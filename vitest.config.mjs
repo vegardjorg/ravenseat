@@ -7,7 +7,7 @@ process.env.QUEUE_LOAD = process.env.QUEUE_LOAD || 'free=100';
 import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
-    include: ['plugin/scripts/orchestrator/**/__tests__/**/*.test.{ts,mjs}'],
+    include: ['plugin/scripts/orchestrator/**/__tests__/**/*.test.{ts,mjs}', 'bench/**/__tests__/**/*.test.{ts,mjs}'],
     testTimeout: 60000,
     pool: 'forks',
   },

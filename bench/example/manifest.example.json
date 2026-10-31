@@ -1,0 +1,42 @@
+{
+  "experiment": "example-cq-vs-manual",
+  "description": "SYNTHETIC example. Copy it OUTSIDE the repo before putting real task ids in it.",
+  "arms": [
+    {
+      "name": "cq",
+      "kind": "cq",
+      "maxParallel": 4,
+      "models": {},
+      "window": { "from": "2030-01-06T07:00:00Z", "to": "2030-01-10T22:00:00Z" },
+      "sessions": ["00000000-0000-4000-8000-000000000001"]
+    },
+    {
+      "name": "manual",
+      "kind": "manual-fresh",
+      "window": { "from": "2030-01-13T07:00:00Z", "to": "2030-01-17T22:00:00Z" }
+    }
+  ],
+  "tasks": [
+    { "id": "DEMO-1", "arm": "cq", "pair": "p1", "stratum": "K-medium" },
+    { "id": "DEMO-2", "arm": "manual", "pair": "p1", "stratum": "K-medium", "sessions": ["00000000-0000-4000-8000-000000000002"] },
+    { "id": "DEMO-3", "arm": "cq", "pair": "p2", "stratum": "D-small" },
+    { "id": "DEMO-3", "arm": "manual", "pair": "p2", "stratum": "D-small", "label": "DEMO-3-R",
+      "replay": { "base": "0000000000000000000000000000000000000000" }, "outcome": "merged" }
+  ],
+  "sources": {
+    "queue": "../path/to/project/scripts/.queue/queue.json",
+    "timeLog": "../path/to/project/scripts/.queue/times.jsonl",
+    "transcripts": "../path/to/home/.claude/projects/<project-slug>",
+    "load": "load.jsonl",
+    "human": "human.jsonl",
+    "gitRepo": "../path/to/project"
+  },
+  "settings": {
+    "seed": 1,
+    "bootstrap": 2000,
+    "defectWindowDays": 14,
+    "loadMatchSec": 120,
+    "prices": {},
+    "sessionTypes": {}
+  }
+}

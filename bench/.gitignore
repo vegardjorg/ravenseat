@@ -1,0 +1,3 @@
+# Benchmark results and manifests name real tasks from the measured project. They must never be committed.
+results/
+*.local.json
