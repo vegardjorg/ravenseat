@@ -32,6 +32,11 @@
 // If the orchestrator had gone into wind-down (the emergency brake at 350k), it is lifted for the session regardless of
 // the number of compactions: compaction is the normal way out of wind-down, and queue.mjs next/start/fill must then work again.
 //
+// Time log: EVERY main session's compaction (not only the orchestrator's) appends one row to the time log
+// (config().timeLog; QUEUE_TIME_LOG overrides): { time, event: "compact", scope: "session", session_id, orchestrator }
+// (lib/timeLogRows.js), with orchestrator = this session is the bound one. Track compactions are logged by
+// hook-track-context.mjs.
+//
 // Fails OPEN: any internal error gives no output and exit 0.
 // =============================================================
 import fs from 'node:fs';
@@ -45,7 +50,8 @@ const require = createRequire(import.meta.url);
 if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
 const KV = require('./lib/contextGuard.js');
 const L = require('./lib/queueLogic.js');
-const { config, dataFolder } = require('./lib/queueConfig.js');
+const { config, dataFolder, timeLog } = require('./lib/queueConfig.js');
+const TL = require('./lib/timeLogRows.js');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const K = config();
@@ -141,7 +147,14 @@ async function main() {
   // The matcher in settings.json is `compact`; the check here makes the hook safe also without a matcher.
   if (input.source !== 'compact') return;
   const cursor = readJson(CURSOR);
-  if (!KV.afterCompactBound({ cursor, sessionId })) return;
+  const bound = KV.afterCompactBound({ cursor, sessionId });
+  // One compaction row for every main session. Fail open: the log is for measurement only.
+  try {
+    TL.appendRows(timeLog(), TL.sessionCompactRow({ sessionId, orchestrator: bound }));
+  } catch {
+    // error-ignored: the re-injection below is what matters
+  }
+  if (!bound) return;
 
   const revoke = KV.withoutWindDown(cursor, sessionId);
   if (revoke.changed) {

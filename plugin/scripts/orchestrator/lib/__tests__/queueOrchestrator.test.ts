@@ -1313,6 +1313,8 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
       '--track-tip',
       g(['rev-parse', 'queue/M']),
     ]);
+    // The task id for the gate row in the time log.
+    expect(k1[2].args.slice(6, 8)).toEqual(['--track', 'M']);
     expect(k1[3].args.slice(1, 4)).toEqual(['set', 'M', 'done']);
     expect(k1[4].args.slice(1)).toEqual(['fill', '--scratchpad', scratch]);
 

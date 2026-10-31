@@ -193,11 +193,54 @@ describe('the track hooks as processes (echoed payload)', () => {
     );
     const two = JSON.parse(run('hook-track-context.mjs', input));
     expect(two.hookSpecificOutput.additionalContext).toMatch(/compacted 2 times.*PARTIAL/);
-    const log = readFileSync(join(folder, 'times.jsonl'), 'utf8').trim().split('\n');
-    expect(log).toHaveLength(1);
-    expect(JSON.parse(log[0])).toMatchObject({ event: 'contextGuard', compactions: 2, cause: 'compaction' });
+    const log = readFileSync(join(folder, 'times.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    // One compact row per new compaction, then the PARTIAL trigger.
+    expect(log.map((r) => r.event)).toEqual(['compact', 'compact', 'contextGuard']);
+    expect(log[0]).toMatchObject({ scope: 'track', agent_id: 'a1', agent_type: 'track', compactions: 1 });
+    expect(log[1]).toMatchObject({ scope: 'track', agent_id: 'a1', compactions: 2 });
+    expect(log[2]).toMatchObject({ event: 'contextGuard', compactions: 2, cause: 'compaction' });
     expect(run('hook-track-context.mjs', input)).toBe('');
+    expect(readFileSync(join(folder, 'times.jsonl'), 'utf8').trim().split('\n')).toHaveLength(3);
   });
+
+  it('hook-track-context: two compactions seen in one call give two rows, with the task from the mission', () => {
+    const tp = join(folder, 'agent-a2.jsonl');
+    const first = JSON.stringify({ type: 'user', message: { content: 'The mission is in C:\\x\\prompt-T-9.md' } });
+    writeFileSync(tp, [first, usage(260_000), boundary, usage(40_000), boundary, usage(40_000)].join('\n') + '\n');
+    run('hook-track-context.mjs', { agent_type: 'track-d', agent_id: 'a2', agent_transcript_path: tp });
+    const rows = readFileSync(join(folder, 'times.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+      .filter((r) => r.event === 'compact');
+    expect(rows.map((r) => [r.compactions, r.track, r.agent_type])).toEqual([
+      [1, 'T-9', 'track-d'],
+      [2, 'T-9', 'track-d'],
+    ]);
+  });
+
+  it('hook-after-compact: one session row per compaction, orchestrator only for the bound session', () => {
+    writeFileSync(join(folder, 'queue.json'), JSON.stringify({ tasks: [] }));
+    writeFileSync(join(folder, 'orchestrator.json'), JSON.stringify({ session_id: 'orch' }));
+    // QUEUE_GIT: a folder that is not a repo, so the unpushed count never reads the real repo.
+    const env = { QUEUE_GIT: folder };
+    expect(run('hook-after-compact.mjs', { hook_event_name: 'SessionStart', source: 'compact', session_id: 'other' }, env)).toBe('');
+    const out = run('hook-after-compact.mjs', { hook_event_name: 'SessionStart', source: 'compact', session_id: 'orch' }, env);
+    expect(JSON.parse(out).hookSpecificOutput.hookEventName).toBe('SessionStart');
+    // Not a compaction: no row.
+    run('hook-after-compact.mjs', { hook_event_name: 'SessionStart', source: 'startup', session_id: 'orch' }, env);
+    const rows = readFileSync(join(folder, 'times.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    expect(rows).toEqual([
+      { time: expect.any(String), event: 'compact', scope: 'session', session_id: 'other', orchestrator: false },
+      { time: expect.any(String), event: 'compact', scope: 'session', session_id: 'orch', orchestrator: true },
+    ]);
+  }, 30_000);
 
   it('hook-track-end: an empty track is blocked once; with a commit or RESULT it passes', () => {
     // A temporary repo: base branch "trunk" (from queue.config.json), one empty track branch and one with a commit.

@@ -21,8 +21,14 @@
 //               budget (gates.precheckBudgetSec), 2 setup error. --json gives the summary as JSON instead of lines;
 //               --base <ref> compares against another ref. The logic lives in lib/gatePrecheck.js.
 //
-// Use: node scripts/orchestrator/gates.mjs --quick|--full [--log <file>]
-//      node scripts/orchestrator/gates.mjs --precheck [--json] [--base <ref>] [--log <file>]
+// Time log: every run (quick, full or precheck) appends one `gate` row to the time log (config().timeLog; QUEUE_TIME_LOG
+// overrides): the kind, the gates that ran and the red ones, the duration, the exit code and `attempt` (the how-many-th
+// run of this kind for the task), so reruns can be counted. The task is --track <id> (cq merge passes it) or the branch
+// <branchPrefix><id>, otherwise null. The row format lives in lib/timeLogRows.js. Writing it never changes the result
+// or the exit code (fail open).
+//
+// Use: node scripts/orchestrator/gates.mjs --quick|--full [--track <id>] [--log <file>]
+//      node scripts/orchestrator/gates.mjs --precheck [--json] [--base <ref>] [--track <id>] [--log <file>]
 // See docs/orchestration.md.
 // =============================================================
 
@@ -34,6 +40,8 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const { config } = require('./lib/queueConfig.js');
 const { firstErrorLine, gateType, resultLine } = require('./lib/orchestratorHelp.js');
+const TL = require('./lib/timeLogRows.js');
+const { timeLog } = require('./lib/queueConfig.js');
 
 const args = process.argv.slice(2);
 const quick = args.includes('--quick');
@@ -41,8 +49,8 @@ const full = args.includes('--full');
 const precheck = args.includes('--precheck');
 if ([quick, full, precheck].filter(Boolean).length !== 1) {
   console.error(
-    'use: gates.mjs --quick|--full [--log <file>]\n' +
-      '     gates.mjs --precheck [--json] [--base <ref>] [--track-base <sha> --track-tip <sha>] [--log <file>]',
+    'use: gates.mjs --quick|--full [--track <id>] [--log <file>]\n' +
+      '     gates.mjs --precheck [--json] [--base <ref>] [--track-base <sha> --track-tip <sha>] [--track <id>] [--log <file>]',
   );
   process.exit(2);
 }
@@ -61,6 +69,28 @@ function inProject(filePath) {
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
 const cwd = inProject(process.cwd()) ? process.cwd() : K.root;
+
+/**
+ * Appends this run's `gate` row to the time log (lib/timeLogRows.js). Fail open: every error is swallowed, so the log
+ * can never change the gate's result or exit code.
+ */
+function logRun({ kind, ran, failed, durationSec, exit, timedOut = false }) {
+  try {
+    const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
+    const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
+    const file = timeLog();
+    let text = null;
+    try {
+      text = fs.readFileSync(file, 'utf8');
+    } catch {
+      text = null; // no log yet: this is the first run
+    }
+    const attempt = TL.gateAttempt(text, { kind, track, branch });
+    TL.appendRows(file, TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt }));
+  } catch {
+    // error-ignored: the time log is for measurement; the gate's result is what matters
+  }
+}
 
 if (precheck) process.exit(await precheckMode());
 
@@ -170,6 +200,16 @@ async function precheckMode() {
   const t0 = Date.now();
   const r = await P.runPrecheck({ checks, changed: ch.files, run: runCommand, root: cwd });
   const totalSec = (Date.now() - t0) / 1000;
+  const exit = r.ok ? 0 : r.status === 'TIMEOUT' ? 3 : 1;
+  const ran = r.results.filter((x) => ['GREEN', 'RED', 'TIMEOUT'].includes(x.status));
+  logRun({
+    kind: 'precheck',
+    ran: ran.map((x) => x.name),
+    failed: ran.filter((x) => x.status !== 'GREEN').map((x) => x.name),
+    durationSec: totalSec,
+    exit,
+    timedOut: r.status === 'TIMEOUT',
+  });
   if (json)
     console.log(
       JSON.stringify(
@@ -182,7 +222,7 @@ async function precheckMode() {
     for (const l of P.precheckLines(r, { changedCount: ch.files.length, base: ch.base, totalSec })) console.log(l);
     if (!r.ok && logFile) console.log(`full log: ${logFile}`);
   }
-  return r.ok ? 0 : r.status === 'TIMEOUT' ? 3 : 1;
+  return exit;
 }
 
 // ---- --quick / --full ---------------------------------------------------------------------------------------------------
@@ -199,6 +239,7 @@ if (logFile) fs.writeFileSync(logFile, `gates --${mode} in ${cwd}\n`);
 const width = Math.min(60, Math.max(...gates.map((g) => g.length)) + 2);
 const start = Date.now();
 let failedCount = 0;
+const failedGates = [];
 
 for (const command of gates) {
   const t0 = Date.now();
@@ -212,7 +253,10 @@ for (const command of gates) {
   const sec = (Date.now() - t0) / 1000;
   const out = `${r.stdout || ''}${r.stderr || ''}${r.error ? `\n${r.error.message}` : ''}`;
   const green = r.status === 0;
-  if (!green) failedCount++;
+  if (!green) {
+    failedCount++;
+    failedGates.push(command);
+  }
   console.log(
     resultLine(
       {
@@ -229,6 +273,7 @@ for (const command of gates) {
 }
 
 const total = Math.round((Date.now() - start) / 1000);
+logRun({ kind: mode, ran: gates, failed: failedGates, durationSec: (Date.now() - start) / 1000, exit: failedCount === 0 ? 0 : 1 });
 console.log(
   failedCount === 0
     ? `ALL GREEN: ${gates.length} gate(s) --${mode} in ${total} s`

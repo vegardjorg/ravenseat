@@ -213,7 +213,14 @@ describe('gates.mjs --precheck (end to end)', () => {
       sh('checkout', '-q', '-b', 'queue/X');
       fs.writeFileSync(path.join(root, 'bad.js'), 'const b = ;\n');
       fs.writeFileSync(path.join(root, 'notes.md'), 'text\n');
-      const env = { ...process.env, QUEUE_ROOT: root, QUEUE_CONFIG: path.join(root, 'queue.config.json') };
+      // The time log outside the fixture, so the gate rows never show up as a changed file.
+      const timeLog = `${root}-times.jsonl`;
+      const env = {
+        ...process.env,
+        QUEUE_ROOT: root,
+        QUEUE_CONFIG: path.join(root, 'queue.config.json'),
+        QUEUE_TIME_LOG: timeLog,
+      };
       const run = (...a: string[]) => spawnSync(process.execPath, [gates, ...a], { cwd: root, encoding: 'utf8', env });
 
       const red = run('--precheck');
@@ -231,8 +238,52 @@ describe('gates.mjs --precheck (end to end)', () => {
       expect(j.checks).toEqual([expect.objectContaining({ name: 'node --check {file}', status: 'GREEN', commands: 1 })]);
 
       expect(run('--precheck', '--full').status).toBe(2);
+
+      // One gate row per run in the time log: the task from the branch queue/X, attempt 1 then 2 (a rerun).
+      const rows = fs
+        .readFileSync(timeLog, 'utf8')
+        .trim()
+        .split('\n')
+        .map((l) => JSON.parse(l));
+      expect(rows).toHaveLength(2);
+      expect(rows[0]).toMatchObject({
+        event: 'gate',
+        kind: 'precheck',
+        track: 'X',
+        branch: 'queue/X',
+        gates: ['node --check {file}'],
+        failed: ['node --check {file}'],
+        ok: false,
+        exit: 1,
+        attempt: 1,
+      });
+      expect(rows[1]).toMatchObject({ kind: 'precheck', track: 'X', failed: [], ok: true, exit: 0, attempt: 2 });
+      expect(rows[0].timed_out).toBeUndefined();
+
+      // --quick with --track (as cq merge passes it): its own kind starts at attempt 1; the exit code is unchanged.
+      fs.writeFileSync(
+        path.join(root, 'queue.config.json'),
+        JSON.stringify({ baseBranch: 'main', gates: { quick: ['node -e "process.exit(3)"'], full: [], precheck: [] } }),
+      );
+      expect(run('--quick', '--track', 'M-1').status).toBe(1);
+      const quick = JSON.parse(fs.readFileSync(timeLog, 'utf8').trim().split('\n').at(-1) as string);
+      expect(quick).toMatchObject({ kind: 'quick', track: 'M-1', ok: false, exit: 1, attempt: 1 });
+      expect(quick.failed).toEqual(['node -e "process.exit(3)"']);
+
+      // An unwritable time log (a folder in its place) never changes the gate's result.
+      const blocked = `${root}-blocked`;
+      fs.mkdirSync(blocked);
+      const r = spawnSync(process.execPath, [gates, '--quick'], {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...env, QUEUE_TIME_LOG: blocked },
+      });
+      expect(r.status).toBe(1);
+      expect(r.stdout).toMatch(/RED: 1 of 1 gate/);
+      fs.rmSync(blocked, { recursive: true, force: true });
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(`${root}-times.jsonl`, { force: true });
     }
   });
 });

@@ -3908,6 +3908,9 @@ if (command === 'init') {
           path.join(HERE, 'gates.mjs'),
           '--quick',
           ...trackArgs,
+          // The task id for the gate row in the time log (gates.mjs): after the merge HEAD is the base branch.
+          '--track',
+          id,
           '--log',
           path.join(logFolder, `merge-${id}-gates`),
         ],

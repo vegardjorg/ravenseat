@@ -19,6 +19,10 @@
 //     each call reads only what is new in the transcript.
 //     Once per message per agent: the state lives in <Temp>/queue-track-context-guard/<agent_id>.json (override the
 //     folder with TRACK_CONTEXT_STATE).
+//   - Each NEW compaction (the count in the state file rises) is logged once in the time log as
+//     { time, event: "compact", scope: "track", agent_id, agent_type, track, compactions } (lib/timeLogRows.js), after
+//     the state file is written, so a compaction is never logged twice. Once the PARTIAL message is said the transcript
+//     is no longer counted, so later compactions of that agent are not logged.
 //   - The PARTIAL trigger is logged as one line in the time log (config().timeLog, event "contextGuard", with
 //     `compactions` and `cause`; QUEUE_TIME_LOG overrides the file, as in hook-time.mjs). The reminder is not logged.
 //   - At about 200k (TRACK_REPORT_WARNING overrides) one reminder comes that the long content belongs in report.md and the
@@ -179,6 +183,24 @@ async function main() {
     stateFile(input.agent_id),
     JSON.stringify({ agent_id: input.agent_id, triggered: newTriggered, compact }),
   );
+  // One time log row per new compaction (the state above is written first, so a row is never repeated).
+  if (compact.n > state.compact.n) {
+    try {
+      let track = null;
+      try {
+        track = require('./lib/timeCost.js').trackFromText(V.readHeader(tp));
+      } catch {
+        track = null;
+      }
+      const TL = require('./lib/timeLogRows.js');
+      TL.appendRows(
+        timeLog(),
+        TL.trackCompactRows({ agentId: input.agent_id, agentType, track, before: state.compact.n, after: compact.n }),
+      );
+    } catch {
+      // error-ignored: the log is for measurement only; the guard goes on
+    }
+  }
   if (!answer && !reportHint && !bashHint) return; // only a new count position
   const hint = [bashHint, reportHint].filter(Boolean).join('\n');
   // The reminder after the first compaction is not logged; only the PARTIAL message is a contextGuard event.
