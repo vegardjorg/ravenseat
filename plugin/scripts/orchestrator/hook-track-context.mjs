@@ -38,6 +38,20 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
+// Fast exit: this hook runs on EVERY tool call in every session, and only queue tracks need it. The input is read
+// first and the hook stops before any require (and before queueActive, which looks for the project root) unless
+// agent_type is a track (track/track-d, or cq:track/cq:track-d in a plugin install; trackGuard.CONTEXT_TYPES). A main
+// session then pays only for the Node start.
+let rawInput = '';
+for await (const chunk of process.stdin) rawInput += chunk;
+let firstInput;
+try {
+  firstInput = JSON.parse(rawInput || '{}');
+} catch {
+  process.exit(0); // unreadable input: fail open
+}
+if (!/^(?:cq:)?track(?:-d)?$/.test(String(firstInput?.agent_type ?? ''))) process.exit(0);
+
 const require = createRequire(import.meta.url);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
 if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
@@ -58,10 +72,9 @@ const BASH_KEY = 'bash'; // one marker per output hint given
 const STATE =
   process.env.TRACK_CONTEXT_STATE || path.join(os.tmpdir(), 'queue-track-context-guard');
 
+/** The hook input, already read and parsed at the top (the fast exit). */
 async function readIn() {
-  let s = '';
-  for await (const chunk of process.stdin) s += chunk;
-  return JSON.parse(s || '{}');
+  return firstInput;
 }
 
 const stateFile = (id) => path.join(STATE, `${String(id).replace(/[^\w.-]/g, '_')}.json`);
