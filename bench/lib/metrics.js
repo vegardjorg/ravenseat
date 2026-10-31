@@ -12,7 +12,8 @@
 //   taskCosts       per task: own USD + an equal share of the arm's overhead (sessions with no task), human minutes,
 //                   fix rounds and defects: the unit the paired comparison uses
 //   defects         defects after merge per merged task: later fix tasks (id <task>-F/-FIX/-FIKS/-QA, or a bug/fix
-//                   label touching the same files) and reverted commits naming the task, within the window
+//                   label touching the same files) and reverted commits naming the task, within the window; and a
+//                   later task that names it in `fixes` (cq's explicit link), whatever the window
 //   loadAnalysis    gate duration and reruns against parallelism and free memory: correlations and level buckets
 //   paired          matched pair comparison of two arms on one metric, with bootstrap CIs
 //
@@ -57,12 +58,20 @@ function defects(records, windowDays = records.settings?.defectWindowDays ?? 14)
         return x != null && x >= m && x <= m + windowMs;
       };
       const files = new Set(t.owned_files ?? []);
+      // An explicit link is not a guess, so the window does not apply; only "later" does (added at or after the
+      // merge, or no added time at all).
+      const later = (iso) => {
+        const x = ms(iso);
+        return x == null || x >= m;
+      };
       for (const q of records.queueTasks ?? []) {
-        if (q.id === t.id || q.status === 'cancelled' || !inWin(q.added)) continue;
+        if (q.id === t.id || q.status === 'cancelled') continue;
+        const byLink = (q.fixes ?? []).includes(t.id) && later(q.added);
+        if (!byLink && !inWin(q.added)) continue;
         const byId = q.id.startsWith(`${t.id}-`) && FIX_ID.test(q.id.slice(t.id.length));
         const byFiles =
           (q.labels ?? []).some((l) => BUG_LABEL.test(l)) && (q.owned_files ?? []).some((f) => files.has(f));
-        if (byId || byFiles) found.fixTasks.push(q.id);
+        if (byLink || byId || byFiles) found.fixTasks.push(q.id);
       }
       const word = new RegExp(`(^|[^A-Za-z0-9_-])${t.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Za-z0-9_-])`);
       for (const r of records.reverts ?? []) if (inWin(r.time) && word.test(r.subject)) found.reverts.push(r.sha);
@@ -89,6 +98,7 @@ function taskCosts(records) {
       const ownUsd = sum(own.map((s) => s.usd));
       const humanOwn = sum(humanRows.filter((h) => h.task === t.id).map((h) => h.minutes));
       const d = def.get(`${t.id}|${t.arm}`);
+      const gates = (records.gates ?? []).filter((g) => g.arm === arm && g.task_label === t.label);
       out.push({
         id: t.id,
         label: t.label,
@@ -105,6 +115,11 @@ function taskCosts(records) {
         wall_min: t.wall_min,
         build_min: t.build_min,
         fix_rounds: own.filter((s) => s.session_type === 'fix').length,
+        // gate runs on the task, and how many of them were reruns (rerun_nr > 0: cq's attempt > 1)
+        gate_runs: gates.length,
+        gate_reruns: gates.filter((g) => (g.rerun_nr ?? 0) > 0).length,
+        // compactions of the task's own sessions (transcript boundaries, else the time log's compact rows)
+        compactions: sum(own.map((s) => (s.compactions ?? 0) + (s.compactions_log ?? 0))),
         defects: d ? d.count : null,
         defect_detail: d ?? null,
       });
@@ -184,6 +199,9 @@ function armSummary(records) {
       per_class: perClass,
       sessions: sessions.length,
       compactions: sum(sessions.map((s) => (s.compactions ?? 0) + (s.compactions_log ?? 0))),
+      compactions_orchestrator: sum(
+        sessions.filter((s) => s.session_type === 'orchestrator').map((s) => (s.compactions ?? 0) + (s.compactions_log ?? 0)),
+      ),
       peak_context_median: S.median(build.map((s) => s.peak_context)),
       peak_context_max: build.length ? Math.max(0, ...build.map((s) => Number(s.peak_context) || 0)) : null,
       wall_min_median: r2(S.median(merged.map((t) => t.wall_min))),

@@ -5,7 +5,9 @@
 //   queue        the queue file (cq queue.json or a Norwegian ko.json): class, estimate, status, timestamps, cost
 //   timeLog      the agent time log (cq times.jsonl from hook-time.mjs, or the Norwegian equivalent): one cumulative
 //                "done" row per agent stop, plus gate rows ("gates"/"gate") and compaction rows where the project
-//                writes them
+//                writes them. cq writes one "gate" row per gates.mjs run (kind, ok, attempt, timed_out) and "compact"
+//                rows with scope "session" (main sessions) or "track" (agent_id, compactions); see
+//                plugin/scripts/orchestrator/lib/timeLogRows.js
 //   transcripts  the Claude Code project folder (~/.claude/projects/<slug>): <session>.jsonl for main sessions and
 //                <session>/subagents/agent-<id>.jsonl (+ .meta.json) for subagents. The most complete source: every
 //                session, including the orchestrator and manual chats, which the time log never sees
@@ -37,6 +39,16 @@ const HELPER_TYPES = new Set(['reviewer-challenger', 'reviewer-design', 'reviewe
 const FIX_LABEL = /-(?:r|round|runde)\d+$/i;
 const FIX_TEXT = /\b(fix round|retterunde|review fixes|review-rettinger)\b/i;
 const TIMEOUT = /timeout|timed out|tidsavbrudd/i;
+
+/** Is a "gate" row cq's one-row-per-run format (gates.mjs: kind and attempt) rather than a single gate step? */
+const isGateRun = (r) => typeof r.kind === 'string' && r.attempt != null;
+
+/** A task's `fixes` as a list of ids (one id or a list in the queue file; anything else gives []). */
+function fixesOf(t) {
+  const v = t?.fixes;
+  if (typeof v === 'string' && v) return [v];
+  return Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x) : [];
+}
 
 /** JSONL text into normalized rows (broken lines skipped: the logs are written by several processes). */
 function readJsonl(text) {
@@ -180,7 +192,35 @@ function parseTimeLog(rows) {
         free_memory_pct: r.free_memory_pct ?? null,
         load_1m: r.load_1m ?? null,
       });
-    if (r.event === 'gate')
+    // cq's gate run row (one per gates.mjs run): it is a gate run, and also a step so timeouts are counted.
+    if (r.event === 'gate' && isGateRun(r)) {
+      const attempt = Number.isInteger(Number(r.attempt)) && Number(r.attempt) > 0 ? Number(r.attempt) : 1;
+      const duration = Number.isFinite(Number(r.duration_s)) ? Number(r.duration_s) : null;
+      const timeout = r.timed_out === true;
+      gates.push({
+        time: r.time,
+        track: r.track ?? null,
+        mode: r.kind,
+        duration_s: duration,
+        green: typeof r.ok === 'boolean' ? r.ok : null,
+        rerun_nr: attempt - 1,
+        first_green: null,
+        concurrent_gates: r.concurrent_gates ?? null,
+        free_memory_pct: r.free_memory_pct ?? null,
+        load_1m: r.load_1m ?? null,
+        branch: r.branch ?? null,
+        exit: r.exit ?? null,
+        timed_out: timeout,
+      });
+      gateSteps.push({
+        time: r.time,
+        track: r.track ?? null,
+        gate: r.kind,
+        status: timeout ? 'TIMEOUT' : r.ok ? 'GREEN' : 'RED',
+        duration_s: duration,
+        timeout,
+      });
+    } else if (r.event === 'gate')
       gateSteps.push({
         time: r.time,
         track: r.track ?? null,
@@ -189,7 +229,18 @@ function parseTimeLog(rows) {
         duration_s: Number(r.duration_s) || null,
         timeout: TIMEOUT.test(String(r.status ?? '')) || TIMEOUT.test(String(r.remark ?? '')),
       });
-    if (r.event === 'compact') compactions.push({ time: r.time, session_id: r.session_id ?? null, pre_tokens: r.pre_tokens ?? null });
+    if (r.event === 'compact')
+      compactions.push({
+        time: r.time,
+        // "session" (a main session), "track" (a track agent, cq's hook-track-context) or null (older rows)
+        scope: r.scope ?? null,
+        session_id: r.session_id ?? null,
+        agent_id: r.agent_id ?? null,
+        track: r.track ?? null,
+        orchestrator: typeof r.orchestrator === 'boolean' ? r.orchestrator : null,
+        compactions: Number.isFinite(Number(r.compactions)) && r.compactions != null ? Number(r.compactions) : null,
+        pre_tokens: r.pre_tokens ?? null,
+      });
   }
   const agents = [...lastDone.values()].map((r) => ({
     agent_id: r.agent_id,
@@ -411,12 +462,23 @@ function build(manifest, data) {
       source: 'timeLog',
     });
   }
-  // Compactions recorded in the time log (hook rows) for main sessions without a compact_boundary in the transcript.
+  // Compactions recorded in the time log (hook rows), for sessions whose transcript shows none (no compact_boundary,
+  // or no transcript at all), so a compaction is never counted twice. A main session row counts one each; a track row
+  // carries the running count, so the highest count per agent is its total.
+  const logged = new Map();
   for (const c of tl.compactions) {
-    const s = raw.find((x) => x.id === c.session_id);
-    if (s && s.source === 'transcript' && s.compactions === 0) s.compactions_log = (s.compactions_log ?? 0) + 1;
+    if (c.scope === 'track' && c.agent_id) {
+      const prev = logged.get(c.agent_id) ?? 0;
+      logged.set(c.agent_id, Math.max(prev, c.compactions ?? prev + 1));
+    } else if (c.session_id) logged.set(c.session_id, (logged.get(c.session_id) ?? 0) + 1);
+  }
+  for (const [id, n] of logged) {
+    const s = raw.find((x) => x.id === id);
+    if (s && s.compactions === 0) s.compactions_log = n;
   }
   const spawnsBuild = new Set(raw.filter((s) => s.kind === 'subagent' && BUILD_TYPES.has(s.agent_type)).map((s) => s.parent));
+  // A main session cq's compaction hook marked as the bound orchestrator is an orchestrator too.
+  for (const c of tl.compactions) if (c.orchestrator === true && c.session_id) spawnsBuild.add(c.session_id);
 
   const inWindow = (iso) => {
     const t = ms(iso);
@@ -509,10 +571,13 @@ function build(manifest, data) {
       id: t.id,
       class: t.class ?? null,
       status: t.status ?? null,
-      added: t.added ?? null,
+      // cq writes added_at; the Norwegian queue lagt_til (normalized to added)
+      added: t.added ?? t.added_at ?? null,
       labels: t.labels ?? [],
       owned_files: Array.isArray(t.owned_files) ? t.owned_files : [],
       depends_on: t.depends_on ?? [],
+      // the task(s) this one fixes (cq's `fixes` field): a merged task named here has a defect after merge
+      fixes: fixesOf(t),
     })),
     reverts: data.reverts ?? [],
     warnings,
@@ -585,6 +650,8 @@ module.exports = {
   REVIEWER_TYPES,
   HELPER_TYPES,
   readJsonl,
+  isGateRun,
+  fixesOf,
   analyzeSession,
   priceSession,
   parseTimeLog,

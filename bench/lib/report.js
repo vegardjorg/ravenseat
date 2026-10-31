@@ -70,8 +70,9 @@ function render(records, { comparisons = null } = {}) {
     '',
   );
   out.push(
-    table(['Arm', 'Cache read share', 'Compactions', 'Peak context median', 'Peak context max'],
-      arms.map((a) => [a.arm, pct(a.cache_read_share), a.compactions, ktok(a.peak_context_median), ktok(a.peak_context_max)])),
+    table(['Arm', 'Cache read share', 'Compactions', 'Orchestrator compactions', 'Peak context median', 'Peak context max'],
+      arms.map((a) => [a.arm, pct(a.cache_read_share), a.compactions, a.compactions_orchestrator, ktok(a.peak_context_median),
+        ktok(a.peak_context_max)])),
     '',
   );
 
@@ -111,9 +112,10 @@ function render(records, { comparisons = null } = {}) {
     : 'None found in the window.', '');
 
   out.push('## Tasks', '');
-  out.push(table(['Task', 'Arm', 'Pair', 'Class', 'Outcome', 'USD (with overhead)', 'Own USD', 'Queue USD', 'Wall min', 'Human min', 'Fix', 'Defects'],
+  out.push(table(['Task', 'Arm', 'Pair', 'Class', 'Outcome', 'USD (with overhead)', 'Own USD', 'Queue USD', 'Wall min', 'Human min', 'Fix', 'Gate runs', 'Reruns', 'Compactions', 'Defects'],
     M.taskCosts(records).map((c) => [c.id, c.arm, c.pair ?? '-', c.class ?? '-', c.outcome, usd(c.usd), usd(c.own_usd),
-      usd(c.queue_usd), fmt(c.wall_min, 0), fmt(c.human_min, 1), c.fix_rounds, c.defects ?? '-'])), '');
+      usd(c.queue_usd), fmt(c.wall_min, 0), fmt(c.human_min, 1), c.fix_rounds, c.gate_runs, c.gate_reruns, c.compactions,
+      c.defects ?? '-'])), '');
   return out.join('\n');
 }
 

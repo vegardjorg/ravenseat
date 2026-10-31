@@ -75,7 +75,9 @@ describe('parseTimeLog', () => {
     expect(t.gates).toHaveLength(3);
     expect(t.gates[1]).toMatchObject({ mode: 'quick', rerun_nr: 1, green: true, concurrent_gates: 2 });
     expect(t.gateSteps[0].timeout).toBe(true);
-    expect(t.compactions).toEqual([{ time: FX.at(9), session_id: 's1', pre_tokens: 260000 }]);
+    expect(t.compactions).toEqual([
+      { time: FX.at(9), scope: null, session_id: 's1', agent_id: null, track: null, orchestrator: null, compactions: null, pre_tokens: 260000 },
+    ]);
   });
 });
 

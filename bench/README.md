@@ -60,12 +60,12 @@ before putting real ids in it. Paths in `sources` are relative to the manifest f
 |---|---|---|
 | Session tokens and USD | transcripts (preferred), else the time log's last cumulative `done` row per agent | Priced per model; a model without a price in `settings.prices` is priced as the default model and listed as a warning |
 | Session type | agent type, track label, main session lists | `orchestrator`, `planning`, `track`, `fix` (a `-r<N>`/`-round<N>` label, or a second build agent on the task), `reviewer`, `helper`; work on an abandoned task is counted as `cancelled` |
-| Context peak, compactions | transcripts (`compact_boundary` rows), time log compaction rows | |
+| Context peak, compactions | transcripts (`compact_boundary` rows), time log `compact` rows | cq writes one `compact` row per main session compaction (`scope: "session"`, `orchestrator` marks the bound orchestrator, which then counts as an orchestrator session) and one per new track compaction (`scope: "track"`, the running count per `agent_id`). The log rows count only for a session whose transcript shows no compaction. Per task and per arm, plus orchestrator compactions per arm |
 | Task class, estimate, status, times, queue cost, findings | the queue file | Replays take nothing from the queue except class and estimate |
-| Gate runs and reruns | the time log's `gates` rows (`rerun_nr`, `green`, `mode`, `concurrent_gates`, `free_memory_pct`); single `gate` rows for timeouts | cq's `gates.mjs` does not write these rows yet (see the plan) |
+| Gate runs and reruns | the time log's `gates` rows (`rerun_nr`, `green`, `mode`, `concurrent_gates`, `free_memory_pct`); single `gate` rows for timeouts; cq's `gate` rows | cq's `gates.mjs` writes one `gate` row per run (`kind` quick/full/precheck, `ok`, `exit`, `attempt`, `timed_out`): read as a gate run with `rerun_nr = attempt - 1`, and as a step for timeouts. Per task (gate runs, reruns) and per arm |
 | Load | `sample` JSONL | free memory, CPU, load average (not on Windows), process and node counts, disk, running tracks |
 | Human minutes | `human` JSONL | |
-| Defects after merge | the queue (later `<id>-F*`/`-FIX*`/`-FIKS*`/`-QA*` tasks, or `bug`/`fix` labelled tasks owning the same files) and `git log` reverts naming the task, within `defectWindowDays` | |
+| Defects after merge | the queue (later `<id>-F*`/`-FIX*`/`-FIKS*`/`-QA*` tasks, or `bug`/`fix` labelled tasks owning the same files) and `git log` reverts naming the task, within `defectWindowDays`; a task added after the merge that names it in `fixes` | The `fixes` link is explicit, so the window does not apply to it. A fix task is counted once even when several rules match |
 
 Field names are normalized first (`lib/fields.js`), so a queue or log written with Norwegian field names (an older
 vendored install of the same queue model) reads the same as a cq one.
