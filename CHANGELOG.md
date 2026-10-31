@@ -3,7 +3,7 @@
 All notable changes to claude-code-queue (the `cq` plugin). The version is in `plugin/.claude-plugin/plugin.json`
 and `package.json`.
 
-## Unreleased
+## 0.4.1 (2026-10-31)
 
 ### Added
 - **`cq help` in groups, and "Did you mean"**: `cq help` prints 14 key commands in four groups (Get started, Daily,
@@ -57,6 +57,8 @@ and `package.json`.
   code table; `cq merge` opens `merge-conflict` or `gate-red` when it stops there and closes it after the next
   successful merge. `cq blockers [--days 7] [--json]` gives count and blocked time per code, and the board's
   Statistics has the table "Blockers last 7 days".
+- **Hiding the mascot needs no password**: **Hide the mascot completely** in the gear is a plain button now (still
+  per browser; **Show the mascot again** undoes it).
 
 ## 0.4.0 (2026-10-31)
 

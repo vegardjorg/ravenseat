@@ -147,9 +147,8 @@ browser comes from `queue.config.json`:
 the flag, the mascot is off for every viewer: no bubbles, no click, nothing is computed on the server, and the choice
 in the gear is locked.
 
-**Hiding the picture.** Off keeps the picture. To remove the mascot completely in one browser, type the password in
-**Hide the mascot completely** in the gear (the hint is there; case, spaces and punctuation do not matter).
-**Show the mascot again** in the same place brings it back.
+**Hiding the picture.** Off keeps the picture. To remove the mascot completely in one browser, click **Hide the mascot
+completely** in the gear. **Show the mascot again** in the same place brings it back.
 
 **Your own phrases.** The board ships the mascot's full built-in repertoire (night owl jabs, encouragement, stats roasts, events and vibe-coding jokes) in `lib/queueMascot.js`. To use your own, put
 `mascot-phrases.json` in the queue's data folder (`<dataFolder>`, default `scripts/.queue/`, which the installer adds

@@ -3516,7 +3516,7 @@ fieldset.setting legend {
   padding: 0;
 }
 
-/* The mascot hidden with the password in the gear (mascot.js): the zone keeps its space, only the picture goes. */
+/* The mascot hidden completely from the gear (mascot.js): the zone keeps its space, only the picture goes. */
 .mascot.gone > * {
   visibility: hidden;
 }

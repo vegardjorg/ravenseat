@@ -6730,7 +6730,7 @@
     const m = window.QueueMascotView;
     if (!m) return el('div', { hidden: true });
     const now = m.mode();
-    // Hidden with the password: the speech choice has no effect until the mascot is shown again.
+    // Hidden completely: the speech choice has no effect until the mascot is shown again.
     const locked = m.locked() || m.isHidden();
     return el(
       'fieldset',
@@ -6765,10 +6765,7 @@
     );
   }
 
-  /**
-   * The whole mascot (picture and bubbles) can be hidden in this browser with a password: an easter egg for the
-   * author's self-roast. The check (case and punctuation do not matter) is isPassword in lib/queueMascot.js.
-   */
+  /** The whole mascot (picture and bubbles) can be hidden in this browser, and shown again. */
   function hideMascotField(m) {
     if (!m.hideMascot) return null;
     if (m.isHidden()) {
@@ -6791,48 +6788,26 @@
         ),
       );
     }
-    const id = 'mascot-password';
-    const input = el('input', {
-      id,
-      type: 'text',
-      autocomplete: 'off',
-      spellcheck: 'false',
-      'aria-describedby': `${id}-help`,
-    });
-    const error = el('p', { class: 'setting-error', role: 'alert', hidden: true });
-    const tryIt = () => {
-      if (m.hideMascot(input.value)) {
-        drawSettings();
-        return;
-      }
-      error.textContent = 'Not quite. The bouncer says no.';
-      error.hidden = false;
-      input.select();
-    };
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        tryIt();
-      }
-    });
     return el(
       'div',
       { class: 'setting-field' },
-      el('label', { for: id, text: 'Hide the mascot completely' }),
       el('p', {
-        id: `${id}-help`,
         class: 'setting-explanation',
-        text:
-          "Password needed. Hint: the password to the back room of Lefty's Bar in Leisure Suit Larry in the " +
-          'Land of the Lounge Lizards.',
+        text: 'Removes the picture and the bubbles in this browser. You can show it again here.',
       }),
       el(
         'div',
         { class: 'setting-control' },
-        input,
-        el('button', { type: 'button', class: 'button button-muted', text: 'Hide', onclick: tryIt }),
+        el('button', {
+          type: 'button',
+          class: 'button button-muted',
+          text: 'Hide the mascot completely',
+          onclick: () => {
+            m.hideMascot();
+            drawSettings();
+          },
+        }),
       ),
-      error,
     );
   }
 

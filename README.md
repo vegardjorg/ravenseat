@@ -372,8 +372,7 @@ The mascot in the board's top-left corner comments in a speech bubble on the que
 an empty queue, a new question for you). To quiet it:
 - per browser: the gear menu, **Mascot**: Chatty, Events only or Off (Off keeps the picture, without bubbles);
 - for everyone: `"board": { "mascot": "off" }` in `queue.config.json`, or `cq board --mascot off`;
-- to remove the picture too, the gear has a password field. The hint is in the gear. **Show the mascot again**
-  brings it back.
+- to remove the picture too: **Hide the mascot completely** in the gear. **Show the mascot again** brings it back.
 
 Your own phrases go in the gitignored `<dataFolder>/mascot-phrases.json`. See
 [docs/board.md](plugin/docs/board.md#the-mascot).

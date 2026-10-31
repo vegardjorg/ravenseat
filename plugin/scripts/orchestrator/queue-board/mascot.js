@@ -13,8 +13,8 @@
 //   - the mode Chatty / Events only / Off is stored in localStorage (with try/catch). The server's default comes from
 //     board.mascot in queue.config.json or --mascot; when the server says "off", the mascot is off for every viewer
 //     (no bubbles, no click) and the choice in the gear is locked;
-//   - the whole mascot (picture and bubbles) can be hidden in this browser with the password in the gear
-//     (M.isPassword); the choice is stored in localStorage and "Show the mascot again" undoes it.
+//   - the whole mascot (picture and bubbles) can be hidden in this browser with "Hide the mascot" in the gear;
+//     the choice is stored in localStorage and "Show the mascot again" undoes it.
 // =============================================================
 (function () {
   'use strict';
@@ -49,7 +49,7 @@
   }
   let saved = readSaved();
 
-  // The whole mascot hidden in this browser (the password in the gear). The zone keeps its space, only the picture goes.
+  // The whole mascot hidden in this browser ("Hide the mascot" in the gear). The zone keeps its space, only the picture goes.
   const STORAGE_HIDDEN = 'queue-board-mascot-hidden';
   function readHidden() {
     try {
@@ -235,9 +235,8 @@
     clickable(mode() !== 'off');
   }
 
-  /** Hides the whole mascot when the text is the password. Returns false (nothing changes) otherwise. */
-  function hideMascot(password) {
-    if (!M.isPassword(password)) return false;
+  /** Hides the whole mascot (picture and bubbles) in this browser. */
+  function hideMascot() {
     gone = true;
     try {
       localStorage.setItem(STORAGE_HIDDEN, '1');
