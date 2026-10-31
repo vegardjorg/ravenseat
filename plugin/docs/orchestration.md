@@ -159,8 +159,9 @@ context size. The system keeps both small:
   own is kept. The line also saves the last quota reading in `<dataFolder>/rate-limits.json`, and
   `cq capacity --calibrate auto` uses its 7-day percentage as a calibration point (refused when it is over 1 h old).
 - **Context limits in every chat.** The same hook also watches every other chat in a project with the queue, not only
-  the orchestrator: a notice at 250k, and at 400k the message is stopped so a long chat does not keep paying for its
-  whole history. Compact the chat (`/compact`), or start the message with `continue:` to send it anyway. Messages
+  the orchestrator: a notice from 250k. With `"contextGuard": { "blockOtherChats": true }` in `queue.config.json`
+  (default off), the message is also stopped at 400k so a long chat does not keep paying for its whole history; then
+  compact the chat (`/compact`), or start the message with `continue:` to send it anyway. Messages
   Claude Code sends by itself (an agent is done) are never stopped. The limits can be changed with the environment
   variables `CONTEXT_WARNING`, `CONTEXT_STOP`, `CONTEXT_WIND_DOWN`, `CONTEXT_STOP_ORCHESTRATOR` and `CONTEXT_COMPACT`
   (tokens).

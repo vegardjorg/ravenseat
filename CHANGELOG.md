@@ -23,6 +23,9 @@ and `package.json`.
   cq's `added_at`.
 
 ### Changed
+- **The 400k block in other chats is opt-in**: chats that are not the orchestrator get the notice from 250k, but the
+  message is only stopped at 400k with `contextGuard.blockOtherChats: true` in `queue.config.json`
+  (`CONTEXT_BLOCK_OTHERS=1` overrides). The orchestrator's compact, wind-down and hard stop are unchanged.
 - **The load guard is on by default**: `loadGuard.minFreeMemoryPct` is 10 (no new starts while free memory is below
   10 %), off on macOS, which counts the page cache as used. In HMS, 14 parallel tracks made D tasks take 165 instead
   of 34 minutes and gates go red from memory, not code. `cq limit minFreeMemoryPct off` turns it off for a queue.

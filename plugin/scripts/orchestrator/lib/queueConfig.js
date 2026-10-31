@@ -187,6 +187,10 @@ const STANDARD = Object.freeze({
     planName: null,
   },
   // Queue board (queue-board.mjs).
+  // Context guard (hook-context.mjs, lib/contextGuard.js). blockOtherChats: stop the message at 400k (CONTEXT_STOP) in
+  // chats that are NOT the orchestrator. Default false: those chats only get the notice from 250k. The orchestrator's
+  // own limits (compact, wind-down, hard stop) are not affected.
+  contextGuard: { blockOtherChats: false },
   board: {
     port: 2000,
     title: 'Queue board',

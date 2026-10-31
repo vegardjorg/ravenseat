@@ -119,17 +119,32 @@ const cursor = (field: Partial<Cursor> = {}): Cursor => ({
   ...field,
 });
 const g = KV.STANDARD;
+// The block of other chats at 400k is opt-in (contextGuard.blockOtherChats); the tests of the block turn it on.
+const gB = { ...KV.STANDARD, blockOthers: true };
 
 describe('assess: the thresholds', () => {
   const v = (n: number, orchestrator: boolean, prompt = 'hello', inWindDown = false) =>
     KV.assess({ n, prompt, orchestrator, inWindDown, g });
 
-  it('not orchestrator: nothing under 250k, notice from 250k, stop at 400k', () => {
+  it('not orchestrator: nothing under 250k, notice from 250k, stop at 400k only when blockOthers is on', () => {
     expect(v(249_999, false).action).toBe('none');
     expect(v(250_000, false).action).toBe('notice');
     expect(v(399_999, false).action).toBe('notice');
-    expect(v(400_000, false)).toMatchObject({ action: 'stop', limit: 400_000 });
+    // Default (blockOthers off): still only a notice, also far above 400k.
+    expect(v(400_000, false).action).toBe('notice');
+    expect(v(900_000, false).action).toBe('notice');
+    const on = (n: number) => KV.assess({ n, prompt: 'hello', orchestrator: false, g: gB });
+    expect(on(399_999).action).toBe('notice');
+    expect(on(400_000)).toMatchObject({ action: 'stop', limit: 400_000 });
     expect(v(600_000, false).setWindDown).toBe(false);
+  });
+
+  it('blockOthers: CONTEXT_BLOCK_OTHERS=1/0 overrides, default off without a config', () => {
+    expect(KV.limits({}).blockOthers).toBe(false);
+    expect(KV.limits({ CONTEXT_BLOCK_OTHERS: '1' }).blockOthers).toBe(true);
+    expect(KV.limits({ CONTEXT_BLOCK_OTHERS: '0' }).blockOthers).toBe(false);
+    // The orchestrator's own stop does not depend on it.
+    expect(v(550_000, true, 'hello', true)).toMatchObject({ action: 'stop', limit: 550_000 });
   });
 
   it('orchestrator: notice from 250k, wind-down (flag set once) at 350k, stop only at 550k', () => {
@@ -173,6 +188,7 @@ describe('assess: the thresholds', () => {
       windDown: 300_000,
       stopOrchestrator: 500_000,
       compact: 280_000,
+      blockOthers: false,
     });
     expect(KV.limits({ CONTEXT_COMPACT: '260000' })).toMatchObject({ compact: 260_000 });
     // No fixed limit on the number of compactions any more.
@@ -183,7 +199,11 @@ describe('assess: the thresholds', () => {
     expect(
       KV.hookOutput({ action: 'none', setWindDown: false }, { n: 1, orchestrator: false }),
     ).toBeNull();
-    const stop = KV.hookOutput(v(400_000, false), { n: 400_000, orchestrator: false, g });
+    const stop = KV.hookOutput(KV.assess({ n: 400_000, prompt: 'hello', orchestrator: false, g: gB }), {
+      n: 400_000,
+      orchestrator: false,
+      g: gB,
+    });
     expect(stop).toMatchObject({ decision: 'block' });
     const by = KV.hookOutput(v(360_000, true), { n: 360_000, orchestrator: true, g, now: NOW });
     expect(by).not.toHaveProperty('decision');
@@ -234,7 +254,7 @@ describe('COMPACT: /compact with focus before wind-down', () => {
 
   it('not orchestrator is unaffected by compactions', () => {
     const w = (n: number, k: number) =>
-      KV.assess({ n, prompt: 'hello', orchestrator: false, compactions: k, g }).action;
+      KV.assess({ n, prompt: 'hello', orchestrator: false, compactions: k, g: gB }).action;
     expect(w(300_000, 0)).toBe('notice');
     expect(w(300_000, 5)).toBe('notice');
     expect(w(400_000, 0)).toBe('stop');
@@ -306,10 +326,10 @@ describe('COMPACT: /compact with focus before wind-down', () => {
     const orch = KV.hookOutput(v(560_000, 0), { n: 560_000, orchestrator: true, g }) as HookOut;
     expect(orch.reason).toContain(KV.COMPACT_COMMAND);
     expect(orch.reason).toMatch(/last resort/);
-    const others = KV.hookOutput(KV.assess({ n: 410_000, prompt: 'hello', orchestrator: false, g }), {
+    const others = KV.hookOutput(KV.assess({ n: 410_000, prompt: 'hello', orchestrator: false, g: gB }), {
       n: 410_000,
       orchestrator: false,
-      g,
+      g: gB,
     }) as HookOut;
     expect(others.reason).toMatch(/new session/i);
     expect(others.reason).not.toContain('/compact keep');
@@ -544,8 +564,11 @@ describe('hook-context.mjs and queue.mjs: the wind-down step end to end', () => 
   const ORCHESTRATOR = join(__dirname, '..', '..');
   let folder: string;
 
+  let extraEnv: Record<string, string> = {};
   const env = () => ({
     ...process.env,
+    CONTEXT_BLOCK_OTHERS: '',
+    ...extraEnv,
     QUEUE_FOLDER: folder,
     QUEUE_GIT: folder,
     QUEUE_TIME_LOG: join(folder, 'times.jsonl'),
@@ -638,9 +661,19 @@ describe('hook-context.mjs and queue.mjs: the wind-down step end to end', () => 
       }),
     );
   });
-  afterEach(() => rmSync(folder, { recursive: true, force: true }));
+  afterEach(() => {
+    extraEnv = {};
+    rmSync(folder, { recursive: true, force: true });
+  });
 
-  it('not orchestrator is stopped at 400k; task-notification gets through', () => {
+  it('not orchestrator: only a notice at 400k by default', () => {
+    const out = hook('s9', 410_000, 'hello', false);
+    expect(out).not.toHaveProperty('decision');
+    expect(out.systemMessage).toMatch(/no stop/);
+  });
+
+  it('not orchestrator is stopped at 400k with the opt-in; task-notification gets through', () => {
+    extraEnv = { CONTEXT_BLOCK_OTHERS: '1' };
     expect(hook('s9', 410_000, 'hello', false)).toMatchObject({ decision: 'block' });
     expect(
       hook('s9', 410_000, '<task-notification><task-id>x</task-id>', false),

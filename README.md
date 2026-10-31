@@ -252,9 +252,10 @@ tokens of every subagent.
 them (`protectedPaths` in `queue.config.json`; `cq merge <ID> --allow-guard` overrides), and tracks cannot run `curl`,
 `wget`, `iwr` or a pipe into a shell ([orchestration](plugin/docs/orchestration.md#hardening-against-prompt-injection)).
 
-**Context limit in every chat.** In a project with the queue, every chat gets a notice at 250k tokens of context,
-and at 400k the message is stopped so a long chat does not keep paying for its whole history. Compact the chat
-(`/compact`), or start the message with `continue:` to send it anyway. The limits can be changed with environment
+**Context limit in every chat.** In a project with the queue, every chat gets a notice at 250k tokens of context.
+With `"contextGuard": { "blockOtherChats": true }` in `queue.config.json` (off by default), the message is also
+stopped at 400k so a long chat does not keep paying for its whole history; compact the chat (`/compact`), or start
+the message with `continue:` to send it anyway. The limits can be changed with environment
 variables ([orchestration](plugin/docs/orchestration.md)).
 
 **Status line and handover.** `cq setup --settings` adds a status line with context, cost, quota and running

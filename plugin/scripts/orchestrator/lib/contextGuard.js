@@ -4,7 +4,9 @@
 //
 // The thresholds (tokens, overridable with environment variables):
 //   - NOTICE 250k (CONTEXT_WARNING): a reminder to the model and a message to the owner, all sessions.
-//   - STOP 400k (CONTEXT_STOP): the message is stopped (decision: block) in sessions that are NOT the active orchestrator.
+//   - STOP 400k (CONTEXT_STOP): the message is stopped (decision: block) in sessions that are NOT the active orchestrator,
+//     but only when contextGuard.blockOtherChats is true in queue.config.json (CONTEXT_BLOCK_OTHERS=1/0 overrides).
+//     Default off: the owner's own chats get the notice, never a block.
 //   - WIND_DOWN 350k (CONTEXT_WIND_DOWN): the active orchestrator goes into wind-down. The hook sets `windDown` in the
 //     orchestrator cursor (<dataFolder>/orchestrator.json); `queue.mjs next/start/fill` then refuse (exit 6), while receive,
 //     review, fix rounds, merge and `set done` work as before. The message is "compact now".
@@ -47,6 +49,21 @@ const STANDARD = Object.freeze({
   compact: 280_000,
 });
 
+/**
+ * Block chats that are not the orchestrator at STOP? contextGuard.blockOtherChats in queue.config.json (default false: a
+ * notice only); CONTEXT_BLOCK_OTHERS=1 or 0 overrides. Without a config: false.
+ */
+function blockOthers(env = {}) {
+  const v = env.CONTEXT_BLOCK_OTHERS;
+  if (v === '1' || v === 'true') return true;
+  if (v === '0' || v === 'false') return false;
+  try {
+    return require('./queueConfig.js').config().contextGuard?.blockOtherChats === true;
+  } catch {
+    return false;
+  }
+}
+
 /** The thresholds, with overrides from the environment variables (invalid or empty values give the default). */
 function limits(env = {}) {
   const counts = (v, std) => {
@@ -60,6 +77,7 @@ function limits(env = {}) {
     windDown: counts(env.CONTEXT_WIND_DOWN, STANDARD.windDown),
     stopOrchestrator: counts(env.CONTEXT_STOP_ORCHESTRATOR, STANDARD.stopOrchestrator),
     compact: counts(env.CONTEXT_COMPACT, STANDARD.compact),
+    blockOthers: blockOthers(env),
   };
 }
 
@@ -230,7 +248,8 @@ function assess({ n, prompt, orchestrator, inWindDown: already = false, g = limi
     if (n >= g.notice) return { action: 'notice', setWindDown: false };
     return none;
   }
-  if (n >= g.stop && canStopped)
+  // Other chats: the block is opt-in (g.blockOthers); without it they keep getting the notice.
+  if (n >= g.stop && canStopped && g.blockOthers)
     return { action: 'stop', setWindDown: false, limit: g.stop };
   if (n >= g.notice) return { action: 'notice', setWindDown: false };
   return none;
@@ -328,7 +347,8 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
       (orchestrator
         ? `compaction at ${k(g.compact)}, wind-down at ${k(g.windDown)}, stop at ${k(g.stopOrchestrator)}; ` +
           `mode: ${modeText(mode)}). Avoid long pauses in this session.`
-        : `stop at ${k(g.stop)}). Consider a new session with a handover note soon; avoid long pauses in this session.`),
+        : `${g.blockOthers ? `stop at ${k(g.stop)}` : 'no stop'}). Compact the chat or start a new session with a ` +
+          'handover note soon; avoid long pauses in this session.'),
     hookSpecificOutput: {
       hookEventName: 'UserPromptSubmit',
       additionalContext:
