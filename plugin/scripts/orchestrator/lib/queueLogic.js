@@ -189,6 +189,8 @@ function validate(o, existing = [], register) {
     if (o[field] != null && !Array.isArray(o[field])) error.push(`${field} must be a list`);
   }
   if (o.value != null && !(o.value >= 1 && o.value <= 10)) error.push('value must be 1–10');
+  // `fixes`: the task(s) this one fixes (lib/fixLinks.js). The shape here; add and edit also check that the ids exist.
+  error.push(...require('./fixLinks.js').fixesShapeError(o));
   const emptyRegister = !register || Object.keys(register).length === 0;
   error.push(...validateNewField(o, register, { stringProject: !emptyRegister }));
   return error;
@@ -3220,7 +3222,7 @@ function qaOk(queue, ids, now = new Date().toISOString()) {
 /**
  * The owner found a deviation: qa_status → deviation, `qa_note` = the text, and a fix task `<id>-QA<n>` is added
  * (K, same project and feature, the label visual, the original's files, mission = the text + link to the original,
- * added_by "owner", status waiting). A deviation on a fix task numbers on from the original (X-QA1 → X-QA2).
+ * added_by "owner", status waiting, `fixes` = [id]). A deviation on a fix task numbers on from the original (X-QA1 → X-QA2).
  * @returns {{ error: string } | { task: object, fix: object }}
  */
 function qaDeviation(queue, id, text, now = new Date().toISOString()) {
@@ -3268,6 +3270,8 @@ function qaDeviation(queue, id, text, now = new Date().toISOString()) {
     source: `qa deviation ${o.id}`,
     added_by: 'owner',
     qa_original: root,
+    // The task the deviation was found in (lib/fixLinks.js): a defect after merge of that task.
+    fixes: [o.id],
   };
   // Without register: the project is inherited from the original, not written in again (it can be an older, explicit
   // project that is not in the register).
@@ -6339,6 +6343,7 @@ const INFO_FIELD = [
   'done',
   'depends_on',
   'waiting_on',
+  'fixes',
   'owned_files',
   'owner_db',
   'scratchpad',
@@ -6361,8 +6366,11 @@ function infoValueText(v) {
   return typeof v === 'string' ? v : JSON.stringify(v);
 }
 
-/** Summary default view of one task (`queue.mjs info <id>`): one field per line, the mission and remarks shortened. */
-function infoView(o) {
+/**
+ * Summary default view of one task (`queue.mjs info <id>`): one field per line, the mission and remarks shortened.
+ * `fixedBy` (lib/fixLinks.fixedBy) lists the fix tasks that name this one in `fixes`.
+ */
+function infoView(o, { fixedBy = [] } = {}) {
   const out = [];
   for (const f of INFO_FIELD) {
     const v = o[f];
@@ -6371,6 +6379,7 @@ function infoView(o) {
       `${f}: ${Array.isArray(v) ? v.join(', ') : f === 'head_start' ? String(v).slice(0, 12) : v}`,
     );
   }
+  if (fixedBy.length) out.push(`fixed by: ${fixedBy.join(', ')}`);
   if (o.result?.line) out.push(`result: ${o.result.line}`);
   if (o.cost)
     out.push(

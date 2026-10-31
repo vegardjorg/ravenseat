@@ -457,7 +457,8 @@
 // blocks of migration numbers, 0 for client/investigation; only used with the migration flow), depends_on [id], waiting_on
 // [owner question id], owned_files [path or folder/], owner_db [feature], shared_patch [shared feature], source (plan and
 // sub-plan), added_by, project (pid), plan (plan entry id in plans.json), feature (short name), labels (e.g.
-// ["visual"]), requires (resources, see queueLogic.REQUIRES), batched (true = batch queue). Set by the tool: picked_by,
+// ["visual"]), requires (resources, see queueLogic.REQUIRES), batched (true = batch queue), fixes (id or [id]: the
+// task(s) this fix task fixes; the ids must exist, stored as a list, lib/fixLinks.js). Set by the tool: picked_by,
 // picked_at, qa_status (waiting|ok|deviation), qa_note, qa_original (on a fix task), evidence ({ type, ref }, from the
 // EVIDENCE line or qa evidence; see config().qa), qa_ok_by ("auto" when qa auto --run closed it).
 // =============================================================
@@ -486,6 +487,8 @@ const F = require('./lib/queueFollow.js');
 const FC = require('./lib/queueForecast.js');
 const PR = require('./lib/queueProposals.js');
 const MG = require('./lib/mergeGuard.js');
+// The optional `fixes` field: the task(s) a fix task fixes (add, edit, info, state).
+const FX = require('./lib/fixLinks.js');
 
 // The project's settings (queue.config.json merged with the defaults in lib/queueConfig.js).
 const CONFIG = KK.config();
@@ -2502,6 +2505,13 @@ if (command === 'init') {
         const f = L.waitingOnError(n, queue);
         if (f.length) error.push(`${n.id ?? '(without id)'}: ${f.join('; ')}`);
       }
+    // `fixes` must name tasks in the queue or in the same add (lib/fixLinks.js; validate above has checked the shape).
+    const knownIds = [...queue.tasks.map((x) => x.id), ...newOnes.map((n) => n?.id)];
+    for (const n of newOnes) {
+      if (FX.fixesShapeError(n).length) continue;
+      const f = FX.fixesError(n, knownIds);
+      if (f.length) error.push(`${n.id ?? '(without id)'}: ${f.join('; ')}`);
+    }
     // The batch queue rules against the queue as it will be (the new ones can depend on each other).
     const after = [...queue.tasks, ...newOnes.map((n) => ({ status: 'waiting', ...n }))];
     for (const n of newOnes) {
@@ -2518,6 +2528,12 @@ if (command === 'init') {
       // The status is computed against the queue BEFORE the new ones are added (a new task cannot make another one an agent source).
       const status = L.statusAtAdd(n, queue.tasks, { approved });
       result.push({ id: n.id, status });
+      // `fixes` is stored as a list (one id is accepted); an empty one is left out.
+      const fixes = FX.fixesList(n.fixes);
+      if (fixes !== undefined) {
+        if (fixes.length) n.fixes = fixes;
+        else delete n.fixes;
+      }
       queue.tasks.push({
         value: 5,
         content_min: 30,
@@ -2998,8 +3014,17 @@ if (command === 'init') {
     );
     // A new waiting_on id must be a registered question (queue.mjs question <id> --text ... first).
     f.push(...L.waitingOnError(fresh, queue, { earlier: o.waiting_on ?? [] }));
+    // `fixes` must name tasks in the queue, never the task itself (lib/fixLinks.js; validate has checked the shape).
+    if ('fixes' in field && !FX.fixesShapeError(fresh).length)
+      f.push(...FX.fixesError(fresh, queue.tasks.map((x) => x.id)));
     if (f.length) die(`Invalid change: ${f.join('; ')}`);
     Object.assign(o, field);
+    // Stored as a list; null or [] removes the link.
+    if ('fixes' in field) {
+      const list = FX.fixesList(field.fixes);
+      if (list.length) o.fixes = list;
+      else delete o.fixes;
+    }
     // `batched: false` takes the task out of the batch queue; the field is removed so the queue file looks as before.
     if (o.batched === false) delete o.batched;
     if (bonus != null) {
@@ -3473,6 +3498,8 @@ if (command === 'init') {
   // The parallelism (active ones, max, share, threshold, low) always; the findings only when it is low.
   const par = D.parallelDiagnose(queue);
   t.parallel = { ...par, findings: par.low ? par.findings : [] };
+  // Open fix tasks and the task(s) they fix (`fixes`, lib/fixLinks.js; always included, empty when there are none).
+  t.fixLinks = FX.openFixLinks(queue.tasks);
   console.log(JSON.stringify(t, null, 2));
   if (t.empty) process.exit(3);
 } else if (command === 'diagnose') {
@@ -4066,7 +4093,8 @@ if (command === 'init') {
   // ---- Fixed lookups instead of `node -e` against queue.json ----
   const id = positional(1, ['--field'])[0];
   if (!id) die('info <id> [--field <name>] [--json]');
-  const o = read().tasks.find((x) => x.id === id);
+  const infoQueue = read();
+  const o = infoQueue.tasks.find((x) => x.id === id);
   if (!o) die(`Unknown task ${id}`);
   const field = val('--field');
   if (field) {
@@ -4074,7 +4102,7 @@ if (command === 'init') {
     if (v === undefined) die(`${id} does not have the field ${field}`);
     console.log(L.infoValueText(v));
   } else if (a.includes('--json')) console.log(JSON.stringify(o, null, 2));
-  else for (const l of L.infoView(o)) console.log(l);
+  else for (const l of L.infoView(o, { fixedBy: FX.fixedBy(id, infoQueue.tasks) })) console.log(l);
 } else if (command === 'activeOnes') {
   for (const l of L.activeLines(read())) console.log(l);
 } else if (command === 'next-migr') {

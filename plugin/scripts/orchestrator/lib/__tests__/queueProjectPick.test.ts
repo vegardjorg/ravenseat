@@ -450,6 +450,7 @@ describe('visual QA', () => {
       added_by: 'owner',
       status: 'waiting',
       qa_original: 'A-1',
+      fixes: ['A-1'],
       owned_files: ['components/ui/Summary.tsx'],
       value: 8,
     });
@@ -464,9 +465,10 @@ describe('visual QA', () => {
     const qa1 = queue.tasks.find((x) => x.id === 'A-1-QA1')!;
     K.setStatus(qa1, 'done', ISO);
     expect(qa1.qa_status).toBe('waiting');
-    expect(K.qaDeviation(queue, 'A-1-QA1', 'Almost, but the text is cut off', ISO).fix!.id).toBe(
-      'A-1-QA3',
-    );
+    const qa3 = K.qaDeviation(queue, 'A-1-QA1', 'Almost, but the text is cut off', ISO).fix!;
+    expect(qa3.id).toBe('A-1-QA3');
+    // fixes names the task the deviation was found in (the fix task), qa_original the root.
+    expect(qa3).toMatchObject({ fixes: ['A-1-QA1'], qa_original: 'A-1' });
 
     expect(K.qaDeviation(queue, 'A-2', '', ISO).error).toBeDefined();
     expect(K.qaDeviation(queue, 'A-1-QA2', 'x', ISO).error).toContain('is not done');
