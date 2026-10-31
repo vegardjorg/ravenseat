@@ -64,9 +64,14 @@ const queueWith = (limits: Record<string, number | null> = {}): Queue => ({
 });
 
 describe('loadGuard', () => {
-  it('off by default: no stop even with little memory', () => {
-    expect(L.minFreeMemoryFor(queueWith())).toBeNull();
-    expect(L.loadGuard(queueWith(), { freeMemoryPct: 1 })).toEqual({ active: false, stop: false });
+  it('default 10 (off on macOS): little memory stops, 10 % or more does not', () => {
+    if (process.platform === 'darwin') {
+      expect(L.minFreeMemoryFor(queueWith())).toBeNull();
+      return;
+    }
+    expect(L.minFreeMemoryFor(queueWith())).toBe(10);
+    expect(L.loadGuard(queueWith(), { freeMemoryPct: 1 }).stop).toBe(true);
+    expect(L.loadGuard(queueWith(), { freeMemoryPct: 10 }).stop).toBe(false);
   });
 
   it('free memory below the limit stops; equal to the limit does not', () => {
@@ -135,10 +140,14 @@ describe('queue.mjs: the load guard', () => {
   });
   afterEach(() => rmSync(folder, { recursive: true, force: true }));
 
-  it('off by default: next proposes as before even with little memory', () => {
-    const r = run(['next'], 'free=1');
+  it('default: next proposes with enough memory, and "limit off" turns the guard off', () => {
+    const r = run(['next'], 'free=50');
     expect(r.code).toBe(0);
     expect(r.out).toContain('A');
+    expect(run(['limit', 'minFreeMemoryPct', 'off'], 'free=50').code).toBe(0);
+    const off = run(['next'], 'free=1');
+    expect(off.code).toBe(0);
+    expect(off.out).toContain('A');
   });
 
   it('on: next and start give exit 7, show shows the reason, start --force starts', () => {

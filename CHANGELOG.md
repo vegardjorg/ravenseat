@@ -3,6 +3,19 @@
 All notable changes to claude-code-queue (the `cq` plugin). The version is in `plugin/.claude-plugin/plugin.json`
 and `package.json`.
 
+## Unreleased
+
+### Added
+- **Model per agent**: `models` in `queue.config.json` (agent name to `opus`, `sonnet`, `haiku` or `fable`, e.g.
+  `{ "reviewer-docs": "sonnet" }`). The start lines from `fill`, `start`, `resume` and `receive` then say `model=<m>`
+  (also `model` in `queue-fill.json`), and the orchestrator passes it to the Agent tool. Empty by default (each agent
+  file's model); an unknown value is ignored. Measure the effect with `cq cost`.
+
+### Changed
+- **The load guard is on by default**: `loadGuard.minFreeMemoryPct` is 10 (no new starts while free memory is below
+  10 %), off on macOS, which counts the page cache as used. In HMS, 14 parallel tracks made D tasks take 165 instead
+  of 34 minutes and gates go red from memory, not code. `cq limit minFreeMemoryPct off` turns it off for a queue.
+
 ## 0.4.1 (2026-10-31)
 
 ### Added

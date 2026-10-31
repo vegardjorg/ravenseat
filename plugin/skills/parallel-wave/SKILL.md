@@ -17,6 +17,7 @@ project by the installer). Project settings (base branch, gates, optional migrat
   HEAD (`worktree.baseRef: head` in `.claude/settings.json`, which `/cq:setup` offers to add), so stand on the base
   branch when you start tracks. `cq fill`/`start` print the exact `subagent_type` a task needs: installed as a plugin
   the agents are `cq:track`, `cq:track-d`, `cq:reviewer` and `cq:reviewer-security`; in a vendored install the bare names.
+  A line with `model=<m>` (config `models`) means: pass `model: "<m>"` to the Agent call as well.
 - **The orchestrator itself runs at medium effort.** `queue-takeover.mjs` shows the level (written by `hook-effort.mjs`).
   If it is not medium, ask the owner before the loop starts.
 - **Push in batches only:** commit locally for every step; `git push` happens only when the owner says "push", and

@@ -95,6 +95,11 @@ const STANDARD = Object.freeze({
   priorityRules: null,
   // The fixed reviewer agents run per class after `queue.mjs receive` (always, not switches).
   reviewers: { K: [], U: [], D: ['reviewer'], 'D+': ['reviewer', 'reviewer-security'] },
+  // Model per agent: agent name (track, track-d, reviewer, reviewer-docs, a helper ...) -> "opus", "sonnet", "haiku"
+  // or "fable". Empty (default) = the model in each agent's own file. A set model is printed on the start lines
+  // (fill, start, resume, receive) as `model=<m>`, and the orchestrator passes it to the Agent tool, which overrides
+  // the agent file. Example: { "reviewer-docs": "sonnet", "reviewer-gap": "sonnet" }.
+  models: {},
   // Helper agents: optional reviewers on top of the fixed ones (lib/queueHelpers.js). One runs for a task when it is
   // enabled AND at least one condition hits: classes, labels, paths (a changed file matches), mostlyPaths (more than
   // half of the changed files match), plan (the task has a plan entry), minMissionItems (numbered points in the
@@ -141,8 +146,10 @@ const STANDARD = Object.freeze({
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.
+  // Default 10: a full machine makes gates red from timeouts and memory, not from code. macOS reports little free
+  // memory (the page cache counts as used), so there the default is off; set a number to turn it on.
   loadGuard: {
-    minFreeMemoryPct: null,
+    minFreeMemoryPct: process.platform === 'darwin' ? null : 10,
   },
   // Auto-accept of agent proposals (lib/queueProposals.js): a proposal that fits the rules is approved by the queue
   // itself (in `queue.mjs add` and `orchestrator pulse`), logged and can be undone. Default off. `queue.mjs proposals

@@ -157,7 +157,8 @@ While off, every `follow` command answers "Follow is off (features.follow in que
 - `dailyBudget <usd>` stops new starts when the day's measured spend (API-equivalent) is used up. The night window
   (`nightRun`, `nightWindow`) can pause starts at night.
 - The load guard (`limit minFreeMemoryPct 15`, or `loadGuard.minFreeMemoryPct` in the config) stops new starts with
-  exit 7 ("THE MACHINE IS FULL") while free memory is below the limit. Off by default. Running tracks finish;
+  exit 7 ("THE MACHINE IS FULL") while free memory is below the limit. Default 10 % (off on macOS, which counts the page cache as used; set a number
+  there to turn it on). Running tracks finish;
   `start --force` and `fill --over-load` override.
 - With a migration flow, `start`, `fill` and `pick` skip taken blocks: a migration file, the block of a task that is
   not finished, or a block named on a "migration block" line in an active prompt file (a move by hand).
@@ -187,7 +188,8 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `readGuard` | built-in lists | Extra agent types, auto-loaded files and large-file globs for the reading guard |
 | `cloudHidden` | `[]` | Paths a cloud session cannot see (missions pointing there are stopped) |
 | `capacity` | Tuesday 19:00 local time | Weekly quota reset for `cq capacity` |
-| `loadGuard.minFreeMemoryPct` | `null` (off) | Load guard: no new starts while free memory (percent) is below it; `cq limit minFreeMemoryPct` overrides per queue |
+| `models` | `{}` (each agent file's model, opus) | Model per agent, e.g. `{ "reviewer-docs": "sonnet" }`: printed as `model=<m>` on the start lines and passed to the Agent tool (opus, sonnet, haiku, fable; an unknown value is ignored) |
+| `loadGuard.minFreeMemoryPct` | `10` (off on macOS) | Load guard: no new starts while free memory (percent) is below it; `cq limit minFreeMemoryPct` overrides per queue |
 | `proposals.autoAccept` | `{ enabled: false, classes: ["K"], maxEstimateMin: 60, maxValue: null }` | Auto-accept of agent proposals by the owner's rules (`cq proposals`); the queue's own rules win; never D/D+, `waiting_on`, legal/owner labels, open legal points or protected paths |
 | `qa.evidenceTypes`, `qa.autoTypes`, `qa.manualTypes` | `screenshot`, `test`, `manual`; auto `test`; manual `manual` | QA evidence types a track writes as `EVIDENCE <type>[=<ref>]`; auto types are closed by `qa auto --run`, manual ones gathered in one round |
 | `qa.autoCommand` | `null` | Shell command for auto evidence, e.g. `npx vitest run {refs}` (`{refs}`, `{id}`; or `{ "<type>": "<command>" }`); `null` = `qa auto` only lists |

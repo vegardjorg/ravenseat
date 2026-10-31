@@ -4834,6 +4834,31 @@ function agentTypeFor(cls) {
   return cls === 'D' || cls === 'D+' ? 'track-d' : 'track';
 }
 
+/** The models the Agent tool takes (config().models). */
+const AGENT_MODELS = ['opus', 'sonnet', 'haiku', 'fable'];
+
+/**
+ * The model set for an agent in config().models, or null (the agent file's own model). An unknown value counts as
+ * not set, so a typo never starts an agent with a model the Agent tool refuses.
+ * @param {string} agent the agent name without the plugin prefix (track, reviewer-docs ...)
+ */
+function modelFor(agent) {
+  let m;
+  try {
+    m = cfg().models?.[String(agent ?? '').replace(/^[^:]+:/, '')];
+  } catch {
+    return null; // no config: the agent file decides
+  }
+  const v = typeof m === 'string' ? m.trim().toLowerCase() : null;
+  return v && AGENT_MODELS.includes(v) ? v : null;
+}
+
+/** " · model=sonnet" for a start line when the agent has a model set, otherwise "". */
+function modelPart(agent) {
+  const m = modelFor(agent);
+  return m ? ` · model=${m}` : '';
+}
+
 // The reviewers (fixed per class and the helper agents) are worked out in ONE place: lib/queueHelpers.js.
 const HELP = require('./queueHelpers.js');
 
@@ -6281,8 +6306,8 @@ function concurrentBlock(agents) {
     SAME_TURN,
     ...agents.map((x) =>
       x.message
-        ? `  subagent_type=${ref(x)} · message: ${x.message}`
-        : `  subagent_type=${ref(x)} · message: the content of ${x.prompt}`,
+        ? `  subagent_type=${ref(x)}${modelPart(x.subagent_type)} · message: ${x.message}`
+        : `  subagent_type=${ref(x)}${modelPart(x.subagent_type)} · message: the content of ${x.prompt}`,
     ),
   ];
 }
@@ -6978,6 +7003,9 @@ module.exports = {
   startGuard,
   windDownGuard,
   loadGuard,
+  modelFor,
+  modelPart,
+  AGENT_MODELS,
   minFreeMemoryFor,
   limitText,
   parseLimit,

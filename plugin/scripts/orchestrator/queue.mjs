@@ -420,7 +420,7 @@
 // Load guard: with a free memory limit set (`queue.mjs limit minFreeMemoryPct 15`, or loadGuard.minFreeMemoryPct in
 // queue.config.json; the queue's value wins), `next`, `start` and `fill` refuse new starts (exit 7, "THE MACHINE IS
 // FULL: ...") while free memory (os.freemem / os.totalmem) is below the limit. `show` and `state` show the reason.
-// Running tracks finish. `start --force` and `fill --over-load` override. Default: off.
+// Running tracks finish. `start --force` and `fill --over-load` override. Default: 10 (off on macOS).
 // QUEUE_LOAD="free=<pct>" replaces the measurement (tests).
 //
 //   node scripts/orchestrator/queue.mjs handover archive [--dry]   (moves dated log entries older than 24 h from
@@ -2872,8 +2872,8 @@ if (command === 'init') {
   // Thinking level by class: K and U on `track` (medium), D and D+ on `track-d` (high).
   console.log(
     L.agentTypeFor(r.class) === 'track-d'
-      ? `Agent: subagent_type ${require('./lib/projectRoot.js').agentRef('track-d')} (thinkingLevel high).`
-      : `Agent: subagent_type ${require('./lib/projectRoot.js').agentRef('track')} (thinkingLevel medium).`,
+      ? `Agent: subagent_type ${require('./lib/projectRoot.js').agentRef('track-d')}${L.modelPart('track-d')} (thinkingLevel high).`
+      : `Agent: subagent_type ${require('./lib/projectRoot.js').agentRef('track')}${L.modelPart('track')} (thinkingLevel medium).`,
   );
   // Only the orchestrator starts tasks: the cursor says it is active.
   pulseCursor(`start ${id}`);
@@ -3625,6 +3625,8 @@ if (command === 'init') {
       class: o.class,
       // cq:track in a plugin install, track in a vendored one (lib/projectRoot.js agentRef).
       subagent_type: require('./lib/projectRoot.js').agentRef(L.agentTypeFor(o.class)),
+      // config().models; null = the agent file's model.
+      model: L.modelFor(L.agentTypeFor(o.class)),
       prompt,
       message: L.trackMessage(o.id, prompt),
       branch: o.branch,
@@ -3641,7 +3643,7 @@ if (command === 'init') {
   console.log(`FILLED ${track.length} track(s) (head ${head.slice(0, 8)}); the details are in ${jsonFile}.`);
   for (const s of track)
     console.log(
-      `${s.id}  subagent_type=${s.subagent_type}  migr ${s.migr_block ?? '-'}${s.new ? '' : '  (was already running)'}` +
+      `${s.id}  subagent_type=${s.subagent_type}${s.model ? `  model=${s.model}` : ''}  migr ${s.migr_block ?? '-'}${s.new ? '' : '  (was already running)'}` +
         `${s.warning ? '  WARNING in the track file (changed outside the queue)' : ''}`,
     );
   resolveWarning();
@@ -4890,7 +4892,7 @@ if (command === 'init') {
       `${adjusted.swapped ? '' : '  WARNING: could not find the setup line to add --continue to; check the prompt'}`,
   );
   console.log(
-    `Agent: subagent_type ${require('./lib/projectRoot.js').agentRef(L.agentTypeFor(o.class))}, ` +
+    `Agent: subagent_type ${require('./lib/projectRoot.js').agentRef(L.agentTypeFor(o.class))}${L.modelPart(L.agentTypeFor(o.class))}, ` +
       `message: ${L.trackMessage(trackId, prompt)}`,
   );
   // If the branch is still checked out in a worktree, prepare-track --continue refuses: the old agent must be done.
