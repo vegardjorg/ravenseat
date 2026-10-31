@@ -47,6 +47,7 @@ a track adding a proposal) cannot corrupt the file. `cq undo` undoes the last ch
 | `shared_patch` | Shared functions the task changes in patch form |
 | `project`, `feature`, `source` | Project id (must exist), feature name, and the plan section the task comes from |
 | `batched` | `true` for small low-value tasks: they go to the batch queue (`cq batch`) instead of their own track |
+| `fixes` | Optional: the task id (or a list of ids) this task fixes. `add` and `edit` refuse an id that is not in the queue (or in the same add) and a task naming itself; stored as a list, and `[]` or `null` in `edit` removes it. `cq info <id>` shows `fixes` and `fixed by`, and `cq state` lists the open fix tasks as `fixLinks`. `qa deviation` sets it on the fix task it creates. The benchmark (`bench/`) counts it as a defect after merge |
 
 Status flow: `proposed` → `waiting` (approved, ready to run) → `running` → `review` → `done`, or `cancelled`. Tasks
 added by an agent start as `proposed` and need `approve`; tasks the owner or the orchestrator adds start as `waiting`.
@@ -71,7 +72,7 @@ With [auto-accept](#auto-accept-of-proposals) on, the queue approves the proposa
 | `set <id> <status>` | Sets status by hand |
 | `cancel <id> [--remark "…"]` | Cancels a waiting or proposed task (decline a proposal with `--remark "declined: …"`); logged, so `undo` puts it back. Running and review tasks: `set <id> cancelled` |
 | `edit <id> --json '{…}'` | Changes fields (logged; `undo` rolls it back) |
-| `info <id>` | Short view of one task |
+| `info <id>` | Short view of one task (with `fixes` and `fixed by` when it has fix links) |
 | `question` / `resolve <q> --answer "…"` | Owner questions / answer one (waiting tasks get the answer in their mission) |
 | `limit [<name> <value>]` | Limits: `maxConcurrent`, `maxDPlus`, `maxPerDomain`, `dailyBudget`, night window, `minFreeMemoryPct`, `silentMin` (minutes before a running track is SILENT; default 20, 0 = off) |
 | `block <id> <code> [--note "…"]` / `unblock <id>` | Opens / closes a blocker reason on the task (`blocks`; one open at a time). Codes: `merge-conflict`, `gate-red`, `context`, `quota`, `owner-question`, `dependency`, `no-agent`, `silent`, `other`. `merge` opens `merge-conflict` or `gate-red` when it stops in that step and closes the open one after a successful merge |

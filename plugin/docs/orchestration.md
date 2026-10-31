@@ -171,7 +171,13 @@ context size. The system keeps both small:
 - **Push guard.** `hook-push-guard.mjs` asks before force pushes, pushes of other branches than the base, and
   migration pushes to environments not listed as allowed.
 - **Time and cost log.** `hook-time.mjs` logs subagent start and stop; `cq cost` turns the measured sessions into
-  per-class statistics, so estimates get better over time.
+  per-class statistics, so estimates get better over time. The same file (`timeLog`, overridden by `QUEUE_TIME_LOG`)
+  also gets rows for the benchmark in `bench/` (formats in `lib/timeLogRows.js`): one `gate` row per gate run (see
+  Gates below) and one `compact` row per compaction. `hook-after-compact.mjs` writes `{ time, event: "compact", scope:
+  "session", session_id, orchestrator }` for every main session (`orchestrator` is true for the bound orchestrator),
+  and `hook-track-context.mjs` writes `{ time, event: "compact", scope: "track", agent_id, agent_type, track,
+  compactions }` once per new track compaction (`compactions` is the count after it; once a track has had its PARTIAL
+  message its transcript is no longer counted). Writing a row never changes what the hook does.
 
 ## Adopting running tracks (cheap rotation)
 
@@ -236,6 +242,14 @@ receive and merge the same track. Compaction is still the usual path for a long 
 `cq gates` (`gates.mjs`) runs the project's checks from `gates` in `queue.config.json`, in the track's own worktree:
 `--quick` (tracks of class K and U, and `cq merge` after merging) and `--full` (D and D+, and the orchestrator before a
 batch push). One line per gate with GREEN/RED and the time; `--log <file>` keeps the full output.
+
+**Gate rows in the time log.** Every `--quick`, `--full` and `--precheck` run appends one row to the time log:
+`{ time, event: "gate", track, branch, kind, gates, failed, duration_s, ok, exit, attempt, timed_out? }`. `track` is
+`--track <id>` (`cq merge` passes it, since HEAD is the base branch after a merge) or the id in a `<branchPrefix><id>`
+branch, otherwise null. `gates` are the commands (or precheck checks) that ran and `failed` the red ones. `attempt`
+counts the runs of the same kind for the same task (or the same branch without one), so `attempt > 1` is a rerun.
+`timed_out: true` marks a precheck check that went over its budget. The row is fail open: it never changes the output
+or the exit code. A setup error (precheck exit 2) writes no row.
 
 **Precheck (fail fast).** Before the class's full gate a track runs `cq gates --precheck`. It runs the cheapest checks
 first, in a fixed order, only on the files changed against `baseBranch` (committed since the fork point, staged,

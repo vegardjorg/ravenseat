@@ -10,6 +10,17 @@ and `package.json`.
   `{ "reviewer-docs": "sonnet" }`). The start lines from `fill`, `start`, `resume` and `receive` then say `model=<m>`
   (also `model` in `queue-fill.json`), and the orchestrator passes it to the Agent tool. Empty by default (each agent
   file's model); an unknown value is ignored. Measure the effect with `cq cost`.
+- **Gate rows in the time log**: every `cq gates` run (`--quick`, `--full`, `--precheck`) appends one `gate` row
+  (track, branch, kind, gates, failed, duration, ok, exit, attempt, timed_out). `cq merge` passes `--track`; `attempt`
+  above 1 is a rerun. Fail open.
+- **Compaction rows in the time log**: `hook-after-compact.mjs` logs each main session compaction (scope `session`,
+  with an `orchestrator` flag), and `hook-track-context.mjs` logs each new track compaction (scope `track`, with the
+  running count).
+- **`fixes` task field**: a fix task names the task id(s) it fixes. `add` and `edit` check that the ids exist,
+  `cq info` shows `fixes` and `fixed by`, `cq state` lists open fix tasks as `fixLinks`, and `qa deviation` sets it.
+- **The benchmark reads these rows**: gate runs and reruns per task, compactions per task and in orchestrator sessions
+  (when the transcript shows none), and `fixes` links as defects after merge, whatever the defect window. It also reads
+  cq's `added_at`.
 
 ### Changed
 - **The load guard is on by default**: `loadGuard.minFreeMemoryPct` is 10 (no new starts while free memory is below
