@@ -185,7 +185,14 @@ describe('queue.mjs forecast (against a temporary queue)', () => {
         class: 'K',
         status: 'done',
         project: 'p1',
-        done: new Date(now - i * DAY).toISOString(),
+        // Noon on the calendar day i days back (local time), so a daylight saving change in the window never moves a
+        // task into the next or previous day (now - i * 24 h can).
+        done: (() => {
+          const d = new Date(now);
+          d.setDate(d.getDate() - i);
+          d.setHours(12, 0, 0, 0);
+          return d.toISOString();
+        })(),
         cost: { usd: 2 },
       })),
       ...Array.from({ length: 6 }, (_, i) => ({ id: `W-${i}`, title: 'w', class: 'K', status: 'waiting', project: 'p1' })),
