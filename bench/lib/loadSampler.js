@@ -11,8 +11,10 @@
 // Platform notes:
 //   - CPU: os.loadavg() is always 0 on Windows, so cpu_pct comes from the delta of os.cpus() times between two samples
 //     (works everywhere). load_1m is null on Windows.
-//   - Process counts: `tasklist /fo csv /nh` on Windows, `ps -A -o comm=` elsewhere, with a 5 s timeout. A failure
-//     gives null.
+//   - Process counts: on Windows PowerShell `Get-Process` (45 s timeout; on a very loaded machine PowerShell alone
+//     took about 20 s to start), with `tasklist /fo csv /nh` as the fallback when PowerShell is missing; `ps -A -o
+//     comm=` elsewhere (5 s timeout). A failure gives null. tasklist alone did not finish within 30 s on a loaded
+//     Windows machine, so the counts came out null there.
 //   - Disk: fs.statfsSync on a given path (Node 18.15+); null if unavailable.
 //   - Running tracks: when a queue file is given, the number of tasks with status running (English or Norwegian).
 //
@@ -73,18 +75,42 @@ function cpuPct(prev, now) {
 }
 
 /**
+ * Process names from a listing's stdout. `powershell`: one name per line (Get-Process, without .exe). `tasklist`: CSV
+ * rows, the first column is the image name.
+ * @returns {string[]}
+ */
+function parseProcessNames(stdout, kind) {
+  const rows = String(stdout ?? '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (kind === 'tasklist') return rows.map((l) => l.split('","')[0].replace(/^"/, ''));
+  return rows;
+}
+
+/**
  * Process names from the OS. Injected in tests via `listProcesses`.
  * @returns {string[]|null}
  */
 function listProcessesOs(platform = process.platform) {
   try {
     if (platform === 'win32') {
-      const r = spawnSync('tasklist', ['/fo', 'csv', '/nh'], { encoding: 'utf8', timeout: 5000, windowsHide: true });
+      const ps = spawnSync(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Command', '(Get-Process).ProcessName'],
+        { encoding: 'utf8', timeout: 45000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+      if (ps.status === 0 && ps.stdout) return parseProcessNames(ps.stdout, 'powershell');
+      // Only when PowerShell is missing (not on a timeout: tasklist is slower still).
+      if (ps.error?.code !== 'ENOENT') return null;
+      const r = spawnSync('tasklist', ['/fo', 'csv', '/nh'], {
+        encoding: 'utf8',
+        timeout: 20000,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
       if (r.status !== 0 || !r.stdout) return null;
-      return r.stdout
-        .split(/\r?\n/)
-        .filter(Boolean)
-        .map((l) => l.split('","')[0].replace(/^"/, ''));
+      return parseProcessNames(r.stdout, 'tasklist');
     }
     const r = spawnSync('ps', ['-A', '-o', 'comm='], { encoding: 'utf8', timeout: 5000 });
     if (r.status !== 0 || !r.stdout) return null;
@@ -225,6 +251,7 @@ module.exports = {
   cpuTimes,
   cpuPct,
   listProcessesOs,
+  parseProcessNames,
   isNode,
   diskFreePct,
   runningTracks,
