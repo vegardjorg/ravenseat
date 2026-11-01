@@ -9,7 +9,7 @@
 //   node bench/bench.mjs sample   --stop --out <load.jsonl>
 //   node bench/bench.mjs human    --log <human.jsonl> --task <id> --min <n> [--arm <a>] [--activity <text>]
 //   node bench/bench.mjs collect  --manifest <file> [--out <dir>] [--queue <f>] [--time-log <f>] [--transcripts <dir>]
-//                                 [--load <f>] [--human <f>] [--git <repo>]
+//                                 [--load <f>] [--human <f>] [--git <repo>] [--no-cache]
 //   node bench/bench.mjs report   --records <records.json> [--out <report.md>]
 //
 // Every command only READS the measured project (the queue, the logs, the transcripts, `git log`). Everything it
@@ -115,15 +115,18 @@ function cmdCollect() {
     gitRepo: val('--git'),
   };
   for (const [k, v] of Object.entries(over)) if (v) m.sources[k] = path.resolve(v);
-  const records = C.collectAll(m);
   const root = PT.safeOutput(val('--out') ?? PT.defaultResultsRoot());
+  // The transcript cache sits next to the run folders (outside the repo, like them); --no-cache reads every file.
+  const cacheFile = flag('--no-cache') ? null : path.join(root, '.transcript-cache.json');
+  const records = C.collectAll(m, { cacheFile });
   const dir = path.join(root, PT.runFolderName(m.experiment));
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'records.json');
   fs.writeFileSync(file, JSON.stringify(records, null, 1));
   console.log(`records: ${file}`);
   console.log(`tasks ${records.tasks.length}, sessions ${records.sessions.length}, gate runs ${records.gates.length}, ` +
-    `load samples ${records.load.length}, warnings ${records.warnings.length}`);
+    `load samples ${records.load.length}, ` +
+    `transcripts from cache ${records.transcript_cache_hits ?? 0}, warnings ${records.warnings.length}`);
   for (const w of records.warnings) console.log(`  warning: ${w}`);
 }
 

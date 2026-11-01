@@ -610,25 +610,64 @@ const readText = (p) => {
   }
 };
 
+// Bump when analyzeSession changes what it returns, so a cached analysis from an older version is not reused.
+const ANALYSIS_VERSION = 1;
+
+/**
+ * The transcript cache: one analysis per file, reused while the file's size and mtime are unchanged. Reading a month
+ * of transcripts can take a quarter of an hour on a busy disk; a daily collect then only parses new or changed files.
+ * A missing, unreadable or outdated cache file simply starts empty.
+ */
+function loadCache(file) {
+  if (!file) return null;
+  try {
+    const c = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (c?.version === ANALYSIS_VERSION && c.entries && typeof c.entries === 'object') return c;
+  } catch {
+    // no cache yet
+  }
+  return { version: ANALYSIS_VERSION, entries: {} };
+}
+
 /** Reads every source named in the manifest and builds the records. `maxBytes` skips huge transcripts. */
-function collectAll(manifest, { maxBytes = 300 * 1024 * 1024 } = {}) {
+function collectAll(manifest, { maxBytes = 300 * 1024 * 1024, cacheFile = null } = {}) {
   const s = manifest.sources ?? {};
   const qText = readText(s.queue);
   const windows = manifest.arms.map((a) => a.window).filter(Boolean);
   const from = windows.length ? Math.min(...windows.map((w) => ms(w.from))) : null;
   const transcripts = [];
   const skipped = [];
+  const cache = loadCache(cacheFile);
+  let cacheHits = 0;
   if (s.transcripts) {
     for (const f of listTranscripts(s.transcripts, { from })) {
       try {
-        if (fs.statSync(f.file).size > maxBytes) {
+        const st = fs.statSync(f.file);
+        if (st.size > maxBytes) {
           skipped.push(f.id);
           continue;
         }
-        transcripts.push({ ...f, analysis: analyzeSession(fs.readFileSync(f.file, 'utf8')) });
+        const hit = cache?.entries[f.file];
+        let analysis;
+        if (hit && hit.size === st.size && hit.mtimeMs === st.mtimeMs) {
+          analysis = hit.analysis;
+          cacheHits++;
+        } else {
+          analysis = analyzeSession(fs.readFileSync(f.file, 'utf8'));
+          if (cache) cache.entries[f.file] = { size: st.size, mtimeMs: st.mtimeMs, analysis };
+        }
+        transcripts.push({ ...f, analysis });
       } catch {
         skipped.push(f.id);
       }
+    }
+  }
+  if (cache && cacheFile) {
+    try {
+      fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+      fs.writeFileSync(cacheFile, JSON.stringify(cache));
+    } catch {
+      // a cache that cannot be written only costs time on the next run
     }
   }
   const timeRows = [...readJsonl(readText(s.timeLog)), ...readJsonl(readText(s.gates))];
@@ -641,6 +680,7 @@ function collectAll(manifest, { maxBytes = 300 * 1024 * 1024 } = {}) {
     reverts: gitReverts(s.gitRepo, from ? new Date(from).toISOString() : null),
   });
   if (skipped.length) out.warnings.push(`${skipped.length} transcript(s) skipped (too large or unreadable)`);
+  out.transcript_cache_hits = cacheHits;
   if (!s.transcripts) out.warnings.push('no transcripts folder: orchestrator, planning and manual sessions are missing');
   return out;
 }

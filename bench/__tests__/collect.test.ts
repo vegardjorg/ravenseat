@@ -169,6 +169,29 @@ describe('files', () => {
     expect(C.listTranscripts(d, { from: Date.now() + 86400000 })).toEqual([]);
   });
 
+  it('collectAll reuses a cached analysis while size and mtime are unchanged, and re-reads a changed file', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-cache-'));
+    tmp.push(d);
+    const tr = path.join(d, 'tr');
+    fs.mkdirSync(path.join(tr, 's1', 'subagents'), { recursive: true });
+    fs.writeFileSync(path.join(tr, 's1.jsonl'), FX.transcript(null, 1));
+    fs.writeFileSync(path.join(tr, 's1', 'subagents', 'agent-a9.jsonl'), FX.transcript('X-1', 1));
+    const Mf = require('../lib/manifest.js') as Record<string, any>;
+    const m = Mf.withDefaults({ experiment: 'c', arms: [{ name: 'a', kind: 'cq' }], tasks: [], sources: { transcripts: tr } });
+    const cacheFile = path.join(d, 'out', '.transcript-cache.json');
+    const first = C.collectAll(m, { cacheFile });
+    expect(first.transcript_cache_hits).toBe(0);
+    expect(fs.existsSync(cacheFile)).toBe(true);
+    const second = C.collectAll(m, { cacheFile });
+    expect(second.transcript_cache_hits).toBe(2);
+    expect(second.sessions.map((s: any) => s.id).sort()).toEqual(first.sessions.map((s: any) => s.id).sort());
+    // A grown file is parsed again; the other comes from the cache.
+    fs.appendFileSync(path.join(tr, 's1.jsonl'), FX.transcript(null, 2));
+    expect(C.collectAll(m, { cacheFile }).transcript_cache_hits).toBe(1);
+    // Without a cache file nothing is cached.
+    expect(C.collectAll(m).transcript_cache_hits).toBe(0);
+  });
+
   it('parseReverts keeps only revert commits', () => {
     const r = C.parseReverts('aaa\t2030-01-01T00:00:00Z\tRevert "X-2: add table"\nbbb\t2030-01-01T00:00:00Z\tX-3: other\n');
     expect(r).toEqual([{ sha: 'aaa', time: '2030-01-01T00:00:00Z', subject: 'Revert "X-2: add table"' }]);

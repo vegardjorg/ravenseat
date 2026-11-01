@@ -26,7 +26,7 @@ node bench/bench.mjs sample   --out <load.jsonl> [--interval 30] [--duration-min
 node bench/bench.mjs sample   --stop --out <load.jsonl>
 node bench/bench.mjs sample   --once [--queue <queue.json>]
 node bench/bench.mjs human    --log <human.jsonl> --task <id> --min <n> [--arm <arm>] [--activity <text>]
-node bench/bench.mjs collect  --manifest <file> [--out <dir>] [--queue f] [--time-log f] [--transcripts dir] [--load f] [--human f] [--git repo]
+node bench/bench.mjs collect  --manifest <file> [--out <dir>] [--queue f] [--time-log f] [--transcripts dir] [--load f] [--human f] [--git repo] [--no-cache]
 node bench/bench.mjs report   --records <records.json> [--out <report.md>]
 ```
 
@@ -37,6 +37,9 @@ node bench/bench.mjs report   --records <records.json> [--out <report.md>]
 - `human` appends one row of human minutes. Log every block of hands-on time (reading, prompting, reviewing,
   merging) per task; time not tied to a task is logged with `--arm` only and is spread over the arm's tasks.
 - `collect` only reads: the queue file, the time log, the transcripts, the load and human logs, and `git log`.
+  It keeps one analysis per transcript in `<out>/.transcript-cache.json` and reuses it while the file's size and
+  mtime are unchanged, so a daily collect only parses new or changed transcripts (a month of them can take a quarter
+  of an hour on a busy disk). `--no-cache` reads every file.
 - `assign` shuffles the arms within each matched pair with a fixed seed, so neither arm always gets the "first" task.
 
 ## Run manifest
