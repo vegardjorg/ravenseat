@@ -1,5 +1,5 @@
 {
-  "description": "claude-code-queue: context, read and push guards, compaction re-injection, the subagent time log and the track end gate. Every hook exits at once in projects without queue.config.json.",
+  "description": "claude-code-queue: context, read and push guards, compaction re-injection, the subagent time log and the track end gate. Every hook exits at once in projects without queue.config.json. Exec form (command + args): node is spawned directly, without a shell, which saves the Git Bash start on Windows on every call.",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,7 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-push-guard.mjs\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-push-guard.mjs"],
             "timeout": 10
           }
         ]
@@ -17,7 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-read-guard.mjs\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-read-guard.mjs"],
             "timeout": 10
           }
         ]
@@ -29,7 +31,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-track-context.mjs\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-track-context.mjs"],
             "timeout": 10
           }
         ]
@@ -41,7 +44,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-after-compact.mjs\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-after-compact.mjs"],
             "timeout": 30
           }
         ]
@@ -53,7 +57,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-time.mjs\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-time.mjs"],
             "timeout": 30
           }
         ]
@@ -65,12 +70,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-time.mjs\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-time.mjs"],
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-track-end.mjs\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-track-end.mjs"],
             "timeout": 20
           }
         ]
@@ -81,12 +88,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-effort.mjs\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-effort.mjs"],
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-context.mjs\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-context.mjs"],
             "timeout": 10
           }
         ]
@@ -98,7 +107,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-after-compact.mjs\"",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-after-compact.mjs"],
             "timeout": 30
           }
         ]

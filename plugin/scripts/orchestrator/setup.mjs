@@ -190,27 +190,38 @@ export function mergeSettings(target, o = {}) {
   }
   if (wanted.length) changes.push(o.keys ? `added ${wanted.join(', ')}` : `recommended, not set (use --settings): ${wanted.join(', ')}`);
   if (o.hooks) {
-    const commands = (groups) => new Set((groups ?? []).flatMap((g) => (g.hooks ?? []).map((h) => h.command)));
+    // A hook is identified by the queue script it runs (hook-x.mjs), whether it is written in shell form
+    // (`command` is the whole command line) or in exec form (`command` is "node" and the script is in `args`).
+    // Other hooks (the project's own) are identified by command + args.
+    const hookKey = (h) => {
+      const line = [h?.command ?? '', ...(Array.isArray(h?.args) ? h.args : [])].join(' ').replace(/\\/g, '/');
+      return /scripts\/orchestrator\/(hook-[\w-]+\.mjs)/.exec(line)?.[1] ?? JSON.stringify([h?.command, h?.args ?? null]);
+    };
+    const keys = (groups) => new Set((groups ?? []).flatMap((g) => (g.hooks ?? []).map(hookKey)));
     existing.hooks = existing.hooks ?? {};
-    // Older installs wrote relative paths (`node scripts/orchestrator/hook-x.mjs`), which break when the session's working
-    // directory is not the project root. Rewrite those to the $CLAUDE_PROJECT_DIR form, so they are not added twice.
-    const OLD = /^node scripts\/orchestrator\/(hook-[\w-]+\.mjs)$/;
+    // Older installs wrote shell form: relative paths (`node scripts/orchestrator/hook-x.mjs`, which break when the
+    // session's working directory is not the project root) or `node "$CLAUDE_PROJECT_DIR/scripts/orchestrator/hook-x.mjs"`.
+    // Rewrite both to exec form (command "node", the script in args): no shell is started, which on Windows saves the
+    // Git Bash start on every call. Only our own exact command lines are rewritten; the other fields (timeout) stay.
+    const OLD = /^node (?:scripts\/orchestrator\/|"\$\{?CLAUDE_PROJECT_DIR\}?\/scripts\/orchestrator\/)(hook-[\w-]+\.mjs)"?$/;
     for (const groups of Object.values(existing.hooks))
       for (const g of groups ?? [])
         for (const h of g.hooks ?? []) {
+          if (h.args !== undefined) continue; // already exec form
           const m = OLD.exec(h.command ?? '');
           if (!m) continue;
-          h.command = `node "$CLAUDE_PROJECT_DIR/scripts/orchestrator/${m[1]}"`;
-          changes.push(`hook path made absolute: ${m[1]}`);
+          h.command = 'node';
+          h.args = [`\${CLAUDE_PROJECT_DIR}/scripts/orchestrator/${m[1]}`];
+          changes.push(`hook made exec form: ${m[1]}`);
         }
     for (const [event, groups] of Object.entries(fresh.hooks ?? {})) {
       const list = (existing.hooks[event] = existing.hooks[event] ?? []);
-      const there = commands(list);
+      const there = keys(list);
       for (const g of groups) {
-        const added = (g.hooks ?? []).filter((h) => !there.has(h.command));
+        const added = (g.hooks ?? []).filter((h) => !there.has(hookKey(h)));
         if (!added.length) continue;
         list.push({ ...g, hooks: added });
-        changes.push(`hook ${event}: ${added.map((h) => h.command.split('/').pop().replace(/"$/, '')).join(', ')}`);
+        changes.push(`hook ${event}: ${added.map(hookKey).join(', ')}`);
       }
     }
   }

@@ -39,7 +39,7 @@ It copies:
 
 In the copied Markdown, `cq <...>` becomes `node scripts/orchestrator/cq.mjs <...>` (there is no `cq` on PATH without
 the plugin). It merges `plugin/settings.queue.json` into `.claude/settings.json` (adds missing keys and hooks, keeps every
-existing value), and adds `scripts/.queue/` and `.claude/worktrees/` to `.gitignore`.
+existing value; older shell-form queue hooks are rewritten to exec form, `"command": "node"` with the script in `args`), and adds `scripts/.queue/` and `.claude/worktrees/` to `.gitignore`.
 
 If a skill or agent with the same name already exists in the target, ASK the user whether to keep theirs, rename one,
 or rerun with `--overwrite`.
