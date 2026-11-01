@@ -1,0 +1,604 @@
+// =============================================================
+// cli/merge.mjs: the commands that finish work: receive, merge, block, unblock, blockers, deliver, release, deliveries, next-migr, migr.
+//
+// receive (take in a finished track), merge (merge-track.mjs, the gates and the migration push, with the merge guard),
+// the merge blocks, deliver/release of a picked task, deliveries (a report.md that has not been received yet), and the
+// migration number blocks (next-migr, migr).
+//
+// Why a module: queue.mjs was one file of about 6,300 lines. It is now a thin entry point (the usage comment and the
+// dispatch on the command word) plus the modules in cli/. The code was moved as it was: same output, exit codes and files.
+//
+// Used by: queue.mjs (dispatch).
+// Tested in: lib/__tests__/queueOrchestrator.test.ts, mergeGuard.test.ts, queueBlockers.test.ts, queueMigrBlock.test.ts,
+//   queueExternal.test.ts, __tests__/queueAdopt.test.ts.
+// =============================================================
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+
+import {
+  a, autoCleanFocus, BASE, branchFor, branchInfo, CONFIG, CQ, die, edit, focusCleanOut, FOLDER, git, GIT_ROOT, HELP,
+  HERE, L, MAIN_TREE, MIGR, parallelWarning, positional, pulseCursor, read, require, TK, val,
+} from './context.mjs';
+import {
+  blockList, findDeliveries, gitLarge, highestMigr, lastTrackReply, logTime, mergeBlock, minutes, readTimeLog,
+  reviewerFindingsLines, scratchpadFor, takenForMigr, taskAgents,
+} from './tracks.mjs';
+
+/** `cq receive` (the usage is at the top of queue.mjs). */
+export function cmdReceive() {
+  // ---- A track has delivered -> review + review package as plain files + reviewer prompts ----
+  const id = positional(1, ['--scratchpad', '--result'])[0];
+  if (!id) die('receive <id> [--scratchpad <folder>] [--result "RESULT ..."] [--force]');
+  const o0 = read().tasks.find((x) => x.id === id);
+  if (!o0) die(`Unknown task ${id}`);
+  if (!['running', 'picked', 'review'].includes(o0.status))
+    die(`${id} has status ${o0.status}; receive applies to running, picked or review.`);
+  const scratch = scratchpadFor(o0.scratchpad ?? null);
+  if (!scratch) die('receive needs --scratchpad <folder> (or QUEUE_SCRATCHPAD).');
+  const branch = o0.branch ?? branchFor(id);
+  const gi = branchInfo(branch);
+  if (!gi.exists) die(`Branch ${branch} does not exist.`);
+  if (gi.commits === 0 && !a.includes('--force'))
+    die(
+      `${branch} has no commits ahead of ${BASE} (already merged?). The package will be empty; --force to make it anyway.`,
+    );
+  const scope = `${BASE}...${branch}`;
+  const folder = path.join(scratch, `rev-${id}`);
+  // The package is made again every time (a new round after a fix replaces the old one). Only files we made ourselves.
+  fs.rmSync(folder, { recursive: true, force: true });
+  fs.mkdirSync(path.join(folder, 'files'), { recursive: true });
+  const stat = gitLarge(['diff', '--stat', scope]) ?? '';
+  const diff = gitLarge(['diff', scope]) ?? '';
+  fs.writeFileSync(path.join(folder, 'diff.patch'), diff);
+  const { copy, skipped } = L.packageFiles(
+    gitLarge(['diff', '--name-status', '--no-renames', scope]),
+    gitLarge(['diff', '--numstat', '--no-renames', scope]),
+  );
+  const copied = [];
+  for (const filePath of copy) {
+    const content = gitLarge(['show', `${branch}:${filePath}`], { buffer: true });
+    if (content == null) {
+      skipped.push({ path: filePath, reason: 'could not be read from the branch' });
+      continue;
+    }
+    const templateFile = path.join(folder, 'files', ...filePath.split('/'));
+    fs.mkdirSync(path.dirname(templateFile), { recursive: true });
+    fs.writeFileSync(templateFile, content);
+    copied.push(filePath);
+  }
+  // The track's answer (from the transcript), report.md and handover.md from the track folder in the scratchpad.
+  const agents = taskAgents(o0);
+  const trackReply = lastTrackReply(agents);
+  const files = {};
+  if (trackReply) {
+    fs.writeFileSync(path.join(folder, 'trackReply.md'), trackReply);
+    files.trackReply = true;
+  }
+  // Adoption: the newest report in the orchestrator's and the task's scratchpad, also from a fix round (<id>-r<N>/).
+  const trackFound = L.findTrackReport(id, [scratch, o0.scratchpad ?? null]);
+  for (const [k, measure, n] of [
+    [trackFound.report?.path, 'trackReport.md', 'report'],
+    [trackFound.handover?.path, 'handover.md', 'handover'],
+  ]) {
+    if (k && fs.existsSync(k)) {
+      fs.copyFileSync(k, path.join(folder, measure));
+      files[n] = true;
+    }
+  }
+  const reportText = files.report
+    ? fs.readFileSync(path.join(folder, 'trackReport.md'), 'utf8')
+    : null;
+  const result =
+    L.parseResult(val('--result')) ??
+    L.parseResult(trackReply) ??
+    L.parseResult(reportText);
+  // QA evidence: the EVIDENCE line (report.md first, otherwise the answer) and the warning when a task that needs it
+  // (config().qa.evidenceLabels) has none. A warning, not a stop.
+  const evidenceRead = L.parseEvidence(reportText) ?? L.parseEvidence(trackReply);
+  const evidenceWarn = L.evidenceWarning({
+    o: o0,
+    evidence: evidenceRead?.evidence ?? null,
+    evidenceError: evidenceRead?.error ?? null,
+  });
+  // The mission (prompt-<id>.md) goes into the package too: reviewer-gap compares the delivery with it, and the helper
+  // condition minMissionItems counts its numbered points.
+  const missionFile = path.join(scratch, `prompt-${id}.md`);
+  let missionText = null;
+  if (fs.existsSync(missionFile)) {
+    missionText = fs.readFileSync(missionFile, 'utf8');
+    fs.writeFileSync(path.join(folder, 'mission.md'), missionText);
+    files.mission = true;
+  }
+  // THE reviewers for the task (lib/queueHelpers.js): the fixed ones for the class and the helpers that are on and hit
+  // (class, label, changed paths, plan, mission points). A custom helper only when its agent file is the one the owner
+  // approved (sha256, lib/helperFiles.js); one that changed since is turned off here and left out.
+  const HF = require('./lib/helperFiles.js');
+  const checked = HF.verifiedSetup(CONFIG, read(), MAIN_TREE);
+  const stale = HELP.switchesToTurnOff(checked.setup);
+  if (stale.length) {
+    edit((queue) => {
+      for (const s of stale) queue.helpers[s.name] = { ...queue.helpers[s.name], enabled: false };
+    });
+    for (const s of stale)
+      console.log(`Helper agent ${s.name}: turned off and left out (${HELP.REVIEW_TEXT[s.review]}; cq helpers scan ${s.name}).`);
+  }
+  const reviewerList = L.reviewersForTask(o0, {
+    queue: read(),
+    changedPaths: [...copy, ...skipped.map((h) => h.path)],
+    missionText,
+    hashes: checked.hashes,
+  });
+  const reviewers = reviewerList.map((x) => x.type);
+  const customReviewers = new Set(reviewerList.filter((x) => x.custom).map((x) => x.type));
+  const dbObjects = L.dbObjectsFromDiff(diff, { folder: MIGR.folder });
+  fs.writeFileSync(
+    path.join(folder, '00-package.md'),
+    L.reviewPackageIndex({
+      o: o0,
+      branch,
+      stat,
+      dbObjects,
+      copied,
+      skipped,
+      result,
+      files,
+      base: BASE,
+      migrFolder: MIGR.folder,
+      reviewers: reviewerList,
+    }),
+  );
+  const prompts = reviewers.map((type) => {
+    const file = path.join(folder, `reviewer-${type}.md`);
+    fs.writeFileSync(file, L.reviewerPrompt({ o: o0, type, folder, base: BASE }) + '\n');
+    return { type, file };
+  });
+  const r = edit((queue) => {
+    const o = queue.tasks.find((x) => x.id === id);
+    if (o.status !== 'review') {
+      const s = L.setStatus(o, 'review', new Date().toISOString());
+      if (s.error) die(s.error);
+    }
+    if (result) o.result = result;
+    if (evidenceRead?.evidence) o.evidence = evidenceRead.evidence;
+    o.review_package = folder;
+    // Adoption: the report that has been read is no longer a new delivery (pulse and deliveries skip it).
+    if (trackFound.report) {
+      o.report_received = trackFound.report.mtimeMs;
+      o.report_seen = Math.max(Number(o.report_seen ?? 0), trackFound.report.mtimeMs);
+    }
+    // First delivery to review (a new round after a fix keeps the first time).
+    o.t_receive ??= new Date().toISOString();
+    autoCleanFocus(queue, `receive ${id}`);
+    return o;
+  });
+  if (o0.status !== 'review' && r.started)
+    logTime(id, 'delivered', `${minutes(r.started, r.delivered)} min to delivery`);
+  if (!r.picked_by) pulseCursor(`receive ${id}`);
+  console.log(
+    `${id}: review · ${result ? result.line : 'no RESULT line (read trackReply.md)'}\n` +
+      `Package: ${folder} (00-package.md; ${copied.length} file(s), ${dbObjects.length} DB object(s))`,
+  );
+  // The report cap (about 1,500 chars); the long part belongs in report.md.
+  const capWarning = L.reportCapWarning(trackReply);
+  if (capWarning) console.log(capWarning);
+  if (evidenceRead?.evidence) console.log(`QA evidence: ${L.evidenceText(evidenceRead.evidence)}`);
+  if (evidenceWarn) console.log(evidenceWarn);
+  focusCleanOut();
+  // The reviewers (D+: two, plus the helpers that hit) are started in the SAME turn.
+  for (const x of reviewerList.filter((y) => !y.fixed))
+    console.log(`Helper agent ${x.type}: ${x.reasons.join(', ')} (cq helpers off ${x.type} turns it off).`);
+  if (prompts.length)
+    for (const l of L.concurrentBlock(
+      prompts.map((p) => ({ subagent_type: p.type, prompt: p.file, bare: customReviewers.has(p.type) })),
+    ))
+      console.log(l);
+  else
+    console.log(
+      `Class ${o0.class}: no review (config().reviewers has none for the class, and no helper agent is on and hits).`,
+    );
+  console.log(
+    `Merge (after an approved review, from Bash): ${CQ} merge ${id}  ` +
+      `(by hand: merge-track.mjs ${branch} --wave-base ${o0.head_start ?? '<HEAD at start>'})`,
+  );
+  // The end of a track is a natural checkpoint for the parallelism.
+  parallelWarning();
+}
+
+/** `cq merge` (the usage is at the top of queue.mjs). */
+export async function cmdMerge() {
+  // ---- merge-track -> migrationPush (only with a migration flow, with the environment guard) -> gates --quick -> set done -> fill,
+  // in one call. The steps, the stop rules and the environment check are in queueLogic (mergePlan, executeMerge, environmentCheck); here is only
+  // the I/O. ----
+  const id = positional(1, ['--scratchpad'])[0];
+  if (!id)
+    die('merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard]');
+  // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
+  const allowGuard = a.includes('--allow-guard');
+  const o = read().tasks.find((x) => x.id === id);
+  if (!o) die(`Unknown task ${id}`);
+  const force = a.includes('--force');
+  if (o.status !== 'review' && !(force && ['running', 'picked'].includes(o.status)))
+    die(
+      `${id} has status ${o.status}; merge applies to review (after receive and an approved review). ` +
+        '--force only for running/picked on the owner\'s word.',
+    );
+  const branch = o.branch ?? branchFor(id);
+  const gi = branchInfo(branch);
+  if (!gi.exists) die(`Branch ${branch} does not exist.`);
+  if (gi.commits === 0)
+    die(`${branch} has no commits ahead of ${BASE} (already merged?). Nothing completed.`);
+  const withoutFill = a.includes('--without-fill');
+  const scratch = scratchpadFor(o.scratchpad ?? null);
+  if (!scratch && !withoutFill)
+    die('merge needs --scratchpad <folder> (or QUEUE_SCRATCHPAD) for fill, or --without-fill.');
+  const name = git(['diff', '--name-only', `${BASE}...${branch}`]);
+  // The branch's merge base and tip BEFORE the merge. After the merge HEAD = baseBranch and the gates' diff against base is empty;
+  // with these gates.mjs can still see the track's own changes.
+  const trackArgs = require('./lib/trackDiff.js').trackArgs({
+    separator: git(['merge-base', BASE, branch]),
+    tip: git(['rev-parse', '--verify', `refs/heads/${branch}`]),
+  });
+  // The size in code lines (a stable size unit), measured BEFORE the merge against the wave base (HEAD at start;
+  // without it: baseBranch). Three dots: only the branch's own changes.
+  const diffLines = TK.diffLinesFromShortstat(
+    git(['diff', '--shortstat', `${o.head_start ?? BASE}...${branch}`]),
+  );
+  const plan = L.mergePlan({
+    o,
+    files: name == null ? null : name.split(/\r?\n/).filter(Boolean),
+    withoutMigrPush: a.includes('--without-migr-push'),
+    withoutFill,
+    base: BASE,
+    migrations: MIGR,
+  });
+  const logFolder = scratch ?? FOLDER;
+  fs.mkdirSync(logFolder, { recursive: true });
+  const logFile = path.join(logFolder, `merge-${id}.log`);
+  const logParts = [];
+  const writeLog = (text) => {
+    logParts.push(text);
+    try {
+      fs.writeFileSync(logFile, logParts.join('\n'));
+    } catch {
+      /* the log is an aid (Windows file lock); the steps go on */
+    }
+  };
+  const queueMjs = path.join(HERE, 'queue.mjs');
+  const remark = `merged with cq merge${plan.migrPush ? ' (migrations pushed)' : ''}`;
+  /** The command for one step: [program, arguments, shell?]. The migration command is a shell line from the config. */
+  const command = ({ step }) => {
+    if (step === 'merge')
+      return [
+        process.execPath,
+        [
+          path.join(HERE, 'merge-track.mjs'),
+          branch,
+          ...(o.head_start ? ['--wave-base', o.head_start] : []),
+          ...(allowGuard ? ['--allow-guard'] : []),
+        ],
+      ];
+    if (step === 'migr-push') return [String(MIGR.pushCommand), [], true];
+    if (step === 'gates')
+      return [
+        process.execPath,
+        [
+          path.join(HERE, 'gates.mjs'),
+          '--quick',
+          ...trackArgs,
+          // The task id for the gate row in the time log (gates.mjs): after the merge HEAD is the base branch.
+          '--track',
+          id,
+          '--log',
+          path.join(logFolder, `merge-${id}-gates`),
+        ],
+      ];
+    if (step === 'done')
+      return [
+        process.execPath,
+        [
+          queueMjs,
+          'set',
+          id,
+          'done',
+          '--remark',
+          remark,
+          // The reviewers' FINDINGS lines are entered into the task (`findings`); no line: no --findings.
+          ...reviewerFindingsLines(o).flatMap((l) => ['--findings', l]),
+        ],
+      ];
+    if (step === 'fill') return [process.execPath, [queueMjs, 'fill', '--scratchpad', scratch]];
+    throw new Error(`unknown step ${step}`);
+  };
+  // The tests inject the runner (QUEUE_MERGE_RUNNING = a module with default export run({ step, cmd, args }) ->
+  // { code, out }), so there is never a real migrationPush, merge or gate run in a test.
+  const injected = process.env.QUEUE_MERGE_RUNNING
+    ? (await import(pathToFileURL(path.resolve(process.env.QUEUE_MERGE_RUNNING)).href)).default
+    : null;
+  // The exit code of merge-track.mjs: 4 = the merge guard stopped it before the merge (gets its own message below).
+  let mergeCode = null;
+  const run = (x) => {
+    const [cmd, args, shell = false] = command(x);
+    let r;
+    if (injected) r = injected({ ...x, cmd, args });
+    else {
+      const s = spawnSync(cmd, args, {
+        cwd: GIT_ROOT,
+        encoding: 'utf8',
+        maxBuffer: 1 << 28,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: shell,
+      });
+      r = {
+        code: s.status ?? 1,
+        out: `${s.stdout ?? ''}${s.stderr ?? ''}${s.error ? `\n${s.error.message}` : ''}`,
+      };
+    }
+    writeLog(`===== ${x.step}: ${cmd} ${args.join(' ')} (exit ${r.code}) =====\n${r.out}`);
+    if (x.step === 'merge') mergeCode = r.code;
+    return r;
+  };
+  const PRIVACY = require('./lib/pushGuard.js');
+  // The environment file is often gitignored and only in the main tree; so the git root is tried first and then the main tree.
+  const readEnvironment = () => PRIVACY.readEnvironment([GIT_ROOT, MAIN_TREE], MIGR.environmentFile ?? null);
+  console.log(`MERGE ${id} (${branch}): ${plan.step.join(' → ')}`);
+  const res = L.executeMerge({
+    o,
+    plan,
+    branch,
+    currentBranch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
+    run,
+    readEnvironment,
+    // The push guard (hook-push-guard.mjs) does not see commands inside this script; so it is asked here too.
+    guard: (environment) =>
+      PRIVACY.assess(String(MIGR.pushCommand ?? ''), {
+        branch: BASE,
+        environment,
+        baseBranch: BASE,
+        migrations: MIGR,
+      }),
+    base: BASE,
+    migrations: MIGR,
+  });
+  for (const l of res.lines) console.log(l);
+  if (!res.ok && res.stop.step === 'merge' && mergeCode === 4) {
+    // The merge guard: nothing was merged. Say what to do instead of a raw exit code.
+    console.log(
+      `STOP: the merge guard stopped ${branch} before the merge. The branch changes protected paths ` +
+        `(protectedPaths in queue.config.json: hooks, settings, agents, orchestrator scripts, the queue config, ` +
+        `package.json) that ${id} does not own. Nothing was merged.`,
+    );
+    if (res.stop.excerpt.length) console.log(res.stop.excerpt.map((l) => `  | ${l}`).join('\n'));
+    console.log(
+      `Read the diff first: git diff ${BASE}...${branch} -- <path>. A change you did not ask for may come from text ` +
+        'the track read (prompt injection): then do not merge, and start a fix round.\n' +
+        `If the change is intended: add the path to the task's owned_files/shared_patch, or run ` +
+        `\`${CQ} merge ${id} --allow-guard\` (logged as "guard-overridden").`,
+    );
+    mergeBlock(id, 'merge-conflict', 'merge guard');
+    console.log(`Full log: ${logFile}`);
+    process.exit(4);
+  }
+  if (!res.ok) {
+    // A stop in the merge or the gates step opens a blocker reason (cq blockers); the next successful merge closes it.
+    const code = { merge: 'merge-conflict', gates: 'gate-red' }[res.stop.step];
+    if (code) mergeBlock(id, code, res.stop.message);
+    console.log(`STOP in the step ${res.stop.step}: ${res.stop.message}`);
+    if (res.stop.excerpt.length) console.log(res.stop.excerpt.map((l) => `  | ${l}`).join('\n'));
+    console.log(`Full log: ${logFile}`);
+    process.exit(1);
+  }
+  // The timestamps and the size. t_review is the first reviewer start after t_receive (hook-time writes
+  // the start row with the task id from the path rev-<id>); the tests run with an injected runner, without a real merge.
+  edit((queue) => {
+    const ox = queue.tasks.find((x) => x.id === id);
+    if (!ox) return null;
+    ox.t_merge = new Date().toISOString();
+    if (diffLines != null) ox.diff_lines = diffLines;
+    const tReview = TK.firstReviewStart(readTimeLog(), id, {
+      types: L.REVIEWER_TYPES,
+      from: ox.t_receive ?? null,
+    });
+    if (tReview && !ox.t_review) ox.t_review = tReview;
+    // The merge went through: an open blocker (merge-conflict, gate-red or one set by hand) is closed.
+    L.closeBlock(ox);
+    return ox;
+  });
+  console.log(`Full log: ${logFile}`);
+}
+
+/** `cq block` (the usage is at the top of queue.mjs). */
+export function cmdBlock() {
+  // ---- Blocker reasons (queueLogic.BLOCK_CODES): open one by hand; at most one is open per task ----
+  const [id, code] = positional(1, ['--note']);
+  if (!id || !code)
+    die(`block <id> <code> [--note "..."]   (code: ${L.BLOCK_CODES.map((b) => b.code).join(', ')})`);
+  const r = edit((queue) => {
+    const o = queue.tasks.find((x) => x.id === id);
+    if (!o) die(`Unknown task ${id}`);
+    const x = L.openBlock(o, code, { note: val('--note') ?? null });
+    if ('error' in x) die(x.error);
+    return x;
+  });
+  if (r.kept) console.log(`${id}: already blocked by ${code} since ${r.block.from}${r.block.note ? ` (${r.block.note})` : ''}`);
+  else
+    console.log(
+      `${id}: blocked by ${code} from ${r.block.from}` +
+        `${r.closed ? ` (closed the open ${r.closed.code})` : ''}. Close it with ${CQ} unblock ${id}.`,
+    );
+}
+
+/** `cq unblock` (the usage is at the top of queue.mjs). */
+export function cmdUnblock() {
+  const [id] = positional(1);
+  if (!id) die('unblock <id>');
+  const closed = edit((queue) => {
+    const o = queue.tasks.find((x) => x.id === id);
+    if (!o) die(`Unknown task ${id}`);
+    return L.closeBlock(o);
+  });
+  console.log(closed ? `${id}: ${closed.code} closed (${closed.from} to ${closed.to})` : `${id} has no open blocker.`);
+}
+
+/** `cq blockers` (the usage is at the top of queue.mjs). */
+export function cmdBlockers() {
+  // ---- Per code: count and blocked time in the period, top first (read-only) ----
+  const raw = val('--days') ?? '7';
+  const days = Number(raw);
+  if (!(days > 0)) die('--days must be a number > 0');
+  const summary = L.blockerSummary(read(), { days });
+  if (a.includes('--json')) console.log(JSON.stringify({ days, blockers: summary }, null, 2));
+  else for (const l of L.blockerLines(summary, { days })) console.log(l);
+}
+
+/** `cq next-migr` (the usage is at the top of queue.mjs). */
+export function cmdNextMigr() {
+  // The highest file in the main tree (baseBranch, where merged migrations live) and the highest assigned block in the queue.
+  if (!MIGR.folder)
+    die('The project has no migration flow (config().migrations.folder is not set); next-migr does not apply.');
+  const highFile = highestMigr(GIT_ROOT);
+  const newText = a[1];
+  if (newText == null) {
+    const queue = read();
+    console.log(
+      `next_migr ${queue.next_migr}; ` +
+        `highest migrationFile ${highFile}, highest block ${L.highestBlockNr(queue)}`,
+    );
+  } else {
+    const fresh = Number(newText);
+    const previous = edit((queue) => {
+      const v = L.nextMigrGuard({
+        now: queue.next_migr,
+        new: fresh,
+        highestFile: highFile,
+        highestBlock: L.highestBlockNr(queue),
+        taken: takenForMigr(queue, { scratch: scratchpadFor() }),
+      });
+      if (!v.ok) die(`Nothing changed: ${v.error}`);
+      const f = queue.next_migr;
+      queue.next_migr = fresh;
+      return f;
+    });
+    console.log(`next_migr ${previous} → ${fresh}`);
+  }
+}
+
+/** `cq migr` (the usage is at the top of queue.mjs). */
+export function cmdMigr() {
+  // ---- `migr move <id> <block>` moves the block in the queue and in the prompt files ----
+  if (!MIGR.folder)
+    die('The project has no migration flow (config().migrations.folder is not set); migr does not apply.');
+  const [sub, id, blockArg] = positional(1, ['--scratchpad']);
+  if (sub !== 'move' || !id || !blockArg)
+    die('migr move <id> <block> [--scratchpad <folder>] [--force]   (block: 3470 or 3470-3479)');
+  const scratch = scratchpadFor();
+  const r = edit((queue) => {
+    const o = queue.tasks.find((x) => x.id === id);
+    if (!o) die(`Unknown task ${id}`);
+    if (L.MIGR_FREE_STATUS.has(o.status)) die(`${id} is ${o.status}; a finished task is not moved.`);
+    const size = Number(MIGR.blockSize) > 0 ? Math.floor(Number(MIGR.blockSize)) : 10;
+    const old = L.blockInterval(o.migr_block);
+    const tens = old ? (old.to - old.from + 1) / size : Math.max(1, Number(o.migr_tens ?? 0));
+    const fresh = L.parseMoveBlock(blockArg, tens, size);
+    if (fresh.error) die(`Nothing changed: ${fresh.error}`);
+    const hit = takenForMigr(queue, { scratch, except: id }).filter(
+      (t) => t.from <= fresh.to && t.to >= fresh.from,
+    );
+    if (hit.length && !a.includes('--force'))
+      die(
+        `Nothing changed: ${fresh.from}–${fresh.to} is taken (${blockList(hit)}); --force only on the owner's word`,
+      );
+    const previous = o.migr_block ?? null;
+    o.migr_block = L.migrBlockText(fresh);
+    const nextBefore = queue.next_migr;
+    queue.next_migr = Math.max(Number(queue.next_migr) || 0, fresh.to + 1);
+    const now = new Date().toISOString();
+    o.remarks = [...(o.remarks ?? []), `${now} migr move: ${previous ?? 'none'} → ${o.migr_block}`];
+    return {
+      o: { ...o },
+      old,
+      fresh,
+      previous,
+      nextBefore,
+      next: queue.next_migr,
+      scratchpad: o.scratchpad,
+    };
+  });
+  console.log(`${id}: migr_block ${r.previous ?? 'none'} → ${r.o.migr_block}`);
+  if (r.next !== r.nextBefore) console.log(`next_migr ${r.nextBefore} → ${r.next}`);
+  // The prompt files (prompt-<id>.md and fix rounds prompt-<id>-rN.md) in the task's scratchpad and in --scratchpad.
+  const folders = [...new Set([scratch, r.scratchpad].filter(Boolean).map((m) => path.resolve(m)))];
+  const own = (f) => L.promptTask(f, [r.o]) === id;
+  let count = 0;
+  for (const m of folders) {
+    let files = [];
+    try {
+      files = fs.readdirSync(m).filter((f) => /^prompt-.+\.md$/.test(f) && own(f));
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      const p = path.join(m, f);
+      const before = fs.readFileSync(p, 'utf8');
+      let after = L.moveBlockInText(before, r.old, r.fresh);
+      const note = `The migration block has been moved to ${r.o.migr_block} (cq migr move). Use only the new block.`;
+      if (!after.includes(note)) after = `${after.replace(/\s*$/, '')}\n\n${note}\n`;
+      if (after !== before) {
+        fs.writeFileSync(p, after);
+        count += 1;
+        console.log(`wrote ${p}`);
+      }
+    }
+  }
+  if (!count) console.log('Found no prompt file to update (--scratchpad <folder> points there).');
+  if (r.o.status === 'running' || r.o.status === 'picked')
+    console.log(
+      `${id} is running: send the track the new block with SendMessage ("The migration block has been moved to ${r.o.migr_block}").`,
+    );
+}
+
+/** `cq deliver` (the usage is at the top of queue.mjs). */
+export function cmdDeliver() {
+  const id = a[1];
+  if (!id) die('deliver <id>');
+  const r = edit((queue) => {
+    const s = L.deliver(queue, id);
+    if (s.error) die(s.error);
+    return s;
+  });
+  console.log(
+    `${id}: review (delivered by ${r.task.picked_by ?? '?'}). The orchestrator merges ${r.task.branch ?? branchFor(id)}.`,
+  );
+}
+
+/** `cq release` (the usage is at the top of queue.mjs). */
+export function cmdRelease() {
+  const id = a[1];
+  if (!id) die('release <id>');
+  // The commits are counted before the lock (git must not run with the queue file locked). The branch is in the task (queue/<id>).
+  const before = read().tasks.find((x) => x.id === id);
+  const g = branchInfo(before?.branch ?? branchFor(id));
+  const r = edit((queue) => {
+    const s = L.release(queue, id, { commits: g.commits });
+    if (s.error) die(s.error);
+    return s;
+  });
+  console.log(`${id}: released (was picked by ${r.by ?? '?'}), waiting again.`);
+  if (r.warning) console.log(`WARNING: ${r.warning}`);
+}
+
+/** `cq deliveries` (the usage is at the top of queue.mjs). */
+export function cmdDeliveries() {
+  // ---- Adoption: report.md files that have not been received (read-only; pulse does the same and remembers what it reported) ----
+  const found = findDeliveries(read());
+  if (a.includes('--json')) console.log(JSON.stringify(found, null, 2));
+  else if (!found.length)
+    console.log('No deliveries waiting (no report.md newer than the start or the last receive).');
+  else
+    for (const l of found)
+      console.log(
+        `${l.id} (${l.taskStatus})  ${l.line}\n  ${l.path}  ${l.new ? 'NEW' : 'reported before'}  → ${CQ} receive ${l.id}`,
+      );
+}

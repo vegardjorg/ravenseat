@@ -61,6 +61,11 @@ and `package.json`.
   statement for statement, and the board looks and works as before. The server allow-lists each file by name; the
   Content-Security-Policy is unchanged. A new test (`queueBoardServe.test.ts`) checks that every file is served with
   the right type and the same CSP.
+- **`queue.mjs` is split into modules**: the file of about 6,300 lines is now the usage comment and the dispatch on
+  the command word, and the commands' code is in `scripts/orchestrator/cli/` (one module per area of 140 to 600 lines,
+  the shared state in `cli/context.mjs`). The code was moved as it was: every command gives the same output, exit
+  codes and files. A new test (`__tests__/queueDispatch.test.ts`) checks that every command word reaches an exported
+  function.
 - **The bench load sampler counts processes on Windows**: `tasklist` did not finish within the timeout on a loaded
   machine, so `processes` and `node_processes` came out null. It now uses PowerShell `Get-Process` (45 s timeout),
   with `tasklist` only as the fallback when PowerShell is missing.
