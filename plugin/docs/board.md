@@ -34,7 +34,9 @@ The Queue workspace has these tabs:
 - **Dependencies:** a graph of which tasks wait on which.
 - **Cloud:** tasks that can run in a cloud session, and the cloud sessions (off by default, see [Modules](#modules)).
 - **Statistics:** done per day, added versus finished, time per class, cost per day (API-equivalent USD), context at
-  the end of tracks, key figures (including usage today), the forecast line, the table **Blockers last 7 days** (per
+  the end of tracks, key figures (first **Cost per merged change**: all measured cost in the last 14 days divided by
+  the tasks merged in them, with where the cost went and, as a secondary estimate-based figure, the cost per content
+  minute; see [Cost estimates and calibration](queue.md#cost-estimates-and-calibration); then usage today), the forecast line, the table **Blockers last 7 days** (per
   blocker code: count and blocked time, the same numbers as `cq blockers`), and the legend for the badges on the cards.
 - A running card gets the badge **silent** when the track has an agent worktree but no sign of life for
   `limits.silentMin` minutes (the same rule as `SILENT` in `cq show`; the server measures it at most once a minute).

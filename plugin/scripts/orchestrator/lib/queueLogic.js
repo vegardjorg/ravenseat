@@ -170,6 +170,16 @@ function estimateCost(o) {
 }
 
 /**
+ * "~$2.4" (one decimal below $10, whole dollars above) for a cost estimate { usd }: the short form shown next to the
+ * minute estimate. The calibrated estimate itself lives in lib/costEstimate.js; '' when there is no number.
+ */
+function costLabel(c) {
+  const usd = Number(c?.usd);
+  if (c?.usd == null || !Number.isFinite(usd)) return '';
+  return `~$${usd < 10 ? usd.toFixed(1) : Math.round(usd)}`;
+}
+
+/**
  * Validates a new task. Returns a list of errors (empty = valid).
  * Required: id, title, domain, class, mission (path to track description or text).
  * `register` (the queue's `projects`): when it has at least one project, an explicit `project` must exist in it.
@@ -4916,12 +4926,26 @@ const SUMMARY_STATUSES = ['running', 'review', 'picked'];
  * task that can start now, then the counts. The target is below approx. 3,000 characters (the full table was approx. 66,000 characters,
  * approx. 20,000 tokens per call). The full one is behind `show --full`.
  * @param {object} queue the queue
- * @param {{ now?: number, uncommitted?: string[], dailyUsage?: number, width?: number }} [option]
+ * `costEstimate` (o => { usd }, lib/costEstimate.js calibratedCost with a model) adds "~$x" to the startable lines, and
+ * with `outlook` (lib/costEstimate.js budgetOutlook) a budget outlook line; passed in by queue.mjs, since costEstimate.js
+ * itself requires this module.
+ * @param {object} queue the queue
+ * @param {{ now?: number, uncommitted?: string[], dailyUsage?: number, width?: number,
+ *   costEstimate?: ((o: object) => { usd: number }) | null, outlook?: ((b: object, usd: number) => { message: string } | null) | null }} [option]
  * @returns {string[]} the lines
  */
 function summaryView(
   queue,
-  { now = Date.now(), uncommitted = [], dailyUsage, width = 110, cursor = null, load = null } = {},
+  {
+    now = Date.now(),
+    uncommitted = [],
+    dailyUsage,
+    width = 110,
+    cursor = null,
+    load = null,
+    costEstimate = null,
+    outlook = null,
+  } = {},
 ) {
   const tasks = queue.tasks ?? [];
   const cut = (s) => (s.length > width ? `${s.slice(0, width - 1)}…` : s);
@@ -4957,6 +4981,7 @@ function summaryView(
     out.push(
       cut(
         `  ${v.id.padEnd(12)} ${v.class.padEnd(2)} ${String(v.domain).padEnd(12)} ${`${v.estimate} min`.padEnd(8)} ` +
+          (costEstimate ? `${costLabel(costEstimate(o)).padEnd(6)} ` : '') +
           `prio ${v.score}${'step' in v ? ` ${stepText(v)}` : ''}  ${o?.title ?? ''}`,
       ),
     );
@@ -5008,6 +5033,12 @@ function summaryView(
   if (!guard) {
     const b = budgetGuard(queue, dailyUsage);
     if (b.active && b.message) out.push(cut(b.message));
+    // The calibrated estimate of what can start now against what is left of the budget (information only).
+    if (b.active && outlook && costEstimate) {
+      const sum = startable.reduce((s, v) => s + (costEstimate(tasks.find((x) => x.id === v.id))?.usd ?? 0), 0);
+      const line = outlook(b, sum)?.message;
+      if (line) out.push(cut(line));
+    }
     const n = nightGuard(queue, now);
     if (n.active && n.message) out.push(cut(n.message));
   }
@@ -6368,9 +6399,10 @@ function infoValueText(v) {
 
 /**
  * Summary default view of one task (`queue.mjs info <id>`): one field per line, the mission and remarks shortened.
- * `fixedBy` (lib/fixLinks.fixedBy) lists the fix tasks that name this one in `fixes`.
+ * `fixedBy` (lib/fixLinks.fixedBy) lists the fix tasks that name this one in `fixes`. `costEstimate` (lib/costEstimate.js
+ * calibratedCost) adds the line "estimate: 39 min · ~$2.4 (measured, class+size, n=7)".
  */
-function infoView(o, { fixedBy = [] } = {}) {
+function infoView(o, { fixedBy = [], costEstimate = null } = {}) {
   const out = [];
   for (const f of INFO_FIELD) {
     const v = o[f];
@@ -6379,6 +6411,13 @@ function infoView(o, { fixedBy = [] } = {}) {
       `${f}: ${Array.isArray(v) ? v.join(', ') : f === 'head_start' ? String(v).slice(0, 12) : v}`,
     );
   }
+  if (costEstimate && Number.isFinite(costEstimate.usd))
+    out.push(
+      `estimate: ${estimate(o)} min · ~$${costEstimate.usd} (` +
+        (costEstimate.source === 'measured'
+          ? `measured, ${costEstimate.basis}, n=${costEstimate.n})`
+          : 'model, too little measured data)'),
+    );
   if (fixedBy.length) out.push(`fixed by: ${fixedBy.join(', ')}`);
   if (o.result?.line) out.push(`result: ${o.result.line}`);
   if (o.cost)
@@ -6969,6 +7008,7 @@ module.exports = {
   CALIBRATED,
   estimateWall,
   estimateCost,
+  costLabel,
   DEFAULT_LIMITS,
   LIMIT_NAME,
   LIMIT_EXTRA,

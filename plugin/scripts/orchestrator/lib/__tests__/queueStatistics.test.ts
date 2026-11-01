@@ -465,3 +465,43 @@ describe('in versus out and time from question to answer', () => {
     expect(s.keyFigures.inOut.out).toBe(0.1);
   });
 });
+
+describe('statistics: USD per merged change (keyFigures.costPerMerged, lib/costEstimate.js)', () => {
+  const tok = (output: number) => ({ input: 0, output, cache_read: 0, cache_written: 0 });
+  const row = (agent: string, track: string, time: string, output: number): Row => ({
+    time,
+    event: 'done',
+    agent_id: agent,
+    agent_type: 'track',
+    track,
+    model: 'claude-opus-5-5',
+    tokens: tok(output),
+  });
+  // $20 per MTok output: 100k = $2.
+  const rows = [
+    row('a1', 'M1', '2026-09-29T10:00:00Z', 100_000),
+    row('a2', 'X1', '2026-09-29T11:00:00Z', 100_000), // the cancelled task
+    row('a3', 'free', '2026-09-30T08:00:00Z', 50_000), // an agent without a task
+    row('a4', 'M1', '2026-08-01T08:00:00Z', 500_000), // outside the 14-day window
+  ];
+  const tasks: Task[] = [
+    { id: 'M1', class: 'K', status: 'done', content_min: 30, done: ts('2026-09-29T12:00:00Z') },
+    { id: 'M2', class: 'D', status: 'done', content_min: 50, done: ts('2026-09-30T09:00:00Z') },
+    { id: 'X1', class: 'K', status: 'cancelled' },
+  ];
+
+  it('all measured cost in the window (also cancelled work and agents without a task) / merged tasks', () => {
+    const s = S.statistics({ tasks }, rows, { now: NOW }) as Stat & {
+      keyFigures: { costPerMerged: Record<string, unknown> };
+    };
+    expect(s.keyFigures.costPerMerged).toMatchObject({
+      merged: 2,
+      total_usd: 5,
+      usd_per_merged: 2.5,
+      source: 'time-log',
+      parts: { merged: 2, cancelled: 2, open: 0, unattributed: 1 },
+      content_min: 80,
+      usd_per_content_min: 0.06,
+    });
+  });
+});

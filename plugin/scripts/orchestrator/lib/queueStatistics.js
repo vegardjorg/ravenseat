@@ -12,11 +12,14 @@
 // In versus out (added and finished per day), median time from question to answer (only with enough resolutions), and
 // the age limits for aging work on the board (`ageBounds`: p85 per class).
 // The batch queue is counted separately in the key figures (`batchQueue`).
+// The main cost figure is USD per merged change (`costPerMerged`, lib/costEstimate.js): all measured cost in the window
+// divided by the tasks that reached done in it.
 // Tested in scripts/orchestrator/lib/__tests__/queueStatistics.test.ts.
 // =============================================================
 
 const L = require('./queueLogic.js');
 const TK = require('./timeCost.js');
+const CE = require('./costEstimate.js');
 
 /** The charts show the last 14 days; "finished" in the key figures the last 7. */
 const WINDOW_DAYS = 14;
@@ -235,6 +238,14 @@ function statistics(queue, rows, { now = Date.now(), tz = TK.TZ } = {}) {
   for (const r of trackLast.filter((x) => x.model).slice(-MODEL_COUNT))
     models.set(r.model, (models.get(r.model) ?? 0) + 1);
 
+  // ---- USD per merged change: all measured cost in the window / the tasks that reached done in it ----
+  const costPerMerged = CE.perMergedChange({
+    queue,
+    events: TK.usageEvents(rows ?? [], tz),
+    from: now - WINDOW_DAYS * 86_400_000,
+    to: now + 1,
+  });
+
   const dailyBudget = Number(g.dailyBudget);
   return {
     windowDays: WINDOW_DAYS,
@@ -247,6 +258,8 @@ function statistics(queue, rows, { now = Date.now(), tz = TK.TZ } = {}) {
       accuracy: match.length ? round(median(match), 2) : null,
       matchCount: match.length,
       usageToday: round(cost.get(today).usd, 2),
+      // The main cost figure (the last WINDOW_DAYS days, rolling), see lib/costEstimate.js perMergedChange.
+      costPerMerged,
       dailyBudget:
         g.dailyBudget != null && Number.isFinite(dailyBudget) && dailyBudget > 0
           ? dailyBudget

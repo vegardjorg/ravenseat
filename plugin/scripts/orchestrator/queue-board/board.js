@@ -2980,13 +2980,41 @@
     );
   }
 
-  function tile(name, val, under) {
+  /** A key figure: name, the large value, a line under it and (optional) a second, smaller detail line. */
+  function tile(name, val, under, detail) {
     return el(
       'div',
       { class: 'tile' },
       el('p', { class: 'tile-name', text: name }),
       el('p', { class: 'tile-value', text: val }),
       under ? el('p', { class: 'tile-under', text: under }) : null,
+      detail ? el('p', { class: 'tile-under tile-detail', text: detail }) : null,
+    );
+  }
+
+  /**
+   * "Cost per merged change" (keyFigures.costPerMerged from lib/costEstimate.js): the value, the total over the merged
+   * count, and a detail line with where the cost went and the secondary, estimate-based per content minute figure.
+   */
+  function costTile(p, windowDays) {
+    if (!p.merged)
+      return tile(
+        'Cost per merged change',
+        'no data',
+        `no task merged in the last ${windowDays} days (${usd(p.total_usd)} measured)`,
+      );
+    return tile(
+      'Cost per merged change',
+      usd(p.usd_per_merged),
+      `${usd(p.total_usd)} all measured cost / ${counts(p.merged)} merged, last ${windowDays} days` +
+        (p.source === 'task-cost' ? ' (task cost only, no usage in the time log)' : ''),
+      (p.source === 'time-log'
+        ? `Merged ${usd(p.parts.merged)}, cancelled ${usd(p.parts.cancelled)}, still open ${usd(p.parts.open)}, ` +
+          `no task ${usd(p.parts.unattributed)}. `
+        : '') +
+        (p.usd_per_content_min != null
+          ? `Estimate-based, secondary: ${usd(p.usd_per_content_min)} per content minute.`
+          : ''),
     );
   }
 
@@ -3210,6 +3238,10 @@
       el(
         'section',
         { class: 'keyFigures', 'aria-label': 'Key figures' },
+        // The main cost figure: all measured cost in the window (also cancelled work and agents without a task) divided
+        // by the tasks that reached done (lib/costEstimate.js perMergedChange). Per content minute is only in the
+        // detail line, labelled estimate-based: it moves when the estimates change.
+        n.costPerMerged ? costTile(n.costPerMerged, d.windowDays) : null,
         tile(
           `Done last ${d.doneDays} days`,
           counts(n.finished),

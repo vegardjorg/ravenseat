@@ -78,7 +78,8 @@ With [auto-accept](#auto-accept-of-proposals) on, the queue approves the proposa
 | `block <id> <code> [--note "…"]` / `unblock <id>` | Opens / closes a blocker reason on the task (`blocks`; one open at a time). Codes: `merge-conflict`, `gate-red`, `context`, `quota`, `owner-question`, `dependency`, `no-agent`, `silent`, `other`. `merge` opens `merge-conflict` or `gate-red` when it stops in that step and closes the open one after a successful merge |
 | `blockers [--days 7] [--json]` | Per blocker code: count and blocked time in the period, top first |
 | `next-migr [<n>]` / `migr move <id> <block>` | Migration flow only: show or set the next number / move a task's block in the queue and its prompt files |
-| `cost` | Cost statistics per class (median, average) from the measured track sessions |
+| `cost [--since 7d] [--json]` | USD per merged change for the window first (see [Cost estimates and calibration](#cost-estimates-and-calibration)), then cost per class (n, median, sum) from the measured track sessions |
+| `calibrate [--days 28] [--min 5] [--json]` | Per class: how far the minute estimates and the cost model are off, and the suggested correction (read-only) |
 | `projects`, `project <pid> …` | Projects: progress, pause, prefixes |
 | `focus set <steps>` | Focus period: only these steps are started |
 | `focus evaluate [--json]` / `focus clean [--dry]` | Each stage as active, done-with-rests (batch queue, proposals, owner questions, QA, with a suggestion per rest) or done / takes out the done stages (history and changelog, so `undo` works; the last stage stays). `receive`, `set <id> done\|cancelled` and `fill` clean automatically, and the board hides done stages |
@@ -100,10 +101,47 @@ along) when a focus applies, otherwise every waiting, running, picked and review
 cancelled never count. `--project <pid>` narrows it to one project. The method is Monte Carlo: each of 2000 runs draws
 a day's throughput (done per calendar day in the last `--days` days, zero days included) with replacement until the
 remaining count is reached, and the 50/85/95 % answers are the day counts that share of runs finished within (day 1 is
-today). The expected cost is the remaining count times the median measured cost (`cost.usd`) per done task in the
-window, left out when nothing has a measured cost. With fewer than 5 done in the window it says "not enough data".
+today). The expected cost is the sum of the calibrated cost estimate of each remaining task (see below), left out when
+nothing in the window has a measured cost. With fewer than 5 done in the window it says "not enough data".
 The throughput is the whole queue's, also with `--project`. The board shows the same paragraph in the Focus view and
 in Statistics. The logic is `lib/queueForecast.js`.
+
+### Cost estimates and calibration
+
+Minute estimates (`content_min` x the class weight) are poor predictors: in a project with about 2,800 tasks the
+median actual/estimate ratio was 0.33 for K, 1.62 for D, 2.33 for D+ and 0.40 for U. The median measured cost per class
+predicts cost well (median ratio about 0.97). So cq estimates cost from measured cost, not from minutes:
+
+1. **Class + size**: when the class and size bucket (S up to 30 content minutes, M up to 60, L above) has at least 5
+   done tasks with a measured cost (`cost.usd`) in the last 28 days, the estimate is that bucket's median.
+2. **Class**: otherwise, with at least 5 in the class, the static model for the task (fixed + content minutes x factor,
+   `CALIBRATED` in `lib/queueLogic.js`) times the class's median measured/model ratio.
+3. **Model**: otherwise the static model alone.
+
+The estimate is shown as `~$x` next to the minute estimate in `show`, `show --full`, `next`, the `fill` lines and
+`info` (with where it came from, e.g. `measured, class+size, n=7`). `state` has a `costEstimate` field: the model per
+class, what can start now with the estimate each, the sum, and the daily budget outlook. With `dailyBudget` set,
+`next` and `show` print a **Budget outlook** line (what can start now against what is left today); the budget guard
+itself still stops on measured usage only. The weekly quota forecast (`capacity`, the queue cost) and the forecast's
+expected cost use the same estimate. The order of the queue is not changed: the priority still uses the minute
+estimate.
+
+`cq calibrate` shows the calibration per class: n, the median actual/estimate ratio for minutes (cycle time started to
+done) with the suggested weight, the median measured USD, the model's median for the same tasks, the cost correction
+factor, and whether new tasks of the class are estimated from measured data or the model. The suggested weight is advice
+only; cq never changes the weights itself. The logic is `lib/costEstimate.js`.
+
+**USD per merged change** is the main cost figure (`cq cost`, and the first key figure in the board's Statistics):
+
+> all measured cost in the window / the queue tasks that reached done in the window
+
+"All measured cost" is every usage event in the time log in the window: the tracks, fix rounds, reviewers and helper
+agents of the merged tasks, the work on cancelled tasks, work on tasks still open, and agents that belong to no task.
+The orchestrator session itself is not in the time log (the hooks cover subagents only), so it is not included. Without
+any usage in the time log for the window, the total is the measured task cost of the merged tasks, and the output says
+so. `cq cost` uses `--since` as the window, otherwise the last 28 days; the board uses its 14-day window. "USD per
+content minute" is shown only as a secondary, estimate-based figure: raising the estimates (the denominator) makes work
+look cheaper without anything changing, so it is not a headline.
 
 ### Auto-accept of proposals
 
