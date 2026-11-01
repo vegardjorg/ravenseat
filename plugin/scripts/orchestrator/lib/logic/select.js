@@ -29,7 +29,6 @@ const { focusStatus } = require('./focus.js');
  * `uncommitted`: the paths `git status` shows in the main tree. A task that owns one of them is skipped (another
  * session is working in the file); `uncommittedSkipped` says which and why.
  */
-
 function selectNext(queue, now = Date.now(), { uncommitted = [], load = null } = {}) {
   const tasks = queue.tasks ?? [];
   const register = queue.projects ?? {};
