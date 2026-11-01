@@ -138,6 +138,8 @@ export function planDoc(json) {
   });
   if (under === 'show') {
     const reg = readPlans();
+    // A register written before the document register existed has no `documents` field: treat it as empty.
+    if (!Array.isArray(reg.documents)) reg.documents = [];
     const filter = {
       group: values('--group'),
       status: values('--status'),
