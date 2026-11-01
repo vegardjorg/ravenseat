@@ -117,7 +117,7 @@ predicts cost well (median ratio about 0.97). So cq estimates cost from measured
 1. **Class + size**: when the class and size bucket (S up to 30 content minutes, M up to 60, L above) has at least 5
    done tasks with a measured cost (`cost.usd`) in the last 28 days, the estimate is that bucket's median.
 2. **Class**: otherwise, with at least 5 in the class, the static model for the task (fixed + content minutes x factor,
-   `CALIBRATED` in `lib/queueLogic.js`) times the class's median measured/model ratio.
+   `CALIBRATED` in `lib/logic/base.js`, re-exported by `lib/queueLogic.js`) times the class's median measured/model ratio.
 3. **Model**: otherwise the static model alone.
 
 The estimate is shown as `~$x` next to the minute estimate in `show`, `show --full`, `next`, the `fill` lines and
