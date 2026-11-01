@@ -6,7 +6,7 @@
 // now and why not, for show, the board and the loops).
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
-// Used by queueLogic.js (the facade) and by logic/pick.js, agents.js.
+// Used by queueLogic.js (the facade) and by logic/pick.js, agents.js, monitor.js.
 // Tested in lib/__tests__/queueMigrBlock.test.ts, queueFocus.test.ts, loadSlots.test.ts and queueExternal.test.ts
 // (through queueLogic.js).
 // =============================================================

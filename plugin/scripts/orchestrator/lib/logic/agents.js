@@ -5,7 +5,7 @@
 // reviewer rules), trackMessage, stateLine and summaryView.
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
-// Used by queueLogic.js (the facade) and by logic/results.js.
+// Used by queueLogic.js (the facade) and by logic/results.js, merge.js.
 // Tested in lib/__tests__/queueOrchestrator.test.ts, queueModels.test.ts and queueHelpers.test.ts (through
 // queueLogic.js).
 // =============================================================

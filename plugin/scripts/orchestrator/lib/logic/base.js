@@ -13,7 +13,7 @@
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
 // Used by queueLogic.js (the facade) and by logic/projects.js, evidence.js, validate.js, conflicts.js, ranking.js,
 // questions.js, commits.js, guards.js, batch.js, edit.js, focus.js, select.js, pick.js, external.js, cloud.js,
-// agents.js, results.js.
+// agents.js, results.js, classify.js, monitor.js, resume.js.
 // Tested in lib/__tests__/queueLogic.test.ts, costEstimate.test.ts, queueCapacity.test.ts and queueBatch.test.ts
 // (through queueLogic.js).
 // =============================================================
