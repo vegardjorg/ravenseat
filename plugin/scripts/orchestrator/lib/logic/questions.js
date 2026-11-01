@@ -6,7 +6,7 @@
 // block as text, common for start and pick).
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
-// Used by queueLogic.js (the facade) and by logic/select.js.
+// Used by queueLogic.js (the facade) and by logic/select.js, pick.js, external.js.
 // Tested in lib/__tests__/queueQuestion.test.ts, queueAnswer.test.ts and queueSaverMode.test.ts (through
 // queueLogic.js).
 // =============================================================

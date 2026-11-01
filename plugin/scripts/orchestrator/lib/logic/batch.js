@@ -5,7 +5,7 @@
 // batchMissionText. The small predicates (isBatched, inBatchQueue, BATCHED_BLOCKER) live in logic/base.js.
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
-// Used by queueLogic.js (the facade) and by logic/edit.js.
+// Used by queueLogic.js (the facade) and by logic/edit.js, agents.js.
 // Tested in lib/__tests__/queueBatch.test.ts and queueSmall.test.ts (through queueLogic.js).
 // =============================================================
 

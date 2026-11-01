@@ -7,7 +7,7 @@
 // rows for external work live in logic/external.js.
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
-// Used by queueLogic.js (the facade) and by logic/guards.js, select.js.
+// Used by queueLogic.js (the facade) and by logic/guards.js, select.js, pick.js, external.js.
 // Tested in lib/__tests__/queueExternal.test.ts and contextGuard.test.ts (through queueLogic.js).
 // =============================================================
 

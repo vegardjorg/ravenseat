@@ -6,7 +6,7 @@
 // scoreParts) and blockersWithPause. Writing the focus period lives in logic/focus.js.
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
-// Used by queueLogic.js (the facade) and by logic/commits.js, edit.js, focus.js, select.js.
+// Used by queueLogic.js (the facade) and by logic/commits.js, edit.js, focus.js, select.js, pick.js, agents.js.
 // Tested in lib/__tests__/queueFocus.test.ts, queueLogic.test.ts and queueProjectPick.test.ts (through queueLogic.js).
 // =============================================================
 

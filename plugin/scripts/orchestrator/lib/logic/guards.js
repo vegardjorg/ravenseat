@@ -5,7 +5,7 @@
 // load-aware slots from lib/loadSlots.js), windDownGuard, and the limit texts and parsing (limitText, parseLimit).
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
-// Used by queueLogic.js (the facade) and by logic/select.js.
+// Used by queueLogic.js (the facade) and by logic/select.js, agents.js.
 // Tested in lib/__tests__/queueNight.test.ts, queueLoadLimit.test.ts, queueSaverMode.test.ts and contextGuard.test.ts
 // (through queueLogic.js).
 // =============================================================

@@ -5,7 +5,7 @@
 // apart because pick, external, batch and edit all validate tasks, and the field rules depend on the QA evidence rules.
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
-// Used by queueLogic.js (the facade) and by logic/batch.js, edit.js.
+// Used by queueLogic.js (the facade) and by logic/batch.js, edit.js, pick.js, external.js.
 // Tested in lib/__tests__/queueLogic.test.ts, queueProjectPick.test.ts and queueRequires.test.ts (through
 // queueLogic.js).
 // =============================================================
