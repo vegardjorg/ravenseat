@@ -430,7 +430,11 @@
 // queue.config.json; the queue's value wins), `next`, `start` and `fill` refuse new starts (exit 7, "THE MACHINE IS
 // FULL: ...") while free memory (os.freemem / os.totalmem) is below the limit. `show` and `state` show the reason.
 // Running tracks finish. `start --force` and `fill --over-load` override. Default: 10 (off on macOS).
-// QUEUE_LOAD="free=<pct>" replaces the measurement (tests).
+// Above that hard stop, the slots are load-aware (lib/loadSlots.js): `next`, `start`, `fill`, `show` and `state` open
+// fewer than maxConcurrent slots while free memory is below loadGuard.allSlotsFreeMemoryPct (default 40), at least
+// loadGuard.minSlots (1), and print why ("LOAD: 2 of 5 slots: free memory 18 % ..."). loadGuard.adaptive false or
+// QUEUE_LOAD_ADAPTIVE=off turns it off; `fill --over-load` and `start --force` skip it.
+// QUEUE_LOAD="free=<pct>,cpu=<pct>" replaces the measurement (tests).
 //
 //   node scripts/orchestrator/queue.mjs handover archive [--dry]   (moves dated log entries older than 24 h from
 //                                                                  <dataFolder>/handover-ongoing.md to
@@ -500,6 +504,8 @@ const MG = require('./lib/mergeGuard.js');
 const FX = require('./lib/fixLinks.js');
 // Calibrated cost estimates (~$ in show, next, fill, info, state), `calibrate`, and USD per merged change (`cost`).
 const CE = require('./lib/costEstimate.js');
+// Load-aware slots: the measurement (free memory, optional CPU) for the load guard and the adaptive slot count.
+const LS = require('./lib/loadSlots.js');
 
 // The project's settings (queue.config.json merged with the defaults in lib/queueConfig.js).
 const CONFIG = KK.config();
@@ -2003,25 +2009,29 @@ function takenForMigr(queue, { scratch = null, except = null } = {}) {
 const blockList = (list) => [...new Set(list.map((h) => `${h.from}–${h.to} ${h.source}`))].join(', ');
 
 /**
- * The load now for the load guard (queueLogic.loadGuard): free memory in percent. An error in the measurement gives
- * null, and null never stops. QUEUE_LOAD="free=<pct>" replaces the measurement (tests).
- * @returns {{ freeMemoryPct: number|null }}
+ * The load now for the load guard (queueLogic.loadGuard) and the adaptive slots (lib/loadSlots.js): free memory in
+ * percent, and CPU busy in percent only when the CPU thresholds are set (a ~200 ms sample). An error in the
+ * measurement gives null, and null never stops or limits. QUEUE_LOAD="free=<pct>,cpu=<pct>" replaces it (tests).
+ * @returns {{ freeMemoryPct: number|null, cpuPct: number|null }}
  */
 function measureLoad() {
-  const env = process.env.QUEUE_LOAD;
-  if (env) {
-    const out = { freeMemoryPct: null };
-    for (const part of env.split(',')) {
-      const [k, v] = part.split('=').map((x) => x.trim());
-      if (k === 'free' && v !== '' && Number.isFinite(Number(v))) out.freeMemoryPct = Number(v);
-    }
-    return out;
-  }
+  let cpu = false;
   try {
-    const total = os.totalmem();
-    return { freeMemoryPct: total > 0 ? Math.round((os.freemem() / total) * 1000) / 10 : null };
+    cpu = LS.cpuOn(LS.settingsFrom(require('./lib/queueConfig.js').config().loadGuard));
   } catch {
-    return { freeMemoryPct: null };
+    cpu = false;
+  }
+  return LS.measure({ cpu });
+}
+
+/** One line when the load limits the slots ("LOAD: 2 of 5 slots: free memory 18 % (all slots from 40 %)."), or null. */
+function loadSlotsLine(queue, load) {
+  if (!load) return null;
+  try {
+    const ls = L.loadSlotsFor(queue, load);
+    return ls.limited ? `LOAD: ${ls.reason}. Fewer tracks start until the load goes down.` : null;
+  } catch {
+    return null; // never let the explanation stop a command
   }
 }
 
@@ -2848,12 +2858,16 @@ if (command === 'init') {
   // Wind-down guard: the orchestrator in windDown (hook-context, about 350k) gives exit 6.
   // Load guard: the machine is full gives exit 7.
   const usage = dailyUsageFor(queue);
-  const guard = L.startGuard(queue, usage, { cursor: readCursor(), load: measureLoad() });
+  const load = measureLoad();
+  const guard = L.startGuard(queue, usage, { cursor: readCursor(), load });
   if (guard) die(guard.message, guard.code);
   const b = L.budgetGuard(queue, usage);
   // Tasks that own an uncommitted file in the main tree are skipped (another session is working in the file).
   const uncommitted = uncommittedPaths();
-  const selected = L.selectNext(queue, Date.now(), { uncommitted });
+  // With the load: fewer slots under load (lib/loadSlots.js), and the line says why.
+  const selected = L.selectNext(queue, Date.now(), { uncommitted, load });
+  const loadLine = loadSlotsLine(queue, load);
+  if (loadLine) console.log(loadLine);
   // The calibrated cost estimate per task (lib/costEstimate.js); the order is selectNext's, unchanged.
   const costModel = CE.costModel(queue);
   const costFor = (v) => CE.calibratedCost(queue.tasks.find((o) => o.id === v.id), costModel);
@@ -2905,7 +2919,7 @@ if (command === 'init') {
     // the pause on the project, never the blockers above (dependencies, ownership, owner questions).
     if (
       !a.includes('--force') &&
-      !L.selectNext(queue, Date.now(), { uncommitted }).some((v) => v.id === id)
+      !L.selectNext(queue, Date.now(), { uncommitted, load }).some((v) => v.id === id)
     ) {
       const register = queue.projects ?? {};
       // Parked and outside focus (rest waiting) stop like a pause; --force (the owner's word) overrides.
@@ -2928,8 +2942,10 @@ if (command === 'init') {
           `${id} cannot be started: file ${u.path} is uncommitted in the main tree (another session is working in it). Wait, ask the session ` +
             'to commit or register itself (cq external add), or start --force on the owner\'s word.',
         );
+      const loadLine = loadSlotsLine(queue, load);
       die(
-        `${id} is not among those that can start now (the limits for concurrent, D+ or domain are reached). See \`next\`.`,
+        `${id} is not among those that can start now (the limits for concurrent, D+ or domain are reached). See \`next\`.` +
+          (loadLine ? ` ${loadLine}` : ''),
       );
     }
     return markStarted(queue, o, {
@@ -3305,7 +3321,13 @@ if (command === 'init') {
   const silentMin = L.silentMinFor(queue);
   console.log(`  ${'silentMin'.padEnd(14)} ${silentMin > 0 ? `${silentMin} min` : 'off'}`);
   const lm = measureLoad();
-  console.log(`  load now: free memory ${lm.freeMemoryPct ?? '?'} %`);
+  console.log(
+    `  load now: free memory ${lm.freeMemoryPct ?? '?'} %` +
+      (lm.cpuPct != null ? `, CPU ${lm.cpuPct} % busy` : ''),
+  );
+  // The adaptive slot count (lib/loadSlots.js; loadGuard.adaptive in queue.config.json, QUEUE_LOAD_ADAPTIVE=off).
+  const ls = L.loadSlotsFor(queue, lm);
+  console.log(`  slots now: ${ls.active ? ls.text : `${ls.max} (adaptive off)`}`);
   const lg = L.loadGuard(queue, lm);
   if (lg.stop) console.log(lg.message);
   const b = L.budgetGuard(queue, dailyUsageFor(queue));
@@ -3603,6 +3625,7 @@ if (command === 'init') {
   // Measured before the lock; --over-load (the owner's word) overrides the load guard.
   const load = a.includes('--over-load') ? null : measureLoad();
   let quotaMessage = null;
+  let loadMessage = null;
   // Under the lock: select (selectNext, or --ids) and mark started. With --ids a task that is already running gets
   // only new prompt files (e.g. after make-mission failed); a pending one must be startable now (otherwise start --force
   // on the owner's word first).
@@ -3611,7 +3634,7 @@ if (command === 'init') {
     autoCleanFocus(queue, 'fill');
     const out = [];
     if (ids.length) {
-      const can = L.selectNext(queue, Date.now(), { uncommitted }).map((v) => v.id);
+      const can = L.selectNext(queue, Date.now(), { uncommitted, load }).map((v) => v.id);
       for (const id of ids) {
         const o = queue.tasks.find((x) => x.id === id);
         if (!o) die(`Unknown task ${id}. Nothing was started.`);
@@ -3624,11 +3647,14 @@ if (command === 'init') {
           const lg = L.loadGuard(queue, load);
           if (lg.stop) die(`${lg.message} Nothing was started.`, 7);
           out.push({ o, new: true });
-        } else
+        } else {
+          const loadLine = o.status === 'waiting' ? loadSlotsLine(queue, load) : null;
           die(
             `${id} (${o.status}) cannot be started now (see next and show --full; start --force only on the owner's word). ` +
+              (loadLine ? `${loadLine} (fill --over-load overrides.) ` : '') +
               'Nothing was started.',
           );
+        }
       }
     } else {
       const guard = L.startGuard(queue, usage, { cursor: readCursor(), load });
@@ -3647,7 +3673,9 @@ if (command === 'init') {
       } catch (e) {
         quotaMessage = `(The quota forecast failed: ${e?.message ?? e}; cq capacity)`;
       }
-      for (const v of L.selectNext(queue, Date.now(), { uncommitted }).slice(
+      // Load-aware slots (lib/loadSlots.js): under load selectNext opens fewer slots; the line says why.
+      loadMessage = loadSlotsLine(queue, load);
+      for (const v of L.selectNext(queue, Date.now(), { uncommitted, load }).slice(
         0,
         Math.min(max, quotaMax),
       ))
@@ -3661,6 +3689,7 @@ if (command === 'init') {
     for (const l of L.resolveWaitsLines(L.resolveWaits(read()), { max: 10 })) console.log(l);
   };
   if (quotaMessage) console.log(quotaMessage);
+  if (loadMessage) console.log(loadMessage);
   focusCleanOut();
   if (!selected.length) {
     console.log('Nothing can start now (see show and state).');

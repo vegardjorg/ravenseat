@@ -32,8 +32,21 @@ and `package.json`.
   cancelled and open work, agents without a task) divided by the tasks that reached done. The first line of
   `cq cost` (window `--since`, default 28 days; `--json` too) and the first key figure in the board's Statistics
   (14 days). Per content minute is only a secondary, estimate-based figure.
+- **Load-aware parallelism** (`lib/loadSlots.js`): `fill`, `next`, `start`, `show` and `state` open fewer than
+  `maxConcurrent` slots while the machine is loaded, instead of all or nothing. All slots at or above
+  `loadGuard.allSlotsFreeMemoryPct` free memory (default 40, off on macOS), `loadGuard.minSlots` (default 1) at the
+  hard limit `minFreeMemoryPct`, linear in between, rounded down. CPU is optional (`allSlotsCpuPct` and
+  `minSlotsCpuPct`, off by default). The commands print why (`LOAD: 2 of 5 slots: free memory 18 % (all slots from
+  40 %)`), `state` has `loadSlots` and `cq limit` shows the slots now. `loadGuard.adaptive: false` or
+  `QUEUE_LOAD_ADAPTIVE=off` turns it off; `fill --over-load` and `start --force` skip it. The hard load guard (exit 7)
+  is unchanged. Why: a heavy user's data showed that with many parallel tracks the machine, not tokens, was the limit:
+  the median gate time more than tripled from 1-2 to 3-4 running tracks, and most gate runs were reruns.
+  `QUEUE_LOAD` also takes `cpu=<pct>`.
 
 ### Changed
+- **The bench load sampler counts processes on Windows**: `tasklist` did not finish within the timeout on a loaded
+  machine, so `processes` and `node_processes` came out null. It now uses PowerShell `Get-Process` (45 s timeout),
+  with `tasklist` only as the fallback when PowerShell is missing.
 - **The 400k block in other chats is opt-in**: chats that are not the orchestrator get the notice from 250k, but the
   message is only stopped at 400k with `contextGuard.blockOtherChats: true` in `queue.config.json`
   (`CONTEXT_BLOCK_OTHERS=1` overrides). The orchestrator's compact, wind-down and hard stop are unchanged.
