@@ -34,514 +34,34 @@
 // The tests live in lib/__tests__/.
 // =============================================================
 
-/**
- * The config (queue.config.json via queueConfig.js), read the first time it is needed. If reading fails (e.g. in a pure test without
- * config), the defaults are used.
- */
-let configCache = null;
+const {
+  cfg, resetConfig, baseBranch, remoteName, branchPrefix, queueBranch, WEIGHT, CALIBRATED, DEFAULT_LIMITS, NIGHT_TZ,
+  ACTIVE, STATUSES, WITHOUT_PROJECT, WITHOUT_FEATURE, LABEL_VISUAL, PID_PATTERN, LABEL_PATTERN, OLD_PICK_MS, estimate,
+  estimateWall, estimateCost, costLabel, hasMigr, utcText, ageText, isExternalRow, regexSafe, BATCHED_BLOCKER,
+  isBatched, inBatchQueue, openTask, openQuestion, round2, cutText, addToBonus, bonusBlock,
+} = require('./logic/base.js');
+const {
+  projectFor, longestPrefix, projectPaused, hasLabel, counterAsAgent, projectOrder, groups, projectOverview,
+  newRegister, withIndex,
+} = require('./logic/projects.js');
+const {
+  qaConfig, validateEvidence, parseEvidence, evidenceRequired, evidenceWarning, evidenceText, qaSplit,
+  evidenceCommand, qaAutoOutcome,
+} = require('./logic/evidence.js');
+const { validate, validateNewField } = require('./logic/validate.js');
+const {
+  norm, fileOverlap, conflictPart, conflict, blockerParts, blockers, childrenMap, successors, lockUpCount,
+} = require('./logic/conflicts.js');
+const {
+  blockersWithPause, WITHOUT_AREA, FOCUS_REST, FOCUS_MAX_TEXT, areaFor, parseStep, stepMatch, focusApplies, ownStep,
+  parkedNow, draggedWith, rankingContext, parkedText, focusSpace, ranking, compareRanking, parseToDate, stepTitle,
+  stepText, focusText, score, scoreParts,
+} = require('./logic/ranking.js');
 /** Load-aware slots (pure rule + measurement; no dependency back on this file). */
 const LS = require('./loadSlots.js');
-function cfg() {
-  if (configCache) return configCache;
-  try {
-    configCache = require('./queueConfig.js').config();
-  } catch {
-    configCache = {};
-  }
-  return configCache;
-}
-/** Forgets the config that was read (tests that switch QUEUE_CONFIG). */
-function resetConfig() {
-  configCache = null;
-}
-/** The integration branch everything is merged into. */
-const baseBranch = () => cfg().baseBranch ?? 'main';
-/** The remote baseBranch is pushed to. */
-const remoteName = () => cfg().remote ?? 'origin';
-/** Prefix for the queue branches (`<prefix><id>`). */
-const branchPrefix = () => cfg().branchPrefix ?? 'queue/';
-/** The queue branch for a task. */
-const queueBranch = (id) => `${branchPrefix()}${id}`;
-
-/**
- * Weight per risk class. Estimate = content (min for a K track) × weight.
- *
- * `estimate` is NOT a good wall time; wall time depends little on content_min. WEIGHT and estimate drive priority (value
- * per minute in scoreParts), the size targets and the cloud bundle cap; editing them would reshuffle the queue. Calibrated wall time and
- * cost live in `estimateWall` and `estimateCost` below.
- */
-const WEIGHT = { K: 1.0, D: 1.3, 'D+': 1.8, U: 0.6 };
-
-/**
- * Calibrated model for WALL TIME (started → done, i.e. including review and merge) and COST (API-equivalent USD for track
- * and reviewers, timeCost.costUsd) per task: fixed + content_min × factor, per class. The start values are fitted to
- * the medians for finished queue tracks in a real project (a few hundred tracks):
- *   K: wall time approx. 15 min (content 30), 29 (90), 33 (120); cost approx. $0.9 / $2.4 / $3.5
- *   D: wall time approx. 60 min (30–60);                         cost approx. $3.6–5.4
- *   D+: wall time approx. 88 min (30);                            cost approx. $7.4
- *   U: wall time approx. 24 min (60);                             cost approx. $1.8
- * Fix rounds (2+ build agents) roughly double cost and wall time; they are rare and sit in the median.
- * Calibrate again (`queue.mjs cost`) when the class mix or way of working changes.
- */
-const CALIBRATED = {
-  date: '2026-10-23',
-  wall: { K: [10, 0.19], D: [56, 0.4], 'D+': [65, 1.1], U: [6, 0.3] },
-  cost: { K: [0.6, 0.022], D: [2, 0.08], 'D+': [3, 0.15], U: [0.6, 0.02] },
-};
-
-/** Default limits: overridden in the queue file under `limits`. */
-// maxDb: tracks with migrations (migr_tens > 0) concurrently. Many concurrent DB tracks compete for the same
-// database (locks, queueing in test runs); client tracks do not load it and are not limited by this limit.
-// dailyBudget: USD API equivalent per day (measured with timeCost.js). null = off (no limit) until the owner has set a
-// number with `queue.mjs limit dailyBudget <usd>`.
-// nightRun / nightWindow: with nightRun off, no new tasks are started in the night window (local time, "23-06" =
-// from 23:00 to 06:00). Default is on.
-// autocompact: automatic compaction of the orchestrator session. On (default, as in Claude Code itself): Claude Code compacts
-// by itself (autoCompactEnabled on, window 300k) and the queue resumes automatically. Off: notice with a ready /compact line,
-// so the owner follows along (also turn off Claude Code's own compaction then). The hooks
-// read the value (contextGuard.compactMode); `queue.mjs compact auto|manual`.
-const DEFAULT_LIMITS = {
-  maxConcurrent: 5,
-  maxDPlus: 2,
-  maxPerDomain: 7,
-  maxDb: 6,
-  dailyBudget: null,
-  nightRun: true,
-  nightWindow: '23-06',
-  autocompact: true,
-};
-/** The time zone the night window and the daily budget's day apply in: the machine's own (the TZ environment variable
- * overrides it). */
-const NIGHT_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-/**
- * Statuses in which the task keeps its ownership (running, picked by a person or session, delivered and waiting for
- * review/merge, or work registered outside the queue). The queue starts nothing that collides with these.
- */
-const ACTIVE = new Set(['running', 'review', 'picked', 'external']);
-
-// proposed: added by an agent (track, reviewer, fold/investigation agent) and not approved yet. Never
-// started; `queue.mjs approve <id…>` makes it waiting.
-// picked: a person or session does the task manually (`queue.mjs pick`). Owns its files and has
-// migrationBlock, but does not count toward maxConcurrent/maxDPlus.
-// external: not a task, but a record of work in progress outside the queue (`queue.mjs external add`). Owns
-// its files like a picked task until `external done <name>`. The row has `external: true` and never counts as
-// work (projects, show, state).
-const STATUSES = new Set([
-  'proposed',
-  'waiting',
-  'running',
-  'picked',
-  'review',
-  'done',
-  'cancelled',
-  'external',
-]);
-const CLASSES = new Set(Object.keys(WEIGHT));
-
-/** The project for a task without its own `project` and without a match on any prefix in the register. */
-const WITHOUT_PROJECT = 'without-project';
-/** The group name for tasks without `feature` in the grouped view and the QA list. */
-const WITHOUT_FEATURE = '(no feature)';
-/** Visual QA: the owner looks at finished tasks with the label `visual`. */
-const QA_STATUSES = new Set(['waiting', 'ok', 'deviation']);
-const LABEL_VISUAL = 'visual';
-/** Project id: short kebab-case (webshop, api-v2, reports). */
-const PID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-/** Label: short word in lowercase (visual). */
-const LABEL_PATTERN = /^[a-z0-9][a-z0-9-]{0,30}$/;
-/** A picked task is "old" when it has been picked this long without commits (it is never released automatically). */
-const OLD_PICK_MS = 72 * 3_600_000;
-
-/** Estimated time in minutes for a task (content × weight). */
-function estimate(o) {
-  const content = Number(o.content_min ?? 30);
-  return Math.round(content * (WEIGHT[o.class] ?? 1));
-}
-
-/** Calibrated wall time in minutes (started → done, including review and merge), see CALIBRATED. */
-function estimateWall(o) {
-  const [fixedLine, factor] = CALIBRATED.wall[o?.class] ?? CALIBRATED.wall.K;
-  return Math.round(fixedLine + Number(o?.content_min ?? 30) * factor);
-}
-
-/** Calibrated cost in API-equivalent USD (track and reviewers), see CALIBRATED. The basis for the quota forecast. */
-function estimateCost(o) {
-  const [fixedLine, factor] = CALIBRATED.cost[o?.class] ?? CALIBRATED.cost.K;
-  return Math.round((fixedLine + Number(o?.content_min ?? 30) * factor) * 10) / 10;
-}
-
-/**
- * "~$2.4" (one decimal below $10, whole dollars above) for a cost estimate { usd }: the short form shown next to the
- * minute estimate. The calibrated estimate itself lives in lib/costEstimate.js; '' when there is no number.
- */
-function costLabel(c) {
-  const usd = Number(c?.usd);
-  if (c?.usd == null || !Number.isFinite(usd)) return '';
-  return `~$${usd < 10 ? usd.toFixed(1) : Math.round(usd)}`;
-}
-
-/**
- * Validates a new task. Returns a list of errors (empty = valid).
- * Required: id, title, domain, class, mission (path to track description or text).
- * `register` (the queue's `projects`): when it has at least one project, an explicit `project` must exist in it.
- */
-function validate(o, existing = [], register) {
-  const error = [];
-  if (!o || typeof o !== 'object') return ['task must be an object'];
-  if (!o.id || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,40}$/.test(o.id))
-    error.push('id missing or has invalid characters');
-  if (existing.some((e) => e.id === o.id)) error.push(`id ${o.id} already exists`);
-  if (!o.title) error.push('title missing');
-  if (!o.domain) error.push('domain missing');
-  if (!CLASSES.has(o.class)) error.push(`class must be one of ${[...CLASSES].join(', ')}`);
-  if (!o.mission) error.push('mission missing (path to track description or text)');
-  if (o.status && !STATUSES.has(o.status)) error.push(`unknown status ${o.status}`);
-  for (const field of ['depends_on', 'waiting_on', 'owned_files', 'owner_db', 'shared_patch']) {
-    if (o[field] != null && !Array.isArray(o[field])) error.push(`${field} must be a list`);
-  }
-  if (o.value != null && !(o.value >= 1 && o.value <= 10)) error.push('value must be 1–10');
-  // `fixes`: the task(s) this one fixes (lib/fixLinks.js). The shape here; add and edit also check that the ids exist.
-  error.push(...require('./fixLinks.js').fixesShapeError(o));
-  const emptyRegister = !register || Object.keys(register).length === 0;
-  error.push(...validateNewField(o, register, { stringProject: !emptyRegister }));
-  return error;
-}
-
-/**
- * The project fields (project, feature, labels, qa_status). All are optional. With `stringProject` an
- * explicit project must exist in the register (writeError would otherwise create a new, empty project in the `projects` table).
- */
-function validateNewField(o, register, { stringProject = true } = {}) {
-  const error = [];
-  if (o.project != null) {
-    if (typeof o.project !== 'string' || !PID_PATTERN.test(o.project))
-      error.push('project must be a short kebab-case id (e.g. api-v2)');
-    else if (
-      stringProject &&
-      o.project !== WITHOUT_PROJECT &&
-      !Object.hasOwn(register ?? {}, o.project)
-    )
-      error.push(
-        `unknown project ${o.project} (create it first: cq project ${o.project} --title "…")`,
-      );
-  }
-  // Plan entry the task belongs to (id in scripts/.queue/plans.json; queue.mjs checks that it exists).
-  if (o.plan != null && (typeof o.plan !== 'string' || !/^PL-\S+$/.test(o.plan)))
-    error.push('plan must be a plan entry id (PL-NAME-1)');
-  if (o.feature != null && (typeof o.feature !== 'string' || !o.feature.trim()))
-    error.push('feature must be a text (short name, e.g. "Today\'s staffing")');
-  if (
-    o.labels != null &&
-    (!Array.isArray(o.labels) ||
-      o.labels.some((e) => typeof e !== 'string' || !LABEL_PATTERN.test(e)))
-  )
-    error.push('labels must be a list of short lowercase words (e.g. ["visual"])');
-  if (
-    o.requires != null &&
-    (!Array.isArray(o.requires) || o.requires.some((k) => typeof k !== 'string' || !REQUIRES.has(k)))
-  )
-    error.push(`requires must be a list of ${[...REQUIRES].join(', ')}`);
-  if (o.qa_status != null && !QA_STATUSES.has(o.qa_status))
-    error.push(`qa_status must be one of ${[...QA_STATUSES].join(', ')}`);
-  // How the owner (or the queue itself) sees that the delivery works (config().qa).
-  if (o.evidence != null) error.push(...validateEvidence(o.evidence));
-  // "put on hold" for one task (queue.mjs park).
-  if (o.parked != null) {
-    const p = o.parked;
-    const valid =
-      typeof p === 'object' &&
-      !Array.isArray(p) &&
-      typeof p.by === 'string' &&
-      !!p.by.trim() &&
-      typeof p.at === 'string' &&
-      Number.isFinite(Date.parse(p.at)) &&
-      (p.to == null || (typeof p.to === 'string' && Number.isFinite(Date.parse(p.to)))) &&
-      (p.reason == null || typeof p.reason === 'string');
-    if (!valid) error.push('parked must be { by, at, reason?, to? } (set with cq park)');
-  }
-  return error;
-}
-
-/** The fast index while queueLogic.withIndex runs (see "The fast index" below), otherwise null. Declared here, before first use. */
-let fastIndex = null;
-
-// ---- Project and feature -----------------------------------------------------------------------------
-
-/**
- * The project a task belongs to: explicit `project`, otherwise the project with the LONGEST prefix in the register that
- * matches the start of the id (on equal length the first in the register wins), otherwise `without-project`.
- * The prefixes are data in the register, never hardcoded here.
- */
-function projectFor(o, register) {
-  if (typeof o?.project === 'string' && o.project) return o.project;
-  // Inside withIndex each id is looked up once per register (the board asks many times per card).
-  const ix = fastIndex;
-  if (ix && register && typeof register === 'object') {
-    ix.project ??= new WeakMap();
-    let perId = ix.project.get(register);
-    if (!perId) ix.project.set(register, (perId = new Map()));
-    const id = String(o?.id ?? '');
-    if (!perId.has(id)) perId.set(id, longestPrefix(id, register)?.pid ?? WITHOUT_PROJECT);
-    return perId.get(id);
-  }
-  return longestPrefix(o?.id, register)?.pid ?? WITHOUT_PROJECT;
-}
-
-/**
- * The longest prefix in the register that matches the start of the id: { pid, prefix } or null. On equal length in two
- * projects the first in the register wins (as before), and `also` lists the others.
- */
-function longestPrefix(id, register) {
-  const s = String(id ?? '');
-  let best = null;
-  for (const [pid, p] of Object.entries(register ?? {})) {
-    const prefixes = Array.isArray(p?.prefixes) ? p.prefixes : [];
-    for (const pre of prefixes) {
-      if (typeof pre !== 'string' || !pre || !s.startsWith(pre)) continue;
-      if (!best || pre.length > best.prefix.length) best = { pid, prefix: pre, also: [] };
-      else if (pre.length === best.prefix.length && pid !== best.pid && !best.also.includes(pid))
-        best.also.push(pid);
-    }
-  }
-  return best;
-}
-
-/** Is the project the task belongs to paused? Then the queue does not start it (next/start without --force). */
-function projectPaused(o, register) {
-  return register?.[projectFor(o, register)]?.pause === true;
-}
-
-/**
- * The blockers, with pause first when the project is paused (for `show` and `state`; `start` checks pause itself).
- * A parked task and a task outside the focus (when the rest waits) get that as the first blocker.
- * @param {object} [k] rankingContext(queue, now), when many tasks are looked up
- */
-function blockersWithPause(o, queue, k = null) {
-  const register = queue.projects ?? {};
-  const h = blockers(o, queue.tasks ?? [], queue.resolved);
-  if (o.status !== 'waiting') return h;
-  const ahead = [];
-  if (o.parked && parkedNow(o, k?.now ?? Date.now())) ahead.push(parkedText(o));
-  if (projectPaused(o, register)) ahead.push(`the project ${projectFor(o, register)} is paused`);
-  if (queue.focus) {
-    const p = focusSpace(o, k ?? rankingContext(queue));
-    if (p.outside && !p.parked && !p.paused && p.out) ahead.push(outsideText(queue));
-  }
-  return [...ahead, ...h];
-}
-
-/** Does the task have the label? */
-function hasLabel(o, label) {
-  return Array.isArray(o?.labels) && o.labels.includes(label);
-}
-
-/**
- * Does the task count toward the queue's agent slots (maxConcurrent, maxDPlus)? Running and review do, but not a task
- * that a person or session has picked, not even after it is delivered to review (it still has `picked_by`).
- */
-function counterAsAgent(o) {
-  return (o.status === 'running' || o.status === 'review') && !o.picked_by;
-}
-
-/** The order projects are shown in: the register's order, then unknown alphabetically, `without-project` last. */
-function projectOrder(pids, register) {
-  const inRegister = Object.keys(register ?? {});
-  const others = [...pids]
-    .filter((p) => !inRegister.includes(p) && p !== WITHOUT_PROJECT)
-    .sort((x, y) => x.localeCompare(y, 'en'));
-  return [
-    ...inRegister.filter((p) => pids.has(p)),
-    ...others,
-    ...(pids.has(WITHOUT_PROJECT) ? [WITHOUT_PROJECT] : []),
-  ];
-}
-
-/**
- * Groups tasks project → feature (the order within a feature is the one the caller gave). For `show --grouped`
- * and the QA list. Returns [{ pid, title, pause, features: [{ feature, tasks }] }].
- */
-function groups(tasks, register) {
-  const perProject = new Map();
-  for (const o of tasks) {
-    const pid = projectFor(o, register);
-    if (!perProject.has(pid)) perProject.set(pid, new Map());
-    const f =
-      typeof o.feature === 'string' && o.feature.trim() ? o.feature.trim() : WITHOUT_FEATURE;
-    const perFeature = perProject.get(pid);
-    if (!perFeature.has(f)) perFeature.set(f, []);
-    perFeature.get(f).push(o);
-  }
-  return projectOrder(new Set(perProject.keys()), register).map((pid) => {
-    const perFeature = perProject.get(pid);
-    const features = [...perFeature.keys()].sort((x, y) =>
-      x === WITHOUT_FEATURE ? 1 : y === WITHOUT_FEATURE ? -1 : x.localeCompare(y, 'en'),
-    );
-    return {
-      pid,
-      title: register?.[pid]?.title ?? null,
-      pause: register?.[pid]?.pause === true,
-      features: features.map((f) => ({ feature: f, tasks: perFeature.get(f) })),
-    };
-  });
-}
-
-/**
- * Overview per project for `queue.mjs projects`: done/total (without cancelled and proposed), minutes left
- * (estimate for what is not done), active ones (running/review), picked, waiting, in the QA list, and the owner questions that
- * block most tasks in the project.
- */
-function projectOverview(queue) {
-  const register = queue.projects ?? {};
-  const resolved = new Set(queue.resolved ?? []);
-  const rows = new Map();
-  const row = (pid) => {
-    if (!rows.has(pid)) {
-      const p = register[pid] ?? {};
-      rows.set(pid, {
-        pid,
-        title: p.title ?? null,
-        plan: p.plan ?? null,
-        pause: p.pause === true,
-        priority_bonus: Number(p.priority_bonus) || 0,
-        in_register: Object.hasOwn(register, pid),
-        total: 0,
-        done: 0,
-        min_left: 0,
-        activeOnes: 0,
-        picked: 0,
-        waiting: 0,
-        proposed: 0,
-        qa: 0,
-        sp: new Map(),
-      });
-    }
-    return rows.get(pid);
-  };
-  for (const pid of Object.keys(register)) row(pid);
-  // Records outside the queue (external add) are not work in any project.
-  for (const o of (queue.tasks ?? []).filter((x) => !isExternalRow(x))) {
-    const r = row(projectFor(o, register));
-    if (o.status === 'cancelled') continue;
-    if (o.status === 'proposed') {
-      r.proposed += 1;
-      continue;
-    }
-    r.total += 1;
-    if (o.status === 'done') {
-      r.done += 1;
-      if (o.qa_status === 'waiting') r.qa += 1;
-      continue;
-    }
-    r.min_left += estimate(o);
-    if (o.status === 'running' || o.status === 'review') r.activeOnes += 1;
-    else if (o.status === 'picked') r.picked += 1;
-    else if (o.status === 'waiting') {
-      r.waiting += 1;
-      for (const sp of o.waiting_on ?? []) {
-        if (!resolved.has(sp)) r.sp.set(sp, (r.sp.get(sp) ?? 0) + 1);
-      }
-    }
-  }
-  return projectOrder(new Set(rows.keys()), register).map((pid) => {
-    const { sp, ...r } = rows.get(pid);
-    return {
-      ...r,
-      ownerQuestion: [...sp.entries()]
-        .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
-        .map(([s, n]) => ({ sp: s, tasks: n })),
-    };
-  });
-}
-
-/** The fields a project in the register can have. */
-const PROJECT_FIELD = new Set([
-  'title',
-  'plan',
-  'prefixes',
-  'pause',
-  'priority_bonus',
-  'area',
-  // File roots (signal for classify) and known feature names.
-  'fileRoot',
-  'features',
-  // 'plan' = the project exists in the plan register, but has no queue tasks yet (docs/plan-register.md).
-  'phase',
-]);
-
-/**
- * Validates and applies changes to the project register: { <pid>: { title?, plan?, prefixes?, pause?,
- * priority_bonus? } }. A new project requires title. `null` removes an optional field. Returns a NEW
- * register (the old one is not changed) and the error list; the caller uses the register only when the error list is empty.
- */
-function newRegister(register, changes, areas = {}) {
-  const error = [];
-  const fresh = { ...(register ?? {}) };
-  if (changes == null) return { register: fresh, error };
-  if (typeof changes !== 'object' || Array.isArray(changes))
-    return { register: fresh, error: ['projects must be an object { <pid>: { title, … } }'] };
-  for (const [pid, field] of Object.entries(changes)) {
-    if (!PID_PATTERN.test(pid) || pid === WITHOUT_PROJECT) {
-      error.push(`project id ${pid} must be short kebab-case (and not ${WITHOUT_PROJECT})`);
-      continue;
-    }
-    if (!field || typeof field !== 'object' || Array.isArray(field)) {
-      error.push(`${pid}: must be an object`);
-      continue;
-    }
-    const unknown = Object.keys(field).filter((k) => !PROJECT_FIELD.has(k));
-    if (unknown.length)
-      error.push(
-        `${pid}: unknown field ${unknown.join(', ')} (allowed: ${[...PROJECT_FIELD].join(', ')})`,
-      );
-    const p = { ...(fresh[pid] ?? {}) };
-    for (const [k, v] of Object.entries(field)) {
-      if (!PROJECT_FIELD.has(k)) continue;
-      if (v === null) delete p[k];
-      else p[k] = v;
-    }
-    if (typeof p.title !== 'string' || !p.title.trim()) error.push(`${pid}: title missing`);
-    if (p.plan != null && typeof p.plan !== 'string')
-      error.push(`${pid}: plan must be a text (path)`);
-    if (
-      p.prefixes != null &&
-      (!Array.isArray(p.prefixes) ||
-        p.prefixes.some((x) => typeof x !== 'string' || !x || /\s/.test(x)))
-    )
-      error.push(`${pid}: prefixes must be a list of non-empty prefixes without whitespace`);
-    if (p.pause != null && typeof p.pause !== 'boolean')
-      error.push(`${pid}: pause must be true/false`);
-    if (p.priority_bonus != null && !Number.isFinite(p.priority_bonus))
-      error.push(`${pid}: priority_bonus must be a number`);
-    // File root = folders/files (paths, not patterns), features = known feature names.
-    if (
-      p.fileRoot != null &&
-      (!Array.isArray(p.fileRoot) ||
-        p.fileRoot.some((x) => typeof x !== 'string' || !x.trim() || /\s/.test(x) || /[*?]/.test(x)))
-    )
-      error.push(`${pid}: fileRoot must be a list of paths without whitespace and wildcards`);
-    if (
-      p.features != null &&
-      (!Array.isArray(p.features) ||
-        p.features.some((x) => typeof x !== 'string' || !x.trim() || x.length > 80))
-    )
-      error.push(`${pid}: features must be a list of short names`);
-    if (p.phase != null && p.phase !== 'plan')
-      error.push(`${pid}: phase must be plan (or be removed with null)`);
-    // Area must exist in the area register when the change sets it.
-    if ('area' in field && field.area != null) {
-      if (typeof field.area !== 'string' || !PID_PATTERN.test(field.area))
-        error.push(`${pid}: area must be a short kebab-case id`);
-      else if (!Object.hasOwn(areas ?? {}, field.area))
-        error.push(
-          `${pid}: unknown area ${field.area} (create it first: cq area ${field.area} --title "…")`,
-        );
-    }
-    fresh[pid] = p;
-  }
-  return { register: fresh, error };
-}
-
+const TK = require('./timeCost.js');
+// The reviewers (fixed per class and the helper agents) are worked out in ONE place: lib/queueHelpers.js.
+const HELP = require('./queueHelpers.js');
 /** The fields `edit-many` can set per task. */
 const EDIT_MANY_FIELD = new Set([
   'id',
@@ -567,7 +87,6 @@ const EDIT_MANY_VALUES = [
   'batched',
   'plan',
 ];
-
 /**
  * Interprets `parked` in edit-many: null = take off hold; true = park (without reason and date); { reason?, to? } = park with
  * reason and/or date (YYYY-MM-DD = through that day, UTC). `by` and `at` are set by the tool (same shape as
@@ -596,7 +115,6 @@ function parkedValue(raw, { by, now }) {
     val: { by: who, at: now, ...(g ? { reason: g } : {}), ...(to ? { to } : {}) },
   };
 }
-
 /**
  * Bulk edit (`queue.mjs edit-many --file`): a list [{ id, project?, feature?, labels?, requires?,
  * priority_bonus?, parked?, batched? }] or an object { projects?: {…}, tasks?: [...] }. ALL OR NOTHING:
@@ -742,325 +260,6 @@ function editMany(queue, input, { by = null, now = new Date().toISOString(), dry
     }),
     warnings,
   };
-}
-
-// ---- Areas, focus period and parking -------------------------------------------------------------
-//
-// Three optional fields in queue.json (docs/queue.md):
-//   areas: { <oid>: { title, description? } }   the area register (program parts); the project gets `area`. The list is
-//                                                  data, never hardcoded here.
-//   focus: { name?, from?, to?, order: [stage], rest: 'wait'|'fill', drag_with_dependencies?, set_by? }
-//          A stage is `area:<oid>`, `project:<pid>` or `feature:<pid>/<name>`. Everything in stage 1 comes before everything in
-//          stage 2 (regardless of score); within a stage the usual score applies. A more specific stage wins over a less
-//          specific one (feature > project > area), so "Widgets now, rest of Platform later" works both ways.
-//          `rest: wait` (default) = tasks outside all stages are not started; `fill` = they come last and
-//          fill slots the focus does not use. The focus applies until it is changed, with an optional end date `to`; when
-//          it has passed, the queue is ranked as without focus and state/show give notice.
-//          Pulled along: an open dependency (transitively) of a pending task in the focus gets the stage of the highest
-//          ranked task that waits on it, even if it belongs to an area outside.
-//   task.parked: { by, at, reason?, to? }      "put on hold" for one task. Status stays waiting (like batched);
-//                                                  next, start and pickable skip it. With `to` the parking ends
-//                                                  by itself.
-// The ranking (ranking/compareRanking) is ONE function used by selectNext, pickable, nextUp (via selectNext),
-// show and state: [parked/paused/outside focus → out] → focusStep → score → id. Without focus and without parked the
-// result is the same as before (tested in lib/__tests__/queueFocus.test.ts).
-
-/** Area for projects without `area`. */
-const WITHOUT_AREA = 'without-area';
-/** Valid values for focus.rest. Standard: wait. */
-const FOCUS_REST = ['wait', 'fill'];
-/** How specific a stage is: the most specific stage that matches a task decides the stage. */
-const STEP_SPECIFICITY = { area: 1, project: 2, feature: 3 };
-/** Sort values for tasks outside the focus (rest waiting) and parked (last of all). */
-const REST_STEP = 1_000_000;
-const PARKED_STEP = 2_000_000;
-/** Longest free text in focus name and parking reason. */
-const FOCUS_MAX_TEXT = 200;
-
-/** The area a task belongs to: the project's `area`, otherwise `without-area`. Tasks never have their own area field. */
-function areaFor(o, queue) {
-  const register = queue?.projects ?? {};
-  const oid = register[projectFor(o, register)]?.area;
-  return typeof oid === 'string' && oid ? oid : WITHOUT_AREA;
-}
-
-/**
- * Interprets one stage from the CLI or the board: `area:<oid>`, `project:<pid>`, `feature:<pid>/<name>`, or a bare
- * name (area if it exists, otherwise project; if both exist, the type must be written). Returns the saved form.
- * @returns {{ stage: string } | { error: string }}
- */
-function parseStep(raw, queue) {
-  const areas = queue?.areas ?? {};
-  const register = queue?.projects ?? {};
-  const s = String(raw ?? '').trim();
-  if (!s) return { error: 'empty stage' };
-  const colon = s.indexOf(':');
-  if (colon < 0) {
-    const isArea = Object.hasOwn(areas, s);
-    const isProject = Object.hasOwn(register, s);
-    if (isArea && isProject)
-      return {
-        error: `${s} is both an area and a project: write area:${s} or project:${s}`,
-      };
-    if (isArea) return { stage: `area:${s}` };
-    if (isProject) return { stage: `project:${s}` };
-    return {
-      error: `unknown stage ${s} (neither area nor project; see cq areas and projects)`,
-    };
-  }
-  const type = s.slice(0, colon);
-  const rest = s.slice(colon + 1).trim();
-  if (type === 'area') {
-    if (!Object.hasOwn(areas, rest))
-      return { error: `unknown area ${rest} (create it with cq area ${rest} --title "…")` };
-    return { stage: `area:${rest}` };
-  }
-  if (type === 'project') {
-    if (!Object.hasOwn(register, rest)) return { error: `unknown project ${rest}` };
-    return { stage: `project:${rest}` };
-  }
-  if (type === 'feature') {
-    const separator = rest.indexOf('/');
-    const pid = separator < 0 ? '' : rest.slice(0, separator).trim();
-    const name = separator < 0 ? '' : rest.slice(separator + 1).trim();
-    if (!pid || !name)
-      return { error: `a feature stage is written feature:<project>/<name> (got ${s})` };
-    if (!Object.hasOwn(register, pid)) return { error: `unknown project ${pid} in ${s}` };
-    return { stage: `feature:${pid}/${name}` };
-  }
-  return { error: `unknown stage type ${type} (use area:, project: or feature:)` };
-}
-
-/** Does the task match a (saved) stage? Returns the specificity (1–3) or 0. */
-function stepMatch(o, stage, queue) {
-  const s = String(stage);
-  const colon = s.indexOf(':');
-  const type = s.slice(0, colon);
-  const rest = s.slice(colon + 1);
-  const register = queue?.projects ?? {};
-  if (type === 'area') return areaFor(o, queue) === rest ? STEP_SPECIFICITY.area : 0;
-  if (type === 'project')
-    return projectFor(o, register) === rest ? STEP_SPECIFICITY.project : 0;
-  if (type === 'feature') {
-    const separator = rest.indexOf('/');
-    const pid = rest.slice(0, separator);
-    const name = rest.slice(separator + 1);
-    const f = typeof o?.feature === 'string' ? o.feature.trim() : '';
-    return projectFor(o, register) === pid && f === name ? STEP_SPECIFICITY.feature : 0;
-  }
-  return 0;
-}
-
-/**
- * Does the focus apply now? No when it is not set, has an empty order, `to` has passed (the period is over) or `from` is
- * in the future. Also returns why, for the notice.
- * @returns {{ applies: boolean, expired: boolean, notStarted: boolean }}
- */
-function focusApplies(queue, now = Date.now()) {
-  const f = queue?.focus;
-  if (!f || !Array.isArray(f.order) || !f.order.length)
-    return { applies: false, expired: false, notStarted: false };
-  const to = f.to ? Date.parse(f.to) : NaN;
-  if (Number.isFinite(to) && to <= now)
-    return { applies: false, expired: true, notStarted: false };
-  const from = f.from ? Date.parse(f.from) : NaN;
-  if (Number.isFinite(from) && from > now)
-    return { applies: false, expired: false, notStarted: true };
-  return { applies: true, expired: false, notStarted: false };
-}
-
-/**
- * The task's own stage (0-based index in focus.order), or null when no stage matches. The most specific
- * stage wins; on equal level the first one. Does not look at "pulled along" (draggedWith/focusSpace does that).
- */
-function ownStep(o, queue) {
-  const order = queue?.focus?.order ?? [];
-  let best = null;
-  let bestSpec = 0;
-  order.forEach((t, i) => {
-    const spec = stepMatch(o, t, queue);
-    if (spec > bestSpec) {
-      best = i;
-      bestSpec = spec;
-    }
-  });
-  return best;
-}
-
-/** Is the task parked now? The parking ends by itself when `to` has passed. */
-function parkedNow(o, now = Date.now()) {
-  const p = o?.parked;
-  if (!p || typeof p !== 'object') return false;
-  const to = p.to ? Date.parse(p.to) : NaN;
-  return !(Number.isFinite(to) && to <= now);
-}
-
-/**
- * "Pulled along": open dependencies (transitively) of pending tasks in the focus that do not themselves have an equally good stage.
- * Each gets the stage of the highest ranked focus task that waits on it, and `by` = that task. The roots are
- * pending tasks with their own stage that are not parked or in a paused project (they should not pull anything along).
- * Empty when the focus does not apply or `drag_with_dependencies` is false.
- * @returns {Map<string, { stage: number, by: string }>}
- */
-function draggedWith(queue, now = Date.now()) {
-  const dragged = new Map();
-  if (!focusApplies(queue, now).applies || queue.focus.drag_with_dependencies === false) return dragged;
-  const tasks = queue.tasks ?? [];
-  const register = queue.projects ?? {};
-  const perId = new Map(tasks.map((o) => [o.id, o]));
-  const ownOne = new Map();
-  const stepFor = (o) => {
-    if (!ownOne.has(o.id)) ownOne.set(o.id, ownStep(o, queue));
-    return ownOne.get(o.id);
-  };
-  const roots = tasks
-    .filter(
-      (o) =>
-        o.status === 'waiting' &&
-        !isExternalRow(o) &&
-        !parkedNow(o, now) &&
-        !projectPaused(o, register),
-    )
-    .map((o) => ({ o, t: stepFor(o) }))
-    .filter((x) => x.t != null)
-    .sort((x, y) => x.t - y.t || x.o.id.localeCompare(y.o.id));
-  for (const { o, t } of roots) {
-    const set = new Set([o.id]);
-    const stack = [...(o.depends_on ?? [])];
-    while (stack.length) {
-      const id = stack.pop();
-      if (set.has(id)) continue;
-      set.add(id);
-      const d = perId.get(id);
-      if (!openTask(d) || isExternalRow(d)) continue;
-      const own = stepFor(d);
-      const previous = dragged.get(id);
-      if ((own == null || own > t) && (!previous || previous.stage > t))
-        dragged.set(id, { stage: t, by: o.id });
-      stack.push(...(d.depends_on ?? []));
-    }
-  }
-  return dragged;
-}
-
-/**
- * The context the ranking needs, computed once per call (draggedWith walks the whole dependency graph).
- * @returns {{ queue: object, now: number, applies: boolean, expired: boolean, notStarted: boolean,
- *             rest: string, dragged: Map<string, { stage: number, by: string }> }}
- */
-function rankingContext(queue, now = Date.now()) {
-  const g = focusApplies(queue, now);
-  return {
-    queue,
-    now,
-    ...g,
-    rest: g.applies && queue.focus.rest === 'fill' ? 'fill' : 'wait',
-    dragged: g.applies ? draggedWith(queue, now) : new Map(),
-  };
-}
-
-/** The text for a parked task (blocker in show/state). */
-function parkedText(o) {
-  const p = o.parked ?? {};
-  return (
-    `parked${p.to ? ` until ${utcText(p.to)}` : ''} by ${p.by ?? '?'}` +
-    `${p.reason ? `: ${p.reason}` : ''} (cq continue ${o.id})`
-  );
-}
-
-/** The text for a task outside the focus when the rest waits. */
-function outsideText(queue) {
-  const name = queue?.focus?.name ? ` "${queue.focus.name}"` : '';
-  return `outside focus${name} (rest waiting; cq focus)`;
-}
-
-/**
- * The placement of one task, without score: focusStep (0-based, null = outside all stages), pulled along by, and whether it is
- * out of the ranking (parked, paused project, or outside the focus when the rest waits) with the reason.
- * `stage` is the sort value: 0 without focus; the stage index with focus; the stage count for the rest with `fill`;
- * REST_STEP for the rest with `wait`; PARKED_STEP for parked.
- */
-function focusSpace(o, k) {
-  const queue = k.queue;
-  const parked = parkedNow(o, k.now);
-  const paused = projectPaused(o, queue.projects ?? {});
-  let step = null;
-  let draggedBy = null;
-  let outside = false;
-  let stage = 0;
-  if (k.applies) {
-    const d = k.dragged.get(o.id);
-    step = d ? d.stage : ownStep(o, queue);
-    draggedBy = d ? d.by : null;
-    outside = step == null;
-    stage = outside ? (k.rest === 'fill' ? queue.focus.order.length : REST_STEP) : step;
-  }
-  if (parked) stage = PARKED_STEP;
-  const outsideWait = outside && k.rest !== 'fill';
-  let reason = null;
-  if (parked) reason = parkedText(o);
-  else if (paused) reason = `the project ${projectFor(o, queue.projects ?? {})} is paused`;
-  else if (outsideWait) reason = outsideText(queue);
-  return {
-    stage,
-    step,
-    dragged_by: draggedBy,
-    parked,
-    paused,
-    outside,
-    out: parked || paused || outsideWait,
-    reason,
-  };
-}
-
-/**
- * The ranking of one task: focusSpace + score. ONE source for selectNext, pickable, nextUp, show and state.
- * @param {object} [k] rankingContext(queue, now), when many tasks are ranked
- */
-function ranking(o, queue, k = rankingContext(queue)) {
-  return {
-    ...focusSpace(o, k),
-    score: score(o, queue.tasks ?? [], k.now, queue.projects ?? {}),
-  };
-}
-
-/** The sorting: lowest stage first, then highest score, then id. Takes { o, r } where r = ranking(o, …). */
-function compareRanking(a, b) {
-  return a.r.stage - b.r.stage || b.r.score - a.r.score || a.o.id.localeCompare(b.o.id);
-}
-
-/** Interprets a date (YYYY-MM-DD = through that day, UTC; otherwise ISO). null if invalid. */
-function parseToDate(raw) {
-  if (raw == null || raw === '') return null;
-  const s = String(raw).trim();
-  const ms = /^\d{4}-\d\d-\d\d$/.test(s) ? Date.parse(`${s}T23:59:59.000Z`) : Date.parse(s);
-  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
-}
-
-/** Short text for a stage: the area's or project's title, or the feature name. */
-function stepTitle(stage, queue) {
-  const s = String(stage);
-  const colon = s.indexOf(':');
-  const type = s.slice(0, colon);
-  const rest = s.slice(colon + 1);
-  if (type === 'area') return queue?.areas?.[rest]?.title ?? rest;
-  if (type === 'project') return queue?.projects?.[rest]?.title ?? rest;
-  return rest.slice(rest.indexOf('/') + 1);
-}
-
-/** "T1", "T2 pulled along by A-1" or "rest" for a row with { step, dragged_by } (show, next, pickable). */
-function stepText(r) {
-  if (r?.step == null) return 'rest';
-  return `T${r.step + 1}${r.dragged_by ? ` pulled along by ${r.dragged_by}` : ''}`;
-}
-
-/** "1 Auth → 2 Payment and invoicing · rest waiting" */
-function focusText(queue) {
-  const f = queue?.focus;
-  if (!f?.order?.length) return 'no focus';
-  const stage = f.order.map((t, i) => `${i + 1} ${stepTitle(t, queue)}`).join(' → ');
-  const rest = f.rest === 'fill' ? 'rest fills free slots' : 'rest waiting';
-  return `${stage} · ${rest}${f.to ? ` · until ${utcText(f.to)}` : ''}`;
 }
 
 /**
@@ -1694,303 +893,6 @@ function proceed(queue, ids) {
   return { error: [], still, notParked };
 }
 
-/** Normalizes a path: slashes, no leading ./. */
-function norm(p) {
-  return String(p).replace(/\\/g, '/').replace(/^\.\//, '');
-}
-
-/**
- * Do two file ownerships overlap? An entry that ends in "/" owns the whole folder.
- * Exact path otherwise. (Deliberately simple: glob patterns would give false security.)
- */
-function fileOverlap(a, b) {
-  const x = norm(a);
-  const y = norm(b);
-  if (x === y) return true;
-  if (x.endsWith('/') && y.startsWith(x)) return true;
-  if (y.endsWith('/') && x.startsWith(y)) return true;
-  return false;
-}
-
-/**
- * First conflict between a candidate and an active task, with the details (the guard rules on the board need
- * who and what, not just the text), or null.
- * @returns {{ type: 'file'|'db'|'patch', name: string, with: string, text: string } | null}
- */
-function conflictPart(candidate, active) {
-  // A record outside the queue (external add) is named after the session or person, so the blocker says who is working.
-  // The text is built only when there actually is a conflict (conflictPart is called for every pair).
-  const ownerText = () =>
-    isExternalRow(active)
-      ? `${active.id} (work outside the queue: ${active.external_name ?? '?'})`
-      : active.id;
-  for (const f of candidate.owned_files ?? []) {
-    for (const g of active.owned_files ?? []) {
-      if (fileOverlap(f, g))
-        return {
-          type: 'file',
-          name: norm(f),
-          with: active.id,
-          text: `file ${norm(f)} is owned by ${ownerText()}`,
-        };
-    }
-  }
-  // The sets are built only when the candidate has something to compare (most have empty lists).
-  const dbCandidate = candidate.owner_db ?? [];
-  const dbActive = dbCandidate.length
-    ? new Set((active.owner_db ?? []).map((s) => s.toLowerCase()))
-    : null;
-  for (const d of dbCandidate) {
-    if (dbActive.has(d.toLowerCase()))
-      return {
-        type: 'db',
-        name: d,
-        with: active.id,
-        text: `DB function ${d} is owned by ${ownerText()}`,
-      };
-  }
-  // One dynamic patch of each shared function at a time (e.g. a common export or anonymization function).
-  const patchCandidate = candidate.shared_patch ?? [];
-  const patchActive = patchCandidate.length
-    ? new Set((active.shared_patch ?? []).map((s) => s.toLowerCase()))
-    : null;
-  for (const d of patchCandidate) {
-    if (patchActive.has(d.toLowerCase()))
-      return {
-        type: 'patch',
-        name: d,
-        with: active.id,
-        text: `shared patch ${d} in progress in ${active.id}`,
-      };
-  }
-  return null;
-}
-
-/** First conflict between a candidate and an active task (as text), or null. */
-function conflict(candidate, active) {
-  return conflictPart(candidate, active)?.text ?? null;
-}
-
-/**
- * The blockers with details: [{ type, text, … }], where `text` is exactly what `blockers` gives. The types:
- * status (proposed, picked or another status), depends_on { id, status } (status null = unknown task),
- * question { sp }, and conflict { conflict: conflictPart }. (The limits are checked in selectNext.)
- */
-function blockerParts(o, tasks, resolved = []) {
-  if (o.status === 'proposed')
-    return [{ type: 'status', text: `proposed (approve it first: cq approve ${o.id})` }];
-  if (o.status === 'picked')
-    return [{ type: 'status', text: `picked by ${o.picked_by ?? '?'}` }];
-  if (o.status !== 'waiting') return [{ type: 'status', text: `status ${o.status}` }];
-  // A task in the batch queue is never started or picked alone; it is packed into a track (queue.mjs batch pack).
-  if (isBatched(o)) return [{ type: 'batched', text: BATCHED_BLOCKER }];
-  const h = [];
-  const perId = perIdFor(tasks);
-  for (const dep of o.depends_on ?? []) {
-    const d = perId.get(dep);
-    if (!d) h.push({ type: 'depends_on', id: dep, status: null, text: `depends on unknown ${dep}` });
-    else if (d.status !== 'done')
-      h.push({
-        type: 'depends_on',
-        id: dep,
-        status: d.status,
-        text: `waiting on ${dep} (${d.status})`,
-      });
-  }
-  const resolvedSet = new Set(resolved);
-  for (const sp of o.waiting_on ?? []) {
-    if (!resolvedSet.has(sp)) h.push({ type: 'question', sp, text: `waiting on answer: ${sp}` });
-  }
-  // Copy, so a caller that changes a blocker never changes the buffered answer (conflictsWithActive).
-  for (const k of conflictsWithActive(o, tasks))
-    h.push({ type: 'conflict', conflict: { ...k }, text: k.text });
-  return h;
-}
-
-/**
- * The conflicts between the candidate and each active task (conflictPart), in the order of the active ones. The board
- * asks blockerParts for the same card from several views (the card, nextUp, the plan basis, the areas, selectNext),
- * and each call walked all the active ones again. Inside withIndex the answer is therefore computed once per candidate
- * and reused (same condition as the rest of the fast index: the queue does not change while fn runs). Outside the
- * index it is computed again.
- */
-function conflictsWithActive(o, tasks) {
-  const ix = indexFor(tasks);
-  if (ix) {
-    ix.conflicts ??= new Map();
-    const stored = ix.conflicts.get(o);
-    if (stored) return stored;
-  }
-  const out = [];
-  for (const a of activeFor(tasks)) {
-    const k = conflictPart(o, a);
-    if (k) out.push(k);
-  }
-  if (ix) ix.conflicts.set(o, out);
-  return out;
-}
-
-/** Why can the task not be started now? Empty list = it can. (The limits are checked in selectNext.) */
-function blockers(o, tasks, resolved = []) {
-  return blockerParts(o, tasks, resolved).map((h) => h.text);
-}
-
-// ---- The fast index ------------------------------------------------------------------------------------------------
-// blockerParts, successors and score were called once per card, and each call built the lookups for the WHOLE queue
-// again (the id map, the active ones, childrenMap and the transitive successor list). With 3 000 tasks the board was
-// then quadratic (close to a minute). withIndex(tasks, fn) lets fn use lookups that are built ONCE and reused, but only
-// for exactly this task list and only while fn runs: outside (and for another list) everything is built again as
-// before, so a mutation of the queue (queue.mjs changes status, depends_on …) can never meet a stale lookup. The
-// requirement on fn is therefore that it does not change the tasks (the list, status or depends_on) or the project
-// register while it runs; the board and the views only read. (The variable fastIndex is declared at the top, before
-// projectFor.)
-
-/**
- * Run fn with the fast index for `tasks` (see above). Nested calls reuse the outer index. Synchronous fn only.
- * @template T
- * @param {object[]} tasks
- * @param {() => T} fn
- * @returns {T}
- */
-function withIndex(tasks, fn) {
-  if (fastIndex) return fn();
-  fastIndex = {
-    tasks,
-    perId: null,
-    active: null,
-    children: null,
-    after: new Map(),
-    project: null,
-    conflicts: null,
-  };
-  try {
-    return fn();
-  } finally {
-    fastIndex = null;
-  }
-}
-
-/** The index when it applies to exactly this list, otherwise null. */
-function indexFor(tasks) {
-  return fastIndex && fastIndex.tasks === tasks ? fastIndex : null;
-}
-
-/** id → task (from the index when it applies; otherwise a new map). */
-function perIdFor(tasks) {
-  const ix = indexFor(tasks);
-  if (!ix) return new Map(tasks.map((x) => [x.id, x]));
-  ix.perId ??= new Map(tasks.map((x) => [x.id, x]));
-  return ix.perId;
-}
-
-/** The tasks with an active status (ACTIVE), in queue order (from the index when it applies). */
-function activeFor(tasks) {
-  const ix = indexFor(tasks);
-  if (!ix) return tasks.filter((x) => ACTIVE.has(x.status));
-  ix.active ??= tasks.filter((x) => ACTIVE.has(x.status));
-  return ix.active;
-}
-
-/** The successors per task: id → the ids that have it in `depends_on` (for successors; build it once for many calls). */
-function childrenMap(tasks) {
-  const ix = indexFor(tasks);
-  if (ix) {
-    ix.children ??= buildChildrenMap(tasks);
-    return ix.children;
-  }
-  return buildChildrenMap(tasks);
-}
-
-function buildChildrenMap(tasks) {
-  const children = new Map();
-  for (const o of tasks) {
-    for (const d of o.depends_on ?? []) {
-      if (!children.has(d)) children.set(d, []);
-      children.get(d).push(o.id);
-    }
-  }
-  return children;
-}
-
-/**
- * Tasks that wait on this one, directly or indirectly (transitively through `depends_on`), and that still need doing
- * (not done or cancelled). Cycles are tolerated (each task is visited once), and the task itself is never included.
- * The same count as the bonus in the priority (lockUpCount) and "unlocks N" on the board.
- * @param {Map<string, string[]>} [children] childrenMap(tasks), when many tasks are looked up
- * @returns {string[]} the ids in the order they were found
- */
-function successors(id, tasks, children) {
-  // With the fast index (and the index's own childrenMap) each id is computed only once; the copy protects against the
-  // caller sorting or changing the list (unlocksOf on the board sorts it).
-  const ix = indexFor(tasks);
-  if (ix && (children === undefined || children === childrenMap(tasks))) {
-    if (!ix.after.has(id)) ix.after.set(id, computeSuccessors(id, tasks, childrenMap(tasks)));
-    return [...ix.after.get(id)];
-  }
-  return computeSuccessors(id, tasks, children ?? childrenMap(tasks));
-}
-
-function computeSuccessors(id, tasks, children) {
-  const set = new Set();
-  const stack = [...(children.get(id) ?? [])];
-  while (stack.length) {
-    const x = stack.pop();
-    if (set.has(x) || x === id) continue;
-    set.add(x);
-    stack.push(...(children.get(x) ?? []));
-  }
-  // Only tasks that still need doing count.
-  const perId = perIdFor(tasks);
-  return [...set].filter((x) => !['done', 'cancelled'].includes(perId.get(x)?.status));
-}
-
-/** How many tasks (directly or indirectly) wait on this one? Gives a bonus for unlocking others. */
-function lockUpCount(id, tasks) {
-  return successors(id, tasks).length;
-}
-
-/**
- * Priority: value per estimated minute, with a bonus for tasks that unlock others and a small
- * age bonus so nothing sits still forever. Manual `priority_bonus` (±) from reprioritizing, plus
- * the project's `priority_bonus` from the register (when `register` is given).
- */
-function score(o, tasks, now = Date.now(), register) {
-  return scoreParts(o, tasks, now, register).score;
-}
-
-/**
- * The parts the priority (score) is computed from, for "Placement" in the detail panel on the board: value, the minutes
- * used (at least 5), unlocks N (+25 % each), age in days (+2 % per day, at most 14), the task's and the project's
- * bonus, and the result. score() is just `.score` from here, so the explanation can never drift from the number.
- * @returns {{ value: number, minutes: number, unlocks: number, lock_factor: number, days: number,
- *   age_factor: number, reason: number, bonus: number, project_bonus: number, score: number }}
- */
-function scoreParts(o, tasks, now = Date.now(), register) {
-  const value = Number(o.value ?? 5);
-  const time = Math.max(estimate(o), 5);
-  const lockState = lockUpCount(o.id, tasks);
-  const days = o.added_at ? Math.max(0, (now - Date.parse(o.added_at)) / 86_400_000) : 0;
-  const lockFactor = 1 + 0.25 * lockState;
-  const ageFactor = 1 + Math.min(days, 14) * 0.02;
-  const s = (value / time) * 100 * lockFactor * ageFactor;
-  const projectBonus = register
-    ? Number(register[projectFor(o, register)]?.priority_bonus) || 0
-    : 0;
-  const bonus = Number(o.priority_bonus ?? 0);
-  return {
-    value,
-    minutes: time,
-    unlocks: lockState,
-    lock_factor: lockFactor,
-    days: Math.round(days * 10) / 10,
-    age_factor: Math.round(ageFactor * 1000) / 1000,
-    reason: Math.round(s * 100) / 100,
-    bonus,
-    project_bonus: projectBonus,
-    score: Math.round((s + bonus + projectBonus) * 100) / 100,
-  };
-}
-
 /**
  * Selects tasks that can be started now, in ranked order, within the limits.
  * The candidates are also checked against each other: two chosen tasks cannot own the same thing.
@@ -2000,8 +902,6 @@ function scoreParts(o, tasks, now = Date.now(), register) {
  * `uncommitted`: the paths `git status` shows in the main tree. A task that owns one of them is skipped (another
  * session is working in the file); `uncommittedSkipped` says which and why.
  */
-/** Does the task have migrations (counts toward maxDb)? */
-const hasMigr = (o) => Number(o.migr_tens ?? 0) > 0;
 
 /**
  * The slots in use now, with the same rules as selectNext: agents (running and review without picked_by) toward maxConcurrent and
@@ -2998,12 +1898,6 @@ function ownerAnswerBonus(queue, ids, answer, now = new Date().toISOString()) {
   return added;
 }
 
-/** "2026-10-01 14:02 UTC" from an ISO time (for the track file; the time is always saved in UTC). */
-const utcText = (iso) =>
-  typeof iso === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(iso)
-    ? `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`
-    : '?';
-
 /**
  * The block in the track file with the owner's answer to what the task waited on (`waiting_on` that is resolved), so the track sees
  * the decision and does not build without it. null when the task did not wait on anything resolved.
@@ -3191,15 +2085,6 @@ function isOldPick(o, { commits = 0, lastCommit = null } = {}, now = Date.now())
   return Number.isFinite(last) && now - last > OLD_PICK_MS;
 }
 
-/** "14 min", "3 h 12 min", "4 d" from milliseconds ("?" when unknown). */
-function ageText(ms) {
-  if (ms == null || Number.isNaN(ms)) return '?';
-  const min = Math.round(ms / 60_000);
-  if (min < 60) return `${min} min`;
-  const t = Math.floor(min / 60);
-  return t < 48 ? `${t} h ${min % 60} min` : `${Math.floor(t / 24)} d`;
-}
-
 // ---- Status and visual QA ---------------------------------------------------------------------------
 
 /**
@@ -3340,177 +2225,6 @@ function qaDeviation(queue, id, text, now = new Date().toISOString()) {
   return { task: o, fix };
 }
 
-// ---- Evidence in the QA entry --------------------------------------------------------------------------------
-//
-// Every QA entry (a finished task waiting on QA) has one piece of evidence: how the owner, or the queue itself, sees that
-// the delivery works. The track writes it as one line in report.md, `EVIDENCE <type>[=<ref>[,<ref>...]]`, and `receive`
-// stores it as `evidence: { type, ref: [...] }` on the task (`qa evidence <id>` sets it by hand). The types and what
-// they mean are config().qa (queue.config.json); the defaults:
-//   screenshot   the owner looks at a screen; ref = the route or the screen
-//   test         ref = the test file(s); the entry is closed automatically when qa.autoCommand is green (qa auto --run)
-//   manual       the owner checks something by hand; ref = free text, gathered in one manual round in `qa`
-// Without evidence every QA round has to guess where to look, and pure logic waits needlessly on the owner's eyes.
-
-const QA_STANDARD = Object.freeze({
-  evidenceTypes: ['screenshot', 'test', 'manual'],
-  autoTypes: ['test'],
-  manualTypes: ['manual'],
-  autoCommand: null,
-  evidenceLabels: ['visual'],
-});
-// A ref that is not free text: a path or a name, never spaces or shell characters (it goes into autoCommand as is).
-const EVIDENCE_REF = /^[\w./@:+-]+$/;
-
-/** The QA settings: config().qa merged with the defaults (the lists are replaced as a whole, as in queueConfig). */
-function qaConfig(qa = cfg().qa) {
-  const out = { ...QA_STANDARD, ...(qa && typeof qa === 'object' ? qa : {}) };
-  for (const k of ['evidenceTypes', 'autoTypes', 'manualTypes', 'evidenceLabels'])
-    if (!Array.isArray(out[k])) out[k] = [...QA_STANDARD[k]];
-  return out;
-}
-
-/** The errors in an evidence object (empty list = valid). */
-function validateEvidence(e, qa = qaConfig()) {
-  if (!e || typeof e !== 'object' || Array.isArray(e))
-    return ['evidence must be { type, ref } (set it with cq qa evidence <id> <type>[=<ref>])'];
-  if (!qa.evidenceTypes.includes(e.type))
-    return [`evidence.type must be one of ${qa.evidenceTypes.join(', ')}`];
-  const ref = e.ref ?? [];
-  if (!Array.isArray(ref) || ref.some((r) => typeof r !== 'string' || !r.trim()))
-    return ['evidence.ref must be a list of texts'];
-  const error = [];
-  if (qa.autoTypes.includes(e.type) && !ref.length)
-    error.push(`evidence ${e.type} needs a ref (what the command runs, e.g. the test file)`);
-  if (!qa.manualTypes.includes(e.type))
-    for (const r of ref)
-      if (!EVIDENCE_REF.test(r))
-        error.push(`evidence ${e.type}: "${r}" must be a path or a name (letters, digits and . / _ - @ : +)`);
-  return error;
-}
-
-/**
- * Reads the EVIDENCE line in a text (report.md or the answer): `EVIDENCE test=src/x.test.ts`, `EVIDENCE: screenshot`,
- * `- EVIDENCE manual=the camera on a phone`. The first line that starts with EVIDENCE counts.
- * @returns {null | { error: string } | { evidence: { type: string, ref: string[] } }}
- */
-function parseEvidence(text, qa = qaConfig()) {
-  const m = /^[ \t]*(?:[-*][ \t]+)?`?EVIDENCE(?::|[ \t])[ \t]*([^\n`]*)`?[ \t]*$/m.exec(String(text ?? ''));
-  if (!m) return null;
-  const body = m[1].trim();
-  const i = body.indexOf('=');
-  const type = (i < 0 ? body : body.slice(0, i)).trim();
-  const rest = i < 0 ? '' : body.slice(i + 1).trim();
-  // A manual type has free text (what to check); the others are comma separated paths or names.
-  const ref = qa.manualTypes.includes(type)
-    ? rest
-      ? [rest]
-      : []
-    : rest
-        .split(',')
-        .map((x) => x.trim())
-        .filter(Boolean);
-  const evidence = { type, ref };
-  const error = validateEvidence(evidence, qa);
-  if (error.length) return { error: `the EVIDENCE line is invalid: ${error.join('; ')}` };
-  return { evidence };
-}
-
-/** Does the task need evidence (one of the labels in qa.evidenceLabels)? */
-function evidenceRequired(o, qa = qaConfig()) {
-  return qa.evidenceLabels.some((l) => hasLabel(o, l));
-}
-
-/**
- * The warning `receive` gives (null when everything is in place, or when the task does not need evidence). A warning,
- * not a stop: the owner can still set it with qa evidence.
- * @param {{ o: object, evidence?: object|null, evidenceError?: string|null }} x
- */
-function evidenceWarning({ o, evidence = null, evidenceError = null }, qa = qaConfig()) {
-  if (evidenceError)
-    return `WARNING: ${o.id}: ${evidenceError}. Fix the line in report.md, or set it: cq qa evidence ${o.id} <type>[=<ref>].`;
-  if (!evidenceRequired(o, qa) || evidence || o.evidence) return null;
-  const labels = qa.evidenceLabels.filter((l) => hasLabel(o, l)).join(', ');
-  return (
-    `WARNING: ${o.id} has the label ${labels}, but report.md has no EVIDENCE line ` +
-    `(EVIDENCE ${qa.evidenceTypes.map((t) => (qa.manualTypes.includes(t) ? `${t}=<what>` : `${t}=<ref>`)).join(' | ')}). ` +
-    `Set it by hand: cq qa evidence ${o.id} <type>[=<ref>].`
-  );
-}
-
-/** The text for evidence in lists: "test src/x.test.ts", "screenshot", "manual: the camera". */
-function evidenceText(e, qa = qaConfig()) {
-  if (!e) return 'no evidence';
-  const ref = e.ref ?? [];
-  if (!ref.length) return e.type;
-  return qa.manualTypes.includes(e.type) ? `${e.type}: ${ref[0]}` : `${e.type} ${ref.join(', ')}`;
-}
-
-/**
- * The QA list split by evidence (queue.mjs qa): `look` (everything the owner looks at, also entries without evidence)
- * grouped as qaList, `manual` (the manual types, one round) and `auto` (the auto types, closed by qa auto --run).
- */
-function qaSplit(queue, qa = qaConfig()) {
-  const waiting = (queue.tasks ?? []).filter((o) => o.status === 'done' && o.qa_status === 'waiting');
-  const type = (o) => o.evidence?.type ?? null;
-  const isManual = (o) => qa.manualTypes.includes(type(o));
-  const isAuto = (o) => qa.autoTypes.includes(type(o));
-  return {
-    look: groups(
-      waiting.filter((o) => !isManual(o) && !isAuto(o)),
-      queue.projects ?? {},
-    ),
-    manual: waiting.filter(isManual),
-    auto: waiting.filter(isAuto),
-  };
-}
-
-/**
- * The shell command that runs the evidence of an auto entry (from qa.autoCommand). A pure function, so queue.mjs only runs
- * it. The refs are checked by validateEvidence (no spaces or shell characters), so they go in as they are.
- * @returns {{ command: string } | { error: string }}
- */
-function evidenceCommand(o, qa = qaConfig()) {
-  const e = o?.evidence;
-  if (!e || !qa.autoTypes.includes(e.type)) return { error: `${o?.id} has no ${qa.autoTypes.join('/')} evidence` };
-  const ref = e.ref ?? [];
-  const f = validateEvidence(e, qa);
-  if (f.length) return { error: `${o.id}: ${f.join('; ')}` };
-  const c = qa.autoCommand;
-  const template = typeof c === 'string' ? c : c && typeof c === 'object' ? c[e.type] : null;
-  if (typeof template !== 'string' || !template.trim())
-    return {
-      error: `qa.autoCommand is not set for ${e.type} in queue.config.json (e.g. "npx vitest run {refs}")`,
-    };
-  const refs = ref.join(' ');
-  const withId = template.replaceAll('{id}', o.id);
-  return {
-    command: withId.includes('{refs}') ? withId.replaceAll('{refs}', refs) : `${withId} ${refs}`,
-  };
-}
-
-/**
- * Closes an auto entry when the evidence is green: qa_status -> ok, `qa_ok_by: "auto"`, the note says what was green.
- * Red changes nothing in the QA status (the entry stays for the owner or a new run), but is written as a remark.
- * @returns {{ error: string } | { closed: boolean }}
- */
-function qaAutoOutcome(queue, id, green, now = new Date().toISOString(), qa = qaConfig()) {
-  const o = (queue.tasks ?? []).find((x) => x.id === id);
-  if (!o) return { error: `unknown task ${id}` };
-  if (o.status !== 'done' || o.qa_status !== 'waiting')
-    return { error: `${id} is not waiting on QA (status ${o.status}, qa_status ${o.qa_status ?? 'none'})` };
-  if (!qa.autoTypes.includes(o.evidence?.type))
-    return { error: `${id} has no ${qa.autoTypes.join('/')} evidence (${evidenceText(o.evidence, qa)})` };
-  if (!green) {
-    o.remarks = [...(o.remarks ?? []), `${now} QA auto red: ${evidenceText(o.evidence, qa)}`];
-    return { closed: false };
-  }
-  o.qa_status = 'ok';
-  o.qa_ok = now;
-  o.qa_ok_by = 'auto';
-  o.qa_note = `green ${evidenceText(o.evidence, qa)}`;
-  return { closed: true };
-}
-
 // ---- Work outside the queue ----------------------------------------------------------------------------
 //
 // Other sessions commit straight to baseBranch, create branches (hotfix/*) and have uncommitted files in the main tree. The queue must
@@ -3524,11 +2238,6 @@ const ORCHESTRATOR_TRAILER_PATTERN = /^Queue:[ \t]*orchestrator[ \t]*$/im;
 const ORCHESTRATOR_EXPIRY_MS = 2 * 3_600_000;
 /** Tasks that are compared with changes outside the queue (collisions), in display order. */
 const COLLISION_STATUSES = ['running', 'picked', 'review', 'waiting'];
-
-/** Is the row a record of work outside the queue (`queue.mjs external add`), not a task? */
-function isExternalRow(o) {
-  return o?.external === true;
-}
 
 /** Does the commit message have the trailer "Queue: orchestrator" (on its own line)? */
 function hasOrchestratorTrailer(message) {
@@ -3560,8 +2269,6 @@ function classifyCommit(c) {
   if (hasOrchestratorTrailer(c?.message)) return { source: 'orchestrator' };
   return { source: 'external' };
 }
-
-const regexSafe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * The task ids that appear in the text as whole words: "(A-T8c)", "A-T8c:", "A-T8c." and "A-T8c" at the end match;
@@ -4023,11 +2730,6 @@ const CLOUD_BY = 'cloud';
 /** At most this many cloud sessions concurrently (does not count toward maxConcurrent). */
 const CLOUD_MAX = 3;
 const CLOUD_CLASSES = new Set(['K', 'U']);
-// The field `requires` (set when the task is added): what the task needs beyond the repo on the remote.
-// The resources in CLOUD_CLOSED do not exist in a cloud session (no database, the network is blocked behind a proxy, gitignored
-// files, local source collections and the owner's device are local), so the task runs locally. `deploy` does not close:
-// the orchestrator deploys after the merge.
-const REQUIRES = new Set(['db', 'web', 'sources', 'local-files', 'unit', 'deploy']);
 const CLOUD_CLOSED = new Map([
   ['db', 'needs the database (test runs against a database)'],
   ['web', 'needs the network (downloads or external sources; the cloud is behind a block)'],
@@ -4453,10 +3155,6 @@ function cloudCancel(queue, id, { commits = 0, now = new Date().toISOString() } 
 // `queue.mjs batch pack`: a new task with a mission file that collects the originals in full, the originals cancelled with a
 // remark, `depends_on` in other tasks redirected, and `merged_from` (same mechanics as other merging).
 
-/** The blocker a task in the batch queue gets (show, the board, start, pick). */
-const BATCHED_BLOCKER =
-  'in the batch queue (packed into a track with cq batch pack; taken out with edit --json \'{"batched":false}\')';
-
 /**
  * The target size per class in content minutes (add-to-queue): `min` = lower target (a group is "ready for packing" from
  * this on), `measure` = the middle of the target, `max` = upper target (a package is not filled above this). D+ is never combined.
@@ -4468,24 +3166,7 @@ const BATCH_MEASURE = {
 };
 /** The order the classes are shown in. */
 const BATCH_CLASSES = ['K', 'D', 'U'];
-
-/** Does the task have `batched: true` (and is it a queue task, not a record outside the queue)? */
-function isBatched(o) {
-  return o?.batched === true && !isExternalRow(o);
-}
-
-/** Is the task in the batch queue now (batched and waiting or proposed)? Cancelled and finished ones are out of it. */
-function inBatchQueue(o) {
-  return isBatched(o) && (o.status === 'waiting' || o.status === 'proposed');
-}
-
-const openTask = (o) => !!o && o.status !== 'done' && o.status !== 'cancelled';
 const contentMin = (o) => Number(o?.content_min ?? 30) || 0;
-/** The owner questions in `waiting_on` that are not resolved. */
-const openQuestion = (o, resolved = []) => {
-  const a = new Set(resolved ?? []);
-  return [...new Set(o?.waiting_on ?? [])].filter((sp) => !a.has(sp)).sort();
-};
 
 /**
  * The rules for the batch queue on `add` and `edit` (called in addition to validate). `tasks` = the queue as it will be (on add:
@@ -4885,8 +3566,6 @@ function batchMissionText(fresh, parts, texts, now = new Date().toISOString()) {
 // agents in the time log belong to a task, and the sum of the cost. Git, the transcripts and the time log are read in queue.mjs.
 // Tested in lib/__tests__/queueOrchestrator.test.ts.
 
-const TK = require('./timeCost.js');
-
 /** The agent type for a track by class: D and D+ on `track-d` (high), K and U on `track` (medium). */
 function agentTypeFor(cls) {
   return cls === 'D' || cls === 'D+' ? 'track-d' : 'track';
@@ -4916,9 +3595,6 @@ function modelPart(agent) {
   const m = modelFor(agent);
   return m ? ` · model=${m}` : '';
 }
-
-// The reviewers (fixed per class and the helper agents) are worked out in ONE place: lib/queueHelpers.js.
-const HELP = require('./queueHelpers.js');
 
 /** The FIXED reviewers by class (config().reviewers): by default K and U none, D `reviewer`, D+ also `reviewer-security`. */
 function reviewersFor(cls) {
@@ -5292,8 +3968,6 @@ function agentsForTask(rows, id, { from = null, to = null } = {}) {
   }
   return { secure, uncertainOnes };
 }
-
-const round2 = (x) => Math.round(x * 100) / 100;
 
 /**
  * The sum of the usage of the agents that belonged to the task. Each agent has `tokens` and `model` from the transcript
@@ -6481,36 +5155,6 @@ function infoView(o, { fixedBy = [], costEstimate = null } = {}) {
   if (o.mission) out.push(`mission: ${cutText(String(o.mission).replace(/\s+/g, ' '), 200)}`);
   out.push('One field: cq info <id> --field <name> (also cost.usd, result.line).');
   return out;
-}
-
-function cutText(s, n) {
-  const t = String(s ?? '');
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
-}
-
-/**
- * Adds a bonus to the mission: in `bonus` (the track block shows it, so the prompt file gets it at the next fill/trackFile)
- * and in the remarks, both with a timestamp. Mutates the task; returns the error text or null.
- */
-function addToBonus(o, text, now) {
-  const t = String(text ?? '').trim();
-  if (!t) return 'the addition is empty';
-  o.bonus = [...(Array.isArray(o.bonus) ? o.bonus : []), { time: now, text: t }];
-  o.remarks = [
-    ...(Array.isArray(o.remarks) ? o.remarks : []),
-    `${now} bonus to the mission: ${t}`,
-  ];
-  return null;
-}
-
-/** The additions as a separate section in the track block (null when there are none). */
-function bonusBlock(o) {
-  const t = Array.isArray(o?.bonus) ? o.bonus : [];
-  if (!t.length) return null;
-  return [
-    '**Bonus from the orchestrator (binding, newest last):**',
-    ...t.map((x) => `- ${x.time}: ${x.text}`),
-  ].join('\n');
 }
 
 // The age is written with ageText (above), same format as in show.
