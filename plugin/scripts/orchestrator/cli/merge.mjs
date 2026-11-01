@@ -2,7 +2,8 @@
 // cli/merge.mjs: the commands that finish work: receive, merge, block, unblock, blockers, deliver, release, deliveries, next-migr, migr.
 //
 // receive (take in a finished track), merge (merge-track.mjs, the gates and the migration push, with the merge guard),
-// the merge blocks, deliver/release of a picked task, the deliveries in the scratchpad, and the migration number blocks.
+// the merge blocks, deliver/release of a picked task, deliveries (a report.md that has not been received yet), and the
+// migration number blocks (next-migr, migr).
 //
 // Why a module: queue.mjs was one file of about 6,300 lines. It is now a thin entry point (the usage comment and the
 // dispatch on the command word) plus the modules in cli/. The code was moved as it was: same output, exit codes and files.

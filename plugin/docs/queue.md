@@ -6,7 +6,9 @@ the chat. Every command is `cq <command>`. `cq help` prints the key commands in 
 Owner, Orchestrator), `cq help all` the full usage list (the comment at the top of `queue.mjs`, with the internal
 scripts under their own heading), and `cq help <command>` one command in full (or a script's header). A mistyped
 command gets one line with the closest match: `Unknown command "shwo". Did you mean "show"? See cq help.` (exit 1).
-The texts and the suggestion live in `lib/cliHelp.js`. The table below lists the important ones.
+The texts and the suggestion live in `lib/cliHelp.js`. The table below lists the important ones. In the code,
+`scripts/orchestrator/queue.mjs` holds the usage comment and the dispatch on the command word, and each command's
+code is in `scripts/orchestrator/cli/` (one module per area, the shared state in `cli/context.mjs`).
 
 Writes happen under a file lock (atomic `mkdir`) and via temp file plus rename, so two writers (the orchestrator and
 a track adding a proposal) cannot corrupt the file. `cq undo` undoes the last change.

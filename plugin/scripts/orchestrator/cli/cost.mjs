@@ -1,8 +1,9 @@
 // =============================================================
 // cli/cost.mjs: the budget and capacity commands: forecast, limit, capacity, cost and calibrate.
 //
-// forecast (Monte Carlo on the throughput), limit (show or set the limits), capacity (time and quota per class),
-// cost (measured cost per task and USD per merged change) and calibrate (the calibrated cost estimate).
+// forecast (Monte Carlo on the throughput), limit (show or set the limits), capacity (the weekly quota: use, pace,
+// calibration and the cloud credit), cost (measured cost per task and USD per merged change) and calibrate (per class:
+// actual against estimated minutes, the suggested weight and the median USD).
 //
 // Why a module: queue.mjs was one file of about 6,300 lines. It is now a thin entry point (the usage comment and the
 // dispatch on the command word) plus the modules in cli/. The code was moved as it was: same output, exit codes and files.

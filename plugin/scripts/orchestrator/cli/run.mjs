@@ -2,8 +2,8 @@
 // cli/run.mjs: the commands that start work: next, start, trackFile, fill, resume, pickable and pick.
 //
 // next and start (with the budget, night pause, windDown and load guard exit codes), trackFile (the blocks for a track),
-// fill (next -> start -> trackFile for as many slots as are free), resume (a track that stopped), and pickable/pick
-// (a task taken by a person instead of an agent).
+// fill (next -> start -> trackFile for as many slots as are free), resume (a new agent on the same branch, for a fix
+// round or a full context), and pickable/pick (a task done by a person or session instead of an agent).
 //
 // Why a module: queue.mjs was one file of about 6,300 lines. It is now a thin entry point (the usage comment and the
 // dispatch on the command word) plus the modules in cli/. The code was moved as it was: same output, exit codes and files.
