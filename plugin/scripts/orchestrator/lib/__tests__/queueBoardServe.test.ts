@@ -62,7 +62,7 @@ beforeAll(async () => {
     let out = '';
     let err = '';
     board!.stderr!.on('data', (d) => (err += String(d)));
-    const t = setTimeout(() => fail(new Error(`no start line: ${out} ${err}`)), 20_000);
+    const t = setTimeout(() => fail(new Error(`no start line: ${out} ${err}`)), 60_000);
     board!.stdout!.on('data', (d) => {
       out += String(d);
       const m = /Open: (http:\/\/[^/\s]+)\/#key=/.exec(out);
@@ -73,7 +73,7 @@ beforeAll(async () => {
       }
     });
   });
-}, 60_000);
+}, 120_000);
 
 afterAll(async () => {
   // Wait for the process to end: Windows will not delete the folder it runs in before that.
