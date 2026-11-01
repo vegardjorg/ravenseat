@@ -9,7 +9,7 @@
 //   cq board [args]               queue-board.mjs
 //   cq takeover [args]            queue-takeover.mjs
 //   cq <script> [args]            <script>.mjs, e.g. `cq prepare-track EX-1 --branch queue/EX-1 --scratchpad <dir>`
-//   cq help                       the key commands in groups (lib/cliHelp.js)
+//   cq help                       the key commands in groups (lib/cliHelp.js); in lite mode only the core loop
 //   cq help all                   every command
 //   cq help <command>             one queue command in full, or a script's header
 //
@@ -39,6 +39,16 @@ function scripts() {
     .sort();
 }
 
+/** Is the project in lite mode ("mode": "lite" in queue.config.json)? Any error reading it = full (the default). */
+function liteMode() {
+  try {
+    const require = createRequire(import.meta.url);
+    return require('./lib/liteMode.js').isLite(require('./lib/queueConfig.js').config());
+  } catch {
+    return false;
+  }
+}
+
 const [first, ...rest] = process.argv.slice(2);
 
 if (!first || first === 'help' || first === '--help' || first === '-h') {
@@ -46,7 +56,7 @@ if (!first || first === 'help' || first === '--help' || first === '-h') {
   const what = rest[0];
   const source = () => fs.readFileSync(path.join(HERE, 'queue.mjs'), 'utf8');
   let lines;
-  if (!what) lines = HELP.shortHelp();
+  if (!what) lines = HELP.shortHelp('cq', { lite: liteMode() });
   else if (what === 'all') lines = HELP.fullHelp(source(), scripts());
   else if (HELP.ALIASES[what] || scripts().includes(what)) {
     lines = HELP.scriptHeader(fs.readFileSync(path.join(HERE, `${HELP.ALIASES[what] ?? what}.mjs`), 'utf8'));

@@ -6,6 +6,17 @@ and `package.json`.
 ## Unreleased
 
 ### Added
+- **Lite mode** (`"mode": "lite"` in `queue.config.json`, `lib/liteMode.js`): a zero-config mode with the core loop
+  only. `cq add "<title>"` adds a task with just a title (optional `--mission`, `--priority 1-10`, `--files`, `--id`);
+  the id (`T-001` ...), class K, value 5, size 30 min and the mission (the title) are filled in. Lite skips the
+  small-task guard and the batch queue rules on `add` (a `batched` flag is dropped with a note), tasks run in the
+  order added unless `--priority` is set, and `cq help` lists only init, add, show, fill, receive, merge and the owner
+  questions. Owner questions work as before. Every other command still works when typed. The queue, parallel-wave,
+  add-to-queue and setup skills have a short lite branch (`cq mode`). README: "Quick start (lite)".
+- **`cq mode [lite|full]`** shows or switches the mode (writes only the `mode` key and keeps the rest of the file),
+  and **`cq init --lite|--full`** does the same at init. A fresh `cq init` (no queue yet) without a flag writes
+  lite when the config has no `mode` of its own; lite gets the project `tasks` (prefix `T-`). A config without `mode`
+  is full, so existing installs do not change.
 - **Model per agent**: `models` in `queue.config.json` (agent name to `opus`, `sonnet`, `haiku` or `fable`, e.g.
   `{ "reviewer-docs": "sonnet" }`). The start lines from `fill`, `start`, `resume` and `receive` then say `model=<m>`
   (also `model` in `queue-fill.json`), and the orchestrator passes it to the Agent tool. Empty by default (each agent

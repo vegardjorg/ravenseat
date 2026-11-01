@@ -14,6 +14,27 @@ A Claude Code plugin that does two things:
 
 By Vegard Cowie Jørgensen.
 
+## Quick start (lite)
+
+New here? Start in lite mode: the core loop only, nothing to learn first.
+
+1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/claude-code-queue`, then
+   `/plugin install cq@claude-code-queue`.
+2. **Create the queue** in your project: `cq init --lite` (a fresh `cq init` is lite too). It writes
+   `"mode": "lite"` to `queue.config.json` and an empty queue in `scripts/.queue/` (add that folder to `.gitignore`).
+3. **Add work with just a title:** `cq add "Fix the login bug"`, or say "add to the queue: fix the login bug". Add a
+   mission when the title is not enough: `cq add "Fix the login bug" --mission "Users with a + in the email cannot log in; add a test"`.
+   `--priority 1-10` moves a task up (5 is normal); otherwise tasks run in the order you added them.
+4. **Run it:** `/cq:queue`. The chat becomes the orchestrator: it shows the state, asks you first, then starts one
+   agent per task in its own git worktree (`cq fill`), takes in what they deliver (`cq receive`) and merges it
+   (`cq merge`). It never pushes unless you say so.
+5. **Answer questions:** when an agent needs your decision, that task waits and the rest go on. `cq question` lists
+   them, `cq resolve <id> --answer "..."` answers one, or use "Waiting on you" on the board (`/cq:board`).
+
+`cq help` shows only these commands in lite mode. What lite leaves out: risk classes, value and size estimates, the
+small-task guard and batch queue, focus, the plan register and helper agents. All of it is still there:
+`cq mode full` switches to full mode (and `cq mode lite` back), and the rest of this README describes full mode.
+
 ## Why I built it
 
 I wanted a project that keeps moving without me sitting at it. With the queue, Claude Code runs a large project on
@@ -75,7 +96,7 @@ and it turns off again if the file changes. See
 1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/claude-code-queue`, then
    `/plugin install cq@claude-code-queue`.
 2. **Set up the project:** open your project and run `/cq:setup` (it asks first), or do it by hand with
-   `cq setup --settings` and `cq init` (the config, the docs, the recommended settings and the empty queue).
+   `cq setup --settings` and `cq init --full` (the config, the docs, the recommended settings and the empty queue).
 3. **Add a task:** say "add to the queue: <what you want done>", or write a JSON file and run `cq add --file task.json`.
 4. **Start the queue:** `/cq:queue`. It shows the state and asks before it starts any agent.
 5. **Open the board:** `/cq:board` gives you a local link. Answer questions under "Waiting on you"; an empty queue
@@ -300,7 +321,7 @@ vendored install, write `node scripts/orchestrator/cq.mjs` instead of `cq` (the 
 files it copies).
 
 ```
-cq init                      # once per project
+cq init --full               # once per project (a bare `cq init` starts in lite mode)
 cq show                      # short queue view
 cq add --file task.json      # add tasks
 cq fill --scratchpad <dir>   # start what the limits allow

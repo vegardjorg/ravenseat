@@ -10,6 +10,16 @@ agents only do their own track. The binding protocol for tracks is `docs/queue/m
 project by the installer). Project settings (base branch, gates, optional migration flow, modules) are in
 `queue.config.json` in the project root.
 
+## Lite mode (`cq mode` says lite)
+
+The owner chose the core loop only. Every task is class K (one `track` agent, no fixed reviewer), and the order is
+the order added (`--priority` moves a task). The loop is: `cq fill --scratchpad <scratch>` and start every agent it
+lists in the same turn; on a delivery `cq receive <id>`, then `cq merge <id>`; owner questions as usual (present them
+with a recommendation; `cq resolve`). Skip the batch queue check, reprioritising, plan entries, focus, follow-up
+entries, `external` and cost reports. The fixed rules below (push in batches, pathspec commits, no dev servers) and
+the fix-round rules still apply. Keep only the "Now" part of the handover note. New work from tracks goes in with
+`cq add "<title>" --mission "<text>"`.
+
 ## Fixed rules
 
 - **Agent model:** `subagent_type: track` (class K and U, `effort: medium`) or `track-d` (class D and D+,

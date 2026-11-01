@@ -15,6 +15,13 @@ touch files before the owner has answered in phase 3.
 
 Extra instructions from the owner: **$ARGUMENTS** (empty = none).
 
+**Lite mode first:** run `cq mode`. If it says `lite`, the owner chose the core loop only, so keep it short: Phase 1 is
+`cq takeover` and `cq show` (skip `projects`, `qa`, `external`, focus, follow-up entries and cost); the report is at
+most 8 lines (delivered tracks, what can start, open owner questions with a recommendation); then ask as in Phase 3
+and run the loop in "Lite mode" in `${CLAUDE_PLUGIN_ROOT}/skills/parallel-wave/SKILL.md`. Everything else below
+applies only when it comes up (a hung orchestrator, compaction). Never switch the mode yourself; mention
+`cq mode full` only if the owner asks for a full-mode feature.
+
 ## Phase 1: Get the picture
 
 Run these in parallel where possible:
