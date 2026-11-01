@@ -55,6 +55,13 @@ and `package.json`.
   `QUEUE_LOAD` also takes `cpu=<pct>`.
 
 ### Changed
+- **`lib/queueLogic.js` is split into modules under `lib/logic/`** (about 7,350 lines into 22 modules of 100 to 670
+  lines: base, projects, evidence, validate, conflicts, ranking, questions, commits, guards, batch, edit, focus,
+  select, pick, external, cloud, agents, results, classify, merge, monitor, resume). Pure move, no behaviour change:
+  `queueLogic.js` stays as a facade that re-exports exactly the same names, so every `require('./queueLogic.js')`
+  keeps working. A module requires only the modules below it (no require cycles); the layout is in the header of
+  `queueLogic.js`. `lib/__tests__/queueLogicFacade.test.ts` locks the export names and checks that each module loads
+  on its own. The installer and the plugin copy whole folders, so the new folder ships without list changes.
 - **The bench load sampler counts processes on Windows**: `tasklist` did not finish within the timeout on a loaded
   machine, so `processes` and `node_processes` came out null. It now uses PowerShell `Get-Process` (45 s timeout),
   with `tasklist` only as the fallback when PowerShell is missing.
