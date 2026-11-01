@@ -1207,6 +1207,13 @@ code {
   color: var(--color-on-surface-variant);
 }
 
+/* The second, smaller line on a key figure (where the cost per merged change went); the same tokens as tile-under. */
+.tile-detail {
+  margin-top: var(--distance-xs) !important;
+  padding-top: var(--distance-xs);
+  border-top: 1px solid var(--color-outline-variant);
+}
+
 /* "Blockers last 7 days" in Statistics: a plain table (code, count, time), the same tokens as the tiles. */
 .blocker-stat {
   margin-top: var(--distance-lg);

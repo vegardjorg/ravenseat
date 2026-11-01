@@ -156,4 +156,4 @@ memory or the handover note (`scripts/.queue/follow.json`, the same lock as the 
   errors.
 - Short agent answers: tracks and reviewers answer with at most about 1,500 characters. Read
   `rev-<id>/trackReport.md` only when RESULT says PARTIAL, RED or ownerQuestions>0.
-- Measure: `cq cost --since 24h` (cost per task and class).
+- Measure: `cq cost --since 24h` (USD per merged change, then cost per task and class); `cq calibrate` (estimate accuracy per class).

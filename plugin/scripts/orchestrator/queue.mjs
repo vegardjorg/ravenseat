@@ -142,9 +142,16 @@
 //         a label when their mission mentions the id), usage from the transcripts; saves cost {usd, tokens, turns,
 //         agents} and findings {H, M, L, deferrable, reports} from the reviewers' FINDINGS lines or --findings (repeatable).
 //         If the measurement fails, the task is set done anyway.)
-//   node scripts/orchestrator/queue.mjs cost [--since 7d|24h|2026-10-01] [--max 10]   (statistics per class: n, median
-//                                                                  and sum USD, findings H/M/L; the last tasks)
+//   node scripts/orchestrator/queue.mjs cost [--since 7d|24h|2026-10-01] [--max 10] [--json]   (first USD per merged change:
+//                                                                  all measured cost in the time log for the window (default
+//                                                                  28 days) / tasks that reached done; then per class: n,
+//                                                                  median and sum USD, findings H/M/L; the last tasks)
 //   node scripts/orchestrator/queue.mjs cost measure <id> [...] [--findings "..."]   (measures and saves again, e.g. older finished ones)
+//   node scripts/orchestrator/queue.mjs calibrate [--days 28] [--min 5] [--json]   (per class: n, median actual/estimate
+//                                                                  minutes and the suggested weight, median USD, the model's
+//                                                                  USD and the cost factor; lib/costEstimate.js. The ~$ cost
+//                                                                  estimates in show, next, fill, info and state use it;
+//                                                                  the weights and the order are never changed by it)
 //   node scripts/orchestrator/queue.mjs helpers [--json]            (the helper agents: on/off, when they run, and the
 //                                                                  measurement: runs, minutes, tokens, USD, share, findings)
 //   node scripts/orchestrator/queue.mjs helpers on|off <agent>      (switches a helper in queue.json; wins over
@@ -404,6 +411,8 @@
 // Budget guard: with limits.dailyBudget set (USD API equivalent per local day, the owner sets the number) `next`
 // proposes nothing and `start` refuses when today's usage has reached the limit. The usage is read from the time log
 // (config().timeLog), deduplicated per agent (lib/timeCost.js, the same numbers as `log-time.mjs --cost`). Default: off.
+// With a budget, `next`, `show` and `state` (costEstimate.budget) add a budget outlook: the calibrated estimate of what can
+// start now (lib/costEstimate.js) against what is left today. Information only; the guard stops on measured usage.
 //
 // Night pause: with limits.nightRun = false (`queue.mjs limit nightRun off`) `next` proposes nothing (exit 5,
 // "Night pause until 06:00 ...") and `start` refuses (exit 5) within the night window (limits.nightWindow, default 23-06, Norwegian
@@ -489,6 +498,8 @@ const PR = require('./lib/queueProposals.js');
 const MG = require('./lib/mergeGuard.js');
 // The optional `fixes` field: the task(s) a fix task fixes (add, edit, info, state).
 const FX = require('./lib/fixLinks.js');
+// Calibrated cost estimates (~$ in show, next, fill, info, state), `calibrate`, and USD per merged change (`cost`).
+const CE = require('./lib/costEstimate.js');
 
 // The project's settings (queue.config.json merged with the defaults in lib/queueConfig.js).
 const CONFIG = KK.config();
@@ -2033,6 +2044,37 @@ function dailyUsageFor(queue) {
   }
 }
 
+/** The summed calibrated cost estimate (USD) of what selectNext would start now (lib/costEstimate.js). */
+function nextCostUsd(queue, uncommitted, model = CE.costModel(queue)) {
+  return L.selectNext(queue, Date.now(), { uncommitted }).reduce(
+    (s, v) => s + CE.calibratedCost(queue.tasks.find((o) => o.id === v.id), model).usd,
+    0,
+  );
+}
+
+/**
+ * The `costEstimate` field in `state`: the calibrated model per class (window, sample, median USD, factor, measured or
+ * model), the tasks that can start now with their estimate, the sum, and the daily budget outlook when a budget is set.
+ */
+function costEstimateState(queue, uncommitted, usage) {
+  const model = CE.costModel(queue);
+  // uncommitted null = a guard stops new starts: nothing would start, so no next list.
+  const can = uncommitted == null ? [] : L.selectNext(queue, Date.now(), { uncommitted });
+  const next = can.map((v) => {
+    const c = CE.calibratedCost(queue.tasks.find((o) => o.id === v.id), model);
+    return { id: v.id, class: v.class, estimate_min: v.estimate, usd: c.usd, source: c.source, basis: c.basis };
+  });
+  const nextUsd = Math.round(next.reduce((s, x) => s + x.usd, 0) * 100) / 100;
+  return {
+    windowDays: model.windowDays,
+    minSample: model.minSample,
+    perClass: model.classes,
+    next,
+    nextUsd,
+    budget: CE.budgetOutlook(L.budgetGuard(queue, usage), nextUsd),
+  };
+}
+
 // ---- The orchestrator's routine as a script and cost per task ---------------------------------------------
 // The agent transcripts: ~/.claude/projects/<repo-slug>/<session>/subagents/agent-<agent_id>.jsonl (the same source as
 // hook-time.mjs). QUEUE_TRANSCRIPTS overrides (tests).
@@ -2634,12 +2676,16 @@ if (command === 'init') {
   // Silent tracks (an agent worktree, but no sign of life), right after.
   const silent = L.silentLines(findSilent(queue));
   if (silent.length) console.log(`${silent.join('\n')}\n`);
+  // The calibrated cost estimate (~$x) on the startable lines and the budget outlook (lib/costEstimate.js).
+  const costModel = CE.costModel(queue);
   for (const l of L.summaryView(queue, {
     uncommitted: uncommittedPaths(),
     dailyUsage: dailyUsageFor(queue),
     width: WIDTH,
     cursor: readCursor(),
     load: measureLoad(),
+    costEstimate: (o) => CE.calibratedCost(o, costModel),
+    outlook: CE.budgetOutlook,
   }))
     console.log(l);
   // Loose waits (free text or an unregistered question, or an answer that still blocks).
@@ -2663,6 +2709,9 @@ if (command === 'init') {
     return u ? [`file ${u.path} is uncommitted in the main tree`] : h;
   };
   const withStep = rk.applies || queue.tasks.some((o) => L.parkedNow(o, rk.now));
+  // The calibrated cost estimate (~$x) next to the minute estimate (lib/costEstimate.js); the order is unchanged.
+  const costModel = CE.costModel(queue);
+  const costCol = (o) => CE.costText(CE.calibratedCost(o, costModel));
   const rows = queue.tasks
     .filter((o) => o.status !== 'proposed' && !L.isExternalRow(o) && !L.inBatchQueue(o))
     .filter((o) => all || !['done', 'cancelled'].includes(o.status))
@@ -2697,7 +2746,7 @@ if (command === 'init') {
         console.log(`  ${cut(f.feature, WIDTH - 2)}`);
         for (const o of f.tasks) {
           const r = rows.find((x) => x.o === o);
-          const col = `    ${o.id.padEnd(12)} ${o.status.padEnd(8)} ${o.class.padEnd(2)} ${`${L.estimate(o)}m`.padEnd(5)} `;
+          const col = `    ${o.id.padEnd(12)} ${o.status.padEnd(8)} ${o.class.padEnd(2)} ${`${L.estimate(o)}m`.padEnd(5)} ${costCol(o).padEnd(6)} `;
           console.log(col + cut(o.title, WIDTH - col.length));
           if (o.status === 'picked') under(pickLine(o), 6);
           else if (r.h.length) under(r.h.join(' · '), 6);
@@ -2712,6 +2761,7 @@ if (command === 'init') {
         o.class.padEnd(3),
         o.domain.padEnd(14),
         `${L.estimate(o)} min`.padEnd(8),
+        costCol(o).padEnd(6),
         s == null ? '        ' : String(s).padEnd(8),
         // The stage (T2 ..., rest) only when focus applies, so the table is otherwise as before.
         ...(rk.applies
@@ -2740,6 +2790,7 @@ if (command === 'init') {
           o.class.padEnd(3),
           o.domain.padEnd(14),
           `${L.estimate(o)} min`.padEnd(8),
+          costCol(o).padEnd(6),
           `value ${o.value ?? 5}`.padEnd(9),
           `from ${o.added_by ?? '?'}`.padEnd(16),
           o.title,
@@ -2783,6 +2834,8 @@ if (command === 'init') {
   if (t.focus?.notice) console.log(`NOTICE: ${t.focus.notice}`);
   const b = L.budgetGuard(queue, usage);
   if (b.active) console.log(b.message);
+  // What would start now, estimated (calibrated) against what is left of the daily budget. Information only.
+  if (b.active && !b.stop) console.log(CE.budgetOutlook(b, nextCostUsd(queue, uncommitted, costModel)).message);
   const n = L.nightGuard(queue);
   if (n.active) console.log(n.message);
   // Loose waits (free text or an unregistered question, or an answer that still blocks).
@@ -2801,10 +2854,13 @@ if (command === 'init') {
   // Tasks that own an uncommitted file in the main tree are skipped (another session is working in the file).
   const uncommitted = uncommittedPaths();
   const selected = L.selectNext(queue, Date.now(), { uncommitted });
+  // The calibrated cost estimate per task (lib/costEstimate.js); the order is selectNext's, unchanged.
+  const costModel = CE.costModel(queue);
+  const costFor = (v) => CE.calibratedCost(queue.tasks.find((o) => o.id === v.id), costModel);
   if (!selected.length) console.log('Nothing can start now (see `show` and `state`).');
   for (const v of selected)
     console.log(
-      `${v.id.padEnd(12)} ${v.class.padEnd(3)} ${v.domain.padEnd(14)} ${v.estimate} min  priority ${v.score}` +
+      `${v.id.padEnd(12)} ${v.class.padEnd(3)} ${v.domain.padEnd(14)} ${v.estimate} min ${CE.costText(costFor(v))}  priority ${v.score}` +
         (v.project !== L.WITHOUT_PROJECT ? `  (${v.project})` : '') +
         ('step' in v ? `  ${L.stepText(v)}` : ''),
     );
@@ -2823,6 +2879,7 @@ if (command === 'init') {
     );
   }
   if (b.active) console.log(b.message);
+  if (b.active) console.log(CE.budgetOutlook(b, selected.reduce((x, v) => x + costFor(v).usd, 0)).message);
 } else if (command === 'start') {
   const id = a[1];
   if (!id) die('start <id>');
@@ -3484,11 +3541,16 @@ if (command === 'init') {
   );
 } else if (command === 'state') {
   const queue = read();
-  const t = L.state(queue, dailyUsageFor(queue), {
-    uncommitted: uncommittedPaths(),
+  const usage = dailyUsageFor(queue);
+  const uncommitted = uncommittedPaths();
+  const t = L.state(queue, usage, {
+    uncommitted,
     cursor: readCursor(),
     load: measureLoad(),
   });
+  // The calibrated cost estimates (always included): the model per class, what can start now with ~$ each (empty when
+  // a guard stops new starts), and the daily budget outlook (null without a budget).
+  t.costEstimate = costEstimateState(queue, t.canStart ? uncommitted : null, usage);
   // A separate list of loose waits (always included; empty list when everything is in order).
   t.resolveWaits = L.resolveWaits(queue);
   // Running tracks without an agent (always included; empty list when all is well).
@@ -3668,10 +3730,17 @@ if (command === 'init') {
     JSON.stringify({ time: new Date().toISOString(), head, track }, null, 2) + '\n',
   );
   console.log(`FILLED ${track.length} track(s) (head ${head.slice(0, 8)}); the details are in ${jsonFile}.`);
+  // The minute estimate and the calibrated cost estimate (lib/costEstimate.js) per track, for the budget at a glance.
+  const fillModel = CE.costModel(queue);
+  const fillEstimate = (id) => {
+    const o = queue.tasks.find((x) => x.id === id);
+    return `${L.estimate(o)} min ${CE.costText(CE.calibratedCost(o, fillModel))}`;
+  };
   for (const s of track)
     console.log(
       `${s.id}  subagent_type=${s.subagent_type}${s.model ? `  model=${s.model}` : ''}  migr ${s.migr_block ?? '-'}${s.new ? '' : '  (was already running)'}` +
-        `${s.warning ? '  WARNING in the track file (changed outside the queue)' : ''}`,
+        `${s.warning ? '  WARNING in the track file (changed outside the queue)' : ''}` +
+        `  (${fillEstimate(s.id)})`,
     );
   resolveWarning();
   // Tracks that were just started count as active (they are running in the queue file now).
@@ -4102,7 +4171,13 @@ if (command === 'init') {
     if (v === undefined) die(`${id} does not have the field ${field}`);
     console.log(L.infoValueText(v));
   } else if (a.includes('--json')) console.log(JSON.stringify(o, null, 2));
-  else for (const l of L.infoView(o, { fixedBy: FX.fixedBy(id, infoQueue.tasks) })) console.log(l);
+  else
+    for (const l of L.infoView(o, {
+      fixedBy: FX.fixedBy(id, infoQueue.tasks),
+      // The minute estimate and the calibrated cost estimate (lib/costEstimate.js); not for records outside the queue.
+      costEstimate: L.isExternalRow(o) ? null : CE.calibratedCost(o, CE.costModel(infoQueue)),
+    }))
+      console.log(l);
 } else if (command === 'activeOnes') {
   for (const l of L.activeLines(read())) console.log(l);
 } else if (command === 'next-migr') {
@@ -4286,7 +4361,24 @@ if (command === 'init') {
       console.log(measurementLine(r));
     }
   } else {
-    const s = L.costStatistics(read(), { since: sinceTime(val('--since')) });
+    const queue = read();
+    const since = sinceTime(val('--since'));
+    const s = L.costStatistics(queue, { since });
+    // The headline: USD per merged change (lib/costEstimate.js), all measured cost in the window / merged tasks. The
+    // window is --since, otherwise the last WINDOW_DAYS days (the per-class lines below keep their all-time default).
+    const from = since ? Date.parse(since) : Date.now() - CE.WINDOW_DAYS * 86_400_000;
+    const merged = CE.perMergedChange({
+      queue,
+      events: TK.usageEvents(readTimeLog()),
+      from,
+      to: Date.now() + 1,
+    });
+    if (a.includes('--json')) {
+      console.log(JSON.stringify({ perMerged: merged, perClass: s.perClass, total: s.total }, null, 2));
+      process.exit(0);
+    }
+    for (const l of CE.perMergedLines(merged, since ? `since ${since.slice(0, 10)}` : `last ${CE.WINDOW_DAYS} days`))
+      console.log(l);
     if (!s.rows.length)
       console.log('No finished tasks with a measured cost yet (measured at set <id> done).');
     else {
@@ -4314,6 +4406,16 @@ if (command === 'init') {
         );
     }
   }
+} else if (command === 'calibrate') {
+  // ---- The calibration view (lib/costEstimate.js): how far the minute estimates and the cost model are off per class.
+  // Read-only: it never changes the weights, the order or the queue. ----
+  const days = a.includes('--days') ? Number(val('--days')) : CE.WINDOW_DAYS;
+  if (!Number.isInteger(days) || days < 1 || days > 365) die('--days must be a whole number 1-365');
+  const min = a.includes('--min') ? Number(val('--min')) : CE.MIN_SAMPLE;
+  if (!Number.isInteger(min) || min < 1) die('--min must be a whole number >= 1');
+  const c = CE.calibration(read(), { windowDays: days, minSample: min });
+  if (a.includes('--json')) console.log(JSON.stringify(c, null, 2));
+  else for (const l of CE.calibrationLines(c)) console.log(l);
 } else if (command === 'projects') {
   // ---- Project and feature ----
   const queue = read();

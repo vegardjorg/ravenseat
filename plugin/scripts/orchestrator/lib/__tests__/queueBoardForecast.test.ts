@@ -138,6 +138,16 @@ describe('the forecast on the board', () => {
     await flush();
     expect(document.querySelector('.stat-forecast')?.textContent).toBe(`Forecast: ${forecast.text}`);
   });
+
+  it('the first key figure is Cost per merged change (12 merged at 3 USD, no time log: task cost only)', () => {
+    const first = document.querySelector('.keyFigures .tile') as HTMLElement;
+    expect(first.querySelector('.tile-name')?.textContent).toBe('Cost per merged change');
+    expect(first.querySelector('.tile-value')?.textContent).toBe('3.00 USD');
+    expect(first.querySelector('.tile-under')?.textContent).toBe(
+      '36.00 USD all measured cost / 12 merged, last 14 days (task cost only, no usage in the time log)',
+    );
+    expect(first.querySelector('.tile-detail')?.textContent).toMatch(/^Estimate-based, secondary: .+ per content minute\.$/);
+  });
 });
 
 describe('Auto-accept proposals in the gear', () => {

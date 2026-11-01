@@ -23,6 +23,7 @@
 const L = require('./queueLogic.js');
 const { config } = require('./queueConfig.js');
 const RL = require('./rateLimits.js');
+const CE = require('./costEstimate.js');
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const HOUR_MS = 3_600_000;
@@ -211,13 +212,18 @@ function trackHours(queue, from, to) {
   return ms / HOUR_MS;
 }
 
-/** Calibrated cost (USD) and count for tasks that are waiting or running (what lies ahead in the queue). */
-function queueCost(queue) {
+/**
+ * Calibrated cost (USD) and count for tasks that are waiting or running (what lies ahead in the queue). The estimate per
+ * task is costEstimate.calibratedCost: the measured median per class (and size) when there is enough data in the window,
+ * otherwise the static model queueLogic.estimateCost.
+ */
+function queueCost(queue, now = Date.now()) {
+  const model = CE.costModel(queue, { now });
   let usd = 0;
   let count = 0;
   for (const o of queue?.tasks ?? []) {
     if (!['waiting', 'running'].includes(o.status) || L.isExternalRow(o)) continue;
-    usd += L.estimateCost(o);
+    usd += CE.calibratedCost(o, model).usd;
     count++;
   }
   return { usd, count };
@@ -255,7 +261,7 @@ function forecast({ queue, events, now = Date.now(), reset: n = reset() }) {
   const trackSustainable =
     pctPerTrackHour && pctPerTrackHour > 0 ? sustainablePace / pctPerTrackHour : null;
   const suggestionTrack = trackSustainable == null ? null : Math.max(0, Math.floor(trackSustainable));
-  const costOfQueue = queueCost(queue);
+  const costOfQueue = queueCost(queue, now);
   return {
     from,
     to,

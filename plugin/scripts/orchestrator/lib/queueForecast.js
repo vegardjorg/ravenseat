@@ -10,8 +10,9 @@
 // reach the remaining count; the number of days is the run's answer. After `runs` runs, p50/p85/p95 are the day counts
 // that 50/85/95 % of the runs finished within (nearest rank, like queueStatistics.percentile). Day 1 is today, so "by
 // Tue 4 Nov (4 days)" counts from today's date.
-// Expected cost = remaining x the median measured cost (cost.usd, `queue.mjs set <id> done`) per done task in the window;
-// null when no done task in the window has a measured cost.
+// Expected cost: `forecast` alone gives remaining x the median measured cost (cost.usd, `queue.mjs set <id> done`) per done
+// task in the window; `queueForecast` replaces it with the sum of the calibrated estimate per remaining task
+// (lib/costEstimate.js, per class and size). null when no done task in the window has a measured cost.
 // With fewer than MIN_DONE done in the window there is no forecast ("not enough data").
 // Used by `queue.mjs forecast` and the board (the Focus view and Statistics). Tested in lib/__tests__/queueForecast.test.ts.
 // =============================================================
@@ -19,6 +20,7 @@
 const L = require('./queueLogic.js');
 const S = require('./queueStatistics.js');
 const TK = require('./timeCost.js');
+const CE = require('./costEstimate.js');
 
 /** The default window (days) and number of runs. */
 const WINDOW_DAYS = 28;
@@ -159,8 +161,16 @@ function queueForecast(queue, { project = null, days = WINDOW_DAYS, runs = RUNS,
   const done = (queue?.tasks ?? [])
     .filter((o) => o.status === 'done' && !L.isExternalRow(o) && o.done)
     .map((o) => ({ done: o.done, usd: o.cost?.usd ?? null }));
+  const f = forecast({ done, remaining: r.tasks.length, days, runs, rng, now, tz });
+  // The expected cost per remaining task from the calibrated model (lib/costEstimate.js: the measured median per class
+  // and size in the same window, or the static model when a class has too little data), so a queue of D+ tasks is not
+  // priced like one of K tasks. Only when some measured cost exists (otherwise "No measured cost yet." as before).
+  if (f.expectedCost != null) {
+    const model = CE.costModel(queue, { now, windowDays: f.windowDays });
+    f.expectedCost = round2(r.tasks.reduce((s, o) => s + CE.calibratedCost(o, model).usd, 0));
+  }
   return {
-    ...forecast({ done, remaining: r.tasks.length, days, runs, rng, now, tz }),
+    ...f,
     project: project ?? null,
     focus: r.focus,
     ids: r.tasks.map((o) => o.id),

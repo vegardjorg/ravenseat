@@ -21,11 +21,25 @@ and `package.json`.
 - **The benchmark reads these rows**: gate runs and reruns per task, compactions per task and in orchestrator sessions
   (when the transcript shows none), and `fixes` links as defects after merge, whatever the defect window. It also reads
   cq's `added_at`.
+- **Calibrated cost estimates** (`lib/costEstimate.js`): per class and class + size bucket, the median measured USD of
+  done tasks in the last 28 days (at least 5), otherwise the static model corrected by the class's measured/model
+  ratio, otherwise the static model. Shown as `~$x` next to the minute estimate in `show`, `show --full`, `next`, the
+  `fill` lines and `info`, and as `costEstimate` in `state`. With `dailyBudget` set, `next` and `show` print a budget
+  outlook line (information only; the guard still stops on measured usage).
+- **`cq calibrate [--days 28] [--min 5] [--json]`**: per class n, the median actual/estimate ratio for minutes and the
+  suggested weight, the median measured USD, the model's USD and the cost correction factor. Read-only.
+- **USD per merged change**: all measured cost in the window (time log: tracks, reviewers, helpers, fix rounds,
+  cancelled and open work, agents without a task) divided by the tasks that reached done. The first line of
+  `cq cost` (window `--since`, default 28 days; `--json` too) and the first key figure in the board's Statistics
+  (14 days). Per content minute is only a secondary, estimate-based figure.
 
 ### Changed
 - **The load guard is on by default**: `loadGuard.minFreeMemoryPct` is 10 (no new starts while free memory is below
   10 %), off on macOS, which counts the page cache as used. In HMS, 14 parallel tracks made D tasks take 165 instead
   of 34 minutes and gates go red from memory, not code. `cq limit minFreeMemoryPct off` turns it off for a queue.
+- **The quota forecast and `cq forecast` price the queue with the calibrated estimate**: `capacity`'s queue cost and
+  the forecast's expected cost sum the calibrated estimate per task (by class and size) instead of the static model or
+  remaining count x one median. The order of the queue is unchanged (the priority still uses the minute estimate).
 
 ## 0.4.1 (2026-10-31)
 
