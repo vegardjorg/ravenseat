@@ -153,8 +153,19 @@ const STANDARD = Object.freeze({
   // sets the value for the queue and wins over this one.
   // Default 10: a full machine makes gates red from timeouts and memory, not from code. macOS reports little free
   // memory (the page cache counts as used), so there the default is off; set a number to turn it on.
+  //
+  // Adaptive slots (lib/loadSlots.js): above the hard limit, the number of parallel slots follows the load instead of
+  // always being maxConcurrent. All slots at or above allSlotsFreeMemoryPct free memory, minSlots at the hard limit,
+  // linear in between. CPU is optional: both allSlotsCpuPct and minSlotsCpuPct set (e.g. 60 and 95) turns it on; it
+  // costs a ~200 ms sample per call. adaptive false (or QUEUE_LOAD_ADAPTIVE=off) = the fixed maxConcurrent as before.
+  // On macOS the memory part is off by default for the same reason as the hard limit.
   loadGuard: {
     minFreeMemoryPct: process.platform === 'darwin' ? null : 10,
+    adaptive: true,
+    minSlots: 1,
+    allSlotsFreeMemoryPct: process.platform === 'darwin' ? null : 40,
+    allSlotsCpuPct: null,
+    minSlotsCpuPct: null,
   },
   // Auto-accept of agent proposals (lib/queueProposals.js): a proposal that fits the rules is approved by the queue
   // itself (in `queue.mjs add` and `orchestrator pulse`), logged and can be undone. Default off. `queue.mjs proposals

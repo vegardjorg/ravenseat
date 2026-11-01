@@ -199,6 +199,21 @@ While off, every `follow` command answers "Follow is off (features.follow in que
   exit 7 ("THE MACHINE IS FULL") while free memory is below the limit. Default 10 % (off on macOS, which counts the page cache as used; set a number
   there to turn it on). Running tracks finish;
   `start --force` and `fill --over-load` override.
+- Load-aware slots: above that hard stop, the number of parallel slots follows the load instead of always being
+  `maxConcurrent`. With many parallel tracks the machine, not the token quota, is often the limit: gates slow down
+  and go red from memory and timeouts, and the reruns cost more than the extra tracks gain. The rule:
+  - all slots at or above `loadGuard.allSlotsFreeMemoryPct` free memory (default 40 %, off on macOS);
+  - `loadGuard.minSlots` (default 1) at the hard limit `minFreeMemoryPct`;
+  - linear in between, rounded down. With `maxConcurrent` 5 and the defaults: 40 % free gives 5 slots, 25 % gives 3,
+    18 % gives 2, 10 % gives 1;
+  - CPU is optional: set both `allSlotsCpuPct` (all slots at or below, e.g. 60) and `minSlotsCpuPct` (`minSlots` at
+    or above, e.g. 95). It costs a ~200 ms CPU sample per command. The lower of memory and CPU wins;
+  - new starts = the slots minus the tracks already running. An unknown measurement never limits.
+
+  `fill`, `next`, `start` and `show` print the reason (`LOAD: 2 of 5 slots: free memory 18 % (all slots from 40 %)`),
+  `state` has `loadSlots`, and `cq limit` shows the load and the slots now. The floor of 1 means this rule alone
+  never stops the queue; only the hard guard does. Turn it off with `loadGuard.adaptive: false` in the config or
+  `QUEUE_LOAD_ADAPTIVE=off`; `fill --over-load` and `start --force` skip it for one call.
 - With a migration flow, `start`, `fill` and `pick` skip taken blocks: a migration file, the block of a task that is
   not finished, or a block named on a "migration block" line in an active prompt file (a move by hand).
   `next-migr` refuses a number inside a taken block.
@@ -229,6 +244,8 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `capacity` | Tuesday 19:00 local time | Weekly quota reset for `cq capacity` |
 | `models` | `{}` (each agent file's model, opus) | Model per agent, e.g. `{ "reviewer-docs": "sonnet" }`: printed as `model=<m>` on the start lines and passed to the Agent tool (opus, sonnet, haiku, fable; an unknown value is ignored) |
 | `loadGuard.minFreeMemoryPct` | `10` (off on macOS) | Load guard: no new starts while free memory (percent) is below it; `cq limit minFreeMemoryPct` overrides per queue |
+| `loadGuard.adaptive`, `minSlots`, `allSlotsFreeMemoryPct` | `true`, `1`, `40` (off on macOS) | Load-aware slots: fewer than `maxConcurrent` slots while free memory is below `allSlotsFreeMemoryPct`, at least `minSlots`; `QUEUE_LOAD_ADAPTIVE=off` turns it off |
+| `loadGuard.allSlotsCpuPct`, `minSlotsCpuPct` | `null`, `null` | Optional CPU part of the load-aware slots (both set, e.g. `60` and `95`) |
 | `proposals.autoAccept` | `{ enabled: false, classes: ["K"], maxEstimateMin: 60, maxValue: null }` | Auto-accept of agent proposals by the owner's rules (`cq proposals`); the queue's own rules win; never D/D+, `waiting_on`, legal/owner labels, open legal points or protected paths |
 | `qa.evidenceTypes`, `qa.autoTypes`, `qa.manualTypes` | `screenshot`, `test`, `manual`; auto `test`; manual `manual` | QA evidence types a track writes as `EVIDENCE <type>[=<ref>]`; auto types are closed by `qa auto --run`, manual ones gathered in one round |
 | `qa.autoCommand` | `null` | Shell command for auto evidence, e.g. `npx vitest run {refs}` (`{refs}`, `{id}`; or `{ "<type>": "<command>" }`); `null` = `qa auto` only lists |

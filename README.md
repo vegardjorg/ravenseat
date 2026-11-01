@@ -279,6 +279,13 @@ stopped at 400k so a long chat does not keep paying for its whole history; compa
 the message with `continue:` to send it anyway. The limits can be changed with environment
 variables ([orchestration](plugin/docs/orchestration.md)).
 
+**Parallelism follows the machine's load.** With many parallel tracks the machine, not the token quota, is often the
+limit: gates slow down and go red from memory and timeouts, and reruns eat the gain. So `cq fill` opens fewer slots
+than `maxConcurrent` while free memory is low (all slots from 40 % free, one at the hard limit of 10 %, linear in
+between; CPU optional) and says why: `LOAD: 2 of 5 slots: free memory 18 % (all slots from 40 %)`. Below the hard
+limit no new tracks start (exit 7). Settings: `loadGuard` in `queue.config.json`
+([queue reference](plugin/docs/queue.md#limits-and-safety)).
+
 **Status line and handover.** `cq setup --settings` adds a status line with context, cost, quota and running
 tracks (run it again after a plugin update). The orchestrator keeps a handover note; after compaction it reads only
 the "Now" part, and a new orchestrator chat can adopt tracks that are still running (`cq deliveries`, `cq resume`).

@@ -39,6 +39,8 @@
  * config), the defaults are used.
  */
 let configCache = null;
+/** Load-aware slots (pure rule + measurement; no dependency back on this file). */
+const LS = require('./loadSlots.js');
 function cfg() {
   if (configCache) return configCache;
   try {
@@ -2024,12 +2026,15 @@ function spaceUse(queue) {
   };
 }
 
-function selectNext(queue, now = Date.now(), { uncommitted = [] } = {}) {
+function selectNext(queue, now = Date.now(), { uncommitted = [], load = null } = {}) {
   const tasks = queue.tasks ?? [];
   const register = queue.projects ?? {};
   const use = spaceUse(queue);
   const g = use.limits;
   let { available, dPlus, db } = use;
+  // Load-aware slots (lib/loadSlots.js): with a measurement, fewer slots open under load. Without one (most callers),
+  // exactly maxConcurrent as before.
+  if (load) available = Math.min(available, loadSlotsFor(queue, load).newSlots);
   const perDomain = use.perDomain;
 
   // Common ranking (parked, paused and outside focus are out; then focusStep, score, id). Without focus and
@@ -2268,7 +2273,9 @@ function state(
   const waiting = tasks.filter((o) => o.status === 'waiting' && !isBatched(o));
   const batched = tasks.filter(inBatchQueue);
   const guard = startGuard(queue, dailyUsage, { now, cursor, load });
-  const canStart = guard ? [] : selectNext(queue, now, { uncommitted });
+  const canStart = guard ? [] : selectNext(queue, now, { uncommitted, load });
+  // Load-aware slots: why fewer slots are open (only when a measurement was given and the adaptive rule applies).
+  const ls = load && !guard ? loadSlotsFor(queue, load) : null;
   const guardBlocker = guard?.stop === 'dailyBudget' ? 'the daily budget is used up' : guard?.summary;
   const rk = rankingContext(queue, now);
   const blocked = waiting
@@ -2304,6 +2311,19 @@ function state(
     ...(guard?.stop === 'nightPause' ? { stop: 'nightPause', night: guard.message } : {}),
     ...(guard?.stop === 'windDown' ? { stop: 'windDown', windDown: guard.message } : {}),
     ...(guard?.stop === 'load' ? { stop: 'load', load: guard.message } : {}),
+    // The effective slot count from the load (lib/loadSlots.js), e.g. "2 of 5 slots: free memory 18 % (...)".
+    ...(ls?.active
+      ? {
+          loadSlots: {
+            slots: ls.slots,
+            max: ls.max,
+            newSlots: ls.newSlots,
+            limited: ls.limited,
+            by: ls.by,
+            text: ls.text,
+          },
+        }
+      : {}),
     blocked,
     ownerQuestion: [...question.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -2474,6 +2494,30 @@ function loadGuard(queue, load) {
       'tracks finish, and delivered tracks are received and merged as usual. The owner can change the limit ' +
       '(cq limit minFreeMemoryPct <number|off>) or start one task with start <id> --force.',
   };
+}
+
+/**
+ * The load-aware slot count for the queue (lib/loadSlots.js): maxConcurrent from the queue's limits, the agents that
+ * already hold a slot, the hard limit (minFreeMemoryFor) as the bottom of the memory ramp, and the settings from
+ * queue.config.json (loadGuard) and QUEUE_LOAD_ADAPTIVE.
+ * @param {object} queue
+ * @param {{ freeMemoryPct?: number|null, cpuPct?: number|null } | null} load
+ */
+function loadSlotsFor(queue, load) {
+  const use = spaceUse(queue);
+  let lg = {};
+  try {
+    lg = cfg().loadGuard ?? {};
+  } catch {
+    lg = {}; // no config: the defaults
+  }
+  return LS.loadSlots({
+    maxSlots: use.limits.maxConcurrent,
+    running: use.agents,
+    load,
+    hardMinFreeMemoryPct: minFreeMemoryFor(queue),
+    settings: LS.settingsFrom(lg),
+  });
 }
 
 /** Interprets the load limit: integer 1-100 (percent free memory), "off"/0 = null. */
@@ -4972,7 +5016,10 @@ function summaryView(
   }
 
   const guard = startGuard(queue, dailyUsage, { now, cursor, load });
-  const startable = guard ? [] : selectNext(queue, now, { uncommitted });
+  const startable = guard ? [] : selectNext(queue, now, { uncommitted, load });
+  // Load-aware slots: say why fewer tracks start (only when the load limits them).
+  const ls = load && !guard ? loadSlotsFor(queue, load) : null;
+  if (ls?.limited) out.push(cut(`LOAD: ${ls.reason}. Fewer tracks start until the load goes down.`));
   out.push(
     `STARTABLE NOW (${startable.length}${startable.length ? '; cq fill starts them' : ''}):`,
   );
@@ -7052,6 +7099,7 @@ module.exports = {
   startGuard,
   windDownGuard,
   loadGuard,
+  loadSlotsFor,
   modelFor,
   modelPart,
   AGENT_MODELS,

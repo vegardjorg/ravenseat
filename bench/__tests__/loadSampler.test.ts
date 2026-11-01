@@ -52,6 +52,15 @@ describe('sampleOnce', () => {
     expect(s.node_processes).toBeNull();
   });
 
+  it('parseProcessNames reads PowerShell lines and tasklist CSV rows; node counts match either form', () => {
+    const ps = LS.parseProcessNames('node\r\nCode\r\n\r\nnode\r\n', 'powershell');
+    expect(ps).toEqual(['node', 'Code', 'node']);
+    expect(ps.filter(LS.isNode).length).toBe(2);
+    const tl = LS.parseProcessNames('"node.exe","123","Console","1","50 000 K"\r\n"bash.exe","9","Console","1","1 K"\r\n', 'tasklist');
+    expect(tl).toEqual(['node.exe', 'bash.exe']);
+    expect(tl.filter(LS.isNode).length).toBe(1);
+  });
+
   it('cpuPct computes the busy share from two readings', () => {
     expect(LS.cpuPct({ idle: 100, total: 200 }, { idle: 150, total: 400 })).toBe(75);
     expect(LS.cpuPct(null, { idle: 1, total: 2 })).toBeNull();
