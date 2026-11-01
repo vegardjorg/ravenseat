@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   Kanban board for the work queue (see docs/board.md). Served by scripts/orchestrator/queue-board.mjs, which also builds
-  theme.css (the neutral palette in lib/queueBoard.js) and inserts the title from queue.config.json. Vanilla JS in board.js,
+  theme.css (the neutral palette in lib/queueBoard.js) and inserts the title from queue.config.json. Vanilla JS in board/ (classic scripts),
   no build step, no CDN. The "Dependencies" view: graph.js draws, the layout is the pure functions in
   lib/queueGraph.js. The top: two rows with the logo in the left corner; row 1 the workspaces Plans and Queue, title, status,
   "Waiting on you" and the gear, row 2 the view tabs, search, Filter, Selection and grouping. The Plans room
@@ -23,14 +23,32 @@
     <script src="/plan.js" defer></script>
     <!-- The card buffer (the diff) and the keyboard between the columns; same file the tests use. -->
     <script src="/performance.js" defer></script>
-    <!-- The mascot's rules (lib/queueMascot.js) and the speech bubble, before board.js, which reports to them. -->
+    <!-- The mascot's rules (lib/queueMascot.js) and the speech bubble, before the board, which reports to them. -->
     <script src="/queueMascot.js" defer></script>
     <script src="/mascot.js" defer></script>
-    <!-- The update banner's rules (lib/queueUpdate.js), before board.js, which draws the banner. -->
+    <!-- The update banner's rules (lib/queueUpdate.js), before the board (board/start.js), which draws the banner. -->
     <script src="/queueUpdate.js" defer></script>
-    <script src="/board.js" defer></script>
+    <!-- The board itself: classic scripts in board/ that share one scope, in this order (start.js runs the board).
+         Each must come after the scripts whose names it uses while it loads (see docs/board.md). -->
+    <script src="/board/core.js" defer></script>
+    <script src="/board/api.js" defer></script>
+    <script src="/board/cards.js" defer></script>
+    <script src="/board/draw.js" defer></script>
+    <script src="/board/views.js" defer></script>
+    <script src="/board/menus.js" defer></script>
+    <script src="/board/statistics.js" defer></script>
+    <script src="/board/settings.js" defer></script>
+    <script src="/board/inbox.js" defer></script>
+    <script src="/board/panel.js" defer></script>
+    <script src="/board/edit.js" defer></script>
+    <script src="/board/select.js" defer></script>
+    <script src="/board/bulk.js" defer></script>
+    <script src="/board/interact.js" defer></script>
+    <script src="/board/top.js" defer></script>
+    <script src="/board/cloud.js" defer></script>
+    <script src="/board/start.js" defer></script>
     <!-- The Plans room. The rules (queuePlanView.js) are the same file the tests use; plans.js draws. After
-         board.js, so the key from the link is saved before Plans fetches the register. -->
+         the board (board/), so the key from the link is saved before Plans fetches the register. -->
     <script src="/queuePlanView.js" defer></script>
     <!-- The Documents and agreements surface (before plans.js, which draws it). -->
     <script src="/plans/documents.js" defer></script>
@@ -54,7 +72,7 @@
       Filter, Selection and grouping. Which side the mascot sits on is controlled by one line in board.css (.top).
     -->
     <header class="top">
-      <!-- The logo is inserted by drawLogo() in board.js when /logo exists; otherwise the zone stays empty as a placeholder. -->
+      <!-- The logo is inserted by drawLogo() in board/start.js when /logo exists; otherwise the zone stays empty as a placeholder. -->
       <div id="mascot" class="mascot empty"></div>
       <!-- The speech bubble by the mascot (mascot.js). The text is always set with textContent. -->
       <p id="bubble" class="bubble" role="note" hidden></p>
@@ -236,7 +254,7 @@
         ></select>
       </div>
     </header>
-    <!-- The update banner (a newer cq version, or setup not run after an update), drawn by board.js from the state. -->
+    <!-- The update banner (a newer cq version, or setup not run after an update), drawn by board/start.js from the state. -->
     <div id="update-banner" class="update-banner" role="status" aria-live="polite" hidden></div>
     <!-- The focus line (the steps, the rest, ready ones in focus, a notice when the focus has nothing ready). -->
     <div id="focusLine" class="focusLine" aria-label="Focus" hidden></div>
