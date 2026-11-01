@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { boardSource } from './boardClient';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const V = require('../queuePlanView.js');
@@ -421,7 +422,7 @@ describe('the wiring in the board', () => {
   const html = readFileSync(join(CLIENT, 'index.html'), 'utf8');
   const js = readFileSync(join(CLIENT, 'plans', 'plans.js'), 'utf8');
   const css = readFileSync(join(CLIENT, 'plans', 'plans.css'), 'utf8');
-  const board = readFileSync(join(CLIENT, 'board.js'), 'utf8');
+  const board = boardSource(); // the board's own scripts (board/) as one text
   const server = readFileSync(join(CLIENT, '..', 'queue-board.mjs'), 'utf8');
 
   it('the top has the room picker Plans | Queue, and the "plan" view is called Focus', () => {
@@ -432,10 +433,10 @@ describe('the wiring in the board', () => {
     expect(html).toContain('id="plans-room"');
   });
 
-  it('plans.js loads after board.js and queuePlanView.js, and the server serves them', () => {
+  it('plans.js loads after the board (board/start.js last) and queuePlanView.js, and the server serves them', () => {
     const i = (s: string) => html.indexOf(s);
-    expect(i('/board.js')).toBeGreaterThan(0);
-    expect(i('/queuePlanView.js')).toBeGreaterThan(i('/board.js'));
+    expect(i('/board/start.js')).toBeGreaterThan(0);
+    expect(i('/queuePlanView.js')).toBeGreaterThan(i('/board/start.js'));
     expect(i('/plans/plans.js')).toBeGreaterThan(i('/queuePlanView.js'));
     expect(server).toContain("'/plans/plans.js'");
     expect(server).toContain("'/plans/plans.css'");

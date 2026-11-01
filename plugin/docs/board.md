@@ -179,3 +179,24 @@ invalid file falls back to the built-in set and prints one line in the board's t
 - Events: `merged` ({id}), `queue-empty`, `new-question`, `high-finding` ({id}), `quota-90` ({p}), `click` and
   `click-5`.
 - Vibe phrases get a higher chance for 15 minutes after a D/D+ review is merged or a fix round starts.
+
+## Files
+
+The board is plain files under `scripts/orchestrator/queue-board/`, with no build step and no CDN. `queue-board.mjs`
+serves only the files in its allow list (`STATIC`), all with the same strict Content-Security-Policy (`script-src
+'self'`, no inline script).
+
+- `index.html`, `board.css` and `theme.css` (built by the server): the page.
+- `board/`: the board itself, 17 classic scripts that `index.html` loads in this order with `defer`:
+  `core.js` (constants, the state, helpers, toasts), `api.js` (key, API calls, fetching, the warning dialog),
+  `cards.js` (filters, search, the card), `draw.js` (the columns, the chain, the strip), `views.js` (Focus wiring,
+  grouping, saved views), `menus.js` (help, project lanes, the Filter menu), `statistics.js`, `settings.js` (the
+  gear), `inbox.js` ("Waiting on you"), `panel.js` (the detail panel), `edit.js` (cancel, decline, edit, markdown),
+  `select.js` (multi-select), `bulk.js` (bulk dialog and undo), `interact.js` (writing, drag, keyboard), `top.js`
+  (theme, gear sections, modules, view tabs), `cloud.js` (the Cloud view) and `start.js` (update banner, logo and
+  the start). They share the page's global scope, so a top-level name in one is visible in the others, as when they
+  were one `board.js`. Code that runs while a script loads may only use names from the scripts before it; a new
+  file goes into `BOARD_SCRIPTS` in `queue-board.mjs` and into `index.html` in the same place.
+- `a11y.js`, `performance.js`, `graph.js`, `plan.js` and `mascot.js`: shared helpers and views with their own
+  `window.Queue…` object; the pure rules they use are served from `lib/` (the same files the tests use).
+- `plans/`: the Plans room (see [plan register](plan-register.md)).

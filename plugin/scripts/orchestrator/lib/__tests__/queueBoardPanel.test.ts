@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { clientSource } from './boardClient';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const T = require('../queueBoard.js') as { board: (queue: unknown, option?: unknown) => any };
@@ -75,9 +76,9 @@ beforeAll(async () => {
           : state
         : {},
   });
-  for (const f of ['a11y.js', '../lib/queueGraph.js', 'graph.js', 'plan.js', 'performance.js', 'board.js'])
+  for (const f of ['a11y.js', '../lib/queueGraph.js', 'graph.js', 'plan.js', 'performance.js', 'board/'])
     // Indirect eval: the scripts run in the global scope (as in the browser).
-    (0, eval)(readFileSync(join(CLIENT, f), 'utf8'));
+    (0, eval)(clientSource(f));
   await flush();
 }, 60_000);
 

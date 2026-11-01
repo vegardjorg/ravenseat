@@ -13,12 +13,14 @@
 //      Blocked is closed and not built until it opens, and the card has one button (the title) instead of tabindex and
 //      aria-label on the whole card. The times are written out with performance.now() (the numbers go to the console).
 //
-// Measuring another version of the board (e.g. the one before a change): set QUEUE_BOARD_JS to the path of that board.js file. Then
+// Measuring another version of the board (e.g. the one before a change): set QUEUE_BOARD_JS to the path of that board.js file
+// (one file, as before the split into board/). Then
 // the times are written out, and the behavior tests say what that version is missing.
 // =============================================================
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { boardSource } from './boardClient';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Y = require('../../queue-board/performance.js') as {
@@ -265,12 +267,14 @@ beforeAll(async () => {
   ];
   // performance.js is newer than the first versions; an older board.js (QUEUE_BOARD_JS) does not need it.
   if (!process.env.QUEUE_BOARD_JS) files.push(join(CLIENT, 'performance.js'));
-  files.push(process.env.QUEUE_BOARD_JS ?? join(CLIENT, 'board.js'));
+  if (process.env.QUEUE_BOARD_JS) files.push(process.env.QUEUE_BOARD_JS);
   const t0 = performance.now();
   for (const f of files) {
     // Indirect eval: the scripts run in the global scope (as in the browser), where `module` does not exist.
     (0, eval)(readFileSync(f, 'utf8'));
   }
+  // The board's own scripts (board/) as one text, so they share one scope as in the browser.
+  if (!process.env.QUEUE_BOARD_JS) (0, eval)(boardSource());
   await flush();
   times.first = performance.now() - t0;
   main = document.getElementById('board') as HTMLElement;

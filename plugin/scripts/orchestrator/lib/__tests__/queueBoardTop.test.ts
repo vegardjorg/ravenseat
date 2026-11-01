@@ -12,11 +12,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { boardSource } from './boardClient';
 
 const folder = join(__dirname, '..', '..', 'queue-board');
 const html = readFileSync(join(folder, 'index.html'), 'utf8');
 const css = readFileSync(join(folder, 'board.css'), 'utf8');
-const js = readFileSync(join(folder, 'board.js'), 'utf8');
+// The board's own scripts (queue-board/board/) as one text, in load order.
+const js = boardSource();
 
 const VIEWPORT = 375;
 
@@ -198,8 +200,8 @@ describe('the top: the markup in the top', () => {
     expect(js).not.toMatch(/BUBBLE_TEST_TEXT/);
   });
 
-  it('the mascot is wired in: scripts before board.js, a Mascot choice in the gear, text only via textContent', () => {
-    const order = ['/queueMascot.js', '/mascot.js', '/board.js'].map((s) =>
+  it('the mascot is wired in: scripts before the board (board/core.js first), a Mascot choice in the gear, text only via textContent', () => {
+    const order = ['/queueMascot.js', '/mascot.js', '/board/core.js'].map((s) =>
       html.indexOf(`<script src="${s}" defer></script>`),
     );
     expect(order.every((i) => i >= 0)).toBe(true);

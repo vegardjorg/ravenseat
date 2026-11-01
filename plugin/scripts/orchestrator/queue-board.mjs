@@ -1980,10 +1980,33 @@ const json = (res, status, obj) =>
     'Cache-Control': 'no-store',
   });
 
+// The board's own client: classic scripts in queue-board/board/ that share one scope and load in this order (the
+// same list as index.html; see docs/board.md). Each file is allow-listed by name, like the rest of STATIC.
+const BOARD_SCRIPTS = [
+  'core.js',
+  'api.js',
+  'cards.js',
+  'draw.js',
+  'views.js',
+  'menus.js',
+  'statistics.js',
+  'settings.js',
+  'inbox.js',
+  'panel.js',
+  'edit.js',
+  'select.js',
+  'bulk.js',
+  'interact.js',
+  'top.js',
+  'cloud.js',
+  'start.js',
+];
 const STATIC = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/index.html': ['index.html', 'text/html; charset=utf-8'],
-  '/board.js': ['board.js', 'text/javascript; charset=utf-8'],
+  ...Object.fromEntries(
+    BOARD_SCRIPTS.map((f) => [`/board/${f}`, [path.join('board', f), 'text/javascript; charset=utf-8']]),
+  ),
   '/board.css': ['board.css', 'text/css; charset=utf-8'],
   // The "Dependencies" view. The layout is the pure functions in lib/queueGraph.js (the same file the tests use),
   // served unchanged to the browser; graph.js draws.
@@ -1992,7 +2015,7 @@ const STATIC = {
   // The speech bubble (mascot.js) and the pure rules in lib/queueMascot.js (the same file the tests use).
   '/mascot.js': ['mascot.js', 'text/javascript; charset=utf-8'],
   '/queueMascot.js': [path.join('..', 'lib', 'queueMascot.js'), 'text/javascript; charset=utf-8'],
-  // The update banner's rules (lib/queueUpdate.js, the same file the tests use); board.js draws it.
+  // The update banner's rules (lib/queueUpdate.js, the same file the tests use); board/start.js draws it.
   '/queueUpdate.js': [path.join('..', 'lib', 'queueUpdate.js'), 'text/javascript; charset=utf-8'],
   // The plan view (Now, Next, Later, Waiting) with a draft and "Save focus", and the help.
   '/plan.js': ['plan.js', 'text/javascript; charset=utf-8'],

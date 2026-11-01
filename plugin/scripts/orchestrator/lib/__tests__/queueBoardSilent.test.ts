@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { clientSource } from './boardClient';
 
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
 const T = require('../queueBoard.js') as { board: (queue: unknown, option?: unknown) => any };
@@ -106,8 +107,8 @@ describe('the board in jsdom', () => {
               : stat
             : {},
     });
-    for (const f of ['a11y.js', '../lib/queueGraph.js', 'graph.js', 'plan.js', 'performance.js', 'board.js'])
-      (0, eval)(readFileSync(join(CLIENT, f), 'utf8'));
+    for (const f of ['a11y.js', '../lib/queueGraph.js', 'graph.js', 'plan.js', 'performance.js', 'board/'])
+      (0, eval)(clientSource(f));
     await flush();
   }, 60_000);
 

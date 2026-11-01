@@ -55,6 +55,12 @@ and `package.json`.
   `QUEUE_LOAD` also takes `cpu=<pct>`.
 
 ### Changed
+- **The board client is split into modules**: the 7,300-line `queue-board/board.js` is now 17 classic scripts in
+  `queue-board/board/` (core, api, cards, draw, views, menus, statistics, settings, inbox, panel, edit, select, bulk,
+  interact, top, cloud, start), loaded in order with `defer` and sharing one scope. Pure move: the code is the same
+  statement for statement, and the board looks and works as before. The server allow-lists each file by name; the
+  Content-Security-Policy is unchanged. A new test (`queueBoardServe.test.ts`) checks that every file is served with
+  the right type and the same CSP.
 - **The bench load sampler counts processes on Windows**: `tasklist` did not finish within the timeout on a loaded
   machine, so `processes` and `node_processes` came out null. It now uses PowerShell `Get-Process` (45 s timeout),
   with `tasklist` only as the fallback when PowerShell is missing.
