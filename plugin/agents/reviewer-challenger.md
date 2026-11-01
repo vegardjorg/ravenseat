@@ -1,6 +1,6 @@
 ---
 name: reviewer-challenger
-description: Tries to prove a delivered track WRONG. For investigations (U) and bug fixes: looks for counter-evidence, a root cause that is really a symptom, a fix that does not fix, missed callers and sources that should not be trusted. Read-only. Answers with a FINDINGS line first.
+description: 'Tries to prove a delivered track WRONG. For investigations (U) and bug fixes: looks for counter-evidence, a root cause that is really a symptom, a fix that does not fix, missed callers and sources that should not be trusted. Read-only. Answers with a FINDINGS line first.'
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
