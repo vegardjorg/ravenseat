@@ -34,6 +34,15 @@ and `package.json`.
   (14 days). Per content minute is only a secondary, estimate-based figure.
 
 ### Changed
+- **Hooks run in exec form**: every hook in `hooks/hooks.json` and `settings.queue.json` is `"command": "node",
+  "args": ["<root>/scripts/orchestrator/hook-x.mjs"]`, so Claude Code spawns node directly instead of through a shell.
+  On Windows the shell is Git Bash, started on every call: with the PostToolUse hook on every tool call, this cuts the
+  hook start by about 40 % (measured on a loaded Windows machine, 20 calls each, two runs: median about 1.9 to 2.1 s
+  exec form against 3.3 to 3.4 s shell form). Tested live on Claude Code 2.1.316: the hook runs as a direct child of
+  Claude Code (no bash.exe), `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PROJECT_DIR}` are substituted in `args`, and the
+  additionalContext of a synchronous exec-form PostToolUse hook reaches the subagent. `setup --hooks` / `install.mjs`
+  rewrite the older shell-form queue hooks in `.claude/settings.json` to exec form (other hooks are left alone), and
+  the board's setup check accepts both forms. Needs `node` on PATH as a real executable (`node.exe` on Windows).
 - **The 400k block in other chats is opt-in**: chats that are not the orchestrator get the notice from 250k, but the
   message is only stopped at 400k with `contextGuard.blockOtherChats: true` in `queue.config.json`
   (`CONTEXT_BLOCK_OTHERS=1` overrides). The orchestrator's compact, wind-down and hard stop are unchanged.

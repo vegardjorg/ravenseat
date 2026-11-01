@@ -245,7 +245,8 @@ orchestration rules, and `/cq:start` to open a session cheaply before you paste 
 
 Hooks support the loop: they warn the orchestrator and the tracks when their context gets large, block force pushes,
 pushes of branches other than the base branch and migration pushes to the wrong environment, put the queue state back into the chat after compaction, and log the time and
-tokens of every subagent.
+tokens of every subagent. The hooks run in exec form (node is spawned directly, no shell), which matters on Windows,
+where a shell-form hook starts Git Bash on every tool call.
 
 **Hardening against prompt injection.** Tracks treat what they read as data, not instructions. The merge stops
 (exit 4) when a branch changes hooks, settings, agents, the orchestrator scripts or the queue config without owning

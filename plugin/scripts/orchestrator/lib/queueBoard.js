@@ -1851,7 +1851,8 @@ const QUEUE_HOOKS = [
 
 /**
  * Are the queue system's hooks set up? Reads `hooks.<event>` in .claude/settings.json and looks for entries where a
- * command points to scripts/orchestrator/<file>. Matcher "*" or no matcher counts as "all".
+ * command (shell form) or one of its args (exec form) points to scripts/orchestrator/<file>. Matcher "*" or no
+ * matcher counts as "all".
  * @returns {{ all: boolean, hooks: { file: string, what: string, ok: boolean,
  *   events: { event: string, matchers: string[], ok: boolean }[] }[], missing: string[] }}
  *   `all` = every hook is listed under all its events; `missing` = "file (event)" for what is missing.
@@ -1862,8 +1863,10 @@ function hooksCoverage(settings, expected = QUEUE_HOOKS) {
       .filter(
         (e) =>
           Array.isArray(e?.hooks) &&
+          // Shell form has the script in `command`; exec form has command "node" and the script in `args`.
           e.hooks.some((h) =>
-            String(h?.command ?? '')
+            [String(h?.command ?? ''), ...(Array.isArray(h?.args) ? h.args.map(String) : [])]
+              .join(' ')
               .replace(/\\/g, '/')
               .includes(`scripts/orchestrator/${file}`),
           ),

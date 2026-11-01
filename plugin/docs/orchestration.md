@@ -179,6 +179,15 @@ context size. The system keeps both small:
   and `hook-track-context.mjs` writes `{ time, event: "compact", scope: "track", agent_id, agent_type, track,
   compactions }` once per new track compaction (`compactions` is the count after it; once a track has had its PARTIAL
   message its transcript is no longer counted). Writing a row never changes what the hook does.
+- **Hook cost.** `hook-track-context.mjs` runs on every tool call in every session (PostToolUse, matcher `*`); it
+  exits before any require unless the agent is a track, so the cost is the process start. All hooks are in exec form
+  (`"command": "node", "args": [...]`): Claude Code spawns node directly, with no shell, and substitutes
+  `${CLAUDE_PLUGIN_ROOT}` (plugin) or `${CLAUDE_PROJECT_DIR}` (vendored install) in `args`. In shell form Windows starts
+  Git Bash first, which made the hook start about 1.6 times slower on a loaded machine. The hooks stay synchronous: an
+  `async: true` PostToolUse hook that fires in a subagent delivers its additionalContext to the main session, so the
+  track would never see the PARTIAL message. `setup --hooks` rewrites older shell-form queue hooks in
+  `.claude/settings.json` to exec form. Exec form needs `node` to resolve to a real executable (`node.exe`), not a
+  `.cmd` shim.
 
 ## Adopting running tracks (cheap rotation)
 

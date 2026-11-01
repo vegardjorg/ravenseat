@@ -36,8 +36,9 @@
 // Fails OPEN: any internal error gives no output and exit 0.
 // Not async: tested 2026-11-01 (Claude Code 2.1.286), an `async: true` PostToolUse hook that fires inside a subagent
 // delivers its additionalContext to the MAIN session, not to the subagent, so the track would never see the PARTIAL
-// message. A synchronous hook reaches the subagent. The cost per call is the Node start (the fast exit below); the
-// way to remove it is an `http` hook to one long-running process, not async.
+// message. A synchronous hook reaches the subagent. The cost per call is the Node start (the fast exit below).
+// hooks.json runs it in exec form (command node + args, no shell), so Windows does not start Git Bash first; tested
+// 2026-11-01 (Claude Code 2.1.316), the exec-form hook's additionalContext reaches the subagent too.
 // Smoke test: echo '{"agent_type":"track","agent_id":"x","transcript_path":"<file>"}' | node scripts/orchestrator/hook-track-context.mjs
 // =============================================================
 import { Buffer } from 'node:buffer';

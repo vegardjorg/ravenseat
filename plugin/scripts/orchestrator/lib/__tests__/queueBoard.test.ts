@@ -945,6 +945,23 @@ describe('settings and setup', () => {
         },
       }).all,
     ).toBe(true);
+    // Exec form (command "node", the script in args), as hooks.json and settings.queue.json write it, counts too.
+    expect(
+      V.hooksCoverage({
+        hooks: {
+          ...fullSettings().hooks,
+          SubagentStop: [
+            ...fullSettings().hooks.SubagentStop.filter((e) => !e.hooks[0].command.includes('hook-time.mjs')),
+            { hooks: [{ command: 'node', args: ['${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-time.mjs'] }] },
+          ],
+        },
+      }).all,
+    ).toBe(true);
+    // ...and the real plugin hooks.json covers every hook.
+    expect(
+      V.hooksCoverage(JSON.parse(readFileSync(join(__dirname, '..', '..', '..', '..', 'hooks', 'hooks.json'), 'utf8')))
+        .missing,
+    ).toEqual([]);
     expect(V.hooksCoverage({}).all).toBe(false);
     // Another project's script with the same file name somewhere else does not count.
     expect(

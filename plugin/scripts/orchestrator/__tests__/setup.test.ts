@@ -12,18 +12,17 @@ import { join } from 'path';
 // @ts-expect-error: plain ESM script without types
 import { mergeSettings, PLUGIN_ROOT, setupProject } from '../setup.mjs';
 
-type Settings = { hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]> } & Record<
-  string,
-  unknown
->;
+type Hook = { type?: string; command: string; args?: string[]; timeout?: number };
+type Settings = { hooks: Record<string, { matcher?: string; hooks: Hook[] }[]> } & Record<string, unknown>;
+
+/** The command line of a hook: shell form has it all in `command`, exec form has the script in `args`. */
+const line = (h: Hook) => [h.command, ...(h.args ?? [])].join(' ');
 
 /** The hook scripts per event in a settings or hooks.json file. */
 function scriptsPerEvent(s: Settings) {
   const out: Record<string, string[]> = {};
   for (const [event, groups] of Object.entries(s.hooks ?? {}))
-    out[event] = groups
-      .flatMap((g) => g.hooks.map((h) => /(hook-[\w-]+\.mjs)/.exec(h.command)?.[1] ?? h.command))
-      .sort();
+    out[event] = groups.flatMap((g) => g.hooks.map((h) => /(hook-[\w-]+\.mjs)/.exec(line(h))?.[1] ?? line(h))).sort();
   return out;
 }
 
@@ -39,6 +38,76 @@ describe('setup.mjs mergeSettings', () => {
     const vendored = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'settings.queue.json'), 'utf8'));
     expect(scriptsPerEvent(vendored)).toEqual(scriptsPerEvent(plugin));
     expect(scriptsPerEvent(plugin).SubagentStop).toEqual(['hook-time.mjs', 'hook-track-end.mjs']);
+  });
+
+  it('every node hook in both files is exec form (command node, the script in args, no shell)', () => {
+    const files: [string, string][] = [
+      [join(PLUGIN_ROOT, 'hooks', 'hooks.json'), '${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/'],
+      [join(PLUGIN_ROOT, 'settings.queue.json'), '${CLAUDE_PROJECT_DIR}/scripts/orchestrator/'],
+    ];
+    for (const [file, prefix] of files) {
+      const s: Settings = JSON.parse(readFileSync(file, 'utf8'));
+      const hooks = Object.values(s.hooks).flatMap((groups) => groups.flatMap((g) => g.hooks));
+      expect(hooks.length).toBeGreaterThan(0);
+      for (const h of hooks) {
+        expect(h.command).toBe('node');
+        expect(h.args).toHaveLength(1);
+        const arg = h.args?.[0] ?? '';
+        expect(arg.startsWith(prefix)).toBe(true);
+        expect(arg.slice(prefix.length)).toMatch(/^hook-[\w-]+\.mjs$/);
+        expect(typeof h.timeout).toBe('number');
+      }
+    }
+  });
+
+  it('shell-form queue hooks of an older install are rewritten to exec form, never added twice', () => {
+    mkdirSync(join(target, '.claude'));
+    const file = join(target, '.claude', 'settings.json');
+    const own = { type: 'command', command: 'node tools/my-hook.mjs', timeout: 5 };
+    writeFileSync(
+      file,
+      JSON.stringify({
+        hooks: {
+          PostToolUse: [
+            {
+              matcher: '*',
+              hooks: [
+                {
+                  type: 'command',
+                  command: 'node "$CLAUDE_PROJECT_DIR/scripts/orchestrator/hook-track-context.mjs"',
+                  timeout: 10,
+                },
+                own,
+              ],
+            },
+          ],
+          SubagentStop: [
+            {
+              matcher: '*',
+              hooks: [{ type: 'command', command: 'node scripts/orchestrator/hook-time.mjs', timeout: 30 }],
+            },
+          ],
+        },
+      }),
+    );
+    const notes = mergeSettings(target, { hooks: true }).join('\n');
+    expect(notes).toContain('hook made exec form: hook-track-context.mjs');
+    expect(notes).toContain('hook made exec form: hook-time.mjs');
+    const after: Settings = JSON.parse(readFileSync(file, 'utf8'));
+    expect(after.hooks.PostToolUse[0].hooks[0]).toEqual({
+      type: 'command',
+      command: 'node',
+      args: ['${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-track-context.mjs'],
+      timeout: 10,
+    });
+    // The project's own hook is left as it is, and hook-track-context.mjs is not added a second time.
+    expect(after.hooks.PostToolUse[0].hooks[1]).toEqual(own);
+    expect(after.hooks.PostToolUse).toHaveLength(1);
+    expect(scriptsPerEvent(after).SubagentStop).toEqual(['hook-time.mjs', 'hook-track-end.mjs']);
+    // A second run changes nothing.
+    const before = readFileSync(file, 'utf8');
+    expect(mergeSettings(target, { hooks: true }).join('\n')).not.toMatch(/hook (made|\w+:)/);
+    expect(readFileSync(file, 'utf8')).toBe(before);
   });
 
   it('an older install gets hook-track-end.mjs on SubagentStop, once', () => {
