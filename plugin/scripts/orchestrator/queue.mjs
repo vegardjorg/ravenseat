@@ -17,6 +17,13 @@
 //   node scripts/orchestrator/queue.mjs init [--next-migr <n>] [--max-concurrent 5] [--max-dplus 2] [--max-per-domain 7]
 //        (creates the data folder and an empty queue with defaultLimits and the example project "example"; never touches an
 //         existing queue. --next-migr only when the migration flow is enabled)
+//   node scripts/orchestrator/queue.mjs init --lite|--full
+//        (also writes "mode" into queue.config.json, for an existing queue too. A fresh init without a flag writes
+//         "lite" when the config has no mode of its own; lite gets the project "tasks" (prefix T-). lib/liteMode.js)
+//   node scripts/orchestrator/queue.mjs mode [lite|full]             (show the mode, or write it into queue.config.json)
+//   node scripts/orchestrator/queue.mjs add "<title>" [--mission "<text or path>"] [--priority 1-10] [--files a,b]
+//        [--id <id>] [--by "<who>"]   (lite mode only: one task from a title; id T-001..., class K, value 5 or
+//         --priority, 30 min, the mission = the title. No small-task guard or batch queue in lite)
 //   node scripts/orchestrator/queue.mjs add --file task.json        (one object, a list, or { "tasks": [...],
 //                                                                  "question": { "<id>": { type, text, ... } } })
 //   node scripts/orchestrator/queue.mjs add --json '{"id":"A-1",...}' [--approved]
@@ -500,6 +507,8 @@ const MG = require('./lib/mergeGuard.js');
 const FX = require('./lib/fixLinks.js');
 // Calibrated cost estimates (~$ in show, next, fill, info, state), `calibrate`, and USD per merged change (`cost`).
 const CE = require('./lib/costEstimate.js');
+// Lite mode ("mode": "lite"): quick add with only a title, no small-task guard or batch queue on add, `cq mode`.
+const LM = require('./lib/liteMode.js');
 
 // The project's settings (queue.config.json merged with the defaults in lib/queueConfig.js).
 const CONFIG = KK.config();
@@ -2461,8 +2470,24 @@ if (MODULE_COMMANDS[command] && !KK.featureOn(MODULE_COMMANDS[command], CONFIG))
 if (command === 'init') {
   // Creates the data folder and an empty queue with defaultLimits and the example project "example" (prefix EX-). An existing
   // queue is never touched, so init is safe to run several times.
+  // The mode (lib/liteMode.js): --lite / --full write `mode` into queue.config.json, also for an existing queue. A FRESH
+  // init (no queue yet) without a flag writes "lite" when the config has no `mode` of its own; an existing install is
+  // never switched without a flag. Lite gets the project "tasks" (prefix T-) instead of "example".
   fs.mkdirSync(FOLDER, { recursive: true });
-  if (fs.existsSync(FILE)) {
+  const fresh = !fs.existsSync(FILE);
+  const flagMode = a.includes('--lite') ? 'lite' : a.includes('--full') ? 'full' : null;
+  if (a.includes('--lite') && a.includes('--full')) die('init takes --lite or --full, not both');
+  const ownMode = LM.readOwnMode(KK.configFile());
+  const initMode = flagMode ?? (fresh && ownMode == null ? 'lite' : LM.mode(CONFIG));
+  if (flagMode || (fresh && ownMode == null)) {
+    try {
+      const w = LM.writeMode(KK.configFile(), initMode);
+      if (w.changed) console.log(`Mode: ${initMode} (written to ${KK.configFile()}; switch with ${CQ} mode lite|full).`);
+    } catch (e) {
+      die(`init: could not write the mode to ${KK.configFile()} (${e.message}). Nothing changed.`);
+    }
+  }
+  if (!fresh) {
     console.log(`The queue already exists: ${FILE} (nothing changed).`);
     process.exit(0);
   }
@@ -2474,12 +2499,15 @@ if (command === 'init') {
       maxPerDomain: Number(val('--max-per-domain') ?? L.DEFAULT_LIMITS.maxPerDomain),
     },
     resolved: [],
-    projects: {
-      example: {
-        title: 'Example',
-        prefixes: ['EX-'],
-      },
-    },
+    projects:
+      initMode === 'lite'
+        ? { [LM.LITE_PROJECT.id]: { title: LM.LITE_PROJECT.title, prefixes: [LM.LITE_PROJECT.prefix] } }
+        : {
+            example: {
+              title: 'Example',
+              prefixes: ['EX-'],
+            },
+          },
     tasks: [],
   };
   // Migration blocks only when the migration flow is enabled (config().migrations.folder).
@@ -2487,14 +2515,58 @@ if (command === 'init') {
   else if (val('--next-migr') != null)
     console.log('Note: --next-migr is ignored; the migration flow is off (migrations.folder in queue.config.json).');
   withLock(() => write(queue));
-  console.log(
-    `The queue is created: ${FILE}` +
-      (queue.next_migr != null ? ` (next migration block from ${queue.next_migr})` : '') +
-      '. The example project "example" (prefix EX-) can be renamed with cq project.',
-  );
+  if (initMode === 'lite') {
+    console.log(`The queue is created: ${FILE} (lite mode).`);
+    console.log(`Next: ${CQ} add "<what you want done>", then /cq:queue (or ${CQ} fill) to start it.`);
+    console.log(LM.switchLine(CQ));
+  } else
+    console.log(
+      `The queue is created: ${FILE}` +
+        (queue.next_migr != null ? ` (next migration block from ${queue.next_migr})` : '') +
+        '. The example project "example" (prefix EX-) can be renamed with cq project.',
+    );
+} else if (command === 'mode') {
+  // `mode` shows the mode; `mode lite|full` writes it into queue.config.json (only that key; lib/liteMode.js).
+  const want = a[1];
+  if (want == null) {
+    console.log(`Mode: ${LM.mode(CONFIG)} (${KK.configFile()}).`);
+    console.log(LM.isLite(CONFIG) ? LM.switchLine(CQ) : `Lite mode (the core loop only): ${CQ} mode lite.`);
+    process.exit(0);
+  }
+  if (!LM.MODES.includes(want)) die(`mode takes ${LM.MODES.join(' or ')} (or nothing, to show it)`);
+  let w;
+  try {
+    w = LM.writeMode(KK.configFile(), want);
+  } catch (e) {
+    die(`mode: could not write ${KK.configFile()} (${e.message}). Nothing changed.`);
+  }
+  console.log(w.changed ? `Mode: ${want} (written to ${KK.configFile()}).` : `Mode: ${want} already (nothing changed).`);
+  if (want === 'lite') console.log(LM.switchLine(CQ));
 } else if (command === 'add') {
-  const source = val('--file') ? fs.readFileSync(val('--file'), 'utf8') : val('--json');
-  if (!source) die("add requires --file <task.json> or --json '{...}'");
+  const LITE = LM.isLite(CONFIG);
+  // Lite: `add "<title>" [--mission ...] [--priority N] [--files a,b] [--id X] [--by ...]` builds the task from the flags.
+  const quickTitle = val('--title') ?? positional(1, [
+    '--file', '--json', '--title', '--mission', '--priority', '--files', '--id', '--by', '--plan',
+  ])[0];
+  let source = val('--file') ? fs.readFileSync(val('--file'), 'utf8') : val('--json');
+  if (!source && quickTitle != null) {
+    if (!LITE)
+      die(
+        `add requires --file <task.json> or --json '{...}' in full mode (a title alone works in lite mode: ${CQ} mode lite)`,
+      );
+    const q = LM.quickTask({
+      title: quickTitle,
+      mission: val('--mission'),
+      priority: val('--priority'),
+      files: val('--files'),
+      id: val('--id'),
+      by: val('--by'),
+    });
+    if (q.error.length) die(`Nothing added: ${q.error.join('; ')}`);
+    source = JSON.stringify(q.task);
+  }
+  if (!source)
+    die(LITE ? 'add requires a title: cq add "Fix the login bug" (or --file/--json)' : "add requires --file <task.json> or --json '{...}'");
   let content;
   try {
     content = JSON.parse(source);
@@ -2519,9 +2591,17 @@ if (command === 'init') {
   const planArg = a.includes('--plan') ? val('--plan') : null;
   if (a.includes('--plan') && (!planArg || planArg.startsWith('--')))
     die('--plan requires a plan entry id (cq plan show)');
+  const liteNotes = [];
   const added = edit((queue) => {
     const error = [];
     let planWarnings = [];
+    // Lite: fill id, class, domain, mission, project, feature, value and content_min when missing (under the lock, so
+    // the generated ids are free). The given fields always win.
+    if (LITE) {
+      const d = LM.liteDefaults(newOnes, queue);
+      newOnes.splice(0, newOnes.length, ...d.tasks);
+      liteNotes.splice(0, liteNotes.length, ...d.notes);
+    }
     if (planArg || newOnes.some((n) => n?.plan != null)) {
       // Under the same lock as the queue, so the register does not change between the check and the write.
       const k = P.linkPlan(readPlans(), newOnes, planArg);
@@ -2555,8 +2635,9 @@ if (command === 'init') {
       if (f.length) error.push(`${n.id ?? '(without id)'}: ${f.join('; ')}`);
     }
     // The batch queue rules against the queue as it will be (the new ones can depend on each other).
+    // Lite mode has no batch queue and no small-task guard (lib/liteMode.js): nothing is refused for its size.
     const after = [...queue.tasks, ...newOnes.map((n) => ({ status: 'waiting', ...n }))];
-    for (const n of newOnes) {
+    for (const n of LITE ? [] : newOnes) {
       const f = L.batchedError({ status: 'waiting', ...n }, after, queue.resolved);
       if (f.length) error.push(`${n.id ?? '(without id)'}: ${f.join('; ')}`);
       // The small-task guard (fix now, batch queue, or ask the owner about the priority).
@@ -2631,6 +2712,7 @@ if (command === 'init') {
   const waiting = added.result.filter((r) => r.status === 'waiting').map((r) => r.id);
   const proposed = added.result.filter((r) => r.status === 'proposed').map((r) => r.id);
   if (waiting.length) console.log(`Added: ${waiting.join(', ')}`);
+  for (const x of liteNotes) console.log(`Note: ${x}`);
   for (const x of added.autoAccepted)
     console.log(`Auto-accepted ${x.id} by the owner's rules (${x.reason}); undo: ${CQ} proposals undo ${x.id}`);
   if (proposed.length)

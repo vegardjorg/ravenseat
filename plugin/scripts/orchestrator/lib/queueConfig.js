@@ -33,6 +33,11 @@ const FEATURES = Object.freeze({
 
 /** The default values. Edit them in queue.config.json, not here. */
 const STANDARD = Object.freeze({
+  // "full" (every feature) or "lite" (the core loop only: init, add with just a title, show, fill, receive, merge; one
+  // task type, no small-task guard or batch queue, the short help; owner questions stay). See lib/liteMode.js. A config
+  // without the key is full, so existing installs keep working as before; a fresh `cq init` writes "lite" (opt out
+  // with `cq init --full`). Switch with `cq mode lite|full`.
+  mode: 'full',
   // The project name in texts (mission, agent messages, the board).
   projectName: 'theProject',
   // The integration branch: everything is merged here, and this is what is pushed in batches. Often main or develop.
@@ -228,6 +233,11 @@ function findRoot() {
 
 let buffer = null;
 
+/** The path to queue.config.json (QUEUE_CONFIG overrides, as in config()). */
+function configFile(root = findRoot()) {
+  return process.env.QUEUE_CONFIG ?? path.join(root, 'queue.config.json');
+}
+
 /**
  * Reads queue.config.json (once per process) and merges it with STANDARD.
  * @param {{ root?: string, fresh?: boolean }} [o]
@@ -235,7 +245,7 @@ let buffer = null;
 function config(o = {}) {
   if (buffer && !o.fresh && !o.root) return buffer;
   const root = o.root ?? findRoot();
-  const file = process.env.QUEUE_CONFIG ?? path.join(root, 'queue.config.json');
+  const file = configFile(root);
   let own = {};
   try {
     own = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -294,6 +304,7 @@ module.exports = {
   FEATURES,
   merge,
   findRoot,
+  configFile,
   config,
   dataFolder,
   timeLog,

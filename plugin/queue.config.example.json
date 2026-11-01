@@ -1,5 +1,6 @@
 {
   "_comment": "Settings for the work queue. Installed as queue.config.json in the project root. Missing fields get the defaults in scripts/orchestrator/lib/queueConfig.js. Keys starting with _ are comments.",
+  "_mode": "\"mode\": \"lite\" = the core loop only (add with just a title, no classes, value or batch queue to learn); \"full\" = every feature. Without the key the mode is full, but a fresh `cq init` writes lite (`cq init --full` to opt out). Switch any time with `cq mode lite|full`.",
   "projectName": "example",
   "baseBranch": "main",
   "remote": "origin",

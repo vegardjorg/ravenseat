@@ -51,11 +51,41 @@ const GROUPS = [
   },
 ];
 
+/**
+ * The short help in lite mode ("mode": "lite", lib/liteMode.js): only the core loop and the owner questions. The other
+ * commands still work when typed; `cq help all` lists them.
+ */
+const LITE_GROUPS = [
+  {
+    title: 'Get started',
+    commands: [
+      { cmd: 'init', usage: 'init --lite', text: 'create the queue (run once)' },
+      { cmd: 'add', usage: 'add "<what to do>"', text: 'add a task; only a title is needed' },
+      { cmd: 'show', usage: 'show', text: 'what runs, what can start, and the counts' },
+    ],
+  },
+  {
+    title: 'Run it (or let /cq:queue do it)',
+    commands: [
+      { cmd: 'fill', usage: 'fill --scratchpad <dir>', text: 'start the next tasks as agents' },
+      { cmd: 'receive', usage: 'receive <id>', text: 'take in a finished task' },
+      { cmd: 'merge', usage: 'merge <id>', text: 'merge it and mark it done' },
+    ],
+  },
+  {
+    title: 'Waiting on you',
+    commands: [
+      { cmd: 'question', usage: 'question', text: 'the questions the agents have for you' },
+      { cmd: 'resolve', usage: 'resolve <q> --answer "..."', text: 'answer one; the waiting tasks go on' },
+    ],
+  },
+];
+
 /** The command words queue.mjs dispatches on (`command === '...'`); the test keeps this list in step with queue.mjs. */
 const QUEUE_COMMANDS = [
   'activeOnes', 'add', 'approve', 'area', 'areas', 'batch', 'block', 'blockers', 'calibrate', 'cancel', 'capacity', 'classify', 'cloud', 'cloud-bundles',
   'cloud-package', 'compact', 'continue', 'cost', 'deliver', 'deliveries', 'diagnose', 'edit', 'edit-many', 'external',
-  'fill', 'focus', 'follow', 'forecast', 'handover', 'helpers', 'info', 'init', 'limit', 'merge', 'migr', 'next', 'next-migr',
+  'fill', 'focus', 'follow', 'forecast', 'handover', 'helpers', 'info', 'init', 'limit', 'merge', 'migr', 'mode', 'next', 'next-migr',
   'orchestrator', 'park', 'pick', 'pickable', 'plan', 'project', 'projects', 'proposals', 'qa', 'question', 'rank', 'receive',
   'release', 'resolutions', 'resolve', 'resume', 'set', 'show', 'start', 'state', 'trackFile', 'unblock', 'undo',
 ];
@@ -66,17 +96,22 @@ const ALIASES = { queue: 'queue', board: 'queue-board', takeover: 'queue-takeove
 /** Scripts the other scripts start by themselves (or Claude Code does): listed only under "Internal" in `cq help all`. */
 const INTERNAL_SCRIPTS = ['context-measure', 'cost-guard-statistics', 'make-mission', 'make-queue-common', 'statusline'];
 
-/** The short grouped help, as lines. `cq` is the command to show (cq, or node scripts/orchestrator/cq.mjs). */
-function shortHelp(cq = 'cq') {
-  const all = GROUPS.flatMap((g) => g.commands);
+/**
+ * The short grouped help, as lines. `cq` is the command to show (cq, or node scripts/orchestrator/cq.mjs).
+ * `lite`: the core commands only (LITE_GROUPS) and one line on how to switch to full mode.
+ */
+function shortHelp(cq = 'cq', { lite = false } = {}) {
+  const groups = lite ? LITE_GROUPS : GROUPS;
+  const all = groups.flatMap((g) => g.commands);
   const width = Math.max(...all.map((c) => `${cq} ${c.usage}`.length)) + 2;
-  const out = ['cq: the work queue for Claude Code.', ''];
-  for (const g of GROUPS) {
+  const out = [lite ? 'cq: the work queue for Claude Code (lite mode).' : 'cq: the work queue for Claude Code.', ''];
+  for (const g of groups) {
     out.push(`${g.title}:`);
     for (const c of g.commands) out.push(`  ${`${cq} ${c.usage}`.padEnd(width)}${c.text}`);
     out.push('');
   }
-  out.push(`More: ${cq} help all (every command), ${cq} help <command> (one command in full).`);
+  if (lite) out.push(require('./liteMode.js').switchLine(cq));
+  else out.push(`More: ${cq} help all (every command), ${cq} help <command> (one command in full).`);
   return out;
 }
 
@@ -199,6 +234,7 @@ function knownCommands(scripts = []) {
 
 module.exports = {
   GROUPS,
+  LITE_GROUPS,
   QUEUE_COMMANDS,
   ALIASES,
   INTERNAL_SCRIPTS,

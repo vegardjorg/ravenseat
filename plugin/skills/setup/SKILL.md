@@ -31,6 +31,12 @@ Then run `cq setup` with `--claude-md` and/or `--settings` for what the user sai
 
 ## 2. Configure `queue.config.json`
 
+ASK first: **lite (recommended for a first run)** or full? Lite is the core loop only: add a task with just a title,
+the agents do it, you merge; questions for the user still wait on the board. Full adds classes, value, focus, the
+batch queue, the plan register and helper agents. Lite: fill in only `projectName`, `baseBranch` and the gates below,
+skip `modules`, and in step 3 run `cq init --lite` with the lite smoke test. Full: `cq init --full`, and everything
+below. The user can switch later with `cq mode full` or `cq mode lite`.
+
 Fill in, asking the user where you are not sure:
 - `projectName`: a short name. `baseBranch`: the integration branch tracks branch from and merge into.
 - `gates.quick` and `gates.full`: the project's real check commands (type check, lint, tests). Read `package.json`
@@ -44,8 +50,19 @@ Keys starting with `_` or `$` are comments.
 
 ## 3. Create the queue and smoke test it
 
+Lite:
+
 ```
-cq init
+cq init --lite
+cq add "Demo task" --mission "Write a one-paragraph note about the repository layout."
+cq show
+cq set T-001 cancelled
+```
+
+Full:
+
+```
+cq init --full
 cq plan modules
 cq add --json '{"id":"EX-1","title":"Demo task","domain":"demo","class":"U","project":"example","feature":"Demo","mission":"Write a one-paragraph note about the repository layout.","value":5,"content_min":60}'
 cq show
@@ -53,8 +70,8 @@ cq next
 cq set EX-1 cancelled
 ```
 
-`init` creates the queue in `scripts/.queue/` (gitignored) with one example project `example` (prefix `EX-`); offer to
-rename it with `cq project`. Then tell the user they can open the board with `/cq:board` (Claude starts it in the background
+`init` creates the queue in `scripts/.queue/` (gitignored). In full mode it has one example project `example` (prefix
+`EX-`); offer to rename it with `cq project`. In lite mode the project is `tasks` (ids `T-001`, `T-002` ...). Then tell the user they can open the board with `/cq:board` (Claude starts it in the background
 and gives a URL with an access key; never stop it by killing node by name).
 
 ## 4. Bring in the user's own work
@@ -62,7 +79,7 @@ and gives a URL with an access key; never stop it by killing node by name).
 ASK: "Do you want me to look through your own notes, TODOs and plans (for example `docs/`, `TODO.md`, `ROADMAP.md`,
 TODO/FIXME comments, and GitHub issues if `gh` is available) and add them as plan entries or queue tasks?"
 
-If yes:
+If yes (in lite mode only concrete queue tasks, with `cq add "<title>" --mission "…"`; no plan entries):
 1. List what you found (file, short title) and propose for each: plan entry (`cq plan new`) for ideas and larger
    plans, queue task (`cq add`) for concrete, ready work. Show the proposal before writing anything.
 2. Plan entries without the user's priority get `"priority": "owner"`, `"maturity": "idea"`,

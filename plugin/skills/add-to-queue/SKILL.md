@@ -10,6 +10,14 @@ What goes in: **$ARGUMENTS** (if empty, ask what to add, or use the tasks the us
 You only ADD work. Do not build, do not start agents, do not run `cq start`/`set`; the orchestrator does that.
 Background: `${CLAUDE_PLUGIN_ROOT}/skills/parallel-wave/SKILL.md` and `docs/queue/queue.md`.
 
+**Lite mode:** run `cq mode` first. If it says `lite`, skip steps 0 to 5: add one task per thing the user asked for
+with `cq add "<short title>" --mission "<self-contained mission: what, why, where, how to check it>"` (add
+`--files <paths>` when you know the files it owns, `--priority 1-10` only when the user gave a priority). No class,
+size, value, project, feature, splitting or packing; ids, class K and the defaults come by themselves, and nothing
+is refused for being small. A task that needs the owner's decision first still waits on a registered question: use
+`cq add --json '{"tasks":[{"title":"…","mission":"…","waiting_on":["Q-1"]}],"question":{"Q-1":{"type":"question","text":"…","recommendation":"…"}}}'`.
+Then do step 7.
+
 0. **Plan entry as input.** If the argument is a plan entry (`PL-…`), or the work belongs to one
    (`cq plan show --search "…"`), fetch it with `cq plan get <id> --json` and check:
    maturity `ready` (otherwise say what is missing and suggest `/plans <id>` first), no open blocking owner questions
