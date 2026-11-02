@@ -12,10 +12,11 @@
 //     links. Git has then ALREADY unregistered the worktree, but the folder is left behind.
 //
 // HOW (cleanupWorktree): the criteria in shouldCleanUp → fingerprint of mainTree → each path in sharedLinks is removed as a LINK
-// (`cmd /c rmdir` WITHOUT /s on Windows, unlink otherwise: removes the link and never the target; a real folder there stops
-// everything) → new fingerprint → `git worktree remove` WITHOUT --force (git itself refuses on changes or a lock) → if the folder
-// is left behind and git has unregistered it, and no folder link inside it points OUT of the worktree: `cmd /c rmdir /s /q` on
-// Windows, fs.rmSync otherwise (neither follows links) → final fingerprint. The branch is NEVER deleted (the commits must remain).
+// (removeLinkOnly: fs.unlinkSync, rmdirSync without recursion as the Windows junction fallback; removes the link and never the
+// target; a real folder there stops everything) → new fingerprint → `git worktree remove` WITHOUT --force (git itself refuses on
+// changes or a lock) → if the folder is left behind and git has unregistered it, and no folder link inside it points OUT of the
+// worktree: fs.rmSync on every platform (removeFolderTree; does not follow links, and no shell, so `&` in a path is safe)
+// → final fingerprint. The branch is NEVER deleted (the commits must remain).
 //
 // NEVER: --force on git worktree remove, touching locked worktrees, PowerShell Remove-Item -Recurse (PS 5.1 can follow junctions)
 // or a recursive delete before the links are removed, or cleaning up anything outside .claude/worktrees/.
@@ -30,7 +31,7 @@
 // Test: npx vitest run scripts/orchestrator/__tests__/cleanup-worktree.test.mjs
 // =============================================================
 
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -158,13 +159,30 @@ function linkType(p) {
   return st.isDirectory() ? 'folder' : 'other';
 }
 
-const winPath = (p) => path.resolve(p).split('/').join('\\');
-
-/** Removes ONLY the link (rmdir without /s), never the target. */
-function removeLink(p) {
-  if (WIN) execFileSync('cmd', ['/c', 'rmdir', winPath(p)], { stdio: 'pipe' });
-  else fs.unlinkSync(p);
+/**
+ * Removes ONLY the link, never the target, and refuses anything that is not a link. No shell: an earlier
+ * `cmd /c rmdir <path>` split a path with `&` and no space (C:\dev\R&D\... became `rmdir C:\dev\R` plus a new command).
+ * fs.unlinkSync removes a symlink, and on Windows also a junction (libuv removes the reparse point); rmdirSync (never
+ * recursive) is the fallback for a directory link that unlink refuses. Neither follows the link.
+ */
+export function removeLinkOnly(p) {
+  if (linkType(p) !== 'link') throw new Error(`${p} is not a link`);
+  try {
+    fs.unlinkSync(p);
+  } catch (e) {
+    if (!WIN || !['EPERM', 'EISDIR', 'EACCES'].includes(e.code)) throw e;
+    fs.rmdirSync(p);
+  }
   if (linkType(p) !== 'missing') throw new Error(`link ${p} is still there`);
+}
+
+/**
+ * Deletes a folder tree with fs.rmSync (no shell, so `&`, `^`, `%`, `!`, spaces and æøå in the path are plain characters).
+ * fs.rmSync does not follow symlinks or junctions: a link inside the tree is removed as a link (deleteRest also checks
+ * first that no folder link points out). Errors are thrown; deleteRest checks the result itself.
+ */
+export function removeFolderTree(p) {
+  fs.rmSync(p, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
 }
 
 /** Folder links inside `root` that point OUT of root. Never follows links. Unreadable folders are reported (unknown = unsafe). */
@@ -281,19 +299,11 @@ function deleteRest(filePath, main, before, name) {
       status: 'leftovers',
       message: `${name}: could not read ${unreadable.slice(0, 3).join('; ')}, leaving it`,
     };
-  if (WIN) {
-    try {
-      execFileSync('cmd', ['/c', 'rmdir', '/s', '/q', winPath(filePath)], { stdio: 'pipe' });
-    } catch {
-      // rmdir gives an error code when something is held open; the result is checked below.
-    }
-  } else {
-    try {
-      // fs.rmSync does not follow symlinks (they are removed as links), and no link points out (checked above).
-      fs.rmSync(filePath, { recursive: true, force: true });
-    } catch {
-      // the result is checked below
-    }
+  try {
+    // No shell (removeFolderTree); no folder link points out (checked above).
+    removeFolderTree(filePath);
+  } catch {
+    // a file held open by a process gives an error; the result is checked below.
   }
   const after = fingerprint(main);
   if (!equalFingerprint(before, after)) return alarm(name, before, after);
@@ -317,7 +327,7 @@ function removeTrackLinks(filePath, main, before, name) {
     if (t !== 'link')
       return { status: 'skipped', message: `${name}: ${rel} is not a link` };
     try {
-      removeLink(p);
+      removeLinkOnly(p);
     } catch (e) {
       return {
         status: 'skipped',

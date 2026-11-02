@@ -65,7 +65,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
 if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
-const { lastContext, readTail } = require('./lib/trackGuard.js');
+const { lastContext, readTail, cachedCompactions } = require('./lib/trackGuard.js');
 export { lastContext };
 const KV = require('./lib/contextGuard.js');
 const COST = require('./lib/costGuard.js');
@@ -79,6 +79,8 @@ const QUEUE_FOLDER = dataFolder();
 const CURSOR = path.join(QUEUE_FOLDER, 'orchestrator.json');
 const QUEUE_FILE = path.join(QUEUE_FOLDER, 'queue.json');
 const COST_GUARD_FILE = path.join(QUEUE_FOLDER, 'costGuard.json');
+// Compaction count cache: { <transcript path>: { pos, n, at } } (lib/trackGuard.js cachedCompactions).
+const COMPACT_COUNT = path.join(QUEUE_FOLDER, 'compact-count.json');
 // Statistics: one line per notice, append-only. Read with scripts/orchestrator/cost-guard-statistics.mjs.
 const COST_GUARD_LOG = path.join(QUEUE_FOLDER, 'cost-guard-log.jsonl');
 // Same sources as queue.mjs (the time log and the agent transcripts); the env vars override in tests.
@@ -97,12 +99,16 @@ async function readIn() {
   return JSON.parse(s || '{}');
 }
 
-/** The whole transcript (to count compactions), or empty text. */
-function readFully(filePath) {
+/**
+ * The number of compactions in the whole transcript, counted incrementally (lib/trackGuard.js cachedCompactions): the
+ * byte position and count per transcript live in <dataFolder>/compact-count.json, so each message reads only what is
+ * new instead of the whole file (review 2026-11-02, M11). 0 when the transcript cannot be read.
+ */
+function compactionsIn(filePath) {
   try {
-    return fs.statSync(filePath).size > MAX_TRANSCRIPT ? '' : fs.readFileSync(filePath, 'utf8');
+    return cachedCompactions(COMPACT_COUNT, filePath).n;
   } catch {
-    return '';
+    return 0;
   }
 }
 
@@ -294,11 +300,9 @@ async function main() {
   }
   let cursor = bind.cursor;
   // Compactions are counted in the WHOLE transcript (the tail is not enough), and only for the orchestrator above COMPACT.
-  // The count is only shown in the message (no fixed limit).
+  // Counted incrementally (only the bytes since the last message are read). The count is only shown in the message.
   const compactions =
-    bind.orchestrator && n >= Math.min(g.compact, g.windDown)
-      ? KV.countCompactions(readFully(input.transcript_path))
-      : 0;
+    bind.orchestrator && n >= Math.min(g.compact, g.windDown) ? compactionsIn(input.transcript_path) : 0;
   const mode = bind.orchestrator ? KV.compactMode(readJson(QUEUE_FILE)) : 'manual';
   const b = KV.assess({
     n,

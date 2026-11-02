@@ -16,6 +16,8 @@
 //               (lib/conflictPredict.js) falls back to file overlap (QUEUE_GIT_VERSION overrides the version, tests)
 //   ci-cost     .github/workflows/*.yml that run on push: WARN without concurrency cancel-in-progress, INFO without a
 //               paths/paths-ignore filter (a text scan, lib/pushBatch.js workflowCost)
+//   merge, settings, in-base (cli/doctorRepo.mjs): a lingering MERGE_HEAD in the main checkout, disableAllHooks in a
+//               Claude Code settings file, done tasks whose merge commit or branch is not in baseBranch (all WARN)
 //   the safety baseline (cli/doctorBaseline.mjs, offline): secrets (a tracked .env or private key is FAIL), gates,
 //               ci, lockfile, prod (productionBranch vs baseBranch), largefile
 // Exit code 1 when any check FAILs, otherwise 0. It never changes anything: no lock, no write, no git command that
@@ -32,6 +34,7 @@ import { execFileSync } from 'node:child_process';
 
 import { a, branchFor, CONFIG, CQ, FILE, FOLDER, FOLLOW_FILE, git, HERE, KK, LOCK, MAIN_TREE, require } from './context.mjs';
 import { BASELINE_CHECKS } from './doctorBaseline.mjs';
+import { REPO_CHECKS } from './doctorRepo.mjs';
 
 const BOARD = require('./lib/queueBoard.js');
 const PB = require('./lib/pushBatch.js');
@@ -392,7 +395,7 @@ function checkGit() {
 
 /** `cq doctor [--json]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const checks = [checkNode, checkHooks, checkConfig, checkState, checkLock, checkWorktrees, checkBranches, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const checks = [checkNode, checkHooks, checkConfig, checkState, checkLock, checkWorktrees, checkBranches, ...REPO_CHECKS, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {
