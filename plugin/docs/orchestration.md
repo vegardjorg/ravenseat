@@ -387,6 +387,22 @@ The base gate (`baseGate` in `queue.config.json`, `lib/baseHealth.js`) records t
 - **On and off.** `baseGate.enabled`: `"auto"` (default) is on when there are commands, `false` turns it off. Lite
   mode has no rule of its own: it is off until the project has a quick gate.
 
+## Gate from incident (a failure becomes a check)
+
+The base gate catches a red base; it does not stop the same kind of mistake from coming back. So when a post-merge
+defect shows up (a bug found in merged code), the base goes red (a `<id>-BASE<n>` or `BASE-<sha7>` fix task), or the
+owner reports a bug, the orchestrator asks whether the failure class is repeatable: could another track make the
+same mistake? Only then does it propose a regression gate next to the fix: a task with `"labels": ["gate"]` and the
+title `Gate: <failure class>`, proposed for the owner to approve. A one-off (a typo, a single wrong value) gets the fix
+only, and an open gate task for the same class is extended instead of duplicated.
+
+The gate mission uses the same criteria as [`/cq:review`](#review-to-gate-cqreview) ("The gate criteria" in
+`skills/review/SKILL.md`): clear purpose, a reproducible failing example, low maintenance cost, red first, and the
+check lives in the project's own gates. Red first is part of the task: its `acceptance` includes the red-first
+criterion, `done_when` runs the new check when the project has a command for it, and the track's `report.md` shows
+both runs (failing without the fix, passing with it). A separate fix task `depends_on` the gate task so the check is
+seen red on the real bug. The loop step is in `skills/parallel-wave/SKILL.md` ("Gate from incident").
+
 ## Batch push (the push threshold)
 
 Every push of the base branch runs the whole CI. Pushing per small change burns CI minutes quietly, so pushes come in

@@ -38,10 +38,13 @@ Before starting tracks:
   - The agent that writes code gets only the schema and never sees the raw text.
   - The orchestrator checks this when the mission is made: if the mission points to unknown content, it is split
     before the start.
-- **Ownership and the merge guard:** if a protected path (`protectedPaths` in `queue.config.json`; by default
-  `.claude/`, `.githooks/`, `.github/`, `.mcp.json`, `scripts/orchestrator/`, the plugin's hooks, agents, skills and
-  scripts, `queue.config.json`, `CLAUDE.queue.md`, `settings.queue.json`, `package.json` and `package-lock.json`) is
-  in the mission, it must be in the task's `owned_files` or `shared_patch`. Otherwise `merge-track.mjs` stops (exit
+- **Ownership and the merge guard:** if a protected path is in the mission, it must be in the task's `owned_files`
+  or `shared_patch`. The list is `protectedPaths` in `queue.config.json` (a list there REPLACES the default); the
+  default is `STANDARD.protectedPaths` in `scripts/orchestrator/lib/queueConfig.js`, so read it there instead of
+  trusting a copy. In short it covers the agent and CI setup (`.claude/`, `.githooks/`, `.github/`, `.mcp.json`), the
+  queue's own scripts, hooks, agents, skills and config files, `package.json` and its lockfile, and the test, lint and
+  type configs in any folder (`vitest.config.*`, `jest.config.*`, `tsconfig*.json`, the eslint configs,
+  `pyproject.toml`, `Makefile` and similar), so a track cannot get green by switching a check off. Otherwise `merge-track.mjs` stops (exit
   4, before the merge). `cq merge <ID> --allow-guard` overrides after the diff has been read, and is logged as
   `guard-overridden` in the time log. Other files outside the ownership only give a warning (ownership drift).
 
@@ -98,8 +101,23 @@ settings, agent definitions or CI unless the mission owns the file.
 - Network calls (`curl`, `wget`, `Invoke-WebRequest`, `| sh` …) are blocked for tracks, reviewers and helper agents by the push guard, and
   `npm install` or `npx` with a package that is not in `package.json` asks for confirmation: ask the orchestrator to
   fetch it.
-- `merge-track.mjs` stops the merge when the branch touches protected paths (`.claude/`, the orchestrator scripts,
-  hooks, agents, `queue.config.json`, `package.json` …) that the task does not own.
+- `merge-track.mjs` stops the merge when the branch touches protected paths that the task does not own: the agent
+  and CI setup (`.claude/`, `.github/` …), the orchestrator scripts, hooks, agents, `queue.config.json`,
+  `package.json`, and the test, lint and type configs (`vitest.config.*`, `tsconfig*.json`, eslint configs …). The
+  full list is `protectedPaths` (`queue.config.json`, default in `scripts/orchestrator/lib/queueConfig.js`).
+
+**Decide or ask:**
+- Fix technical failures yourself, without asking: red tests, lint and type errors, a red precheck or gate, and
+  bugs in your own changes.
+- Ask the owner only on: (1) unclear product requirements (what the feature should do for its users); (2) choices
+  that are hard to reverse: the data model or schema, a public API or file format, a new dependency, deleting data
+  or a feature; (3) security or legal tradeoffs.
+- Ask through the owner questions: the "Owner questions" section in `report.md` (the question, 2 to 4 choices and
+  your recommendation), counted in `ownerQuestions=<n>` on the RESULT line; SendMessage to the orchestrator only when
+  the question blocks the whole track. Do the parts that do not depend on the answer, and never build a hard-to-reverse
+  choice on a guess.
+- Everything else you decide yourself. Record each non-trivial assumption in the "Assumptions" section of
+  `report.md`: one line with what you assumed, why, and how to change it if it is wrong.
 
 **Git:** `prepare-track` runs `git checkout -B <BRANCH> <base>`; HEAD must be <HEAD> or newer.
 - Commit only on your own branch with `git commit -- <files>` (new files: `git add` first), in strict `&&` chains,
@@ -168,8 +186,13 @@ for the owner, `edge` = server functions that must be deployed.)
 **Report cap: the answer to the orchestrator is at most about 1,500 characters**: the RESULT line, then at most 5
 lines (owner questions with one sentence each, HIGH findings, what must be deployed, what the orchestrator must do
 while merging), then the path to `<folder>\report.md`. In `report.md`: status, branch and commits, the gate summary
-line, append-only files touched, deploy needs, **owner questions** in their own section, and the wiring specification
-(file, anchor, exact line). When the track block has **Acceptance criteria (fixed, do not change)**, `report.md`
+line, append-only files touched, deploy needs, **owner questions** in their own section, **Assumptions** in their
+own section (one line each: what, why, how to change it; "none" when there were none), and the wiring specification
+(file, anchor, exact line).
+**Gate tasks (label `gate`, title `Gate: <failure class>`):** red first. Show the new check failing on the original
+bug or a minimal reproduction (the commit before the fix, or a fixture kept next to the check) and passing on the
+fixed code. `report.md` has a "Red first" section with both runs: the command and its result line, red then green. A
+gate task without both runs is not DONE. When the track block has **Acceptance criteria (fixed, do not change)**, `report.md`
 says for each one how it is met (file:line or test); the gap reviewer checks them one by one.
 **QA evidence:** when the task has a label that needs evidence (`qa.evidenceLabels` in `queue.config.json`, default
 `visual`; see `cq info <TRACK> --field labels`), `report.md` has one line `EVIDENCE <type>[=<ref>[,<ref>...]]` saying how
