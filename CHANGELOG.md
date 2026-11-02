@@ -41,6 +41,12 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
   class; after one owner question, one-off bugs become fix tasks, repeatable mistakes become `gate` tasks that add a
   red-first check to the project's own CI, and design questions become owner questions or plan entries. The review
   is recorded as a `PL-REVIEW-…` plan entry.
+- **Decide or ask:** tracks fix technical failures themselves and ask the owner only on unclear requirements,
+  hard-to-reverse choices (data model, public API, new dependency, deletion) and security or legal tradeoffs; other
+  assumptions go in a new "Assumptions" section of report.md.
+- **Gate from incident:** after a post-merge defect, a red base or an owner-found bug, the orchestrator proposes a
+  `Gate: <failure class>` task when the class is repeatable. Gate tasks are red first: the check is shown failing on
+  the original bug and passing on the fix, both runs in the report.
 
 ### Changed
 - README: parallel chats colliding (push and file conflicts) added to the pain points; "What the guards are not"
