@@ -17,8 +17,14 @@
   in `/cq:decide` with a recommendation, and the rest of the queue keeps going.
 - **Built to last the week.** Tracks are cut at about 300k tokens of context, fix rounds start a fresh agent, and the
   orchestrator stays light, so the queue runs for days on one subscription.
+- **Quality you can check, not take on trust.** Gate results are bound to the exact commit, acceptance criteria lock
+  when a task starts, every repeatable mistake can become a check in your own CI, and an interrupted merge picks up
+  where it stopped (`cq merge <ID> --resume`). See ["Agents cheat on tests"](#agents-cheat-on-tests) and
+  ["Something breaks and the queue stops"](#something-breaks-and-the-queue-stops).
 
-There are no workflows or pipelines to write first: the process is built in, and plans and tasks live on disk, so
+There are no workflows or pipelines to write first: the process is built in (your own gate commands run locally, and
+`cq setup --ci` writes an optional GitHub Actions template to `.github/workflows/cq-gates.yml`, never over an existing
+one). Plans and tasks live on disk, so
 nothing is lost when a chat ends or gets compacted. It works purely from Claude Code (every board action has a
 command behind it); the board is optional, for the overview.
 
@@ -259,6 +265,9 @@ fails once and passes on a rerun is recorded as flaky instead of freezing the ba
   the base (`git merge-tree`, nothing written) and suggests a merge order.
 - **Optional CI watch after a push** (`push.ciWatch`, off by default). Local first is the rule: push only when the
   local checks are green. The watch is a second net that turns a red CI run into one fix task.
+- **Merges that survive interruptions.** One merge runs at a time (`merge.lock`, a stale lock is taken over), a merge
+  refuses while git has a merge or rebase in progress, and after Ctrl-C, a crash or a stop `cq merge <ID> --resume`
+  finishes the remaining steps. `queue.json.prev` keeps the previous good queue state.
 - **Ask an earlier track.** `cq ask <id> "why X?"` answers from the track's mission, report, commits and transcript
   tail, without resuming a large agent.
 
@@ -385,6 +394,20 @@ rails, not a sandbox. An agent runs with your user account: it can read the file
 shell can, and reach the network, unless your Claude Code permissions or its sandbox settings say otherwise. A
 blocked command can often be written another way. Keep production credentials off the machine the agents run on,
 and use Claude Code's permission rules or sandbox when you need a real boundary.
+
+What Ravenseat does, and what you need outside it:
+
+| Ravenseat checks (within Claude Code hooks and its own CLI) | Needs a boundary outside Ravenseat |
+| --- | --- |
+| Gate results recorded by the orchestrator, bound to the commit | A sandbox or separate machine user, if agents must not read your files or env |
+| Locked `done_when` and acceptance, locked file ownership after start | Branch protection and required checks on GitHub, so nothing reaches `main` unreviewed |
+| Merge stop on protected paths, deleted tests and skip markers | Secrets kept off the machine (a scan finds known patterns, not every secret) |
+| Queue agents cannot push or run queue commands outside an allow-list | Network rules, if agents must not reach the internet at all |
+| Secret scan of every pushed commit, ask before `deployCommands` | Separate credentials per environment, so a dev machine cannot deploy to production |
+
+Known gaps in the command guard: it does not read the contents of script files an agent runs (`bash x.sh`, an
+`npm run` script), or commands built from string pieces inside an interpreter. Treat it as a strong default, not
+as isolation.
 
 ### Deeper docs
 
