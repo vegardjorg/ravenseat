@@ -48,6 +48,20 @@ Fill in, asking the user where you are not sure:
 
 Keys starting with `_` or `$` are comments.
 
+### Safety basics (one question)
+
+Run `cq doctor` and read its baseline lines (`secrets`, `gates`, `ci`, `lockfile`, `prod`, `largefile`). Tell the
+user in plain words what it found (a FAIL under `secrets` first: a key in git must be changed, not only removed). Then
+ASK one question, and write only what the user says yes to:
+- "Which branch goes live (production)?" Write it as `productionBranch` (leave `null` if they do not know). If it is
+  the same as `baseBranch`, say once that every batch push then goes straight to production; their call.
+- Only when doctor says `no CI config found` and the project is on GitHub: "Want a small GitHub Actions workflow that
+  runs your `gates.quick` on every push and pull request? (`.github/workflows/cq-gates.yml`; you add your runtime setup
+  step, for example setup-node and npm ci.)" On yes, run `cq setup --ci`. It never overwrites an existing workflow. For
+  other hosts, point to the README section "Safety baseline" instead of writing anything.
+- Deploy commands (`deployCommands`) stay empty unless the user names theirs; the push guard then asks before any of
+  them runs. The secret check before push is on by default (`secretScan`); mention it, do not change it.
+
 ## 3. Create the queue and smoke test it
 
 Lite:
@@ -100,10 +114,12 @@ git add queue.config.json docs/queue CLAUDE.queue.md .gitignore
 git commit -m "chore: set up the Ravenseat work queue" -- queue.config.json docs/queue CLAUDE.queue.md .gitignore
 ```
 
-Add `CLAUDE.md` and `.claude/settings.json` to both lists when step 1 changed them. Do not push unless the user asks.
+Add `CLAUDE.md` and `.claude/settings.json` to both lists when step 1 changed them, and
+`.github/workflows/cq-gates.yml` when `cq setup --ci` wrote it. Do not push unless the user asks.
 
 ## 6. Tell the user how to start
 
 - `/cq:queue` runs this chat as the orchestrator; `/cq:add-to-queue` turns a request into queue tasks; `/cq:plans`
   is plan work; `/cq:pick` does one task by hand.
 - `/cq:board` starts the board and gives the link; `cq help` lists every command.
+- `cq doctor` checks the setup and the project's safety baseline any time.

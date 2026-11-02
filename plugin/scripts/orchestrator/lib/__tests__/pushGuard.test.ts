@@ -102,6 +102,34 @@ describe('several commands', () => {
   });
 });
 
+describe('deployCommands and the secret question', () => {
+  const deploy = { deployCommands: ['vercel --prod', 'npm run deploy'] };
+  it('asks before a deploy command (whole-word prefix, env prefixes skipped), from an agent too', () => {
+    expect(decision('vercel --prod', deploy)).toBe('ask');
+    expect(decision('VERCEL_ORG=x vercel --prod --yes', deploy)).toBe('ask');
+    expect(decision('npm test && npm run deploy', deploy)).toBe('ask');
+    expect(decision('npm run deploy', { ...deploy, agentType: 'track', knownPackage: () => true })).toBe('ask');
+    expect(assess('vercel --prod', { ...STD, ...deploy })?.reason).toMatch(/`vercel --prod` is a deploy command/);
+    expect(decision('vercel --prodx', deploy)).toBeNull();
+    expect(decision('npm run deploy-docs', deploy)).toBeNull();
+    expect(decision('vercel --prod', { deployCommands: [] })).toBeNull();
+  });
+  it('the secret question: main session only, joined with the batch question, never over a deny', () => {
+    const secret = () => 'Possible secret in what this push sends: a.ts:1 (aws-access-key).';
+    const batch = () => '4 of 10 merged tasks; push anyway?';
+    const both = assess('git push origin main', { ...STD, secretQuestion: secret, batchQuestion: batch });
+    expect(both?.decision).toBe('ask');
+    expect(both?.reason).toBe(`${secret()} Also: ${batch()}`);
+    expect(decision('git push origin main', { secretQuestion: secret })).toBe('ask');
+    expect(decision('git push origin main', { secretQuestion: () => null })).toBeNull();
+    expect(decision('git push origin main', { secretQuestion: secret, agentType: 'general-purpose' })).toBeNull();
+    expect(decision('git push --force origin main', { secretQuestion: secret })).toBe('deny');
+    let called = false;
+    decision('git push origin queue/A-1', { secretQuestion: () => ((called = true), 'x') });
+    expect(called).toBe(false); // a denied push is never scanned
+  });
+});
+
 // ---- Network guard for tracks (hardening against prompt injection) ----
 const KNOWN = new Set(['vitest', 'typescript', 'tsc', 'eslint', 'prettier', '@vitest/coverage-v8']);
 const track = { agentType: 'track', branch: 'queue/A', knownPackage: (n: string) => KNOWN.has(n) };

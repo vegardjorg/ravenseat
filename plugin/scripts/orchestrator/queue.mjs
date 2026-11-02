@@ -125,7 +125,9 @@
 //                                                                  node and the node the hooks find on PATH, the hooks file and
 //                                                                  its scripts, queue.config.json keys and types, the state
 //                                                                  files, a stale lock, half-deleted worktree folders and git
-//                                                                  worktrees without a folder, branches of finished tasks;
+//                                                                  worktrees without a folder, branches of finished tasks,
+//                                                                  CI cost and the safety baseline (secret files, gates, CI,
+//                                                                  lockfiles, productionBranch, large files; offline);
 //                                                                  exit 1 on any FAIL; cli/doctor.mjs)
 //
 // The orchestrator's routine as a script and the cost per task (the pure logic is in lib/queueLogic.js):

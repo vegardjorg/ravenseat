@@ -1,0 +1,63 @@
+# Ravenseat CI template for GitHub Actions (written by `cq setup --ci`; edit it freely, setup never overwrites it).
+#
+# It runs YOUR project's own check commands, the same ones the agents run: `gates.quick` in queue.config.json.
+# Nothing here is stack specific. Two things are left to you:
+#   1. the runtime setup (Node, Python, Go, ...) and the install step: see the commented placeholder below;
+#   2. making this check required for merges on your host (Settings > Branches or Rules), if you want that.
+# Cost: superseded runs are cancelled, and docs-only pushes are skipped (paths-ignore). Adjust the filter to your repo.
+name: gates
+
+on:
+  push:
+    branches: [__BASE_BRANCH__]
+    paths-ignore: ['**/*.md', 'docs/**']
+  pull_request:
+    paths-ignore: ['**/*.md', 'docs/**']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        # with:
+        #   fetch-depth: 0   # needed only for the gitleaks step below (it scans the history)
+
+      # ---- Your runtime setup goes here (pick what your project uses, then the install step) ----
+      # - uses: actions/setup-node@v4
+      #   with: { node-version: 20, cache: npm }
+      # - run: npm ci
+      #
+      # - uses: actions/setup-python@v5
+      #   with: { python-version: '3.12' }
+      # - run: pip install -r requirements.txt
+      #
+      # - uses: actions/setup-go@v5
+      #   with: { go-version: stable }
+
+      - name: Run the gates from queue.config.json
+        shell: bash
+        run: |
+          # gates.quick, one command per line (jq is preinstalled on GitHub's Ubuntu runners).
+          jq -r '(.gates.quick // [])[]' queue.config.json > "$RUNNER_TEMP/gates.txt"
+          if [ ! -s "$RUNNER_TEMP/gates.txt" ]; then
+            echo "gates.quick in queue.config.json is empty: nothing to run"
+            exit 0
+          fi
+          while IFS= read -r cmd <&3; do
+            echo "::group::$cmd"
+            bash -eo pipefail -c "$cmd" < /dev/null
+            echo "::endgroup::"
+          done 3< "$RUNNER_TEMP/gates.txt"
+
+      # ---- Optional: secret scan (free for personal accounts; an organization needs a GITLEAKS_LICENSE) ----
+      # - uses: gitleaks/gitleaks-action@v2
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
