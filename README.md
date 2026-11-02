@@ -7,9 +7,11 @@
 
 <h1 align="center">Ravenseat</h1>
 <p align="center"><b>Your agents keep building. You make the decisions.</b></p>
-<p align="center">A persistent work queue for Claude Code: it runs parallel agents in isolated git worktrees, checks
-their work with your project's own checks, and keeps the project moving across sessions.</p>
-<p align="center"><sub>Open source · Local-first · Runs inside Claude Code</sub></p>
+<p align="center">Run your Claude Code project from one conversation, even from your phone. Just talk to Claude:
+Ravenseat keeps the work moving across parallel agents in isolated git worktrees, your project's own checks,
+decisions and context resets. No commands to memorize, and the dashboard is optional.</p>
+<p align="center"><sub>Open source · Local-first · Runs inside Claude Code · Dashboard optional</sub></p>
+<p align="center"><sub>Phone access uses Claude Code's Remote Control, with Claude Code running on your computer.</sub></p>
 
 <p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The board: the work queue as a kanban with In queue, In progress and Review" width="800"></p>
 <p align="center"><sub>The board with a made-up demo project ("Pebble", a habit tracker). More in <a href="#a-tour-of-the-board">A tour of the board</a>.</sub></p>
@@ -19,8 +21,8 @@ features, is. Ravenseat makes you stop being the project's manual orchestrator:
 
 - **Parallel work that stays out of each other's way.** Every task runs as a fresh agent in its own git worktree and
   branch, and owns its files while it runs. Conflicts that remain are predicted before merge (`cq conflicts`).
-- **A red check does not stop the queue.** A failed check starts a fix round with a fresh agent and runs the checks
-  again. Only what it cannot resolve reaches you.
+- **A red check does not stop the queue.** When your configured checks fail before a merge, a fix round starts with
+  a fresh agent and the checks run again. Only what it cannot resolve reaches you.
 - **Decisions come to you, in one list.** A task that needs you parks in `/cq:decide` with a recommendation, and the
   rest of the queue keeps going.
 - **Finish features, not just tasks.** Dependencies and focus keep related work together until the feature is done.
@@ -59,13 +61,18 @@ New here? Start in lite mode: the core loop only, nothing to learn first.
 
 1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/ravenseat`, then
    `/plugin install cq@ravenseat`. You need Node.js 20 or newer and git.
-2. **Create the queue** in your project: `cq init`. It starts in lite mode, keeps the queue in `scripts/.queue/` and
-   adds that folder to `.gitignore` for you. Run `cq` commands in Claude Code (or just ask in plain words).
-3. **Add work:** `cq add "Fix the login bug"`, or say "add to the queue: fix the login bug".
-4. **Run it:** `/cq:queue`. The chat picks the next task, starts an agent in an isolated worktree, checks the result
-   and merges work that passes. It asks you before it starts, and never pushes unless you say so.
-5. **Make the decisions:** when a task needs you, it waits and the rest go on. `/cq:decide` walks you through them,
-   or answer with one click under "Waiting on you" on the board (`/cq:board`).
+2. **Create the queue:** run `cq init`. It starts in lite mode, keeps the queue in `scripts/.queue/` and adds that
+   folder to `.gitignore` for you. For the guided setup that also finds your checks, say "set up the queue"
+   (`/cq:setup`).
+3. **Add work:** say "add to the queue: fix the login bug" (or `cq add "Fix the login bug"`).
+4. **Run it:** say "start the queue" (or `/cq:queue`). The chat picks the next task, starts an agent in an isolated
+   worktree, checks the result and merges work that passes. It asks you before it starts, and never pushes unless you
+   say so.
+5. **Make the decisions:** when a task needs you, it waits and the rest go on. Say "what is waiting on me?" (or
+   `/cq:decide`), or answer with one click under "Waiting on you" on the board ("open the board", `/cq:board`).
+
+From then on you can just talk to Claude: "what's next in the queue?", "add a task to …", "what is waiting on me?".
+The commands in parentheses do the same thing.
 
 Missions, priorities, answer options and what runs under the hood: [lite mode in more detail](plugin/docs/guide.md#lite-mode-in-more-detail).
 
