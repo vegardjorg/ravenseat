@@ -145,7 +145,7 @@ const FILL_STOP_CODES = new Set([4, 5, 6, 7]);
  * the file is missing), and `guard(environment)` is the push guard for the migration command (null = free). The order, the stop rules
  * and the environment check are here, so they can be tested without git, database or the gates.
  * @param {{ o: object, plan: object, branch: string, currentBranch: string|null, run: Function,
- *   readEnvironment?: Function, guard?: Function, base?: string, migrations?: object }} x
+ *   readEnvironment?: Function, guard?: Function, base?: string, migrations?: object, beforeDone?: () => string|null }} x
  * @returns {{ ok: boolean, lines: string[], stop: { step: string, message: string, excerpt: string[] }|null }}
  */
 function executeMerge({
@@ -158,6 +158,7 @@ function executeMerge({
   guard = () => null,
   base = 'main',
   migrations,
+  beforeDone = () => null,
 }) {
   const lines = [...plan.notes.map((n) => `NB: ${n}`)];
   const stop = (step, message, out = '') => ({
@@ -226,6 +227,10 @@ function executeMerge({
       const r = run({ step });
       lines.push(`base gate: ${r.code === 0 ? '' : 'RED, the base fix task is added: '}${lastLine(r.out)}`);
     } else if (step === 'done') {
+      // The invariant before a task is marked done (review 2026-11-02, M6): the track's tip is really in the base.
+      // `beforeDone()` gives the reason when it is not (null = fine); then nothing is marked.
+      const why = beforeDone();
+      if (why) return stop(step, why);
       const r = run({ step });
       if (r.code !== 0) return stop(step, `set ${o.id} done failed (exit ${r.code}).`, r.out);
       lines.push(`done: ${lastLine(r.out, /^Cost |: done/)}`);

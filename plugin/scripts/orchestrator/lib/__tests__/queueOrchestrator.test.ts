@@ -1234,10 +1234,14 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
       runningFile,
       [
         "import fs from 'node:fs';",
+        "import { spawnSync } from 'node:child_process';",
         'export default function run(x) {',
         '  fs.appendFileSync(process.env.MERGE_TEST_CALL, JSON.stringify({ step: x.step, cmd: x.cmd, args: x.args }) + "\\n");',
         "  const sc = JSON.parse(fs.readFileSync(process.env.MERGE_TEST_SCENARIO, 'utf8'));",
-        "  return sc[x.step] ?? { code: 0, out: 'ok' };",
+        "  const r = sc[x.step] ?? { code: 0, out: 'ok' };",
+        "  // A green merge step merges for real: cq merge checks that the track tip is in the base (review 2026-11-02, M6).",
+        "  if (x.step === 'merge' && r.code === 0) spawnSync('git', ['-C', process.env.QUEUE_GIT, '-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.invalid', 'merge', '--no-ff', '--no-edit', x.args[1]], { encoding: 'utf8' });",
+        "  return r;",
         '}',
       ].join('\n'),
     );
@@ -1292,6 +1296,10 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
     expect(p.out).toMatch(/STOP in the step migr-push: .*production/);
     expect(call().map((x) => x.step)).toEqual(['merge']);
     expect(fs.readFileSync(path.join(scratch, 'merge-M.log'), 'utf8')).toMatch(/===== merge: /);
+    // The merge is in; the rest can be resumed once the environment is fixed.
+    expect(p.out).toContain('merge M --resume runs the steps that are left (migr-push, gates, done, fill)');
+    // Undo the merge, so the next run merges M again from the start.
+    g(['reset', '-q', '--hard', head]);
 
     // Allowed environment: the whole run, merge-track with --wave-base, the push command from the config, set done and fill.
     setEnvironment('test');
@@ -1325,6 +1333,8 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
     const u = run('merge', 'K', '--without-fill');
     expect(u.code).toBe(0);
     expect(call().map((x) => x.step)).toEqual(['merge', 'gates', 'done']);
+    // Undo K's merge (and M's): the guard checks below merge K again.
+    g(['reset', '-q', '--hard', head]);
 
     // Wrong status: waiting cannot be merged.
     expect(run('merge', 'V').error).toMatch(/merge applies to review/);

@@ -432,9 +432,13 @@ describe('the CLI: cq conflicts, the pulse, cq merge and cq doctor (temporary re
       runner,
       [
         "import fs from 'node:fs';",
+        "import { spawnSync } from 'node:child_process';",
         'export default function run(x) {',
         "  const sc = JSON.parse(fs.readFileSync(process.env.MERGE_TEST_SCENARIO, 'utf8'));",
-        "  return sc[x.step] ?? { code: 0, out: 'ok' };",
+        "  const r = sc[x.step] ?? { code: 0, out: 'ok' };",
+        "  // A green merge step merges for real: cq merge checks that the track tip is in the base (review 2026-11-02, M6). -X theirs: the conflict on f.txt is resolved as by hand.",
+        "  if (x.step === 'merge' && r.code === 0) spawnSync('git', ['-C', process.env.QUEUE_GIT, '-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.invalid', 'merge', '--no-ff', '--no-edit', '-X', 'theirs', x.args[1]], { encoding: 'utf8' });",
+        "  return r;",
         '}',
       ].join('\n'),
     );
