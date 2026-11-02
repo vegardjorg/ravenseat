@@ -1,6 +1,6 @@
 {
   "name": "cq",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Kanban board and project manager for Claude Code: tasks with visible dependencies, a focus that finishes one feature before the next, and parallel worktree agents that work through it. Run /cq:setup in a project to start.",
   "author": { "name": "Vegard Cowie Jørgensen" },
   "homepage": "https://github.com/vegardjorg/claude-code-queue",

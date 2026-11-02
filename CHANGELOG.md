@@ -3,7 +3,7 @@
 All notable changes to claude-code-queue (the `cq` plugin). The version is in `plugin/.claude-plugin/plugin.json`
 and `package.json`.
 
-## Unreleased
+## 0.5.0 (2026-11-02)
 
 ### Added
 - **Choices on owner questions:** a question can carry 2-4 answer options (`choices`):
