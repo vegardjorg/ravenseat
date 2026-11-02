@@ -208,3 +208,29 @@ describe('decided today', () => {
     expect(D.decidedToday({}, { now })).toEqual([]);
   });
 });
+
+describe('the "focus ended" owner question (focus-done-<n>)', () => {
+  const box = {
+    question: [
+      { sp: 'Q-9', type: 'question', text: 'Big one', direct: ['A', 'B'], count: 5, minutes: 600, focus: { per_step: [600], count: 5, minutes: 600 } },
+      {
+        sp: 'focus-done-1',
+        type: 'question',
+        text: 'Focus "Auth" is done: set a new focus or continue the regular queue?',
+        choices: [{ label: 'Set a new focus' }, { label: 'Continue the regular queue' }],
+        direct: [],
+        count: 0,
+        minutes: 0,
+        focus: null,
+      },
+    ],
+  };
+
+  it('comes first, says the queue is paused, and answers with the choice number like any question', () => {
+    const list = D.decisions(box);
+    expect(list[0].id).toBe('focus-done-1');
+    expect(D.impactLine(list[0])).toBe('the queue is paused until you answer');
+    expect(list[0].options.map((o: any) => o.label)).toEqual(['Set a new focus', 'Continue the regular queue']);
+    expect(D.cliArgs(list[0].options[1].action)).toEqual(['resolve', 'focus-done-1', '--choice', '2', '--by', 'owner']);
+  });
+});

@@ -28,6 +28,34 @@ function planContext() {
 
 /** The focus line at the top: the steps, the rest, ready in focus, dragged along, and the warning when the focus has nothing ready. */
 const focusLine = $('focusLine');
+/**
+ * The end of the focus on the Focus tab (lib/logic/focus.js focusStatus: finished, halted): FINISHED when every stage is
+ * done or the period is over, QUEUE PAUSED when the queue then waits for the owner (the owner question focus-done-<n>).
+ */
+function focusEndBadges(f) {
+  if (!f?.finished && !f?.halted && !f?.expired) return [];
+  const since = f.finished_at ? ` since ${String(f.finished_at).slice(0, 16).replace('T', ' ')} UTC` : '';
+  return [
+    el('span', {
+      class: 'badge focus-finished',
+      text: 'finished',
+      title: `The focus has ended${since}.`,
+    }),
+    f.halted
+      ? el('span', {
+          class: 'badge old focus-halted',
+          text: 'queue paused',
+          title:
+            'Nothing starts until you choose: set a new focus, or continue the regular queue (Decisions, or cq resolve).',
+        })
+      : null,
+  ].filter(Boolean);
+}
+function drawFocusTab(f) {
+  const tab = $('show-plan');
+  tab.replaceChildren('Focus', ...focusEndBadges(f));
+}
+
 function drawFocusLine() {
   if (!t.data) {
     focusLine.hidden = true;
@@ -35,6 +63,7 @@ function drawFocusLine() {
   }
   focusLine.hidden = false;
   const f = t.data.focus;
+  drawFocusTab(f);
   const toPlan = (text, title) =>
     el('button', {
       type: 'button',
@@ -114,6 +143,13 @@ function drawFocusLine() {
         })
       : null,
     f.expired ? el('span', { class: 'badge old', text: 'expired' }) : null,
+    ...(f.finished || f.halted ? focusEndBadges({ ...f, expired: false }) : []),
+    f.continue_when_empty && (f.finished || f.expired)
+      ? el('span', {
+          text: f.continue_when_empty.on ? 'continues the regular queue' : 'waits for you',
+          title: `Continue when empty: ${f.continue_when_empty.on ? 'on' : 'off'} (${f.continue_when_empty.from}).`,
+        })
+      : null,
     f.not_started ? el('span', { class: 'badge', text: 'not started' }) : null,
   ].filter(Boolean);
   // The DOM's replaceChildren turns null into the text "null", so the warning row is included only when it exists.

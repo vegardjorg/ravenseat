@@ -78,7 +78,17 @@
       to: f?.to ? String(f.to).slice(0, 10) : '',
       name: f?.name ?? '',
       drag_with: f ? f.drag_with !== false : true,
+      // When the focus is done: true = continue the regular queue, false = pause, null = the config decides
+      // (focus.continueWhenEmpty). Only this focus's own value is a choice here (focusStatus continue_when_empty).
+      continue_empty:
+        f?.continue_when_empty?.setting_from === 'this focus' ? f.continue_when_empty.setting === true : null,
     };
+  }
+  /** "Config default (pause)": the config's value is known only while the saved focus has none of its own. */
+  function configDefaultText() {
+    const c = data()?.focus?.continue_when_empty;
+    if (!c || c.setting_from !== 'config focus.continueWhenEmpty') return 'Config default';
+    return `Config default (${c.setting ? 'continue' : 'pause'})`;
   }
   const normal = (p) =>
     JSON.stringify({ ...p, pause: [...p.pause].sort(), now: p.now, next: p.next });
@@ -282,6 +292,35 @@
           onchange: (e) => setField('drag_with', e.target.checked),
         }),
         el('span', { text: 'Drag dependencies along' }),
+      ),
+      el(
+        'label',
+        {
+          class: 'plan-field',
+          title:
+            'What happens when every stage is done or the period is over: continue the regular queue by priority, or ' +
+            'pause the queue and ask you (an owner question in Decisions). "Config default" uses focus.continueWhenEmpty.',
+        },
+        el('span', { text: 'When the focus is done' }),
+        el(
+          'select',
+          {
+            'aria-label': 'When the focus is done',
+            onchange: (e) =>
+              setField('continue_empty', e.target.value === 'on' ? true : e.target.value === 'off' ? false : null),
+          },
+          [
+            ['inherit', configDefaultText()],
+            ['on', 'Continue the regular queue'],
+            ['off', 'Pause and ask me'],
+          ].map(([value, text]) =>
+            el('option', {
+              value,
+              text,
+              selected: (p.continue_empty === true ? 'on' : p.continue_empty === false ? 'off' : 'inherit') === value,
+            }),
+          ),
+        ),
       ),
       el('span', {
         class: `plan-draft${changed ? ' active' : ''}`,
@@ -823,6 +862,8 @@
       to: p.to || null,
       name: p.name || null,
       drag_with_dependencies: p.drag_with,
+      // Left out = the config decides (the server and setFocus treat a missing value so).
+      ...(typeof p.continue_empty === 'boolean' ? { continue_when_empty: p.continue_empty } : {}),
       pause: [...p.pause].filter((pid) => !serverPause.has(pid)),
       continue: [...serverPause].filter((pid) => !p.pause.has(pid)),
     };

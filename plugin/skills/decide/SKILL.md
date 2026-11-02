@@ -39,7 +39,9 @@ For each item, in order, ask with **AskUserQuestion** (one question per call, ne
 - **question:** `<verb in words> <id>: <title>`, then on new lines the `impact_line` and at most two `context` lines.
   Verbs in words: decide = "Decide", check = "Check", approve = "Approve", unstick = "Unstick".
 - **options**, in this order, at most 4 in all:
-  1. the option with `recommended: true`, labeled `<label> (Recommended)`;
+  1. the option with `recommended: true`, labeled `<label> (Recommended)` (an item without one, such as the
+     "focus ended" question `focus-done-<n>`, keeps its options in order with no label added: the choice is the
+     owner's);
   2. the other options in their order, as long as there is room;
   3. `Skip` (leave it for later, nothing is written);
   4. `Stop` (end the walk now).

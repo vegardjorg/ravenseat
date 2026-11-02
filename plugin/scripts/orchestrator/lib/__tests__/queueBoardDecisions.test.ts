@@ -138,6 +138,34 @@ describe('the Decisions view', () => {
     expect(posts[0]).toEqual({ path: '/api/action', body: { type: 'approve', id: a.dataset.key!.split(':')[1] } });
   });
 
+  it('the Focus tab says FINISHED and QUEUE PAUSED when the focus has ended and the queue waits', async () => {
+    (state.data as any).focus = {
+      name: 'Auth',
+      order: [],
+      stage: [],
+      now_count: 1,
+      rest: 'wait',
+      active: false,
+      expired: false,
+      finished: true,
+      halted: true,
+      finished_at: iso,
+      continue_when_empty: { on: false, setting: false, from: 'config focus.continueWhenEmpty', setting_from: 'config focus.continueWhenEmpty' },
+    };
+    state.version = 'v-focus';
+    window.dispatchEvent(new Event('focus'));
+    await flush();
+    $('room-queue').click();
+    await flush();
+    expect($('show-plan').textContent).toContain('finished');
+    expect($('show-plan').textContent).toContain('queue paused');
+    (state.data as any).focus = null;
+    state.version = 'v-nofocus';
+    window.dispatchEvent(new Event('focus'));
+    await flush();
+    expect($('show-plan').textContent?.trim()).toBe('Focus');
+  });
+
   it('j/k move between the cards; Queue goes back to the queue view', async () => {
     // Back to a clean list (the state is unchanged, so both cards are there after the writes were "done").
     state.version = 'v2';

@@ -119,6 +119,8 @@
         perStep: focus?.per_step ?? [],
         focusCount: focus?.count ?? 0,
         focusMinutes: focus?.minutes ?? 0,
+        // "The focus ended" (lib/logic/focus.js syncFocusEnd, id focus-done-<n>): the whole queue waits on it.
+        pausesQueue: String(s.sp).startsWith('focus-done-'),
       },
       options,
       free: { label: kind.free, action: { type: 'resolve', sp: s.sp, answer: null } },
@@ -245,11 +247,15 @@
   // ---- Sorting and grouping ---------------------------------------------------------------------------------------
 
   /**
-   * Most impact first: minutes unlocked in focus stage 1, then stage 2 and so on (stage 1 weighs most, the same rule
+   * Most impact first: a question that pauses the whole queue (the focus ended), then minutes unlocked in focus stage 1, then stage 2 and so on (stage 1 weighs most, the same rule
    * as the inbox's own question order), then the tasks unlocked, then the minutes, then the verb (a question before a
    * check) and the key, so the order is stable.
    */
   function compareImpact(a, b) {
+    // A question that pauses the whole queue (the focus ended) comes before everything else.
+    const qa = a.impact?.pausesQueue ? 1 : 0;
+    const qb = b.impact?.pausesQueue ? 1 : 0;
+    if (qa !== qb) return qb - qa;
     const pa = a.impact?.perStep ?? [];
     const pb = b.impact?.perStep ?? [];
     for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
@@ -299,6 +305,8 @@
       parts.push(x.count ? `${plural(x.count, 'task waits', 'tasks wait')} on it (${minutesText(x.minutes)})` : 'nothing waits on it');
     } else if (item?.verb === 'check') {
       parts.push('closes the QA; nothing waits on it');
+    } else if (x.pausesQueue) {
+      parts.push('the queue is paused until you answer');
     } else {
       parts.push(x.count ? `unlocks ${plural(x.count, 'task', 'tasks')} (${minutesText(x.minutes)})` : 'no task waiting');
     }

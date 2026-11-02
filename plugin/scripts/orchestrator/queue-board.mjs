@@ -1177,6 +1177,8 @@ async function focus(b, queueNow) {
     to,
     name: name || null,
     drag_with_dependencies: p.drag_with_dependencies !== false,
+    // When the focus is done (lib/logic/focus.js setFocus): left out = the config focus.continueWhenEmpty decides.
+    ...(typeof p.continue_when_empty === 'boolean' ? { continue_when_empty: p.continue_when_empty } : {}),
     pause,
     continue: proceed,
   };
