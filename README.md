@@ -62,6 +62,9 @@ could look at, and I could keep the whole picture in my head. As the project gre
   nothing to look at that told me where the project stood.
 - **The work was scattered across chats.** Size and complexity meant 50 to 100 chat windows, each holding part of
   the picture. Half the findings of a security review could be forgotten in one of them.
+- **Parallel chats collided.** With several chats open on different parts of the project, they edited the same files
+  and pushed on top of each other. The result was push conflicts, merge conflicts and work overwritten by a chat that
+  did not know another one had the file open.
 - **Features were left half-built.** I lost track of features halfway through the implementation, because nothing
   held on to what was started and what was left.
 - **The workaround burned tokens.** Running everything in one long chat kept the overview, but every turn carried the
@@ -69,7 +72,9 @@ could look at, and I could keep the whole picture in my head. As the project gre
 
 **The answer.** To get an overview back and work systematically, I built the queue step by step inside that project:
 a plan register for what is not ready yet, a work queue with dependencies and a focus, a board that shows it all, and
-an orchestrator that hands each task to a fresh agent with a small context. The parts that are not tied to one
+an orchestrator that hands each task to a fresh agent with a small context. Each agent works in its own git worktree
+and branch, a task owns its files exclusively while it runs, and one orchestrator merges and pushes, so parallel work
+no longer collides. The parts that are not tied to one
 project were then extracted into this plugin. What stayed behind is what has to be project specific: the CI/CD
 pipeline and the domain-specific checks.
 

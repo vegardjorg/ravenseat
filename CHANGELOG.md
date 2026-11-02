@@ -3,6 +3,19 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+### Added
+- **Transcript metrics:** per-model cost with a price table per family (Opus, Sonnet, Haiku, Fable; `prices`
+  override), tool calls and errors, API errors, active time (`metrics.idleGapMin`), and killed agents measured from
+  their transcripts; shown in `cq cost`, `log-time --cost` and the Statistics tab.
+- **Safety baseline:** `cq doctor` checks secret files, empty gates, missing CI, lockfiles, `productionBranch` and
+  large files; the push guard scans what a base-branch push sends for secrets (gitleaks or built-in patterns) and
+  asks before `deployCommands`; `cq setup --ci` offers a GitHub Actions template that runs your `gates.quick`.
+
+### Changed
+- README: parallel chats colliding (push and file conflicts) added to the pain points.
+
 ## 0.7.0 (2026-11-02)
 
 ### Changed
