@@ -1,7 +1,7 @@
 <p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The board: the work queue as a kanban with In queue, In progress and Review" width="800"></p>
 <p align="center"><sub>The board with a made-up demo project ("Pebble", a habit tracker). More screenshots in <a href="#a-tour-of-the-board">A tour of the board</a>.</sub></p>
 
-# claude-code-queue
+# Ravenseat – Command your coding agents
 
 **A kanban board and project manager for Claude Code.** You manage the project the way you already know from
 kanban: tasks, dependencies and a focus. Claude Code does the work, one finished feature at a time. There are no
