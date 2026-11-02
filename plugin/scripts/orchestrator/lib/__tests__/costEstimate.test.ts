@@ -29,8 +29,21 @@ type Merged = {
   source: string;
   parts: { merged: number; cancelled: number; open: number; unattributed: number };
   task_cost_usd: number;
+  fix_tasks: number;
   content_min: number;
   usd_per_content_min: number | null;
+};
+type TaskTotal = {
+  id: string;
+  status: string | null;
+  usd: number;
+  tokens: number;
+  runs: number;
+  tasks: number;
+  children: string[];
+  children_usd: number;
+  source: string;
+  last: string | null;
 };
 
 const CE = require('../costEstimate') as {
@@ -47,6 +60,8 @@ const CE = require('../costEstimate') as {
   calibrationLines: (c: object) => string[];
   perMergedChange: (input: { queue: { tasks: Task[] }; events: object[]; from: number; to: number }) => Merged;
   perMergedLines: (p: Merged, label: string) => string[];
+  taskTotals: (input: { queue: { tasks: Task[] }; events?: object[]; since?: number | null }) => TaskTotal[];
+  taskTotalLines: (rows: TaskTotal[], max?: number) => string[];
   budgetOutlook: (b: object, usd: number) => { left: number; next_usd: number; over: boolean; message: string } | null;
 };
 const L = require('../queueLogic') as { estimateCost: (o: object) => number; WEIGHT: Record<string, number> };
@@ -226,6 +241,93 @@ describe('perMergedChange', () => {
     expect(p.usd_per_merged).toBeNull();
     expect(CE.perMergedLines(p, 'last 28 days')[0]).toMatch(/no task reached done in the window \(\$2\.00 measured\)/);
   });
+
+  it('a done fix task counts with the change it fixes: one merged change, the task total in the fallback', () => {
+    const family: Task[] = [
+      done('A', 'K', 4),
+      done('A-QA1', 'K', 2, { qa_original: 'A', fixes: ['A'] }),
+      done('A-FIX', 'K', 1, { fixes: 'A-QA1' }), // a fix of the fix: still A's change
+      done('B', 'K', 3),
+    ];
+    const p = CE.perMergedChange({ queue: { tasks: family }, events: [], ...window });
+    expect(p).toMatchObject({ merged: 2, fix_tasks: 2, total_usd: 10, task_cost_usd: 10, usd_per_merged: 5 });
+    expect(CE.perMergedLines(p, 'x').join('\n')).toMatch(/2 done fix task\(s\) counted with the change they fix/);
+    // With a time log, the fix task's usage is attributed to the merged root, not to "still open".
+    const q = CE.perMergedChange({ queue: { tasks: family }, events: [ev('A-QA1', 2, 10), ev('B', 3, 10)], ...window });
+    expect(q).toMatchObject({ merged: 2, parts: { merged: 5, open: 0 }, usd_per_merged: 2.5 });
+  });
+});
+
+describe('taskTotals (cost per task, all runs)', () => {
+  const ev = (track: string, usd: number, h: number, agent = track, output = 1000) => ({
+    track,
+    agent,
+    usd,
+    time: ago(h),
+    tokens: { input: 0, output, cache_read: 0, cache_written: 0 },
+  });
+
+  it('sums the first track, fix rounds and continuations from the time log, and folds fix tasks into their root', () => {
+    const tasks: Task[] = [
+      { id: 'A', class: 'K', status: 'review', title: 'a' },
+      { id: 'A-QA1', class: 'K', status: 'running', qa_original: 'A' },
+      { id: 'B', class: 'D', status: 'waiting' },
+      { id: 'X', class: 'K', status: 'external', external: true },
+    ];
+    const events = [
+      ev('A', 2, 30, 'a1'),
+      ev('A-r1', 1.5, 20, 'a2'), // fix round
+      ev('A-r2', 0.5, 10, 'a3'), // continuation after the context guard
+      ev('A', 1, 5, 'a1'), // the same agent again (growth): one run
+      ev('A-QA1', 3, 4, 'q1'),
+      ev('general-purpose', 9, 3), // no task
+      ev('X', 7, 3),
+    ];
+    const rows = CE.taskTotals({ queue: { tasks }, events });
+    expect(rows).toHaveLength(1); // B has no cost yet, X is external, the general agent belongs to nothing
+    expect(rows[0]).toMatchObject({
+      id: 'A',
+      status: 'review',
+      usd: 8,
+      tokens: 5000,
+      runs: 4,
+      tasks: 2,
+      children: ['A-QA1'],
+      children_usd: 3,
+      source: 'time-log',
+    });
+    const lines = CE.taskTotalLines(rows);
+    expect(lines[0]).toMatch(/^Cost per task, all runs \(.*top 1 of 1\):$/);
+    expect(lines[1]).toMatch(/^ {2}A\s+K\s+review\s+\$8\.00\s+5000 tok\s+4 run\(s\) {2}\+ A-QA1 \(\$3\.00\) {2}\(time log/);
+  });
+
+  it('the measured cost wins over the time log for the same task (never both), sorted by cost, --since filters', () => {
+    const tasks: Task[] = [
+      done('A', 'K', 5, { cost: { usd: 5, tokens: { sum: 2e6 }, agents: [{}, {}, {}] } }),
+      done('B', 'K', 1, { done: ago(24 * 40), cost: { usd: 9, tokens: { sum: 1 }, agents: [{}] } }),
+      done('C', 'K', null, { fixes: ['B'], done: ago(2) }),
+    ];
+    const events = [ev('A', 50, 30, 'a1'), ev('C', 2, 2, 'c1')];
+    const rows = CE.taskTotals({ queue: { tasks }, events });
+    expect(rows.map((r) => [r.id, r.usd, r.runs, r.source])).toEqual([
+      ['B', 11, 2, 'mixed'], // B measured $9 + its fix task C from the time log $2
+      ['A', 5, 3, 'measured'], // the $50 time-log row is already in the measurement
+    ]);
+    expect(CE.taskTotalLines(rows)[2]).toMatch(/\$5\.00\s+2\.0M tok\s+3 run\(s\)$/);
+    // B was done 40 days ago, but its fix task ran 2 hours ago: B stays in a 7-day window, A (done 24 h ago) too.
+    expect(CE.taskTotals({ queue: { tasks }, events, since: NOW - 7 * 86_400_000 }).map((r) => r.id)).toEqual(['B', 'A']);
+    expect(CE.taskTotals({ queue: { tasks }, events, since: NOW - 3 * 3_600_000 }).map((r) => r.id)).toEqual(['B']);
+    expect(CE.taskTotalLines([])).toEqual(['Cost per task, all runs: nothing measured yet.']);
+  });
+
+  it('a cycle in the fix links does not hang', () => {
+    const tasks: Task[] = [
+      done('P', 'K', 1, { fixes: ['Q'] }),
+      done('Q', 'K', 2, { fixes: ['P'] }),
+    ];
+    const rows = CE.taskTotals({ queue: { tasks } });
+    expect(rows.reduce((s, r) => s + r.usd, 0)).toBe(3);
+  });
 });
 
 describe('budgetOutlook', () => {
@@ -343,5 +445,10 @@ describe('queue.mjs calibrate, cost, next, show, info and state (against a tempo
     expect(cost.out).toMatch(/cancelled \$4\.00/);
     expect(cost.out).toMatch(/Cost per task \(5 finished/);
     expect(JSON.parse(run('cost', '--json').out).perMerged).toMatchObject({ merged: 5, usd_per_merged: 2 });
+    // Cost per task, all runs: the cancelled C-1 ($4 from the time log) ties with K-4 ($4 measured) and comes first by id.
+    expect(cost.out).toMatch(/^Cost per task, all runs \(.*top 6 of 6\):$/m);
+    expect(cost.out).toMatch(/^ {2}C-1\s+K\s+cancelled\s+\$4\.00 .*1 run\(s\) {2}\(time log, not measured yet\)$/m);
+    const perTask = JSON.parse(run('cost', '--json').out).perTask;
+    expect(perTask.map((r: { id: string }) => r.id).slice(0, 2)).toEqual(['C-1', 'K-4']);
   }, 120_000);
 });

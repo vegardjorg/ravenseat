@@ -18,6 +18,7 @@ import {
 import { costEstimateState, dailyUsageFor, findSilent, findWithoutAgent, measureLoad, nextCostUsd } from './tracks.mjs';
 import { batchGroupLine } from './batch.mjs';
 import { followLines } from './orchestrator.mjs';
+import { findingsLineNow, findingsStateNow } from './finding.mjs';
 
 /** "picked by X 3 h ago · 2 commits · OLD" for a picked task. */
 function pickLine(o) {
@@ -57,6 +58,9 @@ export function cmdShowSummary() {
   // Follow up: the active entries and TO REPORT. The resume text after a compaction has this view, so due entries are
   // mentioned there too (hook-after-compact.mjs runs queue.mjs show).
   for (const l of followLines()) console.log(l);
+  // Findings from the tracks (cq finding) that nobody has triaged yet.
+  const fl = findingsLineNow();
+  if (fl) console.log(fl);
 }
 
 /** `cq show` (the usage is at the top of queue.mjs). */
@@ -234,6 +238,8 @@ export function cmdState() {
   t.parallel = { ...par, findings: par.low ? par.findings : [] };
   // Open fix tasks and the task(s) they fix (`fixes`, lib/fixLinks.js; always included, empty when there are none).
   t.fixLinks = FX.openFixLinks(queue.tasks);
+  // Findings the tracks reported outside their scope (cq finding): how many are not triaged yet, and their ids.
+  t.findings = findingsStateNow();
   console.log(JSON.stringify(t, null, 2));
   if (t.empty) process.exit(3);
 }

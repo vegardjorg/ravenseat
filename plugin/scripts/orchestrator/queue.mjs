@@ -121,6 +121,12 @@
 // waiting-on-resolved (cleanup, only in diagnose) and bottleneck. The diagnosis never fixes anything itself; each finding is "simple"
 // (mechanical and unambiguous: a finished command the orchestrator runs) or "complex" (an option with a recommendation to the owner).
 //   node scripts/orchestrator/queue.mjs diagnose [--json]             (the whole diagnosis regardless of parallelism; read-only)
+//   node scripts/orchestrator/queue.mjs doctor [--json]               (read-only health check, OK/WARN/FAIL with a fix hint each:
+//                                                                  node and the node the hooks find on PATH, the hooks file and
+//                                                                  its scripts, queue.config.json keys and types, the state
+//                                                                  files, a stale lock, half-deleted worktree folders and git
+//                                                                  worktrees without a folder, branches of finished tasks;
+//                                                                  exit 1 on any FAIL; cli/doctor.mjs)
 //
 // The orchestrator's routine as a script and the cost per task (the pure logic is in lib/queueLogic.js):
 //   node scripts/orchestrator/queue.mjs fill --scratchpad <folder> [--max N] [--ids <id …>] [--over-quota] [--over-load]
@@ -165,8 +171,11 @@
 //         If the measurement fails, the task is set done anyway.)
 //   node scripts/orchestrator/queue.mjs cost [--since 7d|24h|2026-10-01] [--max 10] [--json]   (first USD per merged change:
 //                                                                  all measured cost in the time log for the window (default
-//                                                                  28 days) / tasks that reached done; then per class: n,
-//                                                                  median and sum USD, findings H/M/L; the last tasks)
+//                                                                  28 days) / tasks that reached done (a fix task counts with
+//                                                                  the task it fixes); then cost per task with all its runs
+//                                                                  (track, fix rounds, continuations, reviewers and fix tasks
+//                                                                  via fixes/qa_original: USD, tokens, runs), by cost; then
+//                                                                  per class: n, median and sum USD, findings H/M/L; the last tasks)
 //   node scripts/orchestrator/queue.mjs cost measure <id> [...] [--findings "..."]   (measures and saves again, e.g. older finished ones)
 //   node scripts/orchestrator/queue.mjs calibrate [--days 28] [--min 5] [--json]   (per class: n, median actual/estimate
 //                                                                  minutes and the suggested weight, median USD, the model's
@@ -404,6 +413,12 @@
 //   Writing plan commands take --dry (preview), --expect-changed <iso>, --json (answer as JSON), --by "..." and
 //   --set-by agent|owner (default agent). An agent never changes a priority the owner has set, except rule 1
 //   (security lifts to now; the field agent_boost shows it), and must always give priority_reason.
+//   node scripts/orchestrator/queue.mjs finding "<title>" [--detail "..."] [--task <id>] [--files a,b] [--project <pid>] [--dry] [--json]
+//        (a track reports something it noticed outside its scope instead of fixing it: an idea in the plan register,
+//         PL-FINDING-<n>, priority later, linked to the task (default: the task of the worktree's queue branch) and
+//         deduplicated on the normalized title (the same title again adds the task and files and counts it). New until
+//         triaged; `orchestrator pulse`, `show` and `state` (the field findings) show how many. lib/queueFindings.js)
+//   node scripts/orchestrator/queue.mjs finding list [--all] [--json]   (the findings nobody has triaged yet; --all: every one)
 //   node scripts/orchestrator/queue.mjs add --file <task.json> --plan <PL-id>   (links tasks without their own `plan` to
 //        the plan entry; an unknown or merged entry is refused, the project is taken from the entry when missing, and the entry
 //        becomes in-queue automatically. The field `plan` can also be in the file, and is set on existing tasks with edit-many.)
@@ -500,7 +515,7 @@
 // =============================================================
 
 // The layout: this file is the usage above and the dispatch on the command word below. The code of the commands is in
-// cli/, one module per area (tasks, taskEdit, view, owner, run, merge, cost, helpers, orchestrator, projects, batch,
+// cli/, one module per area (tasks, taskEdit, view, owner, run, merge, cost, doctor, finding, helpers, orchestrator, projects, batch,
 // cloud, plans with planShared, planCheck and planDoc), with the shared state in cli/context.mjs and the shared track
 // helpers in cli/tracks.mjs. The usage comment stays here: lib/cliHelp.js reads it for `cq help`.
 import fs from 'node:fs';
@@ -508,6 +523,8 @@ import { a, command, CONFIG, CQ, die, HERE, KK, require } from './cli/context.mj
 import * as batch from './cli/batch.mjs';
 import * as cloud from './cli/cloud.mjs';
 import * as cost from './cli/cost.mjs';
+import * as doctor from './cli/doctor.mjs';
+import * as finding from './cli/finding.mjs';
 import * as helpers from './cli/helpers.mjs';
 import * as merge from './cli/merge.mjs';
 import * as orchestrator from './cli/orchestrator.mjs';
@@ -574,6 +591,10 @@ if (command === 'init') {
   view.cmdState();
 } else if (command === 'diagnose') {
   view.cmdDiagnose();
+} else if (command === 'doctor') {
+  doctor.cmdDoctor();
+} else if (command === 'finding') {
+  finding.cmdFinding();
 } else if (command === 'trackFile') {
   run.cmdTrackFile();
 } else if (command === 'fill') {
@@ -671,7 +692,7 @@ if (command === 'init') {
     'Use: cq <init|add|approve|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|cost|handover|deliveries|resume|follow> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

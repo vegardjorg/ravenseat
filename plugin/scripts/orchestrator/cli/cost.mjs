@@ -171,18 +171,19 @@ export function cmdCost() {
     // The headline: USD per merged change (lib/costEstimate.js), all measured cost in the window / merged tasks. The
     // window is --since, otherwise the last WINDOW_DAYS days (the per-class lines below keep their all-time default).
     const from = since ? Date.parse(since) : Date.now() - CE.WINDOW_DAYS * 86_400_000;
-    const merged = CE.perMergedChange({
-      queue,
-      events: TK.usageEvents(readTimeLog()),
-      from,
-      to: Date.now() + 1,
-    });
+    const events = TK.usageEvents(readTimeLog());
+    const merged = CE.perMergedChange({ queue, events, from, to: Date.now() + 1 });
+    // Cost per task with all its runs (first track, fix rounds, continuations, reviewers, fix tasks), by cost. All
+    // time unless --since, like the per-class lines.
+    const perTask = CE.taskTotals({ queue, events, since: since ? Date.parse(since) : null });
+    const max = Number(val('--max') ?? 10);
     if (a.includes('--json')) {
-      console.log(JSON.stringify({ perMerged: merged, perClass: s.perClass, total: s.total }, null, 2));
+      console.log(JSON.stringify({ perMerged: merged, perTask, perClass: s.perClass, total: s.total }, null, 2));
       process.exit(0);
     }
     for (const l of CE.perMergedLines(merged, since ? `since ${since.slice(0, 10)}` : `last ${CE.WINDOW_DAYS} days`))
       console.log(l);
+    for (const l of CE.taskTotalLines(perTask, max)) console.log(cut(l, WIDTH));
     if (!s.rows.length)
       console.log('No finished tasks with a measured cost yet (measured at set <id> done).');
     else {
@@ -200,9 +201,8 @@ export function cmdCost() {
         for (const h of helpers)
           console.log(cut(`  ${h.name.padEnd(20)} ${HELP.measurementText(st[h.name])}`, WIDTH));
       }
-      const n = Number(val('--max') ?? 10);
-      console.log(`Last ${Math.min(n, s.rows.length)}:`);
-      for (const x of s.rows.slice(0, n))
+      console.log(`Last ${Math.min(max, s.rows.length)} finished (each task's own measurement):`);
+      for (const x of s.rows.slice(0, max))
         console.log(
           `  ${x.id.padEnd(12)} ${String(x.class).padEnd(2)} $${String(x.usd).padEnd(7)} ${x.agents} agent(s)` +
             (x.findings ? `  H=${x.findings.H} M=${x.findings.M} L=${x.findings.L}` : '') +
