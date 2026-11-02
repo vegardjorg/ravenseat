@@ -178,8 +178,13 @@ export function cmdAreas() {
 export function cmdFocus() {
   const under = a[1];
   if (under === 'set') {
-    const order = positional(2, ['--rest', '--to', '--name', '--by']);
+    const order = positional(2, ['--rest', '--to', '--name', '--by', '--continue-when-empty']);
     const rest = val('--rest');
+    // --continue-when-empty on|off: this focus's own answer to "continue the regular queue when the focus has ended"
+    // (overrides the config focus.continueWhenEmpty). Left out = the config decides.
+    const cweRaw = val('--continue-when-empty');
+    const cwe = cweRaw == null ? undefined : { on: true, off: false }[String(cweRaw).toLowerCase()];
+    if (cweRaw != null && cwe === undefined) die(`--continue-when-empty must be on or off (got ${cweRaw})`);
     const r = edit((queue) => {
       const s = L.setFocus(queue, {
         order,
@@ -188,6 +193,7 @@ export function cmdFocus() {
         name: val('--name') ?? null,
         drag_with_dependencies: !a.includes('--without-dependencies'),
         set_by: val('--by') ?? null,
+        continue_when_empty: cwe,
       });
       if (s.error.length) die(`Focus not changed:\n  ${s.error.join('\n  ')}`);
       return { s, text: L.focusText(queue) };
@@ -299,14 +305,17 @@ export function cmdFocus() {
     );
   } else if (under && !under.startsWith('--')) {
     die(
-      'focus | focus set <stage> [<stage> ...] [--rest wait|fill] [--to <date>] [--name "..."] [--without-dependencies] | focus evaluate [--json] | focus clean [--dry] | focus off',
+      'focus | focus set <stage> [<stage> ...] [--rest wait|fill] [--to <date>] [--name "..."] [--without-dependencies] [--continue-when-empty on|off] | focus evaluate [--json] | focus clean [--dry] | focus off',
     );
   } else {
     const queue = read();
     if (!queue.focus) {
       console.log(
         'No focus set: the queue is ranked by score and projectBonus.\n' +
-          'Set: cq focus set area:<oid> project:<pid> feature:<pid>/<name> ... [--rest wait|fill] [--to <date>]',
+          'Set: cq focus set area:<oid> project:<pid> feature:<pid>/<name> ... [--rest wait|fill] [--to <date>]' +
+          ' [--continue-when-empty on|off]\n' +
+          `When a focus has ended: continue when empty: ${L.focusContinues(queue).setting ? 'on' : 'off'} ` +
+          '(config focus.continueWhenEmpty)',
       );
     } else {
       const uncommitted = uncommittedPaths();
@@ -317,7 +326,15 @@ export function cmdFocus() {
       console.log(
         `  set ${f.from ?? '?'}${f.set_by ? ` by ${f.set_by}` : ''}` +
           ` · drag along dependencies: ${f.drag_with_dependencies === false ? 'no' : 'yes'}` +
-          `${st.expired ? ' · EXPIRED' : ''}${st.not_started ? ' · not started yet' : ''}`,
+          `${st.expired ? ' · EXPIRED' : ''}${st.not_started ? ' · not started yet' : ''}` +
+          `${st.finished ? ' · FINISHED' : ''}${st.finished_at ? ` (finished ${st.finished_at})` : ''}`,
+      );
+      // The setting "continue the regular queue when the focus is empty" and where it comes from.
+      const cw = st.continue_when_empty;
+      console.log(
+        `  continue when empty: ${cw.setting ? 'on' : 'off'} (${cw.setting_from})` +
+          `${cw.source === 'answer' ? ` · the owner answered continue (${cw.from.replace(/^owner answer /, '')})` : ''}` +
+          `${st.halted ? ' · QUEUE PAUSED' : ''}`,
       );
       if (st.active) {
         // Done stages and stages with only rests are marked (the details: cq focus evaluate).

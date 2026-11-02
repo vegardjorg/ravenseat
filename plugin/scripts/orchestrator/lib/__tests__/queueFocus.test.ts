@@ -47,6 +47,7 @@ type Focus = {
   order: string[];
   rest?: string;
   drag_with_dependencies?: boolean;
+  continue_when_empty?: boolean;
   now_count?: number;
   history?: { at: string; by: string; action: string; stage: string; title?: string }[];
 };
@@ -315,13 +316,15 @@ describe('focus: fixed order, rest and specificity', () => {
     expect(ids(queue)).toEqual(['VP-1', 'VP-2']);
   });
 
-  it('an expired focus is ranked as without focus, with a notice', () => {
+  // Only with continue_when_empty on; the default (off) pauses the queue (queueFocusEnd.test.ts).
+  it('an expired focus with continue_when_empty on is ranked as without focus, with a notice', () => {
     const queue = reasonQueue();
     queue.focus = {
       name: 'Week 41',
       order: ['area:goods'],
       rest: 'wait',
       to: '2026-10-01T00:00:00Z',
+      continue_when_empty: true,
     };
     expect(ids(queue)).toEqual(ids(reasonQueue()));
     const t = L.state(queue, undefined, { now: NOW });
@@ -409,11 +412,11 @@ describe('notice when focus has nothing ready', () => {
     expect(L.summaryView(queue, { now: NOW }).join('\n')).toMatch(/FOCUS WARNING/);
   });
 
-  it('everything in focus done: "focus is empty"', () => {
+  it('everything in focus done: "focus is done", queue paused', () => {
     const queue = reasonQueue();
     queue.tasks = [o('SB-1', { status: 'done' }), o('VK-1')];
     queue.focus = { order: ['area:goods'], rest: 'wait' };
-    expect(L.focusStatus(queue, { now: NOW })?.notice).toMatch(/is empty: nothing left/);
+    expect(L.focusStatus(queue, { now: NOW })?.notice).toMatch(/is done: nothing left.*Queue paused/);
   });
 
   it('ready work in focus: no notice', () => {

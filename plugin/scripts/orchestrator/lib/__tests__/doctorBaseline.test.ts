@@ -152,5 +152,13 @@ describe('cq doctor: the safety baseline', () => {
     expect(c[1]).toMatchObject({ status: 'WARN', message: 'unknown key(s) ignored: secretScan.enable' });
     p = project({ config: { productionBranch: 5 } });
     expect(p.lines('config')[0].message).toMatch(/productionBranch must be a branch name or null/);
+    // focus.continueWhenEmpty (continue the regular queue when the focus has ended): known, boolean, closed object.
+    p = project({ config: { focus: { continueWhenEmpty: true } } });
+    expect(p.lines('config')).toEqual([expect.objectContaining({ status: 'OK' })]);
+    p = project({ config: { focus: { continueWhenEmpty: 'yes', continueWhenEmty: true } } });
+    const fc = p.lines('config');
+    expect(fc[0]).toMatchObject({ status: 'FAIL' });
+    expect(fc[0].message).toMatch(/focus\.continueWhenEmpty is string, expected boolean/);
+    expect(fc[1]).toMatchObject({ status: 'WARN', message: 'unknown key(s) ignored: focus.continueWhenEmty' });
   }, 60_000);
 });

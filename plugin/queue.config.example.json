@@ -65,6 +65,8 @@
   },
   "_triage": "Intake triage: before fill starts a task added or last edited minAgeDays ago or more (null = no age rule), or one an agent added (agentAdded, once), the triage helper checks it read-only against the current code: ready, done, stale or adjust (cq triage <id> --verdict ...). Never fix tasks or continuations. Off: cq helpers off triage. Lite mode: off unless switched on.",
   "triage": { "minAgeDays": 3, "agentAdded": true, "maxPerFill": 3, "askAgainMin": 60 },
+  "_focus": "When a focus has ended (every stage done, or its period is over): continueWhenEmpty false (default) pauses the queue (fill starts nothing) and asks the owner one question in Waiting on you: set a new focus or continue the regular queue. true = the queue continues by itself, with one line saying so. Per focus: cq focus set ... --continue-when-empty on|off. A project that never set a focus is not affected.",
+  "focus": { "continueWhenEmpty": false },
   "planBackup": null,
   "documentFolders": ["docs"],
   "indexFile": null,

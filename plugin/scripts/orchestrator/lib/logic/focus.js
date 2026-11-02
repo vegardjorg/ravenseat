@@ -2,7 +2,8 @@
 // logic/focus.js: writing the focus period, evaluating done focus stages, and areas and parking.
 //
 // setFocus, removeFocus, saveFocusPlan and focusStatus; evaluateFocusStep, focusWithoutDone, cleanFocus and the rest
-// texts (done stages are evaluated and taken out); setArea, areaOverview, park and proceed (`continue`). How the focus
+// texts (done stages are evaluated and taken out); focusEnd, syncFocusEnd and focusEndLine (what happens when the focus
+// has ended: the record finished_at and the owner question, see "When the focus has ended" in ranking.js); setArea, areaOverview, park and proceed (`continue`). How the focus
 // changes the order lives in logic/ranking.js.
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
@@ -15,12 +16,16 @@ const { projectFor, projectPaused, projectOverview, withIndex } = require('./pro
 const { blockerParts, blockers } = require('./conflicts.js');
 const {
   WITHOUT_AREA, FOCUS_REST, FOCUS_MAX_TEXT, areaFor, parseStep, stepMatch, ownStep, parkedNow, rankingContext,
-  focusSpace, parseToDate, stepTitle, focusText,
+  focusSpace, parseToDate, stepTitle, focusText, focusApplies, focusRanEmpty, focusContinues, focusEndQuestionId,
+  FOCUS_END_CHOICES,
 } = require('./ranking.js');
 const { cloneJson, equalValue, logChange } = require('./edit.js');
+const { setQuestion } = require('./questions.js');
 
 /**
- * Sets the focus (queue.mjs focus set). input: { order: [stage], rest?, to?, name?, drag_with_dependencies?, set_by? }.
+ * Sets the focus (queue.mjs focus set). input: { order: [stage], rest?, to?, name?, drag_with_dependencies?, set_by?,
+ * continue_when_empty? } (continue_when_empty: true/false overrides the config focus.continueWhenEmpty for this focus;
+ * left out = the config decides). An open owner question about the previous focus having ended is dropped.
  * Everything is validated before anything is changed. Warnings (not errors): stages without open tasks, paused projects in a stage, and
  * a focus that gives zero ready tasks now. Changes `queue` only when the error list is empty.
  * @returns {{ error: string[], warnings: string[], focus?: object }}
@@ -54,6 +59,9 @@ function setFocus(queue, input, now = new Date().toISOString()) {
     error.push(`name can be at most ${FOCUS_MAX_TEXT} characters`);
   if (input?.drag_with_dependencies != null && typeof input.drag_with_dependencies !== 'boolean')
     error.push('drag_with_dependencies must be true/false');
+  const continueWhenEmpty = input?.continue_when_empty;
+  if (continueWhenEmpty != null && typeof continueWhenEmpty !== 'boolean')
+    error.push('continue_when_empty must be true/false (or left out: the config focus.continueWhenEmpty decides)');
   // How many of the stages the plan view shows in "Now" (the rest of the stages sit in "Next"). View only;
   // the order is the same. If the field is missing, "Now" is the first stage.
   const nowCount = input?.now_count == null ? null : Number(input.now_count);
@@ -72,6 +80,7 @@ function setFocus(queue, input, now = new Date().toISOString()) {
     ...(nowCount != null ? { now_count: nowCount } : {}),
     rest,
     drag_with_dependencies: input?.drag_with_dependencies !== false,
+    ...(typeof continueWhenEmpty === 'boolean' ? { continue_when_empty: continueWhenEmpty } : {}),
     ...(input?.set_by ? { set_by: String(input.set_by).slice(0, FOCUS_MAX_TEXT) } : {}),
     // The history of stages taken out (cleanFocus) is carried over when the focus is set again.
     ...(Array.isArray(queue.focus?.history) && queue.focus.history.length
@@ -99,13 +108,15 @@ function setFocus(queue, input, now = new Date().toISOString()) {
   if (status.active && status.readyOnes === 0)
     warnings.push('the focus gives no ready tasks now (see cq focus)');
   queue.focus = focus;
+  dropFocusEndQuestions(queue);
   return { error: [], warnings, focus };
 }
 
-/** Removes the focus (queue.mjs focus off). Returns the old one, or null. */
+/** Removes the focus (queue.mjs focus off). Returns the old one, or null. Drops an open "focus ended" question. */
 function removeFocus(queue) {
   const oldOne = queue.focus ?? null;
   delete queue.focus;
+  dropFocusEndQuestions(queue);
   return oldOne;
 }
 
@@ -169,6 +180,8 @@ function saveFocusPlan(queue, input, now = new Date().toISOString()) {
   if (paused.length || still.length) queue.projects = register;
   if (focus) queue.focus = focus;
   else delete queue.focus;
+  // setFocus ran on the trial copy, so the open "focus ended" question of the old focus is dropped here.
+  dropFocusEndQuestions(queue);
   return { error: [], warnings, focus, removed, paused, still };
 }
 
@@ -201,14 +214,27 @@ function focusStatus(queue, { now = Date.now(), canStart = null, context = null 
     per_step: (f.order ?? []).map((t) => ({ stage: t, waiting: 0, readyOnes: 0, min_left: 0 })),
     ownerQuestion: [],
     notice: null,
+    // When the focus has ended (every stage done, or the period over): whether the queue continues, and why.
+    finished: k.finished === true,
+    halted: k.halted === true,
+    continue_when_empty: focusContinueInfo(queue),
+    finished_at: f.finished_at ?? null,
   };
   if (k.expired) {
-    out.notice =
-      `Focus period${name} is over (until ${utcText(f.to)}). The queue is ranked as without focus until it is changed: ` +
-      'cq focus set … or cq focus off.';
+    out.notice = k.halted
+      ? `Focus period${name} is over (until ${utcText(f.to)}): queue paused, nothing starts. ${focusEndHow(queue)}`
+      : `Focus period${name} is over (until ${utcText(f.to)}). The queue is ranked as without focus ` +
+        `(continue when empty: on, ${out.continue_when_empty.from}): cq focus set … or cq focus off.`;
     return out;
   }
   if (!k.applies) return out;
+  if (k.finished) {
+    out.notice = k.halted
+      ? `Focus${name} is done: nothing left in the stages. Queue paused, nothing starts. ${focusEndHow(queue)}`
+      : `Focus${name} is done: nothing left in the stages. Continuing the regular queue ` +
+        `(continue when empty: on, ${out.continue_when_empty.from}).`;
+    return out;
+  }
   const can = new Set(canStart ?? []);
   const sp = new Map();
   for (const o of tasks) {
@@ -381,8 +407,14 @@ function cleanFocus(queue, { by = null, now = new Date().toISOString(), dry = fa
     kept: null,
     changes: [],
     entry: null,
+    end: null,
   };
-  if (!queue?.focus?.order?.length) return empty;
+  if (!queue?.focus?.order?.length) {
+    // No focus: an open "focus ended" question about an old focus is dropped (not in a dry run).
+    empty.end = dry ? focusEnd(queue, Date.parse(now)) : syncFocusEnd(queue, { now });
+    empty.end_line = focusEndLine(queue, empty.end);
+    return empty;
+  }
   const r = focusWithoutDone(queue, Date.parse(now));
   const answer = {
     evaluation: r.evaluation,
@@ -391,8 +423,20 @@ function cleanFocus(queue, { by = null, now = new Date().toISOString(), dry = fa
     kept: r.kept,
     changes: [],
     entry: null,
+    end: null,
   };
-  if (!r.focus) return answer;
+  // What happens when the focus has ended (the record and the owner question). Dry: computed on a copy.
+  const endAfter = (cleaned) => {
+    if (!dry) return syncFocusEnd(queue, { now });
+    const trial = cloneJson(queue);
+    if (cleaned) trial.focus = cleaned;
+    return focusEnd(trial, Date.parse(now));
+  };
+  if (!r.focus) {
+    answer.end = endAfter(null);
+    answer.end_line = focusEndLine(queue, answer.end);
+    return answer;
+  }
   const who = String(by ?? '').trim() || 'unknown';
   const history = [
     ...(Array.isArray(queue.focus.history) ? queue.focus.history : []),
@@ -407,10 +451,145 @@ function cleanFocus(queue, { by = null, now = new Date().toISOString(), dry = fa
         before: cloneJson(queue.focus[field] ?? null),
         after: cloneJson(after[field] ?? null),
       });
-  if (dry) return answer;
+  if (dry) {
+    answer.end = endAfter(after);
+    answer.end_line = focusEndLine({ ...queue, focus: after }, answer.end);
+    return answer;
+  }
   queue.focus = after;
   answer.entry = logChange(queue, { by: who, action: 'focus clean', changes: answer.changes, now });
+  answer.end = endAfter(after);
+  answer.end_line = focusEndLine(queue, answer.end);
   return answer;
+}
+
+// ---- When the focus has ended --------------------------------------------------------------------------------------
+//
+// The rule is in ranking.js ("When the focus has ended"). Here: the state for the commands (focusEnd), the record and
+// the owner question, kept in step with the state (syncFocusEnd, run by cleanFocus, so in fill, receive, set and focus
+// clean), and the one line fill and the others print (focusEndLine).
+//   focus.finished_at   the time the queue first saw the focus ended (cleared when the focus gets work again). A
+//                       status stamp like triage_asked: not in the changelog. A focus that was never set has no focus.
+//   question            ONE owner question per focus, id focusEndQuestionId (from focus.from), with FOCUS_END_CHOICES,
+//                       only while the queue is paused. It shows in "Waiting on you". Repeated fills never add a
+//                       second one; an unanswered one is dropped when the pause is over (new focus, focus off, new
+//                       work in a stage, or the setting turned on). An answered one stays (the decision is kept).
+
+/** Where the setting comes from, in words: "this focus", "config focus.continueWhenEmpty" or "owner answer". */
+function focusContinueInfo(queue) {
+  const c = focusContinues(queue);
+  const from =
+    c.source === 'focus'
+      ? 'this focus'
+      : c.source === 'answer'
+        ? `owner answer ${focusEndQuestionId(queue?.focus)}`
+        : 'config focus.continueWhenEmpty';
+  return {
+    on: c.on,
+    setting: c.setting,
+    source: c.source,
+    from,
+    setting_from: c.settingSource === 'focus' ? 'this focus' : 'config focus.continueWhenEmpty',
+  };
+}
+
+/** How to continue while the queue is paused after the focus ended. */
+function focusEndHow(queue) {
+  const id = focusEndQuestionId(queue?.focus);
+  return (
+    'Continue: cq focus set … (a new focus), cq focus off, answer the owner question ' +
+    `${id} (cq resolve ${id} --choice 2 continues the regular queue), or set focus.continueWhenEmpty true in ` +
+    'queue.config.json.'
+  );
+}
+
+/**
+ * The state when the focus has ended (pure; changes nothing).
+ *   none        no focus;
+ *   active      the focus has work (or has not started yet);
+ *   paused      it ended and the queue does not continue (nothing starts);
+ *   continuing  it ended and the queue continues (the setting is on, or the owner answered "Continue").
+ * @returns {{ state: 'none'|'active'|'paused'|'continuing', reason: 'done'|'expired'|null, question: string|null,
+ *   created: boolean, source: 'focus'|'config'|'answer'|null }}
+ */
+function focusEnd(queue, now = Date.now()) {
+  const f = queue?.focus;
+  if (!f?.order?.length) return { state: 'none', reason: null, question: null, created: false, source: null };
+  const g = focusApplies(queue, now);
+  const reason = g.expired ? 'expired' : g.applies && focusRanEmpty(queue) ? 'done' : null;
+  const question = focusEndQuestionId(f);
+  if (!reason) return { state: 'active', reason: null, question, created: false, source: null };
+  const c = focusContinues(queue);
+  const state = c.on ? 'continuing' : 'paused';
+  const created = state === 'paused' && !queue.question?.[question];
+  return { state, reason, question, created, source: c.source };
+}
+
+/**
+ * Drops the open (unanswered) "focus ended" questions, except `keep`. An answered one stays: it is a decision.
+ * @returns {string[]} the ids that were dropped
+ */
+function dropFocusEndQuestions(queue, keep = null) {
+  const resolved = new Set(queue?.resolved ?? []);
+  const drop = Object.keys(queue?.question ?? {}).filter(
+    (id) => id.startsWith('focus-done-') && id !== keep && !resolved.has(id),
+  );
+  if (!drop.length) return [];
+  const question = { ...queue.question };
+  for (const id of drop) delete question[id];
+  queue.question = question;
+  return drop;
+}
+
+/**
+ * Keeps the record and the owner question in step with focusEnd (changes `queue`; under the caller's lock): stamps
+ * focus.finished_at when the focus has ended (clears it when it has work again), registers the ONE owner question while
+ * the queue is paused (never a second one: the id is per focus), and drops an unanswered one when the pause is over.
+ * @returns the focusEnd state, with `created` = the question was registered by this call
+ */
+function syncFocusEnd(queue, { now = new Date().toISOString() } = {}) {
+  const e = focusEnd(queue, Date.parse(now));
+  const f = queue?.focus;
+  if (f) {
+    if (e.reason && !f.finished_at) f.finished_at = now;
+    else if (!e.reason && f.finished_at) delete f.finished_at;
+  }
+  dropFocusEndQuestions(queue, e.state === 'paused' ? e.question : null);
+  if (e.created) {
+    const name = f.name ? `"${f.name}"` : `(${(f.order ?? []).map((t) => stepTitle(t, queue)).join(', ')})`;
+    const what = e.reason === 'expired' ? 'period is over' : 'is done';
+    const s = setQuestion(
+      queue,
+      {
+        [e.question]: {
+          type: 'question',
+          text:
+            `Focus ${name} ${what}: set a new focus or continue the regular queue? The queue is paused until you ` +
+            'choose. "Set a new focus": tell the orchestrator which areas, projects or features come next ' +
+            '(cq focus set ...). "Continue the regular queue": the rest of the queue starts by priority (to make ' +
+            'that the default, set focus.continueWhenEmpty true in queue.config.json).',
+          source: 'cq focus (the focus ended)',
+          choices: FOCUS_END_CHOICES,
+        },
+      },
+      now,
+    );
+    if (s.error.length) return { ...e, created: false, error: s.error };
+  }
+  return e;
+}
+
+/** The one line about the end of the focus (fill, receive, set, focus clean), or null when the focus has not ended. */
+function focusEndLine(queue, end) {
+  if (!end || (end.state !== 'paused' && end.state !== 'continuing')) return null;
+  const name = queue?.focus?.name ? ` "${queue.focus.name}"` : '';
+  const what = end.reason === 'expired' ? 'period is over' : 'is done';
+  if (end.state === 'continuing')
+    return `Focus${name} ${what}: continuing the regular queue (continue when empty: on, ${focusContinueInfo(queue).from}).`;
+  return (
+    `Focus${name} ${what}: queue paused, fill starts nothing. ${focusEndHow(queue)}` +
+    (end.created ? ` (Owner question ${end.question} registered: Waiting on you.)` : '')
+  );
 }
 
 /** One rest in plain text: "SEC-1 proposed → ask the owner for a yes …". */
@@ -459,7 +638,8 @@ function focusCleanLines(r) {
       `Focus stage T${t.index + 1} ${t.title} done with rests (${t.rests.length}): ` +
         `${restGroupText(t.rests)}. Details: cq focus evaluate`,
     );
-  if (r?.kept)
+  if (r?.end_line) lines.push(r.end_line);
+  else if (r?.kept)
     lines.push(
       `Focus stage T${r.kept.index + 1} ${r.kept.title} is done, and all stages are done: set a new focus ` +
         '(cq focus set …) or cq focus off.',
@@ -661,6 +841,10 @@ module.exports = {
   cleanFocus,
   restText,
   focusCleanLines,
+  focusEnd,
+  syncFocusEnd,
+  dropFocusEndQuestions,
+  focusEndLine,
   setArea,
   areaOverview,
   park,
