@@ -23,7 +23,10 @@
 //                  (postinstall …) from every package.json.
 //   "glob"         an entry with * or ?: without a slash it is matched against the file name in ANY folder
 //                  ("vitest.config.*", "tsconfig*.json"); with a slash against the whole path from the root, where
-//                  "**/" is any folders (also none). "*" and "?" never cross a "/". Case matters, as for the others.
+//                  "**/" is any folders (also none). "*" and "?" never cross a "/".
+// Case does NOT matter for the protected check (M3 in plans/review-2026-11-02.md): on Windows and macOS (and with
+// core.ignorecase) ".CLAUDE/settings.json" is checked out into the same folder as ".claude/", so a guard that only
+// knew the lower-case spelling could be walked around. Over-matching on a case-sensitive system costs one guard stop.
 // Paths under node_modules/ are never protected (they are links, not committed).
 //
 // Pure logic without I/O; merge-track.mjs fetches the diff (git diff --name-status -M) and the task (queue.json).
@@ -63,8 +66,9 @@ function withPaths(base, extra = []) {
  * any folders (also none). A pattern without a slash is matched against the file name only; one ending in "/" covers the folder.
  * @param {string} pattern
  * @param {string} p a normalised path (forward slashes)
+ * @param {{ ignoreCase?: boolean }} [o] ignoreCase: compare without regard to case (the protected check does)
  */
-function globMatch(pattern, p) {
+function globMatch(pattern, p, o = {}) {
   let g = norm(pattern);
   if (!g) return false;
   const s = norm(p);
@@ -83,7 +87,7 @@ function globMatch(pattern, p) {
     else if (c === '?') r += '[^/]';
     else r += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
   }
-  return new RegExp(`^${r}$`).test(subject);
+  return new RegExp(`^${r}$`, o.ignoreCase ? 'i' : '').test(subject);
 }
 
 /**
@@ -92,12 +96,13 @@ function globMatch(pattern, p) {
  * @param {string[]} [protectedPaths] default STANDARD.protectedPaths
  */
 function isProtected(p, protectedPaths = defaultProtected()) {
-  const s = norm(p);
+  // Compared in lower case (see the top of the file): .CLAUDE/ is .claude/ on Windows and macOS.
+  const s = norm(p).toLowerCase();
   if (s.startsWith('node_modules/') || s.includes('/node_modules/')) return false;
   const name = s.split('/').pop();
-  return (protectedPaths || []).map(norm).some((b) => {
+  return (protectedPaths || []).map((b) => norm(b).toLowerCase()).some((b) => {
     if (!b) return false;
-    if (/[*?]/.test(b)) return globMatch(b, s);
+    if (/[*?]/.test(b)) return globMatch(b, s, { ignoreCase: true });
     if (b.endsWith('/')) return s.startsWith(b);
     if (!b.includes('/')) return name === b;
     return s === b;
