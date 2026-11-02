@@ -6,45 +6,68 @@
 </p>
 
 <h1 align="center">Ravenseat</h1>
-<p align="center"><b>A work queue and kanban board for Claude Code. Agents do the work; you make the decisions.</b></p>
+<p align="center"><b>Your agents keep building. You make the decisions.</b></p>
+<p align="center">A persistent work queue for Claude Code: it runs parallel agents in isolated git worktrees, checks
+their work with your project's own checks, and keeps the project moving across sessions.</p>
+<p align="center"><sub>Open source · Local-first · Runs inside Claude Code</sub></p>
 
 <p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The board: the work queue as a kanban with In queue, In progress and Review" width="800"></p>
 <p align="center"><sub>The board with a made-up demo project ("Pebble", a habit tracker). More in <a href="#a-tour-of-the-board">A tour of the board</a>.</sub></p>
 
+Running five Claude Code sessions is not the hard part. Keeping them from colliding, and actually finishing the
+features, is. Ravenseat makes you stop being the project's manual orchestrator:
+
 - **Parallel work without collisions.** Every task runs as a fresh agent with a small, fresh context, in its own git
   worktree and branch, and owns its files exclusively while it runs.
-- **You only make the decisions.** Agents code, the checks gate, the orchestrator merges. A task that needs you parks
-  in `/cq:decide` with a recommendation, and the rest of the queue keeps going.
-- **Built to last the week.** Tracks are cut at about 300k tokens of context, fix rounds start a fresh agent, and the
-  orchestrator stays light, so the queue runs for days on one subscription.
+- **A red check does not stop the queue.** A failed check starts a fix round with a fresh agent and runs the checks
+  again. Only what it cannot resolve reaches you.
+- **Decisions come to you, in one list.** A task that needs you parks in `/cq:decide` with a recommendation, and the
+  rest of the queue keeps going.
+- **Finish features, not just tasks.** Dependencies and focus keep related work together until the feature is done.
+- **Designed for long-running work.** Tracks are cut at about 300k tokens of context, fix rounds start a fresh agent,
+  and the orchestrator stays light. The numbers from about 1,200 tasks are in
+  [What it costs in tokens](#what-it-costs-in-tokens).
 - **Quality you can check, not take on trust.** Gate results are bound to the exact commit, acceptance criteria lock
   when a task starts, every repeatable mistake can become a check in your own CI, and an interrupted merge picks up
   where it stopped (`cq merge <ID> --resume`). See ["Agents cheat on tests"](#agents-cheat-on-tests) and
   ["Something breaks and the queue stops"](#something-breaks-and-the-queue-stops).
 
-There are no workflows or pipelines to write first: the process is built in (your own gate commands run locally, and
-`cq setup --ci` writes an optional GitHub Actions template to `.github/workflows/cq-gates.yml`, never over an existing
-one). Plans and tasks live on disk, so
-nothing is lost when a chat ends or gets compacted. It works purely from Claude Code (every board action has a
-command behind it); the board is optional, for the overview.
+```text
+  pick the next task ──> agent builds it in its own worktree ──> your checks run
+                                                                   │
+                         ┌─────────────── green ───────────────────┤
+                         v                                         │ red
+              merge, start the next task              fix round with a fresh agent,
+                                                      then the checks again
+                                                                   │
+                                                      still stuck? a decision for you,
+                                                      while independent tasks go on
+```
+
+The loop is only as strong as your checks: Ravenseat runs the tests, lint and type checks your project has, and does
+not make a project safe on its own. `/cq:setup` helps you set them up.
+
+**No hosted service, no new CI system.** Plans, tasks and state live as files in your repository, so nothing is lost
+when a chat ends or gets compacted. Your own gate commands run locally, and `cq setup --ci` can write an optional
+GitHub Actions template (`.github/workflows/cq-gates.yml`, never over an existing one). It works purely from Claude
+Code (every board action has a command behind it); the board is optional, for the overview.
 
 By Vegard Cowie Jørgensen.
 
 ## Quick start (lite)
 
-New here? Start in lite mode: the core loop only, nothing to learn first. You need Node.js 20 or newer, git and
-Claude Code.
+New here? Start in lite mode: the core loop only, nothing to learn first.
 
 1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/ravenseat`, then
-   `/plugin install cq@ravenseat`.
+   `/plugin install cq@ravenseat`. You need Node.js 20 or newer and git.
 2. **Create the queue** in your project: `cq init --lite` (a fresh `cq init` is lite too). It writes
    `"mode": "lite"` to `queue.config.json` and an empty queue in `scripts/.queue/` (add that folder to `.gitignore`).
 3. **Add work with just a title:** `cq add "Fix the login bug"`, or say "add to the queue: fix the login bug". Add a
    mission when the title is not enough: `cq add "Fix the login bug" --mission "Users with a + in the email cannot log in; add a test"`.
    `--priority 1-10` moves a task up (5 is normal); otherwise tasks run in the order you added them.
-4. **Run it:** `/cq:queue`. The chat becomes the orchestrator: it shows the state, asks you first, then starts one
-   agent per task in its own git worktree (`cq fill`), takes in what they deliver (`cq receive`) and merges it
-   (`cq merge`). It never pushes unless you say so.
+4. **Run it:** `/cq:queue`. The chat picks the next task, starts an agent in an isolated worktree, checks the result
+   and merges work that passes. It asks you before it starts, keeps going until it needs a decision from you, and
+   never pushes unless you say so.
 5. **Answer questions:** when an agent needs your decision, that task waits and the rest go on. `cq question` lists
    them, `cq resolve <id> --answer "..."` answers one, or use "Waiting on you" on the board (`/cq:board`). A question
    can come with 2-4 answer options (`cq question <id> --text "..." --choice "Yes" --choice "No"`): pick one with
