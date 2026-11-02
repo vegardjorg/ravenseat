@@ -3,6 +3,12 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.3 (2026-11-02)
+
+### Changed
+- README: opens with autonomy ("Your agents keep building. You make the decisions."), shows the self-correcting
+  loop, a simpler quick start without internal commands, and a local-first line (no hosted service, no new CI).
+
 ## 0.8.2 (2026-11-02)
 
 ### Changed
