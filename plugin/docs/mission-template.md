@@ -103,6 +103,10 @@ settings, agent definitions or CI unless the mission owns the file.
 - Network calls (`curl`, `wget`, `Invoke-WebRequest`, `| sh` …) are blocked for tracks, reviewers and helper agents by the push guard, and
   `npm install` or `npx` with a package that is not in `package.json` asks for confirmation: ask the orchestrator to
   fetch it.
+- The push guard also denies every `git push` from a track, and every queue command except `prepare-track`, `gates`,
+  `show`, `info`, `help`, `blockers`, `finding`, `question`, `block`, `deliver` and `plan show|get` (no `merge`, `set`,
+  `edit`, `approve`, `resolve`, `undo`, `--allow-guard`, `--force` or `--by owner`). Your ownership (`owned_files`,
+  `shared_patch`) is fixed at the start: a path you need beyond it goes in the report.
 - `merge-track.mjs` stops the merge when the branch touches protected paths that the task does not own: the agent
   and CI setup (`.claude/`, `.github/` …), the orchestrator scripts, hooks, agents, `queue.config.json`,
   `package.json`, and the test, lint and type configs (`vitest.config.*`, `tsconfig*.json`, eslint configs …). The

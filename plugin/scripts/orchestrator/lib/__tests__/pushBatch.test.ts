@@ -199,8 +199,8 @@ describe('the guard question', () => {
     const ctx = { baseBranch: 'main', migrations: {}, batchQuestion: () => '4 of 10 merged tasks since the last push; push anyway?' };
     expect(assess('git push origin main', ctx)).toEqual({ decision: 'ask', reason: ctx.batchQuestion() });
     expect(assess('git push', { ...ctx, branch: 'main' })?.decision).toBe('ask');
-    // A track (agent_type set) is not asked about the batch.
-    expect(assess('git push origin main', { ...ctx, agentType: 'track', guardedTypes: new Set() })).toBeNull();
+    // A track (agent_type set) is never asked about the batch: it may not push at all (H1, denied with its own reason).
+    expect(assess('git push origin main', { ...ctx, agentType: 'track', guardedTypes: new Set() })?.decision).toBe('deny');
     // Force and other branches are still denied with their own reason.
     expect(assess('git push --force origin main', ctx)?.decision).toBe('deny');
     expect(assess('git push origin queue/A-1', ctx)?.decision).toBe('deny');
@@ -290,9 +290,9 @@ describe('the push guard hook', () => {
     expect(h.permissionDecisionReason).toMatch(/^push-guard: 1 of 2 merged tasks since the last push .*push anyway\?$/);
     p.queueMerge('A-2');
     expect(p.hook('git push origin main')).toBeNull();
-    // A track is never asked about the batch (tracks do not push base; the network guard is not hit by git).
+    // A track is never asked about the batch: it may not push at all (H1), so the hook denies it.
     p.g(['reset', '-q', '--hard', 'HEAD~1']);
-    expect(p.hook('git push origin main', { agent_type: 'track' })).toBeNull();
+    expect(p.hook('git push origin main', { agent_type: 'track' })?.permissionDecision).toBe('deny');
   }, 60_000);
   it('asks on a red base at the tip even above the threshold and with minTasks 0', () => {
     const p = project({ minTasks: 0 }, { red: true });

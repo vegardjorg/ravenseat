@@ -45,68 +45,36 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-/** Split a shell command into parts on ; && || | and newlines (good enough for a guard; not a full parser). */
-function parts(command) {
-  return String(command || '')
-    .split(/\r?\n|&&|\|\||;|\|/)
-    .map((d) => d.trim())
-    .filter(Boolean);
-}
-
-/** Simple tokens: whitespace split, remove surrounding quotes. */
-function tokens(chunk) {
-  return (chunk.match(/"[^"]*"|'[^']*'|\S+/g) || []).map((t) => t.replace(/^(["'])(.*)\1$/, '$2'));
-}
-
-/**
- * Find the git subcommand in a token list, skipping global options (-C <path>, -c k=v, --no-pager ...).
- * Returns { sub, args } or null.
- */
-function gitCall(t) {
-  // Allow prefixes such as env vars (FOO=bar git push) and "command"/"exec".
-  let i = 0;
-  while (
-    i < t.length &&
-    (/^[A-Za-z_][A-Za-z0-9_]*=/.test(t[i]) || ['command', 'exec', 'env'].includes(t[i]))
-  )
-    i++;
-  if (!/(^|[\\/])git(\.exe)?$/.test(t[i] || '')) return null;
-  i++;
-  while (i < t.length && t[i].startsWith('-')) {
-    if (t[i] === '-C' || t[i] === '-c' || t[i] === '--git-dir' || t[i] === '--work-tree') i += 2;
-    else i++;
-  }
-  if (i >= t.length) return null;
-  return { sub: t[i], args: t.slice(i + 1) };
-}
+const SC = require('./shellCommands.js');
+const { tokens, segments, commandWord, firstWordIndex } = SC;
 
 /**
  * Which branches does a `git push` with these arguments match?
- * Returns { template: [branch], force, all } (all = --all/--mirror, i.e. all branches).
+ * Returns { template: [branch], force, all, deletes: [branch] } (all = --all/--mirror, i.e. all branches; deletes = the
+ * remote branches the push deletes: `--delete`/`-d`, or a refspec with an empty source, `:branch`).
  */
 function pushTemplate(args, currentBranch) {
   let force = false;
   let all = false;
+  let del = false;
   const pos = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (
-      a === '--force' ||
-      a === '-f' ||
-      a.startsWith('--force-with-lease') ||
-      a === '--force-if-includes'
-    )
-      force = true;
-    else if (a === '--all' || a === '--mirror') all = true;
-    else if (a === '-o' || a === '--push-option' || a === '--repo' || a === '--receive-pack') i++;
-    else if (/^-[a-zA-Z]*f[a-zA-Z]*$/.test(a))
-      force = true; // e.g. -uf
-    else if (!a.startsWith('-')) pos.push(a);
+    if (a === '--force' || a === '-f' || a.startsWith('--force-with-lease')) force = true;
+    else if (a === '--all' || a === '--mirror' || a === '--branches') all = true;
+    else if (a === '--delete') del = true;
+    else if (a === '-o' || a === '--push-option' || a === '--repo' || a === '--receive-pack' || a === '--exec') i++;
+    else if (/^-[a-zA-Z]+$/.test(a)) {
+      // short flags, also combined (-uf, -fd)
+      if (a.includes('f')) force = true;
+      if (a.includes('d')) del = true;
+    } else if (!a.startsWith('-')) pos.push(a);
   }
   const refspecs = pos.slice(1); // first positional is the remote
-  if (all) return { template: [], force, all };
+  if (all) return { template: [], force, all, deletes: [] };
   if (refspecs.length === 0)
-    return { template: currentBranch ? [currentBranch] : ['<unknown>'], force, all };
+    return { template: currentBranch ? [currentBranch] : ['<unknown>'], force, all, deletes: [] };
+  const deletes = [];
   const template = refspecs.map((r) => {
     let x = r;
     if (x.startsWith('+')) {
@@ -115,9 +83,11 @@ function pushTemplate(args, currentBranch) {
     }
     const dst = x.includes(':') ? x.split(':').pop() : x;
     const name = dst.replace(/^refs\/heads\//, '');
-    return name === 'HEAD' || name === '' ? currentBranch || '<unknown>' : name;
+    const branch = name === 'HEAD' || name === '' ? currentBranch || '<unknown>' : name;
+    if (del || (x.startsWith(':') && name)) deletes.push(branch);
+    return branch;
   });
-  return { template, force, all };
+  return { template, force, all, deletes };
 }
 
 /** Programs that only start another program (npx foo, npm exec foo): skipped when commands are compared. */
@@ -232,81 +202,6 @@ const SHELLS = new Set([
   'cmd',
 ]);
 
-/**
- * Split a command into segments, respecting quotes. Splits on ; && || | & newline ( ) { } ` and $( .
- * Each segment gets { text, afterPipe } (afterPipe = the segment comes right after a single "|").
- * @param {string} command
- */
-function segments(command) {
-  const s = String(command || '');
-  const out = [];
-  let buf = '';
-  let quote = null;
-  let afterPipe = false;
-  const cut = (nextAfterPipe) => {
-    if (buf.trim()) out.push({ text: buf.trim(), afterPipe });
-    buf = '';
-    afterPipe = nextAfterPipe;
-  };
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (quote) {
-      buf += c;
-      if (c === quote) quote = null;
-      continue;
-    }
-    if (c === '"' || c === "'") {
-      quote = c;
-      buf += c;
-      continue;
-    }
-    if (c === '|') {
-      if (s[i + 1] === '|') {
-        i++;
-        cut(false);
-      } else cut(true);
-      continue;
-    }
-    if (c === '&') {
-      if (s[i + 1] === '&') i++;
-      cut(false);
-      continue;
-    }
-    if (c === '$' && s[i + 1] === '(') {
-      i++;
-      cut(false);
-      continue;
-    }
-    if (';\n\r(){}`'.includes(c)) {
-      cut(false);
-      continue;
-    }
-    buf += c;
-  }
-  cut(false);
-  return out;
-}
-
-/** The command word in a token: without path, without .exe/.cmd/.bat/.ps1, lower case. */
-const commandWord = (t) =>
-  String(t || '')
-    .split(/[\\/]/)
-    .pop()
-    .replace(/\.(exe|cmd|bat|ps1)$/i, '')
-    .toLowerCase();
-
-/** Skip env prefixes (FOO=bar), "command", "exec", "env", "sudo" and PowerShell assignment ($x = …). */
-function firstWordIndex(t) {
-  let i = 0;
-  for (;;) {
-    if (i < t.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(t[i])) i++;
-    else if (i < t.length && ['command', 'exec', 'env', 'sudo', 'nohup', 'time'].includes(t[i])) i++;
-    else if (i + 1 < t.length && /^\$[A-Za-z_][\w:]*$/.test(t[i]) && t[i + 1] === '=') i += 2;
-    else if (i < t.length && /^\$[A-Za-z_][\w:]*=$/.test(t[i])) i++;
-    else return i;
-  }
-}
-
 /** The name in an npm package spec: "@scope/name@1.2" gives "@scope/name", "name@^1" gives "name". null = path/URL/git. */
 function packageName(spec) {
   const s = String(spec || '');
@@ -412,6 +307,66 @@ function assessNetwork(command, context, depth = 0) {
   return findings;
 }
 
+// ---- Push and queue CLI rules for the queue's agents (H1, H2) -------------------------------------------------------
+
+const AGENT_PUSH_REASON =
+  'Queue agents never push (any remote, branch, refspec or form): the orchestrator merges your branch and pushes the ' +
+  'base in batches. Commit on your own branch and deliver.';
+
+/**
+ * The queue commands a queue agent may run (an allow-list; everything else is denied for them). What tracks and the
+ * review and helper agents legitimately need (agents/*.md, docs/mission-template.md): the setup and the gates, the
+ * read-only views, and the few writes that report upwards (a finding, an owner question, a blocker, deliver). A list
+ * value limits the command to those sub-words (`cq plan show|get`).
+ */
+const AGENT_QUEUE_COMMANDS = Object.freeze({
+  'prepare-track': true,
+  gates: true,
+  help: true,
+  '': true, // bare `cq`: the help
+  show: true,
+  info: true,
+  blockers: true,
+  finding: true,
+  question: true,
+  block: true,
+  deliver: true,
+  plan: ['show', 'get'],
+});
+/** For the reasons: the allowed commands as text. */
+const AGENT_QUEUE_LIST = 'prepare-track, gates, show, info, help, blockers, finding, question, block, deliver, plan show|get';
+
+/** The deny reason for a queue agent's call of the queue CLI, or null (allowed). */
+function agentQueueReason(call) {
+  const name = String(call.name);
+  const shown = name ? `cq ${name}` : 'cq';
+  const flag = call.args.find((x) => x === '--allow-guard' || /^--force/.test(x));
+  if (flag)
+    return `\`${flag}\` is the orchestrator's and the owner's override; a queue agent never passes it (\`${shown}\`).`;
+  const by = call.args.findIndex((x) => x === '--by' || x.startsWith('--by='));
+  if (by >= 0) {
+    const who = call.args[by].startsWith('--by=') ? call.args[by].slice(5) : call.args[by + 1];
+    if (['owner', 'theboard'].includes(String(who ?? '').trim().toLowerCase()))
+      return `A queue agent never acts as the owner (\`--by ${who}\`); ask the owner with cq question.`;
+  }
+  const rule = Object.hasOwn(AGENT_QUEUE_COMMANDS, name) ? AGENT_QUEUE_COMMANDS[name] : false;
+  if (rule === true) return null;
+  if (Array.isArray(rule)) {
+    const sub = call.args.find((x) => !x.startsWith('-'));
+    if (rule.includes(sub)) return null;
+    return `\`${shown} ${sub ?? ''}\`: a queue agent only reads here (\`${shown} ${rule.join('|')}\`).`;
+  }
+  return (
+    `\`${shown}\` is not for queue agents: merging, status changes, edits, approvals, answers and undo belong to the ` +
+    `orchestrator and the owner. Allowed: ${AGENT_QUEUE_LIST}. Put what you need in report.md or ask with cq question.`
+  );
+}
+
+/** Does the command line look like a push (git and the word push / send-pack)? Used when it cannot be read. */
+const pushShaped = (command) => /git/i.test(command) && /\bpush\b|send-pack/i.test(command);
+/** Does the command line mention the queue CLI? Used when it cannot be read (queue agents only). */
+const queueShaped = (command) => /(^|[\s"'`(;&|\\/])(cq|cq\.mjs|cq\.cmd|queue\.mjs|merge-track\.mjs)\b/i.test(command);
+
 /**
  * Assess one command.
  * context: {
@@ -420,6 +375,7 @@ function assessNetwork(command, context, depth = 0) {
  *   baseBranch?: string            default config().baseBranch,
  *   migrations?: { pushCommand, environmentFile, allowedEnvironment }   default config().migrations,
  *   agentType?: string|null        the hook payload's agent_type; tracks, reviewers and helpers get the network guard,
+ *                                  never push, and run only the allowed queue commands,
  *   knownPackage?: (name) => bool  is the npm package known (package.json or node_modules/.bin)? Only for guarded agents,
  *   guardedTypes?: Set<string>    the guarded agent types beyond track/track-d; default trackGuard.queueAgentTypes(),
  *   batchQuestion?: () => string|null   the batch threshold question for a plain push of baseBranch (the hook reads
@@ -428,19 +384,46 @@ function assessNetwork(command, context, depth = 0) {
  *   secretQuestion?: () => string|null  the secret precheck question for the same push (lib/secretScan.js), same rules.
  *   deployCommands?: string[]      default config().deployCommands,
  * }
+ * The command line is read with lib/shellCommands.js (nested shells, eval, $( ), subshells and inline git aliases
+ * included). A part it cannot see into, in a line that looks like a push (or, for a queue agent, a queue CLI call),
+ * gives ask for the main session and deny for a queue agent.
  * Returns null (no decision) or { decision: 'ask'|'deny', reason }.
  * With several matches the strictest wins (deny over ask).
  */
 function assess(command, context = {}) {
   const { baseBranch, migrations, deployCommands } = values(context);
+  const guarded = isGuardedAgent(context.agentType, context.guardedTypes);
   const findings = [];
   let basePush = false;
-  for (const chunk of parts(command)) {
-    const t = tokens(chunk);
+  const read = SC.commandList(command);
+  const unread = [...read.unsure];
+  for (const c of read.commands) {
+    const { t, i0 } = c;
+    if (c.opaque) unread.push(c.opaque);
 
-    const g = gitCall(t);
-    if (g && g.sub === 'push') {
-      const { template, force, all } = pushTemplate(g.args, context.branch || null);
+    const g = SC.gitInvocation(t, i0);
+    const sub = g ? String(g.sub).toLowerCase() : null;
+    if (g && guarded) {
+      if (SC.isGitPush(g)) findings.push({ decision: 'deny', reason: AGENT_PUSH_REASON });
+      else if (g.aliasFromEnv)
+        findings.push({
+          decision: 'deny',
+          reason: `\`git ${g.sub}\` is an alias from an environment variable (--config-env); queue agents do not use git aliases.`,
+        });
+      else if (sub === 'config' && g.args.some((x) => /^alias\./i.test(x)))
+        findings.push({
+          decision: 'deny',
+          reason: 'Queue agents do not define git aliases (git config alias.*): the push guard cannot see what they run.',
+        });
+      else if (!SC.GIT_SUBCOMMANDS.has(sub))
+        findings.push({
+          decision: 'deny',
+          reason:
+            `\`git ${g.sub}\` is not a git builtin (an alias from the git config?): queue agents use the plain git ` +
+            'commands, so the guard can see what runs.',
+        });
+    } else if (g && sub === 'push') {
+      const { template, force, all, deletes } = pushTemplate(g.args, context.branch || null);
       if (force) {
         findings.push({
           decision: 'deny',
@@ -451,6 +434,11 @@ function assess(command, context = {}) {
         findings.push({
           decision: 'deny',
           reason: `\`git push --all/--mirror\` pushes all branches. Only baseBranch (${baseBranch}) is pushed.`,
+        });
+      } else if (deletes.includes(baseBranch)) {
+        findings.push({
+          decision: 'deny',
+          reason: `Deleting baseBranch (${baseBranch}) on the remote is blocked (\`--delete\` or \`:${baseBranch}\`).`,
         });
       } else {
         const others = template.filter((m) => m !== baseBranch && m !== '<unknown>');
@@ -466,6 +454,18 @@ function assess(command, context = {}) {
           });
         } else if (template.length > 0) basePush = true;
       }
+    } else if (g && (SC.isGitPush(g) || (g.aliasFromEnv && pushShaped(command)))) {
+      // send-pack, `subtree push`, or an alias the guard cannot see: the main session confirms.
+      findings.push({
+        decision: 'ask',
+        reason: `\`git ${g.sub}\` may push in a form the push guard does not assess. Confirm the target is baseBranch (${baseBranch}).`,
+      });
+    }
+
+    if (guarded) {
+      const call = SC.queueCall(t, i0);
+      const reason = call ? agentQueueReason(call) : null;
+      if (reason) findings.push({ decision: 'deny', reason });
     }
 
     const deploy = deployCommands.length ? deployMatch(t, deployCommands) : null;
@@ -492,8 +492,32 @@ function assess(command, context = {}) {
       }
     }
   }
+  // A part the reading could not see into (lib/shellCommands.js): when the line looks like a push (or, for a queue
+  // agent, a queue CLI call), the main session confirms and a queue agent is stopped.
+  if (unread.length) {
+    const why = [...new Set(unread)].join('; ');
+    if (pushShaped(command))
+      findings.push(
+        guarded
+          ? {
+              decision: 'deny',
+              reason: `The push guard cannot read this command (${why}) and it looks like a push. ${AGENT_PUSH_REASON}`,
+            }
+          : {
+              decision: 'ask',
+              reason:
+                `The push guard cannot read this command (${why}) and it looks like a push. Confirm what it pushes ` +
+                `(only baseBranch ${baseBranch}, never forced).`,
+            },
+      );
+    else if (guarded && queueShaped(command))
+      findings.push({
+        decision: 'deny',
+        reason: `The push guard cannot read this command (${why}) and it calls the queue CLI. Run cq directly; allowed for queue agents: ${AGENT_QUEUE_LIST}.`,
+      });
+  }
   // The network guard applies to the queue's agents: tracks, reviewers and helper agents (never the orchestrator).
-  if (isGuardedAgent(context.agentType, context.guardedTypes)) findings.push(...assessNetwork(command, context));
+  if (guarded) findings.push(...assessNetwork(command, context));
   // The secret precheck and the batch threshold: only for the orchestrator (no agent_type; tracks never push) and only
   // when nothing else hit. Both questions go in one dialog.
   if (basePush && findings.length === 0 && !context.agentType) {
@@ -526,6 +550,8 @@ function readEnvironment(rotate, environmentFile) {
 
 module.exports = {
   assess,
+  AGENT_PUSH_REASON,
+  AGENT_QUEUE_COMMANDS,
   readEnvironment,
   isCommand,
   isTrackAgent,

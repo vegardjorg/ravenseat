@@ -5,7 +5,8 @@
 // --by owner (or theBoard) is refused with "is locked after start; ask the owner (cq question)" and nothing is written;
 // (3) from inside a track worktree (the cwd on a queue/<id> branch) the change is refused whatever --by says;
 // (4) acceptance round-trips through add --accept, edit --accept and info, and reaches the track block (the mission) and
-// the reviewer-gap prompt. Runs queue.mjs against a temporary queue (QUEUE_FOLDER) and a temporary git repo with a
+// the reviewer-gap prompt; (5) the ownership fields the merge guard trusts (owned_files, shared_patch, owner_db,
+// migr_block) follow the same lock (review H2). Runs queue.mjs against a temporary queue (QUEUE_FOLDER) and a temporary git repo with a
 // worktree on queue/R, as queueDoneCheck.test.ts. Never the main repo or the real queue.
 // =============================================================
 import { afterAll, describe, expect, it } from 'vitest';
@@ -124,6 +125,21 @@ describe('doneLockError (pure)', () => {
     );
   });
 
+  it('locks the ownership the merge guard trusts (owned_files, shared_patch, owner_db, migr_block) the same way', () => {
+    const r = { ...running, owned_files: ['lib/R.ts'], shared_patch: [], owner_db: [] };
+    for (const field of ['owned_files', 'shared_patch', 'owner_db', 'migr_block']) {
+      const change = { [field]: ['.claude/'] };
+      expect(D.doneLockError({ id: 'W', status: 'waiting' }, change, { by: 'cq' }), field).toBeNull();
+      expect(D.doneLockError(r, change, { by: 'cq' }), field).toBe(`${field} is ${LOCKED}`);
+      expect(D.doneLockError(r, change, { by: 'R' }), field).toBe(`${field} is ${LOCKED}`);
+      expect(D.doneLockError(r, change, { by: 'owner' }), field).toBeNull();
+      expect(D.doneLockError(r, change, { by: 'theBoard' }), field).toBeNull();
+      expect(D.doneLockError(r, change, { by: 'owner', inTrack: 'queue/R' }), field).toMatch(/from inside a track worktree/);
+    }
+    // The same list again is not a change.
+    expect(D.doneLockError(r, { owned_files: ['lib/R.ts'] }, { by: 'cq' })).toBeNull();
+  });
+
   it('validates the acceptance shape', () => {
     expect(D.acceptanceErrors({ acceptance: ['ok'] })).toEqual([]);
     expect(D.acceptanceErrors({ acceptance: [] })[0]).toMatch(/list of 1 to 10/);
@@ -214,6 +230,35 @@ describe('queue.mjs edit, undo, add and trackFile with the done lock', () => {
     expect(find('W').done_when).toBe('npm test');
     // Other fields still work from there (the lock is only on the finish line).
     expect(run(['edit', 'W', '--json', JSON.stringify({ value: 6 })], worktree).code).toBe(0);
+  });
+
+  it('refuses widening owned_files or shared_patch after the start, except for the owner (review H2)', () => {
+    const { run, find, worktree } = setup();
+    // Before the start: anyone.
+    expect(run(['edit', 'W', '--json', JSON.stringify({ owned_files: ['lib/W.ts', 'lib/W2.ts'] })]).code).toBe(0);
+    expect(find('W').owned_files).toEqual(['lib/W.ts', 'lib/W2.ts']);
+    // After the start: an agent (no --by, or a track id) is refused and nothing is written.
+    const before = JSON.stringify(find('R'));
+    const r1 = run(['edit', 'R', '--json', JSON.stringify({ owned_files: ['lib/R.ts', '.claude/'] })]);
+    expect(r1.code).toBe(1);
+    expect(r1.error).toContain(`owned_files is ${LOCKED}`);
+    const r2 = run(['edit', 'R', '--json', JSON.stringify({ shared_patch: ['.claude/settings.json'] }), '--by', 'R']);
+    expect(r2.code).toBe(1);
+    expect(r2.error).toContain(`shared_patch is ${LOCKED}`);
+    expect(run(['edit', 'R', '--json', JSON.stringify({ owner_db: ['users'] })]).error).toContain(`owner_db is ${LOCKED}`);
+    expect(JSON.stringify(find('R'))).toBe(before);
+    // From the track's own worktree: refused whatever --by says.
+    const t1 = run(['edit', 'R', '--json', JSON.stringify({ owned_files: ['.claude/'] }), '--by', 'owner'], worktree);
+    expect(t1.code).toBe(1);
+    expect(t1.error).toContain('cannot be changed from inside a track worktree (branch queue/R)');
+    // The owner may, and an agent cannot undo the owner's change.
+    expect(run(['edit', 'R', '--json', JSON.stringify({ owned_files: ['lib/R.ts', 'lib/R2.ts'] }), '--by', 'owner']).code).toBe(0);
+    expect(find('R').owned_files).toEqual(['lib/R.ts', 'lib/R2.ts']);
+    const u1 = run(['undo']);
+    expect(u1.code).toBe(1);
+    expect(u1.error).toContain(`owned_files is ${LOCKED}`);
+    expect(run(['undo', '--by', 'owner']).code).toBe(0);
+    expect(find('R').owned_files).toEqual(['lib/R.ts']);
   });
 
   it('round-trips acceptance through add, edit and info, and copies it into the mission', () => {
