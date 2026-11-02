@@ -80,7 +80,7 @@ With [auto-accept](#auto-accept-of-proposals) on, the queue approves the proposa
 | `block <id> <code> [--note "…"]` / `unblock <id>` | Opens / closes a blocker reason on the task (`blocks`; one open at a time). Codes: `merge-conflict`, `gate-red`, `context`, `quota`, `owner-question`, `dependency`, `no-agent`, `silent`, `other`. `merge` opens `merge-conflict` or `gate-red` when it stops in that step and closes the open one after a successful merge |
 | `blockers [--days 7] [--json]` | Per blocker code: count and blocked time in the period, top first |
 | `next-migr [<n>]` / `migr move <id> <block>` | Migration flow only: show or set the next number / move a task's block in the queue and its prompt files |
-| `cost [--since 7d] [--json]` | USD per merged change for the window first (see [Cost estimates and calibration](#cost-estimates-and-calibration)), then cost per class (n, median, sum) from the measured track sessions |
+| `cost [--since 7d] [--max 10] [--json]` | USD per merged change for the window first (see [Cost estimates and calibration](#cost-estimates-and-calibration)), then cost per task with all its runs (track, fix rounds, continuations, reviewers, fix tasks) by cost, then cost per class (n, median, sum) from the measured track sessions |
 | `calibrate [--days 28] [--min 5] [--json]` | Per class: how far the minute estimates and the cost model are off, and the suggested correction (read-only) |
 | `projects`, `project <pid> …` | Projects: progress, pause, prefixes |
 | `focus set <steps>` | Focus period: only these steps are started |
@@ -144,6 +144,16 @@ any usage in the time log for the window, the total is the measured task cost of
 so. `cq cost` uses `--since` as the window, otherwise the last 28 days; the board uses its 14-day window. "USD per
 content minute" is shown only as a secondary, estimate-based figure: raising the estimates (the denominator) makes work
 look cheaper without anything changing, so it is not a headline.
+
+A fix task (one with `fixes`, or a QA fix task with `qa_original`) is part of the change it fixes: its cost is
+attributed to that task, and a done fix task is not counted as a merged change of its own. Without a time log, the
+fallback total is the task total of the merged tasks, fix tasks included.
+
+**Cost per task, all runs** (`cq cost`, `perTask` in `--json`) is one row per task, most expensive first: the first
+track, the fix rounds and continuations (`cq resume`, logged as `<id>-r<N>`), the reviewers, and the fix tasks that
+point to it, with USD, tokens and the number of agent runs. A task measured at `set <id> done` uses that measurement
+(it already holds its rounds and reviewers); a task without one (open, cancelled) uses its usage in the time log, and
+the row says so. `--since` keeps the tasks with activity in the window, `--max` the number of rows.
 
 ### Auto-accept of proposals
 

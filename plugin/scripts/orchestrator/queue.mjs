@@ -151,8 +151,11 @@
 //         If the measurement fails, the task is set done anyway.)
 //   node scripts/orchestrator/queue.mjs cost [--since 7d|24h|2026-10-01] [--max 10] [--json]   (first USD per merged change:
 //                                                                  all measured cost in the time log for the window (default
-//                                                                  28 days) / tasks that reached done; then per class: n,
-//                                                                  median and sum USD, findings H/M/L; the last tasks)
+//                                                                  28 days) / tasks that reached done (a fix task counts with
+//                                                                  the task it fixes); then cost per task with all its runs
+//                                                                  (track, fix rounds, continuations, reviewers and fix tasks
+//                                                                  via fixes/qa_original: USD, tokens, runs), by cost; then
+//                                                                  per class: n, median and sum USD, findings H/M/L; the last tasks)
 //   node scripts/orchestrator/queue.mjs cost measure <id> [...] [--findings "..."]   (measures and saves again, e.g. older finished ones)
 //   node scripts/orchestrator/queue.mjs calibrate [--days 28] [--min 5] [--json]   (per class: n, median actual/estimate
 //                                                                  minutes and the suggested weight, median USD, the model's

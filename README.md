@@ -335,7 +335,7 @@ cq add --file task.json      # add tasks
 cq fill --scratchpad <dir>   # start what the limits allow
 cq receive <ID>              # receive a finished track
 cq merge <ID>                # merge it
-cq cost                      # USD per merged change, then measured cost per class
+cq cost                      # USD per merged change, cost per task (all runs), then per class
 cq calibrate                 # how far minute and cost estimates are off, per class
 cq helpers                   # helper agents: on/off and what they cost
 cq helpers add <file.md>     # a custom helper: copied, scanned, off until approved
