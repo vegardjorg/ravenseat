@@ -25,10 +25,10 @@
 
   /** The published manifest (the main branch of the public repo). */
   const MANIFEST_URL =
-    'https://raw.githubusercontent.com/vegardjorg/claude-code-queue/main/plugin/.claude-plugin/plugin.json';
-  const CHANGELOG_URL = 'https://github.com/vegardjorg/claude-code-queue/blob/main/CHANGELOG.md';
+    'https://raw.githubusercontent.com/vegardjorg/ravenseat/main/plugin/.claude-plugin/plugin.json';
+  const CHANGELOG_URL = 'https://github.com/vegardjorg/ravenseat/blob/main/CHANGELOG.md';
   /** The marketplace name in the repo's .claude-plugin/marketplace.json (a test checks they match). */
-  const MARKETPLACE = 'claude-code-queue';
+  const MARKETPLACE = 'ravenseat';
   const PLUGIN = 'cq';
   /** At most one check per day. */
   const MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -179,7 +179,7 @@
       ];
     const target = projectFolder ? `"${String(projectFolder).split('\\').join('/')}"` : '<your project folder>';
     return [
-      { text: 'In your claude-code-queue folder, get the new version:', command: 'git pull' },
+      { text: 'In your Ravenseat folder, get the new version:', command: 'git pull' },
       { text: 'From that folder, install it into the project again:', command: `node scripts/install.mjs ${target} --overwrite` },
     ];
   }

@@ -1,4 +1,4 @@
-claude-code-queue includes third-party material.
+Ravenseat includes third-party material.
 
 The helper agents plugin/agents/reviewer-design.md, reviewer-tests.md, reviewer-gap.md and reviewer-docs.md are
 adapted from the agent definitions in testdouble/han (https://github.com/testdouble/han, han-core/agents:

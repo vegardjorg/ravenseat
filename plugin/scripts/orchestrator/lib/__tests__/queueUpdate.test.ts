@@ -131,9 +131,9 @@ describe('notice and visible', () => {
   it('a newer version gives the banner with the CHANGELOG and the plugin steps', () => {
     const n = U.notice({ mode: 'plugin', installed: '0.3.0', latest: '0.4.0', setupVersion: '0.3.0' });
     expect(n.newVersion.latest).toBe('0.4.0');
-    expect(n.newVersion.changelog).toBe('https://github.com/vegardjorg/claude-code-queue/blob/main/CHANGELOG.md');
+    expect(n.newVersion.changelog).toBe('https://github.com/vegardjorg/ravenseat/blob/main/CHANGELOG.md');
     expect(n.newVersion.steps.map((s: { command: string }) => s.command)).toEqual([
-      'claude plugin update cq@claude-code-queue',
+      'claude plugin update cq@ravenseat',
       '/reload-plugins',
       'cq setup --settings',
     ]);

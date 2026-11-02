@@ -1,5 +1,5 @@
 {
-  "description": "claude-code-queue: context, read and push guards, compaction re-injection, the subagent time log and the track end gate. Every hook exits at once in projects without queue.config.json. Exec form (command + args): node is spawned directly, without a shell, which saves the Git Bash start on Windows on every call.",
+  "description": "Ravenseat: context, read and push guards, compaction re-injection, the subagent time log and the track end gate. Every hook exits at once in projects without queue.config.json. Exec form (command + args): node is spawned directly, without a shell, which saves the Git Bash start on Windows on every call.",
   "hooks": {
     "PreToolUse": [
       {

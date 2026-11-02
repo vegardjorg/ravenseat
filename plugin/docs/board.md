@@ -107,8 +107,8 @@ is no switch in the browser; change the file and restart the board.
 ## Update banner
 
 When a newer cq is out, a banner below the top says "cq X is out (you have Y)", links to the CHANGELOG and lists the
-steps with a Copy button each: `claude plugin update cq@claude-code-queue`, then `/reload-plugins` (or a new session),
-then `cq setup --settings`. A vendored install gets `git pull` in your claude-code-queue folder and
+steps with a Copy button each: `claude plugin update cq@ravenseat`, then `/reload-plugins` (or a new session),
+then `cq setup --settings`. A vendored install gets `git pull` in your Ravenseat folder and
 `node scripts/install.mjs <project> --overwrite` instead. Close it with the X: it stays away until a newer version is out
 (remembered in this browser).
 

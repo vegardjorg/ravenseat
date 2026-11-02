@@ -1,6 +1,6 @@
 ---
 name: setup
-description: 'Set up the current project for the work queue (claude-code-queue plugin): queue.config.json, docs, CLAUDE.queue.md, .gitignore, recommended settings, the empty queue, a smoke test, and optionally the user''s own TODOs and plans as queue entries. Use when the user types "/cq:setup", "set up the queue", "install the queue in this project", or when a queue command says there is no queue.config.json.'
+description: 'Set up the current project for the work queue (Ravenseat plugin): queue.config.json, docs, CLAUDE.queue.md, .gitignore, recommended settings, the empty queue, a smoke test, and optionally the user''s own TODOs and plans as queue entries. Use when the user types "/cq:setup", "set up the queue", "install the queue in this project", or when a queue command says there is no queue.config.json.'
 disable-model-invocation: true
 ---
 
@@ -97,7 +97,7 @@ parallel run, with a pathspec:
 
 ```
 git add queue.config.json docs/queue CLAUDE.queue.md .gitignore
-git commit -m "chore: set up the claude-code-queue work queue" -- queue.config.json docs/queue CLAUDE.queue.md .gitignore
+git commit -m "chore: set up the Ravenseat work queue" -- queue.config.json docs/queue CLAUDE.queue.md .gitignore
 ```
 
 Add `CLAUDE.md` and `.claude/settings.json` to both lists when step 1 changed them. Do not push unless the user asks.

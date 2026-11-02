@@ -4,7 +4,7 @@ These instructions are written TO Claude Code. The user has downloaded this repo
 into their project. Follow the steps in order, and ask the user where a step says ASK. Do not push anything.
 
 This is the vendored install: everything is copied into the project. The recommended way is the Claude Code plugin
-(`/plugin marketplace add vegardjorg/claude-code-queue`, `/plugin install cq@claude-code-queue`, then `/cq:setup`).
+(`/plugin marketplace add vegardjorg/ravenseat`, `/plugin install cq@ravenseat`, then `/cq:setup`).
 If the user has not chosen, ASK which they want before you copy anything.
 
 ## 0. Check the prerequisites
@@ -126,7 +126,7 @@ before the first parallel run. Commit with a pathspec, for example:
 
 ```
 git add scripts/orchestrator .claude/skills .claude/agents .claude/settings.json docs/queue CLAUDE.queue.md queue.config.json .gitignore CLAUDE.md
-git commit -m "chore: install claude-code-queue work queue" -- scripts/orchestrator .claude/skills .claude/agents .claude/settings.json docs/queue CLAUDE.queue.md queue.config.json .gitignore CLAUDE.md
+git commit -m "chore: install Ravenseat work queue" -- scripts/orchestrator .claude/skills .claude/agents .claude/settings.json docs/queue CLAUDE.queue.md queue.config.json .gitignore CLAUDE.md
 ```
 
 Do not push unless the user asks.

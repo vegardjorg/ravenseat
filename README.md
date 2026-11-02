@@ -1,9 +1,15 @@
-<p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The board: the work queue as a kanban with In queue, In progress and Review" width="800"></p>
-<p align="center"><sub>The board with a made-up demo project ("Pebble", a habit tracker). More screenshots in <a href="#a-tour-of-the-board">A tour of the board</a>.</sub></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/ravenseat-dark.svg">
+    <img src="assets/logo/ravenseat-light.svg" alt="Ravenseat: two ravens on a high seat" width="110">
+  </picture>
+</p>
 
 <h1 align="center">Ravenseat</h1>
-<h2 align="center">One seat. Every agent. Total oversight.</h2>
-<h3 align="center">AI Agent Orchestration</h3>
+<p align="center"><b>One seat. Every agent. Total oversight.</b></p>
+
+<p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The board: the work queue as a kanban with In queue, In progress and Review" width="800"></p>
+<p align="center"><sub>The board with a made-up demo project ("Pebble", a habit tracker). More screenshots in <a href="#a-tour-of-the-board">A tour of the board</a>.</sub></p>
 
 **A kanban board and project manager for Claude Code.** You manage the project the way you already know from
 kanban: tasks, dependencies and a focus. Claude Code does the work, one finished feature at a time. There are no
@@ -28,8 +34,8 @@ By Vegard Cowie Jørgensen.
 
 New here? Start in lite mode: the core loop only, nothing to learn first.
 
-1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/claude-code-queue`, then
-   `/plugin install cq@claude-code-queue`.
+1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/ravenseat`, then
+   `/plugin install cq@ravenseat`.
 2. **Create the queue** in your project: `cq init --lite` (a fresh `cq init` is lite too). It writes
    `"mode": "lite"` to `queue.config.json` and an empty queue in `scripts/.queue/` (add that folder to `.gitignore`).
 3. **Add work with just a title:** `cq add "Fix the login bug"`, or say "add to the queue: fix the login bug". Add a
@@ -123,8 +129,8 @@ and it turns off again if the file changes. See
 
 ## First run in 5 minutes
 
-1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/claude-code-queue`, then
-   `/plugin install cq@claude-code-queue`.
+1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/ravenseat`, then
+   `/plugin install cq@ravenseat`.
 2. **Set up the project:** open your project and run `/cq:setup` (it asks first), or do it by hand with
    `cq setup --settings` and `cq init --full` (the config, the docs, the recommended settings and the empty queue).
 3. **Add a task:** say "add to the queue: <what you want done>", or write a JSON file and run `cq add --file task.json`.
@@ -228,11 +234,14 @@ early.
 
 ## Install
 
+Installed it as claude-code-queue before? Run `/plugin marketplace remove claude-code-queue` first, then the two
+lines below. The plugin is still `cq`, and your queue data stays as it is.
+
 As a Claude Code plugin (recommended). In Claude Code:
 
 ```
-/plugin marketplace add vegardjorg/claude-code-queue
-/plugin install cq@claude-code-queue
+/plugin marketplace add vegardjorg/ravenseat
+/plugin install cq@ravenseat
 ```
 
 Then open your own project and run `/cq:setup`. It:
@@ -248,7 +257,7 @@ Update with `/plugin update`; the board shows a banner when a new version is out
 with `"board": { "updateCheck": false }`, see [board](plugin/docs/board.md#update-banner)). To try it without installing: `claude --plugin-dir <path-to-this-repo>/plugin`.
 
 Without the plugin system you can copy everything into the project instead ("vendored" install): open Claude Code in
-your project and say *Install claude-code-queue from `<path-to-this-repo>`; follow its INSTALL.md*. See
+your project and say *Install Ravenseat from `<path-to-this-repo>`; follow its INSTALL.md*. See
 [INSTALL.md](INSTALL.md).
 
 Requirements: Node.js 20 or newer, git and Claude Code. No npm packages are needed at run time.

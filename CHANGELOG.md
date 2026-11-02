@@ -1,7 +1,17 @@
 # Changelog
 
-All notable changes to claude-code-queue (the `cq` plugin). The version is in `plugin/.claude-plugin/plugin.json`
-and `package.json`.
+All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
+`plugin/.claude-plugin/plugin.json` and `package.json`.
+
+## 0.7.0 (2026-11-02)
+
+### Changed
+- **New name: Ravenseat.** The repo is now `vegardjorg/ravenseat` and the marketplace is `ravenseat`; the plugin is
+  still `cq`, so `/cq:queue` and every `cq` command stay the same. The update banner, the docs and the install lines
+  use the new name. **Moving an existing install:** `/plugin marketplace remove claude-code-queue`, then
+  `/plugin marketplace add vegardjorg/ravenseat` and `/plugin install cq@ravenseat`. Your queue data is not touched.
+- **The Ravenseat logo** (two ravens on the high seat) is the board's default picture; the raven on the right does the
+  talking. The mascot is a switch under **Logo and mascot** in the gear. The README opens with the logo.
 
 ## 0.6.0 (2026-11-02)
 

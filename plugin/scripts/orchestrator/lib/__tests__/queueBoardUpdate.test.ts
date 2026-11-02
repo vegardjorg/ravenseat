@@ -84,10 +84,10 @@ describe('the update banner', () => {
     expect(b.getAttribute('role')).toBe('status');
     expect(b.textContent).toContain('cq 0.4.0 is out (you have 0.3.0).');
     const link = b.querySelector('a') as HTMLAnchorElement;
-    expect(link.href).toBe('https://github.com/vegardjorg/claude-code-queue/blob/main/CHANGELOG.md');
+    expect(link.href).toBe('https://github.com/vegardjorg/ravenseat/blob/main/CHANGELOG.md');
     expect(link.rel).toContain('noopener');
     const commands = [...b.querySelectorAll('code')].map((c) => c.textContent);
-    expect(commands).toEqual(['claude plugin update cq@claude-code-queue', '/reload-plugins', 'cq setup --settings']);
+    expect(commands).toEqual(['claude plugin update cq@ravenseat', '/reload-plugins', 'cq setup --settings']);
     expect(b.querySelectorAll('.cloud-command button').length).toBe(3);
     expect(b.querySelector('.update-banner-close')?.getAttribute('aria-label')).toBe(
       'Close the notice about cq 0.4.0',
