@@ -274,7 +274,9 @@ orchestration rules, and `/cq:start` to open a session cheaply before you paste 
    any fix round. A task can name a done command (`done_when`, e.g. `npm test -- src/x.test.ts`): `cq receive` runs
    it in the track's worktree first, and a red one gives a fix round instead of a review. After `maxFixRounds` (default
    3) fix rounds the task becomes a question for you instead of another round.
-4. When the review is clean, it merges the branch, runs the quick checks and fills the free slot.
+4. When the review is clean, it merges the branch, runs the quick checks and fills the free slot. The base gate
+   records whether the base branch itself is green after each merge: two tracks that are green alone can break it
+   together, and then `cq merge` refuses other tracks and adds a high-priority fix task until it is green again.
 
 Hooks support the loop: they warn the orchestrator and the tracks when their context gets large, block force pushes,
 pushes of branches other than the base branch and migration pushes to the wrong environment, put the queue state back into the chat after compaction, and log the time and

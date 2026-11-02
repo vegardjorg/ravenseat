@@ -15,7 +15,8 @@ const { modelPart } = require('./agents.js');
 // ---- Fewer orchestrator turns ----
 //
 // The decisions behind the commands that save orchestrator turns (the I/O lives in queue.mjs):
-//   merge <id>        merge-track → (migrationPush, with environment guard) → gates --quick → set done → fill, in one call
+//   merge <id>        merge-track → (migrationPush, with environment guard) → gates --quick → (base gate) → set done → fill,
+//                     in one call
 //   info / activeOnes     fixed lookups instead of `node -e`
 //   edit --bonus   text for the mission (the track block) and the remarks, with a timestamp
 //   next-migr [<n>]  show or set the next migration number; never backward and never down into a used number
@@ -87,11 +88,13 @@ function migrFiles(files, migrations) {
  * Which steps `merge` runs. Migration push when the project has a migration flow (folder + pushCommand) and the branch has
  * migration files; if the diff cannot be read (`files` null), the migration block decides (rather one push too many than one too
  * few). A block without files gives only a note. Without a migration folder there is never a push step.
+ * `baseGate` adds the step `base-gate` after the quick gates: the base gate's own commands (lib/baseHealth.js) on the new
+ * base tip, only when they are not the quick gates themselves (then the gates step is the base check).
  * @param {{ o: object, files: string[]|null, withoutMigrPush?: boolean, withoutFill?: boolean, base?: string,
- *   migrations?: object }} x
+ *   migrations?: object, baseGate?: boolean }} x
  * @returns {{ step: string[], migrPush: boolean, migr: string[], notes: string[] }}
  */
-function mergePlan({ o, files, withoutMigrPush = false, withoutFill = false, base = 'baseBranch', migrations }) {
+function mergePlan({ o, files, withoutMigrPush = false, withoutFill = false, base = 'baseBranch', migrations, baseGate = false }) {
   const m = migrSetup(migrations);
   const notes = [];
   let migr = [];
@@ -111,7 +114,7 @@ function mergePlan({ o, files, withoutMigrPush = false, withoutFill = false, bas
       notes.push('migration push skipped (--without-migr-push): the migrations are NOT pushed yet');
     migrPush = hasMigr && !!m.pushCommand && !withoutMigrPush;
   }
-  const step = ['merge', ...(migrPush ? ['migr-push'] : []), 'gates', 'done'];
+  const step = ['merge', ...(migrPush ? ['migr-push'] : []), 'gates', ...(baseGate ? ['base-gate'] : []), 'done'];
   if (!withoutFill) step.push('fill');
   return { step, migrPush, migr, notes };
 }
@@ -217,6 +220,11 @@ function executeMerge({
           r.out,
         );
       lines.push(`gates --quick: ${lastLine(r.out)}`);
+    } else if (step === 'base-gate') {
+      // A red base gate does NOT stop the flow: the merge is on the base already and the task's own work was green, so
+      // the task is set done, and fill still runs, which starts the base fix task the caller added (value 10).
+      const r = run({ step });
+      lines.push(`base gate: ${r.code === 0 ? '' : 'RED, the base fix task is added: '}${lastLine(r.out)}`);
     } else if (step === 'done') {
       const r = run({ step });
       if (r.code !== 0) return stop(step, `set ${o.id} done failed (exit ${r.code}).`, r.out);
