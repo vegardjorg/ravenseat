@@ -25,6 +25,22 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
   inside a track worktree, undo included. The mission lists them as "Acceptance criteria (fixed, do not change)",
   `cq info` and the board's detail panel show them, and reviewer-gap answers MET / NOT MET / UNCLEAR per criterion
   (NOT MET is a HIGH finding).
+- **Guard tests:** the merge guard protects the test, lint and type configs by default (glob entries in
+  `protectedPaths`: vitest/jest/playwright/cypress/karma/mocha configs, tsconfig*.json, eslint/biome, pytest.ini,
+  tox.ini, setup.cfg, conftest.py, pyproject.toml, mypy.ini, .coveragerc, .flake8, .golangci.*, Cargo.toml,
+  Makefile/Justfile, .pre-commit-config.yaml, phpunit.xml*, .rspec). `cq receive` warns about test weakening
+  (deleted test files, test files moved out of the test paths, added skip/focus markers) with one WARN line and a
+  Test weakening section in 00-package.md (`testWeakening.enabled`, `testPaths`, `markers`).
+- **Quality figures:** right first time, post-merge defects and owner interventions per 10 merged, autonomy
+  (verified tasks per owner intervention, longest stretch without the owner, failures corrected without the owner),
+  reviewer hit rate per type with a "0 fixes in N runs" hint, and inflow by source with a 3-week growth hint, in
+  `cq cost`, `--json` and the board's Flow box. `cq finding --cause <id>` and `cq resume --from <reviewer,...>`
+  record the links.
+- **`/cq:review <area> [<lens>]`:** review a path, feature or project through a lens (security, logic, ux,
+  architecture or free text) with read-only Opus `reviewer-area` agents. Every finding gets file:line, severity and a
+  class; after one owner question, one-off bugs become fix tasks, repeatable mistakes become `gate` tasks that add a
+  red-first check to the project's own CI, and design questions become owner questions or plan entries. The review
+  is recorded as a `PL-REVIEW-…` plan entry.
 
 ### Changed
 - README: parallel chats colliding (push and file conflicts) added to the pain points; "What the guards are not"
