@@ -2083,6 +2083,9 @@ const STATIC = {
   '/queueGraph.js': [path.join('..', 'lib', 'queueGraph.js'), 'text/javascript; charset=utf-8'],
   // The speech bubble (mascot.js) and the pure rules in lib/queueMascot.js (the same file the tests use).
   '/mascot.js': ['mascot.js', 'text/javascript; charset=utf-8'],
+  // The Ravenseat logo: the default picture in the mascot zone (the mascot from /logo is a switch in the gear). Used as
+  // a CSS mask, so the color comes from the theme.
+  '/ravenseat.svg': ['ravenseat.svg', 'image/svg+xml'],
   '/queueMascot.js': [path.join('..', 'lib', 'queueMascot.js'), 'text/javascript; charset=utf-8'],
   // The update banner's rules (lib/queueUpdate.js, the same file the tests use); board/start.js draws it.
   '/queueUpdate.js': [path.join('..', 'lib', 'queueUpdate.js'), 'text/javascript; charset=utf-8'],

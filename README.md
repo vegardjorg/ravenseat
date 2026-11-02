@@ -1,7 +1,9 @@
 <p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The board: the work queue as a kanban with In queue, In progress and Review" width="800"></p>
 <p align="center"><sub>The board with a made-up demo project ("Pebble", a habit tracker). More screenshots in <a href="#a-tour-of-the-board">A tour of the board</a>.</sub></p>
 
-# claude-code-queue
+<h1 align="center">Ravenseat</h1>
+<h2 align="center">One seat. Every agent. Total oversight.</h2>
+<h3 align="center">AI Agent Orchestration</h3>
 
 **A kanban board and project manager for Claude Code.** You manage the project the way you already know from
 kanban: tasks, dependencies and a focus. Claude Code does the work, one finished feature at a time. There are no
@@ -217,9 +219,9 @@ the keyboard); changes are collected in a draft you review before anything is sa
 
 ### Settings
 
-<p align="center"><img src="assets/screenshots/light-11-settings.jpg" alt="The settings panel with theme, mascot and queue limits" width="800"></p>
+<p align="center"><img src="assets/screenshots/light-11-settings.jpg" alt="The settings panel with theme, logo and mascot, and queue limits" width="800"></p>
 
-The gear holds the help, the theme, the mascot and the queue's limits (how many tracks run at once, how many heavy
+The gear holds the help, the theme, the logo and mascot and the queue's limits (how many tracks run at once, how many heavy
 D+ tracks, tracks per domain, daily budget, night pause, automatic compaction). Each setting shows its current
 value, the default and, for the track limits, the recommended ceiling that keeps the weekly quota from running out
 early.
@@ -436,11 +438,12 @@ Run `cq cost` in your own project to see where your tokens go.
 
 ## The talking mascot
 
-The mascot in the board's top-left corner comments in a speech bubble on the queue's numbers and events (a merge,
-an empty queue, a new question for you). To quiet it:
-- per browser: the gear menu, **Mascot**: Chatty, Events only or Off (Off keeps the picture, without bubbles);
+The raven on the right of the Ravenseat logo in the board's top-left corner (or the mascot, if you switch to it under
+**Logo and mascot** in the gear) comments in a speech bubble on the queue's numbers and events (a merge, an empty
+queue, a new question for you). To quiet it:
+- per browser: the gear menu, **Logo and mascot**: Chatty, Events only or Off (Off keeps the picture, without bubbles);
 - for everyone: `"board": { "mascot": "off" }` in `queue.config.json`, or `cq board --mascot off`;
-- to remove the picture too: **Hide the mascot completely** in the gear. **Show the mascot again** brings it back.
+- to remove the picture too: **Hide the picture completely** in the gear. **Show the picture again** brings it back.
 
 Your own phrases go in the gitignored `<dataFolder>/mascot-phrases.json`. See
 [docs/board.md](plugin/docs/board.md#the-mascot).
@@ -475,16 +478,18 @@ Double, Inc.); the license text is in [NOTICE](NOTICE).
 
 ## About the logo
 
-The logo is a self-roast of the author in the style of Leisure Suit Larry, one of his first computer games (from the
-same era as Commander Keen and Chuck Yeager's flight trainer). It is an original drawing and is not affiliated with
-or endorsed by the owners of those games.
+The logo is the Ravenseat: two ravens on a high seat, after Odin's seat Hliðskjálf, from which he saw every world while
+his ravens brought him the news. It sits in the top-left corner of the board, follows light and dark mode, and the raven
+on the right does the talking.
 
-Keeping the logo in the top-left corner of the board is a friendly request, not a license condition. You are
-welcome to restyle it.
+There is also a mascot: a self-roast of the author in the style of Leisure Suit Larry, one of his first computer games
+(from the same era as Commander Keen and Chuck Yeager's flight trainer). It is an original drawing and is not affiliated
+with or endorsed by the owners of those games. Turn it on with "Show the mascot instead of the logo" under Logo and
+mascot in the settings, or put your own `logo.webp`, `logo.png` or `logo.svg` in the queue folder to use as the mascot.
 
-The mascot also talks. It nags you when you work at night, cheers when a branch is merged, comments on the
-numbers, and once in a while tells a vibe coding joke. Turn the speech bubbles off under Mascot in the settings.
+Both of them talk. They nag you when you work at night, cheer when a branch is merged, comment on the numbers, and once
+in a while tell a vibe coding joke. Turn the speech bubbles off under Logo and mascot in the settings.
 
-<p align="center"><img src="assets/screenshots/light-12-mascot-night.png" alt="The mascot at 02:47: the agents don't need sleep, you do" width="480"></p>
+<p align="center"><img src="assets/screenshots/light-12-mascot-night.png" alt="The raven at 02:47: the agents don't need sleep, you do" width="480"></p>
 
 Ken sent me.
