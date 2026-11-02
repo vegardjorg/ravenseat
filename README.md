@@ -47,7 +47,25 @@ small-task guard and batch queue, focus, the plan register and helper agents. Al
 
 ## Why I built it
 
-I wanted a project that keeps moving without me sitting at it. With the queue, Claude Code runs a large project on
+**The problem.** In a small project, working with Claude Code was easy. Most of the work showed up on a screen I
+could look at, and I could keep the whole picture in my head. As the project grew, that stopped working:
+
+- **Progress became invisible.** Days of backend work could pass without a single screen changing, so there was
+  nothing to look at that told me where the project stood.
+- **The work was scattered across chats.** Size and complexity meant 50 to 100 chat windows, each holding part of
+  the picture. Half the findings of a security review could be forgotten in one of them.
+- **Features were left half-built.** I lost track of features halfway through the implementation, because nothing
+  held on to what was started and what was left.
+- **The workaround burned tokens.** Running everything in one long chat kept the overview, but every turn carried the
+  whole history, and the token use grew far faster than the work did.
+
+**The answer.** To get an overview back and work systematically, I built the queue step by step inside that project:
+a plan register for what is not ready yet, a work queue with dependencies and a focus, a board that shows it all, and
+an orchestrator that hands each task to a fresh agent with a small context. The parts that are not tied to one
+project were then extracted into this plugin. What stayed behind is what has to be project specific: the CI/CD
+pipeline and the domain-specific checks.
+
+**What it gives me now.** I wanted a project that keeps moving without me sitting at it. With the queue, Claude Code runs a large project on
 its own for long stretches, often overnight or for days. It picks the next task, starts track agents, reviews and
 merges what they deliver, and starts the next tasks. When a task needs my decision, the queue does not stop: it parks
 that task and carries on with everything else that can be done. The decisions wait for me on the board, or the
@@ -65,8 +83,8 @@ queue finishes those before it moves on to the next feature or step I want. The 
 order: it keeps track of the plans, the tasks, what depends on what and what is running right now, so nothing gets
 lost between sessions.
 
-Before this, I worked in long chats, and the token bill grew much faster than the work did. Splitting the work into
-right-sized tasks, each in a fresh small context, cut my usage a lot. On a Claude Max (20x) plan, the queue now keeps
+Splitting the work into right-sized tasks, each in a fresh small context, cut my usage a lot compared with the long
+chat. On a Claude Max (20x) plan, the queue now keeps
 running for about five days of a week before the weekly limit runs out. That is one project and one developer; see
 [What it costs in tokens](#what-it-costs-in-tokens) for what was measured and what was not.
 
