@@ -94,6 +94,7 @@ its brief; the next one asks again. A higher cap: `cq edit <id> --json '{"max_fi
 | `forecast [--project <pid>] [--days 28] [--json]` | When the remaining tasks are done at 50, 85 and 95 % (Monte Carlo, see below) |
 | `show` / `show --full` | Short view (under about 3,000 characters) / full table |
 | `next` | What can start now, without changing anything |
+| `triage` / `triage <id> --verdict ready\|done\|stale\|adjust [--note "…"]` / `triage <id> --prompt --scratchpad <dir>` | The tasks that need an intake verdict before they start / record the triage helper's verdict (done and stale become an owner question, adjust adds the note to the mission) / write the triage prompt again (see orchestration.md, Intake triage) |
 | `fill --scratchpad <dir>` | Starts as many tasks as the limits allow and writes the mission prompts |
 | `receive <id>` | Receives a finished track: reads the RESULT line, builds the review package |
 | `deliveries` | Tracks with a `report.md` (RESULT line on top) that is not received yet; the pulse prints new ones as `NEW DELIVERY` |
@@ -280,6 +281,7 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `migrations.pushCommand`, `environmentFile`, `allowedEnvironment` | `null`, `null`, `[]` | `merge` runs the push command after merging (skip with `--without-migr-push`), but only when the environment file names an allowed environment |
 | `reviewers` | D: `reviewer`, D+: `reviewer` + `reviewer-security` | Fixed reviewer agents per class after `receive` |
 | `helpers` | challenger (U, `bug`) and design (`visual`) on; tests, gap, docs off | Optional helper agents with conditions; switch with `cq helpers on\|off <agent>` (see orchestration.md) |
+| `triage.minAgeDays`, `agentAdded`, `maxPerFill`, `askAgainMin` | `3`, `true`, `3`, `60` | Intake triage before a task starts: tasks added or last edited this many days ago (`null` = off) and agent-added tasks get a `triage` verdict first (`cq triage`); at most this many steps per fill, not asked again within this many minutes. Off with `cq helpers off triage` and in lite mode (see orchestration.md) |
 | `architectureRules` | `[]` | Short rules copied into every mission |
 | `sharedLinks` | `["node_modules"]` | Folders linked into each worktree instead of reinstalled |
 | `readGuard` | built-in lists | Extra agent types, auto-loaded files and large-file globs for the reading guard |

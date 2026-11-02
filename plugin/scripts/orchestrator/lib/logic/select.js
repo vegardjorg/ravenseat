@@ -28,8 +28,10 @@ const { focusStatus } = require('./focus.js');
  * like a track), but not toward maxConcurrent/maxDPlus, which apply to the queue's agents.
  * `uncommitted`: the paths `git status` shows in the main tree. A task that owns one of them is skipped (another
  * session is working in the file); `uncommittedSkipped` says which and why.
+ * `skip`: ids that must not be chosen now (the tasks waiting on an intake triage verdict, lib/queueTriage.js); the
+ * next ones in the order take their slots, so the parallelism is kept.
  */
-function selectNext(queue, now = Date.now(), { uncommitted = [], load = null } = {}) {
+function selectNext(queue, now = Date.now(), { uncommitted = [], load = null, skip = null } = {}) {
   const tasks = queue.tasks ?? [];
   const register = queue.projects ?? {};
   const use = spaceUse(queue);
@@ -47,6 +49,7 @@ function selectNext(queue, now = Date.now(), { uncommitted = [], load = null } =
     .filter(
       (o) =>
         o.status === 'waiting' &&
+        !skip?.has?.(o.id) &&
         blockers(o, tasks, queue.resolved).length === 0 &&
         !uncommittedCollision(o, uncommitted),
     )

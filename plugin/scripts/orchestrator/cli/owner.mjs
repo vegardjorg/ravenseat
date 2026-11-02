@@ -15,8 +15,11 @@ import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 import {
-  a, autoAcceptContext, autoAcceptRules, CQ, cut, die, edit, GIT_ROOT, L, positional, PR, read, val, WIDTH,
+  a, autoAcceptContext, autoAcceptRules, CQ, cut, die, edit, GIT_ROOT, L, positional, PR, read, require, val, WIDTH,
 } from './context.mjs';
+
+// The intake triage's owner questions (close, keep, rewrite) are acted on in resolve.
+const T = require('./lib/queueTriage.js');
 
 /** The values of a repeated flag (`--choice A --choice B`): the argument right after each occurrence. */
 const repeated = (flag) => a.flatMap((x, i) => (x === flag ? [a[i + 1] ?? ''] : []));
@@ -35,7 +38,10 @@ export function cmdResolve() {
     if (s.error.length) die(`Nothing resolved:\n  ${s.error.join('\n  ')}`);
     // The answer (with a choice: the choice's text and the note) is written into the mission of every task that waits
     // on the question (idempotent).
-    return { stored: s.answer, added: L.ownerAnswerBonus(queue, sp, s.answer, now) };
+    const added = L.ownerAnswerBonus(queue, sp, s.answer, now);
+    // An answer to an intake triage question (lib/queueTriage.js): close, keep or rewrite, as the owner chose.
+    const triage = s.answer == null ? [] : sp.map((q) => T.ownerChoice(queue, q, s.answer, { by: val('--by') ?? null, now })).filter(Boolean);
+    return { stored: s.answer, added, triage };
   });
   const added = r.added;
   console.log(
@@ -46,6 +52,14 @@ export function cmdResolve() {
       `The answer is added to the mission (OWNER_ANSWER bonus) for: ${[...new Set(added.map((x) => x.id))].join(', ')}. ` +
         'If a track is already running: send it with SendMessage.',
     );
+  for (const t of r.triage) {
+    if (t.error) console.log(`Triage ${t.id}: ${t.error}`);
+    else if (t.action === 'close') console.log(`Triage ${t.id}: cancelled, as the owner chose (cq undo does not apply; cq set ${t.id} waiting puts it back).`);
+    else if (t.action === 'keep') console.log(`Triage ${t.id}: kept; it can start (the next fill).`);
+    else if (t.action === 'rewrite')
+      console.log(`Triage ${t.id}: parked for a rewrite. Rewrite the mission (cq edit ${t.id} --json '{"mission": "..."}'), then cq continue ${t.id}.`);
+    else console.log(`Triage ${t.id}: the answer is not one of the choices; act on it by hand (cancel, edit or continue).`);
+  }
 }
 
 /** `cq resolutions` (the usage is at the top of queue.mjs). */

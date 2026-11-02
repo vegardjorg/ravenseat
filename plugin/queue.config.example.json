@@ -44,8 +44,11 @@
     "reviewer-design": { "enabled": true, "labels": ["visual"], "paths": [] },
     "reviewer-tests": { "enabled": false, "classes": ["D", "D+"], "labels": ["bug"] },
     "reviewer-gap": { "enabled": false, "plan": true, "minMissionItems": 8 },
-    "reviewer-docs": { "enabled": false, "mostlyPaths": ["docs/", "*.md"] }
+    "reviewer-docs": { "enabled": false, "mostlyPaths": ["docs/", "*.md"] },
+    "triage": { "enabled": true }
   },
+  "_triage": "Intake triage: before fill starts a task added or last edited minAgeDays ago or more (null = no age rule), or one an agent added (agentAdded, once), the triage helper checks it read-only against the current code: ready, done, stale or adjust (cq triage <id> --verdict ...). Never fix tasks or continuations. Off: cq helpers off triage. Lite mode: off unless switched on.",
+  "triage": { "minAgeDays": 3, "agentAdded": true, "maxPerFill": 3, "askAgainMin": 60 },
   "planBackup": null,
   "documentFolders": ["docs"],
   "indexFile": null,

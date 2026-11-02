@@ -70,6 +70,11 @@ word.
    the same turn with exactly that message. At loop start and each round without start/set:
    `cq orchestrator pulse --session "<session>"`. Check `cq batch` when filling: a group marked
    "READY FOR PACKING" is packed with `cq batch pack --auto` (proposal) and `--auto --execute`.
+   **Intake triage:** when `fill` prints `TRIAGE <n> task(s) first`, the block also has a `triage` agent per task
+   (read-only, cheap); start it like the others. It answers `TRIAGE ready|done|stale|adjust`; record that with
+   `cq triage <id> --verdict <v> --note "<its note>"`. ready and adjust start on the next fill; done and stale become
+   the owner question `triage-<id>` with choices, asked at the end of the round. Never close or cancel such a task
+   yourself.
 2. **When a track delivers:** `cq receive <id>` BEFORE merging (status review, the review package as plain files in
    `<scratch>/rev-<id>/`, the track's RESULT line from the transcript, one reviewer prompt per reviewer for the
    class, and the merge command). Read the long report only when RESULT says PARTIAL, RED or ownerQuestions>0. Start the

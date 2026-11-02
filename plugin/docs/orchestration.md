@@ -10,7 +10,9 @@ branch (`queue/<ID>`), with a self-contained mission file.
 1. `cq orchestrator pulse`: mark the orchestrator as alive.
 2. `cq fill --scratchpad <dir>`: start what the limits allow. For each task it writes `prompt-<ID>.md` (shared
    protocol from `docs/queue/mission-template.md`, filtered for the task's class, plus the task block). The orchestrator
-   launches one agent per prompt in the background, with worktree isolation.
+   launches one agent per prompt in the background, with worktree isolation. A task that waited a while or that an
+   agent proposed gets an [intake triage](#intake-triage) first: `fill` skips it, prints the triage step and starts
+   the others.
 3. A track finishes and answers with one `RESULT …` line plus at most a few lines; the long report is in
    `report.md` in its scratch folder.
 4. `cq receive <ID>`: reads the result line and builds a review package (diff, changed files in full, the track's
@@ -43,6 +45,7 @@ reviewers, and the helpers only add to that. The reviewers for a task are worked
 | `reviewer-tests` | Do the tests prove the behavior; missing edge cases | class D or D+, or label `bug` | no |
 | `reviewer-gap` | The delivery against the mission, point by point | the task has a `plan`, or the mission has 8+ numbered points | no |
 | `reviewer-docs` | Docs rewrites: lost facts, findability, docs against code | more than half of the changed files are under `docs/` or `*.md` | no |
+| `triage` | Intake check BEFORE a track starts: ready, done, stale or adjust (see [Intake triage](#intake-triage)) | the task was added or last edited `triage.minAgeDays` (3) days ago or more, or an agent added it | yes (off in lite mode) |
 
 The setup lives under `helpers` in `queue.config.json`:
 
@@ -69,6 +72,49 @@ is that file name anywhere, `**` is any number of folders. A helper with no cond
   sum of minutes, tokens and USD, the share of the task cost it added, and findings per run. "No runs yet" until then.
 - **Your own helper:** see [Custom helper agents](#custom-helper-agents) below. It is added, scanned, reviewed and
   approved before it can be switched on.
+
+### Intake triage
+
+A task can wait in the queue for days while the code moves on: the owned files are renamed, another track already did
+it, or a later decision made it pointless. A full track finds that out only after a whole agent run. The `triage`
+helper (`agents/triage.md`) checks first: read-only, a cheap model with low effort, about 15 turns. It reads the
+mission and the owned files against the base branch and answers one line, `TRIAGE ready|done|stale|adjust`, with
+`file:line` evidence.
+
+**When it runs** (`lib/queueTriage.js`, `needsTriage`): a waiting task that was added or last edited (title,
+mission, owned files, `done_when` or an addition to the mission; the mission file's mtime counts too) at least
+`triage.minAgeDays` days ago, and a task an agent added (an approved proposal, or `added_by` a track) that has never
+been triaged. A verdict at least as new as the last edit holds until it is itself `minAgeDays` old. Never for fix
+tasks (`fixes`) or continuations (a task that has a branch or was started before).
+
+**In the loop:** `fill` does not start such a task. It writes `triage-<ID>.md` in the scratchpad and puts the
+`triage` agent in the same "Start these in the SAME turn" block as the tracks (at most `triage.maxPerFill`, default
+3, per fill), and keeps starting the other tasks. The step is not printed again for `triage.askAgainMin` minutes
+(default 60) while the agent may still run. `next` lists the task as needing a verdict, and `start <id>` refuses it
+(`--force` overrides). When the agent answers, the orchestrator records the verdict:
+
+```
+cq triage <id> --verdict ready|done|stale|adjust [--note "<the agent's note>"]
+```
+
+- **ready:** the task can start (the next `fill`).
+- **adjust:** the note is added to the mission (`TRIAGE adjust (<date>): ...` in the track block's additions), then
+  the task can start.
+- **done / stale** (the note is required): never closed by itself. An owner question `triage-<id>` is registered
+  with the choices "Close as done" (or stale), "Keep and start anyway" and "Rewrite"; the task waits on it.
+  `cq resolve triage-<id> --choice 1` cancels the task (`cq set <id> waiting` puts it back), 2 makes it startable, 3
+  parks it so the owner can `cq edit` the mission and `cq continue` it.
+
+`cq triage` lists the tasks that need a verdict. The config (top level in `queue.config.json`):
+
+```json
+"triage": { "minAgeDays": 3, "agentAdded": true, "maxPerFill": 3, "askAgainMin": 60 }
+```
+
+`minAgeDays: null` turns the age rule off, `agentAdded: false` the agent rule. `cq helpers off triage` (or the board's
+Helper agents tab) turns triage off entirely; in lite mode it is off unless switched on there. The board and
+`cq helpers` show its runs and cost (the agent message names the task, so the time log ties it to it) and its
+verdicts: how many were ready, done, stale and adjust, and how many tracks it saved (done plus stale).
 
 ### Custom helper agents
 

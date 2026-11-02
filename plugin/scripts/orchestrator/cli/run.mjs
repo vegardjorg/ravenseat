@@ -26,6 +26,7 @@ import {
   dailyUsageFor, loadSlotsLine, logStart, makeTrackBlocks, markStarted, measureLoad, readTimeLog, scratchpadFor,
   takenForMigr, trackRoots,
 } from './tracks.mjs';
+import { askedLine, triageReason, triageState, writeTriageSteps } from './triage.mjs';
 
 /** `cq next` (the usage is at the top of queue.mjs). */
 export function cmdNext() {
@@ -41,14 +42,20 @@ export function cmdNext() {
   const b = L.budgetGuard(queue, usage);
   // Tasks that own an uncommitted file in the main tree are skipped (another session is working in the file).
   const uncommitted = uncommittedPaths();
+  // Tasks waiting on an intake triage verdict (lib/queueTriage.js) are left out; fill prints their triage step.
+  const triage = triageState(queue, { uncommitted });
   // With the load: fewer slots under load (lib/loadSlots.js), and the line says why.
-  const selected = L.selectNext(queue, Date.now(), { uncommitted, load });
+  const selected = L.selectNext(queue, Date.now(), { uncommitted, load, skip: triage.skip });
   const loadLine = loadSlotsLine(queue, load);
   if (loadLine) console.log(loadLine);
   // The calibrated cost estimate per task (lib/costEstimate.js); the order is selectNext's, unchanged.
   const costModel = CE.costModel(queue);
   const costFor = (v) => CE.calibratedCost(queue.tasks.find((o) => o.id === v.id), costModel);
   if (!selected.length) console.log('Nothing can start now (see `show` and `state`).');
+  if (triage.list.length)
+    console.log(
+      `Needs an intake triage verdict first (fill prints the step): ${triage.list.map((x) => `${x.id} (${x.reason})`).join(', ')}`,
+    );
   for (const v of selected)
     console.log(
       `${v.id.padEnd(12)} ${v.class.padEnd(3)} ${v.domain.padEnd(14)} ${v.estimate} min ${CE.costText(costFor(v))}  priority ${v.score}` +
@@ -95,6 +102,13 @@ export function cmdStart() {
       load,
     });
     if (guard) die(guard.message, guard.code);
+    // Intake triage (lib/queueTriage.js): an old or agent-added task needs a verdict first; --force overrides.
+    const why = a.includes('--force') ? null : triageReason(queue, o);
+    if (why)
+      die(
+        `${id} needs an intake triage verdict before it starts (${why}): cq fill prints the step, or ` +
+          `cq triage ${id} --prompt --scratchpad <dir>. Or start --force on the owner's word.`,
+      );
     // --force: the owner has asked for the task to go first. Overrides only the priority order in selectNext and
     // the pause on the project, never the blockers above (dependencies, ownership, owner questions).
     if (
@@ -188,6 +202,10 @@ export function cmdFill() {
   const load = a.includes('--over-load') ? null : measureLoad();
   let quotaMessage = null;
   let loadMessage = null;
+  // The intake triage (lib/queueTriage.js): the tasks that need a verdict are skipped (others take the slots), and the
+  // first few get a triage step instead (set under the lock, so two fills never ask for the same one twice).
+  let triageSteps = [];
+  let triageWaiting = [];
   // Under the lock: select (selectNext, or --ids) and mark started. With --ids a task that is already running gets
   // only new prompt files (e.g. after make-mission failed); a pending one must be startable now (otherwise start --force
   // on the owner's word first).
@@ -195,12 +213,18 @@ export function cmdFill() {
     // Done focus stages are taken out before the selection (does not change the order: a done stage has no tasks).
     autoCleanFocus(queue, 'fill');
     const out = [];
+    const triage = triageState(queue, { uncommitted });
     if (ids.length) {
-      const can = L.selectNext(queue, Date.now(), { uncommitted, load }).map((v) => v.id);
+      const can = L.selectNext(queue, Date.now(), { uncommitted, load, skip: triage.skip }).map((v) => v.id);
       for (const id of ids) {
         const o = queue.tasks.find((x) => x.id === id);
         if (!o) die(`Unknown task ${id}. Nothing was started.`);
         if (o.status === 'running') out.push({ o, new: false });
+        else if (o.status === 'waiting' && triage.skip.has(id))
+          die(
+            `${id} needs an intake triage verdict before it starts (${triage.list.find((x) => x.id === id).reason}): ` +
+              `cq triage ${id} --prompt --scratchpad <dir>, or start --force on the owner's word. Nothing was started.`,
+          );
         else if (o.status === 'waiting' && can.includes(id)) {
           // The wind-down also stops new starts via --ids (new prompt files for running ones still work).
           const by = L.windDownGuard(readCursor());
@@ -237,11 +261,16 @@ export function cmdFill() {
       }
       // Load-aware slots (lib/loadSlots.js): under load selectNext opens fewer slots; the line says why.
       loadMessage = loadSlotsLine(queue, load);
-      for (const v of L.selectNext(queue, Date.now(), { uncommitted, load }).slice(
+      for (const v of L.selectNext(queue, Date.now(), { uncommitted, load, skip: triage.skip }).slice(
         0,
         Math.min(max, quotaMax),
       ))
         out.push({ o: queue.tasks.find((x) => x.id === v.id), new: true });
+      // The triage steps: the first few that were not asked for recently (maxPerFill), in ranked order.
+      const now = new Date().toISOString();
+      triageSteps = triage.list.filter((x) => !x.asked).slice(0, triage.setup.maxPerFill);
+      for (const x of triageSteps) queue.tasks.find((o) => o.id === x.id).triage_asked = now;
+      triageWaiting = triage.list.filter((x) => x.asked);
     }
     for (const x of out) if (x.new) markStarted(queue, x.o, { head, scratchpad: scratch });
     return out.map((x) => ({ id: x.o.id, new: x.new }));
@@ -253,10 +282,17 @@ export function cmdFill() {
   if (quotaMessage) console.log(quotaMessage);
   if (loadMessage) console.log(loadMessage);
   focusCleanOut();
+  // The triage prompt files and lines (cli/triage.mjs); the agents join the same-turn block below.
+  const triageOut = writeTriageSteps(read(), triageSteps, { scratch, head });
+  const waitLine = askedLine(triageWaiting);
   if (!selected.length) {
     console.log('Nothing can start now (see show and state).');
+    for (const l of triageOut.lines) console.log(l);
+    if (waitLine) console.log(waitLine);
+    if (triageOut.agents.length) pulseCursor(`fill triage ${triageOut.agents.map((x) => x.id).join(' ')}`);
     resolveWarning();
     parallelWarning();
+    for (const l of L.concurrentBlock(triageOut.agents)) console.log(l);
     process.exit(0);
   }
   const queue = read();
@@ -333,11 +369,14 @@ export function cmdFill() {
         `${s.warning ? '  WARNING in the track file (changed outside the queue)' : ''}` +
         `  (${fillEstimate(s.id)})`,
     );
+  for (const l of triageOut.lines) console.log(l);
+  if (waitLine) console.log(waitLine);
   resolveWarning();
   // Tracks that were just started count as active (they are running in the queue file now).
   parallelWarning();
-  // All the agents are started in the SAME turn (parallel Agent calls), not one per turn.
-  for (const l of L.concurrentBlock(track)) console.log(l);
+  // All the agents are started in the SAME turn (parallel Agent calls), not one per turn: the tracks and the triage
+  // helpers.
+  for (const l of L.concurrentBlock([...track, ...triageOut.agents])) console.log(l);
 }
 
 /** `cq pickable` (the usage is at the top of queue.mjs). */

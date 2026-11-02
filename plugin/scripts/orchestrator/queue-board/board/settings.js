@@ -346,6 +346,12 @@ async function addHelper(file, name, button, errorEl) {
 /** The measurement: "No runs yet", or the numbers as a small list of facts. */
 function helperMeasure(h, id) {
   const s = h.stats;
+  // The intake triage answers with verdicts (counted from the tasks), also before its cost is measured at set done.
+  const v = s?.verdicts;
+  const verdicts = v
+    ? facts('Verdicts', `ready ${v.ready}, done ${v.done}, stale ${v.stale}, adjust ${v.adjust} (${v.saved} track run(s) stopped)`)
+    : [];
+  if (v?.total && !s.runs) return el('dl', { id, class: 'facts helper-measure' }, verdicts);
   if (!s || !s.runs) return el('p', { id, class: 'setting-meta helper-empty', text: 'No runs yet' });
   const tok = (n) => (n == null ? '?' : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
   const rows = [
@@ -354,12 +360,14 @@ function helperMeasure(h, id) {
     ...facts('Tokens', s.tokens ? `${tok(s.tokens.median)} median, ${tok(s.tokens.sum)} total` : 'not measured'),
     ...facts('Cost', s.usd ? `${usd(s.usd.median)} median, ${usd(s.usd.sum)} total` : 'not measured'),
     ...facts('Share of the task cost', s.sharePct != null ? `${s.sharePct} %` : 'not measured'),
-    ...facts(
-      'Findings',
-      s.findings.reviewed
-        ? `H=${s.findings.H} M=${s.findings.M} L=${s.findings.L} (${s.findings.perRun} per run)`
-        : 'no FINDINGS lines measured',
-    ),
+    ...(v
+      ? verdicts
+      : facts(
+          'Findings',
+          s.findings.reviewed
+            ? `H=${s.findings.H} M=${s.findings.M} L=${s.findings.L} (${s.findings.perRun} per run)`
+            : 'no FINDINGS lines measured',
+        )),
   ];
   return el('dl', { id, class: 'facts helper-measure' }, rows);
 }

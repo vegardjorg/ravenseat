@@ -170,6 +170,7 @@ describe('the Helper agents tab', () => {
       'reviewer-tests',
       'reviewer-gap',
       'reviewer-docs',
+      'triage',
       'db-check',
       'new-check',
     ]);

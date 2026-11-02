@@ -136,7 +136,11 @@
 //         on the task. --ids: only these; one that is already running only gets new prompt files (after an error).
 //         QUEUE_SCRATCHPAD can replace --scratchpad. Without --ids, fill prints a quota line when the forecast
 //         empties weeklyQuota before the reset; with capacity --mode cap at most that many new ones start, and --over-quota
-//         overrides. The load guard (exit 7, the machine is full) stops new starts; --over-load overrides.)
+//         overrides. The load guard (exit 7, the machine is full) stops new starts; --over-load overrides.
+//         Intake triage (lib/queueTriage.js): a task added or last edited triage.minAgeDays (3) ago or more, or added by an
+//         agent, is not started without a verdict; other tasks take its slot, and fill writes <folder>/triage-<id>.md and
+//         puts the `triage` helper in the same-turn block for the first triage.maxPerFill (3) of them. --ids refuses such
+//         a task; start --force on the owner's word overrides.)
 //   node scripts/orchestrator/queue.mjs receive <id> [--scratchpad <folder>] [--result "RESULT …"] [--force]
 //                                                 [--done-cwd <folder>]
 //        (the track has delivered: status review, and the review package as PLAIN FILES in <folder>/rev-<id>/: 00-package.md
@@ -198,6 +202,15 @@
 //        (the conditions of a custom helper; "none" clears a list)
 //   node scripts/orchestrator/queue.mjs helpers remove <agent> [--delete-file]   (drops the registration; the copied
 //                                                                  file is only deleted with --delete-file)
+//   node scripts/orchestrator/queue.mjs triage                      (the tasks that need an intake triage verdict, and why)
+//   node scripts/orchestrator/queue.mjs triage <id> --verdict ready|done|stale|adjust [--note "..."] [--by "..."]
+//        (records the triage helper's answer. ready: the task can start. adjust: the note is added to the mission (bonus),
+//         then it can start. done and stale (a note is required: the evidence file:line, or why): the owner question
+//         triage-<id> with the choices Close as done|stale, Keep and start anyway, Rewrite, in waiting_on; never closed
+//         without the owner. `resolve triage-<id> --choice <n>` then cancels, keeps or parks the task (Rewrite: edit the
+//         mission, then continue). Off: helpers off triage; off in lite mode unless switched on.)
+//   node scripts/orchestrator/queue.mjs triage <id> --prompt [--scratchpad <folder>]   (writes triage-<id>.md again and
+//                                                                  prints the agent line)
 //   The transcripts: ~/.claude/projects/<repo-slug>/<session>/subagents/agent-<id>.jsonl (QUEUE_TRANSCRIPTS overrides).
 //
 // Fewer orchestrator turns: `fill` and `receive` end with "Start these in the SAME turn:" and one line per agent
@@ -534,6 +547,7 @@ import * as projects from './cli/projects.mjs';
 import * as run from './cli/run.mjs';
 import * as taskEdit from './cli/taskEdit.mjs';
 import * as tasks from './cli/tasks.mjs';
+import * as triage from './cli/triage.mjs';
 import * as view from './cli/view.mjs';
 
 // ---- Switched-off modules (features in queue.config.json, lib/queueConfig.js) ------------------------------------
@@ -585,6 +599,8 @@ if (command === 'init') {
   cost.cmdLimit();
 } else if (command === 'helpers') {
   helpers.cmdHelpers();
+} else if (command === 'triage') {
+  triage.cmdTriage();
 } else if (command === 'compact') {
   orchestrator.cmdCompact();
 } else if (command === 'state') {
@@ -692,7 +708,7 @@ if (command === 'init') {
     'Use: cq <init|add|approve|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow|triage> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

@@ -123,7 +123,15 @@ const STANDARD = Object.freeze({
     'reviewer-tests': { enabled: false, classes: ['D', 'D+'], labels: ['bug'] },
     'reviewer-gap': { enabled: false, plan: true, minMissionItems: 8 },
     'reviewer-docs': { enabled: false, mostlyPaths: ['docs/', '*.md'] },
+    // The intake triage (lib/queueTriage.js): runs before the start, not after receive; its rule is `triage` below.
+    triage: { enabled: true },
   },
+  // Intake triage (lib/queueTriage.js, the `triage` helper): before `fill` starts a task that was added or last edited
+  // minAgeDays ago or more (null = no age rule), or that an agent added (agentAdded, once), a short read-only agent
+  // checks it against the current code: ready, done, stale or adjust. Never fix tasks or continuations. At most
+  // maxPerFill triage steps per fill; a printed step is not printed again for askAgainMin minutes. Off: `cq helpers
+  // off triage` (or helpers.triage.enabled false). Lite mode: off unless switched on in the queue.
+  triage: { minAgeDays: 3, agentAdded: true, maxPerFill: 3, askAgainMin: 60 },
   // Read guard (hook-read-guard.mjs): in addition to the built-in lists.
   readGuard: {
     agentTypes: [], // more agent types the guard applies to (track, track-d and the reviewers are already included)
