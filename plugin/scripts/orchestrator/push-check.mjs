@@ -7,6 +7,12 @@
 // anything the owner does not know about: the orchestrator runs this BEFORE every batch push and asks the owner on exit 2.
 // The base branch and remote come from queue.config.json (config().baseBranch, config().remote).
 //
+// It also prints the batch status (lib/pushBatch.js, config().push): merged tasks and commits not pushed, the oldest
+// unpushed work, the base health of the tip (base-health.json, the base gate) and a verdict line: READY, NOT YET
+// (n of minTasks), BLOCKED (base red, external commits, or the remote is ahead), LARGE (over warnTasks: push recommended)
+// or NOTHING. In push mode "threshold" the orchestrator may push on READY or LARGE by itself, never on BLOCKED; in mode
+// "owner" (the default) only on the owner's word. The verdict does not change the exit code.
+//
 // Read only: it never pushes, does not fetch and does not rewrite history.
 //
 // Use: node scripts/orchestrator/push-check.mjs [--from <remote>/<baseBranch>] [--to <baseBranch>] [--json]
@@ -16,11 +22,14 @@
 // =============================================================
 
 import { createRequire } from 'node:module';
+import path from 'node:path';
 
 const require = createRequire(import.meta.url);
 const L = require('./lib/queueLogic.js');
 const G = require('./lib/queueGit.js');
-const { config } = require('./lib/queueConfig.js');
+const { config, dataFolder } = require('./lib/queueConfig.js');
+const PB = require('./lib/pushBatch.js');
+const BH = require('./lib/baseHealth.js');
 
 const K = config();
 // Main tree (config().root): baseBranch and the uncommitted files that matter are there (also when the script runs from
@@ -64,6 +73,20 @@ const total = Number(String(git(['rev-list', '--count', `${FROM}..${TO}`]) ?? '0
 // If the remote branch has commits not in the local one (local ref after fetch), the push is rejected: say so.
 const back = Number(String(git(['rev-list', '--count', `${TO}..${FROM}`]) ?? '0').trim()) || 0;
 
+// The batch: merged tasks on the first-parent line (the queue merge commits), the commit count and the oldest work.
+const SETUP = PB.pushSetup(K);
+const batch = PB.summarize(
+  raw.map((c) => ({ sha: c.sha, parents: c.parents, subject: c.subject, time: Date.parse(c.date) })),
+  { prefix: K.branchPrefix, commits: total },
+);
+// The base health of the tip, as the base gate recorded it ('unknown' when the gate is off or has not checked this tip).
+const health = BH.verdict(BH.readState(path.join(dataFolder(), 'base-health.json')), toSha);
+const blocked = [
+  ...(plan.externalOnes.length ? [`${plan.externalOnes.length} external commit(s): ask the owner first`] : []),
+  ...(back ? [`${FROM} has ${back} commit(s) not in ${TO}`] : []),
+];
+const verdict = PB.batchVerdict({ batch, setup: SETUP, health, blocked });
+
 const summary = (s) => String(s).slice(0, 8);
 const fileText = (files, max = 6) =>
   files.length
@@ -94,6 +117,19 @@ if (AS_JSON) {
         merged: plan.merged,
         uncommitted: theTrack.map((u) => `${u.xy} ${u.path}`),
         untracked: untracked.length,
+        batch: {
+          mode: SETUP.mode,
+          minTasks: SETUP.minTasks,
+          warnTasks: SETUP.warnTasks,
+          maxAgeHours: SETUP.maxAgeHours,
+          tasks: batch.tasks,
+          task_count: batch.taskCount,
+          commits: batch.commits,
+          oldest_at: batch.oldestAt,
+          base_health: health,
+          verdict: verdict.verdict,
+          reason: verdict.reason,
+        },
       },
       null,
       2,
@@ -118,7 +154,9 @@ function textReport() {
   if (!plan.total) out.push('Nothing to push.');
   else if (!plan.externalOnes.length)
     out.push(
-      'No external commits: everything belongs to the queue and the orchestrator. Push only when the owner has said "push".',
+      SETUP.mode === 'threshold'
+        ? 'No external commits: everything belongs to the queue and the orchestrator. Push mode threshold: push when the verdict below is READY or LARGE, never BLOCKED.'
+        : 'No external commits: everything belongs to the queue and the orchestrator. Push only when the owner has said "push".',
     );
   else {
     out.push('');
@@ -157,6 +195,8 @@ function textReport() {
       'Ask the owner before pushing (AskUserQuestion): "Include everything" / "Push only the queue part" (only with a cut point) / "Wait".',
     );
   }
+  out.push('');
+  out.push(...batchLines());
   if (theTrack.length || untracked.length) {
     out.push('');
     out.push(
@@ -166,4 +206,18 @@ function textReport() {
     if (theTrack.length > 10) out.push(`  … and ${theTrack.length - 10} more`);
   }
   return out;
+}
+
+/** The batch status and the verdict line (lib/pushBatch.js). */
+function batchLines() {
+  const healthText = { green: 'GREEN', red: 'RED', unknown: 'not checked at this tip' }[health];
+  const limits =
+    `mode ${SETUP.mode}, minTasks ${SETUP.minTasks}, warnTasks ${SETUP.warnTasks}` +
+    (SETUP.maxAgeHours != null ? `, maxAgeHours ${SETUP.maxAgeHours}` : '');
+  return [
+    `Batch: ${batch.taskCount} merged task(s) / ${batch.commits} commit(s) unpushed` +
+      (batch.oldestAt ? `, oldest ${PB.ageText(batch.oldestAt)} old` : '') +
+      `; base ${healthText} at ${summary(toSha)} (${limits}).`,
+    `Verdict: ${PB.verdictWord(verdict.verdict)} (${verdict.reason}).`,
+  ];
 }

@@ -12,8 +12,13 @@
 //   ask   `git push` where the branch cannot be determined (detached HEAD).
 //   deny  the migration command (config().migrations.pushCommand) when the environment file (migrations.environmentFile)
 //         exists and its contents are not in migrations.allowedEnvironment. If the file is missing, the guard has no say.
-// Push to baseBranch is let through. The rule about pushing in batches (not per commit) is documentation
-// (docs/orchestration.md), not a block.
+// Push to baseBranch is let through, with one question: the batch threshold (config().push, lib/pushBatch.js).
+//   ask   a plain (non-force) `git push` of baseBranch by the orchestrator (the main session, no agent_type) when the
+//         base is red at the tip, or when fewer than push.minTasks merged tasks are unpushed (and push.maxAgeHours does
+//         not make the batch ready). Both push modes: in "owner" mode the owner is the one pushing, and a reminder
+//         dialog is cheap. push.minTasks 0 turns the count question off (the red-base question stays). Never deny: the
+//         owner can always push. The counting needs git, so the hook passes it in as context.batchQuestion (called only
+//         when such a push is found, so every other command costs nothing extra).
 //
 // Network guard for the queue's agents (hardening against prompt injection). Applies ONLY when the hook payload has an
 // agent_type that is a track (track, track-d) or a reviewer or helper agent, builtin or custom (the same list as the read
@@ -393,7 +398,10 @@ function assessNetwork(command, context, depth = 0) {
  *   migrations?: { pushCommand, environmentFile, allowedEnvironment }   default config().migrations,
  *   agentType?: string|null        the hook payload's agent_type; tracks, reviewers and helpers get the network guard,
  *   knownPackage?: (name) => bool  is the npm package known (package.json or node_modules/.bin)? Only for guarded agents,
- *   guardedTypes?: Set<string>    the guarded agent types beyond track/track-d; default trackGuard.queueAgentTypes().
+ *   guardedTypes?: Set<string>    the guarded agent types beyond track/track-d; default trackGuard.queueAgentTypes(),
+ *   batchQuestion?: () => string|null   the batch threshold question for a plain push of baseBranch (the hook reads
+ *                                  git and base-health.json); asked only for the main session, and only when nothing
+ *                                  else is found. null = no question.
  * }
  * Returns null (no decision) or { decision: 'ask'|'deny', reason }.
  * With several matches the strictest wins (deny over ask).
@@ -401,6 +409,7 @@ function assessNetwork(command, context, depth = 0) {
 function assess(command, context = {}) {
   const { baseBranch, migrations } = values(context);
   const findings = [];
+  let basePush = false;
   for (const chunk of parts(command)) {
     const t = tokens(chunk);
 
@@ -430,7 +439,7 @@ function assess(command, context = {}) {
             decision: 'ask',
             reason: `Could not determine which branch is pushed. Confirm that it is baseBranch (${baseBranch}).`,
           });
-        }
+        } else if (template.length > 0) basePush = true;
       }
     }
 
@@ -453,6 +462,11 @@ function assess(command, context = {}) {
   }
   // The network guard applies to the queue's agents: tracks, reviewers and helper agents (never the orchestrator).
   if (isGuardedAgent(context.agentType, context.guardedTypes)) findings.push(...assessNetwork(command, context));
+  // The batch threshold: only for the orchestrator (no agent_type; tracks never push) and only when nothing stricter hit.
+  if (basePush && findings.length === 0 && !context.agentType && typeof context.batchQuestion === 'function') {
+    const question = context.batchQuestion();
+    if (question) findings.push({ decision: 'ask', reason: question });
+  }
   if (findings.length === 0) return null;
   return findings.find((f) => f.decision === 'deny') || findings[0];
 }

@@ -238,6 +238,12 @@ function baseHealthText(b, branch) {
   return ` · Base ${branch ?? ''}: ${word}${fix}`;
 }
 
+/** The push batch after the base health (null = no remote ref yet): " · Push: 4 of 10 tasks, NOT YET". */
+function pushBatchText(p) {
+  if (!p || !p.text) return '';
+  return ` · Push: ${p.text}`;
+}
+
 function drawStatus() {
   const s = $('status');
   if (!t.key) {
@@ -265,5 +271,6 @@ function drawStatus() {
       (t.data?.gitError
         ? ' (git status could not be read; uncommitted files are not checked)'
         : '') +
-      baseHealthText(t.data?.baseHealth, t.data?.baseBranch);
+      baseHealthText(t.data?.baseHealth, t.data?.baseBranch) +
+      pushBatchText(t.data?.pushBatch);
 }

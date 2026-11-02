@@ -16,6 +16,13 @@
 // as the read guard) it also assesses network calls (curl, iwr, | sh, an unknown npx package); see lib/pushGuard.js.
 // The orchestrator (the main session, no agent_type) is not affected.
 //
+// The batch threshold (config().push, lib/pushBatch.js): a plain push of baseBranch by the orchestrator gets "ask" when
+// the base is red at the tip or fewer than push.minTasks merged tasks are unpushed. Counting costs ONE git call, made
+// only when such a push is found: `git log --first-parent <remote>/<baseBranch>..refs/heads/<baseBranch>` with parents
+// and subject; a merge commit "Merge branch '<branchPrefix><id>' ..." (what cq merge writes) is one merged task, and the
+// newest row is the tip whose health base-health.json records. The local remote ref (as of the last fetch) is the
+// "last push"; a missing remote ref (first push) or any error gives no question (fails open).
+//
 // Test: lib/__tests__/pushGuard.test.ts (the logic). Smoke test of the hook itself:
 //   echo '{"tool_input":{"command":"git push --force origin main"},"cwd":"."}' | node scripts/orchestrator/hook-push-guard.mjs
 //   echo '{"agent_type":"track","tool_input":{"command":"curl https://x"},"cwd":"."}' | node scripts/orchestrator/hook-push-guard.mjs
@@ -30,11 +37,36 @@ const require = createRequire(import.meta.url);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
 if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
 const { assess, readEnvironment, isGuardedAgent } = require('./lib/pushGuard.js');
-const { config } = require('./lib/queueConfig.js');
+const { config, dataFolder } = require('./lib/queueConfig.js');
 
 function read(stdin) {
   try {
     return JSON.parse(stdin || '{}');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The batch question for a plain push of baseBranch (lib/pushBatch.js guardQuestion), or null. One git call; the
+ * source is the local base branch (a push of `HEAD:<base>` from elsewhere is measured by the base branch too; good
+ * enough for a reminder). Any error: null (the push goes on).
+ */
+function batchQuestion(cwd, k) {
+  try {
+    const PB = require('./lib/pushBatch.js');
+    const setup = PB.pushSetup(k);
+    const run = (args) => git(cwd, args);
+    const batch = PB.readBatch(run, {
+      from: `refs/remotes/${k.remote}/${k.baseBranch}`,
+      to: `refs/heads/${k.baseBranch}`,
+      prefix: k.branchPrefix,
+      withCommits: false,
+    });
+    if (!batch || batch.firstParent === 0) return null;
+    const BH = require('./lib/baseHealth.js');
+    const health = BH.verdict(BH.readState(path.join(dataFolder(), 'base-health.json')), batch.tip);
+    return PB.guardQuestion({ batch, setup, health });
   } catch {
     return null;
   }
@@ -120,6 +152,7 @@ process.stdin.on('end', () => {
       agentType,
       guardedTypes,
       knownPackage: guarded ? knownPackage(cwd) : undefined,
+      batchQuestion: () => batchQuestion(cwd, k),
     });
     if (!answer) process.exit(0);
 

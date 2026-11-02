@@ -73,6 +73,14 @@ const STANDARD = Object.freeze({
   // check, nothing runs twice), or a list (e.g. the full gate) run after the quick gates. timeoutSec = the budget for
   // the whole list; tailLines = the output lines kept for the fix task (null = doneCheck.tailLines).
   baseGate: { enabled: 'auto', commands: null, timeoutSec: 900, tailLines: null },
+  // The batch push threshold (lib/pushBatch.js; `cq push-check`, the push guard, the board). Every push of baseBranch
+  // runs the whole CI, so pushes come in batches of MERGED TASKS (merges through cq merge not yet on <remote>).
+  // mode: "owner" = the orchestrator never pushes on its own, only on the owner's word; "threshold" = it may push by
+  // itself when push-check says READY or LARGE (never BLOCKED). minTasks: the batch is ready at this many merged tasks
+  // (0 = no lower limit); a plain push below it gets a confirmation dialog in both modes. warnTasks: from this many,
+  // push-check says LARGE (a warning, never a block: a big batch makes a red CI harder to bisect; 0 = off).
+  // maxAgeHours: when set, the oldest unpushed work older than this makes the batch ready below minTasks.
+  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null },
   // The fix-round cap per task (`resume --reason fix`, also the one receive starts after a red done command). At the cap
   // the task becomes an owner question instead of another round. The task field `max_fix_rounds` overrides it.
   maxFixRounds: 3,
