@@ -16,6 +16,10 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
   `OWNER ACTED: <action> <ids>` when the owner answers, approves, does QA, adds or edits on the board (exit 10 on
   `TIMEOUT` after 8 h), so a board answer starts the next round. "Waiting on you" on the board says "Orchestrator
   listening" while it runs.
+- **Event rows in the time log:** the orchestrator session's cost (status line, compaction and SessionEnd hooks)
+  shown as orchestration overhead in `cq cost`; fix rounds, merge conflicts, base gate verdicts, triage verdicts and
+  pushes as a Flow view in `cq cost` and the board's Statistics tab (first-pass rate, fix rounds per task, conflicts
+  and pushes per week); a load row per fill/start with a Load history in `cq limit`.
 
 ### Changed
 - README: parallel chats colliding (push and file conflicts) added to the pain points.
