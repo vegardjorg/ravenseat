@@ -134,6 +134,11 @@
 // waiting-on-resolved (cleanup, only in diagnose) and bottleneck. The diagnosis never fixes anything itself; each finding is "simple"
 // (mechanical and unambiguous: a finished command the orchestrator runs) or "complex" (an option with a recommendation to the owner).
 //   node scripts/orchestrator/queue.mjs diagnose [--json]             (the whole diagnosis regardless of parallelism; read-only)
+//   node scripts/orchestrator/queue.mjs conflicts [--json] [--budget-ms <n>] [--max-checks <n>]   (read-only: each running,
+//        picked or review track tip against baseBranch and against the other tips with git merge-tree --write-tree
+//        (git >= 2.38; older git: changed-file overlap, with a note), cached per sha pair in <dataFolder>/conflict-predict.json,
+//        and a suggested merge order. `orchestrator pulse` prints the same PREDICTED CONFLICT / CONFLICTS WITH BASE lines.
+//        lib/conflictPredict.js)
 //   node scripts/orchestrator/queue.mjs doctor [--json]               (read-only health check, OK/WARN/FAIL with a fix hint each:
 //                                                                  node and the node the hooks find on PATH, the hooks file and
 //                                                                  its scripts, queue.config.json keys and types, the state
@@ -561,6 +566,7 @@ import { a, command, CONFIG, CQ, die, HERE, KK, require } from './cli/context.mj
 import * as ask from './cli/ask.mjs';
 import * as batch from './cli/batch.mjs';
 import * as cloud from './cli/cloud.mjs';
+import * as conflicts from './cli/conflicts.mjs';
 import * as cost from './cli/cost.mjs';
 import * as doctor from './cli/doctor.mjs';
 import * as finding from './cli/finding.mjs';
@@ -638,6 +644,8 @@ if (command === 'init') {
   view.cmdDiagnose();
 } else if (command === 'doctor') {
   doctor.cmdDoctor();
+} else if (command === 'conflicts') {
+  conflicts.cmdConflicts();
 } else if (command === 'finding') {
   finding.cmdFinding();
 } else if (command === 'trackFile') {

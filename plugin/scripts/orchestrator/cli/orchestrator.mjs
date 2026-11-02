@@ -22,6 +22,7 @@ import {
 import { deliveryWarning, findSilent, findWithoutAgent } from './tracks.mjs';
 import { findingsLineNow } from './finding.mjs';
 import { baseHealthLine } from './baseHealth.mjs';
+import { conflictLinesNow } from './conflicts.mjs';
 
 // ---- queue.mjs handover: the ongoing note in two parts ---------------------------------------------------------
 /**
@@ -263,6 +264,9 @@ export function cmdOrchestrator() {
     // The base branch's health (lib/baseHealth.js): one line every round, so a red base is never missed.
     const baseLine = baseHealthLine();
     if (baseLine) console.log(baseLine);
+    // Predicted merge conflicts between the track tips and the base (lib/conflictPredict.js): cached per sha pair, so
+    // a round where no tip moved costs one for-each-ref and no merge-tree.
+    for (const l of conflictLinesNow()) console.log(l);
     // The pulse runs every loop round, so low parallelism is checked now and then even without fill and receive.
     parallelWarning();
   } else if (under === 'stop') {

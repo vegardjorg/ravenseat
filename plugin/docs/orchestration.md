@@ -292,6 +292,16 @@ started them. A new session adopts them without that notification:
   `silent`, `other`). `cq merge` opens `merge-conflict` (a stop in the merge step) or `gate-red` (a stop in the gates)
   by itself and closes the open one after the next successful merge. `cq blockers [--days 7]` clusters them: count and
   blocked time per code, top first (also in the board's Statistics).
+- **Predicted conflicts:** `cq orchestrator pulse` checks each running, picked or review track tip against the base
+  and against the other tips with `git merge-tree --write-tree` (writes no index, checkout or ref) and prints
+  `PREDICTED CONFLICT <A> x <B>: <files>`, `CONFLICTS WITH BASE: <A>: <files>` and a suggested merge order (a track's
+  dependencies first, then the one with the fewest predicted conflicted files, delivered before running). Results are
+  cached per sha pair in `<dataFolder>/conflict-predict.json`, so a round where no tip moved runs no merge check; a
+  round over the time budget says PARTIAL and the next one continues. `cq conflicts [--json]` gives the full picture.
+  On git older than 2.38 it falls back to changed-file overlap (one NOTE line; `cq doctor` shows an INFO line). When
+  `cq merge` stops on a real conflict, it saves the conflicting files and the other tasks that touched them (owners and
+  queue merges since the fork) on the task (`merge_conflict`) and prints them; `cq resume <ID> --reason fix` puts them
+  in the fix round brief. The next successful merge clears it.
 
 An emergency rotation therefore needs no quiet window. Stop the old session first, so two orchestrators do not
 receive and merge the same track. Compaction is still the usual path for a long session.
