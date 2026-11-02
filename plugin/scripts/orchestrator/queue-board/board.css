@@ -125,18 +125,21 @@ textarea {
 }
 
 /* The Ravenseat logo (the default in the zone; the mascot is a switch in the gear). It is drawn at 70 % of the zone's
-   height so the top is not cramped, standing on the bottom edge in the same 52 × 104 zone, so nothing else moves. The raven
-   on the right talks; the bubble keeps its place and its arrow points at that raven. The shape is a mask and the color a
-   theme token, so it follows light and dark mode. */
+   height so the top is not cramped, centred both ways in the same 52 × 104 zone, and the zone itself is centred in the
+   top (the mascot stands on the bottom edge instead, for its feet), so nothing else moves. The raven on the right
+   talks; the bubble keeps its place and its arrow points at that raven. The shape is a mask and the color a theme
+   token, so it follows light and dark mode. */
 .mascot.raven {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
 }
 .mascot .logo-raven {
   height: 70%;
   background: var(--color-on-surface);
-  -webkit-mask: url('/ravenseat.svg') no-repeat bottom center / contain;
-  mask: url('/ravenseat.svg') no-repeat bottom center / contain;
+  -webkit-mask: url('/ravenseat.svg') no-repeat center / contain;
+  mask: url('/ravenseat.svg') no-repeat center / contain;
 }
 
 /* The switch "Show the mascot instead of the logo" in the gear: the shared input.switch slider with its text. */
