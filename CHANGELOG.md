@@ -55,6 +55,10 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
   owner question "Focus X is done: set a new focus or continue the regular queue?" appears in Waiting on you;
   answering "Continue the regular queue" lifts the pause. On keeps the old behavior with one notice line. Per focus:
   `cq focus set ... --continue-when-empty on|off`; `cq focus` and `cq doctor` know the setting.
+- **Conflict prediction:** `cq orchestrator pulse` and the new `cq conflicts [--json]` check running and delivered
+  track tips against the base and each other with `git merge-tree --write-tree` (cached per sha pair,
+  time-budgeted, with a suggested merge order; git older than 2.38 falls back to file overlap and `cq doctor` says
+  so). A real conflict in `cq merge` names the files and the other tasks that touched them in the fix round brief.
 - **`cq ask <id> ["<question>"]`:** answer a question about an earlier track without resuming its agent. It builds a
   size-capped, secret-redacted bundle (mission, report.md, handover.md, queue notes and owner answers, commits and
   diffstat, transcript tail); `--bundle` writes it for the new `/cq:ask` skill and read-only `ask` agent, `--json`
