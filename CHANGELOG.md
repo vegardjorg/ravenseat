@@ -60,6 +60,14 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
   `approve` and `qa ok` record `--by owner`. The Cloud tab is hidden by default (`board.showCloud`,
   `cq board-setting cloud on`). The Focus view sets what happens when the focus is done and shows FINISHED /
   QUEUE PAUSED. `docs/cli-parity.md` maps every board action to its command.
+- **CI watch after a batch push:** `push-check --watch-ci <sha>` (`push.ciWatch: "github"`, default off, needs gh).
+  A failed check gives one fix task `CI-<sha7>` and a red base (exit 9); an infrastructure failure gives an owner
+  question and no freeze; a timeout exits 10. Only a redacted tail of the failed log is kept.
+- **Flaky check before freezing the base** (`baseGate.flakyRerun`, default on): a red base gate reruns only the
+  failed commands once on the same sha. Green is recorded as flaky (a finding, a `flakyGate` row in `cq cost` Flow)
+  and does not freeze; red twice freezes.
+- **Write guard hook** (`hook-write-guard.mjs`, Write|Edit|NotebookEdit): queue agents can no longer write the gate
+  evidence store or the queue's `queue.json` and `base-health.json` with the file tools.
 - **Review fixes (package E):** the context hook counts compactions incrementally (only the new transcript tail is
   read, cached in `compact-count.json`); worktree cleanup deletes without a shell (paths with `&` are safe);
   `cq doctor` warns about a leftover MERGE_HEAD, `disableAllHooks` in Claude settings, and done tasks whose merge is
