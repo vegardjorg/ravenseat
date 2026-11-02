@@ -90,7 +90,7 @@ describe('cq doctor', () => {
     expect(r.code).toBe(0);
     expect(r.out).not.toMatch(/^FAIL/m);
     expect(r.out).toMatch(/^OK {4}node {7}Node \d+/m);
-    expect(r.out).toMatch(/^OK {4}hooks {6}9 queue hooks listed in .*, all scripts exist$/m);
+    expect(r.out).toMatch(/^OK {4}hooks {6}10 queue hooks listed in .*, all scripts exist$/m);
     expect(r.out).toMatch(/^OK {4}config {5}queue\.config\.json parses, keys and types valid$/m);
     expect(r.out).toMatch(/^OK {4}queue {6}queue\.json parses \(2 task\(s\)\)$/m);
     expect(r.out).toMatch(/^OK {4}lock {7}no lock held$/m);

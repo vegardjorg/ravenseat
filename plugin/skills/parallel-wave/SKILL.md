@@ -191,6 +191,11 @@ on the same branch. Stop the old session first, so two orchestrators do not rece
   "push", or in push mode `threshold` when the verdict line says READY or LARGE; BLOCKED = never push, NOT YET =
   keep collecting). Exit 2: external commits: ask the owner (take everything / push only the queue's part when a safe cut point
   is printed / wait). History is never rewritten.
+  A push needs a green `cq gates --full` run in the main checkout on the tip with no uncommitted changes (BLOCKED
+  otherwise). With `push.ciWatch` on (push-check prints the line), start `cq push-check --watch-ci <sha>` with
+  `run_in_background` right after the push and go on with the loop: exit 9 = a check failed (the fix task
+  `CI-<sha7>` is in the queue and the base is red), 0 = green or an owner question (`ci-<sha7>-infra`, nothing
+  frozen), 10 = timeout (start it again later). Local gates stay the rule; the watch is a safety net.
 
 ## Cloud sessions (optional)
 

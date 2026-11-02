@@ -40,6 +40,7 @@ const BOARD = require('./lib/queueBoard.js');
 const PB = require('./lib/pushBatch.js');
 const TW = require('./lib/testWeakening.js');
 const CP = require('./lib/conflictPredict.js');
+const CW = require('./lib/ciWatch.js');
 
 /** The lowest Node major version the scripts support (package.json "engines"). */
 const MIN_NODE = 20;
@@ -201,6 +202,8 @@ function checkConfig() {
   if (own.mode != null && !['lite', 'full'].includes(own.mode)) wrong.push(`mode is "${own.mode}", expected lite or full`);
   // The push keys have value rules beyond the type (lib/pushBatch.js setupProblems).
   wrong.push(...PB.setupProblems(own.push).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
+  // The CI watch keys (lib/ciWatch.js setupProblems): off or github, positive interval and timeout.
+  wrong.push(...CW.setupProblems(own.push).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   // The test-weakening markers must be valid regular expressions (lib/testWeakening.js setupProblems).
   wrong.push(...TW.setupProblems(own.testWeakening).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   wrong.push(...baselineProblems(own).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));

@@ -14,9 +14,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { BASE, CONFIG, CQ, die, edit, FOLDER, git, GIT_ROOT, L, require, TIME_LOG } from './context.mjs';
+import {
+  BASE, CONFIG, CQ, die, edit, FOLDER, git, GIT_ROOT, L, P, readPlans, readQueueForPlan, require, TIME_LOG, withLock,
+  writePlans,
+} from './context.mjs';
 
 const BH = require('./lib/baseHealth.js');
+const FI = require('./lib/queueFindings.js');
 const TL = require('./lib/timeLogRows.js');
 const ER = require('./lib/eventRows.js');
 const GE = require('./lib/gateEvidence.js');
@@ -68,12 +72,20 @@ export function runCheckNow({ tip, folder, cause = null }) {
     `BASE GATE on ${BASE} at ${short(tip)} in ${GIT_ROOT}: ${BASE_SETUP.commands.join(' ; ')}  ` +
       `(time budget ${BASE_SETUP.timeoutSec} s)`,
   );
-  const run = BH.runBaseGate({
+  let run = BH.runBaseGate({
     commands: BASE_SETUP.commands,
     cwd: GIT_ROOT,
     timeoutSec: BASE_SETUP.timeoutSec,
     tailLines: BASE_SETUP.tailLines,
   });
+  // The flaky check: the red command (and the ones after it, which never ran) once more on the same sha.
+  if (!run.ok) {
+    const again = rerunFailed({ tip, commands: BH.afterFailed(BASE_SETUP.commands, run.failed) });
+    if (again) {
+      run = BH.flakyResult({ first: run, rerun: again, firstFailed: [run.failed] });
+      flakyLines({ tip, run, causeId: cause?.task ?? null, source: 'base gate' });
+    }
+  }
   const after = trackedChanges();
   if (after !== before)
     console.log(
@@ -83,6 +95,102 @@ export function runCheckNow({ tip, folder, cause = null }) {
   console.log(`Base gate ${run.ok ? 'GREEN' : 'RED'} (${run.timedOut ? 'time budget' : `exit ${run.exit ?? '?'}`}, ${run.durationSec} s).`);
   const file = writeReport({ folder, tip, run, cause });
   return { run, file };
+}
+
+/**
+ * The flaky check's rerun: `commands` once more in the main checkout, only when baseGate.flakyRerun is on and the
+ * checkout is still on exactly `tip` (a rerun on another commit would prove nothing). null when it does not run.
+ */
+function rerunFailed({ tip, commands }) {
+  if (!BASE_SETUP.flakyRerun || !commands.length) return null;
+  if (git(['rev-parse', 'HEAD']) !== tip) return null;
+  console.log(`Base gate red: running the failed command(s) once more on the same sha (${short(tip)}): ${commands.join(' ; ')}`);
+  return BH.runBaseGate({ commands, cwd: GIT_ROOT, timeoutSec: BASE_SETUP.timeoutSec, tailLines: BASE_SETUP.tailLines });
+}
+
+/** The lines after a flaky check, and on green the finding and the flakyGate row (fileFlaky). */
+function flakyLines({ tip, run, causeId, source }) {
+  if (!run.ok) {
+    console.log(`Base gate red again on a rerun of \`${run.failed ?? '?'}\` on the same sha (${short(tip)}): not flaky, the base is frozen.`);
+    return;
+  }
+  const finding = fileFlaky({ commands: run.flaky, tip, causeId, source });
+  for (const c of run.flaky)
+    console.log(
+      `FLAKY: \`${c}\` was red, then green on a rerun on the same sha (${short(tip)}); the base is not frozen.` +
+        (finding ? ` Finding ${finding} (${CQ} finding list).` : ''),
+    );
+}
+
+/**
+ * Records a flaky command: one `flakyGate` row in the time log (measurement; cq cost Flow counts them) and a finding
+ * in the plan register per command (deduplicated on the title, so a command that is flaky again counts on the same
+ * entry). The project: the merged task's, else the only registered one; without one only the row is written.
+ * Never throws (a flaky record must not stop the merge flow).
+ * @returns {string|null} the finding id (the first command's), or null
+ */
+function fileFlaky({ commands, tip, causeId = null, source }) {
+  try {
+    TL.appendRows(TIME_LOG, ER.flakyGateRow({ tip, commands, source, task: causeId }));
+  } catch {
+    // error-ignored: measurement only
+  }
+  try {
+    return withLock(() => {
+      const queue = readQueueForPlan();
+      const projects = queue.projects ?? {};
+      const task = causeId ? (queue.tasks ?? []).find((t) => t.id === causeId) : null;
+      const own = task ? L.projectFor(task, projects) : null;
+      const names = Object.keys(projects);
+      const project = own && Object.hasOwn(projects, own) ? own : names.length === 1 ? names[0] : null;
+      if (!project) {
+        console.log(`NOTE: no registered project to file the flaky finding under (${CQ} project <pid>); the time log has the row.`);
+        return null;
+      }
+      const reg = readPlans();
+      const before = JSON.parse(JSON.stringify({ entries: reg.entries, archive: reg.archive, documents: reg.documents }));
+      let first = null;
+      for (const c of commands) {
+        const r = FI.recordFinding(
+          reg,
+          {
+            title: `Flaky gate command: ${c}`.slice(0, 200),
+            detail:
+              `Red, then green on a rerun on the same commit ${tip} (${source}, ${BASE}). Not frozen. ` +
+              'Make the command deterministic or take it out of the gate.',
+            task: null,
+            files: [],
+            project,
+          },
+          { projects, question: queue.question ?? {} },
+        );
+        if (!r.error?.length) first ??= r.entry?.id ?? r.duplicate ?? null;
+      }
+      const entry = P.logChange(reg, { by: source, action: 'finding', changes: P.planDiff(before, reg) });
+      if (entry) writePlans(reg);
+      return first;
+    });
+  } catch {
+    return null; // error-ignored: the row above is the measurement; the finding is a convenience
+  }
+}
+
+/**
+ * The flaky check for the merge step's red quick gates (cli/merge.mjs): the failed commands from the gate evidence the
+ * run recorded for `tip` (gates.mjs --evidence; all the quick gates when none is found) once more on the same sha.
+ * Green: the lines and the record, and the green run for the verdict ({ run }). Red again or off: null (the caller
+ * freezes as before).
+ */
+export function flakyRecheck({ tip, causeId = null }) {
+  if (!BASE_SETUP.enabled || !BASE_SETUP.flakyRerun || !tip) return null;
+  const quick = (CONFIG.gates?.quick ?? []).filter((g) => typeof g === 'string' && g.trim());
+  const entry = gateRowsNow().filter((e) => e?.sha === tip && e.kind === 'quick').at(-1);
+  const failed = entry?.failed?.length ? entry.failed : quick;
+  const again = rerunFailed({ tip, commands: failed });
+  if (!again) return null;
+  const run = BH.flakyResult({ first: { durationSec: null }, rerun: again, firstFailed: failed });
+  flakyLines({ tip, run, causeId, source: 'quick gates after a merge' });
+  return run.ok ? { run } : null;
 }
 
 /** Writes the report for a check and returns its path. */
@@ -101,22 +209,28 @@ export function writeReport({ folder, tip, run, cause = null }) {
  * or the open one is reused (the task that is being merged is never reused: it is set done right after), and the record
  * names the merge that made it red. When the base was already red before this merge (`wasRed`: a forced merge or the
  * fix task itself), the record keeps the merge that first made it red.
+ * `fixTask`: a fix task the caller already added (the CI watch, CI-<sha7>) is the record's fix task and no base fix
+ * task is added. A green `run` with `flaky` (the flaky check) records `flaky` and a note.
  * @returns {{ entry: object, previous: object|null, fix: { id: string, reused: boolean } | null }}
  */
-export function recordVerdict({ tip, ok, run = null, file = null, causeId = null, wasRed = null, skipped = null, note = null }) {
+export function recordVerdict({
+  tip, ok, run = null, file = null, causeId = null, wasRed = null, skipped = null, note = null, fixTask = null,
+}) {
   const state = readHealth();
   const previous = state.current;
   const at = new Date().toISOString();
   const base = { tip, branch: BASE, status: ok ? 'green' : 'red', at, commands: BASE_SETUP.commands };
   if (ok) {
-    const entry = { ...base, ...(skipped ? { skipped } : {}), ...(note ? { note } : {}) };
+    const flaky = run?.flaky?.length ? { flaky: run.flaky, note: note ?? `flaky: green on a rerun of ${run.flaky.join(', ')}` } : {};
+    const entry = { ...base, ...(skipped ? { skipped } : {}), ...(note ? { note } : {}), ...flaky };
     BH.writeState(HEALTH_FILE, BH.record(state, entry));
     logBaseGate({ entry, run });
     return { entry, previous, fix: null };
   }
   // Already red before this merge: this merge did not make it red, so the earlier cause (possibly none) is kept.
   const madeRedBy = wasRed ? (wasRed.made_red_by ?? null) : causeId ? { task: causeId, merge_commit: tip } : null;
-  const fix = edit((queue) => {
+  // A fix task the caller already added (the CI watch: CI-<sha7>) is the fix task; no base fix task is added then.
+  const fix = fixTask ? { id: fixTask, reused: true } : edit((queue) => {
     const tasks = queue.tasks ?? (queue.tasks = []);
     const candidate = wasRed?.fix_task ?? (previous?.status === 'red' ? previous.fix_task : null);
     const open = candidate ? tasks.find((t) => t.id === candidate) : null;

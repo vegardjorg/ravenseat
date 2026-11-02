@@ -9,7 +9,9 @@
 // fix task without a cause, --force-red-base goes on, is logged and reuses the open fix task; (4) the skip rule: a
 // track that already contains the base and whose own gate ran green on its tip is recorded green without the gates
 // step; (5) other base gate commands run as their own step, and a red one lets done go on but exits 9; (6) the feature
-// off: no state file, no refusal, no fix task.
+// off: no state file, no refusal, no fix task; (7) the flaky check: a red base gate reruns only the failed commands once
+// on the same sha; green on the rerun records green with `flaky`, a finding and a flakyGate row (no freeze), red twice
+// freezes as before, and baseGate.flakyRerun false freezes at once.
 // Runs queue.mjs against a temporary queue (QUEUE_FOLDER) and git repo (QUEUE_GIT), with an injected merge runner
 // (QUEUE_MERGE_RUNNING) that merges with plain git (merge-track.mjs refuses a test identity) and runs the other steps
 // (the real gates.mjs, the real `set done`) as cq merge would. Never the main repo or the real queue. The gate is a tiny
@@ -34,6 +36,13 @@ const CHECK_JS =
   "for (const f of fs.readdirSync('lib').sort()) require(path.resolve('lib', f));\n" +
   "console.log('check ok');\n";
 const CHECK = 'node check.js';
+// Red and green in turn (a marker file outside the repo, FLAKY_FILE): a flaky gate command.
+const FLAKY_JS =
+  "const fs = require('fs'); const f = process.env.FLAKY_FILE;\n" +
+  'if (!f) process.exit(0);\n' +
+  "if (fs.existsSync(f)) { fs.rmSync(f); console.log('flaky green'); process.exit(0); }\n" +
+  "fs.writeFileSync(f, '1'); console.log('flaky red'); process.exit(1);\n";
+const FLAKY = 'node flaky.js';
 
 const temporary: string[] = [];
 afterAll(() => {
@@ -45,7 +54,7 @@ afterAll(() => {
 });
 
 /** A temporary project: repo on develop with lib/a.js and check.js, a queue, a config and the merge runner. */
-function project(config: Record<string, unknown>) {
+function project(config: Record<string, unknown>, queueExtra: Record<string, unknown> = {}) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-basegate-'));
   temporary.push(folder);
   const repo = path.join(folder, 'repo');
@@ -63,7 +72,7 @@ function project(config: Record<string, unknown>) {
   const writeQueue = () =>
     fs.writeFileSync(
       path.join(folder, 'queue.json'),
-      JSON.stringify({ created: '2026-01-01T00:00:00.000Z', limits: {}, next_migr: 3600, resolved: [], tasks }),
+      JSON.stringify({ created: '2026-01-01T00:00:00.000Z', limits: {}, next_migr: 3600, resolved: [], ...queueExtra, tasks }),
     );
   writeQueue();
   const configFile = path.join(folder, 'queue.config.json');
@@ -170,6 +179,9 @@ describe('queue.mjs merge with the base gate', () => {
     expect(m2.code).toBe(1);
     expect(m2.out).not.toContain('checking it before the merge');
     expect(m2.out).toContain('BASE RED: develop is red at');
+    // The flaky check reran the red command once on the same sha; red twice freezes as before.
+    expect(m2.out).toContain('red again on a rerun');
+    expect(m2.out).not.toContain('FLAKY');
     expect(m2.out).toContain('after the merge of B');
     expect(m2.out).toContain('Fix task: B-BASE1');
     expect(m2.out).toContain('revert -m 1');
@@ -364,5 +376,51 @@ describe('queue.mjs merge with the base gate', () => {
     expect(fs.existsSync(path.join(p.folder, 'base-health.json'))).toBe(false);
     expect(p.queue().tasks.map((t) => t.id).sort()).toEqual(['A', 'B', 'C']);
     expect(p.run('show').out).not.toContain('BASE develop');
+  });
+
+  it('a flaky base gate: red, then green on a rerun of the failed command on the same sha; not frozen, a finding', () => {
+    const p = project({ gates: { quick: [FLAKY] } }, { projects: { app: { title: 'App', prefixes: ['A'] } } });
+    fs.writeFileSync(path.join(p.repo, 'flaky.js'), FLAKY_JS);
+    p.g(['add', '--', 'flaky.js']);
+    p.g(['commit', '-q', '-m', 'flaky gate']);
+    p.env.FLAKY_FILE = path.join(p.folder, 'flaky.marker');
+    p.track('A', { 'lib/b.js': 'exports.b = 1;\n' });
+    // The check before the merge (unknown base) and the quick gates after it are each red once, then green on the rerun.
+    const m = p.run('merge', 'A', '--without-fill');
+    expect(m.error).toBe('');
+    expect(m.code).toBe(0);
+    expect(m.out).toContain(`FLAKY: \`${FLAKY}\``);
+    expect(m.out).toContain('BASE GREEN');
+    expect(p.find('A')?.status).toBe('done');
+    expect(p.health().current).toMatchObject({ tip: p.tip(), status: 'green', flaky: [FLAKY] });
+    expect(p.queue().tasks.map((t) => t.id)).toEqual(['A']);
+    // One finding (the second report counts on the same entry), and a flakyGate row per rerun in the time log.
+    const plans = JSON.parse(fs.readFileSync(path.join(p.folder, 'plans.json'), 'utf8'));
+    const findings = plans.entries.filter((e: { finding?: unknown }) => e.finding);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].title).toContain(FLAKY);
+    expect(findings[0].finding.count).toBe(2);
+    const rows = fs
+      .readFileSync(path.join(p.folder, 'times.jsonl'), 'utf8')
+      .split('\n')
+      .filter((l) => l.includes('"flakyGate"'))
+      .map((l) => JSON.parse(l));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ event: 'flakyGate', commands: [FLAKY] });
+    expect(p.run('cost').out).toMatch(/flaky gate command\(s\): 2/);
+  });
+
+  it('baseGate.flakyRerun false: a red base gate freezes at once, without a rerun', () => {
+    const p = project({ gates: { quick: [FLAKY] }, baseGate: { flakyRerun: false } });
+    fs.writeFileSync(path.join(p.repo, 'flaky.js'), FLAKY_JS);
+    p.g(['add', '--', 'flaky.js']);
+    p.g(['commit', '-q', '-m', 'flaky gate']);
+    p.env.FLAKY_FILE = path.join(p.folder, 'flaky.marker');
+    p.track('A', { 'lib/b.js': 'exports.b = 1;\n' });
+    const m = p.run('merge', 'A', '--without-fill');
+    expect(m.code).toBe(9);
+    expect(m.out).not.toContain('FLAKY');
+    expect(m.out).not.toContain('rerun');
+    expect(p.health().current).toMatchObject({ status: 'red' });
   });
 });

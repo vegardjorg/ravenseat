@@ -49,7 +49,9 @@ Before starting tracks:
   `guard-overridden` in the time log. Other files outside the ownership only give a warning (ownership drift).
 
 After tracks:
-- The full gate run happens once, at the orchestrator, after merging: `cq gates --full`.
+- The full gate run happens once, at the orchestrator, after merging: `cq gates --full`. A batch push needs it green
+  in the main checkout, on the base tip, with no uncommitted changes (the gate evidence `cq push-check` reads).
+- A track's own gate runs are informational; `cq receive` reruns the quick gates on the delivered tip (`gate_check`).
 - Merging is done with `scripts/orchestrator/merge-track.mjs` (through `cq merge`).
 
 ## Fix round and continuation (new agent)
@@ -175,6 +177,8 @@ the log folder, so read the log file of a red gate instead of running it again):
 <!-- class: D D+ -->
 - Before delivery, D and D+: `cq gates --full --log "<folder>\gates"` (must be green).
 <!-- /class -->
+- Your own gate runs are informational: `cq receive` runs the quick gates again on your delivered tip, so commit
+  everything before you report. Never write the gate evidence or the queue files yourself (a hook denies it).
 
 **Report:** write the long version with Write to `<folder>\report.md`, NEVER in the answer. The answer STARTS with
 one result line in a fixed format (the queue reads it with `cq receive` and `set done`), with no spaces inside

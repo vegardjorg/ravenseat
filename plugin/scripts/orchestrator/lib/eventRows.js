@@ -15,7 +15,11 @@
 //   baseGate      { tip, ok, skipped, duration_s, made_red_by, fix_task?, note? }
 //                                                            every recorded base verdict (cli/baseHealth.mjs
 //                                                            recordVerdict): before a merge, after it, the skip rule
-//   triage        { task, verdict, by? }                    cq triage <id> --verdict
+//   flakyGate     { tip, commands, source, task? }          a base gate command that was red, then green on a rerun
+//                                                            on the same sha (cli/baseHealth.mjs, the flaky check)
+//   ciWatch       { sha, verdict, runs, red, task?, question? }
+//                                                            the CI watch's verdict for a pushed commit (cli/ciWatch.mjs)
+//   triage       { task, verdict, by? }                    cq triage <id> --verdict
 //   push          { remote, branch, from, tip, tasks, task_count, commits, base_health, verdict, detected_at }
 //                                                            detected after the fact from the reflog of the remote
 //                                                            tracking ref (see pushesFromReflog), at cq fill
@@ -35,7 +39,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /** The event names written here (readers that keep only some rows, such as the board, filter on this set). */
-const EVENTS = new Set(['fixRound', 'mergeConflict', 'baseGate', 'triage', 'push', 'load', 'session']);
+const EVENTS = new Set(['fixRound', 'mergeConflict', 'baseGate', 'flakyGate', 'ciWatch', 'triage', 'push', 'load', 'session']);
 
 const iso = (t) => (t == null ? new Date().toISOString() : typeof t === 'number' ? new Date(t).toISOString() : t);
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
@@ -83,6 +87,21 @@ function baseGateRow({ time, tip, ok, skipped = null, run = null, madeRedBy = nu
   };
   if (fixTask) row.fix_task = fixTask;
   if (note) row.note = note;
+  return row;
+}
+
+/** A flaky base gate command (or several): red, then green on a rerun on the same sha. */
+function flakyGateRow({ time, tip, commands, source = null, task = null }) {
+  const row = { time: iso(time), event: 'flakyGate', tip: tip ?? null, commands: Array.isArray(commands) ? [...commands] : [], source };
+  if (task) row.task = task;
+  return row;
+}
+
+/** The CI watch's verdict for a pushed commit: green, check or infra (the red run count, the task or question). */
+function ciWatchRow({ time, sha, verdict, runs = 0, red = 0, task = null, question = null }) {
+  const row = { time: iso(time), event: 'ciWatch', sha: sha ?? null, verdict, runs, red };
+  if (task) row.task = task;
+  if (question) row.question = question;
   return row;
 }
 
@@ -301,6 +320,8 @@ module.exports = {
   conflictFiles,
   mergeConflictRow,
   baseGateRow,
+  flakyGateRow,
+  ciWatchRow,
   triageRow,
   loadRow,
   SESSION_FILE,

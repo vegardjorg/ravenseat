@@ -19,7 +19,8 @@
   "hooks": {
     "PreToolUse": [
       { "matcher": "Bash|PowerShell", "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-push-guard.mjs"], "timeout": 10 }] },
-      { "matcher": "Read", "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-read-guard.mjs"], "timeout": 10 }] }
+      { "matcher": "Read", "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-read-guard.mjs"], "timeout": 10 }] },
+      { "matcher": "Write|Edit|NotebookEdit", "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-write-guard.mjs"], "timeout": 10 }] }
     ],
     "PostToolUse": [
       { "matcher": "*", "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-track-context.mjs"], "timeout": 10 }] }

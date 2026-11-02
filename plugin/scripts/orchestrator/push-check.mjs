@@ -15,9 +15,14 @@
 // or NOTHING. In push mode "threshold" the orchestrator may push on READY or LARGE by itself, never on BLOCKED; in mode
 // "owner" (the default) only on the owner's word. The verdict does not change the exit code.
 //
-// Read only: it never pushes, does not fetch and does not rewrite history.
+// Read only: it never pushes, does not fetch and does not rewrite history (--watch-ci, the CI watch, is the exception
+// that writes: the fix task or the owner question, and the base health).
 //
 // Use: node scripts/orchestrator/push-check.mjs [--from <remote>/<baseBranch>] [--to <baseBranch>] [--json]
+//      node scripts/orchestrator/push-check.mjs --watch-ci <sha> [--interval <sec>] [--timeout <min>]
+// --watch-ci is the optional CI watch after a batch push (config().push.ciWatch, off by default; cli/ciWatch.mjs):
+// started in the background, it exits 0 green or infrastructure (an owner question), 9 on a failed check (the fix task
+// CI-<sha7>, the base red), 10 on timeout. When it is on, the verdict below names the command to start.
 // Exit: 0 = no external commits (or nothing to push); 2 = external commits (the list, and a safe cut point when one
 // exists); 1 = error (e.g. unknown ref).
 // QUEUE_GIT overrides the repo (smoke test against a temporary repo), as in queue.mjs.
@@ -33,8 +38,17 @@ const { config, dataFolder } = require('./lib/queueConfig.js');
 const PB = require('./lib/pushBatch.js');
 const BH = require('./lib/baseHealth.js');
 const GE = require('./lib/gateEvidence.js');
+const CW = require('./lib/ciWatch.js');
+
+if (process.argv.includes('--watch-ci')) {
+  // The CI watch is its own flow (it writes the queue); the read-only push check below does not run.
+  // It ends with process.exit; the line after it only guards a module that returns.
+  await import('./cli/ciWatch.mjs');
+  process.exit(process.exitCode ?? 0);
+}
 
 const K = config();
+const CI = CW.ciWatchSetup(K);
 // Main tree (config().root): baseBranch and the uncommitted files that matter are there (also when the script runs from
 // a worktree).
 const git = G.makeGit(process.env.QUEUE_GIT ?? K.root);
@@ -137,6 +151,7 @@ if (AS_JSON) {
           verdict: verdict.verdict,
           reason: verdict.reason,
         },
+        ci_watch: CI.enabled ? { mode: CI.mode, command: `cq push-check --watch-ci ${toSha}` } : null,
       },
       null,
       2,
@@ -227,5 +242,8 @@ function batchLines() {
       (batch.oldestAt ? `, oldest ${PB.ageText(batch.oldestAt)} old` : '') +
       `; base ${healthText}, full gate ${gateText} at ${summary(toSha)} (${limits}).`,
     `Verdict: ${PB.verdictWord(verdict.verdict)} (${verdict.reason}).`,
+    ...(CI.enabled
+      ? [`CI watch (${CI.mode}): after the push, start cq push-check --watch-ci ${toSha} in the background (run_in_background); exit 9 = a check failed (fix task CI-${toSha.slice(0, 7)}), 0 = green or an owner question, 10 = timeout.`]
+      : []),
   ];
 }

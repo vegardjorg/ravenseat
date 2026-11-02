@@ -71,8 +71,9 @@ const STANDARD = Object.freeze({
   // verdict recorded per tip; a red base stops further merges until a fix task makes it green. enabled: "auto" (on when
   // there are commands), true or false. commands: null = the quick gates (then the merge step's own gates run is the
   // check, nothing runs twice), or a list (e.g. the full gate) run after the quick gates. timeoutSec = the budget for
-  // the whole list; tailLines = the output lines kept for the fix task (null = doneCheck.tailLines).
-  baseGate: { enabled: 'auto', commands: null, timeoutSec: 900, tailLines: null },
+  // the whole list; tailLines = the output lines kept for the fix task (null = doneCheck.tailLines). flakyRerun: a red
+  // check reruns only the failed commands once on the same sha first; green then is "flaky" (a finding, no freeze).
+  baseGate: { enabled: 'auto', commands: null, timeoutSec: 900, tailLines: null, flakyRerun: true },
   // The batch push threshold (lib/pushBatch.js; `cq push-check`, the push guard, the board). Every push of baseBranch
   // runs the whole CI, so pushes come in batches of MERGED TASKS (merges through cq merge not yet on <remote>).
   // mode: "owner" = the orchestrator never pushes on its own, only on the owner's word; "threshold" = it may push by
@@ -80,7 +81,10 @@ const STANDARD = Object.freeze({
   // (0 = no lower limit); a plain push below it gets a confirmation dialog in both modes. warnTasks: from this many,
   // push-check says LARGE (a warning, never a block: a big batch makes a red CI harder to bisect; 0 = off).
   // maxAgeHours: when set, the oldest unpushed work older than this makes the batch ready below minTasks.
-  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null },
+  // ciWatch: "off" (default) or "github": the optional CI watch after a batch push
+  // (`cq push-check --watch-ci <sha>`, lib/ciWatch.js, needs gh): polls the runs every ciWatchIntervalSec, gives up
+  // after ciWatchTimeoutMin (exit 10). Local gates stay the rule; this is a safety net.
+  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90 },
   // The branch that goes live (production). null = unknown. `cq doctor` warns when it is the same as baseBranch: every
   // batch push would then go straight to production. Nothing else reads it yet.
   productionBranch: null,
