@@ -151,7 +151,7 @@ away once setup has run. If setup was run for a newer plugin than the running bo
 
 The picture in the upper-left corner is loaded from `<dataFolder>/logo.webp` if it exists, otherwise from
 `scripts/orchestrator/queue-board/logo.webp`. Keeping the picture there is a friendly request, not a license
-condition (see "About the logo" in the README).
+condition (see "The name and the logo" in the README).
 
 ## The mascot
 
