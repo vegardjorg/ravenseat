@@ -265,6 +265,9 @@ Claude offers to queue it. The slash commands below are the explicit way to do t
 3. **Check the board.** Run `/cq:board` (or ask Claude to "start the board"). It starts the board in the
    background and gives you a local link. Answer open questions there; the orchestrator picks the answers up.
 4. **Push when you are ready.** Merges stay local. Nothing is pushed until you say "push", and then in one batch.
+   `cq push-check` counts the merged tasks since the last push and says READY, NOT YET, BLOCKED or LARGE; with
+   `push.mode: "threshold"` the orchestrator pushes by itself when the batch is ready (see
+   [Batch push](plugin/docs/orchestration.md#batch-push-the-push-threshold)).
 
 Other skills: `/cq:pick` to take one task and do it yourself in the current chat, `/cq:parallel-wave` for the full
 orchestration rules, and `/cq:start` to open a session cheaply before you paste a task (it only answers "ready";
