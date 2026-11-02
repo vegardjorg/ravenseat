@@ -248,6 +248,11 @@
 //         base fix task merges, --force-red-base overrides on the owner's word and is logged as "base-red-overridden"),
 //         or after it when the base gate commands went red (the merge stays, a fix task <id>-BASE<n> is added).)
 //   node scripts/orchestrator/queue.mjs info <id> [--field <name>] [--json]   (short view; one field raw, also cost.usd)
+//   node scripts/orchestrator/queue.mjs ask <id> ["<question>"] [--bundle] [--json] [--max-chars <n>] [--out <file>]
+//        [--scratchpad <dir>]   (a question about an earlier track without resuming its agent: a size-capped,
+//         secret-redacted bundle of the mission, report.md, handover.md, the queue's notes and owner answers, the
+//         commits and diffstat, and the transcript tail. Prints it with an answer instruction; --bundle writes it to
+//         <scratchpad>/ask-<id>/bundle.md and prints the path, for /cq:ask. Read-only. cli/ask.mjs, lib/askBundle.js)
 //   node scripts/orchestrator/queue.mjs edit <id> --bonus "<text>"  (to the mission, in the track block from the next
 //                                                                  trackFile/fill, and to the remarks, with a timestamp)
 //   node scripts/orchestrator/queue.mjs activeOnes                        (running/picked/review: id, class, branch, migr_block,
@@ -553,6 +558,7 @@
 // helpers in cli/tracks.mjs. The usage comment stays here: lib/cliHelp.js reads it for `cq help`.
 import fs from 'node:fs';
 import { a, command, CONFIG, CQ, die, HERE, KK, require } from './cli/context.mjs';
+import * as ask from './cli/ask.mjs';
 import * as batch from './cli/batch.mjs';
 import * as cloud from './cli/cloud.mjs';
 import * as cost from './cli/cost.mjs';
@@ -650,6 +656,8 @@ if (command === 'init') {
   merge.cmdBlockers();
 } else if (command === 'info') {
   view.cmdInfo();
+} else if (command === 'ask') {
+  ask.cmdAsk();
 } else if (command === 'activeOnes') {
   view.cmdActiveOnes();
 } else if (command === 'next-migr') {
@@ -728,7 +736,7 @@ if (command === 'init') {
   die(require('./lib/cliHelp.js').unknownCommandMessage(command, require('./lib/cliHelp.js').knownCommands(scripts), CQ), 1);
 } else {
   die(
-    'Use: cq <init|add|approve|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
+    'Use: cq <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
       'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow|triage|wait> ...  (see the top of the file)',
