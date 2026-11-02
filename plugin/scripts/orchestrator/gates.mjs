@@ -27,10 +27,17 @@
 // overrides): the kind, the gates that ran and the red ones, the duration, the exit code and `attempt` (the how-many-th
 // run of this kind for the task), so reruns can be counted. The task is --track <id> (cq merge passes it) or the branch
 // <branchPrefix><id>, otherwise null. The row also has the HEAD commit (`sha`) and `clean` (no uncommitted tracked
-// changes) from the start of the run, for the base gate's skip rule. The row format lives in lib/timeLogRows.js. Writing it never changes the result
-// or the exit code (fail open).
+// changes) from the start of the run. The row format lives in lib/timeLogRows.js. Writing it never changes the result
+// or the exit code (fail open). The time log row is MEASUREMENT ONLY: every agent can append to that file.
 //
-// Use: node scripts/orchestrator/gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>]
+// Gate evidence (lib/gateEvidence.js): what cq receive, cq merge (the base gate's skip rule) and the push check rely on.
+// A --quick/--full run records one entry in <dataFolder>/gate-evidence.json (sha, clean, the commands, green or red) only
+// when the orchestrator's side runs it: with --evidence (cq receive and cq merge pass it) or in the MAIN checkout (not a
+// linked worktree; the full gate before a batch push). A track's own run in its worktree is never evidence.
+//   --evidence  record evidence also outside the main checkout (the push guard denies it to queue agents).
+//   --cwd <folder>  run in that folder (cq receive: the track's worktree).
+//
+// Use: node scripts/orchestrator/gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>] [--evidence] [--cwd <folder>]
 //      node scripts/orchestrator/gates.mjs --precheck [--json] [--base <ref>] [--track <id>] [--log <file>]
 // See docs/orchestration.md.
 // =============================================================
@@ -52,7 +59,7 @@ const full = args.includes('--full');
 const precheck = args.includes('--precheck');
 if ([quick, full, precheck].filter(Boolean).length !== 1) {
   console.error(
-    'use: gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>]\n' +
+    'use: gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>] [--evidence] [--cwd <folder>]\n' +
       '     gates.mjs --precheck [--json] [--base <ref>] [--track-base <sha> --track-tip <sha>] [--track <id>] [--log <file>]',
   );
   process.exit(2);
@@ -71,7 +78,8 @@ function inProject(filePath) {
   const rel = path.relative(K.root, filePath);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
-const cwd = inProject(process.cwd()) ? process.cwd() : K.root;
+// --cwd <folder>: run there (cq receive runs the quick gate in the track's worktree, which need not be under the root).
+const cwd = option('--cwd') ? path.resolve(option('--cwd')) : inProject(process.cwd()) ? process.cwd() : K.root;
 
 /**
  * Appends this run's `gate` row to the time log (lib/timeLogRows.js). Fail open: every error is swallowed, so the log
@@ -111,6 +119,47 @@ function startState() {
   return { sha, clean: status == null ? undefined : status.trim() === '' };
 }
 const START = startState();
+
+/**
+ * Is the gate folder the MAIN checkout (not a linked worktree)? git-dir and git-common-dir are the same folder there.
+ * A run in the main checkout is the orchestrator's (before a batch push, after a merge) and records gate evidence by
+ * default; a track runs in its own worktree. null when git cannot tell.
+ */
+function inMainTree() {
+  const out = git('rev-parse', '--git-dir', '--git-common-dir');
+  if (out == null) return null;
+  const [dir, common] = out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!dir || !common) return null;
+  const norm = (p) => {
+    const abs = path.resolve(cwd, p);
+    return process.platform === 'win32' ? abs.toLowerCase() : abs;
+  };
+  return norm(dir) === norm(common);
+}
+
+/**
+ * Records this run as trusted gate evidence (lib/gateEvidence.js) when the orchestrator's side ran it: --evidence
+ * (cq receive, cq merge) or a run in the main checkout. A track's own run in its worktree is never evidence. The entry
+ * needs the sha (HEAD did not move during the run) and the cleanliness at the start. Fail open: a write error only
+ * means no evidence, so the caller runs the gate again or asks.
+ */
+function recordEvidence({ kind, ran, failed, exit, timedOut = false }) {
+  try {
+    const mainTree = inMainTree() === true;
+    if (!args.includes('--evidence') && !mainTree) return;
+    const GE = require('./lib/gateEvidence.js');
+    const { dataFolder } = require('./lib/queueConfig.js');
+    const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
+    const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
+    const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
+    GE.append(
+      GE.storeFile(dataFolder()),
+      GE.entry({ kind, sha, clean: START.clean, exit, gates: ran, failed, timedOut, track, branch, mainTree }),
+    );
+  } catch {
+    // error-ignored: no evidence is the safe direction (receive runs the gate again, the push check asks)
+  }
+}
 
 if (precheck) process.exit(await precheckMode());
 
@@ -313,6 +362,7 @@ logRun({
   exit: failedCount === 0 ? 0 : 1,
   timedOut: timedOutAny,
 });
+recordEvidence({ kind: mode, ran: gates, failed: failedGates, exit: failedCount === 0 ? 0 : 1, timedOut: timedOutAny });
 console.log(
   failedCount === 0
     ? `ALL GREEN: ${gates.length} gate(s) --${mode} in ${total} s`
