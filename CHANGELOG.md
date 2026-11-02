@@ -3,7 +3,7 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.8.4 (2026-11-02)
 
 ### Changed
 - `cq init` adds the queue data folder to `.gitignore` (only in a git repo, only when not already ignored).
