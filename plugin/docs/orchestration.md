@@ -229,6 +229,18 @@ context size. The system keeps both small:
   and `hook-track-context.mjs` writes `{ time, event: "compact", scope: "track", agent_id, agent_type, track,
   compactions }` once per new track compaction (`compactions` is the count after it; once a track has had its PARTIAL
   message its transcript is no longer counted). Writing a row never changes what the hook does.
+- **Transcript metrics.** In the same single pass over the transcript, each `done` row also gets `byModel`
+  (`{<model>: {turns, tokens, cost_usd}}`; `cost_usd` of the row is the sum, `model` is kept for old readers), `tools`
+  (`{<name>: {calls, errors}}`, errors are tool results with `is_error`), `api_errors` (`{rate_limit, overloaded,
+  other}`), and `active_s` with `idle_gaps`: the wall time minus gaps longer than `metrics.idleGapMin` minutes (default
+  5). Time spent (calibration minutes) uses `active_s` when the row has it; `duration_s` stays. Prices are per model
+  family in `lib/timeCost.js` (`PRICE_TABLE`, with its source and date); the config key `prices` overrides them per
+  model id or family (`{"opus": {"input": 5, "output": 25, "cache_read": 0.5}}`), and a model with no price is priced
+  as Opus 5.5 and marked as assumed. An agent with a `start` row and no `done` row (killed, so no SubagentStop) is
+  measured from its transcript at `cq receive`, `set <id> done` and `cq cost measure`: one `done` row with `killed:
+  true`, cumulative like the others, so a later real stop never counts twice. A transcript written in the last 2
+  minutes is left for the next measurement. `cq cost` and `log-time.mjs --cost` show the per model split, top tools,
+  API errors, active time and killed agents; old rows without the fields still work.
 - **Hook cost.** `hook-track-context.mjs` runs on every tool call in every session (PostToolUse, matcher `*`); it
   exits before any require unless the agent is a track, so the cost is the process start. All hooks are in exec form
   (`"command": "node", "args": [...]`): Claude Code spawns node directly, with no shell, and substitutes

@@ -21,7 +21,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import {
-  branchFor, CE, CQ, die, edit, G, GIT_ROOT, gitRead, HERE, L, LS, MAIN_TREE, MIGR, missionFile, read, require,
+  branchFor, CE, CONFIG, CQ, die, edit, G, GIT_ROOT, gitRead, HERE, L, LS, MAIN_TREE, MIGR, missionFile, read, require,
   TIME_LOG, TK, val, values,
 } from './context.mjs';
 
@@ -219,6 +219,8 @@ export function readTimeLog() {
  */
 export function taskAgents(o, to = new Date().toISOString()) {
   const from = o.started ?? o.picked_at ?? o.added_at ?? null;
+  // Killed agents first (start row, no done row): their done row makes them part of the task like any other agent.
+  recordKilledAgents(o, to);
   const { secure, uncertainOnes } = L.agentsForTask(readTimeLog(), o.id, { from, to });
   const out = [];
   for (const a of [...secure, ...uncertainOnes.map((x) => ({ ...x, uncertain: true }))]) {
@@ -236,19 +238,64 @@ export function taskAgents(o, to = new Date().toISOString()) {
   }
   return out;
 }
+// ---- Killed agents (transcript metrics): kept apart to keep merges simple ----
+/** The idle threshold for active time (config metrics.idleGapMin, default 5 min), as in hook-time.mjs. */
+const idleGapMin = () => CONFIG?.metrics?.idleGapMin ?? TK.IDLE_GAP_MIN;
+/**
+ * A transcript written this recently may belong to an agent that is still alive (its SubagentStop has not come yet);
+ * it is left for the next measurement.
+ */
+const KILLED_QUIET_MS = 2 * 60_000;
+/**
+ * Writes a done row with `killed: true` (lib/timeLogRows.js killedDoneRow) for each agent of task `o` that has a start
+ * row and no done row: an agent that was stopped, crashed or killed without SubagentStop, whose cost would otherwise be
+ * lost. The analysis is of what its transcript holds. The agent belongs to the task when the mission's track label is
+ * the task (or a fix round of it) or the mission mentions the task id. Called by taskAgents, so `receive`, `set done`
+ * and `cost measure` all run it. A later real done row is cumulative too, so the readers count only its growth.
+ * Never throws (the measurement must not stop the command); returns the rows written.
+ */
+export function recordKilledAgents(o, to = new Date().toISOString()) {
+  try {
+    const TLR = require('./lib/timeLogRows.js');
+    const from = o.started ?? o.picked_at ?? o.added_at ?? null;
+    const isId = (x) => x === o.id;
+    const rows = [];
+    for (const start of TLR.agentsWithoutDone(readTimeLog(), { from })) {
+      if (to && Date.parse(start.time) > Date.parse(to)) continue;
+      const filePath = findTranscript(start.agent_id);
+      if (!filePath) continue;
+      if (Date.now() - fs.statSync(filePath).mtimeMs < KILLED_QUIET_MS) continue;
+      const text = readTranscript(filePath);
+      if (!text) continue;
+      const stat = TK.analyzeTranscript(text, { idleGapMin: idleGapMin() });
+      const firstMessage = L.firstUserMessage(text);
+      const belongs =
+        (stat.track && TK.taskIdFor(stat.track, isId) === o.id) ||
+        (firstMessage != null && L.mentionsTask(firstMessage, o.id));
+      if (belongs) rows.push(TLR.killedDoneRow({ start, stat }));
+    }
+    if (rows.length) TLR.appendRows(TIME_LOG, rows);
+    return rows;
+  } catch {
+    return []; // error-ignored: a killed agent's row is for measurement only
+  }
+}
 /** The cost of the task (queueLogic.sumCost): the transcript when it exists, otherwise the last row in the time log. */
 function measureCost(agents) {
   return L.sumCost(
     agents.map((a) => {
       if (a.text) {
-        const t = TK.analyzeTranscript(a.text);
+        const t = TK.analyzeTranscript(a.text, { idleGapMin: idleGapMin() });
+        // Time spent = active time (idle gaps left out); older analyses without it use the wall time.
+        const seconds = t.active_s ?? t.duration_s;
         return {
           agent: a.agent,
           type: a.type,
           tokens: t.tokens,
           model: t.model,
+          byModel: t.byModel,
           turns: t.modelTurns,
-          minutes: t.duration_s != null ? t.duration_s / 60 : null,
+          minutes: seconds != null ? seconds / 60 : null,
           // The reviewer's FINDINGS numbers per agent (the helper measurement, queueHelpers.helperStatistics).
           findings: L.REVIEWER_TYPES.includes(a.type) ? L.parseFindings(L.lastAnswer(a.text)) : null,
           source: 'transcript',
@@ -259,8 +306,9 @@ function measureCost(agents) {
         type: a.type,
         tokens: a.row.tokens,
         model: a.row.model,
+        byModel: a.row.byModel ?? null,
         turns: a.row.modelTurns,
-        minutes: a.row.duration_s != null ? a.row.duration_s / 60 : null,
+        minutes: (a.row.active_s ?? a.row.duration_s) != null ? (a.row.active_s ?? a.row.duration_s) / 60 : null,
         source: 'timeLog',
       };
     }),

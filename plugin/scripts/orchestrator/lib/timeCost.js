@@ -13,17 +13,94 @@
 // Here every row gives only the GROWTH since the previous row for the same agent, so the sum over all rows = last row
 // per agent, and the usage is split correctly by day when an agent runs past midnight.
 //
-// UNIT: "API-equivalent USD" with the list prices in PRICES: claude-opus-5-5 input $4, output $20, cache read $0.20,
-// cache write 5 min $5 and 1 h $8 per MTok. The subscription quota is not in dollars, but is weighted by the same
-// pattern, so the shares and trends are what matter.
+// UNIT: "API-equivalent USD" with the list prices per model family in PRICE_TABLE (Opus 5.5: input $4, output $20,
+// cache read $0.20, cache write 5 min $5 and 1 h $8 per MTok). The subscription quota is not in dollars, but is weighted
+// by the same pattern, so the shares and trends are what matter. A done row has `byModel` (tokens and cost per model);
+// its cost is the sum over the models. Older rows without byModel are priced by their one `model`.
 // =============================================================
 'use strict';
 
-/** USD per million tokens. Unknown models are priced as DEFAULT_MODEL and marked "assumed". */
-const PRICES = {
-  'claude-opus-5-5': { input: 4, output: 20, cache_read: 0.2, cache_5m: 5, cache_1h: 8 },
-};
+/**
+ * The list prices per model family, USD per million tokens (MTok). ONE place for prices; users override them with
+ * `prices` in queue.config.json (see priceFor).
+ * SOURCE: Anthropic's first-party Claude API list prices (the "Current Models" table and the prompt-caching economics in
+ * the Claude API reference, cached 2026-10-06, read 2026-11-02). Cache writes cost 1.25x the input price (5 min TTL) and
+ * 2x (1 h TTL); cache reads have their own price per model. Not modelled: the Haiku 5.5 long-prompt tier (above 100K
+ * prompt tokens $0.50 / $2.50), fast mode, batch discounts, and older models not listed here (for example Opus 4.1 and
+ * earlier at $15 / $75 fall under "opus"): set `prices` for those.
+ * The first entry whose `match` hits the model id (lowercase, so "claude-opus-5-5[1m]" and "us.anthropic.claude-..."
+ * hit too) applies, so the specific versions come before their family.
+ */
+const PRICE_TABLE = [
+  { family: 'fable-5-1', match: /(?:fable|mythos)-5-1/, input: 10, output: 50, cache_read: 0.25 },
+  { family: 'fable', match: /fable|mythos/, input: 10, output: 50, cache_read: 1 },
+  { family: 'opus-5-5', match: /opus-5-5/, input: 4, output: 20, cache_read: 0.2 },
+  { family: 'opus', match: /opus/, input: 5, output: 25, cache_read: 0.5 },
+  { family: 'sonnet-5', match: /sonnet-5/, input: 2, output: 10, cache_read: 0.2 },
+  { family: 'sonnet', match: /sonnet/, input: 3, output: 15, cache_read: 0.3 },
+  { family: 'haiku-5', match: /haiku-5/, input: 0.1, output: 0.5, cache_read: 0.01 },
+  { family: 'haiku', match: /haiku/, input: 1, output: 5, cache_read: 0.1 },
+];
+/** The cache write factors on the input price (the same for every model). */
+const CACHE_WRITE_FACTOR = { '5m': 1.25, '1h': 2 };
+/** A full price from a table entry or an override: the cache write prices follow the input price unless given. */
+function fullPrice(p) {
+  // A number, or null when the value is missing or not a number.
+  const num = (x) => (x != null && Number.isFinite(Number(x)) ? Number(x) : null);
+  const input = num(p.input) ?? 0;
+  return {
+    input,
+    output: num(p.output) ?? 0,
+    cache_read: num(p.cache_read) ?? 0,
+    cache_5m: num(p.cache_5m) ?? input * CACHE_WRITE_FACTOR['5m'],
+    cache_1h: num(p.cache_1h) ?? input * CACHE_WRITE_FACTOR['1h'],
+  };
+}
 const DEFAULT_MODEL = 'claude-opus-5-5';
+/** The price of DEFAULT_MODEL by name (kept for older readers: PRICES[DEFAULT_MODEL]). */
+const PRICES = { [DEFAULT_MODEL]: fullPrice(PRICE_TABLE.find((p) => p.family === 'opus-5-5')) };
+
+// The `prices` override from queue.config.json: { "<model id or part of it>": { input, output, cache_read, cache_5m?,
+// cache_1h? } }. Read once, lazily, and fail open (no config = the table). setPriceOverrides replaces it (tests).
+let priceOverrides;
+function overrides() {
+  if (priceOverrides === undefined) {
+    try {
+      const p = require('./queueConfig.js').config().prices;
+      priceOverrides = p && typeof p === 'object' ? p : null;
+    } catch {
+      priceOverrides = null; // error-ignored: prices fall back to the table
+    }
+  }
+  return priceOverrides;
+}
+/** Sets the price overrides (null = only the table; undefined = read queue.config.json again on next use). */
+function setPriceOverrides(o) {
+  priceOverrides = o === undefined ? undefined : o && typeof o === 'object' ? o : null;
+}
+
+/**
+ * The price for a model id: an override (exact id first, then the longest key the id contains), else the first table
+ * entry that matches, else DEFAULT_MODEL's price with `known: false` (the cost is then "assumed").
+ * @returns {{ price: { input: number, output: number, cache_read: number, cache_5m: number, cache_1h: number },
+ *   family: string, known: boolean }}
+ */
+function priceFor(model) {
+  const id = String(model ?? '').toLowerCase();
+  const o = overrides();
+  if (o && id) {
+    const keys = Object.keys(o).filter((k) => !k.startsWith('_') && o[k] && typeof o[k] === 'object');
+    const exact = keys.find((k) => k.toLowerCase() === id);
+    const part = exact ?? keys.filter((k) => id.includes(k.toLowerCase())).sort((a, b) => b.length - a.length)[0];
+    if (part) return { price: fullPrice(o[part]), family: part, known: true };
+  }
+  const hit = id ? PRICE_TABLE.find((p) => p.match.test(id)) : null;
+  if (hit) return { price: fullPrice(hit), family: hit.family, known: true };
+  return { price: PRICES[DEFAULT_MODEL], family: 'opus-5-5', known: false };
+}
+
+/** The pseudo model Claude Code writes on its own API error entries (not a real model; never priced or counted). */
+const SYNTHETIC_MODEL = '<synthetic>';
 
 /** The time zone "day" is computed in: the machine's own (set the TZ environment variable to use another). */
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -38,7 +115,7 @@ const CACHE_TTL_S = { '5m': 300, '1h': 3600 };
  */
 function costUsd(tokens, model) {
   if (!tokens) return 0;
-  const p = PRICES[model] ?? PRICES[DEFAULT_MODEL];
+  const p = priceFor(model).price;
   const n = (x) => (Number.isFinite(Number(x)) ? Number(x) : 0);
   let s5 = tokens.cache_written_5m;
   let s1 = tokens.cache_written_1h;
@@ -60,6 +137,25 @@ function costUsd(tokens, model) {
       s1 * p.cache_1h) /
     1e6
   );
+}
+
+/**
+ * The cost of a done row (or anything with tokens, model and byModel): the sum over `byModel` when the row has it (each
+ * model at its own price), else the row's tokens at the price of its one `model` (older rows).
+ * @returns {number} USD
+ */
+function costOf(r) {
+  if (!r) return 0;
+  const by = r.byModel && typeof r.byModel === 'object' ? Object.entries(r.byModel) : [];
+  if (by.length) return by.reduce((s, [m, v]) => s + costUsd(v?.tokens, m), 0);
+  return costUsd(r.tokens, r.model ?? undefined);
+}
+
+/** True when some model in the row has no price of its own (priced as DEFAULT_MODEL). */
+function costAssumed(r) {
+  const by = r?.byModel && typeof r.byModel === 'object' ? Object.keys(r.byModel) : [];
+  if (by.length) return by.some((m) => !priceFor(m).known);
+  return !!r?.model && !priceFor(r.model).known;
 }
 
 /**
@@ -89,15 +185,79 @@ function trackFromText(text) {
 const BUILD_AGENT_TYPES = ['track', 'track-d'];
 const isBuildAgent = (type) => BUILD_AGENT_TYPES.includes(type);
 
+/** The default idle threshold (minutes) for active time: a gap longer than this between two entries is not work. */
+const IDLE_GAP_MIN = 5;
+
+/** An empty token set (the fields of `tokens` in a done row). */
+const emptyTokens = () => ({
+  input: 0,
+  output: 0,
+  cache_read: 0,
+  cache_written: 0,
+  cache_written_5m: 0,
+  cache_written_1h: 0,
+});
+
+/** Adds one turn's API usage to a token set (the same rules for the total and for each model). */
+function addUsage(tokens, u) {
+  const written = u.cache_creation_input_tokens ?? 0;
+  const five = u.cache_creation?.ephemeral_5m_input_tokens;
+  const hour = u.cache_creation?.ephemeral_1h_input_tokens;
+  tokens.input += u.input_tokens ?? 0;
+  tokens.output += u.output_tokens ?? 0;
+  tokens.cache_read += u.cache_read_input_tokens ?? 0;
+  tokens.cache_written += written;
+  // Without a split (older API responses) the write counts as 5 min, as for subagents.
+  tokens.cache_written_5m += five ?? (hour == null ? written : 0);
+  tokens.cache_written_1h += hour ?? 0;
+}
+
+/**
+ * The kind of an API error entry in a transcript, or null when the entry is not one. Claude Code writes a failed API
+ * call as an assistant entry with `isApiErrorMessage: true`, `apiErrorStatus` (the HTTP status, e.g. 529), `error`
+ * (a short code such as "rate_limit" or "server_error") and model "<synthetic>", with the text "API Error: 529
+ * Overloaded ..." as content. Other versions may lack some of these fields, so the status, the code AND the text are
+ * matched: 429 or rate limit -> rate_limit, 529 or overloaded -> overloaded, anything else -> other.
+ * @returns {'rate_limit'|'overloaded'|'other'|null}
+ */
+function apiErrorKind(r) {
+  const m = r?.message;
+  if (!r?.isApiErrorMessage && !(m?.model === SYNTHETIC_MODEL && r?.error)) return null;
+  const content = Array.isArray(m?.content) ? m.content : [];
+  const text = [typeof m?.content === 'string' ? m.content : '', ...content.map((c) => c?.text ?? '')].join(' ');
+  const status = Number(r.apiErrorStatus);
+  const code = String(r.error ?? '');
+  if (status === 429 || code === 'rate_limit' || /\b429\b|rate[ _-]?limit/i.test(text)) return 'rate_limit';
+  if (status === 529 || code === 'overloaded' || /\b529\b|overloaded/i.test(text)) return 'overloaded';
+  return 'other';
+}
+
 /**
  * Computes usage from an agent transcript (JSONL). Streamed messages can span several lines with the same
  * message.id; they are counted once (last usage wins, first timestamp gives the turn's time).
+ * Everything comes from this one pass over the text (the hook must stay fast):
+ *   byModel     { <model>: { turns, tokens, cost_usd } } per real model; cost_usd (the total) is their sum, each model
+ *               at its own price. `model` is the most used one (kept for older readers).
+ *   tools       { <tool name>: { calls, errors } }; errors = tool_result blocks with is_error for a call of that tool.
+ *   api_errors  { rate_limit, overloaded, other } from the API error entries (apiErrorKind); they are not model turns.
+ *   active_s    duration_s minus the gaps longer than `idleGapMin` minutes between two consecutive timestamped
+ *               entries; idle_gaps = the number of such gaps.
+ * @param {string} text
+ * @param {{ idleGapMin?: number }} [option]
  */
-function analyzeTranscript(text) {
+function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
+  const idleMs = (Number(idleGapMin) > 0 ? Number(idleGapMin) : IDLE_GAP_MIN) * 60_000;
   const turns = new Map(); // message.id -> { usage, ts, model }
   const tool = new Set();
+  const toolName = new Map(); // tool_use id -> tool name
+  const tools = {};
+  const errorSeen = new Set();
+  const apiErrors = { rate_limit: 0, overloaded: 0, other: 0 };
   let first = null;
   let last = null;
+  let previousEntry = null;
+  let idleMsSum = 0;
+  let idleGaps = 0;
   let firstChange = null;
   let callForChange = 0;
   let trackFromMission = null;
@@ -113,17 +273,41 @@ function analyzeTranscript(text) {
     if (!Number.isNaN(ts)) {
       if (first === null) first = ts;
       last = ts;
+      // Active time: a long gap between two consecutive entries is idle (a stalled run, a wait, a sleep).
+      if (previousEntry !== null && ts - previousEntry > idleMs) {
+        idleMsSum += ts - previousEntry;
+        idleGaps++;
+      }
+      previousEntry = ts;
     }
     const m = r.message;
     if (!m) continue;
     const content = Array.isArray(m.content) ? m.content : [];
-    if (r.type === 'user' && !trackFromMission) {
-      const textChunks =
-        typeof m.content === 'string' ? m.content : content.map((c) => c?.text ?? '').join(' ');
-      trackFromMission = trackFromText(textChunks);
+    if (r.type === 'user') {
+      if (!trackFromMission) {
+        const textChunks =
+          typeof m.content === 'string' ? m.content : content.map((c) => c?.text ?? '').join(' ');
+        trackFromMission = trackFromText(textChunks);
+      }
+      for (const c of content) {
+        if (c?.type !== 'tool_result' || c.is_error !== true) continue;
+        if (c.tool_use_id) {
+          if (errorSeen.has(c.tool_use_id)) continue;
+          errorSeen.add(c.tool_use_id);
+        }
+        const name = toolName.get(c.tool_use_id) ?? 'unknown';
+        tools[name] ??= { calls: 0, errors: 0 };
+        tools[name].errors++;
+      }
+      continue;
     }
     if (r.type !== 'assistant') continue;
-    if (m.id && m.usage) {
+    const kind = apiErrorKind(r);
+    if (kind) {
+      apiErrors[kind]++;
+      continue;
+    }
+    if (m.id && m.usage && m.model !== SYNTHETIC_MODEL) {
       const earlier = turns.get(m.id);
       turns.set(m.id, {
         usage: m.usage,
@@ -134,20 +318,18 @@ function analyzeTranscript(text) {
     for (const c of content) {
       if (c?.type !== 'tool_use' || !c.id || tool.has(c.id)) continue;
       tool.add(c.id);
+      const name = String(c.name ?? 'unknown');
+      toolName.set(c.id, name);
+      tools[name] ??= { calls: 0, errors: 0 };
+      tools[name].calls++;
       if (firstChange === null) {
         if (['Edit', 'Write', 'NotebookEdit'].includes(c.name)) firstChange = ts;
         else callForChange++;
       }
     }
   }
-  const tokens = {
-    input: 0,
-    output: 0,
-    cache_read: 0,
-    cache_written: 0,
-    cache_written_5m: 0,
-    cache_written_1h: 0,
-  };
+  const tokens = emptyTokens();
+  const byModel = {};
   const context = [];
   const models = new Map();
   let cacheExpiry = 0;
@@ -155,15 +337,13 @@ function analyzeTranscript(text) {
   for (const { usage: u, ts, model } of turns.values()) {
     const written = u.cache_creation_input_tokens ?? 0;
     const read = u.cache_read_input_tokens ?? 0;
-    const five = u.cache_creation?.ephemeral_5m_input_tokens;
     const hour = u.cache_creation?.ephemeral_1h_input_tokens;
-    tokens.input += u.input_tokens ?? 0;
-    tokens.output += u.output_tokens ?? 0;
-    tokens.cache_read += read;
-    tokens.cache_written += written;
-    // Without a split (older API responses) the write counts as 5 min, as for subagents.
-    tokens.cache_written_5m += five ?? (hour == null ? written : 0);
-    tokens.cache_written_1h += hour ?? 0;
+    addUsage(tokens, u);
+    // A turn without a model id is priced as DEFAULT_MODEL (as before) and kept under that name.
+    const key = model ?? DEFAULT_MODEL;
+    byModel[key] ??= { turns: 0, tokens: emptyTokens(), cost_usd: 0 };
+    byModel[key].turns++;
+    addUsage(byModel[key].tokens, u);
     context.push((u.input_tokens ?? 0) + read + written);
     if (model) models.set(model, (models.get(model) ?? 0) + 1);
     // Cache expiry: the turn came after a pause longer than the cache lifetime and wrote more than it read (the whole context
@@ -173,16 +353,28 @@ function analyzeTranscript(text) {
       cacheExpiry++;
     if (ts !== null) previousTs = ts;
   }
+  let costSum = 0;
+  for (const [name, v] of Object.entries(byModel)) {
+    const c = costUsd(v.tokens, name);
+    costSum += c;
+    v.cost_usd = Math.round(c * 10000) / 10000;
+  }
   const sorted = [...context].sort((x, y) => x - y);
   const model = [...models.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const duration = first !== null && last !== null ? Math.round((last - first) / 1000) : null;
   return {
-    duration_s: first !== null && last !== null ? Math.round((last - first) / 1000) : null,
+    duration_s: duration,
+    active_s: duration != null ? Math.max(0, Math.round((last - first - idleMsSum) / 1000)) : null,
+    idle_gaps: idleGaps,
     toolCall: tool.size,
     modelTurns: turns.size,
     tokens,
     model,
+    byModel,
+    tools,
+    api_errors: apiErrors,
     cache_expiry: cacheExpiry,
-    cost_usd: Math.round(costUsd(tokens, model) * 100) / 100,
+    cost_usd: Math.round(costSum * 100) / 100,
     context: context.length
       ? {
           start: context[0],
@@ -259,7 +451,7 @@ function usageEvents(rows, tz = TZ) {
         previousTok[k] = Math.max(previousTok[k], v);
       }
       const now = {
-        usd: costUsd(r.tokens, r.model),
+        usd: costOf(r),
         turns: Number(r.modelTurns ?? 0),
         expiry: Number(r.cache_expiry ?? 0),
       };
@@ -272,7 +464,7 @@ function usageEvents(rows, tz = TZ) {
         usd: Math.max(0, now.usd - previous.usd),
         turns: Math.max(0, now.turns - previous.turns),
         cache_expiry: Math.max(0, now.expiry - previous.expiry),
-        assumed: !!r.model && !PRICES[r.model],
+        assumed: costAssumed(r),
         tokens: growth,
       });
       // A row without full analysis (transcript too large) can be lower than the previous one: keep the highest.
@@ -427,9 +619,19 @@ function diffLinesFromShortstat(text) {
 
 module.exports = {
   PRICES,
+  PRICE_TABLE,
+  CACHE_WRITE_FACTOR,
   DEFAULT_MODEL,
+  SYNTHETIC_MODEL,
+  IDLE_GAP_MIN,
   TZ,
+  priceFor,
+  setPriceOverrides,
   costUsd,
+  costOf,
+  costAssumed,
+  apiErrorKind,
+  emptyTokens,
   trackFromText,
   analyzeTranscript,
   dayFor,

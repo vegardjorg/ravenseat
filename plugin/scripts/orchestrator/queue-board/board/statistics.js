@@ -349,6 +349,70 @@ function blockerTable(rows) {
   );
 }
 
+/** A plain table (the blocker table's style): the header cells and the rows (first cell is the row header). */
+function metricsTableOf(head, rows) {
+  return el(
+    'table',
+    { class: 'blocker-table metrics-table' },
+    el('thead', null, el('tr', null, head.map((h) => el('th', { scope: 'col', text: h })))),
+    el(
+      'tbody',
+      null,
+      rows.map(([first, ...rest]) =>
+        el('tr', null, el('th', { scope: 'row', text: first }), rest.map((v) => el('td', { text: v }))),
+      ),
+    ),
+  );
+}
+
+/**
+ * "Agents: models, tools and errors" (queueStatistics.transcriptMetrics, the same numbers as `cq cost`): cost per
+ * model, the top tools with their error rate, the API errors, the active time and the killed agents. Nothing when
+ * the time log has no done rows in the window.
+ */
+function transcriptMetricsSection(m, windowDays) {
+  if (!m?.agents) return null;
+  const pct = (x) => (x == null ? '' : `${counts(x, 1)} %`);
+  const e = m.apiErrors ?? {};
+  const facts = [
+    m.time?.rowsWithActive
+      ? `Active time ${duration(m.time.active_s / 60)} of ${duration(m.time.duration_s / 60)} wall time ` +
+        `(${counts(m.time.idle_gaps)} idle gaps left out).`
+      : null,
+    e.rate_limit || e.overloaded || e.other
+      ? `API errors: ${counts(e.rate_limit)} rate limit, ${counts(e.overloaded)} overloaded, ${counts(e.other)} other.`
+      : null,
+    m.killed ? `${counts(m.killed)} killed agents measured from their transcripts.` : null,
+  ].filter(Boolean);
+  return el(
+    'section',
+    { class: 'blocker-stat', 'aria-labelledby': 'metrics-stat-title' },
+    el('h3', {
+      id: 'metrics-stat-title',
+      class: 'setting-title',
+      text: `Agents last ${windowDays} days: models, tools and errors`,
+    }),
+    m.perModel?.length
+      ? metricsTableOf(
+          ['Model', 'Turns', 'Cost', 'Share'],
+          m.perModel.map((x) => [
+            x.known ? x.model : `${x.model} (priced as Opus 5.5)`,
+            counts(x.turns),
+            usd(x.usd),
+            pct(x.share),
+          ]),
+        )
+      : null,
+    m.tools?.length
+      ? metricsTableOf(
+          ['Tool', 'Calls', 'Errors', 'Error rate'],
+          m.tools.map((x) => [x.name, counts(x.calls), counts(x.errors), pct(x.errorRate)]),
+        )
+      : null,
+    ...facts.map((text) => el('p', { class: 'graph-remark', text })),
+  );
+}
+
 function drawStatistics() {
   const d = t.stat.data;
   if (!d) {
@@ -595,6 +659,8 @@ function drawStatistics() {
     el('div', { class: 'graphs' }, graph1, graphInOut, graph2, graph3, graph4),
     // Blockers last 7 days (cq blockers): per reason code, count and blocked time, top first.
     blockerTable(d.blockers),
+    // Models, tools and errors (lib/transcriptMetrics.js); append() turns null into "null", so only when it exists.
+    ...(d.metrics?.agents ? [transcriptMetricsSection(d.metrics, d.windowDays)] : []),
     // The legend for the classes and badges (same as in the help).
     legend('stat'),
     // append() turns null into the text "null", so the remark is only added when it exists.

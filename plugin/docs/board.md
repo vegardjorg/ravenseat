@@ -37,7 +37,9 @@ The Queue workspace has these tabs:
   the end of tracks, key figures (first **Cost per merged change**: all measured cost in the last 14 days divided by
   the tasks merged in them, with where the cost went and, as a secondary estimate-based figure, the cost per content
   minute; see [Cost estimates and calibration](queue.md#cost-estimates-and-calibration); then usage today), the forecast line, the table **Blockers last 7 days** (per
-  blocker code: count and blocked time, the same numbers as `cq blockers`), and the legend for the badges on the cards.
+  blocker code: count and blocked time, the same numbers as `cq blockers`), the section **Agents last 14 days: models,
+  tools and errors** (cost and share per model, the top tools with their error rate, API errors, active time and
+  killed agents, the same numbers as `cq cost`), and the legend for the badges on the cards.
 - A running card gets the badge **silent** when the track has an agent worktree but no sign of life for
   `limits.silentMin` minutes (the same rule as `SILENT` in `cq show`; the server measures it at most once a minute).
 

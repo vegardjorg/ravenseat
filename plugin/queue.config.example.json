@@ -43,6 +43,10 @@
   "reviewers": { "K": [], "U": [], "D": ["reviewer"], "D+": ["reviewer", "reviewer-security"] },
   "_models": "Model per agent (track, track-d, reviewer, reviewer-docs, a helper ...): opus, sonnet, haiku or fable. Empty = each agent file's own model (opus). A set model is printed on the start lines as model=<m> and passed to the Agent tool. Measure the effect with cq cost before and after.",
   "models": {},
+  "_prices": "The list prices for the cost measurement (USD per MTok). null = the built-in table per model family (scripts/orchestrator/lib/timeCost.js PRICE_TABLE: Opus, Sonnet, Haiku, Fable). Override per model id or a part of it, e.g. { \"opus-4-1\": { \"input\": 15, \"output\": 75, \"cache_read\": 1.5 } }; cache_5m and cache_1h default to 1.25x and 2x the input price.",
+  "prices": null,
+  "_metrics": "Transcript metrics in the time log: idleGapMin = a gap longer than this many minutes between two transcript entries is idle and not counted in active_s (the active time).",
+  "metrics": { "idleGapMin": 5 },
   "helpers": {
     "reviewer-challenger": { "enabled": true, "classes": ["U"], "labels": ["bug"] },
     "reviewer-design": { "enabled": true, "labels": ["visual"], "paths": [] },

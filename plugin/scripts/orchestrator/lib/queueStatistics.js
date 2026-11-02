@@ -308,7 +308,23 @@ function statistics(queue, rows, { now = Date.now(), tz = TK.TZ } = {}) {
     models: [...models.entries()]
       .map(([model, count]) => ({ model, count }))
       .sort((a, b) => b.count - a.count),
+    metrics: transcriptMetrics(rows, now),
   };
+}
+
+/** The number of tools the Statistics tab lists (top by calls). */
+const METRICS_TOOLS = 10;
+/**
+ * The transcript metrics for the Statistics tab (lib/transcriptMetrics.js): cost per model, the top tools with their
+ * error rate, the API errors, the active time and the killed agents, the last WINDOW_DAYS days. Kept apart from
+ * `statistics` to keep merges simple.
+ */
+function transcriptMetrics(rows, now = Date.now()) {
+  const m = require('./transcriptMetrics.js').metricsSummary(rows ?? [], {
+    from: now - WINDOW_DAYS * 86_400_000,
+    to: now + 1,
+  });
+  return { ...m, tools: m.tools.slice(0, METRICS_TOOLS) };
 }
 
 module.exports = {
@@ -327,4 +343,5 @@ module.exports = {
   doneInWindow,
   ageBounds,
   statistics,
+  transcriptMetrics,
 };
