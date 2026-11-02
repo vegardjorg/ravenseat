@@ -247,6 +247,11 @@ export function cmdReceive() {
   const reviewers = reviewerList.map((x) => x.type);
   const customReviewers = new Set(reviewerList.filter((x) => x.custom).map((x) => x.type));
   const dbObjects = L.dbObjectsFromDiff(diff, { folder: MIGR.folder });
+  // Test weakening (lib/testWeakening.js): deleted test files and added skip/focus markers. A warning, never a stop.
+  const TW = require('./lib/testWeakening.js');
+  const weak = CONFIG.testWeakening?.enabled === false ? null : TW.assess(diff, CONFIG.testWeakening);
+  const weakLine = weak && TW.summaryLine(weak);
+  if (weakLine) console.log(weakLine);
   fs.writeFileSync(
     path.join(folder, '00-package.md'),
     L.reviewPackageIndex({
@@ -261,6 +266,7 @@ export function cmdReceive() {
       base: BASE,
       migrFolder: MIGR.folder,
       reviewers: reviewerList,
+      testWeakening: weak ? TW.packageSection(weak) : null,
     }),
   );
   const prompts = reviewers.map((type) => {

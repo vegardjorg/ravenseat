@@ -462,8 +462,10 @@ Windows, so there are four layers:
   that the task does not own (`owned_files` or `shared_patch`). The list is `protectedPaths` in `queue.config.json`
   (default: `.claude/`, `.githooks/`, `.github/`, `.mcp.json`, `scripts/orchestrator/`, the plugin's hooks, agents,
   skills and scripts, `queue.config.json`, `CLAUDE.queue.md`, `settings.queue.json`, `package.json`,
-  `package-lock.json`). Read the diff; then add the path to the task's ownership, or run `cq merge <ID> --allow-guard`,
-  which is logged as `guard-overridden` in the time log. Other files outside the ownership only give a warning.
+  `package-lock.json`, and the test, lint and type configs such as `vitest.config.*`, `tsconfig*.json`, `.eslintrc*`,
+  `pytest.ini`, `pyproject.toml`, `Cargo.toml` and `Makefile`, see queue.md). Read the diff; then add the path to the
+  task's ownership, or run `cq merge <ID> --allow-guard`, which is logged as `guard-overridden` in the time log.
+  Other files outside the ownership only give a warning.
 - **Network guard.** For every queue agent, `hook-push-guard.mjs` denies `curl`, `wget`, `iwr`/`irm`,
   `Start-BitsTransfer` and a pipe into a shell (`| sh`, `| iex` …), and asks before `npm install` or `npx` with a
   package that is not in `package.json`. The queue agents are `track`, `track-d` and every reviewer and helper agent,
@@ -473,6 +475,13 @@ Windows, so there are four layers:
 - **Limits.** `maxTurns` is 400 for `track` and 600 for `track-d`, and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`
   (`env` in `settings.queue.json`, set by `setup --settings`) stops a track from starting agents of its own. A plugin's
   `hooks.json` cannot set environment variables, so this one lives in the project settings.
+
+Test weakening: a track must not get green by weakening the checks either. The configs that can switch a check off
+are protected paths (above); for the tests themselves, `receive` reads the branch diff against the merge base and
+warns about deleted test files, test files moved out of the test paths and skip or focus markers (`.skip(`, `.only(`,
+`xit(`, `@pytest.mark.skip`, `#[ignore]`, `t.Skip(`, `@Disabled` ...) on added lines in test files: one
+`WARN test weakening:` line and a `Test weakening` section in `00-package.md`, never a stop. The reviewers decide
+whether a skip is intended. `testWeakening.enabled: false` turns it off (`lib/testWeakening.js`).
 
 A custom helper agent is itself text the owner may not have written. It is scanned, read in full and approved
 against its sha256 before it can be on, and a changed file turns it off (see
