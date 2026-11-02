@@ -36,8 +36,13 @@
 //   - DEPENDENCIES: the graph with circles and strokes is computed in the browser by lib/queueGraph.js (served as /queueGraph.js) from
 //     the same state, once per version and filter, so the search and the filter menu work the same.
 //   - WAITING ON YOU: the state has `inbox` (owner question, QA, proposed, what is stuck) and `next` ("Next up").
-//     Answers go via `queue.mjs resolve <id> --answer … --by owner`, QA ok and approve for several via `queue.mjs qa ok <id…>` and
-//     `queue.mjs approve <id…>`.
+//     Answers go via `queue.mjs resolve <id> --answer … --by owner`, QA ok and approve for several via `queue.mjs qa ok <id…>
+//     --by owner` and `queue.mjs approve <id…> --by owner`. DECISIONS (board/decide.js) is the same inbox as one list by
+//     impact (lib/queueDecisions.js, also `cq decide`); its writes are the same calls, plus { type: 'flag-stuck', id }
+//     (= `queue.mjs block <id> other --note …`) for stuck work. The inbox also has `decided` ("Decided today").
+//   - BOARD SWITCHES: state.boardSwitches (lib/queueConfig.js boardSwitches). The Cloud tab shows only with features.cloud
+//     AND board.showCloud (default false); POST /api/action { type: 'board-switch', name: 'showCloud', on } runs
+//     `queue.mjs board-setting cloud on|off`. A saved Cloud view still opens with the tab hidden (with a note).
 //   - CLOUD: the cards in the queue and in cloud sessions get queueLogic.cloudSuitable (<remote>/<baseBranch> and local changes are read with git,
 //     at most every minute). "Copy cloud package" fetches /api/cloudPackage (= `queue.mjs cloud-package <id>`), and "Started in cloud",
 //     "Completed in cloud" and "Cancel cloud" go via `queue.mjs cloud start|done|cancel`.
@@ -135,6 +140,8 @@ const HF = require('./lib/helperFiles.js');
 // The forecast box (Focus view, Statistics) and the "Auto-accept proposals" section in the gear.
 const FC = require('./lib/queueForecast.js');
 const PR = require('./lib/queueProposals.js');
+// The decision overview (the flag note for stuck work; the board's Decisions view uses the same file in the browser).
+const DEC = require('./lib/queueDecisions.js');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // The project root (two folders above scripts/orchestrator/). The queue lives in the main tree, as for queue.mjs: if the board runs from a
 // worktree, config().root already points to the main tree.
@@ -539,6 +546,8 @@ function state() {
     pushBatch,
     // The module switches (lib/queueConfig.js features): the board hides the tabs, buttons and rows of those that are off.
     features: FEATURES,
+    // The board's own switches (lib/queueConfig.js boardSwitches; queue.json board wins): showCloud = the Cloud tab.
+    boardSwitches: KK.boardSwitches(CONFIG, queue),
     // The forecast box in the Focus view (lib/queueForecast.js, a fixed seed so the version stays stable).
     forecast: boardForecast(showQueue),
     // `cq wait` runs and will start an orchestrator turn when the owner acts (lib/ownerWait.js heartbeatState).
@@ -1858,7 +1867,8 @@ async function write(filePath, b) {
     if ((type === 'qa-ok' || type === 'approve') && Array.isArray(b.ids)) {
       const ids = b.ids.map(idOrNull);
       if (!ids.length || ids.length > 500 || ids.some((x) => !x)) return no('invalid id list');
-      const args = type === 'qa-ok' ? ['qa', 'ok', ...ids] : ['approve', ...ids];
+      // --by owner, as resolve: the actor is the same whether the owner answers here or with /cq:decide.
+      const args = type === 'qa-ok' ? ['qa', 'ok', ...ids, '--by', 'owner'] : ['approve', ...ids, '--by', 'owner'];
       return run(args, `${type} ${ids.length === 1 ? ids[0] : `${ids.length} tasks`}`);
     }
     // "Started in cloud" for a bundle (the chosen cards) goes in one queue.mjs call (all or nothing).
@@ -1895,6 +1905,11 @@ async function write(filePath, b) {
         `batch pack ${ids.join(' ')} → ${newId}`,
       );
     }
+    // The gear's Board section: the same `cq board-setting cloud on|off` Claude Code runs (queue.json board.showCloud).
+    if (type === 'board-switch') {
+      if (b.name !== 'showCloud' || typeof b.on !== 'boolean') return no('invalid board switch');
+      return run(['board-setting', 'cloud', b.on ? 'on' : 'off'], `board-setting cloud ${b.on ? 'on' : 'off'}`);
+    }
     const id = idOrNull(b.id);
     if (!id) return no('invalid id');
     // "Started in cloud", "Completed in cloud" and "Cancel cloud" go via queue.mjs cloud … (the suitability, the git check of
@@ -1913,6 +1928,14 @@ async function write(filePath, b) {
       return run(['cloud', 'done', id, ...(branch ? ['--branch', branch] : [])], `cloud done ${id}`);
     }
     if (type === 'cloud-cancel') return run(['cloud', 'cancel', id], `cloud cancel ${id}`);
+    // "Flag for the orchestrator" on stuck work in the Decisions view: a blocker reason (cq block <id> other) with a
+    // fixed note, the same command /cq:decide runs (lib/queueDecisions.js cliArgs). Never over an open blocker.
+    if (type === 'flag-stuck') {
+      const o = (queueNow().tasks ?? []).find((x) => x.id === id);
+      if (!o) return no(`unknown task ${id}`);
+      if (L.openBlockOf(o)) return no(`${id} already has an open blocker (${L.openBlockOf(o).code})`);
+      return run(['block', id, 'other', '--note', DEC.FLAG_NOTE], `block ${id} other (flagged stuck)`);
+    }
     // The context the guard rules need: the orchestrator cursor (pick) and commits on the branch (release).
     const queue = queueNow();
     const o = (queue.tasks ?? []).find((x) => x.id === id);
@@ -1932,8 +1955,8 @@ async function write(filePath, b) {
       return run(['pick', id, '--by', by], `pick ${id}`);
     }
     if (type === 'release') return run(['release', id], `release ${id}`);
-    if (type === 'qa-ok') return run(['qa', 'ok', id], `qa ok ${id}`);
-    if (type === 'approve') return run(['approve', id], `approve ${id}`);
+    if (type === 'qa-ok') return run(['qa', 'ok', id, '--by', 'owner'], `qa ok ${id}`);
+    if (type === 'approve') return run(['approve', id, '--by', 'owner'], `approve ${id}`);
     if (type === 'qa-deviation') {
       const text = cleanText(b.text, 2000);
       if (!text) return no('write what is wrong, and where');
@@ -2106,6 +2129,7 @@ const BOARD_SCRIPTS = [
   'statistics.js',
   'settings.js',
   'inbox.js',
+  'decide.js',
   'panel.js',
   'edit.js',
   'select.js',
@@ -2132,6 +2156,9 @@ const STATIC = {
   // a CSS mask, so the color comes from the theme.
   '/ravenseat.svg': ['ravenseat.svg', 'image/svg+xml'],
   '/queueMascot.js': [path.join('..', 'lib', 'queueMascot.js'), 'text/javascript; charset=utf-8'],
+  // The Decisions view's rules (lib/queueDecisions.js: sorting, grouping, impact, the writes; the same file the tests
+  // and cq decide use); board/decide.js draws.
+  '/queueDecisions.js': [path.join('..', 'lib', 'queueDecisions.js'), 'text/javascript; charset=utf-8'],
   // The update banner's rules (lib/queueUpdate.js, the same file the tests use); board/start.js draws it.
   '/queueUpdate.js': [path.join('..', 'lib', 'queueUpdate.js'), 'text/javascript; charset=utf-8'],
   // The plan view (Now, Next, Later, Waiting) with a draft and "Save focus", and the help.

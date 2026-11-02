@@ -3881,3 +3881,204 @@ fieldset.setting legend {
 .aa-row-text {
   flex: 1;
 }
+/* ---- Decisions (board/decide.js): everything that waits on the owner, one card per decision ---- */
+#show-decisions .inbox-count {
+  margin-left: var(--distance-xs);
+}
+.board.decisions {
+  padding: var(--distance-md) var(--distance-lg);
+}
+.decide {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-md);
+}
+.decide-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--distance-xs) var(--distance-md);
+}
+.decide-heading {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--color-on-surface);
+}
+.decide-keys {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.decide-head .inbox-listening {
+  margin: 0;
+  flex-basis: 100%;
+}
+.decide-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+}
+.decide-group-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--distance-sm);
+  font-size: var(--text-md);
+  color: var(--color-on-surface);
+}
+.decide-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.decide-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-sm);
+}
+.decide-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+  padding: var(--distance-md);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+}
+.decide-card.current {
+  border-color: var(--color-primary);
+}
+.decide-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--distance-sm);
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.decide-title {
+  margin: 0;
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+}
+.decide-title.missing {
+  color: var(--color-on-surface-variant);
+  font-style: italic;
+}
+.decide-impact {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-on-secondary-container);
+}
+.decide-context {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+.decide-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+  margin-top: var(--distance-xs);
+}
+.decide-key {
+  display: inline-block;
+  min-width: 1.4em;
+  margin-right: var(--distance-xs);
+  padding: 0 var(--distance-xs);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-xs);
+  text-align: center;
+  opacity: 0.8;
+}
+.decide-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+}
+.decide-form label {
+  font-size: var(--text-sm);
+}
+.decide-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--distance-sm);
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font: inherit;
+  resize: vertical;
+}
+.decide-form-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--distance-sm);
+}
+.decide-more {
+  margin: 0;
+}
+.decide-done {
+  border-top: 1px solid var(--color-outline-variant);
+  padding-top: var(--distance-sm);
+}
+.decide-done summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--color-on-surface-variant);
+}
+.decide-done-list {
+  list-style: none;
+  margin: var(--distance-sm) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+}
+.decide-done-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.decide-done-time {
+  font-variant-numeric: tabular-nums;
+}
+.decide-done-what {
+  color: var(--color-on-surface);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+  .board.decisions {
+    padding: var(--distance-sm) var(--distance-md);
+  }
+  .decide-card {
+    padding: var(--distance-sm);
+  }
+  .decide-options .button {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+  .decide-keys {
+    display: none;
+  }
+}
+@media (forced-colors: active) {
+  .decide-card {
+    border-color: CanvasText;
+  }
+  .decide-card.current {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
+  }
+}

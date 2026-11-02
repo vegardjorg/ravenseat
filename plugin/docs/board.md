@@ -57,6 +57,17 @@ running, picked or review task is never cancelled from the board, since an agent
 the panel shows `cq set <id> cancelled --remark "<why>"` instead. **Waiting on you** has **Decline** next to
 **Approve** for each proposal; it opens the task with the confirm step.
 
+**Decisions** (the tab next to Plans and Queue, with a count) is the owner's main view: everything that waits on
+the owner as one list, one card per decision, most impact first (minutes unlocked in focus stage 1 first, then what
+the answer unlocks), grouped as **Decide** (owner questions), **Check** (QA), **Approve** (proposals) and **Unstick**
+(an old pick, or work running long). Each card has an impact line, the recommendation as the filled button, and the
+other answers next to it. A click does not write at once: the card leaves and an **Undo** toast stands for 5 seconds;
+a new answer, leaving the page or the timer writes it. Keys: `j` / `k` move, `Enter` takes the recommendation, `1`-`4`
+picks an answer, `u` undoes. With nothing waiting it shows the listening status; **Decided today** (closed) is at the
+bottom. The board opens on Decisions when anything waits and on the queue otherwise. The rules are
+`lib/queueDecisions.js`, the same file `cq decide` and `/cq:decide` use, so the writes are the same commands (see
+[CLI parity](cli-parity.md)). "Flag for the orchestrator" on running work is `cq block <id> other` with a fixed note.
+
 **Waiting on you** (the button at the top) collects what needs the owner: owner questions, proposals to approve,
 QA (done tasks with the label `visual` that wait for a manual check, `qa ok` / `qa deviation`) and what is stuck.
 An owner question with `choices` shows one button per choice (the recommended one filled); a click answers it through
@@ -112,6 +123,10 @@ hides what is off:
 
 The gear's **General** tab has a read-only **Modules** section: each module, On or Off, and the key to set. There
 is no switch in the browser; change the file and restart the board.
+
+The **Cloud** tab also needs `board.showCloud`, which is off by default: turn it on in the gear (**Board**, "Show the
+Cloud tab") or with `cq board-setting cloud on` (both write `board.showCloud` in queue.json, which wins over
+queue.config.json). A saved Cloud view still opens while the tab is hidden, with a note where to turn it on.
 
 ## Update banner
 

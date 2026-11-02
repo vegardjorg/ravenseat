@@ -108,7 +108,8 @@ still pass `--by owner`, and the changelog (`cq undo --show`) records who did.
 |---|---|
 | `init` | Creates an empty queue (run once per project) |
 | `add --file task.json` / `add --json '{…}'` | Adds one task or a list |
-| `approve <id>` | Approves a proposal |
+| `decide [--json] [--max N]` / `decide --today` | Everything waiting on the owner (questions, QA, proposals, stuck work) as one list, most impact first, each answer with its exact `cq` command; read only. `/cq:decide` walks it one decision at a time / what was decided today |
+| `approve <id> [--by owner]` | Approves a proposal (`--by` records who) |
 | `proposals [auto [on\|off] …]` / `proposals log` / `proposals undo <id>` | Auto-accept of proposals by the owner's rules (default off) / what was auto-accepted / back to proposed (see below) |
 | `forecast [--project <pid>] [--days 28] [--json]` | When the remaining tasks are done at 50, 85 and 95 % (Monte Carlo, see below) |
 | `show` / `show --full` | Short view (under about 3,000 characters) / full table |
@@ -385,4 +386,5 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `modules`, `projectModuleSuggestion`, `priorityRules`, `documentFolders`, `indexFile`, `documents`, `planBackup` | see `queue.config.example.json` | Plan register (see `plan-register.md`) |
 | `board.port`, `board.title` | `2000`, `Queue board` | Board |
 | `board.updateCheck` | `true` | Board: look for a newer cq on GitHub at most once per 24 hours (see board.md, Update banner) |
+| `board.showCloud` | `false` | Board: show the Cloud tab (with `features.cloud` on). `cq board-setting cloud on\|off` sets it in queue.json, which wins |
 | `features` | `plans`, `focus`, `statistics` on; `cloud`, `follow`, `plans.legal`, `plans.launch`, `plans.documents` off | Modules that can be switched off. Off hides them on the board (tabs, buttons, routes; see board.md, Modules); `cloud*` and `follow*` commands answer "Cloud is off (features.cloud in queue.config.json)." with exit 0, and `show` and the pulse skip follow-up lines. `plans` only hides the board's Plans room: `cq plan` always works. A part (`plans.legal`) is off when its parent is off; unknown keys are ignored. Restart the board after a change |

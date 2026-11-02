@@ -114,7 +114,9 @@ running for about five days of a week before the weekly limit runs out. That is 
 - **Tracks:** each task runs as a subagent in its own git worktree, on its own branch. It gets a short mission file,
   does the work, runs your checks, commits on its branch and answers with one line. The long report goes to a file,
   not into the orchestrator's context.
-- **Board:** a local web page (kanban, plans, dependencies, cost, and "Waiting on you").
+- **Board:** a local web page (kanban, plans, dependencies, cost, and "Waiting on you"). It is optional: everything
+  works from Claude Code, and `/cq:decide` is the main loop for what waits on you (one decision at a time, the
+  recommendation first). [CLI parity](plugin/docs/cli-parity.md) lists the command behind every board action.
 
 Task classes decide size and review:
 

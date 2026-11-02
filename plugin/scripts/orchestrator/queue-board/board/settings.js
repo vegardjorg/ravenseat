@@ -86,6 +86,7 @@ function drawSettings() {
         el('h3', { id: 'setting-setup', class: 'setting-title', text: 'Setup (read only)' }),
         el('dl', { class: 'facts' }, setupFacts(o)),
       ),
+      boardSection(),
       modulesSection(),
       el(
         'section',

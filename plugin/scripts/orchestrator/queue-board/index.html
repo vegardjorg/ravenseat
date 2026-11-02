@@ -28,6 +28,8 @@
     <script src="/mascot.js" defer></script>
     <!-- The update banner's rules (lib/queueUpdate.js), before the board (board/start.js), which draws the banner. -->
     <script src="/queueUpdate.js" defer></script>
+    <!-- The Decisions view's rules (lib/queueDecisions.js, the same file `cq decide` uses), before board/decide.js. -->
+    <script src="/queueDecisions.js" defer></script>
     <!-- The board itself: classic scripts in board/ that share one scope, in this order (start.js runs the board).
          Each must come after the scripts whose names it uses while it loads (see docs/board.md). -->
     <script src="/board/core.js" defer></script>
@@ -39,6 +41,7 @@
     <script src="/board/statistics.js" defer></script>
     <script src="/board/settings.js" defer></script>
     <script src="/board/inbox.js" defer></script>
+    <script src="/board/decide.js" defer></script>
     <script src="/board/panel.js" defer></script>
     <script src="/board/edit.js" defer></script>
     <script src="/board/select.js" defer></script>
@@ -103,6 +106,20 @@
             title="Work queue: the cards, the focus and the statistics"
           >
             Queue
+          </button>
+          <!-- Everything that waits on the owner, one card per decision (board/decide.js). The board lands here when
+               anything is waiting. The count is drawn into the button. -->
+          <button
+            type="button"
+            id="show-decisions"
+            class="toggles-button"
+            role="tab"
+            aria-controls="board"
+            aria-selected="false"
+            tabindex="-1"
+            title="Decisions: what waits on you, most impact first (also /cq:decide in Claude Code)"
+          >
+            Decisions
           </button>
         </div>
         <h1 class="title">{{TITLE}}</h1>
@@ -184,6 +201,7 @@
             aria-controls="board"
             aria-selected="false"
             tabindex="-1"
+            hidden
             title="Tasks that can run in the cloud, and the cloud sessions"
           >
             Cloud

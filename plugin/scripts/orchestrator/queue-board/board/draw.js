@@ -368,9 +368,15 @@ function draw() {
   main.replaceChildren();
   main.className = `board ${t.view}${t.marked.size ? ' has-option' : ''}`;
   // Search and filter apply to the cards, not the statistics (and not the plan, which shows areas and projects).
-  $('search-filter').hidden = ['statistics', 'cloud', 'plan'].includes(t.view);
+  $('search-filter').hidden = ['statistics', 'cloud', 'plan', 'decisions'].includes(t.view);
   // The grouping applies to Flat and Project lanes.
   $('grouping').hidden = !['flat', 'lanes'].includes(t.view);
+  // Decisions (board/decide.js) draws its own list: no focus line, no stripe.
+  if (t.view === 'decisions') {
+    drawStripe();
+    drawDecisions(false);
+    return;
+  }
   drawFocusLine();
   if (t.view === 'plan') {
     if (t.data) window.QueuePlan.draw(planContext());
@@ -593,7 +599,7 @@ function nextButton(v) {
   );
 }
 function drawStripe() {
-  stripe.hidden = t.view === 'statistics' || !t.data;
+  stripe.hidden = t.view === 'statistics' || t.view === 'decisions' || !t.data;
   if (stripe.hidden) return;
   const n = t.data.next;
   const row = el('div', { class: 'stripe-row' });

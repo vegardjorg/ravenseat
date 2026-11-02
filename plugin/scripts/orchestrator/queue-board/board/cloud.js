@@ -130,6 +130,13 @@ function drawCloudQueue() {
     el(
       'div',
       { class: 'cloud-view' },
+      // Opened from a saved view while the tab is hidden: say where the tab is turned on.
+      boardSwitch('showCloud')
+        ? null
+        : el('p', {
+            class: 'cloud-help',
+            text: 'The Cloud tab is hidden. Turn it on in Settings, Board (or cq board-setting cloud on).',
+          }),
       el('p', { class: 'cloud-help', text: cloudHelp() }),
       chunk(`In cloud now (${inCloud.length}${sessions})`, inProgress),
       chunk(`Ready bundles (${d?.bundles.length ?? 0})`, bundles),

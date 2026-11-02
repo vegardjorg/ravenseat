@@ -35,7 +35,7 @@ const GROUPS = [
   {
     title: 'Owner',
     commands: [
-      { cmd: 'question', usage: 'question', text: 'the owner questions, open and resolved' },
+      { cmd: 'decide', usage: 'decide', text: 'everything waiting on you, most impact first (or /cq:decide)' },
       { cmd: 'resolve', usage: 'resolve <q> --answer "..." | --choice <n>', text: 'answer one; waiting tasks get the answer' },
       { cmd: 'approve', usage: 'approve <id>', text: 'approve a task an agent proposed' },
     ],
@@ -75,6 +75,7 @@ const LITE_GROUPS = [
   {
     title: 'Waiting on you',
     commands: [
+      { cmd: 'decide', usage: 'decide', text: 'everything waiting on you (or /cq:decide)' },
       { cmd: 'question', usage: 'question', text: 'the questions the agents have for you' },
       { cmd: 'resolve', usage: 'resolve <q> --answer "..."', text: 'answer one; the waiting tasks go on' },
     ],
@@ -83,8 +84,8 @@ const LITE_GROUPS = [
 
 /** The command words queue.mjs dispatches on (`command === '...'`); the test keeps this list in step with queue.mjs. */
 const QUEUE_COMMANDS = [
-  'activeOnes', 'add', 'approve', 'area', 'areas', 'batch', 'block', 'blockers', 'calibrate', 'cancel', 'capacity', 'classify', 'cloud', 'cloud-bundles',
-  'cloud-package', 'compact', 'continue', 'cost', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'external',
+  'activeOnes', 'add', 'approve', 'area', 'areas', 'batch', 'board-setting', 'block', 'blockers', 'calibrate', 'cancel', 'capacity', 'classify', 'cloud', 'cloud-bundles',
+  'cloud-package', 'compact', 'continue', 'cost', 'decide', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'external',
   'fill', 'finding', 'focus', 'follow', 'forecast', 'handover', 'helpers', 'info', 'init', 'limit', 'merge', 'migr', 'mode', 'next', 'next-migr',
   'orchestrator', 'park', 'pick', 'pickable', 'plan', 'project', 'projects', 'proposals', 'qa', 'question', 'rank', 'receive',
   'release', 'resolutions', 'resolve', 'resume', 'set', 'show', 'start', 'state', 'trackFile', 'triage', 'unblock', 'undo', 'wait',

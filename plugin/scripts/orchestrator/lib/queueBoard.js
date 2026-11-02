@@ -28,6 +28,8 @@
 // =============================================================
 
 const L = require('./queueLogic.js');
+// The decision overview ("Decided today" in the inbox; the sorting and the writes are used by the board and cq decide).
+const DEC = require('./queueDecisions.js');
 
 /** How far past the neighbor a card or a lane lands at the top or bottom (in priority points). */
 const STEP = 10;
@@ -430,7 +432,7 @@ function buildBoard(
     batchQueue,
     // What the queue would start now, and what is waiting on the owner.
     next,
-    inbox: inbox(queue, columns, { map, context: fk }),
+    inbox: inbox(queue, columns, { map, context: fk, now }),
     // The focus line, areas and the basis for the plan view.
     focus: focusLine(queue, { now, context: fk, canStart: next.startable.map((v) => v.id) }),
     areas: L.areaOverview(queue, now).map((r) => ({
@@ -531,7 +533,7 @@ function nextUp(queue, { now = Date.now(), uncommitted = [], dailyUsage } = {}) 
  * `unlogged` (answers not entered in the decision log) is info for the orchestrator and is not counted in `count`.
  * @param {object} columns the board's columns (the cards have aging and old)
  */
-function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = null } = {}) {
+function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = null, now = Date.now() } = {}) {
   const tasks = queue.tasks ?? [];
   const register = queue.projects ?? {};
   const resolved = new Set(queue.resolved ?? []);
@@ -610,6 +612,15 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
     0,
   );
 
+  // The focus stage a task sits in (0-based), or null without focus or outside it: the decision overview sorts by it
+  // (lib/queueDecisions.js).
+  const focusStep = (id) => {
+    if (!countStep) return null;
+    const o = map.perId.get(id);
+    if (!o) return null;
+    const p = L.focusSpace(o, fk);
+    return p.step == null || p.parked ? null : p.step;
+  };
   const proposed = (columns.proposed ?? []).map((k) => ({
     id: k.id,
     title: k.title,
@@ -617,6 +628,9 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
     estimate: k.estimate,
     value: k.value,
     added_by: k.added_by,
+    // What waits on it ("unlocks N") and its focus stage, for the impact line in the decision overview.
+    unlocks: k.unlocks ?? null,
+    focus_step: focusStep(k.id),
   }));
 
   const stuck = [...(columns.inProgress ?? []), ...(columns.review ?? [])]
@@ -629,6 +643,10 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
       start: k.start,
       picked_by: k.picked_by,
       aging: k.aging,
+      unlocks: k.unlocks ?? null,
+      focus_step: focusStep(k.id),
+      // An open blocker reason (cq block): the decision overview does not flag it again.
+      open_block: L.openBlockOf(map.perId.get(k.id))?.code ?? null,
     }));
 
   const unlogged = L.unlogged(queue).map((x) => ({ sp: x.sp, time: x.time ?? null, by: x.by ?? null }));
@@ -646,6 +664,8 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
     proposed,
     stuck,
     unlogged: unlogged,
+    // What the owner decided today (queueDecisions.decidedToday), for "Decided today" in the Decisions view.
+    decided: DEC.decidedToday(queue, { now }),
   };
 }
 
@@ -1894,7 +1914,7 @@ function hooksCoverage(settings, expected = QUEUE_HOOKS) {
 }
 
 /** The queue system's skills (.claude/skills/<name>/SKILL.md). */
-const QUEUE_SKILLS = ['queue', 'add-to-queue', 'parallel-wave', 'plans', 'pick', 'start'];
+const QUEUE_SKILLS = ['queue', 'add-to-queue', 'parallel-wave', 'plans', 'pick', 'start', 'decide', 'review'];
 
 /**
  * Are the queue system's skills installed? `exists(name)` answers whether .claude/skills/<name>/SKILL.md exists (the server passes
