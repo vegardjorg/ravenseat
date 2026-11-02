@@ -236,6 +236,22 @@ What Ravenseat checks for you:
 - `/cq:setup` can write a GitHub Actions workflow that runs your `gates.quick` on push and pull requests (opt-in,
   never over an existing file). On GitLab, Bitbucket and others, add a job that runs the same commands.
 
+## Guarantees and limits
+
+What Ravenseat does, and what you need outside it. The guards are Claude Code hooks: guard rails, not a sandbox.
+
+| Ravenseat checks (within Claude Code hooks and its own CLI) | Needs a boundary outside Ravenseat |
+| --- | --- |
+| Gate results recorded by the orchestrator, bound to the commit | A sandbox or separate machine user, if agents must not read your files or env |
+| Locked `done_when` and acceptance, locked file ownership after start | Branch protection and required checks on GitHub, so nothing reaches `main` unreviewed |
+| Merge stop on protected paths, deleted tests and skip markers | Secrets kept off the machine (a scan finds known patterns, not every secret) |
+| Queue agents cannot push or run queue commands outside an allow-list | Network rules, if agents must not reach the internet at all |
+| Secret scan of every pushed commit, ask before `deployCommands` | Separate credentials per environment, so a dev machine cannot deploy to production |
+
+Known gaps in the command guard: it does not read the contents of script files an agent runs (`bash x.sh`, an
+`npm run` script), or commands built from string pieces inside an interpreter. Treat it as a strong default, not
+as isolation.
+
 ## Not included
 
 This is the queue system only. My own project has more around it, which was too project-specific to include. You

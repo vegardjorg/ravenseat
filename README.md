@@ -17,20 +17,17 @@ their work with your project's own checks, and keeps the project moving across s
 Running five Claude Code sessions is not the hard part. Keeping them from colliding, and actually finishing the
 features, is. Ravenseat makes you stop being the project's manual orchestrator:
 
-- **Parallel work without collisions.** Every task runs as a fresh agent with a small, fresh context, in its own git
-  worktree and branch, and owns its files exclusively while it runs.
+- **Parallel work that stays out of each other's way.** Every task runs as a fresh agent in its own git worktree and
+  branch, and owns its files while it runs. Conflicts that remain are predicted before merge (`cq conflicts`).
 - **A red check does not stop the queue.** A failed check starts a fix round with a fresh agent and runs the checks
   again. Only what it cannot resolve reaches you.
 - **Decisions come to you, in one list.** A task that needs you parks in `/cq:decide` with a recommendation, and the
   rest of the queue keeps going.
 - **Finish features, not just tasks.** Dependencies and focus keep related work together until the feature is done.
-- **Designed for long-running work.** Tracks are cut at about 300k tokens of context, fix rounds start a fresh agent,
-  and the orchestrator stays light. The numbers from about 1,200 tasks are in
-  [What it costs in tokens](#what-it-costs-in-tokens).
-- **Quality you can check, not take on trust.** Gate results are bound to the exact commit, acceptance criteria lock
-  when a task starts, every repeatable mistake can become a check in your own CI, and an interrupted merge picks up
-  where it stopped (`cq merge <ID> --resume`). See ["Agents cheat on tests"](#agents-cheat-on-tests) and
-  ["Something breaks and the queue stops"](#something-breaks-and-the-queue-stops).
+
+Built for long-running work, with quality you can check: see
+[what it costs in tokens](#what-it-costs-in-tokens), ["Agents cheat on tests"](#agents-cheat-on-tests) and
+["Something breaks and the queue stops"](#something-breaks-and-the-queue-stops).
 
 **When something fails, the queue does not have to stop.**
 
@@ -180,8 +177,6 @@ The plan register, the priority map, dark mode and the settings panel are shown 
 [full-mode guide](plugin/docs/guide.md#the-board-in-detail); every tab is described in [board](plugin/docs/board.md).
 
 <p align="center"><img src="assets/screenshots/light-12-mascot-night.png" alt="The ravens at 02:47: the agents don't need sleep, you do" width="480"></p>
-
-Ken sent me.
 
 ## Graduating to full mode
 
@@ -417,19 +412,8 @@ shell can, and reach the network, unless your Claude Code permissions or its san
 blocked command can often be written another way. Keep production credentials off the machine the agents run on,
 and use Claude Code's permission rules or sandbox when you need a real boundary.
 
-What Ravenseat does, and what you need outside it:
-
-| Ravenseat checks (within Claude Code hooks and its own CLI) | Needs a boundary outside Ravenseat |
-| --- | --- |
-| Gate results recorded by the orchestrator, bound to the commit | A sandbox or separate machine user, if agents must not read your files or env |
-| Locked `done_when` and acceptance, locked file ownership after start | Branch protection and required checks on GitHub, so nothing reaches `main` unreviewed |
-| Merge stop on protected paths, deleted tests and skip markers | Secrets kept off the machine (a scan finds known patterns, not every secret) |
-| Queue agents cannot push or run queue commands outside an allow-list | Network rules, if agents must not reach the internet at all |
-| Secret scan of every pushed commit, ask before `deployCommands` | Separate credentials per environment, so a dev machine cannot deploy to production |
-
-Known gaps in the command guard: it does not read the contents of script files an agent runs (`bash x.sh`, an
-`npm run` script), or commands built from string pieces inside an interpreter. Treat it as a strong default, not
-as isolation.
+What Ravenseat checks, what needs a boundary outside it, and the known gaps in the command guard:
+[guarantees and limits](plugin/docs/guide.md#guarantees-and-limits).
 
 ### Deeper docs
 
