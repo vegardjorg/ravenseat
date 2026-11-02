@@ -191,6 +191,15 @@ describe('the event rows written by the commands', () => {
     expect(resume.error).toBe('');
     expect(resume.code).toBe(0);
     expect(p.rows('fixRound')).toEqual([expect.objectContaining({ task: 'R', reason: 'fix', round: 1 })]);
+    expect(p.rows('fixRound')[0].from).toBeUndefined();
+    // --from: the reviewer types whose findings caused the round, in `resumed` and the row; an unknown name is kept
+    // with a warning.
+    const from = p.run('resume', 'R', '--reason', 'fix', '--from', 'reviewer,reviewer-made-up', '--scratchpad', p.scratch);
+    expect(from.code).toBe(0);
+    expect(from.out).toContain('WARNING: --from reviewer-made-up is not a reviewer type here');
+    expect(p.rows('fixRound')[1]).toMatchObject({ task: 'R', round: 2, from: ['reviewer', 'reviewer-made-up'] });
+    expect(p.queue().tasks.find((t) => t.id === 'R')?.resumed[1].from).toEqual(['reviewer', 'reviewer-made-up']);
+    expect(p.run('resume', 'R', '--from', 'bad name', '--scratchpad', p.scratch).error).toContain('--from takes agent type names');
 
     // Two tracks that change the same line: the second merge stops in the merge step with one conflicted file.
     p.track('M1', { 'a.txt': 'from M1\n' });
@@ -341,6 +350,9 @@ describe('the session cost rows (status line, compaction hook, SessionEnd hook)'
     const j = JSON.parse(cost.out);
     expect(j.orchestration).toMatchObject({ sessions: 1, gross_usd: 1.4, subagent_usd: 0, usd: 1.4 });
     expect(j.flow).toHaveProperty('firstPass');
+    expect(j.flow).toHaveProperty('rightFirstTime');
+    expect(j.flow).toHaveProperty('reviewers');
+    expect(j.flow).toHaveProperty('inflow');
     const text = p.run('cost');
     expect(text.out).toContain('Orchestration overhead');
     expect(text.out).toContain('Flow (');

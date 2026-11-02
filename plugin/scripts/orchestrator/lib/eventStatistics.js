@@ -1,7 +1,8 @@
 // =============================================================
 // eventStatistics.js: the views on the flow, load and session rows (lib/eventRows.js): the orchestration overhead,
-// the flow figures (first-pass rate, fix rounds, merge conflicts, base red, pushes, triage) and when parallelism was
-// limited by the load.
+// the flow figures (first-pass rate, fix rounds, merge conflicts, base red, pushes, triage), the quality figures
+// (right first time, post-merge defects, owner interventions, reviewer hit rate, inflow by source) and when parallelism
+// was limited by the load.
 //
 // Pure functions on the time log rows (timeCost.readRows), the usage events (timeCost.usageEvents) and the queue,
 // apart from readAgentsBySession (one readdir per session). Used by cli/cost.mjs (cq cost, cq limit) and
@@ -20,6 +21,37 @@
 // USD per merged change (lib/costEstimate.js perMergedChange) and shown as a share of track cost + overhead, so it is
 // never folded into the track figure and never hides it.
 //
+// THE QUALITY FIGURES (part of flowStatistics, from data that already exists; old tasks without a field count as
+// "nothing recorded", never as an error):
+//   rightFirstTime: a merged task (the same tasks as firstPass) is right first time when it had 0 fix rounds, no QA
+//     deviation (qa_status deviation or a qa_note), was not reopened (a changelog change of its status away from done),
+//     and has no post-merge defect. A post-merge defect is a fix task that names it (`fixes`, or `qa_original` for the
+//     QA fix chain; a base gate fix task names the task that made the base red) or a finding whose `finding.causes`
+//     names it (`cq finding --cause <id>`). Owner interventions are the changelog entries by owner or theBoard that
+//     change the task between its start (started, otherwise picked_at) and done. The changelog keeps the last 50
+//     entries, so a task started before the oldest kept entry is "unknown" for interventions (when entries fell out).
+//   reviewers: per reviewer type, over the tasks done in the window with a cost measurement (cost.agents, saved at
+//     set done): runs, runs whose FINDINGS line had H+M+L > 0, runs with no FINDINGS line recorded, the fix rounds the
+//     orchestrator attributed to the type (`resumed[].from`, from `cq resume --from`), and the dismissed ones (runs
+//     with findings minus attributed fixes, never below 0). A type with REVIEWER_HINT_RUNS runs or more and no fix gets
+//     a hint, but only once some fix round in the window carries `from` (otherwise every type would look useless).
+//   autonomy: how far the queue got without the owner.
+//     verified_per_intervention = the verified merged tasks (right first time, or every defect fixed: each fix task
+//       done, no QA deviation open) divided by the owner interventions above; null ("no interventions") when 0.
+//     longest_stretch_h = the longest period in the window when work ran with no owner action: work runs while some
+//       task is between its start (started, otherwise picked_at) and its done (otherwise delivered; still open = the
+//       window's end), so a time when nothing ran (all work waiting, on an owner question or otherwise) ends a stretch;
+//       an owner action cuts it. Owner actions: changelog entries and undos by owner or theBoard, resolutions by
+//       owner or theBoard, approvals not made by the auto-accept, qa ok not by auto, a QA deviation (the QA fix task's
+//       added_at) and tasks the owner added. Old tasks without a start add no work time.
+//     corrected = the failures on the tasks done in the window that ended green with no owner action on that task:
+//       fix rounds from review (resumed reason fix), red done commands (fix rounds with from done_when, written by
+//       cq receive and cq merge) and base red fix tasks (added_by base gate). An owner action on the task: an owner
+//       changelog entry that changes it, a QA deviation on it, or an owner answer to its fix-round cap question.
+//   inflow: the tasks added in the window by source (fix tasks, tasks from a finding via its plan entry = triage,
+//     agent proposals, the owner, other = the orchestrator or unknown), and added versus done for the last
+//     INFLOW_WEEKS whole weeks before the window's end; a hint when more came in than went out in each of them.
+//
 // Tested in lib/__tests__/eventStatistics.test.ts.
 // =============================================================
 'use strict';
@@ -27,7 +59,21 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { isAgentSource } = require('./logic/questions.js');
+
 const DAY_MS = 86_400_000;
+/** The `by` values that mean the owner (the board writes theBoard for edits and owner for answers; lib/ownerWait.js). */
+const OWNER_BY = new Set(['owner', 'theBoard']);
+/** The id prefix of the plan entries `cq finding` creates (lib/queueFindings.js). */
+const FINDING_PREFIX = 'PL-FINDING-';
+/** A reviewer type with at least this many runs and no fix round gets the hint. */
+const REVIEWER_HINT_RUNS = 10;
+/** Inflow above outflow this many whole weeks in a row gives the hint. */
+const INFLOW_WEEKS = 3;
+/** The `--from` value cq receive and cq merge pass for a fix round after a red done command (not a reviewer). */
+const DONE_WHEN = 'done_when';
+/** The inflow sources, in the order they are shown. */
+const INFLOW_SOURCES = ['owner', 'agent', 'fix', 'triage', 'other'];
 const round1 = (x) => Math.round(x * 10) / 10;
 const round2 = (x) => Math.round(x * 100) / 100;
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
@@ -176,6 +222,286 @@ function overheadLines(o, label) {
 /** The fix rounds a task has had (queue.json `resumed` with reason fix; the same rule as lib/doneCheck.js). */
 const fixRounds = (o) => (Array.isArray(o?.resumed) ? o.resumed : []).filter((r) => r?.reason === 'fix').length;
 
+/** The task's `fixes` as a list (a string or a list; lib/fixLinks.js). */
+const fixesOf = (o) => (Array.isArray(o?.fixes) ? o.fixes : typeof o?.fixes === 'string' && o.fixes ? [o.fixes] : []);
+/** Is the task a fix task of another task (`fixes`, or a QA fix with `qa_original`)? Fix tasks are not merged changes. */
+const isFixTask = (o) => (typeof o?.qa_original === 'string' && o.qa_original !== o.id) || fixesOf(o).length > 0;
+const per10 = (n, of) => (of > 0 ? round1((n / of) * 10) : null);
+
+/**
+ * The right-first-time figures for the merged tasks (see the header).
+ * @param {object[]} merged the tasks done in the window that are not fix tasks
+ * @param {object} queue  for the other tasks (fix tasks) and the changelog
+ * @param {object|null} plans the plan register (findings with `finding.causes`); null = no findings known
+ */
+function rightFirstTime(merged, queue, plans) {
+  const tasks = (queue?.tasks ?? []).filter(Boolean);
+  const log = (Array.isArray(queue?.changelog) ? queue.changelog : []).filter((e) => e && Array.isArray(e.changes));
+  // The changelog keeps its last entries only: when entry 1 is gone, what happened before the oldest kept one is unknown.
+  const oldestNr = log.reduce((m, e) => Math.min(m, Number(e.nr) || Infinity), Infinity);
+  const oldestAt = log.reduce((m, e) => Math.min(m, Date.parse(e.at ?? '') || Infinity), Infinity);
+  const complete = !log.length || oldestNr <= 1;
+  const findings = (plans?.entries ?? []).filter((p) => p?.finding && Array.isArray(p.finding.causes));
+  let right = 0;
+  let defects = 0;
+  let interventions = 0;
+  let known = 0;
+  const misses = [];
+  for (const o of merged) {
+    const fixTasks = tasks.filter((t) => t.id !== o.id && (fixesOf(t).includes(o.id) || t.qa_original === o.id));
+    const caused = findings.filter((p) => p.finding.causes.includes(o.id));
+    const qa = o.qa_status === 'deviation' || (typeof o.qa_note === 'string' && !!o.qa_note);
+    const reopened = log.some((e) =>
+      e.changes.some((c) => c?.id === o.id && c.field === 'status' && c.before === 'done' && c.after !== 'done'),
+    );
+    const rounds = fixRounds(o);
+    const d = fixTasks.length + caused.length;
+    defects += d;
+    if (!rounds && !qa && !reopened && !d) right += 1;
+    else
+      misses.push({
+        id: o.id,
+        fix_rounds: rounds,
+        qa_deviation: qa,
+        reopened,
+        defects: [...fixTasks.map((t) => t.id), ...caused.map((p) => p.id)],
+      });
+    // Owner interventions: the owner's logged edits of the task while it ran (start to done).
+    const start = Date.parse(o.started ?? o.picked_at ?? '');
+    const end = Date.parse(o.done ?? '');
+    if (!Number.isFinite(start) || !Number.isFinite(end) || (!complete && !(oldestAt <= start))) continue;
+    known += 1;
+    interventions += log.filter((e) => {
+      const t = Date.parse(e.at ?? '');
+      return OWNER_BY.has(String(e.by ?? '').trim()) && t >= start && t <= end && e.changes.some((c) => c?.id === o.id);
+    }).length;
+  }
+  return {
+    merged: merged.length,
+    right,
+    rate_pct: merged.length ? round1((right / merged.length) * 100) : null,
+    defects,
+    defects_per_10: per10(defects, merged.length),
+    findings_linked: findings.length > 0,
+    interventions,
+    interventions_known: known,
+    interventions_per_10: per10(interventions, known),
+    misses,
+  };
+}
+
+/** The reviewer types to show: the given ones plus every `reviewer...` type in the measurements. */
+function reviewerTypeList(done, types) {
+  const out = [...(types ?? [])];
+  for (const o of done)
+    for (const a of o.cost.agents) if (/^reviewer(-|$)/.test(a?.type ?? '') && !out.includes(a.type)) out.push(a.type);
+  return out;
+}
+
+/**
+ * The reviewer hit rate over the tasks done in [from, to) with a cost measurement (see the header).
+ * @param {string[]|null} types the reviewer types (queueLogic.REVIEWER_TYPES: the fixed ones and the helpers)
+ */
+function reviewerStatistics(queue, { from, to, types = null }) {
+  const inWindow = (t) => Number.isFinite(t) && t >= from && t < to;
+  const done = (queue?.tasks ?? []).filter(
+    (o) => o && o.external !== true && o.status === 'done' && inWindow(Date.parse(o.done ?? '')) && Array.isArray(o.cost?.agents),
+  );
+  const fixList = (o) => (Array.isArray(o.resumed) ? o.resumed : []).filter((r) => r?.reason === 'fix');
+  // A red done command (from done_when) is no reviewer's: it neither counts as attributed nor gets a row.
+  const from_ = (r) => (Array.isArray(r?.from) ? r.from : []).filter((x) => x !== DONE_WHEN);
+  const rounds = done.flatMap(fixList);
+  const attributed = rounds.filter((r) => from_(r).length).length;
+  const rows = [];
+  for (const type of reviewerTypeList(done, types)) {
+    const row = { type, runs: 0, tasks: 0, with_findings: 0, no_line: 0, fixes: 0, dismissed: 0 };
+    for (const o of done) {
+      const mine = o.cost.agents.filter((a) => a?.type === type);
+      if (!mine.length) continue;
+      row.tasks += 1;
+      row.runs += mine.length;
+      const hit = mine.filter((a) => a.findings && (Number(a.findings.H) || 0) + (Number(a.findings.M) || 0) + (Number(a.findings.L) || 0) > 0).length;
+      row.no_line += mine.filter((a) => !a.findings).length;
+      const fixes = fixList(o).filter((r) => from_(r).includes(type)).length;
+      row.with_findings += hit;
+      row.fixes += fixes;
+      row.dismissed += Math.max(0, hit - fixes);
+    }
+    if (row.runs) rows.push(row);
+  }
+  const hints = attributed
+    ? rows.filter((r) => r.runs >= REVIEWER_HINT_RUNS && r.fixes === 0).map((r) => `${r.type}: 0 fixes in ${r.runs} runs`)
+    : [];
+  return { tasks: done.length, rows, fix_rounds: rounds.length, attributed, hints };
+}
+
+/** The owner action times in the queue (see the header, autonomy), as ms, sorted. */
+function ownerActionTimes(queue) {
+  const isOwner = (by) => OWNER_BY.has(String(by ?? '').trim());
+  const out = [];
+  const push = (t) => {
+    const ms = Date.parse(t ?? '');
+    if (Number.isFinite(ms)) out.push(ms);
+  };
+  for (const e of Array.isArray(queue?.changelog) ? queue.changelog : []) {
+    if (isOwner(e?.by)) push(e.at);
+    if (e?.undone && isOwner(e.undone.by)) push(e.undone.at);
+  }
+  for (const r of Object.values(queue?.resolutions ?? {})) if (isOwner(r?.by)) push(r.time);
+  // The auto-accept approves through the same path; its log (auto_accepted) tells those apart (as lib/ownerWait.js).
+  const auto = new Set((Array.isArray(queue?.auto_accepted) ? queue.auto_accepted : []).map((x) => `${x?.id} ${x?.at}`));
+  for (const o of (queue?.tasks ?? []).filter(Boolean)) {
+    if (o.approved && !auto.has(`${o.id} ${o.approved}`)) push(o.approved);
+    if (o.qa_ok && o.qa_ok_by !== 'auto') push(o.qa_ok);
+    if (isOwner(o.added_by)) push(o.added_at); // also the QA fix task: the time of the deviation
+  }
+  return out.sort((a, b) => a - b);
+}
+
+/** The longest stretch in [from, to) with work running and no owner action, in ms (see the header). */
+function longestStretch(queue, { from, to }) {
+  const spans = [];
+  for (const o of (queue?.tasks ?? []).filter((x) => x && x.external !== true)) {
+    const a = Date.parse(o.started ?? o.picked_at ?? '');
+    if (!Number.isFinite(a)) continue;
+    const end = Date.parse(o.done ?? o.delivered ?? '');
+    const b = Number.isFinite(end) ? end : ['picked', 'running', 'review'].includes(o.status) ? to : NaN;
+    const x = Math.max(a, from);
+    const y = Math.min(b, to);
+    if (Number.isFinite(y) && y > x) spans.push([x, y]);
+  }
+  spans.sort((p, q) => p[0] - q[0]);
+  // The union of the work spans: the times when something ran.
+  const union = [];
+  for (const [a, b] of spans) {
+    const last = union[union.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else union.push([a, b]);
+  }
+  const cuts = ownerActionTimes(queue);
+  let best = 0;
+  for (const [a, b] of union) {
+    let s = a;
+    for (const c of cuts.filter((t) => t > a && t < b)) {
+      best = Math.max(best, c - s);
+      s = c;
+    }
+    best = Math.max(best, b - s);
+  }
+  return best;
+}
+
+/** Did the owner act on the task while it ran (a changelog entry, a QA deviation, an answer to its fix-round cap)? */
+function ownerTouched(o, queue) {
+  const start = Date.parse(o.started ?? o.picked_at ?? o.added_at ?? '');
+  const end = Date.parse(o.done ?? '');
+  const inSpan = (t) => Number.isFinite(t) && (!Number.isFinite(start) || t >= start) && (!Number.isFinite(end) || t <= end);
+  const logged = (Array.isArray(queue?.changelog) ? queue.changelog : []).some(
+    (e) =>
+      OWNER_BY.has(String(e?.by ?? '').trim()) &&
+      inSpan(Date.parse(e.at ?? '')) &&
+      (Array.isArray(e.changes) ? e.changes : []).some((c) => c?.id === o.id),
+  );
+  const qa = o.qa_status === 'deviation' || (typeof o.qa_note === 'string' && !!o.qa_note);
+  // The fix-round cap question <id>.fixcap<N> (lib/doneCheck.js; the id may be cut to fit 40 characters).
+  const isCap = (q) => {
+    const m = /^(.+)\.fixcap\d+$/.exec(String(q));
+    return !!m && String(o.id).startsWith(m[1]);
+  };
+  const cap =
+    (Array.isArray(queue?.resolved) ? queue.resolved : []).some(isCap) || Object.keys(queue?.resolutions ?? {}).some(isCap);
+  return logged || qa || cap;
+}
+
+/**
+ * The autonomy figures (see the header).
+ * @param {object[]} merged the merged tasks (as for rightFirstTime)
+ * @param {object} rft the rightFirstTime result (its interventions and misses)
+ */
+function autonomyStatistics(queue, merged, rft, { from, to }) {
+  const tasks = (queue?.tasks ?? []).filter(Boolean);
+  const byId = new Map(tasks.map((o) => [o.id, o]));
+  const missed = new Map(rft.misses.map((m) => [m.id, m]));
+  // A defect is fixed when its fix task is done; a finding when a task made from it (plan = its id) is done.
+  const fixedDefect = (d) => (byId.has(d) ? byId.get(d).status === 'done' : tasks.some((o) => o.plan === d && o.status === 'done'));
+  const verified = merged.filter((o) => {
+    const m = missed.get(o.id);
+    return !m || (o.qa_status !== 'deviation' && !m.reopened && m.defects.every(fixedDefect));
+  }).length;
+  const inWindow = (t) => Number.isFinite(t) && t >= from && t < to;
+  const done = tasks.filter((o) => o.external !== true && o.status === 'done' && inWindow(Date.parse(o.done ?? '')));
+  const corrected = {
+    fix_rounds: { total: 0, without_owner: 0 },
+    done_when: { total: 0, without_owner: 0 },
+    base_fix: { total: 0, without_owner: 0 },
+  };
+  for (const o of done) {
+    const alone = !ownerTouched(o, queue);
+    for (const r of (Array.isArray(o.resumed) ? o.resumed : []).filter((x) => x?.reason === 'fix')) {
+      const k = (Array.isArray(r.from) ? r.from : []).includes(DONE_WHEN) ? 'done_when' : 'fix_rounds';
+      corrected[k].total += 1;
+      if (alone) corrected[k].without_owner += 1;
+    }
+    if (o.added_by === 'base gate') {
+      corrected.base_fix.total += 1;
+      if (alone) corrected.base_fix.without_owner += 1;
+    }
+  }
+  const parts = Object.values(corrected);
+  return {
+    verified,
+    verified_per_intervention: rft.interventions > 0 ? round1(verified / rft.interventions) : null,
+    longest_stretch_h: round1(longestStretch(queue, { from, to }) / 3_600_000),
+    corrected: {
+      ...corrected,
+      total: parts.reduce((s, x) => s + x.total, 0),
+      without_owner: parts.reduce((s, x) => s + x.without_owner, 0),
+    },
+  };
+}
+
+/** Where a task came from (see the header): fix, triage, agent, owner or other. */
+function inflowSource(o, tasks) {
+  if (isFixTask(o) || o.added_by === 'base gate') return 'fix';
+  if (typeof o.plan === 'string' && o.plan.startsWith(FINDING_PREFIX)) return 'triage';
+  if (o.approved || o.status === 'proposed' || isAgentSource(o.added_by, tasks)) return 'agent';
+  if (OWNER_BY.has(String(o.added_by ?? '').trim())) return 'owner';
+  return 'other';
+}
+
+/** The inflow in [from, to) by source, and added versus done for the INFLOW_WEEKS whole weeks before `to`. */
+function inflowStatistics(queue, { from, to }) {
+  const tasks = (queue?.tasks ?? []).filter((o) => o && o.external !== true);
+  const between = (t, a, b) => Number.isFinite(t) && t >= a && t < b;
+  const by = Object.fromEntries(INFLOW_SOURCES.map((k) => [k, 0]));
+  let added = 0;
+  for (const o of tasks) {
+    if (!between(Date.parse(o.added_at ?? ''), from, to)) continue;
+    added += 1;
+    by[inflowSource(o, tasks)] += 1;
+  }
+  const weeks = [];
+  for (let i = INFLOW_WEEKS; i >= 1; i--) {
+    const a = to - i * 7 * DAY_MS;
+    const b = a + 7 * DAY_MS;
+    weeks.push({
+      from: new Date(a).toISOString(),
+      in: tasks.filter((o) => between(Date.parse(o.added_at ?? ''), a, b)).length,
+      out: tasks.filter((o) => o.status === 'done' && between(Date.parse(o.done ?? ''), a, b)).length,
+    });
+  }
+  const growing = weeks.every((w) => w.in > w.out);
+  return {
+    added,
+    by,
+    weeks,
+    hint: growing
+      ? `inflow exceeded outflow ${INFLOW_WEEKS} weeks in a row (added ${weeks.map((w) => w.in).join(', ')}; ` +
+        `done ${weeks.map((w) => w.out).join(', ')})`
+      : null,
+  };
+}
+
 /**
  * The flow figures in [from, to).
  *   firstPass: the tasks that reached done in the window (not fix tasks of another task: `fixes` or `qa_original`),
@@ -184,19 +510,20 @@ const fixRounds = (o) => (Array.isArray(o?.resumed) ? o.resumed : []).filter((r)
  *   mergeConflicts: the mergeConflict rows (not the merge guard's stops, counted apart), per week,
  *   baseGate: recorded verdicts, how many were skipped by the skip rule, red verdicts and red tips, the median run time,
  *   pushes: the push rows (deduplicated on tip + time), the merged tasks and commits per push,
- *   triage: the verdicts by word.
+ *   triage: the verdicts by word,
+ *   rightFirstTime, autonomy, reviewers, inflow: the quality figures (see the header).
+ * @param {{ from: number, to: number, plans?: object|null, reviewerTypes?: string[]|null }} window  plans = the plan
+ *   register (for the findings' causes), reviewerTypes = queueLogic.REVIEWER_TYPES
  */
-function flowStatistics(queue, rows, { from, to }) {
+function flowStatistics(queue, rows, { from, to, plans = null, reviewerTypes = null }) {
   const weeks = Math.max(1 / 7, (to - from) / (7 * DAY_MS));
   const inWindow = (t) => Number.isFinite(t) && t >= from && t < to;
   const tasks = (queue?.tasks ?? []).filter((o) => o && o.external !== true);
-  const isFix = (o) =>
-    (typeof o.qa_original === 'string' && o.qa_original !== o.id) ||
-    (Array.isArray(o.fixes) ? o.fixes.length > 0 : typeof o.fixes === 'string' && !!o.fixes);
-  const merged = tasks.filter((o) => o.status === 'done' && inWindow(Date.parse(o.done ?? '')) && !isFix(o));
+  const merged = tasks.filter((o) => o.status === 'done' && inWindow(Date.parse(o.done ?? '')) && !isFixTask(o));
   const rounds = merged.map(fixRounds);
   const first = rounds.filter((n) => n === 0).length;
 
+  const rft = rightFirstTime(merged, queue, plans);
   const fixRows = rowsOf(rows, 'fixRound', from, to);
   const conflicts = rowsOf(rows, 'mergeConflict', from, to);
   const real = conflicts.filter((r) => !r.guard);
@@ -250,6 +577,11 @@ function flowStatistics(queue, rows, { from, to }) {
       red_tip: pushes.filter((r) => r.base_health === 'red').length,
     },
     triage,
+    // The quality figures (see the header).
+    rightFirstTime: rft,
+    autonomy: autonomyStatistics(queue, merged, rft, { from, to }),
+    reviewers: reviewerStatistics(queue, { from, to, types: reviewerTypes }),
+    inflow: inflowStatistics(queue, { from, to }),
   };
 }
 
@@ -275,7 +607,68 @@ function flowLines(f, label) {
           (f.pushes.red_tip ? `, ${f.pushes.red_tip} with a red base tip` : '')
         : ''),
     `  triage verdicts: ${triage || 'none'}`,
+    ...qualityLines(f),
   ];
+}
+
+/** The quality figures as text lines (part of flowLines). Older results without them give no lines. */
+function qualityLines(f) {
+  const out = [];
+  const v = (x) => (x == null ? '-' : String(x));
+  const r = f.rightFirstTime;
+  if (r)
+    out.push(
+      `  right first time: ${r.right} of ${r.merged} merged (${r.rate_pct == null ? '-' : `${r.rate_pct} %`}); ` +
+        `post-merge defects ${r.defects} (${v(r.defects_per_10)} per 10 merged)` +
+        `; owner interventions ${r.interventions} (${v(r.interventions_per_10)} per 10 merged` +
+        (r.interventions_known < r.merged ? `, ${r.merged - r.interventions_known} task(s) unknown` : '') +
+        ')',
+    );
+  const au = f.autonomy;
+  if (au) {
+    const c = au.corrected;
+    const per =
+      au.verified_per_intervention == null
+        ? `no interventions (${au.verified} verified)`
+        : `${au.verified_per_intervention} (${au.verified} verified)`;
+    out.push(
+      `  autonomy: verified tasks per owner intervention ${per}; longest stretch without the owner ` +
+        `${au.longest_stretch_h} h; corrected without the owner ${c.without_owner} of ${c.total} failure(s) ` +
+        `(fix rounds ${c.fix_rounds.without_owner}/${c.fix_rounds.total}, red done commands ` +
+        `${c.done_when.without_owner}/${c.done_when.total}, base red fix tasks ${c.base_fix.without_owner}/${c.base_fix.total})`,
+    );
+  }
+  const rv = f.reviewers;
+  if (rv) {
+    if (!rv.rows.length) out.push('  reviewers: no measured reviewer runs in the window');
+    else {
+      out.push(
+        `  reviewers (${rv.tasks} measured task(s); fix rounds attributed ${rv.attributed} of ${rv.fix_rounds}` +
+          (rv.fix_rounds && !rv.attributed ? ', cq resume --from records it' : '') +
+          '):',
+      );
+      for (const x of rv.rows)
+        out.push(
+          `    ${x.type.padEnd(20)} ${x.runs} run(s), ${x.with_findings} with findings, ${x.fixes} led to a fix round, ` +
+            `${x.dismissed} dismissed` +
+            (x.no_line ? `, ${x.no_line} without a FINDINGS line` : ''),
+        );
+      for (const h of rv.hints) out.push(`  HINT ${h}`);
+    }
+  }
+  const i = f.inflow;
+  if (i) {
+    const by = Object.entries(i.by)
+      .filter(([, n]) => n)
+      .map(([k, n]) => `${k} ${n}`)
+      .join(', ');
+    out.push(
+      `  inflow: ${i.added} added${by ? ` (${by})` : ''}; last ${i.weeks.length} weeks added/done ` +
+        i.weeks.map((w) => `${w.in}/${w.out}`).join(', '),
+    );
+    if (i.hint) out.push(`  HINT ${i.hint}`);
+  }
+  return out;
 }
 
 // ---- Load ------------------------------------------------------------------------------------------------------
@@ -341,8 +734,20 @@ module.exports = {
   orchestrationOverhead,
   overheadLines,
   fixRounds,
+  REVIEWER_HINT_RUNS,
+  INFLOW_WEEKS,
+  INFLOW_SOURCES,
+  rightFirstTime,
+  ownerActionTimes,
+  longestStretch,
+  ownerTouched,
+  autonomyStatistics,
+  reviewerStatistics,
+  inflowSource,
+  inflowStatistics,
   flowStatistics,
   flowLines,
+  qualityLines,
   loadStatistics,
   loadLines,
 };

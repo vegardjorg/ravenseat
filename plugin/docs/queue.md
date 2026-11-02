@@ -138,7 +138,7 @@ still pass `--by owner`, and the changelog (`cq undo --show`) records who did.
 | `park <id>` / `continue <id>` | Park / unpark |
 | `pick <id> --by "<who>"` / `deliver <id>` | A person or a separate chat takes a task by hand / delivers it |
 | `diagnose` | Why the queue runs fewer tracks than it could (with suggested fixes) |
-| `finding "<title>" [--detail] [--task] [--files a,b]` / `finding list [--all]` | A track reports something outside its scope: an idea in the plan register, linked to the task and deduplicated on the title ([plan-register.md](plan-register.md#findings)). Pulse and `show` count the new ones |
+| `finding "<title>" [--detail] [--task] [--cause <id>] [--files a,b]` / `finding list [--all]` | A track reports something outside its scope: an idea in the plan register, linked to the task and deduplicated on the title ([plan-register.md](plan-register.md#findings)). `--cause` names the merged task it is a defect of. Pulse and `show` count the new ones |
 | `doctor [--json]` | Read-only health check, one OK/WARN/FAIL line each with a fix hint: Node and the `node` the hooks find on PATH, the hooks file and its scripts, `queue.config.json` keys and types, the state files, a stale lock, half-deleted worktree folders under `.claude/worktrees/` and git worktrees whose folder is gone, branches of finished tasks, CI cost, and the safety baseline (secret files in git or not ignored, empty gates, no CI config, a manifest without its lockfile, `productionBranch` equal to `baseBranch`, tracked files over `largeFileMb`; offline). Exit 1 on any FAIL |
 | `state` | Machine-readable state (exit 3 when there is nothing to do) |
 | `undo` | Undo the last write |
@@ -221,6 +221,33 @@ receive or merge resumes), `mergeConflict` (cq merge stopped in the merge step, 
 and `load`. The figures: first-pass rate (the tasks done in the window, not fix tasks, with 0 fix rounds in `resumed`),
 fix rounds per merged task, merge conflicts per week, base red verdicts, pushes per week with merged tasks and commits
 per push, and the triage verdicts.
+
+**Quality** (in the same Flow view, `lib/eventStatistics.js`) measures how often work was right, from data the queue
+already keeps; a task without a field counts as "nothing recorded", never as an error:
+
+- **Right first time:** a merged task (as for first pass) with 0 fix rounds, no QA deviation, not reopened (a logged
+  status change away from done) and no post-merge defect. A **post-merge defect** is a fix task that names the task
+  (`fixes`, the QA fix chain `qa_original`, the base gate fix task) or a finding with `cq finding --cause <id>`.
+  Shown as a rate and as defects per 10 merged.
+- **Owner interventions per 10 merged:** changelog entries by owner or theBoard that change the task between its start
+  and done (edit, park, continue, cancel and the like; `cq set` writes no `by`). The changelog keeps its last 50
+  entries, so a task started before the oldest kept one is counted as unknown.
+- **Autonomy:** *verified tasks per owner intervention* = the merged tasks that were right first time or have every
+  defect fixed (each fix task done, no QA deviation open, not reopened), divided by the owner interventions ("no
+  interventions" at 0). *Longest stretch without the owner* = the longest time in the window when work ran (some task
+  between its start and its done, or delivered; an open one up to now) with no owner action: owner or theBoard
+  changelog entries and undos, owner answers, hand approvals, `qa ok` by hand, a QA deviation and tasks the owner
+  added. A time when nothing ran (all work waiting, for example on an owner question) ends a stretch. *Corrected
+  without the owner* = the fix rounds, red done commands (`receive` and `merge` start that round with
+  `--from done_when`) and base red fix tasks on the tasks done in the window that ended green with no owner action on
+  that task (an owner edit, a QA deviation, or an answer to its fix-round cap).
+- **Reviewer hit rate:** per reviewer type over the tasks done in the window with a cost measurement: runs, runs whose
+  FINDINGS line had findings, fix rounds the orchestrator attributed to the type (`cq resume --from <reviewer,...>`,
+  saved in `resumed[].from` and the fixRound row) and the dismissed rest. A type with 10 or more runs and no fix gets a
+  hint ("reviewer-docs: 0 fixes in 14 runs"), once fix rounds carry `--from` at all.
+- **Inflow:** the tasks added in the window by source (owner, agent proposals, fix tasks, triage = tasks made from a
+  finding's plan entry, other), added versus done for the last 3 whole weeks, and a hint when more came in than went
+  out in each of them.
 
 Pushes are found after the fact: `cq fill` reads the reflog of `refs/remotes/<remote>/<baseBranch>`, where git writes
 "update by push" with the time after every successful push (a fetch writes "fetch: ..."), and logs each new push once

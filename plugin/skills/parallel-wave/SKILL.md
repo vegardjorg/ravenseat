@@ -81,7 +81,8 @@ word.
 2. **When a track delivers:** `cq receive <id>` BEFORE merging (status review, the review package as plain files in
    `<scratch>/rev-<id>/`, the track's RESULT line from the transcript, one reviewer prompt per reviewer for the
    class, and the merge command). Read the long report only when RESULT says PARTIAL, RED or ownerQuestions>0. Start the
-   reviewers `receive` prints (fixed per class plus the helper agents that hit) in the SAME turn. Fix round in a new agent on findings. When review is green:
+   reviewers `receive` prints (fixed per class plus the helper agents that hit) in the SAME turn. Fix round in a new agent on findings,
+   with `cq resume <id> --from <reviewer,...>` naming the reviewer types whose findings caused it (the reviewer hit rate). When review is green:
    **`cq merge <id>`** from Bash with a long timeout (merge with `--wave-base`, optional migration push if
    configured, `gates --quick`, `set <id> done` with cost and findings, `fill`). It stops at the first error with
    the step and an excerpt; full log in `<scratch>/merge-<id>.log`. PARTIAL = continuation in a new agent, not a merge.
@@ -123,7 +124,7 @@ word.
 - The branch must be free (`git worktree list`; `git -C <old worktree> switch --detach`).
 - The new agent starts with `cq prepare-track <ID>-r<N> --branch queue/<ID> --continue …`: takes the branch over with
   `git switch`, no reset. Never `prepare-track` without `--continue` for a fix round.
-- In the queue, `cq resume <id> --reason fix|context [--findings-file <file>]` writes that mission
+- In the queue, `cq resume <id> --reason fix|context [--findings-file <file>] [--from <reviewer,...>]` writes that mission
   (`prompt-<id>-r<N>.md`, N = the next free round) and prints the agent message. The fix round writes its report.md
   in `<scratch>/<id>-r<N>/`, where `cq deliveries`, the pulse and `cq receive` find it.
 

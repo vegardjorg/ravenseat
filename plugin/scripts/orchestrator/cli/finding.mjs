@@ -1,10 +1,11 @@
 // =============================================================
 // cli/finding.mjs: `cq finding`, what a track reports when it notices something outside its scope.
 //
-//   cq finding "<title>" [--detail "..."] [--task <id>] [--files a,b] [--project <pid>] [--dry] [--json]
+//   cq finding "<title>" [--detail "..."] [--task <id>] [--cause <id>[,<id>]] [--files a,b] [--project <pid>] [--dry] [--json]
 //        an idea in the plan register (PL-FINDING-<n>, priority later), linked to the reporting task and deduplicated
 //        on the normalized title. --task defaults to the task whose queue branch the worktree is on. The project is
-//        --project, otherwise the task's project, otherwise the only project in the register.
+//        --project, otherwise the task's project, otherwise the only project in the register. --cause names the
+//        merged task(s) the finding is a defect of (a post-merge defect in the right-first-time figure).
 //   cq finding list [--all] [--json]
 //        the findings nobody has triaged yet (--all: every finding)
 // The rules (where it lands, dedup, when it stops being new) are in lib/queueFindings.js. The write goes through
@@ -69,7 +70,7 @@ function findingList() {
     return;
   }
   for (const r of rows) {
-    const from = r.tasks.length ? ` from ${r.tasks.join(', ')}` : '';
+    const from = (r.tasks.length ? ` from ${r.tasks.join(', ')}` : '') + (r.causes.length ? `, caused by ${r.causes.join(', ')}` : '');
     const times = r.count > 1 ? ` x${r.count}` : '';
     console.log(cut(`${r.new ? 'NEW ' : '    '}${r.id.padEnd(16)} ${r.priority.padEnd(6)} ${r.title}${from}${times}`, WIDTH));
     if (r.files.length) console.log(cut(`${' '.repeat(21)}files: ${r.files.join(', ')}`, WIDTH));
@@ -84,12 +85,15 @@ function findingList() {
 export function cmdFinding() {
   if (a[1] === 'list') return findingList();
   const title = a[1];
-  const usage = `${CQ} finding "<title>" [--detail "..."] [--task <id>] [--files a,b] [--project <pid>]`;
+  const usage = `${CQ} finding "<title>" [--detail "..."] [--task <id>] [--cause <id>[,<id>]] [--files a,b] [--project <pid>]`;
   if (!title || title.startsWith('--')) die(`Use: ${usage}`);
   const queue = readQueueForPlan();
   const tasks = queue.tasks ?? [];
   const task = val('--task') ?? taskFromBranch(tasks);
   if (task && !tasks.some((o) => o.id === task)) die(`Unknown task ${task} (--task takes a queue task id).`);
+  const causes = [...new Set(String(val('--cause') ?? '').split(',').map((x) => x.trim()).filter(Boolean))];
+  const unknown = causes.filter((c) => !tasks.some((o) => o.id === c));
+  if (unknown.length) die(`Unknown task ${unknown.join(', ')} (--cause takes the id(s) of the merged task(s) that caused it).`);
   const parsed = FI.parseFiles(val('--files'));
   if (parsed.error.length) die(parsed.error.join('\n'));
   // The project: --project, the task's project when it is registered, otherwise the only project there is.
@@ -105,7 +109,7 @@ export function cmdFinding() {
   const r = editPlans('finding', (reg, q) =>
     FI.recordFinding(
       reg,
-      { title, detail: val('--detail') ?? null, task, files: parsed.files, project },
+      { title, detail: val('--detail') ?? null, task, files: parsed.files, causes, project },
       { projects: q.projects ?? {}, question: q.question ?? {} },
     ),
   );

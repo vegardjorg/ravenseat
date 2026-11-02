@@ -468,11 +468,16 @@ export function cmdResume() {
   // The same template as fill (make-queue-common + make-mission), with the track block from queueLogic.resumeBlock and
   // --continue in the setup. The track id is <id>-r<N>, so the agent's report lands in <scratchpad>/<id>-r<N>/ (receive
   // finds it).
-  const id = positional(1, ['--reason', '--round', '--scratchpad', '--findings-file'])[0];
+  const id = positional(1, ['--reason', '--round', '--scratchpad', '--findings-file', '--from'])[0];
   const reason = val('--reason') ?? 'fix';
   const use =
-    'resume <id> [--reason fix|context] [--round N] [--findings-file <file>] [--scratchpad <folder>]';
+    'resume <id> [--reason fix|context] [--round N] [--findings-file <file>] [--from <reviewer,...>] [--scratchpad <folder>]';
   if (!id || !L.RESUME_REASONS.includes(reason)) die(use);
+  // --from: the reviewer types whose findings caused this fix round (the reviewer hit rate, lib/eventStatistics.js).
+  // Saved in `resumed` and the fixRound row; a name that is not a known reviewer type is kept, with a warning.
+  const fromList = [...new Set(String(val('--from') ?? '').split(',').map((x) => x.trim()).filter(Boolean))];
+  if (fromList.some((x) => !/^[A-Za-z0-9][A-Za-z0-9._-]{0,60}$/.test(x)))
+    die('--from takes agent type names separated by commas (e.g. --from reviewer,reviewer-security)');
   const queue = read();
   const o = queue.tasks.find((x) => x.id === id);
   if (!o) die(`Unknown task ${id}`);
@@ -598,10 +603,14 @@ export function cmdResume() {
   edit((q) => {
     const x = q.tasks.find((y) => y.id === id);
     if (found.report) x.report_seen = Math.max(Number(x.report_seen ?? 0), found.report.mtimeMs);
-    (x.resumed ??= []).push({ round, reason, time: new Date().toISOString() });
+    (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}) });
   });
   // The fixRound row (lib/eventRows.js): the same round as `resumed`, countable per week (fail open).
-  logEvent(ER.fixRoundRow({ task: id, reason, round }));
+  logEvent(ER.fixRoundRow({ task: id, reason, round, from: fromList }));
+  // done_when is what cq receive and cq merge pass for a red done command (not a reviewer, but a known cause).
+  const unknownFrom = fromList.filter((x) => x !== 'done_when' && !L.REVIEWER_TYPES.includes(x));
+  if (unknownFrom.length)
+    console.log(`WARNING: --from ${unknownFrom.join(', ')} is not a reviewer type here (${L.REVIEWER_TYPES.join(', ')}); saved as given.`);
   pulseCursor(`resume ${id} r${round}`);
   console.log(
     `RESUME ${trackId} (${reason}): prompt ${prompt}` +

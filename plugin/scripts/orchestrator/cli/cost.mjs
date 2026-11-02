@@ -13,7 +13,7 @@
 // =============================================================
 
 import {
-  a, CE, CH, CONFIG, cut, D, die, edit, FC, FOLDER, HELP, L, positional, read, require, TK, val, WIDTH,
+  a, CE, CH, CONFIG, cut, D, die, edit, FC, FOLDER, HELP, L, positional, read, readPlans, require, TK, val, WIDTH,
 } from './context.mjs';
 import {
   dailyUsageFor, measureLoad, measurementLine, measureTask, readTimeLog, saveMeasurement, sinceTime,
@@ -193,7 +193,14 @@ export function cmdCost() {
       trackUsd: merged.total_usd,
       agentsBySession: agentsBySession(sessionIds),
     });
-    const flow = ES.flowStatistics(queue, rows, { from, to });
+    // The plan register gives the findings' causes (post-merge defects); an unreadable one only leaves them out.
+    let plans = null;
+    try {
+      plans = readPlans();
+    } catch {
+      plans = null; // error-ignored: the findings are one input of the right-first-time figure
+    }
+    const flow = ES.flowStatistics(queue, rows, { from, to, plans, reviewerTypes: L.REVIEWER_TYPES });
     // Cost per task with all its runs (first track, fix rounds, continuations, reviewers, fix tasks), by cost. All
     // time unless --since, like the per-class lines.
     const perTask = CE.taskTotals({ queue, events, since: since ? Date.parse(since) : null });

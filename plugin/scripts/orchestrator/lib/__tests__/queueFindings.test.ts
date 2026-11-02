@@ -92,6 +92,18 @@ describe('queueFindings (pure)', () => {
     expect(reg.entries.find((p) => p.id === 'PL-X-1')).not.toHaveProperty('finding');
   });
 
+  it('causes: the merged task(s) a finding is a defect of, kept apart from the reporting task and merged on a duplicate', () => {
+    const reg = P.emptyRegister();
+    const first = FI.recordFinding(reg, { title: 'Off by one', task: 'W-2', causes: ['A-1', 'A-1'], project: 'app' }, { projects: PROJECTS });
+    expect(first.entry.finding).toMatchObject({ tasks: ['W-2'], causes: ['A-1'] });
+    FI.recordFinding(reg, { title: 'off by ONE', task: 'W-3', causes: ['B-1'], project: 'app' }, { projects: PROJECTS });
+    expect(reg.entries[0].finding.causes).toEqual(['A-1', 'B-1']);
+    // Without --cause no field is written (older findings look the same), and the list row has an empty list.
+    const plain = FI.recordFinding(reg, { title: 'Another', task: 'W-2', project: 'app' }, { projects: PROJECTS });
+    expect(plain.entry.finding).not.toHaveProperty('causes');
+    expect(FI.findingRows(reg, [], { all: true }).map((r: { causes: string[] }) => r.causes)).toEqual([['A-1', 'B-1'], []]);
+  });
+
   it('stops being new when triaged: prioritized, matured, dropped or turned into queue tasks', () => {
     const fresh = () => {
       const reg = P.emptyRegister();
@@ -172,6 +184,7 @@ describe('cq finding (against a temporary queue)', () => {
     expect(which.code).toBe(1);
     expect(which.error).toMatch(/Which project\? Z-1 has no registered project\. Give --project <pid> \(app, web\)/);
     expect(run('finding', 'x', '--task', 'NOPE').error).toMatch(/Unknown task NOPE/);
+    expect(run('finding', 'x', '--cause', 'A-1,NOPE').error).toMatch(/Unknown task NOPE \(--cause/);
     expect(run('finding').error).toMatch(/Use: cq finding "<title>"/);
 
     expect(run('finding', 'Second issue', '--task', 'A-1', '--dry').out).toMatch(/^Preview \(nothing written\): FINDING PL-FINDING-2/m);
@@ -192,5 +205,9 @@ describe('cq finding (against a temporary queue)', () => {
     // The write is in the plan changelog, so plan undo rolls the drop back.
     expect(run('plan', 'undo').code).toBe(0);
     expect(JSON.parse(run('state').out).findings.new).toBe(1);
+    // --cause: the merged task(s) the finding is a defect of, saved as finding.causes and shown in the list.
+    expect(run('finding', 'Totals are off by one', '--task', 'Z-1', '--cause', 'A-1', '--project', 'app').code).toBe(0);
+    expect(reg().entries.find((p) => p.title === 'Totals are off by one')?.finding).toMatchObject({ tasks: ['Z-1'], causes: ['A-1'] });
+    expect(run('finding', 'list').out).toMatch(/Totals are off by one from Z-1, caused by A-1$/m);
   }, 120_000);
 });

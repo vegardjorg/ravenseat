@@ -105,6 +105,9 @@ function doneCommandRed(id, check, { scratch }) {
       'fix',
       '--findings-file',
       check.file,
+      // The cause of the round, for the autonomy figure (lib/eventStatistics.js): a red done command, not a reviewer.
+      '--from',
+      'done_when',
       ...(scratch ? ['--scratchpad', scratch] : []),
     ],
     { encoding: 'utf8', env: process.env },

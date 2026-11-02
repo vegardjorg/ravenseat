@@ -47,7 +47,7 @@ undo.
 | `plan undo` | Undo |
 | `plan backup` | Runs the script in `planBackup` (optional; for example a private backup repo) |
 | `plan doc …` | Optional register of controlled documents (versions, revisions, links) |
-| `finding "<title>" [--detail "…"] [--task <id>] [--files a,b]` | A track reports something outside its scope as an idea (see Findings) |
+| `finding "<title>" [--detail "…"] [--task <id>] [--cause <id>] [--files a,b]` | A track reports something outside its scope as an idea (see Findings); `--cause` names the merged task it is a defect of |
 | `finding list [--all]` | The findings nobody has triaged yet (`--all`: every one) |
 
 ## Findings

@@ -12,7 +12,9 @@
 // it into queue tasks with `cq add --plan <id>`.
 //
 // The entry: id PL-FINDING-<n>, the title, the detail as `summary`, the reporting task's project, and the tool-owned
-// field `finding` { tasks: [ids that reported it], files: [paths], reported, last, count }. Deduplicated on the
+// field `finding` { tasks: [ids that reported it], files: [paths], reported, last, count, causes? }. `causes` (from
+// `cq finding --cause <id>`) names the done task(s) whose merge caused it: a post-merge defect of that task in the
+// right-first-time figure (lib/eventStatistics.js); the reporting task is not a cause. Deduplicated on the
 // normalized title (case, punctuation and spacing ignored): the same finding again adds the task and the files to the
 // existing entry and counts it; a title that matches a plan entry that is not a finding changes nothing.
 //
@@ -72,7 +74,8 @@ function parseFiles(raw) {
 /**
  * Records a finding in the register (mutates `reg` only when it is valid).
  * @param {object} reg the plan register (normalized)
- * @param {{ title: string, detail?: string|null, task?: string|null, files?: string[], project: string }} input
+ * @param {{ title: string, detail?: string|null, task?: string|null, files?: string[], causes?: string[],
+ *   project: string }} input  causes = the task(s) whose merge caused it (--cause)
  * @param {{ projects?: object, question?: object, now?: string }} ctx  queue.json projects and question
  * @returns {{ error: string[], warnings: string[], entry?: object, created?: boolean, duplicate?: string,
  *   finding?: boolean }}  created: a new entry; duplicate: the id of the entry it matched (finding false = an entry
@@ -85,12 +88,14 @@ function recordFinding(reg, input, ctx = {}) {
   if (!key) return { error: ['the title is empty (cq finding "<title>")'], warnings: [] };
   const files = input.files ?? [];
   const task = input.task ?? null;
+  const causes = [...new Set((input.causes ?? []).filter(Boolean))];
   const same = (reg.entries ?? []).find((p) => findingKey(p.title) === key);
   if (same && !same.finding) return { error: [], warnings: [], entry: same, duplicate: same.id, finding: false };
   if (same) {
     const fi = same.finding;
     if (task && !fi.tasks.includes(task)) fi.tasks.push(task);
     for (const f of files) if (!fi.files.includes(f) && fi.files.length < MAX_FILES) fi.files.push(f);
+    for (const c of causes) if (!(fi.causes ??= []).includes(c)) fi.causes.push(c);
     fi.count = (Number(fi.count) || 1) + 1;
     fi.last = now;
     if (input.detail && !same.summary) same.summary = String(input.detail);
@@ -110,6 +115,7 @@ function recordFinding(reg, input, ctx = {}) {
   );
   if (s.error.length) return s;
   s.entry.finding = { tasks: task ? [task] : [], files: [...files], reported: now, last: now, count: 1 };
+  if (causes.length) s.entry.finding.causes = causes;
   return { ...s, created: true };
 }
 
@@ -147,6 +153,7 @@ function findingRows(reg, tasks = [], { all = false } = {}) {
       priority: p.priority,
       tasks: p.finding.tasks ?? [],
       files: p.finding.files ?? [],
+      causes: p.finding.causes ?? [],
       count: p.finding.count ?? 1,
       reported: p.finding.reported ?? null,
     }))

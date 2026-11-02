@@ -608,11 +608,25 @@ function boardForecast(queue) {
   }
 }
 
+/** The plan register for the flow figures (the findings' causes), or null when it is missing or cannot be read. */
+function flowPlans() {
+  try {
+    return fs.existsSync(PLAN_FILE) ? P.normalize(JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8'))) : null;
+  } catch {
+    return null; // error-ignored: the findings are one input of the right-first-time figure
+  }
+}
+
 /** The flow figures for the last 14 days (lib/eventStatistics.js, the same as in cq cost); an error leaves the box out. */
 function boardFlow(queue, events) {
   try {
     const to = Date.now();
-    return ES.flowStatistics(queue, events ?? [], { from: to - 14 * 86_400_000, to });
+    return ES.flowStatistics(queue, events ?? [], {
+      from: to - 14 * 86_400_000,
+      to,
+      plans: flowPlans(),
+      reviewerTypes: L.REVIEWER_TYPES,
+    });
   } catch (e) {
     console.error(`the flow figures failed: ${e?.message ?? e}`);
     return null;
@@ -622,7 +636,14 @@ function boardFlow(queue, events) {
 let statCache = null;
 function statistics() {
   const log = timeLogRows();
-  const key = `${log.key}|${fs.statSync(FILE).mtimeMs}|${TK.dayFor(new Date().toISOString())}`;
+  // plans.json is in the key too: a new finding with --cause changes the right-first-time figure.
+  let plansMt = 0;
+  try {
+    plansMt = fs.statSync(PLAN_FILE).mtimeMs;
+  } catch {
+    plansMt = 0; // no register yet
+  }
+  const key = `${log.key}|${fs.statSync(FILE).mtimeMs}|${plansMt}|${TK.dayFor(new Date().toISOString())}`;
   if (statCache?.key === key) return statCache;
   const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
   const data = {

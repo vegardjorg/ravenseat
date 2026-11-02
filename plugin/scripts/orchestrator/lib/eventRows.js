@@ -6,8 +6,9 @@
 // (base-health.json), triage verdicts (queue.json) and pushes (git), but only as the current state, so nothing could
 // say "how many first-pass merges this week" or "when was parallelism limited". One appended JSON line per event makes
 // that countable. The rows (all with `time` and `event`):
-//   fixRound      { task, reason, round }                   cq resume (cli/run.mjs), also when receive or merge
-//                                                            resumes by itself; reason fix or context
+//   fixRound      { task, reason, round, from? }            cq resume (cli/run.mjs), also when receive or merge
+//                                                            resumes by itself; reason fix or context; from = the
+//                                                            reviewer types that caused it (cq resume --from)
 //   mergeConflict { task, files, branch, guard? }           cq merge stopped in the merge step (cli/merge.mjs);
 //                                                            files = "Conflicts in N files." from merge-track.mjs (null
 //                                                            when not printed); guard: true when the merge guard stopped
@@ -43,8 +44,10 @@ const round2 = (x) => Math.round(x * 100) / 100;
 
 // ---- Flow rows --------------------------------------------------------------------------------------------------
 
-function fixRoundRow({ time, task, reason, round }) {
-  return { time: iso(time), event: 'fixRound', task, reason: reason ?? null, round: Number.isInteger(round) ? round : null };
+function fixRoundRow({ time, task, reason, round, from = [] }) {
+  const row = { time: iso(time), event: 'fixRound', task, reason: reason ?? null, round: Number.isInteger(round) ? round : null };
+  if (Array.isArray(from) && from.length) row.from = [...from];
+  return row;
 }
 
 /**
