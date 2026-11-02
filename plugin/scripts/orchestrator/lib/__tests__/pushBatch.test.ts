@@ -144,6 +144,16 @@ describe('the verdict', () => {
     expect(PB.batchVerdict({ batch: fake(12), setup: SETUP, blocked: ['1 external commit(s)'], now }).verdict).toBe('BLOCKED');
     expect(PB.batchVerdict({ batch: fake(12), setup: SETUP, health: 'unknown', now }).verdict).toBe('READY');
   });
+  it('BLOCKED without a green full gate on the tip when it is required (fullGate), never when it is off', () => {
+    expect(PB.batchVerdict({ batch: fake(12), setup: SETUP, fullGate: 'missing', now })).toMatchObject({
+      verdict: 'BLOCKED',
+      reason: 'no green full gate recorded on m0 (run cq gates --full in the main checkout, on the tip, with no uncommitted changes)',
+    });
+    expect(PB.batchVerdict({ batch: fake(12), setup: SETUP, fullGate: 'red', now }).reason).toMatch(/^the full gate is red at m0/);
+    expect(PB.batchVerdict({ batch: fake(12), setup: SETUP, fullGate: 'green', now }).verdict).toBe('READY');
+    expect(PB.batchVerdict({ batch: fake(12), setup: SETUP, fullGate: 'off', now }).verdict).toBe('READY');
+    expect(PB.batchVerdict({ batch: fake(12), setup: SETUP, now }).verdict).toBe('READY');
+  });
   it('maxAgeHours: old work makes the batch READY below minTasks', () => {
     const setup = { ...SETUP, maxAgeHours: 24 };
     const young = fake(2, { oldestAt: new Date(now - 3 * HOUR).toISOString() });
@@ -171,6 +181,12 @@ describe('the guard question', () => {
     expect(PB.guardQuestion({ batch: fake(60), setup: SETUP, now })).toBeNull();
     expect(PB.guardQuestion({ batch: fake(12), setup: SETUP, health: 'red', now })).toBe('base is red at m0; push anyway?');
     expect(PB.guardQuestion({ batch: fake(0), setup: SETUP, now })).toBeNull();
+  });
+  it('asks without a green full gate on the tip, also above the threshold and with minTasks 0', () => {
+    expect(PB.guardQuestion({ batch: fake(12), setup: SETUP, fullGate: 'missing', now })).toMatch(/^no green full gate recorded on m0 .*push anyway\?$/);
+    expect(PB.guardQuestion({ batch: fake(1), setup: { ...SETUP, minTasks: 0 }, fullGate: 'red', now })).toMatch(/^the full gate is red at m0/);
+    expect(PB.guardQuestion({ batch: fake(12), setup: SETUP, fullGate: 'green', now })).toBeNull();
+    expect(PB.guardQuestion({ batch: fake(0), setup: SETUP, fullGate: 'missing', now })).toBeNull();
   });
   it('minTasks 0 turns the count question off but keeps the red-base one; maxAgeHours counts', () => {
     const zero = { ...SETUP, minTasks: 0 };
@@ -224,14 +240,21 @@ describe('counting against a temporary repo', () => {
 });
 
 /** A queue project on a temporary repo: config, data folder (optionally base-health.json), env for the scripts. */
-function project(push: object, { red = false } = {}) {
+function project(push: object, { red = false, extra = {} as Record<string, unknown> } = {}) {
   const r = makeRepo();
   const data = path.join(r.root, 'data');
   fs.mkdirSync(data);
   fs.writeFileSync(path.join(data, 'queue.json'), JSON.stringify({ tasks: [], projects: {} }));
   const configFile = path.join(r.dir, 'queue.config.json');
-  fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'main', remote: 'origin', branchPrefix: 'queue/', push }));
-  const env = { ...process.env, QUEUE_ROOT: r.dir, QUEUE_FOLDER: data, QUEUE_CONFIG: configFile, QUEUE_GIT: r.dir };
+  fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'main', remote: 'origin', branchPrefix: 'queue/', push, ...extra }));
+  const env = {
+    ...process.env,
+    QUEUE_ROOT: r.dir,
+    QUEUE_FOLDER: data,
+    QUEUE_CONFIG: configFile,
+    QUEUE_GIT: r.dir,
+    QUEUE_TIME_LOG: path.join(data, 'times.jsonl'),
+  };
   const markHealth = () => {
     const tip = r.g(['rev-parse', 'main']);
     fs.writeFileSync(
@@ -252,7 +275,10 @@ function project(push: object, { red = false } = {}) {
     const out = spawnSync(process.execPath, [path.join(ORCH, 'push-check.mjs'), ...args], { encoding: 'utf8', env, cwd: r.dir });
     return { code: out.status, out: `${out.stdout}${out.stderr}` };
   };
-  return { ...r, data, markHealth, hook, pushCheck };
+  /** gates.mjs as the orchestrator runs it (the main checkout unless `cwd` says otherwise). */
+  const gates = (args: string[], cwd = r.dir) =>
+    spawnSync(process.execPath, [path.join(ORCH, 'gates.mjs'), ...args], { encoding: 'utf8', env, cwd });
+  return { ...r, data, env, markHealth, hook, pushCheck, gates };
 }
 
 describe('the push guard hook', () => {
@@ -276,6 +302,45 @@ describe('the push guard hook', () => {
     const h = p.hook('git push origin main');
     expect(h.permissionDecision).toBe('ask');
     expect(h.permissionDecisionReason).toBe(`push-guard: base is red at ${p.g(['rev-parse', 'main']).slice(0, 7)}; push anyway?`);
+  }, 60_000);
+  it('asks when the tip has no green full gate from cq; a forged time log row or another sha does not count', () => {
+    const FULL = 'node -e "process.exit(0)"';
+    const p = project({ minTasks: 1 }, { extra: { gates: { full: [FULL] } } });
+    p.queueMerge('A-1');
+    const tip = p.g(['rev-parse', 'main']);
+    const ask = () => p.hook('git push origin main');
+    // The forgeries: a green full row in the time log for the tip, and a green evidence entry for another commit.
+    fs.writeFileSync(
+      path.join(p.data, 'times.jsonl'),
+      JSON.stringify({ time: 't', event: 'gate', kind: 'full', sha: tip, ok: true, exit: 0, clean: true, gates: [FULL] }) + '\n',
+    );
+    fs.writeFileSync(
+      path.join(p.data, 'gate-evidence.json'),
+      JSON.stringify({ version: 1, entries: [{ sha: p.g(['rev-parse', 'main~1']), kind: 'full', ok: true, exit: 0, clean: true, gates: [FULL] }] }),
+    );
+    const h = ask();
+    expect(h?.permissionDecision).toBe('ask');
+    expect(h.permissionDecisionReason).toBe(
+      `push-guard: no green full gate recorded on ${tip.slice(0, 7)} (run cq gates --full in the main checkout, on the tip, with no uncommitted changes); push anyway?`,
+    );
+    // The orchestrator's own full gate in the main checkout records the evidence: no question any more.
+    expect(p.gates(['--full']).status).toBe(0);
+    expect(ask()).toBeNull();
+    // A new commit moves the tip: asked again.
+    p.queueMerge('A-2');
+    expect(ask()?.permissionDecision).toBe('ask');
+  }, 60_000);
+  it('denies a queue agent a command that could forge gate evidence; the orchestrator and plain gate runs are free', () => {
+    const p = project({ minTasks: 1 });
+    const decision = (command: string, agent_type?: string) =>
+      p.hook(command, agent_type ? { agent_type } : {})?.permissionDecision ?? null;
+    expect(decision('node scripts/orchestrator/gates.mjs --quick --evidence', 'track')).toBe('deny');
+    expect(decision('node "C:/x/cq.mjs" gates --full --cwd ../main', 'track')).toBe('deny');
+    expect(decision('echo {} > scripts/.queue/gate-evidence.json', 'track-d')).toBe('deny');
+    expect(decision('node scripts/orchestrator/gates.mjs --quick --log x', 'track')).toBeNull();
+    expect(decision('git commit -m "gates: add --cwd note"', 'track')).toBeNull();
+    // The orchestrator (no agent_type) may run the gates with --evidence.
+    expect(decision('node scripts/orchestrator/gates.mjs --quick --evidence')).toBeNull();
   }, 60_000);
   it('nothing to push, or no remote ref: no question (fails open)', () => {
     const p = project({ minTasks: 5 });
@@ -301,6 +366,23 @@ describe('push-check batch status', () => {
     expect(p.pushCheck().out).toContain('Verdict: LARGE (3 merged tasks unpushed');
     const j = JSON.parse(p.pushCheck('--json').out);
     expect(j.batch).toMatchObject({ mode: 'threshold', task_count: 3, tasks: ['A-1', 'A-2', 'A-3'], verdict: 'LARGE', base_health: 'unknown' });
+  }, 60_000);
+  it('BLOCKED without a green full gate from cq on the tip, READY after cq gates --full in the main checkout', () => {
+    const p = project({ mode: 'threshold', minTasks: 1 }, { extra: { gates: { full: ['node -e "process.exit(0)"'] } } });
+    p.queueMerge('A-1');
+    let c = p.pushCheck();
+    expect(c.out).toContain('full gate not run on this tip');
+    expect(c.out).toContain('Verdict: BLOCKED (no green full gate recorded on');
+    // The track's own run in a linked worktree (where agent worktrees live) is not evidence.
+    const wt = path.join(p.dir, '.claude', 'worktrees', 'wt');
+    p.g(['worktree', 'add', '-q', '--detach', wt, 'main']);
+    expect(p.gates(['--full'], wt).status).toBe(0);
+    expect(p.pushCheck().out).toContain('Verdict: BLOCKED (no green full gate recorded on');
+    expect(p.gates(['--full']).status).toBe(0);
+    c = p.pushCheck();
+    expect(c.out).toContain('full gate GREEN');
+    expect(c.out).toContain('Verdict: READY (1 of 1 merged tasks).');
+    expect(JSON.parse(p.pushCheck('--json').out).batch.full_gate).toBe('green');
   }, 60_000);
   it('BLOCKED on a red base and on external commits; owner mode keeps the owner rule', () => {
     const p = project({ minTasks: 1 }, { red: true });

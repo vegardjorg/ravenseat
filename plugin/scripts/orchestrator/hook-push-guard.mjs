@@ -23,6 +23,11 @@
 // newest row is the tip whose health base-health.json records. The local remote ref (as of the last fetch) is the
 // "last push"; a missing remote ref (first push) or any error gives no question (fails open).
 //
+// The full gate (lib/gateEvidence.js): the same plain push also asks when the tip has no green, clean full-gate run
+// recorded by the orchestrator's side (`cq gates --full` in the main checkout), with the hint to run it; only when
+// gates.full has commands. For the queue's agents the guard denies a command that names the gate evidence store or
+// passes --evidence/--cwd to the gate runner, so a track cannot record its own evidence.
+//
 // The secret precheck (config().secretScan, lib/secretScan.js): the same plain push of baseBranch by the orchestrator
 // scans the added lines of `<remote>/<baseBranch>..<baseBranch>` (gitleaks when on PATH, else built-in patterns) and
 // asks with file:line on a hit. Skipped silently over secretScan.maxBytes, on a timeout or any error (fails open).
@@ -71,7 +76,9 @@ function batchQuestion(cwd, k) {
     if (!batch || batch.firstParent === 0) return null;
     const BH = require('./lib/baseHealth.js');
     const health = BH.verdict(BH.readState(path.join(dataFolder(), 'base-health.json')), batch.tip);
-    return PB.guardQuestion({ batch, setup, health });
+    // The full gate on exactly the tip being pushed, from the trusted gate evidence (lib/gateEvidence.js).
+    const fullGate = require('./lib/gateEvidence.js').fullGateVerdict({ folder: dataFolder(), sha: batch.tip, cfg: k });
+    return PB.guardQuestion({ batch, setup, health, fullGate });
   } catch {
     return null;
   }
@@ -154,6 +161,20 @@ process.stdin.on('end', () => {
     const guarded = isGuardedAgent(agentType, guardedTypes);
     const gitContext = canHit(command, k);
     if (!gitContext && !guarded) process.exit(0);
+    // Gate evidence (lib/gateEvidence.js): a queue agent may not record or touch it (deny; the orchestrator is free).
+    const tamper = guarded ? require('./lib/gateEvidence.js').tamperReason(command) : null;
+    if (tamper) {
+      process.stdout.write(
+        JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'deny',
+            permissionDecisionReason: `push-guard: ${tamper}`,
+          },
+        }),
+      );
+      process.exit(0);
+    }
 
     const cwd = typeof p.cwd === 'string' && p.cwd ? p.cwd : process.cwd();
     // The git calls only when the command can be a push or a migration push.

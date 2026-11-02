@@ -8,8 +8,10 @@
 // The base branch and remote come from queue.config.json (config().baseBranch, config().remote).
 //
 // It also prints the batch status (lib/pushBatch.js, config().push): merged tasks and commits not pushed, the oldest
-// unpushed work, the base health of the tip (base-health.json, the base gate) and a verdict line: READY, NOT YET
-// (n of minTasks), BLOCKED (base red, external commits, or the remote is ahead), LARGE (over warnTasks: push recommended)
+// unpushed work, the base health of the tip (base-health.json, the base gate), the full gate on the tip (the gate
+// evidence store, lib/gateEvidence.js: a green, clean `cq gates --full` run in the main checkout on exactly that commit)
+// and a verdict line: READY, NOT YET (n of minTasks), BLOCKED (base red, no green full gate on the tip while gates.full
+// is set up, external commits, or the remote is ahead), LARGE (over warnTasks: push recommended)
 // or NOTHING. In push mode "threshold" the orchestrator may push on READY or LARGE by itself, never on BLOCKED; in mode
 // "owner" (the default) only on the owner's word. The verdict does not change the exit code.
 //
@@ -30,6 +32,7 @@ const G = require('./lib/queueGit.js');
 const { config, dataFolder } = require('./lib/queueConfig.js');
 const PB = require('./lib/pushBatch.js');
 const BH = require('./lib/baseHealth.js');
+const GE = require('./lib/gateEvidence.js');
 
 const K = config();
 // Main tree (config().root): baseBranch and the uncommitted files that matter are there (also when the script runs from
@@ -81,11 +84,14 @@ const batch = PB.summarize(
 );
 // The base health of the tip, as the base gate recorded it ('unknown' when the gate is off or has not checked this tip).
 const health = BH.verdict(BH.readState(path.join(dataFolder(), 'base-health.json')), toSha);
+// The full gate on exactly the tip, from the trusted gate evidence (lib/gateEvidence.js: the orchestrator's own runs,
+// never a track's rows in the time log). 'off' when gates.full has no commands.
+const fullGate = GE.fullGateVerdict({ folder: dataFolder(), sha: toSha, cfg: K });
 const blocked = [
   ...(plan.externalOnes.length ? [`${plan.externalOnes.length} external commit(s): ask the owner first`] : []),
   ...(back ? [`${FROM} has ${back} commit(s) not in ${TO}`] : []),
 ];
-const verdict = PB.batchVerdict({ batch, setup: SETUP, health, blocked });
+const verdict = PB.batchVerdict({ batch, setup: SETUP, health, fullGate, blocked });
 
 const summary = (s) => String(s).slice(0, 8);
 const fileText = (files, max = 6) =>
@@ -127,6 +133,7 @@ if (AS_JSON) {
           commits: batch.commits,
           oldest_at: batch.oldestAt,
           base_health: health,
+          full_gate: fullGate,
           verdict: verdict.verdict,
           reason: verdict.reason,
         },
@@ -211,13 +218,14 @@ function textReport() {
 /** The batch status and the verdict line (lib/pushBatch.js). */
 function batchLines() {
   const healthText = { green: 'GREEN', red: 'RED', unknown: 'not checked at this tip' }[health];
+  const gateText = { green: 'GREEN', red: 'RED', missing: 'not run on this tip', off: 'not set up' }[fullGate];
   const limits =
     `mode ${SETUP.mode}, minTasks ${SETUP.minTasks}, warnTasks ${SETUP.warnTasks}` +
     (SETUP.maxAgeHours != null ? `, maxAgeHours ${SETUP.maxAgeHours}` : '');
   return [
     `Batch: ${batch.taskCount} merged task(s) / ${batch.commits} commit(s) unpushed` +
       (batch.oldestAt ? `, oldest ${PB.ageText(batch.oldestAt)} old` : '') +
-      `; base ${healthText} at ${summary(toSha)} (${limits}).`,
+      `; base ${healthText}, full gate ${gateText} at ${summary(toSha)} (${limits}).`,
     `Verdict: ${PB.verdictWord(verdict.verdict)} (${verdict.reason}).`,
   ];
 }

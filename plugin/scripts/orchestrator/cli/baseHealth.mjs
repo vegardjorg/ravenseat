@@ -19,6 +19,7 @@ import { BASE, CONFIG, CQ, die, edit, FOLDER, git, GIT_ROOT, L, require, TIME_LO
 const BH = require('./lib/baseHealth.js');
 const TL = require('./lib/timeLogRows.js');
 const ER = require('./lib/eventRows.js');
+const GE = require('./lib/gateEvidence.js');
 
 /** The resolved setup (config().baseGate with the defaults; off without commands or with enabled: false). */
 export const BASE_SETUP = BH.baseGateSetup(CONFIG);
@@ -274,13 +275,13 @@ export function guardBeforeMerge({ id, force, folder }) {
   return current;
 }
 
-/** Reads the time log's gate rows for the skip rule (an empty list when the log cannot be read). */
+/**
+ * The trusted gate runs for the skip rule: the gate evidence store (lib/gateEvidence.js), written by gates.mjs only for
+ * the orchestrator's own runs (cq receive, cq merge, the main checkout). NOT the time log: every agent can append a
+ * `gate` row there, so a row in it proves nothing. An empty list when the store is missing or broken (the check runs).
+ */
 export function gateRowsNow() {
-  try {
-    return BH.gateRows(fs.readFileSync(TIME_LOG, 'utf8'));
-  } catch {
-    return [];
-  }
+  return GE.readStore(GE.storeFile(FOLDER)).entries;
 }
 
 /** The tree of a commit (for the skip rule), or null. */

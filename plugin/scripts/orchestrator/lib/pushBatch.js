@@ -19,8 +19,9 @@
 //
 // The verdict (batchVerdict):
 //   NOTHING  nothing to push.
-//   BLOCKED  the base is red at the tip (base-health.json), or push-check's own checks fail (external commits, or the
-//            remote has commits the base does not). Never push.
+//   BLOCKED  the base is red at the tip (base-health.json), the full gate has no green, clean run recorded on exactly
+//            the tip (`fullGate`, the gate evidence store, lib/gateEvidence.js; only when gates.full has commands), or
+//            push-check's own checks fail (external commits, or the remote has commits the base does not). Never push.
 //   LARGE    merged tasks >= warnTasks: push recommended (a big batch makes a red CI harder to bisect). Never a block.
 //   READY    merged tasks >= minTasks (0 = no lower limit), or the oldest work is older than maxAgeHours.
 //   NOT_YET  below minTasks ("4 of 10").
@@ -143,18 +144,33 @@ function readBatch(git, { from, to, prefix, withCommits = true }) {
 /** Hours since an ISO time (NaN when unknown). */
 const hoursSince = (at, now) => (now - Date.parse(at ?? '')) / 3_600_000;
 
+/** The hint for a missing or red full gate on the tip (push-check and the push guard say the same). */
+function fullGateText(fullGate, tip) {
+  const at = String(tip ?? '').slice(0, 7);
+  if (fullGate === 'red') return `the full gate is red at ${at} (cq gates --full in the main checkout, then fix it)`;
+  if (fullGate === 'missing')
+    return `no green full gate recorded on ${at} (run cq gates --full in the main checkout, on the tip, with no uncommitted changes)`;
+  return null;
+}
+
 /**
  * The verdict for the batch.
  * @param {{ batch: ReturnType<typeof summarize>|null, setup: ReturnType<typeof pushSetup>, health?: 'green'|'red'|'unknown',
- *   blocked?: string[], now?: number }} x  blocked = push-check's own failing checks, as texts
+ *   fullGate?: 'green'|'red'|'missing'|'off', blocked?: string[], now?: number }} x  blocked = push-check's own failing
+ *   checks, as texts; fullGate = the trusted full-gate verdict for the tip (lib/gateEvidence.js; 'off' = not required)
  * @returns {{ verdict: 'NOTHING'|'BLOCKED'|'LARGE'|'READY'|'NOT_YET', reason: string, aged: boolean }}
  */
-function batchVerdict({ batch, setup, health = 'unknown', blocked = [], now = Date.now() }) {
+function batchVerdict({ batch, setup, health = 'unknown', fullGate = 'off', blocked = [], now = Date.now() }) {
   const n = batch?.taskCount ?? 0;
   const age = hoursSince(batch?.oldestAt, now);
   const aged = setup.maxAgeHours != null && Number.isFinite(age) && age >= setup.maxAgeHours;
   if (!batch || batch.firstParent === 0) return { verdict: 'NOTHING', reason: 'nothing to push', aged: false };
-  const why = [...(health === 'red' ? [`base is red at ${String(batch.tip ?? '').slice(0, 7)}`] : []), ...blocked];
+  const gateText = fullGateText(fullGate, batch.tip);
+  const why = [
+    ...(health === 'red' ? [`base is red at ${String(batch.tip ?? '').slice(0, 7)}`] : []),
+    ...(gateText ? [gateText] : []),
+    ...blocked,
+  ];
   if (why.length) return { verdict: 'BLOCKED', reason: why.join('; '), aged };
   if (setup.warnTasks > 0 && n >= setup.warnTasks)
     return {
@@ -178,12 +194,15 @@ const verdictWord = (v) => (v === 'NOT_YET' ? 'NOT YET' : v);
 /**
  * The push guard's question for a plain push of the base branch by the orchestrator: a reason for "ask", or null (no
  * question). Both modes: in owner mode the owner pushes, and a reminder dialog is cheap. Never deny: the owner can
- * always push. External commits are not asked about here (push-check handles them before a batch push).
- * @param {{ batch: object|null, setup: object, health?: string, now?: number }} x
+ * always push. External commits are not asked about here (push-check handles them before a batch push). A missing or
+ * red full gate on the tip (`fullGate`, lib/gateEvidence.js) asks too, with the hint to run it.
+ * @param {{ batch: object|null, setup: object, health?: string, fullGate?: string, now?: number }} x
  */
-function guardQuestion({ batch, setup, health = 'unknown', now = Date.now() }) {
+function guardQuestion({ batch, setup, health = 'unknown', fullGate = 'off', now = Date.now() }) {
   if (!batch || batch.firstParent === 0) return null;
   if (health === 'red') return `base is red at ${String(batch.tip ?? '').slice(0, 7)}; push anyway?`;
+  const gateText = fullGateText(fullGate, batch.tip);
+  if (gateText) return `${gateText}; push anyway?`;
   if (setup.minTasks === 0) return null;
   const v = batchVerdict({ batch, setup, health, now });
   if (v.verdict !== 'NOT_YET') return null;
@@ -263,6 +282,7 @@ module.exports = {
   verdictWord,
   queueIdFromMerge,
   guardQuestion,
+  fullGateText,
   ageText,
   boardBatch,
   triggerBlock,
