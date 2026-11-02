@@ -368,7 +368,7 @@ function dbObjectsFromDiff(diff, migrations = cfg().migrations) {
 
 /**
  * The index file in the review package (`00-package.md`): what the task is, the track's RESULT line, the diff statistics, changed
- * DB objects and which files are in the package. The package is PLAIN FILES (a reviewer without Bash cannot read
+ * DB objects, the test-weakening warning and which files are in the package. The package is PLAIN FILES (a reviewer without Bash cannot read
  * git objects).
  */
 function reviewPackageIndex({
@@ -383,6 +383,7 @@ function reviewPackageIndex({
   base = baseBranch(),
   migrFolder = cfg().migrations?.folder ?? null,
   reviewers = null,
+  testWeakening = null,
 }) {
   const lines = [
     `# Review package ${o.id} (${o.class}): ${o.title ?? ''}`,
@@ -409,6 +410,8 @@ function reviewPackageIndex({
     if (dbObjects.length) for (const d of dbObjects) lines.push(`- ${d}`);
     else lines.push(`- (none in ${migrFolder})`);
   }
+  // The test-weakening section (lib/testWeakening.js packageSection), already as lines; null = the check is off.
+  if (Array.isArray(testWeakening)) lines.push(...testWeakening);
   // The reviewers for this task (queueHelpers.reviewersForTask): the fixed ones for the class (the floor), then each
   // helper agent with one line on why it was chosen.
   if (Array.isArray(reviewers)) {

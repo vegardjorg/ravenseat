@@ -21,6 +21,9 @@
 //   "dir/file"     exactly that path (from the root)
 //   "name"         (no slash) a file with that name in ANY folder, e.g. package.json: npm runs lifecycle scripts
 //                  (postinstall …) from every package.json.
+//   "glob"         an entry with * or ?: without a slash it is matched against the file name in ANY folder
+//                  ("vitest.config.*", "tsconfig*.json"); with a slash against the whole path from the root, where
+//                  "**/" is any folders (also none). "*" and "?" never cross a "/". Case matters, as for the others.
 // Paths under node_modules/ are never protected (they are links, not committed).
 //
 // Pure logic without I/O; merge-track.mjs fetches the diff (git diff --name-status -M) and the task (queue.json).
@@ -56,6 +59,34 @@ function withPaths(base, extra = []) {
 }
 
 /**
+ * Does a glob pattern match the path? "*" = any characters except "/", "?" = one such character, "**" before a "/" =
+ * any folders (also none). A pattern without a slash is matched against the file name only; one ending in "/" covers the folder.
+ * @param {string} pattern
+ * @param {string} p a normalised path (forward slashes)
+ */
+function globMatch(pattern, p) {
+  let g = norm(pattern);
+  if (!g) return false;
+  const s = norm(p);
+  if (g.endsWith('/')) g += '**';
+  const subject = g.includes('/') ? s : s.split('/').pop();
+  let r = '';
+  for (let i = 0; i < g.length; i++) {
+    const c = g[i];
+    if (c === '*' && g[i + 1] === '*') {
+      i++;
+      if (g[i + 1] === '/') {
+        r += '(?:.*/)?';
+        i++;
+      } else r += '.*';
+    } else if (c === '*') r += '[^/]*';
+    else if (c === '?') r += '[^/]';
+    else r += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`^${r}$`).test(subject);
+}
+
+/**
  * Is the path protected?
  * @param {string} p
  * @param {string[]} [protectedPaths] default STANDARD.protectedPaths
@@ -66,6 +97,7 @@ function isProtected(p, protectedPaths = defaultProtected()) {
   const name = s.split('/').pop();
   return (protectedPaths || []).map(norm).some((b) => {
     if (!b) return false;
+    if (/[*?]/.test(b)) return globMatch(b, s);
     if (b.endsWith('/')) return s.startsWith(b);
     if (!b.includes('/')) return name === b;
     return s === b;
@@ -193,6 +225,7 @@ function assessGuard({
 
 module.exports = {
   isProtected,
+  globMatch,
   readDiff,
   migrCovered,
   taskIdFromBranch,
