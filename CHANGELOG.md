@@ -3,6 +3,14 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+### Added
+- **`cq merge` survives interruptions:** one merge at a time (`merge.lock`, stale-lock takeover), a refusal while git
+  has a merge, rebase or cherry-pick in progress, a check that the track tip is in base before `done`
+  (`merge_commit` stored on the task), and `cq merge <id> --resume` to finish the remaining steps after Ctrl-C, a
+  crash or a stop.
+
 ## 0.8.0 (2026-11-02)
 
 ### Added
