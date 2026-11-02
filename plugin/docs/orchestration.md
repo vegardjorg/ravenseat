@@ -28,6 +28,12 @@ branch (`queue/<ID>`), with a self-contained mission file.
 6. `cq merge <ID>`: merge into the base branch with `merge-track.mjs`, run the quick gates, start the next tasks.
 7. Repeat until `cq state` exits 3 (nothing to do). Owner questions are collected and asked at the end of a
    round, in plain language with a recommendation.
+8. When the round ends with only owner items left (questions, proposals, QA) and no agent running, the orchestrator
+   starts `cq wait` with `run_in_background`. Claude Code starts a new turn when a background command exits, so an
+   answer on the board (`OWNER ACTED: ...`) starts the next round, beginning with `cq resolutions --unlogged`. On
+   `TIMEOUT` (8 h, exit 10) it is started once more, then the loop stops. This only works while the Claude Code session
+   is open (also via Remote Control); it costs no tokens while it waits. The board's **Waiting on you** says
+   "Orchestrator listening" while the waiter's heartbeat (`<dataFolder>/wait-heartbeat.json`) is fresh.
 
 Push happens in **batches**: `cq push-check` first, then `git push`. Every push can trigger CI in your own setup,
 so many small pushes cost money quietly. By default (`push.mode` `"owner"`) only the owner's word starts a push; see

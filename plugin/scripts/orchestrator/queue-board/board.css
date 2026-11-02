@@ -2059,6 +2059,29 @@ div.row-option {
   padding-top: var(--distance-sm);
 }
 
+/* Whether `cq wait` listens (lib/ownerWait.js): a dot, filled in the primary color while it does. */
+.inbox-listening {
+  display: flex;
+  align-items: center;
+  gap: var(--distance-sm);
+  margin: var(--distance-sm) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
+.inbox-listening-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--color-outline);
+}
+
+.inbox-listening.on .inbox-listening-dot {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
 .inbox-empty {
   display: flex;
   align-items: center;
