@@ -63,6 +63,13 @@ const STANDARD = Object.freeze({
     precheck: null,
     precheckBudgetSec: 120, // time budget per check (seconds) when the check does not set budgetSec
   },
+  // The done command (task field `done_when`, lib/doneCheck.js): `receive` and `merge` run it in the track's worktree.
+  // timeoutSec = the time budget per run (a run over it is red); tailLines = how many of the last output lines are kept
+  // for the fix brief (only the tail, so a secret printed early in a long run is not copied around).
+  doneCheck: { timeoutSec: 600, tailLines: 40 },
+  // The fix-round cap per task (`resume --reason fix`, also the one receive starts after a red done command). At the cap
+  // the task becomes an owner question instead of another round. The task field `max_fix_rounds` overrides it.
+  maxFixRounds: 3,
   // Optional migration flow (e.g. database migrations that must be numbered and pushed after merge).
   // With folder = null everything to do with migrations is turned off (no number blocks, no push in merge).
   migrations: {

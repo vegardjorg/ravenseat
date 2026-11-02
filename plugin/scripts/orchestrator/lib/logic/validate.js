@@ -35,6 +35,8 @@ function validate(o, existing = [], register) {
   if (o.value != null && !(o.value >= 1 && o.value <= 10)) error.push('value must be 1–10');
   // `fixes`: the task(s) this one fixes (lib/fixLinks.js). The shape here; add and edit also check that the ids exist.
   error.push(...require('../fixLinks.js').fixesShapeError(o));
+  // `done_when` (the shell command that must exit 0 for the track to count as done) and `max_fix_rounds` (lib/doneCheck.js).
+  error.push(...require('../doneCheck.js').doneWhenErrors(o));
   const emptyRegister = !register || Object.keys(register).length === 0;
   error.push(...validateNewField(o, register, { stringProject: !emptyRegister }));
   return error;

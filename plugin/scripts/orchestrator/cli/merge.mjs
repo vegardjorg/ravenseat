@@ -27,10 +27,91 @@ import {
   reviewerFindingsLines, scratchpadFor, takenForMigr, taskAgents,
 } from './tracks.mjs';
 
+// ---- The done command (task field done_when, lib/doneCheck.js): receive and merge ---------------------------------
+
+/**
+ * Runs the task's done command in the track's worktree (the worktree that has the branch checked out; --done-cwd
+ * overrides) and writes the tail of the output to `done-<id>.md` in the scratchpad (the data folder without one).
+ * null when the task has no done command. Stops (exit 1, nothing changed) when no worktree has the branch: the command
+ * must run on the track's own files, and the queue never creates or removes worktrees here (the shared links make a
+ * delete dangerous, see cleanup-worktree.mjs).
+ * @returns {null | { ok: boolean, run: object, record: object, file: string, cwd: string }}
+ */
+function runDoneCommand(o, { branch, scratch, step }) {
+  const DC = require('./lib/doneCheck.js');
+  const command = typeof o.done_when === 'string' ? o.done_when.trim() : '';
+  if (!command) return null;
+  const tip = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
+  const cwd = val('--done-cwd')
+    ? path.resolve(val('--done-cwd'))
+    : DC.worktreeFor(git(['worktree', 'list', '--porcelain']), branch);
+  if (!cwd || !fs.existsSync(cwd))
+    die(
+      `${o.id}: the done command cannot run: no worktree has ${branch} checked out` +
+        `${cwd ? ` (${cwd} is gone)` : ''}. Check the branch out in a worktree (git worktree add <folder> ${branch}, ` +
+        `then prepare-track for the shared links) and run ${step} again with --done-cwd <folder>. Nothing changed.`,
+    );
+  // Uncommitted changes in the worktree are not on the branch: a green run would then prove more than the branch has.
+  const dirty = spawnSync('git', ['-C', cwd, 'status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' });
+  if ((dirty.stdout ?? '').trim())
+    console.log(`WARNING: ${cwd} has uncommitted changes; the done command also sees them (they are not on ${branch}).`);
+  const setup = DC.doneCheckSetup(CONFIG);
+  console.log(`DONE COMMAND (${step}) for ${o.id} in ${cwd}: ${command}  (time budget ${setup.timeoutSec} s)`);
+  const run = DC.runDoneWhen({ command, cwd, ...setup });
+  const folder = scratch ?? FOLDER;
+  fs.mkdirSync(folder, { recursive: true });
+  const file = path.join(folder, `done-${o.id}.md`);
+  // Only the tail is written (lib/doneCheck.js, Secrets): the full output never leaves this process.
+  fs.writeFileSync(file, DC.doneCheckReport({ id: o.id, command, cwd, step, run, tip }));
+  const record = {
+    ok: run.ok,
+    exit: run.exit,
+    ...(run.timedOut ? { timed_out: true } : {}),
+    command,
+    tip,
+    step,
+    at: new Date().toISOString(),
+    duration_s: run.durationSec,
+    file,
+  };
+  console.log(`Done command ${run.ok ? 'GREEN' : 'RED'} (${run.timedOut ? 'time budget' : `exit ${run.exit ?? '?'}`}, ${run.durationSec} s).`);
+  return { ok: run.ok, run, record, file, cwd };
+}
+
+/**
+ * A red done command gets the same treatment as a red gate: the blocker gate-red, the last lines on screen and a fix
+ * round (`cq resume <id> --reason fix` with the tail file as findings; resume puts the tail into the brief and applies
+ * the fix-round cap). Never a review or a merge. Exits: 8 when the cap stopped the round (an owner question), else 1.
+ */
+function doneCommandRed(id, check, { scratch }) {
+  const tail = check.run.tail;
+  console.log(`NOT DONE: ${id}'s done command is red; no review and no merge. The last lines:`);
+  console.log(tail.slice(-10).map((l) => `  | ${l}`).join('\n'));
+  console.log(`Output tail (${tail.length} lines): ${check.file}`);
+  const r = spawnSync(
+    process.execPath,
+    [
+      path.join(HERE, 'queue.mjs'),
+      'resume',
+      id,
+      '--reason',
+      'fix',
+      '--findings-file',
+      check.file,
+      ...(scratch ? ['--scratchpad', scratch] : []),
+    ],
+    { encoding: 'utf8', env: process.env },
+  );
+  if (r.stdout) process.stdout.write(r.stdout);
+  if (r.stderr) process.stderr.write(r.stderr);
+  if (r.status === 0) console.log(`Start the fix round in the SAME turn (the line above), then ${CQ} receive ${id} again.`);
+  process.exit(r.status === 8 ? 8 : 1);
+}
+
 /** `cq receive` (the usage is at the top of queue.mjs). */
 export function cmdReceive() {
   // ---- A track has delivered -> review + review package as plain files + reviewer prompts ----
-  const id = positional(1, ['--scratchpad', '--result'])[0];
+  const id = positional(1, ['--scratchpad', '--result', '--done-cwd'])[0];
   if (!id) die('receive <id> [--scratchpad <folder>] [--result "RESULT ..."] [--force]');
   const o0 = read().tasks.find((x) => x.id === id);
   if (!o0) die(`Unknown task ${id}`);
@@ -95,6 +176,31 @@ export function cmdReceive() {
     L.parseResult(val('--result')) ??
     L.parseResult(trackReply) ??
     L.parseResult(reportText);
+  // The done command (lib/doneCheck.js), BEFORE any reviewer is started: a red one is not a delivery but a fix round.
+  // A PARTIAL track is known to be unfinished (a context continuation), so the command is not run for it.
+  const doneCheck = result?.status === 'PARTIAL' ? null : runDoneCommand(o0, { branch, scratch, step: 'receive' });
+  if (doneCheck && !doneCheck.ok) {
+    edit((queue) => {
+      const o = queue.tasks.find((x) => x.id === id);
+      if (o.status !== 'review') {
+        const s = L.setStatus(o, 'review', new Date().toISOString());
+        if (s.error) die(s.error);
+      }
+      if (result) o.result = result;
+      o.review_package = folder;
+      o.done_check = doneCheck.record;
+      // The report has been read: it is no longer a new delivery (the fix round's report is the next one).
+      if (trackFound.report) {
+        o.report_received = trackFound.report.mtimeMs;
+        o.report_seen = Math.max(Number(o.report_seen ?? 0), trackFound.report.mtimeMs);
+      }
+      o.t_receive ??= new Date().toISOString();
+      L.openBlock(o, 'gate-red', { note: `done command red at receive (exit ${doneCheck.run.exit ?? '?'})` });
+      return o;
+    });
+    if (!o0.picked_by) pulseCursor(`receive ${id} done command red`);
+    doneCommandRed(id, doneCheck, { scratch });
+  }
   // QA evidence: the EVIDENCE line (report.md first, otherwise the answer) and the warning when a task that needs it
   // (config().qa.evidenceLabels) has none. A warning, not a stop.
   const evidenceRead = L.parseEvidence(reportText) ?? L.parseEvidence(trackReply);
@@ -162,6 +268,7 @@ export function cmdReceive() {
       if (s.error) die(s.error);
     }
     if (result) o.result = result;
+    if (doneCheck) o.done_check = doneCheck.record;
     if (evidenceRead?.evidence) o.evidence = evidenceRead.evidence;
     o.review_package = folder;
     // Adoption: the report that has been read is no longer a new delivery (pulse and deliveries skip it).
@@ -212,7 +319,7 @@ export async function cmdMerge() {
   // ---- merge-track -> migrationPush (only with a migration flow, with the environment guard) -> gates --quick -> set done -> fill,
   // in one call. The steps, the stop rules and the environment check are in queueLogic (mergePlan, executeMerge, environmentCheck); here is only
   // the I/O. ----
-  const id = positional(1, ['--scratchpad'])[0];
+  const id = positional(1, ['--scratchpad', '--done-cwd'])[0];
   if (!id)
     die('merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard]');
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
@@ -234,6 +341,24 @@ export async function cmdMerge() {
   const scratch = scratchpadFor(o.scratchpad ?? null);
   if (!scratch && !withoutFill)
     die('merge needs --scratchpad <folder> (or QUEUE_SCRATCHPAD) for fill, or --without-fill.');
+  // The done command (lib/doneCheck.js) once more before the merge, unless the last run was green on this exact tip with
+  // this command (receive ran it, and no fix round has added commits since). Red: a fix round, never a merge.
+  if (typeof o.done_when === 'string' && o.done_when.trim()) {
+    const tipNow = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
+    const last = o.done_check;
+    if (last?.ok && last.tip === tipNow && last.command === o.done_when.trim())
+      console.log(`Done command green at ${String(tipNow).slice(0, 12)} (${last.step}, ${last.at}); not run again.`);
+    else {
+      const check = runDoneCommand(o, { branch, scratch, step: 'merge' });
+      edit((queue) => {
+        const x = queue.tasks.find((y) => y.id === id);
+        x.done_check = check.record;
+        if (!check.ok) L.openBlock(x, 'gate-red', { note: `done command red before merge (exit ${check.run.exit ?? '?'})` });
+        return null;
+      });
+      if (!check.ok) doneCommandRed(id, check, { scratch });
+    }
+  }
   const name = git(['diff', '--name-only', `${BASE}...${branch}`]);
   // The branch's merge base and tip BEFORE the merge. After the merge HEAD = baseBranch and the gates' diff against base is empty;
   // with these gates.mjs can still see the track's own changes.

@@ -132,6 +132,7 @@
 //         empties weeklyQuota before the reset; with capacity --mode cap at most that many new ones start, and --over-quota
 //         overrides. The load guard (exit 7, the machine is full) stops new starts; --over-load overrides.)
 //   node scripts/orchestrator/queue.mjs receive <id> [--scratchpad <folder>] [--result "RESULT …"] [--force]
+//                                                 [--done-cwd <folder>]
 //        (the track has delivered: status review, and the review package as PLAIN FILES in <folder>/rev-<id>/: 00-package.md
 //         (resultLine, changed DB objects if any, diff statistics), diff.patch, files/ (changed files in full version
 //         from the branch), trackReply.md (the track's last answer from the transcript), trackReport.md and handover.md (from
@@ -139,7 +140,10 @@
 //         ones by class (config().reviewers) and the helper agents that are on and hit (lib/queueHelpers.js).
 //         Saves the RESULT line. Does NOT merge; prints the merge command. Adoption: the report is the newest in
 //         <folder>/<id>/ or a fix round <folder>/<id>-r<N>/, in the orchestrator's and the task's scratchpad; saves
-//         report_received.)
+//         report_received.
+//         Done command (task field done_when, lib/doneCheck.js): run first in the worktree that has the branch checked
+//         out (--done-cwd overrides), with config().doneCheck.timeoutSec. Red: no reviewers, the blocker gate-red, only
+//         the output tail in <folder>/done-<id>.md, and resume --reason fix is run (exit 1; exit 8 at the fix-round cap).)
 //   node scripts/orchestrator/queue.mjs deliveries [--json]
 //        (adoption: active tasks with a report.md that has not been received: first line RESULT status=DONE|PARTIAL and
 //         newer than the start, the delivery and the last receive. `orchestrator pulse` prints the new ones every round (and
@@ -147,6 +151,9 @@
 //         <task-notification>.)
 //   node scripts/orchestrator/queue.mjs resume <id> [--reason fix|context] [--round N] [--findings-file <file>]
 //                                                [--scratchpad <folder>]
+//        (fix-round cap: at max_fix_rounds (task) or config().maxFixRounds (default 3) fix rounds, --reason fix registers
+//         the owner question <id>.fixcap<N>, puts it in waiting_on, opens the blocker owner-question and exits 8; a resolved
+//         question allows exactly one more round. A red done command's tail goes into the fix brief.)
 //        (adoption: prompt-<id>-r<N>.md for a NEW agent on the same branch, fix round (default) or continuation after the
 //         context guard: the same template as fill, with prepare-track --continue, the paths to report.md, handover.md,
 //         the review package and the findings, and the original mission. N is the next free round. Not `continue`,
@@ -187,7 +194,9 @@
 // Fewer orchestrator turns: `fill` and `receive` end with "Start these in the SAME turn:" and one line per agent
 // (subagent_type + message); start them in one turn. `receive` warns when the track's answer exceeds the report cap (about 1,500 chars).
 //   node scripts/orchestrator/queue.mjs merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force]
-//        [--allow-guard]
+//        [--allow-guard] [--done-cwd <folder>]
+//        (with a done command: run again first unless the last green run was on the same branch tip; red = a fix round
+//         as in receive, never a merge, exit 1 or 8.)
 //        (after an approved review; run from Bash (merge-track calls sh), with a long timeout: the gates can take minutes. In one
 //         call: merge-track.mjs <branch> --wave-base <head_start> -> the migration step (only when config().migrations is
 //         enabled and the branch has migration files: the environment guard (environmentFile/allowedEnvironment) and the push guard are asked, then

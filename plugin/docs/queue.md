@@ -49,11 +49,39 @@ a track adding a proposal) cannot corrupt the file. `cq undo` undoes the last ch
 | `shared_patch` | Shared functions the task changes in patch form |
 | `project`, `feature`, `source` | Project id (must exist), feature name, and the plan section the task comes from |
 | `batched` | `true` for small low-value tasks: they go to the batch queue (`cq batch`) instead of their own track |
+| `done_when` | Optional: a shell command (one line, at most 500 characters) that must exit 0 in the track's worktree for the track to count as done, e.g. `npm test -- src/x.test.ts`. The mission tells the track to run it before it reports; `receive` and `merge` run it again (see [the done command](#the-done-command-and-the-fix-round-cap)). `null` in `edit` removes it. A proposal with it is never auto-accepted |
+| `max_fix_rounds` | Optional: this task's fix-round cap, a whole number 0 to 20 (0 = no fix round without the owner); overrides `maxFixRounds` in `queue.config.json` (default 3). `null` in `edit` removes it |
 | `fixes` | Optional: the task id (or a list of ids) this task fixes. `add` and `edit` refuse an id that is not in the queue (or in the same add) and a task naming itself; stored as a list, and `[]` or `null` in `edit` removes it. `cq info <id>` shows `fixes` and `fixed by`, and `cq state` lists the open fix tasks as `fixLinks`. `qa deviation` sets it on the fix task it creates. The benchmark (`bench/`) counts it as a defect after merge |
 
 Status flow: `proposed` → `waiting` (approved, ready to run) → `running` → `review` → `done`, or `cancelled`. Tasks
 added by an agent start as `proposed` and need `approve`; tasks the owner or the orchestrator adds start as `waiting`.
 With [auto-accept](#auto-accept-of-proposals) on, the queue approves the proposals that fit the owner's rules itself.
+
+## The done command and the fix-round cap
+
+`done_when` is a command the owner or the orchestrator picks, so "done" means more than the track's own RESULT line.
+
+- **The mission** states it (`**Done command (binding):**` in the track block): the track runs it from its worktree
+  root before it reports DONE.
+- **`cq receive <id>`** runs it first, through the shell, in the worktree that has the track branch checked out
+  (`--done-cwd <folder>` overrides; with no such worktree receive stops and changes nothing). A PARTIAL delivery is
+  not checked. Green: receive goes on as before and saves `done_check` (`ok`, `exit`, `tip`, `step`, `at`).
+  Red, or over the time budget: no review package for reviewers, the blocker `gate-red`, and a fix round
+  (`cq resume <id> --reason fix`, run by receive) whose brief carries the command and its last output lines. Exit 1.
+- **`cq merge <id>`** runs it again unless the last green run was on the same branch tip with the same command. Red
+  is handled as in receive, and nothing is merged.
+- **Only the tail is kept** (`doneCheck.tailLines`, default 40 lines, each cut to 400 characters) in
+  `<scratchpad>/done-<id>.md` and the fix brief; the full output is never stored, so a secret printed early in a
+  long run is not copied around. `doneCheck.timeoutSec` (default 600) is the time budget per run. On Windows a
+  timeout stops cmd.exe; a process it started can live on until it ends by itself.
+
+**The fix-round cap.** Every `cq resume <id> --reason fix` counts (the task's `resumed` list; a `context`
+continuation does not). At `max_fix_rounds` (the task) or `maxFixRounds` (the config, default 3) the queue stops
+retrying by itself and asks the owner the usual way: it registers the owner question `<id>.fixcap<N>`, puts it in
+the task's `waiting_on` and opens the blocker `owner-question`, prints `FIX-ROUND CAP` and exits 8 (`receive` and
+`merge` pass the 8 on). `cq resolve <id>.fixcap<N> --answer "…"` allows exactly one more round, and the answer is in
+its brief; the next one asks again. A higher cap: `cq edit <id> --json '{"max_fix_rounds": 5}'`; giving up:
+`cq set <id> cancelled`.
 
 ## Everyday commands
 

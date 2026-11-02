@@ -14,6 +14,7 @@
 // The HARD rules no setting can override (autoAcceptDecision checks them first):
 //   - never class D or D+ (database and security work always gets a human look),
 //   - never a task with `waiting_on` (it waits on an owner question),
+//   - never a task with `done_when` (a shell command the orchestrator runs; lib/doneCheck.js),
 //   - never a task with a legal or owner label (LEGAL_LABELS), or linked to a plan entry with open legal points,
 //   - never a task that owns a protected path (config().protectedPaths, the merge guard's list): owning one is what lets
 //     a track change hooks, settings or the orchestrator scripts without the merge guard stopping it,
@@ -108,6 +109,8 @@ function autoAcceptDecision(task, rules, ctx = {}) {
   // ---- The hard rules: no setting overrides them ----
   if (task.class === 'D' || task.class === 'D+') return no(`class ${task.class} is never auto-accepted`);
   if ((task.waiting_on ?? []).length) return no(`waits on ${task.waiting_on.join(', ')}`);
+  // A done command is a shell command the orchestrator runs (lib/doneCheck.js): the owner reads it before it runs.
+  if (task.done_when != null) return no('has a done command (done_when), which the owner approves by hand');
   const legal = (task.labels ?? []).find((l) => {
     const s = String(l).toLowerCase();
     return LEGAL_LABELS.includes(s) || s.startsWith('legal') || s.startsWith('owner');

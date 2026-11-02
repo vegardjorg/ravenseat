@@ -15,6 +15,9 @@
     "precheck": null,
     "precheckBudgetSec": 120
   },
+  "_doneCheck": "The done command (task field done_when): receive and merge run it in the track's worktree; exit != 0 gives a fix round instead of review or merge. timeoutSec = time budget per run; tailLines = the last output lines kept for the fix brief (only the tail is kept). maxFixRounds = fix rounds per task before it becomes an owner question (task field max_fix_rounds overrides).",
+  "doneCheck": { "timeoutSec": 600, "tailLines": 40 },
+  "maxFixRounds": 3,
   "_migrations": "Optional numbered migrations. folder = null turns the whole migration flow off.",
   "migrations": {
     "folder": null,
