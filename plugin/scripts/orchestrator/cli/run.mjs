@@ -18,7 +18,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import {
-  a, autoCleanFocus, BASE, branchFor, branchInfo, CE, CH, cut, die, edit, focusCleanOut, git, HERE, L, MIGR,
+  a, autoCleanFocus, BASE, branchFor, branchInfo, CE, CH, CONFIG, cut, die, edit, focusCleanOut, git, HERE, L, MIGR,
   missionFile, parallelWarning, positional, pulseCursor, read, readCursor, require, TK, uncommittedPaths, val, values,
   WIDTH, writeExternalWarning,
 } from './context.mjs';
@@ -440,6 +440,54 @@ export function cmdResume() {
   if (!Number.isInteger(round) || round < 1) die('--round must be an integer >= 1');
   const findingsFile = val('--findings-file') ? path.resolve(val('--findings-file')) : null;
   if (findingsFile && !fs.existsSync(findingsFile)) die(`Could not find --findings-file ${findingsFile}`);
+  // The fix-round cap (lib/doneCheck.js): at max_fix_rounds (task) or maxFixRounds (config, default 3) the queue stops
+  // retrying by itself. The task becomes an owner question the existing way: a registered question, the id in
+  // waiting_on (the answer reaches the next brief) and an open blocker owner-question. Exit 8. The owner answers with
+  // `cq resolve <question> --answer "…"`, which allows exactly one more round (the next one asks again).
+  const DC = require('./lib/doneCheck.js');
+  if (reason === 'fix') {
+    const cap = DC.fixCap(o, queue, CONFIG);
+    if (!cap.allowed) {
+      const last = o.done_check && !o.done_check.ok
+        ? `the done command was red (${o.done_check.timed_out ? 'time budget' : `exit ${o.done_check.exit ?? '?'}`})`
+        : null;
+      edit((q) => {
+        const x = q.tasks.find((y) => y.id === id);
+        const s = L.setQuestion(q, DC.capQuestion(x, cap, { lastFailure: last }));
+        if (s.error.length) die(`Could not register the owner question: ${s.error.join('; ')}`);
+        if (!(x.waiting_on ?? []).includes(cap.questionId)) x.waiting_on = [...(x.waiting_on ?? []), cap.questionId];
+        L.openBlock(x, 'owner-question', { note: `fix-round cap ${cap.used}/${cap.max} (${cap.questionId})` });
+      });
+      pulseCursor(`resume ${id} fix cap`);
+      console.log(
+        `FIX-ROUND CAP: ${id} has had ${cap.used} fix round(s) (cap ${cap.max}); no new round is started by the queue.\n` +
+          `Owner question ${cap.questionId} registered (cq question; blocker owner-question). Ask the owner at the end of the ` +
+          `round. The owner's answer allows one more round: cq resolve ${cap.questionId} --answer "…", then ` +
+          `cq resume ${id} --reason fix again. A higher cap: cq edit ${id} --json '{"max_fix_rounds": N}'.`,
+      );
+      process.exit(8);
+    }
+    if (cap.byOwner) console.log(`Fix round beyond the cap (${cap.used}/${cap.max}): allowed by the owner's answer to ${cap.questionId}.`);
+  }
+  // A red done command (receive or merge saved it on the task): its tail goes into the brief (lib/doneCheck.js).
+  let doneCheck = null;
+  if (reason === 'fix' && o.done_check && !o.done_check.ok) {
+    let tail = [];
+    try {
+      // The tail sits between the two ~~~~ fences in the file doneCheckReport wrote.
+      const inside = (fs.readFileSync(o.done_check.file, 'utf8').split('~~~~')[1] ?? '').replace(/^\r?\n/, '');
+      tail = DC.tailOf(inside, DC.doneCheckSetup(CONFIG).tailLines);
+    } catch {
+      tail = ['(the done command output file is gone; run the command yourself to see it)'];
+    }
+    doneCheck = {
+      ok: false,
+      command: o.done_check.command ?? o.done_when,
+      exit: o.done_check.exit,
+      timedOut: !!o.done_check.timed_out,
+      tail,
+    };
+  }
   // The review package: the saved one (receive), otherwise rev-<id> in one of the roots. Files beyond the package's own are
   // the reviewers'.
   const reviewFolder =
@@ -479,6 +527,7 @@ export function cmdResume() {
       reviewFiles,
       findingsFile,
       original,
+      doneCheck,
     }),
   );
   for (const [name, args] of [

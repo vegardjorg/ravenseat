@@ -310,11 +310,14 @@ function trackBlock(o, queue, { text, warning = null, cloud = false } = {}) {
     ? 'if you need to, stop with CLOUD-STOP and say what is needed.'
     : 'if you need to, report it (SendMessage) instead of editing it.';
   const answer = answerBlock(o, queue);
+  // The done command (lib/doneCheck.js): the track runs it itself before it reports, the orchestrator runs it again.
+  const done = require('../doneCheck.js').doneWhenBlock(o);
   return [
     `## TRACK ${o.id} (${o.title}; source: ${o.source ?? 'see the mission'}; class ${o.class}, estimate ${estimate(o)} min)`,
     '',
     `**Ownership in the queue:** files ${list(o.owned_files)}; DB ${list(o.owner_db)}; shared patch ${list(o.shared_patch)}. Do not touch anything other tasks in the queue own; ${reportFrom}`,
     '',
+    ...(done ? [done, ''] : []),
     ...(warning ? [warning, ''] : []),
     ...(answer ? [answer, ''] : []),
     String(text ?? '').trim(),

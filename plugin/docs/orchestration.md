@@ -19,7 +19,10 @@ branch (`queue/<ID>`), with a self-contained mission file.
    plus the [helper agents](#helper-agents) that are on and hit (by default `reviewer-challenger` for U and the
    `bug` label, `reviewer-design` for the `visual` label).
 5. Findings: HIGH and non-mechanical MEDIUM give a fix round with a NEW track agent on the same branch
-   (`prepare-track --continue`). LOW findings become follow-up proposals.
+   (`prepare-track --continue`). LOW findings become follow-up proposals. A task with a done command (`done_when`)
+   is checked before the review: `receive` runs it in the track's worktree, and a red one gives the fix round by
+   itself. At the fix-round cap (`maxFixRounds`, default 3) the task becomes an owner question instead (exit 8;
+   [the done command and the cap](queue.md#the-done-command-and-the-fix-round-cap)).
 6. `cq merge <ID>`: merge into the base branch with `merge-track.mjs`, run the quick gates, start the next tasks.
 7. Repeat until `cq state` exits 3 (nothing to do). Owner questions are collected and asked at the end of a
    round, in plain language with a recommendation.

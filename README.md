@@ -261,7 +261,9 @@ orchestration rules, and `/cq:start` to open a session cheaply before you paste 
    related tests, only on the changed files, stopping at the first red one) runs before the full gate, so a red
    error shows up in minutes.
 3. The orchestrator builds a review package, runs the reviewer agents the class needs, and starts a fresh agent for
-   any fix round.
+   any fix round. A task can name a done command (`done_when`, e.g. `npm test -- src/x.test.ts`): `cq receive` runs
+   it in the track's worktree first, and a red one gives a fix round instead of a review. After `maxFixRounds` (default
+   3) fix rounds the task becomes a question for you instead of another round.
 4. When the review is clean, it merges the branch, runs the quick checks and fills the free slot.
 
 Hooks support the loop: they warn the orchestrator and the tracks when their context gets large, block force pushes,

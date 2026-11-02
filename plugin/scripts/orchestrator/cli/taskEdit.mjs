@@ -160,6 +160,8 @@ export function cmdEdit() {
     }
     // `batched: false` takes the task out of the batch queue; the field is removed so the queue file looks as before.
     if (o.batched === false) delete o.batched;
+    // null removes the done command and the task's own fix-round cap (the config cap applies again).
+    for (const k of ['done_when', 'max_fix_rounds']) if (k in field && field[k] == null) delete o[k];
     if (bonus != null) {
       const t = L.addToBonus(o, bonus, new Date().toISOString());
       if (t) die(`Invalid bonus: ${t}`);

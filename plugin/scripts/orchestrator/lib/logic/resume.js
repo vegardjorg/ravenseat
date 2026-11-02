@@ -205,6 +205,7 @@ function resumeBlock({
   reviewFiles = [],
   findingsFile = null,
   original = '',
+  doneCheck = null,
 }) {
   const base = baseBranch();
   const trackId = `${o.id}-r${round}`;
@@ -229,8 +230,23 @@ function resumeBlock({
         (reviewFiles.length ? `; the reviewers' files there: ${reviewFiles.join(', ')}` : ''),
     );
   if (findingsFile) read.push(`${reviewFolder ? 5 : 4}. The findings to fix: ${findingsFile}`);
+  // A red done command (lib/doneCheck.js): the command and its last output lines go into the brief itself, so the new
+  // agent sees what failed without opening another file. Only the tail was kept (no full output, see doneCheck.js).
+  const doneRed =
+    fix && doneCheck && !doneCheck.ok
+      ? [
+          `The done command is RED (${doneCheck.timedOut ? 'over the time budget' : `exit ${doneCheck.exit ?? '?'}`}): \`${doneCheck.command}\`.`,
+          'Make it exit 0 in your worktree (run it yourself before you report). Its last output lines:',
+          '',
+          '~~~~',
+          ...(doneCheck.tail ?? []),
+          '~~~~',
+          '',
+        ]
+      : [];
   const work = fix
     ? [
+        ...doneRed,
         'Fix the review findings: HIGH, and MEDIUM that is not small and mechanical; LOW findings in the same files come along.',
         'Fix at the file:line the findings point to, and only in the files the track owns. A finding you disagree with:',
         'give the reason in the report instead of fixing it.',
