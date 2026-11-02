@@ -88,7 +88,8 @@ word.
    the step and an excerpt; full log in `<scratch>/merge-<id>.log`. PARTIAL = continuation in a new agent, not a merge.
 3. **New work** from reviewers, planners or tracks goes in with `cq add` (agents' tasks get status `proposed` and
    start only after `cq approve <id…>`). Investigations and ideas that are not concrete tasks become plan entries
-   (`cq plan new`, priority `owner`, maturity `idea`).
+   (`cq plan new`, priority `owner`, maturity `idea`). A post-merge defect, a red base or an owner-found bug also
+   gets a gate proposal when its class is repeatable ("Gate from incident" below).
 4. **Answers from the board:** `cq resolutions --unlogged`; log them where the project keeps decisions, then
    `cq resolutions --mark-logged <id…>`.
 5. **Low parallelism:** when fewer agents run than `parallelThreshold` of `maxConcurrent`, `fill`/`receive`/`pulse` print a
@@ -102,6 +103,26 @@ word.
    this session is open (also via Remote Control) and costs no tokens while it waits.
 8. **Stop** when `cq state` gives exit 3 or the day budget is used: present the owner questions that unlock the
    rest (sorted by how many tasks each unlocks). `cq orchestrator stop` when the loop stops.
+
+## Gate from incident
+
+A failure that got past the gates once can get past them again, so a repeatable failure becomes a check.
+- **When:** a post-merge defect (a reviewer, a later track or a user finds a bug in merged code), a red base (the
+  `<id>-BASE<n>` or `BASE-<sha7>` fix task after `cq merge` exits 9), or a bug the owner reports.
+- **Only when repeatable:** propose a gate only when the failure class can happen again (another track could make
+  the same mistake: a missing error check, a renamed symbol with callers left, an unescaped value). A one-off (a
+  typo, a single wrong value) gets the fix and nothing more. An open gate task for the same class is extended with the
+  new place, never duplicated.
+- **The proposal:** `cq add` with `"labels": ["gate"]` and the title `Gate: <failure class>`, as a proposed task (the
+  owner approves it; list it with the round's owner items). The mission names the failure class and the incident
+  (merge commit, task id or the owner's report, with file:line), and carries the gate criteria from `/cq:review`
+  ("The gate criteria" in its SKILL.md) word for word: clear purpose, reproducible failing example, low maintenance
+  cost, red first, in the project's own gates.
+- **Red first:** `acceptance` includes `The new check fails on the original bug or a minimal reproduction, and passes
+  on the fixed code (both runs shown in the report).`, and `done_when` is the command that runs the new check when the
+  project has one. When the fix is a separate task it `depends_on` the gate task, so the check is shown red on the real
+  bug first; when the fix has already merged, the red run is on the commit before the fix or on a reproduction kept as
+  a fixture. On delivery, read the "Red first" section of `report.md`: a gate task without both runs gets a fix round.
 
 ## Review
 
