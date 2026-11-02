@@ -44,6 +44,10 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
 - **Decide or ask:** tracks fix technical failures themselves and ask the owner only on unclear requirements,
   hard-to-reverse choices (data model, public API, new dependency, deletion) and security or legal tradeoffs; other
   assumptions go in a new "Assumptions" section of report.md.
+- **`cq ask <id> ["<question>"]`:** answer a question about an earlier track without resuming its agent. It builds a
+  size-capped, secret-redacted bundle (mission, report.md, handover.md, queue notes and owner answers, commits and
+  diffstat, transcript tail); `--bundle` writes it for the new `/cq:ask` skill and read-only `ask` agent, `--json`
+  describes it.
 - **Gate from incident:** after a post-merge defect, a red base or an owner-found bug, the orchestrator proposes a
   `Gate: <failure class>` task when the class is repeatable. Gate tasks are red first: the check is shown failing on
   the original bug and passing on the fix, both runs in the report.
