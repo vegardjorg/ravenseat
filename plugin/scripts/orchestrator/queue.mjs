@@ -381,12 +381,17 @@
 //   node scripts/orchestrator/queue.mjs areas                        (area -> projects, waiting, ready ones, min left, parked)
 //   node scripts/orchestrator/queue.mjs focus                          (current focus, the stages, dragged along, Next up, notice)
 //   node scripts/orchestrator/queue.mjs focus set <stage> [<stage> ...] [--rest wait|fill] [--to <date>] [--name "..."]
-//        [--without-dependencies] [--by "..."]
+//        [--without-dependencies] [--continue-when-empty on|off] [--by "..."]
 //        (stage = area:<oid>, project:<pid>, feature:<pid>/<name> or a bare area/project name. Everything in stage 1
 //         before everything in stage 2, regardless of score; within a stage, score applies. The most specific stage wins.
 //         --rest wait (default): tasks outside the focus do not start; fill: they fill slots the focus does not use.
 //         Dependencies of focus tasks are dragged along (transitively) unless --without-dependencies. --to YYYY-MM-DD = up to
-//         and including that day (UTC); afterwards the queue is ranked as without focus, with a notice. Pause on a project takes precedence.)
+//         and including that day (UTC). Pause on a project takes precedence.
+//         When the focus has ENDED (every stage done, or the period over), the setting continueWhenEmpty decides:
+//         off (the default, config focus.continueWhenEmpty) = the queue is paused (fill starts nothing), focus.finished_at
+//         is stamped and ONE owner question focus-done-<from> is registered (Waiting on you: "Set a new focus" or
+//         "Continue the regular queue"; the second lifts the pause). on = the queue continues as without focus, with
+//         one line. --continue-when-empty on|off overrides the config for this focus. No focus set = not affected.)
 //   node scripts/orchestrator/queue.mjs focus evaluate [--json] [--all]
 //        (each stage with open, ready, minutes left, rests (batch queue, proposals, waiting only on owner questions,
 //         QA with the owner) with a suggestion per rest, and status active | done-with-rests | done.)

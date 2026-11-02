@@ -167,6 +167,12 @@ const STANDARD = Object.freeze({
   // maxPerFill triage steps per fill; a printed step is not printed again for askAgainMin minutes. Off: `cq helpers
   // off triage` (or helpers.triage.enabled false). Lite mode: off unless switched on in the queue.
   triage: { minAgeDays: 3, agentAdded: true, maxPerFill: 3, askAgainMin: 60 },
+  // When a focus has ended (every stage done, or its period `to` is over; lib/logic/ranking.js "When the focus has
+  // ended"): continueWhenEmpty false (the default) pauses the queue (fill starts nothing) and asks the owner one
+  // question in "Waiting on you": set a new focus or continue the regular queue. true = the queue continues by itself
+  // (rest fill keeps filling, an expired focus is ranked as without focus), with one line saying so. A focus can
+  // override it: cq focus set ... --continue-when-empty on|off. A project that never set a focus is not affected.
+  focus: { continueWhenEmpty: false },
   // Read guard (hook-read-guard.mjs): in addition to the built-in lists.
   readGuard: {
     agentTypes: [], // more agent types the guard applies to (track, track-d and the reviewers are already included)

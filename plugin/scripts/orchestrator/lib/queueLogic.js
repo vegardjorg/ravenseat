@@ -81,7 +81,7 @@ const {
 } = require('./logic/conflicts.js');
 const {
   blockersWithPause, WITHOUT_AREA, FOCUS_REST, areaFor, parseStep, stepMatch, focusApplies, ownStep, parkedNow,
-  draggedWith, rankingContext, focusSpace, ranking, compareRanking, parseToDate, stepTitle, stepText, focusText,
+  focusEndQuestionId, FOCUS_END_CHOICES, focusRanEmpty, focusContinues, focusEndText, draggedWith, rankingContext, focusSpace, ranking, compareRanking, parseToDate, stepTitle, stepText, focusText,
   score, scoreParts,
 } = require('./logic/ranking.js');
 const {
@@ -109,7 +109,8 @@ const {
 } = require('./logic/edit.js');
 const {
   setFocus, removeFocus, FOCUS_PLAN_MAX, saveFocusPlan, focusStatus, evaluateFocusStep, focusWithoutDone, cleanFocus,
-  restText, focusCleanLines, setArea, areaOverview, park, proceed,
+  restText, focusCleanLines, setArea, areaOverview, park, proceed, focusEnd, syncFocusEnd, dropFocusEndQuestions,
+  focusEndLine,
 } = require('./logic/focus.js');
 const {
   selectNext, assignMigrBlock, migrTens, MIGR_FREE_STATUS, blockInterval, blocksInText, promptTask, takenBlocks,
@@ -236,6 +237,16 @@ module.exports = {
   focusApplies,
   ownStep,
   parkedNow,
+  // When the focus has ended (all stages done or the period over): continueWhenEmpty, the record and the question
+  focusEndQuestionId,
+  FOCUS_END_CHOICES,
+  focusRanEmpty,
+  focusContinues,
+  focusEndText,
+  focusEnd,
+  syncFocusEnd,
+  dropFocusEndQuestions,
+  focusEndLine,
   draggedWith,
   rankingContext,
   focusSpace,
