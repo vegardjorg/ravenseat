@@ -527,11 +527,15 @@ holding work back.
   `paths-ignore: ["**/*.md", "docs/**"]` under `on.push`.
 
 **Secret check and deploy commands in the push guard.** Before a plain push of the base branch by the orchestrator,
-the guard scans the added lines of what the push sends (`<remote>/<baseBranch>..<baseBranch>`): with gitleaks when it
-is on PATH, otherwise with a few built-in patterns (private key headers; AWS, GitHub, GitLab, Slack, Stripe live,
-Google API, Azure storage, OpenAI and Anthropic key formats; and a generic `password=`/`secret=`/`token=` with a long
-value outside test, fixture, example and docs files). A hit gets the confirmation dialog with file:line and the rule,
-never the value; a false alarm is answered with "push anyway". It never denies. Skipped silently: a diff larger than
+the guard scans the added lines of every commit the push sends (`git log -p --no-merges
+<remote>/<baseBranch>..<baseBranch>`, so a key added in one commit and deleted in the next is still found): with
+gitleaks when it is on PATH, otherwise with a few built-in patterns (private key headers; AWS, GitHub, GitLab, Slack,
+Stripe live, Google API and OAuth, Azure storage, OpenAI, Anthropic, Supabase `sb_secret_`, npm, SendGrid, Hugging
+Face and DigitalOcean key formats; JWTs; a GCP service account file; and, outside test, fixture, example and docs
+files, a URI with a password (`scheme://user:pass@host`), a value line in a `.env` style file and a generic
+`password=`/`secret=`/`token=`/`SERVICE_ROLE_KEY=` with a long value). A hit gets the confirmation dialog with
+file:line, the rule and the commit, never the value; a false alarm is answered with "push anyway". It never denies. A
+log over `secretScan.maxBytes` falls back to the net diff. Skipped silently: a net diff larger than
 `secretScan.maxBytes`, a first push (no remote ref, it would scan the whole history), a timeout or any error.
 `secretScan.enabled: false` turns it off. With the batch question, both are asked in one dialog.
 `deployCommands` (empty by default) lists the project's deploy commands; any command that starts with one of them

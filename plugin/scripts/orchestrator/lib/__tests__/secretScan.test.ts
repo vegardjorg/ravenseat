@@ -13,7 +13,7 @@ import path from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { addedLines, isQuietFile, question, scanLines, scanPush } from '../secretScan';
+import { addedLines, isEnvFile, isQuietFile, question, scanLines, scanPush, scanRange } from '../secretScan';
 
 // Fake keys in the providers' formats, joined at run time.
 const AWS = ['AK', 'IA', 'QX7TFAKE', 'KEY4PUSH'].join('');
@@ -21,6 +21,9 @@ const GH = ['gh', 'p_', 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8'].join('');
 const STRIPE = ['sk', '_live_', '4eC39HqLyjWDarjtT1zdp7dc'].join('');
 const PEM = ['-----BEGIN ', 'RSA PRIVATE KEY-----'].join('');
 const GENERIC_VALUE = 'q8Zr2Lm9Xw4Tb7Kd1Vn6';
+const JWT = ['ey', 'JhbGciOiJIUzI1NiJ9', '.', 'ey', 'Jyb2xlIjoic2VydmljZV9yb2xlIn0', '.', 'Q2hhbmdlTWVOb3RBUmVhbFNpZw'].join('');
+const SB_SECRET = ['sb_', 'secret_', 'a1B2c3D4e5F6g7H8i9J0kL'].join('');
+const DB_URI = ['postgres://app', ':', 'Zq8rT2', 'wLm9vX', '@db.internal:5432/app'].join('');
 
 const temporary: string[] = [];
 afterAll(() => {
@@ -109,6 +112,64 @@ describe('scanLines', () => {
   });
 });
 
+describe('scanLines: JWTs, cloud keys, URI credentials and .env files (M4)', () => {
+  const at = (text: string, file = 'src/config.ts') => scanLines([{ file, line: 3, text }]);
+  it('a JWT and a Supabase secret key are provider formats (they hit in any file)', () => {
+    expect(at(`SUPABASE_SERVICE_ROLE_KEY=${JWT}`)[0].rule).toBe('jwt');
+    expect(at(`const k = '${JWT}'`, 'src/__tests__/a.test.ts')[0].rule).toBe('jwt');
+    expect(at(`key: ${SB_SECRET}`)[0].rule).toBe('supabase-secret-key');
+  });
+  it('a URI with a real-looking password hits; placeholders, local defaults and docs files do not', () => {
+    expect(at(`DATABASE_URL=${DB_URI}`)[0].rule).toBe('uri-credentials');
+    expect(at(`url: "mysql://root:${GENERIC_VALUE}@10.0.0.4/db"`)[0].rule).toBe('uri-credentials');
+    expect(at('postgres://postgres:postgres@localhost:5432/dev')).toEqual([]);
+    expect(at('postgres://user:password@host/db')).toEqual([]);
+    expect(at('postgres://app:${DB_PASSWORD}@db/app')).toEqual([]);
+    expect(at('https://example.com/path?x=1')).toEqual([]);
+    expect(at(`DATABASE_URL=${DB_URI}`, 'docs/setup.md')).toEqual([]);
+  });
+  it('a value line in a .env file hits; .env.example, comments, empty values and references do not', () => {
+    expect(at('API_URL=https://api.internal', '.env.staging')[0].rule).toBe('env-file');
+    expect(at('export PORT=3000', 'apps/web/.env')[0].rule).toBe('env-file');
+    expect(at('API_URL=https://api.internal', '.env.example')).toEqual([]);
+    expect(at('# API_URL=https://api.internal', '.env')).toEqual([]);
+    expect(at('API_KEY=', '.env.local')).toEqual([]);
+    expect(at('API_KEY=${VAULT_KEY}', '.env.local')).toEqual([]);
+    expect(isEnvFile('.env.production')).toBe(true);
+    expect(isEnvFile('src/env.ts')).toBe(false);
+    expect(isEnvFile('.env.sample')).toBe(false);
+  });
+  it('the generic rule knows cloud key names (SERVICE_ROLE_KEY, AWS_SECRET_ACCESS_KEY, CLIENT_SECRET)', () => {
+    expect(at(`SERVICE_ROLE_KEY=${GENERIC_VALUE}`)[0].rule).toBe('generic-secret');
+    expect(at(`aws_secret_access_key = ${GENERIC_VALUE}`)[0].rule).toBe('generic-secret');
+    expect(at(`CLIENT_SECRET: "${GENERIC_VALUE}"`)[0].rule).toBe('generic-secret');
+  });
+});
+
+describe('addedLines on git log -p output', () => {
+  it('carries the short sha of the commit that added each line', () => {
+    const sha1 = 'a'.repeat(40);
+    const sha2 = 'b'.repeat(40);
+    const log = [
+      `commit ${sha1}`,
+      '',
+      'diff --git a/x b/x',
+      '--- /dev/null',
+      '+++ b/x',
+      '@@ -0,0 +1 @@',
+      '+one',
+      `commit ${sha2}`,
+      '',
+      'diff --git a/x b/x',
+      '--- a/x',
+      '+++ /dev/null',
+      '@@ -1 +0,0 @@',
+      '-one',
+    ].join('\n');
+    expect(addedLines(log)).toEqual([{ file: 'x', line: 1, text: 'one', commit: 'aaaaaaa' }]);
+  });
+});
+
 describe('question', () => {
   it('names file:line and the rule, never the value; null without hits', () => {
     const q = question({ scanner: 'built-in', hits: [{ file: 'src/a.ts', line: 3, rule: 'aws-access-key' }] });
@@ -124,7 +185,28 @@ describe('scanPush (temporary repos)', () => {
   it('hit: the added line of the unpushed commit, with its line number', () => {
     const r = repo({ 'src/config.ts': `export const a = 1;\nexport const key = "${AWS}";\n` });
     const out = scanPush({ cwd: r.work, remote: 'origin', branch: 'main' });
-    expect(out).toEqual({ scanner: 'built-in', hits: [{ file: 'src/config.ts', line: 2, rule: 'aws-access-key' }] });
+    expect(out).toEqual({
+      scanner: 'built-in',
+      hits: [{ file: 'src/config.ts', line: 2, rule: 'aws-access-key', commit: expect.stringMatching(/^[0-9a-f]{7}$/) }],
+    });
+  });
+  it('a secret added in one commit and deleted in the next is still found (M4: commits, not the net diff)', () => {
+    const r = repo({ '.env.staging': `DB_URL=${DB_URI}\n`, 'src/keys.ts': `export const k = "${AWS}";\n` });
+    fs.rmSync(path.join(r.work, '.env.staging'));
+    fs.writeFileSync(path.join(r.work, 'src/keys.ts'), 'export const k = process.env.K;\n');
+    r.g(r.work, 'add', '-A');
+    r.g(r.work, 'commit', '-q', '-m', 'oops, remove');
+    // The net diff holds nothing secret any more.
+    const net = execFileSync('git', ['diff', 'origin/main..main'], { cwd: r.work, encoding: 'utf8' });
+    expect(net).not.toContain(AWS);
+    const out = scanPush({ cwd: r.work, remote: 'origin', branch: 'main' });
+    expect(out?.hits.map((h) => `${h.file}:${h.rule}`).sort()).toEqual(['.env.staging:uri-credentials', 'src/keys.ts:aws-access-key']);
+    const q = question(out);
+    expect(q).toMatch(/src\/keys\.ts:1 \(aws-access-key\) in [0-9a-f]{7}/);
+    expect(q).not.toContain(AWS);
+    expect(q).not.toContain(DB_URI);
+    // scanRange takes any range (e.g. a track branch against its base).
+    expect(scanRange({ cwd: r.work, from: 'origin/main', to: 'main' })?.hits.length).toBe(2);
   });
   it('miss: clean changes give no hits', () => {
     const r = repo({ 'src/app.ts': 'export const port = 3000;\n' });
