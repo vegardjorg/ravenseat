@@ -246,35 +246,76 @@ describe('queue.mjs merge with the base gate', () => {
     expect(log).toContain('"track":"E"');
   });
 
-  it('the skip rule: same tree as the track tip and a green own gate run there, so the gates step is not run', () => {
+  it('the skip rule trusts only cq receive\'s gate run, never the track\'s own run or a time log row', () => {
     const p = project({ gates: { quick: [CHECK] } });
     p.track('A', { 'lib/b.js': "exports.b = 1;\n" });
     expect(p.run('merge', 'A', '--without-fill').code).toBe(0);
-    // F branches from the new base tip, so the merge commit gets exactly F's tree; F's own gate runs in its worktree.
-    const wt = p.track('F', { 'lib/f.js': "exports.f = 1;\n" });
-    const gate = spawnSync(process.execPath, [GATES, '--quick'], { cwd: wt, encoding: 'utf8', env: p.env });
-    expect(gate.status).toBe(0);
+    // H branches from the new base tip, so the merge commit gets exactly H's tree. H's own gate runs green in its
+    // worktree and writes a green time log row for its tip: that is the track's claim, not evidence.
+    const wtH = p.track('H', { 'lib/h.js': "exports.h = 1;\n" });
+    const own = spawnSync(process.execPath, [GATES, '--quick'], { cwd: wtH, encoding: 'utf8', env: p.env });
+    expect(own.status).toBe(0);
     const row = fs
       .readFileSync(path.join(p.folder, 'times.jsonl'), 'utf8')
       .split('\n')
       .filter((l) => l.includes('"gate"'))
       .map((l) => JSON.parse(l))
       .at(-1);
-    expect(row).toMatchObject({ kind: 'quick', ok: true, clean: true, sha: p.g(['rev-parse', 'queue/F']) });
+    expect(row).toMatchObject({ kind: 'quick', ok: true, clean: true, sha: p.g(['rev-parse', 'queue/H']) });
+    p.clearSteps();
+    const mh = p.run('merge', 'H', '--without-fill');
+    expect(mh.code).toBe(0);
+    expect(mh.out).not.toContain('not run again');
+    expect(p.stepsRun()).toEqual(['merge', 'gates', 'done']);
+
+    // F branches from the new base tip too; cq receive runs the quick gate on F's tip itself, and that run is what the
+    // skip rule trusts.
+    const wt = p.track('F', { 'lib/f.js': "exports.f = 1;\n" });
+    const rec = p.run('receive', 'F');
+    expect(rec.code).toBe(0);
+    expect(rec.out).toContain('Gates GREEN');
+    expect(fs.existsSync(wt)).toBe(true);
     p.clearSteps();
     const m = p.run('merge', 'F', '--without-fill');
     expect(m.code).toBe(0);
     expect(m.out).toContain('not run again: same tree as the track tip');
+    expect(m.out).toContain("cq's own quick gate run was green");
     expect(p.stepsRun()).toEqual(['merge', 'done']);
     expect(p.health().current).toMatchObject({ tip: p.tip(), status: 'green' });
     expect(p.health().current.skipped).toContain('same tree');
 
     // A track that does not contain the base (G branched before F's merge) is checked as usual.
-    const wtG = p.track('G', { 'lib/g.js': "exports.g = 1;\n" }, 'develop~1');
-    expect(spawnSync(process.execPath, [GATES, '--quick'], { cwd: wtG, encoding: 'utf8', env: p.env }).status).toBe(0);
+    p.track('G', { 'lib/g.js': "exports.g = 1;\n" }, 'develop~1');
+    expect(p.run('receive', 'G').code).toBe(0);
     p.clearSteps();
     expect(p.run('merge', 'G', '--without-fill').code).toBe(0);
     expect(p.stepsRun()).toEqual(['merge', 'gates', 'done']);
+  });
+
+  it('gates.mjs records evidence only for the orchestrator\'s side: the main checkout or --evidence', () => {
+    const p = project({ gates: { quick: [CHECK] } });
+    const wt = p.track('A', { 'lib/b.js': "exports.b = 1;\n" });
+    const store = () => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(p.folder, 'gate-evidence.json'), 'utf8')).entries as Record<string, unknown>[];
+      } catch {
+        return [];
+      }
+    };
+    // The track's own run in its worktree: no evidence.
+    expect(spawnSync(process.execPath, [GATES, '--quick'], { cwd: wt, encoding: 'utf8', env: p.env }).status).toBe(0);
+    expect(store()).toHaveLength(0);
+    // The main checkout: evidence by default (the full gate before a batch push runs there).
+    expect(spawnSync(process.execPath, [GATES, '--quick'], { cwd: p.repo, encoding: 'utf8', env: p.env }).status).toBe(0);
+    expect(store().at(-1)).toMatchObject({ sha: p.tip(), kind: 'quick', ok: true, clean: true, main_tree: true });
+    // --evidence with --cwd (what cq receive passes): evidence for the worktree's tip.
+    const r = spawnSync(process.execPath, [GATES, '--quick', '--evidence', '--cwd', wt], { cwd: p.folder, encoding: 'utf8', env: p.env });
+    expect(r.status).toBe(0);
+    expect(store().at(-1)).toMatchObject({ sha: p.g(['rev-parse', 'queue/A']), ok: true, clean: true, main_tree: false });
+    // A dirty run is recorded with clean: false, which is never evidence.
+    fs.writeFileSync(path.join(p.repo, 'check.js'), `${fs.readFileSync(path.join(p.repo, 'check.js'), 'utf8')}// x\n`);
+    expect(spawnSync(process.execPath, [GATES, '--quick'], { cwd: p.repo, encoding: 'utf8', env: p.env }).status).toBe(0);
+    expect(store().at(-1)).toMatchObject({ sha: p.tip(), clean: false });
   });
 
   it('other base gate commands run as their own step; red lets done go on and exits 9', () => {

@@ -90,9 +90,9 @@ function runDoneCommand(o, { branch, scratch, step }) {
  * round (`cq resume <id> --reason fix` with the tail file as findings; resume puts the tail into the brief and applies
  * the fix-round cap). Never a review or a merge. Exits: 8 when the cap stopped the round (an owner question), else 1.
  */
-function doneCommandRed(id, check, { scratch }) {
+function doneCommandRed(id, check, { scratch, what = 'done command' }) {
   const tail = check.run.tail;
-  console.log(`NOT DONE: ${id}'s done command is red; no review and no merge. The last lines:`);
+  console.log(`NOT DONE: ${id}'s ${what} is red; no review and no merge. The last lines:`);
   console.log(tail.slice(-10).map((l) => `  | ${l}`).join('\n'));
   console.log(`Output tail (${tail.length} lines): ${check.file}`);
   const r = spawnSync(
@@ -106,6 +106,7 @@ function doneCommandRed(id, check, { scratch }) {
       '--findings-file',
       check.file,
       // The cause of the round, for the autonomy figure (lib/eventStatistics.js): a red done command, not a reviewer.
+      // A red quick gate at receive is counted the same way (a machine check, not a reviewer).
       '--from',
       'done_when',
       ...(scratch ? ['--scratchpad', scratch] : []),
@@ -116,6 +117,127 @@ function doneCommandRed(id, check, { scratch }) {
   if (r.stderr) process.stderr.write(r.stderr);
   if (r.status === 0) console.log(`Start the fix round in the SAME turn (the line above), then ${CQ} receive ${id} again.`);
   process.exit(r.status === 8 ? 8 : 1);
+}
+
+// ---- The gate evidence at receive (lib/gateEvidence.js) -------------------------------------------------------------
+
+/**
+ * The quick gates bound to the delivered tip. The track's RESULT line (`gates=OK`) and its own gate rows in the time
+ * log are informational only: what counts is a green, clean run of every quick gate on exactly the branch tip, recorded
+ * by gates.mjs for the orchestrator (lib/gateEvidence.js). When the store has one for this tip (an earlier receive, no
+ * new commits since), nothing runs. Otherwise receive runs `gates.mjs --quick --evidence` in the track's worktree (the
+ * one with the branch checked out; --done-cwd overrides) and reads the evidence that run recorded.
+ * Refused (exit 1, nothing changed), as for the done command: no worktree has the branch, the worktree is not at the
+ * branch tip, or it has uncommitted tracked changes (a green run would then not be bound to the tip).
+ * @returns {{ status: 'off' } | { status: 'green'|'red', record: object, check?: { run: object, file: string } }}
+ */
+function receiveGates(o, { branch, scratch }) {
+  const GE = require('./lib/gateEvidence.js');
+  const DC = require('./lib/doneCheck.js');
+  const commands = (Array.isArray(CONFIG.gates?.quick) ? CONFIG.gates.quick : [])
+    .filter((g) => typeof g === 'string' && g.trim())
+    .map((g) => g.trim());
+  if (!commands.length) return { status: 'off' };
+  const tip = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
+  const storeFile = GE.storeFile(FOLDER);
+  const known = GE.latest(GE.readStore(storeFile).entries, { sha: tip, kinds: ['quick', 'full'], commands });
+  if (known?.ok === true) {
+    console.log(`Gates green at ${String(tip).slice(0, 12)} (${known.kind}, cq's own run at ${known.time}); not run again.`);
+    return {
+      status: 'green',
+      record: { ok: true, kind: known.kind, tip, at: new Date().toISOString(), ran: false, evidence_at: known.time },
+    };
+  }
+  const cwd = val('--done-cwd')
+    ? path.resolve(val('--done-cwd'))
+    : DC.worktreeFor(git(['worktree', 'list', '--porcelain']), branch);
+  if (!cwd || !fs.existsSync(cwd))
+    die(
+      `${o.id}: the quick gates cannot run: no worktree has ${branch} checked out${cwd ? ` (${cwd} is gone)` : ''}. ` +
+        `receive runs them itself on the delivered tip (the track's RESULT gates= is not evidence). Check the branch out ` +
+        `in a worktree (git worktree add <folder> ${branch}, then prepare-track for the shared links) and run receive ` +
+        'again with --done-cwd <folder>. Nothing changed.',
+    );
+  const at = spawnSync('git', ['-C', cwd, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+  const head = (at.stdout ?? '').trim();
+  if (head !== tip)
+    die(
+      `${o.id}: ${cwd} is at ${head.slice(0, 12) || '?'}, not at the tip of ${branch} (${String(tip).slice(0, 12)}); the ` +
+        'gates must run on the delivered commit. Check the branch out there and run receive again. Nothing changed.',
+    );
+  const dirty = spawnSync('git', ['-C', cwd, 'status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' });
+  if ((dirty.stdout ?? '').trim())
+    die(
+      `${o.id}: ${cwd} has uncommitted tracked changes; a gate run there would not be bound to ${branch} at ` +
+        `${String(tip).slice(0, 12)}. Commit them on the branch (then the tip moves) or discard them, and run receive ` +
+        'again. Nothing changed.',
+    );
+  const folder = scratch ?? FOLDER;
+  fs.mkdirSync(folder, { recursive: true });
+  const logFile = path.join(folder, `gates-receive-${o.id}.log`);
+  console.log(`GATES (receive) for ${o.id} in ${cwd}: ${commands.join(' ; ')}  (the quick gates, cq's own run)`);
+  const t0 = Date.now();
+  const r = spawnSync(
+    process.execPath,
+    [
+      path.join(HERE, 'gates.mjs'),
+      '--quick',
+      '--evidence',
+      '--cwd',
+      cwd,
+      '--track',
+      o.id,
+      '--log',
+      logFile,
+      '--timeout-sec',
+      String(BASE_SETUP.timeoutSec),
+    ],
+    { cwd, encoding: 'utf8', env: process.env, maxBuffer: 1 << 26 },
+  );
+  const durationSec = Math.round((Date.now() - t0) / 100) / 10;
+  const entry = GE.latest(GE.readStore(storeFile).entries, { sha: tip, kinds: ['quick'], commands });
+  // The run's own result and its recorded evidence must agree; a green exit without an entry (a commit during the run,
+  // or the store could not be written) is no evidence.
+  if (r.status === 0 && entry?.ok === true) {
+    console.log(`Gates GREEN at ${String(tip).slice(0, 12)} (${durationSec} s), recorded as evidence for that commit.`);
+    return { status: 'green', record: { ok: true, kind: 'quick', tip, at: entry.time, ran: true, duration_s: durationSec } };
+  }
+  if (r.status === 0)
+    die(
+      `${o.id}: the quick gates exited green but left no evidence for ${String(tip).slice(0, 12)} (did the branch move ` +
+        `during the run, or could ${storeFile} not be written?). Run receive again. Nothing changed.`,
+    );
+  let text = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+  try {
+    text = fs.readFileSync(logFile, 'utf8');
+  } catch {
+    /* no log file: the output */
+  }
+  // Only the tail goes into the fix brief (as for the done command: a secret printed early is not copied around).
+  const tail = DC.tailOf(text, DC.doneCheckSetup(CONFIG).tailLines);
+  const file = path.join(folder, `gates-${o.id}.md`);
+  fs.writeFileSync(
+    file,
+    [
+      `# Quick gates for ${o.id} at ${String(tip).slice(0, 12)}: RED (exit ${r.status ?? '?'})`,
+      '',
+      `- Commands: ${commands.map((c) => `\`${c}\``).join(', ')}`,
+      `- Where: ${cwd} (cq receive's own run; the track's RESULT line is not evidence)`,
+      '',
+      `The last ${tail.length} line(s) of the output:`,
+      '',
+      '~~~~',
+      ...tail,
+      '~~~~',
+      '',
+    ].join('\n'),
+  );
+  console.log(`Gates RED at ${String(tip).slice(0, 12)} (exit ${r.status ?? '?'}, ${durationSec} s).`);
+  return {
+    status: 'red',
+    record: { ok: false, kind: 'quick', tip, at: new Date().toISOString(), ran: true, exit: r.status, duration_s: durationSec, file },
+    check: { run: { tail, exit: r.status }, file },
+  };
 }
 
 /** `cq receive` (the usage is at the top of queue.mjs). */
@@ -186,6 +308,32 @@ export function cmdReceive() {
     L.parseResult(val('--result')) ??
     L.parseResult(trackReply) ??
     L.parseResult(reportText);
+  // The quick gates bound to the delivered tip (receiveGates), BEFORE the done command and any reviewer: the track's own
+  // claim is informational only. A PARTIAL track is known to be unfinished, so no gate runs for it.
+  if (result?.gates != null)
+    console.log(`The track's RESULT gates=${result.gates} is self-reported (informational only; receive checks the tip itself).`);
+  const gateCheck = result?.status === 'PARTIAL' ? { status: 'off' } : receiveGates(o0, { branch, scratch });
+  if (gateCheck.status === 'red') {
+    edit((queue) => {
+      const o = queue.tasks.find((x) => x.id === id);
+      if (o.status !== 'review') {
+        const s = L.setStatus(o, 'review', new Date().toISOString());
+        if (s.error) die(s.error);
+      }
+      if (result) o.result = result;
+      o.review_package = folder;
+      o.gate_check = gateCheck.record;
+      if (trackFound.report) {
+        o.report_received = trackFound.report.mtimeMs;
+        o.report_seen = Math.max(Number(o.report_seen ?? 0), trackFound.report.mtimeMs);
+      }
+      o.t_receive ??= new Date().toISOString();
+      L.openBlock(o, 'gate-red', { note: `quick gates red at receive (exit ${gateCheck.record.exit ?? '?'})` });
+      return o;
+    });
+    if (!o0.picked_by) pulseCursor(`receive ${id} gates red`);
+    doneCommandRed(id, gateCheck.check, { scratch, what: 'quick gate run (cq receive, on the delivered tip)' });
+  }
   // The done command (lib/doneCheck.js), BEFORE any reviewer is started: a red one is not a delivery but a fix round.
   // A PARTIAL track is known to be unfinished (a context continuation), so the command is not run for it.
   const doneCheck = result?.status === 'PARTIAL' ? null : runDoneCommand(o0, { branch, scratch, step: 'receive' });
@@ -198,6 +346,7 @@ export function cmdReceive() {
       }
       if (result) o.result = result;
       o.review_package = folder;
+      if (gateCheck.record) o.gate_check = gateCheck.record;
       o.done_check = doneCheck.record;
       // The report has been read: it is no longer a new delivery (the fix round's report is the next one).
       if (trackFound.report) {
@@ -284,6 +433,7 @@ export function cmdReceive() {
       if (s.error) die(s.error);
     }
     if (result) o.result = result;
+    if (gateCheck.record) o.gate_check = gateCheck.record;
     if (doneCheck) o.done_check = doneCheck.record;
     if (evidenceRead?.evidence) o.evidence = evidenceRead.evidence;
     o.review_package = folder;
@@ -437,6 +587,8 @@ export async function cmdMerge() {
         [
           path.join(HERE, 'gates.mjs'),
           '--quick',
+          // Trusted evidence for the merge commit (lib/gateEvidence.js); the main checkout records it anyway.
+          '--evidence',
           ...trackArgs,
           // The task id for the gate row in the time log (gates.mjs): after the merge HEAD is the base branch.
           '--track',
@@ -497,7 +649,8 @@ export async function cmdMerge() {
           `(${CQ} set ${before.fix_task} cancelled).`,
       );
   };
-  // The skip rule: the merge commit has the tree the track tested and the track's own gate ran green on its tip.
+  // The skip rule: the merge commit has the tree of the track tip, and cq's own gate run (receive) was green on that
+  // tip. The rows are the trusted gate evidence (lib/gateEvidence.js), never the time log a track can append to.
   const skipNow = () =>
     BH.skipEvidence({ newTip: mergeCommit, trackTip, treeOf, rows: gateRowsNow(), commands: BASE_SETUP.commands });
   const skipped = (reason) => {

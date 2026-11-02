@@ -41,6 +41,27 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
   class; after one owner question, one-off bugs become fix tasks, repeatable mistakes become `gate` tasks that add a
   red-first check to the project's own CI, and design questions become owner questions or plan entries. The review
   is recorded as a `PL-REVIEW-…` plan entry.
+- **Decide or ask:** tracks fix technical failures themselves and ask the owner only on unclear requirements,
+  hard-to-reverse choices (data model, public API, new dependency, deletion) and security or legal tradeoffs; other
+  assumptions go in a new "Assumptions" section of report.md.
+- **Gate evidence bound to the sha:** `cq receive` no longer trusts the track's `RESULT gates=` line or its gate rows
+  in the time log. It needs a green, clean quick-gate run on exactly the delivered tip, recorded by `gates.mjs` for
+  the orchestrator in `gate-evidence.json`, and otherwise runs the quick gate itself in the track's worktree (red:
+  fix round, exit 1/8; dirty or missing worktree: refused, exit 1). The base gate's skip rule reads the same store.
+  `push-check` is BLOCKED and the push guard asks when the tip has no green `cq gates --full` run from the main
+  checkout. Queue agents may not pass `--evidence`/`--cwd` to the gate runner or touch the store.
+- **Focus end:** when every focus stage is done or the focus period is over, the queue no longer continues silently.
+  With `focus.continueWhenEmpty` off (the default) fill starts nothing, `focus.finished_at` is recorded, and one
+  owner question "Focus X is done: set a new focus or continue the regular queue?" appears in Waiting on you;
+  answering "Continue the regular queue" lifts the pause. On keeps the old behavior with one notice line. Per focus:
+  `cq focus set ... --continue-when-empty on|off`; `cq focus` and `cq doctor` know the setting.
+- **`cq ask <id> ["<question>"]`:** answer a question about an earlier track without resuming its agent. It builds a
+  size-capped, secret-redacted bundle (mission, report.md, handover.md, queue notes and owner answers, commits and
+  diffstat, transcript tail); `--bundle` writes it for the new `/cq:ask` skill and read-only `ask` agent, `--json`
+  describes it.
+- **Gate from incident:** after a post-merge defect, a red base or an owner-found bug, the orchestrator proposes a
+  `Gate: <failure class>` task when the class is repeatable. Gate tasks are red first: the check is shown failing on
+  the original bug and passing on the fix, both runs in the report.
 
 ### Changed
 - README: parallel chats colliding (push and file conflicts) added to the pain points; "What the guards are not"

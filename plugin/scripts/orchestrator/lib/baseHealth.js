@@ -16,9 +16,10 @@
 //     other commands (`baseGate.commands`, e.g. the full gate) a `base-gate` step runs them after the quick gates.
 //   - Red after a merge: the merge stays (no automatic revert), a fix task `<id>-BASE<n>` (value 10, `fixes` the merged
 //     task, `done_when` = the base gate commands) is added, and the next merge is refused until a check is green again.
-//   - The skip rule (skipEvidence): the merge commit has exactly the tree the track tested, and the track's own gate ran
-//     green on that commit with the base gate commands: the check would run the same commands on the same files, so
-//     green is recorded without running them.
+//   - The skip rule (skipEvidence): the merge commit has exactly the tree of the track tip, and a TRUSTED gate run (cq's
+//     own, from the gate evidence store, lib/gateEvidence.js; normally the one `cq receive` ran) was green on that commit
+//     with the base gate commands: the check would run the same commands on the same files, so green is recorded
+//     without running them. The track's own runs and the time log's gate rows are never used: a track can write those.
 //
 // Where the check runs: the main checkout (config root / QUEUE_GIT), which `cq merge` already requires to be on the base
 // branch and where the merge and the quick gates run. A separate worktree would need the shared links (node_modules) to
@@ -146,9 +147,10 @@ function gateRows(text) {
  *   1. the new base tip has exactly the tree of the track tip (`git merge --no-ff` of a branch that already contains the
  *      base gives a merge commit with the track's own tree; a fast-forward gives the track tip itself), so the check
  *      would see exactly the files the track tested;
- *   2. the track's own gate ran green on exactly that track tip, in a clean worktree (no uncommitted tracked changes,
- *      which a green run could have depended on), and ran every base gate command (a quick or full row in the time log
- *      with `sha` = the track tip; gates.mjs writes sha and clean).
+ *   2. a trusted gate run was green on exactly that track tip, in a clean worktree (no uncommitted tracked changes,
+ *      which a green run could have depended on), and ran every base gate command (a quick or full entry with `sha` =
+ *      the track tip). `rows` are the gate evidence entries (lib/gateEvidence.js, written by gates.mjs for cq receive
+ *      and cq merge), never the time log's gate rows (any agent can append one there).
  * Anything less (another tree, a dirty or older run, a row without sha) runs the check.
  * @param {{ newTip: string, trackTip: string, treeOf: (sha: string) => string|null, rows: object[], commands: string[] }} x
  * @returns {{ skip: boolean, reason: string }}
@@ -172,7 +174,7 @@ function skipEvidence({ newTip, trackTip, treeOf, rows, commands }) {
   if (!hit) return { skip: false, reason: `no green, clean gate run of the base gate commands on ${short(trackTip)}` };
   return {
     skip: true,
-    reason: `same tree as the track tip ${short(trackTip)}, where the track's ${hit.kind} gate ran green at ${hit.time ?? '?'}`,
+    reason: `same tree as the track tip ${short(trackTip)}, where cq's own ${hit.kind} gate run was green at ${hit.time ?? '?'}`,
   };
 }
 

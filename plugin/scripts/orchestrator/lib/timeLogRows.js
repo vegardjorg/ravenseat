@@ -11,6 +11,8 @@
 //                 same kind for the same track (or the same branch when the track is unknown): 1 is the first run, so
 //                 attempt > 1 is a rerun. `timed_out: true` only when a check went over its time budget. `sha` (the
 //                 HEAD commit when the run started) and `clean` (no uncommitted tracked changes then), when known.
+//                 MEASUREMENT ONLY: the time log is a file every agent appends to, so a gate row proves nothing. What
+//                 cq receive, cq merge and the push check rely on is the gate evidence store (lib/gateEvidence.js).
 //   compaction    { time, event: "compact", scope: "session", session_id, orchestrator }   a main session (SessionStart
 //                 compact; orchestrator = the session is the bound orchestrator, contextGuard.afterCompactBound)
 //                 { time, event: "compact", scope: "track", agent_id, agent_type, track, compactions }   one row per new
@@ -84,8 +86,8 @@ function gateRow(r) {
     attempt: Number.isInteger(r.attempt) && r.attempt > 0 ? r.attempt : 1,
   };
   if (r.timedOut) row.timed_out = true;
-  // The commit the run checked and whether the tree had uncommitted tracked changes: the base gate's skip rule
-  // (lib/baseHealth.js) trusts only a green run on exactly the merged commit in a clean tree.
+  // The commit the run checked and whether the tree had uncommitted tracked changes (for measurement: reruns per
+  // commit). No decision reads them; the trusted copy is the gate evidence store (lib/gateEvidence.js).
   if (typeof r.sha === 'string' && r.sha) row.sha = r.sha;
   if (typeof r.clean === 'boolean') row.clean = r.clean;
   return row;

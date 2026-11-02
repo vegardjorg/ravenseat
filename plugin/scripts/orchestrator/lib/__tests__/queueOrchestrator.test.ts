@@ -1305,16 +1305,18 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
     expect(k1.map((x) => x.step)).toEqual(['merge', 'migr-push', 'gates', 'done', 'fill']);
     expect(k1[0].args.slice(1)).toEqual(['queue/M', '--wave-base', head]);
     expect(k1[1]).toMatchObject({ cmd: 'node migr-push.js', args: [] });
-    // The gates get the branch fork point and tip, so rule 1 in "known red" works after the merge.
-    expect(k1[2].args.slice(1, 6)).toEqual([
+    // The gates get the branch fork point and tip, so rule 1 in "known red" works after the merge, and record trusted
+    // gate evidence for the merge commit (lib/gateEvidence.js).
+    expect(k1[2].args.slice(1, 7)).toEqual([
       '--quick',
+      '--evidence',
       '--track-base',
       head,
       '--track-tip',
       g(['rev-parse', 'queue/M']),
     ]);
     // The task id for the gate row in the time log.
-    expect(k1[2].args.slice(6, 8)).toEqual(['--track', 'M']);
+    expect(k1[2].args.slice(7, 9)).toEqual(['--track', 'M']);
     expect(k1[3].args.slice(1, 4)).toEqual(['set', 'M', 'done']);
     expect(k1[4].args.slice(1)).toEqual(['fill', '--scratchpad', scratch]);
 

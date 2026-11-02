@@ -10,7 +10,7 @@
 // Tested in lib/__tests__/queueFocus.test.ts, queueLogic.test.ts and queueProjectPick.test.ts (through queueLogic.js).
 // =============================================================
 
-const { estimate, utcText, isExternalRow, openTask } = require('./base.js');
+const { cfg, estimate, utcText, isExternalRow, openTask } = require('./base.js');
 const { projectFor, projectPaused } = require('./projects.js');
 const { blockers, lockUpCount } = require('./conflicts.js');
 
@@ -28,7 +28,8 @@ function blockersWithPause(o, queue, k = null) {
   if (projectPaused(o, register)) ahead.push(`the project ${projectFor(o, register)} is paused`);
   if (queue.focus) {
     const p = focusSpace(o, k ?? rankingContext(queue));
-    if (p.outside && !p.parked && !p.paused && p.out) ahead.push(outsideText(queue));
+    // Outside the focus (rest waiting), or the queue paused because the focus has ended (focusEndText).
+    if (!p.parked && !p.paused && p.out) ahead.push(p.reason);
   }
   return [...ahead, ...h];
 }
@@ -45,6 +46,11 @@ function blockersWithPause(o, queue, k = null) {
 //          `rest: wait` (default) = tasks outside all stages are not started; `fill` = they come last and
 //          fill slots the focus does not use. The focus applies until it is changed, with an optional end date `to`; when
 //          it has passed, the queue is ranked as without focus and state/show give notice.
+//          When every stage is done (focusRanEmpty) or `to` has passed, the focus has ENDED. Then the setting
+//          continueWhenEmpty decides (focusContinues): off (the default) = nothing starts, the queue is paused until the
+//          owner sets a new focus, turns it off, or answers the owner question (logic/focus.js syncFocusEnd); on = the
+//          queue continues as without focus (rest fill keeps filling; an expired one is ranked as without focus).
+//          `rest` only applies while the focus has work; once it has ended, this setting decides.
 //          Pulled along: an open dependency (transitively) of a pending task in the focus gets the stage of the highest
 //          ranked task that waits on it, even if it belongs to an area outside.
 //   task.parked: { by, at, reason?, to? }      "put on hold" for one task. Status stays waiting (like batched);
@@ -158,6 +164,72 @@ function focusApplies(queue, now = Date.now()) {
   return { applies: true, expired: false, notStarted: false };
 }
 
+// ---- When the focus has ended ---------------------------------------------------------------------------------------
+//
+// A focus ENDS when every stage is done (nothing open and no rests in any stage: the same as status `done` in
+// logic/focus.js evaluateFocusStep) or when its period `to` has passed. What happens then is the setting
+// "continue the regular queue automatically when the focus is empty":
+//   queue.json         focus.continue_when_empty: true|false   per focus (cq focus set ... --continue-when-empty on|off); wins
+//   queue.config.json  focus.continueWhenEmpty                 the project's default (false)
+// Off: the queue is paused (every waiting task is out of the ranking, with focusEndText as the reason) until the owner
+// sets a new focus, turns it off, or answers the owner question (focusEndQuestionId) with "Continue the regular queue".
+// On: the queue continues (the old behavior). A project that never set a focus is never affected.
+
+/** The id of the owner question for one focus (from its `from`, so a new focus gets a new question). */
+function focusEndQuestionId(focus) {
+  const stamp = String(focus?.from ?? '').replace(/\D/g, '').slice(0, 14);
+  return `focus-done-${stamp || 'unset'}`;
+}
+/** The choices of the owner question; the second one lifts the pause (focusContinues). */
+const FOCUS_END_CHOICES = ['Set a new focus', 'Continue the regular queue'];
+
+/**
+ * Is every stage of the focus done? True when no task belongs to a stage that is still open (waiting, also batched,
+ * parked, proposed and waiting on questions; running, picked, review) or done with QA waiting on the owner. Pulled-along
+ * tasks need not be checked: they are only pulled by a waiting task in a stage, which already counts.
+ */
+function focusRanEmpty(queue) {
+  if (!queue?.focus?.order?.length) return false;
+  for (const o of queue.tasks ?? []) {
+    if (!o || isExternalRow(o) || o.status === 'cancelled') continue;
+    if (o.status === 'done' && o.qa_status !== 'waiting') continue;
+    if (ownStep(o, queue) != null) return false;
+  }
+  return true;
+}
+
+/**
+ * Does the queue continue when the focus has ended? The per-focus override wins over the config; an owner answer
+ * "Continue the regular queue" to this focus's question also continues.
+ * @returns {{ on: boolean, source: 'focus'|'config'|'answer', setting: boolean, settingSource: 'focus'|'config' }}
+ */
+function focusContinues(queue) {
+  const own = queue?.focus?.continue_when_empty;
+  let setting;
+  let settingSource;
+  if (typeof own === 'boolean') {
+    setting = own;
+    settingSource = 'focus';
+  } else {
+    setting = cfg()?.focus?.continueWhenEmpty === true;
+    settingSource = 'config';
+  }
+  if (setting) return { on: true, source: settingSource, setting, settingSource };
+  const id = focusEndQuestionId(queue?.focus);
+  const answer = (queue?.resolved ?? []).includes(id) ? queue?.resolutions?.[id]?.answer : null;
+  const continued = typeof answer === 'string' && answer.startsWith(FOCUS_END_CHOICES[1]);
+  return { on: continued, source: continued ? 'answer' : settingSource, setting, settingSource };
+}
+
+/** The reason a task does not start while the queue is paused after the focus ended. */
+function focusEndText(queue, k) {
+  const name = queue?.focus?.name ? ` "${queue.focus.name}"` : '';
+  return (
+    `focus${name} ${k?.expired ? 'period is over' : 'is done'}: queue paused ` +
+    '(cq focus set ... for a new focus, cq focus off, or focus.continueWhenEmpty)'
+  );
+}
+
 /**
  * The task's own stage (0-based index in focus.order), or null when no stage matches. The most specific
  * stage wins; on equal level the first one. Does not look at "pulled along" (draggedWith/focusSpace does that).
@@ -234,15 +306,23 @@ function draggedWith(queue, now = Date.now()) {
 
 /**
  * The context the ranking needs, computed once per call (draggedWith walks the whole dependency graph).
+ * `finished` = applies and every stage is done; `ended` = finished or expired; `halted` = ended and the queue does not
+ * continue (focusContinues), so nothing starts.
  * @returns {{ queue: object, now: number, applies: boolean, expired: boolean, notStarted: boolean,
+ *             finished: boolean, ended: boolean, halted: boolean,
  *             rest: string, dragged: Map<string, { stage: number, by: string }> }}
  */
 function rankingContext(queue, now = Date.now()) {
   const g = focusApplies(queue, now);
+  const finished = g.applies && focusRanEmpty(queue);
+  const ended = finished || g.expired;
   return {
     queue,
     now,
     ...g,
+    finished,
+    ended,
+    halted: ended && !focusContinues(queue).on,
     rest: g.applies && queue.focus.rest === 'fill' ? 'fill' : 'wait',
     dragged: g.applies ? draggedWith(queue, now) : new Map(),
   };
@@ -265,7 +345,8 @@ function outsideText(queue) {
 
 /**
  * The placement of one task, without score: focusStep (0-based, null = outside all stages), pulled along by, and whether it is
- * out of the ranking (parked, paused project, or outside the focus when the rest waits) with the reason.
+ * out of the ranking (parked, paused project, outside the focus when the rest waits, or the queue paused because the
+ * focus has ended: `halted`) with the reason.
  * `stage` is the sort value: 0 without focus; the stage index with focus; the stage count for the rest with `fill`;
  * REST_STEP for the rest with `wait`; PARKED_STEP for parked.
  */
@@ -286,9 +367,11 @@ function focusSpace(o, k) {
   }
   if (parked) stage = PARKED_STEP;
   const outsideWait = outside && k.rest !== 'fill';
+  const halted = k.halted === true;
   let reason = null;
   if (parked) reason = parkedText(o);
   else if (paused) reason = `the project ${projectFor(o, queue.projects ?? {})} is paused`;
+  else if (halted) reason = focusEndText(queue, k);
   else if (outsideWait) reason = outsideText(queue);
   return {
     stage,
@@ -297,7 +380,8 @@ function focusSpace(o, k) {
     parked,
     paused,
     outside,
-    out: parked || paused || outsideWait,
+    halted,
+    out: parked || paused || outsideWait || halted,
     reason,
   };
 }
@@ -401,6 +485,11 @@ module.exports = {
   parseStep,
   stepMatch,
   focusApplies,
+  focusEndQuestionId,
+  FOCUS_END_CHOICES,
+  focusRanEmpty,
+  focusContinues,
+  focusEndText,
   ownStep,
   parkedNow,
   draggedWith,
