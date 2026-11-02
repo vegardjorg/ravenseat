@@ -4,7 +4,7 @@
 // scripts/install.mjs (vendored install), so both install paths write the same project files.
 //
 // Usage:
-//   cq setup [--dry] [--overwrite] [--claude-md] [--settings] [--target <dir>]
+//   cq setup [--dry] [--overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]
 //
 // What it does (everything is "add to"; existing files are kept unless --overwrite, and queue.config.json is never replaced):
 //   1. queue.config.json from <plugin>/queue.config.example.json, when missing.
@@ -18,6 +18,9 @@
 //      run --settings again after a plugin update; a status line of your own is kept.
 //   7. --settings in a plugin install records the plugin version in <dataFolder>/setup.json, so the board can show
 //      that setup must be run again after an update (lib/queueUpdate.js).
+//   8. --ci: writes the GitHub Actions template <plugin>/templates/ci-github.yml to .github/workflows/cq-gates.yml (it
+//      runs the project's own gates.quick, with baseBranch filled in). An existing file is NEVER replaced, also not
+//      with --overwrite. Opt-in only: /cq:setup asks first.
 //   Hooks (install.mjs only, a plugin brings hooks/hooks.json): every hook in settings.queue.json is added next to the
 //   project's own, also hooks added in a later version (e.g. hook-track-end.mjs on SubagentStop). The two files must
 //   list the same scripts (__tests__/setup.test.ts checks it).
@@ -33,6 +36,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** The plugin root: two folders above scripts/orchestrator/. */
 export const PLUGIN_ROOT = path.resolve(HERE, '..', '..');
 
+/** Where --ci writes the GitHub Actions template (relative to the target). */
+export const CI_WORKFLOW = '.github/workflows/cq-gates.yml';
+
 /** The lines .gitignore needs: the queue's data and the agents' worktrees. */
 export const GITIGNORE_LINES = ['scripts/.queue/', '.claude/worktrees/'];
 
@@ -44,6 +50,7 @@ export const GITIGNORE_LINES = ['scripts/.queue/', '.claude/worktrees/'];
  * @param {boolean} [o.overwrite]           replace existing docs and CLAUDE.queue.md
  * @param {boolean} [o.claudeMd]            add @CLAUDE.queue.md to CLAUDE.md
  * @param {boolean} [o.settings]            add the recommended keys to .claude/settings.json
+ * @param {boolean} [o.ci]                  write the GitHub Actions template (never over an existing file)
  * @param {boolean} [o.hooks]               also merge the hooks into .claude/settings.json (vendored install only;
  *                                          a plugin has its own hooks/hooks.json)
  * @param {(text: string) => string} [o.transformMd]  rewrites the Markdown on the way (install.mjs: cq -> node form)
@@ -104,7 +111,33 @@ export function setupProject(o) {
     const note = recordSetupVersion(t, { dry: o.dry });
     if (note) log.notes.push(note);
   }
+
+  // 8: --ci, the GitHub Actions template. Never over an existing workflow.
+  if (o.ci) log.notes.push(writeCiTemplate(t, { dry: o.dry }));
   return log;
+}
+
+/** Writes the CI template to <target>/CI_WORKFLOW unless it exists. Returns a note for the log. */
+export function writeCiTemplate(target, o = {}) {
+  const to = path.join(target, ...CI_WORKFLOW.split('/'));
+  if (fs.existsSync(to)) return `${CI_WORKFLOW}: kept (already there; setup never overwrites a workflow)`;
+  const from = path.join(PLUGIN_ROOT, 'templates', 'ci-github.yml');
+  if (!fs.existsSync(from)) return `${CI_WORKFLOW}: not written (no template in this install: ${from})`;
+  const KK = require('./lib/queueConfig.js');
+  const base = KK.config({ root: target }).baseBranch || 'main';
+  if (!o.dry) {
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.writeFileSync(to, fs.readFileSync(from, 'utf8').split('__BASE_BRANCH__').join(base));
+  }
+  const others = (() => {
+    try {
+      return fs.readdirSync(path.dirname(to)).filter((f) => /\.ya?ml$/i.test(f) && f !== path.basename(to));
+    } catch {
+      return [];
+    }
+  })();
+  const twice = others.length ? `; you already have ${others.join(', ')}: check that they do not run the same checks twice` : '';
+  return `${CI_WORKFLOW}: written (runs gates.quick on push to ${base} and on pull requests; add your runtime setup step)${twice}`;
 }
 
 /** The record setup --settings writes: <dataFolder>/setup.json. QUEUE_FOLDER overrides the folder, as for queue.mjs. */
@@ -241,10 +274,10 @@ if (isMain) {
   const args = process.argv.slice(2);
   const flags = new Set(args.filter((a) => a.startsWith('--')));
   const i = args.indexOf('--target');
-  const known = ['--dry', '--overwrite', '--claude-md', '--settings', '--target'];
+  const known = ['--dry', '--overwrite', '--claude-md', '--settings', '--ci', '--target'];
   const unknown = [...flags].filter((f) => !known.includes(f));
   if (unknown.length) {
-    console.error(`setup: unknown option ${unknown.join(' ')}. Use: cq setup [--dry] [--overwrite] [--claude-md] [--settings] [--target <dir>]`);
+    console.error(`setup: unknown option ${unknown.join(' ')}. Use: cq setup [--dry] [--overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]`);
     process.exit(2);
   }
   const target = i >= 0 ? path.resolve(args[i + 1]) : require('./lib/projectRoot.js').roots().main;
@@ -254,6 +287,7 @@ if (isMain) {
     overwrite: flags.has('--overwrite'),
     claudeMd: flags.has('--claude-md'),
     settings: flags.has('--settings'),
+    ci: flags.has('--ci'),
   });
   console.log(`${flags.has('--dry') ? '[DRY] ' : ''}Set up the work queue in ${target}`);
   console.log(`  copied: ${log.copied.join(', ') || '-'}`);

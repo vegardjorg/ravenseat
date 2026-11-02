@@ -11,6 +11,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 // @ts-expect-error: plain ESM script without types
 import { mergeSettings, PLUGIN_ROOT, setupProject } from '../setup.mjs';
+import * as PB from '../lib/pushBatch';
 
 type Hook = { type?: string; command: string; args?: string[]; timeout?: number };
 type Settings = { hooks: Record<string, { matcher?: string; hooks: Hook[] }[]> } & Record<string, unknown>;
@@ -197,5 +198,52 @@ describe('setup.mjs records the plugin version it set up (for the setup notice o
     setupProject({ target, settings: true, dry: true });
     setupProject({ target, settings: true, hooks: true });
     expect(existsSync(recordFile())).toBe(false);
+  });
+});
+
+describe('setup.mjs --ci: the GitHub Actions template (opt-in, never over an existing workflow)', () => {
+  let target: string;
+  const before = process.env.QUEUE_CONFIG;
+  beforeEach(() => {
+    target = mkdtempSync(join(tmpdir(), 'queue-setup-ci-'));
+    delete process.env.QUEUE_CONFIG;
+  });
+  afterEach(() => {
+    rmSync(target, { recursive: true, force: true });
+    if (before === undefined) delete process.env.QUEUE_CONFIG;
+    else process.env.QUEUE_CONFIG = before;
+  });
+  const workflow = () => join(target, '.github', 'workflows', 'cq-gates.yml');
+
+  it('writes nothing without --ci or with --dry', () => {
+    setupProject({ target });
+    setupProject({ target, ci: true, dry: true });
+    expect(existsSync(workflow())).toBe(false);
+  });
+
+  it('writes the template with baseBranch filled in; it runs gates.quick, cancels old runs and has a path filter', () => {
+    writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ baseBranch: 'develop', gates: { quick: ['npm test'] } }));
+    const log = setupProject({ target, ci: true });
+    const text = readFileSync(workflow(), 'utf8');
+    expect(log.notes.join(' | ')).toMatch(/\.github\/workflows\/cq-gates\.yml: written \(runs gates\.quick on push to develop/);
+    expect(text).toMatch(/branches: \[develop\]/);
+    expect(text).not.toContain('__BASE_BRANCH__');
+    expect(text).toMatch(/jq -r '\(\.gates\.quick \/\/ \[\]\)\[\]' queue\.config\.json/);
+    expect(text).toMatch(/# - uses: actions\/setup-node@v4/);
+    expect(text).toMatch(/# - uses: gitleaks\/gitleaks-action@v2/);
+    expect(PB.workflowCost(text)).toEqual({ push: true, concurrency: true, pathFilter: true });
+  });
+
+  it('never replaces an existing workflow, also not with --overwrite, and names other workflows', () => {
+    mkdirSync(join(target, '.github', 'workflows'), { recursive: true });
+    writeFileSync(workflow(), 'mine\n');
+    const log = setupProject({ target, ci: true, overwrite: true });
+    expect(readFileSync(workflow(), 'utf8')).toBe('mine\n');
+    expect(log.notes.join(' | ')).toMatch(/cq-gates\.yml: kept \(already there; setup never overwrites a workflow\)/);
+    rmSync(workflow());
+    writeFileSync(join(target, '.github', 'workflows', 'build.yml'), 'on: push\n');
+    const again = setupProject({ target, ci: true });
+    expect(readFileSync(join(target, '.github', 'workflows', 'build.yml'), 'utf8')).toBe('on: push\n');
+    expect(again.notes.join(' | ')).toMatch(/you already have build\.yml: check that they do not run the same checks twice/);
   });
 });
