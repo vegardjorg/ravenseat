@@ -3,6 +3,18 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.7 (2026-11-02)
+
+### Changed
+- README: chat-first hero and Quick start in plain words ("set up the queue", "start the queue", "what is waiting on
+  me?"), a note that phone access uses Claude Code's Remote Control, and red checks described as "your configured
+  checks fail before a merge".
+- README: a contents line, a "Who it's for" section, "What it gives me now" folded into `<details>`, the class letters
+  K, U, D and D+ explained, and K's review listed as "your gates (no reviewer agent)" with what that means when no
+  gates are set up.
+- README: "every board action has a command" narrowed to every change the board makes to the queue (CLI parity lists
+  the one remaining gap).
+
 ## 0.8.6 (2026-11-02)
 
 ### Changed
