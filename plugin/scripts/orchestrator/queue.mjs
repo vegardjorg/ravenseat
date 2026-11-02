@@ -169,7 +169,9 @@
 //         remembers them in report_seen), so a new session that has adopted the tracks sees the delivery without
 //         <task-notification>.)
 //   node scripts/orchestrator/queue.mjs resume <id> [--reason fix|context] [--round N] [--findings-file <file>]
-//                                                [--scratchpad <folder>]
+//                                                [--from <reviewer,...>] [--scratchpad <folder>]
+//        (--from: the reviewer types whose findings caused the fix round, saved in `resumed[].from` and the fixRound
+//         row; the reviewer hit rate in cq cost and the board's Flow box counts them.)
 //        (fix-round cap: at max_fix_rounds (task) or config().maxFixRounds (default 3) fix rounds, --reason fix registers
 //         the owner question <id>.fixcap<N>, puts it in waiting_on, opens the blocker owner-question and exits 8; a resolved
 //         question allows exactly one more round. A red done command's tail goes into the fix brief.)

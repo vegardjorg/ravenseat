@@ -367,7 +367,9 @@ function metricsTableOf(head, rows) {
 
 /**
  * "Flow last 14 days": a plain table from lib/eventStatistics.js flowStatistics (the same figures as the Flow lines in
- * cq cost): first-pass rate, fix rounds per task, merge conflicts per week, base red verdicts, pushes and batch size.
+ * cq cost): first-pass rate, fix rounds per task, merge conflicts per week, base red verdicts, pushes and batch size,
+ * then the quality figures (right first time, post-merge defects, owner interventions, inflow by source), the reviewer
+ * hit rate table and the hints.
  */
 function flowTable(f) {
   const v = (x, unit = '') => (x == null ? '-' : `${counts(x, Number.isInteger(x) ? 0 : 1)}${unit}`);
@@ -382,6 +384,46 @@ function flowTable(f) {
     ['Pushes per week', v(f.pushes.per_week), `${f.pushes.count} push(es), ${v(f.pushes.tasks_per_push)} tasks per push`],
     ['Triage', triage || '-', 'verdicts from cq triage'],
   ];
+  // The quality figures (lib/eventStatistics.js header); older server data without them shows the rows above only.
+  const r = f.rightFirstTime;
+  if (r)
+    rows.push(
+      ['Right first time', v(r.rate_pct, ' %'), `${r.right} of ${r.merged} merged: no fix round, QA deviation, reopen or post-merge defect`],
+      ['Post-merge defects per 10 merged', v(r.defects_per_10), `${r.defects} fix task(s) or finding(s) naming a merged task`],
+      [
+        'Owner interventions per 10 merged',
+        v(r.interventions_per_10),
+        `${r.interventions} owner edit(s) while the task ran` +
+          (r.interventions_known < r.merged ? `, ${r.merged - r.interventions_known} task(s) unknown (changelog too short)` : ''),
+      ],
+    );
+  const au = f.autonomy;
+  if (au) {
+    const c = au.corrected;
+    rows.push(
+      [
+        'Verified tasks per owner intervention',
+        au.verified_per_intervention == null ? 'no interventions' : v(au.verified_per_intervention),
+        `${au.verified} merged task(s) right first time or with every defect fixed`,
+      ],
+      ['Longest stretch without the owner', v(au.longest_stretch_h, ' h'), 'work running, no owner action'],
+      [
+        'Corrected without the owner',
+        `${c.without_owner} of ${c.total}`,
+        `fix rounds ${c.fix_rounds.without_owner}/${c.fix_rounds.total}, red done commands ` +
+          `${c.done_when.without_owner}/${c.done_when.total}, base red fix tasks ${c.base_fix.without_owner}/${c.base_fix.total}`,
+      ],
+    );
+  }
+  const i = f.inflow;
+  if (i) {
+    const by = Object.entries(i.by ?? {})
+      .filter(([, n]) => n)
+      .map(([k, n]) => `${k} ${n}`)
+      .join(', ');
+    rows.push(['Inflow', v(i.added), `${by || 'nothing added'}; added/done last ${i.weeks.length} weeks ${i.weeks.map((w) => `${w.in}/${w.out}`).join(', ')}`]);
+  }
+  const hints = [...(f.reviewers?.hints ?? []), ...(i?.hint ? [i.hint] : [])];
   return el(
     'section',
     { class: 'blocker-stat', 'aria-labelledby': 'flow-stat-title' },
@@ -405,6 +447,38 @@ function flowTable(f) {
         null,
         rows.map(([name, val, detail]) =>
           el('tr', null, el('th', { scope: 'row', text: name }), el('td', { text: val }), el('td', { text: detail })),
+        ),
+      ),
+    ),
+    ...(f.reviewers?.rows?.length ? [reviewerTable(f.reviewers)] : []),
+    ...hints.map((h) => el('p', { class: 'graph-remark', text: `Hint: ${h}.` })),
+  );
+}
+
+/**
+ * The reviewer hit rate under the Flow table: per reviewer type the runs, the runs with findings, the fix rounds the
+ * orchestrator attributed to it (cq resume --from) and the dismissed ones (lib/eventStatistics.js reviewerStatistics).
+ */
+function reviewerTable(rv) {
+  const head = ['Reviewer', 'Runs', 'With findings', 'Led to a fix', 'Dismissed'];
+  return el(
+    'table',
+    { class: 'blocker-table' },
+    el('caption', {
+      text:
+        `Reviewer hit rate: fix rounds attributed ${rv.attributed} of ${rv.fix_rounds}` +
+        (rv.fix_rounds && !rv.attributed ? ' (cq resume --from records which reviewer caused one)' : ''),
+    }),
+    el('thead', null, el('tr', null, head.map((h) => el('th', { scope: 'col', text: h })))),
+    el(
+      'tbody',
+      null,
+      rv.rows.map((x) =>
+        el(
+          'tr',
+          null,
+          el('th', { scope: 'row', text: x.type }),
+          [x.runs, x.with_findings, x.fixes, x.dismissed].map((n) => el('td', { text: String(n) })),
         ),
       ),
     ),
