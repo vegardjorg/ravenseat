@@ -43,7 +43,8 @@ are `/<name>`.
 
 ## Git
 - Commit locally for every step. **Push only in batches, when the owner says "push".** Run
-  `cq push-check` before pushing.
+  `cq push-check` before pushing. With `push.mode: "threshold"` in queue.config.json the orchestrator may also push
+  by itself when push-check says READY or LARGE; never when it says BLOCKED.
 - Always commit with a pathspec: `git commit -- <files>` (new files: `git add` first). Other chats and tracks may
   have staged files in the same tree.
 - Never force push. Never push other branches than the base branch from the orchestrator.

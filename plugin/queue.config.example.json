@@ -20,6 +20,8 @@
   "maxFixRounds": 3,
   "_baseGate": "The base gate: after cq merge the base branch's new tip is checked in the main checkout and the verdict recorded per tip (scripts/.queue/base-health.json). While it is red, cq merge refuses other tracks (exit 9; --force-red-base overrides, logged) and a fix task <id>-BASE<n> is added. enabled: auto (on when there are commands), true or false. commands: null = the quick gates (the merge step's own gates run is the check), or a list run after them. timeoutSec = budget for the whole list; tailLines null = doneCheck.tailLines.",
   "baseGate": { "enabled": "auto", "commands": null, "timeoutSec": 900, "tailLines": null },
+  "_push": "The batch push threshold, counted in merged tasks (cq merge) not yet on <remote>/<baseBranch>. mode: owner (push only on the owner's word) or threshold (the orchestrator may push when cq push-check says READY or LARGE, never BLOCKED). minTasks: READY from this many (0 = no lower limit); below it, or on a red base, the push guard asks before a plain push of the base branch (never denies). warnTasks: LARGE from this many (push recommended; 0 = off). maxAgeHours: null, or unpushed work older than this makes the batch READY below minTasks.",
+  "push": { "mode": "owner", "minTasks": 10, "warnTasks": 50, "maxAgeHours": null },
   "_migrations": "Optional numbered migrations. folder = null turns the whole migration flow off.",
   "migrations": {
     "folder": null,

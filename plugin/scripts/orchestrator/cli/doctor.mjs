@@ -12,6 +12,8 @@
 //   worktrees   folders under <mainTree>/.claude/worktrees without .git (a half-deleted worktree blocks agent starts),
 //               and git worktrees whose folder is gone (`git worktree list --porcelain`)
 //   branches    queue branches of done or cancelled tasks that are still there (WARN only)
+//   ci-cost     .github/workflows/*.yml that run on push: WARN without concurrency cancel-in-progress, INFO without a
+//               paths/paths-ignore filter (a text scan, lib/pushBatch.js workflowCost)
 // Exit code 1 when any check FAILs, otherwise 0. It never changes anything: no lock, no write, no git command that
 // writes (git runs read-only, as in cli/context.mjs).
 // QUEUE_HOOKS overrides the path to the hooks file (tests).
@@ -27,17 +29,20 @@ import { execFileSync } from 'node:child_process';
 import { a, branchFor, CONFIG, CQ, FILE, FOLDER, FOLLOW_FILE, git, HERE, KK, LOCK, MAIN_TREE, require } from './context.mjs';
 
 const BOARD = require('./lib/queueBoard.js');
+const PB = require('./lib/pushBatch.js');
 
 /** The lowest Node major version the scripts support (package.json "engines"). */
 const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals'];
+const CLOSED = ['gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
 const fail = (name, message, fix) => ({ status: 'FAIL', name, message, fix });
+/** A hint that is not a problem on its own (counted, never an exit code). */
+const info = (name, message, fix) => ({ status: 'INFO', name, message, fix });
 
 /** The kind of a JSON value for the type check: array, object, null or the typeof. */
 const kind = (v) => (Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v);
@@ -164,6 +169,8 @@ function checkConfig() {
     }
   }
   if (own.mode != null && !['lite', 'full'].includes(own.mode)) wrong.push(`mode is "${own.mode}", expected lite or full`);
+  // The push keys have value rules beyond the type (lib/pushBatch.js setupProblems).
+  wrong.push(...PB.setupProblems(own.push).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   const out = [];
   if (wrong.length) out.push(fail('config', `wrong type in ${path.basename(file)}: ${wrong.join('; ')}`, 'compare with queue.config.example.json'));
   if (unknown.length)
@@ -292,9 +299,57 @@ function checkBranches() {
   ];
 }
 
+/**
+ * CI cost: the project's GitHub Actions workflows that run on push. Every push of the base branch runs them, so a
+ * workflow without `concurrency` + `cancel-in-progress: true` runs every push to the end even when a newer one already
+ * replaced it (WARN), and one without a path filter runs for a docs-only push too (INFO). A text scan
+ * (lib/pushBatch.js workflowCost, its limits are listed there); no workflows folder = nothing to say.
+ */
+function checkCiCost() {
+  const dir = path.join(MAIN_TREE, '.github', 'workflows');
+  let files = [];
+  try {
+    files = fs.readdirSync(dir).filter((f) => /\.ya?ml$/i.test(f)).sort();
+  } catch {
+    return [];
+  }
+  const out = [];
+  let onPush = 0;
+  for (const f of files) {
+    let text;
+    try {
+      text = fs.readFileSync(path.join(dir, f), 'utf8');
+    } catch {
+      continue;
+    }
+    const c = PB.workflowCost(text);
+    if (!c.push) continue;
+    onPush++;
+    if (!c.concurrency)
+      out.push(
+        warn(
+          'ci-cost',
+          `${f} runs on push without concurrency cancel-in-progress: an older run is not stopped when a newer push replaces it`,
+          'add `concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }` at the top level',
+        ),
+      );
+    if (!c.pathFilter)
+      out.push(
+        info(
+          'ci-cost',
+          `${f} runs on push without a paths/paths-ignore filter: a docs-only push runs it too`,
+          'add `paths-ignore: ["**/*.md", "docs/**"]` under on.push (or `paths:` for what it really tests)',
+        ),
+      );
+  }
+  if (!onPush) return files.length ? [ok('ci-cost', `${files.length} workflow(s), none runs on push`)] : [];
+  if (!out.length) out.push(ok('ci-cost', `${onPush} workflow(s) on push, all with cancel-in-progress and a path filter`));
+  return out;
+}
+
 /** `cq doctor [--json]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const checks = [checkNode, checkHooks, checkConfig, checkState, checkLock, checkWorktrees, checkBranches].flatMap((f) => {
+  const checks = [checkNode, checkHooks, checkConfig, checkState, checkLock, checkWorktrees, checkBranches, checkCiCost].flatMap((f) => {
     try {
       return f();
     } catch (e) {
@@ -310,7 +365,7 @@ export function cmdDoctor() {
       if (c.fix) console.log(`${' '.repeat(17)}fix: ${c.fix}`);
     }
     const n = (s) => checks.filter((c) => c.status === s).length;
-    console.log(`\n${n('OK')} OK, ${n('WARN')} WARN, ${n('FAIL')} FAIL${failed ? ' (exit 1)' : ''}. Nothing was changed.`);
+    console.log(`\n${n('OK')} OK, ${n('WARN')} WARN, ${n('INFO')} INFO, ${n('FAIL')} FAIL${failed ? ' (exit 1)' : ''}. Nothing was changed.`);
   }
   if (failed) process.exit(1);
 }

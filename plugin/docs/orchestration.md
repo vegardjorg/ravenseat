@@ -29,8 +29,9 @@ branch (`queue/<ID>`), with a self-contained mission file.
 7. Repeat until `cq state` exits 3 (nothing to do). Owner questions are collected and asked at the end of a
    round, in plain language with a recommendation.
 
-Push happens in **batches**, only when the owner says so: `cq push-check` first, then
-`git push`. Every push can trigger CI in your own setup, so many small pushes cost money quietly.
+Push happens in **batches**: `cq push-check` first, then `git push`. Every push can trigger CI in your own setup,
+so many small pushes cost money quietly. By default (`push.mode` `"owner"`) only the owner's word starts a push; see
+[Batch push](#batch-push-the-push-threshold) for the threshold mode and the push guard's reminder.
 
 ## Helper agents
 
@@ -367,6 +368,56 @@ The base gate (`baseGate` in `queue.config.json`, `lib/baseHealth.js`) records t
   board's status line under the title.
 - **On and off.** `baseGate.enabled`: `"auto"` (default) is on when there are commands, `false` turns it off. Lite
   mode has no rule of its own: it is off until the project has a quick gate.
+
+## Batch push (the push threshold)
+
+Every push of the base branch runs the whole CI. Pushing per small change burns CI minutes quietly, so pushes come in
+batches, and the batch is measured in **merged tasks**, not commits: one track gives several commits plus a merge
+commit. Projects with gates and the harness as their safety net push 20 to 500+ commits per batch.
+
+- **How the batch is counted.** The first-parent line of `<remote>/<baseBranch>..<baseBranch>`: a merge commit with
+  the subject `Merge branch '<branchPrefix><id>' ...` (what `cq merge` writes) is one merged task, distinct ids, so a
+  task merged again after a fix counts once. Commits (`git rev-list --count`) are the secondary figure. The remote ref
+  is the local one as of the last fetch; nothing here fetches. The age is when the oldest unpushed commit landed on
+  the base branch (`lib/pushBatch.js`).
+- **The verdict.** `cq push-check` prints `Batch: N merged task(s) / M commit(s) unpushed, oldest <age> old; base
+  GREEN|RED|not checked at <sha>` and one verdict line (`--json` has it under `batch`):
+  - `READY`: at least `push.minTasks` merged tasks, or the oldest work is older than `push.maxAgeHours`;
+  - `NOT YET (n of minTasks)`: below the threshold;
+  - `BLOCKED`: the base is red at the tip (the [base gate](#the-base-gate-a-red-base-stops-the-merges)), there are
+    external commits, or the remote has commits the base branch does not;
+  - `LARGE`: at least `push.warnTasks` merged tasks: push recommended (a large batch makes a red CI harder to bisect).
+    A warning, never a block;
+  - `NOTHING`: nothing to push.
+  The verdict does not change push-check's exit code (0, or 2 for external commits, as before).
+- **The modes.** `push.mode` `"owner"` (the default): the orchestrator never pushes on its own, only when the owner
+  says "push", as before. `"threshold"`: the orchestrator may push by itself when push-check says `READY` or `LARGE`,
+  never when it says `BLOCKED` (and never with external commits the owner has not answered for).
+- **The push guard's reminder.** A plain `git push` of the base branch by the orchestrator below `push.minTasks`, or
+  with the base red at the tip, gets Claude Code's confirmation dialog: `4 of 10 merged tasks since the last push ...;
+  push anyway?` or `base is red at <sha7>; push anyway?`. This applies in both modes (in owner mode the owner is the
+  one pushing, and a reminder is cheap). It never denies: the owner can always push. `minTasks: 0` turns the count
+  question off; the red-base question stays. Tracks never push, and nothing changes for them. The guard costs one
+  `git log` and only for a push of the base branch; any error lets the push through.
+- **Where it shows.** push-check, and the board's status line next to the base health (`Push: 4 of 10 tasks, NOT YET`).
+
+| Key | Default | Meaning |
+|---|---|---|
+| `push.mode` | `"owner"` | `"owner"`: push only on the owner's word. `"threshold"`: the orchestrator may push on `READY` or `LARGE` |
+| `push.minTasks` | `10` | Merged tasks for `READY`; below it the guard asks. `0` = no lower limit |
+| `push.warnTasks` | `50` | From this many merged tasks the verdict is `LARGE` (push recommended). `0` = off |
+| `push.maxAgeHours` | `null` | When set, unpushed work older than this makes the batch `READY` below `minTasks` |
+
+**Recommendation.** New users: keep `"owner"`. Projects with expensive CI: `"threshold"` with `minTasks` 10 and
+`warnTasks` 50, then tune; the numbers are yours to choose. A `maxAgeHours` (for example 24) keeps a slow week from
+holding work back.
+
+**Cheaper CI per push.** `cq doctor` scans `.github/workflows/*.yml` that run on push (a text scan, no YAML parser):
+
+- WARN without `concurrency` and `cancel-in-progress: true`: a newer push does not stop the older run. Add
+  `concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }` at the top level.
+- INFO without a `paths` or `paths-ignore` filter: a docs-only push runs the whole CI. Add for example
+  `paths-ignore: ["**/*.md", "docs/**"]` under `on.push`.
 
 ## Hardening against prompt injection
 

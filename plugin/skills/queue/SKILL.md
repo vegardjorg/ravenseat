@@ -108,8 +108,11 @@ Follow `parallel-wave` ("Continuous queue") unchanged. Specific to taking over:
   When they arrive as `review` (after `cq deliver`), receive them like a delivered track.
 - **Register as orchestrator:** `cq orchestrator pulse --session "<session name>"` with a NEW name (date and time). That
   resets the previous session's wind-down; otherwise `fill`/`start` refuse with exit 6.
-- **Push:** never `git push` before the owner says "push", and always `cq push-check` right
-  before. Exit 2 (external commits) = ask the owner first. Your own commits on the base branch get
+- **Push:** always `cq push-check` right before, and read its verdict line. Push mode `owner` (the default in
+  queue.config.json `push.mode`): never `git push` before the owner says "push". Mode `threshold`: push by yourself
+  when the verdict is READY or LARGE, never when it is BLOCKED (base red, external commits, remote ahead); NOT YET =
+  keep collecting. Exit 2 (external commits) = ask the owner first. Below `push.minTasks` the push guard shows a
+  confirmation dialog; that is a reminder for the owner, never something to work around. Your own commits on the base branch get
   `--trailer "Queue: orchestrator"`.
 - **Shared working tree:** always commit with `git commit -- <files>`, and never touch files another session has
   uncommitted.

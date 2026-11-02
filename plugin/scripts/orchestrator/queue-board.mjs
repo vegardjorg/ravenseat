@@ -117,6 +117,8 @@ const U = require('./lib/queueUpdate.js');
 const TE = require('./lib/queueTaskEdit.js');
 // The base gate's verdict (lib/baseHealth.js; cq merge writes base-health.json, the board only reads it).
 const BH = require('./lib/baseHealth.js');
+// The batch push threshold (config().push): the unpushed merged tasks next to the base health in the status line.
+const PB = require('./lib/pushBatch.js');
 
 const CONFIG = KK.config();
 // The modules that are on (features in queue.config.json, resolved once at start): sent with the state, so the board
@@ -425,6 +427,29 @@ function baseHealthNow() {
   }
 }
 
+// ---- The push batch (merged tasks not on <remote>/<baseBranch>, lib/pushBatch.js) ------------------------------------
+const PUSH_SETUP = PB.pushSetup(CONFIG);
+let pushBatchCache = { time: 0, batch: null };
+/** { verdict, tasks, minTasks, text } or null (no remote ref yet, or git failed). git is read at most once a minute. */
+function pushBatchNow(baseHealth) {
+  try {
+    if (Date.now() - pushBatchCache.time > 60_000)
+      pushBatchCache = {
+        time: Date.now(),
+        batch: PB.readBatch(gitRead, {
+          from: `refs/remotes/${REMOTE}/${BASE}`,
+          to: `refs/heads/${BASE}`,
+          prefix: BRANCH_PREFIX,
+          withCommits: false,
+        }),
+      };
+    // The health is the base gate's verdict for the tip (red blocks); unknown when the gate is off.
+    return PB.boardBatch({ batch: pushBatchCache.batch, setup: PUSH_SETUP, health: baseHealth?.status ?? 'unknown' });
+  } catch {
+    return null;
+  }
+}
+
 // ---- The state (cheap: rebuilt only when queue.json, git status or the logo has changed) -----------------------------
 // git status is read again every minute, so the state (age, night pause, "Next up") is recomputed at least that often.
 let quick = null;
@@ -439,7 +464,8 @@ function state() {
   const updateKey = JSON.stringify(update);
   // The base health: the file's time and the base tip (read with git status, at most once a minute) are in the key.
   const baseHealth = baseHealthNow();
-  const baseKey = JSON.stringify(baseHealth);
+  const pushBatch = pushBatchNow(baseHealth);
+  const baseKey = JSON.stringify([baseHealth, pushBatch]);
   if (
     quick &&
     quick.mtime === mtime &&
@@ -501,6 +527,8 @@ function state() {
     update,
     // The base branch's health (lib/baseHealth.js boardHealth): null when the base gate is off; the status line shows it.
     baseHealth,
+    // The push batch (lib/pushBatch.js boardBatch): "4 of 10 tasks, NOT YET"; null without a remote ref.
+    pushBatch,
     // The module switches (lib/queueConfig.js features): the board hides the tabs, buttons and rows of those that are off.
     features: FEATURES,
     // The forecast box in the Focus view (lib/queueForecast.js, a fixed seed so the version stays stable).

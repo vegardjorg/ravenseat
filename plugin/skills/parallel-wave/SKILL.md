@@ -30,8 +30,10 @@ the fix-round rules still apply. Keep only the "Now" part of the handover note. 
   A line with `model=<m>` (config `models`) means: pass `model: "<m>"` to the Agent call as well.
 - **The orchestrator itself runs at medium effort.** `queue-takeover.mjs` shows the level (written by `hook-effort.mjs`).
   If it is not medium, ask the owner before the loop starts.
-- **Push in batches only:** commit locally for every step; `git push` happens only when the owner says "push", and
-  always after `cq push-check`. Never push per commit (every push triggers CI and costs).
+- **Push in batches only:** commit locally for every step; `git push` happens only when the owner says "push"
+  (push mode `owner`, the default) or, in push mode `threshold`, when `cq push-check` says READY or LARGE (never
+  BLOCKED), and always after `cq push-check`. Never push per commit (every push triggers CI and costs). The batch is
+  counted in merged tasks, not commits (`push.minTasks`, default 10).
 - **Shared working tree:** always commit with `git commit -- <files>` (pathspec), never `git add -A`. Never touch files
   another session has uncommitted. The orchestrator's own commits on the base branch (not the merges) get the trailer
   `--trailer "Queue: orchestrator"` so `push-check` can tell them from other sessions' commits.
@@ -158,7 +160,8 @@ on the same branch. Stop the old session first, so two orchestrators do not rece
   `cq external add --name "<session>" --files <…>`.
 - `next`/`start` skip tasks that own an uncommitted file in the main tree.
 - **Push check** before every push: `cq push-check`. Exit 0: push (when the owner has said
-  "push"). Exit 2: external commits: ask the owner (take everything / push only the queue's part when a safe cut point
+  "push", or in push mode `threshold` when the verdict line says READY or LARGE; BLOCKED = never push, NOT YET =
+  keep collecting). Exit 2: external commits: ask the owner (take everything / push only the queue's part when a safe cut point
   is printed / wait). History is never rewritten.
 
 ## Cloud sessions (optional)

@@ -19,7 +19,7 @@ afterAll(() => {
   for (const m of temporary) fs.rmSync(m, { recursive: true, force: true });
 });
 
-type Check = { status: 'OK' | 'WARN' | 'FAIL'; name: string; message: string; fix: string | null };
+type Check = { status: 'OK' | 'INFO' | 'WARN' | 'FAIL'; name: string; message: string; fix: string | null };
 
 /** A temporary project: a git repo with one commit, a data folder with queue.json, a config and a hooks file. */
 function project({ config = {}, hooks = null }: { config?: object | string; hooks?: object | null } = {}) {
@@ -160,5 +160,44 @@ describe('cq doctor', () => {
     r = p.run();
     expect(r.out).toMatch(/^WARN {2}queue {6}no queue at .*\n {17}fix: run cq init$/m);
     expect(r.code).toBe(0);
+  }, 60_000);
+
+  it('push config: valid keys pass, bad values FAIL, an unknown push key WARNs', () => {
+    let p = project({
+      config: { push: { mode: 'threshold', minTasks: 10, warnTasks: 50, maxAgeHours: 24 }, loadGuard: { minFreeMemoryPct: null } },
+    });
+    expect(p.run().out).toMatch(/^OK {4}config {5}queue\.config\.json parses, keys and types valid$/m);
+    p = project({ config: { push: { mode: 'auto', minTasks: -2, minTask: 3 }, loadGuard: { minFreeMemoryPct: null } } });
+    const r = p.run();
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(
+      /wrong type in queue\.config\.json: push\.mode is "auto", expected owner or threshold; push\.minTasks must be a whole number >= 0/,
+    );
+    expect(r.out).toMatch(/^WARN {2}config {5}unknown key\(s\) ignored: push\.minTask$/m);
+  }, 60_000);
+
+  it('ci-cost: WARN without cancel-in-progress, INFO without a path filter, nothing for workflows not on push', () => {
+    const p = project({ config: { loadGuard: { minFreeMemoryPct: null } } });
+    // No workflows folder: no ci-cost line at all.
+    expect(p.json().checks.some((c) => c.name === 'ci-cost')).toBe(false);
+    const dir = path.join(p.root, '.github', 'workflows');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'ci.yml'), ['name: ci', 'on:', '  push:', '    branches: [main]', 'jobs:', '  t:', '    runs-on: x', ''].join('\n'));
+    fs.writeFileSync(
+      path.join(dir, 'good.yaml'),
+      ['on:', '  push:', "    paths-ignore: ['docs/**']", 'concurrency:', '  group: g-${{ github.ref }}', '  cancel-in-progress: true', 'jobs: {}', ''].join('\n'),
+    );
+    fs.writeFileSync(path.join(dir, 'pr.yml'), 'on: pull_request\njobs: {}\n');
+    fs.writeFileSync(path.join(dir, 'notes.txt'), 'on: push\n');
+    const r = p.run();
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/^WARN {2}ci-cost {4}ci\.yml runs on push without concurrency cancel-in-progress/m);
+    expect(r.out).toMatch(/^INFO {2}ci-cost {4}ci\.yml runs on push without a paths\/paths-ignore filter/m);
+    expect(r.out).toMatch(/fix: add `concurrency: /);
+    expect(r.out).not.toMatch(/good\.yaml|pr\.yml|notes\.txt/);
+    expect(p.json().checks.filter((c) => c.name === 'ci-cost').map((c) => c.status)).toEqual(['WARN', 'INFO']);
+    // All fixed: one OK line.
+    fs.rmSync(path.join(dir, 'ci.yml'));
+    expect(p.run().out).toMatch(/^OK {4}ci-cost {4}1 workflow\(s\) on push, all with cancel-in-progress and a path filter$/m);
   }, 60_000);
 });
