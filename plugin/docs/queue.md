@@ -99,7 +99,7 @@ its brief; the next one asks again. A higher cap: `cq edit <id> --json '{"max_fi
 | `receive <id>` | Receives a finished track: reads the RESULT line, builds the review package |
 | `deliveries` | Tracks with a `report.md` (RESULT line on top) that is not received yet; the pulse prints new ones as `NEW DELIVERY` |
 | `resume <id> --reason fix\|context` | Writes `prompt-<id>-r<N>.md` for a new agent on the same branch (fix round or continuation of an adopted track) |
-| `merge <id>` | Merges the track branch into the base branch (after review). Exit 4: the merge guard stopped it (protected paths the task does not own); `--allow-guard` overrides |
+| `merge <id>` | Merges the track branch into the base branch (after review). Exit 9: the base branch is red (the base gate, see orchestration.md; only its fix task merges, `--force-red-base` overrides and is logged). Exit 4: the merge guard stopped it (protected paths the task does not own); `--allow-guard` overrides |
 | `set <id> <status>` | Sets status by hand |
 | `cancel <id> [--remark "…"]` | Cancels a waiting or proposed task (decline a proposal with `--remark "declined: …"`); logged, so `undo` puts it back. Running and review tasks: `set <id> cancelled` |
 | `edit <id> --json '{…}'` | Changes fields (logged; `undo` rolls it back) |

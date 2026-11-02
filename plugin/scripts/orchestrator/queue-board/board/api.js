@@ -230,6 +230,14 @@ function indexes() {
   if (t.anchor && !markable(t.anchor)) t.anchor = null;
 }
 
+/** The base gate's verdict after the update time (null = the base gate is off): " · Base main: RED (fix task X)". */
+function baseHealthText(b, branch) {
+  if (!b) return '';
+  const word = { green: 'green', red: 'RED', unknown: 'not checked at this tip' }[b.status] ?? b.status;
+  const fix = b.status === 'red' && b.fixTask ? ` (fix task ${b.fixTask}; cq merge refuses other tracks)` : '';
+  return ` · Base ${branch ?? ''}: ${word}${fix}`;
+}
+
 function drawStatus() {
   const s = $('status');
   if (!t.key) {
@@ -256,5 +264,6 @@ function drawStatus() {
       `Updated at ${clock(t.fetched)}` +
       (t.data?.gitError
         ? ' (git status could not be read; uncommitted files are not checked)'
-        : '');
+        : '') +
+      baseHealthText(t.data?.baseHealth, t.data?.baseBranch);
 }

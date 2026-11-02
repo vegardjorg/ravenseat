@@ -115,6 +115,8 @@ const F = require('./lib/queueFollow.js');
 const U = require('./lib/queueUpdate.js');
 // Cancel, decline and edit one task from the detail panel (the rules; queue.mjs cancel / edit write).
 const TE = require('./lib/queueTaskEdit.js');
+// The base gate's verdict (lib/baseHealth.js; cq merge writes base-health.json, the board only reads it).
+const BH = require('./lib/baseHealth.js');
 
 const CONFIG = KK.config();
 // The modules that are on (features in queue.config.json, resolved once at start): sent with the state, so the board
@@ -137,6 +139,8 @@ const CURSOR = path.join(FOLDER, 'orchestrator.json');
 const PLAN_FILE = path.join(FOLDER, 'plans.json');
 // The "Follow up" entries (queue.mjs follow writes; the board only reads).
 const FOLLOW_FILE = path.join(FOLDER, 'follow.json');
+// The base gate's state file (cli/baseHealth.mjs writes it after cq merge).
+const BASE_HEALTH_FILE = path.join(FOLDER, 'base-health.json');
 // Documents in the reading view live in the main tree, like the source paths in the plan register (same env var as queue.mjs).
 const SOURCE_ROOT = process.env.QUEUE_PLAN_SOURCE_ROOT ?? MAIN_TREE;
 const GIT_ROOT = process.env.QUEUE_GIT ?? MAIN_TREE;
@@ -406,6 +410,21 @@ function silentNow(queue) {
   return list;
 }
 
+// ---- The base health (the base gate's verdict for the current base tip) ------------------------------------------
+const BASE_SETUP = BH.baseGateSetup(CONFIG);
+let baseTipCache = { time: 0, tip: null };
+/** { status, tip, fixTask, text } or null when the base gate is off. The tip is read at most once a minute. */
+function baseHealthNow() {
+  if (!BASE_SETUP.enabled) return null;
+  try {
+    if (Date.now() - baseTipCache.time > 60_000)
+      baseTipCache = { time: Date.now(), tip: String(gitRead(['rev-parse', '-q', '--verify', `refs/heads/${BASE}`]) ?? '').trim() || null };
+    return BH.boardHealth({ state: BH.readState(BASE_HEALTH_FILE), tip: baseTipCache.tip, setup: BASE_SETUP, branch: BASE });
+  } catch {
+    return null;
+  }
+}
+
 // ---- The state (cheap: rebuilt only when queue.json, git status or the logo has changed) -----------------------------
 // git status is read again every minute, so the state (age, night pause, "Next up") is recomputed at least that often.
 let quick = null;
@@ -418,10 +437,14 @@ function state() {
   const stat = quick?.budget ? statistics().version : null;
   const update = updateNotice();
   const updateKey = JSON.stringify(update);
+  // The base health: the file's time and the base tip (read with git status, at most once a minute) are in the key.
+  const baseHealth = baseHealthNow();
+  const baseKey = JSON.stringify(baseHealth);
   if (
     quick &&
     quick.mtime === mtime &&
     quick.updateKey === updateKey &&
+    quick.baseKey === baseKey &&
     quick.gitTime === g.time &&
     quick.logo === logo &&
     quick.mascotFile === mascotFile &&
@@ -476,6 +499,8 @@ function state() {
     baseBranch: BASE,
     // The update banner (lib/queueUpdate.js): null, or a newer version and/or "run cq setup --settings".
     update,
+    // The base branch's health (lib/baseHealth.js boardHealth): null when the base gate is off; the status line shows it.
+    baseHealth,
     // The module switches (lib/queueConfig.js features): the board hides the tabs, buttons and rows of those that are off.
     features: FEATURES,
     // The forecast box in the Focus view (lib/queueForecast.js, a fixed seed so the version stays stable).
@@ -506,6 +531,7 @@ function state() {
     budget,
     stat: s?.version ?? null,
     updateKey,
+    baseKey,
     version,
     data,
   };

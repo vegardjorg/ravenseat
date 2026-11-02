@@ -18,6 +18,8 @@
   "_doneCheck": "The done command (task field done_when): receive and merge run it in the track's worktree; exit != 0 gives a fix round instead of review or merge. timeoutSec = time budget per run; tailLines = the last output lines kept for the fix brief (only the tail is kept). maxFixRounds = fix rounds per task before it becomes an owner question (task field max_fix_rounds overrides).",
   "doneCheck": { "timeoutSec": 600, "tailLines": 40 },
   "maxFixRounds": 3,
+  "_baseGate": "The base gate: after cq merge the base branch's new tip is checked in the main checkout and the verdict recorded per tip (scripts/.queue/base-health.json). While it is red, cq merge refuses other tracks (exit 9; --force-red-base overrides, logged) and a fix task <id>-BASE<n> is added. enabled: auto (on when there are commands), true or false. commands: null = the quick gates (the merge step's own gates run is the check), or a list run after them. timeoutSec = budget for the whole list; tailLines null = doneCheck.tailLines.",
+  "baseGate": { "enabled": "auto", "commands": null, "timeoutSec": 900, "tailLines": null },
   "_migrations": "Optional numbered migrations. folder = null turns the whole migration flow off.",
   "migrations": {
     "folder": null,

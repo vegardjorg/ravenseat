@@ -21,6 +21,7 @@ import {
 } from './context.mjs';
 import { deliveryWarning, findSilent, findWithoutAgent } from './tracks.mjs';
 import { findingsLineNow } from './finding.mjs';
+import { baseHealthLine } from './baseHealth.mjs';
 
 // ---- queue.mjs handover: the ongoing note in two parts ---------------------------------------------------------
 /**
@@ -259,6 +260,9 @@ export function cmdOrchestrator() {
     // Findings the tracks reported outside their scope (cq finding) that nobody has triaged yet.
     const fl = findingsLineNow();
     if (fl) console.log(fl);
+    // The base branch's health (lib/baseHealth.js): one line every round, so a red base is never missed.
+    const baseLine = baseHealthLine();
+    if (baseLine) console.log(baseLine);
     // The pulse runs every loop round, so low parallelism is checked now and then even without fill and receive.
     parallelWarning();
   } else if (under === 'stop') {

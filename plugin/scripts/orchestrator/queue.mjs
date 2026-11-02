@@ -216,7 +216,7 @@
 // Fewer orchestrator turns: `fill` and `receive` end with "Start these in the SAME turn:" and one line per agent
 // (subagent_type + message); start them in one turn. `receive` warns when the track's answer exceeds the report cap (about 1,500 chars).
 //   node scripts/orchestrator/queue.mjs merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force]
-//        [--allow-guard] [--done-cwd <folder>]
+//        [--allow-guard] [--done-cwd <folder>] [--force-red-base]
 //        (with a done command: run again first unless the last green run was on the same branch tip; red = a fix round
 //         as in receive, never a merge, exit 1 or 8.)
 //        (after an approved review; run from Bash (merge-track calls sh), with a long timeout: the gates can take minutes. In one
@@ -226,7 +226,10 @@
 //         --without-fill). Stops at the first error with the step and an error excerpt; full log in <scratchpad>/merge-<id>.log.
 //         Exit 0 ok, 1 stop, 4 the merge guard stopped it before the merge: the branch touches protected paths
 //         (config().protectedPaths) the task does not own. Read the diff; then add the path to owned_files/shared_patch,
-//         or run again with --allow-guard, which is passed on to merge-track.mjs and logged as "guard-overridden".)
+//         or run again with --allow-guard, which is passed on to merge-track.mjs and logged as "guard-overridden".
+//         Exit 9: the base branch is red (the base gate, lib/baseHealth.js): before the merge (nothing done; only the
+//         base fix task merges, --force-red-base overrides on the owner's word and is logged as "base-red-overridden"),
+//         or after it when the base gate commands went red (the merge stays, a fix task <id>-BASE<n> is added).)
 //   node scripts/orchestrator/queue.mjs info <id> [--field <name>] [--json]   (short view; one field raw, also cost.usd)
 //   node scripts/orchestrator/queue.mjs edit <id> --bonus "<text>"  (to the mission, in the track block from the next
 //                                                                  trackFile/fill, and to the remarks, with a timestamp)

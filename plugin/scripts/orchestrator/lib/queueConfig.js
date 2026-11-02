@@ -67,6 +67,12 @@ const STANDARD = Object.freeze({
   // timeoutSec = the time budget per run (a run over it is red); tailLines = how many of the last output lines are kept
   // for the fix brief (only the tail, so a secret printed early in a long run is not copied around).
   doneCheck: { timeoutSec: 600, tailLines: 40 },
+  // The base gate (lib/baseHealth.js): after `cq merge` the base branch's new tip is checked in the main checkout and the
+  // verdict recorded per tip; a red base stops further merges until a fix task makes it green. enabled: "auto" (on when
+  // there are commands), true or false. commands: null = the quick gates (then the merge step's own gates run is the
+  // check, nothing runs twice), or a list (e.g. the full gate) run after the quick gates. timeoutSec = the budget for
+  // the whole list; tailLines = the output lines kept for the fix task (null = doneCheck.tailLines).
+  baseGate: { enabled: 'auto', commands: null, timeoutSec: 900, tailLines: null },
   // The fix-round cap per task (`resume --reason fix`, also the one receive starts after a red done command). At the cap
   // the task becomes an owner question instead of another round. The task field `max_fix_rounds` overrides it.
   maxFixRounds: 3,

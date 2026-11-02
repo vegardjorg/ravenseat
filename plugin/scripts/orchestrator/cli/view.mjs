@@ -19,6 +19,7 @@ import { costEstimateState, dailyUsageFor, findSilent, findWithoutAgent, measure
 import { batchGroupLine } from './batch.mjs';
 import { followLines } from './orchestrator.mjs';
 import { findingsLineNow, findingsStateNow } from './finding.mjs';
+import { baseHealthLine } from './baseHealth.mjs';
 
 /** "picked by X 3 h ago · 2 commits · OLD" for a picked task. */
 function pickLine(o) {
@@ -41,6 +42,9 @@ export function cmdShowSummary() {
   // Silent tracks (an agent worktree, but no sign of life), right after.
   const silent = L.silentLines(findSilent(queue));
   if (silent.length) console.log(`${silent.join('\n')}\n`);
+  // The base branch's health (lib/baseHealth.js): one line, also first, since a red base stops every merge.
+  const baseLine = baseHealthLine();
+  if (baseLine) console.log(baseLine);
   // The calibrated cost estimate (~$x) on the startable lines and the budget outlook (lib/costEstimate.js).
   const costModel = CE.costModel(queue);
   for (const l of L.summaryView(queue, {
@@ -200,6 +204,9 @@ export function cmdShow() {
   const usage = dailyUsageFor(queue);
   const t = L.state(queue, usage, { uncommitted, cursor: readCursor(), load: measureLoad() });
   console.log(`\n${L.stateLine(t)}`);
+  // The base branch's health (lib/baseHealth.js), one line under the status line.
+  const baseLine = baseHealthLine();
+  if (baseLine) console.log(baseLine);
   if (t.focus)
     console.log(cut(`FOCUS${t.focus.name ? ` "${t.focus.name}"` : ''}: ${t.focus.text}`, WIDTH));
   if (t.focus?.notice) console.log(`NOTICE: ${t.focus.notice}`);

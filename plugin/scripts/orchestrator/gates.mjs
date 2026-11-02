@@ -13,6 +13,8 @@
 // Output: one line per gate (GREEN/RED + duration, and the first error line for red ones) and a final line.
 // Exit 0 when all are green (or no gates are set up), 1 otherwise.
 //   --log <file>  writes the whole output of each gate to the file (for debugging without filling the context).
+//   --timeout-sec <n>  (--quick/--full) one time budget for the whole list; a gate over it is red (cq merge passes the
+//                 base gate's budget when the quick gates are the base gate, lib/baseHealth.js).
 //
 //   --precheck  the fail-fast precheck a track runs BEFORE the class's full gate: the cheapest checks first, in a fixed
 //               order, only on the files changed against baseBranch (`gates.precheck`, with `{changed}`/`{file}`;
@@ -24,10 +26,11 @@
 // Time log: every run (quick, full or precheck) appends one `gate` row to the time log (config().timeLog; QUEUE_TIME_LOG
 // overrides): the kind, the gates that ran and the red ones, the duration, the exit code and `attempt` (the how-many-th
 // run of this kind for the task), so reruns can be counted. The task is --track <id> (cq merge passes it) or the branch
-// <branchPrefix><id>, otherwise null. The row format lives in lib/timeLogRows.js. Writing it never changes the result
+// <branchPrefix><id>, otherwise null. The row also has the HEAD commit (`sha`) and `clean` (no uncommitted tracked
+// changes) from the start of the run, for the base gate's skip rule. The row format lives in lib/timeLogRows.js. Writing it never changes the result
 // or the exit code (fail open).
 //
-// Use: node scripts/orchestrator/gates.mjs --quick|--full [--track <id>] [--log <file>]
+// Use: node scripts/orchestrator/gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>]
 //      node scripts/orchestrator/gates.mjs --precheck [--json] [--base <ref>] [--track <id>] [--log <file>]
 // See docs/orchestration.md.
 // =============================================================
@@ -49,7 +52,7 @@ const full = args.includes('--full');
 const precheck = args.includes('--precheck');
 if ([quick, full, precheck].filter(Boolean).length !== 1) {
   console.error(
-    'use: gates.mjs --quick|--full [--track <id>] [--log <file>]\n' +
+    'use: gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>]\n' +
       '     gates.mjs --precheck [--json] [--base <ref>] [--track-base <sha> --track-tip <sha>] [--track <id>] [--log <file>]',
   );
   process.exit(2);
@@ -86,11 +89,28 @@ function logRun({ kind, ran, failed, durationSec, exit, timedOut = false }) {
       text = null; // no log yet: this is the first run
     }
     const attempt = TL.gateAttempt(text, { kind, track, branch });
-    TL.appendRows(file, TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt }));
+    // A commit made during the run means the run checked neither commit exactly: no sha then.
+    const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
+    TL.appendRows(
+      file,
+      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean }),
+    );
   } catch {
     // error-ignored: the time log is for measurement; the gate's result is what matters
   }
 }
+
+/**
+ * The commit and the cleanliness when the run starts (for the gate row: the base gate's skip rule, lib/baseHealth.js,
+ * trusts only a green run on exactly one commit with no uncommitted tracked changes). Untracked files are not counted:
+ * build output and logs are usually untracked, and a new file a gate depended on would be in the track's commit anyway.
+ */
+function startState() {
+  const sha = (git('rev-parse', 'HEAD') || '').trim() || null;
+  const status = git('status', '--porcelain', '--untracked-files=no');
+  return { sha, clean: status == null ? undefined : status.trim() === '' };
+}
+const START = startState();
 
 if (precheck) process.exit(await precheckMode());
 
@@ -241,6 +261,13 @@ const start = Date.now();
 let failedCount = 0;
 const failedGates = [];
 
+// --timeout-sec <n>: one time budget for the whole list (cq merge passes config().baseGate.timeoutSec when the quick
+// gates are the base gate, so a hanging gate cannot hold the merge forever). Each gate gets what is left; a gate over
+// it is red. As for the done command, on Windows a child the shell started can live on until it ends by itself.
+const budgetSec = Number(option('--timeout-sec'));
+const deadline = budgetSec > 0 ? start + budgetSec * 1000 : null;
+let timedOutAny = false;
+
 for (const command of gates) {
   const t0 = Date.now();
   const r = spawnSync(command, {
@@ -249,10 +276,15 @@ for (const command of gates) {
     encoding: 'utf8',
     maxBuffer: 256 << 20,
     env: { ...process.env, FORCE_COLOR: '0' },
+    ...(deadline ? { timeout: Math.max(1000, deadline - t0) } : {}),
   });
   const sec = (Date.now() - t0) / 1000;
-  const out = `${r.stdout || ''}${r.stderr || ''}${r.error ? `\n${r.error.message}` : ''}`;
-  const green = r.status === 0;
+  const timedOut = r.error?.code === 'ETIMEDOUT';
+  if (timedOut) timedOutAny = true;
+  const out =
+    `${r.stdout || ''}${r.stderr || ''}${r.error ? `\n${r.error.message}` : ''}` +
+    (timedOut ? `\n(stopped after the time budget of ${budgetSec} s: --timeout-sec)` : '');
+  const green = r.status === 0 && !timedOut;
   if (!green) {
     failedCount++;
     failedGates.push(command);
@@ -273,7 +305,14 @@ for (const command of gates) {
 }
 
 const total = Math.round((Date.now() - start) / 1000);
-logRun({ kind: mode, ran: gates, failed: failedGates, durationSec: (Date.now() - start) / 1000, exit: failedCount === 0 ? 0 : 1 });
+logRun({
+  kind: mode,
+  ran: gates,
+  failed: failedGates,
+  durationSec: (Date.now() - start) / 1000,
+  exit: failedCount === 0 ? 0 : 1,
+  timedOut: timedOutAny,
+});
 console.log(
   failedCount === 0
     ? `ALL GREEN: ${gates.length} gate(s) --${mode} in ${total} s`

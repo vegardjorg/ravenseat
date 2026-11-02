@@ -303,7 +303,8 @@ receive and merge the same track. Compaction is still the usual path for a long 
 batch push). One line per gate with GREEN/RED and the time; `--log <file>` keeps the full output.
 
 **Gate rows in the time log.** Every `--quick`, `--full` and `--precheck` run appends one row to the time log:
-`{ time, event: "gate", track, branch, kind, gates, failed, duration_s, ok, exit, attempt, timed_out? }`. `track` is
+`{ time, event: "gate", track, branch, kind, gates, failed, duration_s, ok, exit, attempt, timed_out?, sha?, clean? }`
+(`sha` = HEAD when the run started, `clean` = no uncommitted tracked changes then; the base gate's skip rule reads them). `track` is
 `--track <id>` (`cq merge` passes it, since HEAD is the base branch after a merge) or the id in a `<branchPrefix><id>`
 branch, otherwise null. `gates` are the commands (or precheck checks) that ran and `failed` the red ones. `attempt`
 counts the runs of the same kind for the same task (or the same branch without one), so `attempt > 1` is a rerun.
@@ -332,6 +333,40 @@ minutes instead of after a long full run. Only a green precheck goes on to the f
   first error lines; then a final line. Exit 0 green, 1 red, 3 timeout, 2 setup error (for example the base branch was
   not found; `--base <ref>` picks another ref). `--json` gives the same as one JSON object (`ok`, `status`,
   `stoppedAt`, `base`, `changed`, `totalSec`, `checks`). The logic lives in `lib/gatePrecheck.js`.
+
+## The base gate (a red base stops the merges)
+
+Each track's gates run on its own branch, so two tracks can each be green and still break the base branch together (a
+semantic conflict: one renames a function, the other adds a call to the old name; git merges both without a conflict).
+The base gate (`baseGate` in `queue.config.json`, `lib/baseHealth.js`) records the base branch's health per tip in
+`<dataFolder>/base-health.json` and makes `cq merge` refuse other tracks while it is red.
+
+- **Where it runs.** In the main checkout, on the base branch, where `cq merge` already merges and runs `gates --quick`.
+  No extra worktree (the shared links make creating and removing worktrees the hazard `cleanup-worktree.mjs`
+  handles). The check never writes to the checkout; `cq merge` warns when the checkout had or got tracked changes.
+- **Which commands.** `baseGate.commands`, default `null` = the quick gates. Then the merge step's own quick gates run
+  on the new tip IS the base check (nothing runs twice; it gets the budget `baseGate.timeoutSec`, default 900 s, as
+  `gates.mjs --timeout-sec`). Other commands (for example the full gate) run as a `base-gate` step after the quick
+  gates, with one budget for the whole list. Only the output tail (`baseGate.tailLines`, default `doneCheck.tailLines`)
+  is kept, in `base-health-<sha>.md` next to the merge log, never the full output (it can hold secrets).
+- **Before a merge.** Green for the current base tip: merge. Unknown (never checked, or the tip moved since the last
+  check, for example a commit by hand): the check runs first. Red: `STOP`, exit 9, nothing done. Allowed while red:
+  the open base fix task itself, and `cq merge <id> --force-red-base` on the owner's word (logged in the time log as
+  `base-red-overridden`).
+- **Red after a merge.** The merge stays (never reverted automatically; the message gives the `git revert -m 1 <sha>`
+  line to do it by hand). A fix task `<id>-BASE<n>` is added: value 10, `fixes` the merged task, the base gate as its
+  `done_when`, and a mission that names the merge commit and the tail file. An open fix task is reused instead of a
+  second one; a red tip no merge is known to have caused gets `BASE-<sha7>`. When the quick gates are red the merge
+  flow stops as before (the task stays in review with `gate-red`; set it done after the fix task); when only other
+  base gate commands are red, the task is set done, `fill` runs (and starts the fix task), and `cq merge` exits 9.
+- **Green again.** The next green check (normally the fix task's merge) clears the red.
+- **The skip rule.** When the merge commit has exactly the tree of the track tip (the branch already contained the
+  base, or a fast-forward) and the track's own gate ran green on exactly that tip in a clean worktree with every base
+  gate command (the gate row's `sha` and `clean`), green is recorded without running the gates again.
+- **Where it shows.** One `BASE <branch>: GREEN|RED|unknown ...` line in `cq show` and the orchestrator pulse, and the
+  board's status line under the title.
+- **On and off.** `baseGate.enabled`: `"auto"` (default) is on when there are commands, `false` turns it off. Lite
+  mode has no rule of its own: it is off until the project has a quick gate.
 
 ## Hardening against prompt injection
 

@@ -1,7 +1,8 @@
 // =============================================================
 // cli/merge.mjs: the commands that finish work: receive, merge, block, unblock, blockers, deliver, release, deliveries, next-migr, migr.
 //
-// receive (take in a finished track), merge (merge-track.mjs, the gates and the migration push, with the merge guard),
+// receive (take in a finished track), merge (merge-track.mjs, the gates and the migration push, with the merge guard
+// and the base gate of cli/baseHealth.mjs: a red base branch refuses the merge, a merge that makes it red adds a fix task),
 // the merge blocks, deliver/release of a picked task, deliveries (a report.md that has not been received yet), and the
 // migration number blocks (next-migr, migr).
 //
@@ -10,7 +11,7 @@
 //
 // Used by: queue.mjs (dispatch).
 // Tested in: lib/__tests__/queueOrchestrator.test.ts, mergeGuard.test.ts, queueBlockers.test.ts, queueMigrBlock.test.ts,
-//   queueExternal.test.ts, __tests__/queueAdopt.test.ts.
+//   queueExternal.test.ts, __tests__/queueAdopt.test.ts, __tests__/queueBaseGate.test.ts.
 // =============================================================
 
 import fs from 'node:fs';
@@ -26,6 +27,9 @@ import {
   blockList, findDeliveries, gitLarge, highestMigr, lastTrackReply, logTime, mergeBlock, minutes, readTimeLog,
   reviewerFindingsLines, scratchpadFor, takenForMigr, taskAgents,
 } from './tracks.mjs';
+import {
+  BASE_SETUP, BH, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf, writeReport,
+} from './baseHealth.mjs';
 
 // ---- The done command (task field done_when, lib/doneCheck.js): receive and merge ---------------------------------
 
@@ -321,7 +325,9 @@ export async function cmdMerge() {
   // the I/O. ----
   const id = positional(1, ['--scratchpad', '--done-cwd'])[0];
   if (!id)
-    die('merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard]');
+    die(
+      'merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--force-red-base]',
+    );
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
   const allowGuard = a.includes('--allow-guard');
   const o = read().tasks.find((x) => x.id === id);
@@ -341,6 +347,10 @@ export async function cmdMerge() {
   const scratch = scratchpadFor(o.scratchpad ?? null);
   if (!scratch && !withoutFill)
     die('merge needs --scratchpad <folder> (or QUEUE_SCRATCHPAD) for fill, or --without-fill.');
+  // The base gate (lib/baseHealth.js) BEFORE anything else runs: a red base refuses the merge (exit 9) unless this is the
+  // base fix task or --force-red-base (logged); an unknown verdict (the tip moved since the last check) is checked first.
+  // `wasRed` is the red record the merge goes on despite, so the record after it keeps the merge that made it red.
+  const wasRed = guardBeforeMerge({ id, force: a.includes('--force-red-base'), folder: scratch ?? FOLDER });
   // The done command (lib/doneCheck.js) once more before the merge, unless the last run was green on this exact tip with
   // this command (receive ran it, and no fix round has added commits since). Red: a fix round, never a merge.
   if (typeof o.done_when === 'string' && o.done_when.trim()) {
@@ -362,9 +372,10 @@ export async function cmdMerge() {
   const name = git(['diff', '--name-only', `${BASE}...${branch}`]);
   // The branch's merge base and tip BEFORE the merge. After the merge HEAD = baseBranch and the gates' diff against base is empty;
   // with these gates.mjs can still see the track's own changes.
+  const trackTip = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
   const trackArgs = require('./lib/trackDiff.js').trackArgs({
     separator: git(['merge-base', BASE, branch]),
-    tip: git(['rev-parse', '--verify', `refs/heads/${branch}`]),
+    tip: trackTip,
   });
   // The size in code lines (a stable size unit), measured BEFORE the merge against the wave base (HEAD at start;
   // without it: baseBranch). Three dots: only the branch's own changes.
@@ -378,6 +389,7 @@ export async function cmdMerge() {
     withoutFill,
     base: BASE,
     migrations: MIGR,
+    baseGate: BASE_SETUP.enabled && !BASE_SETUP.sameAsQuick,
   });
   const logFolder = scratch ?? FOLDER;
   fs.mkdirSync(logFolder, { recursive: true });
@@ -392,7 +404,8 @@ export async function cmdMerge() {
     }
   };
   const queueMjs = path.join(HERE, 'queue.mjs');
-  const remark = `merged with cq merge${plan.migrPush ? ' (migrations pushed)' : ''}`;
+  const gatesLog = path.join(logFolder, `merge-${id}-gates`);
+  const remark =`merged with cq merge${plan.migrPush ? ' (migrations pushed)' : ''}`;
   /** The command for one step: [program, arguments, shell?]. The migration command is a shell line from the config. */
   const command = ({ step }) => {
     if (step === 'merge')
@@ -417,7 +430,9 @@ export async function cmdMerge() {
           '--track',
           id,
           '--log',
-          path.join(logFolder, `merge-${id}-gates`),
+          gatesLog,
+          // When the quick gates are the base gate, they get its time budget (a hanging gate must not hold the merge).
+          ...(BASE_SETUP.enabled && BASE_SETUP.sameAsQuick ? ['--timeout-sec', String(BASE_SETUP.timeoutSec)] : []),
         ],
       ];
     if (step === 'done')
@@ -444,7 +459,84 @@ export async function cmdMerge() {
     : null;
   // The exit code of merge-track.mjs: 4 = the merge guard stopped it before the merge (gets its own message below).
   let mergeCode = null;
+  // ---- The base gate after the merge (lib/baseHealth.js) ----
+  // The verdict is recorded for the merge commit as soon as it is known: from the quick gates when they are the base
+  // gate (or when they are red: a red quick gate on the new tip is a red base whatever the base gate commands are),
+  // otherwise from the `base-gate` step. Before `done` and `fill`, so fill already sees the base fix task.
+  let mergeCommit = null;
+  let baseSettled = false;
+  const baseLines = [];
+  const short = (sha) => String(sha ?? '').slice(0, 12);
+  const settleBase = ({ ok, check = null, file = null, skipped = null, stayedInReview = false }) => {
+    if (baseSettled || !mergeCommit) return;
+    baseSettled = true;
+    const v = recordVerdict({ tip: mergeCommit, ok, run: check, file, causeId: id, wasRed, skipped });
+    if (!ok) {
+      baseLines.push(...redLines({ entry: v.entry, run: check, fix: v.fix, causeId: id, stayedInReview }));
+      return;
+    }
+    baseLines.push(`BASE GREEN: ${BASE} at ${short(mergeCommit)}${skipped ? ` (not run again: ${skipped})` : ''}.`);
+    const before = wasRed ?? (v.previous?.status === 'red' ? v.previous : null);
+    if (before?.fix_task && before.fix_task !== id)
+      baseLines.push(
+        `${BASE} is green again, but the base fix task ${before.fix_task} is still open: cancel it if it is obsolete ` +
+          `(${CQ} set ${before.fix_task} cancelled).`,
+      );
+  };
+  // The skip rule: the merge commit has the tree the track tested and the track's own gate ran green on its tip.
+  const skipNow = () =>
+    BH.skipEvidence({ newTip: mergeCommit, trackTip, treeOf, rows: gateRowsNow(), commands: BASE_SETUP.commands });
+  const skipped = (reason) => {
+    settleBase({ ok: true, skipped: reason });
+    return { code: 0, out: `skipped, recorded green: ${reason}` };
+  };
+  /** The `base-gate` step: the base gate commands on the merge commit, in the main checkout (or the skip rule). */
+  const baseGateStep = () => {
+    if (!mergeCommit) return { code: 1, out: 'no merge commit to check' };
+    const sk = skipNow();
+    if (sk.skip) return skipped(sk.reason);
+    const check = runCheckNow({ tip: mergeCommit, folder: logFolder, cause: { task: id, merge_commit: mergeCommit } });
+    settleBase({ ok: check.run.ok, check: check.run, file: check.file });
+    return {
+      code: check.run.ok ? 0 : 1,
+      out: check.run.ok
+        ? `GREEN (${check.run.durationSec} s)`
+        : `\`${check.run.failed}\` ${check.run.timedOut ? 'over the time budget' : `exit ${check.run.exit ?? '?'}`}`,
+    };
+  };
+  /** A red quick gates run on the merge commit as a base verdict: the tail of the gates log (or of the output). */
+  const gatesRed = (r) => {
+    let text = r.out;
+    try {
+      text = fs.readFileSync(gatesLog, 'utf8');
+    } catch {
+      /* no log file (an injected runner): the step's output */
+    }
+    const check = {
+      ok: false,
+      failed: null,
+      exit: r.code,
+      timedOut: /time budget/.test(text),
+      durationSec: null,
+      tail: require('./lib/doneCheck.js').tailOf(text, BASE_SETUP.tailLines),
+    };
+    const file = writeReport({ folder: logFolder, tip: mergeCommit, run: check, cause: { task: id, merge_commit: mergeCommit } });
+    settleBase({ ok: false, check, file, stayedInReview: true });
+  };
   const run = (x) => {
+    if (x.step === 'base-gate') {
+      const r = baseGateStep();
+      writeLog(`===== base-gate (exit ${r.code}) =====\n${r.out}`);
+      return r;
+    }
+    if (x.step === 'gates' && BASE_SETUP.enabled && BASE_SETUP.sameAsQuick && mergeCommit) {
+      const sk = skipNow();
+      if (sk.skip) {
+        const r = skipped(sk.reason);
+        writeLog(`===== gates (skipped by the base gate's skip rule) =====\n${r.out}`);
+        return r;
+      }
+    }
     const [cmd, args, shell = false] = command(x);
     let r;
     if (injected) r = injected({ ...x, cmd, args });
@@ -462,7 +554,14 @@ export async function cmdMerge() {
       };
     }
     writeLog(`===== ${x.step}: ${cmd} ${args.join(' ')} (exit ${r.code}) =====\n${r.out}`);
-    if (x.step === 'merge') mergeCode = r.code;
+    if (x.step === 'merge') {
+      mergeCode = r.code;
+      if (r.code === 0 && BASE_SETUP.enabled) mergeCommit = git(['rev-parse', 'HEAD']);
+    }
+    if (x.step === 'gates' && BASE_SETUP.enabled && mergeCommit) {
+      if (r.code !== 0) gatesRed(r);
+      else if (BASE_SETUP.sameAsQuick) settleBase({ ok: true });
+    }
     return r;
   };
   const PRIVACY = require('./lib/pushGuard.js');
@@ -488,6 +587,13 @@ export async function cmdMerge() {
     migrations: MIGR,
   });
   for (const l of res.lines) console.log(l);
+  // A flow that stopped after the merge but before any verdict (the migration push): the tip is unknown, so the next
+  // merge checks it first. Said here; the red or green verdict lines come last, where they are read.
+  if (BASE_SETUP.enabled && mergeCommit && !baseSettled)
+    console.log(`BASE: ${BASE} at ${short(mergeCommit)} is not checked yet (the flow stopped first); the next ${CQ} merge checks it first.`);
+  const printBase = () => {
+    for (const l of baseLines) console.log(l);
+  };
   if (!res.ok && res.stop.step === 'merge' && mergeCode === 4) {
     // The merge guard: nothing was merged. Say what to do instead of a raw exit code.
     console.log(
@@ -513,6 +619,7 @@ export async function cmdMerge() {
     console.log(`STOP in the step ${res.stop.step}: ${res.stop.message}`);
     if (res.stop.excerpt.length) console.log(res.stop.excerpt.map((l) => `  | ${l}`).join('\n'));
     console.log(`Full log: ${logFile}`);
+    printBase();
     process.exit(1);
   }
   // The timestamps and the size. t_review is the first reviewer start after t_receive (hook-time writes
@@ -532,6 +639,10 @@ export async function cmdMerge() {
     return ox;
   });
   console.log(`Full log: ${logFile}`);
+  printBase();
+  // The merge went through, but the base gate made the base red: exit 9 (as a refused merge), so a script that chains
+  // merges stops here instead of reading a 0.
+  if (baseSettled && BH.verdict(BH.readState(HEALTH_FILE), mergeCommit) === 'red') process.exit(BH.EXIT_RED_BASE);
 }
 
 /** `cq block` (the usage is at the top of queue.mjs). */
