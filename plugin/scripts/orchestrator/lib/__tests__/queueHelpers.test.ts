@@ -199,6 +199,8 @@ describe('switches and backward compatibility', () => {
       'reviewer-tests',
       'reviewer-gap',
       'reviewer-docs',
+      // The intake triage helper (phase intake): counted for the cost, never a reviewer.
+      'triage',
     ]);
     expect(L.REVIEWER_TYPES).toEqual(expect.arrayContaining(['reviewer-docs', 'reviewer-challenger']));
     expect(L.TASK_AGENT_TYPES).toEqual(expect.arrayContaining(['track', 'track-d', 'reviewer-gap']));
@@ -295,6 +297,7 @@ describe('the measurement per helper', () => {
       'reviewer-tests',
       'reviewer-gap',
       'reviewer-docs',
+      'triage',
     ]);
     const design = rows[1];
     expect(design.enabled).toBe(false);

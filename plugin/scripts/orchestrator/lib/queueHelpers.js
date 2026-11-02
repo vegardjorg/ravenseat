@@ -24,6 +24,10 @@
 //     caller passes the current sha256 per custom helper (`hashes`, lib/helperFiles.js). Never approved, changed since
 //     approval, missing, or not checked = off in the selection, whatever the switch or the config says.
 //
+//   - intake helpers: `phase: "intake"` (the builtin `triage`, CATALOG) run BEFORE a track starts, not after receive.
+//     They share the switch, the board tab and the measurement, but never become reviewers; their rule is in
+//     lib/queueTriage.js (`triage` in queue.config.json), and their measurement adds the verdict counts.
+//
 // reviewersForTask() is used by `cq receive` (the reviewer prompts and the review package), allReviewerTypes() by the
 // cost per task, the cost guard and the read guard. helperStatistics() is the measurement (runs, minutes, tokens, USD,
 // share of the task cost, findings per run) in the board tab, `cq helpers` and `cq cost`.
@@ -54,7 +58,16 @@ const CATALOG = Object.freeze({
     title: 'Docs',
     text: 'For documentation changes: no true fact lost in a rewrite, easy to find your way, and the docs match the code.',
   },
+  // Not a reviewer: runs BEFORE a track starts (phase intake, lib/queueTriage.js). Never in reviewersForTask.
+  triage: {
+    title: 'Intake triage',
+    text: 'Before an old or agent-added task starts: is it still needed, already done, stale, or is its mission off?',
+    phase: 'intake',
+  },
 });
+
+/** The phase a helper runs in: "review" (after receive, the default) or "intake" (before the start, the triage). */
+const phaseOf = (name, h) => (isObject(h) && h.phase === 'intake') || CATALOG[name]?.phase === 'intake' ? 'intake' : 'review';
 
 /** A valid agent name (the file plugin/agents/<name>.md, the subagent_type). */
 const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/i;
@@ -193,6 +206,7 @@ function helperSetup(config, queue = null, { hashes = null } = {}) {
     const r = isObject(s) ? s : {};
     out[name] = {
       ...c,
+      phase: phaseOf(name, h),
       switchedInQueue,
       wantedOn,
       ...src,
@@ -266,6 +280,8 @@ function fixedFor(config, cls) {
  */
 function helperReasons(h, o, { changedPaths = [], missionText = null, ignoreEnabled = false } = {}) {
   if (!h || (!h.enabled && !ignoreEnabled)) return [];
+  // An intake helper (the triage) runs before the start, never as a reviewer (lib/queueTriage.js has its rule).
+  if (h.phase === 'intake') return [];
   const why = [];
   if (h.classes.includes(String(o?.class))) why.push(`class ${o.class}`);
   const labels = Array.isArray(o?.labels) ? o.labels : [];
@@ -301,7 +317,8 @@ function helperReasons(h, o, { changedPaths = [], missionText = null, ignoreEnab
  */
 function reviewersForTask(o, { config, queue = null, changedPaths = [], missionText = null, hashes = null }) {
   const setup = helperSetup(config, queue, { hashes });
-  const blocked = (type) => setup[type]?.source === 'custom' && setup[type].review !== 'approved';
+  const blocked = (type) =>
+    (setup[type]?.source === 'custom' && setup[type].review !== 'approved') || setup[type]?.phase === 'intake';
   const out = fixedFor(config, o?.class)
     .filter((type) => !blocked(type))
     .map((type) => ({ type, fixed: true, reasons: [`class ${o?.class}`], ...(setup[type]?.source === 'custom' ? { custom: true } : {}) }));
@@ -340,8 +357,15 @@ function fixedClasses(config, name) {
     .map(([k]) => k);
 }
 
-/** When the helper runs, in plain text: "class U · label bug", "files under docs/ or *.md are most of the diff". */
-function conditionText(h) {
+/**
+ * When the helper runs, in plain text: "class U · label bug", "files under docs/ or *.md are most of the diff". An
+ * intake helper (the triage) has its rule in `triage` of queue.config.json: `config` gives it (lib/queueTriage.js).
+ */
+function conditionText(h, config = null) {
+  if (h.phase === 'intake') {
+    const T = require('./queueTriage.js');
+    return T.whenText(T.ruleSetup(config));
+  }
   const parts = [];
   if (h.classes.length) parts.push(`class ${h.classes.join(', ')}`);
   if (h.labels.length) parts.push(`label ${h.labels.join(', ')}`);
@@ -432,19 +456,27 @@ function tokenText(n) {
   return String(n);
 }
 
+/** The verdicts of the triage helper in one part ("verdicts ready=3 done=1 stale=0 adjust=2, 1 run(s) stopped"). */
+function verdictText(v) {
+  return `verdicts ready=${v.ready} done=${v.done} stale=${v.stale} adjust=${v.adjust}${v.saved ? ` (${v.saved} track run(s) stopped)` : ''}`;
+}
+
 /** The measurement in one line ("No runs yet" when the helper has none). */
 function measurementText(s) {
+  if (s?.verdicts?.total && !s.runs) return `${verdictText(s.verdicts)} · cost measured at set done`;
   if (!s || !s.runs) return EMPTY;
   const parts = [`${s.runs} run(s) on ${s.tasks} task(s)`];
   if (s.minutes) parts.push(`${s.minutes.median} min median, ${s.minutes.sum} min total`);
   if (s.tokens) parts.push(`${tokenText(s.tokens.median)} tokens median, ${tokenText(s.tokens.sum)} total`);
   if (s.usd) parts.push(`$${s.usd.median} median, $${s.usd.sum} total`);
   if (s.sharePct != null) parts.push(`${s.sharePct} % of the task cost`);
-  parts.push(
-    s.findings.reviewed
-      ? `findings H=${s.findings.H} M=${s.findings.M} L=${s.findings.L} (${s.findings.perRun} per run)`
-      : 'no FINDINGS lines measured',
-  );
+  if (s.verdicts) parts.push(verdictText(s.verdicts));
+  else
+    parts.push(
+      s.findings.reviewed
+        ? `findings H=${s.findings.H} M=${s.findings.M} L=${s.findings.L} (${s.findings.perRun} per run)`
+        : 'no FINDINGS lines measured',
+    );
   return parts.join(' · ');
 }
 
@@ -460,6 +492,9 @@ function helperRows(config, queue, { hashes = null } = {}) {
   const setup = helperSetup(config, queue, { hashes });
   const names = Object.keys(setup);
   const st = helperStatistics(queue, names);
+  // The triage helper answers with a verdict, not a FINDINGS line: its counts come from the tasks' triage log.
+  for (const name of names)
+    if (setup[name].phase === 'intake') st[name].verdicts = require('./queueTriage.js').verdictStatistics(queue);
   return names.map((name) => {
     const h = setup[name];
     const custom = h.source === 'custom';
@@ -470,9 +505,11 @@ function helperRows(config, queue, { hashes = null } = {}) {
       source: h.source,
       path: h.path,
       sha256: h.sha256,
-      enabled: h.enabled,
+      // The triage is also off in lite mode until it is switched on in the queue (queueTriage.triageSetup).
+      enabled: h.phase === 'intake' ? require('./queueTriage.js').triageSetup(config, queue).on : h.enabled,
+      phase: h.phase,
       switchedInQueue: h.switchedInQueue,
-      when: conditionText(h),
+      when: conditionText(h, config),
       fixedIn: fixedClasses(config, name),
       stats: st[name],
       measurement: measurementText(st[name]),
