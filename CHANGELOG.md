@@ -6,6 +6,25 @@ and `package.json`.
 ## Unreleased
 
 ### Added
+- **Choices on owner questions:** a question can carry 2-4 answer options (`choices`):
+  `cq question <id> --choice "..." --choice "..."`, answer with `cq resolve <id> --choice <n|text> [--answer "note"]`
+  or one click on the board's "Waiting on you". The choices are listed numbered in `cq question`, `cq resolutions` and
+  the after-compact summary.
+- **Done command and fix-round cap:** a task can name a done command (`done_when`). The mission states it, `cq receive`
+  and `cq merge` run it in the track's worktree (budget `doneCheck.timeoutSec`, only the last `doneCheck.tailLines`
+  lines are kept), and a red run gives a fix round instead of a review or merge. Fix rounds are capped per task
+  (`maxFixRounds`, default 3, task field `max_fix_rounds`); at the cap the task becomes an owner question
+  (`<id>.fixcap<N>`, blocker `owner-question`, exit 8).
+- **Cost per task:** `cq cost` shows the cost per task including all its runs: fix rounds, continuations (`<id>-rN`)
+  and the fix tasks that point to it. "USD per merged change" uses these totals, so a done fix task is counted with
+  the change it fixes, not as a merged change of its own. `--json` has `perTask`.
+- **`cq doctor [--json]`:** a read-only health check of Node and the `node` the hooks find, the hooks and their
+  scripts, `queue.config.json`, the state files, a stale lock, half-deleted worktree folders, missing git worktrees and
+  branches of finished tasks. Each line is OK, WARN or FAIL with a fix hint; exit 1 on any FAIL.
+- **`cq finding "<title>" [--detail] [--task] [--files a,b]`** and `cq finding list [--all]`: a track reports
+  something outside its scope as an idea in the plan register (`PL-FINDING-<n>`), linked to the task and
+  deduplicated on the title. `orchestrator pulse` and `cq show` print the number of untriaged findings, and the track
+  prompt tells tracks to use it instead of fixing.
 - **Lite mode** (`"mode": "lite"` in `queue.config.json`, `lib/liteMode.js`): a zero-config mode with the core loop
   only. `cq add "<title>"` adds a task with just a title (optional `--mission`, `--priority 1-10`, `--files`, `--id`);
   the id (`T-001` ...), class K, value 5, size 30 min and the mission (the title) are filled in. Lite skips the
