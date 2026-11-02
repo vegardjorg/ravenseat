@@ -3,6 +3,12 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.2 (2026-11-02)
+
+### Changed
+- README: quality you can check up front, `cq setup --ci` explained, merge recovery, and a table of what Ravenseat
+  checks versus what needs a boundary outside it, with the known gaps in the command guard.
+
 ## 0.8.1 (2026-11-02)
 
 ### Added
