@@ -312,12 +312,15 @@ function trackBlock(o, queue, { text, warning = null, cloud = false } = {}) {
   const answer = answerBlock(o, queue);
   // The done command (lib/doneCheck.js): the track runs it itself before it reports, the orchestrator runs it again.
   const done = require('../doneCheck.js').doneWhenBlock(o);
+  // The acceptance criteria (fixed before the start; the gap reviewer checks each one).
+  const accept = require('../doneCheck.js').acceptanceBlock(o);
   return [
     `## TRACK ${o.id} (${o.title}; source: ${o.source ?? 'see the mission'}; class ${o.class}, estimate ${estimate(o)} min)`,
     '',
     `**Ownership in the queue:** files ${list(o.owned_files)}; DB ${list(o.owner_db)}; shared patch ${list(o.shared_patch)}. Do not touch anything other tasks in the queue own; ${reportFrom}`,
     '',
     ...(done ? [done, ''] : []),
+    ...(accept ? [accept, ''] : []),
     ...(warning ? [warning, ''] : []),
     ...(answer ? [answer, ''] : []),
     String(text ?? '').trim(),

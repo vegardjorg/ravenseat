@@ -421,7 +421,10 @@ function reviewPackageIndex({
   return lines.join('\n');
 }
 
-/** The short reviewer prompt. "track <id>" in the text ties the reviewer's cost to the task. */
+/**
+ * The short reviewer prompt. "track <id>" in the text ties the reviewer's cost to the task. reviewer-gap also gets the
+ * task's acceptance criteria and done command (doneCheck.gapCriteriaBlock), when it has any.
+ */
 function reviewerPrompt({ o, type, folder }) {
   const sep = String(folder).includes('\\') ? '\\' : '/';
   return [
@@ -432,6 +435,8 @@ function reviewerPrompt({ o, type, folder }) {
     'Your answer is at most approx. 1,500 characters. First line in fixed format: FINDINGS H=<count> M=<count> L=<count>',
     'deferrable=<finding codes that can wait, comma-separated, or ->. Then one short point per H and M finding (code,',
     'file:line, fix), L findings only with code and one sentence. Do not repeat the package.',
+    // reviewer-gap also gets the fixed criteria and the done command (lib/doneCheck.js), one verdict line per criterion.
+    ...(type === 'reviewer-gap' ? [require('../doneCheck.js').gapCriteriaBlock(o)].filter(Boolean) : []),
   ].join('\n');
 }
 

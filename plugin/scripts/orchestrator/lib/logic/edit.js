@@ -365,9 +365,11 @@ function lastUndoable(queue) {
  * field no longer has the "after" value (someone has changed it since), when a task is gone, or when the result breaks
  * the rules (the project must exist, only waiting and proposed can be parked, the batch queue rules). The entry stays, marked
  * `undone`, so the log shows what happened; the next undo takes the entry before it. `show` checks without editing anything.
+ * `lockError(task, { field: value })` (optional; queue.mjs passes doneCheck.doneLockError for the caller) refuses a
+ * field the caller may not set, so undo cannot move a locked finish line back either.
  * @returns {{ error: string[], entry?: object, show?: boolean }}
  */
-function undoEntry(queue, { by = null, now = new Date().toISOString(), show = false } = {}) {
+function undoEntry(queue, { by = null, now = new Date().toISOString(), show = false, lockError = null } = {}) {
   const entry = lastUndoable(queue);
   if (!entry)
     return { error: ['nothing to undo (the changelog is empty, or everything in it is undone)'] };
@@ -385,6 +387,11 @@ function undoEntry(queue, { by = null, now = new Date().toISOString(), show = fa
     const who = changeWho(e);
     if (e.id != null && UNDO_BLOCKED.has(e.field) && !undoableCancel(entry, e)) {
       error.push(`${who}: ${e.field} cannot be undone (use the command that owns the field)`);
+      continue;
+    }
+    const lock = e.id != null && lockError && perId.has(e.id) ? lockError(perId.get(e.id), { [e.field]: e.before }) : null;
+    if (lock) {
+      error.push(`${who}: ${lock}`);
       continue;
     }
     let measure;

@@ -28,6 +28,8 @@ branch, merging and pushing; you only do your track.
   first red one). Only a green precheck goes on to the class's full gate, as the mission says (K and U:
   `cq gates --quick`; D and D+: `cq gates --full`). Never write your own check script. Read the log file of a red
   gate instead of running it again.
+- The done command and the acceptance criteria in the mission are fixed: never change them (`cq edit` refuses from
+  your worktree). One that is wrong or impossible goes in the report (or SendMessage), so the owner decides.
 - Commit only on your own branch with `git commit -- <files>`. NEVER push, merge your branch into the base branch, run
   migrations against shared environments, start dev servers or previews.
 - Your answer to the orchestrator (last answer) is at most about 1,500 characters: the RESULT line first, at most 5

@@ -50,6 +50,7 @@ a track adding a proposal) cannot corrupt the file. `cq undo` undoes the last ch
 | `project`, `feature`, `source` | Project id (must exist), feature name, and the plan section the task comes from |
 | `batched` | `true` for small low-value tasks: they go to the batch queue (`cq batch`) instead of their own track |
 | `done_when` | Optional: a shell command (one line, at most 500 characters) that must exit 0 in the track's worktree for the track to count as done, e.g. `npm test -- src/x.test.ts`. The mission tells the track to run it before it reports; `receive` and `merge` run it again (see [the done command](#the-done-command-and-the-fix-round-cap)). `null` in `edit` removes it. A proposal with it is never auto-accepted |
+| `acceptance` | Optional: a list of 1 to 10 short criteria (one line each, at most 300 characters), set with `cq add ... --accept "..." --accept "..."` (one task) or `cq edit <id> --accept "..."` (replaces the list). The mission copies them under "Acceptance criteria (fixed, do not change)", `cq info` and the board's detail panel show them, and `reviewer-gap` answers MET / NOT MET / UNCLEAR per criterion. Locked after the start, like `done_when` (see [the lock](#the-finish-line-is-locked-after-the-start)). `null` in `edit` removes it |
 | `max_fix_rounds` | Optional: this task's fix-round cap, a whole number 0 to 20 (0 = no fix round without the owner); overrides `maxFixRounds` in `queue.config.json` (default 3). `null` in `edit` removes it |
 | `fixes` | Optional: the task id (or a list of ids) this task fixes. `add` and `edit` refuse an id that is not in the queue (or in the same add) and a task naming itself; stored as a list, and `[]` or `null` in `edit` removes it. `cq info <id>` shows `fixes` and `fixed by`, and `cq state` lists the open fix tasks as `fixLinks`. `qa deviation` sets it on the fix task it creates. The benchmark (`bench/`) counts it as a defect after merge |
 
@@ -82,6 +83,24 @@ the task's `waiting_on` and opens the blocker `owner-question`, prints `FIX-ROUN
 `merge` pass the 8 on). `cq resolve <id>.fixcap<N> --answer "…"` allows exactly one more round, and the answer is in
 its brief; the next one asks again. A higher cap: `cq edit <id> --json '{"max_fix_rounds": 5}'`; giving up:
 `cq set <id> cancelled`.
+
+### The finish line is locked after the start
+
+`done_when` and `acceptance` are fixed before a task starts and checked by someone else than the track, so a track
+cannot move its own finish line ("implementation complete" is the track's claim, "verified complete" is the gap
+reviewer's verdict against criteria the track could not change).
+
+- **Before the start** (status `proposed` or `waiting`, no `started` time) anyone may change them, as any field.
+- **After the start** (`running`, `picked`, `review`, `done`, `cancelled`, or a `started` time kept after a release)
+  `cq edit` and `cq undo` refuse a change unless `--by owner` (or the board, which passes `--by theBoard`). Anyone
+  else gets `done_when is locked after start; ask the owner (cq question)`, and nothing is written.
+- **From inside a track worktree** (the cwd is on a `<branchPrefix><id>` branch, `queue/<id>` by default) the change
+  is refused whatever `--by` says, before or after the start: `--by` is only a name, and a track can type it too.
+- An edit that sets the same value again is not a change, and other fields in the same edit are not affected by the
+  lock (an edit that touches a locked field stops as a whole).
+
+The lock is a guard against a track editing its own criteria, not an access control: a session in the main tree can
+still pass `--by owner`, and the changelog (`cq undo --show`) records who did.
 
 ## Everyday commands
 

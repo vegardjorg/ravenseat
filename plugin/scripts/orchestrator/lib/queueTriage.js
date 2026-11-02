@@ -47,7 +47,7 @@ const DEFAULTS = Object.freeze({
 });
 
 /** The task fields whose change counts as an edit of what the track would do (the changelog). */
-const CONTENT_FIELDS = new Set(['title', 'mission', 'owned_files', 'owned_db', 'shared_patch', 'done_when', 'bonus']);
+const CONTENT_FIELDS = new Set(['title', 'mission', 'owned_files', 'owned_db', 'shared_patch', 'done_when', 'acceptance', 'bonus']);
 
 const DAY_MS = 86_400_000;
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);

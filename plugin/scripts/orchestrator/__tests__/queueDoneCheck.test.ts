@@ -104,6 +104,8 @@ describe('queue.mjs receive, resume and merge with a done command', () => {
       const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'orchestrator', 'queue.mjs'), ...args], {
         encoding: 'utf8',
         env,
+        // Outside any git tree: the done lock refuses edits from a track worktree (the cwd on a queue/ branch).
+        cwd: folder,
       });
       return { code: r.status, out: r.stdout ?? '', error: r.stderr ?? '' };
     };
@@ -117,8 +119,8 @@ describe('queue.mjs receive, resume and merge with a done command', () => {
       fs.utimesSync(f, later, later);
     };
 
-    // ---- edit validates the field (the same rule as add) ----
-    expect(run('edit', 'A', '--json', JSON.stringify({ done_when: '' })).error).toContain('done_when must be a non-empty');
+    // ---- edit validates the field (the same rule as add); the task is running, so only the owner may edit it ----
+    expect(run('edit', 'A', '--json', JSON.stringify({ done_when: '' }), '--by', 'owner').error).toContain('done_when must be a non-empty');
     expect(run('edit', 'A', '--json', JSON.stringify({ max_fix_rounds: 99 })).error).toContain('max_fix_rounds must be');
 
     // ---- 1. The track says DONE, the done command is red: a fix round, not a review ----
@@ -175,7 +177,7 @@ describe('queue.mjs receive, resume and merge with a done command', () => {
     expect(queue().question?.['A.fixcap2']).toBeTruthy();
 
     // ---- 4. Green: receive goes on to the review package, merge does not run it again on the same tip ----
-    expect(run('edit', 'A', '--json', JSON.stringify({ done_when: GREEN })).code).toBe(0);
+    expect(run('edit', 'A', '--json', JSON.stringify({ done_when: GREEN }), '--by', 'owner').code).toBe(0);
     report(`A-r${round}`, `${RES}\n\n# Fix round ${round}\n`);
     const m4 = run('receive', 'A');
     expect(m4.error).toBe('');
@@ -197,7 +199,7 @@ describe('queue.mjs receive, resume and merge with a done command', () => {
     expect(find().done_check).toMatchObject({ ok: true, step: 'merge' });
 
     // ---- 5. null removes the field ----
-    expect(run('edit', 'A', '--json', JSON.stringify({ done_when: null, max_fix_rounds: null })).code).toBe(0);
+    expect(run('edit', 'A', '--json', JSON.stringify({ done_when: null, max_fix_rounds: null }), '--by', 'owner').code).toBe(0);
     expect('done_when' in find()).toBe(false);
   });
 });
