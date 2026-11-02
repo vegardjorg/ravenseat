@@ -383,7 +383,7 @@ cq receive <ID>              # receive a finished track
 cq merge <ID>                # merge it
 cq cost                      # USD per merged change, cost per task (all runs), then per class
 cq calibrate                 # how far minute and cost estimates are off, per class
-cq doctor                    # read-only health check: node, hooks, config, state, locks, worktrees
+cq doctor                    # read-only health check: node, hooks, config, state, worktrees, safety baseline
 cq helpers                   # helper agents: on/off and what they cost
 cq helpers add <file.md>     # a custom helper: copied, scanned, off until approved
 cq plan show                 # plan register
@@ -457,14 +457,43 @@ queue, a new question for you). To quiet it:
 Your own phrases go in the gitignored `<dataFolder>/mascot-phrases.json`. See
 [docs/board.md](plugin/docs/board.md#the-mascot).
 
+## Safety baseline
+
+Agents write and merge a lot of code quickly, so the usual mistakes (a leaked key, a red build on the live site, lost
+data) get cheaper to make. These eleven rules work in any stack; take the ones that fit your project:
+
+1. Keep secrets out of git: `.env*` and key files in `.gitignore`, a committed `.env.example` with names only.
+2. Scan for secrets before you push and in CI.
+3. Run your own checks (build, type check, lint, tests) on every push, and keep them green.
+4. Protect the release branch on your git host: no force push, no deletion, changes only with green checks.
+5. Agents never deploy and never see production credentials.
+6. Staging first; production is a separate, deliberate step.
+7. Database changes go forward only, are tried on staging first, with a backup before production.
+8. Have backups you have restored once, and know how to revert a merge (`git revert -m 1 <merge>`).
+9. Commit the lockfile and audit your dependencies now and then.
+10. Keep large and binary files (dumps, exports, builds) out of git.
+11. Keep CI cheap: cancel superseded runs, skip docs-only pushes, push in batches.
+
+What Ravenseat checks for you:
+- `cq doctor` (offline, read-only): secret files in git or not ignored (a tracked `.env` or private key is a FAIL;
+  an ignored local `.env` is fine), empty gates, no CI config, a manifest without its lockfile, `productionBranch`
+  equal to `baseBranch`, tracked files over `largeFileMb`, and CI workflows that run on push without cancel or a path
+  filter.
+- The push guard: no force push and no other branch than `baseBranch` from Claude Code; before a plain push of the
+  base branch it scans what is about to be pushed for secrets (gitleaks when it is on your PATH, otherwise a few
+  built-in patterns) and asks, naming file and line, never the value. It also asks before any of your
+  `deployCommands`. It only sees commands run inside Claude Code, not your own terminal.
+- The gates (`gates.quick`, `gates.full`) the agents run before delivery, the base gate that stops merges on a red
+  base, and the batch push threshold.
+- `/cq:setup` can write a GitHub Actions workflow that runs your `gates.quick` on push and pull requests (opt-in,
+  never over an existing file). On GitLab, Bitbucket and others, add a job that runs the same commands.
+
+Set this up for your project: run `cq doctor`.
+
 ## Not included
 
 This is the queue system only. My own project has more around it, which was too project-specific to include. You
 will want your own versions of these:
-- **CI/CD.** No GitHub workflows are included, and the checks the tracks run are only what you put in
-  `queue.config.json` (`gates.quick`, `gates.full`). Build your own pipeline, so code is tested behind gates before
-  it reaches staging or production: at a minimum type check, lint and tests on every push, and a separate, deliberate
-  step to promote staging to production. Agents write a lot of code quickly, so this matters more, not less.
 - **Screenshots and visual checks.** Tasks can carry the label `visual` and land on a manual QA list (`cq qa`), but
   nothing takes screenshots. Either write a small script of your own that opens the app in a headless browser and
   saves screenshots, or use an end-to-end test tool such as Playwright, which can click through flows and take

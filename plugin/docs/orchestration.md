@@ -419,6 +419,18 @@ holding work back.
 - INFO without a `paths` or `paths-ignore` filter: a docs-only push runs the whole CI. Add for example
   `paths-ignore: ["**/*.md", "docs/**"]` under `on.push`.
 
+**Secret check and deploy commands in the push guard.** Before a plain push of the base branch by the orchestrator,
+the guard scans the added lines of what the push sends (`<remote>/<baseBranch>..<baseBranch>`): with gitleaks when it
+is on PATH, otherwise with a few built-in patterns (private key headers; AWS, GitHub, GitLab, Slack, Stripe live,
+Google API, Azure storage, OpenAI and Anthropic key formats; and a generic `password=`/`secret=`/`token=` with a long
+value outside test, fixture, example and docs files). A hit gets the confirmation dialog with file:line and the rule,
+never the value; a false alarm is answered with "push anyway". It never denies. Skipped silently: a diff larger than
+`secretScan.maxBytes`, a first push (no remote ref, it would scan the whole history), a timeout or any error.
+`secretScan.enabled: false` turns it off. With the batch question, both are asked in one dialog.
+`deployCommands` (empty by default) lists the project's deploy commands; any command that starts with one of them
+gets the confirmation dialog, from an agent or the main session. It is a reminder, not a wall: a list is never
+complete, so keep production credentials out of the shell Claude Code starts from.
+
 ## Hardening against prompt injection
 
 A track reads text the owner did not write: files, PDFs, web pages, other agents' reports. If it follows an
