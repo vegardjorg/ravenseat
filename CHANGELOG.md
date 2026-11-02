@@ -3,6 +3,11 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.6 (2026-11-02)
+
+### Changed
+- New board screenshots from the demo project, showing the 0.8 board with the Decisions tab.
+
 ## 0.8.5 (2026-11-02)
 
 ### Changed
