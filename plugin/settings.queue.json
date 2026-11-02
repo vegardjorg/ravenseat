@@ -42,6 +42,9 @@
         { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-context.mjs"], "timeout": 10 }
       ] }
     ],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-session-end.mjs"], "timeout": 10 }] }
+    ],
     "PreCompact": [
       { "matcher": "", "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-after-compact.mjs"], "timeout": 30 }] }
     ]

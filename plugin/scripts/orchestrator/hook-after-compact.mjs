@@ -35,7 +35,8 @@
 // Time log: EVERY main session's compaction (not only the orchestrator's) appends one row to the time log
 // (config().timeLog; QUEUE_TIME_LOG overrides): { time, event: "compact", scope: "session", session_id, orchestrator }
 // (lib/timeLogRows.js), with orchestrator = this session is the bound one. Track compactions are logged by
-// hook-track-context.mjs.
+// hook-track-context.mjs. It also appends a `session` row (trigger compact) with the session's last cost reading the
+// status line saved in <dataFolder>/session-cost.json (lib/eventRows.js), when there is one.
 //
 // Fails OPEN: any internal error gives no output and exit 0.
 // =============================================================
@@ -135,6 +136,20 @@ function compactions(filePath) {
   }
 }
 
+/** The session row with the last saved cost reading (lib/eventRows.js). Fail open. */
+function logSessionCost({ sessionId, orchestrator }) {
+  try {
+    const ER = require('./lib/eventRows.js');
+    const row = ER.sessionRowFromState(ER.readSessionState(path.join(QUEUE_FOLDER, ER.SESSION_FILE)), sessionId, {
+      trigger: 'compact',
+      orchestrator,
+    });
+    if (row) TL.appendRows(timeLog(), row);
+  } catch {
+    // error-ignored: measurement only
+  }
+}
+
 async function main() {
   const input = await readIn();
   const sessionId = input.session_id ?? null;
@@ -154,6 +169,7 @@ async function main() {
   } catch {
     // error-ignored: the re-injection below is what matters
   }
+  logSessionCost({ sessionId, orchestrator: bound });
   if (!bound) return;
 
   const revoke = KV.withoutWindDown(cursor, sessionId);

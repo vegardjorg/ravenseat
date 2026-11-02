@@ -15,6 +15,12 @@
 // Calibration point: when the input has rate_limits, the last reading is saved in <dataFolder>/rate-limits.json (when
 // the percentages change, otherwise at most every 15 min; lib/rateLimits.js). `cq capacity --calibrate auto` uses it.
 //
+// Session cost: the session's cost.total_cost_usd (cumulative for the session id) is saved per session in
+// <dataFolder>/session-cost.json when it changes, and a `session` row goes to the time log when it grew by $0.50 or
+// more since the last row, or 10 min after the last row when it grew at all (lib/eventRows.js sessionDecision). The
+// payload has no cumulative token counts (context_window.total_input_tokens is the context now), so only the cost,
+// the durations, the context size and the model are kept. `cq cost` shows it as the orchestration overhead.
+//
 // Set up: a plugin cannot set `statusLine` itself (it is a user or project setting, not a plugin component), so
 // `cq setup --settings` writes it to .claude/settings.json (settings.queue.json has the vendored form). An existing
 // status line of your own is kept.
@@ -74,8 +80,11 @@ function queueFolder(input) {
   const { main } = PR.resolveRoots({ cwd });
   if (!PR.queueActive({ main })) return null;
   const k = require('./lib/queueConfig.js').config({ root: main });
+  timeLogFile = process.env.QUEUE_TIME_LOG ?? path.join(main, k.timeLog);
   return process.env.QUEUE_FOLDER ?? path.join(main, k.dataFolder);
 }
+/** The project's time log, set by queueFolder (config().timeLog in the main tree; QUEUE_TIME_LOG overrides). */
+let timeLogFile = null;
 
 /** The count of active tracks, from the cache when queue.json is unchanged. Null when there is no queue. */
 function trackCount(folder) {
@@ -121,6 +130,32 @@ function saveRateLimits(folder, input) {
   fs.renameSync(tmp, file);
 }
 
+/**
+ * Saves the session's cost reading and, when lib/eventRows.js says so, appends a `session` row to the time log.
+ * `orchestrator` = the session is the bound orchestrator (<dataFolder>/orchestrator.json session_id).
+ */
+export function saveSessionCost(folder, input, { now = Date.now(), log = timeLogFile } = {}) {
+  const ER = require('./lib/eventRows.js');
+  const reading = ER.sessionReading(input, now);
+  if (!reading) return false;
+  const file = path.join(folder, ER.SESSION_FILE);
+  const state = ER.readSessionState(file);
+  const d = ER.sessionDecision(state.sessions[reading.session_id], reading, now);
+  if (!d.save) return false;
+  let logged = false;
+  if (d.log) {
+    let orchestrator = false;
+    try {
+      orchestrator = JSON.parse(fs.readFileSync(path.join(folder, 'orchestrator.json'), 'utf8'))?.session_id === reading.session_id;
+    } catch {
+      orchestrator = false; // no cursor: not the orchestrator
+    }
+    logged = require('./lib/timeLogRows.js').appendRows(log, ER.sessionRow({ reading, orchestrator, trigger: 'statusline' }));
+  }
+  ER.writeSessionState(file, ER.withSession(state, reading, { logged }));
+  return logged;
+}
+
 async function main() {
   let s = '';
   for await (const chunk of process.stdin) s += chunk;
@@ -134,6 +169,11 @@ async function main() {
         saveRateLimits(folder, input);
       } catch {
         // error-ignored: the calibration point is an aid; the line must still be written
+      }
+      try {
+        saveSessionCost(folder, input);
+      } catch {
+        // error-ignored: the session cost is measurement only; the line must still be written
       }
     }
   } catch {

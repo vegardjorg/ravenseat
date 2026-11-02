@@ -30,6 +30,9 @@ import {
 import {
   BASE_SETUP, BH, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf, writeReport,
 } from './baseHealth.mjs';
+import { logEvent } from './events.mjs';
+
+const ER = require('./lib/eventRows.js');
 
 // ---- The done command (task field done_when, lib/doneCheck.js): receive and merge ---------------------------------
 
@@ -459,6 +462,8 @@ export async function cmdMerge() {
     : null;
   // The exit code of merge-track.mjs: 4 = the merge guard stopped it before the merge (gets its own message below).
   let mergeCode = null;
+  // The merge step's output, for the conflict count in the mergeConflict row ("Conflicts in N files.").
+  let mergeOut = '';
   // ---- The base gate after the merge (lib/baseHealth.js) ----
   // The verdict is recorded for the merge commit as soon as it is known: from the quick gates when they are the base
   // gate (or when they are red: a red quick gate on the new tip is a red base whatever the base gate commands are),
@@ -556,6 +561,7 @@ export async function cmdMerge() {
     writeLog(`===== ${x.step}: ${cmd} ${args.join(' ')} (exit ${r.code}) =====\n${r.out}`);
     if (x.step === 'merge') {
       mergeCode = r.code;
+      mergeOut = r.out;
       if (r.code === 0 && BASE_SETUP.enabled) mergeCommit = git(['rev-parse', 'HEAD']);
     }
     if (x.step === 'gates' && BASE_SETUP.enabled && mergeCommit) {
@@ -609,6 +615,7 @@ export async function cmdMerge() {
         `\`${CQ} merge ${id} --allow-guard\` (logged as "guard-overridden").`,
     );
     mergeBlock(id, 'merge-conflict', 'merge guard');
+    logEvent(ER.mergeConflictRow({ task: id, branch, files: ER.conflictFiles(mergeOut), guard: true }));
     console.log(`Full log: ${logFile}`);
     process.exit(4);
   }
@@ -616,6 +623,10 @@ export async function cmdMerge() {
     // A stop in the merge or the gates step opens a blocker reason (cq blockers); the next successful merge closes it.
     const code = { merge: 'merge-conflict', gates: 'gate-red' }[res.stop.step];
     if (code) mergeBlock(id, code, res.stop.message);
+    // The mergeConflict row (lib/eventRows.js): only when merge-track itself failed (not the wrong branch), and not
+    // when it said "No conflicts." (a validation stop). Fail open.
+    if (code === 'merge-conflict' && mergeCode != null && mergeCode !== 0 && ER.conflictFiles(mergeOut) !== 0)
+      logEvent(ER.mergeConflictRow({ task: id, branch, files: ER.conflictFiles(mergeOut) }));
     console.log(`STOP in the step ${res.stop.step}: ${res.stop.message}`);
     if (res.stop.excerpt.length) console.log(res.stop.excerpt.map((l) => `  | ${l}`).join('\n'));
     console.log(`Full log: ${logFile}`);

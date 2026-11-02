@@ -18,8 +18,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { a, BASE, CONFIG, CQ, die, edit, git, L, missionFile, positional, pulseCursor, read, readMission, require, val } from './context.mjs';
+import { logEvent } from './events.mjs';
 
 export const T = require('./lib/queueTriage.js');
+const ER = require('./lib/eventRows.js');
 
 /** The mission file's mtime (ms) when the mission is a file, otherwise null (an edit of the file counts as an edit). */
 function missionMtimeMs(o) {
@@ -133,6 +135,8 @@ export function cmdTriage() {
     return { question: s.question, title: s.task.title };
   });
   pulseCursor(`triage ${id} ${verdict}`);
+  // The triage row (lib/eventRows.js): the verdicts per week (fail open).
+  logEvent(ER.triageRow({ task: id, verdict, by: val('--by') ?? null }));
   if (verdict === 'ready') console.log(`${id}: triage ready. It can start (the next fill).`);
   else if (verdict === 'adjust')
     console.log(`${id}: triage adjust. The note is added to the mission (TRIAGE bonus in the track block); it can start (the next fill).`);

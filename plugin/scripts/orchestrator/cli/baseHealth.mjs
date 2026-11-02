@@ -18,6 +18,7 @@ import { BASE, CONFIG, CQ, die, edit, FOLDER, git, GIT_ROOT, L, require, TIME_LO
 
 const BH = require('./lib/baseHealth.js');
 const TL = require('./lib/timeLogRows.js');
+const ER = require('./lib/eventRows.js');
 
 /** The resolved setup (config().baseGate with the defaults; off without commands or with enabled: false). */
 export const BASE_SETUP = BH.baseGateSetup(CONFIG);
@@ -109,6 +110,7 @@ export function recordVerdict({ tip, ok, run = null, file = null, causeId = null
   if (ok) {
     const entry = { ...base, ...(skipped ? { skipped } : {}), ...(note ? { note } : {}) };
     BH.writeState(HEALTH_FILE, BH.record(state, entry));
+    logBaseGate({ entry, run });
     return { entry, previous, fix: null };
   }
   // Already red before this merge: this merge did not make it red, so the earlier cause (possibly none) is kept.
@@ -158,7 +160,29 @@ export function recordVerdict({ tip, ok, run = null, file = null, causeId = null
     ...(note ? { note } : {}),
   };
   BH.writeState(HEALTH_FILE, BH.record(state, entry));
+  logBaseGate({ entry, run });
   return { entry, previous, fix };
+}
+
+/** The baseGate row for a recorded verdict (lib/eventRows.js). Fail open: never stops the merge flow. */
+function logBaseGate({ entry, run }) {
+  try {
+    TL.appendRows(
+      TIME_LOG,
+      ER.baseGateRow({
+        time: entry.at,
+        tip: entry.tip,
+        ok: entry.status === 'green',
+        skipped: entry.skipped ?? null,
+        run,
+        madeRedBy: entry.made_red_by ?? null,
+        fixTask: entry.fix_task ?? null,
+        note: entry.note ?? null,
+      }),
+    );
+  } catch {
+    // error-ignored: measurement only
+  }
 }
 
 /** The orchestrator instruction after a red verdict (printed last, where it is read). */

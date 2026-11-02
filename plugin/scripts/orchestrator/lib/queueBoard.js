@@ -1850,6 +1850,7 @@ const QUEUE_HOOKS = [
     what: 'recovery after compaction',
   },
   { file: 'hook-effort.mjs', events: ['UserPromptSubmit'], what: 'thinking level' },
+  { file: 'hook-session-end.mjs', events: ['SessionEnd'], what: 'session cost at session end' },
   { file: 'hook-context.mjs', events: ['UserPromptSubmit'], what: 'context warning' },
 ];
 

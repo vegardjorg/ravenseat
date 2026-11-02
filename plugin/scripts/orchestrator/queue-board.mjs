@@ -102,6 +102,9 @@ const G = require('./lib/queueGit.js');
 const L = require('./lib/queueLogic.js');
 const S = require('./lib/queueStatistics.js');
 const TK = require('./lib/timeCost.js');
+// The flow rows (fixRound, mergeConflict, baseGate, triage, push, load) and their figures for the Statistics tab.
+const ER = require('./lib/eventRows.js');
+const ES = require('./lib/eventStatistics.js');
 // The Plans space. The register is read with queuePlan.js, and what the board needs is made by queuePlanView.js (read only).
 const P = require('./lib/queuePlan.js');
 const PRIVACY = require('./lib/queuePlanView.js');
@@ -575,21 +578,22 @@ function state() {
 }
 
 // ---- The statistics: the time log is read only when it has changed, the result is cached -------------
-let logCache = { key: null, rows: [], error: null };
+let logCache = { key: null, rows: [], events: [], error: null };
 function timeLogRows() {
   let st;
   try {
     st = fs.statSync(TIME_LOG);
   } catch (e) {
-    return { key: 'missing', rows: [], error: e?.code ?? 'does not exist' };
+    return { key: 'missing', rows: [], events: [], error: e?.code ?? 'does not exist' };
   }
   const key = `${st.mtimeMs}:${st.size}`;
   if (logCache.key !== key) {
     // Only the "done" rows are needed (usage and context); the gate rows (most of them) are dropped at once.
-    const rows = TK.readRows(fs.readFileSync(TIME_LOG, 'utf8')).filter(
-      (r) => r?.event === 'done',
-    );
-    logCache = { key, rows, error: null };
+    const all = TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+    const rows = all.filter((r) => r?.event === 'done');
+    // The flow rows apart (boardFlow), so the "done" rows stay exactly as before.
+    const events = all.filter((r) => ER.EVENTS.has(r?.event));
+    logCache = { key, rows, events, error: null };
   }
   return logCache;
 }
@@ -600,6 +604,17 @@ function boardForecast(queue) {
     return FC.boardForecast(queue);
   } catch (e) {
     console.error(`the forecast failed: ${e?.message ?? e}`);
+    return null;
+  }
+}
+
+/** The flow figures for the last 14 days (lib/eventStatistics.js, the same as in cq cost); an error leaves the box out. */
+function boardFlow(queue, events) {
+  try {
+    const to = Date.now();
+    return ES.flowStatistics(queue, events ?? [], { from: to - 14 * 86_400_000, to });
+  } catch (e) {
+    console.error(`the flow figures failed: ${e?.message ?? e}`);
     return null;
   }
 }
@@ -616,6 +631,7 @@ function statistics() {
     blockers: L.blockerSummary(queue, { days: 7 }),
     timeLogError: log.error,
     forecast: boardForecast(queue),
+    flow: boardFlow(queue, log.events),
   };
   const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
   statCache = { key, version, data };
