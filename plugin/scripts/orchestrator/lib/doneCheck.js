@@ -19,7 +19,8 @@
 //
 // The finish line is fixed before the start: `acceptance` (an optional list of short criteria, `cq add --accept` or
 // `cq edit --accept`) and `done_when` are locked once the task has started (status running or later, or a `started`
-// time). After that only the owner changes them (`--by owner`, or the board, `theBoard`); anyone else gets "<field> is
+// time). The ownership fields the merge guard trusts (owned_files, shared_patch, owner_db, migr_block) follow the same
+// lock (LOCKED_FIELDS). After that only the owner changes them (`--by owner`, or the board, `theBoard`); anyone else gets "<field> is
 // locked after start". From inside a track worktree (the cwd is on a `<branchPrefix><id>` branch) they are refused
 // whatever --by says, since a track can type `--by owner` too. The mission copies the criteria under ACCEPTANCE_TITLE,
 // and the gap reviewer answers MET / NOT MET / UNCLEAR per criterion (gapCriteriaBlock). So the track being checked
@@ -44,8 +45,13 @@ const LINE_MAX = 400;
 /** At most this many acceptance criteria per task, each at most ACCEPTANCE_TEXT_MAX characters (short, checkable). */
 const ACCEPTANCE_MAX = 10;
 const ACCEPTANCE_TEXT_MAX = 300;
-/** The fields that are locked after the start, and the `by` values that mean the owner (as in lib/ownerWait.js). */
-const LOCKED_FIELDS = Object.freeze(['done_when', 'acceptance']);
+/**
+ * The fields that are locked after the start, and the `by` values that mean the owner (as in lib/ownerWait.js).
+ * The finish line (done_when, acceptance) and the ownership the merge guard checks against (owned_files, shared_patch,
+ * owner_db, migr_block; merge-track.mjs and lib/mergeGuard.js): a track that could widen its own ownership could make
+ * the merge guard let a change to .claude/ or a hook through (review H2).
+ */
+const LOCKED_FIELDS = Object.freeze(['done_when', 'acceptance', 'owned_files', 'shared_patch', 'owner_db', 'migr_block']);
 const OWNER_BY = new Set(['owner', 'theBoard']);
 /** The statuses before the start; every other status (or a `started` time) locks the fields. */
 const BEFORE_START = new Set(['proposed', 'waiting']);

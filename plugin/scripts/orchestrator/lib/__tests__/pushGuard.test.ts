@@ -228,8 +228,8 @@ describe('network guard (agent_type track/track-d)', () => {
       expect(decision('npx cowsay', context)).toBeNull();
     }
   });
-  it('the push rules are unchanged for tracks, and deny wins over ask', () => {
-    expect(decision('git push origin main', track)).toBeNull();
+  it('tracks never push (H1), and deny wins over ask', () => {
+    expect(decision('git push origin main', track)).toBe('deny');
     expect(decision('git push origin queue/A', track)).toBe('deny');
     expect(decision('git status && npx cowsay', track)).toBe('ask');
     expect(decision('npx cowsay && curl https://x', track)).toBe('deny');

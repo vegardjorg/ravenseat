@@ -226,7 +226,12 @@ context size. The system keeps both small:
 - **Reading guard.** `hook-read-guard.mjs` stops tracks and reviewers from re-reading files that are already loaded
   automatically, or reading huge files in full.
 - **Push guard.** `hook-push-guard.mjs` asks before force pushes, pushes of other branches than the base, and
-  migration pushes to environments not listed as allowed.
+  migration pushes to environments not listed as allowed, and denies deleting the base on the remote (`--delete`,
+  `:<base>`). It reads the whole command line (`lib/shellCommands.js`): `bash -c`, `sh -c`, `powershell -Command`,
+  `pwsh -c`, `cmd /c`, `eval`/`iex`, the `&` call operator, `( )`, `$( )`, backticks, `;`/`&&`/`||`/pipes, env
+  prefixes, `git -C` and inline aliases (`git -c alias.p=push p`). A part it cannot see into (inline `node -e` code, a
+  variable as the command, `xargs`, `Start-Process` …) in a line that looks like a push gives a question in the main
+  session and a deny for a queue agent.
 - **Time and cost log.** `hook-time.mjs` logs subagent start and stop; `cq cost` turns the measured sessions into
   per-class statistics, so estimates get better over time. The same file (`timeLog`, overridden by `QUEUE_TIME_LOG`)
   also gets rows for the benchmark in `bench/` (formats in `lib/timeLogRows.js`): one `gate` row per gate run (see
@@ -542,8 +547,18 @@ Windows, so there are four layers:
   `Start-BitsTransfer` and a pipe into a shell (`| sh`, `| iex` …), and asks before `npm install` or `npx` with a
   package that is not in `package.json`. The queue agents are `track`, `track-d` and every reviewer and helper agent,
   builtin or custom (the same list as the read guard, `queueAgentTypes` in `lib/trackGuard.js`, also with the plugin
-  prefix such as `cq:reviewer`). None of them needs the network. The orchestrator (the main session) is not affected
+  prefix such as `cq:reviewer`, plus every agent file the plugin ships, `PLUGIN_AGENT_TYPES`: `ask`, `triage` and all
+  `reviewer-*`). None of them needs the network. The orchestrator (the main session) is not affected
   and fetches what an agent needs.
+- **Queue agents never push or steer the queue.** For the same queue agents the push guard denies every `git push`
+  (any remote, refspec or form: `HEAD:<base>`, `--delete`, `:ref`, `--mirror`, `--all`, `--tags`, `-f`, `send-pack`,
+  `subtree push`), a git subcommand that is not a builtin (an alias from the git config) and defining an alias
+  (`git config alias.*`). Of the queue's own CLI (`cq …`, `node …/queue.mjs …`, `node …/cq.mjs …`, the orchestrator's
+  scripts) they run only an allow-list: `prepare-track`, `gates`, `show`, `info`, `help`, `blockers`, `finding`,
+  `question`, `block`, `deliver` and `plan show|get`; never `merge`, `set`, `edit`, `approve`, `resolve`, `undo` and
+  the rest, and never `--allow-guard`, `--force*` or `--by owner`/`--by theBoard`. The ownership the merge guard
+  checks (`owned_files`, `shared_patch`, `owner_db`, `migr_block`) is locked after the start like `done_when` and
+  `acceptance`: only `--by owner` or the board changes it, and never from a track worktree.
 - **Limits.** `maxTurns` is 400 for `track` and 600 for `track-d`, and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`
   (`env` in `settings.queue.json`, set by `setup --settings`) stops a track from starting agents of its own. A plugin's
   `hooks.json` cannot set environment variables, so this one lives in the project settings.

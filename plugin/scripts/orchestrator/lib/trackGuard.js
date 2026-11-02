@@ -35,6 +35,26 @@ const path = require('node:path');
 const CONTEXT_TYPES = new Set(['track', 'track-d']);
 /** Agent types readGuard applies to by default (track + the review agents in the template). */
 const READ_TYPES = new Set(['track', 'track-d', 'reviewer', 'reviewer-security']);
+/**
+ * Every agent the plugin ships (plugin/agents/<name>.md, the file names). All of them are queue agents: the network,
+ * push, queue CLI and write guards apply to each (review M2: `ask` and `reviewer-area` have Bash and read a track's
+ * transcript tail, exactly where injected text sits). lib/__tests__/trackGuard.test.ts compares the list with the folder,
+ * so a new agent file cannot be left out.
+ */
+const PLUGIN_AGENT_TYPES = Object.freeze([
+  'ask',
+  'reviewer',
+  'reviewer-area',
+  'reviewer-challenger',
+  'reviewer-design',
+  'reviewer-docs',
+  'reviewer-gap',
+  'reviewer-security',
+  'reviewer-tests',
+  'track',
+  'track-d',
+  'triage',
+]);
 /** Files Claude Code loads automatically (or that belong to memory), and that must not be read whole again. */
 const AUTO_LOADED = Object.freeze(['CLAUDE.md', 'CLAUDE.local.md', 'MEMORY.md']);
 
@@ -281,7 +301,8 @@ function globToRegex(glob) {
 }
 
 /**
- * The queue's own agent types: track, track-d, the review agents in the template and every reviewer and helper agent in
+ * The queue's own agent types: track, track-d, every agent the plugin ships (PLUGIN_AGENT_TYPES: ask, triage and all
+ * reviewer-* files), the review agents in the template and every reviewer and helper agent in
  * the setup (fixed per class, the config's helpers and the custom helpers registered in queue.json with
  * `cq helpers add`, lib/queueHelpers.js allReviewerTypes). Bare names, without a plugin prefix.
  * The read guard (readRules) and the network guard (pushGuard.js) use this same list. The main session (the
@@ -302,7 +323,7 @@ function queueAgentTypes() {
   } catch {
     reviewerTypes = Object.keys(require('./queueHelpers.js').CATALOG);
   }
-  return new Set([...READ_TYPES, ...reviewerTypes]);
+  return new Set([...READ_TYPES, ...PLUGIN_AGENT_TYPES, ...reviewerTypes]);
 }
 
 /**
@@ -393,6 +414,7 @@ function assessReading({ agentType, filePath, offset, limit, countLines, maxLine
 module.exports = {
   CONTEXT_TYPES,
   READ_TYPES,
+  PLUGIN_AGENT_TYPES,
   AUTO_LOADED,
   TRACK_THRESHOLD,
   MAX_LINES,

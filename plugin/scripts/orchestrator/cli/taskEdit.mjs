@@ -21,8 +21,9 @@ import {
 } from './context.mjs';
 import { logTime, measurementLine, measureTask, minutes, saveMeasurement } from './tracks.mjs';
 
-// The lock on the finish line (done_when and acceptance, lib/doneCheck.js doneLockError): edit and undo refuse a
-// change after the start unless --by is owner or theBoard, and always from inside a track worktree.
+// The lock on the finish line and the ownership (done_when, acceptance, owned_files, shared_patch, owner_db, migr_block;
+// lib/doneCheck.js LOCKED_FIELDS and doneLockError): edit and undo refuse a change after the start unless --by is owner
+// or theBoard, and always from inside a track worktree.
 const D = require('./lib/doneCheck.js');
 let trackBranchCache;
 /**
