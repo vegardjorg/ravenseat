@@ -84,13 +84,8 @@ const LITE_GROUPS = [
 
 /** The command words queue.mjs dispatches on (`command === '...'`); the test keeps this list in step with queue.mjs. */
 const QUEUE_COMMANDS = [
-<<<<<<< HEAD
-  'activeOnes', 'add', 'approve', 'area', 'areas', 'ask', 'batch', 'block', 'blockers', 'calibrate', 'cancel', 'capacity', 'classify', 'cloud', 'cloud-bundles',
-  'cloud-package', 'compact', 'conflicts', 'continue', 'cost', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'external',
-=======
   'activeOnes', 'add', 'approve', 'area', 'areas', 'ask', 'batch', 'board-setting', 'block', 'blockers', 'calibrate', 'cancel', 'capacity', 'classify', 'cloud', 'cloud-bundles',
-  'cloud-package', 'compact', 'continue', 'cost', 'decide', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'external',
->>>>>>> mvp/decide
+  'cloud-package', 'compact', 'conflicts', 'continue', 'cost', 'decide', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'external',
   'fill', 'finding', 'focus', 'follow', 'forecast', 'handover', 'helpers', 'info', 'init', 'limit', 'merge', 'migr', 'mode', 'next', 'next-migr',
   'orchestrator', 'park', 'pick', 'pickable', 'plan', 'project', 'projects', 'proposals', 'qa', 'question', 'rank', 'receive',
   'release', 'resolutions', 'resolve', 'resume', 'set', 'show', 'start', 'state', 'trackFile', 'triage', 'unblock', 'undo', 'wait',

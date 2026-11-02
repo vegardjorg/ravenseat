@@ -55,6 +55,11 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
   owner question "Focus X is done: set a new focus or continue the regular queue?" appears in Waiting on you;
   answering "Continue the regular queue" lifts the pause. On keeps the old behavior with one notice line. Per focus:
   `cq focus set ... --continue-when-empty on|off`; `cq focus` and `cq doctor` know the setting.
+- **`/cq:decide` and `cq decide`:** one list of everything waiting on you, most impact first, with the board's new
+  Decisions tab (the landing view when anything waits; one-click answers with undo; keys j/k/Enter/1-4/u).
+  `approve` and `qa ok` record `--by owner`. The Cloud tab is hidden by default (`board.showCloud`,
+  `cq board-setting cloud on`). The Focus view sets what happens when the focus is done and shows FINISHED /
+  QUEUE PAUSED. `docs/cli-parity.md` maps every board action to its command.
 - **Conflict prediction:** `cq orchestrator pulse` and the new `cq conflicts [--json]` check running and delivered
   track tips against the base and each other with `git merge-tree --write-tree` (cached per sha pair,
   time-budgeted, with a suggested merge order; git older than 2.38 falls back to file overlap and `cq doctor` says
