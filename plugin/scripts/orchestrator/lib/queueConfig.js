@@ -81,6 +81,20 @@ const STANDARD = Object.freeze({
   // push-check says LARGE (a warning, never a block: a big batch makes a red CI harder to bisect; 0 = off).
   // maxAgeHours: when set, the oldest unpushed work older than this makes the batch ready below minTasks.
   push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null },
+  // The branch that goes live (production). null = unknown. `cq doctor` warns when it is the same as baseBranch: every
+  // batch push would then go straight to production. Nothing else reads it yet.
+  productionBranch: null,
+  // Commands that deploy (e.g. "vercel --prod", "fly deploy"). The push guard ASKS before any command that starts with
+  // one of them, from an agent or the main session (a simple prefix match after env prefixes; never complete, so keep
+  // production credentials out of the shell too). Empty = off.
+  deployCommands: [],
+  // The secret precheck before a plain push of baseBranch from the main session (lib/secretScan.js): the added lines of
+  // what the push sends are scanned (gitleaks when it is on PATH, else built-in patterns) and a hit gets a confirmation
+  // dialog naming file:line, never the value. maxBytes: a larger diff is skipped silently. timeoutMs: per git or
+  // gitleaks call. Fails open.
+  secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000 },
+  // `cq doctor` warns about tracked files larger than this (MB).
+  largeFileMb: 5,
   // The fix-round cap per task (`resume --reason fix`, also the one receive starts after a red done command). At the cap
   // the task becomes an owner question instead of another round. The task field `max_fix_rounds` overrides it.
   maxFixRounds: 3,

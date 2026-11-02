@@ -14,6 +14,8 @@
 //   branches    queue branches of done or cancelled tasks that are still there (WARN only)
 //   ci-cost     .github/workflows/*.yml that run on push: WARN without concurrency cancel-in-progress, INFO without a
 //               paths/paths-ignore filter (a text scan, lib/pushBatch.js workflowCost)
+//   the safety baseline (cli/doctorBaseline.mjs, offline): secrets (a tracked .env or private key is FAIL), gates,
+//               ci, lockfile, prod (productionBranch vs baseBranch), largefile
 // Exit code 1 when any check FAILs, otherwise 0. It never changes anything: no lock, no write, no git command that
 // writes (git runs read-only, as in cli/context.mjs).
 // QUEUE_HOOKS overrides the path to the hooks file (tests).
@@ -27,6 +29,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import { a, branchFor, CONFIG, CQ, FILE, FOLDER, FOLLOW_FILE, git, HERE, KK, LOCK, MAIN_TREE, require } from './context.mjs';
+import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 
 const BOARD = require('./lib/queueBoard.js');
 const PB = require('./lib/pushBatch.js');
@@ -36,13 +39,33 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push'];
+const CLOSED = ['gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
 const fail = (name, message, fix) => ({ status: 'FAIL', name, message, fix });
 /** A hint that is not a problem on its own (counted, never an exit code). */
 const info = (name, message, fix) => ({ status: 'INFO', name, message, fix });
+
+/**
+ * The value rules of the safety baseline keys beyond the type check (productionBranch has the default null, so the
+ * type check cannot see a wrong type there).
+ */
+export function baselineProblems(own) {
+  const out = [];
+  const p = own.productionBranch;
+  if (p !== undefined && p !== null && !(typeof p === 'string' && /^[^\s]+$/.test(p)))
+    out.push('productionBranch must be a branch name or null');
+  const d = own.deployCommands;
+  if (Array.isArray(d) && d.some((x) => typeof x !== 'string' || !x.trim())) out.push('deployCommands must hold non-empty strings');
+  const s = own.secretScan;
+  if (s && typeof s === 'object' && !Array.isArray(s))
+    for (const k of ['maxBytes', 'timeoutMs'])
+      if (s[k] !== undefined && !(Number.isInteger(s[k]) && s[k] > 0)) out.push(`secretScan.${k} must be a whole number > 0`);
+  const mb = own.largeFileMb;
+  if (mb !== undefined && !(typeof mb === 'number' && mb > 0)) out.push('largeFileMb must be a number > 0');
+  return out;
+}
 
 /** The kind of a JSON value for the type check: array, object, null or the typeof. */
 const kind = (v) => (Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v);
@@ -171,6 +194,7 @@ function checkConfig() {
   if (own.mode != null && !['lite', 'full'].includes(own.mode)) wrong.push(`mode is "${own.mode}", expected lite or full`);
   // The push keys have value rules beyond the type (lib/pushBatch.js setupProblems).
   wrong.push(...PB.setupProblems(own.push).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
+  wrong.push(...baselineProblems(own).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   const out = [];
   if (wrong.length) out.push(fail('config', `wrong type in ${path.basename(file)}: ${wrong.join('; ')}`, 'compare with queue.config.example.json'));
   if (unknown.length)
@@ -349,7 +373,7 @@ function checkCiCost() {
 
 /** `cq doctor [--json]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const checks = [checkNode, checkHooks, checkConfig, checkState, checkLock, checkWorktrees, checkBranches, checkCiCost].flatMap((f) => {
+  const checks = [checkNode, checkHooks, checkConfig, checkState, checkLock, checkWorktrees, checkBranches, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {
