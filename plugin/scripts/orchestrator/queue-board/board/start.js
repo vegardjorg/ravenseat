@@ -112,16 +112,53 @@ function drawUpdateBanner() {
 }
 
 /**
- * The logo (optional file in the queue folder, served at /logo) sits in the fixed mascot zone in the left corner of the top.
- * Without a logo the zone is empty, but keeps its space, so the top does not jump when the file comes or goes.
+ * The picture in the fixed mascot zone in the left corner of the top. The Ravenseat logo (two ravens on the high seat,
+ * /ravenseat.svg) is the default; the raven on the right does the talking. The mascot (the queue folder's own logo file
+ * or the bundled one, served at /logo) is a switch in the gear. Without a mascot file the zone falls back to the
+ * Ravenseat logo, so it is never empty.
  */
 function drawLogo() {
   const zone = $('mascot');
+  const mascot = figure() === 'mascot' && !!t.data?.logo;
   const exists = zone.querySelector('.logo');
-  if (t.data?.logo && !exists) zone.append(el('img', { class: 'logo', src: '/logo', alt: '' }));
-  else if (!t.data?.logo && exists) exists.remove();
-  zone.classList.toggle('empty', !t.data?.logo);
+  const right = mascot ? exists?.tagName === 'IMG' : exists?.classList.contains('logo-raven');
+  if (!right) {
+    exists?.remove();
+    zone.append(
+      mascot
+        ? el('img', { class: 'logo', src: '/logo', alt: '' })
+        : // The mask (ravenseat.svg) gives the shape, the theme token the color: follows light and dark mode.
+          el('span', { class: 'logo logo-raven', 'aria-hidden': 'true' }),
+    );
+  }
+  zone.classList.remove('empty');
+  zone.classList.toggle('raven', !mascot);
+  zone.dataset.talker = mascot ? 'mascot' : 'raven'; // read by mascot.js for the button's label
+  if (zone.classList.contains('clickable'))
+    zone.setAttribute('aria-label', mascot ? 'The mascot: say something' : 'The raven: say something');
 }
+
+// Which picture sits in the mascot zone: 'logo' (Ravenseat, the default) or 'mascot'. Remembered per browser; the
+// choice made in this session lives on t.figure, so the switch works even when localStorage is blocked.
+const FIGURE_STORAGE = 'queue-board-figure';
+function figure() {
+  if (t.figure) return t.figure;
+  try {
+    return localStorage.getItem(FIGURE_STORAGE) === 'mascot' ? 'mascot' : 'logo';
+  } catch {
+    return 'logo'; // localStorage blocked: the default
+  }
+}
+function setFigure(v) {
+  t.figure = v === 'mascot' ? 'mascot' : 'logo';
+  try {
+    localStorage.setItem(FIGURE_STORAGE, t.figure);
+  } catch {
+    /* storage is blocked: the choice applies until the page is reloaded */
+  }
+  drawLogo();
+}
+drawLogo(); // the logo is there at once, before the first state has arrived
 
 // The speech bubble by the mascot: the logic lives in mascot.js and lib/queueMascot.js. The board reports new
 // states (update) and owner actions (api) there, and has the choice Chatty / Events only / Off in the gear.

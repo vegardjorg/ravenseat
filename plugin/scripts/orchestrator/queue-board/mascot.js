@@ -204,7 +204,11 @@
     if (on) {
       zone.setAttribute('role', 'button');
       zone.tabIndex = 0;
-      zone.setAttribute('aria-label', 'The mascot: say something');
+      // Who talks: the raven on the right of the Ravenseat logo (the default) or the mascot (board/start.js sets it).
+      zone.setAttribute(
+        'aria-label',
+        zone.dataset.talker === 'mascot' ? 'The mascot: say something' : 'The raven: say something',
+      );
     } else {
       zone.removeAttribute('role');
       zone.removeAttribute('tabindex');

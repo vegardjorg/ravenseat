@@ -152,8 +152,11 @@ browser comes from `queue.config.json`:
 the flag, the mascot is off for every viewer: no bubbles, no click, nothing is computed on the server, and the choice
 in the gear is locked.
 
-**Hiding the picture.** Off keeps the picture. To remove the mascot completely in one browser, click **Hide the mascot
-completely** in the gear. **Show the mascot again** in the same place brings it back.
+**Logo or mascot.** The Ravenseat logo is the default picture; the raven on the right talks. **Show the mascot instead
+of the logo** under Logo and mascot in the gear switches to the mascot (`/logo`), per browser.
+
+**Hiding the picture.** Off keeps the picture. To remove it completely in one browser, click **Hide the picture
+completely** in the gear. **Show the picture again** in the same place brings it back.
 
 **Your own phrases.** The board ships the mascot's full built-in repertoire (night owl jabs, encouragement, stats roasts, events and vibe-coding jokes) in `lib/queueMascot.js`. To use your own, put
 `mascot-phrases.json` in the queue's data folder (`<dataFolder>`, default `scripts/.queue/`, which the installer adds

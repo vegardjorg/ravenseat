@@ -72,8 +72,10 @@ function themeSection() {
 }
 
 /**
- * How much the mascot says: Chatty, Events only or Off (stored in localStorage by mascot.js). When the server has
- * turned the mascot off (board.mascot "off" in queue.config.json, or --mascot off), the choice is locked.
+ * The picture in the top corner and how much it says. A switch picks the Ravenseat logo (the default; the raven on the
+ * right talks) or the mascot. The speech choice, Chatty, Events only or Off (stored in localStorage by mascot.js),
+ * applies to both. When the server has turned the mascot off (board.mascot "off" in queue.config.json, or
+ * --mascot off), the speech choice is locked.
  */
 function mascotSection() {
   const m = window.QueueMascotView;
@@ -84,7 +86,8 @@ function mascotSection() {
   return el(
     'fieldset',
     { class: 'setting theme-option' },
-    el('legend', { class: 'setting-title', text: 'Mascot' }),
+    el('legend', { class: 'setting-title', text: 'Logo and mascot' }),
+    figureSwitch(),
     el('p', {
       class: 'setting-explanation',
       text: 'How often the speech bubbles show. Off keeps the picture and turns the bubbles off.',
@@ -114,21 +117,38 @@ function mascotSection() {
   );
 }
 
-/** The whole mascot (picture and bubbles) can be hidden in this browser, and shown again. */
+/** The switch between the Ravenseat logo (off, the default) and the mascot (on). Stored per browser (board/start.js). */
+function figureSwitch() {
+  return el(
+    'label',
+    { class: 'figure-switch' },
+    el('input', {
+      type: 'checkbox',
+      class: 'switch',
+      role: 'switch',
+      id: 'figure-switch',
+      checked: figure() === 'mascot',
+      onchange: (e) => setFigure(e.target.checked ? 'mascot' : 'logo'),
+    }),
+    'Show the mascot instead of the logo',
+  );
+}
+
+/** The whole picture (logo or mascot, and the bubbles) can be hidden in this browser, and shown again. */
 function hideMascotField(m) {
   if (!m.hideMascot) return null;
   if (m.isHidden()) {
     return el(
       'div',
       { class: 'setting-field' },
-      el('p', { class: 'setting-explanation', text: 'The mascot is hidden in this browser.' }),
+      el('p', { class: 'setting-explanation', text: 'The picture is hidden in this browser.' }),
       el(
         'div',
         { class: 'setting-control' },
         el('button', {
           type: 'button',
           class: 'button button-muted',
-          text: 'Show the mascot again',
+          text: 'Show the picture again',
           onclick: () => {
             m.showMascot();
             drawSettings();
@@ -150,7 +170,7 @@ function hideMascotField(m) {
       el('button', {
         type: 'button',
         class: 'button button-muted',
-        text: 'Hide the mascot completely',
+        text: 'Hide the picture completely',
         onclick: () => {
           m.hideMascot();
           drawSettings();
