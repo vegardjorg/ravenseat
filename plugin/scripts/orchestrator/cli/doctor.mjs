@@ -12,6 +12,8 @@
 //   worktrees   folders under <mainTree>/.claude/worktrees without .git (a half-deleted worktree blocks agent starts),
 //               and git worktrees whose folder is gone (`git worktree list --porcelain`)
 //   branches    queue branches of done or cancelled tasks that are still there (WARN only)
+//   git         INFO when git is older than 2.38: no `git merge-tree --write-tree`, so the conflict prediction
+//               (lib/conflictPredict.js) falls back to file overlap (QUEUE_GIT_VERSION overrides the version, tests)
 //   ci-cost     .github/workflows/*.yml that run on push: WARN without concurrency cancel-in-progress, INFO without a
 //               paths/paths-ignore filter (a text scan, lib/pushBatch.js workflowCost)
 //   the safety baseline (cli/doctorBaseline.mjs, offline): secrets (a tracked .env or private key is FAIL), gates,
@@ -34,6 +36,7 @@ import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 const BOARD = require('./lib/queueBoard.js');
 const PB = require('./lib/pushBatch.js');
 const TW = require('./lib/testWeakening.js');
+const CP = require('./lib/conflictPredict.js');
 
 /** The lowest Node major version the scripts support (package.json "engines"). */
 const MIN_NODE = 20;
@@ -374,9 +377,22 @@ function checkCiCost() {
   return out;
 }
 
+/** git: new enough for `git merge-tree --write-tree` (the conflict prediction)? Only an INFO line when it is not. */
+function checkGit() {
+  const v = CP.gitVersion(CP.makeRunner(MAIN_TREE));
+  if (v && CP.supportsMergeTree(v)) return [];
+  return [
+    info(
+      'git',
+      `git ${v ?? '(version unknown)'} is older than ${CP.MIN_GIT_TEXT}: the conflict prediction (pulse, ${CQ} conflicts) uses file overlap instead of git merge-tree --write-tree`,
+      `update git to ${CP.MIN_GIT_TEXT} or newer`,
+    ),
+  ];
+}
+
 /** `cq doctor [--json]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const checks = [checkNode, checkHooks, checkConfig, checkState, checkLock, checkWorktrees, checkBranches, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const checks = [checkNode, checkHooks, checkConfig, checkState, checkLock, checkWorktrees, checkBranches, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

@@ -244,8 +244,12 @@ function resumeBlock({
           '',
         ]
       : [];
+  // A merge that stopped on a real conflict (cq merge saved merge_conflict): the files and the other tasks that touched
+  // them, so the fix round starts informed (lib/conflictPredict.js briefLines).
+  const conflictLines = fix ? require('../conflictPredict.js').briefLines(o.merge_conflict, { base, branch }) : [];
   const work = fix
     ? [
+        ...conflictLines,
         ...doneRed,
         'Fix the review findings: HIGH, and MEDIUM that is not small and mechanical; LOW findings in the same files come along.',
         'Fix at the file:line the findings point to, and only in the files the track owns. A finding you disagree with:',

@@ -33,6 +33,7 @@ import {
 import { logEvent } from './events.mjs';
 
 const ER = require('./lib/eventRows.js');
+const CP = require('./lib/conflictPredict.js');
 
 // ---- The done command (task field done_when, lib/doneCheck.js): receive and merge ---------------------------------
 
@@ -791,6 +792,25 @@ export async function cmdMerge() {
       logEvent(ER.mergeConflictRow({ task: id, branch, files: ER.conflictFiles(mergeOut) }));
     console.log(`STOP in the step ${res.stop.step}: ${res.stop.message}`);
     if (res.stop.excerpt.length) console.log(res.stop.excerpt.map((l) => `  | ${l}`).join('\n'));
+    // A real conflict: the files and the other tasks that touched them go on the task (merge_conflict), so the fix
+    // round brief names them (lib/conflictPredict.js, logic/resume.js). Fail open.
+    if (code === 'merge-conflict' && mergeCode != null && mergeCode !== 0) {
+      try {
+        const mc = CP.mergeConflictContext({
+          out: mergeOut, task: o, tasks: read().tasks, run: CP.makeRunner(GIT_ROOT), base: BASE, branch,
+          prefix: CONFIG.branchPrefix ?? 'queue/',
+        });
+        if (mc.files.length) {
+          edit((q) => {
+            const x = q.tasks.find((y) => y.id === id);
+            if (x) x.merge_conflict = mc;
+          });
+          for (const l of CP.mergeStopLines(mc, { id, cq: CQ })) console.log(l);
+        }
+      } catch {
+        /* the context helps the fix round; it is never a reason to fail the stop */
+      }
+    }
     console.log(`Full log: ${logFile}`);
     printBase();
     process.exit(1);
@@ -809,6 +829,7 @@ export async function cmdMerge() {
     if (tReview && !ox.t_review) ox.t_review = tReview;
     // The merge went through: an open blocker (merge-conflict, gate-red or one set by hand) is closed.
     L.closeBlock(ox);
+    delete ox.merge_conflict;
     return ox;
   });
   console.log(`Full log: ${logFile}`);
