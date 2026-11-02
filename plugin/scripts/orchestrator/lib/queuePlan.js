@@ -77,9 +77,11 @@ const FIELD = [
   // Set by the tool:
   'created',
   'agent_boost',
+  // `cq finding` (lib/queueFindings.js): { tasks, files, reported, last, count }, the tracks that reported it.
+  'finding',
 ];
 /** Fields the tool owns: cannot be set with `plan new` or `plan edit`. */
-const TOOL_FIELD = new Set(['id', 'created', 'agent_boost', 'merged_from']);
+const TOOL_FIELD = new Set(['id', 'created', 'agent_boost', 'merged_from', 'finding']);
 /** Derived from queue.json (task.plan); never saved in the register. */
 const DERIVED_FIELD = new Set(['queue_tasks']);
 
@@ -341,6 +343,16 @@ function validateEntry(entry, ctx = {}) {
     );
   else if (!MATURITY_MANUAL.includes(entry.maturity))
     f(`unknown maturity ${entry.maturity} (allowed: ${MATURITY_MANUAL.join(', ')})`);
+
+  // A finding (`cq finding`): who reported it and which files they named; the shape only, the tool writes it.
+  if (entry.finding != null) {
+    const fi = entry.finding;
+    if (!isObject(fi)) f('finding must be an object (set by cq finding)');
+    else {
+      if (!Array.isArray(fi.tasks) || fi.tasks.some((x) => typeof x !== 'string')) f('finding.tasks must be a list of task ids');
+      if (!Array.isArray(fi.files) || fi.files.some((x) => typeof x !== 'string')) f('finding.files must be a list of paths');
+    }
+  }
 
   if (entry.size != null && !SIZES.includes(entry.size))
     f(`size must be one of ${SIZES.join(', ')}`);

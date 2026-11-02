@@ -66,6 +66,7 @@ function makeQueueCommon(template, scratch, k = {}) {
       'depends_on, waiting_on, owned_files, shared_patch, source, added_by = your track id) and run',
       `\`${require('./lib/projectRoot.js').cqCommand()} add --file <file>\`. It becomes a proposal the owner approves. Mention the id in`,
       'the report, and a HIGH security finding in its own section.',
+      `Noticed something outside your scope? Run \`${require('./lib/projectRoot.js').cqCommand()} finding "<title>" [--detail "..."] [--files a,b]\` instead of fixing it.`,
     ].join('\n'),
   );
   s = swap(s, '<BRANCH>', '__BRANCH__');

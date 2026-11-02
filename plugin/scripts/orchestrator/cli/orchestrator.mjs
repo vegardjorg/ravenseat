@@ -20,6 +20,7 @@ import {
   KV, L, missionRef, parallelWarning, positional, pulseCursor, read, readCursor, val, values, WIDTH, withLock, write,
 } from './context.mjs';
 import { deliveryWarning, findSilent, findWithoutAgent } from './tracks.mjs';
+import { findingsLineNow } from './finding.mjs';
 
 // ---- queue.mjs handover: the ongoing note in two parts ---------------------------------------------------------
 /**
@@ -255,6 +256,9 @@ export function cmdOrchestrator() {
     for (const l of L.silentLines(findSilent(read()))) console.log(l);
     // Follow up: the pulse repeats due entries every time, until the report is written (cq follow report).
     for (const l of followLines({ pulse: true })) console.log(l);
+    // Findings the tracks reported outside their scope (cq finding) that nobody has triaged yet.
+    const fl = findingsLineNow();
+    if (fl) console.log(fl);
     // The pulse runs every loop round, so low parallelism is checked now and then even without fill and receive.
     parallelWarning();
   } else if (under === 'stop') {

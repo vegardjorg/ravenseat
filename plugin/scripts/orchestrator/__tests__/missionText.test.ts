@@ -50,6 +50,7 @@ const REQUIREMENT: [string, string[]][] = [
   ['NEVER kill by pattern', ALL],
   ['hotspots', ALL],
   ['cq add --file', ALL],
+  ['Noticed something outside your scope? Run `cq finding "<title>"', ALL],
   ['HIGH security finding', ALL],
   ['Context cap about 300k', ALL],
   ['handover.md', ALL],

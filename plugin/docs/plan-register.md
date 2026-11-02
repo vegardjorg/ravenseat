@@ -47,6 +47,23 @@ undo.
 | `plan undo` | Undo |
 | `plan backup` | Runs the script in `planBackup` (optional; for example a private backup repo) |
 | `plan doc …` | Optional register of controlled documents (versions, revisions, links) |
+| `finding "<title>" [--detail "…"] [--task <id>] [--files a,b]` | A track reports something outside its scope as an idea (see Findings) |
+| `finding list [--all]` | The findings nobody has triaged yet (`--all`: every one) |
+
+## Findings
+
+A track that notices a bug or a smell outside its own files runs `cq finding "<title>"` instead of fixing it. The
+finding lands here, not in the batch queue: the batch queue holds small tasks someone has decided to do (class,
+estimate, owned files), while a finding is an observation nobody has looked at yet, which is what an idea is.
+
+- The entry is `PL-FINDING-<n>` with `maturity: idea` and `priority: later` set by the agent. It is not `owner`
+  (rule 2 below), so a busy track does not open an owner question for every observation; the orchestrator triages.
+- `--task` defaults to the task whose queue branch the worktree is on, and the project to that task's project.
+  The tool-owned field `finding` keeps the reporting tasks, the files, the time and a count.
+- The same title again (case, punctuation and spacing ignored) adds the task and the files to the existing entry.
+  A title that matches an entry that is not a finding changes nothing.
+- A finding is new until it is triaged: a new priority or maturity, a drop, or a queue task with `--plan <id>`.
+  `orchestrator pulse` and `cq show` print a `FINDINGS:` line with the count, and `cq state` has `findings`.
 
 ## Rules that keep it useful
 

@@ -341,6 +341,7 @@ cq doctor                    # read-only health check: node, hooks, config, stat
 cq helpers                   # helper agents: on/off and what they cost
 cq helpers add <file.md>     # a custom helper: copied, scanned, off until approved
 cq plan show                 # plan register
+cq finding "<title>"         # a track notes something outside its scope (an idea, not a fix)
 cq board                     # the board: prints a local link with a key
 cq follow                    # follow-up entries
 cq handover now              # the "Now" part of the handover note

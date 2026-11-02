@@ -88,6 +88,7 @@ With [auto-accept](#auto-accept-of-proposals) on, the queue approves the proposa
 | `park <id>` / `continue <id>` | Park / unpark |
 | `pick <id> --by "<who>"` / `deliver <id>` | A person or a separate chat takes a task by hand / delivers it |
 | `diagnose` | Why the queue runs fewer tracks than it could (with suggested fixes) |
+| `finding "<title>" [--detail] [--task] [--files a,b]` / `finding list [--all]` | A track reports something outside its scope: an idea in the plan register, linked to the task and deduplicated on the title ([plan-register.md](plan-register.md#findings)). Pulse and `show` count the new ones |
 | `doctor [--json]` | Read-only health check, one OK/WARN/FAIL line each with a fix hint: Node and the `node` the hooks find on PATH, the hooks file and its scripts, `queue.config.json` keys and types, the state files, a stale lock, half-deleted worktree folders under `.claude/worktrees/` and git worktrees whose folder is gone, branches of finished tasks. Exit 1 on any FAIL |
 | `state` | Machine-readable state (exit 3 when there is nothing to do) |
 | `undo` | Undo the last write |
