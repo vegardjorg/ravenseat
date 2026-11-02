@@ -1,12 +1,12 @@
 {
   "name": "claude-code-queue",
   "owner": { "name": "Vegard Cowie Jørgensen" },
-  "description": "claude-code-queue: a work queue and board for running Claude Code as an orchestrator with parallel worktree agents.",
+  "description": "claude-code-queue: a kanban board and project manager for Claude Code, with visible dependencies and a focus that finishes one feature before the next.",
   "plugins": [
     {
       "name": "cq",
       "source": "./plugin",
-      "description": "Work queue, plan register and local board for running Claude Code as an orchestrator with parallel worktree agents."
+      "description": "Kanban board and project manager for Claude Code: tasks with visible dependencies, a focus that finishes one feature before the next, and parallel worktree agents that work through it."
     }
   ]
 }

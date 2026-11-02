@@ -3,14 +3,22 @@
 
 # claude-code-queue
 
-A Claude Code plugin that does two things:
+**A kanban board and project manager for Claude Code.** You manage the project the way you already know from
+kanban: tasks, dependencies and a focus. Claude Code does the work, one finished feature at a time. There are no
+workflows or pipelines to write first; the process is built in, and you only step in for the decisions.
 
-1. **Keeps track of your plans and tasks.** Ideas and plans go into a plan register. Work that is ready goes into a
-   work queue. Both live on disk, so nothing is lost when a chat ends or gets compacted, and a local board shows it
-   all.
-2. **Lets Claude Code work through the queue continuously without wasting tokens.** One chat acts as the
-   orchestrator. It hands each task to a fresh agent with a small, self-contained mission, in its own git worktree.
-   Contexts stay small, so each turn stays cheap.
+1. **A kanban board you already know how to read.** Tasks move from In queue to In progress, Review and Done on a
+   local board. Claude Code moves the cards; you see at a glance where every task stands and what comes next.
+2. **Dependencies you can see.** Each task says what it waits for. The board draws the chains as a graph, so you see
+   what is blocked, whether by another task or by a decision only you can make, and what can start right now.
+3. **Focus: finish one feature before starting the next.** You choose the areas to work on now. The queue finishes
+   the connected tasks in that focus, fixes and follow-ups included, before it picks up new feature work. Features
+   get done instead of lying half-built across the codebase.
+4. **You handle the exceptions, not the routine.** Decisions that need you collect in one place, "Waiting on you",
+   each with context, a recommendation and choices. Only that task waits; the rest of the board keeps moving.
+5. **Runs for days without wasting tokens.** One chat acts as the orchestrator and hands each task to a fresh agent
+   with a small, self-contained mission, in its own git worktree, with your checks as gates before anything is
+   merged. Plans and tasks live on disk, so nothing is lost when a chat ends or gets compacted.
 
 By Vegard Cowie Jørgensen.
 
