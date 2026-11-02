@@ -62,6 +62,8 @@ Then do step 7.
    from before or in the same file); `add` and `edit` refuse anything else, and the whole file stops. Types:
    `question`, `condition`, `lawyer`, `owner-task`. When the owner answers (`cq resolve <id> --answer "…"`), every
    waiting task gets the answer appended to its mission.
+5b. **Acceptance criteria:** a task with user-visible behaviour gets 1-3 short, checkable criteria
+   (`"acceptance": ["..."]` in the file, or `cq add ... --accept "..."`); they are locked once the task starts.
 6. **Add and check:** `cq add --file <file.json>` and `cq show --project <pid>`.
    `add` rejects the whole file on error: fix and retry.
 7. **Report briefly:** the ids added, project and feature, dependencies, and owner questions (with recommendation).

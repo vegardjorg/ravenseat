@@ -75,6 +75,10 @@ function infoView(o, { fixedBy = [], costEstimate = null } = {}) {
           : 'model, too little measured data)'),
     );
   if (fixedBy.length) out.push(`fixed by: ${fixedBy.join(', ')}`);
+  // The finish line (lib/doneCheck.js), locked once the task has started.
+  if (typeof o.done_when === 'string' && o.done_when.trim()) out.push(`done_when: ${o.done_when.trim()}`);
+  const accept = require('../doneCheck.js').acceptanceList(o);
+  if (accept.length) out.push(`acceptance: ${accept.map((c, i) => `${i + 1}) ${c}`).join(' ')}`);
   if (o.result?.line) out.push(`result: ${o.result.line}`);
   if (o.cost)
     out.push(

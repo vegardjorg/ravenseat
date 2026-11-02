@@ -40,6 +40,18 @@ The track's own report is a claim, not evidence; check it against the diff. A po
 gap; list it as an open question instead. Do not judge code quality or rank the business value; others do that.
 A finding you could not check says so on its own last line: `Unverified: <what>, because <why>.`
 
+## Fixed acceptance criteria
+
+When the task has acceptance criteria or a done command, your prompt lists them (`A1`..`An`, and `D` for the done
+command). The owner set them before the start and the track could not change them, so they are the finish line, not
+the track's report. Give each one a verdict with evidence you read yourself:
+
+- **MET:** the evidence shows it (file:line, a test name and its assertion, or command output).
+- **NOT MET:** the delivery does not do it, or does it only in part. Every NOT MET is a HIGH finding and counts in `H=`.
+- **UNCLEAR:** you could not settle it within the review. Not a finding by itself; say what would settle it.
+
+For `D`, the orchestrator already ran the command green: judge whether it really exercises what the mission asks.
+
 ## Before you write a HIGH or MEDIUM finding
 
 Disprove it first. This is a step inside your own review: never start other agents to check a finding.
@@ -62,7 +74,8 @@ At most about 1,500 characters. First line exactly:
 
 Then one line per finding: severity, the mission point (its number and a few words), the status, the evidence (or
 where you looked), and what must be added or removed. HIGH means a required point is missing or divergent; MEDIUM is a
-partial point or a sizable change outside the mission; LOW is a small leftover. End with one line:
+partial point or a sizable change outside the mission; LOW is a small leftover. With fixed criteria, one line per
+criterion follows the findings: `A<n>|D MET|NOT MET|UNCLEAR <evidence>`. End with one line:
 `Covered: <done>/<total> points`.
 
 Adapted from testdouble/han (MIT).

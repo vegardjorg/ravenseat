@@ -169,7 +169,8 @@ for the owner, `edge` = server functions that must be deployed.)
 lines (owner questions with one sentence each, HIGH findings, what must be deployed, what the orchestrator must do
 while merging), then the path to `<folder>\report.md`. In `report.md`: status, branch and commits, the gate summary
 line, append-only files touched, deploy needs, **owner questions** in their own section, and the wiring specification
-(file, anchor, exact line).
+(file, anchor, exact line). When the track block has **Acceptance criteria (fixed, do not change)**, `report.md`
+says for each one how it is met (file:line or test); the gap reviewer checks them one by one.
 **QA evidence:** when the task has a label that needs evidence (`qa.evidenceLabels` in `queue.config.json`, default
 `visual`; see `cq info <TRACK> --field labels`), `report.md` has one line `EVIDENCE <type>[=<ref>[,<ref>...]]` saying how
 the owner sees that the delivery works. The types are `qa.evidenceTypes` (default `screenshot=<route or screen>`,

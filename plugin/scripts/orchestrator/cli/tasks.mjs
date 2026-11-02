@@ -17,7 +17,7 @@ import fs from 'node:fs';
 
 import {
   a, autoAcceptIn, byName, CONFIG, CQ, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
-  positional, read, readPlans, undoHint, val, withLock, write,
+  positional, read, readPlans, undoHint, val, values, withLock, write,
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
 
@@ -107,7 +107,7 @@ export function cmdAdd() {
   const LITE = LM.isLite(CONFIG);
   // Lite: `add "<title>" [--mission ...] [--priority N] [--files a,b] [--id X] [--by ...]` builds the task from the flags.
   const quickTitle = val('--title') ?? positional(1, [
-    '--file', '--json', '--title', '--mission', '--priority', '--files', '--id', '--by', '--plan',
+    '--file', '--json', '--title', '--mission', '--priority', '--files', '--id', '--by', '--plan', '--accept',
   ])[0];
   let source = val('--file') ? fs.readFileSync(val('--file'), 'utf8') : val('--json');
   if (!source && quickTitle != null) {
@@ -146,6 +146,14 @@ export function cmdAdd() {
   const newQuestion = combined ? (content.question ?? {}) : {};
   if (combined && !newOnes.length && !Object.keys(newQuestion ?? {}).length)
     die('Nothing to add (both tasks and question are empty).');
+  // --accept "<criterion>" (repeatable): the acceptance criteria of the ONE task added (lib/doneCheck.js; locked once
+  // it starts). Several tasks, or a task with its own `acceptance`, take them in the file instead.
+  const accepts = values('--accept');
+  if (accepts.length) {
+    if (newOnes.length !== 1) die('--accept sets the criteria of one task; with several, put "acceptance" in each task');
+    if (newOnes[0]?.acceptance != null) die('--accept and "acceptance" in the task both set the criteria; use one');
+    newOnes[0].acceptance = accepts;
+  }
   const approved = a.includes('--approved');
   // --plan <id> links tasks (that do not have their own `plan`) to a plan entry. Set in the file or with --plan:
   // the plan entry must exist in the plan register (an unknown or merged entry is refused), and the entry becomes in-queue automatically.

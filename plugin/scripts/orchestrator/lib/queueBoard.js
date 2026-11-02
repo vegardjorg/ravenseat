@@ -324,6 +324,9 @@ function buildBoard(
       })),
       owned_files: o.owned_files ?? [],
       owner_db: o.owner_db ?? [],
+      // The finish line (lib/doneCheck.js), read-only in the detail panel; only when set, so other cards do not grow.
+      ...(Array.isArray(o.acceptance) && o.acceptance.length ? { acceptance: o.acceptance.map(String) } : {}),
+      ...(typeof o.done_when === 'string' && o.done_when.trim() ? { done_when: o.done_when.trim() } : {}),
       remarks: remarksFor(o),
       source: o.source ?? null,
       added_by: o.added_by ?? null,

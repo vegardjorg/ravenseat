@@ -17,8 +17,17 @@
 // kept (config().doneCheck.tailLines, default 40 lines, each cut to LINE_MAX characters); the full output is never written
 // to disk or to queue.json, and the tail itself goes only to a file in the scratchpad and into the fix brief.
 //
+// The finish line is fixed before the start: `acceptance` (an optional list of short criteria, `cq add --accept` or
+// `cq edit --accept`) and `done_when` are locked once the task has started (status running or later, or a `started`
+// time). After that only the owner changes them (`--by owner`, or the board, `theBoard`); anyone else gets "<field> is
+// locked after start". From inside a track worktree (the cwd is on a `<branchPrefix><id>` branch) they are refused
+// whatever --by says, since a track can type `--by owner` too. The mission copies the criteria under ACCEPTANCE_TITLE,
+// and the gap reviewer answers MET / NOT MET / UNCLEAR per criterion (gapCriteriaBlock). So the track being checked
+// never moves its own finish line: "implementation complete" (the track) and "verified complete" (the reviewer) differ.
+//
 // Pure except runDoneWhen (it runs the command; `spawn` can be swapped in tests). Tested in lib/__tests__/doneCheck.test.ts
-// and __tests__/queueAdopt.test.ts (receive and resume against a temporary queue).
+// and __tests__/queueAdopt.test.ts (receive and resume against a temporary queue), the lock and the criteria through
+// queue.mjs in __tests__/queueDoneLock.test.ts.
 // =============================================================
 'use strict';
 
@@ -32,6 +41,16 @@ const DEFAULT_TAIL_LINES = 40;
 const DEFAULT_MAX_FIX_ROUNDS = 3;
 /** Each kept output line is cut to this many characters (a minified bundle on one line must not fill the brief). */
 const LINE_MAX = 400;
+/** At most this many acceptance criteria per task, each at most ACCEPTANCE_TEXT_MAX characters (short, checkable). */
+const ACCEPTANCE_MAX = 10;
+const ACCEPTANCE_TEXT_MAX = 300;
+/** The fields that are locked after the start, and the `by` values that mean the owner (as in lib/ownerWait.js). */
+const LOCKED_FIELDS = Object.freeze(['done_when', 'acceptance']);
+const OWNER_BY = new Set(['owner', 'theBoard']);
+/** The statuses before the start; every other status (or a `started` time) locks the fields. */
+const BEFORE_START = new Set(['proposed', 'waiting']);
+/** The heading of the criteria in the mission. */
+const ACCEPTANCE_TITLE = 'Acceptance criteria (fixed, do not change)';
 
 /**
  * The shape errors for `done_when` and `max_fix_rounds` (queueLogic.validate, so add and edit both check them).
@@ -50,7 +69,91 @@ function doneWhenErrors(o) {
   const m = o?.max_fix_rounds;
   if (m != null && !(Number.isInteger(m) && m >= 0 && m <= MAX_FIX_ROUNDS_LIMIT))
     error.push(`max_fix_rounds must be a whole number 0 to ${MAX_FIX_ROUNDS_LIMIT} (0 = no automatic fix round)`);
+  error.push(...acceptanceErrors(o));
   return error;
+}
+
+/** The shape errors for `acceptance`: null or missing is fine, otherwise a list of 1 to ACCEPTANCE_MAX one-line texts. */
+function acceptanceErrors(o) {
+  const v = o?.acceptance;
+  if (v == null) return [];
+  if (!Array.isArray(v) || !v.length || v.length > ACCEPTANCE_MAX)
+    return [`acceptance must be a list of 1 to ${ACCEPTANCE_MAX} short criteria (null removes it)`];
+  for (const c of v) {
+    if (typeof c !== 'string' || !c.trim()) return ['acceptance: every criterion must be a non-empty text'];
+    if (c.length > ACCEPTANCE_TEXT_MAX)
+      return [`acceptance: a criterion can be at most ${ACCEPTANCE_TEXT_MAX} characters`];
+    // One line each, as done_when: the mission and the gap prompt number them one per line.
+    if (/[\u0000-\u001f\u007f]/.test(c)) return ['acceptance: a criterion must be one line without control characters'];
+  }
+  return [];
+}
+
+/** The criteria as a clean list (trimmed, empty ones dropped); [] without any. */
+function acceptanceList(o) {
+  return (Array.isArray(o?.acceptance) ? o.acceptance : [])
+    .filter((c) => typeof c === 'string' && c.trim())
+    .map((c) => c.trim());
+}
+
+/** Has the task started (the lock applies)? Status running or later, or a `started` time (kept after a release). */
+const lockStarted = (o) => !BEFORE_START.has(o?.status) || !!o?.started;
+
+/**
+ * The lock on the finish line: the error text when `changes` (the new values per field an edit writes) touches a
+ * locked field this caller may not change, otherwise null. An unchanged value is not a change. `inTrack` (the track
+ * branch the cwd is on) refuses whatever `by` says; after the start only the owner (OWNER_BY) may change them.
+ * @param {object} o the task as it is now
+ * @param {Record<string, unknown>} changes
+ * @param {{ by?: string|null, inTrack?: string|null }} [who]
+ * @returns {string|null}
+ */
+function doneLockError(o, changes, { by = null, inTrack = null } = {}) {
+  const touched = LOCKED_FIELDS.filter(
+    (f) => Object.hasOwn(changes ?? {}, f) && JSON.stringify(changes[f] ?? null) !== JSON.stringify(o?.[f] ?? null),
+  );
+  if (!touched.length) return null;
+  const names = touched.join(' and ');
+  if (inTrack)
+    return `${names} cannot be changed from inside a track worktree (branch ${inTrack}); ask the owner (cq question)`;
+  if (!lockStarted(o) || OWNER_BY.has(String(by ?? '').trim())) return null;
+  return `${names} ${touched.length > 1 ? 'are' : 'is'} locked after start; ask the owner (cq question)`;
+}
+
+/** The criteria in the track block (the mission); null without criteria. */
+function acceptanceBlock(o) {
+  const list = acceptanceList(o);
+  if (!list.length) return null;
+  return [
+    `**${ACCEPTANCE_TITLE}:**`,
+    ...list.map((c, i) => `${i + 1}. ${c}`),
+    'The owner set these before the start, and `cq edit` refuses to change them from your worktree. The gap reviewer',
+    'checks each one (MET / NOT MET / UNCLEAR) against the delivery, so say in report.md how each is met (file:line or',
+    'test). One that is wrong or impossible: say so in the report (or SendMessage); never work around it.',
+  ].join('\n');
+}
+
+/**
+ * The part of the reviewer-gap prompt for a task with criteria or a done command; null without either. The criteria
+ * are A1..An and the done command is D; each gets one line after the FINDINGS line, and NOT MET is a finding.
+ */
+function gapCriteriaBlock(o) {
+  const list = acceptanceList(o);
+  const d = typeof o?.done_when === 'string' ? o.done_when.trim() : '';
+  if (!list.length && !d) return null;
+  return [
+    'Fixed acceptance criteria (set by the owner before the start; the track could not change them):',
+    ...list.map((c, i) => `- A${i + 1}: ${c}`),
+    ...(d
+      ? [
+          `- D: the done command \`${d}\` (the orchestrator ran it green before this review; judge whether it really`,
+          '  exercises what the mission asks, not only that it passes).',
+        ]
+      : []),
+    'After the FINDINGS line, answer each one on its own line: `A<n>|D MET|NOT MET|UNCLEAR <evidence>`, where the',
+    'evidence is a file:line or command output you read. Every NOT MET is a HIGH finding and counts in H=. UNCLEAR is',
+    'not a finding by itself; say what would settle it.',
+  ].join('\n');
 }
 
 /** A positive integer from the config, or the default. */
@@ -217,4 +320,14 @@ module.exports = {
   capQuestion,
   doneWhenBlock,
   worktreeFor,
+  ACCEPTANCE_MAX,
+  ACCEPTANCE_TEXT_MAX,
+  ACCEPTANCE_TITLE,
+  LOCKED_FIELDS,
+  acceptanceErrors,
+  acceptanceList,
+  lockStarted,
+  doneLockError,
+  acceptanceBlock,
+  gapCriteriaBlock,
 };

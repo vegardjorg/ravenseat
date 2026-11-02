@@ -29,6 +29,8 @@
 //   node scripts/orchestrator/queue.mjs add --json '{"id":"A-1",...}' [--approved]
 //        Status: "proposed" when added_by is an agent (a track/task id, reviewer or investigation agent), otherwise
 //        "waiting". --approved (only orchestrator/the owner, e.g. a serious finding from review) gives waiting.
+//        --accept "<criterion>" (repeatable, one task only): its acceptance criteria (field acceptance), copied into
+//        the mission and checked one by one by reviewer-gap.
 //   node scripts/orchestrator/queue.mjs approve <id> [...]           (proposed -> waiting)
 //   node scripts/orchestrator/queue.mjs proposals [auto [on|off] [--classes K,U] [--max-estimate <min|none>]
 //        [--max-value <1-10|none>]]   (auto-accept of agent proposals by the owner's rules, default off; applied by add
@@ -52,6 +54,10 @@
 //   node scripts/orchestrator/queue.mjs set <id> <proposed|waiting|running|review|done|cancelled> [--remark "..."]
 //   node scripts/orchestrator/queue.mjs edit <id> --json '{"value":8,"priority_bonus":50}' [--by "..."] [--answer-json]
 //        (logged in the changelog, so `undo` rolls it back; --answer-json: the answer as JSON with the changelog no.)
+//   node scripts/orchestrator/queue.mjs edit <id> --accept "<criterion>" [--accept "..."]   (replaces the acceptance
+//        criteria; null in --json removes them. done_when and acceptance are LOCKED once the task has started: only
+//        --by owner (or the board, theBoard) changes them then, and never from inside a track worktree (the cwd on a
+//        queue/<id> branch), whatever --by says; undo follows the same rule. lib/doneCheck.js doneLockError)
 //   node scripts/orchestrator/queue.mjs cancel <id> [--remark "..."] [--by "..."] [--expect-changed <iso>] [--json]
 //        (a waiting (also on hold or batched) or proposed task -> cancelled, the same result as set <id> cancelled
 //         --remark, but logged in the changelog so `undo` puts it back. Declining a proposal is cancel with the

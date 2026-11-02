@@ -12,13 +12,44 @@
 // Tested in: lib/__tests__/queueTaskEdit.test.ts, queueBulk.test.ts, queueAnswer.test.ts, queueFocus.test.ts, queuePlan.test.ts.
 // =============================================================
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
 import {
   a, autoCleanFocus, byName, checkExpect, die, edit, editLogged, focusCleanOut, FX, hasLock, L, lastEntry, LOCK, P,
-  pulseCursor, read, readPlans, require, undoHint, val,
+  PREFIX, pulseCursor, read, readPlans, require, undoHint, val, values,
 } from './context.mjs';
 import { logTime, measurementLine, measureTask, minutes, saveMeasurement } from './tracks.mjs';
+
+// The lock on the finish line (done_when and acceptance, lib/doneCheck.js doneLockError): edit and undo refuse a
+// change after the start unless --by is owner or theBoard, and always from inside a track worktree.
+const D = require('./lib/doneCheck.js');
+let trackBranchCache;
+/**
+ * The track branch the cwd is on (`<branchPrefix><id>`), or null. A track agent runs cq from its worktree, so this is
+ * what tells a track's edit apart from the owner's, whatever --by says. Asked only when a locked field is touched.
+ */
+function trackBranchHere() {
+  if (trackBranchCache !== undefined) return trackBranchCache;
+  let branch = '';
+  try {
+    branch = execFileSync('git', ['-C', process.cwd(), 'rev-parse', '--abbrev-ref', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    }).trim();
+  } catch {
+    // Not a git tree: not a track worktree either.
+  }
+  trackBranchCache = branch.startsWith(PREFIX) && branch.length > PREFIX.length ? branch : null;
+  return trackBranchCache;
+}
+/** doneLockError for this caller: --by and, only when a locked field is in `changes`, the cwd's track branch. */
+const lockError = (o, changes) =>
+  D.doneLockError(o, changes, {
+    by: byName(),
+    inTrack: D.LOCKED_FIELDS.some((f) => Object.hasOwn(changes, f)) ? trackBranchHere() : null,
+  });
 
 /** `cq set` (the usage is at the top of queue.mjs). */
 export function cmdSet() {
@@ -105,6 +136,9 @@ export function cmdCancel() {
 export function cmdEdit() {
   const [, id] = a;
   const field = JSON.parse(val('--json') ?? '{}');
+  // --accept "<criterion>" (repeatable) replaces the acceptance criteria (null in --json removes them).
+  const accepts = values('--accept');
+  if (accepts.length) field.acceptance = accepts;
   // --bonus "<text>" adds text to the mission (the track block) and the remarks, with a timestamp.
   const bonus = a.includes('--bonus') ? (val('--bonus') ?? '') : null;
   if (bonus != null && !String(bonus).trim())
@@ -131,6 +165,9 @@ export function cmdEdit() {
   editLogged('edit', (queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
+    // The finish line is fixed once the task has started (only the owner moves it, never a track).
+    const locked = lockError(o, field);
+    if (locked) die(`Not changed: ${locked}`);
     const fresh = { ...o, ...field };
     const f = L.validate(
       fresh,
@@ -160,8 +197,8 @@ export function cmdEdit() {
     }
     // `batched: false` takes the task out of the batch queue; the field is removed so the queue file looks as before.
     if (o.batched === false) delete o.batched;
-    // null removes the done command and the task's own fix-round cap (the config cap applies again).
-    for (const k of ['done_when', 'max_fix_rounds']) if (k in field && field[k] == null) delete o[k];
+    // null removes the done command, the criteria and the task's own fix-round cap (the config cap applies again).
+    for (const k of ['done_when', 'acceptance', 'max_fix_rounds']) if (k in field && field[k] == null) delete o[k];
     if (bonus != null) {
       const t = L.addToBonus(o, bonus, new Date().toISOString());
       if (t) die(`Invalid bonus: ${t}`);
@@ -285,7 +322,7 @@ export function cmdUndo() {
   if (a.includes('--show')) {
     const queue0 = read();
     const nf = nrError(queue0);
-    const s = nf ? { error: [nf], entry: L.lastUndoable(queue0) } : L.undoEntry(queue0, { show: true });
+    const s = nf ? { error: [nf], entry: L.lastUndoable(queue0) } : L.undoEntry(queue0, { show: true, lockError });
     if (json)
       console.log(JSON.stringify({ ok: !s.error.length, error: s.error, entry: s.entry ?? null }));
     else if (!s.entry) console.log(s.error.join('\n'));
@@ -303,7 +340,7 @@ export function cmdUndo() {
     const r = edit((queue) => {
       checkExpect(queue);
       const nf = nrError(queue);
-      const s = nf ? { error: [nf], entry: null } : L.undoEntry(queue, { by: byName(), now });
+      const s = nf ? { error: [nf], entry: null } : L.undoEntry(queue, { by: byName(), now, lockError });
       if (s.error.length) {
         if (json) {
           console.log(JSON.stringify({ ok: false, error: s.error, entry: s.entry ?? null }));
