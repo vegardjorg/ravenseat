@@ -51,9 +51,13 @@ not make a project safe on its own. `/cq:setup` helps you set them up.
 **No hosted service, no new CI system.** Plans, tasks and state live as files in your repository, so nothing is lost
 when a chat ends or gets compacted. Your own gate commands run locally, and `cq setup --ci` can write an optional
 GitHub Actions template (`.github/workflows/cq-gates.yml`, never over an existing one). It works purely from Claude
-Code (every board action has a command behind it); the board is optional, for the overview.
+Code (every change the board makes to the queue has a command behind it); the board is optional, for the overview.
 
 By Vegard Cowie Jørgensen.
+
+**Contents:** [Quick start](#quick-start-lite) · [Who it's for](#who-its-for) · [Why I built it](#why-i-built-it) ·
+[A tour of the board](#a-tour-of-the-board) · [Full mode](#graduating-to-full-mode) ·
+[What it costs](#what-it-costs-in-tokens) · [Reference and safety](#reference-and-safety)
 
 ## Quick start (lite)
 
@@ -86,6 +90,14 @@ Missions, priorities, answer options and what runs under the hood: [lite mode in
 
 Installed it as claude-code-queue before? See [Install](plugin/docs/guide.md#install) for the one extra step.
 
+## Who it's for
+
+- **A good fit:** a project that has grown past what one chat can hold, with work that can run in parallel, and
+  checks (tests, lint, type check) you are willing to trust. Most useful when you want the project to keep moving
+  while you are away, and only want to be asked when a decision is yours.
+- **Not worth it:** small scripts, one task at a time, or a project with no checks at all and no plan to add them.
+  Without checks, Ravenseat still runs the loop, but nothing automatic stands between an agent's work and the merge.
+
 ## Why I built it
 
 **The problem.** In a small project, working with Claude Code was easy. Most of the work showed up on a screen I
@@ -111,8 +123,11 @@ no longer collides. The parts that are not tied to one project were then extract
 behind is what has to be project specific: the CI/CD pipeline and the domain-specific checks
 ([not included](plugin/docs/guide.md#not-included)).
 
-**What it gives me now.** I wanted a project that keeps moving without me sitting at it. With the queue, Claude Code
-runs a large project on its own for long stretches, often overnight or for days. It picks the next task, starts track
+<details>
+<summary><b>What it gives me now</b> (how I use it day to day)</summary>
+
+I wanted a project that keeps moving without me sitting at it. With the queue, Claude Code
+runs a large project on its own for long stretches, often overnight or for days. It picks the next task, starts
 agents, reviews and merges what they deliver, and starts the next tasks. When a task needs my decision, the queue
 does not stop: it parks that task and carries on with everything else that can be done. The decisions wait for me on
 the board, or the orchestrator lists them in the chat, each with context and a recommendation.
@@ -134,6 +149,8 @@ chat. On a Claude Max (20x) plan, the queue now keeps running for about five day
 runs out. That is one project and one developer; see [What it costs in tokens](#what-it-costs-in-tokens) for what was
 measured and what was not.
 
+</details>
+
 ## A tour of the board
 
 **Start it:** in Claude Code, run `/cq:board` (or say "start the board"). Claude starts it in the background and
@@ -149,7 +166,7 @@ or dark mode; the gear lets you pick one. The screenshots use a made-up demo pro
 
 The main view (top of this page) is a kanban: **In queue** (ready now, blocked, proposed by agents, and the batch
 queue where small tasks wait to be packed into one track), **In progress** and **Review**. Each card shows the id,
-domain, class (K, D, D+ or U), estimate and how many tasks it unlocks. **Next up** shows what the orchestrator starts
+domain, class (the risk level K, D, D+ or U, see [task classes](#agents-skip-security-and-edge-cases)), estimate and how many tasks it unlocks. **Next up** shows what the orchestrator starts
 in the next free slot. Other views: **Project lanes** (one row per project), **Focus** (only what you have chosen to
 push), **Decisions** and **Statistics** (**Cloud** is hidden until you turn it on in Settings). Click a card for its
 mission, owned files, cost and the actions for its status (see [task detail](plugin/docs/guide.md#task-detail)).
@@ -221,10 +238,15 @@ Task classes decide size and review:
 
 | Class | Meaning | Size of one task | Review |
 |---|---|---|---|
-| K | Ordinary code | 90 to 120 min of work | none |
+| K | Ordinary code | 90 to 120 min of work | your gates (no reviewer agent) |
 | U | Investigation | about 60 min | the challenger (a helper agent) |
 | D | Database or contract change | about 40 min | one reviewer agent |
 | D+ | High-risk database or security | 25 to 30 min | two reviewer agents |
+
+The letters come from the project Ravenseat was built in: K for ordinary code, U for investigation (Norwegian
+*utredning*), D for database. A K task is checked only by your own gates, so with no gates set up nothing automatic
+checks it before the merge; `cq doctor` warns about that, and the tests or gap reviewer can be switched on as a
+safety net (`cq helpers`).
 
 On top of that come **helper agents**: optional reviewers you switch on and off (`cq helpers`, or the Helper agents
 tab in the board's settings). By default the challenger runs for U and `bug` tasks and the design reviewer for
@@ -297,8 +319,8 @@ fails once and passes on a rerun is recorded as flaky instead of freezing the ba
 
 ### Claude Code first: you only make the decisions
 
-Ravenseat works as a backend for Claude Code. Every board action has a command behind it
-([CLI parity](plugin/docs/cli-parity.md)), so you can work entirely from one chat (or from your phone over Remote
+Ravenseat works as a backend for Claude Code. Every change the board makes to the queue has a command behind it
+([CLI parity](plugin/docs/cli-parity.md) lists the one remaining gap, a draft-file export), so you can work entirely from one chat (or from your phone over Remote
 Control) and never open the board.
 
 **The goal is that your only contact surface is a decision list.** Once your project has checks you trust (tests,
