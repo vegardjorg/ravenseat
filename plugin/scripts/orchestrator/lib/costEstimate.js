@@ -431,7 +431,7 @@ function perMergedLines(p, label) {
   if (p.source === 'time-log')
     out.push(
       `  of which merged tasks ${$(p.parts.merged)}, cancelled ${$(p.parts.cancelled)}, still open ${$(p.parts.open)}, ` +
-        `no task ${$(p.parts.unattributed)} (the orchestrator session itself is not in the time log)`,
+        `no task ${$(p.parts.unattributed)} (subagents only; the orchestrator session is the overhead line below)`,
     );
   else out.push('  no usage in the time log for the window: the total is the measured task cost of the merged tasks only');
   if (p.fix_tasks)

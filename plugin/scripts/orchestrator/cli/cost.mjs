@@ -13,11 +13,14 @@
 // =============================================================
 
 import {
-  a, CE, CH, CONFIG, cut, D, die, edit, FC, FOLDER, HELP, L, positional, read, TK, val, WIDTH,
+  a, CE, CH, CONFIG, cut, D, die, edit, FC, FOLDER, HELP, L, positional, read, require, TK, val, WIDTH,
 } from './context.mjs';
 import {
   dailyUsageFor, measureLoad, measurementLine, measureTask, readTimeLog, saveMeasurement, sinceTime,
 } from './tracks.mjs';
+import { agentsBySession } from './events.mjs';
+
+const ES = require('./lib/eventStatistics.js');
 
 /** `cq forecast` (the usage is at the top of queue.mjs). */
 export function cmdForecast() {
@@ -74,6 +77,9 @@ export function cmdLimit() {
   console.log(`  slots now: ${ls.active ? ls.text : `${ls.max} (adaptive off)`}`);
   const lg = L.loadGuard(queue, lm);
   if (lg.stop) console.log(lg.message);
+  // When parallelism was limited and why, from the load rows of fill and start (lib/eventStatistics.js).
+  for (const l of ES.loadLines(ES.loadStatistics(readTimeLog(), { from: Date.now() - 7 * 86_400_000, to: Date.now() + 1 }), 'last 7 days'))
+    console.log(cut(l, WIDTH));
   const b = L.budgetGuard(queue, dailyUsageFor(queue));
   if (b.active) console.log(b.message);
   const night = L.nightGuard(queue);
@@ -171,18 +177,37 @@ export function cmdCost() {
     // The headline: USD per merged change (lib/costEstimate.js), all measured cost in the window / merged tasks. The
     // window is --since, otherwise the last WINDOW_DAYS days (the per-class lines below keep their all-time default).
     const from = since ? Date.parse(since) : Date.now() - CE.WINDOW_DAYS * 86_400_000;
-    const events = TK.usageEvents(readTimeLog());
-    const merged = CE.perMergedChange({ queue, events, from, to: Date.now() + 1 });
+    const rows = readTimeLog();
+    const events = TK.usageEvents(rows);
+    const to = Date.now() + 1;
+    const merged = CE.perMergedChange({ queue, events, from, to });
+    // The orchestration overhead (the main sessions' cost from the status line, minus their subagents) and the flow
+    // figures over the SAME window, shown apart from the headline (lib/eventStatistics.js).
+    const sessionIds = ES.sessionCosts(rows, { from, to }).map((x) => x.session_id);
+    const orchestration = ES.orchestrationOverhead({
+      rows,
+      events,
+      from,
+      to,
+      merged: merged.merged,
+      trackUsd: merged.total_usd,
+      agentsBySession: agentsBySession(sessionIds),
+    });
+    const flow = ES.flowStatistics(queue, rows, { from, to });
     // Cost per task with all its runs (first track, fix rounds, continuations, reviewers, fix tasks), by cost. All
     // time unless --since, like the per-class lines.
     const perTask = CE.taskTotals({ queue, events, since: since ? Date.parse(since) : null });
     const max = Number(val('--max') ?? 10);
     if (a.includes('--json')) {
-      console.log(JSON.stringify({ perMerged: merged, perTask, perClass: s.perClass, total: s.total }, null, 2));
+      console.log(
+        JSON.stringify({ perMerged: merged, orchestration, flow, perTask, perClass: s.perClass, total: s.total }, null, 2),
+      );
       process.exit(0);
     }
-    for (const l of CE.perMergedLines(merged, since ? `since ${since.slice(0, 10)}` : `last ${CE.WINDOW_DAYS} days`))
-      console.log(l);
+    const label = since ? `since ${since.slice(0, 10)}` : `last ${CE.WINDOW_DAYS} days`;
+    for (const l of CE.perMergedLines(merged, label)) console.log(l);
+    for (const l of ES.overheadLines(orchestration, label)) console.log(cut(l, WIDTH));
+    for (const l of ES.flowLines(flow, label)) console.log(cut(l, WIDTH));
     for (const l of CE.taskTotalLines(perTask, max)) console.log(cut(l, WIDTH));
     if (!s.rows.length)
       console.log('No finished tasks with a measured cost yet (measured at set <id> done).');

@@ -171,7 +171,7 @@ only; cq never changes the weights itself. The logic is `lib/costEstimate.js`.
 
 "All measured cost" is every usage event in the time log in the window: the tracks, fix rounds, reviewers and helper
 agents of the merged tasks, the work on cancelled tasks, work on tasks still open, and agents that belong to no task.
-The orchestrator session itself is not in the time log (the hooks cover subagents only), so it is not included. Without
+The orchestrator session is not in this figure (the agent rows cover subagents only); it is the overhead line below. Without
 any usage in the time log for the window, the total is the measured task cost of the merged tasks, and the output says
 so. `cq cost` uses `--since` as the window, otherwise the last 28 days; the board uses its 14-day window. "USD per
 content minute" is shown only as a secondary, estimate-based figure: raising the estimates (the denominator) makes work
@@ -180,6 +180,37 @@ look cheaper without anything changing, so it is not a headline.
 A fix task (one with `fixes`, or a QA fix task with `qa_original`) is part of the change it fixes: its cost is
 attributed to that task, and a done fix task is not counted as a merged change of its own. Without a time log, the
 fallback total is the task total of the merged tasks, fix tasks included.
+
+**Orchestration overhead** (`cq cost`, `orchestration` in `--json`) is the main session's own cost, shown apart so it
+never hides the track cost. The status line (`statusline.mjs`, set up by `cq setup --settings`) saves the session's
+`cost.total_cost_usd` per session id in `<dataFolder>/session-cost.json` and appends a `session` row to the time log
+when it grew by $0.50 or more, or 10 minutes after the last row; the compaction hook and the SessionEnd hook
+(`hook-session-end.mjs`) add one more row with the last reading. The rows are cumulative per session: each reading adds
+its growth since the previous one (a lower reading means the counter started over), and the growth inside the window
+is the session's cost there. The session total counts the subagents the session started too (as far as we know), so
+their usage in the window (their transcripts are under the session's `subagents/` folder) is subtracted. The rest,
+for the sessions bound as the orchestrator, is divided by the same merged changes as the headline and shown as a share
+of track cost + overhead; other main sessions are listed apart. Without the status line no session row is written and
+the line says so. The payload has no cumulative token counts (only the tokens in the context now), so the rows hold the
+cost, the durations, the context size and the model.
+
+**Flow** (`cq cost`, `flow` in `--json`, the "Flow" box in the board's Statistics) counts rows that the commands append
+to the time log (`lib/eventRows.js`, one JSON line each, never failing the command): `fixRound` (cq resume, also when
+receive or merge resumes), `mergeConflict` (cq merge stopped in the merge step, with the conflicted file count),
+`baseGate` (every recorded base verdict, with the skip rule and the run time), `triage` (cq triage --verdict), `push`
+and `load`. The figures: first-pass rate (the tasks done in the window, not fix tasks, with 0 fix rounds in `resumed`),
+fix rounds per merged task, merge conflicts per week, base red verdicts, pushes per week with merged tasks and commits
+per push, and the triage verdicts.
+
+Pushes are found after the fact: `cq fill` reads the reflog of `refs/remotes/<remote>/<baseBranch>`, where git writes
+"update by push" with the time after every successful push (a fetch writes "fetch: ..."), and logs each new push once
+(`<dataFolder>/push-seen.json`) with the batch between the ref before it and the pushed tip and the base health of the
+tip. This also covers pushes the owner makes by hand. It needs reflogs for remote refs (on by default in a normal repo).
+
+**Load history** (`cq limit`): one `load` row per `cq fill` and `cq start`, written before the load guard can stop the
+command: free memory and CPU (when measured), the slots the adaptive rule allows against maxConcurrent, the running
+tracks, and the guard's reason when it limited or stopped (exit 7). `cq limit` shows the last 7 days: how many times
+the slots were limited and by what, how many stops, and the latest ones.
 
 **Cost per task, all runs** (`cq cost`, `perTask` in `--json`) is one row per task, most expensive first: the first
 track, the fix rounds and continuations (`cq resume`, logged as `<id>-r<N>`), the reviewers, and the fix tasks that

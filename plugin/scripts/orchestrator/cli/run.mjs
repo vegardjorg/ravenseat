@@ -27,6 +27,9 @@ import {
   takenForMigr, trackRoots,
 } from './tracks.mjs';
 import { askedLine, triageReason, triageState, writeTriageSteps } from './triage.mjs';
+import { detectPushes, logEvent, logLoad } from './events.mjs';
+
+const ER = require('./lib/eventRows.js');
 
 /** `cq next` (the usage is at the top of queue.mjs). */
 export function cmdNext() {
@@ -89,6 +92,8 @@ export function cmdStart() {
   const usage = dailyUsageFor(read());
   const uncommitted = uncommittedPaths();
   const load = a.includes('--force') ? null : measureLoad();
+  // One load row per start (cli/events.mjs), before the guards can stop it, so a stop (exit 7) is recorded too.
+  logLoad({ command: 'start', queue: read(), load });
   const r = edit((queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
@@ -200,6 +205,10 @@ export function cmdFill() {
   const uncommitted = uncommittedPaths();
   // Measured before the lock; --over-load (the owner's word) overrides the load guard.
   const load = a.includes('--over-load') ? null : measureLoad();
+  // One load row per fill (before the load guard can stop it with exit 7), and the pushes made since the last fill
+  // (the reflog of the remote tracking ref). Both fail open (cli/events.mjs).
+  logLoad({ command: 'fill', queue: read(), load });
+  detectPushes();
   let quotaMessage = null;
   let loadMessage = null;
   // The intake triage (lib/queueTriage.js): the tasks that need a verdict are skipped (others take the slots), and the
@@ -591,6 +600,8 @@ export function cmdResume() {
     if (found.report) x.report_seen = Math.max(Number(x.report_seen ?? 0), found.report.mtimeMs);
     (x.resumed ??= []).push({ round, reason, time: new Date().toISOString() });
   });
+  // The fixRound row (lib/eventRows.js): the same round as `resumed`, countable per week (fail open).
+  logEvent(ER.fixRoundRow({ task: id, reason, round }));
   pulseCursor(`resume ${id} r${round}`);
   console.log(
     `RESUME ${trackId} (${reason}): prompt ${prompt}` +

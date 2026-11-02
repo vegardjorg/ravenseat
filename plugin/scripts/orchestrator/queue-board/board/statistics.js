@@ -349,6 +349,52 @@ function blockerTable(rows) {
   );
 }
 
+/**
+ * "Flow last 14 days": a plain table from lib/eventStatistics.js flowStatistics (the same figures as the Flow lines in
+ * cq cost): first-pass rate, fix rounds per task, merge conflicts per week, base red verdicts, pushes and batch size.
+ */
+function flowTable(f) {
+  const v = (x, unit = '') => (x == null ? '-' : `${counts(x, Number.isInteger(x) ? 0 : 1)}${unit}`);
+  const triage = Object.entries(f.triage ?? {})
+    .map(([k, n]) => `${k} ${n}`)
+    .join(', ');
+  const rows = [
+    ['First pass', v(f.firstPass.rate_pct, ' %'), `${f.firstPass.first_pass} of ${f.firstPass.merged} merged tasks with 0 fix rounds`],
+    ['Fix rounds per task', v(f.fixRounds.per_task), `${f.fixRounds.started} fix round(s) started, ${f.fixRounds.continuations} continuation(s)`],
+    ['Merge conflicts per week', v(f.mergeConflicts.per_week), `${f.mergeConflicts.count} conflict(s), ${f.mergeConflicts.files} file(s)`],
+    ['Base red', v(f.baseGate.red), `of ${f.baseGate.verdicts} verdict(s), ${f.baseGate.red_tips} red tip(s)`],
+    ['Pushes per week', v(f.pushes.per_week), `${f.pushes.count} push(es), ${v(f.pushes.tasks_per_push)} tasks per push`],
+    ['Triage', triage || '-', 'verdicts from cq triage'],
+  ];
+  return el(
+    'section',
+    { class: 'blocker-stat', 'aria-labelledby': 'flow-stat-title' },
+    el('h3', { id: 'flow-stat-title', class: 'setting-title', text: 'Flow last 14 days' }),
+    el(
+      'table',
+      { class: 'blocker-table' },
+      el(
+        'thead',
+        null,
+        el(
+          'tr',
+          null,
+          el('th', { scope: 'col', text: 'Figure' }),
+          el('th', { scope: 'col', text: 'Value' }),
+          el('th', { scope: 'col', text: 'Detail' }),
+        ),
+      ),
+      el(
+        'tbody',
+        null,
+        rows.map(([name, val, detail]) =>
+          el('tr', null, el('th', { scope: 'row', text: name }), el('td', { text: val }), el('td', { text: detail })),
+        ),
+      ),
+    ),
+  );
+}
+
 function drawStatistics() {
   const d = t.stat.data;
   if (!d) {
@@ -595,6 +641,8 @@ function drawStatistics() {
     el('div', { class: 'graphs' }, graph1, graphInOut, graph2, graph3, graph4),
     // Blockers last 7 days (cq blockers): per reason code, count and blocked time, top first.
     blockerTable(d.blockers),
+    // Flow last 14 days (lib/eventStatistics.js flowStatistics, the same figures as cq cost).
+    ...(d.flow ? [flowTable(d.flow)] : []),
     // The legend for the classes and badges (same as in the help).
     legend('stat'),
     // append() turns null into the text "null", so the remark is only added when it exists.
