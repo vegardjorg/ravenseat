@@ -88,6 +88,7 @@ With [auto-accept](#auto-accept-of-proposals) on, the queue approves the proposa
 | `park <id>` / `continue <id>` | Park / unpark |
 | `pick <id> --by "<who>"` / `deliver <id>` | A person or a separate chat takes a task by hand / delivers it |
 | `diagnose` | Why the queue runs fewer tracks than it could (with suggested fixes) |
+| `doctor [--json]` | Read-only health check, one OK/WARN/FAIL line each with a fix hint: Node and the `node` the hooks find on PATH, the hooks file and its scripts, `queue.config.json` keys and types, the state files, a stale lock, half-deleted worktree folders under `.claude/worktrees/` and git worktrees whose folder is gone, branches of finished tasks. Exit 1 on any FAIL |
 | `state` | Machine-readable state (exit 3 when there is nothing to do) |
 | `undo` | Undo the last write |
 | `qa` / `qa ok <id…>` / `qa deviation <id> "…"` | The QA list (split into what to look at, a manual round and auto entries) / the owner approves / the owner finds a deviation (fix task `<id>-QA<n>`) |

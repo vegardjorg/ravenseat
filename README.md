@@ -337,6 +337,7 @@ cq receive <ID>              # receive a finished track
 cq merge <ID>                # merge it
 cq cost                      # USD per merged change, cost per task (all runs), then per class
 cq calibrate                 # how far minute and cost estimates are off, per class
+cq doctor                    # read-only health check: node, hooks, config, state, locks, worktrees
 cq helpers                   # helper agents: on/off and what they cost
 cq helpers add <file.md>     # a custom helper: copied, scanned, off until approved
 cq plan show                 # plan register

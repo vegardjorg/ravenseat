@@ -114,6 +114,12 @@
 // waiting-on-resolved (cleanup, only in diagnose) and bottleneck. The diagnosis never fixes anything itself; each finding is "simple"
 // (mechanical and unambiguous: a finished command the orchestrator runs) or "complex" (an option with a recommendation to the owner).
 //   node scripts/orchestrator/queue.mjs diagnose [--json]             (the whole diagnosis regardless of parallelism; read-only)
+//   node scripts/orchestrator/queue.mjs doctor [--json]               (read-only health check, OK/WARN/FAIL with a fix hint each:
+//                                                                  node and the node the hooks find on PATH, the hooks file and
+//                                                                  its scripts, queue.config.json keys and types, the state
+//                                                                  files, a stale lock, half-deleted worktree folders and git
+//                                                                  worktrees without a folder, branches of finished tasks;
+//                                                                  exit 1 on any FAIL; cli/doctor.mjs)
 //
 // The orchestrator's routine as a script and the cost per task (the pure logic is in lib/queueLogic.js):
 //   node scripts/orchestrator/queue.mjs fill --scratchpad <folder> [--max N] [--ids <id …>] [--over-quota] [--over-load]
@@ -487,7 +493,7 @@
 // =============================================================
 
 // The layout: this file is the usage above and the dispatch on the command word below. The code of the commands is in
-// cli/, one module per area (tasks, taskEdit, view, owner, run, merge, cost, helpers, orchestrator, projects, batch,
+// cli/, one module per area (tasks, taskEdit, view, owner, run, merge, cost, doctor, helpers, orchestrator, projects, batch,
 // cloud, plans with planShared, planCheck and planDoc), with the shared state in cli/context.mjs and the shared track
 // helpers in cli/tracks.mjs. The usage comment stays here: lib/cliHelp.js reads it for `cq help`.
 import fs from 'node:fs';
@@ -495,6 +501,7 @@ import { a, command, CONFIG, CQ, die, HERE, KK, require } from './cli/context.mj
 import * as batch from './cli/batch.mjs';
 import * as cloud from './cli/cloud.mjs';
 import * as cost from './cli/cost.mjs';
+import * as doctor from './cli/doctor.mjs';
 import * as helpers from './cli/helpers.mjs';
 import * as merge from './cli/merge.mjs';
 import * as orchestrator from './cli/orchestrator.mjs';
@@ -561,6 +568,8 @@ if (command === 'init') {
   view.cmdState();
 } else if (command === 'diagnose') {
   view.cmdDiagnose();
+} else if (command === 'doctor') {
+  doctor.cmdDoctor();
 } else if (command === 'trackFile') {
   run.cmdTrackFile();
 } else if (command === 'fill') {
@@ -658,7 +667,7 @@ if (command === 'init') {
     'Use: cq <init|add|approve|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|cost|handover|deliveries|resume|follow> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|cost|handover|deliveries|resume|follow> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }
