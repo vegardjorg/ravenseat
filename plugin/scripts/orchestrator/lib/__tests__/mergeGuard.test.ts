@@ -19,6 +19,51 @@ import { STANDARD } from '../queueConfig';
 const changed = (...paths: string[]) => paths.map((p) => ({ status: 'M', paths: [p] }));
 const MIGR = { folder: 'db/migrations', filePattern: '^(\\d+)_.*\\.sql$' };
 
+describe('protected paths: the M3 additions and case (plans/review-2026-11-02.md)', () => {
+  it('git hook managers, package manager configs, editor tasks and CLAUDE.md at any level are protected', () => {
+    for (const p of [
+      '.husky/pre-commit',
+      'lefthook.yml',
+      '.npmrc',
+      'packages/app/.npmrc',
+      '.yarnrc.yml',
+      '.pnpmfile.cjs',
+      '.vscode/tasks.json',
+      '.github/workflows/ci.yml',
+      'CLAUDE.md',
+      'docs/area/CLAUDE.md',
+      'CLAUDE.local.md',
+      'packages/app/.claude/settings.json',
+      '.gitattributes',
+    ])
+      expect(isProtected(p), p).toBe(true);
+    for (const p of ['src/claude.ts', 'docs/CLAUDE-notes.md', 'src/.vscode-like/x.ts', 'npmrc.md'])
+      expect(isProtected(p), p).toBe(false);
+  });
+  it('the match ignores case: .CLAUDE/ and .Claude/ are .claude/ on Windows and macOS', () => {
+    for (const p of [
+      '.CLAUDE/settings.json',
+      '.Claude/agents/x.md',
+      '.GitHub/workflows/ci.yml',
+      'Package.json',
+      'claude.md',
+      '.Husky/pre-push',
+      'VITEST.config.ts',
+    ])
+      expect(isProtected(p), p).toBe(true);
+    // A custom list matches without case too.
+    expect(isProtected('Infra/Secrets.tf', ['infra/'])).toBe(true);
+    // The glob helper keeps its case-sensitive default for its other users (the test-weakening check).
+    expect(globMatch('*.test.ts', 'A.TEST.TS')).toBe(false);
+    expect(globMatch('*.test.ts', 'A.TEST.TS', { ignoreCase: true })).toBe(true);
+  });
+  it('a track that writes .CLAUDE/settings.json without owning it stops the merge', () => {
+    const r = assessGuard({ changes: changed('.CLAUDE/settings.json'), ownedFiles: ['src/'] });
+    expect(r.stop).toBe(true);
+    expect(r.violations.map((v) => v.path)).toEqual(['.CLAUDE/settings.json']);
+  });
+});
+
 describe('protected paths (the default list)', () => {
   it('recognises hooks, settings, agents, skills, orchestrator scripts, the queue config and package files', () => {
     for (const p of [

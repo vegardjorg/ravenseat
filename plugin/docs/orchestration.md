@@ -427,6 +427,23 @@ checkout or with cq's own `--evidence` run:
   main session is never stopped, and the hook is inert without `queue.config.json`. Both are guards against mistakes
   and casual forgery, not a security boundary: the agents run as the same OS user.
 
+## A merge that survives interruptions
+
+`cq merge` runs several steps in a row, so it guards against being cut off or run twice (`lib/mergeLock.js`):
+
+- **One at a time.** A lock file `<dataFolder>/merge.lock` (pid, host, start time) lets one `cq merge` run per repo. A
+  second one stops at once and names the holder. A lock whose process is gone (same host) or that is older than 6 h
+  is stale and taken over; the message names the merge that was cut off.
+- **No merge on top of an unfinished one.** A merge, rebase, cherry-pick or revert in progress in the main checkout
+  (`MERGE_HEAD` and the like) refuses `cq merge` and `merge-track.mjs` (exit 5), with how to finish or undo it.
+- **Done only when merged.** After the merge step and again before `done`, the track tip must be in the base
+  (`git merge-base --is-ancestor`). Otherwise the task is not marked done and stays in review. The merge commit is
+  stored on the task as `merge_commit`.
+- **Resume.** Every step is recorded in `<dataFolder>/merge-state-<id>.json` as it starts. After Ctrl-C, a crash, a
+  stop after the merge (the migration push, a red gate) or a conflict resolved and committed by hand,
+  `cq merge <id> --resume` runs only the steps after the merge that have not run (migration push, gates, base gate,
+  done, fill). A plain `cq merge <id>` on a branch that is already in the base says so and gives that command.
+
 ## Gate from incident (a failure becomes a check)
 
 The base gate catches a red base; it does not stop the same kind of mistake from coming back. So when a post-merge
@@ -515,11 +532,15 @@ holding work back.
   `paths-ignore: ["**/*.md", "docs/**"]` under `on.push`.
 
 **Secret check and deploy commands in the push guard.** Before a plain push of the base branch by the orchestrator,
-the guard scans the added lines of what the push sends (`<remote>/<baseBranch>..<baseBranch>`): with gitleaks when it
-is on PATH, otherwise with a few built-in patterns (private key headers; AWS, GitHub, GitLab, Slack, Stripe live,
-Google API, Azure storage, OpenAI and Anthropic key formats; and a generic `password=`/`secret=`/`token=` with a long
-value outside test, fixture, example and docs files). A hit gets the confirmation dialog with file:line and the rule,
-never the value; a false alarm is answered with "push anyway". It never denies. Skipped silently: a diff larger than
+the guard scans the added lines of every commit the push sends (`git log -p --no-merges
+<remote>/<baseBranch>..<baseBranch>`, so a key added in one commit and deleted in the next is still found): with
+gitleaks when it is on PATH, otherwise with a few built-in patterns (private key headers; AWS, GitHub, GitLab, Slack,
+Stripe live, Google API and OAuth, Azure storage, OpenAI, Anthropic, Supabase `sb_secret_`, npm, SendGrid, Hugging
+Face and DigitalOcean key formats; JWTs; a GCP service account file; and, outside test, fixture, example and docs
+files, a URI with a password (`scheme://user:pass@host`), a value line in a `.env` style file and a generic
+`password=`/`secret=`/`token=`/`SERVICE_ROLE_KEY=` with a long value). A hit gets the confirmation dialog with
+file:line, the rule and the commit, never the value; a false alarm is answered with "push anyway". It never denies. A
+log over `secretScan.maxBytes` falls back to the net diff. Skipped silently: a net diff larger than
 `secretScan.maxBytes`, a first push (no remote ref, it would scan the whole history), a timeout or any error.
 `secretScan.enabled: false` turns it off. With the batch question, both are asked in one dialog.
 `deployCommands` (empty by default) lists the project's deploy commands; any command that starts with one of them

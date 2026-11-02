@@ -74,6 +74,10 @@ const name = ALIASES[first] ?? (scripts().includes(first) ? first : null);
 const file = path.join(HERE, `${name ?? 'queue'}.mjs`);
 const args = name ? rest : [first, ...rest];
 
+// queue.config.json exists but does not parse: a script stops here instead of running on the defaults (H3). A queue
+// command is checked by queue.mjs itself (where `doctor` is exempt); `setup` is exempt (it never replaces the file).
+if (name && name !== 'setup') createRequire(import.meta.url)('./lib/queueConfig.js').stopIfConfigUnreadable();
+
 const r = spawnSync(process.execPath, [file, ...args], { stdio: 'inherit' });
 if (r.error) {
   console.error(`cq: could not start ${path.basename(file)}: ${r.error.message}`);

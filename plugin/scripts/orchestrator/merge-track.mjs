@@ -45,7 +45,8 @@
 //     --keep-worktree   do not clean up the track worktree after the merge
 //     --allow-guard     merge even if the branch touches protected paths it does not own (logged as "guard-overridden"
 //                       in the time log). Without it: exit 4 BEFORE the merge, with the list.
-//   Exit: 0 merged, 1 merge or validation failed, 2 usage or no diff, 3 identity guard, 4 merge guard.
+//   Exit: 0 merged, 1 merge or validation failed, 2 usage or no diff, 3 identity guard, 4 merge guard,
+//         5 a merge, rebase, cherry-pick or revert is already in progress in the checkout (nothing was merged).
 // NB: never use String.replace with a replacement text that may contain "$" (patterns such as $& are interpreted); build with slice.
 // =============================================================
 
@@ -106,6 +107,30 @@ const gitOk = (...a) => spawnSync('git', a, { encoding: 'utf8', maxBuffer: 256 <
         'Set user.name and user.email first.\n',
     );
     process.exit(3);
+  }
+}
+
+// An unfinished merge, rebase, cherry-pick or revert in this checkout BEFORE anything else (review 2026-11-02, M6):
+// with MERGE_HEAD from an earlier conflict, `git merge <branch>` fails with "unmerged files", the conflict list is the
+// earlier merge's files, and this script would resolve and commit THAT merge and report this branch as merged.
+{
+  const ML = require('./lib/mergeLock.js');
+  const gitPath = (name) => {
+    const r = spawnSync('git', ['rev-parse', '--git-path', name], { encoding: 'utf8' });
+    return r.status === 0 && r.stdout.trim() ? path.resolve(r.stdout.trim()) : null;
+  };
+  const found = ML.gitInProgress(gitPath);
+  if (found.length) {
+    const tip = spawnSync('git', ['rev-parse', '-q', '--verify', `refs/heads/${branch}`], { encoding: 'utf8' });
+    const own = (tip.stdout || '').trim();
+    const lines = [];
+    for (const x of found)
+      lines.push(
+        `A ${x.kind} is in progress in this checkout (${x.marker}${x.sha ? ` ${x.sha.slice(0, 12)}` : ''}` +
+          `${x.sha && x.sha === own ? `, the tip of ${branch}` : ''}). Finish it (${x.finish}) or undo it (${x.undo}).`,
+      );
+    process.stderr.write(`${lines.join('\n')}\nNothing was merged.\n`);
+    process.exit(5);
   }
 }
 
@@ -175,7 +200,8 @@ function writeWithNewAttempt(file, text) {
           'Hooks, settings, agents, orchestrator scripts, the queue config and package.json can run code with the owner\'s rights.\n' +
           'The test, lint and type configs (vitest.config.*, tsconfig*.json, pytest.ini …) can switch checks off.\n' +
           `Read the diff (git diff HEAD...${branch} -- <path>). If the change is intended: add the path to the task's\n` +
-          'owned_files/shared_patch, or merge with --allow-guard (logged as "guard-overridden"). Nothing was merged.',
+          'owned_files/shared_patch (locked after start: the owner, cq edit <id> --json ... --by owner), or merge\n' +
+          'with --allow-guard (logged as "guard-overridden"). Nothing was merged.',
       );
       process.exit(4);
     }

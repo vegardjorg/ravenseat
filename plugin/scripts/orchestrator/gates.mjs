@@ -72,6 +72,8 @@ const option = (name) => {
 };
 
 const K = config();
+// queue.config.json exists but does not parse: stop (H3); empty default gates would report a green run.
+require('./lib/queueConfig.js').stopIfConfigUnreadable(K);
 
 /** Is `path` the project root or a worktree of the project (<root>/.claude/worktrees/<name>/...)? */
 function inProject(filePath) {

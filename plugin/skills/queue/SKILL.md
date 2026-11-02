@@ -159,7 +159,9 @@ memory or the handover note (`scripts/.queue/follow.json`, the same lock as the 
 
 - `fill` and `receive` end with "Start these in the SAME turn:": start ALL listed agents in one turn (parallel Agent calls).
 - One call to merge: `cq merge <id>`. If it stops, the step and an excerpt are in the answer and the full log in
-  `<scratch>/merge-<id>.log`: read the log, do not rerun the step to look.
+  `<scratch>/merge-<id>.log`: read the log, do not rerun the step to look. Cut off after the merge (Ctrl-C, a crash,
+  a stop in the migration push or the gates once the cause is fixed): `cq merge <id> --resume` runs the steps that are
+  left. Never `cq set <id> done` by hand there: the migration push and the gates would be skipped.
 - Fixed lookups, never your own scripts: `cq info <id> [--field <name>]`, `cq activeOnes`,
   `cq edit <id> --bonus "<text>"`. No `node -e` against `queue.json`.
 - The orchestrator does not build: if something needs more than about 3 calls beyond merging, start a focused agent.

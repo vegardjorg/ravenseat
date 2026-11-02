@@ -337,4 +337,32 @@ describe('hook-push-guard.mjs: queue agents', () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
   }, 60_000);
+  it('with an unreadable queue.config.json: git push asks (main) and is denied (queue agent); a track still runs only allowed commands', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-agentguard-bad-'));
+    try {
+      const folder = path.join(root, 'q');
+      fs.mkdirSync(folder);
+      fs.writeFileSync(path.join(folder, 'queue.json'), JSON.stringify({ tasks: [] }));
+      const file = path.join(root, 'queue.config.json');
+      fs.writeFileSync(file, '{\n  "baseBranch": "staging",\n}\n');
+      const env: NodeJS.ProcessEnv = { ...process.env, QUEUE_ROOT: root, QUEUE_FOLDER: folder, QUEUE_CONFIG: file };
+      const run = (command: string, agent_type?: string) => {
+        const r = spawnSync(process.execPath, [hook], {
+          input: JSON.stringify({ ...(agent_type ? { agent_type } : {}), tool_input: { command }, cwd: root }),
+          encoding: 'utf8',
+          env,
+        });
+        return r.stdout ? JSON.parse(r.stdout).hookSpecificOutput : null;
+      };
+      const main = run('git push origin staging');
+      expect(main?.permissionDecision).toBe('ask');
+      expect(main?.permissionDecisionReason).toMatch(/config unreadable/);
+      expect(run('git push origin staging', 'cq:track')?.permissionDecision).toBe('deny');
+      expect(run('git status')).toBeNull();
+      expect(run('cq merge R', 'cq:track')?.permissionDecision).toBe('deny');
+      expect(run('cq show', 'cq:track')).toBeNull();
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

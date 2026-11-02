@@ -169,9 +169,13 @@ describe('queue.mjs block, unblock, blockers and merge (against a temporary repo
       runningFile,
       [
         "import fs from 'node:fs';",
+        "import { spawnSync } from 'node:child_process';",
         'export default function run(x) {',
         "  const sc = JSON.parse(fs.readFileSync(process.env.MERGE_TEST_SCENARIO, 'utf8'));",
-        "  return sc[x.step] ?? { code: 0, out: 'ok' };",
+        "  const r = sc[x.step] ?? { code: 0, out: 'ok' };",
+        "  // A green merge step merges for real: cq merge checks that the track tip is in the base (review 2026-11-02, M6).",
+        "  if (x.step === 'merge' && r.code === 0) spawnSync('git', ['-C', process.env.QUEUE_GIT, '-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.invalid', 'merge', '--no-ff', '--no-edit', x.args[1]], { encoding: 'utf8' });",
+        "  return r;",
         '}',
       ].join('\n'),
     );
@@ -218,6 +222,8 @@ describe('queue.mjs block, unblock, blockers and merge (against a temporary repo
     expect(m1.code).toBe(1);
     expect(m1.out).toContain('Blocker gate-red opened on K');
     expect(blocksOf('K').map((x) => [x.code, !!x.to])).toEqual([['gate-red', false]]);
+    // The merge went in before the red gates; undo it, so the next merges of K have a branch to merge.
+    g(['reset', '-q', '--hard', head]);
     // merge stops in the merge step: gate-red is closed, merge-conflict opened (one open at a time).
     scenario({ merge: { code: 1, out: 'CONFLICT (content): lib/k.ts' } });
     expect(run('merge', 'K', '--without-fill').code).toBe(1);

@@ -4,14 +4,16 @@
 // receive (take in a finished track), merge (merge-track.mjs, the gates and the migration push, with the merge guard
 // and the base gate of cli/baseHealth.mjs: a red base branch refuses the merge, a merge that makes it red adds a fix task),
 // the merge blocks, deliver/release of a picked task, deliveries (a report.md that has not been received yet), and the
-// migration number blocks (next-migr, migr).
+// migration number blocks (next-migr, migr). merge holds the merge lock, refuses while git has a merge (or rebase,
+// cherry-pick, revert) in progress, checks that the track tip is in base before done, records each step in the merge
+// state and continues a cut-off merge with --resume (lib/mergeLock.js).
 //
 // Why a module: queue.mjs was one file of about 6,300 lines. It is now a thin entry point (the usage comment and the
 // dispatch on the command word) plus the modules in cli/. The code was moved as it was: same output, exit codes and files.
 //
 // Used by: queue.mjs (dispatch).
 // Tested in: lib/__tests__/queueOrchestrator.test.ts, mergeGuard.test.ts, queueBlockers.test.ts, queueMigrBlock.test.ts,
-//   queueExternal.test.ts, __tests__/queueAdopt.test.ts, __tests__/queueBaseGate.test.ts.
+//   queueExternal.test.ts, __tests__/queueAdopt.test.ts, __tests__/queueBaseGate.test.ts, __tests__/queueMergeResume.test.ts.
 // =============================================================
 
 import fs from 'node:fs';
@@ -481,39 +483,175 @@ export function cmdReceive() {
   parallelWarning();
 }
 
+// ---- The merge lock, the in-progress refusal and the resume (lib/mergeLock.js) -------------------------------------
+
+const ML = require('./lib/mergeLock.js');
+
+/** True when `ancestor` is in the history of `ref` (git merge-base --is-ancestor). */
+const containsCommit = (ancestor, ref) =>
+  !!ancestor && !!ref && git(['merge-base', '--is-ancestor', ancestor, ref]) !== null;
+
+/** The absolute path of a file in the main checkout's git directory (MERGE_HEAD, rebase-merge, ...). */
+const gitPathOf = (name) => {
+  const p = git(['rev-parse', '--git-path', name]);
+  return p ? path.resolve(GIT_ROOT, p) : null;
+};
+
+/**
+ * The merge commit that brought `tip` into `base`: the first commit on base's first-parent line that descends from
+ * the tip (a merge done by cq merge, by hand or a fast-forward). null when the tip is not in base.
+ */
+function mergeCommitFor(tip, base) {
+  if (!containsCommit(tip, `refs/heads/${base}`)) return null;
+  const list = git(['rev-list', '--first-parent', '--ancestry-path', '--reverse', `${tip}..refs/heads/${base}`]);
+  const first = (list ?? '').split(/\r?\n/).filter(Boolean)[0];
+  // Nothing on the line after the tip: base IS the tip (a fast-forward, or the branch was reset onto base).
+  return first ?? tip;
+}
+
+/**
+ * Takes the merge lock (one cq merge at a time per data folder) and makes sure it is released however the process ends:
+ * a normal end, die()/process.exit (the 'exit' handler), an uncaught error (also 'exit') and Ctrl-C or a kill
+ * (the signal handlers, which also record the interruption in the merge state). A hard crash (power, kill -9) leaves
+ * the lock behind; the next merge sees that its pid is gone and takes it over.
+ */
+function takeMergeLock(id, { resume }) {
+  const got = ML.acquire(FOLDER, { task: id, command: resume ? 'merge --resume' : 'merge' });
+  if (!got.ok) die(ML.heldMessage({ file: got.file, holder: got.holder, cq: CQ, id }));
+  if (got.tookOver) {
+    const h = got.tookOver.holder;
+    console.log(
+      `NB: took over a stale merge lock (${h?.command ?? 'merge'} ${h?.task ?? '?'}: ${got.tookOver.reason}).` +
+        `${h?.task ? ` If that merge was cut off, ${CQ} merge ${h.task} --resume finishes it.` : ''}`,
+    );
+  }
+  const ctl = { lock: got.lock, released: false, onSignal: null };
+  ctl.release = () => {
+    if (ctl.released) return;
+    ctl.released = true;
+    try {
+      ML.release(FOLDER, ctl.lock);
+    } catch {
+      /* a lock that cannot be removed is taken over as stale by the next merge (the pid is gone) */
+    }
+  };
+  process.on('exit', ctl.release);
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    try {
+      process.on(sig, () => {
+        if (ctl.onSignal) ctl.onSignal(sig);
+        ctl.release();
+        process.exit(130);
+      });
+    } catch {
+      /* a signal this platform does not have */
+    }
+  }
+  return ctl;
+}
+
+/** Ctrl-C reached the child of a step: a signal on POSIX, STATUS_CONTROL_C_EXIT (0xC000013A) on Windows. */
+const interruptedBy = (s) =>
+  s.signal && ['SIGINT', 'SIGTERM', 'SIGHUP'].includes(s.signal) ? s.signal : s.status === 3221225786 ? 'Ctrl-C' : null;
+
 /** `cq merge` (the usage is at the top of queue.mjs). */
 export async function cmdMerge() {
   // ---- merge-track -> migrationPush (only with a migration flow, with the environment guard) -> gates --quick -> set done -> fill,
   // in one call. The steps, the stop rules and the environment check are in queueLogic (mergePlan, executeMerge, environmentCheck); here is only
-  // the I/O. ----
+  // the I/O. With --resume: the steps after the merge that have not run yet (the merge state, lib/mergeLock.js). ----
   const id = positional(1, ['--scratchpad', '--done-cwd'])[0];
   if (!id)
     die(
-      'merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--force-red-base]',
+      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--force-red-base]',
     );
+  const resume = a.includes('--resume');
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
   const allowGuard = a.includes('--allow-guard');
+  if (!read().tasks.some((x) => x.id === id)) die(`Unknown task ${id}`);
+  // One merge at a time (review 2026-11-02, M8), before anything reads git or the queue for the merge.
+  const lockCtl = takeMergeLock(id, { resume });
   const o = read().tasks.find((x) => x.id === id);
   if (!o) die(`Unknown task ${id}`);
+  const branch = o.branch ?? branchFor(id);
+  const branchTip = git(['rev-parse', '-q', '--verify', `refs/heads/${branch}`]);
+  // An unfinished merge, rebase, cherry-pick or revert in the main checkout refuses the merge and the resume (M6).
+  const busy = ML.gitInProgress(gitPathOf);
+  if (busy.length) {
+    const tasks = read().tasks;
+    const tips = new Map();
+    for (const t of tasks) {
+      const b = t.branch ?? branchFor(t.id);
+      const sha = git(['rev-parse', '-q', '--verify', `refs/heads/${b}`]);
+      if (sha) tips.set(sha, b);
+    }
+    die(
+      ML.inProgressMessage(busy, {
+        root: GIT_ROOT,
+        id,
+        cq: CQ,
+        branch,
+        branchTip,
+        branchOf: (sha) => tips.get(sha) ?? null,
+        taskOf: (b) => tasks.find((t) => (t.branch ?? branchFor(t.id)) === b)?.id ?? null,
+      }),
+    );
+  }
+  const state0 = ML.readState(FOLDER, id);
   const force = a.includes('--force');
-  if (o.status !== 'review' && !(force && ['running', 'picked'].includes(o.status)))
+  if (resume) {
+    const left = state0 ? ML.remainingSteps(state0.plan ?? [], state0.steps_done ?? []) : [];
+    if (o.status === 'done' && !left.some((s) => s !== 'done')) {
+      ML.clearState(FOLDER, id);
+      console.log(`${id} is done; nothing to resume.`);
+      return;
+    }
+    if (!['review', 'done'].includes(o.status) && !(force && ['running', 'picked'].includes(o.status)))
+      die(`${id} has status ${o.status}; merge --resume applies to a task in review whose branch is already merged.`);
+  } else if (o.status !== 'review' && !(force && ['running', 'picked'].includes(o.status)))
     die(
       `${id} has status ${o.status}; merge applies to review (after receive and an approved review). ` +
         '--force only for running/picked on the owner\'s word.',
     );
-  const branch = o.branch ?? branchFor(id);
   const gi = branchInfo(branch);
   if (!gi.exists) die(`Branch ${branch} does not exist.`);
-  if (gi.commits === 0)
+  const trackTip = branchTip;
+  const tipInBase = containsCommit(trackTip, `refs/heads/${BASE}`);
+  if (resume && !tipInBase)
+    die(
+      `${branch} at ${String(trackTip).slice(0, 12)} is not in ${BASE}, so there is nothing to resume: the merge itself ` +
+        `has not happened${gi.commits ? ` (${gi.commits} commit(s) ahead)` : ''}. Run ${CQ} merge ${id} (without --resume).`,
+    );
+  if (!resume && gi.commits === 0) {
+    // M7: the branch is in base already. A task still in review was cut off after the merge (Ctrl-C, a crash, a stop
+    // after the merge): the remaining steps are what is left, not a new merge.
+    if (tipInBase && o.status === 'review')
+      die(
+        `${branch} is already merged into ${BASE} (its tip ${String(trackTip).slice(0, 12)} is on ${BASE}), but ${id} is ` +
+          'still in review: the merge was cut off before the end' +
+          `${state0?.steps_done?.length ? ` (steps done: ${state0.steps_done.join(', ')})` : ''}. ` +
+          `Run the remaining steps (migration push, gates, base gate, done, fill) with: ${CQ} merge ${id} --resume`,
+      );
     die(`${branch} has no commits ahead of ${BASE} (already merged?). Nothing completed.`);
+  }
   const withoutFill = a.includes('--without-fill');
   const scratch = scratchpadFor(o.scratchpad ?? null);
   if (!scratch && !withoutFill)
     die('merge needs --scratchpad <folder> (or QUEUE_SCRATCHPAD) for fill, or --without-fill.');
+  // The merge commit when resuming: the one recorded (still in base and holding the tip), otherwise the one found.
+  const recorded = state0?.merge_commit ?? o.merge_commit ?? null;
+  let resumeCommit = null;
+  if (resume)
+    resumeCommit =
+      recorded && containsCommit(recorded, `refs/heads/${BASE}`) && containsCommit(trackTip, recorded)
+        ? recorded
+        : mergeCommitFor(trackTip, BASE);
+  // The first parent of the merge commit: the base as it was before the merge (for the plan's diff when resuming).
+  const beforeMerge = resumeCommit ? (git(['rev-parse', '-q', '--verify', `${resumeCommit}^1`]) ?? null) : null;
   // The base gate (lib/baseHealth.js) BEFORE anything else runs: a red base refuses the merge (exit 9) unless this is the
   // base fix task or --force-red-base (logged); an unknown verdict (the tip moved since the last check) is checked first.
   // `wasRed` is the red record the merge goes on despite, so the record after it keeps the merge that made it red.
-  const wasRed = guardBeforeMerge({ id, force: a.includes('--force-red-base'), folder: scratch ?? FOLDER });
+  // A resume does not ask: the merge is in already, and the base gate on it is one of the steps that are left.
+  const wasRed = resume ? null : guardBeforeMerge({ id, force: a.includes('--force-red-base'), folder: scratch ?? FOLDER });
   // The done command (lib/doneCheck.js) once more before the merge, unless the last run was green on this exact tip with
   // this command (receive ran it, and no fix round has added commits since). Red: a fix round, never a merge.
   if (typeof o.done_when === 'string' && o.done_when.trim()) {
@@ -532,20 +670,21 @@ export async function cmdMerge() {
       if (!check.ok) doneCommandRed(id, check, { scratch });
     }
   }
-  const name = git(['diff', '--name-only', `${BASE}...${branch}`]);
+  // Before the merge: the branch against base. When resuming: the track against the base before its merge commit.
+  const against = resume ? (beforeMerge ?? BASE) : BASE;
+  const name = git(['diff', '--name-only', `${against}...${trackTip}`]);
   // The branch's merge base and tip BEFORE the merge. After the merge HEAD = baseBranch and the gates' diff against base is empty;
   // with these gates.mjs can still see the track's own changes.
-  const trackTip = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
   const trackArgs = require('./lib/trackDiff.js').trackArgs({
-    separator: git(['merge-base', BASE, branch]),
+    separator: git(['merge-base', against, trackTip]),
     tip: trackTip,
   });
   // The size in code lines (a stable size unit), measured BEFORE the merge against the wave base (HEAD at start;
   // without it: baseBranch). Three dots: only the branch's own changes.
   const diffLines = TK.diffLinesFromShortstat(
-    git(['diff', '--shortstat', `${o.head_start ?? BASE}...${branch}`]),
+    git(['diff', '--shortstat', `${o.head_start ?? against}...${trackTip}`]),
   );
-  const plan = L.mergePlan({
+  const fullPlan = L.mergePlan({
     o,
     files: name == null ? null : name.split(/\r?\n/).filter(Boolean),
     withoutMigrPush: a.includes('--without-migr-push'),
@@ -554,6 +693,54 @@ export async function cmdMerge() {
     migrations: MIGR,
     baseGate: BASE_SETUP.enabled && !BASE_SETUP.sameAsQuick,
   });
+  // The steps this call runs: all of them, or (resume) the ones after the merge that the state does not list as done.
+  // A task already done (set by hand, or the done step ran) never gets `done` again.
+  const doneBefore = resume ? [...(state0?.steps_done ?? []), 'merge', ...(o.status === 'done' ? ['done'] : [])] : [];
+  const plan = resume ? { ...fullPlan, step: ML.remainingSteps(fullPlan.step, doneBefore) } : fullPlan;
+  // The merge state (lib/mergeLock.js): written as each step starts and when the flow ends, so an interruption at any
+  // point leaves a record of the steps that ran. A completed flow removes it.
+  const mstate = {
+    task: id,
+    branch,
+    base: BASE,
+    track_tip: trackTip,
+    plan: fullPlan.step,
+    steps_done: fullPlan.step.filter((s) => doneBefore.includes(s)),
+    current: null,
+    merge_commit: resumeCommit,
+    started: new Date().toISOString(),
+    pid: process.pid,
+    ...(resume ? { resumed: (state0?.resumed ?? 0) + 1 } : {}),
+  };
+  const saveState = () => ML.writeState(FOLDER, mstate);
+  lockCtl.onSignal = (sig) => {
+    mstate.interrupted = { step: mstate.current, by: sig, at: new Date().toISOString() };
+    saveState();
+    console.error(
+      `\nINTERRUPTED (${sig}) in the step ${mstate.current ?? '(between steps)'} of ${CQ} merge ${id}. Steps done: ` +
+        `${mstate.steps_done.join(', ') || 'none'}. Continue with ${CQ} merge ${id} --resume ` +
+        '(it explains first when git still has a merge in progress).',
+    );
+  };
+  if (resume) {
+    if (!plan.step.length) {
+      ML.clearState(FOLDER, id);
+      console.log(`${id}: every step of the merge has run already; nothing to resume.`);
+      return;
+    }
+    console.log(
+      `RESUME ${id}: ${branch} at ${String(trackTip).slice(0, 12)} is in ${BASE}` +
+        `${resumeCommit ? ` (merge commit ${String(resumeCommit).slice(0, 12)})` : ''}; ` +
+        `steps done: ${mstate.steps_done.join(', ') || 'merge'}.`,
+    );
+    if (resumeCommit && o.merge_commit !== resumeCommit)
+      edit((queue) => {
+        const x = queue.tasks.find((y) => y.id === id);
+        if (x) x.merge_commit = resumeCommit;
+        return null;
+      });
+  }
+  saveState();
   const logFolder = scratch ?? FOLDER;
   fs.mkdirSync(logFolder, { recursive: true });
   const logFile = path.join(logFolder, `merge-${id}.log`);
@@ -630,7 +817,8 @@ export async function cmdMerge() {
   // The verdict is recorded for the merge commit as soon as it is known: from the quick gates when they are the base
   // gate (or when they are red: a red quick gate on the new tip is a red base whatever the base gate commands are),
   // otherwise from the `base-gate` step. Before `done` and `fill`, so fill already sees the base fix task.
-  let mergeCommit = null;
+  // When resuming, the merge is in already: the base verdict goes to the base tip as it is now.
+  let mergeCommit = resume && BASE_SETUP.enabled ? git(['rev-parse', '--verify', `refs/heads/${BASE}`]) : null;
   let baseSettled = false;
   const baseLines = [];
   const short = (sha) => String(sha ?? '').slice(0, 12);
@@ -691,7 +879,17 @@ export async function cmdMerge() {
     const file = writeReport({ folder: logFolder, tip: mergeCommit, run: check, cause: { task: id, merge_commit: mergeCommit } });
     settleBase({ ok: false, check, file, stayedInReview: true });
   };
+  /** Ctrl-C or a kill reached a step's child: the state says where, the lock goes, exit 130 (as a shell does). */
+  const stepInterrupted = (sig) => {
+    lockCtl.onSignal?.(sig);
+    lockCtl.release();
+    process.exit(130);
+  };
   const run = (x) => {
+    // The steps before this one have succeeded (executeMerge stops at the first error): recorded before it starts.
+    mstate.steps_done = ML.markBefore(plan.step, mstate.steps_done, x.step);
+    mstate.current = x.step;
+    saveState();
     if (x.step === 'base-gate') {
       const r = baseGateStep();
       writeLog(`===== base-gate (exit ${r.code}) =====\n${r.out}`);
@@ -707,8 +905,11 @@ export async function cmdMerge() {
     }
     const [cmd, args, shell = false] = command(x);
     let r;
-    if (injected) r = injected({ ...x, cmd, args });
-    else {
+    if (injected) {
+      r = injected({ ...x, cmd, args });
+      // A test runner can answer as an interrupted child would ({ signal: 'SIGINT' }).
+      if (r && interruptedBy({ signal: r.signal ?? null, status: r.code })) stepInterrupted(interruptedBy({ signal: r.signal ?? null, status: r.code }));
+    } else {
       const s = spawnSync(cmd, args, {
         cwd: GIT_ROOT,
         encoding: 'utf8',
@@ -716,6 +917,7 @@ export async function cmdMerge() {
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: shell,
       });
+      if (interruptedBy(s)) stepInterrupted(interruptedBy(s));
       r = {
         code: s.status ?? 1,
         out: `${s.stdout ?? ''}${s.stderr ?? ''}${s.error ? `\n${s.error.message}` : ''}`,
@@ -723,9 +925,32 @@ export async function cmdMerge() {
     }
     writeLog(`===== ${x.step}: ${cmd} ${args.join(' ')} (exit ${r.code}) =====\n${r.out}`);
     if (x.step === 'merge') {
+      if (r.code === 0) {
+        // The invariant right after the merge (M6): HEAD holds the track's tip. A merge step that says "merged" while
+        // the tip is not in HEAD (it committed another, unfinished merge, or nothing) is a stop, never a done task.
+        const head = git(['rev-parse', '--verify', 'HEAD']);
+        if (!containsCommit(trackTip, head)) {
+          r = {
+            code: 1,
+            out:
+              `${r.out}\nNOT MERGED: the merge step exited 0, but ${BASE} at ${short(head)} does not contain ${branch} at ` +
+              `${short(trackTip)} (git merge-base --is-ancestor). It may have committed an earlier, unfinished merge. ` +
+              `Check git log -3 ${BASE}; nothing after the merge was done.`,
+          };
+        } else {
+          mstate.merge_commit = head;
+          saveState();
+          // The merge commit on the task (merge_commit): doctor and later checks can see that it is still in base.
+          edit((queue) => {
+            const t = queue.tasks.find((y) => y.id === id);
+            if (t) t.merge_commit = head;
+            return null;
+          });
+          if (BASE_SETUP.enabled) mergeCommit = head;
+        }
+      }
       mergeCode = r.code;
       mergeOut = r.out;
-      if (r.code === 0 && BASE_SETUP.enabled) mergeCommit = git(['rev-parse', 'HEAD']);
     }
     if (x.step === 'gates' && BASE_SETUP.enabled && mergeCommit) {
       // The flaky check (lib/baseHealth.js): the failed quick gates once more on the same sha before the base freezes.
@@ -761,8 +986,28 @@ export async function cmdMerge() {
       }),
     base: BASE,
     migrations: MIGR,
+    // The last check before the task is marked done (M6): the track's tip is in base.
+    beforeDone: () =>
+      containsCommit(trackTip, `refs/heads/${BASE}`)
+        ? null
+        : `NOT DONE: ${branch} at ${short(trackTip)} is not in ${BASE} (git merge-base --is-ancestor failed), so ${id} ` +
+          'is not marked done and stays in review. Check git log on the base (was it reset or moved?) and merge again.',
   });
   for (const l of res.lines) console.log(l);
+  // The flow is over: a late signal (Ctrl-C that the child survived) no longer rewrites the state.
+  lockCtl.onSignal = null;
+  // The merge state after the flow: removed when everything ran, kept with the stop otherwise (for --resume).
+  if (res.ok) {
+    mstate.steps_done = ML.markBefore(plan.step, mstate.steps_done, null);
+    mstate.current = null;
+  } else {
+    mstate.steps_done = ML.markBefore(plan.step, mstate.steps_done, res.stop.step);
+    mstate.current = null;
+    mstate.stopped = { step: res.stop.step, message: res.stop.message, at: new Date().toISOString() };
+    if (res.stop.step === 'merge' && mergeCode !== 0 && !containsCommit(trackTip, `refs/heads/${BASE}`) && !ML.gitInProgress(gitPathOf).length)
+      ML.clearState(FOLDER, id); // nothing was merged and nothing is in progress: nothing to resume
+    else saveState();
+  }
   // A flow that stopped after the merge but before any verdict (the migration push): the tip is unknown, so the next
   // merge checks it first. Said here; the red or green verdict lines come last, where they are read.
   if (BASE_SETUP.enabled && mergeCommit && !baseSettled)
@@ -784,6 +1029,7 @@ export async function cmdMerge() {
         `If the change is intended: add the path to the task's owned_files/shared_patch, or run ` +
         `\`${CQ} merge ${id} --allow-guard\` (logged as "guard-overridden").`,
     );
+    ML.clearState(FOLDER, id);
     mergeBlock(id, 'merge-conflict', 'merge guard');
     logEvent(ER.mergeConflictRow({ task: id, branch, files: ER.conflictFiles(mergeOut), guard: true }));
     console.log(`Full log: ${logFile}`);
@@ -799,6 +1045,16 @@ export async function cmdMerge() {
       logEvent(ER.mergeConflictRow({ task: id, branch, files: ER.conflictFiles(mergeOut) }));
     console.log(`STOP in the step ${res.stop.step}: ${res.stop.message}`);
     if (res.stop.excerpt.length) console.log(res.stop.excerpt.map((l) => `  | ${l}`).join('\n'));
+    // After the merge, the rest can be continued once the cause is fixed (the environment, a flaky gate, a base reset).
+    if (containsCommit(trackTip, `refs/heads/${BASE}`)) {
+      const left = ML.remainingSteps(plan.step, mstate.steps_done);
+      if (left.length)
+        console.log(`RESUME: when the cause is fixed, ${CQ} merge ${id} --resume runs the steps that are left (${left.join(', ')}).`);
+    } else if (ML.gitInProgress(gitPathOf).some((x) => x.kind === 'merge'))
+      console.log(
+        `RESUME: resolve the files, git add them and git commit --no-edit, then ${CQ} merge ${id} --resume runs the rest ` +
+          '(or undo with git merge --abort).',
+      );
     // A real conflict: the files and the other tasks that touched them go on the task (merge_conflict), so the fix
     // round brief names them (lib/conflictPredict.js, logic/resume.js). Fail open.
     if (code === 'merge-conflict' && mergeCode != null && mergeCode !== 0) {
@@ -827,7 +1083,9 @@ export async function cmdMerge() {
   edit((queue) => {
     const ox = queue.tasks.find((x) => x.id === id);
     if (!ox) return null;
-    ox.t_merge = new Date().toISOString();
+    if (resume) ox.t_merge ??= new Date().toISOString();
+    else ox.t_merge = new Date().toISOString();
+    if (mstate.merge_commit) ox.merge_commit = mstate.merge_commit;
     if (diffLines != null) ox.diff_lines = diffLines;
     const tReview = TK.firstReviewStart(readTimeLog(), id, {
       types: L.REVIEWER_TYPES,
@@ -839,6 +1097,7 @@ export async function cmdMerge() {
     delete ox.merge_conflict;
     return ox;
   });
+  ML.clearState(FOLDER, id);
   console.log(`Full log: ${logFile}`);
   printBase();
   // The merge went through, but the base gate made the base red: exit 9 (as a refused merge), so a script that chains

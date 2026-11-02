@@ -14,8 +14,8 @@
 **A kanban board and project manager for Claude Code.** You manage the project the way you already know from
 kanban: tasks, dependencies and a focus. Claude Code does the work, one finished feature at a time. There are no
 workflows or pipelines to write first; the process is built in, and you only step in for the decisions. The
-board is the interface; the product is what runs behind it: orchestration, continuity across chats, and quality
-checks before anything is merged.
+product is what runs behind the board: orchestration, continuity across chats, and quality checks before anything
+is merged. **You can run all of it from Claude Code alone**; the board is there for the overview, not required.
 
 1. **A kanban board you already know how to read.** Tasks move from In queue to In progress, Review and Done on a
    local board. Claude Code moves the cards; you see at a glance where every task stands and what comes next.
@@ -24,8 +24,9 @@ checks before anything is merged.
 3. **Focus: finish one feature before starting the next.** You choose the areas to work on now. The queue finishes
    the connected tasks in that focus, fixes and follow-ups included, before it picks up new feature work. Features
    get done instead of lying half-built across the codebase.
-4. **You handle the exceptions, not the routine.** Decisions that need you collect in one place, "Waiting on you",
-   each with context, a recommendation and choices. Only that task waits; the rest of the board keeps moving.
+4. **You handle the exceptions, not the routine.** Decisions that need you collect in one list, most impact first,
+   each with context, a recommendation and choices: `/cq:decide` in Claude Code, or the Decisions tab on the board.
+   Only that task waits; the rest of the queue keeps moving.
 5. **Runs for days without wasting tokens.** One chat acts as the orchestrator and hands each task to a fresh agent
    with a small, self-contained mission, in its own git worktree, with your checks as gates before anything is
    merged. Plans and tasks live on disk, so nothing is lost when a chat ends or gets compacted.
@@ -136,6 +137,52 @@ agent"): it is copied, scanned, read by Claude and approved by you against its h
 and it turns off again if the file changes. See
 [custom helper agents](plugin/docs/orchestration.md#custom-helper-agents).
 
+## Claude Code first: you only make the decisions
+
+Ravenseat works as a backend for Claude Code. Every board action has a command behind it
+([CLI parity](plugin/docs/cli-parity.md)), so you can work entirely from one chat (or from your phone over Remote
+Control) and never open the board. The board is for when you want the overview.
+
+**The goal is that your only contact surface is a decision list.** Once your project has checks you trust (tests,
+type check, lint, a database run before push), the routine needs no human: agents build, the gates check, the
+orchestrator merges. What is left for you is what a machine should not decide alone:
+- unclear product requirements, hard-to-reverse choices (data model, public API, new dependencies, deletions) and
+  security or legal tradeoffs. Tracks fix technical failures themselves and ask you only about these; other
+  assumptions are written down in the report;
+- approving tasks agents propose, visual QA, and work that is stuck.
+
+`/cq:decide` walks the list one decision at a time, the recommendation first, and tells you what each answer
+unlocks. The board's Decisions tab shows the same list, grouped as Decide, Check, Approve and Unstick, with one-click
+answers and undo.
+
+**The queue keeps working when something stops.** A task that waits on you is parked, and everything else goes on.
+A red check gives a fix round with a fresh agent, and a red base gets its own fix task while other merges wait. A
+gate that fails once and passes on a rerun is recorded as flaky instead of freezing the base. When the focus is
+done, the queue pauses and asks whether to set a new focus or continue the regular queue (`focus.continueWhenEmpty`,
+off by default).
+
+**Quality you can check, not just trust:**
+- **Gate evidence bound to the commit.** A track cannot report its own checks as green: `cq receive` needs a clean,
+  green gate run on exactly the delivered commit, recorded by the orchestrator, and otherwise runs the gate itself. A
+  push needs a green full gate on the commit being pushed.
+- **Locked acceptance criteria.** `done_when` and the acceptance criteria are fixed once a task starts, and a gap
+  reviewer answers MET or NOT MET per criterion.
+- **Guards on the guards.** Test, lint and type configs are protected paths, and `cq receive` warns about deleted
+  tests and added skip markers.
+- **Every repeatable mistake becomes a check.** After a defect, the orchestrator proposes a `Gate:` task that adds a
+  check to your own CI, shown red on the original bug before the fix and green after. `/cq:review <area> [<lens>]`
+  reviews a path or feature (security, logic, ux, architecture) and turns its findings into fix tasks, gate tasks and
+  questions.
+- **Fewer surprises at merge.** `cq conflicts` predicts which running tracks will conflict with each other or with
+  the base (`git merge-tree`, nothing written) and suggests a merge order.
+- **Optional CI watch after a push** (`push.ciWatch`, off by default). Local first is the rule: push only when the
+  local checks are green. The watch is a second net that turns a red CI run into one fix task.
+- **Ask an earlier track.** `cq ask <id> "why X?"` answers from the track's mission, report, commits and transcript
+  tail, without resuming a large agent.
+
+`cq cost` shows the flow numbers behind this: right first time, defects after merge, and how many tasks were verified
+per owner intervention.
+
 ## First run in 5 minutes
 
 1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/ravenseat`, then
@@ -166,7 +213,7 @@ The main view (top of this page) is a kanban: **In queue** (ready now, blocked, 
 queue where small tasks wait to be packed into one track), **In progress** and **Review**. Each card shows the id,
 domain, class (K, D, D+ or U), estimate and how many tasks it unlocks. **Next up** shows what the orchestrator starts
 in the next free slot. Other views: **Project lanes** (one row per project), **Focus** (only what you have chosen to
-push), **Cloud** and **Statistics**.
+push), **Decisions** and **Statistics** (**Cloud** is hidden until you turn it on in Settings).
 
 ### Task detail
 
@@ -196,6 +243,10 @@ Change the priority by dragging cards (or with the keyboard), or select several 
 Everything only you can decide lands here: questions from agents (with their recommendation), owner tasks and
 conditions. Each shows which tasks it blocks. Answer on the board, and the orchestrator picks up the answer and
 unblocks the tasks.
+
+The **Decisions** tab is the same list as `/cq:decide`, sorted by what each answer unlocks and grouped as Decide,
+Check, Approve and Unstick. The board opens on it when anything waits. The recommendation is the main button, an
+answer can be undone for 5 seconds, and j/k, Enter, 1-4 and u work from the keyboard.
 
 ### Dependencies
 
@@ -282,8 +333,8 @@ Claude offers to queue it. The slash commands below are the explicit way to do t
 2. **Start the loop.** Open a chat and run `/cq:queue`. It reports the state and asks before it starts. Then it fills
    the free slots with track agents, reviews and merges what they deliver, and starts the next tasks, until the queue
    is empty, the daily budget is used, or everything left waits on you.
-3. **Check the board.** Run `/cq:board` (or ask Claude to "start the board"). It starts the board in the
-   background and gives you a local link. Answer open questions there; the orchestrator picks the answers up.
+3. **Make the decisions.** Run `/cq:decide` (or say "what is waiting on me?") to answer them in the chat, one at a
+   time. Or run `/cq:board` for the board and use the Decisions tab; the orchestrator picks the answers up either way.
 4. **Push when you are ready.** Merges stay local. Nothing is pushed until you say "push", and then in one batch.
    `cq push-check` counts the merged tasks since the last push and says READY, NOT YET, BLOCKED or LARGE; with
    `push.mode: "threshold"` the orchestrator pushes by itself when the batch is ready (see
@@ -392,6 +443,9 @@ cq receive <ID>              # receive a finished track
 cq merge <ID>                # merge it
 cq cost                      # USD per merged change, cost per task (all runs), then per class
 cq calibrate                 # how far minute and cost estimates are off, per class
+cq decide                    # everything waiting on you, most impact first (/cq:decide walks it)
+cq conflicts                 # predicted merge conflicts between running tracks and the base
+cq ask <ID> "<question>"     # ask about an earlier track without resuming it (/cq:ask)
 cq doctor                    # read-only health check: node, hooks, config, state, worktrees, safety baseline
 cq helpers                   # helper agents: on/off and what they cost
 cq helpers add <file.md>     # a custom helper: copied, scanned, off until approved
@@ -480,8 +534,8 @@ What Ravenseat checks for you:
   base branch it scans what is about to be pushed for secrets (gitleaks when it is on your PATH, otherwise a few
   built-in patterns) and asks, naming file and line, never the value. It also asks before any of your
   `deployCommands`. It only sees commands run inside Claude Code, not your own terminal.
-- The gates (`gates.quick`, `gates.full`) the agents run before delivery, the base gate that stops merges on a red
-  base, and the batch push threshold.
+- The gates (`gates.quick`, `gates.full`), with results bound to the commit and run by the orchestrator, the base
+  gate that stops merges on a red base, and the batch push threshold.
 - `/cq:setup` can write a GitHub Actions workflow that runs your `gates.quick` on push and pull requests (opt-in,
   never over an existing file). On GitLab, Bitbucket and others, add a job that runs the same commands.
 

@@ -192,12 +192,26 @@ const STANDARD = Object.freeze({
   // a bare name (no slash) = that file name in any folder, an entry with * or ? = a glob (without a slash on the file
   // name in any folder, with a slash on the path from the root, "**/" = any folders). An empty list turns the guard off.
   // A list in queue.config.json REPLACES this one (lists are not merged): copy the entries you want to keep.
+  // The match ignores case (lib/mergeGuard.js): .CLAUDE/ and .claude/ are the same folder on Windows and macOS.
   protectedPaths: [
     '.claude/', // project settings, hooks, agents, skills, rules
+    '**/.claude/', // the same in a subfolder (Claude Code reads nested settings, skills and rules there too)
     '.claude-plugin/',
     '.githooks/',
+    '.husky/', // git hooks through core.hooksPath: they run on every commit in the main checkout
+    'lefthook.yml', // lefthook git hooks (any folder)
+    '.lefthook.yml',
+    'lefthook-local.yml',
     '.github/',
+    '.vscode/', // tasks.json with runOn folderOpen runs when the folder is opened
     '.mcp.json',
+    'CLAUDE.md', // instructions to the orchestrator session (any folder: Claude Code loads nested ones too)
+    'CLAUDE.local.md',
+    '.npmrc', // npm config (any folder): script-shell, registries and tokens
+    '.yarnrc', // yarn 1 config (yarn-path runs a file)
+    '.yarnrc.yml', // yarn 2+ config: yarnPath runs arbitrary JavaScript
+    '.pnpmfile.cjs', // pnpm hooks: code run on every install
+    '.gitattributes', // filter and diff drivers, merge strategies
     'scripts/orchestrator/', // the installed queue scripts and hooks
     'plugin/scripts/orchestrator/', // the same, in the plugin's own repo
     'plugin/hooks/',
@@ -352,25 +366,100 @@ function configFile(root = findRoot()) {
 }
 
 /**
- * Reads queue.config.json (once per process) and merges it with STANDARD.
+ * Parses the text of queue.config.json. A leading byte order mark is dropped (Windows editors and PowerShell 5.1
+ * write one, and JSON.parse refuses it). Throws the JSON.parse error otherwise.
+ * @param {string} text
+ */
+function parseConfigText(text) {
+  return JSON.parse(String(text).replace(/^﻿/, ''));
+}
+
+/**
+ * The line and column (1-based) of a JSON.parse error: from the message when the runtime names them ("(line 3 column
+ * 1)", newer V8), otherwise counted from "at position N" in the text. null when neither is there.
+ * @param {string} message
+ * @param {string} [text] the text that was parsed
+ * @returns {{ line: number, column: number } | null}
+ */
+function parseErrorPosition(message, text) {
+  const m = /line (\d+) column (\d+)/i.exec(String(message || ''));
+  if (m) return { line: Number(m[1]), column: Number(m[2]) };
+  const p = /at position (\d+)/i.exec(String(message || ''));
+  if (!p || typeof text !== 'string') return null;
+  const before = text.replace(/^﻿/, '').slice(0, Number(p[1]));
+  const lines = before.split('\n');
+  return { line: lines.length, column: lines[lines.length - 1].length + 1 };
+}
+
+/**
+ * Reads and parses queue.config.json. A missing file is no error (the defaults apply, as before); a file that exists
+ * but cannot be read or parsed IS one (H3 in plans/review-2026-11-02.md): running on the defaults would silently drop
+ * the project's base branch, gates, migration guard and deploy commands.
+ * @param {string} file
+ * @returns {{ own: object, error: null | { file: string, message: string, line: number|null, column: number|null } }}
+ */
+function readConfigFile(file) {
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    if (e?.code === 'ENOENT') return { own: {}, error: null };
+    return { own: {}, error: { file, message: String(e?.message ?? e), line: null, column: null } };
+  }
+  try {
+    const own = parseConfigText(text);
+    if (!isObject(own)) return { own: {}, error: { file, message: 'the file must hold one JSON object ({ ... })', line: null, column: null } };
+    return { own, error: null };
+  } catch (e) {
+    const at = parseErrorPosition(e?.message, text);
+    return { own: {}, error: { file, message: String(e?.message ?? e), line: at?.line ?? null, column: at?.column ?? null } };
+  }
+}
+
+/**
+ * Reads queue.config.json (once per process) and merges it with STANDARD. When the file exists but does not parse,
+ * the result still holds the defaults (so `cq doctor` and the hooks can run), plus `configError` ({ file, message,
+ * line, column }). The CLI stops on it (stopIfConfigUnreadable); the push guard asks or denies the push, migration and
+ * deploy shaped commands (lib/configGuard.js). Nothing else may act on such a config as if it were the project's.
  * @param {{ root?: string, fresh?: boolean }} [o]
  */
 function config(o = {}) {
   if (buffer && !o.fresh && !o.root) return buffer;
   const root = o.root ?? findRoot();
   const file = configFile(root);
-  let own = {};
-  try {
-    own = JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch (e) {
-    if (e?.code !== 'ENOENT') {
-      process.stderr.write(`WARNING: could not read ${file} (${e?.message}); using the default values.\n`);
-    }
-  }
+  const { own, error } = readConfigFile(file);
   const k = merge(STANDARD, own);
   k.root = root;
+  if (error) Object.defineProperty(k, 'configError', { value: error, enumerable: false });
   if (!o.root) buffer = k;
   return k;
+}
+
+/**
+ * The CLI message for an unreadable config: the file, the position when known, the parse error and the hint.
+ * @param {{ file: string, message: string, line: number|null, column: number|null }} error
+ * @returns {string}
+ */
+function configErrorText(error) {
+  const where = error.line ? `${error.file}:${error.line}${error.column ? `:${error.column}` : ''}` : error.file;
+  return [
+    `STOP: queue.config.json exists but cannot be read: ${where}`,
+    `  ${error.message}`,
+    '  The queue does not run on the default values instead: they would drop your base branch, gates, migration',
+    '  guard and deploy commands. Fix the file (a trailing comma or a missing quote is the usual cause), then run',
+    '  `cq doctor` to check it. Until then the push guard asks before every push, migration and deploy command.',
+  ].join('\n');
+}
+
+/**
+ * Stops the process (exit 1, the message on stderr) when queue.config.json exists but does not parse. Called by the
+ * CLI entry points (cq.mjs, cli/context.mjs, gates.mjs, push-check.mjs); `cq doctor` and `cq help` are exempt there.
+ * @param {object} [k] the configuration (default: config())
+ */
+function stopIfConfigUnreadable(k = config()) {
+  if (!k?.configError) return;
+  process.stderr.write(`${configErrorText(k.configError)}\n`);
+  process.exit(1);
 }
 
 /** Absolute path to the data folder (QUEUE_FOLDER overrides). */
@@ -437,6 +526,11 @@ module.exports = {
   findRoot,
   configFile,
   config,
+  parseConfigText,
+  parseErrorPosition,
+  readConfigFile,
+  configErrorText,
+  stopIfConfigUnreadable,
   dataFolder,
   timeLog,
   features,

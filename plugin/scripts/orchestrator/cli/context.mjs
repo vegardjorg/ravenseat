@@ -39,6 +39,8 @@ export const F = require('./lib/queueFollow.js');
 export const FC = require('./lib/queueForecast.js');
 export const PR = require('./lib/queueProposals.js');
 const MG = require('./lib/mergeGuard.js');
+// The safe write of queue.json (queue.json.prev and the rename retry) and the recovery hint.
+export const SF = require('./lib/stateFile.js');
 // The optional `fixes` field: the task(s) a fix task fixes (add, edit, info, state).
 export const FX = require('./lib/fixLinks.js');
 // Calibrated cost estimates (~$ in show, next, fill, info, state), `calibrate`, and USD per merged change (`cost`).
@@ -49,6 +51,9 @@ export const LM = require('./lib/liteMode.js');
 export const LS = require('./lib/loadSlots.js');
 // The project's settings (queue.config.json merged with the defaults in lib/queueConfig.js).
 export const CONFIG = KK.config();
+// queue.config.json exists but does not parse: stop instead of running on the defaults (H3). `doctor` still runs (it
+// names the error with a fix hint) and so does `help`.
+if (!['doctor', 'help', '--help', '-h'].includes(process.argv[2])) KK.stopIfConfigUnreadable(CONFIG);
 // The integration branch everything is merged into (often main), the remote and the branch prefix for queue tasks.
 export const BASE = CONFIG.baseBranch;
 export const REMOTE = CONFIG.remote;
@@ -244,7 +249,18 @@ export function withLock(fn) {
 }
 export function read() {
   if (!fs.existsSync(FILE)) die(`The queue does not exist. Run: ${CQ} init`);
-  return JSON.parse(fs.readFileSync(FILE, 'utf8'));
+  const text = fs.readFileSync(FILE, 'utf8');
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    // A broken queue.json: stop with the error and, when queue.json.prev parses, how to get the last good state back
+    // (lib/stateFile.js). The queue never restores it by itself.
+    const hint = SF.recoveryHint(FILE);
+    return die(
+      `queue.json does not parse (${FILE}): ${e?.message ?? e}\n` +
+        (hint ? `  ${hint}` : `  No good copy at ${SF.prevPath(FILE)}; restore it from queue.json.*.tmp or a backup.`),
+    );
+  }
 }
 // The short diagnosis paragraph when parallelism is low (fill, receive, orchestrator pulse). Reads the queue
 // again, so tracks that were just started or received are counted. Prints nothing when parallelism is not low, and an
@@ -256,11 +272,11 @@ export function parallelWarning() {
     console.log(`(The queue diagnosis failed: ${e?.message ?? e}. Run cq diagnose.)`);
   }
 }
+// The write keeps queue.json.prev (the previous good state) and retries the rename on Windows EPERM/EBUSY/EACCES
+// (lib/stateFile.js writeState).
 export function write(queue) {
   queue.changed = new Date().toISOString();
-  const tmp = `${FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(queue, null, 2) + '\n');
-  fs.renameSync(tmp, FILE);
+  SF.writeState(FILE, JSON.stringify(queue, null, 2) + '\n');
 }
 export const edit = (fn) =>
   withLock(() => {
@@ -337,7 +353,7 @@ export function writePlans(reg, { bump = true } = {}) {
   if (bump) reg.changed = new Date().toISOString();
   const tmp = `${PLAN_FILE}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(reg, null, 2) + '\n');
-  fs.renameSync(tmp, PLAN_FILE);
+  SF.renameWithRetry(tmp, PLAN_FILE);
 }
 /** The queue read-only (projects, areas, tasks, owner questions); empty when it does not exist. */
 export const readQueueForPlan = () => (fs.existsSync(FILE) ? read() : {});

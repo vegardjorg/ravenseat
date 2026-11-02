@@ -38,6 +38,8 @@ const { config, dataFolder } = require('./lib/queueConfig.js');
 const PB = require('./lib/pushBatch.js');
 const BH = require('./lib/baseHealth.js');
 const GE = require('./lib/gateEvidence.js');
+// queue.config.json exists but does not parse: stop (H3); the default base branch and remote may be the wrong ones.
+require('./lib/queueConfig.js').stopIfConfigUnreadable();
 const CW = require('./lib/ciWatch.js');
 
 if (process.argv.includes('--watch-ci')) {

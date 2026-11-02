@@ -159,6 +159,27 @@ process.stdin.on('end', () => {
     // The guarded types are read once (config + queue.json), and only in a subagent.
     const guardedTypes = agentType ? require('./lib/trackGuard.js').queueAgentTypes() : new Set();
     const guarded = isGuardedAgent(agentType, guardedTypes);
+    // queue.config.json exists but does not parse (lib/configGuard.js, review H3): the project's base branch,
+    // migration guard and deploy commands are unknown, so a push, migration or deploy shaped command gets ask (main
+    // session) or deny (queue agent). The main session stops here: the other rules would run on defaults that are not
+    // the project's. A queue agent goes on through the rules below, which do not depend on the config (it never
+    // pushes, runs only the allowed queue commands, has no network).
+    if (k.configError) {
+      const answer = require('./lib/configGuard.js').answerForHook(command, k.configError, guarded);
+      if (answer) {
+        process.stdout.write(
+          JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: answer.decision,
+              permissionDecisionReason: `push-guard: ${answer.reason}`,
+            },
+          }),
+        );
+        process.exit(0);
+      }
+      if (!guarded) process.exit(0);
+    }
     const gitContext = canHit(command, k);
     if (!gitContext && !guarded) process.exit(0);
     // Gate evidence (lib/gateEvidence.js): a queue agent may not record or touch it (deny; the orchestrator is free).

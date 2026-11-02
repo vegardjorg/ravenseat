@@ -6,6 +6,27 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
 ## Unreleased
 
 ### Added
+- **`cq merge` survives interruptions:** one merge at a time (`merge.lock`, stale-lock takeover), a refusal while git
+  has a merge, rebase or cherry-pick in progress, a check that the track tip is in base before `done`
+  (`merge_commit` stored on the task), and `cq merge <id> --resume` to finish the remaining steps after Ctrl-C, a
+  crash or a stop.
+- **queue.json.prev** keeps the previous good queue state on every write, and the rename is retried on Windows
+  EPERM/EBUSY/EACCES. A broken queue.json stops the CLI with the way back, and `cq doctor` names it too.
+- **More secret rules:** JWTs, Supabase `sb_secret_`, npm, SendGrid, Hugging Face, DigitalOcean, Google OAuth, GCP
+  service accounts, URIs with passwords and `.env` value lines, and cloud key names in the generic rule.
+
+### Fixed
+- A `queue.config.json` that exists but does not parse no longer runs on the defaults: the CLI stops with
+  file:line:column and a hint (`cq doctor` and `cq help` still run), and a BOM is accepted.
+- The secret precheck scans every pushed commit (`git log -p`), not only the net diff.
+
+### Changed
+- `protectedPaths` also covers `.husky/`, lefthook, `.npmrc`, `.yarnrc(.yml)`, `.pnpmfile.cjs`, `.vscode/`,
+  `.gitattributes`, and `CLAUDE.md` / `.claude/` at any level, and the match ignores case.
+
+## 0.8.0 (2026-11-02)
+
+### Added
 - **Transcript metrics:** per-model cost with a price table per family (Opus, Sonnet, Haiku, Fable; `prices`
   override), tool calls and errors, API errors, active time (`metrics.idleGapMin`), and killed agents measured from
   their transcripts; shown in `cq cost`, `log-time --cost` and the Statistics tab.
