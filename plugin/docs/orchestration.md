@@ -489,3 +489,12 @@ against its sha256 before it can be on, and a changed file turns it off (see
 
 For a task that has to read content from outside, split reading and writing between two agents (the quarantine rule
 in the mission template): the reader returns a fixed schema, and the writer never sees the raw text.
+
+### Review to gate (`/cq:review`)
+
+`/cq:review <area> [<lens>]` reviews a path, feature or project through a lens (security, logic, ux, architecture or
+free text) with read-only `reviewer-area` agents, one per part of a large area. Each finding carries file:line, a
+severity and a class: a one-off bug becomes a fix task, a repeatable mistake becomes a task labelled `gate` that adds a
+check to the project's own CI (red first: shown failing on the original bug and passing on the fix), and a design
+question becomes an owner question or a plan entry. Nothing is added before the owner answers one question, and the
+review is recorded as a `PL-REVIEW-…` entry in the plan register with its counts and task ids.
