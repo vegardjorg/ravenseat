@@ -173,6 +173,7 @@ function writeWithNewAttempt(file, text) {
       console.error(
         `\nGUARD: ${branch} changes protected paths that the task${taskName ? ` ${taskName}` : ''} does not own:\n${list}\n\n` +
           'Hooks, settings, agents, orchestrator scripts, the queue config and package.json can run code with the owner\'s rights.\n' +
+          'The test, lint and type configs (vitest.config.*, tsconfig*.json, pytest.ini …) can switch checks off.\n' +
           `Read the diff (git diff HEAD...${branch} -- <path>). If the change is intended: add the path to the task's\n` +
           'owned_files/shared_patch, or merge with --allow-guard (logged as "guard-overridden"). Nothing was merged.',
       );

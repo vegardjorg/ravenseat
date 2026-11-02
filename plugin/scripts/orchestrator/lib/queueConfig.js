@@ -179,7 +179,9 @@ const STANDARD = Object.freeze({
   // shared_patch). Otherwise merge-track.mjs stops before the merge (exit 4; --allow-guard overrides). These paths can
   // run code or give instructions with the owner's rights in the orchestrator session: hooks, settings, agents, skills,
   // the orchestrator scripts and the queue config. "folder/" = the folder from the root, "dir/file" = that exact path,
-  // a bare name (no slash) = that file name in any folder. An empty list turns the guard off.
+  // a bare name (no slash) = that file name in any folder, an entry with * or ? = a glob (without a slash on the file
+  // name in any folder, with a slash on the path from the root, "**/" = any folders). An empty list turns the guard off.
+  // A list in queue.config.json REPLACES this one (lists are not merged): copy the entries you want to keep.
   protectedPaths: [
     '.claude/', // project settings, hooks, agents, skills, rules
     '.claude-plugin/',
@@ -197,7 +199,44 @@ const STANDARD = Object.freeze({
     'settings.queue.json',
     'package.json',
     'package-lock.json',
+    // The test, lint and type configs (any folder): a track must not get green by switching a check off, narrowing
+    // what a runner collects or loosening a threshold. Formatter configs are left out (formatting cannot hide a bug).
+    // Some of these files hold more than check config (pyproject.toml, Cargo.toml, setup.cfg, Makefile): a task that
+    // has to change them owns them in owned_files.
+    'vitest.config.*',
+    'vitest.workspace.*',
+    'jest.config.*',
+    'playwright.config.*',
+    'cypress.config.*',
+    'karma.conf.*',
+    '.mocharc*',
+    'tsconfig*.json',
+    '.eslintrc*',
+    'eslint.config.*',
+    'biome.json*',
+    'pytest.ini',
+    'tox.ini',
+    'setup.cfg',
+    'conftest.py',
+    'pyproject.toml',
+    'mypy.ini',
+    '.coveragerc',
+    '.flake8',
+    '.golangci.*',
+    'Cargo.toml',
+    'Makefile',
+    'Justfile',
+    'justfile',
+    '.pre-commit-config.yaml',
+    'phpunit.xml*',
+    '.rspec',
   ],
+  // Test-weakening warning (lib/testWeakening.js): `receive` reads the task branch's diff against the merge base and
+  // reports deleted test files, test files moved out of the test paths and skip or focus markers on ADDED lines in
+  // test files (.skip(, .only(, xit(, @pytest.mark.skip, #[ignore], t.Skip(, @Disabled …). A warning in the receive
+  // output and a "Test weakening" section in 00-package.md, never a stop. testPaths: more test file globs (same rules
+  // as protectedPaths). markers: more regular expressions (JavaScript syntax) for an added line in a test file.
+  testWeakening: { enabled: true, testPaths: [], markers: [] },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.

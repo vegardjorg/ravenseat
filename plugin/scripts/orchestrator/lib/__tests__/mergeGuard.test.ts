@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { assessGuard, isProtected, migrCovered, readDiff, taskIdFromBranch } from '../mergeGuard';
+import { assessGuard, globMatch, isProtected, migrCovered, readDiff, taskIdFromBranch } from '../mergeGuard';
 import { STANDARD } from '../queueConfig';
 
 const changed = (...paths: string[]) => paths.map((p) => ({ status: 'M', paths: [p] }));
@@ -239,6 +239,144 @@ describe('merge-track.mjs in a temporary repo', () => {
       expect(row).toMatchObject({ track: 'A', event: 'guard-overridden', paths: ['.claude/settings.json'] });
     } finally {
       fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('the test, lint and type configs (default list, globs)', () => {
+  it('protects the runner, lint and type configs at any depth', () => {
+    for (const p of [
+      'vitest.config.mjs',
+      'app/vitest.config.ts',
+      'vitest.workspace.ts',
+      'jest.config.js',
+      'playwright.config.ts',
+      'cypress.config.ts',
+      'karma.conf.js',
+      '.mocharc.yml',
+      'tsconfig.json',
+      'packages/web/tsconfig.build.json',
+      '.eslintrc.cjs',
+      'eslint.config.mjs',
+      'biome.json',
+      'pytest.ini',
+      'tox.ini',
+      'setup.cfg',
+      'conftest.py',
+      'tests/unit/conftest.py',
+      'pyproject.toml',
+      'mypy.ini',
+      '.coveragerc',
+      '.golangci.yml',
+      'crates/core/Cargo.toml',
+      'Makefile',
+      'justfile',
+      '.pre-commit-config.yaml',
+      'phpunit.xml.dist',
+      '.rspec',
+    ])
+      expect(isProtected(p), p).toBe(true);
+  });
+  it('leaves formatter configs, look-alike names and ordinary code alone', () => {
+    for (const p of ['.prettierrc', 'src/vitest.config.helper/x.ts', 'src/tsconfig.ts', 'docs/Makefile.md', 'Cargo.lock'])
+      expect(isProtected(p), p).toBe(false);
+  });
+  it('globMatch: a bare glob on the name, a glob with a slash on the path from the root, **/ = any folders', () => {
+    expect(globMatch('*.config.ts', 'a/b/vite.config.ts')).toBe(true);
+    expect(globMatch('ci/*.yml', 'ci/a.yml')).toBe(true);
+    expect(globMatch('ci/*.yml', 'x/ci/a.yml')).toBe(false);
+    expect(globMatch('ci/*.yml', 'ci/sub/a.yml')).toBe(false);
+    expect(globMatch('**/fixtures/*.json', 'fixtures/a.json')).toBe(true);
+    expect(globMatch('**/fixtures/*.json', 'a/b/fixtures/a.json')).toBe(true);
+    expect(globMatch('tools/', 'tools/x/y.sh')).toBe(true);
+    expect(globMatch('tsconfig?.json', 'tsconfig1.json')).toBe(true);
+    expect(globMatch('a.b*', 'aXb')).toBe(false); // the dot is literal
+  });
+  it('a glob entry in owned_files is not needed: the exact path in owned_files owns the config', () => {
+    expect(assessGuard({ changes: changed('vitest.config.mjs'), ownedFiles: ['src/a.ts'] }).stop).toBe(true);
+    expect(assessGuard({ changes: changed('vitest.config.mjs'), ownedFiles: ['vitest.config.mjs'] }).stop).toBe(false);
+  });
+});
+
+describe('merge-track.mjs and a test config change', () => {
+  const SCRIPT = path.resolve(__dirname, '..', '..', 'merge-track.mjs');
+  /** A repo where queue/A changes vitest.config.mjs (and a.txt); `owned` is the task's owned_files, `config` the queue.config.json. */
+  const setup = (owned: string[], config: object | null) => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-merge-guard-tests-'));
+    const g = (...a: string[]) => {
+      const r = spawnSync('git', a, { cwd: repo, encoding: 'utf8' });
+      if (r.status !== 0) throw new Error(`git ${a.join(' ')}: ${r.stderr}`);
+      return r.stdout.trim();
+    };
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.name', 'Merge Guard Test');
+    g('config', 'user.email', 'merge-guard@test.local');
+    g('config', 'commit.gpgsign', 'false');
+    fs.writeFileSync(path.join(repo, 'a.txt'), 'a\n');
+    fs.writeFileSync(path.join(repo, 'vitest.config.mjs'), "export default { test: { include: ['**/*.test.ts'] } };\n");
+    g('add', 'a.txt', 'vitest.config.mjs');
+    g('commit', '-q', '-m', 'base');
+    g('switch', '-q', '-c', 'queue/A');
+    // The weakening a track might try: collect nothing, so every gate is green.
+    fs.writeFileSync(path.join(repo, 'vitest.config.mjs'), "export default { test: { include: [] } };\n");
+    fs.writeFileSync(path.join(repo, 'a.txt'), 'a\nb\n');
+    g('add', 'a.txt', 'vitest.config.mjs');
+    g('commit', '-q', '-m', 'track');
+    g('switch', '-q', 'main');
+    const data = path.join(repo, 'data');
+    fs.mkdirSync(data);
+    fs.writeFileSync(
+      path.join(data, 'queue.json'),
+      JSON.stringify({ tasks: [{ id: 'A', branch: 'queue/A', owned_files: owned, shared_patch: [] }] }),
+    );
+    const configFile = path.join(repo, config ? 'queue.config.json' : 'no-config.json');
+    if (config) fs.writeFileSync(configFile, JSON.stringify(config));
+    const env = {
+      ...process.env,
+      QUEUE_ROOT: repo,
+      QUEUE_CONFIG: configFile,
+      QUEUE_FOLDER: data,
+      QUEUE_TIME_LOG: path.join(data, 'times.jsonl'),
+    };
+    const run = () =>
+      spawnSync(process.execPath, [SCRIPT, 'queue/A', '--keep-worktree'], { cwd: repo, encoding: 'utf8', env });
+    return { repo, run };
+  };
+
+  it('the defaults stop a vitest.config change by a task that does not own it', () => {
+    const { repo, run } = setup(['a.txt'], null);
+    try {
+      const r = run();
+      expect(r.status).toBe(4);
+      expect(r.stderr).toMatch(/vitest\.config\.mjs/);
+      expect(r.stderr).toMatch(/can switch checks off/);
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+  it('the defaults let it through when the task owns the file', () => {
+    const { repo, run } = setup(['a.txt', 'vitest.config.mjs'], null);
+    try {
+      const r = run();
+      expect(r.status, r.stderr).toBe(0);
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+  it('an explicit protectedPaths list replaces the defaults (it keeps its own behaviour)', () => {
+    // A list without the new entries: the config change is not stopped, as before this default existed.
+    const own = setup(['a.txt'], { protectedPaths: ['.claude/', 'package.json'] });
+    try {
+      expect(own.run().status).toBe(0);
+    } finally {
+      fs.rmSync(own.repo, { recursive: true, force: true });
+    }
+    // A list that names the config (or a glob for it) stops it.
+    const glob = setup(['a.txt'], { protectedPaths: ['vitest.*'] });
+    try {
+      expect(glob.run().status).toBe(4);
+    } finally {
+      fs.rmSync(glob.repo, { recursive: true, force: true });
     }
   });
 });
