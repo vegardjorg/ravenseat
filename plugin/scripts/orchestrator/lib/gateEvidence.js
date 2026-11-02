@@ -20,8 +20,9 @@
 //
 // Out of the track's reach: the store is a file in the data folder that no track instruction mentions, and the push
 // guard (hook-push-guard.mjs) denies a queue agent's shell command that names the store or passes `--evidence` or
-// `--cwd` to the gate runner (tamperReason). Limits, on purpose: the agents run as the same OS user, so a Write/Edit tool
-// call on the file, or a gate run after `cd` into the main checkout, is not stopped by a hook; the store is a guard
+// `--cwd` to the gate runner (tamperReason). Limits, on purpose: the agents run as the same OS user. A queue agent's Write/Edit/
+// NotebookEdit on the file is denied by hook-write-guard.mjs (lib/writeGuard.js), but a Bash write or a gate run after
+// `cd` into the main checkout is not stopped by a hook; the store is a guard
 // against claims and casual forgery, not a security boundary against a hostile process.
 //
 // The file: <dataFolder>/gate-evidence.json, { version: 1, entries: [entry, ...] } (the newest last, at most MAX_ENTRIES).

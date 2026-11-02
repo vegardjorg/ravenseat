@@ -1845,6 +1845,7 @@ const QUEUE_HOOKS = [
   },
   { file: 'hook-push-guard.mjs', events: ['PreToolUse'], what: 'push guard' },
   { file: 'hook-read-guard.mjs', events: ['PreToolUse'], what: 'read guard' },
+  { file: 'hook-write-guard.mjs', events: ['PreToolUse'], what: 'write guard' },
   { file: 'hook-track-context.mjs', events: ['PostToolUse'], what: 'context measurement in tracks' },
   { file: 'hook-track-end.mjs', events: ['SubagentStop'], what: 'end gate for tracks' },
   {

@@ -45,7 +45,7 @@ const GROUPS = [
     commands: [
       { cmd: 'takeover', usage: 'takeover', text: 'the status picture for a new orchestrator session' },
       { cmd: 'fill', usage: 'fill --scratchpad <dir>', text: 'start as many tracks as the limits allow' },
-      { cmd: 'receive', usage: 'receive <id>', text: 'take in a finished track and build the review package' },
+      { cmd: 'receive', usage: 'receive <id>', text: 'take in a finished track (cq reruns the quick gates on its tip: gate_check) and build the review package' },
       { cmd: 'merge', usage: 'merge <id>', text: 'merge a reviewed track, run the gates, set it done' },
     ],
   },

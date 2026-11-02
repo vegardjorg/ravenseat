@@ -28,7 +28,7 @@ import {
   reviewerFindingsLines, scratchpadFor, takenForMigr, taskAgents,
 } from './tracks.mjs';
 import {
-  BASE_SETUP, BH, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf, writeReport,
+  BASE_SETUP, BH, flakyRecheck, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf, writeReport,
 } from './baseHealth.mjs';
 import { logEvent } from './events.mjs';
 
@@ -727,7 +727,14 @@ export async function cmdMerge() {
       if (r.code === 0 && BASE_SETUP.enabled) mergeCommit = git(['rev-parse', 'HEAD']);
     }
     if (x.step === 'gates' && BASE_SETUP.enabled && mergeCommit) {
-      if (r.code !== 0) gatesRed(r);
+      // The flaky check (lib/baseHealth.js): the failed quick gates once more on the same sha before the base freezes.
+      const flaky = r.code !== 0 ? flakyRecheck({ tip: mergeCommit, causeId: id }) : null;
+      if (flaky) {
+        const list = flaky.run.flaky.join(' ; ');
+        r = { code: 0, out: `${r.out}\nflaky: green on a rerun of ${list}` };
+        writeLog(`===== gates: flaky, green on a rerun of ${list} =====`);
+        if (BASE_SETUP.sameAsQuick) settleBase({ ok: true, check: flaky.run });
+      } else if (r.code !== 0) gatesRed(r);
       else if (BASE_SETUP.sameAsQuick) settleBase({ ok: true });
     }
     return r;

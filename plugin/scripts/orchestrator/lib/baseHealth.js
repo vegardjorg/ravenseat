@@ -20,6 +20,11 @@
 //     own, from the gate evidence store, lib/gateEvidence.js; normally the one `cq receive` ran) was green on that commit
 //     with the base gate commands: the check would run the same commands on the same files, so green is recorded
 //     without running them. The track's own runs and the time log's gate rows are never used: a track can write those.
+//   - The flaky check (baseGate.flakyRerun, default true): before a red check freezes the base, only the failed
+//     commands run once more on the same sha in the main checkout (afterFailed, flakyResult). Green on the rerun: the
+//     verdict is green with `flaky` = those commands, a finding is filed (cq finding, deduplicated on the command) and a
+//     `flakyGate` row goes to the time log (cq cost Flow counts them); nothing is frozen. Red twice: frozen as above.
+//   - CI (cli/ciWatch.mjs, the optional CI watch after a push) can mark a tip red too, with its own fix task CI-<sha7>.
 //
 // Where the check runs: the main checkout (config root / QUEUE_GIT), which `cq merge` already requires to be on the base
 // branch and where the merge and the quick gates run. A separate worktree would need the shared links (node_modules) to
@@ -32,7 +37,7 @@
 //
 // The state file: <dataFolder>/base-health.json, { current: entry, history: [entry, ...] } with
 //   entry = { tip, branch, status: "green"|"red", at, commands, skipped?, made_red_by?: { task, merge_commit },
-//             fix_task?, tail_file?, failed?, exit?, timed_out?, note? }
+//             fix_task?, tail_file?, failed?, exit?, timed_out?, flaky?: [commands], note? }
 // The history keeps the last HISTORY_MAX entries (the newest last).
 //
 // Pure except readState/writeState (one small file) and runBaseGate (it runs the commands; `spawn` can be swapped).
@@ -63,8 +68,10 @@ const positiveInt = (v, standard) => (Number.isInteger(v) && v > 0 ? v : standar
  *   `gates.quick` has a command it is on there too, since a red base costs a beginner the most.
  *   commands: config().baseGate.commands, else the quick gates (what tracks run before delivery).
  *   sameAsQuick: the commands are exactly the quick gates, so the merge step's own gates run is the base check.
+ *   flakyRerun: config().baseGate.flakyRerun (default true): a red check reruns only the failed commands once on the
+ *   same sha before the base is frozen (see "The flaky check" at the top).
  * @returns {{ enabled: boolean, commands: string[], sameAsQuick: boolean, timeoutSec: number, tailLines: number,
- *   reason: string }}
+ *   flakyRerun: boolean, reason: string }}
  */
 function baseGateSetup(cfg = {}) {
   const own = isObject(cfg?.baseGate) ? cfg.baseGate : {};
@@ -79,7 +86,28 @@ function baseGateSetup(cfg = {}) {
     enabled = false;
     reason = 'off: baseGate.enabled is false';
   }
-  return { enabled, commands, sameAsQuick, timeoutSec, tailLines, reason };
+  return { enabled, commands, sameAsQuick, timeoutSec, tailLines, flakyRerun: own.flakyRerun !== false, reason };
+}
+
+/**
+ * The commands a flaky rerun runs after a red runBaseGate (which stops at the first red command): the red one and
+ * the ones after it that never ran. The ones before it were green and are not run again.
+ */
+function afterFailed(commands, failed) {
+  const list = commandList(commands);
+  const i = list.indexOf(failed);
+  return i >= 0 ? list.slice(i) : list;
+}
+
+/**
+ * The outcome of the flaky check: the first (red) run and the rerun of `rerunCommands` on the same sha.
+ * Green on the rerun: a green run with `flaky` = the commands that were red the first time (`firstFailed`) and the
+ * rerun's tail. Red again: the rerun's red result with `rerun: true` (its fresh tail). Pure.
+ */
+function flakyResult({ first, rerun, firstFailed }) {
+  const durationSec = Math.round(((first?.durationSec ?? 0) + (rerun?.durationSec ?? 0)) * 10) / 10;
+  if (rerun?.ok) return { ...rerun, ok: true, failed: null, exit: 0, durationSec, flaky: commandList(firstFailed) };
+  return { ...rerun, ok: false, durationSec, rerun: true };
 }
 
 /** The state file's content, or an empty state when it is missing or broken (a broken file is never fatal: unknown). */
@@ -353,6 +381,8 @@ module.exports = {
   HISTORY_MAX,
   EXIT_RED_BASE,
   baseGateSetup,
+  afterFailed,
+  flakyResult,
   readState,
   writeState,
   record,

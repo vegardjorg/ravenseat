@@ -163,9 +163,12 @@
 //         from the branch), trackReply.md (the track's last answer from the transcript), trackReport.md and handover.md (from
 //         <folder>/<id>/), mission.md (the prompt file), and reviewer-<type>.md (the short prompt) per reviewer: the fixed
 //         ones by class (config().reviewers) and the helper agents that are on and hit (lib/queueHelpers.js).
-//         Saves the RESULT line. Does NOT merge; prints the merge command. Adoption: the report is the newest in
-//         <folder>/<id>/ or a fix round <folder>/<id>-r<N>/, in the orchestrator's and the task's scratchpad; saves
-//         report_received.
+//         Saves the RESULT line. Does NOT merge; prints the merge command. The track's own gate runs (RESULT gates=) are
+//         informational: receive runs the quick gates itself on the delivered tip (gates.mjs --evidence) and saves the
+//         task field gate_check (red: the blocker gate-red and a fix round). A batch push needs cq gates --full run in the
+//         main checkout on the base tip with no uncommitted changes (cq push-check reads that gate evidence).
+//         Adoption: the report is the newest in <folder>/<id>/ or a fix round <folder>/<id>-r<N>/, in the orchestrator's
+//         and the task's scratchpad; saves report_received.
 //         Done command (task field done_when, lib/doneCheck.js): run first in the worktree that has the branch checked
 //         out (--done-cwd overrides), with config().doneCheck.timeoutSec. Red: no reviewers, the blocker gate-red, only
 //         the output tail in <folder>/done-<id>.md, and resume --reason fix is run (exit 1; exit 8 at the fix-round cap).)

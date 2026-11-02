@@ -529,6 +529,9 @@ function flowStatistics(queue, rows, { from, to, plans = null, reviewerTypes = n
   const real = conflicts.filter((r) => !r.guard);
   const gates = rowsOf(rows, 'baseGate', from, to);
   const red = gates.filter((r) => r.ok === false);
+  const flakyCommands = {};
+  for (const r of rowsOf(rows, 'flakyGate', from, to))
+    for (const c of r.commands ?? []) flakyCommands[c] = (flakyCommands[c] ?? 0) + 1;
   const durations = gates.map((r) => num(r.duration_s)).filter((x) => x != null);
   const seen = new Set();
   const pushes = rowsOf(rows, 'push', from, to).filter((r) => {
@@ -576,6 +579,8 @@ function flowStatistics(queue, rows, { from, to, plans = null, reviewerTypes = n
       commits_per_push: commits.length ? round1(commits.reduce((a, b) => a + b, 0) / commits.length) : null,
       red_tip: pushes.filter((r) => r.base_health === 'red').length,
     },
+    // The flaky check (cli/baseHealth.mjs): base gate commands that were red, then green on a rerun on the same sha.
+    flakyGates: { count: Object.values(flakyCommands).reduce((x, y) => x + y, 0), commands: flakyCommands },
     triage,
     // The quality figures (see the header).
     rightFirstTime: rft,
@@ -606,6 +611,12 @@ function flowLines(f, label) {
           `${v(f.pushes.commits_per_push)} commit(s) per push` +
           (f.pushes.red_tip ? `, ${f.pushes.red_tip} with a red base tip` : '')
         : ''),
+    ...(f.flakyGates?.count
+      ? [
+          `  flaky gate command(s): ${f.flakyGates.count} green on a rerun (` +
+            `${Object.entries(f.flakyGates.commands).map(([c, n]) => `${c} x${n}`).join(', ')})`,
+        ]
+      : []),
     `  triage verdicts: ${triage || 'none'}`,
     ...qualityLines(f),
   ];

@@ -379,6 +379,12 @@ The base gate (`baseGate` in `queue.config.json`, `lib/baseHealth.js`) records t
   flow stops as before (the task stays in review with `gate-red`; set it done after the fix task); when only other
   base gate commands are red, the task is set done, `fill` runs (and starts the fix task), and `cq merge` exits 9.
 - **Green again.** The next green check (normally the fix task's merge) clears the red.
+- **The flaky check.** Before a red check freezes the base, only the failed commands run once more on the same sha
+  (in the merge step for the quick gates, in the base-gate step and before a merge for the rest). Green on the rerun:
+  `FLAKY: <command> was red, then green on a rerun`, the verdict is green with `flaky` in `base-health.json`, a
+  `flakyGate` row goes to the time log (`flaky gate command(s)` in the Flow box of `cq cost`), and a finding
+  `Flaky gate command: <command>` is filed (`cq finding list`; a second flake counts on the same finding). Nothing is
+  frozen. Red twice: frozen as before. `baseGate.flakyRerun: false` turns the rerun off.
 - **The skip rule.** When the merge commit has exactly the tree of the track tip (the branch already contained the
   base, or a fast-forward) and the track's own gate ran green on exactly that tip in a clean worktree with every base
   gate command (the gate row's `sha` and `clean`), green is recorded without running the gates again.
@@ -386,6 +392,25 @@ The base gate (`baseGate` in `queue.config.json`, `lib/baseHealth.js`) records t
   board's status line under the title.
 - **On and off.** `baseGate.enabled`: `"auto"` (default) is on when there are commands, `false` turns it off. Lite
   mode has no rule of its own: it is off until the project has a quick gate.
+
+## The gate evidence (what a push and a merge trust)
+
+A track's own gate runs are informational: its `RESULT gates=OK` is a claim. What the queue trusts is the gate
+evidence store, `<dataFolder>/gate-evidence.json` (`lib/gateEvidence.js`), which only `gates.mjs` writes, in the main
+checkout or with cq's own `--evidence` run:
+
+- `cq receive` runs the quick gates itself on the delivered tip (in the worktree that has the branch checked out, with
+  no uncommitted tracked changes) and saves the result as the task field `gate_check` (`ok`, `kind`, `tip`, `at`,
+  `ran`, and `evidence_at` when an earlier green entry for that exact tip was reused). Red: the blocker `gate-red` and
+  a fix round, as for a red done command.
+- A batch push needs `cq gates --full` run in the main checkout, on exactly the base tip, with no uncommitted tracked
+  changes: `cq push-check` says `BLOCKED` while `gates.full` is set up and that entry is missing or red.
+- Out of the agents' reach: the push guard denies a queue agent's shell command that names the store or passes
+  `--evidence` or `--cwd` to the gate runner, and the write guard (`hook-write-guard.mjs`, PreToolUse on
+  `Write|Edit|NotebookEdit`, `lib/writeGuard.js`) denies a queue agent (track, track-d, the reviewers and helpers) a
+  direct write to `gate-evidence.json` anywhere, and to the data folder's `queue.json` and `base-health.json`. The
+  main session is never stopped, and the hook is inert without `queue.config.json`. Both are guards against mistakes
+  and casual forgery, not a security boundary: the agents run as the same OS user.
 
 ## Gate from incident (a failure becomes a check)
 
@@ -441,6 +466,27 @@ commit. Projects with gates and the harness as their safety net push 20 to 500+ 
 | `push.minTasks` | `10` | Merged tasks for `READY`; below it the guard asks. `0` = no lower limit |
 | `push.warnTasks` | `50` | From this many merged tasks the verdict is `LARGE` (push recommended). `0` = off |
 | `push.maxAgeHours` | `null` | When set, unpushed work older than this makes the batch `READY` below `minTasks` |
+| `push.ciWatch` | `"off"` | `"github"`: the optional CI watch after a batch push (`cq push-check --watch-ci <sha>`, needs `gh`) |
+| `push.ciWatchIntervalSec`, `push.ciWatchTimeoutMin` | `60`, `90` | The CI watch's poll interval and its cap (exit 10 after it) |
+
+**The CI watch (optional).** The local gates are the rule (a push needs a green `cq gates --full` on the tip), but CI
+can still go red on what a batch push sent. `push.ciWatch: "github"` (default `"off"`, needs the `gh` CLI) turns on
+a safety net: right after a batch push the orchestrator starts `cq push-check --watch-ci <sha>` in the background
+(`run_in_background`; push-check prints the command when the watch is on). It polls `gh run list --commit <sha>`
+every `push.ciWatchIntervalSec` (60) and exits when the runs are done, like `cq wait`:
+
+- exit 0 `CI GREEN`: every run is green;
+- exit 9 `CI RED`: a check failed. One fix task `CI-<sha7>` (value 10, class K, waiting, as the base fix task) and
+  the base is marked red at the tip with that task as its fix task, so `cq merge` lets only it through;
+- exit 0 `CI INFRA`: every red run failed outside the code (cancelled, timed out, a runner that never started or went
+  away, billing). An owner question `ci-<sha7>-infra` (rerun the failed jobs or ignore). Nothing is frozen;
+- exit 10 `TIMEOUT`: not done after `push.ciWatchTimeoutMin` (90) minutes. Exit 0 also when no run shows up for the
+  commit within 10 minutes (no CI for this push).
+
+Only the failed jobs' log is fetched (`gh run view --log-failed`), and only its tail is kept (about 8 KB, 60 lines),
+redacted with the secret patterns of `lib/secretScan.js`, in `<dataFolder>/ci-<sha7>.md`. The task and the question
+name that file and never hold the log. A second watch of the same sha (a rerun) finds the task or the question and
+adds nothing. `cq doctor` checks the keys.
 
 **Recommendation.** New users: keep `"owner"`. Projects with expensive CI: `"threshold"` with `minTasks` 10 and
 `warnTasks` 50, then tune; the numbers are yours to choose. A `maxAgeHours` (for example 24) keeps a slow week from

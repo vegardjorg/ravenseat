@@ -7,7 +7,8 @@
 // <namespace>.<function>(), the namespace is imported from ./cli/<module>.mjs, and that module exports the function.
 // An async command function must be called with await. The words themselves are kept in step with QUEUE_COMMANDS in
 // lib/__tests__/cliHelp.test.ts.
-// Also: every cli/*.mjs module is imported by queue.mjs or by another cli/ module, so none is left behind.
+// Also: every cli/*.mjs module is imported by queue.mjs, by another cli/ module, or by another entry script with import()
+// (push-check.mjs --watch-ci loads cli/ciWatch.mjs), so none is left behind.
 // =============================================================
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -56,6 +57,9 @@ describe('the dispatch in queue.mjs', () => {
   it('every cli/ module is used', () => {
     const imported = new Set([...NAMESPACES.values()]);
     for (const f of MODULES) for (const m of text(f).matchAll(/from '\.\/([\w.]+\.mjs)'/g)) imported.add(m[1]);
+    // The other entry scripts next to queue.mjs that load a cli/ module themselves (push-check.mjs --watch-ci).
+    for (const f of fs.readdirSync(DIR).filter((x) => x.endsWith('.mjs')))
+      for (const m of fs.readFileSync(path.join(DIR, f), 'utf8').matchAll(/import\('\.\/cli\/([\w.]+\.mjs)'\)/g)) imported.add(m[1]);
     for (const f of MODULES) expect(imported.has(f), f).toBe(true);
   });
 });
