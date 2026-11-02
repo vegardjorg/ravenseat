@@ -58,8 +58,8 @@
 //     unregistered documents (queue.mjs plan check), and POST /api/plan-new and /api/plan-source run `queue.mjs plan new`
 //     and `plan edit <id> --set {sources}` with --set-by owner, --dry and --expect-changed.
 //     The Legal, Decisions and Launch views read the same data. An answer to an owner question goes via
-//     POST /api/action { type: 'resolve' } (= `queue.mjs resolve`), and POST /api/lawyerPackage writes a draft locally
-//     (dry = preview; never sent).
+//     POST /api/action { type: 'resolve' } (= `queue.mjs resolve`; { choice: <n> } from a choice button = resolve --choice),
+//     and POST /api/lawyerPackage writes a draft locally (dry = preview; never sent).
 //     POST /api/plan-bulk runs `queue.mjs plan prioritize|edit|combine` (dry = preview, otherwise
 //     --expect-changed, all or nothing), POST /api/plan-undo undoes what the board just saved (`plan undo --nr`),
 //     and GET /api/plans?wait=1 waits until plans.json or queue.json changes (live update, fs.watch).
@@ -1735,6 +1735,21 @@ async function write(filePath, b) {
           (queue.tasks ?? []).some((o) => (o.waiting_on ?? []).includes(sp)));
       if (!known) return no('unknown question');
       const answer = cleanText(b.answer, 4000);
+      // A choice button ({ choice: <1-based number> }): the server checks that the question has that choice, and
+      // queue.mjs resolve --choice stores the choice's text (with the free text field as a note, when filled in).
+      if (b.choice != null) {
+        const n = Number(b.choice);
+        const choices = queue.question?.[sp]?.choices;
+        if (!Number.isInteger(n) || !Array.isArray(choices) || n < 1 || n > choices.length)
+          return no('unknown choice');
+        const v = guard(queue, { type, sp, text: choices[n - 1] }, {}, b);
+        if (v.stop) return v.stop;
+        info = v.info;
+        return run(
+          ['resolve', sp, '--choice', String(n), ...(answer ? ['--answer', answer] : []), '--by', 'owner'],
+          `resolve ${sp} (choice ${n})`,
+        );
+      }
       const v = guard(queue, { type, sp, text: answer }, {}, b);
       if (v.stop) return v.stop;
       info = v.info;

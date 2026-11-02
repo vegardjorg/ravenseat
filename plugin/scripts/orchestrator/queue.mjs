@@ -67,6 +67,10 @@
 //                                                                  --answer every task waiting on the question gets
 //                                                                  the addition "OWNER_ANSWER <id> (<date>): <answer>" in
 //                                                                  the mission, once)
+//   node scripts/orchestrator/queue.mjs resolve <question> --choice <n|text> [--answer "note"] [--by "..."]   (picks one of
+//                                                                  the question's choices, by number from 1 or by its text;
+//                                                                  the answer stored is the choice's text, plus
+//                                                                  " (note: ...)" when --answer is given; one question only)
 //   `waiting_on` takes ONLY registered question ids (letters, digits, ".", "_", "-", at most 40 chars, no
 //   whitespace) with text and type in `question`. add and edit REJECT (all or nothing) a new id that is not
 //   registered, unless the add file registers it in { tasks, question }; free text is stopped. edit-many and the board
@@ -78,7 +82,10 @@
 //   node scripts/orchestrator/queue.mjs question                      (the owner questions: text, type, open or resolved)
 //   node scripts/orchestrator/queue.mjs question <id> --text "..." [--type question|condition|lawyer|owner-task]
 //        [--recommendation "..."] [--source "..."]                          (sets one; fields not given are kept)
-//   node scripts/orchestrator/queue.mjs question --file <json>         ({ "<id>": { type, text, recommendation?, source? } };
+//        [--choice "..." --choice "..." (2-4) | --no-choices]           (answer options: each at most 60 characters, no
+//                                                                  duplicates; put the recommended one first, or let
+//                                                                  --recommendation be its exact text to mark it)
+//   node scripts/orchestrator/queue.mjs question --file <json>         ({ "<id>": { type, text, recommendation?, source?, choices? } };
 //                                                                  all or nothing)
 //
 // Limits, capacity and guards:

@@ -36,7 +36,7 @@ const GROUPS = [
     title: 'Owner',
     commands: [
       { cmd: 'question', usage: 'question', text: 'the owner questions, open and resolved' },
-      { cmd: 'resolve', usage: 'resolve <q> --answer "..."', text: 'answer one; waiting tasks get the answer' },
+      { cmd: 'resolve', usage: 'resolve <q> --answer "..." | --choice <n>', text: 'answer one; waiting tasks get the answer' },
       { cmd: 'approve', usage: 'approve <id>', text: 'approve a task an agent proposed' },
     ],
   },

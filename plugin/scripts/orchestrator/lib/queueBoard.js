@@ -557,6 +557,10 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
         text: q?.text ?? null,
         recommendation: q?.recommendation ?? null,
         source: q?.source ?? null,
+        // The answer options (2-4, optional) as buttons; `recommended` = the one equal to the recommendation.
+        choices: Array.isArray(q?.choices)
+          ? q.choices.map((label) => ({ label, recommended: L.isRecommendedChoice(q, label) }))
+          : [],
         direct: [...ids].sort(),
         count: all.size,
         minutes: [...all].reduce((sum, x) => sum + L.estimate(map.perId.get(x) ?? {}), 0),

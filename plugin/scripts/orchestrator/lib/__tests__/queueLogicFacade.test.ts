@@ -15,7 +15,7 @@ import path from 'node:path';
 const LIB = path.join(__dirname, '..');
 const L = require('../queueLogic.js');
 
-/** The sorted export names of queueLogic.js before the split (276). */
+/** The sorted export names of queueLogic.js before the split (276), plus the ones added on purpose since. */
 const EXPORTS = [
   'ACTIVE', 'AGENT_MODELS', 'BATCHED_BLOCKER', 'BATCH_MEASURE', 'BLOCK_CODES', 'CALIBRATED', 'CHANGELOG_MAX',
   'CLOUD_BUNDLE_MAX', 'CLOUD_BUNDLE_MIN', 'CLOUD_BY', 'CLOUD_MAX', 'COLLISION_STATUSES', 'DEFAULT_LIMITS',
@@ -28,7 +28,7 @@ const EXPORTS = [
   'areaOverview', 'assessActive', 'assessDelivery', 'assignMigrBlock', 'assignStartBlock', 'baseBranch',
   'batchFindings', 'batchGroups', 'batchId', 'batchMissionText', 'batchPack', 'batchSuggestion', 'batchedError',
   'blockInterval', 'blockerLines', 'blockerParts', 'blockerSummary', 'blockers', 'blockersWithPause', 'blocksInText',
-  'bonusBlock', 'branchPrefix', 'budgetGuard', 'bulkDiff', 'childrenMap', 'classifyCommit', 'classifyQueue',
+  'bonusBlock', 'branchPrefix', 'budgetGuard', 'bulkDiff', 'childrenMap', 'choiceLines', 'choicesError', 'classifyCommit', 'classifyQueue',
   'cleanFocus', 'cloneJson', 'closeBlock', 'cloudBundleCap', 'cloudBundlePackage', 'cloudBundles', 'cloudCancel',
   'cloudDone', 'cloudPackage', 'cloudReferences', 'cloudSessions', 'cloudStart', 'cloudSuitable', 'collisionText',
   'compareRanking', 'concurrentBlock', 'conflict', 'conflictPart', 'consistency', 'continue', 'costLabel',
@@ -40,13 +40,13 @@ const EXPORTS = [
   'findTrackReport', 'firstUserMessage', 'focusApplies', 'focusCleanLines', 'focusSpace', 'focusStatus', 'focusText',
   'focusWithoutDone', 'groups', 'hasLabel', 'hasMigr', 'hasOrchestratorTrailer', 'highestBlockNr', 'inBatchQueue',
   'inNightWindow', 'infoField', 'infoValueText', 'infoView', 'isAgentSource', 'isBatched', 'isCloud', 'isExternalRow',
-  'isOldPick', 'lastAnswer', 'lastUndoable', 'limitText', 'loadGuard', 'loadSlotsFor', 'lockUpCount', 'logChange',
+  'isOldPick', 'isRecommendedChoice', 'lastAnswer', 'lastUndoable', 'limitText', 'loadGuard', 'loadSlotsFor', 'lockUpCount', 'logChange',
   'longestPrefix', 'markLogged', 'mentionedIds', 'mentionsTask', 'mergePlan', 'migrBlockText', 'migrFiles',
   'migrSetup', 'migrTens', 'minFreeMemoryFor', 'missingProject', 'modelFor', 'modelPart', 'moveBlockInText',
   'newCursor', 'newRegister', 'nextMigrGuard', 'nightGuard', 'openBlock', 'openBlockOf', 'openQuestion',
   'orchestratorStatus', 'ownStep', 'ownerAnswerBonus', 'packageFiles', 'park', 'parkedNow', 'parkedValue',
   'parseEvidence', 'parseFindings', 'parseLimit', 'parseMoveBlock', 'parseNightWindow', 'parseResult', 'parseStep',
-  'parseToDate', 'pick', 'pickable', 'planMatch', 'prefixWarnings', 'projectFor', 'projectOverview', 'projectPaused',
+  'parseToDate', 'pick', 'pickChoice', 'pickable', 'planMatch', 'prefixWarnings', 'projectFor', 'projectOverview', 'projectPaused',
   'promptTask', 'pushPlan', 'qaAutoOutcome', 'qaConfig', 'qaDeviation', 'qaList', 'qaOk', 'qaSplit',
   'questionOverview', 'questionRegistered', 'questionWithoutText', 'queueBranch', 'queueIdFromMerge', 'rankBlock',
   'ranking', 'rankingContext', 'release', 'removeFocus', 'reportCapWarning', 'resetConfig', 'resolve', 'resolveWaits',

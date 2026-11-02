@@ -77,6 +77,42 @@ function checkOff(set, id, label) {
   });
 }
 
+/**
+ * The question's answer options as buttons (only when it has `choices`). One click answers the question with that choice
+ * through the same POST /api/action { type: 'resolve' } as the free text answer, with { choice: <n> } (1-based); the server
+ * looks up the text and runs queue.mjs resolve --choice. `note` gives the free text field, when it is open: its text is
+ * stored as a note after the choice. The recommended choice (equal to the recommendation) is the filled button.
+ */
+function choiceButtons(s, i, note) {
+  if (!s.choices?.length) return null;
+  const pick = async (n) => {
+    const text = note ? note().trim() : '';
+    const body = { type: 'resolve', sp: s.sp, choice: n, ...(text ? { answer: text } : {}) };
+    const completed = await action(body, `${s.sp}: resolved (${s.choices[n - 1].label})`);
+    if (completed) {
+      t.answerOpen = null;
+      t.answerDraft.delete(s.sp);
+      drawInbox(true);
+    }
+  };
+  return el(
+    'div',
+    { class: 'answer-choices', role: 'group', 'aria-label': `Choices for ${s.sp}` },
+    s.choices.map((c, j) =>
+      el('button', {
+        type: 'button',
+        class: `button ${c.recommended ? 'button-filled' : 'button-outline'}`,
+        'data-focus': `choice:${i}:${j}`,
+        text: c.recommended ? `${c.label} (recommended)` : c.label,
+        title: note
+          ? `Answer ${s.sp} with "${c.label}", with the text in the field as a note`
+          : `Answer ${s.sp} with "${c.label}"`,
+        onclick: () => pick(j + 1),
+      }),
+    ),
+  );
+}
+
 function questionRow(s, i) {
   const type = spType(s.type);
   const open = t.answerOpen === s.sp;
@@ -135,11 +171,13 @@ function questionRow(s, i) {
   );
   if (!open) {
     row.append(
+      ...[choiceButtons(s, i, null)].filter(Boolean),
       el('button', {
         type: 'button',
         class: 'button button-muted',
         'data-focus': `answer:${i}`,
-        text: type.button,
+        // With choices the button opens the free text answer (a note or an answer that is not one of the choices).
+        text: s.choices?.length ? 'Answer in your own words' : type.button,
         'aria-label': `${type.button}: ${s.sp}`,
         onclick: () => {
           t.answerOpen = s.sp;
@@ -173,6 +211,7 @@ function questionRow(s, i) {
       'div',
       { class: 'actions answer-form' },
       el('div', { class: 'field' }, el('label', { for: `answer-${i}`, text: type.field }), field),
+      choiceButtons(s, i, () => field.value),
       s.recommendation
         ? el('button', {
             type: 'button',

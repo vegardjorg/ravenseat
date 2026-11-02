@@ -7,7 +7,8 @@
 //     bytes, so a module that is missing from the server's allow list shows up here and not as a blank board,
 //   - the board's scripts in index.html are exactly the files in queue-board/board/ (none left out, none extra),
 //   - the Content-Security-Policy and the other security headers are the same strict ones as before the split,
-//   - only allow-listed paths are served: the old /board.js and an unknown file under /board/ give 404.
+//   - only allow-listed paths are served: the old /board.js and an unknown file under /board/ give 404,
+//   - an answer from a choice button (POST /api/action { type: 'resolve', choice }) goes through queue.mjs resolve --choice.
 // =============================================================
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -25,6 +26,7 @@ const CSP =
 let root = '';
 let board: ChildProcess | null = null;
 let base = '';
+let key = '';
 
 /** Runs queue.mjs async (spawnSync blocks the test worker; see helperCustom.test.ts). */
 const cq = (env: NodeJS.ProcessEnv, ...args: string[]) =>
@@ -65,10 +67,11 @@ beforeAll(async () => {
     const t = setTimeout(() => fail(new Error(`no start line: ${out} ${err}`)), 60_000);
     board!.stdout!.on('data', (d) => {
       out += String(d);
-      const m = /Open: (http:\/\/[^/\s]+)\/#key=/.exec(out);
+      const m = /Open: (http:\/\/[^/\s]+)\/#key=(\S+)/.exec(out);
       if (m) {
         clearTimeout(t);
         base = m[1];
+        key = m[2];
         done();
       }
     });
@@ -133,4 +136,41 @@ describe('the board server and the client scripts', () => {
       await r.arrayBuffer();
     }
   }, 30_000);
+});
+
+describe('the board server: an owner question answered with a choice button', () => {
+  it('POST /api/action { type: resolve, choice } stores the choice text with the note; an unknown choice gives 400', async () => {
+    // The same environment as the server (beforeAll), so the question lands in the queue the board reads.
+    const env = {
+      ...process.env,
+      QUEUE_ROOT: root,
+      QUEUE_FOLDER: path.join(root, 'q'),
+      QUEUE_CONFIG: path.join(root, 'no-config.json'),
+      QUEUE_TIME_LOG: path.join(root, 'times.jsonl'),
+      QUEUE_GIT: root,
+      DISABLE_UPDATES: '1',
+    };
+    expect(
+      await cq(env, 'question', 'PICK-1', '--text', 'Which vendor?', '--choice', 'Vendor A', '--choice', 'Vendor B'),
+    ).toBe(0);
+    const post = async (body: object) => {
+      const r = await fetch(`${base}/api/action`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-queue-key': key },
+        body: JSON.stringify(body),
+      });
+      return { status: r.status, body: (await r.json()) as { ok: boolean; message?: string } };
+    };
+    const unknown = await post({ type: 'resolve', sp: 'PICK-1', choice: 3 });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.message).toBe('unknown choice');
+    const queueFile = path.join(root, 'q', 'queue.json');
+    expect(JSON.parse(fs.readFileSync(queueFile, 'utf8')).resolutions?.['PICK-1']).toBeUndefined();
+
+    const ok = await post({ type: 'resolve', sp: 'PICK-1', choice: 2, answer: 'from March' });
+    expect(ok.status, ok.body.message).toBe(200);
+    const queue = JSON.parse(fs.readFileSync(queueFile, 'utf8'));
+    expect(queue.resolved).toContain('PICK-1');
+    expect(queue.resolutions['PICK-1']).toMatchObject({ answer: 'Vendor B (note: from March)', by: 'owner' });
+  }, 60_000);
 });
