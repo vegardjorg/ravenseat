@@ -50,6 +50,11 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
   fix round, exit 1/8; dirty or missing worktree: refused, exit 1). The base gate's skip rule reads the same store.
   `push-check` is BLOCKED and the push guard asks when the tip has no green `cq gates --full` run from the main
   checkout. Queue agents may not pass `--evidence`/`--cwd` to the gate runner or touch the store.
+- **Focus end:** when every focus stage is done or the focus period is over, the queue no longer continues silently.
+  With `focus.continueWhenEmpty` off (the default) fill starts nothing, `focus.finished_at` is recorded, and one
+  owner question "Focus X is done: set a new focus or continue the regular queue?" appears in Waiting on you;
+  answering "Continue the regular queue" lifts the pause. On keeps the old behavior with one notice line. Per focus:
+  `cq focus set ... --continue-when-empty on|off`; `cq focus` and `cq doctor` know the setting.
 - **`cq ask <id> ["<question>"]`:** answer a question about an earlier track without resuming its agent. It builds a
   size-capped, secret-redacted bundle (mission, report.md, handover.md, queue notes and owner answers, commits and
   diffstat, transcript tail); `--bundle` writes it for the new `/cq:ask` skill and read-only `ask` agent, `--json`
