@@ -13,7 +13,7 @@
 // =============================================================
 
 import {
-  a, CE, CH, CONFIG, cut, D, die, edit, FC, FOLDER, HELP, L, positional, read, TK, val, WIDTH,
+  a, CE, CH, CONFIG, cut, D, die, edit, FC, FOLDER, HELP, L, positional, read, require, TK, val, WIDTH,
 } from './context.mjs';
 import {
   dailyUsageFor, measureLoad, measurementLine, measureTask, readTimeLog, saveMeasurement, sinceTime,
@@ -177,12 +177,14 @@ export function cmdCost() {
     // time unless --since, like the per-class lines.
     const perTask = CE.taskTotals({ queue, events, since: since ? Date.parse(since) : null });
     const max = Number(val('--max') ?? 10);
+    const metrics = transcriptMetricsSince(from);
     if (a.includes('--json')) {
-      console.log(JSON.stringify({ perMerged: merged, perTask, perClass: s.perClass, total: s.total }, null, 2));
+      console.log(JSON.stringify({ perMerged: merged, perTask, perClass: s.perClass, total: s.total, metrics }, null, 2));
       process.exit(0);
     }
     for (const l of CE.perMergedLines(merged, since ? `since ${since.slice(0, 10)}` : `last ${CE.WINDOW_DAYS} days`))
       console.log(l);
+    for (const l of TM().metricsLines(metrics)) console.log(cut(l, WIDTH));
     for (const l of CE.taskTotalLines(perTask, max)) console.log(cut(l, WIDTH));
     if (!s.rows.length)
       console.log('No finished tasks with a measured cost yet (measured at set <id> done).');
@@ -210,6 +212,13 @@ export function cmdCost() {
         );
     }
   }
+}
+
+// ---- Transcript metrics (lib/transcriptMetrics.js): per model, tools and errors, API errors, active time ----
+const TM = () => require('./lib/transcriptMetrics.js');
+/** The metrics summary for the done rows in the time log since `from` (epoch ms), the same window as the headline. */
+function transcriptMetricsSince(from) {
+  return TM().metricsSummary(readTimeLog(), { from, to: Date.now() + 1 });
 }
 
 /** `cq calibrate` (the usage is at the top of queue.mjs). */

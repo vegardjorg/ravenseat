@@ -6,9 +6,12 @@
 // writes one line to the time log (config().timeLog in mainTree, default scripts/.queue/times.jsonl; QUEUE_TIME_LOG
 // overrides) in the log-time.mjs format:
 //   start:  { time, wave, track, event: "start", agent_id, agent_type }
-//   done: { ..., event: "done", cumulative: true, duration_s, toolCall, modelTurns, model, cache_expiry,
+//   done: { ..., event: "done", cumulative: true, duration_s, active_s, idle_gaps, toolCall, modelTurns, model,
+//             byModel { <model>: { turns, tokens, cost_usd } }, tools { <name>: { calls, errors } },
+//             api_errors { rate_limit, overloaded, other }, cache_expiry,
 //             cost_usd, tokens { input, output, cache_read, cache_written, cache_written_5m, cache_written_1h },
 //             context {...}, first_change_s, call_for_first_change, remark }
+//   (killed: true marks a done row cq wrote itself for an agent that never stopped normally: cli/tracks.mjs.)
 // The numbers for "done" are computed from the agent's transcript (agent_transcript_path) in lib/timeCost.js.
 //
 // ALL AGENT_TYPES: the script logs any agent type it is called for (track, reviewer, general-purpose ...); agent_type
@@ -37,7 +40,7 @@ const require = createRequire(import.meta.url);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
 if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
 const T = require('./lib/timeCost.js');
-const { dataFolder, timeLog } = require('./lib/queueConfig.js');
+const { config, dataFolder, timeLog } = require('./lib/queueConfig.js');
 
 const guard = setTimeout(() => process.exit(0), 20000);
 guard.unref();
@@ -60,8 +63,17 @@ function readStdin() {
   });
 }
 
+/** The idle threshold for active time (config metrics.idleGapMin, default 5 min). Never throws. */
+function idleGapMin() {
+  try {
+    return config().metrics?.idleGapMin ?? T.IDLE_GAP_MIN;
+  } catch {
+    return T.IDLE_GAP_MIN; // error-ignored: the default threshold
+  }
+}
+
 /** Computes usage from a transcript (JSONL). The logic lives in lib/timeCost.js (tested). */
-export const analyser = T.analyzeTranscript;
+export const analyser = (text) => T.analyzeTranscript(text, { idleGapMin: idleGapMin() });
 
 async function main() {
   // Manual analysis of a transcript (for checking): node hook-time.mjs --analyser <file>

@@ -216,8 +216,9 @@ function agentsForTask(rows, id, { from = null, to = null } = {}) {
 
 /**
  * The sum of the usage of the agents that belonged to the task. Each agent has `tokens` and `model` from the transcript
- * (timeCost.analyzeTranscript) or from the last row in the time log; the price is timeCost.costUsd (API-equivalent USD).
- * @param {{ agent: string, type: string, tokens: object, model?: string|null, turns?: number, source?: string,
+ * (timeCost.analyzeTranscript) or from the last row in the time log; the price is timeCost.costOf (API-equivalent USD,
+ * per model when `byModel` is given).
+ * @param {{ agent: string, type: string, tokens: object, model?: string|null, byModel?: object|null, turns?: number, source?: string,
  *   minutes?: number|null, findings?: { H: number, M: number, L: number }|null }[]} agents
  * @returns {{ usd: number, tokens: { input: number, output: number, cache_read: number, cache_written: number,
  *   sum: number }, turns: number, agents: { agent: string, type: string, usd: number, source: string }[],
@@ -229,7 +230,8 @@ function sumCost(agents, now = new Date().toISOString()) {
   let turns = 0;
   const list = [];
   for (const a of agents ?? []) {
-    const u = TK.costUsd(a.tokens, a.model ?? undefined);
+    // Per model when the agent has byModel (each model at its own price), else its one model (older rows).
+    const u = TK.costOf({ tokens: a.tokens, model: a.model ?? null, byModel: a.byModel ?? null });
     usd += u;
     turns += Number(a.turns ?? 0) || 0;
     for (const k of ['input', 'output', 'cache_read', 'cache_written']) {

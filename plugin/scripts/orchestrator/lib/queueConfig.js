@@ -126,6 +126,13 @@ const STANDARD = Object.freeze({
   // (fill, start, resume, receive) as `model=<m>`, and the orchestrator passes it to the Agent tool, which overrides
   // the agent file. Example: { "reviewer-docs": "sonnet", "reviewer-gap": "sonnet" }.
   models: {},
+  // The list prices for the cost measurement (lib/timeCost.js PRICE_TABLE, per model family). null = the table. An
+  // override: { "<model id or part of it>": { input, output, cache_read, cache_5m?, cache_1h? } } in USD per MTok; the
+  // cache write prices default to 1.25x and 2x the input price. Example: { "opus-4-1": { input: 15, output: 75, cache_read: 1.5 } }.
+  prices: null,
+  // The transcript metrics in the time log (hook-time.mjs): idleGapMin = a gap longer than this many minutes between
+  // two transcript entries is idle and not counted in active_s.
+  metrics: { idleGapMin: 5 },
   // Helper agents: optional reviewers on top of the fixed ones (lib/queueHelpers.js). One runs for a task when it is
   // enabled AND at least one condition hits: classes, labels, paths (a changed file matches), mostlyPaths (more than
   // half of the changed files match), plan (the task has a plan entry), minMissionItems (numbered points in the

@@ -13,9 +13,11 @@
 //       table of the events. The "done" rows from hook-time are cumulative per agent (one per stop); only the LAST
 //       per agent_id is shown, otherwise a resumed agent would count several times.
 //   node scripts/orchestrator/log-time.mjs --cost [--day YYYY-MM-DD | --day today] [--track-top N] [--json]
-//       usage in API-equivalent USD (the list prices in lib/timeCost.js: Opus 5.5 input $4, output $20, cache read
-//       $0.20, cache write 5 min $5 / 1 h $8 per MTok), deduplicated per agent: total, per agent type, per
-//       risk class (from the queue) and the most expensive tracks with the number of cache expiries. Day = local date.
+//       usage in API-equivalent USD (the list prices per model family in lib/timeCost.js PRICE_TABLE, e.g. Opus 5.5
+//       input $4, output $20, cache read $0.20, cache write 5 min $5 / 1 h $8 per MTok; config `prices` overrides),
+//       deduplicated per agent: total, per agent type, per risk class (from the queue), the most expensive tracks with
+//       the number of cache expiries, and (lib/transcriptMetrics.js) per model, the top tools with their error rate,
+//       the API errors, the active time and the killed agents. Day = local date.
 //       Without --day: everything. The orchestrator session itself is not included (the hook only covers subagents).
 //
 // Example:
@@ -48,7 +50,13 @@ if (a[0] === '--show') {
   const filter = a[1];
   const rows = T.deduplicateDone(readLog());
   for (const r of rows.filter((r) => !filter || r.wave === filter)) {
-    const v = r.duration_s != null ? `${Math.round(r.duration_s / 60)} min` : '';
+    // The active time next to the wall time when the row has it (idle gaps left out, lib/timeCost.js).
+    const v =
+      r.duration_s != null
+        ? `${Math.round(r.duration_s / 60)} min` +
+          (r.active_s != null ? ` (${Math.round(r.active_s / 60)} active)` : '') +
+          (r.killed ? ' killed' : '')
+        : '';
     console.log([r.time, r.wave, r.track, r.event, v, r.remark ?? ''].join('\t'));
   }
   process.exit(0);
@@ -74,8 +82,11 @@ if (a[0] === '--cost') {
     return id ? classes.get(id) : null;
   };
   const o = T.summarizeCost(readLog(), { day, classFor });
+  // Per model, tools and errors, API errors and active time (lib/transcriptMetrics.js), the same window.
+  const TM = require('./lib/transcriptMetrics.js');
+  const metrics = TM.metricsSummary(readLog(), { day });
   if (a.includes('--json')) {
-    console.log(JSON.stringify(o, null, 1));
+    console.log(JSON.stringify({ ...o, metrics }, null, 1));
     process.exit(0);
   }
   const usd = (x) => `$${x.toFixed(2)}`.padStart(10);
@@ -102,6 +113,8 @@ if (a[0] === '--cost') {
         `  ${s.track.padEnd(20)} ${usd(s.usd)}  ${String(s.turns).padStart(4)} turns  ${String(s.cache_expiry).padStart(3)} cache expiries  ${s.types.join(', ')}`,
       );
   }
+  const metricsText = TM.metricsLines(metrics);
+  if (metricsText.length) console.log(`\n${metricsText.join('\n')}`);
   process.exit(0);
 }
 

@@ -15,6 +15,11 @@
 //                 compact; orchestrator = the session is the bound orchestrator, contextGuard.afterCompactBound)
 //                 { time, event: "compact", scope: "track", agent_id, agent_type, track, compactions }   one row per new
 //                 compaction of a track agent (hook-track-context.mjs); `compactions` is the count after it (1, 2, ...)
+//   killed agent  { time, wave, track, event: "done", killed: true, cumulative: true, agent_id, agent_type, ...the
+//                 analysis }   a done row cq writes itself (cli/tracks.mjs recordKilledAgents) for an agent that has a
+//                 start row and no done row (stopped, crashed or killed without SubagentStop), from what its transcript
+//                 holds, so its cost is counted. It is cumulative like the hook's rows: when a real done row arrives later,
+//                 the readers take only the growth per agent_id (timeCost.usageEvents), so nothing is counted twice.
 //
 // Writing a row never changes what the caller does: appendRows swallows every error (fail open).
 // Tested in lib/__tests__/timeLogRows.test.ts.
@@ -132,4 +137,65 @@ function appendRows(file, rows) {
   }
 }
 
-module.exports = { GATE_KINDS, trackFromBranch, gateAttempt, gateRow, sessionCompactRow, trackCompactRows, appendRows };
+// ---- Killed agents (transcript metrics): kept apart from the rows above to keep merges simple ----
+
+/**
+ * The agents with a start row and no done row: the earliest start row per agent_id, only starts at or after `from`
+ * (an ISO time; null = all). A done row of any kind (hook or killed) for the agent leaves it out.
+ * @param {object[]} rows the time log rows
+ * @param {{ from?: string|null }} [option]
+ * @returns {object[]} start rows
+ */
+function agentsWithoutDone(rows, { from = null } = {}) {
+  const done = new Set();
+  const start = new Map();
+  for (const r of rows ?? []) {
+    if (!r?.agent_id) continue;
+    if (r.event === 'done') done.add(r.agent_id);
+    else if (r.event === 'start') {
+      const earlier = start.get(r.agent_id);
+      if (!earlier || Date.parse(r.time) < Date.parse(earlier.time)) start.set(r.agent_id, r);
+    }
+  }
+  const limit = from ? Date.parse(from) : NaN;
+  return [...start.values()].filter(
+    (r) => !done.has(r.agent_id) && (Number.isNaN(limit) || !(Date.parse(r.time) < limit)),
+  );
+}
+
+/**
+ * The done row for a killed agent: the start row's wave, id and type, and the analysis of its transcript
+ * (timeCost.analyzeTranscript), marked killed and cumulative. The track is the mission's (the analysis), else the
+ * start row's label.
+ * @param {{ start: object, stat: object, time?: string }} a
+ */
+function killedDoneRow({ start, stat, time }) {
+  const { track, ...counts } = stat ?? {};
+  const row = {
+    time: time ?? new Date().toISOString(),
+    wave: start?.wave ?? 'unknown',
+    track: track ?? start?.track ?? String(start?.agent_id ?? '').slice(0, 12),
+    event: 'done',
+    agent_id: start?.agent_id ?? null,
+    agent_type: start?.agent_type ?? null,
+    killed: true,
+    cumulative: true,
+    ...counts,
+  };
+  row.remark =
+    `killed (no SubagentStop): ${counts.toolCall ?? 0} calls, ${counts.modelTurns ?? 0} turns, ` +
+    `about $${counts.cost_usd ?? 0} (cumulative)`;
+  return row;
+}
+
+module.exports = {
+  GATE_KINDS,
+  trackFromBranch,
+  gateAttempt,
+  gateRow,
+  sessionCompactRow,
+  trackCompactRows,
+  appendRows,
+  agentsWithoutDone,
+  killedDoneRow,
+};
