@@ -44,6 +44,12 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
 - **Decide or ask:** tracks fix technical failures themselves and ask the owner only on unclear requirements,
   hard-to-reverse choices (data model, public API, new dependency, deletion) and security or legal tradeoffs; other
   assumptions go in a new "Assumptions" section of report.md.
+- **Gate evidence bound to the sha:** `cq receive` no longer trusts the track's `RESULT gates=` line or its gate rows
+  in the time log. It needs a green, clean quick-gate run on exactly the delivered tip, recorded by `gates.mjs` for
+  the orchestrator in `gate-evidence.json`, and otherwise runs the quick gate itself in the track's worktree (red:
+  fix round, exit 1/8; dirty or missing worktree: refused, exit 1). The base gate's skip rule reads the same store.
+  `push-check` is BLOCKED and the push guard asks when the tip has no green `cq gates --full` run from the main
+  checkout. Queue agents may not pass `--evidence`/`--cwd` to the gate runner or touch the store.
 - **`cq ask <id> ["<question>"]`:** answer a question about an earlier track without resuming its agent. It builds a
   size-capped, secret-redacted bundle (mission, report.md, handover.md, queue notes and owner answers, commits and
   diffstat, transcript tail); `--bundle` writes it for the new `/cq:ask` skill and read-only `ask` agent, `--json`
