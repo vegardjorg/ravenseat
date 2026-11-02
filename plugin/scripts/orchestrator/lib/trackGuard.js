@@ -23,8 +23,9 @@
 //   maxLines   the limit for largeFiles (default 300)
 //   blockLines  all text files over this many lines are read in excerpts (default 2000)
 //
-// The functions here do no I/O beyond readTail/readHeader/subagentTranscript (which get fs functions passed in), so they can
-// be tested (lib/__tests__/trackGuard.test.ts).
+// The functions here do no I/O beyond readTail/readHeader/subagentTranscript/countCompactionsFrom/cachedCompactions
+// (several take fs functions passed in), so they can be tested (lib/__tests__/trackGuard.test.ts,
+// lib/__tests__/compactCount.test.ts).
 // =============================================================
 
 const fs = require('node:fs');
@@ -134,6 +135,107 @@ function subagentTranscript(input, exists = fs.existsSync) {
     }
   }
   return null;
+}
+
+/** Bytes read per step when counting compactions; memory stays bounded even for a first read of a huge transcript. */
+const COUNT_CHUNK = 8 * 1024 * 1024;
+
+/**
+ * The number of compactions (`compact_boundary` rows, contextGuard.countCompactions) in a transcript, counted
+ * INCREMENTALLY: `prev` is the byte position and count from the previous call, and only the bytes after `pos` are read.
+ * Only whole lines are counted (up to the last newline), so a row that is being written is counted on the next call.
+ * If the file has shrunk below `pos` (a new file with the same name) counting starts over from 0.
+ *
+ * WHY: an orchestrator session is compacted instead of rotated, so its transcript grows to 100+ MB. Reading and decoding
+ * all of it on every message cost seconds and could hit the hook's 10 s timeout (the notice then vanished silently).
+ *
+ * @param {string} filePath
+ * @param {{ pos?: number, n?: number }} [prev]
+ * @param {{ fsImpl?: typeof fs, chunk?: number, count?: (text: string) => number }} [o]
+ *   fsImpl/chunk can be replaced in tests (to see how many bytes are read); count defaults to contextGuard.countCompactions.
+ * @returns {{ pos: number, n: number, read: number }} read = bytes read in this call
+ */
+function countCompactionsFrom(filePath, prev = {}, o = {}) {
+  const f = o.fsImpl ?? fs;
+  const chunk = o.chunk ?? COUNT_CHUNK;
+  // Lazy: contextGuard pulls in queueLogic, which the read guard (also a user of this file) does not need.
+  const count = o.count ?? require('./contextGuard.js').countCompactions;
+  let pos = Number.isFinite(prev.pos) && prev.pos >= 0 ? prev.pos : 0;
+  let n = Number.isFinite(prev.n) && prev.n >= 0 ? prev.n : 0;
+  const fd = f.openSync(filePath, 'r');
+  let read = 0;
+  try {
+    const size = f.fstatSync(fd).size;
+    if (size < pos) {
+      pos = 0;
+      n = 0;
+    }
+    // carry = the start of a line that continues in the next chunk (not counted yet).
+    let carry = Buffer.alloc(0);
+    let at = pos;
+    while (at < size) {
+      const len = Math.min(chunk, size - at);
+      const buf = Buffer.alloc(len);
+      const got = f.readSync(fd, buf, 0, len, at);
+      if (got <= 0) break;
+      read += got;
+      at += got;
+      const data = carry.length ? Buffer.concat([carry, buf.subarray(0, got)]) : buf.subarray(0, got);
+      const end = data.lastIndexOf(0x0a); // 0x0a is never part of a multibyte character in UTF-8
+      if (end < 0) {
+        carry = data;
+        continue;
+      }
+      n += count(data.subarray(0, end).toString('utf8'));
+      pos += end + 1;
+      carry = data.subarray(end + 1);
+    }
+    return { pos, n, read };
+  } finally {
+    f.closeSync(fd);
+  }
+}
+
+/** How many transcripts the compaction cache remembers (the most recently counted ones are kept). */
+const COUNT_CACHE_MAX = 20;
+
+/**
+ * Compactions in a transcript, with the position remembered in a small JSON cache file
+ * ({ "<transcript path>": { pos, n, at } }), so each call reads only what is new. Used by hook-context.mjs and
+ * hook-after-compact.mjs with <dataFolder>/compact-count.json. The cache is written atomically (tmp + rename); a cache
+ * that cannot be read or written only means counting from the start again. Throws when the transcript cannot be read.
+ * @param {string} cacheFile
+ * @param {string} transcriptPath
+ * @param {{ fsImpl?: typeof fs, chunk?: number, now?: number }} [o]
+ * @returns {{ n: number, read: number }}
+ */
+function cachedCompactions(cacheFile, transcriptPath, o = {}) {
+  const f = o.fsImpl ?? fs;
+  const key = path.resolve(transcriptPath);
+  let cache = {};
+  try {
+    const parsed = JSON.parse(f.readFileSync(cacheFile, 'utf8'));
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) cache = parsed;
+  } catch {
+    cache = {}; // no cache yet, or a broken one: count from the start
+  }
+  const prev = cache[key] ?? {};
+  const r = countCompactionsFrom(transcriptPath, prev, o);
+  if (r.pos !== prev.pos || r.n !== prev.n) {
+    cache[key] = { pos: r.pos, n: r.n, at: o.now ?? Date.now() };
+    const keep = Object.entries(cache)
+      .filter(([, v]) => v && Number.isFinite(v.pos))
+      .sort((a, b) => (b[1].at ?? 0) - (a[1].at ?? 0))
+      .slice(0, COUNT_CACHE_MAX);
+    try {
+      const tmp = `${cacheFile}.${process.pid}.tmp`;
+      f.writeFileSync(tmp, JSON.stringify(Object.fromEntries(keep)) + '\n');
+      f.renameSync(tmp, cacheFile);
+    } catch {
+      // error-ignored: without the cache the next call counts from the start (slower, same result)
+    }
+  }
+  return { n: r.n, read: r.read };
 }
 
 const thousand = (n) => `${Math.round(n / 1000)}k`;
@@ -299,6 +401,8 @@ module.exports = {
   readTail,
   readHeader,
   subagentTranscript,
+  countCompactionsFrom,
+  cachedCompactions,
   assessContext,
   readRules,
   queueAgentTypes,

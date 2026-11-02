@@ -63,7 +63,6 @@ const CURSOR = path.join(QUEUE_FOLDER, 'orchestrator.json');
 const QUEUE_FILE = path.join(QUEUE_FOLDER, 'queue.json');
 // Same override as queue.mjs (QUEUE_GIT) for the git root, so the tests never read the real repo.
 const GIT_ROOT = process.env.QUEUE_GIT ?? MAIN_TREE;
-const MAX_TRANSCRIPT = 300 * 1024 * 1024;
 
 async function readIn() {
   let s = '';
@@ -127,10 +126,14 @@ function handoverNow() {
   return require('./lib/queueHandover.js').nowPart(text, 40);
 }
 
+/**
+ * Compactions in the transcript, counted incrementally with the same cache as hook-context.mjs
+ * (<dataFolder>/compact-count.json, lib/trackGuard.js cachedCompactions), so only the new bytes are read. 0 on error.
+ */
 function compactions(filePath) {
   try {
-    if (!filePath || fs.statSync(filePath).size > MAX_TRANSCRIPT) return 0;
-    return KV.countCompactions(fs.readFileSync(filePath, 'utf8'));
+    if (!filePath) return 0;
+    return require('./lib/trackGuard.js').cachedCompactions(path.join(QUEUE_FOLDER, 'compact-count.json'), filePath).n;
   } catch {
     return 0;
   }

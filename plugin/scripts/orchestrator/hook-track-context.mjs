@@ -41,7 +41,6 @@
 // 2026-11-01 (Claude Code 2.1.316), the exec-form hook's additionalContext reaches the subagent too.
 // Smoke test: echo '{"agent_type":"track","agent_id":"x","transcript_path":"<file>"}' | node scripts/orchestrator/hook-track-context.mjs
 // =============================================================
-import { Buffer } from 'node:buffer';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -102,28 +101,12 @@ function readState(id) {
 }
 
 /**
- * The number of compactions in the transcript, counted incrementally from the previous position (whole lines only). If the
- * file has shrunk (a new file with the same name), counting starts over.
+ * The number of compactions in the transcript, counted incrementally from the previous position (whole lines only;
+ * lib/trackGuard.js countCompactionsFrom, shared with hook-context.mjs). If the file has shrunk, counting starts over.
  */
 function countCompactions(tp, compact) {
-  const fd = fs.openSync(tp, 'r');
-  try {
-    const st = fs.fstatSync(fd);
-    let { pos, n } = compact;
-    if (st.size < pos) {
-      pos = 0;
-      n = 0;
-    }
-    if (st.size === pos) return { pos, n };
-    const buf = Buffer.alloc(st.size - pos);
-    fs.readSync(fd, buf, 0, buf.length, pos);
-    const end = buf.lastIndexOf(0x0a); // 0x0a is never part of a multibyte character in UTF-8
-    if (end < 0) return { pos, n };
-    n += KV.countCompactions(buf.subarray(0, end).toString('utf8'));
-    return { pos: pos + end + 1, n };
-  } finally {
-    fs.closeSync(fd);
-  }
+  const r = V.countCompactionsFrom(tp, compact);
+  return { pos: r.pos, n: r.n };
 }
 
 async function main() {

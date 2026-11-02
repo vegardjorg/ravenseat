@@ -5,7 +5,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { expect, test } from 'vitest';
 
-import { isUnder, fingerprint, shouldCleanUp } from '../cleanup-worktree.mjs';
+import {
+  isUnder,
+  fingerprint,
+  shouldCleanUp,
+  removeLinkOnly,
+  removeFolderTree,
+} from '../cleanup-worktree.mjs';
 
 const ok = {
   underWorktreesFolder: true,
@@ -91,5 +97,67 @@ test('fingerprint counts the entries in each shared folder, -1 when it is missin
     });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ---- Deleting paths with shell characters (review 2026-11-02, section 4: "folder with & in the path") ----
+// `cmd /c rmdir /s /q C:\dev\R&D\...` without quotes splits at `&` and deletes C:\dev\R. The cleanup now uses fs
+// (removeLinkOnly, removeFolderTree) with no shell at all. Proven in a temp folder: a sibling "R" that a split command would
+// hit, and a link target outside the worktree, both survive.
+
+function shellTrap(name) {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-rm-'));
+  const victim = path.join(base, 'R'); // what `rmdir /s /q <base>\R&D...` would delete after the split
+  fs.mkdirSync(victim);
+  fs.writeFileSync(path.join(victim, 'keep.txt'), 'keep');
+  const target = path.join(base, 'target'); // the main tree's shared folder
+  fs.mkdirSync(target);
+  fs.writeFileSync(path.join(target, 'shared.txt'), 'shared');
+  const wt = path.join(base, name, 'wt');
+  fs.mkdirSync(path.join(wt, 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(wt, 'sub', 'f.txt'), 'x');
+  const link = path.join(wt, 'node_modules');
+  fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+  return { base, victim, target, wt, link };
+}
+
+for (const name of ['R&D', 'R&D app æøå (x) 100%', 'a^b!c']) {
+  test(`removeLinkOnly and removeFolderTree are safe with "${name}" in the path`, () => {
+    const t = shellTrap(name);
+    try {
+      removeLinkOnly(t.link);
+      expect(fs.existsSync(t.link)).toBe(false);
+      expect(fs.readFileSync(path.join(t.target, 'shared.txt'), 'utf8')).toBe('shared');
+      removeFolderTree(t.wt);
+      expect(fs.existsSync(t.wt)).toBe(false);
+      expect(fs.readFileSync(path.join(t.victim, 'keep.txt'), 'utf8')).toBe('keep');
+      expect(fs.readFileSync(path.join(t.target, 'shared.txt'), 'utf8')).toBe('shared');
+    } finally {
+      fs.rmSync(t.base, { recursive: true, force: true });
+    }
+  });
+}
+
+test('removeFolderTree removes a link inside the tree as a link and never empties its target', () => {
+  const t = shellTrap('R&D');
+  try {
+    removeFolderTree(t.wt); // the link is still there (deleteRest only runs when no link points out, this is the fallback)
+    expect(fs.existsSync(t.wt)).toBe(false);
+    expect(fs.readFileSync(path.join(t.target, 'shared.txt'), 'utf8')).toBe('shared');
+  } finally {
+    fs.rmSync(t.base, { recursive: true, force: true });
+  }
+});
+
+test('removeLinkOnly refuses a real folder (never a recursive delete)', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-rm-'));
+  try {
+    const real = path.join(base, 'R&D', 'node_modules');
+    fs.mkdirSync(real, { recursive: true });
+    fs.writeFileSync(path.join(real, 'a.txt'), 'a');
+    expect(() => removeLinkOnly(real)).toThrow();
+    expect(fs.readFileSync(path.join(real, 'a.txt'), 'utf8')).toBe('a');
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
   }
 });
