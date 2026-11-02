@@ -3,6 +3,19 @@
 All notable changes to claude-code-queue (the `cq` plugin). The version is in `plugin/.claude-plugin/plugin.json`
 and `package.json`.
 
+## Unreleased
+
+### Added
+- **Intake triage:** a cheap read-only `triage` helper checks tasks that waited `triage.minAgeDays` (3) days or were
+  added by an agent before a track starts. `cq fill` skips them, prints the triage step in the same turn and keeps
+  starting the others. `cq triage <id> --verdict ready|done|stale|adjust` records the answer: adjust adds the note to
+  the mission, and done and stale become an owner question with choices, never an auto-close. Off with
+  `cq helpers off triage` and in lite mode; the board shows its cost and verdicts.
+- **Base gate:** `cq merge` records the base branch's health per tip after each merge (the quick gates by default,
+  or `baseGate.commands`). A red base refuses further merges (exit 9, `--force-red-base` is logged), adds a value-10
+  fix task `<id>-BASE<n>`, and shows in `cq show`, the pulse and the board status line. Gate rows now carry the sha
+  and whether the tree was clean, and `gates.mjs` takes `--timeout-sec`.
+
 ## 0.5.0 (2026-11-02)
 
 ### Added
