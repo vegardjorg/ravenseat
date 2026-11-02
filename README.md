@@ -520,4 +520,6 @@ Double, Inc.); the license text is in [NOTICE](NOTICE).
 The logo is the Ravenseat: two ravens on a high seat, after Odin's seat Hliðskjálf, from which he saw every world while
 his ravens brought him the news. It sits in the top-left corner of the board and follows light and dark mode.
 
+<p align="center"><img src="assets/screenshots/light-12-mascot-night.png" alt="The ravens at 02:47: the agents don't need sleep, you do" width="480"></p>
+
 Ken sent me.
