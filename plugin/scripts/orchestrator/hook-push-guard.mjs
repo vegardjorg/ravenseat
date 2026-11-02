@@ -23,6 +23,11 @@
 // newest row is the tip whose health base-health.json records. The local remote ref (as of the last fetch) is the
 // "last push"; a missing remote ref (first push) or any error gives no question (fails open).
 //
+// The secret precheck (config().secretScan, lib/secretScan.js): the same plain push of baseBranch by the orchestrator
+// scans the added lines of `<remote>/<baseBranch>..<baseBranch>` (gitleaks when on PATH, else built-in patterns) and
+// asks with file:line on a hit. Skipped silently over secretScan.maxBytes, on a timeout or any error (fails open).
+// deployCommands: a command that starts with one of them gets "ask" (agents and the main session).
+//
 // Test: lib/__tests__/pushGuard.test.ts (the logic). Smoke test of the hook itself:
 //   echo '{"tool_input":{"command":"git push --force origin main"},"cwd":"."}' | node scripts/orchestrator/hook-push-guard.mjs
 //   echo '{"agent_type":"track","tool_input":{"command":"curl https://x"},"cwd":"."}' | node scripts/orchestrator/hook-push-guard.mjs
@@ -72,6 +77,17 @@ function batchQuestion(cwd, k) {
   }
 }
 
+/** The secret precheck question for a plain push of baseBranch (lib/secretScan.js), or null. Any error: null. */
+function secretQuestion(cwd, k) {
+  try {
+    if (k.secretScan?.enabled === false) return null;
+    const SS = require('./lib/secretScan.js');
+    return SS.question(SS.scanPush({ cwd, remote: k.remote, branch: k.baseBranch, setup: k.secretScan }));
+  } catch {
+    return null;
+  }
+}
+
 function git(cwd, args) {
   try {
     return execFileSync('git', ['-C', cwd, ...args], {
@@ -88,9 +104,11 @@ function mainTree(top) {
   return String(top).split(/[\\/]\.claude[\\/]worktrees[\\/]/)[0];
 }
 
-/** Only commands that can match: git or the first word of the migration command. Saves git calls otherwise. */
+/** Only commands that can match: git, a deploy command or the first word of the migration command. Saves git calls. */
 function canHit(command, k) {
   if (/\bgit\b/.test(command)) return true;
+  const deploys = Array.isArray(k.deployCommands) ? k.deployCommands : [];
+  if (deploys.some((d) => String(d || '').trim() && command.includes(String(d).trim().split(/\s+/)[0]))) return true;
   const word = String(k.migrations?.pushCommand || '')
     .split(/\s+/)
     .filter((x) => x && !x.startsWith('-') && !['npx', 'npm', 'pnpm', 'yarn', 'exec'].includes(x));
@@ -149,10 +167,12 @@ process.stdin.on('end', () => {
       environment,
       baseBranch: k.baseBranch,
       migrations: k.migrations,
+      deployCommands: k.deployCommands,
       agentType,
       guardedTypes,
       knownPackage: guarded ? knownPackage(cwd) : undefined,
       batchQuestion: () => batchQuestion(cwd, k),
+      secretQuestion: () => secretQuestion(cwd, k),
     });
     if (!answer) process.exit(0);
 

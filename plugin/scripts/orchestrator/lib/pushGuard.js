@@ -19,6 +19,11 @@
 //         dialog is cheap. push.minTasks 0 turns the count question off (the red-base question stays). Never deny: the
 //         owner can always push. The counting needs git, so the hook passes it in as context.batchQuestion (called only
 //         when such a push is found, so every other command costs nothing extra).
+//   ask   the same plain push of baseBranch by the orchestrator when the secret precheck (lib/secretScan.js, config
+//         secretScan) finds a possible secret in what the push sends: the question names file:line, never the value.
+//         The hook passes it in as context.secretQuestion; with the batch question both are asked in one dialog.
+//   ask   a command that starts with one of config().deployCommands (after env prefixes), from an agent or the main
+//         session: a deploy is a deliberate step. A simple prefix match; empty list = off.
 //
 // Network guard for the queue's agents (hardening against prompt injection). Applies ONLY when the hook payload has an
 // agent_type that is a track (track, track-d) or a reviewer or helper agent, builtin or custom (the same list as the read
@@ -152,7 +157,25 @@ function values(context) {
   };
   const baseBranch = context.baseBranch ?? get().baseBranch;
   const migrations = context.migrations ?? get().migrations ?? {};
-  return { baseBranch, migrations };
+  const deployCommands = context.deployCommands ?? get().deployCommands ?? [];
+  return { baseBranch, migrations, deployCommands: Array.isArray(deployCommands) ? deployCommands : [] };
+}
+
+/** Words joined by single spaces, without env prefixes (FOO=bar) and "command"/"exec"/"env" in front. */
+function plainCommand(t) {
+  let i = 0;
+  while (i < t.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(t[i]) || ['command', 'exec', 'env'].includes(t[i]))) i++;
+  return t.slice(i).join(' ');
+}
+
+/** The deploy command this chunk starts with (a whole-word prefix match), or null. */
+function deployMatch(t, deployCommands) {
+  const line = plainCommand(t);
+  for (const d of deployCommands) {
+    const want = tokens(String(d || '')).join(' ');
+    if (want && (line === want || line.startsWith(`${want} `))) return want;
+  }
+  return null;
 }
 
 // ---- Network guard for the queue's agents ---------------------------------------------------------------------------
@@ -402,12 +425,14 @@ function assessNetwork(command, context, depth = 0) {
  *   batchQuestion?: () => string|null   the batch threshold question for a plain push of baseBranch (the hook reads
  *                                  git and base-health.json); asked only for the main session, and only when nothing
  *                                  else is found. null = no question.
+ *   secretQuestion?: () => string|null  the secret precheck question for the same push (lib/secretScan.js), same rules.
+ *   deployCommands?: string[]      default config().deployCommands,
  * }
  * Returns null (no decision) or { decision: 'ask'|'deny', reason }.
  * With several matches the strictest wins (deny over ask).
  */
 function assess(command, context = {}) {
-  const { baseBranch, migrations } = values(context);
+  const { baseBranch, migrations, deployCommands } = values(context);
   const findings = [];
   let basePush = false;
   for (const chunk of parts(command)) {
@@ -443,6 +468,13 @@ function assess(command, context = {}) {
       }
     }
 
+    const deploy = deployCommands.length ? deployMatch(t, deployCommands) : null;
+    if (deploy)
+      findings.push({
+        decision: 'ask',
+        reason: `\`${deploy}\` is a deploy command (deployCommands in queue.config.json). Confirm that this should go live now.`,
+      });
+
     if (
       migrations.pushCommand &&
       migrations.environmentFile &&
@@ -462,10 +494,13 @@ function assess(command, context = {}) {
   }
   // The network guard applies to the queue's agents: tracks, reviewers and helper agents (never the orchestrator).
   if (isGuardedAgent(context.agentType, context.guardedTypes)) findings.push(...assessNetwork(command, context));
-  // The batch threshold: only for the orchestrator (no agent_type; tracks never push) and only when nothing stricter hit.
-  if (basePush && findings.length === 0 && !context.agentType && typeof context.batchQuestion === 'function') {
-    const question = context.batchQuestion();
-    if (question) findings.push({ decision: 'ask', reason: question });
+  // The secret precheck and the batch threshold: only for the orchestrator (no agent_type; tracks never push) and only
+  // when nothing else hit. Both questions go in one dialog.
+  if (basePush && findings.length === 0 && !context.agentType) {
+    const questions = [context.secretQuestion, context.batchQuestion]
+      .map((f) => (typeof f === 'function' ? f() : null))
+      .filter(Boolean);
+    if (questions.length) findings.push({ decision: 'ask', reason: questions.join(' Also: ') });
   }
   if (findings.length === 0) return null;
   return findings.find((f) => f.decision === 'deny') || findings[0];
