@@ -20,9 +20,15 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
   shown as orchestration overhead in `cq cost`; fix rounds, merge conflicts, base gate verdicts, triage verdicts and
   pushes as a Flow view in `cq cost` and the board's Statistics tab (first-pass rate, fix rounds per task, conflicts
   and pushes per week); a load row per fill/start with a Load history in `cq limit`.
+- **Done lock and acceptance criteria:** `done_when` and the new optional `acceptance` criteria
+  (`cq add/edit --accept`) are locked once a task starts: only `--by owner` or the board may change them, never from
+  inside a track worktree, undo included. The mission lists them as "Acceptance criteria (fixed, do not change)",
+  `cq info` and the board's detail panel show them, and reviewer-gap answers MET / NOT MET / UNCLEAR per criterion
+  (NOT MET is a HIGH finding).
 
 ### Changed
-- README: parallel chats colliding (push and file conflicts) added to the pain points.
+- README: parallel chats colliding (push and file conflicts) added to the pain points; "What the guards are not"
+  (guard rails, not a sandbox) in the safety baseline; the board as the interface, orchestration as the product.
 
 ## 0.7.0 (2026-11-02)
 
