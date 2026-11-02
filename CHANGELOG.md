@@ -3,7 +3,7 @@
 All notable changes to claude-code-queue (the `cq` plugin). The version is in `plugin/.claude-plugin/plugin.json`
 and `package.json`.
 
-## Unreleased
+## 0.6.0 (2026-11-02)
 
 ### Added
 - **Intake triage:** a cheap read-only `triage` helper checks tasks that waited `triage.minAgeDays` (3) days or were
