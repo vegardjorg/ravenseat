@@ -32,6 +32,8 @@ features, is. Ravenseat makes you stop being the project's manual orchestrator:
   where it stopped (`cq merge <ID> --resume`). See ["Agents cheat on tests"](#agents-cheat-on-tests) and
   ["Something breaks and the queue stops"](#something-breaks-and-the-queue-stops).
 
+**When something fails, the queue does not have to stop.**
+
 ```text
   pick the next task ──> agent builds it in its own worktree ──> your checks run
                                                                    │
@@ -60,18 +62,15 @@ New here? Start in lite mode: the core loop only, nothing to learn first.
 
 1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/ravenseat`, then
    `/plugin install cq@ravenseat`. You need Node.js 20 or newer and git.
-2. **Create the queue** in your project: `cq init --lite` (a fresh `cq init` is lite too). It writes
-   `"mode": "lite"` to `queue.config.json` and an empty queue in `scripts/.queue/` (add that folder to `.gitignore`).
-3. **Add work with just a title:** `cq add "Fix the login bug"`, or say "add to the queue: fix the login bug". Add a
-   mission when the title is not enough: `cq add "Fix the login bug" --mission "Users with a + in the email cannot log in; add a test"`.
-   `--priority 1-10` moves a task up (5 is normal); otherwise tasks run in the order you added them.
+2. **Create the queue** in your project: `cq init`. It starts in lite mode, keeps the queue in `scripts/.queue/` and
+   adds that folder to `.gitignore` for you. Run `cq` commands in Claude Code (or just ask in plain words).
+3. **Add work:** `cq add "Fix the login bug"`, or say "add to the queue: fix the login bug".
 4. **Run it:** `/cq:queue`. The chat picks the next task, starts an agent in an isolated worktree, checks the result
-   and merges work that passes. It asks you before it starts, keeps going until it needs a decision from you, and
-   never pushes unless you say so.
-5. **Answer questions:** when an agent needs your decision, that task waits and the rest go on. `cq question` lists
-   them, `cq resolve <id> --answer "..."` answers one, or use "Waiting on you" on the board (`/cq:board`). A question
-   can come with 2-4 answer options (`cq question <id> --text "..." --choice "Yes" --choice "No"`): pick one with
-   `cq resolve <id> --choice 1`, or with one click on the board.
+   and merges work that passes. It asks you before it starts, and never pushes unless you say so.
+5. **Make the decisions:** when a task needs you, it waits and the rest go on. `/cq:decide` walks you through them,
+   or answer with one click under "Waiting on you" on the board (`/cq:board`).
+
+Missions, priorities, answer options and what runs under the hood: [lite mode in more detail](plugin/docs/guide.md#lite-mode-in-more-detail).
 
 > **That's all you need.** Add tasks, run `/cq:queue`, answer what it asks. `cq help` shows only these commands in
 > lite mode.

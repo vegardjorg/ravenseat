@@ -8,7 +8,7 @@
 // once per flow (init, add, help, mode) against a temporary queue, because that is where the rules are enforced.
 // =============================================================
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -152,6 +152,32 @@ beforeEach(() => {
 });
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+});
+
+describe('cq init and .gitignore', () => {
+  it('in a git repo, a fresh init adds the data folder once; a second init adds nothing', async () => {
+    expect(spawnSync('git', ['init', '-q'], { cwd: root }).status).toBe(0);
+    const init = await cq('init');
+    expect(init.status, init.stderr).toBe(0);
+    expect(init.stdout).toContain('Added q/ to .gitignore');
+    expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toContain('\nq/\n');
+    expect(spawnSync('git', ['check-ignore', '-q', 'q'], { cwd: root }).status).toBe(0);
+    await cq('init');
+    expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8').match(/^q\/$/gm)).toHaveLength(1);
+  });
+
+  it('a folder git already ignores is left alone, and outside git nothing is written', async () => {
+    expect(spawnSync('git', ['init', '-q'], { cwd: root }).status).toBe(0);
+    fs.writeFileSync(path.join(root, '.gitignore'), 'q/\n');
+    expect((await cq('init')).stdout).not.toContain('to .gitignore');
+    expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe('q/\n');
+  });
+
+  it('outside a git repo: no .gitignore', async () => {
+    const init = await cq('init');
+    expect(init.status, init.stderr).toBe(0);
+    expect(fs.existsSync(path.join(root, '.gitignore'))).toBe(false);
+  });
 });
 
 describe('cq init, add, help and mode', () => {

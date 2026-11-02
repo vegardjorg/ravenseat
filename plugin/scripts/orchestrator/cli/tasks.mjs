@@ -13,13 +13,38 @@
 //   and the many tests that set up a queue with init and add.
 // =============================================================
 
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 
 import {
   a, autoAcceptIn, byName, CONFIG, CQ, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
   positional, read, readPlans, undoHint, val, values, withLock, write,
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
+
+/**
+ * Adds the data folder to the repo's .gitignore on a fresh init, so a new user does not have to. Does nothing outside a
+ * git repo, when git already ignores the folder, or when the folder lies outside the repo. Never fails init: a .gitignore
+ * that cannot be written only gives a hint.
+ */
+function ignoreDataFolder() {
+  const git = (...args) => spawnSync('git', args, { cwd: FOLDER, encoding: 'utf8' });
+  const top = git('rev-parse', '--show-toplevel');
+  if (top.status !== 0) return;
+  if (git('check-ignore', '-q', FOLDER).status === 0) return;
+  const rel = path.relative(top.stdout.trim(), FOLDER).split(path.sep).join('/');
+  if (!rel || rel.startsWith('..')) return;
+  const file = path.join(top.stdout.trim(), '.gitignore');
+  try {
+    const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+    const sep = before && !before.endsWith('\n') ? '\n' : '';
+    fs.appendFileSync(file, `${sep}# Ravenseat queue data (local state)\n${rel}/\n`);
+    console.log(`Added ${rel}/ to .gitignore (the queue data is local state, not for git).`);
+  } catch (e) {
+    console.log(`Note: could not add ${rel}/ to .gitignore (${e.message}); add it yourself.`);
+  }
+}
 
 /** `cq init` (the usage is at the top of queue.mjs). */
 export function cmdInit() {
@@ -70,6 +95,7 @@ export function cmdInit() {
   else if (val('--next-migr') != null)
     console.log('Note: --next-migr is ignored; the migration flow is off (migrations.folder in queue.config.json).');
   withLock(() => write(queue));
+  ignoreDataFolder();
   if (initMode === 'lite') {
     console.log(`The queue is created: ${FILE} (lite mode).`);
     console.log(`Next: ${CQ} add "<what you want done>", then /cq:queue (or ${CQ} fill) to start it.`);
