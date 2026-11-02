@@ -179,6 +179,8 @@
       b.setAttribute('aria-selected', selected ? 'true' : 'false');
       b.tabIndex = selected ? 0 : -1;
     }
+    // The Decisions tab (board/decide.js) sits in the same tab list: it sets Queue and Decisions from the view.
+    if (typeof drawRoomTabs === 'function') drawRoomTabs();
     document.title = p ? 'Plans' : 'Work queue';
     const h1 = document.querySelector('.top .title');
     if (h1) h1.textContent = p ? 'Plans' : 'Work queue';
@@ -204,7 +206,8 @@
   $('room-queue').addEventListener('click', () => selectRoom('queue'));
   // The room tabs: the arrow keys move focus, Enter or space selects (like the view tabs).
   $('room-option').addEventListener('keydown', (e) => {
-    const buttons = [$('room-plans'), $('room-queue')].filter((b) => !b.hidden); // Plans can be off
+    // Plans can be off; Decisions (board/decide.js) is the third tab.
+    const buttons = [$('room-plans'), $('room-queue'), $('show-decisions')].filter((b) => b && !b.hidden);
     const i = buttons.indexOf(document.activeElement);
     if (i < 0) return;
     const j = window.QueueA11y.tabMeasure(buttons.length, i, e.key);
@@ -1523,6 +1526,10 @@
   }
 
   window.QueuePlans = {
+    /** Leave Plans for the queue room (the Decisions tab, board/decide.js). */
+    showQueue() {
+      if (isPlans()) useState({ ...s.state, room: 'queue' });
+    },
     /** Marker on a queue card: switch to Plans with the entry open (the filters reset, so the entry is always in the list). */
     openEntry(id) {
       if (!featureOn('plans')) return; // the Plans module is off (features.plans)

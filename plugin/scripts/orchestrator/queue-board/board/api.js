@@ -197,6 +197,8 @@ async function update(force) {
       drawUpdateBanner();
       // The mascot sees the change (events between two polls) and may say something.
       window.QueueMascotView?.newState(t.data);
+      // The first state picks where the board lands: Decisions when anything waits on the owner (board/decide.js).
+      if (typeof landingView === 'function') landingView();
       if (drag || boosted || t.busy || window.QueuePlan?.busy()) t.pending = true;
       else if (t.view === 'cloud')
         getCloudQueue(); // the bundles depend on the queue: fetch again
@@ -205,6 +207,7 @@ async function update(force) {
       else drawFilter();
       // "Waiting on you": the counter at the top, and the panel when it is open.
       drawInboxButton();
+      if (typeof drawDecisionsTab === 'function') drawDecisionsTab();
       if (t.inbox) drawInbox();
     }
   } catch (e) {

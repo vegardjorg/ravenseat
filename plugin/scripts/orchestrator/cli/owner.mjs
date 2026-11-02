@@ -155,12 +155,15 @@ export function cmdQuestion() {
 
 /** `cq approve` (the usage is at the top of queue.mjs). */
 export function cmdApprove() {
-  const ids = a.slice(1).filter((x) => !x.startsWith('--'));
-  if (!ids.length) die('approve <id> [...]');
+  const ids = positional(1, ['--by']);
+  if (!ids.length) die('approve <id> [...] [--by "<who>"]');
+  const by = val('--by') ?? null;
   const r = edit((queue) => {
     const answer = L.approve(queue, ids);
     // All or nothing: a write error in one id must not approve half the list.
     if (answer.error.length) die(`Nothing approved:\n  ${answer.error.join('\n  ')}`);
+    // Who approved (the board and /cq:decide pass --by owner), next to the time in `approved`.
+    if (by) for (const o of queue.tasks) if (answer.approved.includes(o.id)) o.approved_by = by;
     return answer;
   });
   console.log(`Approved (waiting now): ${r.approved.join(', ')}`);
@@ -324,12 +327,15 @@ export function cmdQa() {
     }
     if (candidates.length && !run) console.log(`\nRun and close the green ones: ${CQ} qa auto --run [<id...>]`);
   } else if (under === 'ok') {
-    const ids = positional(2);
-    if (!ids.length) die('qa ok <id> [...]');
+    const ids = positional(2, ['--by']);
+    if (!ids.length) die('qa ok <id> [...] [--by "<who>"]');
+    const by = val('--by') ?? null;
     const r = edit((queue) => {
       const s = L.qaOk(queue, ids);
       // All or nothing, like approve.
       if (s.error.length) die(`Nothing changed:\n  ${s.error.join('\n  ')}`);
+      // Who said QA ok (qa auto --run sets "auto"; the board and /cq:decide pass --by owner).
+      if (by && by !== 'auto') for (const o of queue.tasks) if (s.ok.includes(o.id)) o.qa_ok_by = by;
       return s;
     });
     console.log(`QA ok: ${r.ok.join(', ')}`);

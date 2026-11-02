@@ -312,6 +312,9 @@ const STANDARD = Object.freeze({
     // plain GET that sends nothing about you). false turns it off; so do DISABLE_UPDATES and
     // CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC. The local "run cq setup --settings" notice works either way.
     updateCheck: true,
+    // The Cloud tab (with features.cloud on): hidden unless this is true. queue.json board.showCloud wins (written
+    // by `cq board-setting cloud on|off` and the gear's Board section). A saved Cloud view still opens with the tab hidden.
+    showCloud: false,
   },
   // The modules that can be switched off (FEATURES above): { "cloud": true } turns one on. Unknown keys are ignored.
   features: FEATURES,
@@ -394,6 +397,24 @@ function features(cfg = config()) {
   return out;
 }
 
+/**
+ * The board's own switches: STANDARD.board merged with config board and then queue.json `board` (the owner's choice
+ * from `cq board-setting` or the gear, which wins). Only the known boolean switches (BOARD_SWITCHES) and real booleans count.
+ * @param {object} [cfg] the configuration (default: config())
+ * @param {object} [queue] queue.json (its `board` object), or null
+ * @returns {{ showCloud: boolean }}
+ */
+const BOARD_SWITCHES = Object.freeze({ showCloud: 'the Cloud tab on the board (with features.cloud on)' });
+function boardSwitches(cfg = config(), queue = null) {
+  const out = {};
+  for (const k of Object.keys(BOARD_SWITCHES)) {
+    const own = queue?.board?.[k];
+    const set = cfg?.board?.[k];
+    out[k] = typeof own === 'boolean' ? own : typeof set === 'boolean' ? set : STANDARD.board[k] === true;
+  }
+  return out;
+}
+
 /** Is the module on? An unknown name is off. */
 function featureOn(name, cfg) {
   return features(cfg)[name] === true;
@@ -417,4 +438,6 @@ module.exports = {
   features,
   featureOn,
   featureOffText,
+  BOARD_SWITCHES,
+  boardSwitches,
 };

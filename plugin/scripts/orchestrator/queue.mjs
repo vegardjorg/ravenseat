@@ -31,7 +31,7 @@
 //        "waiting". --approved (only orchestrator/the owner, e.g. a serious finding from review) gives waiting.
 //        --accept "<criterion>" (repeatable, one task only): its acceptance criteria (field acceptance), copied into
 //        the mission and checked one by one by reviewer-gap.
-//   node scripts/orchestrator/queue.mjs approve <id> [...]           (proposed -> waiting)
+//   node scripts/orchestrator/queue.mjs approve <id> [...] [--by "<who>"]   (proposed -> waiting; --by is kept as approved_by)
 //   node scripts/orchestrator/queue.mjs proposals [auto [on|off] [--classes K,U] [--max-estimate <min|none>]
 //        [--max-value <1-10|none>]]   (auto-accept of agent proposals by the owner's rules, default off; applied by add
 //         and orchestrator pulse; never D/D+, waiting_on, legal/owner labels, open legal points or protected paths)
@@ -86,6 +86,16 @@
 //                                                                  the decision log)
 //   node scripts/orchestrator/queue.mjs resolutions --mark-logged <question> [...]   (the orchestrator has entered them)
 //   node scripts/orchestrator/queue.mjs question                      (the owner questions: text, type, open or resolved)
+//   node scripts/orchestrator/queue.mjs decide [--json] [--max N] [--today]   (the decision overview, read-only: everything
+//                                                                  waiting on the owner (questions, QA, proposed, stuck work)
+//                                                                  as one list, most impact first (what the answer unlocks,
+//                                                                  focus stage 1 first), each option with its exact cq
+//                                                                  command (--by owner, the same commands the board runs);
+//                                                                  --today: what was decided today. The /cq:decide skill
+//                                                                  walks it; lib/queueDecisions.js, cli/decide.mjs)
+//   node scripts/orchestrator/queue.mjs board-setting [cloud on|off]   (the board's own switches: without arguments the values;
+//                                                                  cloud on|off shows or hides the Cloud tab, queue.json
+//                                                                  board.showCloud, default hidden; cli/board.mjs)
 //   node scripts/orchestrator/queue.mjs wait [--debounce <s>] [--timeout <h>] [--since <log-nr>]   (blocks until the owner
 //                                                                  acts: resolve, approve, qa ok/fail, add, or an edit by owner/
 //                                                                  theBoard after the start point; then waits --debounce (30 s)
@@ -298,7 +308,7 @@
 //   node scripts/orchestrator/queue.mjs deliver <id>                    (picked -> review; the orchestrator merges)
 //   node scripts/orchestrator/queue.mjs release <id>                    (picked -> waiting; warns when the branch has commits)
 //   node scripts/orchestrator/queue.mjs qa                            (QA list: finished with the label visual that are waiting)
-//   node scripts/orchestrator/queue.mjs qa ok <id> [...]              (owner only)
+//   node scripts/orchestrator/queue.mjs qa ok <id> [...] [--by "<who>"]   (owner only; --by is kept as qa_ok_by)
 //   node scripts/orchestrator/queue.mjs qa deviation <id> "<text>"       (owner only; creates fixTask <id>-QA<n>)
 //   node scripts/orchestrator/queue.mjs qa evidence <id> <type>[=<ref>]  (the types are config().qa.evidenceTypes, default
 //                                                                  screenshot|test|manual; receive otherwise reads the
@@ -563,7 +573,7 @@
 // =============================================================
 
 // The layout: this file is the usage above and the dispatch on the command word below. The code of the commands is in
-// cli/, one module per area (tasks, taskEdit, view, owner, run, merge, cost, doctor, finding, helpers, orchestrator, projects, batch,
+// cli/, one module per area (tasks, taskEdit, view, owner, decide, run, merge, cost, doctor, finding, helpers, orchestrator, projects, batch,
 // cloud, wait, plans with planShared, planCheck and planDoc), with the shared state in cli/context.mjs and the shared track
 // helpers in cli/tracks.mjs. The usage comment stays here: lib/cliHelp.js reads it for `cq help`.
 import fs from 'node:fs';
@@ -573,6 +583,8 @@ import * as batch from './cli/batch.mjs';
 import * as cloud from './cli/cloud.mjs';
 import * as conflicts from './cli/conflicts.mjs';
 import * as cost from './cli/cost.mjs';
+import * as decide from './cli/decide.mjs';
+import * as board from './cli/board.mjs';
 import * as doctor from './cli/doctor.mjs';
 import * as finding from './cli/finding.mjs';
 import * as helpers from './cli/helpers.mjs';
@@ -629,6 +641,8 @@ if (command === 'init') {
   owner.cmdQuestion();
 } else if (command === 'wait') {
   wait.cmdWait();
+} else if (command === 'decide') {
+  decide.cmdDecide();
 } else if (command === 'approve') {
   owner.cmdApprove();
 } else if (command === 'forecast') {
@@ -639,6 +653,8 @@ if (command === 'init') {
   cost.cmdLimit();
 } else if (command === 'helpers') {
   helpers.cmdHelpers();
+} else if (command === 'board-setting') {
+  board.cmdBoard();
 } else if (command === 'triage') {
   triage.cmdTriage();
 } else if (command === 'compact') {
@@ -752,7 +768,7 @@ if (command === 'init') {
     'Use: cq <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow|triage|wait> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow|triage|wait|decide> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

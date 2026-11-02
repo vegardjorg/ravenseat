@@ -975,7 +975,7 @@ describe('settings and setup', () => {
   });
 
   it('skills: the queue system\'s skills, and which are missing', () => {
-    expect(V.QUEUE_SKILLS).toEqual(['queue', 'add-to-queue', 'parallel-wave', 'plans', 'pick', 'start']);
+    expect(V.QUEUE_SKILLS).toEqual(['queue', 'add-to-queue', 'parallel-wave', 'plans', 'pick', 'start', 'decide', 'review']);
     expect(V.skillsCoverage(() => true)).toEqual({ all: true, exists: V.QUEUE_SKILLS, missing: [] });
     expect(V.skillsCoverage((n) => n !== 'pick' && n !== 'start')).toMatchObject({
       all: false,

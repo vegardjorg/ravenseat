@@ -21,6 +21,7 @@ const KK = require('../queueConfig.js') as {
   STANDARD: Record<string, unknown>;
   merge: (a: unknown, b: unknown) => Record<string, unknown>;
   features: (cfg?: unknown) => Record<string, boolean>;
+  boardSwitches: (cfg?: unknown, queue?: unknown) => Record<string, boolean>;
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -66,6 +67,8 @@ const stateFor = (version: string, statuses: string[], own: object = {}) => ({
     gitError: null,
     logo: false,
     features: KK.features(KK.merge(KK.STANDARD, own)),
+    // The board's own switches (queue-board.mjs: KK.boardSwitches(CONFIG, queue)); here only from the config.
+    boardSwitches: KK.boardSwitches(KK.merge(KK.STANDARD, own), null),
   },
 });
 
@@ -129,8 +132,15 @@ describe('the module switches on the board', () => {
     $('filter-button').click();
   });
 
-  it('shows the Cloud tab when features.cloud is true, and hides Focus, Statistics and Plans when they are off', async () => {
-    await serve(stateFor('v2', ['waiting'], { features: { cloud: true } }));
+  it('hides the Cloud tab by default, even with features.cloud on (board.showCloud is off)', async () => {
+    await serve(stateFor('v1b', ['waiting'], { features: { cloud: true } }));
+    expect($('show-cloud').hidden).toBe(true);
+    await serve(stateFor('v1c', ['waiting'], { features: { cloud: true }, board: { showCloud: false } }));
+    expect($('show-cloud').hidden).toBe(true);
+  });
+
+  it('shows the Cloud tab when features.cloud and board.showCloud are on, and hides Focus, Statistics and Plans when they are off', async () => {
+    await serve(stateFor('v2', ['waiting'], { features: { cloud: true }, board: { showCloud: true } }));
     expect($('show-cloud').hidden).toBe(false);
     await serve(stateFor('v3', ['waiting'], { features: { focus: false, statistics: false, plans: false } }));
     expect($('show-cloud').hidden).toBe(true);

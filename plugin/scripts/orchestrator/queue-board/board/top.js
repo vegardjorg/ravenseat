@@ -186,12 +186,19 @@ function featureOn(name) {
   const f = t.data?.features;
   return !f || f[name] === true;
 }
+/** A board switch (state.boardSwitches, lib/queueConfig.js boardSwitches): off until the state says it is on. */
+function boardSwitch(name) {
+  return t.data?.boardSwitches?.[name] === true;
+}
 /**
  * Hides the tabs and the Plans button of the modules that are off, and leaves a view (or the Plans room) that was
  * just switched off. Runs on every new state; cheap.
  */
 function applyFeatures() {
   for (const [view, name] of Object.entries(VIEW_FEATURE)) $(`show-${view}`).hidden = !featureOn(name);
+  // The Cloud tab also needs the board switch showCloud (default off; `cq board-setting cloud on` or Settings, Board). A saved
+  // Cloud view still opens without the tab (the view shows a note), so only a module that is off leaves the view.
+  if (!boardSwitch('showCloud')) $('show-cloud').hidden = true;
   if (VIEW_FEATURE[t.view] && !featureOn(VIEW_FEATURE[t.view])) setView('flat');
   $('room-plans').hidden = !featureOn('plans');
   // Plans redraws only when the switches themselves changed (not on every poll).
@@ -225,6 +232,53 @@ function modulesSection() {
     el('p', {
       class: 'setting-source',
       text: 'The board reads queue.config.json when it starts: restart it after a change.',
+    }),
+  );
+}
+
+/**
+ * The gear's "Board" section: the board's own switches (state.boardSwitches). A change runs `cq board-setting cloud on|off`
+ * (queue.json board.showCloud), the same command Claude Code can run, so it holds for every viewer.
+ */
+function boardSection() {
+  if (!t.data?.boardSwitches) return null;
+  const cloudModule = featureOn('cloud');
+  const box = el('input', {
+    id: 'board-show-cloud',
+    type: 'checkbox',
+    role: 'switch',
+    class: 'switch',
+    checked: boardSwitch('showCloud'),
+    disabled: !cloudModule,
+    'aria-describedby': 'board-show-cloud-help',
+  });
+  box.addEventListener('change', async () => {
+    box.disabled = true;
+    try {
+      const answer = await writeWithGuard('/api/action', { type: 'board-switch', name: 'showCloud', on: box.checked });
+      if (answer) message(box.checked ? 'The Cloud tab is shown.' : 'The Cloud tab is hidden.');
+    } catch (e) {
+      message(`Could not save: ${e.message}`, true);
+    }
+    await update(true);
+    if (t.setting) drawSettings();
+  });
+  return el(
+    'section',
+    { class: 'setting', 'aria-labelledby': 'setting-board' },
+    el('h3', { id: 'setting-board', class: 'setting-title', text: 'Board' }),
+    el(
+      'div',
+      { class: 'helper-head' },
+      box,
+      el('label', { for: 'board-show-cloud', text: 'Show the Cloud tab' }),
+    ),
+    el('p', {
+      id: 'board-show-cloud-help',
+      class: 'setting-explanation',
+      text: cloudModule
+        ? 'Off by default. Saved in queue.json for everyone; Claude Code: cq board-setting cloud on|off.'
+        : 'The cloud module is off (features.cloud in queue.config.json), so there is no Cloud tab.',
     }),
   );
 }
@@ -267,12 +321,20 @@ function onboardingCard() {
 
 function setView(v) {
   t.view = v;
-  store.setItem('queue-board-view', v);
+  // 'decisions' (board/decide.js) is not one of the VIEWS tabs and is not saved: the board picks it on load when
+  // anything waits on the owner. The queue view the owner had is kept for the way back.
+  if (v !== 'decisions') {
+    store.setItem('queue-board-view', v);
+    if (t.decide) t.decide.queueView = v;
+  }
+  if (typeof drawRoomTabs === 'function') drawRoomTabs();
   // Real tabs. The selected tab is the only tab stop in the tab list (roving tabindex).
+  // In Decisions no view tab is selected; the one the owner had stays the tab stop.
+  const stop = v === 'decisions' ? (t.decide?.queueView ?? 'flat') : v;
   for (const x of VIEWS) {
     const tab = $(`show-${x}`);
     tab.setAttribute('aria-selected', x === v ? 'true' : 'false');
-    tab.tabIndex = x === v ? 0 : -1;
+    tab.tabIndex = x === stop ? 0 : -1;
   }
   if (v === 'statistics') {
     closeFilter(false);
@@ -309,7 +371,8 @@ $('tabs').addEventListener('keydown', (e) => {
 // If focus leaves the tab list without anything being selected, the selected tab is the tab stop again.
 $('tabs').addEventListener('focusout', (e) => {
   if ($('tabs').contains(e.relatedTarget)) return;
-  for (const x of VIEWS) $(`show-${x}`).tabIndex = x === t.view ? 0 : -1;
+  const current = t.view === 'decisions' ? (t.decide?.queueView ?? 'flat') : t.view;
+  for (const x of VIEWS) $(`show-${x}`).tabIndex = x === current ? 0 : -1;
 });
 
 // The statistics are fetched when the view is open (the server caches; "unchanged" when nothing is new).
