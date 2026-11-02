@@ -13,7 +13,9 @@
 
 **A kanban board and project manager for Claude Code.** You manage the project the way you already know from
 kanban: tasks, dependencies and a focus. Claude Code does the work, one finished feature at a time. There are no
-workflows or pipelines to write first; the process is built in, and you only step in for the decisions.
+workflows or pipelines to write first; the process is built in, and you only step in for the decisions. The
+board is the interface; the product is what runs behind it: orchestration, continuity across chats, and quality
+checks before anything is merged.
 
 1. **A kanban board you already know how to read.** Tasks move from In queue to In progress, Review and Done on a
    local board. Claude Code moves the cards; you see at a glance where every task stands and what comes next.
@@ -494,6 +496,12 @@ What Ravenseat checks for you:
   never over an existing file). On GitLab, Bitbucket and others, add a job that runs the same commands.
 
 Set this up for your project: run `cq doctor`.
+
+**What the guards are not.** The guards are Claude Code hooks that check the commands an agent runs. They are guard
+rails, not a sandbox. An agent runs with your user account: it can read the files and environment variables your
+shell can, and reach the network, unless your Claude Code permissions or its sandbox settings say otherwise. A
+blocked command can often be written another way. Keep production credentials off the machine the agents run on,
+and use Claude Code's permission rules or sandbox when you need a real boundary.
 
 ## Not included
 
