@@ -32,7 +32,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { a, branchFor, CONFIG, CQ, FILE, FOLDER, FOLLOW_FILE, git, HERE, KK, LOCK, MAIN_TREE, require } from './context.mjs';
+import { a, branchFor, CONFIG, CQ, FILE, FOLDER, FOLLOW_FILE, git, HERE, KK, LOCK, MAIN_TREE, require, SF } from './context.mjs';
 import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 import { REPO_CHECKS } from './doctorRepo.mjs';
 
@@ -168,12 +168,24 @@ function checkHooks() {
 function checkConfig() {
   const file = KK.configFile(MAIN_TREE);
   let own;
+  let text;
   try {
-    own = JSON.parse(fs.readFileSync(file, 'utf8'));
+    text = fs.readFileSync(file, 'utf8');
+    own = KK.parseConfigText(text);
   } catch (e) {
     if (e?.code === 'ENOENT')
       return [warn('config', `no ${path.basename(file)}: the defaults apply and the hooks stay off`, `run ${CQ} setup`)];
-    return [fail('config', `${file} does not parse: ${e.message}`, 'fix the JSON; until then every command runs on the defaults')];
+    // The same reading as config() (lib/queueConfig.js readConfigFile): the queue commands stop on it, and the push
+    // guard asks (main session) or denies (queue agents) every push, migration and deploy command until it is fixed.
+    const at = KK.parseErrorPosition(e?.message, text);
+    const where = at ? ` (line ${at.line}, column ${at.column})` : '';
+    return [
+      fail(
+        'config',
+        `${file} does not parse${where}: ${e.message}`,
+        'fix the JSON (a trailing comma is the usual cause); until then the queue commands stop and the push guard asks before every push, migration and deploy',
+      ),
+    ];
   }
   if (kind(own) !== 'object') return [fail('config', `${file} must hold one JSON object`, 'wrap the settings in { }')];
   const S = KK.STANDARD;
@@ -229,7 +241,15 @@ function checkState() {
   const out = [];
   const q = readJson(FILE);
   if (!q) out.push(warn('queue', `no queue at ${FILE}`, `run ${CQ} init`));
-  else if (q.error) out.push(fail('queue', `queue.json does not parse: ${q.error}`, 'restore it from queue.json.*.tmp or a backup; never edit it while the queue runs'));
+  else if (q.error)
+    out.push(
+      fail(
+        'queue',
+        `queue.json does not parse: ${q.error}`,
+        // queue.json.prev (lib/stateFile.js) is the previous good state when it parses.
+        SF.recoveryHint(FILE) ?? 'restore it from queue.json.*.tmp or a backup; never edit it while the queue runs',
+      ),
+    );
   else if (!Array.isArray(q.value?.tasks)) out.push(fail('queue', 'queue.json has no tasks list', `restore it from a backup, or ${CQ} init in a fresh data folder`));
   else out.push(ok('queue', `queue.json parses (${q.value.tasks.length} task(s))`));
   for (const [name, file] of [
