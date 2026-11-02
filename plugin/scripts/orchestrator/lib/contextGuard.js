@@ -411,7 +411,8 @@ function resumeText(mode) {
  * additionalContext after /compact (SessionStart, matcher compact): a short queue state that the summary might otherwise
  * lose, and the resume instruction. The order is chosen so the most important comes first; the queue view is cut if
  * the cap is reached.
- * @param {{ show: string, question: Array<{ sp: string, text?: string|null, recommendation?: string|null }>,
+ * @param {{ show: string, question: Array<{ sp: string, text?: string|null, recommendation?: string|null,
+ *   choices?: string[] }>,
  *   unpushed: number|null, base?: string, compactions: number, windDownRevoked?: boolean,
  *   mode?: 'auto'|'manual', g?: object, maxDraw?: number, now?: string|null }} input
  *   `base` = baseBranch (config().baseBranch) for the line about unpushed commits.
@@ -454,9 +455,13 @@ function afterCompactText({
     );
   }
   header.push(`Unpushed commits on ${base}: ${unpushed == null ? 'unknown' : unpushed}`);
+  // With choices, they follow numbered on their own lines (the owner answers with cq resolve <id> --choice <n>).
   const openOnes = (question ?? []).map(
     (s) =>
-      `  ${s.sp}: ${s.text ?? '(missing text)'}${s.recommendation ? ` (recommendation: ${s.recommendation})` : ''}`,
+      `  ${s.sp}: ${s.text ?? '(missing text)'}${s.recommendation ? ` (recommendation: ${s.recommendation})` : ''}` +
+      (Array.isArray(s.choices) && s.choices.length
+        ? s.choices.map((c, i) => `\n    ${i + 1}. ${c}`).join('')
+        : ''),
   );
   header.push(
     openOnes.length

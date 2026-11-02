@@ -18,20 +18,29 @@ import {
   a, autoAcceptContext, autoAcceptRules, CQ, cut, die, edit, GIT_ROOT, L, positional, PR, read, val, WIDTH,
 } from './context.mjs';
 
+/** The values of a repeated flag (`--choice A --choice B`): the argument right after each occurrence. */
+const repeated = (flag) => a.flatMap((x, i) => (x === flag ? [a[i + 1] ?? ''] : []));
+
 /** `cq resolve` (the usage is at the top of queue.mjs). */
 export function cmdResolve() {
-  const sp = positional(1, ['--answer', '--by']);
-  if (!sp.length) die('resolve <question> [...] [--answer "..."] [--by "..."]');
-  // With a timestamp (and the answer, when given) in `resolutions`; the ids are in `resolved` as before.
+  const sp = positional(1, ['--answer', '--by', '--choice']);
+  if (!sp.length) die('resolve <question> [...] [--answer "..."] [--choice <n|text>] [--by "..."]');
+  // With a timestamp (and the answer, when given) in `resolutions`; the ids are in `resolved` as before. --choice picks
+  // one of the question's choices (number or text); --answer is then a note after the choice.
   const answer = a.includes('--answer') ? (val('--answer') ?? '') : null;
-  const added = edit((queue) => {
+  const choice = a.includes('--choice') ? (val('--choice') ?? '') : null;
+  const r = edit((queue) => {
     const now = new Date().toISOString();
-    const r = L.resolve(queue, sp, { answer, by: val('--by') ?? null, now });
-    if (r.error.length) die(`Nothing resolved:\n  ${r.error.join('\n  ')}`);
-    // The answer is written into the mission of every task that waits on the question (idempotent).
-    return L.ownerAnswerBonus(queue, sp, answer, now);
+    const s = L.resolve(queue, sp, { answer, choice, by: val('--by') ?? null, now });
+    if (s.error.length) die(`Nothing resolved:\n  ${s.error.join('\n  ')}`);
+    // The answer (with a choice: the choice's text and the note) is written into the mission of every task that waits
+    // on the question (idempotent).
+    return { stored: s.answer, added: L.ownerAnswerBonus(queue, sp, s.answer, now) };
   });
-  console.log(`Resolved: ${sp.join(', ')}${answer != null ? ' (with answer)' : ''}`);
+  const added = r.added;
+  console.log(
+    `Resolved: ${sp.join(', ')}${choice != null ? ` (choice: ${r.stored})` : answer != null ? ' (with answer)' : ''}`,
+  );
   if (added.length)
     console.log(
       `The answer is added to the mission (OWNER_ANSWER bonus) for: ${[...new Set(added.map((x) => x.id))].join(', ')}. ` +
@@ -66,6 +75,7 @@ export function cmdResolutions() {
       const badge = r.answer == null ? 'without answer' : r.logged ? 'logged' : 'NOT LOGGED';
       console.log(`${r.sp}  ${r.time ?? '?'}  by ${r.by ?? '?'}  [${badge}]`);
       if (q?.text) console.log(`  ${q.type ?? 'question'}: ${q.text}`);
+      for (const line of L.choiceLines(q)) console.log(`    ${line}`);
       if (r.answer != null) console.log(`  answer: ${r.answer}`);
       if (q?.source) console.log(`  source: ${q.source}`);
     }
@@ -80,10 +90,16 @@ export function cmdResolutions() {
 /** `cq question` (the usage is at the top of queue.mjs). */
 export function cmdQuestion() {
   const file = val('--file');
-  const [id] = positional(1, ['--file', '--text', '--type', '--recommendation', '--source']);
-  const fields = ['--text', '--type', '--recommendation', '--source'].some((f) => a.includes(f));
+  const [id] = positional(1, ['--file', '--text', '--type', '--recommendation', '--source', '--choice']);
+  const fields = ['--text', '--type', '--recommendation', '--source', '--choice', '--no-choices'].some((f) =>
+    a.includes(f),
+  );
   if (file || id || fields) {
-    if (!file && !id) die('question <id> --text "..." [--type ...] [--recommendation "..."] [--source "..."]');
+    if (!file && !id)
+      die(
+        'question <id> --text "..." [--type ...] [--recommendation "..."] [--source "..."] ' +
+          '[--choice "..." (2-4 times) | --no-choices]',
+      );
     let input;
     if (file) input = JSON.parse(fs.readFileSync(file, 'utf8'));
     else {
@@ -91,6 +107,9 @@ export function cmdQuestion() {
       const field = {};
       for (const k of ['text', 'type', 'recommendation', 'source'])
         if (a.includes(`--${k}`)) field[k] = val(`--${k}`) ?? '';
+      // Each --choice is one answer option (setQuestion checks 2-4, length and duplicates); --no-choices removes them.
+      if (a.includes('--choice')) field.choices = repeated('--choice');
+      else if (a.includes('--no-choices')) field.choices = null;
       input = { [id]: field };
     }
     const r = edit((queue) => {
@@ -112,7 +131,10 @@ export function cmdQuestion() {
       console.log(
         `  ${cut(r.text ?? '(missing text: cq question <id> --text "...")', WIDTH - 2)}`,
       );
+      for (const line of L.choiceLines(r)) console.log(`    ${cut(line, WIDTH - 4)}`);
       if (r.recommendation) console.log(`  ${cut(`recommendation: ${r.recommendation}`, WIDTH - 2)}`);
+      if (r.choices.length && !r.resolved)
+        console.log(`  answer: cq resolve ${r.sp} --choice <1-${r.choices.length}> [--answer "note"]`);
     }
   }
 }

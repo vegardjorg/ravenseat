@@ -152,6 +152,7 @@ describe('resolve: resolved as before, and resolutions with timestamps', () => {
     expect(L.resolve(queue, ['Q8'], { answer: '  Ledgerly  ', by: 'owner', now: T1 })).toEqual({
       resolved: ['Q8'],
       error: [],
+      answer: 'Ledgerly',
     });
     expect(queue.resolved).toEqual(['OLD', 'Q8']);
     expect(queue.resolutions?.Q8).toEqual({ time: T1, answer: 'Ledgerly', by: 'owner', logged: false });

@@ -61,15 +61,85 @@ function approve(queue, ids, now = new Date().toISOString()) {
 
 // ---- Owner questions and resolutions -------------------------------------------------------------------
 //
-// `question`: { "<id>": { type, text, recommendation?, source?, added_at } } is the text behind the ids in `waiting_on`, so
+// `question`: { "<id>": { type, text, recommendation?, source?, choices?, added_at } } is the text behind the ids in `waiting_on`, so
 // the board can show what the owner must answer. `resolutions`: { "<id>": { time, answer, by, logged? } } is the answer with
 // a timestamp; the id still sits in `resolved` (that list is what the blockers read). Both fields are optional: an
-// old queue.json without them works unchanged.
+// old queue.json without them works unchanged. `choices` (optional) is 2-4 short answer options the owner can pick
+// with one click on the board or `cq resolve <id> --choice <n|text>`; a question without choices works as before.
 
 /** The types an owner question can have. `condition` is answered with how the condition is fulfilled. */
 const QUESTION_TYPES = ['question', 'condition', 'lawyer', 'owner-task'];
-const QUESTION_FIELD = new Set(['type', 'text', 'recommendation', 'source', 'added_at']);
+const QUESTION_FIELD = new Set(['type', 'text', 'recommendation', 'source', 'choices', 'added_at']);
 const QUESTION_MAX_TEXT = 4000;
+/** The limits for `choices`: 2-4 options, each at most 60 characters (a button label, not an essay). */
+const CHOICES_MIN = 2;
+const CHOICES_MAX = 4;
+const CHOICE_MAX_TEXT = 60;
+
+/**
+ * The errors for a `choices` value (setQuestion). A list of 2-4 strings, each non-empty after trim, at most
+ * CHOICE_MAX_TEXT characters, without control characters, and no two the same (ignoring case and whitespace at the ends).
+ * @returns {string[]} empty when the list is valid
+ */
+function choicesError(list) {
+  if (!Array.isArray(list)) return [`choices must be a list of ${CHOICES_MIN}-${CHOICES_MAX} short texts`];
+  const error = [];
+  if (list.length < CHOICES_MIN || list.length > CHOICES_MAX)
+    error.push(`choices must have ${CHOICES_MIN}-${CHOICES_MAX} entries (has ${list.length})`);
+  const seen = new Set();
+  list.forEach((c, i) => {
+    const s = typeof c === 'string' ? c.trim() : '';
+    if (!s) error.push(`choice ${i + 1} is empty (or not text)`);
+    else if (s.length > CHOICE_MAX_TEXT)
+      error.push(`choice ${i + 1} is longer than ${CHOICE_MAX_TEXT} characters`);
+    else if (/[\u0000-\u001f\u007f]/.test(s)) error.push(`choice ${i + 1} has a control character`);
+    else if (seen.has(s.toLowerCase())) error.push(`choice ${i + 1} is a duplicate ("${s}")`);
+    seen.add(s.toLowerCase());
+  });
+  return error;
+}
+
+/** Is `choice` the recommended one? Only when the recommendation is exactly the choice's text (ignoring case). */
+function isRecommendedChoice(q, choice) {
+  const r = typeof q?.recommendation === 'string' ? q.recommendation.trim().toLowerCase() : '';
+  return !!r && r === String(choice).trim().toLowerCase();
+}
+
+/**
+ * The choices numbered, one line each ("1. Yes (recommended)"), for everything that prints a question for the
+ * orchestrator or an agent. Empty list when the question has no choices.
+ */
+function choiceLines(q) {
+  if (!Array.isArray(q?.choices)) return [];
+  return q.choices.map((c, i) => `${i + 1}. ${c}${isRecommendedChoice(q, c) ? ' (recommended)' : ''}`);
+}
+
+/**
+ * Finds the choice the owner picked: a number (1-based, "2") or the text of the choice (ignoring case). `q` is the
+ * registered question.
+ * @returns {{ choice: string|null, error: string|null }}
+ */
+function pickChoice(q, pick) {
+  const list = Array.isArray(q?.choices) ? q.choices : [];
+  if (!list.length) return { choice: null, error: 'the question has no choices: answer with --answer "..."' };
+  const s = String(pick ?? '').trim();
+  const numbered = list.map((c, i) => `${i + 1}. ${c}`).join(', ');
+  if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    if (n >= 1 && n <= list.length) return { choice: list[n - 1], error: null };
+    return { choice: null, error: `choice ${s} does not exist (${numbered})` };
+  }
+  const hit = list.find((c) => c.toLowerCase() === s.toLowerCase());
+  return hit
+    ? { choice: hit, error: null }
+    : { choice: null, error: `unknown choice ${JSON.stringify(s)} (${numbered})` };
+}
+
+/** The answer that is stored when the owner picks a choice: the choice's text, plus a free text note when one is given. */
+function choiceAnswer(choice, note = null) {
+  const n = note == null ? '' : String(note).trim();
+  return n ? `${choice} (note: ${n})` : String(choice);
+}
 
 /** Valid id for an owner question: not empty, at most 300 characters, without control characters, whitespace at the ends or a leading "-". */
 function validQuestionId(id) {
@@ -86,9 +156,11 @@ function validQuestionId(id) {
 /**
  * Sets or updates owner questions (`queue.mjs question`, `question --file`, `add` with `{ tasks, question }`).
  * All or nothing: if one question is invalid, nothing is changed. A field that is not included is kept from before; `null`
- * removes recommendation or source. `added_at` is set by the tool (the first time the question is registered).
+ * removes recommendation, source or choices. `added_at` is set by the tool (the first time the question is registered).
+ * `choices` (optional): 2-4 short answer options (choicesError); the texts are stored trimmed.
  * @param {object} queue the queue (changed when the error list is empty)
- * @param {Record<string, { type?: string, text?: string, recommendation?: string|null, source?: string|null }>} input
+ * @param {Record<string, { type?: string, text?: string, recommendation?: string|null, source?: string|null,
+ *   choices?: string[]|null }>} input
  * @returns {{ set: string[], error: string[] }}
  */
 function setQuestion(queue, input, now = new Date().toISOString()) {
@@ -98,7 +170,7 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
   const newOnes = {};
   for (const [id, s] of Object.entries(input)) {
     if (!s || typeof s !== 'object' || Array.isArray(s)) {
-      error.push(`${id}: must be an object { type, text, recommendation?, source? }`);
+      error.push(`${id}: must be an object { type, text, recommendation?, source?, choices? }`);
       continue;
     }
     const f = [];
@@ -118,6 +190,7 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
       if (v != null && (typeof v !== 'string' || v.length > QUESTION_MAX_TEXT))
         f.push(`${k} must be text (at most ${QUESTION_MAX_TEXT} characters)`);
     }
+    if (s.choices != null) f.push(...choicesError(s.choices));
     if (f.length) {
       error.push(`${id}: ${f.join('; ')}`);
       continue;
@@ -127,6 +200,8 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
       const v = s[k] !== undefined ? s[k] : previous[k];
       if (typeof v === 'string' && v.trim()) fresh[k] = v.trim();
     }
+    const choices = s.choices !== undefined ? s.choices : previous.choices;
+    if (Array.isArray(choices) && choices.length) fresh.choices = choices.map((c) => String(c).trim());
     fresh.added_at = previous.added_at ?? now;
     newOnes[id] = fresh;
   }
@@ -136,21 +211,31 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
 }
 
 /**
- * `queue.mjs resolve <id…> [--answer "…"] [--by "…"]`: the ids are put in `resolved` (as before) and in `resolutions` with time, answer
- * and who. Without an answer an earlier resolution is kept unchanged (time and answer are never lost); a new answer replaces it
- * and must be entered in the decision log again (`logged: false`). An empty answer (`--answer ""`) is refused: then everything stops.
- * @returns {{ resolved: string[], error: string[] }}
+ * `queue.mjs resolve <id…> [--answer "…"] [--choice <n|text>] [--by "…"]`: the ids are put in `resolved` (as before) and in
+ * `resolutions` with time, answer and who. Without an answer an earlier resolution is kept unchanged (time and answer are never
+ * lost); a new answer replaces it and must be entered in the decision log again (`logged: false`). An empty answer (`--answer ""`)
+ * is refused: then everything stops. `choice` picks one of the question's choices (pickChoice; exactly one id): the stored answer is
+ * the choice's text, with `answer` as a note when given (choiceAnswer).
+ * @returns {{ resolved: string[], error: string[], answer: string|null }} `answer` = the answer that was stored
  */
-function resolve(queue, ids, { answer = null, by = null, now = new Date().toISOString() } = {}) {
+function resolve(queue, ids, { answer = null, choice = null, by = null, now = new Date().toISOString() } = {}) {
   const list = [...new Set(ids ?? [])];
   const error = list
     .filter((id) => !validQuestionId(id))
     .map((id) => `invalid question id ${JSON.stringify(id)}`);
   if (!list.length) error.push('resolve requires at least one question id');
-  const s = answer == null ? null : String(answer).trim();
-  if (answer != null && !s)
+  let s = answer == null ? null : String(answer).trim();
+  if (choice != null) {
+    // A choice belongs to one question: picking "2" for several at once would be a guess.
+    if (list.length !== 1) error.push('--choice takes exactly one question id');
+    else {
+      const p = pickChoice(queue.question?.[list[0]], choice);
+      if (p.error) error.push(`${list[0]}: ${p.error}`);
+      else s = choiceAnswer(p.choice, s);
+    }
+  } else if (answer != null && !s)
     error.push('the answer is empty: write the answer, or how the condition is fulfilled');
-  if (error.length) return { resolved: [], error };
+  if (error.length) return { resolved: [], error, answer: null };
   queue.resolved = [...new Set([...(queue.resolved ?? []), ...list])];
   const resolutions = { ...(queue.resolutions ?? {}) };
   for (const id of list) {
@@ -159,7 +244,7 @@ function resolve(queue, ids, { answer = null, by = null, now = new Date().toISOS
     if (s != null) resolutions[id].logged = false;
   }
   queue.resolutions = resolutions;
-  return { resolved: list, error: [] };
+  return { resolved: list, error: [], answer: s };
 }
 
 /** Resolutions with an answer that is not entered in the decision log yet (the orchestrator enters them and runs --mark-logged). */
@@ -215,6 +300,7 @@ function questionOverview(queue) {
         text: q?.text ?? null,
         recommendation: q?.recommendation ?? null,
         source: q?.source ?? null,
+        choices: Array.isArray(q?.choices) ? q.choices : [],
         resolved: resolved.has(sp),
         answer: queue.resolutions?.[sp]?.answer ?? null,
         tasks: waiting.get(sp) ?? [],
@@ -398,6 +484,11 @@ module.exports = {
   QUESTION_TYPES,
   validQuestionId,
   setQuestion,
+  choicesError,
+  isRecommendedChoice,
+  choiceLines,
+  pickChoice,
+  choiceAnswer,
   resolve,
   unlogged,
   markLogged,

@@ -1955,6 +1955,28 @@ body.with-option-line .toaster {
   padding: var(--distance-sm) 0 0;
 }
 
+/* The answer options of an owner question (choices): one button each, wrapped; long labels break inside the button. */
+.answer-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--distance-sm);
+  margin-top: var(--distance-sm);
+}
+
+.answer-choices .button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+/* Phone width: one choice per line, full width, so each one is an easy target. */
+@media (max-width: 720px) {
+  .answer-choices .button {
+    flex: 1 1 100%;
+  }
+}
+
 /* QA, proposed and stuck: checkbox (or id) and title on the left, one button on the right. */
 .row-summary {
   display: flex;

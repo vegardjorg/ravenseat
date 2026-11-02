@@ -86,6 +86,7 @@ const {
 } = require('./logic/ranking.js');
 const {
   isAgentSource, statusAtAdd, approve, QUESTION_TYPES, validQuestionId, setQuestion, resolve, unlogged, markLogged,
+  choicesError, choiceLines, isRecommendedChoice, pickChoice,
   questionOverview, questionWithoutText, QUESTION_ID_PATTERN, questionRegistered, waitingOnError, resolveWaits,
   resolveWaitsLines, ownerAnswerBonus, answerBlock, migrBlockText,
 } = require('./logic/questions.js');
@@ -307,6 +308,10 @@ module.exports = {
   QUESTION_TYPES,
   validQuestionId,
   setQuestion,
+  choicesError,
+  choiceLines,
+  isRecommendedChoice,
+  pickChoice,
   resolve,
   unlogged,
   markLogged,

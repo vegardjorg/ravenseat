@@ -37,7 +37,9 @@ New here? Start in lite mode: the core loop only, nothing to learn first.
    agent per task in its own git worktree (`cq fill`), takes in what they deliver (`cq receive`) and merges it
    (`cq merge`). It never pushes unless you say so.
 5. **Answer questions:** when an agent needs your decision, that task waits and the rest go on. `cq question` lists
-   them, `cq resolve <id> --answer "..."` answers one, or use "Waiting on you" on the board (`/cq:board`).
+   them, `cq resolve <id> --answer "..."` answers one, or use "Waiting on you" on the board (`/cq:board`). A question
+   can come with 2-4 answer options (`cq question <id> --text "..." --choice "Yes" --choice "No"`): pick one with
+   `cq resolve <id> --choice 1`, or with one click on the board.
 
 `cq help` shows only these commands in lite mode. What lite leaves out: risk classes, value and size estimates, the
 small-task guard and batch queue, focus, the plan register and helper agents. All of it is still there:

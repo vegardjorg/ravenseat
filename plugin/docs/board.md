@@ -52,6 +52,9 @@ the panel shows `cq set <id> cancelled --remark "<why>"` instead. **Waiting on y
 
 **Waiting on you** (the button at the top) collects what needs the owner: owner questions, proposals to approve,
 QA (done tasks with the label `visual` that wait for a manual check, `qa ok` / `qa deviation`) and what is stuck.
+An owner question with `choices` shows one button per choice (the recommended one filled); a click answers it through
+the same `POST /api/action { type: 'resolve' }` with `{ choice: <n> }`, and the text in the open answer field goes
+along as a note. "Answer in your own words" keeps the free text answer.
 
 The **Plans** workspace is the plan register. **Overview** has one card per area, what is being worked on now and
 what waits on you. **Plan entries** shows the entries as a list, a priority map, a tree map or dependencies, with
