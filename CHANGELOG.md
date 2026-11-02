@@ -60,6 +60,10 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
   `approve` and `qa ok` record `--by owner`. The Cloud tab is hidden by default (`board.showCloud`,
   `cq board-setting cloud on`). The Focus view sets what happens when the focus is done and shows FINISHED /
   QUEUE PAUSED. `docs/cli-parity.md` maps every board action to its command.
+- **Review fixes (package E):** the context hook counts compactions incrementally (only the new transcript tail is
+  read, cached in `compact-count.json`); worktree cleanup deletes without a shell (paths with `&` are safe);
+  `cq doctor` warns about a leftover MERGE_HEAD, `disableAllHooks` in Claude settings, and done tasks whose merge is
+  missing from the base branch.
 - **Conflict prediction:** `cq orchestrator pulse` and the new `cq conflicts [--json]` check running and delivered
   track tips against the base and each other with `git merge-tree --write-tree` (cached per sha pair,
   time-budgeted, with a suggested merge order; git older than 2.38 falls back to file overlap and `cq doctor` says
