@@ -100,7 +100,8 @@ Follow `parallel-wave` ("Continuous queue") unchanged. Specific to taking over:
   Then `cq merge <id>` from Bash with a long timeout: merge with the right `--wave-base`, optional migration push,
   `gates --quick`, `set <id> done` and `fill`.
 - **Fill slots:** `cq fill --scratchpad <scratch>` (one call; start all agents in the SAME turn with the messages
-  under "Start these in the SAME turn:").
+  under "Start these in the SAME turn:"). Old and agent-added tasks get a `triage` agent there instead of a track;
+  record its answer with `cq triage <id> --verdict <v> --note "..."` (see `parallel-wave`, the loop).
 - **EMPTY tracks:** `cq set <id> waiting`; remove the dead worktree and branch only if the branch has 0 commits;
   the loop restarts the task.
 - **Picked tasks** (status `picked`) are never EMPTY or UNCERTAIN: a person or session owns them. Do not touch them.
