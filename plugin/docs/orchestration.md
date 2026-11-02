@@ -422,6 +422,23 @@ checkout or with cq's own `--evidence` run:
   main session is never stopped, and the hook is inert without `queue.config.json`. Both are guards against mistakes
   and casual forgery, not a security boundary: the agents run as the same OS user.
 
+## A merge that survives interruptions
+
+`cq merge` runs several steps in a row, so it guards against being cut off or run twice (`lib/mergeLock.js`):
+
+- **One at a time.** A lock file `<dataFolder>/merge.lock` (pid, host, start time) lets one `cq merge` run per repo. A
+  second one stops at once and names the holder. A lock whose process is gone (same host) or that is older than 6 h
+  is stale and taken over; the message names the merge that was cut off.
+- **No merge on top of an unfinished one.** A merge, rebase, cherry-pick or revert in progress in the main checkout
+  (`MERGE_HEAD` and the like) refuses `cq merge` and `merge-track.mjs` (exit 5), with how to finish or undo it.
+- **Done only when merged.** After the merge step and again before `done`, the track tip must be in the base
+  (`git merge-base --is-ancestor`). Otherwise the task is not marked done and stays in review. The merge commit is
+  stored on the task as `merge_commit`.
+- **Resume.** Every step is recorded in `<dataFolder>/merge-state-<id>.json` as it starts. After Ctrl-C, a crash, a
+  stop after the merge (the migration push, a red gate) or a conflict resolved and committed by hand,
+  `cq merge <id> --resume` runs only the steps after the merge that have not run (migration push, gates, base gate,
+  done, fill). A plain `cq merge <id>` on a branch that is already in the base says so and gives that command.
+
 ## Gate from incident (a failure becomes a check)
 
 The base gate catches a red base; it does not stop the same kind of mistake from coming back. So when a post-merge

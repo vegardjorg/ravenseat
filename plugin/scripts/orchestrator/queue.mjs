@@ -252,6 +252,15 @@
 // (subagent_type + message); start them in one turn. `receive` warns when the track's answer exceeds the report cap (about 1,500 chars).
 //   node scripts/orchestrator/queue.mjs merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force]
 //        [--allow-guard] [--done-cwd <folder>] [--force-red-base]
+//        [--resume]
+//        (one merge at a time per repo: the lock <dataFolder>/merge.lock with pid, host and start time; a held lock
+//         refuses with the holder, a stale one (the pid is gone, or older than 6 h) is taken over. A merge, rebase,
+//         cherry-pick or revert in progress in the main checkout (MERGE_HEAD and so on) refuses the merge with how to
+//         finish or undo it. The track tip must be in baseBranch (git merge-base --is-ancestor) after the merge and before
+//         done, otherwise nothing is marked; the merge commit is stored on the task as merge_commit. Every step is
+//         recorded in <dataFolder>/merge-state-<id>.json; --resume (after Ctrl-C, a crash, a stop after the merge or a
+//         conflict resolved and committed by hand) runs the steps after the merge that have not run: migration push,
+//         gates, base gate, done, fill. lib/mergeLock.js.)
 //        (with a done command: run again first unless the last green run was on the same branch tip; red = a fix round
 //         as in receive, never a merge, exit 1 or 8.)
 //        (after an approved review; run from Bash (merge-track calls sh), with a long timeout: the gates can take minutes. In one

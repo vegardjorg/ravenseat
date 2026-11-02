@@ -85,9 +85,20 @@ describe('queue.mjs receive, resume and merge with a done command', () => {
     );
     fs.mkdirSync(path.join(folder, 'docs'));
     fs.copyFileSync(path.join(ROOT, 'docs', 'mission-template.md'), path.join(folder, 'docs', 'mission-template.md'));
-    // The merge runner: every step green, no real merge, migration push or gate.
+    // The merge runner: every step green, no migration push or gate. The merge step merges for real: cq merge checks
+    // that the track tip is in the base (review 2026-11-02, M6).
     const runner = path.join(folder, 'runner.mjs');
-    fs.writeFileSync(runner, "export default () => ({ code: 0, out: '' });\n");
+    fs.writeFileSync(
+      runner,
+      [
+        "import { spawnSync } from 'node:child_process';",
+        'export default (x) => {',
+        "  if (x.step === 'merge') spawnSync('git', ['-C', process.env.QUEUE_GIT, '-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.invalid', 'merge', '--no-ff', '--no-edit', x.args[1]], { encoding: 'utf8' });",
+        "  return { code: 0, out: '' };",
+        '};',
+        '',
+      ].join('\n'),
+    );
     const env = {
       ...process.env,
       QUEUE_FOLDER: folder,
