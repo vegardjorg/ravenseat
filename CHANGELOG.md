@@ -15,6 +15,11 @@ and `package.json`.
   or `baseGate.commands`). A red base refuses further merges (exit 9, `--force-red-base` is logged), adds a value-10
   fix task `<id>-BASE<n>`, and shows in `cq show`, the pulse and the board status line. Gate rows now carry the sha
   and whether the tree was clean, and `gates.mjs` takes `--timeout-sec`.
+- **Push threshold:** config `push` (`mode` owner or threshold, `minTasks` 10, `warnTasks` 50, `maxAgeHours`) counts
+  merged tasks since the last push. `cq push-check` prints the batch and READY, NOT YET, BLOCKED, LARGE or NOTHING;
+  the push guard asks before a plain base push below `minTasks` or on a red base (it never denies); `cq doctor`
+  checks the push keys and warns about push workflows without `concurrency` `cancel-in-progress` or path filters;
+  the board's status line shows the batch.
 
 ## 0.5.0 (2026-11-02)
 
