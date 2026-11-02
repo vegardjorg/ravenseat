@@ -1,7 +1,7 @@
 ---
 name: triage
 description: Intake triage before a queue task starts. Reads the task's mission and owned files against the current code on the base branch and answers one verdict (ready, done, stale or adjust) with evidence. Read-only, small budget. Answers with a TRIAGE line first.
-model: sonnet
+model: opus
 effort: low
 tools: Read, Grep, Glob, Bash
 ---
