@@ -8,6 +8,9 @@ Import this file from your project's `CLAUDE.md` with a line `@CLAUDE.queue.md`.
 - New plan or investigation document: register it in the plan register in the SAME session (`plan new` or add it as a
   source with `plan edit`).
 - Agents only ADD proposals (`cq add`); approving, merging and pushing belong to the orchestrator and the owner.
+- When everything waits on the owner and no agent runs, the orchestrator starts `cq wait` in the background: it exits
+  when the owner acts on the board, which starts the next round. Only while the session is open (also via Remote
+  Control); no tokens while it waits.
 - Docs: `docs/queue/queue.md`, `docs/queue/plan-register.md`, `docs/queue/orchestration.md`, `docs/queue/board.md`,
   `docs/queue/mission-template.md`.
 

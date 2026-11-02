@@ -113,6 +113,8 @@ const KAP = require('./lib/queueCapacity.js');
 const F = require('./lib/queueFollow.js');
 // The update banner (a newer plugin version, or setup not run after an update). Served to the browser as /queueUpdate.js.
 const U = require('./lib/queueUpdate.js');
+// `cq wait`'s heartbeat (lib/ownerWait.js): "Orchestrator listening" in "Waiting on you" while it is fresh.
+const OW = require('./lib/ownerWait.js');
 // Cancel, decline and edit one task from the detail panel (the rules; queue.mjs cancel / edit write).
 const TE = require('./lib/queueTaskEdit.js');
 // The base gate's verdict (lib/baseHealth.js; cq merge writes base-health.json, the board only reads it).
@@ -466,8 +468,11 @@ function state() {
   const baseHealth = baseHealthNow();
   const pushBatch = pushBatchNow(baseHealth);
   const baseKey = JSON.stringify([baseHealth, pushBatch]);
+  // Is a `cq wait` listening (its heartbeat is fresh)? Read every time, so the line flips without a queue change.
+  const listening = OW.heartbeatState(FOLDER).listening;
   if (
     quick &&
+    quick.listening === listening &&
     quick.mtime === mtime &&
     quick.updateKey === updateKey &&
     quick.baseKey === baseKey &&
@@ -533,6 +538,8 @@ function state() {
     features: FEATURES,
     // The forecast box in the Focus view (lib/queueForecast.js, a fixed seed so the version stays stable).
     forecast: boardForecast(showQueue),
+    // `cq wait` runs and will start an orchestrator turn when the owner acts (lib/ownerWait.js heartbeatState).
+    listening,
   };
   // Each stage gets status and rests; a stage with only rests shows them in the title (the focus line and the cards
   // read the title), not as an empty stage.
@@ -558,6 +565,7 @@ function state() {
     mascotFile,
     budget,
     stat: s?.version ?? null,
+    listening,
     updateKey,
     baseKey,
     version,

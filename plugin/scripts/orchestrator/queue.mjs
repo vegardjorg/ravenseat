@@ -80,6 +80,13 @@
 //                                                                  the decision log)
 //   node scripts/orchestrator/queue.mjs resolutions --mark-logged <question> [...]   (the orchestrator has entered them)
 //   node scripts/orchestrator/queue.mjs question                      (the owner questions: text, type, open or resolved)
+//   node scripts/orchestrator/queue.mjs wait [--debounce <s>] [--timeout <h>] [--since <log-nr>]   (blocks until the owner
+//                                                                  acts: resolve, approve, qa ok/fail, add, or an edit by owner/
+//                                                                  theBoard after the start point; then waits --debounce (30 s)
+//                                                                  for more and prints OWNER ACTED: <action> <ids>; ... (ids
+//                                                                  only), exit 0. TIMEOUT after --timeout (8 h), exit 10. One
+//                                                                  at a time (ALREADY WAITING, exit 0); started with
+//                                                                  run_in_background by the orchestrator loop; cli/wait.mjs)
 //   node scripts/orchestrator/queue.mjs question <id> --text "..." [--type question|condition|lawyer|owner-task]
 //        [--recommendation "..."] [--source "..."]                          (sets one; fields not given are kept)
 //        [--choice "..." --choice "..." (2-4) | --no-choices]           (answer options: each at most 60 characters, no
@@ -519,7 +526,7 @@
 //
 // Exit codes: 0 ok, 1 error, 3 empty queue (state), 4 the daily budget is used up (next, start), 5 night pause (next,
 // start), 6 the orchestrator is in windDown (next, start, fill) or the queue has changed since the preview
-// (--expect-changed), 7 the machine is full (the load guard; next, start, fill).
+// (--expect-changed), 7 the machine is full (the load guard; next, start, fill), 10 TIMEOUT (wait).
 //
 // Task fields (see queueLogic.validate): id, title, domain, class (K|D|D+|U), mission (path to a track description
 // or the text itself), value (1-10, default 5), content_min (min for a K track, default 30), migr_tens (number of
@@ -534,7 +541,7 @@
 
 // The layout: this file is the usage above and the dispatch on the command word below. The code of the commands is in
 // cli/, one module per area (tasks, taskEdit, view, owner, run, merge, cost, doctor, finding, helpers, orchestrator, projects, batch,
-// cloud, plans with planShared, planCheck and planDoc), with the shared state in cli/context.mjs and the shared track
+// cloud, wait, plans with planShared, planCheck and planDoc), with the shared state in cli/context.mjs and the shared track
 // helpers in cli/tracks.mjs. The usage comment stays here: lib/cliHelp.js reads it for `cq help`.
 import fs from 'node:fs';
 import { a, command, CONFIG, CQ, die, HERE, KK, require } from './cli/context.mjs';
@@ -554,6 +561,7 @@ import * as taskEdit from './cli/taskEdit.mjs';
 import * as tasks from './cli/tasks.mjs';
 import * as triage from './cli/triage.mjs';
 import * as view from './cli/view.mjs';
+import * as wait from './cli/wait.mjs';
 
 // ---- Switched-off modules (features in queue.config.json, lib/queueConfig.js) ------------------------------------
 // The commands of a module that is off answer that with exit 0 (not an error: the project chose it). The plan register
@@ -594,6 +602,8 @@ if (command === 'init') {
   owner.cmdResolutions();
 } else if (command === 'question') {
   owner.cmdQuestion();
+} else if (command === 'wait') {
+  wait.cmdWait();
 } else if (command === 'approve') {
   owner.cmdApprove();
 } else if (command === 'forecast') {
@@ -713,7 +723,7 @@ if (command === 'init') {
     'Use: cq <init|add|approve|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow|triage> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow|triage|wait> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

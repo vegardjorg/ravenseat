@@ -56,7 +56,9 @@ the panel shows `cq set <id> cancelled --remark "<why>"` instead. **Waiting on y
 QA (done tasks with the label `visual` that wait for a manual check, `qa ok` / `qa deviation`) and what is stuck.
 An owner question with `choices` shows one button per choice (the recommended one filled); a click answers it through
 the same `POST /api/action { type: 'resolve' }` with `{ choice: <n> }`, and the text in the open answer field goes
-along as a note. "Answer in your own words" keeps the free text answer.
+along as a note. "Answer in your own words" keeps the free text answer. A line under the title says
+"Orchestrator listening" while `cq wait` runs in the orchestrator session (its heartbeat is under 90 s old), so an
+answer starts the next round at once; otherwise "Answers are picked up the next time the orchestrator runs".
 
 The **Plans** workspace is the plan register. **Overview** has one card per area, what is being worked on now and
 what waits on you. **Plan entries** shows the entries as a list, a priority map, a tree map or dependencies, with

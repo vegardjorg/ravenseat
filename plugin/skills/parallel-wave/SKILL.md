@@ -18,7 +18,8 @@ lists in the same turn; on a delivery `cq receive <id>`, then `cq merge <id>`; o
 with a recommendation; `cq resolve`). Skip the batch queue check, reprioritising, plan entries, focus, follow-up
 entries, `external` and cost reports. The fixed rules below (push in batches, pathspec commits, no dev servers) and
 the fix-round rules still apply. Keep only the "Now" part of the handover note. New work from tracks goes in with
-`cq add "<title>" --mission "<text>"`.
+`cq add "<title>" --mission "<text>"`. When a round ends with only owner items left and no agent running, start
+`cq wait` in the background (step 7 of the loop below) so a board answer starts the next round.
 
 ## Fixed rules
 
@@ -45,7 +46,7 @@ the fix-round rules still apply. Keep only the "Now" part of the handover note. 
 Tool: `cq …` (pure logic in `scripts/orchestrator/lib/`). The queue lives in
 `scripts/.queue/queue.json` in the MAIN tree (gitignored) and survives compaction and new sessions. Read it with
 `cq show` (short by default). Main commands: `init`, `add --file|--json`, `show`, `next`, `start <id>`,
-`set <id> <status>`, `edit <id>`, `resolve <question> [--answer "…"]`, `resolutions`, `question`, `state`
+`set <id> <status>`, `edit <id>`, `resolve <question> [--answer "…"]`, `resolutions`, `question`, `wait`, `state`
 (exit 3 = empty), `fill`, `receive`, `merge`, `cost`, `batch`, `projects`, `pick`, `deliver`, `release`, `qa`, `external`,
 `orchestrator`, `plan …`. Full reference: `docs/queue/queue.md`.
 
@@ -93,7 +94,12 @@ word.
    short diagnosis. "simple" findings come with a ready command; "complex" ones go to the owner with a recommendation.
 6. **Reprioritise** after every 5 finished tasks and when the owner answers: split tasks that are too large, adjust
    value.
-7. **Stop** when `cq state` gives exit 3 or the day budget is used: present the owner questions that unlock the
+7. **Wait on the owner:** when a round ends, something waits on the owner (owner questions, proposed tasks, QA) and
+   no agent is running, start `cq wait` with `run_in_background: true` (a no-op when one already runs). It exits with
+   `OWNER ACTED: ...` when the owner answers on the board: run a normal round, starting with
+   `cq resolutions --unlogged`. On `TIMEOUT` (exit 10, after 8 h) start it once more, then stop. It only works while
+   this session is open (also via Remote Control) and costs no tokens while it waits.
+8. **Stop** when `cq state` gives exit 3 or the day budget is used: present the owner questions that unlock the
    rest (sorted by how many tasks each unlocks). `cq orchestrator stop` when the loop stops.
 
 ## Review

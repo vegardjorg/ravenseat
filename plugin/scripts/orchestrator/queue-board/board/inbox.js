@@ -38,6 +38,23 @@ function drawInboxButton() {
   inboxButton.setAttribute('aria-expanded', t.inbox ? 'true' : 'false');
 }
 
+/**
+ * Whether answers given here are picked up now: `cq wait` runs in the orchestrator session and its heartbeat is fresh
+ * (state.listening, lib/ownerWait.js). Only shown when something waits on the owner.
+ */
+function listeningLine(count) {
+  if (!count) return null;
+  const on = t.data?.listening === true;
+  return el(
+    'p',
+    { class: `inbox-listening${on ? ' on' : ''}` },
+    el('span', { class: 'inbox-listening-dot', 'aria-hidden': 'true' }),
+    el('span', {
+      text: on ? 'Orchestrator listening' : 'Answers are picked up the next time the orchestrator runs',
+    }),
+  );
+}
+
 function openInbox() {
   t.selected = null;
   t.setting = null;
@@ -382,7 +399,7 @@ function drawInbox(fresh) {
   for (const id of [...t.selectedSuggestion]) if (!suggestionIds.has(id)) t.selectedSuggestion.delete(id);
   if (t.answerOpen && !d.question.some((s) => s.sp === t.answerOpen)) t.answerOpen = null;
 
-  const parts = [header];
+  const parts = [header, listeningLine(d.count)];
   if (!d.count)
     parts.push(
       el(
