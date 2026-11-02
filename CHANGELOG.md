@@ -12,6 +12,10 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
 - **Safety baseline:** `cq doctor` checks secret files, empty gates, missing CI, lockfiles, `productionBranch` and
   large files; the push guard scans what a base-branch push sends for secrets (gitleaks or built-in patterns) and
   asks before `deployCommands`; `cq setup --ci` offers a GitHub Actions template that runs your `gates.quick`.
+- **`cq wait`:** a background waiter the orchestrator starts when only owner items are left. It exits with
+  `OWNER ACTED: <action> <ids>` when the owner answers, approves, does QA, adds or edits on the board (exit 10 on
+  `TIMEOUT` after 8 h), so a board answer starts the next round. "Waiting on you" on the board says "Orchestrator
+  listening" while it runs.
 
 ### Changed
 - README: parallel chats colliding (push and file conflicts) added to the pain points.
