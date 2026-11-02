@@ -23,6 +23,12 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
 ### Changed
 - `protectedPaths` also covers `.husky/`, lefthook, `.npmrc`, `.yarnrc(.yml)`, `.pnpmfile.cjs`, `.vscode/`,
   `.gitattributes`, and `CLAUDE.md` / `.claude/` at any level, and the match ignores case.
+- **Queue agents are locked down:** tracks, reviewers, helpers, `ask` and `reviewer-area` can no longer push in any
+  form, and may run only an allow-list of queue commands (no merge/set/edit/approve/resolve/undo, no `--allow-guard`,
+  `--force` or `--by owner`). `owned_files`, `shared_patch`, `owner_db` and `migr_block` are locked after start like
+  `done_when`. The push guard reads nested commands (`bash -c`, `pwsh -Command`, `cmd /c`, `&`, `( )`, `$( )`,
+  backticks, `eval`, `git -c alias.*`) and asks or denies when it cannot. Deleting the base on the remote is denied
+  for everyone. A broken config makes the hook ask before push, migrate and deploy.
 
 ## 0.8.0 (2026-11-02)
 

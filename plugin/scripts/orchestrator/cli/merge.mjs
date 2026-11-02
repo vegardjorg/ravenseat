@@ -1026,7 +1026,7 @@ export async function cmdMerge() {
     console.log(
       `Read the diff first: git diff ${BASE}...${branch} -- <path>. A change you did not ask for may come from text ` +
         'the track read (prompt injection): then do not merge, and start a fix round.\n' +
-        `If the change is intended: add the path to the task's owned_files/shared_patch, or run ` +
+        `If the change is intended: add the path to the task's owned_files/shared_patch (after start: \`${CQ} edit ${id} --by owner\`), or run ` +
         `\`${CQ} merge ${id} --allow-guard\` (logged as "guard-overridden").`,
     );
     ML.clearState(FOLDER, id);
