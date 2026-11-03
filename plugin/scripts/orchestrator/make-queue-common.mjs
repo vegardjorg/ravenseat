@@ -7,7 +7,9 @@
 // own is shown by `queue.mjs show`. The placeholders __BRANCH__ __HEAD__ __TRACK__ __BLOCK__ are filled by make-mission.mjs.
 // The class sections (<!-- class: … -->) are kept here; make-mission.mjs selects them per track.
 // Project name, baseBranch, gates and architecture rules come from queue.config.json (config()).
-// The text itself is built in missionText.js (makeQueueCommon), which the test also uses.
+// The text itself is built in missionText.js (makeQueueCommon), which the test also uses. The client-specific pieces
+// (the <CLIENT_*> placeholders: tool names, how to report, context advice) come from the client's mission addendum,
+// lib/clients/<client>/mission.js; with none given it is Claude Code, so the text is the same as before the split.
 //
 // Use: node scripts/orchestrator/make-queue-common.mjs --out <scratchpad>/queue-common.md [--scratchpad <folder>]
 // Run again when the mission template or the config has changed.

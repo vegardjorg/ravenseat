@@ -3,7 +3,8 @@
 //
 // externalCollisions, collisionText, trackFileWarning, externalAdd, externalDone, externalAccept and missingProject
 // (`queue.mjs external ...`), and trackBlock (the task block in the track file and the cloud package). The git side
-// lives in logic/commits.js.
+// lives in logic/commits.js. The client-specific end of the ownership line in trackBlock comes from the client's
+// mission addendum (lib/clients/<client>/mission.js, Claude Code by default).
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
 // Used by queueLogic.js (the facade) and by logic/cloud.js.
@@ -17,6 +18,10 @@ const { norm, fileOverlap, conflict } = require('./conflicts.js');
 const { answerBlock } = require('./questions.js');
 const { COLLISION_STATUSES } = require('./commits.js');
 const { setStatus } = require('./pick.js');
+
+// The default client addendum (Claude Code, today's text) for trackBlock. The client registry (lib/clients/index.js)
+// replaces this lookup once it exists; a caller for another client passes its own missionAddendum.
+const defaultAddendum = (ctx) => require('../clients/claude/mission.js').missionAddendum(ctx);
 
 /**
  * Collisions between work outside the queue and the owned files of tasks that are running, picked, in review or waiting.
@@ -301,14 +306,14 @@ function missingProject(tasks, register) {
  * and the mission text. `queue.mjs trackFile` puts TITLE/BLOCK/BRANCH in front; `cloud-package` puts it under "## The mission".
  * @param {object} o the task
  * @param {object} queue the queue (for answerBlock)
- * @param {{ text: string, warning?: string|null, cloud?: boolean }} v `cloud`: the cloud session has no SendMessage, so
- *   the ownership line says "stop" instead of "report".
+ * @param {{ text: string, warning?: string|null, cloud?: boolean,
+ *   addendum?: (ctx: { cloud: boolean }) => { reportOutside: string } }} v `cloud`: the track runs as a cloud session.
+ *   `addendum`: the client's missionAddendum (lib/clients/<client>/mission.js; default Claude Code), which says how the
+ *   track reports a path someone else owns (Claude: SendMessage, or "stop" in the cloud).
  */
-function trackBlock(o, queue, { text, warning = null, cloud = false } = {}) {
+function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = defaultAddendum } = {}) {
   const list = (x) => (Array.isArray(x) && x.length ? x.join(', ') : 'none');
-  const reportFrom = cloud
-    ? 'if you need to, stop with CLOUD-STOP and say what is needed.'
-    : 'if you need to, report it (SendMessage) instead of editing it.';
+  const reportFrom = addendum({ cloud }).reportOutside;
   const answer = answerBlock(o, queue);
   // The done command (lib/doneCheck.js): the track runs it itself before it reports, the orchestrator runs it again.
   const done = require('../doneCheck.js').doneWhenBlock(o);
