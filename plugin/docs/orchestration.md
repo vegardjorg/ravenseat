@@ -598,7 +598,8 @@ against its sha256 before it can be on, and a changed file turns it off (see
 [Custom helper agents](#custom-helper-agents)).
 
 For a task that has to read content from outside, split reading and writing between two agents (the quarantine rule
-in the mission template): the reader returns a fixed schema, and the writer never sees the raw text.
+in the mission template): the reader returns a fixed schema, and the writer never sees the raw text. This is a
+recommended pattern for the mission author, not a control: nothing in the code enforces the split.
 
 ### Review to gate (`/cq:review`)
 

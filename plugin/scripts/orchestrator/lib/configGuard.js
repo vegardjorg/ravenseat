@@ -14,8 +14,8 @@
 // and migration commands the broken file names are still picked out of its raw text when they can be (best effort),
 // so a project's own "npm run release" is caught too.
 //
-// Pure apart from commandsFromFile (one small file read). Used by: hook-push-guard.mjs (to be wired by its owner; see
-// the comment on answerForHook). Tested in: lib/__tests__/configUnreadable.test.ts.
+// Pure apart from commandsFromFile (one small file read). Used by: hook-push-guard.mjs, through answerForHook.
+// Tested in: lib/__tests__/configUnreadable.test.ts.
 // =============================================================
 
 const fs = require('node:fs');

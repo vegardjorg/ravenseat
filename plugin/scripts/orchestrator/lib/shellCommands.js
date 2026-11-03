@@ -23,7 +23,7 @@
 // Known limits (on purpose, a guard and not a shell): a script file's contents (`bash x.sh`), a git alias stored in
 // the repo config (queue agents get a deny on any git subcommand that is not a known builtin instead), and a command
 // built from string pieces inside an interpreter (`node -e` with "pu"+"sh") are not seen.
-// Tested in lib/__tests__/shellCommands.test.ts and lib/__tests__/pushGuard.test.ts.
+// Tested in lib/__tests__/queueAgentGuard.test.ts (M1, nested shells) and lib/__tests__/pushGuard.test.ts.
 // =============================================================
 'use strict';
 

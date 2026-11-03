@@ -24,8 +24,8 @@
 // Config: secretScan { enabled, maxBytes, timeoutMs } in queue.config.json (lib/queueConfig.js).
 // QUEUE_SECRET_SCANNER=builtin skips gitleaks (tests).
 //
-// Used by: hook-push-guard.mjs (secretQuestion -> scanPush). scanRange takes any from..to range (e.g. a track branch
-// against its merge base at receive). Tested in: lib/__tests__/secretScan.test.ts.
+// Used by: hook-push-guard.mjs (secretQuestion -> scanPush). scanRange takes any from..to range; today only scanPush
+// calls it (a scan at receive is planned, not wired). Tested in: lib/__tests__/secretScan.test.ts.
 // =============================================================
 
 const { spawnSync } = require('node:child_process');
