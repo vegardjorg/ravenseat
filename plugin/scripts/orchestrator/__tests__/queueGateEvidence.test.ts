@@ -11,7 +11,7 @@
 // dropped and the run recorded red (tampered), and the gate command gets neither QUEUE_FOLDER nor GITHUB_TOKEN;
 // (6) the same tip with a changed gate setup, or with only a legacy green entry, runs the gates again; (7) the receive
 // lines say where the gates ran and what they could see; (8) the done command runs scrubbed, and a done command or a gate
-// that changes the git hooks or the executing config is red, with TAMPERED on screen and the reason in the fix brief.
+// that changes the git hooks or the executing config is an owner stop: TAMPERED on screen, no fix round, the queue unchanged.
 // Runs queue.mjs against a temporary queue (QUEUE_FOLDER) and a temporary git repo (QUEUE_GIT) with a worktree for the
 // track branch, as queueDoneCheck.test.ts. Never the main repo or the real queue. The gates are tiny `node -e` scripts.
 // =============================================================
@@ -272,7 +272,9 @@ describe('the gate commands cannot write their own evidence', () => {
     const ev = p.evidence();
     expect(forged(ev)).toBe(false);
     expect(ev.at(-1)).toMatchObject({ sha: p.tip(), ok: false, tampered: true, writer: 'orchestrator' });
-    expect(p.find().gate_check).toMatchObject({ ok: false });
+    // The owner's decision: nothing in the queue changed (__tests__/gitSurfaceBaseline.test.ts).
+    expect(p.find()).not.toHaveProperty('gate_check');
+    expect(p.find().status).toBe('running');
   });
 
   it('the gate gets neither QUEUE_FOLDER nor GITHUB_TOKEN, so the env route writes nothing', () => {
@@ -379,7 +381,7 @@ describe('what receive says about the run, and the done command', () => {
     expect(JSON.parse(fs.readFileSync(seen, 'utf8'))).toEqual({ queue: null, token: null, path: true });
   });
 
-  it('a done command that changes the executing git config is red, and the record says so', () => {
+  it('a done command that changes the executing git config is red and an owner stop, with no record on the task', () => {
     const p = project({});
     setTask(p, { done_when: 'git config core.pager cat' });
     p.report('A', REPORT);
@@ -387,10 +389,11 @@ describe('what receive says about the run, and the done command', () => {
     expect(r.code).toBe(1);
     expect(r.out).toContain('Done command RED');
     expect(r.out).toContain('TAMPERED: git hooks or config changed during the run (git config changed: core.pager)');
-    expect(p.find().done_check).toMatchObject({ ok: false, exit: 0, tampered: true });
+    expect(p.find()).not.toHaveProperty('done_check');
+    expect(p.find().status).toBe('running');
   });
 
-  it('a gate that changes the executing git config: TAMPERED on screen, the reason in the fix brief, red in the store', () => {
+  it('a gate that changes the executing git config: TAMPERED on screen, an owner stop, red in the store', () => {
     const p = project({ gates: { quick: ['git config core.pager cat'] } });
     p.report('A', REPORT);
     const r = p.run('receive', 'A');
@@ -398,6 +401,8 @@ describe('what receive says about the run, and the done command', () => {
     expect(r.out).toContain('Gates RED');
     expect(r.out).toContain('TAMPERED: git hooks or config changed during the run (git config changed: core.pager)');
     expect(p.evidence().at(-1)).toMatchObject({ ok: false, tampered: true, exit: 0 });
-    expect(fs.readFileSync(path.join(p.scratch, 'gates-A.md'), 'utf8')).toContain('core.pager');
+    expect(r.error).toContain('the owner decides');
+    expect(p.find().status).toBe('running');
+    expect(JSON.stringify(p.find())).not.toContain('gate-red');
   });
 });

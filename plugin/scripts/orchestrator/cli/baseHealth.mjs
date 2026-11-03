@@ -26,6 +26,7 @@ const ER = require('./lib/eventRows.js');
 const GE = require('./lib/gateEvidence.js');
 const GV = require('./lib/gateEnv.js');
 const GX = require('./lib/gitExecSurface.js');
+const GB = require('./lib/gitSurfaceBaseline.js');
 
 /** The base gate commands run the merged tracks' code: the same scrubbed environment as the gates (lib/gateEnv.js). */
 const trackCodeSpawn = () => GV.trackCodeSpawn(process.env, { storeFile: GE.storeFile(FOLDER), root: CONFIG.root });
@@ -67,11 +68,12 @@ function trackedChanges() {
  * Runs the base gate commands in the main checkout now and writes the report (the tail only) to
  * `<folder>/base-health-<sha>.md`. Warns when the checkout had or got tracked changes: the commands then saw files that
  * are not on the tip, and the checkout is left as it is (the queue never cleans up someone's changes). A change to the
- * git hooks or the executing config during the check makes it red (lib/gitExecSurface.js).
+ * git hooks or the executing config during the check, or a difference from the accepted baseline, makes it red with
+ * `run.tampered` naming it (lib/gitSurfaceBaseline.js): the caller stops for the owner and records no verdict.
  * @returns {{ run: object, file: string }}
  */
 export function runCheckNow({ tip, folder, cause = null }) {
-  const surface = GX.readSurface(GIT_ROOT);
+  const watch = GB.watch(FOLDER, GIT_ROOT);
   const before = trackedChanges();
   if (before)
     console.log(`WARNING: the main checkout ${GIT_ROOT} has uncommitted changes; the base gate also sees them (they are not on ${BASE}).`);
@@ -94,10 +96,16 @@ export function runCheckNow({ tip, folder, cause = null }) {
       flakyLines({ tip, run, causeId: cause?.task ?? null, source: 'base gate' });
     }
   }
-  const tamperReason = GX.surfaceChangeReason(surface, GX.readSurface(GIT_ROOT));
+  const tamperReason = watch.finish();
   if (tamperReason) {
     console.log(`TAMPERED: ${tamperReason}. ${GX.INSPECT}.`);
-    run = { ...run, ok: false, failed: run.failed ?? 'git hooks or config changed', tail: [...run.tail, `${tamperReason}. ${GX.INSPECT}`] };
+    run = {
+      ...run,
+      ok: false,
+      tampered: tamperReason,
+      failed: run.failed ?? 'git hooks or config changed',
+      tail: [...run.tail, `${tamperReason}. ${GX.INSPECT}`],
+    };
   }
   const after = trackedChanges();
   if (after !== before)
@@ -193,7 +201,7 @@ function fileFlaky({ commands, tip, causeId = null, source }) {
  * run recorded for `tip` (gates.mjs --evidence; all the quick gates when none is found) once more on the same sha.
  * Green: the lines and the record, and the green run for the verdict ({ run }). Red again or off: null (the caller
  * freezes as before). A tampered run is never flaky: its commands may all be green, and a rerun would turn the red that
- * says so into green. The same goes when the rerun itself changes the git hooks or config.
+ * says so into green. The rerun itself changing the git hooks or config: { tampered: reason } (the caller stops for the owner).
  */
 export function flakyRecheck({ tip, causeId = null }) {
   if (!BASE_SETUP.enabled || !BASE_SETUP.flakyRerun || !tip) return null;
@@ -201,13 +209,13 @@ export function flakyRecheck({ tip, causeId = null }) {
   const entry = gateRowsNow().filter((e) => e?.sha === tip && e.kind === 'quick').at(-1);
   if (entry?.tampered) return null;
   const failed = entry?.failed?.length ? entry.failed : quick;
-  const surface = GX.readSurface(GIT_ROOT);
+  const watch = GB.watch(FOLDER, GIT_ROOT);
   const again = rerunFailed({ tip, commands: failed });
   if (!again) return null;
-  const tamperReason = GX.surfaceChangeReason(surface, GX.readSurface(GIT_ROOT));
+  const tamperReason = watch.finish();
   if (tamperReason) {
     console.log(`TAMPERED: ${tamperReason}. ${GX.INSPECT}.`);
-    return null;
+    return { tampered: tamperReason };
   }
   const run = BH.flakyResult({ first: { durationSec: null }, rerun: again, firstFailed: failed });
   flakyLines({ tip, run, causeId, source: 'quick gates after a merge' });
@@ -379,6 +387,10 @@ export function guardBeforeMerge({ id, force, folder }) {
         'checking it before the merge.',
     );
     const check = runCheckNow({ tip, folder });
+    // Never a red verdict with a base fix task for an agent: the owner decides. The verdict stays unknown, so the next
+    // merge checks again.
+    if (check.run.tampered)
+      die(GB.tamperedMessage({ what: 'the base check', reason: check.run.tampered, cq: CQ, again: `${CQ} merge ${id}` }));
     const v = recordVerdict({ tip, ok: check.run.ok, run: check.run, file: check.file, note: `checked before merging ${id}` });
     if (!check.run.ok) for (const l of redLines({ entry: v.entry, run: check.run, fix: v.fix })) console.log(l);
     state = readHealth();

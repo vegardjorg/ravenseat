@@ -9,7 +9,7 @@
 //
 // Protected (PROTECTED):
 //   - gate-evidence.json and its temporary files (gate-evidence.json.<n>.tmp), ANYWHERE: no track needs such a file.
-//   - queue.json and base-health.json in the data folder only (a project may have its own queue.json elsewhere).
+//   - queue.json, base-health.json and git-surface.json in the data folder only (a project may have its own queue.json elsewhere).
 // Guarded agents: track and track-d always, plus the given types (trackGuard.queueAgentTypes(): the reviewers and
 // helpers). The orchestrator (no agent_type) and other agent types are never stopped.
 //
@@ -26,6 +26,7 @@ const PROTECTED = Object.freeze([
   { re: /^gate-evidence\.json(?:\..*)?$/i, anywhere: true, what: 'the gate evidence store', how: 'only gates.mjs writes it (cq gates)' },
   { re: /^queue\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the queue', how: 'change it with the cq commands (cq report, cq status ...)' },
   { re: /^base-health\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the base health', how: 'only cq merge and the base gate write it' },
+  { re: /^git-surface\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the accepted git baseline', how: 'only the owner changes it (cq surface accept --by owner)' },
 ]);
 
 /** Always guarded, whatever the config says. */

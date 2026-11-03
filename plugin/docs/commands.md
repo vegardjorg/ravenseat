@@ -18,6 +18,8 @@ cq decide                    # everything waiting on you, most impact first (/cq
 cq conflicts                 # predicted merge conflicts between running tracks and the base
 cq ask <ID> "<question>"     # ask about an earlier track without resuming it (/cq:ask)
 cq doctor                    # read-only health check: node, hooks, config, state, worktrees, safety baseline
+cq surface                   # git hooks and config that run code, against what was accepted; changes nothing
+cq surface accept --by owner # accept the current state (after installing a hook tool, changing git config)
 cq helpers                   # helper agents: on/off and what they cost
 cq helpers add <file.md>     # a custom helper: copied, scanned, off until approved
 cq plan show                 # plan register

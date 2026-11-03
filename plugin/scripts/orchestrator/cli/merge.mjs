@@ -37,6 +37,32 @@ import { logEvent } from './events.mjs';
 const ER = require('./lib/eventRows.js');
 const CP = require('./lib/conflictPredict.js');
 const AT = require('./lib/logic/attempt.js');
+const GB = require('./lib/gitSurfaceBaseline.js');
+
+// ---- The git hooks and config against the accepted baseline (lib/gitSurfaceBaseline.js) -------------------------------
+
+/**
+ * The stop at the top of receive and merge, before any git command that could run a hook: records the baseline on first
+ * use, and on a difference stops (exit 1, nothing changed: no status, no blocker, no fix round). It is sticky until the
+ * owner removes the difference or accepts it; there is no override flag.
+ */
+function stopOnDrift(again, extra = () => []) {
+  GB.ensure(FOLDER, GIT_ROOT);
+  const detail = GB.driftDetail(FOLDER, GIT_ROOT);
+  if (detail) die([GB.driftMessage({ ...detail, cq: CQ, again }), ...extra()].join('\n'));
+}
+
+/**
+ * The reason a red gates.mjs run was tampered, or null: the entry it recorded for this task after `since` (also one for
+ * another sha: a gate that moved HEAD), or, with no such entry, a surface that now differs from the baseline.
+ */
+function gatesTamperReason({ id, since }) {
+  const GE = require('./lib/gateEvidence.js');
+  const own = GE.readStore(GE.storeFile(FOLDER)).entries.filter((e) => e?.track === id && Date.parse(e.time) >= since - 1000);
+  const entry = own.at(-1);
+  if (entry?.tampered) return entry.tamper_reason ?? 'the evidence store changed during the run';
+  return GB.driftReason(FOLDER, GIT_ROOT);
+}
 
 // ---- The done command (task field done_when, lib/doneCheck.js): receive and merge ---------------------------------
 
@@ -47,7 +73,8 @@ const AT = require('./lib/logic/attempt.js');
  * must run on the track's own files, and the queue never creates or removes worktrees here (the shared links make a
  * delete dangerous, see cleanup-worktree.mjs).
  * The command runs the track's code, so it gets the same scrubbed environment as the gates (lib/gateEnv.js), and a
- * change to the git hooks or the executing config during it makes it red (lib/gitExecSurface.js).
+ * change to the git hooks or the executing config during it, or a difference from the accepted baseline, makes it red
+ * with `record.tampered` (lib/gitSurfaceBaseline.js): the callers stop for the owner, no fix round.
  * @returns {null | { ok: boolean, run: object, record: object, file: string, cwd: string }}
  */
 function runDoneCommand(o, { branch, scratch, step }) {
@@ -72,13 +99,13 @@ function runDoneCommand(o, { branch, scratch, step }) {
     console.log(`WARNING: ${cwd} has uncommitted changes; the done command also sees them (they are not on ${branch}).`);
   const setup = DC.doneCheckSetup(CONFIG);
   console.log(`DONE COMMAND (${step}) for ${o.id} in ${cwd}: ${command}  (time budget ${setup.timeoutSec} s)`);
-  const surface = GX.readSurface(cwd);
+  const watch = GB.watch(FOLDER, cwd);
   const spawn = GV.trackCodeSpawn(process.env, {
     storeFile: require('./lib/gateEvidence.js').storeFile(FOLDER),
     root: CONFIG.root,
   });
   const run = DC.runDoneWhen({ command, cwd, ...setup, spawn });
-  const tamperReason = GX.surfaceChangeReason(surface, GX.readSurface(cwd));
+  const tamperReason = watch.finish();
   if (tamperReason) {
     run.ok = false;
     run.tail.push(`${tamperReason}. ${GX.INSPECT}`);
@@ -154,7 +181,8 @@ function doneCommandRed(id, check, { scratch, what = 'done command' }) {
  * newer than the run's start, so an older entry can never stand in for a run that recorded nothing.
  * Refused (exit 1, nothing changed), as for the done command: no worktree has the branch, the worktree is not at the
  * branch tip, or it has uncommitted tracked changes (a green run would then not be bound to the tip).
- * @returns {{ status: 'off' } | { status: 'green'|'red', record: object, check?: { run: object, file: string } }}
+ * A red run that was tampered carries `tampered` (the reason): cq receive stops for the owner instead of a fix round.
+ * @returns {{ status: 'off' } | { status: 'green'|'red', record: object, tampered?: string, check?: { run: object, file: string } }}
  */
 function receiveGates(o, { branch, scratch, reuse = true }) {
   const GE = require('./lib/gateEvidence.js');
@@ -247,6 +275,7 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
   } catch {
     /* no log file: the output */
   }
+  const tampered = gatesTamperReason({ id: o.id, since: t0 });
   // Only the tail goes into the fix brief (as for the done command: a secret printed early is not copied around).
   const tail = DC.tailOf(text, DC.doneCheckSetup(CONFIG).tailLines);
   const file = path.join(folder, `gates-${o.id}.md`);
@@ -275,6 +304,7 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
       ok: false, kind: 'quick', tip, at: new Date().toISOString(), ran: true, exit: r.status, duration_s: durationSec, file,
       ...(entry?.id ? { evidence_id: entry.id } : {}),
     },
+    ...(tampered ? { tampered } : {}),
     check: { run: { tail, exit: r.status }, file },
   };
 }
@@ -288,6 +318,8 @@ export function cmdReceive() {
   if (!o0) die(`Unknown task ${id}`);
   if (!['running', 'picked', 'review'].includes(o0.status))
     die(`${id} has status ${o0.status}; receive applies to running, picked or review.`);
+  // Before any git command and any change: a difference in what runs at the next git command is the owner's to settle.
+  stopOnDrift(`${CQ} receive ${id}`);
   const scratch = scratchpadFor(o0.scratchpad ?? null);
   if (!scratch) die('receive needs --scratchpad <folder> (or QUEUE_SCRATCHPAD).');
   const branch = o0.branch ?? branchFor(id);
@@ -355,6 +387,10 @@ export function cmdReceive() {
   if (result?.gates != null)
     console.log(`The track's RESULT gates=${result.gates} is self-reported (informational only; receive checks the tip itself).`);
   const gateCheck = result?.status === 'PARTIAL' ? { status: 'off' } : receiveGates(o0, { branch, scratch });
+  // A run that changed what runs at the next git command (or the evidence store) is the owner's decision: no red path,
+  // no blocker, no fix round, no attempt closed. The rerun hits the drift stop while the hook is there, else runs again.
+  if (gateCheck.tampered)
+    die(GB.tamperedMessage({ what: 'the check run at receive', reason: gateCheck.tampered, cq: CQ, again: `${CQ} receive ${id}` }));
   const recordAttempt = (o, { gateRed = false, doneRed = false } = {}) => {
     if (!o.attempts?.length) return;
     syncAttempts(o, attemptLog);
@@ -392,6 +428,8 @@ export function cmdReceive() {
   // The done command (lib/doneCheck.js), BEFORE any reviewer is started: a red one is not a delivery but a fix round.
   // A PARTIAL track is known to be unfinished (a context continuation), so the command is not run for it.
   const doneCheck = result?.status === 'PARTIAL' ? null : runDoneCommand(o0, { branch, scratch, step: 'receive' });
+  if (doneCheck?.record.tampered)
+    die(GB.tamperedMessage({ what: 'the done command', reason: doneCheck.record.tamper_reason, cq: CQ, again: `${CQ} receive ${id}` }));
   if (doneCheck && !doneCheck.ok) {
     edit((queue) => {
       const o = queue.tasks.find((x) => x.id === id);
@@ -622,6 +660,16 @@ export async function cmdMerge() {
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
   const allowGuard = a.includes('--allow-guard');
   if (!read().tasks.some((x) => x.id === id)) die(`Unknown task ${id}`);
+  // Before any git merge step, and also for --resume: the merge itself is what would run a planted hook. A merge cut off
+  // part-way is still named, so whoever settles this knows what is left.
+  stopOnDrift(`${CQ} merge ${id}${resume ? ' --resume' : ''}`, () => {
+    const cut = ML.readState(FOLDER, id);
+    const busy = ML.gitInProgress(gitPathOf);
+    return [
+      ...(cut ? [`A merge of ${id} was cut off earlier (steps done: ${cut.steps_done?.join(', ') || 'none'}): when this is settled, ${CQ} merge ${id} --resume goes on.`] : []),
+      ...(busy.length ? [`git also has an unfinished ${busy.map((b) => b.kind).join(', ')} in ${GIT_ROOT}. Settle the above first: git commit there runs the hooks.`] : []),
+    ];
+  });
   // One merge at a time (review 2026-11-02, M8), before anything reads git or the queue for the merge.
   const lockCtl = takeMergeLock(id, { resume });
   const o = read().tasks.find((x) => x.id === id);
@@ -715,6 +763,8 @@ export async function cmdMerge() {
       console.log(`Done command green at ${String(tipNow).slice(0, 12)} (${last.step}, ${last.at}); not run again.`);
     else {
       const check = runDoneCommand(o, { branch, scratch, step: 'merge' });
+      if (check.record.tampered)
+        die(GB.tamperedMessage({ what: 'the done command', reason: check.record.tamper_reason, cq: CQ, again: `${CQ} merge ${id}` }));
       edit((queue) => {
         const x = queue.tasks.find((y) => y.id === id);
         x.done_check = check.record;
@@ -900,12 +950,26 @@ export async function cmdMerge() {
     settleBase({ ok: true, skipped: reason });
     return { code: 0, out: `skipped, recorded green: ${reason}` };
   };
+  /**
+   * A run after the merge changed what runs at the next git command: the owner's decision, not a base fix task for an
+   * agent. No verdict is recorded (the next merge checks the base first) and no blocker opened; the merge state stays,
+   * so --resume runs what is left once the owner has settled it.
+   */
+  const ownerStop = (step, what, reason) => {
+    mstate.steps_done = ML.markBefore(plan.step, mstate.steps_done, step);
+    mstate.current = null;
+    mstate.stopped = { step, message: 'owner stop: git hooks, config or the evidence store changed', at: new Date().toISOString() };
+    saveState();
+    lockCtl.onSignal = null;
+    die(GB.tamperedMessage({ what, reason, cq: CQ, again: `${CQ} merge ${id} --resume` }));
+  };
   /** The `base-gate` step: the base gate commands on the merge commit, in the main checkout (or the skip rule). */
   const baseGateStep = () => {
     if (!mergeCommit) return { code: 1, out: 'no merge commit to check' };
     const sk = skipNow();
     if (sk.skip) return skipped(sk.reason);
     const check = runCheckNow({ tip: mergeCommit, folder: logFolder, cause: { task: id, merge_commit: mergeCommit } });
+    if (check.run.tampered) ownerStop('base-gate', 'the base check after the merge', check.run.tampered);
     settleBase({ ok: check.run.ok, check: check.run, file: check.file });
     return {
       code: check.run.ok ? 0 : 1,
@@ -958,6 +1022,7 @@ export async function cmdMerge() {
       }
     }
     const [cmd, args, shell = false] = command(x);
+    const stepStarted = Date.now();
     let r;
     if (injected) {
       r = injected({ ...x, cmd, args });
@@ -1006,9 +1071,14 @@ export async function cmdMerge() {
       mergeCode = r.code;
       mergeOut = r.out;
     }
+    if (x.step === 'gates' && r.code !== 0) {
+      const tampered = gatesTamperReason({ id, since: stepStarted });
+      if (tampered) ownerStop('gates', 'the quick gates after the merge', tampered);
+    }
     if (x.step === 'gates' && BASE_SETUP.enabled && mergeCommit) {
       // The flaky check (lib/baseHealth.js): the failed quick gates once more on the same sha before the base freezes.
       const flaky = r.code !== 0 ? flakyRecheck({ tip: mergeCommit, causeId: id }) : null;
+      if (flaky?.tampered) ownerStop('gates', 'the rerun of the quick gates after the merge', flaky.tampered);
       if (flaky) {
         const list = flaky.run.flaky.join(' ; ');
         r = { code: 0, out: `${r.out}\nflaky: green on a rerun of ${list}` };

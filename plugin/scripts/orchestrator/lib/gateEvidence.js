@@ -344,6 +344,9 @@ function tamperReason(command) {
   const c = String(command ?? '');
   if (c.includes(FILE_NAME.replace('.json', '')))
     return `the gate evidence (${FILE_NAME}) is written only by the orchestrator's gate runs; a queue agent may not touch it`;
+  // The accepted git baseline (lib/gitSurfaceBaseline.js): removing it would make the next first use accept a planted hook.
+  if (c.includes('git-surface'))
+    return "the accepted git baseline (git-surface.json) is the owner's (cq surface accept --by owner); a queue agent may not touch it";
   // The gate runner itself (gates.mjs, `cq gates`, `queue.mjs gates`), not any command that mentions the word.
   const gateRun = /\bgates\.mjs\b/.test(c) || /\b(cq|cq\.mjs|queue\.mjs)["']?\s+gates\b/.test(c);
   if (gateRun && /(^|\s)--(evidence|cwd)\b/.test(c))

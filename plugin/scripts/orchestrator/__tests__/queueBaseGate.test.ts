@@ -487,7 +487,7 @@ describe('the base gate and the trust rules', () => {
     expect(mergedAfter('O', (entries, sha) => entries.map((e) => (e.sha === sha ? { ...e, setup_hash: 'another setup' } : e)))).toEqual(['merge', 'gates', 'done']);
   }, 240_000);
 
-  it('a gate run that plants a hook is not flaky: the base freezes, although a rerun would be green', () => {
+  it('a gate run that plants a hook after the merge is not flaky and no fix task: the owner stops it, and --resume goes on', () => {
     // Plants the hook once, and only where the track's file is: red the first time (tampered), every command green.
     const script =
       "const cp = require('child_process'), fs = require('fs'), path = require('path');\n" +
@@ -502,20 +502,35 @@ describe('the base gate and the trust rules', () => {
     p.g(['commit', '-q', '-m', 'the gate']);
     p.track('A', { 'lib/plant.js': 'exports.p = 1;\n' });
     const m = p.run('merge', 'A', '--without-fill');
-    expect(m.out).toContain('BASE RED');
+    expect(m.code).toBe(1);
+    expect(m.error).toContain('the owner decides');
+    expect(m.error).toContain('hook added: post-rewrite');
+    expect(m.error).toContain('merge A --resume');
     expect(m.out).not.toContain('FLAKY');
-    expect(p.health().current).toMatchObject({ tip: p.tip(), status: 'red' });
+    expect(m.out).not.toContain('BASE RED');
+    // No verdict and no base fix task for an agent; the task stays in review with no blocker.
+    expect(p.queue().tasks.map((t) => t.id)).toEqual(['A']);
+    expect(p.find('A')?.status).toBe('review');
+    expect(JSON.stringify(p.find('A'))).not.toContain('gate-red');
     expect(readEntries(p).at(-1)).toMatchObject({ sha: p.tip(), ok: false, exit: 0, tampered: true });
-    expect(fs.readFileSync(p.health().current.tail_file, 'utf8')).toContain('hook added: post-rewrite');
+    // The drift stop holds the resume until the owner has decided; accepted, the resume finishes.
+    const held = p.run('merge', 'A', '--resume', '--without-fill');
+    expect(held.code).toBe(1);
+    expect(held.error).toContain('surface accept --by owner');
+    expect(p.run('surface', 'accept', '--by', 'owner').code).toBe(0);
+    const on = p.run('merge', 'A', '--resume', '--without-fill');
+    expect(on.code).toBe(0);
+    expect(p.find('A')?.status).toBe('done');
   });
 
-  it('a base gate that changes the executing git config is red, with no flaky rerun', () => {
+  it('a base gate that changes the executing git config is an owner stop, with no flaky rerun and no fix task', () => {
     const p = project({ gates: { quick: [CHECK] }, baseGate: { commands: ['git config core.pager cat'] } });
     p.track('A', { 'lib/b.js': 'exports.b = 1;\n' });
     const m = p.run('merge', 'A', '--without-fill');
     expect(m.out).toContain('TAMPERED: git hooks or config changed during the run (git config changed: core.pager)');
     expect(m.out).toContain('Base gate RED');
     expect(m.out).not.toContain('once more on the same sha');
-    expect(p.health().current).toMatchObject({ status: 'red' });
+    expect(m.error).toContain('the owner decides');
+    expect(p.queue().tasks.map((t) => t.id)).toEqual(['A']);
   });
 });

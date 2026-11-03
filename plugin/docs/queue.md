@@ -346,6 +346,32 @@ While off, every `follow` command answers "Follow is off (features.follow in que
   `TZ=America/New_York`) for Claude Code.
 - Agents may only ADD proposals. Approval, merging and pushing belong to the orchestrator and the owner.
 
+### Git hooks and config
+
+A git hook, and git settings such as an alias or `core.sshCommand`, run code at the next git command, with your
+credentials. Automated work in the repository runs as the same user, so it can write them. The queue therefore keeps
+what was last accepted (`git-surface.json` in the data folder: hook hashes and setting names with hashed values, never
+the values), recorded the first time `cq fill`, `start`, `resume`, `receive` or `merge` runs.
+
+`cq receive`, `cq merge` and the push check compare against it before they run anything. If something differs they stop
+and change nothing. **This usually means nothing is wrong**: you installed husky or lefthook, updated one, or changed a
+global alias. What to do:
+
+```
+cq surface                     # each difference: the full path of a hook, the file a setting comes from
+cq surface accept --by owner   # you made the change: one command, then run again
+```
+
+If you did not make the change, remove it (the hook file, or the setting with `git config --unset`) and run again. A
+hook tool's name in the output (`looks like a hook manager`) is a hint and accepts nothing. There is no override flag;
+`cq doctor` warns about the same difference. A global setting stops the queue like a local one, because a program can
+write that file too.
+
+`TAMPERED` means something else: a check that ran the code under review changed these things *during* its run. That is
+also your decision and never goes back to an agent as a fix round. The same two ways out apply. The limits: this detects,
+it does not prevent. A change undone before the next check is not seen, a process that outlives its run can act later,
+and git commands you or a script run by hand are not stopped.
+
 ## Configuration
 
 Project-specific values live in `queue.config.json` at the project root (see `queue.config.example.json`): base branch,
