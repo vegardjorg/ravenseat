@@ -30,7 +30,7 @@ let trackBranchCache;
  * The track branch the cwd is on (`<branchPrefix><id>`), or null. A track agent runs cq from its worktree, so this is
  * what tells a track's edit apart from the owner's, whatever --by says. Asked only when a locked field is touched.
  */
-function trackBranchHere() {
+export function trackBranchHere() {
   if (trackBranchCache !== undefined) return trackBranchCache;
   let branch = '';
   try {
@@ -161,6 +161,8 @@ export function cmdEdit() {
     'external',
     'external_name',
     'done_outside_queue',
+    // The attempts are the queue's own record of what ran (lib/logic/attempt.js); only cq attempt close changes one by hand.
+    'attempts',
   ])
     delete field[f];
   editLogged('edit', (queue) => {

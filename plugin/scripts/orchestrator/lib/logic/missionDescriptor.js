@@ -29,7 +29,8 @@ function effortFor(cls) {
 
 /**
  * The mission descriptor for a track. The optional fields (worktree, model, sandbox, attempt_id) are left out when
- * they are not given, so the descriptor only says what is known. `attempt_id` comes with the attempt model (phase 1).
+ * they are not given, so the descriptor only says what is known. `attempt_id` is the attempt that start, fill and resume
+ * reserved (lib/logic/attempt.js); the Claude format does not print it.
  * @param {object} task the queue task (id, class, branch, migr_block ...)
  * @param {{ client: string, trackId?: string, role?: string, branch?: string|null, promptFile?: string|null, baseSha?: string|null,
  *   worktree?: string|null, isNew?: boolean, warning?: boolean, model?: string|null, sandbox?: string|null,
