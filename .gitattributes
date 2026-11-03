@@ -3,3 +3,5 @@ plugin/bin/cq text eol=lf
 plugin/bin/*.cmd text eol=crlf
 # Scripts with a shebang must keep LF endings, also in Windows checkouts (autocrlf): vitest cannot parse "#!...\r".
 *.mjs text eol=lf
+# Test snapshots are compared byte for byte: keep LF in every checkout (autocrlf would turn them into CRLF).
+**/__snapshots__/** text eol=lf
