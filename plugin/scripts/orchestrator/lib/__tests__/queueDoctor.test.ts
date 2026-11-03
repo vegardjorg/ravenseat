@@ -83,6 +83,20 @@ function snapshot(dir: string): Record<string, string> {
 }
 
 describe('cq doctor', () => {
+  it('a live holder of an old lock is not called stale, and the fix names cq unlock', () => {
+    const p = project({ config: { baseBranch: 'main', loadGuard: { minFreeMemoryPct: null } } });
+    const lock = path.join(p.data, '.lockState');
+    fs.mkdirSync(lock);
+    const owner = { generation: 1, pid: process.pid, nonce: 'n', hostname: os.hostname(), started: new Date().toISOString() };
+    fs.writeFileSync(path.join(lock, 'owner-1.json'), JSON.stringify(owner));
+    const old = new Date(Date.now() - 5 * 60_000);
+    fs.utimesSync(lock, old, old);
+    const r = p.run();
+    expect(r.out).not.toMatch(/stale lock/);
+    expect(r.out).toMatch(/^WARN {2}lock {7}lock .*\.lockState held for \d+ s by a live process/m);
+    expect(r.out).toMatch(/unlock --force --by owner/);
+  });
+
   it('a healthy project: no FAIL, exit 0, every line OK or WARN, and nothing is written', () => {
     const p = project({ config: { baseBranch: 'main', loadGuard: { minFreeMemoryPct: null } } });
     const before = snapshot(p.root);

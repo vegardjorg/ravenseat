@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 import {
-  a, autoAcceptContext, autoAcceptRules, CQ, cut, die, edit, GIT_ROOT, L, positional, PR, read, require, val, WIDTH,
+  a, autoAcceptContext, autoAcceptRules, CQ, cut, die, edit, FOLDER, GIT_ROOT, L, positional, PR, read, require, val, WIDTH,
 } from './context.mjs';
 
 // The intake triage's owner questions (close, keep, rewrite) are acted on in resolve.
@@ -308,8 +308,10 @@ export function cmdQa() {
       }
       const k = L.evidenceCommand(o);
       if (k.error) die(k.error);
+      // The evidence command runs what the track delivered: the same scrubbed environment as the gates (lib/gateEnv.js).
       const s = spawnSync(k.command, {
         cwd: GIT_ROOT,
+        env: require('./lib/gateEnv.js').trackCodeEnv(process.env, { storeFile: require('./lib/gateEvidence.js').storeFile(FOLDER), root: GIT_ROOT }).env,
         shell: true,
         encoding: 'utf8',
         maxBuffer: 1 << 28,

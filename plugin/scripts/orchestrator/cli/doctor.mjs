@@ -29,6 +29,7 @@
 // =============================================================
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -37,6 +38,7 @@ import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 import { REPO_CHECKS } from './doctorRepo.mjs';
 
 const BOARD = require('./lib/queueBoard.js');
+const QL = require('./lib/queueLock.js');
 const PB = require('./lib/pushBatch.js');
 const TW = require('./lib/testWeakening.js');
 const CP = require('./lib/conflictPredict.js');
@@ -264,19 +266,20 @@ function checkState() {
 
 /** A lock left behind by a process that died. */
 function checkLock() {
-  let st;
-  try {
-    st = fs.statSync(LOCK);
-  } catch {
-    return [ok('lock', 'no lock held')];
-  }
-  const age = Date.now() - st.mtimeMs;
-  if (age <= STALE_LOCK_MS) return [ok('lock', 'a command holds the lock right now')];
+  const state = QL.readState(LOCK);
+  if (!state) return [ok('lock', 'no lock held')];
+  const seconds = Math.round(state.ageMs / 1000);
+  // The same rule withLock uses: a live holder on this machine is never taken over, however old its lock is.
+  const owner = state.tokens[0]?.owner ?? null;
+  const verdict = QL.assessLock({ owner, ageMs: state.ageMs, hostname: os.hostname(), isAlive: QL.pidAlive });
+  if (verdict.action === 'take_over')
+    return [warn('lock', `stale lock ${LOCK} (${seconds} s old)`, 'the next writing command takes it over')];
+  if (state.ageMs <= STALE_LOCK_MS) return [ok('lock', 'a command holds the lock right now')];
   return [
     warn(
       'lock',
-      `stale lock ${LOCK} (${Math.round(age / 1000)} s old)`,
-      'the next writing command removes it; if commands hang, check that no cq process runs, then delete the folder',
+      `lock ${LOCK} held for ${seconds} s by a live process (${owner ? QL.holderText(state.tokens[0]) : 'unknown'})`,
+      `${CQ} unlock shows the holder; if it hangs, stop it, or release the lock with ${CQ} unlock --force --by owner`,
     ),
   ];
 }
