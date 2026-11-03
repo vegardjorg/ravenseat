@@ -18,7 +18,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import {
-  a, autoCleanFocus, BASE, branchFor, branchInfo, CE, CH, CONFIG, CQ, cut, die, edit, focusCleanOut, git, HERE, L, MIGR,
+  a, autoCleanFocus, BASE, branchFor, branchInfo, CE, CH, CONFIG, CQ, cut, die, edit, focusCleanOut, FOLDER, git, GIT_ROOT, HERE, L, MIGR,
   missionFile, parallelWarning, positional, pulseCursor, read, readCursor, require, TK, uncommittedPaths, val, values,
   WIDTH, writeExternalWarning,
 } from './context.mjs';
@@ -28,6 +28,9 @@ import {
 } from './tracks.mjs';
 import { askedLine, triageReason, triageState, writeTriageSteps } from './triage.mjs';
 import { detectPushes, logEvent, logLoad } from './events.mjs';
+
+// The accepted git baseline: recorded silently on first use, before anything starts (lib/gitSurfaceBaseline.js).
+const GB = require('./lib/gitSurfaceBaseline.js');
 
 const ER = require('./lib/eventRows.js');
 // The client-neutral mission descriptor and the client adapters: fill, start and resume build the descriptor first,
@@ -102,6 +105,7 @@ export function cmdNext() {
 export function cmdStart() {
   const id = a[1];
   if (!id) die('start <id>');
+  GB.ensure(FOLDER, GIT_ROOT);
   // The usage is read before the lock (the log is large enough that this should not happen with the queue file locked). The same applies to
   // git status (uncommitted files in the main tree).
   const usage = dailyUsageFor(read());
@@ -207,6 +211,7 @@ export function cmdFill() {
   const scratch = scratchpadFor();
   if (!scratch)
     die('fill --scratchpad <folder> (or QUEUE_SCRATCHPAD): the prompt files are written there.');
+  GB.ensure(FOLDER, GIT_ROOT);
   const max = val('--max') != null ? Number(val('--max')) : Infinity;
   if (!(max >= 0)) die('--max must be a number >= 0');
   const ids = values('--ids');
@@ -501,6 +506,7 @@ export function cmdResume() {
   const use =
     'resume <id> [--reason fix|context] [--round N] [--findings-file <file>] [--from <reviewer,...>] [--scratchpad <folder>]';
   if (!id || !L.RESUME_REASONS.includes(reason)) die(use);
+  GB.ensure(FOLDER, GIT_ROOT);
   // --from: the reviewer types whose findings caused this fix round (the reviewer hit rate, lib/eventStatistics.js).
   // Saved in `resumed` and the fixRound row; a name that is not a known reviewer type is kept, with a warning.
   const fromList = [...new Set(String(val('--from') ?? '').split(',').map((x) => x.trim()).filter(Boolean))];

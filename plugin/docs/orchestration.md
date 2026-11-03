@@ -389,6 +389,10 @@ The base gate (`baseGate` in `queue.config.json`, `lib/baseHealth.js`) records t
   check, for example a commit by hand): the check runs first. Red: `STOP`, exit 9, nothing done. Allowed while red:
   the open base fix task itself, and `cq merge <id> --force-red-base` on the owner's word (logged in the time log as
   `base-red-overridden`).
+- **Git hooks or config changed.** A check that changes what runs at the next git command gets no red verdict and no
+  fix task: `cq merge` stops for the owner, and `--resume` goes on once it is settled. The same goes for `cq receive`.
+  As orchestrator, pass the message to the owner and wait: `cq surface accept --by owner` is theirs to run or to
+  say (see [queue.md](queue.md), Git hooks and config). Never accept a difference on your own judgement.
 - **Red after a merge.** The merge stays (never reverted automatically; the message gives the `git revert -m 1 <sha>`
   line to do it by hand). A fix task `<id>-BASE<n>` is added: value 10, `fixes` the merged task, the base gate as its
   `done_when`, and a mission that names the merge commit and the tail file. An open fix task is reused instead of a

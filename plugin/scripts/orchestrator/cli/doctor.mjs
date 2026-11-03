@@ -8,6 +8,8 @@
 //               queue hook under its events (queueBoard.hooksCoverage) and every hook script it names exists
 //   config      queue.config.json parses, has no unknown keys (WARN) and no value of the wrong type (FAIL)
 //   queue       queue.json (and plans.json, follow.json when they exist) parse
+//   surface     the git hooks and config that run code against the accepted baseline (lib/gitSurfaceBaseline.js): WARN on
+//               a difference; no baseline yet is OK (the first command that runs code records it, doctor never does)
 //   lock        a lock (<dataFolder>/.lockState) older than 60 s: a process died holding it
 //   worktrees   folders under <mainTree>/.claude/worktrees without .git (a half-deleted worktree blocks agent starts),
 //               and git worktrees whose folder is gone (`git worktree list --porcelain`)
@@ -33,7 +35,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { a, branchFor, CONFIG, CQ, FILE, FOLDER, FOLLOW_FILE, git, HERE, KK, LOCK, MAIN_TREE, require, SF } from './context.mjs';
+import { a, branchFor, CONFIG, CQ, FILE, FOLDER, FOLLOW_FILE, git, GIT_ROOT, HERE, KK, LOCK, MAIN_TREE, require, SF } from './context.mjs';
 import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 import { REPO_CHECKS } from './doctorRepo.mjs';
 
@@ -43,6 +45,7 @@ const PB = require('./lib/pushBatch.js');
 const TW = require('./lib/testWeakening.js');
 const CP = require('./lib/conflictPredict.js');
 const CW = require('./lib/ciWatch.js');
+const GB = require('./lib/gitSurfaceBaseline.js');
 
 /** The lowest Node major version the scripts support (package.json "engines"). */
 const MIN_NODE = 20;
@@ -264,6 +267,14 @@ function checkState() {
   return out;
 }
 
+/** The git hooks and config that run code against the accepted baseline. Reads only: no ensure here. */
+function checkSurface() {
+  if (!GB.read(FOLDER)) return [ok('surface', 'no accepted git baseline yet (the next fill, start, resume, receive or merge records it)')];
+  const reason = GB.driftReason(FOLDER, GIT_ROOT);
+  if (!reason) return [ok('surface', 'the git hooks and config that run code match the accepted baseline')];
+  return [warn('surface', reason, `${CQ} surface shows where; ${CQ} surface accept --by owner if you made the change, otherwise remove it`)];
+}
+
 /** A lock left behind by a process that died. */
 function checkLock() {
   const state = QL.readState(LOCK);
@@ -421,7 +432,7 @@ function checkGit() {
 
 /** `cq doctor [--json]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const checks = [checkNode, checkHooks, checkConfig, checkState, checkLock, checkWorktrees, checkBranches, ...REPO_CHECKS, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const checks = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, ...REPO_CHECKS, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

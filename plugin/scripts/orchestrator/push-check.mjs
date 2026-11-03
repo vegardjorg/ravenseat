@@ -24,7 +24,8 @@
 // started in the background, it exits 0 green or infrastructure (an owner question), 9 on a failed check (the fix task
 // CI-<sha7>, the base red), 10 on timeout. When it is on, the verdict below names the command to start.
 // Exit: 0 = no external commits (or nothing to push); 2 = external commits (the list, and a safe cut point when one
-// exists); 1 = error (e.g. unknown ref).
+// exists), or the git hooks and config differ from the accepted baseline (lib/gitSurfaceBaseline.js: said first, before
+// any other git command, because `git status` below can start a planted core.fsmonitor); 1 = error (e.g. unknown ref).
 // QUEUE_GIT overrides the repo (smoke test against a temporary repo), as in queue.mjs.
 // =============================================================
 
@@ -62,6 +63,16 @@ const val = (name) => {
 const FROM = val('--from') ?? `${K.remote}/${K.baseBranch}`;
 const TO = val('--to') ?? K.baseBranch;
 const AS_JSON = a.includes('--json');
+
+// What runs at the next git command, against what was accepted. The push itself would run a planted pre-push hook. Read
+// only: no baseline yet means nothing to compare (cq fill, start, resume, receive and merge record it).
+const GB = require('./lib/gitSurfaceBaseline.js');
+const surfaceDrift = GB.driftDetail(dataFolder(), process.env.QUEUE_GIT ?? K.root);
+if (surfaceDrift) {
+  const message = GB.driftMessage({ ...surfaceDrift, cq: require('./lib/projectRoot.js').cqCommand() });
+  console.log(AS_JSON ? JSON.stringify({ surface_drift: surfaceDrift.reason, message }, null, 2) : message);
+  process.exit(2);
+}
 
 const sha = (ref) =>
   String(git(['rev-parse', '-q', '--verify', `${ref}^{commit}`]) ?? '').trim() || null;

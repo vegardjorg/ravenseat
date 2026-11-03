@@ -5,11 +5,14 @@
 // .git. A hook planted there runs at the orchestrator's next git command (the merge, a commit) WITH the tokens the gate
 // was scrubbed of; __tests__/gateCoverageTamper.test.ts shows it. The same goes for config values that name a program.
 // So the runners that start track code (gates.mjs, the done command, the base gate) read this surface before the first
-// command and compare it after the last one. A change makes the run red and names what changed.
+// command and compare it after the last one. A change makes the run red and names what changed. lib/gitSurfaceBaseline.js
+// keeps the accepted state between runs: a rerun cannot go green over a planted hook, and what an agent's own Bash wrote
+// outside any run is seen at the next cq receive, cq merge or push-check, before their git commands.
 //
 // This is DETECTION, against accidents and simple cheating, not prevention: the planted hook stays until someone removes
-// it (nothing is restored, the message says what to inspect), a change that is undone before the run ends is not seen,
-// a process that outlives the run is not seen, and a track agent's own Bash can write there outside any gate run. A real
+// it or accepts it (no hook or config is restored, the message says what to inspect), a change that is undone before the
+// check is not seen, a process that outlives the run can change things after it, a hook planted between the check and
+// the git command runs, and git commands outside those stops (by hand, merge-track.mjs alone) are not stopped. A real
 // boundary needs OS isolation (lib/gateEnv.js, Limits).
 //
 // The surface: { hooksDir, hooks: { <relative name>: <hash> }, config: { <key>: [values] } }, in memory only. The
@@ -43,7 +46,7 @@ const MAX_NAMED = 5;
 
 /** What the message tells a person to do (nothing is restored). `git config` and rev-parse run no hooks. */
 const INSPECT =
-  'Nothing was restored. Before the next git command in this repository, inspect the hooks folder ' +
+  'No hook or config was restored. Before the next git command in this repository, inspect the hooks folder ' +
   '(git rev-parse --git-path hooks) and git config --list --show-origin';
 
 /** Does this config key run a program? Pure. */
@@ -180,4 +183,4 @@ function surfaceChangeReason(before, after) {
   return changes.length ? `git hooks or config changed during the run (${changes.join('; ')})` : null;
 }
 
-module.exports = { INSPECT, isExecKey, parseConfigList, hookFiles, readSurface, surfaceChanges, surfaceChangeReason };
+module.exports = { INSPECT, isExecKey, parseConfigList, hookFiles, gitOut, readSurface, differingKeys, surfaceChanges, surfaceChangeReason };

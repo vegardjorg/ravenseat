@@ -49,6 +49,10 @@
 // effective hooks folder and the config values that run a program before the first command and compares them after the
 // last one. A change makes the run red (`tampered: true`, `tamper_reason` naming it, exit 1); nothing is restored, the
 // message says what to inspect. This is detection against accidents and simple cheating, not prevention.
+// A run that records evidence is also red when they differ from the accepted baseline (lib/gitSurfaceBaseline.js), so an
+// evidence entry is never green over a drifted surface and a rerun after a planted hook stays red. A track's own run keeps
+// the comparison during the run only: an owner's new hook must not make every track red. The baseline file itself is
+// watched in both: a change to it during the run is undone and makes the run red.
 //   --evidence  record evidence also outside the main checkout (the push guard denies it to queue agents).
 //   --cwd <folder>  run in that folder (cq receive: the track's worktree).
 //
@@ -403,7 +407,9 @@ const BEFORE = evidenceBefore(WANT);
 const COVERAGE = coverageNow(WANT);
 // The hooks and the executing config, also for a track's own run: what is planted in the shared .git reaches every run.
 const GX = require('./lib/gitExecSurface.js');
-const SURFACE = GX.readSurface(cwd);
+const GB = require('./lib/gitSurfaceBaseline.js');
+const SURFACE_FOLDER = evidenceFile() ? path.dirname(evidenceFile()) : null;
+const SURFACE = GB.watch(SURFACE_FOLDER, cwd);
 const width = Math.min(60, Math.max(...gates.map((g) => g.length)) + 2);
 const start = Date.now();
 let failedCount = 0;
@@ -454,7 +460,7 @@ for (const command of gates) {
 
 const total = Math.round((Date.now() - start) / 1000);
 // Every gate command has exited: did one of them change what runs at the next git command (lib/gitExecSurface.js)?
-const surfaceChange = GX.surfaceChangeReason(SURFACE, GX.readSurface(cwd));
+const surfaceChange = SURFACE.finish({ drift: WANT.wanted });
 // Only now does this process (the orchestrator's side) record the evidence.
 const recorded = recordEvidence({
   kind: mode,
@@ -479,7 +485,11 @@ logRun({
 });
 if (recorded.covered) console.log(`Evidence for ${String(START.sha).slice(0, 12)}: ${recorded.covered}.`);
 if (surfaceChange) {
-  const text = `RED: ${recorded.reason ?? surfaceChange}. ${GX.INSPECT} (${total} s)`;
+  // Nothing happened during the run: the plain message for someone who may simply have installed a hook tool.
+  const detail = GB.isDriftOnly(surfaceChange) ? GB.driftDetail(SURFACE_FOLDER, cwd) : null;
+  const text = detail
+    ? `RED (${total} s). ${GB.driftMessage({ ...detail, afterRun: true, cq: require('./lib/projectRoot.js').cqCommand() })}`
+    : `RED: ${recorded.reason ?? surfaceChange}. ${GX.INSPECT} (${total} s)`;
   // In the log too: cq receive and cq merge take the fix brief and the base report from the log's tail.
   if (logFile) fs.appendFileSync(logFile, `\n${text}\n`);
   console.log(`${text}${logFile ? `, full log: ${logFile}` : ''}`);
