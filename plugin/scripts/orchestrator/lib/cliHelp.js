@@ -88,7 +88,7 @@ const QUEUE_COMMANDS = [
   'cloud-package', 'compact', 'conflicts', 'continue', 'cost', 'decide', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'external',
   'fill', 'finding', 'focus', 'follow', 'forecast', 'handover', 'helpers', 'info', 'init', 'limit', 'merge', 'migr', 'mode', 'next', 'next-migr',
   'orchestrator', 'park', 'pick', 'pickable', 'plan', 'project', 'projects', 'proposals', 'qa', 'question', 'rank', 'receive',
-  'release', 'resolutions', 'resolve', 'resume', 'set', 'show', 'start', 'state', 'trackFile', 'triage', 'unblock', 'undo', 'wait',
+  'release', 'resolutions', 'resolve', 'resume', 'set', 'show', 'start', 'state', 'trackFile', 'triage', 'unblock', 'undo', 'unlock', 'wait',
 ];
 
 /** Short names cq.mjs maps to a script file (cq board = queue-board.mjs). */
