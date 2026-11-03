@@ -34,6 +34,13 @@
 // A --quick/--full run records one entry in <dataFolder>/gate-evidence.json (sha, clean, the commands, green or red) only
 // when the orchestrator's side runs it: with --evidence (cq receive and cq merge pass it) or in the MAIN checkout (not a
 // linked worktree; the full gate before a batch push). A track's own run in its worktree is never evidence.
+// Who writes it: THIS process, the orchestrator's side, and only after every gate command has exited. The gate commands
+// load the track's code, so they run as child processes that only report an exit code; they get a scrubbed environment
+// (lib/gateEnv.js: no tokens or cloud keys, no variable that points to the data folder or the store) and never the
+// store's path on their command line. The entry carries `writer: "orchestrator"` and the `setup_hash` of the configured
+// gates. The store's text is read before the first command and compared after the last one; a change during the run
+// (a gate command wrote to it) is dropped and the run is recorded RED with `tampered: true` (lib/gateEvidence.js
+// recordRun), printed on stderr, and the exit code is 1. This is no OS isolation: see the limits in lib/gateEnv.js.
 //   --evidence  record evidence also outside the main checkout (the push guard denies it to queue agents).
 //   --cwd <folder>  run in that folder (cq receive: the track's worktree).
 //
@@ -139,27 +146,86 @@ function inMainTree() {
   return norm(dir) === norm(common);
 }
 
-/**
- * Records this run as trusted gate evidence (lib/gateEvidence.js) when the orchestrator's side ran it: --evidence
- * (cq receive, cq merge) or a run in the main checkout. A track's own run in its worktree is never evidence. The entry
- * needs the sha (HEAD did not move during the run) and the cleanliness at the start. Fail open: a write error only
- * means no evidence, so the caller runs the gate again or asks.
- */
-function recordEvidence({ kind, ran, failed, exit, timedOut = false }) {
+/** The evidence store file (lib/gateEvidence.js) in the data folder, or null when the data folder cannot be found. */
+function evidenceFile() {
   try {
-    const mainTree = inMainTree() === true;
-    if (!args.includes('--evidence') && !mainTree) return;
-    const GE = require('./lib/gateEvidence.js');
     const { dataFolder } = require('./lib/queueConfig.js');
+    return require('./lib/gateEvidence.js').storeFile(dataFolder());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The environment for the gate commands (lib/gateEnv.js): this process's environment without tokens, cloud keys and
+ * every variable that points to the data folder or the evidence store. Computed once; the gate commands never get the
+ * unscrubbed one.
+ */
+function childEnvironment() {
+  const file = evidenceFile();
+  const folder = file ? path.dirname(file) : null;
+  // The data folder itself only when it is not the project root (then every variable naming the root would go too).
+  const storePaths = [file, folder && path.resolve(folder) !== path.resolve(K.root) ? folder : null].filter(Boolean);
+  return require('./lib/gateEnv.js').gateEnv(process.env, { storePaths }).env;
+}
+const CHILD_ENV = childEnvironment();
+
+/**
+ * Does this run record evidence? Only when the orchestrator's side runs it: --evidence (cq receive, cq merge) or a run
+ * in the main checkout. A track's own run in its worktree never does. Decided BEFORE the gate commands run.
+ */
+function evidenceWanted() {
+  const mainTree = inMainTree() === true;
+  return { wanted: args.includes('--evidence') || mainTree, mainTree };
+}
+
+/**
+ * The evidence store's text before the first gate command (the tamper check in lib/gateEvidence.js recordRun), or
+ * undefined when this run records no evidence.
+ */
+function evidenceBefore(want) {
+  if (!want.wanted) return undefined;
+  const file = evidenceFile();
+  return file ? require('./lib/gateEvidence.js').readStoreText(file) : undefined;
+}
+
+/**
+ * Records this run as trusted gate evidence (lib/gateEvidence.js), in this process after every gate command has exited,
+ * when the orchestrator's side ran it (evidenceWanted). The entry needs the sha (HEAD did not move during the run) and
+ * the cleanliness at the start; it carries the setup hash of the configured gates and `writer: "orchestrator"`.
+ * `before` is the store's text from before the run; a change during the run makes the entry red (tampered).
+ * Fail open: a write error only means no evidence, so the caller runs the gate again or asks.
+ * @returns {{ recorded: boolean, tampered: boolean }}
+ */
+function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, before }) {
+  try {
+    if (!want?.wanted) return { recorded: false, tampered: false };
+    const GE = require('./lib/gateEvidence.js');
+    const file = evidenceFile();
+    if (!file) return { recorded: false, tampered: false };
     const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
     const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
     const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
-    GE.append(
-      GE.storeFile(dataFolder()),
-      GE.entry({ kind, sha, clean: START.clean, exit, gates: ran, failed, timedOut, track, branch, mainTree }),
-    );
+    return GE.recordRun({
+      file,
+      before: before ?? null,
+      entry: GE.entry({
+        kind,
+        sha,
+        setupHash: GE.setupHash(K.gates),
+        clean: START.clean,
+        exit,
+        gates: ran,
+        failed,
+        timedOut,
+        track,
+        branch,
+        mainTree: want.mainTree,
+      }),
+    });
   } catch {
     // error-ignored: no evidence is the safe direction (receive runs the gate again, the push check asks)
+    return { recorded: false, tampered: false };
   }
 }
 
@@ -237,7 +303,7 @@ function runCommand(command, { timeoutMs }) {
       cwd,
       shell: true,
       detached: process.platform !== 'win32', // its own process group, so the whole tree can be ended
-      env: { ...process.env, FORCE_COLOR: '0' },
+      env: CHILD_ENV, // scrubbed (lib/gateEnv.js): the check runs the track's code
       windowsHide: true,
     });
     child.stdout.on('data', (d) => (out += d));
@@ -307,6 +373,9 @@ if (gates.length === 0) {
 }
 
 if (logFile) fs.writeFileSync(logFile, `gates --${mode} in ${cwd}\n`);
+// Before the first gate command: does this run record evidence, and the store's text for the tamper check.
+const WANT = evidenceWanted();
+const BEFORE = evidenceBefore(WANT);
 const width = Math.min(60, Math.max(...gates.map((g) => g.length)) + 2);
 const start = Date.now();
 let failedCount = 0;
@@ -326,7 +395,7 @@ for (const command of gates) {
     shell: true,
     encoding: 'utf8',
     maxBuffer: 256 << 20,
-    env: { ...process.env, FORCE_COLOR: '0' },
+    env: CHILD_ENV, // scrubbed (lib/gateEnv.js): the gate runs the track's code
     ...(deadline ? { timeout: Math.max(1000, deadline - t0) } : {}),
   });
   const sec = (Date.now() - t0) / 1000;
@@ -356,18 +425,35 @@ for (const command of gates) {
 }
 
 const total = Math.round((Date.now() - start) / 1000);
+// Every gate command has exited: only now does this process (the orchestrator's side) record the evidence.
+const recorded = recordEvidence({
+  kind: mode,
+  ran: gates,
+  failed: failedGates,
+  exit: failedCount === 0 ? 0 : 1,
+  timedOut: timedOutAny,
+  want: WANT,
+  before: BEFORE,
+});
+// The store changed while the gate commands ran: the run is red whatever the gates said (lib/gateEvidence.js recordRun).
+const exitCode = failedCount === 0 && !recorded.tampered ? 0 : 1;
 logRun({
   kind: mode,
   ran: gates,
   failed: failedGates,
   durationSec: (Date.now() - start) / 1000,
-  exit: failedCount === 0 ? 0 : 1,
+  exit: exitCode,
   timedOut: timedOutAny,
 });
-recordEvidence({ kind: mode, ran: gates, failed: failedGates, exit: failedCount === 0 ? 0 : 1, timedOut: timedOutAny });
-console.log(
-  failedCount === 0
-    ? `ALL GREEN: ${gates.length} gate(s) --${mode} in ${total} s`
-    : `RED: ${failedCount} of ${gates.length} gate(s) --${mode} failed (${total} s)${logFile ? `, full log: ${logFile}` : ''}`,
-);
-process.exit(failedCount === 0 ? 0 : 1);
+if (recorded.tampered)
+  console.log(
+    `RED: the gate evidence store changed while the gate commands ran (a gate wrote to it); the change was dropped and ` +
+      `the run recorded as red (tampered) (${total} s)${logFile ? `, full log: ${logFile}` : ''}`,
+  );
+else
+  console.log(
+    failedCount === 0
+      ? `ALL GREEN: ${gates.length} gate(s) --${mode} in ${total} s`
+      : `RED: ${failedCount} of ${gates.length} gate(s) --${mode} failed (${total} s)${logFile ? `, full log: ${logFile}` : ''}`,
+  );
+process.exit(exitCode);

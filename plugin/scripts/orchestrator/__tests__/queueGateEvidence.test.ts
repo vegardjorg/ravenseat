@@ -6,7 +6,10 @@
 // worktree, the gate is red, and receive gives a fix round (exit 1), never a review; (2) a green run records evidence
 // for exactly the tip (clean, by gates.mjs), and a second receive on the same tip does not run the gate again; a new
 // commit does; (3) uncommitted tracked changes in the worktree, or no worktree with the branch, refuse the receive
-// (exit 1, nothing changed); (4) a PARTIAL track and a project without quick gates run no gate.
+// (exit 1, nothing changed); (4) a PARTIAL track and a project without quick gates run no gate; (5) a gate command that
+// writes the evidence store (directly to the file, or through QUEUE_FOLDER) never produces evidence: the direct write is
+// dropped and the run recorded red (tampered), and the gate command gets neither QUEUE_FOLDER nor GITHUB_TOKEN;
+// (6) the same tip with a changed gate setup, or with only a legacy green entry, runs the gates again.
 // Runs queue.mjs against a temporary queue (QUEUE_FOLDER) and a temporary git repo (QUEUE_GIT) with a worktree for the
 // track branch, as queueDoneCheck.test.ts. Never the main repo or the real queue. The gates are tiny `node -e` scripts.
 // =============================================================
@@ -210,5 +213,113 @@ describe('cq receive with gate evidence', () => {
     const r2 = q.run('receive', 'A');
     expect(r2.code).toBe(0);
     expect(r2.out).not.toContain('GATES (receive)');
+  });
+});
+
+describe('the gate commands cannot write their own evidence', () => {
+  const GE_PATH = path.join(ROOT, 'scripts', 'orchestrator', 'lib', 'gateEvidence.js');
+  const REPORT = `${RES}\n\n# Report A\n`;
+  const setGates = (folder: string, quick: string[]) =>
+    fs.writeFileSync(path.join(folder, 'queue.config.json'), JSON.stringify({ baseBranch: 'develop', maxFixRounds: 3, gates: { quick } }));
+  const addOk = (p: ReturnType<typeof project>) => {
+    fs.writeFileSync(path.join(p.worktree, 'lib', 'OK.ts'), 'export const ok = 1;\n');
+    p.g(['add', '--', 'lib/OK.ts'], p.worktree);
+    p.g(['commit', '-q', '-m', 'feat: ok'], p.worktree);
+  };
+  /**
+   * A gate that tries to forge a green entry for the tip (time far in the future, the right writer and setup hash), in
+   * the store file it knows (mode "direct", exit 0) or through QUEUE_FOLDER (mode "env", exit 1), and notes what it saw
+   * of QUEUE_FOLDER and GITHUB_TOKEN in seen-<mode>.json.
+   */
+  const forger = (folder: string, mode: 'direct' | 'env') => {
+    const script = path.join(folder, `forge-${mode}.cjs`);
+    const command = `node "${script.split(path.sep).join('/')}"`;
+    const seen = path.join(folder, `seen-${mode}.json`);
+    const target =
+      mode === 'env'
+        ? "process.env.QUEUE_FOLDER ? path.join(process.env.QUEUE_FOLDER, 'gate-evidence.json') : null"
+        : JSON.stringify(path.join(folder, 'gate-evidence.json'));
+    fs.writeFileSync(
+      script,
+      [
+        "const fs = require('fs'), path = require('path'), cp = require('child_process');",
+        `const GE = require(${JSON.stringify(GE_PATH)});`,
+        `fs.writeFileSync(${JSON.stringify(seen)}, JSON.stringify({ queue: process.env.QUEUE_FOLDER || null, token: process.env.GITHUB_TOKEN || null }));`,
+        "const sha = cp.execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();",
+        `const target = ${target};`,
+        `const gates = [${JSON.stringify(command)}];`,
+        "const e = GE.entry({ kind: 'quick', sha, setupHash: GE.setupHash({ quick: gates }), clean: true, exit: 0, gates, failed: [], time: '2099-01-01T00:00:00.000Z' });",
+        'if (target) fs.writeFileSync(target, JSON.stringify({ version: 1, entries: [e] }));',
+        `process.exit(${mode === 'env' ? 1 : 0});`,
+        '',
+      ].join('\n'),
+    );
+    return { command, seen: () => JSON.parse(fs.readFileSync(seen, 'utf8')) };
+  };
+  const forged = (ev: Record<string, unknown>[]) => ev.some((x) => x.time === '2099-01-01T00:00:00.000Z');
+
+  it('a direct write to the store is dropped and the run is red (tampered)', () => {
+    const p = project({});
+    const f = forger(p.folder, 'direct');
+    setGates(p.folder, [f.command]);
+    p.report('A', REPORT);
+    const r = p.run('receive', 'A');
+    expect(r.out).toContain('GATES (receive) for A');
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('Gates RED');
+    const ev = p.evidence();
+    expect(forged(ev)).toBe(false);
+    expect(ev.at(-1)).toMatchObject({ sha: p.tip(), ok: false, tampered: true, writer: 'orchestrator' });
+    expect(p.find().gate_check).toMatchObject({ ok: false });
+  });
+
+  it('the gate gets neither QUEUE_FOLDER nor GITHUB_TOKEN, so the env route writes nothing', () => {
+    const p = project({});
+    const f = forger(p.folder, 'env');
+    setGates(p.folder, [f.command]);
+    p.env.GITHUB_TOKEN = 'test-token-not-for-gates';
+    p.report('A', REPORT);
+    const r = p.run('receive', 'A');
+    expect(r.code).toBe(1);
+    expect(f.seen()).toEqual({ queue: null, token: null });
+    const ev = p.evidence();
+    expect(forged(ev)).toBe(false);
+    expect(ev.at(-1)).toMatchObject({ sha: p.tip(), ok: false, writer: 'orchestrator' });
+    expect(ev.at(-1)).not.toHaveProperty('tampered');
+  });
+
+  it('the same tip with a changed gate setup runs again; both entries stay', () => {
+    const p = project({ gates: { quick: [GATE] } });
+    addOk(p);
+    p.report('A', REPORT);
+    expect(p.run('receive', 'A').out).toContain('Gates GREEN');
+    setGates(p.folder, [GATE, 'node -e "process.exit(0)"']);
+    const r = p.run('receive', 'A');
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('GATES (receive) for A');
+    const ev = p.evidence().filter((x) => x.sha === p.tip() && x.ok === true);
+    expect(ev).toHaveLength(2);
+    expect(ev[0].setup_hash).not.toBe(ev[1].setup_hash);
+  });
+
+  it('a legacy green entry for the tip is read but not reused by receive', () => {
+    const p = project({ gates: { quick: [GATE] } });
+    addOk(p);
+    fs.writeFileSync(
+      path.join(p.folder, 'gate-evidence.json'),
+      JSON.stringify({ version: 1, entries: [{ time: 't', by: 'gates.mjs', sha: p.tip(), kind: 'quick', ok: true, exit: 0, clean: true, gates: [GATE], failed: [] }] }),
+    );
+    p.report('A', REPORT);
+    const r = p.run('receive', 'A');
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('GATES (receive) for A');
+    expect(r.out).toContain('Gates GREEN');
+    // The legacy entry stays as history; the new one is the orchestrator's.
+    const ev = p.evidence();
+    expect(ev).toHaveLength(2);
+    expect(ev[0]).not.toHaveProperty('writer');
+    expect(ev[1]).toMatchObject({ writer: 'orchestrator', ok: true });
+    // The task's gate record points to the evidence entry (the later attempt's `evidence: [id]`).
+    expect(p.find().gate_check).toMatchObject({ ok: true, ran: true, evidence_id: ev[1].id });
   });
 });
