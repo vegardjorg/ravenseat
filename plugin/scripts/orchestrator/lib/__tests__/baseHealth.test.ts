@@ -114,6 +114,17 @@ describe('skipEvidence', () => {
     expect(BH.skipEvidence({ ...base, commands: ['npm test', 'npm run e2e'], rows: rows() }).skip).toBe(false);
     expect(BH.gateRows('x\n{"event":"gate","sha":"s"}\n{"event":"start"}\n{broken "gate"')).toEqual([{ event: 'gate', sha: 's' }]);
   });
+
+  it('the newest run decides: a later red or tampered run beats an earlier green one', () => {
+    const same = tree({ [T1]: 'tree1', [T2]: 'tree1' });
+    const base = { newTip: T1, trackTip: T2, treeOf: same, commands: ['npm test'] };
+    const green = rows()[0];
+    const red = { ...green, ok: false, tampered: true };
+    expect(BH.skipEvidence({ ...base, rows: [green, red] }).skip).toBe(false);
+    expect(BH.skipEvidence({ ...base, rows: [red, green] }).skip).toBe(true);
+    // A later dirty run is no evidence at all, so it decides nothing, as for receive and the push check.
+    expect(BH.skipEvidence({ ...base, rows: [green, { ...red, clean: false }] }).skip).toBe(true);
+  });
 });
 
 describe('the fix task', () => {

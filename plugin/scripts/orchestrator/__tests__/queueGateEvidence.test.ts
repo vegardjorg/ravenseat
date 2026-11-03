@@ -9,7 +9,9 @@
 // (exit 1, nothing changed); (4) a PARTIAL track and a project without quick gates run no gate; (5) a gate command that
 // writes the evidence store (directly to the file, or through QUEUE_FOLDER) never produces evidence: the direct write is
 // dropped and the run recorded red (tampered), and the gate command gets neither QUEUE_FOLDER nor GITHUB_TOKEN;
-// (6) the same tip with a changed gate setup, or with only a legacy green entry, runs the gates again.
+// (6) the same tip with a changed gate setup, or with only a legacy green entry, runs the gates again; (7) the receive
+// lines say where the gates ran and what they could see; (8) the done command runs scrubbed, and a done command or a gate
+// that changes the git hooks or the executing config is red, with TAMPERED on screen and the reason in the fix brief.
 // Runs queue.mjs against a temporary queue (QUEUE_FOLDER) and a temporary git repo (QUEUE_GIT) with a worktree for the
 // track branch, as queueDoneCheck.test.ts. Never the main repo or the real queue. The gates are tiny `node -e` scripts.
 // =============================================================
@@ -321,5 +323,81 @@ describe('the gate commands cannot write their own evidence', () => {
     expect(ev[1]).toMatchObject({ writer: 'orchestrator', ok: true });
     // The task's gate record points to the evidence entry (the later attempt's `evidence: [id]`).
     expect(p.find().gate_check).toMatchObject({ ok: true, ran: true, evidence_id: ev[1].id });
+  });
+});
+
+describe('what receive says about the run, and the done command', () => {
+  const REPORT = `${RES}\n\n# Report A\n`;
+  /** Sets fields on the task directly: the done lock refuses cq edit once a task has started. */
+  const setTask = (p: ReturnType<typeof project>, fields: Record<string, unknown>) => {
+    const file = path.join(p.folder, 'queue.json');
+    const q = JSON.parse(fs.readFileSync(file, 'utf8')) as Queue;
+    Object.assign(q.tasks[0], fields);
+    fs.writeFileSync(file, JSON.stringify(q));
+  };
+
+  it('the receive lines say the gates ran locally, and how many other files were there', () => {
+    const p = project({ gates: { quick: ['node -e "process.exit(0)"'] } });
+    fs.writeFileSync(path.join(p.worktree, 'scratch-note.txt'), 'not committed\n');
+    p.report('A', REPORT);
+    const r1 = p.run('receive', 'A');
+    expect(r1.code).toBe(0);
+    expect(r1.out).toContain("recorded as evidence for that commit; ran locally in the track's worktree, 1 untracked.");
+    const r2 = p.run('receive', 'A');
+    expect(r2.out).toMatch(/Gates green at [0-9a-f]{12} \(quick, cq's own run at [^,]+, ran locally in the track's worktree, 1 untracked\); not run again\./);
+    expect(p.evidence().at(-1)).toMatchObject({ runner: 'local-worktree', untracked: 1, ignored_present: 0, shared_links: [] });
+  });
+
+  it('an entry from before the coverage fields is reused without a phrase', () => {
+    const p = project({ gates: { quick: ['node -e "process.exit(0)"'] } });
+    p.report('A', REPORT);
+    expect(p.run('receive', 'A').code).toBe(0);
+    const file = path.join(p.folder, 'gate-evidence.json');
+    const store = JSON.parse(fs.readFileSync(file, 'utf8'));
+    for (const k of ['runner', 'shared_links', 'untracked', 'ignored_present']) delete store.entries.at(-1)[k];
+    fs.writeFileSync(file, JSON.stringify(store));
+    const r = p.run('receive', 'A');
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/\(quick, cq's own run at [^)]+\); not run again\./);
+    expect(r.out).not.toContain('ran locally');
+  });
+
+  it('the done command gets neither QUEUE_FOLDER nor GITHUB_TOKEN', () => {
+    const p = project({});
+    const seen = path.join(p.folder, 'done-saw.json');
+    const script = path.join(p.folder, 'done.cjs');
+    fs.writeFileSync(
+      script,
+      `require('fs').writeFileSync(${JSON.stringify(seen)}, JSON.stringify({ queue: process.env.QUEUE_FOLDER || null, token: process.env.GITHUB_TOKEN || null, path: !!(process.env.PATH || process.env.Path) }));\n`,
+    );
+    setTask(p, { done_when: `node "${script.split(path.sep).join('/')}"` });
+    p.env.GITHUB_TOKEN = 'test-token-not-for-done';
+    p.report('A', REPORT);
+    const r = p.run('receive', 'A');
+    expect(r.out).toContain('Done command GREEN');
+    expect(r.code).toBe(0);
+    expect(JSON.parse(fs.readFileSync(seen, 'utf8'))).toEqual({ queue: null, token: null, path: true });
+  });
+
+  it('a done command that changes the executing git config is red, and the record says so', () => {
+    const p = project({});
+    setTask(p, { done_when: 'git config core.pager cat' });
+    p.report('A', REPORT);
+    const r = p.run('receive', 'A');
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('Done command RED');
+    expect(r.out).toContain('TAMPERED: git hooks or config changed during the run (git config changed: core.pager)');
+    expect(p.find().done_check).toMatchObject({ ok: false, exit: 0, tampered: true });
+  });
+
+  it('a gate that changes the executing git config: TAMPERED on screen, the reason in the fix brief, red in the store', () => {
+    const p = project({ gates: { quick: ['git config core.pager cat'] } });
+    p.report('A', REPORT);
+    const r = p.run('receive', 'A');
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('Gates RED');
+    expect(r.out).toContain('TAMPERED: git hooks or config changed during the run (git config changed: core.pager)');
+    expect(p.evidence().at(-1)).toMatchObject({ ok: false, tampered: true, exit: 0 });
+    expect(fs.readFileSync(path.join(p.scratch, 'gates-A.md'), 'utf8')).toContain('core.pager');
   });
 });

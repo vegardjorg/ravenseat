@@ -35,6 +35,14 @@
 // same moment), the store is put back as it was BEFORE the run (whatever was written during the run is dropped) and the
 // run's own entry is appended as RED with `tampered: true`. A concurrent orchestrator run then loses its entry and runs
 // again: the safe direction. A process that writes after gates.mjs has exited is not caught (no OS isolation, below).
+// recordRun also takes a `tamperReason` from the caller (gates.mjs: git hooks or executing config changed during the run,
+// lib/gitExecSurface.js): the run is then red with `tampered: true` and `tamper_reason` naming what changed.
+//
+// What the evidence covers (coverage, coverageLine): a sha names the commit, but the commands can read more than it. An
+// entry says where it ran (`runner`: only "local-worktree" today, later "clean-checkout" and "sandbox") and what it could
+// see beyond the commit (`shared_links`, `untracked`, `ignored_present`, read by lib/gateCoverage.js before the first
+// command). Same sha, different result is possible with "local-worktree". Untracked files are not forbidden; they are
+// shown. These fields do not decide anything yet. Entries from before them stay readable and have no coverage.
 //
 // Out of the track's reach: the store is a file in the data folder that no track instruction mentions, and the push
 // guard (hook-push-guard.mjs) denies a queue agent's shell command that names the store or passes `--evidence` or
@@ -45,8 +53,9 @@
 //
 // The file: <dataFolder>/gate-evidence.json, { version: 1, entries: [entry, ...] } (the newest last, at most MAX_ENTRIES).
 //   entry = { id, time, by: "gates.mjs", writer: "orchestrator", sha, setup_hash, kind: "quick"|"full", ok, exit, clean,
-//             gates: [commands], failed: [commands], timed_out?, tampered?, track?, branch?, main_tree }
-//   legacy entry = the same without id, writer and setup_hash.
+//             gates: [commands], failed: [commands], timed_out?, tampered?, tamper_reason?, track?, branch?, main_tree,
+//             runner, shared_links?: [{ path, lock_hash?, target_lock_hash? }], untracked?: count, ignored_present?: count }
+//   legacy entry = the same without id, writer, setup_hash and runner.
 // Pure except readStoreText/readStore/writeStore/append/recordRun (one small file, written atomically).
 // Tested in lib/__tests__/gateEvidence.test.ts, __tests__/queueGateEvidence.test.ts and __tests__/queueBaseGate.test.ts.
 // =============================================================
@@ -64,6 +73,8 @@ const MAX_ENTRIES = 200;
 const KINDS = new Set(['quick', 'full']);
 /** The only writer whose entries are evidence. */
 const WRITER = 'orchestrator';
+/** Where a run happens today: in a working tree on this machine, as the same user, with what that tree holds. */
+const RUNNER_LOCAL = 'local-worktree';
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const commandList = (v) => (Array.isArray(v) ? v.filter((g) => typeof g === 'string' && g.trim()).map((g) => g.trim()) : []);
@@ -130,7 +141,8 @@ function writeStore(file, store) {
  * `tampered` (recordRun) makes the entry red whatever the exit code.
  * @param {{ id?: string, time?: string, sha?: string|null, setupHash?: string|null, kind: string, exit: number,
  *   clean?: boolean, gates?: string[], failed?: string[], timedOut?: boolean, tampered?: boolean, track?: string|null,
- *   branch?: string|null, mainTree?: boolean }} r
+ *   branch?: string|null, mainTree?: boolean,
+ *   coverage?: { sharedLinks?: object[], untracked?: number|null, ignoredPresent?: number|null } }} r
  */
 function entry(r) {
   if (!KINDS.has(r?.kind)) return null;
@@ -157,6 +169,11 @@ function entry(r) {
   if (r.track) e.track = String(r.track);
   if (r.branch) e.branch = String(r.branch);
   e.main_tree = r.mainTree === true;
+  e.runner = RUNNER_LOCAL;
+  const c = r.coverage;
+  if (Array.isArray(c?.sharedLinks)) e.shared_links = c.sharedLinks;
+  if (Number.isInteger(c?.untracked)) e.untracked = c.untracked;
+  if (Number.isInteger(c?.ignoredPresent)) e.ignored_present = c.ignoredPresent;
   return e;
 }
 
@@ -181,16 +198,22 @@ function append(file, e) {
  * Records a finished run (gates.mjs, in its own process after every gate command has exited). `before` is the store's
  * raw text from readStoreText before the first gate command started. When the text is the same now, the entry is
  * appended. When it changed during the run, the store is put back to `before` and the entry is appended as RED with
- * `tampered: true` (the tamper check at the top). Never throws.
- * @param {{ file: string, before: string|null, entry: object|null }} r
- * @returns {{ recorded: boolean, tampered: boolean }}
+ * `tampered: true` (the tamper check at the top). A `tamperReason` from the caller also makes the entry red and tampered
+ * (the store stays as it is unless it changed too); `tamper_reason` then names both, and so does `reason` in the result.
+ * Never throws.
+ * @param {{ file: string, before: string|null, entry: object|null, tamperReason?: string|null }} r
+ * @returns {{ recorded: boolean, tampered: boolean, reason?: string }}
  */
-function recordRun({ file, before, entry: e }) {
+function recordRun({ file, before, entry: e, tamperReason = null }) {
   try {
     if (!file || !e) return { recorded: false, tampered: false };
-    if (readStoreText(file) === before) return { recorded: append(file, e), tampered: false };
-    writeStore(file, add(parseStore(before), { ...e, ok: false, tampered: true }));
-    return { recorded: true, tampered: true };
+    const storeChanged = readStoreText(file) !== before;
+    if (!storeChanged && !tamperReason) return { recorded: append(file, e), tampered: false };
+    const reason = [storeChanged ? 'the evidence store changed during the run' : null, tamperReason].filter(Boolean).join('; ');
+    const red = { ...e, ok: false, tampered: true, tamper_reason: reason };
+    if (storeChanged) writeStore(file, add(parseStore(before), red));
+    const recorded = storeChanged ? true : append(file, red);
+    return { recorded, tampered: true, ...(tamperReason ? { reason } : {}) };
   } catch {
     return { recorded: false, tampered: false }; // error-ignored: no evidence is the safe direction
   }
@@ -215,6 +238,44 @@ function trusted(e, { setupHash: want = null, legacy = true } = {}) {
   if (!want) return true;
   if ('setup_hash' in e) return e.setup_hash === want;
   return legacy;
+}
+
+/**
+ * What an entry says it covered, in a form for a reader (the receive line below, and the board's panel when it comes):
+ * where it ran and what it could see beyond the commit. null for an entry from before these fields. A count is null when
+ * the entry does not have it. Pure.
+ * @returns {null | { runner: string, mainTree: boolean, sharedLinks: { path: string, lockHash: string|null, lockDiffers: boolean }[],
+ *   untracked: number|null, ignored: number|null }}
+ */
+function coverage(e) {
+  if (!isObject(e) || typeof e.runner !== 'string') return null;
+  const count = (v) => (Number.isInteger(v) ? v : null);
+  return {
+    runner: e.runner,
+    mainTree: e.main_tree === true,
+    sharedLinks: (Array.isArray(e.shared_links) ? e.shared_links : [])
+      .filter((l) => isObject(l) && typeof l.path === 'string')
+      .map((l) => ({ path: l.path, lockHash: l.lock_hash ?? null, lockDiffers: typeof l.target_lock_hash === 'string' })),
+    untracked: count(e.untracked),
+    ignored: count(e.ignored_present),
+  };
+}
+
+/**
+ * The short honest phrase for an entry, e.g. "ran locally in the track's worktree, 2 untracked, shared node_modules".
+ * Counts of zero are left out. '' for an entry from before these fields. Pure.
+ */
+function coverageLine(e) {
+  const c = coverage(e);
+  if (!c) return '';
+  const parts = [
+    c.runner === RUNNER_LOCAL ? `ran locally in ${c.mainTree ? 'the main checkout' : "the track's worktree"}` : `ran in ${c.runner}`,
+  ];
+  if (c.untracked) parts.push(`${c.untracked} untracked`);
+  if (c.ignored) parts.push(`${c.ignored} ignored`);
+  for (const l of c.sharedLinks)
+    parts.push(`shared ${l.path}${l.lockDiffers ? " (its lockfile differs from the commit's)" : ''}`);
+  return parts.join(', ');
 }
 
 /** Did the entry run every one of `commands`? */
@@ -297,6 +358,7 @@ module.exports = {
   FILE_NAME,
   MAX_ENTRIES,
   WRITER,
+  RUNNER_LOCAL,
   setupHash,
   storeFile,
   parseStore,
@@ -309,6 +371,8 @@ module.exports = {
   recordRun,
   isLegacy,
   trusted,
+  coverage,
+  coverageLine,
   covers,
   latest,
   verdict,

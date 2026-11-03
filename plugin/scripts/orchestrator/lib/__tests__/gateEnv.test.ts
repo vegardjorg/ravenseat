@@ -6,7 +6,8 @@
 // (3) a variable whose value points to the evidence store or the data folder goes (no case and "/" vs "\" on Windows);
 // (4) tokens and cloud keys go (GITHUB_TOKEN, GH_TOKEN, *_TOKEN, *_SECRET, *_API_KEY, AWS_*, ANTHROPIC_API_KEY,
 // OPENAI_API_KEY, SSH_AUTH_SOCK, npm's _authToken), a plain *_KEY of an unknown provider stays; (5) dropped lists names
-// only, and FORCE_COLOR is 0.
+// only, and FORCE_COLOR is 0; (6) trackCodeEnv drops the store and its folder, the folder not when it is the project root;
+// (7) trackCodeSpawn gives a spawn function the scrubbed environment and leaves the other options alone.
 // =============================================================
 import { describe, expect, it } from 'vitest';
 
@@ -110,5 +111,43 @@ describe('gateEnv', () => {
     expect(env).not.toHaveProperty('A');
     expect(dropped).toEqual(['GH_TOKEN']);
     expect(JSON.stringify(dropped)).not.toContain('secret-value');
+  });
+});
+
+describe('trackCodeEnv and trackCodeSpawn', () => {
+  const env = { PATH: '/usr/bin', A_PATH: '/p/.queue/gate-evidence.json', B_PATH: '/p/.queue/x', C_PATH: '/p/other', GITHUB_TOKEN: 't', QUEUE_FOLDER: '/q' };
+
+  it('drops what points to the store and its folder', () => {
+    const r = GV.trackCodeEnv(env, { storeFile: '/p/.queue/gate-evidence.json', root: '/p', platform: 'linux' });
+    expect(r.dropped).toEqual(['A_PATH', 'B_PATH', 'GITHUB_TOKEN', 'QUEUE_FOLDER']);
+    expect(r.env).toMatchObject({ PATH: '/usr/bin', C_PATH: '/p/other' });
+  });
+
+  it('keeps the folder out of the match when it is the project root', () => {
+    const r = GV.trackCodeEnv({ ROOTISH: '/p/src', STORE: '/p/gate-evidence.json' }, { storeFile: '/p/gate-evidence.json', root: '/p', platform: 'linux' });
+    expect(r.env).toHaveProperty('ROOTISH');
+    expect(r.dropped).toEqual(['STORE']);
+  });
+
+  it('without a store only the names decide', () => {
+    expect(GV.trackCodeEnv({ PATH: '/x', GH_TOKEN: 't' }).dropped).toEqual(['GH_TOKEN']);
+  });
+
+  it('trackCodeSpawn passes the scrubbed environment and the other options', () => {
+    const calls: { command: string; options: Record<string, unknown> }[] = [];
+    const spawn = GV.trackCodeSpawn(env, {
+      storeFile: '/p/.queue/gate-evidence.json',
+      root: '/p',
+      platform: 'linux',
+      spawn: (command: string, options: Record<string, unknown>) => {
+        calls.push({ command, options });
+        return { status: 0 };
+      },
+    });
+    expect(spawn('npm test', { cwd: '/w', env: { GITHUB_TOKEN: 'from the caller' } })).toEqual({ status: 0 });
+    expect(calls[0].command).toBe('npm test');
+    expect(calls[0].options.cwd).toBe('/w');
+    expect(calls[0].options.env).not.toHaveProperty('GITHUB_TOKEN');
+    expect(calls[0].options.env).toHaveProperty('PATH', '/usr/bin');
   });
 });

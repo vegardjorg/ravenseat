@@ -47,6 +47,7 @@
 
 const fs = require('node:fs');
 const DC = require('./doneCheck.js');
+const GE = require('./gateEvidence.js');
 
 /** The defaults for config().baseGate. A full gate can take long; the budget is for the whole list. */
 const DEFAULT_TIMEOUT_SEC = 900;
@@ -177,8 +178,10 @@ function gateRows(text) {
  *      would see exactly the files the track tested;
  *   2. a trusted gate run was green on exactly that track tip, in a clean worktree (no uncommitted tracked changes,
  *      which a green run could have depended on), and ran every base gate command (a quick or full entry with `sha` =
- *      the track tip). `rows` are the gate evidence entries (lib/gateEvidence.js, written by gates.mjs for cq receive
- *      and cq merge), never the time log's gate rows (any agent can append one there).
+ *      the track tip). The NEWEST such run decides (GE.latest): a later red or tampered run beats an earlier green one.
+ *      `rows` are the gate evidence entries (lib/gateEvidence.js, written by gates.mjs for cq receive and cq merge) the
+ *      caller has already filtered with GE.trusted (cli/baseHealth.mjs gateRowsNow), never the time log's gate rows (any
+ *      agent can append one there).
  * Anything less (another tree, a dirty or older run, a row without sha) runs the check.
  * @param {{ newTip: string, trackTip: string, treeOf: (sha: string) => string|null, rows: object[], commands: string[] }} x
  * @returns {{ skip: boolean, reason: string }}
@@ -190,15 +193,8 @@ function skipEvidence({ newTip, trackTip, treeOf, rows, commands }) {
     const b = treeOf(trackTip);
     if (!a || !b || a !== b) return { skip: false, reason: 'the merge has files the track did not test' };
   }
-  const want = new Set(commands);
-  const hit = (rows ?? []).find(
-    (r) =>
-      r?.sha === trackTip &&
-      r.ok === true &&
-      r.clean === true &&
-      (r.kind === 'quick' || r.kind === 'full') &&
-      [...want].every((c) => (r.gates ?? []).includes(c)),
-  );
+  const newest = GE.latest(rows, { sha: trackTip, commands });
+  const hit = newest?.ok === true ? newest : null;
   if (!hit) return { skip: false, reason: `no green, clean gate run of the base gate commands on ${short(trackTip)}` };
   return {
     skip: true,

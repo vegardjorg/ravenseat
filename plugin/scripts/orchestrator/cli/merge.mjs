@@ -45,10 +45,14 @@ const CP = require('./lib/conflictPredict.js');
  * null when the task has no done command. Stops (exit 1, nothing changed) when no worktree has the branch: the command
  * must run on the track's own files, and the queue never creates or removes worktrees here (the shared links make a
  * delete dangerous, see cleanup-worktree.mjs).
+ * The command runs the track's code, so it gets the same scrubbed environment as the gates (lib/gateEnv.js), and a
+ * change to the git hooks or the executing config during it makes it red (lib/gitExecSurface.js).
  * @returns {null | { ok: boolean, run: object, record: object, file: string, cwd: string }}
  */
 function runDoneCommand(o, { branch, scratch, step }) {
   const DC = require('./lib/doneCheck.js');
+  const GV = require('./lib/gateEnv.js');
+  const GX = require('./lib/gitExecSurface.js');
   const command = typeof o.done_when === 'string' ? o.done_when.trim() : '';
   if (!command) return null;
   const tip = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
@@ -67,7 +71,17 @@ function runDoneCommand(o, { branch, scratch, step }) {
     console.log(`WARNING: ${cwd} has uncommitted changes; the done command also sees them (they are not on ${branch}).`);
   const setup = DC.doneCheckSetup(CONFIG);
   console.log(`DONE COMMAND (${step}) for ${o.id} in ${cwd}: ${command}  (time budget ${setup.timeoutSec} s)`);
-  const run = DC.runDoneWhen({ command, cwd, ...setup });
+  const surface = GX.readSurface(cwd);
+  const spawn = GV.trackCodeSpawn(process.env, {
+    storeFile: require('./lib/gateEvidence.js').storeFile(FOLDER),
+    root: CONFIG.root,
+  });
+  const run = DC.runDoneWhen({ command, cwd, ...setup, spawn });
+  const tamperReason = GX.surfaceChangeReason(surface, GX.readSurface(cwd));
+  if (tamperReason) {
+    run.ok = false;
+    run.tail.push(`${tamperReason}. ${GX.INSPECT}`);
+  }
   const folder = scratch ?? FOLDER;
   fs.mkdirSync(folder, { recursive: true });
   const file = path.join(folder, `done-${o.id}.md`);
@@ -77,6 +91,7 @@ function runDoneCommand(o, { branch, scratch, step }) {
     ok: run.ok,
     exit: run.exit,
     ...(run.timedOut ? { timed_out: true } : {}),
+    ...(tamperReason ? { tampered: true, tamper_reason: tamperReason } : {}),
     command,
     tip,
     step,
@@ -85,6 +100,7 @@ function runDoneCommand(o, { branch, scratch, step }) {
     file,
   };
   console.log(`Done command ${run.ok ? 'GREEN' : 'RED'} (${run.timedOut ? 'time budget' : `exit ${run.exit ?? '?'}`}, ${run.durationSec} s).`);
+  if (tamperReason) console.log(`TAMPERED: ${tamperReason}. ${GX.INSPECT}.`);
   return { ok: run.ok, run, record, file, cwd };
 }
 
@@ -154,7 +170,8 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
     ? GE.latest(GE.readStore(storeFile).entries, { sha: tip, kinds: ['quick', 'full'], commands, ...trust })
     : null;
   if (known?.ok === true) {
-    console.log(`Gates green at ${String(tip).slice(0, 12)} (${known.kind}, cq's own run at ${known.time}); not run again.`);
+    const covered = GE.coverageLine(known);
+    console.log(`Gates green at ${String(tip).slice(0, 12)} (${known.kind}, cq's own run at ${known.time}${covered ? `, ${covered}` : ''}); not run again.`);
     return {
       status: 'green',
       record: { ok: true, kind: known.kind, tip, at: new Date().toISOString(), ran: false, evidence_at: known.time, evidence_id: known.id },
@@ -210,10 +227,12 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
   const found = GE.latest(GE.readStore(storeFile).entries, { sha: tip, kinds: ['quick'], commands, ...trust });
   // Written by THIS run (not before it started; a second of slack for the clock's resolution), or none.
   const entry = found && Date.parse(found.time) >= t0 - 1000 ? found : null;
+  // What the run covered, in a short phrase (lib/gateEvidence.js coverageLine): a sha does not name everything it saw.
+  const covered = GE.coverageLine(entry);
   // The run's own result and its recorded evidence must agree; a green exit without an entry (a commit during the run,
   // or the store could not be written) is no evidence.
   if (r.status === 0 && entry?.ok === true) {
-    console.log(`Gates GREEN at ${String(tip).slice(0, 12)} (${durationSec} s), recorded as evidence for that commit.`);
+    console.log(`Gates GREEN at ${String(tip).slice(0, 12)} (${durationSec} s), recorded as evidence for that commit${covered ? `; ${covered}` : ''}.`);
     return { status: 'green', record: { ok: true, kind: 'quick', tip, at: entry.time, ran: true, duration_s: durationSec, evidence_id: entry.id } };
   }
   if (r.status === 0)
@@ -246,7 +265,9 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
       '',
     ].join('\n'),
   );
-  console.log(`Gates RED at ${String(tip).slice(0, 12)} (exit ${r.status ?? '?'}, ${durationSec} s).`);
+  console.log(`Gates RED at ${String(tip).slice(0, 12)} (exit ${r.status ?? '?'}, ${durationSec} s)${covered ? `; ${covered}` : ''}.`);
+  if (entry?.tampered)
+    console.log(`TAMPERED: ${entry.tamper_reason ?? 'the evidence store changed during the run'}. ${require('./lib/gitExecSurface.js').INSPECT}.`);
   return {
     status: 'red',
     record: {
