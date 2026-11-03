@@ -1,0 +1,15 @@
+{
+  "task_id": "D7",
+  "track_id": "D7",
+  "role": "track",
+  "client": "claude",
+  "class": "D",
+  "branch": "queue/D7",
+  "base_sha": "0123456789abcdef0123456789abcdef01234567",
+  "prompt_file": "/scratch/prompt-D7.md",
+  "expects": ["report", "handover", "result"],
+  "effort": "high",
+  "migr_block": null,
+  "new": true,
+  "warning": false
+}
