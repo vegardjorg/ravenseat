@@ -305,6 +305,9 @@
 //                                                                  merge-conflict/gate-red when it stops there and closes
 //                                                                  the open one after a successful merge)
 //   node scripts/orchestrator/queue.mjs unblock <id>                  (closes the open blocker)
+//   node scripts/orchestrator/queue.mjs unlock [--force --by owner]   (the queue lock: prints the holder; with both flags
+//                                                                  releases it. Refused from a track worktree; the guard
+//                                                                  denies it to queue agents. lib/queueLock.js)
 //   node scripts/orchestrator/queue.mjs blockers [--days 7] [--json]   (per code: count and blocked time in the period,
 //                                                                  top first)
 //
@@ -611,6 +614,7 @@ import * as run from './cli/run.mjs';
 import * as taskEdit from './cli/taskEdit.mjs';
 import * as tasks from './cli/tasks.mjs';
 import * as triage from './cli/triage.mjs';
+import * as unlock from './cli/unlock.mjs';
 import * as view from './cli/view.mjs';
 import * as wait from './cli/wait.mjs';
 
@@ -693,6 +697,8 @@ if (command === 'init') {
   await merge.cmdMerge();
 } else if (command === 'block') {
   merge.cmdBlock();
+} else if (command === 'unlock') {
+  unlock.cmdUnlock();
 } else if (command === 'unblock') {
   merge.cmdUnblock();
 } else if (command === 'blockers') {
@@ -782,7 +788,7 @@ if (command === 'init') {
     'Use: cq <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow|triage|wait|decide> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow|triage|wait|decide|unlock> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

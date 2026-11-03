@@ -4,7 +4,8 @@
 // The libraries (L = lib/queueLogic.js and the other one- and two-letter aliases), the project settings (CONFIG, BASE,
 // the migration flow), the paths (the data folder, queue.json, the lock, the cursor, the plan register), the parsed
 // arguments (a, command, val, values, positional) and the helpers every command uses: git, read, write, edit and
-// editLogged under the file lock, die (releases the lock), the orchestrator cursor and the auto-accept of proposals.
+// editLogged under the file lock (the owner token and the takeover rule: lib/queueLock.js), die (releases the lock), the
+// orchestrator cursor and the auto-accept of proposals.
 // It imports no other cli/ module, so the command modules can all import it without a cycle. `require` is made
 // relative to queue.mjs, so `require('./lib/...')` means the same in every module as it did in the single file.
 //
@@ -39,6 +40,8 @@ export const F = require('./lib/queueFollow.js');
 export const FC = require('./lib/queueForecast.js');
 export const PR = require('./lib/queueProposals.js');
 const MG = require('./lib/mergeGuard.js');
+// The owner of the lock in withLock: the token, the takeover rule and the atomic takeover.
+const QL = require('./lib/queueLock.js');
 // The safe write of queue.json (queue.json.prev and the rename retry) and the recovery hint.
 export const SF = require('./lib/stateFile.js');
 // The optional `fixes` field: the task(s) a fix task fixes (add, edit, info, state).
@@ -211,41 +214,59 @@ export function writeExternalWarning(o) {
           .join(', '),
     );
 }
-// process.exit skips finally blocks: release the lock here, otherwise it lingers for 60 s and stops all
-// other calls (e.g. "cannot be started" inside the lock would otherwise block the queue).
-export let hasLock = false;
+// The token of the lock this process holds (null: none). Set by withLock, cleared by releaseLock.
+let held = null;
+let releaseOnExit = false;
+/** Gives the lock back if this process still owns it. A lock another process has taken is left alone (lib/queueLock.js). */
+function releaseLock() {
+  if (!held) return;
+  const me = held;
+  held = null;
+  QL.release(LOCK, me);
+}
+// Always false, on purpose. Command modules (planShared, projects, taskEdit) have `if (hasLock) fs.rmSync(LOCK, ...)`
+// before their process.exit on a --json error. That removal has no owner check, so it must never run: the 'exit' handler
+// withLock registers does the release, with the check, for those exits and every other one. They can drop the line.
+export const hasLock = false;
+// process.exit skips finally blocks: the 'exit' handler releases the lock, otherwise it would stop all other calls
+// (e.g. "cannot be started" inside the lock would otherwise block the queue). A lost lock is not removed.
 export const die = (message, code = 1) => {
   console.error(message);
-  if (hasLock) fs.rmSync(LOCK, { recursive: true, force: true });
+  releaseLock();
   process.exit(code);
 };
 // ---- Lock and storage --------------------------------------------------------------------------------------
 export function withLock(fn) {
   fs.mkdirSync(FOLDER, { recursive: true });
-  const deadline = Date.now() + 15_000;
-  for (;;) {
-    try {
-      fs.mkdirSync(LOCK);
-      hasLock = true;
-      break;
-    } catch {
-      // A lock older than 60 s was left behind by a process that died: remove it.
-      try {
-        if (Date.now() - fs.statSync(LOCK).mtimeMs > 60_000)
-          fs.rmSync(LOCK, { recursive: true, force: true });
-      } catch {
-        /* the lock disappeared between the checks */
-      }
-      if (Date.now() > deadline) die(`Could not get the lock on ${FOLDER} (tried for 15 s). Try again.`);
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
-    }
+  const got = QL.acquire(LOCK, { waitMs: QL.waitMsFrom(process.env.QUEUE_LOCK_WAIT_MS) });
+  if (!got.ok) die(QL.heldMessage({ folder: FOLDER, cq: CQ, ...got }));
+  held = got.me;
+  if (!releaseOnExit) {
+    releaseOnExit = true;
+    process.on('exit', releaseLock);
   }
   try {
     return fn();
   } finally {
-    fs.rmSync(LOCK, { recursive: true, force: true });
-    hasLock = false;
+    if (held && !QL.isHeld(LOCK, held))
+      console.error(`WARNING: this command lost the lock on ${FOLDER} while it ran; the lock was left to its new holder.`);
+    releaseLock();
   }
+}
+/**
+ * Stops the command if it holds the lock no more (taken over, or released with cq unlock): it must not publish.
+ * The gap between this check and the rename: on one machine it is closed by the rule in lib/queueLock.js, not by the
+ * check, because a live holder is never taken over, so a holder that gets here and still lives keeps the lock through
+ * the rename. (Only the owner's cq unlock --force breaks that, on the owner's word.) For a holder on another host the
+ * age rule still applies: a holder pausing right here past 60 s can publish after losing the lock. The check only makes
+ * that window small; a data folder shared across machines would need a lease or a real database to close it.
+ */
+function stopIfLockLost(what) {
+  if (held && !QL.isHeld(LOCK, held))
+    die(
+      `Lost the lock on ${FOLDER} before writing ${what}: another process took it over or the owner released it. ` +
+        'Nothing was written, and the lock was left to its new holder. Run the command again.',
+    );
 }
 export function read() {
   if (!fs.existsSync(FILE)) die(`The queue does not exist. Run: ${CQ} init`);
@@ -275,6 +296,7 @@ export function parallelWarning() {
 // The write keeps queue.json.prev (the previous good state) and retries the rename on Windows EPERM/EBUSY/EACCES
 // (lib/stateFile.js writeState).
 export function write(queue) {
+  stopIfLockLost('queue.json');
   queue.changed = new Date().toISOString();
   SF.writeState(FILE, JSON.stringify(queue, null, 2) + '\n');
 }
@@ -294,8 +316,7 @@ export function checkExpect(queue) {
   const code = f.startsWith('invalid') ? 1 : 6;
   if (a.includes('--json')) {
     console.log(JSON.stringify({ ok: false, error: [f], outdated: code === 6 }));
-    if (hasLock) fs.rmSync(LOCK, { recursive: true, force: true });
-    process.exit(code);
+    process.exit(code); // The 'exit' handler releases the lock.
   }
   die(`Nothing changed: ${f}`, code);
 }
@@ -350,6 +371,7 @@ export function readPlans() {
 }
 // `bump: false` (plan active) leaves `changed` alone: a pulse is no plan change and must not make --expect-changed outdated.
 export function writePlans(reg, { bump = true } = {}) {
+  stopIfLockLost('plans.json');
   if (bump) reg.changed = new Date().toISOString();
   const tmp = `${PLAN_FILE}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(reg, null, 2) + '\n');
