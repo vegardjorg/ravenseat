@@ -60,7 +60,7 @@ function trackFolderRound(name, id) {
  * @returns {{ report: null | { path: string, folder: string, round: number, mtimeMs: number, text: string },
  *   handover: null | { path: string, mtimeMs: number }, nextRound: number }}
  */
-function findTrackReport(id, roots, fsx = require('node:fs'), pathx = require('node:path')) {
+function findTrackReport(id, roots, fsx = require('node:fs'), pathx = require('node:path'), attempt = null) {
   let report = null;
   let handover = null;
   let maxRound = 0;
@@ -108,7 +108,38 @@ function findTrackReport(id, roots, fsx = require('node:fs'), pathx = require('n
       }
     }
   }
+  // The current attempt names its files: only those count, however new another report is (see attemptFiles).
+  const own = attempt?.artifacts;
+  if (own?.report || own?.handover) {
+    return { ...attemptFiles(own, attempt.round ?? 0, fsx, pathx), nextRound: maxRound + 1 };
+  }
   return { report, handover, nextRound: maxRound + 1 };
+}
+
+/**
+ * The report and handover an attempt names, each null when the file is not there (yet). A report from an earlier attempt
+ * is not this attempt's. An attempt that names none (an old task, or a Claude attempt, whose agent writes where the
+ * mission says) keeps the newest-file rule in findTrackReport, with no binding to an attempt or a commit.
+ */
+function attemptFiles(own, round, fsx, pathx) {
+  const mtime = (filePath) => {
+    try {
+      const st = filePath ? fsx.statSync(filePath) : null;
+      return st?.isFile() ? st.mtimeMs : null;
+    } catch {
+      return null;
+    }
+  };
+  const handoverMs = mtime(own.handover);
+  const handover = handoverMs == null ? null : { path: own.handover, mtimeMs: handoverMs };
+  const reportMs = mtime(own.report);
+  if (reportMs == null) return { report: null, handover };
+  try {
+    const text = fsx.readFileSync(own.report, 'utf8');
+    return { report: { path: own.report, folder: pathx.dirname(own.report), round, mtimeMs: reportMs, text }, handover };
+  } catch {
+    return { report: null, handover }; // file lock while the track writes: the next pulse takes it
+  }
 }
 
 /** The baseline for a new delivery: the start, the delivery to review or the last receive, whichever is latest (ms). */

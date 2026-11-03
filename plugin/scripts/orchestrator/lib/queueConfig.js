@@ -99,6 +99,9 @@ const STANDARD = Object.freeze({
   secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000 },
   // `cq doctor` warns about tracked files larger than this (MB).
   largeFileMb: 5,
+  // Attempts (lib/logic/attempt.js): how long, in minutes, a reservation with no start row counts as live. After that it
+  // reads as expired and the next start takes a new attempt. A reservation never blocks a start either way.
+  attempts: { reservationTtlMin: 30 },
   // The fix-round cap per task (`resume --reason fix`, also the one receive starts after a red done command). At the cap
   // the task becomes an owner question instead of another round. The task field `max_fix_rounds` overrides it.
   maxFixRounds: 3,

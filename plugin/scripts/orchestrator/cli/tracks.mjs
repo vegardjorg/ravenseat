@@ -25,6 +25,9 @@ import {
   TIME_LOG, TK, val, values,
 } from './context.mjs';
 
+const AT = require('./lib/logic/attempt.js');
+const CL = require('./lib/clients/index.js');
+
 export function logTime(id, event, remark) {
   try {
     execFileSync(
@@ -350,7 +353,7 @@ export const trackRoots = (o) => [scratchpadFor(), o?.scratchpad ?? null].filter
 export function findDeliveries(queue) {
   return queue.tasks
     .filter((o) => ['running', 'review'].includes(o.status) && !o.picked_by)
-    .map((o) => L.assessDelivery(o, L.findTrackReport(o.id, trackRoots(o)).report))
+    .map((o) => L.assessDelivery(o, trackReport(o).report))
     .filter(Boolean);
 }
 /**
@@ -385,7 +388,7 @@ export function findWithoutAgent(queue) {
     const worktreeBranches = new Set(G.readWorktrees(gitRead).map((w) => w.branch).filter(Boolean));
     return L.startedWithoutAgent(queue, {
       worktreeBranches,
-      hasReport: (o) => !!L.findTrackReport(o.id, trackRoots(o)).report,
+      hasReport: (o) => !!trackReport(o).report,
     });
   } catch (e) {
     console.error(`(The agent check failed: ${e?.message ?? e})`);
@@ -427,7 +430,7 @@ export function findSilent(queue) {
     return L.silentTracks(queue, {
       worktreeBranches,
       lastActivity,
-      hasReport: (o) => !!L.findTrackReport(o.id, trackRoots(o)).report,
+      hasReport: (o) => !!trackReport(o).report,
       now,
       limitMin,
     });
@@ -449,8 +452,61 @@ export function mergeBlock(id, code, note) {
     console.error(`(Could not record the blocker: ${e?.message ?? e})`);
   }
 }
-/** The fields `start` and `fill` set (under the lock): status, branch and, if any, migration block. */
-export function markStarted(queue, o, { agent = null, head = null, scratchpad = null } = {}) {
+// ---- Attempts (the rules in lib/logic/attempt.js) ----
+/** The report and handover for a task: its current attempt's folder when it names one, otherwise the mtime rule. */
+export const trackReport = (o, roots = trackRoots(o)) => L.findTrackReport(o.id, roots, undefined, undefined, AT.current(o));
+/** The label an agent's mission gives it, from its transcript; null when there is none yet. */
+function labelFromTranscript(agentId) {
+  const text = readTranscript(findTranscript(agentId));
+  const first = text ? L.firstUserMessage(text) : null;
+  return first ? TK.trackFromText(first) : null;
+}
+/**
+ * The time log rows for deriving the attempts of `tasks`, with the labels the hook could not know yet (lib/logic/attempt.js
+ * relabelRows). Read BEFORE the lock (the log can be large), and only when one of them has an open attempt, so a normal
+ * start reads nothing. The hook only appends to the log: it never writes queue.json or waits for the lock.
+ */
+export function attemptRows(tasks) {
+  const open = tasks.filter((o) => AT.hasOpen(o?.attempts));
+  if (!open.length) return [];
+  const from = Math.min(...open.flatMap((o) => o.attempts.filter((x) => x.state !== 'ended').map((x) => Date.parse(x.reserved))));
+  return AT.relabelRows(readTimeLog(), labelFromTranscript, { from });
+}
+/** Brings a task's attempts up to date with the rows (the caller holds the lock). True when something changed. */
+export function syncAttempts(o, rows) {
+  const r = AT.deriveRunning(o.attempts, rows, { taskId: o.id });
+  if (r.changed) o.attempts = r.attempts;
+  return r.changed;
+}
+/** Would a new attempt be refused? The running attempt that blocks it, after the rows, or null. Changes nothing on disk. */
+export function runningAttempt(o, rows) {
+  return AT.startBlock(AT.deriveRunning(o.attempts, rows, { taskId: o.id }).attempts);
+}
+/**
+ * Reserves the attempt for a start or a round on the task (the caller holds the lock; `rows` from attemptRows). The
+ * client's adapter gives the id and the guard. A running attempt stops the command: nothing has been written yet.
+ */
+export function reserveAttempt(o, { round = 0, head = null, scratch = null, rows = [] } = {}) {
+  syncAttempts(o, rows);
+  const adapter = CL.clientFor(o.client);
+  const r = AT.reserve(o.attempts, {
+    client: adapter.id,
+    capabilities: adapter.capabilities,
+    round,
+    baseSha: head,
+    now: new Date().toISOString(),
+    scratch,
+    taskId: o.id,
+    ttlMin: AT.reservationTtlMin(CONFIG),
+  });
+  if (r.blocked) die(AT.blockMessage(o.id, r.blocked, CQ));
+  o.attempts = r.attempts;
+  return r.attempt;
+}
+/** The fields `start` and `fill` set (under the lock): status, branch, if any, migration block, and the attempt. */
+export function markStarted(queue, o, { agent = null, head = null, scratchpad = null, rows = [] } = {}) {
+  // First: a running attempt stops the start before anything on the task changes.
+  reserveAttempt(o, { head, scratch: scratchpad, rows });
   // Past blocks that are already taken (a file, a task that is not finished, an active prompt file).
   const t = L.assignStartBlock(queue, o, takenForMigr(queue, { scratch: scratchpad, except: o.id }), MIGR);
   if (t.skipped.length) console.error(`${o.id}: skipped taken blocks (${blockList(t.skipped)})`);

@@ -194,6 +194,12 @@
 //         newer than the start, the delivery and the last receive. `orchestrator pulse` prints the new ones every round (and
 //         remembers them in report_seen), so a new session that has adopted the tracks sees the delivery without
 //         <task-notification>.)
+//   node scripts/orchestrator/queue.mjs attempt list <id> [--json]   (the task's attempts, lib/logic/attempt.js: reserved, running or
+//                                                 ended, derived from the agents' start and stop rows in the time log;
+//                                                 a reservation past attempts.reservationTtlMin reads as expired)
+//   node scripts/orchestrator/queue.mjs attempt close <id> --outcome <delivered|failed|interrupted|abandoned> [--by "..."]
+//        (a running attempt blocks a new one, so close it when its agent is gone. For Claude the guard is best effort; the
+//         cases are at the top of lib/logic/attempt.js. Refused inside a track worktree; logged, so cq undo takes it back.)
 //   node scripts/orchestrator/queue.mjs resume <id> [--reason fix|context] [--round N] [--findings-file <file>]
 //                                                [--from <reviewer,...>] [--scratchpad <folder>]
 //        (--from: the reviewer types whose findings caused the fix round, saved in `resumed[].from` and the fixRound
@@ -596,6 +602,7 @@
 import fs from 'node:fs';
 import { a, command, CONFIG, CQ, die, HERE, KK, require } from './cli/context.mjs';
 import * as ask from './cli/ask.mjs';
+import * as attempt from './cli/attempt.mjs';
 import * as batch from './cli/batch.mjs';
 import * as cloud from './cli/cloud.mjs';
 import * as conflicts from './cli/conflicts.mjs';
@@ -743,6 +750,8 @@ if (command === 'init') {
   merge.cmdDeliveries();
 } else if (command === 'resume') {
   run.cmdResume();
+} else if (command === 'attempt') {
+  attempt.cmdAttempt();
 } else if (command === 'cloud-package') {
   cloud.cmdCloudPackage();
 } else if (command === 'cloud-bundles') {
@@ -788,7 +797,7 @@ if (command === 'init') {
     'Use: cq <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|follow|triage|wait|decide|unlock> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

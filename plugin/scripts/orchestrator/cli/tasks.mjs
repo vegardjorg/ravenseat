@@ -181,6 +181,8 @@ export function cmdAdd() {
     ('tasks' in content || 'question' in content);
   const newOnes = combined ? [].concat(content.tasks ?? []) : [].concat(content);
   const newQuestion = combined ? (content.question ?? {}) : {};
+  // A new task has no attempts: they are the queue's own record of what ran (lib/logic/attempt.js), never input.
+  for (const n of newOnes) if (n && typeof n === 'object') delete n.attempts;
   if (combined && !newOnes.length && !Object.keys(newQuestion ?? {}).length)
     die('Nothing to add (both tasks and question are empty).');
   // --accept "<criterion>" (repeatable): the acceptance criteria of the ONE task added (lib/doneCheck.js; locked once

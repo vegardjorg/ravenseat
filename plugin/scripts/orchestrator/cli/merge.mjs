@@ -27,7 +27,7 @@ import {
 } from './context.mjs';
 import {
   blockList, findDeliveries, gitLarge, highestMigr, lastTrackReply, logTime, mergeBlock, minutes, readTimeLog,
-  reviewerFindingsLines, scratchpadFor, takenForMigr, taskAgents,
+  attemptRows, reviewerFindingsLines, scratchpadFor, syncAttempts, takenForMigr, taskAgents, trackReport,
 } from './tracks.mjs';
 import {
   BASE_SETUP, BH, flakyRecheck, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf, writeReport,
@@ -36,6 +36,7 @@ import { logEvent } from './events.mjs';
 
 const ER = require('./lib/eventRows.js');
 const CP = require('./lib/conflictPredict.js');
+const AT = require('./lib/logic/attempt.js');
 
 // ---- The done command (task field done_when, lib/doneCheck.js): receive and merge ---------------------------------
 
@@ -301,6 +302,9 @@ export function cmdReceive() {
   }
   // The track's answer (from the transcript), report.md and handover.md from the track folder in the scratchpad.
   const agents = taskAgents(o0);
+  // The attempt (lib/logic/attempt.js): its rows are read here, before the lock and after taskAgents wrote any killed
+  // agent's row. Every way out of receive below records on it, so the fix round a red check starts is a new attempt.
+  const attemptLog = attemptRows([o0]);
   const trackReply = lastTrackReply(agents);
   const files = {};
   if (trackReply) {
@@ -308,7 +312,7 @@ export function cmdReceive() {
     files.trackReply = true;
   }
   // Adoption: the newest report in the orchestrator's and the task's scratchpad, also from a fix round (<id>-r<N>/).
-  const trackFound = L.findTrackReport(id, [scratch, o0.scratchpad ?? null]);
+  const trackFound = trackReport(o0, [scratch, o0.scratchpad ?? null]);
   for (const [k, measure, n] of [
     [trackFound.report?.path, 'trackReport.md', 'report'],
     [trackFound.handover?.path, 'handover.md', 'handover'],
@@ -330,6 +334,18 @@ export function cmdReceive() {
   if (result?.gates != null)
     console.log(`The track's RESULT gates=${result.gates} is self-reported (informational only; receive checks the tip itself).`);
   const gateCheck = result?.status === 'PARTIAL' ? { status: 'off' } : receiveGates(o0, { branch, scratch });
+  const recordAttempt = (o, { gateRed = false, doneRed = false } = {}) => {
+    if (!o.attempts?.length) return;
+    syncAttempts(o, attemptLog);
+    o.attempts = AT.recordReceive(o.attempts, {
+      sha: gateCheck.record?.tip ?? git(['rev-parse', '--verify', `refs/heads/${branch}`]),
+      outcome: AT.receiveOutcome({ status: result?.status ?? null, gateRed, doneRed }),
+      evidenceId: gateCheck.record?.evidence_id ?? null,
+      now: new Date().toISOString(),
+      report: trackFound.report?.path ?? null,
+      handover: trackFound.handover?.path ?? null,
+    });
+  };
   if (gateCheck.status === 'red') {
     edit((queue) => {
       const o = queue.tasks.find((x) => x.id === id);
@@ -346,6 +362,7 @@ export function cmdReceive() {
       }
       o.t_receive ??= new Date().toISOString();
       L.openBlock(o, 'gate-red', { note: `quick gates red at receive (exit ${gateCheck.record.exit ?? '?'})` });
+      recordAttempt(o, { gateRed: true });
       return o;
     });
     if (!o0.picked_by) pulseCursor(`receive ${id} gates red`);
@@ -372,6 +389,7 @@ export function cmdReceive() {
       }
       o.t_receive ??= new Date().toISOString();
       L.openBlock(o, 'gate-red', { note: `done command red at receive (exit ${doneCheck.run.exit ?? '?'})` });
+      recordAttempt(o, { doneRed: true });
       return o;
     });
     if (!o0.picked_by) pulseCursor(`receive ${id} done command red`);
@@ -461,6 +479,7 @@ export function cmdReceive() {
     }
     // First delivery to review (a new round after a fix keeps the first time).
     o.t_receive ??= new Date().toISOString();
+    recordAttempt(o);
     autoCleanFocus(queue, `receive ${id}`);
     return o;
   });

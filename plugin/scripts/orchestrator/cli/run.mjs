@@ -18,13 +18,13 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import {
-  a, autoCleanFocus, BASE, branchFor, branchInfo, CE, CH, CONFIG, cut, die, edit, focusCleanOut, git, HERE, L, MIGR,
+  a, autoCleanFocus, BASE, branchFor, branchInfo, CE, CH, CONFIG, CQ, cut, die, edit, focusCleanOut, git, HERE, L, MIGR,
   missionFile, parallelWarning, positional, pulseCursor, read, readCursor, require, TK, uncommittedPaths, val, values,
   WIDTH, writeExternalWarning,
 } from './context.mjs';
 import {
-  dailyUsageFor, loadSlotsLine, logStart, makeTrackBlocks, markStarted, measureLoad, readTimeLog, scratchpadFor,
-  takenForMigr, trackRoots,
+  attemptRows, dailyUsageFor, loadSlotsLine, logStart, makeTrackBlocks, markStarted, measureLoad, readTimeLog,
+  reserveAttempt, runningAttempt, scratchpadFor, takenForMigr, trackReport, trackRoots,
 } from './tracks.mjs';
 import { askedLine, triageReason, triageState, writeTriageSteps } from './triage.mjs';
 import { detectPushes, logEvent, logLoad } from './events.mjs';
@@ -34,6 +34,8 @@ const ER = require('./lib/eventRows.js');
 // and the task's client adapter (Claude when the task names none) turns it into its own format.
 const MD = require('./lib/logic/missionDescriptor.js');
 const CL = require('./lib/clients/index.js');
+// The attempt: start, fill and resume reserve one under the lock, and its id goes into the descriptor.
+const AT = require('./lib/logic/attempt.js');
 
 /** The adapter for a task's client, or die with the registry's error (an unknown client starts nothing). */
 function adapterFor(o) {
@@ -107,6 +109,7 @@ export function cmdStart() {
   const load = a.includes('--force') ? null : measureLoad();
   // One load row per start (cli/events.mjs), before the guards can stop it, so a stop (exit 7) is recorded too.
   logLoad({ command: 'start', queue: read(), load });
+  const attemptLog = attemptRows(read().tasks.filter((x) => x.id === id));
   const r = edit((queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
@@ -166,6 +169,7 @@ export function cmdStart() {
       agent: val('--agent'),
       head: git(['rev-parse', BASE]),
       scratchpad: scratchpadFor(),
+      rows: attemptLog,
     });
   });
   logStart(r);
@@ -173,7 +177,7 @@ export function cmdStart() {
     `Started ${id}: branch ${r.branch}${r.migr_block ? `, migration block ${r.migr_block}` : ''}, estimate ${L.estimate(r)} min.`,
   );
   // The agent line from the descriptor: the effort by class (K and U medium, D and D+ high) and the adapter's agent.
-  const d = MD.missionDescriptor(r, { client: adapterFor(r).id, baseSha: r.head_start ?? null });
+  const d = MD.missionDescriptor(r, { client: adapterFor(r).id, baseSha: r.head_start ?? null, attemptId: AT.current(r)?.id });
   console.log(CL.clientFor(d.client).startLine(d));
   // Only the orchestrator starts tasks: the cursor says it is active.
   pulseCursor(`start ${id}`);
@@ -221,6 +225,7 @@ export function cmdFill() {
   // (the reflog of the remote tracking ref). Both fail open (cli/events.mjs).
   logLoad({ command: 'fill', queue: read(), load });
   detectPushes();
+  const attemptLog = attemptRows(read().tasks.filter((x) => x.status === 'waiting' || x.status === 'running'));
   let quotaMessage = null;
   let loadMessage = null;
   // The intake triage (lib/queueTriage.js): the tasks that need a verdict are skipped (others take the slots), and the
@@ -295,8 +300,21 @@ export function cmdFill() {
     }
     // Every client is checked before anything is marked started (an unknown one stops the whole fill).
     for (const x of out) adapterFor(x.o);
-    for (const x of out) if (x.new) markStarted(queue, x.o, { head, scratchpad: scratch });
-    return out.map((x) => ({ id: x.o.id, new: x.new }));
+    // A task the selection chose but whose attempt is still running gets no second agent. Without --ids the rest go on;
+    // --ids stops in reserveAttempt below, as --ids does for anything that cannot start.
+    const go = ids.length
+      ? out
+      : out.filter((x) => {
+          const live = runningAttempt(x.o, attemptLog);
+          if (live) console.error(AT.blockMessage(x.o.id, live, CQ));
+          return !live;
+        });
+    for (const x of go) {
+      if (x.new) markStarted(queue, x.o, { head, scratchpad: scratch, rows: attemptLog });
+      // Already running (new prompt files, for example after make-mission failed): a live reservation is kept.
+      else reserveAttempt(x.o, { head, scratch, rows: attemptLog });
+    }
+    return go.map((x) => ({ id: x.o.id, new: x.new }));
   });
   // A check at every fill: loose waits (the owner does not see them, or an answer blocks anyway).
   const resolveWarning = () => {
@@ -364,6 +382,7 @@ export function cmdFill() {
       client: adapterFor(o).id,
       promptFile: path.join(scratch, `prompt-${o.id}.md`),
       baseSha: head,
+      attemptId: AT.current(o)?.id,
       isNew: v.new,
       warning: withWarning.includes(o.id),
     });
@@ -493,12 +512,15 @@ export function cmdResume() {
   if (!['running', 'review'].includes(o.status))
     die(`${id} has status ${o.status}; resume applies to running and review (a new start is fill or start).`);
   adapterFor(o); // an unknown client stops before any round file is written
+  // A running attempt stops the round before any file is written; the reservation at the end checks again under the lock.
+  const running = runningAttempt(o, attemptRows([o]));
+  if (running) die(AT.blockMessage(id, running, CQ));
   const scratch = scratchpadFor(o.scratchpad ?? null);
   if (!scratch) die(`${use}\nNeeds --scratchpad <folder> (or QUEUE_SCRATCHPAD).`);
   const branch = o.branch ?? branchFor(id);
   if (!branchInfo(branch).exists)
     die(`Branch ${branch} does not exist; resume continues a branch that exists (otherwise fill --ids).`);
-  const found = L.findTrackReport(id, trackRoots(o));
+  const found = trackReport(o);
   const round = val('--round') != null ? Number(val('--round')) : found.nextRound;
   if (!Number.isInteger(round) || round < 1) die('--round must be an integer >= 1');
   const findingsFile = val('--findings-file') ? path.resolve(val('--findings-file')) : null;
@@ -610,10 +632,13 @@ export function cmdResume() {
   const adjusted = L.resumePromptAdjust(fs.readFileSync(prompt, 'utf8'), { trackId, branch, base: BASE });
   fs.writeFileSync(prompt, adjusted.text);
   // The report that exists now has already been reported; only a NEW report from the new agent is reported by pulse.
-  edit((q) => {
+  const attemptLog = attemptRows([read().tasks.find((y) => y.id === id)]);
+  const attempt = edit((q) => {
     const x = q.tasks.find((y) => y.id === id);
+    const reserved = reserveAttempt(x, { round, head, scratch, rows: attemptLog });
     if (found.report) x.report_seen = Math.max(Number(x.report_seen ?? 0), found.report.mtimeMs);
     (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}) });
+    return reserved;
   });
   // The fixRound row (lib/eventRows.js): the same round as `resumed`, countable per week (fail open).
   logEvent(ER.fixRoundRow({ task: id, reason, round, from: fromList }));
@@ -627,7 +652,7 @@ export function cmdResume() {
       `${adjusted.swapped ? '' : '  WARNING: could not find the setup line to add --continue to; check the prompt'}`,
   );
   // The agent line from the round's descriptor (track id <id>-r<N>, the round prompt), in the task's client format.
-  const d = MD.missionDescriptor(o, { client: adapterFor(o).id, trackId, branch, promptFile: prompt, baseSha: head });
+  const d = MD.missionDescriptor(o, { client: adapterFor(o).id, trackId, branch, promptFile: prompt, baseSha: head, attemptId: attempt.id });
   console.log(CL.clientFor(d.client).resumeLine(d));
   // If the branch is still checked out in a worktree, prepare-track --continue refuses: the old agent must be done.
   const holder = (git(['worktree', 'list', '--porcelain']) ?? '')
