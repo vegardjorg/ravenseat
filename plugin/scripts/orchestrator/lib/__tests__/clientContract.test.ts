@@ -27,7 +27,7 @@ type Adapter = {
 
 const CLIENTS = path.resolve(__dirname, '..', 'clients');
 const CAPABILITIES = ['cloud', 'hooks', 'resume', 'sandbox', 'structuredOutput', 'usage'];
-const FUNCTIONS = ['dispatch', 'fillEntry', 'agentLabel', 'startLine', 'resumeLine', 'sameTurnBlock'];
+const FUNCTIONS = ['dispatch', 'fillEntry', 'agentLabel', 'startLine', 'resumeLine', 'sameTurnBlock', 'missionAddendum'];
 const adapters: Adapter[] = CL.adapters;
 const fixture = (id: string) =>
   JSON.parse(fs.readFileSync(path.join(CLIENTS, id, 'fixtures', 'descriptor.json'), 'utf8'));
@@ -74,6 +74,10 @@ describe('client adapters: the shared contract', () => {
       expect(adapter.resumeLine(d)).toContain(d.track_id);
       expect(adapter.sameTurnBlock([])).toEqual([]);
       expect(adapter.sameTurnBlock([x]).length).toBeGreaterThan(0);
+      // The mission addendum fills the template's client placeholders with non-empty text.
+      const a = adapter.missionAddendum({});
+      expect(Object.keys(a.template).length).toBeGreaterThan(0);
+      expect(typeof a.reportOutside).toBe('string');
     });
   });
 

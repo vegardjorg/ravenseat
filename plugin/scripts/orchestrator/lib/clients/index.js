@@ -9,7 +9,7 @@
 //
 // Every adapter exports { id, capabilities: { sandbox, resume, usage, hooks, cloud, structuredOutput } (booleans),
 // dispatch(descriptor), fillEntry(descriptor), agentLabel(descriptor), startLine(descriptor),
-// resumeLine(descriptor), sameTurnBlock(agents) }. lib/__tests__/clientContract.test.ts checks each one.
+// resumeLine(descriptor), sameTurnBlock(agents), missionAddendum(ctx) }. lib/__tests__/clientContract.test.ts checks each one.
 // Used by cli/run.mjs and lib/logic/merge.js (concurrentBlock).
 // =============================================================
 'use strict';

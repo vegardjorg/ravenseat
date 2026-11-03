@@ -4,7 +4,8 @@
 // queue-fill.json entry, the fill, start and resume lines and the "same turn" block.
 //
 // The output is byte-identical to the Claude flow before the adapter split (locked by claudeDispatchCompat.test.ts).
-// The Claude facts themselves (agent names, model list, message text) live in ./dispatch.js, with source and date.
+// The Claude facts themselves (agent names, model list, message text) live in ./dispatch.js and the mission text
+// pieces in ./mission.js, each with source and date.
 //
 // Used by lib/clients/index.js (the registry). Tested in lib/__tests__/clientContract.test.ts and
 // claudeDispatchCompat.test.ts.
@@ -95,5 +96,6 @@ module.exports = {
   resumeLine,
   // The agents for one orchestrator turn: tracks from dispatch and the Claude helpers (reviewers, triage).
   sameTurnBlock: D.sameTurnBlock,
-  // missionAddendum: wired from ./mission.js (track B, the Claude mission text addendum) after the merge.
+  // The Claude pieces of the mission text (tool names, how to report, context advice): ./mission.js.
+  missionAddendum: require('./mission.js').missionAddendum,
 };

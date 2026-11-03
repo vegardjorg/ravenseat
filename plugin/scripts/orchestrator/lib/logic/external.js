@@ -19,9 +19,9 @@ const { answerBlock } = require('./questions.js');
 const { COLLISION_STATUSES } = require('./commits.js');
 const { setStatus } = require('./pick.js');
 
-// The default client addendum (Claude Code, today's text) for trackBlock. The client registry (lib/clients/index.js)
-// replaces this lookup once it exists; a caller for another client passes its own missionAddendum.
-const defaultAddendum = (ctx) => require('../clients/claude/mission.js').missionAddendum(ctx);
+// The default client's mission addendum for trackBlock (the registry's first adapter, today's Claude text); a caller
+// for another client passes its own adapter's missionAddendum.
+const defaultAddendum = (ctx) => require('../clients/index.js').clientFor().missionAddendum(ctx);
 
 /**
  * Collisions between work outside the queue and the owned files of tasks that are running, picked, in review or waiting.

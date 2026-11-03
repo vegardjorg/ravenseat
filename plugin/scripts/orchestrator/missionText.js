@@ -17,9 +17,9 @@
 
 const CLASSES = ['K', 'D', 'D+', 'U'];
 
-// The default client addendum (Claude Code, today's text). The client registry (lib/clients/index.js) replaces this
-// lookup once it exists; a caller for another client passes its own addendum.
-const defaultAddendum = (ctx) => require('./lib/clients/claude/mission.js').missionAddendum(ctx);
+// The default client's mission addendum (the registry's first adapter, today's Claude text); a caller for another
+// client passes its own adapter's missionAddendum.
+const defaultAddendum = (ctx) => require('./lib/clients/index.js').clientFor().missionAddendum(ctx);
 
 // Split/join, never String.replace (a replacement containing "$'" duplicates text).
 const swap = (s, from, to) => s.split(from).join(to);
