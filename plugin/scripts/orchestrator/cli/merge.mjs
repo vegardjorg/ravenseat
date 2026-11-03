@@ -130,11 +130,16 @@ function doneCommandRed(id, check, { scratch, what = 'done command' }) {
  * by gates.mjs for the orchestrator (lib/gateEvidence.js). When the store has one for this tip (an earlier receive, no
  * new commits since), nothing runs. Otherwise receive runs `gates.mjs --quick --evidence` in the track's worktree (the
  * one with the branch checked out; --done-cwd overrides) and reads the evidence that run recorded.
+ * Reuse needs ALL of: the same sha, the setup hash of the CURRENT gate config (lib/gateEvidence.js setupHash, so a
+ * changed gate setup runs again on the same commit) and `writer: "orchestrator"`; a legacy entry (from before those
+ * fields) is never reused here. `reuse: false` always runs the gates (prepared for an external attempt, which must never
+ * ride on evidence it did not get from this run; no caller passes it yet). The entry read back after the run must be
+ * newer than the run's start, so an older entry can never stand in for a run that recorded nothing.
  * Refused (exit 1, nothing changed), as for the done command: no worktree has the branch, the worktree is not at the
  * branch tip, or it has uncommitted tracked changes (a green run would then not be bound to the tip).
  * @returns {{ status: 'off' } | { status: 'green'|'red', record: object, check?: { run: object, file: string } }}
  */
-function receiveGates(o, { branch, scratch }) {
+function receiveGates(o, { branch, scratch, reuse = true }) {
   const GE = require('./lib/gateEvidence.js');
   const DC = require('./lib/doneCheck.js');
   const commands = (Array.isArray(CONFIG.gates?.quick) ? CONFIG.gates.quick : [])
@@ -143,12 +148,16 @@ function receiveGates(o, { branch, scratch }) {
   if (!commands.length) return { status: 'off' };
   const tip = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
   const storeFile = GE.storeFile(FOLDER);
-  const known = GE.latest(GE.readStore(storeFile).entries, { sha: tip, kinds: ['quick', 'full'], commands });
+  // Only the orchestrator's own entries for this exact control setup (legacy: false), see the comment above.
+  const trust = { setupHash: GE.setupHash(CONFIG.gates), legacy: false };
+  const known = reuse
+    ? GE.latest(GE.readStore(storeFile).entries, { sha: tip, kinds: ['quick', 'full'], commands, ...trust })
+    : null;
   if (known?.ok === true) {
     console.log(`Gates green at ${String(tip).slice(0, 12)} (${known.kind}, cq's own run at ${known.time}); not run again.`);
     return {
       status: 'green',
-      record: { ok: true, kind: known.kind, tip, at: new Date().toISOString(), ran: false, evidence_at: known.time },
+      record: { ok: true, kind: known.kind, tip, at: new Date().toISOString(), ran: false, evidence_at: known.time, evidence_id: known.id },
     };
   }
   const cwd = val('--done-cwd')
@@ -198,12 +207,14 @@ function receiveGates(o, { branch, scratch }) {
     { cwd, encoding: 'utf8', env: process.env, maxBuffer: 1 << 26 },
   );
   const durationSec = Math.round((Date.now() - t0) / 100) / 10;
-  const entry = GE.latest(GE.readStore(storeFile).entries, { sha: tip, kinds: ['quick'], commands });
+  const found = GE.latest(GE.readStore(storeFile).entries, { sha: tip, kinds: ['quick'], commands, ...trust });
+  // Written by THIS run (not before it started; a second of slack for the clock's resolution), or none.
+  const entry = found && Date.parse(found.time) >= t0 - 1000 ? found : null;
   // The run's own result and its recorded evidence must agree; a green exit without an entry (a commit during the run,
   // or the store could not be written) is no evidence.
   if (r.status === 0 && entry?.ok === true) {
     console.log(`Gates GREEN at ${String(tip).slice(0, 12)} (${durationSec} s), recorded as evidence for that commit.`);
-    return { status: 'green', record: { ok: true, kind: 'quick', tip, at: entry.time, ran: true, duration_s: durationSec } };
+    return { status: 'green', record: { ok: true, kind: 'quick', tip, at: entry.time, ran: true, duration_s: durationSec, evidence_id: entry.id } };
   }
   if (r.status === 0)
     die(
@@ -238,7 +249,10 @@ function receiveGates(o, { branch, scratch }) {
   console.log(`Gates RED at ${String(tip).slice(0, 12)} (exit ${r.status ?? '?'}, ${durationSec} s).`);
   return {
     status: 'red',
-    record: { ok: false, kind: 'quick', tip, at: new Date().toISOString(), ran: true, exit: r.status, duration_s: durationSec, file },
+    record: {
+      ok: false, kind: 'quick', tip, at: new Date().toISOString(), ran: true, exit: r.status, duration_s: durationSec, file,
+      ...(entry?.id ? { evidence_id: entry.id } : {}),
+    },
     check: { run: { tail, exit: r.status }, file },
   };
 }
