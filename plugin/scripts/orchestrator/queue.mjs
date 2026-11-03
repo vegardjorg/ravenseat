@@ -161,8 +161,10 @@
 // The orchestrator's routine as a script and the cost per task (the pure logic is in lib/queueLogic.js):
 //   node scripts/orchestrator/queue.mjs fill --scratchpad <folder> [--max N] [--ids <id …>] [--over-quota] [--over-load]
 //        (next -> start -> trackFile -> make-queue-common -> make-mission in one call. Writes <folder>/prompt-<id>.md and
-//         <folder>/queue-fill.json [{ id, class, subagent_type, prompt, message, branch, migr_block }], and one line +
-//         the agent message per track. Saves head_start (HEAD on baseBranch, --wave-base for merge-track) and scratchpad
+//         <folder>/queue-fill.json { time, head, track: [{ id, class, subagent_type, model, prompt, message, branch,
+//         migr_block, new, warning }] } (subagent_type, model and message are the Claude adapter's, lib/clients/claude;
+//         model null = the agent file's; new false = was already running; warning = changed outside the queue), and
+//         one line + the agent message per track. Saves head_start (HEAD on baseBranch, --wave-base for merge-track) and scratchpad
 //         on the task. --ids: only these; one that is already running only gets new prompt files (after an error).
 //         QUEUE_SCRATCHPAD can replace --scratchpad. Without --ids, fill prints a quota line when the forecast
 //         empties weeklyQuota before the reset; with capacity --mode cap at most that many new ones start, and --over-quota
