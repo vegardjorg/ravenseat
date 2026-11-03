@@ -30,6 +30,19 @@ import { askedLine, triageReason, triageState, writeTriageSteps } from './triage
 import { detectPushes, logEvent, logLoad } from './events.mjs';
 
 const ER = require('./lib/eventRows.js');
+// The client-neutral mission descriptor and the client adapters: fill, start and resume build the descriptor first,
+// and the task's client adapter (Claude when the task names none) turns it into its own format.
+const MD = require('./lib/logic/missionDescriptor.js');
+const CL = require('./lib/clients/index.js');
+
+/** The adapter for a task's client, or die with the registry's error (an unknown client starts nothing). */
+function adapterFor(o) {
+  try {
+    return CL.clientFor(o.client);
+  } catch (e) {
+    return die(`${o.id}: ${e.message}`);
+  }
+}
 
 /** `cq next` (the usage is at the top of queue.mjs). */
 export function cmdNext() {
@@ -147,6 +160,8 @@ export function cmdStart() {
           (loadLine ? ` ${loadLine}` : ''),
       );
     }
+    // The client is checked before the start, so an unknown one never leaves a running task without an agent.
+    adapterFor(o);
     return markStarted(queue, o, {
       agent: val('--agent'),
       head: git(['rev-parse', BASE]),
@@ -157,12 +172,9 @@ export function cmdStart() {
   console.log(
     `Started ${id}: branch ${r.branch}${r.migr_block ? `, migration block ${r.migr_block}` : ''}, estimate ${L.estimate(r)} min.`,
   );
-  // Thinking level by class: K and U on `track` (medium), D and D+ on `track-d` (high).
-  console.log(
-    L.agentTypeFor(r.class) === 'track-d'
-      ? `Agent: subagent_type ${require('./lib/projectRoot.js').agentRef('track-d')}${L.modelPart('track-d')} (thinkingLevel high).`
-      : `Agent: subagent_type ${require('./lib/projectRoot.js').agentRef('track')}${L.modelPart('track')} (thinkingLevel medium).`,
-  );
+  // The agent line from the descriptor: the effort by class (K and U medium, D and D+ high) and the adapter's agent.
+  const d = MD.missionDescriptor(r, { client: adapterFor(r).id, baseSha: r.head_start ?? null });
+  console.log(CL.clientFor(d.client).startLine(d));
   // Only the orchestrator starts tasks: the cursor says it is active.
   pulseCursor(`start ${id}`);
   writeExternalWarning(r);
@@ -281,6 +293,8 @@ export function cmdFill() {
       for (const x of triageSteps) queue.tasks.find((o) => o.id === x.id).triage_asked = now;
       triageWaiting = triage.list.filter((x) => x.asked);
     }
+    // Every client is checked before anything is marked started (an unknown one stops the whole fill).
+    for (const x of out) adapterFor(x.o);
     for (const x of out) if (x.new) markStarted(queue, x.o, { head, scratchpad: scratch });
     return out.map((x) => ({ id: x.o.id, new: x.new }));
   });
@@ -301,7 +315,7 @@ export function cmdFill() {
     if (triageOut.agents.length) pulseCursor(`fill triage ${triageOut.agents.map((x) => x.id).join(' ')}`);
     resolveWarning();
     parallelWarning();
-    for (const l of L.concurrentBlock(triageOut.agents)) console.log(l);
+    for (const l of CL.sameTurnLines([], triageOut.agents)) console.log(l);
     process.exit(0);
   }
   const queue = read();
@@ -342,24 +356,19 @@ export function cmdFill() {
     '--out',
     scratch,
   ]);
-  const track = selected.map((v) => {
+  // One client-neutral descriptor per track (lib/logic/missionDescriptor.js); the client format (for Claude:
+  // subagent_type, model and the agent message) is derived from it by the task's adapter (lib/clients/).
+  const descriptors = selected.map((v) => {
     const o = queue.tasks.find((x) => x.id === v.id);
-    const prompt = path.join(scratch, `prompt-${o.id}.md`);
-    return {
-      id: o.id,
-      class: o.class,
-      // cq:track in a plugin install, track in a vendored one (lib/projectRoot.js agentRef).
-      subagent_type: require('./lib/projectRoot.js').agentRef(L.agentTypeFor(o.class)),
-      // config().models; null = the agent file's model.
-      model: L.modelFor(L.agentTypeFor(o.class)),
-      prompt,
-      message: L.trackMessage(o.id, prompt),
-      branch: o.branch,
-      migr_block: o.migr_block ?? null,
-      new: v.new,
+    return MD.missionDescriptor(o, {
+      client: adapterFor(o).id,
+      promptFile: path.join(scratch, `prompt-${o.id}.md`),
+      baseSha: head,
+      isNew: v.new,
       warning: withWarning.includes(o.id),
-    };
+    });
   });
+  const track = descriptors.map((d) => CL.clientFor(d.client).fillEntry(d));
   const jsonFile = path.join(scratch, 'queue-fill.json');
   fs.writeFileSync(
     jsonFile,
@@ -372,11 +381,11 @@ export function cmdFill() {
     const o = queue.tasks.find((x) => x.id === id);
     return `${L.estimate(o)} min ${CE.costText(CE.calibratedCost(o, fillModel))}`;
   };
-  for (const s of track)
+  for (const d of descriptors)
     console.log(
-      `${s.id}  subagent_type=${s.subagent_type}${s.model ? `  model=${s.model}` : ''}  migr ${s.migr_block ?? '-'}${s.new ? '' : '  (was already running)'}` +
-        `${s.warning ? '  WARNING in the track file (changed outside the queue)' : ''}` +
-        `  (${fillEstimate(s.id)})`,
+      `${d.task_id}  ${CL.clientFor(d.client).agentLabel(d)}  migr ${d.migr_block ?? '-'}${d.new ? '' : '  (was already running)'}` +
+        `${d.warning ? '  WARNING in the track file (changed outside the queue)' : ''}` +
+        `  (${fillEstimate(d.task_id)})`,
     );
   for (const l of triageOut.lines) console.log(l);
   if (waitLine) console.log(waitLine);
@@ -385,7 +394,7 @@ export function cmdFill() {
   parallelWarning();
   // All the agents are started in the SAME turn (parallel Agent calls), not one per turn: the tracks and the triage
   // helpers.
-  for (const l of L.concurrentBlock([...track, ...triageOut.agents])) console.log(l);
+  for (const l of CL.sameTurnLines(descriptors, triageOut.agents)) console.log(l);
 }
 
 /** `cq pickable` (the usage is at the top of queue.mjs). */
@@ -483,6 +492,7 @@ export function cmdResume() {
   if (!o) die(`Unknown task ${id}`);
   if (!['running', 'review'].includes(o.status))
     die(`${id} has status ${o.status}; resume applies to running and review (a new start is fill or start).`);
+  adapterFor(o); // an unknown client stops before any round file is written
   const scratch = scratchpadFor(o.scratchpad ?? null);
   if (!scratch) die(`${use}\nNeeds --scratchpad <folder> (or QUEUE_SCRATCHPAD).`);
   const branch = o.branch ?? branchFor(id);
@@ -616,10 +626,9 @@ export function cmdResume() {
     `RESUME ${trackId} (${reason}): prompt ${prompt}` +
       `${adjusted.swapped ? '' : '  WARNING: could not find the setup line to add --continue to; check the prompt'}`,
   );
-  console.log(
-    `Agent: subagent_type ${require('./lib/projectRoot.js').agentRef(L.agentTypeFor(o.class))}${L.modelPart(L.agentTypeFor(o.class))}, ` +
-      `message: ${L.trackMessage(trackId, prompt)}`,
-  );
+  // The agent line from the round's descriptor (track id <id>-r<N>, the round prompt), in the task's client format.
+  const d = MD.missionDescriptor(o, { client: adapterFor(o).id, trackId, branch, promptFile: prompt, baseSha: head });
+  console.log(CL.clientFor(d.client).resumeLine(d));
   // If the branch is still checked out in a worktree, prepare-track --continue refuses: the old agent must be done.
   const holder = (git(['worktree', 'list', '--porcelain']) ?? '')
     .split(/\r?\n\r?\n/)

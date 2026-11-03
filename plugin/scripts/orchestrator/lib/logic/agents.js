@@ -1,8 +1,9 @@
 // =============================================================
-// logic/agents.js: the orchestrator's routine as script: agent type, model, reviewers, the agent message and the short `show`.
+// logic/agents.js: the orchestrator's routine as script: reviewers, the state line and the short `show`.
 //
-// agentTypeFor, modelFor, modelPart, reviewersFor, reviewersForTask, reviewerTypes (lib/queueHelpers.js holds the
-// reviewer rules), trackMessage, stateLine and summaryView.
+// reviewersFor, reviewersForTask, reviewerTypes (lib/queueHelpers.js holds the reviewer rules), stateLine and
+// summaryView. agentTypeFor, AGENT_MODELS, modelFor, modelPart and trackMessage are re-exported from the Claude
+// adapter (lib/clients/claude/dispatch.js), where they moved in the client adapter split.
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
 // Used by queueLogic.js (the facade) and by logic/results.js, merge.js.
@@ -17,6 +18,9 @@ const { batchGroups } = require('./batch.js');
 const { selectNext, state } = require('./select.js');
 // The reviewers (fixed per class and the helper agents) are worked out in ONE place: lib/queueHelpers.js.
 const HELP = require('../queueHelpers.js');
+// The Claude facts (agent names, model list, the agent message) live in the Claude adapter; re-exported here so the
+// queueLogic.js facade and its callers keep the names (lib/clients/claude/dispatch.js).
+const { agentTypeFor, AGENT_MODELS, modelFor, modelPart, trackMessage } = require('../clients/claude/dispatch.js');
 
 // ---- The orchestrator's routine as script and cost per task -----
 //
@@ -24,36 +28,6 @@ const HELP = require('../queueHelpers.js');
 // short view, agent type and agent message, the content of the review package, the parsers for the RESULT and FINDINGS lines, which
 // agents in the time log belong to a task, and the sum of the cost. Git, the transcripts and the time log are read in queue.mjs.
 // Tested in lib/__tests__/queueOrchestrator.test.ts.
-
-/** The agent type for a track by class: D and D+ on `track-d` (high), K and U on `track` (medium). */
-function agentTypeFor(cls) {
-  return cls === 'D' || cls === 'D+' ? 'track-d' : 'track';
-}
-
-/** The models the Agent tool takes (config().models). */
-const AGENT_MODELS = ['opus', 'sonnet', 'haiku', 'fable'];
-
-/**
- * The model set for an agent in config().models, or null (the agent file's own model). An unknown value counts as
- * not set, so a typo never starts an agent with a model the Agent tool refuses.
- * @param {string} agent the agent name without the plugin prefix (track, reviewer-docs ...)
- */
-function modelFor(agent) {
-  let m;
-  try {
-    m = cfg().models?.[String(agent ?? '').replace(/^[^:]+:/, '')];
-  } catch {
-    return null; // no config: the agent file decides
-  }
-  const v = typeof m === 'string' ? m.trim().toLowerCase() : null;
-  return v && AGENT_MODELS.includes(v) ? v : null;
-}
-
-/** " · model=sonnet" for a start line when the agent has a model set, otherwise "". */
-function modelPart(agent) {
-  const m = modelFor(agent);
-  return m ? ` · model=${m}` : '';
-}
 
 /** The FIXED reviewers by class (config().reviewers): by default K and U none, D `reviewer`, D+ also `reviewer-security`. */
 function reviewersFor(cls) {
@@ -71,18 +45,6 @@ function reviewersForTask(o, { queue = null, changedPaths = [], missionText = nu
 /** All reviewer types (fixed and helpers, unique, in order): the agents that count toward a task. */
 function reviewerTypes(queue = null) {
   return HELP.allReviewerTypes(cfg(), queue);
-}
-
-/**
- * The short message the orchestrator starts the track agent with; the mission is in the prompt file. "track <id>" and
- * "prompt-<id>.md" in the text are what timeCost.trackFromText recognizes the track by (the cost per task).
- */
-function trackMessage(id, promptPath) {
-  return (
-    `You are track ${id} in the work queue (continuous queue, wave "queue"). Your mission is in ${promptPath} and is ` +
-    'binding: read it first and follow the protocol there. Your answer to the orchestrator is at most approx. 1,500 characters: ' +
-    'RESULT line first, at most 5 lines, then the path to report.md (the long version is there).'
-  );
 }
 
 /** The summary line under `show` (same in the short and full view). `t` is queueLogic.state. */

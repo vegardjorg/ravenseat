@@ -10,7 +10,8 @@
 // queueLogic.js).
 // =============================================================
 
-const { modelPart } = require('./agents.js');
+// The same-turn block is the client's format: the default client's adapter writes it (lib/clients/index.js).
+const { SAME_TURN } = require('../clients/claude/dispatch.js');
 
 // ---- Fewer orchestrator turns ----
 //
@@ -267,30 +268,20 @@ function fillExcerpt(out) {
   return [`fill: ${lines[lines.length - 1] ?? 'no output'}`];
 }
 
-const SAME_TURN = 'Start these in the SAME turn:';
 /** Why merge must not run where nobody reads it (a background job, a script that chains merges). */
 const FILL_NOTE =
   'never run merge where nobody reads the output (in the background or chained in a script): use --without-fill there ' +
   'and run fill yourself afterwards. cq show and the pulse warn about tracks STARTED WITHOUT AGENT.';
 
 /**
- * The agent list the orchestrator starts in ONE turn (in parallel): one line per agent with subagent_type and the message
- * (the track message mentions the prompt file; a reviewer gets the content of the prompt file as the message).
- * `bare: true` keeps the name as it is: a custom helper lives in the project's .claude/agents/, never under the
- * plugin's prefix.
+ * The agent list the orchestrator starts in ONE turn (in parallel), for the reviewers, triage helpers and other agents
+ * already in the default client's own format (lib/clients/claude/dispatch.js sameTurnBlock for Claude: one line per
+ * agent with subagent_type and the message). Tracks go through lib/clients/index.js sameTurnLines from their
+ * descriptors instead.
  * @param {{ subagent_type: string, prompt: string, message?: string|null, bare?: boolean }[]} agents
  */
 function concurrentBlock(agents) {
-  if (!agents?.length) return [];
-  const ref = (x) => (x.bare ? x.subagent_type : require('../projectRoot.js').agentRef(x.subagent_type));
-  return [
-    SAME_TURN,
-    ...agents.map((x) =>
-      x.message
-        ? `  subagent_type=${ref(x)}${modelPart(x.subagent_type)} · message: ${x.message}`
-        : `  subagent_type=${ref(x)}${modelPart(x.subagent_type)} · message: the content of ${x.prompt}`,
-    ),
-  ];
+  return require('../clients/index.js').clientFor().sameTurnBlock(agents);
 }
 
 /** The warning `receive` gives when the track's answer is over the report cap (null otherwise). */
