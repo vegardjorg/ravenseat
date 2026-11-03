@@ -3,6 +3,14 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.11 (2026-11-03)
+
+### Fixed (found by the first CI run)
+- `cq init` now adds the data folder to `.gitignore` also when the project path is a Windows short name
+  (`C:\Users\RUNNER~1\...`) or goes through a symlink; real paths are compared. Before, nothing was added.
+- The bench path check uses the path rules of the platform it is asked about, so it gives the same answer on Linux.
+- A test of file times allows the sub-millisecond rounding Linux file systems give.
+
 ## 0.8.10 (2026-11-03)
 
 ### Added
