@@ -3,6 +3,14 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.9 (2026-11-03)
+
+### Fixed
+- Docs now match the code on security: deleted tests and skip markers give a warning at receive, not a merge stop;
+  the secret scan covers each commit in a base-branch push from Claude Code, with its known gaps listed (first push,
+  over 2 MB, timeout, fail open); the quarantine rule is described as a recommended pattern, not a control.
+- Stale code comments in `shellCommands.js`, `configGuard.js` and `secretScan.js`.
+
 ## 0.8.8 (2026-11-03)
 
 ### Changed
