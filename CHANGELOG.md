@@ -3,6 +3,16 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.8 (2026-11-03)
+
+### Changed
+- README reorganized and cut to about half: the product promise, Quick start before the diagrams, two infographics
+  (task flow, and Claude Code plus the optional board), decisions in one place, "Agents don't grade their own
+  homework", a lite vs full table, one cost number with its caveats, and who it is for.
+- New docs pages for what left the front page: `full-mode.md` (classes, helper agents, focus, guards, load guard,
+  recovery), `costs.md` (the token measurements), `commands.md` and `why-i-built-it.md`. The board tour moved to
+  `board.md`, the architecture infographic to `orchestration.md`, and the sandbox caveat to "Guarantees and limits".
+
 ## 0.8.7 (2026-11-02)
 
 ### Changed
