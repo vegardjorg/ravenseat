@@ -318,6 +318,6 @@ describe('the module stays pure', () => {
     expect(src).not.toMatch(/require\(['"](?:node:)?fs['"]\)/);
     expect(src).not.toMatch(/process\.exit/);
     expect(src).not.toMatch(/['"`](?:claude|codex|antigravity)['"`]/i);
-    expect(src).not.toContain('—');
+    expect(src).not.toContain('\u2014');
   });
 });
