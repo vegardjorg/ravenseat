@@ -33,9 +33,20 @@ function ignoreDataFolder() {
   const top = git('rev-parse', '--show-toplevel');
   if (top.status !== 0) return;
   if (git('check-ignore', '-q', FOLDER).status === 0) return;
-  const rel = path.relative(top.stdout.trim(), FOLDER).split(path.sep).join('/');
+  // Compare real paths: git prints the long, resolved path, while FOLDER may be a Windows 8.3 short name
+  // (C:\Users\RUNNER~1\...) or go through a symlink (/var -> /private/var on macOS). Without this the folder looks
+  // outside the repo and nothing is added.
+  const real = (p) => {
+    try {
+      return fs.realpathSync.native(p);
+    } catch {
+      return path.resolve(p);
+    }
+  };
+  const repo = real(top.stdout.trim());
+  const rel = path.relative(repo, real(FOLDER)).split(path.sep).join('/');
   if (!rel || rel.startsWith('..')) return;
-  const file = path.join(top.stdout.trim(), '.gitignore');
+  const file = path.join(repo, '.gitignore');
   try {
     const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
     const sep = before && !before.endsWith('\n') ? '\n' : '';

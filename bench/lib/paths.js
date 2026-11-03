@@ -17,15 +17,18 @@ const path = require('node:path');
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const ALLOWED_INSIDE = path.join(REPO_ROOT, 'bench', 'results');
 
+// The path rules of the platform asked about, not the host's: on Linux, path.resolve('C:\\A') is not a Windows path.
+const pathFor = (platform) => (platform === 'win32' ? path.win32 : path.posix);
 const norm = (p, platform = process.platform) => {
-  const r = path.resolve(p);
+  const r = pathFor(platform).resolve(p);
   return platform === 'win32' ? r.toLowerCase() : r;
 };
 /** Is `child` the folder `parent` or inside it? */
 function isInside(child, parent, platform = process.platform) {
+  const sep = pathFor(platform).sep;
   const c = norm(child, platform);
   const p = norm(parent, platform);
-  return c === p || c.startsWith(p.endsWith(path.sep) ? p : p + path.sep);
+  return c === p || c.startsWith(p.endsWith(sep) ? p : p + sep);
 }
 
 /** The default results root: BENCH_RESULTS or ~/.cq-bench/results. */

@@ -148,7 +148,8 @@ describe('trackActivity: the sources of a sign of life', () => {
     fs.writeFileSync(path.join(d, 'node_modules', 'x', 'fresh.js'), 'x');
     for (const p of [path.join(d, 'src', 'a.ts'), path.join(d, 'src'), path.join(d, 'node_modules'), d]) setTime(p, old);
     // node_modules (whose content is fresh) is not walked; the folder itself was set old.
-    expect(ACT.newestMtime(d)).toBe(old);
+    // Within a millisecond: Linux stores the time in nanoseconds, so mtimeMs can come back as old - 0.001.
+    expect(Math.abs(ACT.newestMtime(d)! - old)).toBeLessThan(1);
     fs.writeFileSync(path.join(d, 'src', 'b.ts'), 'b');
     expect(ACT.newestMtime(d)! > old + 60_000).toBe(true);
     expect(ACT.newestMtime(path.join(d, 'missing'))).toBeNull();
