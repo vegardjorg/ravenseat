@@ -5,8 +5,10 @@
 // only apply to D and D+ (DB, self-review, full gate) therefore sit in class sections that are only included for the
 // classes that need them, and pointers such as "file.md § 3" get their line range appended, so the track reads only that section.
 //
-//   makeQueueCommon(template, scratch, k) the shared part of the mission template (docs/queue/mission-template.md), filled for queue and
-//                                project (k = config(): projectName, baseBranch, gates, architectureRules)
+//   makeQueueCommon(template, scratch, k, addendum) the shared part of the mission template (docs/queue/mission-template.md), filled for queue and
+//                                project (k = config(): projectName, baseBranch, gates, architectureRules) and for the
+//                                client (addendum = its missionAddendum function; Claude Code when it is left out)
+//   fillClient(text, pieces, eol) fills the <CLIENT_*> placeholders from addendum.template
 //   filterClass(text, k)      keeps only the <!-- class: … --> … <!-- /class --> sections that apply to class k
 //   classFromBlock(body)        the class in a track block ("class D+" in the ## TRACK line, or a CLASS: line)
 //   sectionPointers(text, read)   appends "(line A–B)" after "file.md § N" and "file.md#heading"
@@ -14,6 +16,10 @@
 // =============================================================
 
 const CLASSES = ['K', 'D', 'D+', 'U'];
+
+// The default client addendum (Claude Code, today's text). The client registry (lib/clients/index.js) replaces this
+// lookup once it exists; a caller for another client passes its own addendum.
+const defaultAddendum = (ctx) => require('./lib/clients/claude/mission.js').missionAddendum(ctx);
 
 // Split/join, never String.replace (a replacement containing "$'" duplicates text).
 const swap = (s, from, to) => s.split(from).join(to);
@@ -27,14 +33,36 @@ function gateText(list) {
 }
 
 /**
+ * Fills the client placeholders (<CLIENT_NAME>) from pieces (NAME -> text). A line that holds only a placeholder whose
+ * value is '' is dropped, so a client without that piece leaves no empty bullet. A line break in a piece becomes eol,
+ * the template's own line ending (the Claude text was part of the template before the split, so it keeps its bytes).
+ * A placeholder without a piece is left as it is (make-queue-common.mjs warns about unfilled placeholders).
+ * @param {string} text
+ * @param {Record<string, string>} [pieces]
+ * @param {string} [eol] '\n' or '\r\n'
+ */
+function fillClient(text, pieces = {}, eol = '\n') {
+  let s = String(text);
+  for (const [name, value] of Object.entries(pieces ?? {})) {
+    const mark = `<CLIENT_${name}>`;
+    if (value === '') s = swap(swap(s, `\n${mark}\r\n`, '\n'), `\n${mark}\n`, '\n');
+    s = swap(s, mark, swap(String(value), '\n', eol));
+  }
+  return s;
+}
+
+/**
  * Shared protocol for the queue tracks, with the placeholders __BRANCH__ __HEAD__ __TRACK__ __BLOCK__ left in (they are
  * filled per track by make-mission.mjs). The class markers are kept; make-mission filters per track.
  * @param {string} template the whole mission template (docs/queue/mission-template.md)
  * @param {string} scratch the scratchpad root
  * @param {{ projectName?: string, baseBranch?: string, gates?: { quick?: string[], full?: string[] },
  *   architectureRules?: string[] }} [k] the project config (config()); missing fields give neutral defaults
+ * @param {(ctx: object) => { template?: Record<string, string>, readExcerpts?: string, newWorkWrite?: string }} [missionAddendum]
+ *   the client's mission addendum (lib/clients/<client>/mission.js); default Claude Code
  */
-function makeQueueCommon(template, scratch, k = {}) {
+function makeQueueCommon(template, scratch, k = {}, missionAddendum = defaultAddendum) {
+  const addendum = missionAddendum({});
   const start = template.search(/^## Common protocol/m);
   if (start < 0) throw new Error('could not find "## Common protocol" in the mission template');
   const base = k.baseBranch || 'main';
@@ -42,13 +70,15 @@ function makeQueueCommon(template, scratch, k = {}) {
     ? k.architectureRules.filter((r) => typeof r === 'string' && r.trim())
     : [];
   let s = template.slice(start);
+  // Client pieces first: they sit in the template text, so they take its line ending.
+  s = fillClient(s, addendum.template, s.includes('\r\n') ? '\r\n' : '\n');
   // Saver mode: the track reads only its own part of the source, in excerpts.
   s = swap(
     s,
     '<READ_ALSO>',
     [
       'The source the track block names: read only the part that applies to this track (`grep -n` on the id or',
-      '  heading, then excerpts with `offset`/`limit`).',
+      `  heading, then excerpts${addendum.readExcerpts ?? ''}).`,
       ...(rules.length
         ? ['- The project architecture rules (binding, from `queue.config.json`):', ...rules.map((r) => `  - ${r}`)]
         : []),
@@ -61,8 +91,10 @@ function makeQueueCommon(template, scratch, k = {}) {
       'Your ownership is listed in the track block. Other tasks run at the same time and own their files',
       `(\`${require('./lib/projectRoot.js').cqCommand()} show\`, works from the worktree). Never touch what they own.`,
       '',
-      '**New work you discover** (outside the mission, or a follow-up bug): do not do it yourself. Write a JSON file with',
-      'Write (id, title, domain, class K|D|D+|U, mission = short self-contained description, value 1-10, content_min,',
+      // newWorkWrite carries the line break (Claude: " with\nWrite"), so the wrapping is the same as before the split.
+      '**New work you discover** (outside the mission, or a follow-up bug): do not do it yourself. Write a JSON file' +
+        (addendum.newWorkWrite ?? '\n') +
+        ' (id, title, domain, class K|D|D+|U, mission = short self-contained description, value 1-10, content_min,',
       'depends_on, waiting_on, owned_files, shared_patch, source, added_by = your track id) and run',
       `\`${require('./lib/projectRoot.js').cqCommand()} add --file <file>\`. It becomes a proposal the owner approves. Mention the id in`,
       'the report, and a HIGH security finding in its own section.',
@@ -217,6 +249,7 @@ module.exports = {
   CLASSES,
   gateText,
   makeQueueCommon,
+  fillClient,
   filterClass,
   classFromBlock,
   sectionArea,
