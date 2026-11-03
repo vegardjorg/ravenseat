@@ -1,8 +1,8 @@
-# Full-mode guide
+# Guide
 
-The parts of the old README that are too detailed for the front page: install options, the full first run, daily
-use, how the loop works, cloud sessions, the board's detail panel and settings, the full safety baseline, and what
-is not included. The [README](../../README.md) has the short version and links here.
+Install options, lite mode in detail, the first run in full mode, daily use, how the loop works, cloud sessions, the
+board's detail panel and settings, the full safety baseline, guarantees and limits, and what is not included. The
+[README](../../README.md) has the short version and links here. What full mode adds and why: [full mode](full-mode.md).
 
 ## Install
 
@@ -238,7 +238,11 @@ What Ravenseat checks for you:
 
 ## Guarantees and limits
 
-What Ravenseat does, and what you need outside it. The guards are Claude Code hooks: guard rails, not a sandbox.
+What Ravenseat does, and what you need outside it. The guards are Claude Code hooks that check the commands an agent
+runs: guard rails, not a sandbox. An agent runs with your user account: it can read the files and environment
+variables your shell can, and reach the network, unless your Claude Code permissions or its sandbox settings say
+otherwise. A blocked command can often be written another way. Keep production credentials off the machine the agents
+run on, and use Claude Code's permission rules or sandbox when you need a real boundary.
 
 | Ravenseat checks (within Claude Code hooks and its own CLI) | Needs a boundary outside Ravenseat |
 | --- | --- |

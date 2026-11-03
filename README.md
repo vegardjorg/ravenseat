@@ -7,461 +7,213 @@
 
 <h1 align="center">Ravenseat</h1>
 <p align="center"><b>Your agents keep building. You make the decisions.</b></p>
-<p align="center">Run your Claude Code project from one conversation, even from your phone. Just talk to Claude:
-Ravenseat keeps the work moving across parallel agents in isolated git worktrees, your project's own checks,
-decisions and context resets. No commands to memorize, and the dashboard is optional.</p>
-<p align="center"><sub>Open source · Local-first · Runs inside Claude Code · Dashboard optional</sub></p>
-<p align="center"><sub>Phone access uses Claude Code's Remote Control, with Claude Code running on your computer.</sub></p>
+<p align="center">Run your Claude Code project from one conversation. Ravenseat coordinates parallel coding agents,
+tracks what needs to happen next, verifies their work with your project's checks and brings you the decisions that
+matter. One conversation, independent verification, and human decisions that don't stop the rest of the work.</p>
+<p align="center"><sub>Open source · Local-first · Built for Claude Code · Visual board optional</sub></p>
+<p align="center"><sub>Works with Claude Code in your terminal or desktop app. You can also follow the conversation from
+your phone with Claude Code's Remote Control, while Claude Code runs on your computer.</sub></p>
 
-<p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The board: the work queue as a kanban with In queue, In progress and Review" width="800"></p>
-<p align="center"><sub>The board with a made-up demo project ("Pebble", a habit tracker). More in <a href="#a-tour-of-the-board">A tour of the board</a>.</sub></p>
+<p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The board: the work queue as a kanban with In queue, In progress and Review" width="600"></p>
+<p align="center"><sub>The optional board, with a made-up demo project ("Pebble", a habit tracker).</sub></p>
 
-Running five Claude Code sessions is not the hard part. Keeping them from colliding, and actually finishing the
-features, is. Ravenseat makes you stop being the project's manual orchestrator:
+## Stop managing agents. Start directing the project.
 
-- **Parallel work that stays out of each other's way.** Every task runs as a fresh agent in its own git worktree and
-  branch, and owns its files while it runs. Conflicts that remain are predicted before merge (`cq conflicts`).
-- **A red check does not stop the queue.** When your configured checks fail before a merge, a fix round starts with
-  a fresh agent and the checks run again. Only what it cannot resolve reaches you.
-- **Decisions come to you, in one list.** A task that needs you parks in `/cq:decide` with a recommendation, and the
-  rest of the queue keeps going.
-- **Finish features, not just tasks.** Dependencies and focus keep related work together until the feature is done.
+Running several coding agents is easy. Keeping their work coordinated, verified and moving forward is the hard part.
+Ravenseat handles the coordination:
 
-Built for long-running work, with quality you can check: see
-[what it costs in tokens](#what-it-costs-in-tokens), ["Agents cheat on tests"](#agents-cheat-on-tests) and
-["Something breaks and the queue stops"](#something-breaks-and-the-queue-stops).
+- **One conversation, many agents.** Describe what needs doing. Ravenseat keeps the queue and hands each task to a
+  fresh agent in its own git worktree, which owns its files while it runs.
+- **Agents don't grade their own homework.** Your project's checks run on exactly the delivered commit, recorded by
+  the orchestrator, not reported by the agent. Changes to tests and other protected files are flagged or stopped.
+- **Decisions without a standstill.** When a task needs you, it waits in one list with a recommendation, while
+  independent work goes on.
+- **A red check starts a fix, not an interruption.** When the checks fail, a fresh agent tries a fix before anything
+  needs your attention.
+- **Work survives context resets.** Tasks, plans, dependencies and decisions live in files outside the conversation,
+  so nothing is lost when a chat is compacted or a new session starts.
 
-**When something fails, the queue does not have to stop.**
+You stay responsible for the direction. Ravenseat handles the mechanics of getting there.
 
-```text
-  pick the next task ──> agent builds it in its own worktree ──> your checks run
-                                                                   │
-                         ┌─────────────── green ───────────────────┤
-                         v                                         │ red
-              merge, start the next task              fix round with a fresh agent,
-                                                      then the checks again
-                                                                   │
-                                                      still stuck? a decision for you,
-                                                      while independent tasks go on
+## Quick start
+
+Start in lite mode: the core loop only. You can add the advanced features later.
+
+**1. Install the plugin.** In Claude Code:
+
+```
+/plugin marketplace add vegardjorg/ravenseat
+/plugin install cq@ravenseat
 ```
 
-The loop is only as strong as your checks: Ravenseat runs the tests, lint and type checks your project has, and does
-not make a project safe on its own. `/cq:setup` helps you set them up.
+You need Node.js 20 or newer and git.
 
-**No hosted service, no new CI system.** Plans, tasks and state live as files in your repository, so nothing is lost
-when a chat ends or gets compacted. Your own gate commands run locally, and `cq setup --ci` can write an optional
-GitHub Actions template (`.github/workflows/cq-gates.yml`, never over an existing one). It works purely from Claude
-Code (every change the board makes to the queue has a command behind it); the board is optional, for the overview.
+**2. Set up your project.** Ask Claude: *"Set up the queue."* (`/cq:setup`, the guided setup that also finds your
+checks). Or run `cq init` for a minimal lite setup: it keeps the queue in `scripts/.queue/` and adds that folder to
+`.gitignore`.
 
-By Vegard Cowie Jørgensen.
+**3. Add some work.** Tell Claude what needs doing: *"Add to the queue: fix the login bug and add a regression
+test."*
 
-**Contents:** [Quick start](#quick-start-lite) · [Who it's for](#who-its-for) · [Why I built it](#why-i-built-it) ·
-[A tour of the board](#a-tour-of-the-board) · [Full mode](#graduating-to-full-mode) ·
-[What it costs](#what-it-costs-in-tokens) · [Reference and safety](#reference-and-safety)
+**4. Start the queue.** *"Start the queue."* (`/cq:queue`). Ravenseat asks before it starts, then picks tasks, hands
+them to agents, runs the checks and merges what passes. It never pushes unless you tell it to.
 
-## Quick start (lite)
+**5. Answer what waits on you.** *"What's waiting on me?"* (`/cq:decide`). Each decision comes with a recommendation
+and the work it blocks.
 
-New here? Start in lite mode: the core loop only, nothing to learn first.
+That is the basic workflow. Plain words work, and the commands are there when you want explicit control
+([all commands](plugin/docs/commands.md)). More in the [guide](plugin/docs/guide.md#lite-mode-in-more-detail).
+Installed it as claude-code-queue before? See [install](plugin/docs/guide.md#install) for the one extra step.
 
-1. **Install** (in Claude Code): `/plugin marketplace add vegardjorg/ravenseat`, then
-   `/plugin install cq@ravenseat`. You need Node.js 20 or newer and git.
-2. **Create the queue:** run `cq init`. It starts in lite mode, keeps the queue in `scripts/.queue/` and adds that
-   folder to `.gitignore` for you. For the guided setup that also finds your checks, say "set up the queue"
-   (`/cq:setup`).
-3. **Add work:** say "add to the queue: fix the login bug" (or `cq add "Fix the login bug"`).
-4. **Run it:** say "start the queue" (or `/cq:queue`). The chat picks the next task, starts an agent in an isolated
-   worktree, checks the result and merges work that passes. It asks you before it starts, and never pushes unless you
-   say so.
-5. **Make the decisions:** when a task needs you, it waits and the rest go on. Say "what is waiting on me?" (or
-   `/cq:decide`), or answer with one click under "Waiting on you" on the board ("open the board", `/cq:board`).
+## From task to verified change
 
-From then on you can just talk to Claude: "what's next in the queue?", "add a task to …", "what is waiting on me?".
-The commands in parentheses do the same thing.
+<p align="center"><img src="assets/infographics/task-flow.webp" alt="Pick the next task, a fresh agent builds it in an isolated worktree, checks run. Passing work is merged and the next task starts. Failing work gets a fix attempt by a fresh agent; if it is still blocked, it becomes your decision while independent tasks continue" width="800"></p>
 
-Missions, priorities, answer options and what runs under the hood: [lite mode in more detail](plugin/docs/guide.md#lite-mode-in-more-detail).
+An agent gets a bounded task in its own worktree. Your configured checks run against the result. Passing work is
+merged; a failure gets another attempt with a fresh context. When the system cannot safely go on, it asks you, and
+the independent tasks keep moving.
 
-> **That's all you need.** Add tasks, run `/cq:queue`, answer what it asks. `cq help` shows only these commands in
-> lite mode.
->
-> **Going further:** `cq mode full` switches to full mode (`cq mode lite` goes back), and `/cq:setup` sets up your
-> checks, areas and settings. Full mode adds what lite leaves out: risk classes, value and size estimates, the
-> small-task guard and batch queue, focus, the plan register and helper agents. See
-> [Graduating to full mode](#graduating-to-full-mode).
+Ravenseat does not replace your tests, review standards or judgment. It makes them part of a repeatable workflow, and
+it is only as strong as the checks your project has (`/cq:setup` helps you set them up).
 
-Installed it as claude-code-queue before? See [Install](plugin/docs/guide.md#install) for the one extra step.
+## Your decisions, in one place
 
-## Who it's for
-
-- **A good fit:** a project that has grown past what one chat can hold, with work that can run in parallel, and
-  checks (tests, lint, type check) you are willing to trust. Most useful when you want the project to keep moving
-  while you are away, and only want to be asked when a decision is yours.
-- **Not worth it:** small scripts, one task at a time, or a project with no checks at all and no plan to add them.
-  Without checks, Ravenseat still runs the loop, but nothing automatic stands between an agent's work and the merge.
-
-## Why I built it
-
-**The problem.** In a small project, working with Claude Code was easy. Most of the work showed up on a screen I
-could look at, and I could keep the whole picture in my head. As the project grew, that stopped working:
-
-- **Progress became invisible.** Days of backend work could pass without a single screen changing, so there was
-  nothing to look at that told me where the project stood.
-- **The work was scattered across chats.** Size and complexity meant 50 to 100 chat windows, each holding part of
-  the picture. Half the findings of a security review could be forgotten in one of them.
-- **Parallel chats collided.** With several chats open on different parts of the project, they edited the same files
-  and pushed on top of each other. The result was push conflicts, merge conflicts and work overwritten by a chat that
-  did not know another one had the file open.
-- **Features were left half-built.** I lost track of features halfway through the implementation, because nothing
-  held on to what was started and what was left.
-- **The workaround burned tokens.** Running everything in one long chat kept the overview, but every turn carried the
-  whole history, and the token use grew far faster than the work did.
-
-**The answer.** To get an overview back and work systematically, I built the queue step by step inside that project:
-a plan register for what is not ready yet, a work queue with dependencies and a focus, a board that shows it all, and
-an orchestrator that hands each task to a fresh agent with a small context. Each agent works in its own git worktree
-and branch, a task owns its files exclusively while it runs, and one orchestrator merges and pushes, so parallel work
-no longer collides. The parts that are not tied to one project were then extracted into this plugin. What stayed
-behind is what has to be project specific: the CI/CD pipeline and the domain-specific checks
-([not included](plugin/docs/guide.md#not-included)).
-
-<details>
-<summary><b>What it gives me now</b> (how I use it day to day)</summary>
-
-I wanted a project that keeps moving without me sitting at it. With the queue, Claude Code
-runs a large project on its own for long stretches, often overnight or for days. It picks the next task, starts
-agents, reviews and merges what they deliver, and starts the next tasks. When a task needs my decision, the queue
-does not stop: it parks that task and carries on with everything else that can be done. The decisions wait for me on
-the board, or the orchestrator lists them in the chat, each with context and a recommendation.
-
-Most of the time I work from my phone. Remote Control connects me to the orchestrator chat in Claude Code, so I only
-deal with a single chat. The work itself happens in fresh, small contexts for each task. The orchestrator keeps its
-state in the queue and in a handover note, and the chat is compacted automatically at 300k tokens of context, so it
-can keep going for days. From the phone I ask what is next, what is blocked or what a plan contains, and I answer the
-open questions. The tasks that waited on them then move on.
-
-On the desktop I use the board to keep track of the project. I go through the open questions, manage the
-dependencies between tasks, and choose the focus. With focus, I pick which areas of the project to work on now. The
-queue finishes those before it moves on to the next feature or step I want. The queue also helps Claude Code keep
-order: it keeps track of the plans, the tasks, what depends on what and what is running right now, so nothing gets
-lost between sessions.
-
-Splitting the work into right-sized tasks, each in a fresh small context, cut my usage a lot compared with the long
-chat. On a Claude Max (20x) plan, the queue now keeps running for about five days of a week before the weekly limit
-runs out. That is one project and one developer; see [What it costs in tokens](#what-it-costs-in-tokens) for what was
-measured and what was not.
-
-</details>
-
-## A tour of the board
-
-**Start it:** in Claude Code, run `/cq:board` (or say "start the board"). Claude starts it in the background and
-gives you a link like `http://127.0.0.1:2000/#key=…`. It runs while that Claude Code session runs. To keep it
-running on its own, start it from your own terminal in the project folder:
-`node "<plugin folder>/scripts/orchestrator/cq.mjs" board` (`/cq:board` tells you the exact path). The plain `cq`
-command only exists inside Claude Code.
-
-The board only listens on 127.0.0.1, and the key in the link changes on every start. It follows your system's light
-or dark mode; the gear lets you pick one. The screenshots use a made-up demo project.
-
-### The queue
-
-The main view (top of this page) is a kanban: **In queue** (ready now, blocked, proposed by agents, and the batch
-queue where small tasks wait to be packed into one track), **In progress** and **Review**. Each card shows the id,
-domain, class (the risk level K, D, D+ or U, see [task classes](#agents-skip-security-and-edge-cases)), estimate and how many tasks it unlocks. **Next up** shows what the orchestrator starts
-in the next free slot. Other views: **Project lanes** (one row per project), **Focus** (only what you have chosen to
-push), **Decisions** and **Statistics** (**Cloud** is hidden until you turn it on in Settings). Click a card for its
-mission, owned files, cost and the actions for its status (see [task detail](plugin/docs/guide.md#task-detail)).
-
-### Waiting on you and Decisions
+The goal is not to remove you from development. It is to stop interrupting you for what the system can handle itself.
+Technical failures get retried, routine work goes on, and the questions that need your judgment are collected in one
+list.
 
 <p align="center"><img src="assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
 
-Everything only you can decide lands here: questions from agents (with their recommendation), owner tasks and
-conditions. Each shows which tasks it blocks. Answer on the board, and the orchestrator picks up the answer and
-unblocks the tasks.
+Each decision has context, a recommendation and the work it blocks. Answer in Claude Code with `/cq:decide`, or with
+one click on the board. Typical decisions: unclear requirements, security tradeoffs, hard-to-reverse changes, visual
+approval, and tasks still blocked after a fix attempt.
 
-The **Decisions** tab is the same list as `/cq:decide`, sorted by what each answer unlocks and grouped as Decide,
-Check, Approve and Unstick. The board opens on it when anything waits. The recommendation is the main button, an
-answer can be undone for 5 seconds, and j/k, Enter, 1-4 and u work from the keyboard.
+## Claude Code first. Board optional.
 
-### Dependencies
+The orchestration runs inside Claude Code. The board is a companion, not a requirement.
 
-<p align="center"><img src="assets/screenshots/light-03-dependencies.jpg" alt="Dependency chains as a graph" width="800"></p>
+- **Claude Code CLI or desktop app:** manage everything from one conversation.
+- **Remote Control:** follow and answer from your phone, using Claude Code's own Remote Control feature.
+- **The board:** a local web page with tasks, dependencies, decisions, plans and statistics, in light and dark mode.
 
-The chains as a graph: circles are tasks (solid ring = in progress, dashed = blocked), squares are open questions.
-It shows at a glance which single answer unlocks the most work.
+<p align="center"><img src="assets/infographics/claude-code-and-board.webp" alt="Claude Code as the control surface plus the optional visual board, both on top of the same orchestration: task queue, agents, checks and your decisions" width="800"></p>
 
-### Statistics and cost
+The board shows the same project state from a wider angle; it does not run a separate engine, and every change it
+makes to the queue has a command behind it. Open it with `/cq:board`, or ask Claude to open the board.
 
-<p align="center"><img src="assets/screenshots/light-04-statistics.jpg" alt="Statistics: throughput, cycle time, estimate accuracy and cost" width="800"></p>
+<p align="center"><img src="assets/screenshots/dark-03-dependencies.jpg" alt="The dependency graph on the board in dark mode" width="800"></p>
 
-Done per day, cycle time, how good the estimates are, cost per day (API-equivalent), time per class, and how large
-the agents' contexts got. This is where you see whether the queue earns its keep.
+[A tour of the board](plugin/docs/board.md#a-tour)
 
-The plan register, the priority map, dark mode and the settings panel are shown in the
-[full-mode guide](plugin/docs/guide.md#the-board-in-detail); every tab is described in [board](plugin/docs/board.md).
+## Built for work that lasts longer than a chat
 
-<p align="center"><img src="assets/screenshots/light-12-mascot-night.png" alt="The ravens at 02:47: the agents don't need sleep, you do" width="480"></p>
+Long-running AI development brings problems you don't see one task at a time:
 
-## Graduating to full mode
+- **Context grows.** Agents spend more and more of each turn carrying history instead of doing focused work.
+- **Parallel sessions collide.** Agents change the same files without knowing about each other.
+- **Work gets forgotten.** Findings, half-done features and dependencies end up scattered across conversations.
+- **Quality gets hard to track.** An agent saying "done" is not a tested, merged change.
 
-Lite is the loop. Full mode is the same loop plus answers to the problems that show up once a project and its queue
-grow. Switch with `cq mode full`, and run `/cq:setup` to fill in your checks and areas
-([first run in full mode](plugin/docs/guide.md#first-run-in-full-mode)).
+Ravenseat answers with a persistent queue, isolated worktrees, bounded missions, dependency tracking and explicit
+checks. The orchestration conversation keeps the direction, fresh agents do the individual tasks, and the project
+state lives outside the chat, so you can resume without rebuilding the plan from chat history.
 
-### The pieces
+### Why I built it
 
-The name says how it works: you sit in the Ravenseat, and the ravens (your agents) fly out into their worktrees and
-come back with the work.
+Ravenseat grew out of a real project I built with Claude Code. As it grew, I was juggling dozens of conversations:
+features were half-finished, agents collided over files, findings disappeared into old chats, and running everything
+in one huge conversation kept the context but got expensive. I wanted the advantages of coding agents without becoming
+their full-time project manager. So I built a persistent work queue with isolated agents, checks, recovery and one
+place for decisions. Ravenseat is the reusable part of that system.
+[The longer story, and how I use it day to day](plugin/docs/why-i-built-it.md).
 
-- **Plan register:** a list of ideas, plans and investigations, each with a priority and a maturity (idea,
-  investigated, planned, ready, then in the queue, built and verified). It points to your documents instead of
-  copying them. See [plan register](plugin/docs/plan-register.md).
-- **Work queue:** concrete tasks. Each has a class (risk level), an estimate, a value, dependencies, the files it
-  owns, and any open questions for you. The queue picks the next task by value per minute.
-- **Orchestrator:** one Claude Code chat that runs the loop. It starts tasks, reviews results, merges them and asks
-  you what only a human can decide. It does not write the code itself.
-- **Tracks:** each task runs as a subagent in its own git worktree, on its own branch. It gets a short mission file,
-  does the work, runs your checks, commits on its branch and answers with one line. The long report goes to a file,
-  not into the orchestrator's context.
-- **Board:** a local web page (kanban, plans, dependencies, cost, and "Waiting on you"). It is optional: everything
-  works from Claude Code, and `/cq:decide` is the main loop for what waits on you.
+## Agents don't grade their own homework
 
-Worktrees do not reinstall your dependencies: `prepare-track.mjs` links the folders in `sharedLinks` (default
-`["node_modules"]`) from the main tree into each worktree, as a junction on Windows and a symlink otherwise, and the
-cleanup removes them as links.
+An agent that writes the code and then reports that it works is not proof that a change is ready. Ravenseat keeps
+those two jobs apart.
 
-How the loop runs step by step, the hooks, and the daily commands: [full-mode guide](plugin/docs/guide.md#how-it-works).
+- **Checks belong to the delivered commit.** The orchestrator records the gate run on exactly the delivered commit;
+  an agent cannot report its own work as passing.
+- **Acceptance criteria stay fixed.** A task's completion criteria are locked when it starts, and an optional
+  reviewer checks the work against them.
+- **Protected files get extra scrutiny.** Changes to test config, hooks, queue settings and other guarded paths stop
+  the merge unless explicitly allowed, and deleted tests or new skip markers are flagged.
+- **Recovery uses a fresh context.** A fix attempt starts a new agent with a short mission, not the previous agent's
+  whole conversation.
+- **Merging is controlled.** One orchestrator merges, one merge at a time, and `cq conflicts` predicts conflicts
+  between running worktrees.
 
-### "Agents skip security and edge cases"
+These guards reduce common failure modes. They are guard rails, not a sandbox: agents run with your user account, so
+keep production credentials off the machine and use Claude Code's permissions or sandbox when you need a real
+boundary. Without meaningful checks, no automated merge can show that a change is correct; `cq doctor` warns when
+your project has none. More in [full mode](plugin/docs/full-mode.md#agents-cheat-on-tests),
+[guarantees and limits](plugin/docs/guide.md#guarantees-and-limits) and
+[orchestration](plugin/docs/orchestration.md).
 
-Task classes decide size and review:
+## Start simple. Scale when you need to.
 
-| Class | Meaning | Size of one task | Review |
-|---|---|---|---|
-| K | Ordinary code | 90 to 120 min of work | your gates (no reviewer agent) |
-| U | Investigation | about 60 min | the challenger (a helper agent) |
-| D | Database or contract change | about 40 min | one reviewer agent |
-| D+ | High-risk database or security | 25 to 30 min | two reviewer agents |
+| | Lite mode | Full mode |
+|---|---|---|
+| Persistent task queue | Yes | Yes |
+| Agents in isolated worktrees | Yes | Yes |
+| Checks and fix rounds | Yes | Yes |
+| Decisions, `/cq:decide` and the board | Yes | Yes |
+| Risk classes and task sizing | No | Yes |
+| Focus and value-based priority | No | Yes |
+| Plan register | No | Yes |
+| Helper agents and deeper review | No | Yes |
 
-The letters come from the project Ravenseat was built in: K for ordinary code, U for investigation (Norwegian
-*utredning*), D for database. A K task is checked only by your own gates, so with no gates set up nothing automatic
-checks it before the merge; `cq doctor` warns about that, and the tests or gap reviewer can be switched on as a
-safety net (`cq helpers`).
+Lite gets work moving with minimal setup. Full adds structure for larger projects. Switch with `cq mode full` when you
+need it: [what full mode adds](plugin/docs/full-mode.md).
 
-On top of that come **helper agents**: optional reviewers you switch on and off (`cq helpers`, or the Helper agents
-tab in the board's settings). By default the challenger runs for U and `bug` tasks and the design reviewer for
-`visual` tasks; the tests, gap and docs reviewers are off. The board shows what each one costs in minutes, tokens and
-dollars, and how many findings it gives. See [orchestration](plugin/docs/orchestration.md#helper-agents).
-You can add your own agent file as a **custom helper** (`cq helpers add <file.md>`, or "add this as a helper
-agent"): it is copied, scanned, read by Claude and approved by you against its hash before it can be switched on,
-and it turns off again if the file changes. See
-[custom helper agents](plugin/docs/orchestration.md#custom-helper-agents).
+## What does it cost?
 
-`/cq:review <area> [<lens>]` reviews a path or feature (security, logic, ux, architecture) and turns its findings into
-fix tasks, gate tasks and questions.
+More agents do not automatically mean cheaper development. Long contexts, repeated setup and fix rounds in bloated
+agents eat tokens, so Ravenseat uses short agent contexts, keeps state outside the conversation, shares installed
+dependencies between worktrees and never polls in a loop.
 
-### "Half-done features everywhere"
+In one project, about 1,200 measured tasks gave a median of about 2.5 USD (API-equivalent) per ordinary code task
+including its review. That is one project and one developer, not a controlled benchmark, and it does not show a
+saving over plain Claude Code or other tools. Run `cq cost` to see the numbers in your own project.
+[The measurements in detail](plugin/docs/costs.md).
 
-- **Focus:** you choose the areas to work on now (`cq focus set`, or the Focus tab). The queue finishes the connected
-  tasks in that focus, fixes and follow-ups included, before it picks up new feature work. When the focus is done,
-  the queue pauses and asks whether to set a new focus or continue the regular queue (`focus.continueWhenEmpty`, off
-  by default). `cq forecast` says when the rest of the focus is done.
-- **Dependency graph:** each task says what it waits for, whether another task or a decision only you can make, so
-  you see what is blocked and what can start right now.
-- **Plan register:** what is not ready yet lives as plan entries (`cq plan show`, `/cq:plans`) and moves into the
-  queue when it is ready.
+## Is Ravenseat right for your project?
 
-### "Agents cheat on tests"
+- **A good fit:** a growing codebase with several tasks, dependencies and useful automated checks, where you want to
+  hand off implementation without coordinating every agent, review and merge yourself.
+- **Probably not needed:** a small script, one short task, or a project without meaningful checks and no plan to add
+  them.
 
-A track cannot grade its own work:
-- **Gate evidence bound to the commit.** A track cannot report its own checks as green: `cq receive` needs a clean,
-  green gate run on exactly the delivered commit, recorded by the orchestrator, and otherwise runs the gate itself. A
-  push needs a green full gate on the commit being pushed.
-- **Locked acceptance criteria.** `done_when` and the acceptance criteria are fixed once a task starts, and a gap
-  reviewer answers MET or NOT MET per criterion.
-- **Guards on the guards.** Test, lint and type configs are protected paths (`protectedPaths` in
-  `queue.config.json`), and `cq receive` warns about deleted tests and added skip markers. The merge stops (exit 4)
-  when a branch changes hooks, settings, agents, the orchestrator scripts or the queue config without owning them
-  (`cq merge <ID> --allow-guard` overrides).
-- **The queue-agent guard.** Tracks, reviewers and helpers cannot push in any form and may run only an allow-list of
-  queue commands (no merge, set, edit, approve or resolve). They treat what they read as data, not instructions, and
-  cannot run `curl`, `wget`, `iwr` or a pipe into a shell
-  ([hardening against prompt injection](plugin/docs/orchestration.md#hardening-against-prompt-injection)).
-- **Every repeatable mistake becomes a check.** After a defect, the orchestrator proposes a `Gate:` task that adds a
-  check to your own CI, shown red on the original bug before the fix and green after.
+Ravenseat adds structure. It helps when coordination has become the problem, not when one Claude Code conversation
+already does everything you need.
 
-### "My PC chokes on parallel builds"
+## Documentation
 
-With many parallel tracks the machine, not the token quota, is often the limit: gates slow down and go red from
-memory and timeouts, and reruns eat the gain. So the **load guard** makes `cq fill` open fewer slots than
-`maxConcurrent` while free memory is low (all slots from 40 % free, one at the hard limit of 10 %, linear in between;
-CPU optional) and says why: `LOAD: 2 of 5 slots: free memory 18 % (all slots from 40 %)`. Below the hard limit no new
-tracks start (exit 7). Settings: `loadGuard` in `queue.config.json`
-([queue reference](plugin/docs/queue.md#limits-and-safety)).
-
-**Cloud sessions** move ordinary code tasks to Claude Code's cloud sessions on claude.ai instead (off by default,
-`"features": { "cloud": true }`). See [cloud sessions](plugin/docs/guide.md#cloud-sessions).
-
-### "Something breaks and the queue stops"
-
-The queue keeps working when something stops. A task that waits on you is parked, and everything else goes on. A red
-check gives a fix round with a fresh agent, and a red base gets its own fix task while other merges wait. A gate that
-fails once and passes on a rerun is recorded as flaky instead of freezing the base.
-- **Fewer surprises at merge.** `cq conflicts` predicts which running tracks will conflict with each other or with
-  the base (`git merge-tree`, nothing written) and suggests a merge order.
-- **Optional CI watch after a push** (`push.ciWatch`, off by default). Local first is the rule: push only when the
-  local checks are green. The watch is a second net that turns a red CI run into one fix task.
-- **Merges that survive interruptions.** One merge runs at a time (`merge.lock`, a stale lock is taken over), a merge
-  refuses while git has a merge or rebase in progress, and after Ctrl-C, a crash or a stop `cq merge <ID> --resume`
-  finishes the remaining steps. `queue.json.prev` keeps the previous good queue state.
-- **Ask an earlier track.** `cq ask <id> "why X?"` answers from the track's mission, report, commits and transcript
-  tail, without resuming a large agent.
-
-### Claude Code first: you only make the decisions
-
-Ravenseat works as a backend for Claude Code. Every change the board makes to the queue has a command behind it
-([CLI parity](plugin/docs/cli-parity.md) lists the one remaining gap, a draft-file export), so you can work entirely from one chat (or from your phone over Remote
-Control) and never open the board.
-
-**The goal is that your only contact surface is a decision list.** Once your project has checks you trust (tests,
-type check, lint, a database run before push), the routine needs no human: agents build, the gates check, the
-orchestrator merges. What is left for you is what a machine should not decide alone:
-- unclear product requirements, hard-to-reverse choices (data model, public API, new dependencies, deletions) and
-  security or legal tradeoffs. Tracks fix technical failures themselves and ask you only about these; other
-  assumptions are written down in the report;
-- approving tasks agents propose, visual QA, and work that is stuck.
-
-`/cq:decide` walks the list one decision at a time, the recommendation first, and tells you what each answer
-unlocks. The board's Decisions tab shows the same list with one-click answers and undo. `cq cost` shows the flow
-numbers behind this: right first time, defects after merge, and how many tasks were verified per owner intervention.
-
-### The name and the logo
-
-The logo is the Ravenseat: two ravens on a high seat, after Odin's seat Hliðskjálf, from which he saw every world while
-his ravens brought him the news. It sits in the top-left corner of the board and follows light and dark mode.
-
-## What it costs in tokens
-
-Every turn in Claude Code sends the whole conversation again (most of it from the prompt cache, which is cheaper but
-not free). So a turn costs more the larger the context is, and a session costs roughly **number of turns times
-context size**. The system is built around that fact: many short contexts instead of one long one.
-
-**Read these numbers with care.** They come from one project (mine), one developer and a few months of use, about
-1,200 measured tasks. They are not a benchmark, and there is no controlled comparison with other ways of working.
-- The cost per task is **measured**: the subagent logs record the tokens, and the dollar amounts are what those
-  tokens would cost at API prices. On a subscription you pay a flat fee; the amounts only show relative use.
-- The comparison with "one long chat" and "many small chats" below is **my estimate from experience**, not a
-  measurement.
-- Your numbers depend on your codebase, your tasks, your checks and the model, and will differ.
-
-**Measured: median cost per finished task, including its review.**
-
-| Class | Median USD (API-equivalent) | Average USD | Median tokens (mostly cache reads) | Median turns |
-|---|---|---|---|---|
-| K (code) | about 2.5 | about 3.1 | about 10M | about 60 |
-| D (database) | about 5.1 | about 5.7 | about 25M | about 105 |
-| D+ (high-risk) | about 7.5 | about 8.8 | about 36M | about 137 |
-| U (investigation) | about 1.8 | about 2.1 | about 6.5M | about 42 |
-
-The orchestrator added about 18 turns and about 0.75 USD per task. Its target is now 10 turns or fewer per task.
-
-**Measured: where tokens were wasted, and what the plugin does about it.**
-- Turns taken while a track's context was above about 300k tokens were about 61% of track cost. So a track stops at
-  about 300k: it commits, writes a handover note, and a fresh agent continues. A track may compact once; at the second
-  compaction it delivers PARTIAL. A SubagentStop gate (`hook-track-end.mjs`) sends a track back once if it stops with
-  neither a commit nor a RESULT line.
-- The orchestrator's handover note grew to thousands of lines that every takeover read in full. So it has a short
-  "Now" part and a dated log; `cq handover archive` moves old log entries to a monthly archive, and only "Now" is read
-  after compaction and at takeover. A status line (`cq setup --settings`) shows context, cost, quota and running
-  tracks while you work.
-- Prompt cache expiry while waiting was about 23% of all usage. So there are no sleep or polling loops, and
-  subagents use a 1-hour cache.
-- Fix rounds sent to an agent that already held 400k to 900k tokens of context were 35 to 38% of track cost. So fix
-  rounds always start a new agent with a short mission.
-- Fixed overhead per track (setup, reading, checks, report) was about 60% of a small K task and 30 to 40% of a D or
-  D+ task. So task sizes are set per class, and small tasks are bundled.
-
-**Estimated, not measured: the alternatives.**
-- *One long chat.* Each new message pays for the whole history again. In my project, a message at over 500k
-  context cost close to three times as much as the same message at 100k to 200k, and quality dropped as the context
-  filled. I expect this to cost several times more per task than the queue, more the longer the session runs.
-- *Many small chats by hand.* The context stays small, but every chat pays the start-up cost again (reading the
-  project, finding files, running checks), and you do the coordination yourself: no shared queue, no file ownership,
-  no review step, and merge conflicts when chats overlap.
-
-Run `cq cost` in your own project to see where your tokens go.
-
-## Reference and safety
-
-### Key commands
-
-All scripts share one entry point, `cq`. With the plugin, `cq` is on the PATH of Claude Code's Bash tool. In a
-vendored install, write `node scripts/orchestrator/cq.mjs` instead of `cq` (the installer already does this in the
-files it copies).
-
-```
-cq init --full               # once per project (a bare `cq init` starts in lite mode)
-cq mode [lite|full]          # show or switch the mode
-cq show                      # short queue view
-cq add --file task.json      # add tasks
-cq fill --scratchpad <dir>   # start what the limits allow
-cq receive <ID>              # receive a finished track
-cq merge <ID>                # merge it
-cq cost                      # USD per merged change, cost per task (all runs), then per class
-cq calibrate                 # how far minute and cost estimates are off, per class
-cq decide                    # everything waiting on you, most impact first (/cq:decide walks it)
-cq conflicts                 # predicted merge conflicts between running tracks and the base
-cq ask <ID> "<question>"     # ask about an earlier track without resuming it (/cq:ask)
-cq doctor                    # read-only health check: node, hooks, config, state, worktrees, safety baseline
-cq helpers                   # helper agents: on/off and what they cost
-cq helpers add <file.md>     # a custom helper: copied, scanned, off until approved
-cq plan show                 # plan register
-cq finding "<title>"         # a track notes something outside its scope (an idea, not a fix)
-cq board                     # the board: prints a local link with a key
-cq follow                    # follow-up entries
-cq handover now              # the "Now" part of the handover note
-cq help                      # all commands
-```
-
-Skills: `/cq:queue`, `/cq:decide`, `/cq:board`, `/cq:setup`, `/cq:add-to-queue`, `/cq:plans`, `/cq:pick`,
-`/cq:review`, `/cq:ask`, `/cq:parallel-wave` and `/cq:start` ([daily use](plugin/docs/guide.md#daily-use)).
-
-### Safety baseline
-
-Agents write and merge a lot of code quickly, so the usual mistakes (a leaked key, a red build on the live site, lost
-data) get cheaper to make. Run `cq doctor` (offline, read-only) to check your project: secret files in git, empty
-gates, no CI config, a manifest without its lockfile, `productionBranch` equal to `baseBranch`, large tracked files
-and CI workflows without cancel or a path filter. The push guard blocks force pushes and other branches than
-`baseBranch`, scans a base-branch push for secrets and asks before your `deployCommands`. The eleven rules and what
-each check covers: [safety baseline in full](plugin/docs/guide.md#safety-baseline-in-full).
-
-**What the guards are not.** The guards are Claude Code hooks that check the commands an agent runs. They are guard
-rails, not a sandbox. An agent runs with your user account: it can read the files and environment variables your
-shell can, and reach the network, unless your Claude Code permissions or its sandbox settings say otherwise. A
-blocked command can often be written another way. Keep production credentials off the machine the agents run on,
-and use Claude Code's permission rules or sandbox when you need a real boundary.
-
-What Ravenseat checks, what needs a boundary outside it, and the known gaps in the command guard:
-[guarantees and limits](plugin/docs/guide.md#guarantees-and-limits).
-
-### Deeper docs
-
-- [Full-mode guide](plugin/docs/guide.md): install options, daily use, how the loop works, cloud sessions, the
-  board in detail, the full safety baseline and what is not included.
-- [Orchestration](plugin/docs/orchestration.md), [queue reference](plugin/docs/queue.md),
-  [plan register](plugin/docs/plan-register.md), [board](plugin/docs/board.md),
-  [mission template](plugin/docs/mission-template.md), [CLI parity](plugin/docs/cli-parity.md).
+- [Guide](plugin/docs/guide.md): install, lite mode, daily use, how the loop works, safety baseline, guarantees
+  and limits.
+- [Full mode](plugin/docs/full-mode.md): risk classes, helper agents, focus, guards, load guard and recovery.
+- [The board](plugin/docs/board.md) and [commands](plugin/docs/commands.md), with [CLI parity](plugin/docs/cli-parity.md).
+- [Orchestration and agent safeguards](plugin/docs/orchestration.md), [queue configuration and reference](plugin/docs/queue.md),
+  [plan register](plugin/docs/plan-register.md), [mission template](plugin/docs/mission-template.md).
+- [What it costs in tokens](plugin/docs/costs.md) and [why I built it](plugin/docs/why-i-built-it.md).
 - [INSTALL.md](INSTALL.md) for a vendored install, and the [CHANGELOG](CHANGELOG.md) for changes per version.
 
-### Development
+## Development
 
 ```
 npm install
 npm test        # vitest; runs the unit tests under plugin/scripts/orchestrator
 ```
 
-### License
+## License
 
 MIT. See [LICENSE](LICENSE). The helper agents `reviewer-design`, `reviewer-tests`, `reviewer-gap` and
 `reviewer-docs` are adapted from [testdouble/han](https://github.com/testdouble/han) (MIT, Copyright 2026 Test
 Double, Inc.); the license text is in [NOTICE](NOTICE).
+
+## The idea behind the name
+
+Ravenseat is named after Odin's high seat, Hliðskjálf, from which he could see every world while his ravens brought
+him the news. You sit in the seat. Your agents fly out, do the work and come back with the results.
+
+Created by Vegard Cowie Jørgensen.

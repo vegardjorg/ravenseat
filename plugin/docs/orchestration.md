@@ -5,6 +5,8 @@ agents, receives their results, sends them to review, merges, and asks the owner
 answer. Each **track** is a subagent (`track` for K and U, `track-d` for D and D+) in its own git worktree, on its own
 branch (`queue/<ID>`), with a self-contained mission file.
 
+<p align="center"><img src="../../assets/infographics/architecture.webp" alt="One Claude Code conversation drives the orchestrator, which keeps persistent state, starts agents in isolated worktrees and sends their work through checks and integration" width="800"></p>
+
 ## The loop
 
 1. `cq orchestrator pulse`: mark the orchestrator as alive.

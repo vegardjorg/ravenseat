@@ -18,6 +18,43 @@ It listens on 127.0.0.1 only. There is no user login, but every request needs th
 and the key changes on every restart (an old tab then says "The key is old": open the new link). Do not expose
 the port.
 
+## A tour
+
+The screenshots use a made-up demo project ("Pebble", a habit tracker). The board follows your system's light or
+dark mode; the gear lets you pick one.
+
+<p align="center"><img src="../../assets/screenshots/light-01-queue.jpg" alt="The board: the work queue as a kanban with In queue, In progress and Review" width="800"></p>
+
+**The queue.** A kanban: **In queue** (ready now, blocked, proposed by agents, and the batch queue where small tasks
+wait to be packed into one track), **In progress** and **Review**. Each card shows the id, domain, class (the risk
+level K, D, D+ or U, see [task classes](full-mode.md#agents-skip-security-and-edge-cases)), estimate and how many tasks
+it unlocks. **Next up** shows what the orchestrator starts in the next free slot. Click a card for its mission, owned
+files, cost and the actions for its status (see [task detail](guide.md#task-detail)).
+
+<p align="center"><img src="../../assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
+
+**Waiting on you and Decisions.** Everything only you can decide lands here: questions from agents (with their
+recommendation), owner tasks and conditions. Each shows which tasks it blocks. Answer on the board, and the
+orchestrator picks up the answer and unblocks the tasks. The **Decisions** tab is the same list as `/cq:decide`,
+sorted by what each answer unlocks and grouped as Decide, Check, Approve and Unstick. The board opens on it when
+anything waits. The recommendation is the main button, an answer can be undone for 5 seconds, and j/k, Enter, 1-4 and
+u work from the keyboard.
+
+<p align="center"><img src="../../assets/screenshots/light-03-dependencies.jpg" alt="Dependency chains as a graph" width="800"></p>
+
+**Dependencies.** The chains as a graph: circles are tasks (solid ring = in progress, dashed = blocked), squares are
+open questions. It shows at a glance which single answer unlocks the most work.
+
+<p align="center"><img src="../../assets/screenshots/light-04-statistics.jpg" alt="Statistics: throughput, cycle time, estimate accuracy and cost" width="800"></p>
+
+**Statistics and cost.** Done per day, cycle time, how good the estimates are, cost per day (API-equivalent), time per
+class, and how large the agents' contexts got. This is where you see whether the queue earns its keep.
+
+The plan register, the priority map, dark mode and the settings panel are shown in
+[the board in detail](guide.md#the-board-in-detail).
+
+<p align="center"><img src="../../assets/screenshots/light-12-mascot-night.png" alt="The ravens at 02:47: the agents don't need sleep, you do" width="480"></p>
+
 ## What it shows
 
 The switch at the top left changes between two workspaces, **Queue** and **Plans**.
