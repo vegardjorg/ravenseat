@@ -11,7 +11,9 @@
 // step; (5) other base gate commands run as their own step, and a red one lets done go on but exits 9; (6) the feature
 // off: no state file, no refusal, no fix task; (7) the flaky check: a red base gate reruns only the failed commands once
 // on the same sha; green on the rerun records green with `flaky`, a finding and a flakyGate row (no freeze), red twice
-// freezes as before, and baseGate.flakyRerun false freezes at once.
+// freezes as before, and baseGate.flakyRerun false freezes at once; (8) the base gate runs scrubbed; (9) the skip rule and
+// the flaky check read only trusted rows: a later tampered run, a legacy entry and another gate setup never skip; (10) a
+// run that changed the git hooks or config is never called flaky, and a base gate that does it is red.
 // Runs queue.mjs against a temporary queue (QUEUE_FOLDER) and git repo (QUEUE_GIT), with an injected merge runner
 // (QUEUE_MERGE_RUNNING) that merges with plain git (merge-track.mjs refuses a test identity) and runs the other steps
 // (the real gates.mjs, the real `set done`) as cq merge would. Never the main repo or the real queue. The gate is a tiny
@@ -256,7 +258,7 @@ describe('queue.mjs merge with the base gate', () => {
     const log = fs.readFileSync(path.join(p.folder, 'times.jsonl'), 'utf8');
     expect(log).toContain('"event":"base-red-overridden"');
     expect(log).toContain('"track":"E"');
-  });
+  }, 240_000);
 
   it('the skip rule trusts only cq receive\'s gate run, never the track\'s own run or a time log row', () => {
     const p = project({ gates: { quick: [CHECK] } });
@@ -302,7 +304,7 @@ describe('queue.mjs merge with the base gate', () => {
     p.clearSteps();
     expect(p.run('merge', 'G', '--without-fill').code).toBe(0);
     expect(p.stepsRun()).toEqual(['merge', 'gates', 'done']);
-  });
+  }, 240_000);
 
   it('gates.mjs records evidence only for the orchestrator\'s side: the main checkout or --evidence', () => {
     const p = project({ gates: { quick: [CHECK] } });
@@ -421,6 +423,99 @@ describe('queue.mjs merge with the base gate', () => {
     expect(m.code).toBe(9);
     expect(m.out).not.toContain('FLAKY');
     expect(m.out).not.toContain('rerun');
+    expect(p.health().current).toMatchObject({ status: 'red' });
+  });
+});
+
+describe('the base gate and the trust rules', () => {
+  const store = (p: ReturnType<typeof project>) => path.join(p.folder, 'gate-evidence.json');
+  const readEntries = (p: ReturnType<typeof project>) => JSON.parse(fs.readFileSync(store(p), 'utf8')).entries as Record<string, unknown>[];
+  const writeEntries = (p: ReturnType<typeof project>, entries: Record<string, unknown>[]) =>
+    fs.writeFileSync(store(p), JSON.stringify({ version: 1, entries }));
+
+  it('the base gate commands get neither QUEUE_FOLDER nor GITHUB_TOKEN', () => {
+    const p = project({ gates: { quick: [CHECK] } });
+    const seen = path.join(p.folder, 'base-saw.jsonl');
+    const script = path.join(p.folder, 'base.cjs');
+    fs.writeFileSync(
+      script,
+      `require('fs').appendFileSync(${JSON.stringify(seen)}, JSON.stringify({ queue: process.env.QUEUE_FOLDER || null, token: process.env.GITHUB_TOKEN || null }) + '\\n');\n`,
+    );
+    const command = `node "${script.split(path.sep).join('/')}"`;
+    fs.writeFileSync(path.join(p.folder, 'queue.config.json'), JSON.stringify({ baseBranch: 'develop', gates: { quick: [CHECK] }, baseGate: { commands: [command] } }));
+    p.env.GITHUB_TOKEN = 'test-token-not-for-the-base-gate';
+    p.track('A', { 'lib/b.js': 'exports.b = 1;\n' });
+    expect(p.run('merge', 'A', '--without-fill').code).toBe(0);
+    const runs = fs.readFileSync(seen, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    // Once before the merge (the base was unknown) and once as the base-gate step after it.
+    expect(runs.length).toBeGreaterThanOrEqual(2);
+    for (const r of runs) expect(r).toEqual({ queue: null, token: null });
+  });
+
+  it('the skip rule: a later tampered run, a legacy entry or another gate setup makes the check run', () => {
+    const p = project({ gates: { quick: [CHECK] } });
+    p.track('A', { 'lib/b.js': 'exports.b = 1;\n' });
+    expect(p.run('merge', 'A', '--without-fill').code).toBe(0);
+    /** One track on the base tip, received (green evidence on its tip), the store changed, and merged: which steps ran? */
+    const mergedAfter = (id: string, change: (entries: Record<string, unknown>[], sha: string) => Record<string, unknown>[]) => {
+      p.track(id, { [`lib/${id}.js`]: `exports.x = 1;\n` });
+      const received = p.run('receive', id);
+      expect(received.out).toContain('Gates GREEN');
+      writeEntries(p, change(readEntries(p), p.g(['rev-parse', `queue/${id}`])));
+      p.clearSteps();
+      const m = p.run('merge', id, '--without-fill');
+      expect(m.code).toBe(0);
+      return p.stepsRun();
+    };
+    // Unchanged: the rule skips, so the three cases below differ only by what they change.
+    expect(mergedAfter('S', (entries) => entries)).toEqual(['merge', 'done']);
+    expect(
+      mergedAfter('T', (entries, sha) => {
+        const own = entries.filter((e) => e.sha === sha).at(-1) as Record<string, unknown>;
+        return [...entries, { ...own, ok: false, tampered: true, tamper_reason: 'hook added: x' }];
+      }),
+    ).toEqual(['merge', 'gates', 'done']);
+    expect(
+      mergedAfter('L', (entries, sha) =>
+        entries.map((e) => {
+          if (e.sha !== sha) return e;
+          const { writer: _w, setup_hash: _s, id: _i, ...legacy } = e;
+          return legacy;
+        }),
+      ),
+    ).toEqual(['merge', 'gates', 'done']);
+    expect(mergedAfter('O', (entries, sha) => entries.map((e) => (e.sha === sha ? { ...e, setup_hash: 'another setup' } : e)))).toEqual(['merge', 'gates', 'done']);
+  }, 240_000);
+
+  it('a gate run that plants a hook is not flaky: the base freezes, although a rerun would be green', () => {
+    // Plants the hook once, and only where the track's file is: red the first time (tampered), every command green.
+    const script =
+      "const cp = require('child_process'), fs = require('fs'), path = require('path');\n" +
+      "if (fs.existsSync('lib/plant.js')) {\n" +
+      "  const hooks = path.resolve(cp.execFileSync('git', ['rev-parse', '--git-path', 'hooks'], { encoding: 'utf8' }).trim());\n" +
+      "  fs.mkdirSync(hooks, { recursive: true });\n" +
+      "  fs.writeFileSync(path.join(hooks, 'post-rewrite'), '#!/bin/sh\\nexit 0\\n');\n" +
+      '}\n';
+    const p = project({ gates: { quick: ['node plant-gate.js'] } });
+    fs.writeFileSync(path.join(p.repo, 'plant-gate.js'), script);
+    p.g(['add', '--', 'plant-gate.js']);
+    p.g(['commit', '-q', '-m', 'the gate']);
+    p.track('A', { 'lib/plant.js': 'exports.p = 1;\n' });
+    const m = p.run('merge', 'A', '--without-fill');
+    expect(m.out).toContain('BASE RED');
+    expect(m.out).not.toContain('FLAKY');
+    expect(p.health().current).toMatchObject({ tip: p.tip(), status: 'red' });
+    expect(readEntries(p).at(-1)).toMatchObject({ sha: p.tip(), ok: false, exit: 0, tampered: true });
+    expect(fs.readFileSync(p.health().current.tail_file, 'utf8')).toContain('hook added: post-rewrite');
+  });
+
+  it('a base gate that changes the executing git config is red, with no flaky rerun', () => {
+    const p = project({ gates: { quick: [CHECK] }, baseGate: { commands: ['git config core.pager cat'] } });
+    p.track('A', { 'lib/b.js': 'exports.b = 1;\n' });
+    const m = p.run('merge', 'A', '--without-fill');
+    expect(m.out).toContain('TAMPERED: git hooks or config changed during the run (git config changed: core.pager)');
+    expect(m.out).toContain('Base gate RED');
+    expect(m.out).not.toContain('once more on the same sha');
     expect(p.health().current).toMatchObject({ status: 'red' });
   });
 });

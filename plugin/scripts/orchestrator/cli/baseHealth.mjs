@@ -24,6 +24,11 @@ const FI = require('./lib/queueFindings.js');
 const TL = require('./lib/timeLogRows.js');
 const ER = require('./lib/eventRows.js');
 const GE = require('./lib/gateEvidence.js');
+const GV = require('./lib/gateEnv.js');
+const GX = require('./lib/gitExecSurface.js');
+
+/** The base gate commands run the merged tracks' code: the same scrubbed environment as the gates (lib/gateEnv.js). */
+const trackCodeSpawn = () => GV.trackCodeSpawn(process.env, { storeFile: GE.storeFile(FOLDER), root: CONFIG.root });
 
 /** The resolved setup (config().baseGate with the defaults; off without commands or with enabled: false). */
 export const BASE_SETUP = BH.baseGateSetup(CONFIG);
@@ -61,10 +66,12 @@ function trackedChanges() {
 /**
  * Runs the base gate commands in the main checkout now and writes the report (the tail only) to
  * `<folder>/base-health-<sha>.md`. Warns when the checkout had or got tracked changes: the commands then saw files that
- * are not on the tip, and the checkout is left as it is (the queue never cleans up someone's changes).
+ * are not on the tip, and the checkout is left as it is (the queue never cleans up someone's changes). A change to the
+ * git hooks or the executing config during the check makes it red (lib/gitExecSurface.js).
  * @returns {{ run: object, file: string }}
  */
 export function runCheckNow({ tip, folder, cause = null }) {
+  const surface = GX.readSurface(GIT_ROOT);
   const before = trackedChanges();
   if (before)
     console.log(`WARNING: the main checkout ${GIT_ROOT} has uncommitted changes; the base gate also sees them (they are not on ${BASE}).`);
@@ -77,6 +84,7 @@ export function runCheckNow({ tip, folder, cause = null }) {
     cwd: GIT_ROOT,
     timeoutSec: BASE_SETUP.timeoutSec,
     tailLines: BASE_SETUP.tailLines,
+    spawn: trackCodeSpawn(),
   });
   // The flaky check: the red command (and the ones after it, which never ran) once more on the same sha.
   if (!run.ok) {
@@ -85,6 +93,11 @@ export function runCheckNow({ tip, folder, cause = null }) {
       run = BH.flakyResult({ first: run, rerun: again, firstFailed: [run.failed] });
       flakyLines({ tip, run, causeId: cause?.task ?? null, source: 'base gate' });
     }
+  }
+  const tamperReason = GX.surfaceChangeReason(surface, GX.readSurface(GIT_ROOT));
+  if (tamperReason) {
+    console.log(`TAMPERED: ${tamperReason}. ${GX.INSPECT}.`);
+    run = { ...run, ok: false, failed: run.failed ?? 'git hooks or config changed', tail: [...run.tail, `${tamperReason}. ${GX.INSPECT}`] };
   }
   const after = trackedChanges();
   if (after !== before)
@@ -105,7 +118,7 @@ function rerunFailed({ tip, commands }) {
   if (!BASE_SETUP.flakyRerun || !commands.length) return null;
   if (git(['rev-parse', 'HEAD']) !== tip) return null;
   console.log(`Base gate red: running the failed command(s) once more on the same sha (${short(tip)}): ${commands.join(' ; ')}`);
-  return BH.runBaseGate({ commands, cwd: GIT_ROOT, timeoutSec: BASE_SETUP.timeoutSec, tailLines: BASE_SETUP.tailLines });
+  return BH.runBaseGate({ commands, cwd: GIT_ROOT, timeoutSec: BASE_SETUP.timeoutSec, tailLines: BASE_SETUP.tailLines, spawn: trackCodeSpawn() });
 }
 
 /** The lines after a flaky check, and on green the finding and the flakyGate row (fileFlaky). */
@@ -179,15 +192,23 @@ function fileFlaky({ commands, tip, causeId = null, source }) {
  * The flaky check for the merge step's red quick gates (cli/merge.mjs): the failed commands from the gate evidence the
  * run recorded for `tip` (gates.mjs --evidence; all the quick gates when none is found) once more on the same sha.
  * Green: the lines and the record, and the green run for the verdict ({ run }). Red again or off: null (the caller
- * freezes as before).
+ * freezes as before). A tampered run is never flaky: its commands may all be green, and a rerun would turn the red that
+ * says so into green. The same goes when the rerun itself changes the git hooks or config.
  */
 export function flakyRecheck({ tip, causeId = null }) {
   if (!BASE_SETUP.enabled || !BASE_SETUP.flakyRerun || !tip) return null;
   const quick = (CONFIG.gates?.quick ?? []).filter((g) => typeof g === 'string' && g.trim());
   const entry = gateRowsNow().filter((e) => e?.sha === tip && e.kind === 'quick').at(-1);
+  if (entry?.tampered) return null;
   const failed = entry?.failed?.length ? entry.failed : quick;
+  const surface = GX.readSurface(GIT_ROOT);
   const again = rerunFailed({ tip, commands: failed });
   if (!again) return null;
+  const tamperReason = GX.surfaceChangeReason(surface, GX.readSurface(GIT_ROOT));
+  if (tamperReason) {
+    console.log(`TAMPERED: ${tamperReason}. ${GX.INSPECT}.`);
+    return null;
+  }
   const run = BH.flakyResult({ first: { durationSec: null }, rerun: again, firstFailed: failed });
   flakyLines({ tip, run, causeId, source: 'quick gates after a merge' });
   return run.ok ? { run } : null;
@@ -390,12 +411,17 @@ export function guardBeforeMerge({ id, force, folder }) {
 }
 
 /**
- * The trusted gate runs for the skip rule: the gate evidence store (lib/gateEvidence.js), written by gates.mjs only for
- * the orchestrator's own runs (cq receive, cq merge, the main checkout). NOT the time log: every agent can append a
- * `gate` row there, so a row in it proves nothing. An empty list when the store is missing or broken (the check runs).
+ * The trusted gate runs for the skip rule and the flaky check, both decisions: the gate evidence store
+ * (lib/gateEvidence.js), written by gates.mjs only for the orchestrator's own runs (cq receive, cq merge, the main
+ * checkout), filtered with GE.trusted for the CURRENT gate setup and without legacy entries (as cq receive): a run under
+ * another setup, another writer's entry or an entry from before the fields existed decides nothing here, so the check
+ * runs. NOT the time log: every agent can append a `gate` row there, so a row in it proves nothing. An empty list when
+ * the store is missing or broken (the check runs). No history view reads through this; one that wants every row reads
+ * GE.readStore itself.
  */
 export function gateRowsNow() {
-  return GE.readStore(GE.storeFile(FOLDER)).entries;
+  const trust = { setupHash: GE.setupHash(CONFIG.gates), legacy: false };
+  return GE.readStore(GE.storeFile(FOLDER)).entries.filter((e) => GE.trusted(e, trust));
 }
 
 /** The tree of a commit (for the skip rule), or null. */

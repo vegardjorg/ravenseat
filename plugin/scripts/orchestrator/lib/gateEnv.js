@@ -1,5 +1,6 @@
 // =============================================================
-// gateEnv.js: the scrubbed environment the gate commands (gates.mjs) run with.
+// gateEnv.js: the scrubbed environment every command that runs a track's code gets: the gate commands (gates.mjs), the
+// done command (task field done_when) and the base gate (cli/merge.mjs, cli/baseHealth.mjs).
 //
 // Why: the gate commands run the code a track just wrote (its tests, its lint config, its scripts), with the
 // orchestrator's rights. They should not get what they do not need for that: tokens and cloud keys (a test could send
@@ -27,9 +28,11 @@
 // simple cheating (a test that reads QUEUE_FOLDER or GITHUB_TOKEN), not against a targeted attacker. A real boundary
 // needs OS isolation (a sandbox around the gate commands), see plans/client-adapter-plan.md, "Tillitsgrense" point 7.
 //
-// Pure: no I/O. Tested in lib/__tests__/gateEnv.test.ts.
+// Pure: no I/O (trackCodeSpawn only wraps a spawn function). Tested in lib/__tests__/gateEnv.test.ts.
 // =============================================================
 'use strict';
+
+const path = require('node:path');
 
 /** Never dropped (upper case; Windows names are compared without case). */
 const KEEP = new Set([
@@ -112,4 +115,27 @@ function gateEnv(env, { storePaths = [], platform = process.platform } = {}) {
   return { env: out, dropped: dropped.sort() };
 }
 
-module.exports = { KEEP, SECRET_NAMES, SECRET_PREFIXES, dropReason, gateEnv };
+/**
+ * The environment for track code from where the evidence store lives: the store file, and its folder too unless that is
+ * the project root (then every variable naming the root would go, PATH entries and all). Pure.
+ * @param {Record<string, string|undefined>} env
+ * @param {{ storeFile?: string|null, root?: string|null, platform?: string }} [o]
+ */
+function trackCodeEnv(env, { storeFile = null, root = null, platform = process.platform } = {}) {
+  const folder = storeFile ? path.dirname(storeFile) : null;
+  const inRoot = folder && root && path.resolve(folder) === path.resolve(root);
+  return gateEnv(env, { storePaths: [storeFile, inRoot ? null : folder].filter(Boolean), platform });
+}
+
+/**
+ * A spawnSync for commands that run track code, with trackCodeEnv as their environment: what lib/doneCheck.js
+ * runDoneWhen and lib/baseHealth.js runBaseGate take as `spawn`.
+ * @param {Record<string, string|undefined>} env
+ * @param {{ storeFile?: string|null, root?: string|null, platform?: string, spawn?: Function }} [o]
+ */
+function trackCodeSpawn(env, { spawn = require('node:child_process').spawnSync, ...where } = {}) {
+  const scrubbed = trackCodeEnv(env, where).env;
+  return (command, options) => spawn(command, { ...options, env: scrubbed });
+}
+
+module.exports = { KEEP, SECRET_NAMES, SECRET_PREFIXES, dropReason, gateEnv, trackCodeEnv, trackCodeSpawn };

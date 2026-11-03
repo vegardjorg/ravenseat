@@ -41,6 +41,14 @@
 // gates. The store's text is read before the first command and compared after the last one; a change during the run
 // (a gate command wrote to it) is dropped and the run is recorded RED with `tampered: true` (lib/gateEvidence.js
 // recordRun), printed on stderr, and the exit code is 1. This is no OS isolation: see the limits in lib/gateEnv.js.
+// What the entry covers (lib/gateCoverage.js, read before the first command): `runner`, the shared links and how many
+// untracked and ignored paths the commands could see; a line before the final line says so when evidence was recorded.
+//
+// Git hooks and config (lib/gitExecSurface.js): a gate command can write the shared .git, and what it plants there runs at
+// the orchestrator's next git command with the tokens the gate was scrubbed of. Every --quick/--full run reads the
+// effective hooks folder and the config values that run a program before the first command and compares them after the
+// last one. A change makes the run red (`tampered: true`, `tamper_reason` naming it, exit 1); nothing is restored, the
+// message says what to inspect. This is detection against accidents and simple cheating, not prevention.
 //   --evidence  record evidence also outside the main checkout (the push guard denies it to queue agents).
 //   --cwd <folder>  run in that folder (cq receive: the track's worktree).
 //
@@ -162,11 +170,7 @@ function evidenceFile() {
  * unscrubbed one.
  */
 function childEnvironment() {
-  const file = evidenceFile();
-  const folder = file ? path.dirname(file) : null;
-  // The data folder itself only when it is not the project root (then every variable naming the root would go too).
-  const storePaths = [file, folder && path.resolve(folder) !== path.resolve(K.root) ? folder : null].filter(Boolean);
-  return require('./lib/gateEnv.js').gateEnv(process.env, { storePaths }).env;
+  return require('./lib/gateEnv.js').trackCodeEnv(process.env, { storeFile: evidenceFile(), root: K.root }).env;
 }
 const CHILD_ENV = childEnvironment();
 
@@ -193,11 +197,12 @@ function evidenceBefore(want) {
  * Records this run as trusted gate evidence (lib/gateEvidence.js), in this process after every gate command has exited,
  * when the orchestrator's side ran it (evidenceWanted). The entry needs the sha (HEAD did not move during the run) and
  * the cleanliness at the start; it carries the setup hash of the configured gates and `writer: "orchestrator"`.
- * `before` is the store's text from before the run; a change during the run makes the entry red (tampered).
+ * `before` is the store's text from before the run; a change during the run makes the entry red (tampered), and so does
+ * `tamperReason` (git hooks or config changed). `coverage` is what the run could see beyond the commit.
  * Fail open: a write error only means no evidence, so the caller runs the gate again or asks.
- * @returns {{ recorded: boolean, tampered: boolean }}
+ * @returns {{ recorded: boolean, tampered: boolean, reason?: string, covered?: string }}
  */
-function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, before }) {
+function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, before, coverage = null, tamperReason = null }) {
   try {
     if (!want?.wanted) return { recorded: false, tampered: false };
     const GE = require('./lib/gateEvidence.js');
@@ -206,26 +211,45 @@ function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, befor
     const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
     const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
     const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
-    return GE.recordRun({
-      file,
-      before: before ?? null,
-      entry: GE.entry({
-        kind,
-        sha,
-        setupHash: GE.setupHash(K.gates),
-        clean: START.clean,
-        exit,
-        gates: ran,
-        failed,
-        timedOut,
-        track,
-        branch,
-        mainTree: want.mainTree,
-      }),
+    const entry = GE.entry({
+      kind,
+      sha,
+      setupHash: GE.setupHash(K.gates),
+      clean: START.clean,
+      exit,
+      gates: ran,
+      failed,
+      timedOut,
+      track,
+      branch,
+      mainTree: want.mainTree,
+      coverage,
     });
+    const result = GE.recordRun({ file, before: before ?? null, entry, tamperReason });
+    return { ...result, covered: result.recorded ? GE.coverageLine(entry) : '' };
   } catch {
     // error-ignored: no evidence is the safe direction (receive runs the gate again, the push check asks)
     return { recorded: false, tampered: false };
+  }
+}
+
+/**
+ * What this run could see beyond the commit, for the evidence entry (lib/gateCoverage.js). Read before the first gate
+ * command and only when this run records evidence. core.fsmonitor is off for these git calls: they must not start a
+ * program someone planted. null when git cannot tell where the worktree's root is.
+ */
+function coverageNow(want) {
+  if (!want.wanted) return null;
+  try {
+    const top = (git('rev-parse', '--show-toplevel') || '').trim();
+    if (!top) return null;
+    return require('./lib/gateCoverage.js').readCoverage({
+      top: path.resolve(top),
+      links: require('./lib/orchestratorHelp.js').trackLinks(K.sharedLinks),
+      git: (...a) => git('-C', top, '-c', 'core.fsmonitor=false', ...a),
+    });
+  } catch {
+    return null; // error-ignored: the entry is then without the counts, which reads as unknown
   }
 }
 
@@ -376,6 +400,10 @@ if (logFile) fs.writeFileSync(logFile, `gates --${mode} in ${cwd}\n`);
 // Before the first gate command: does this run record evidence, and the store's text for the tamper check.
 const WANT = evidenceWanted();
 const BEFORE = evidenceBefore(WANT);
+const COVERAGE = coverageNow(WANT);
+// The hooks and the executing config, also for a track's own run: what is planted in the shared .git reaches every run.
+const GX = require('./lib/gitExecSurface.js');
+const SURFACE = GX.readSurface(cwd);
 const width = Math.min(60, Math.max(...gates.map((g) => g.length)) + 2);
 const start = Date.now();
 let failedCount = 0;
@@ -425,7 +453,9 @@ for (const command of gates) {
 }
 
 const total = Math.round((Date.now() - start) / 1000);
-// Every gate command has exited: only now does this process (the orchestrator's side) record the evidence.
+// Every gate command has exited: did one of them change what runs at the next git command (lib/gitExecSurface.js)?
+const surfaceChange = GX.surfaceChangeReason(SURFACE, GX.readSurface(cwd));
+// Only now does this process (the orchestrator's side) record the evidence.
 const recorded = recordEvidence({
   kind: mode,
   ran: gates,
@@ -434,9 +464,11 @@ const recorded = recordEvidence({
   timedOut: timedOutAny,
   want: WANT,
   before: BEFORE,
+  coverage: COVERAGE,
+  tamperReason: surfaceChange,
 });
-// The store changed while the gate commands ran: the run is red whatever the gates said (lib/gateEvidence.js recordRun).
-const exitCode = failedCount === 0 && !recorded.tampered ? 0 : 1;
+// The store or the git surface changed while the gate commands ran: the run is red whatever the gates said.
+const exitCode = failedCount === 0 && !recorded.tampered && !surfaceChange ? 0 : 1;
 logRun({
   kind: mode,
   ran: gates,
@@ -445,7 +477,13 @@ logRun({
   exit: exitCode,
   timedOut: timedOutAny,
 });
-if (recorded.tampered)
+if (recorded.covered) console.log(`Evidence for ${String(START.sha).slice(0, 12)}: ${recorded.covered}.`);
+if (surfaceChange) {
+  const text = `RED: ${recorded.reason ?? surfaceChange}. ${GX.INSPECT} (${total} s)`;
+  // In the log too: cq receive and cq merge take the fix brief and the base report from the log's tail.
+  if (logFile) fs.appendFileSync(logFile, `\n${text}\n`);
+  console.log(`${text}${logFile ? `, full log: ${logFile}` : ''}`);
+} else if (recorded.tampered)
   console.log(
     `RED: the gate evidence store changed while the gate commands ran (a gate wrote to it); the change was dropped and ` +
       `the run recorded as red (tampered) (${total} s)${logFile ? `, full log: ${logFile}` : ''}`,
