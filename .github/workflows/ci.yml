@@ -1,0 +1,42 @@
+# CI for Ravenseat: the full test suite on Linux and Windows, on every push to main and every pull request.
+# Actions are pinned by commit SHA (the tag in the comment), so a moved tag cannot change what runs here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # Many tests build throwaway git repos; most pass an identity with -c, this covers the rest.
+      - name: Git identity for test repos
+        run: |
+          git config --global user.name "ravenseat-ci"
+          git config --global user.email "ravenseat-ci@example.invalid"
+      - run: npm ci
+      - run: npm test

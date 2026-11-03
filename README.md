@@ -6,6 +6,7 @@
 </p>
 
 <h1 align="center">Ravenseat</h1>
+<p align="center"><a href="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml"><img src="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI: tests on Linux and Windows"></a></p>
 <p align="center"><b>Your agents keep building. You make the decisions.</b></p>
 <p align="center">Run your Claude Code project from one conversation. Ravenseat coordinates parallel coding agents,
 tracks what needs to happen next, verifies their work with your project's checks and brings you the decisions that
