@@ -3,6 +3,16 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.10 (2026-11-03)
+
+### Added
+- CI for Ravenseat itself: the full test suite on Linux and Windows with Node 20 and 22, on every push to `main` and
+  every pull request. Actions are pinned by commit SHA, the workflow has read-only access. Badge in the README.
+
+### Fixed
+- The test run could end with exit 1 although every test passed ("Timeout calling onTaskUpdate" on a busy machine):
+  vitest now uses half the cores.
+
 ## 0.8.9 (2026-11-03)
 
 ### Fixed
