@@ -41,8 +41,18 @@ export const PLUGIN_ROOT = path.resolve(HERE, '..', '..');
 /** Where --ci writes the GitHub Actions template (relative to the target). */
 export const CI_WORKFLOW = '.github/workflows/cq-gates.yml';
 
-/** The lines .gitignore needs: the queue's data, the agents' worktrees and the personal settings (an absolute path). */
-export const GITIGNORE_LINES = ['scripts/.queue/', '.claude/worktrees/', '.claude/settings.local.json'];
+/**
+ * The lines .gitignore needs: the queue's data, the agents' worktrees, the personal settings (an absolute path) and
+ * local secret files, so one `git add .` does not commit them. A file git already tracks stays tracked; cq doctor names it.
+ */
+export const GITIGNORE_LINES = [
+  'scripts/.queue/',
+  '.claude/worktrees/',
+  '.claude/settings.local.json',
+  '.env',
+  '.env.*',
+  '!.env.example',
+];
 
 /**
  * Sets up `target`. Returns a log { copied, replaced, skipped, notes } and writes nothing when `dry`.
@@ -97,7 +107,7 @@ export function setupProject(o) {
   if (missing.length) {
     const pre = gitignore && !gitignore.endsWith('\n') ? '\n' : '';
     if (!o.dry)
-      fs.appendFileSync(gitignorePath, `${pre}\n# Ravenseat (the queue's data and the agents' worktrees)\n${missing.join('\n')}\n`);
+      fs.appendFileSync(gitignorePath, `${pre}\n# Ravenseat (the queue's data, the agents' worktrees and local secrets)\n${missing.join('\n')}\n`);
     log.notes.push(`.gitignore: added ${missing.join(' ')}`);
   } else log.notes.push('.gitignore: unchanged');
 

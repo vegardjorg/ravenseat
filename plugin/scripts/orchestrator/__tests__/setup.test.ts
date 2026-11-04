@@ -210,6 +210,25 @@ describe('setup.mjs records the plugin version it set up (for the setup notice o
     expect(log.notes.join(' | ')).toContain(`setup record: plugin ${version()} (scripts/.queue/setup.json)`);
   });
 
+  it('.gitignore: git really ignores local secret files but not the example, and a second run adds nothing', () => {
+    execFileSync('git', ['init', '-q'], { cwd: target });
+    setupProject({ target });
+    const first = readFileSync(join(target, '.gitignore'), 'utf8');
+    const ignored = (file: string) => {
+      try {
+        execFileSync('git', ['check-ignore', '-q', file], { cwd: target, stdio: 'ignore' });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    expect(ignored('.env')).toBe(true);
+    expect(ignored('.env.local')).toBe(true);
+    expect(ignored('.env.example')).toBe(false);
+    setupProject({ target });
+    expect(readFileSync(join(target, '.gitignore'), 'utf8')).toBe(first);
+  });
+
   it('nothing without --settings, with --dry, or in a vendored install (hooks)', () => {
     setupProject({ target });
     setupProject({ target, settings: true, dry: true });
