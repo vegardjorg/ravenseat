@@ -132,6 +132,14 @@ function quickTask(f = {}) {
       .filter(Boolean);
     if (files.length) task.owned_files = files;
   }
+  // --depends a,b: the task waits until these are done. cq add refuses an id that is not in the queue.
+  if (f.depends != null) {
+    const depends = String(f.depends)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (depends.length) task.depends_on = depends;
+  }
   if (f.id != null && String(f.id).trim()) task.id = String(f.id).trim();
   if (f.by != null && String(f.by).trim()) task.added_by = String(f.by).trim();
   return error.length ? { error } : { task, error };

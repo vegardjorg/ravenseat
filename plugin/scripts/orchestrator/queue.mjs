@@ -21,7 +21,7 @@
 //        (also writes "mode" into queue.config.json, for an existing queue too. A fresh init without a flag writes
 //         "lite" when the config has no mode of its own; lite gets the project "tasks" (prefix T-). lib/liteMode.js)
 //   node scripts/orchestrator/queue.mjs mode [lite|full]             (show the mode, or write it into queue.config.json)
-//   node scripts/orchestrator/queue.mjs add "<title>" [--mission "<text or path>"] [--priority 1-10] [--files a,b]
+//   node scripts/orchestrator/queue.mjs add "<title>" [--mission "<text or path>"] [--priority 1-10] [--files a,b] [--depends a,b]
 //        [--id <id>] [--by "<who>"]   (lite mode only: one task from a title; id T-001..., class K, value 5 or
 //         --priority, 30 min, the mission = the title. No small-task guard or batch queue in lite)
 //   node scripts/orchestrator/queue.mjs add --file task.json        (one object, a list, or { "tasks": [...],

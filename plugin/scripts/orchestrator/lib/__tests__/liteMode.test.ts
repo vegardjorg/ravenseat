@@ -86,6 +86,7 @@ describe('liteDefaults and quickTask', () => {
       owned_files: ['src/a.js', 'src/b/'],
     });
     expect(LM.quickTask({ title: 'x', priority: '11' }).error.join()).toMatch(/1-10/);
+    expect(LM.quickTask({ title: 'x', depends: 'T-001, T-002' }).task?.depends_on).toEqual(['T-001', 'T-002']);
     expect(LM.quickTask({}).error.join()).toMatch(/needs a title/);
   });
 });
@@ -187,6 +188,9 @@ describe('cq init, add, help and mode', () => {
     expect(JSON.parse(fs.readFileSync(configFile(), 'utf8'))).toEqual({ mode: 'lite' });
     expect(Object.keys(queue().projects)).toEqual(['tasks']);
 
+    const typo = await cq('add', 'Later', '--depends', 'T-999');
+    expect(typo.status).not.toBe(0);
+    expect(typo.stderr + typo.stdout).toContain('unknown task(s): T-999');
     const a = await cq('add', 'Fix the login bug');
     expect(a.status, a.stderr).toBe(0);
     expect(a.stdout).toContain('Added: T-001');

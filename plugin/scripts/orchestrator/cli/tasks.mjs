@@ -145,9 +145,9 @@ export function cmdMode() {
 /** `cq add` (the usage is at the top of queue.mjs). */
 export function cmdAdd() {
   const LITE = LM.isLite(CONFIG);
-  // Lite: `add "<title>" [--mission ...] [--priority N] [--files a,b] [--id X] [--by ...]` builds the task from the flags.
+  // Lite: `add "<title>" [--mission ...] [--priority N] [--files a,b] [--depends a,b] [--id X] [--by ...]` builds the task from the flags.
   const quickTitle = val('--title') ?? positional(1, [
-    '--file', '--json', '--title', '--mission', '--priority', '--files', '--id', '--by', '--plan', '--accept',
+    '--file', '--json', '--title', '--mission', '--priority', '--files', '--depends', '--id', '--by', '--plan', '--accept',
   ])[0];
   let source = val('--file') ? fs.readFileSync(val('--file'), 'utf8') : val('--json');
   if (!source && quickTitle != null) {
@@ -160,10 +160,15 @@ export function cmdAdd() {
       mission: val('--mission'),
       priority: val('--priority'),
       files: val('--files'),
+      depends: val('--depends'),
       id: val('--id'),
       by: val('--by'),
     });
     if (q.error.length) die(`Nothing added: ${q.error.join('; ')}`);
+    // A mistyped dependency would hold the task back for good, without a word.
+    const known = new Set(read().tasks.map((x) => x.id));
+    const unknown = (q.task.depends_on ?? []).filter((d) => !known.has(d));
+    if (unknown.length) die(`Nothing added: --depends names unknown task(s): ${unknown.join(', ')}`);
     source = JSON.stringify(q.task);
   }
   if (!source)

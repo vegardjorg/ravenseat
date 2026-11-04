@@ -12,7 +12,8 @@ Background: `${CLAUDE_PLUGIN_ROOT}/skills/parallel-wave/SKILL.md` and `docs/queu
 
 **Lite mode:** run `cq mode` first. If it says `lite`, skip steps 0 to 5: add one task per thing the user asked for
 with `cq add "<short title>" --mission "<self-contained mission: what, why, where, how to check it>"` (add
-`--files <paths>` when you know the files it owns, `--priority 1-10` only when the user gave a priority). No class,
+`--files <paths>` when you know the files it owns, `--depends <ids>` when it must wait for other tasks, `--priority 1-10`
+only when the user gave a priority). No class,
 size, value, project, feature, splitting or packing; ids, class K and the defaults come by themselves, and nothing
 is refused for being small. A task that needs the owner's decision first still waits on a registered question: use
 `cq add --json '{"tasks":[{"title":"…","mission":"…","waiting_on":["Q-1"]}],"question":{"Q-1":{"type":"question","text":"…","recommendation":"…"}}}'`.
