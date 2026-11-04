@@ -3,6 +3,12 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.17 (2026-11-04)
+
+### Fixed
+- `cq merge --resume` left the worktree and the branch when the project path had another spelling than the one git prints,
+  such as a link or a short Windows path. The cleanup now compares real paths.
+
 ## 0.8.16 (2026-11-04)
 
 ### Fixed

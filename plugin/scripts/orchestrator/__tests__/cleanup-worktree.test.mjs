@@ -161,3 +161,18 @@ test('removeLinkOnly refuses a real folder (never a recursive delete)', () => {
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
+
+test('isUnder sees through another spelling of the same folder (a link here, a short 8.3 path on a Windows runner)', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cleanup-alias-'));
+  try {
+    const real = path.join(base, 'real');
+    const worktree = path.join(real, '.claude', 'worktrees', 'a');
+    fs.mkdirSync(worktree, { recursive: true });
+    const alias = path.join(base, 'alias');
+    fs.symlinkSync(real, alias, 'junction');
+    expect(isUnder(worktree, path.join(alias, '.claude', 'worktrees'))).toBe(true);
+    expect(isUnder(path.join(base, 'other'), path.join(alias, '.claude', 'worktrees'))).toBe(false);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});

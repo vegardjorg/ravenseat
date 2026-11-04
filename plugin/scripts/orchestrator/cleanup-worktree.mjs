@@ -51,12 +51,24 @@ function git(args, cwd) {
   return { ok: r.status === 0, out: (r.stdout || '').trim(), error: (r.stderr || '').trim() };
 }
 
+/**
+ * The one spelling of a path: git prints the long real path, while the temp folder or the current directory can be a
+ * link or a short 8.3 path (RUNNER~1). A path that does not exist yet stays as written.
+ */
+function canonical(p) {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
 /** true when `path` is INSIDE `root` (not equal to root). path.win32.relative compares case-insensitively. */
 export function isUnder(filePath, root) {
-  const rel = path.relative(path.resolve(root), path.resolve(filePath));
+  const rel = path.relative(canonical(root), canonical(filePath));
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
-const same = (a, b) => path.relative(path.resolve(a), path.resolve(b)) === '';
+const same = (a, b) => path.relative(canonical(a), canonical(b)) === '';
 
 /**
  * Pure decision: should the worktree be cleaned up? The first reason that applies wins. The order goes from cheap to expensive, so
