@@ -60,6 +60,8 @@ ASK one question, and write only what the user says yes to:
   runs your `gates.quick` on every push and pull request? (`.github/workflows/cq-gates.yml`; you add your runtime setup
   step, for example setup-node and npm ci.)" On yes, run `cq setup --ci`. It never overwrites an existing workflow. For
   other hosts, point to the README section "Safety baseline" instead of writing anything.
+- When checks are missing, say that `/cq:kickstart` takes them one step at a time, whenever the user wants. Do not run it
+  as part of setup unless they ask.
 - Deploy commands (`deployCommands`) stay empty unless the user names theirs; the push guard then asks before any of
   them runs. The secret check before push is on by default (`secretScan`); mention it, do not change it.
 

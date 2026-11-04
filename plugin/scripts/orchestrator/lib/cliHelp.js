@@ -86,7 +86,7 @@ const LITE_GROUPS = [
 const QUEUE_COMMANDS = [
   'activeOnes', 'add', 'approve', 'area', 'areas', 'ask', 'attempt', 'batch', 'board-setting', 'block', 'blockers', 'calibrate', 'cancel', 'capacity', 'classify', 'cloud', 'cloud-bundles',
   'cloud-package', 'compact', 'conflicts', 'continue', 'cost', 'decide', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'external',
-  'fill', 'finding', 'focus', 'follow', 'forecast', 'handover', 'helpers', 'info', 'init', 'limit', 'merge', 'migr', 'mode', 'next', 'next-migr',
+  'fill', 'finding', 'focus', 'follow', 'forecast', 'handover', 'helpers', 'info', 'init', 'kickstart', 'limit', 'merge', 'migr', 'mode', 'next', 'next-migr',
   'orchestrator', 'park', 'pick', 'pickable', 'plan', 'project', 'projects', 'proposals', 'qa', 'question', 'rank', 'receive',
   'release', 'resolutions', 'resolve', 'resume', 'set', 'show', 'start', 'state', 'surface', 'trackFile', 'triage', 'unblock', 'undo', 'unlock', 'wait',
 ];

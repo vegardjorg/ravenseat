@@ -17,6 +17,9 @@ cq calibrate                 # how far minute and cost estimates are off, per cl
 cq decide                    # everything waiting on you, most impact first (/cq:decide walks it)
 cq conflicts                 # predicted merge conflicts between running tracks and the base
 cq ask <ID> "<question>"     # ask about an earlier track without resuming it (/cq:ask)
+cq kickstart                 # which checks the project has and one next step, in plain words; changes nothing
+cq kickstart gates --apply   # sets the checks your project already has as gates
+cq kickstart add             # proposes the next step as a task; it starts only when you approve it
 cq doctor                    # read-only health check: node, hooks, config, state, worktrees, safety baseline
 cq surface                   # git hooks and config that run code, against what was accepted; changes nothing
 cq surface accept --by owner # accept the current state (after installing a hook tool, changing git config)

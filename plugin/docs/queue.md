@@ -331,6 +331,18 @@ A project with no gates or no CI config still runs. You are told, and you decide
 
 Tasks merged before this came have no status and no badge. `/cq:setup` sets up gates and offers a CI template.
 
+### Adding checks one step at a time
+
+`cq kickstart` (or `/cq:kickstart`, which explains it in plain words) shows what the project has and one next step: git,
+gates, secret files, then CI. It works before `cq init` and in a folder without git, and it changes nothing. You can
+stop at any step, and no step is required.
+
+- `cq kickstart gates --apply` writes the checks it found to `gates.quick` and `gates.full`, never over gates already
+  set. It reads Node/TypeScript (`package.json` scripts, `tsconfig.json`) and Python (`pyproject.toml`, `tests/`). The
+  skill reads other stacks itself.
+- `cq kickstart add [gates|secrets|ci]` proposes the step as a task (`KS-CHECK`, `KS-SECRETS`, `KS-CI`). It starts only
+  when you approve it, and it uses tokens like any other task. Cancel it and the step stays declined.
+
 ## Limits and safety
 
 - `maxConcurrent` (parallel tracks), `maxDPlus`, `maxPerDomain` and `maxDb` stop the queue from starting more than
