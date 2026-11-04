@@ -13,6 +13,10 @@ As a Claude Code plugin (recommended). In Claude Code:
 /plugin install cq@ravenseat
 ```
 
+For one project only, run `claude plugin install cq@ravenseat --scope project` in a terminal in that project. That limits
+the plugin. The marketplace entry still goes in your user settings unless `claude plugin marketplace add` also gets
+`--scope project`.
+
 Installed it as claude-code-queue before? Run `/plugin marketplace remove claude-code-queue` first, then the two
 lines above. The plugin is still `cq`, and your queue data stays as it is.
 
