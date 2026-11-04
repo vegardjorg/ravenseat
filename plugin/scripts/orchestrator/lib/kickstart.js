@@ -91,6 +91,24 @@ function gateLists(checks) {
   return { quick: commands(['types', 'lint', 'test']), full: commands(['types', 'lint', 'test', 'build']) };
 }
 
+/**
+ * Gate commands that name a package.json script the project does not have: such a gate is red on every run. Only the
+ * plain forms (`npm test`, `npm run lint`, `pnpm run x`, `yarn test`, `bun run x`); anything else is not judged.
+ * @param {string[]} commands
+ * @param {string|null} packageJson the text of package.json, or null when there is none
+ * @returns {string[]} the commands that cannot run
+ */
+function missingScripts(commands, packageJson) {
+  const pkg = parseJson(packageJson ?? '');
+  const scripts = pkg && typeof pkg.scripts === 'object' && pkg.scripts ? pkg.scripts : {};
+  return commands.filter((c) => {
+    const m = /^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?([^\s-]\S*)/.exec(String(c).trim());
+    if (!m) return false;
+    const named = /^\S+\s+run\s/.test(String(c).trim()) || m[1] === 'test';
+    return named && !scripts[m[1]];
+  });
+}
+
 const NEVER_PUSH = 'Never push, deploy or change settings on the git host. Report what the owner must do by hand.';
 
 /** The files a first-check task may touch, for the stack that was found (the merge guard protects these otherwise). */
@@ -248,4 +266,4 @@ function steps({ facts, tasks = [] }) {
 /** The first step the owner can act on now, or null when nothing waits. */
 const nextStep = (list) => list.find((s) => s.state === 'next') ?? null;
 
-module.exports = { STATES, detectChecks, gateLists, steps, nextStep, taskFor };
+module.exports = { STATES, detectChecks, gateLists, missingScripts, steps, nextStep, taskFor };

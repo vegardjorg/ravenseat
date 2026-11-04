@@ -7,7 +7,9 @@
 //              .p12/.pfx, an id_rsa-style SSH key, a credentials JSON): FAIL (a key file under a test or fixture folder:
 //              WARN). The same file on disk, untracked and NOT ignored: WARN (one `git add .` puts it in git).
 //              An ignored local .env is fine.
-//   gates      gates.quick and gates.full both empty: WARN (the agents run no checks before delivery).
+//   base       the base branch does not exist: FAIL (in an empty repo: WARN).
+//   gates      gates.quick and gates.full both empty: WARN (the agents run no checks before delivery). A gate naming a
+//              package.json script that does not exist: FAIL (red on every run).
 //   ci         no CI config for the common hosts (GitHub, GitLab, Bitbucket, Azure, CircleCI, Jenkins): INFO.
 //   lockfile   a tracked dependency manifest in the root whose lockfile is missing (INFO) or present but not
 //              tracked (WARN).
@@ -122,11 +124,42 @@ export function checkSecrets() {
   return out;
 }
 
+/** The base branch must exist: tracks branch from it and merge into it. An empty repo has no branch yet, and only a warning. */
+export function checkBaseBranch() {
+  const base = CONFIG.baseBranch;
+  const has = (ref) => gitList(['rev-parse', '-q', '--verify', ref]) !== null;
+  if (has(`refs/heads/${base}`)) return [ok('base', `base branch ${base} exists`)];
+  const branches = gitList(['for-each-ref', '--format=%(refname:short)%00', 'refs/heads']) ?? [];
+  const names = branches.map((b) => b.trim()).filter(Boolean);
+  const fix = `set baseBranch in queue.config.json${names.length ? ` (your branches: ${names.slice(0, 5).join(', ')})` : ''}`;
+  if (!names.length) return [warn('base', `base branch ${base} does not exist yet: the repo has no commits`, 'make a first commit')];
+  return [fail('base', `base branch ${base} does not exist, so no track can start`, fix)];
+}
+
 /** Gates: both lists empty means the agents deliver without running anything. */
 export function checkGates() {
   const g = CONFIG.gates ?? {};
   const n = (Array.isArray(g.quick) ? g.quick.length : 0) + (Array.isArray(g.full) ? g.full.length : 0);
-  if (n) return [ok('gates', `${n} gate command(s) set`)];
+  if (n) {
+    // A gate that names a script the project does not have is red on every run, so every delivery would look broken.
+    const commands = [...new Set([...(g.quick ?? []), ...(g.full ?? [])].filter((c) => typeof c === 'string'))];
+    let text = null;
+    try {
+      text = fs.readFileSync(path.join(MAIN_TREE, 'package.json'), 'utf8');
+    } catch {
+      /* no package.json: every npm script counts as missing */
+    }
+    const missing = require('./lib/kickstart.js').missingScripts(commands, text);
+    if (missing.length)
+      return [
+        fail(
+          'gates',
+          `gate command(s) that cannot run, the script is not in package.json: ${missing.join(', ')}`,
+          'change gates.quick and gates.full in queue.config.json to commands your project has',
+        ),
+      ];
+    return [ok('gates', `${n} gate command(s) set`)];
+  }
   return [
     warn(
       'gates',
@@ -229,4 +262,4 @@ export function checkLargeFiles() {
 }
 
 /** The baseline checks in the order doctor prints them. */
-export const BASELINE_CHECKS = [checkSecrets, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles];
+export const BASELINE_CHECKS = [checkBaseBranch, checkSecrets, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles];

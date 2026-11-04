@@ -38,6 +38,7 @@ function project({ config = {}, files = {}, loose = {} }: { config?: object; fil
   write({ 'README.md': 'x\n', ...files });
   g('add', '-f', '.');
   g('commit', '-q', '-m', 'start');
+  g('branch', 'staging');
   write(loose);
   const data = path.join(os.tmpdir(), `queue-baseline-data-${path.basename(root)}`);
   temporary.push(data);
@@ -64,10 +65,20 @@ function project({ config = {}, files = {}, loose = {} }: { config?: object; fil
 }
 
 describe('cq doctor: the safety baseline', () => {
+  it('a missing base branch and a gate naming a missing script are FAIL', () => {
+    const p = project({ config: { gates: { quick: ['npm run nope'], full: [] }, baseBranch: 'develop' }, files: { 'package.json': '{}' } });
+    const r = p.run();
+    expect(r.code).toBe(1);
+    const hit = (n: string) => r.checks.find((c) => c.name === n);
+    expect(hit('base')?.status).toBe('FAIL');
+    expect(hit('gates')?.status).toBe('FAIL');
+    expect(hit('gates')?.message).toContain('npm run nope');
+  });
+
   it('a clean project: OK lines, no FAIL, and nothing is written', () => {
     const p = project({
       config: { gates: { quick: ['npm test'], full: [] }, baseBranch: 'staging', productionBranch: 'main' },
-      files: { '.gitignore': '.env\n', '.env.example': 'API_KEY=\n', 'package.json': '{}', 'package-lock.json': '{}', '.gitlab-ci.yml': 'test:\n  script: npm test\n' },
+      files: { '.gitignore': '.env\n', '.env.example': 'API_KEY=\n', 'package.json': JSON.stringify({ scripts: { test: 'x' } }), 'package-lock.json': '{}', '.gitlab-ci.yml': 'test:\n  script: npm test\n' },
       loose: { '.env': 'API_KEY=real\n' },
     });
     const before = fs.readdirSync(p.root).sort();

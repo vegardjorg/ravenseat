@@ -8,9 +8,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { join } from 'path';
 // @ts-expect-error: plain ESM script without types
-import { mergeSettings, PLUGIN_ROOT, setupProject } from '../setup.mjs';
+import { fillConfigFromProject, mergeSettings, PLUGIN_ROOT, setupProject } from '../setup.mjs';
 import * as PB from '../lib/pushBatch';
 
 type Hook = { type?: string; command: string; args?: string[]; timeout?: number };
@@ -245,5 +247,46 @@ describe('setup.mjs --ci: the GitHub Actions template (opt-in, never over an exi
     const again = setupProject({ target, ci: true });
     expect(readFileSync(join(target, '.github', 'workflows', 'build.yml'), 'utf8')).toBe('on: push\n');
     expect(again.notes.join(' | ')).toMatch(/you already have build\.yml: check that they do not run the same checks twice/);
+  });
+});
+
+describe('setup.mjs fillConfigFromProject', () => {
+  const example = readFileSync(join(PLUGIN_ROOT, 'queue.config.example.json'), 'utf8');
+  const fresh = (branch: string, pkg?: object) => {
+    const dir = mkdtempSync(join(tmpdir(), 'cq-setup-fill-'));
+    execFileSync('git', ['-C', dir, 'init', '-q', '-b', branch]);
+    if (pkg) writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg));
+    return dir;
+  };
+
+  it('takes the current branch and the checks the project has, and keeps the comments', () => {
+    const dir = fresh('master', { scripts: { test: 'node --test' } });
+    const { text, notes } = fillConfigFromProject(example, dir);
+    const c = JSON.parse(text);
+    expect(c.baseBranch).toBe('master');
+    expect(c.gates.quick).toEqual(['npm test']);
+    expect(c.gates.full).toEqual(['npm test']);
+    expect(c._baseGate).toBeTruthy();
+    expect(notes.join('\n')).toContain('baseBranch master');
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('no checks found: empty gates and a note, never a command the project does not have', () => {
+    const dir = fresh('trunk');
+    const { text, notes } = fillConfigFromProject(example, dir);
+    const c = JSON.parse(text);
+    expect(c.gates.quick).toEqual([]);
+    expect(c.gates.full).toEqual([]);
+    expect(notes.join('\n')).toContain('no check commands found');
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('kickstart missingScripts', () => {
+  const K = createRequire(import.meta.url)(join(PLUGIN_ROOT, 'scripts', 'orchestrator', 'lib', 'kickstart.js'));
+  it('names scripts package.json does not have, and leaves other commands alone', () => {
+    const pkg = JSON.stringify({ scripts: { test: 'x', lint: 'y' } });
+    expect(K.missingScripts(['npm test', 'npm run lint', 'npm run build', 'npx tsc', 'pytest', 'yarn lint'], pkg)).toEqual(['npm run build']);
+    expect(K.missingScripts(['npm test'], null)).toEqual(['npm test']);
   });
 });

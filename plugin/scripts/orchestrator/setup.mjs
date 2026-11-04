@@ -7,7 +7,8 @@
 //   cq setup [--dry] [--overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]
 //
 // What it does (everything is "add to"; existing files are kept unless --overwrite, and queue.config.json is never replaced):
-//   1. queue.config.json from <plugin>/queue.config.example.json, when missing.
+//   1. queue.config.json from <plugin>/queue.config.example.json, when missing, with the current branch and the checks
+//      the project's files show (fillConfigFromProject).
 //   2. <plugin>/docs/*.md -> docs/queue/ (the mission template there is the project's own copy and may be edited).
 //   3. CLAUDE.queue.md (the queue's rules for Claude), when missing.
 //   4. .gitignore: the data folder and the agents' worktrees.
@@ -28,6 +29,7 @@
 // =============================================================
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -74,8 +76,16 @@ export function setupProject(o) {
     write(to, from.endsWith('.md') && o.transformMd ? o.transformMd(text) : text);
   };
 
-  // 1-3: files. queue.config.json holds the project's own options and is never replaced.
-  copy(path.join(PLUGIN_ROOT, 'queue.config.example.json'), path.join(t, 'queue.config.json'), false);
+  // 1-3: files. queue.config.json holds the project's own options and is never replaced. A new one gets the project's
+  // own branch and checks, so a first run does not start on the example's values.
+  const configTo = path.join(t, 'queue.config.json');
+  const configIsNew = !fs.existsSync(configTo);
+  copy(path.join(PLUGIN_ROOT, 'queue.config.example.json'), configTo, false);
+  if (configIsNew) {
+    const filled = fillConfigFromProject(fs.readFileSync(path.join(PLUGIN_ROOT, 'queue.config.example.json'), 'utf8'), t);
+    write(configTo, filled.text);
+    log.notes.push(...filled.notes);
+  }
   for (const f of fs.readdirSync(path.join(PLUGIN_ROOT, 'docs')).filter((f) => f.endsWith('.md')).sort())
     copy(path.join(PLUGIN_ROOT, 'docs', f), path.join(t, 'docs', 'queue', f));
   copy(path.join(PLUGIN_ROOT, 'CLAUDE.queue.md'), path.join(t, 'CLAUDE.queue.md'));
@@ -115,6 +125,54 @@ export function setupProject(o) {
   // 8: --ci, the GitHub Actions template. Never over an existing workflow.
   if (o.ci) log.notes.push(writeCiTemplate(t, { dry: o.dry }));
   return log;
+}
+
+/**
+ * The example config with the project's current branch as baseBranch and the checks its files show as gates (the same
+ * detector as cq kickstart). Edits the text, so the comments in the example stay. No checks found: empty lists, and a
+ * note that says so, never a command that does not exist in the project.
+ * @returns {{ text: string, notes: string[] }}
+ */
+export function fillConfigFromProject(text, target) {
+  const K = require('./lib/kickstart.js');
+  const notes = [];
+  let out = text;
+  let branch = null;
+  try {
+    branch = execFileSync('git', ['-C', target, 'symbolic-ref', '--short', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    }).trim();
+  } catch {
+    /* not git, or a detached HEAD: the example's value stays, and cq doctor says if the branch is missing */
+  }
+  if (branch) {
+    out = out.replace(/("baseBranch":\s*)"[^"]*"/, (_, key) => `${key}${JSON.stringify(branch)}`);
+    notes.push(`queue.config.json: baseBranch ${branch} (the current branch)`);
+  }
+  const { checks } = K.detectChecks({
+    exists: (f) => fs.existsSync(path.join(target, f)),
+    read: (f) => {
+      try {
+        return fs.readFileSync(path.join(target, f), 'utf8');
+      } catch {
+        return null;
+      }
+    },
+  });
+  const lists = K.gateLists(checks);
+  const list = (name) => {
+    out = out.replace(new RegExp(`("${name}":\\s*)\\[[^\\]]*\\]`), (_, key) => `${key}${JSON.stringify(lists[name]).replace(/","/g, '", "')}`);
+  };
+  list('quick');
+  list('full');
+  notes.push(
+    checks.length
+      ? `queue.config.json: gates.quick ${lists.quick.join(', ') || 'empty'}; gates.full ${lists.full.join(', ') || 'empty'} (found in the project; change them if they are wrong)`
+      : 'queue.config.json: no check commands found, so the gates are empty and agents run no checks. Add your own, or see cq kickstart.',
+  );
+  return { text: out, notes };
 }
 
 /** Writes the CI template to <target>/CI_WORKFLOW unless it exists. Returns a note for the log. */
