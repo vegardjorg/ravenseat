@@ -28,6 +28,12 @@ import path from 'node:path';
 type Task = Record<string, unknown> & { id: string; status: string };
 type Queue = { tasks: Task[] };
 
+/**
+ * One turn of the event loop, inside a test that blocks for a long time with spawnSync: past 60 s without one, vitest's own
+ * progress call times out and the run ends with exit 1 (__tests__/yieldBetweenTests.setup.mjs has the why).
+ */
+const loopTurn = () => new Promise((resolve) => setImmediate(resolve));
+
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const QUEUE = path.join(ROOT, 'scripts', 'orchestrator', 'queue.mjs');
 const GATES = path.join(ROOT, 'scripts', 'orchestrator', 'gates.mjs');
@@ -260,7 +266,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(log).toContain('"track":"E"');
   }, 240_000);
 
-  it('the skip rule trusts only cq receive\'s gate run, never the track\'s own run or a time log row', () => {
+  it('the skip rule trusts only cq receive\'s gate run, never the track\'s own run or a time log row', async () => {
     const p = project({ gates: { quick: [CHECK] } });
     p.track('A', { 'lib/b.js': "exports.b = 1;\n" });
     expect(p.run('merge', 'A', '--without-fill').code).toBe(0);
@@ -281,6 +287,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(mh.code).toBe(0);
     expect(mh.out).not.toContain('not run again');
     expect(p.stepsRun()).toEqual(['merge', 'gates', 'done']);
+    await loopTurn();
 
     // F branches from the new base tip too; cq receive runs the quick gate on F's tip itself, and that run is what the
     // skip rule trusts.
@@ -297,6 +304,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(p.stepsRun()).toEqual(['merge', 'done']);
     expect(p.health().current).toMatchObject({ tip: p.tip(), status: 'green' });
     expect(p.health().current.skipped).toContain('same tree');
+    await loopTurn();
 
     // A track that does not contain the base (G branched before F's merge) is checked as usual.
     p.track('G', { 'lib/g.js': "exports.g = 1;\n" }, 'develop~1');
@@ -452,7 +460,7 @@ describe('the base gate and the trust rules', () => {
     for (const r of runs) expect(r).toEqual({ queue: null, token: null });
   });
 
-  it('the skip rule: a later tampered run, a legacy entry or another gate setup makes the check run', () => {
+  it('the skip rule: a later tampered run, a legacy entry or another gate setup makes the check run', async () => {
     const p = project({ gates: { quick: [CHECK] } });
     p.track('A', { 'lib/b.js': 'exports.b = 1;\n' });
     expect(p.run('merge', 'A', '--without-fill').code).toBe(0);
@@ -469,12 +477,14 @@ describe('the base gate and the trust rules', () => {
     };
     // Unchanged: the rule skips, so the three cases below differ only by what they change.
     expect(mergedAfter('S', (entries) => entries)).toEqual(['merge', 'done']);
+    await loopTurn();
     expect(
       mergedAfter('T', (entries, sha) => {
         const own = entries.filter((e) => e.sha === sha).at(-1) as Record<string, unknown>;
         return [...entries, { ...own, ok: false, tampered: true, tamper_reason: 'hook added: x' }];
       }),
     ).toEqual(['merge', 'gates', 'done']);
+    await loopTurn();
     expect(
       mergedAfter('L', (entries, sha) =>
         entries.map((e) => {
@@ -484,6 +494,7 @@ describe('the base gate and the trust rules', () => {
         }),
       ),
     ).toEqual(['merge', 'gates', 'done']);
+    await loopTurn();
     expect(mergedAfter('O', (entries, sha) => entries.map((e) => (e.sha === sha ? { ...e, setup_hash: 'another setup' } : e)))).toEqual(['merge', 'gates', 'done']);
   }, 240_000);
 

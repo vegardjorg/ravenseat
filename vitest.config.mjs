@@ -10,8 +10,9 @@ export default defineConfig({
     include: ['plugin/scripts/orchestrator/**/__tests__/**/*.test.{ts,mjs}', 'bench/**/__tests__/**/*.test.{ts,mjs}'],
     testTimeout: 60000,
     pool: 'forks',
-    // Half the cores: with one worker per core the tests that spawn git and node starve the main process, and vitest
-    // ends with "Timeout calling onTaskUpdate" (exit 1) although every test passed. Half was clean and ~20% slower.
+    // Keeps a file of blocking spawnSync tests from timing out vitest's own progress calls (see the file).
+    setupFiles: ['plugin/scripts/orchestrator/__tests__/yieldBetweenTests.setup.mjs'],
+    // Half the cores: with one worker per core the tests that spawn git and node starve the machine.
     maxWorkers: '50%',
   },
 });
