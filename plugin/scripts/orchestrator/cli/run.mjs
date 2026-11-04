@@ -31,6 +31,7 @@ import { detectPushes, logEvent, logLoad } from './events.mjs';
 
 // The accepted git baseline: recorded silently on first use, before anything starts (lib/gitSurfaceBaseline.js).
 const GB = require('./lib/gitSurfaceBaseline.js');
+const GI = require('./lib/gitIdentity.js');
 
 const ER = require('./lib/eventRows.js');
 // The client-neutral mission descriptor and the client adapters: fill, start and resume build the descriptor first,
@@ -222,6 +223,10 @@ export function cmdFill() {
   }
   const head = git(['rev-parse', BASE]);
   if (!head) die(`Could not find baseBranch ${BASE} in the main tree (git rev-parse ${BASE}).`);
+  // Said before the work starts, not after it at the merge. A warning: the tracks themselves can run.
+  const identity = GI.readIdentity(GIT_ROOT);
+  if (identity.refused)
+    console.log(`WARNING: cq merge will refuse this git identity (${identity.ident || 'none'}). Fix it now: ${GI.IDENTITY_FIX}`);
   const usage = dailyUsageFor(read());
   const uncommitted = uncommittedPaths();
   // Measured before the lock; --over-load (the owner's word) overrides the load guard.

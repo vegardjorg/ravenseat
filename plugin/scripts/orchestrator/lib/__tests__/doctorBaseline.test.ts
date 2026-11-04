@@ -23,7 +23,7 @@ afterAll(() => {
 type Check = { status: 'OK' | 'INFO' | 'WARN' | 'FAIL'; name: string; message: string; fix: string | null };
 
 /** A temporary project: a git repo, `files` committed, `loose` written but not committed, and a config. */
-function project({ config = {}, files = {}, loose = {} }: { config?: object; files?: Record<string, string | Buffer>; loose?: Record<string, string> } = {}) {
+function project({ config = {}, files = {}, loose = {}, env: extra = {} }: { config?: object; files?: Record<string, string | Buffer>; loose?: Record<string, string>; env?: Record<string, string> } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-baseline-'));
   temporary.push(root);
   const g = (...args: string[]) =>
@@ -54,6 +54,10 @@ function project({ config = {}, files = {}, loose = {} }: { config?: object; fil
     QUEUE_GIT: root,
     QUEUE_HOOKS: path.join(PLUGIN, 'hooks', 'hooks.json'),
     QUEUE_TIME_LOG: path.join(data, 'times.jsonl'),
+    // A real-looking identity by default, whatever the machine running the tests has.
+    GIT_COMMITTER_NAME: 'Queue Owner',
+    GIT_COMMITTER_EMAIL: 'owner@company.no',
+    ...extra,
   };
   const run = () => {
     const r = spawnSync(process.execPath, [QUEUE, 'doctor', '--json'], { encoding: 'utf8', env, cwd: root });
@@ -61,7 +65,7 @@ function project({ config = {}, files = {}, loose = {} }: { config?: object; fil
   };
   const text = () => spawnSync(process.execPath, [QUEUE, 'doctor'], { encoding: 'utf8', env, cwd: root }).stdout;
   const lines = (name: string) => run().checks.filter((c) => c.name === name);
-  return { root, g, run, text, lines };
+  return { root, g, env, run, text, lines };
 }
 
 describe('cq doctor: the safety baseline', () => {
@@ -148,6 +152,31 @@ describe('cq doctor: the safety baseline', () => {
     expect(p.lines('prod')).toEqual([]);
     p = project({ files: { 'data/dump.bin': big } });
     expect(p.lines('largefile')[0].status).toBe('OK');
+  }, 60_000);
+
+  it('push-check before the first push: exit 0, says it is normal and what comes next', () => {
+    const p = project({ config: { baseBranch: 'main' } });
+    const push = () => spawnSync(process.execPath, [path.join(path.dirname(QUEUE), 'push-check.mjs')], { encoding: 'utf8', env: p.env, cwd: p.root });
+    let r = push();
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('normal before the first push');
+    expect(r.stdout).toContain('git remote add origin');
+    p.g('remote', 'add', 'origin', 'https://example.invalid/x.git');
+    r = push();
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('git push -u origin main');
+    expect(r.stdout).not.toContain('git remote add');
+  }, 60_000);
+
+  it('identity: a test identity WARNs with the repo-local command', () => {
+    const p = project();
+    expect(p.lines('identity')[0].status).toBe('OK');
+    const bad = project({ env: { GIT_COMMITTER_NAME: 'x', GIT_COMMITTER_EMAIL: 'x@example.com' } });
+    const c = bad.lines('identity')[0];
+    expect(c).toMatchObject({ status: 'WARN', message: expect.stringMatching(/x@example\.com.*cq merge will refuse/) });
+    expect(c.fix).toContain('git config user.email');
+    expect(c.fix).not.toContain('--global');
+    expect(bad.run().code).toBe(0);
   }, 60_000);
 
   it('branches: a merged agent branch is named, one with a worktree or unmerged work is not', () => {

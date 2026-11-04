@@ -26,6 +26,8 @@ import { execFileSync } from 'node:child_process';
 
 import { CONFIG, GIT_ROOT, MAIN_TREE, require } from './context.mjs';
 
+const GI = require('./lib/gitIdentity.js');
+
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
 const fail = (name, message, fix) => ({ status: 'FAIL', name, message, fix });
@@ -134,6 +136,13 @@ export function checkBaseBranch() {
   const fix = `set baseBranch in queue.config.json${names.length ? ` (your branches: ${names.slice(0, 5).join(', ')})` : ''}`;
   if (!names.length) return [warn('base', `base branch ${base} does not exist yet: the repo has no commits`, 'make a first commit')];
   return [fail('base', `base branch ${base} does not exist, so no track can start`, fix)];
+}
+
+/** The git identity: `cq merge` refuses a test identity or none, so say it now. WARN: nothing is broken until then. */
+export function checkIdentity() {
+  const { ident, refused } = GI.readIdentity(GIT_ROOT);
+  if (!refused) return [ok('identity', `git identity ${ident}`)];
+  return [warn('identity', `git identity looks like a test or is missing (${ident || 'none'}): cq merge will refuse it`, GI.IDENTITY_FIX)];
 }
 
 /** Gates: both lists empty means the agents deliver without running anything. */
@@ -262,4 +271,4 @@ export function checkLargeFiles() {
 }
 
 /** The baseline checks in the order doctor prints them. */
-export const BASELINE_CHECKS = [checkBaseBranch, checkSecrets, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles];
+export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles];

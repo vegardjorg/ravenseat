@@ -40,6 +40,9 @@ function setup() {
   const g = (args: string[]) =>
     execFileSync('git', ['-C', repo, ...ID, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   g(['init', '-q', '-b', 'main']);
+  // fill warns about an identity cq merge would refuse; this locked output is for a project that has a working one.
+  g(['config', 'user.name', 'queue-test']);
+  g(['config', 'user.email', 'queue-test@queue-test.test']);
   fs.writeFileSync(path.join(repo, 'README.md'), 'start\n');
   g(['add', '--', 'README.md']);
   g(['commit', '-q', '-m', 'start']);

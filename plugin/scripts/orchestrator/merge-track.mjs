@@ -99,12 +99,12 @@ const gitOk = (...a) => spawnSync('git', a, { encoding: 'utf8', maxBuffer: 256 <
 // in the repo config (for example from a test of this script) would otherwise end up in all merge commits.
 // Tests for this script must use a temporary repo.
 {
-  const r = spawnSync('git', ['var', 'GIT_COMMITTER_IDENT'], { encoding: 'utf8' });
-  const ident = (r.stdout || '').trim();
-  if (r.status !== 0 || !ident || /@(example\.(com|org|net|invalid)|[^>\s]*\.invalid)>/i.test(ident)) {
+  const GI = require('./lib/gitIdentity.js');
+  const { ident, refused } = GI.readIdentity();
+  if (refused) {
     process.stderr.write(
       `The identity guard stopped the merge: the git identity looks like a test or is missing (${ident || 'none'}). ` +
-        'Set user.name and user.email first.\n',
+        `Set it first: ${GI.IDENTITY_FIX}\n`,
     );
     process.exit(3);
   }

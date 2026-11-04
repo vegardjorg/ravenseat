@@ -79,6 +79,16 @@ const sha = (ref) =>
 
 const fromSha = sha(FROM);
 const toSha = sha(TO);
+// Before the first push there is no remote branch to compare with, and that is normal, not a failure.
+if (!fromSha && toSha && val('--from') == null) {
+  const hasRemote = String(git(['remote']) ?? '').split(/\r?\n/).includes(K.remote);
+  const next = hasRemote
+    ? `Next: git push -u ${K.remote} ${K.baseBranch} (when the owner says push). The check has something to compare with after that.`
+    : `Next: add the remote (git remote add ${K.remote} <url>), then git push -u ${K.remote} ${K.baseBranch} when the owner says push.`;
+  const message = `push-check: nothing to compare with yet: ${FROM} does not exist, which is normal before the first push. ${next}`;
+  console.log(AS_JSON ? JSON.stringify({ first_push: true, message }, null, 2) : message);
+  process.exit(0);
+}
 if (!fromSha || !toSha) {
   console.error(
     `push-check: could not find ${!fromSha ? FROM : TO} (git rev-parse). Nothing was checked.`,
