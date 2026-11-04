@@ -635,8 +635,14 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
     focus_step: focusStep(k.id),
   }));
 
+  // A task in review whose merge or gates stopped: nothing moves until someone acts, however young it is. A running task
+  // is left out: its fix round is already under way.
+  const stopInfo = (k) => {
+    const b = L.openBlockOf(map.perId.get(k.id));
+    return k.status === 'review' && b && DEC.STOP_TEXT[b.code] ? { code: b.code, note: b.note ?? null } : null;
+  };
   const stuck = [...(columns.inProgress ?? []), ...(columns.review ?? [])]
-    .filter((k) => k.aging || (k.status === 'picked' && k.old))
+    .filter((k) => k.aging || (k.status === 'picked' && k.old) || stopInfo(k))
     .map((k) => ({
       id: k.id,
       title: k.title,
@@ -649,6 +655,8 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
       focus_step: focusStep(k.id),
       // An open blocker reason (cq block): the decision overview does not flag it again.
       open_block: L.openBlockOf(map.perId.get(k.id))?.code ?? null,
+      // The merge or gate stop the owner should see (the decision overview gives it its own card).
+      stop: stopInfo(k),
     }));
 
   const unlogged = L.unlogged(queue).map((x) => ({ sp: x.sp, time: x.time ?? null, by: x.by ?? null }));

@@ -296,9 +296,11 @@ started them. A new session adopts them without that notification:
   (right after STARTED WITHOUT AGENT), `cq state` (`silent`) and `cq orchestrator pulse` print `SILENT`, and the board
   marks the card "silent". Check the track, then `cq resume <ID> --reason context` and start the new agent, or stop it.
 - **Blocker reasons:** `cq block <ID> <code> [--note "…"]` / `cq unblock <ID>` record why a task is stuck, with codes
-  from one fixed table (`merge-conflict`, `gate-red`, `context`, `quota`, `owner-question`, `dependency`, `no-agent`,
-  `silent`, `other`). `cq merge` opens `merge-conflict` (a stop in the merge step) or `gate-red` (a stop in the gates)
-  by itself and closes the open one after the next successful merge. `cq blockers [--days 7]` clusters them: count and
+  from one fixed table (`merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `context`, `quota`, `owner-question`, `dependency`, `no-agent`,
+  `silent`, `other`). `cq merge` opens `merge-conflict` (a real conflict), `merge-guard` (protected paths), `merge-stopped` (any other stop
+  in the merge step, such as the identity guard) or `gate-red` (a stop in the gates) by itself and closes the open one
+  after the next successful merge; a green `cq receive` closes `gate-red` too. A task in review with one of these open
+  shows in `cq decide` and on the board's Decisions view, with the next step. A red base stands above that list. `cq blockers [--days 7]` clusters them: count and
   blocked time per code, top first (also in the board's Statistics).
 - **Predicted conflicts:** `cq orchestrator pulse` checks each running, picked or review track tip against the base
   and against the other tips with `git merge-tree --write-tree` (writes no index, checkout or ref) and prints

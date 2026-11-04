@@ -436,6 +436,7 @@ function drawDecisions(fresh) {
         })
       : null,
     listeningLine(Math.max(items.length, 1)),
+    t.data.baseHealth?.status === 'red' ? el('p', { class: 'decide-base-red', text: t.data.baseHealth.text }) : null,
   );
   const parts = [head];
   if (!items.length)

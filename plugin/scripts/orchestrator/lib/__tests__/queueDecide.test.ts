@@ -81,6 +81,23 @@ describe('cq decide', () => {
     expect(readFileSync(join(folder, 'queue.json'), 'utf8')).toBe(before);
   });
 
+  it('a stopped merge in review gets a card with the next step; a running fix round does not', () => {
+    const q = queue();
+    const from = new Date().toISOString();
+    q.tasks.push(
+      { id: 'T-20', title: 'Guarded', status: 'review', class: 'K', blocks: [{ code: 'merge-guard', from, note: 'protected paths the task does not own' }] },
+      { id: 'T-21', title: 'Fixing', status: 'running', class: 'K', start: from, blocks: [{ code: 'gate-red', from }] },
+    );
+    writeFileSync(join(folder, 'queue.json'), JSON.stringify(q));
+    const j = JSON.parse(run('decide', '--json'));
+    const card = j.items.find((x: any) => x.id === 'T-20');
+    expect(card).toMatchObject({ verb: 'unstick', kind: 'stopped', kindName: 'Stopped by the merge guard' });
+    expect(card.context[0]).toContain('protected paths');
+    expect(card.context[1]).toContain('cq merge T-20 --allow-guard');
+    expect(card.options.map((o: any) => [o.label, o.cli])).toEqual([['Seen', null]]);
+    expect(j.items.some((x: any) => x.id === 'T-21')).toBe(false);
+  });
+
   it('the commands it lists record the owner, and the answers show under --today', () => {
     run('resolve', 'Q-1', '--choice', '2', '--by', 'owner');
     run('approve', 'T-5', '--by', 'owner');

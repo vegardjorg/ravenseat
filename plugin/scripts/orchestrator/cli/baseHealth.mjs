@@ -48,6 +48,18 @@ export function readHealth() {
   return BH.readState(HEALTH_FILE);
 }
 
+/** The health line only when the base is red (for `cq decide`); null otherwise. Never throws. */
+export function baseRedLine() {
+  if (!BASE_SETUP.enabled) return null;
+  try {
+    const state = readHealth();
+    const tip = baseTip();
+    return BH.verdict(state, tip) === 'red' ? BH.healthLine({ state, tip, setup: BASE_SETUP, branch: BASE, cq: CQ }) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The one line for show and the pulse; null when the feature is off. Never throws (a status line must not stop show). */
 export function baseHealthLine() {
   if (!BASE_SETUP.enabled) return null;

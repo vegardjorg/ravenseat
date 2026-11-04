@@ -46,6 +46,8 @@ describe('blocker reasons (pure)', () => {
   it('the fixed table has exactly the agreed codes', () => {
     expect(L.BLOCK_CODES.map((b) => b.code)).toEqual([
       'merge-conflict',
+      'merge-guard',
+      'merge-stopped',
       'gate-red',
       'context',
       'quota',
@@ -231,6 +233,14 @@ describe('queue.mjs block, unblock, blockers and merge (against a temporary repo
       ['gate-red', true],
       ['merge-conflict', false],
     ]);
+    // A stop in the merge step without a conflict (the identity guard): merge-stopped, and no conflict row.
+    const conflictRows = () => fs.readFileSync(path.join(folder, 'times.jsonl'), 'utf8').split('mergeConflict').length - 1;
+    const before = conflictRows();
+    expect(before).toBeGreaterThan(0);
+    scenario({ merge: { code: 3, out: 'STOP: git identity' } });
+    expect(run('merge', 'K', '--without-fill').code).not.toBe(0);
+    expect(blocksOf('K').at(-1)).toMatchObject({ code: 'merge-stopped' });
+    expect(conflictRows()).toBe(before);
     // The next merge goes through: the open one is closed.
     scenario({ merge: { code: 0, out: 'Merged' }, gates: { code: 0, out: 'gates: OK' }, done: { code: 0, out: 'done' } });
     const m3 = run('merge', 'K', '--without-fill');
@@ -244,7 +254,7 @@ describe('queue.mjs block, unblock, blockers and merge (against a temporary repo
     expect(text.out).toMatch(/^\s+merge-conflict\s+1\s/m);
     const json = JSON.parse(run('blockers', '--json').out) as { days: number; blockers: Row[] };
     expect(json.days).toBe(7);
-    expect(json.blockers.map((r) => r.code).sort()).toEqual(['gate-red', 'merge-conflict', 'owner-question']);
+    expect(json.blockers.map((r) => r.code).sort()).toEqual(['gate-red', 'merge-conflict', 'merge-stopped', 'owner-question']);
     expect(run('blockers', '--days', '0').code).not.toBe(0);
   });
 });

@@ -548,6 +548,8 @@ export function cmdReceive() {
     }
     // First delivery to review (a new round after a fix keeps the first time).
     o.t_receive ??= new Date().toISOString();
+    // The gates and the done command are green on this delivery: an earlier gate-red is over.
+    if (result?.status !== 'PARTIAL' && L.openBlockOf(o)?.code === 'gate-red') L.closeBlock(o);
     recordAttempt(o);
     autoCleanFocus(queue, `receive ${id}`);
     return o;
@@ -1203,18 +1205,21 @@ export async function cmdMerge() {
         `\`${CQ} merge ${id} --allow-guard\` (logged as "guard-overridden").`,
     );
     ML.clearState(FOLDER, id);
-    mergeBlock(id, 'merge-conflict', 'merge guard');
+    mergeBlock(id, 'merge-guard', 'protected paths the task does not own');
     logEvent(ER.mergeConflictRow({ task: id, branch, files: ER.conflictFiles(mergeOut), guard: true }));
     console.log(`Full log: ${logFile}`);
     process.exit(4);
   }
   if (!res.ok) {
     // A stop in the merge or the gates step opens a blocker reason (cq blockers); the next successful merge closes it.
-    const code = { merge: 'merge-conflict', gates: 'gate-red' }[res.stop.step];
+    // Only a real conflict counts as one (files named by git, or a merge left in progress): an identity guard or a
+    // validation stop is merge-stopped, so the statistics do not call it a conflict.
+    const realConflict =
+      res.stop.step === 'merge' && (ER.conflictFiles(mergeOut) > 0 || ML.gitInProgress(gitPathOf).some((x) => x.kind === 'merge'));
+    const code = { merge: realConflict ? 'merge-conflict' : 'merge-stopped', gates: 'gate-red' }[res.stop.step];
     if (code) mergeBlock(id, code, res.stop.message);
-    // The mergeConflict row (lib/eventRows.js): only when merge-track itself failed (not the wrong branch), and not
-    // when it said "No conflicts." (a validation stop). Fail open.
-    if (code === 'merge-conflict' && mergeCode != null && mergeCode !== 0 && ER.conflictFiles(mergeOut) !== 0)
+    // The mergeConflict row (lib/eventRows.js): only for a real conflict that merge-track itself reported. Fail open.
+    if (code === 'merge-conflict' && mergeCode != null && mergeCode !== 0)
       logEvent(ER.mergeConflictRow({ task: id, branch, files: ER.conflictFiles(mergeOut) }));
     console.log(`STOP in the step ${res.stop.step}: ${res.stop.message}`);
     if (res.stop.excerpt.length) console.log(res.stop.excerpt.map((l) => `  | ${l}`).join('\n'));

@@ -215,6 +215,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(p.find('B')?.status).toBe('review');
     expect(p.run('show').out).toContain('BASE develop: RED at');
     expect(p.run('orchestrator', 'pulse').out).toContain('cq merge refuses other tracks');
+    expect(p.run('decide').out).toMatch(/^BASE develop: RED at/);
 
     // ---- 3. Another track is refused while the base is red ----
     const m3 = p.run('merge', 'C', '--without-fill');

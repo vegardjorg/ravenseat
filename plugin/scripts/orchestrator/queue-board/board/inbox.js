@@ -611,7 +611,9 @@ function drawInbox(fresh) {
                 el('span', { class: 'row-title', text: h.title }),
                 el('span', {
                   class: 'sp-meta',
-                  text: h.aging
+                  text: h.stop
+                    ? `stopped: ${h.stop.note ?? h.stop.code}`
+                    : h.aging
                     ? `${h.status === 'review' ? 'in review' : 'running'}, started ${duration(h.aging.age)} ago; ` +
                       `85 % of ${h.class ?? '?'} tasks are ${h.aging.measure === 'work' ? 'delivered' : 'finished'} within ${duration(h.aging.limit)}`
                     : `picked by ${h.picked_by ?? '?'} ${h.start ? age(h.start) : '?'} ago, without commits in the last 72 h`,

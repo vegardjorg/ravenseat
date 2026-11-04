@@ -228,11 +228,13 @@ function silentLines(list) {
 /**
  * The blocker reasons: one fixed table, so `cq blockers` and the board's statistics can cluster on them. A task has
  * `blocks: [{ code, from, to?, note? }]`, with at most one open (no `to`). `cq block` / `cq unblock` set them by hand;
- * `cq merge` opens merge-conflict or gate-red when it stops in that step, and closes the open one after a merge.
+ * `cq merge` opens merge-conflict, merge-guard, merge-stopped or gate-red when it stops, and closes the open one after a merge.
  */
 const BLOCK_CODES = [
-  { code: 'merge-conflict', text: 'the merge step stopped (conflict or merge guard)' },
-  { code: 'gate-red', text: 'the gates failed after the merge' },
+  { code: 'merge-conflict', text: 'the merge hit a real conflict' },
+  { code: 'merge-guard', text: 'the merge guard stopped it (protected paths)' },
+  { code: 'merge-stopped', text: 'the merge step stopped without a conflict (identity guard, validation)' },
+  { code: 'gate-red', text: 'the gates or the done command failed' },
   { code: 'context', text: 'the agent ran out of context' },
   { code: 'quota', text: 'the usage quota or budget stopped it' },
   { code: 'owner-question', text: 'waiting on an owner answer' },

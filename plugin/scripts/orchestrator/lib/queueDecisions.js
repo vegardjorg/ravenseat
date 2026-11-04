@@ -25,7 +25,7 @@
     { verb: 'decide', title: 'Decide', hint: 'Owner questions: the answer lets the waiting tasks go on.' },
     { verb: 'check', title: 'Check', hint: 'Finished work that needs your eyes before it counts as done.' },
     { verb: 'approve', title: 'Approve', hint: 'Tasks an agent proposed. Nothing starts before you say yes.' },
-    { verb: 'unstick', title: 'Unstick', hint: 'Work that has run long, or sits picked without commits.' },
+    { verb: 'unstick', title: 'Unstick', hint: 'Work that has stopped, run long, or sits picked without commits.' },
   ];
   /** Tie break between verbs with the same impact: a question first, a check (unlocks nothing) last. */
   const VERB_ORDER = { decide: 0, unstick: 1, approve: 2, check: 3 };
@@ -35,6 +35,27 @@
 
   /** The note `cq block` gets when the owner flags stuck work (the orchestrator sees it in pulse and blockers). */
   const FLAG_NOTE = 'owner: looks stuck, please check';
+
+  /** The stops that wait on someone (a task in review with one of these open): what to call it and the next step. */
+  const STOP_TEXT = {
+    'merge-conflict': {
+      name: 'Merge conflict',
+      next: (id) => `Next: the orchestrator starts a fix round (cq resume ${id} --reason fix).`,
+    },
+    'merge-guard': {
+      name: 'Stopped by the merge guard',
+      next: (id) =>
+        `Next: read the diff of the protected paths. Not asked for: a fix round (cq resume ${id} --reason fix). Intended: cq merge ${id} --allow-guard.`,
+    },
+    'merge-stopped': {
+      name: 'Merge stopped',
+      next: (id) => `Next: fix the cause named above, then cq merge ${id} again. Nothing was merged by this stop.`,
+    },
+    'gate-red': {
+      name: 'Gates red',
+      next: (id) => `Next: the orchestrator starts a fix round (cq resume ${id} --reason fix), or cq merge ${id} --resume once the cause is fixed.`,
+    },
+  };
 
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
@@ -203,7 +224,29 @@
     };
   }
 
+  /** A stop in the merge or the gates. "Seen" writes nothing: the card goes when the blocker closes. */
+  function stopItem(h) {
+    const stop = STOP_TEXT[h.stop.code];
+    const options = [{ label: 'Seen', recommended: true, action: { type: 'keep', id: h.id } }];
+    return {
+      key: `unstick:${h.id}`,
+      verb: 'unstick',
+      kind: 'stopped',
+      kindName: stop.name,
+      id: h.id,
+      title: h.title || h.id,
+      text: null,
+      context: [h.stop.note, stop.next(h.id)].filter(Boolean),
+      recommendation: options[0].label,
+      impact: taskImpact(0, h),
+      options,
+      free: null,
+      open: h.id,
+    };
+  }
+
   function stuckItem(h) {
+    if (h.stop) return stopItem(h);
     const picked = h.status === 'picked';
     const flagged = !!h.open_block;
     const context = [
@@ -453,6 +496,7 @@
     VERBS,
     UNDO_MS,
     FLAG_NOTE,
+    STOP_TEXT,
     minutesText,
     fromInbox,
     compareImpact,

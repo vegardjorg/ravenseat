@@ -171,7 +171,10 @@ describe('cq receive with gate evidence', () => {
     expect(p.find().gate_check).toMatchObject({ ok: true, tip: p.tip(), ran: true });
     expect(p.evidence().filter((e) => e.sha === p.tip() && e.ok === true)).toHaveLength(1);
 
+    // An earlier gate-red is over once a delivery is green: the owner is not told about it any more.
+    p.run('block', 'A', 'gate-red');
     const r2 = p.run('receive', 'A');
+    expect((p.find().blocks as { code: string; to?: string }[]).every((b) => !!b.to)).toBe(true);
     expect(r2.code).toBe(0);
     expect(r2.out).toMatch(/Gates green at [0-9a-f]{12} \(quick, cq's own run/);
     expect(r2.out).not.toContain('GATES (receive)');

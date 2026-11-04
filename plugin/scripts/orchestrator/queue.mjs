@@ -305,10 +305,10 @@
 //   SILENT: `show`, `state` (the field `silent`) and `orchestrator pulse` warn about a running track whose worktree
 //   has the branch but that has shown no sign of life (commit, worktree or track folder mtime, time log or transcript)
 //   for limits.silentMin minutes (default 20; `limit silentMin <n>`, 0 = off).
-//   node scripts/orchestrator/queue.mjs block <id> <code> [--note "..."]   (opens a blocker reason; code: merge-conflict,
+//   node scripts/orchestrator/queue.mjs block <id> <code> [--note "..."]   (opens a blocker reason; code: merge-conflict, merge-guard, merge-stopped,
 //                                                                  gate-red, context, quota, owner-question, dependency,
 //                                                                  no-agent, silent, other. One open per task; merge opens
-//                                                                  merge-conflict/gate-red when it stops there and closes
+//                                                                  merge-conflict/merge-guard/merge-stopped/gate-red when it stops there and closes
 //                                                                  the open one after a successful merge)
 //   node scripts/orchestrator/queue.mjs unblock <id>                  (closes the open blocker)
 //   node scripts/orchestrator/queue.mjs kickstart [--json]          (which controls the project has and one next step, in plain words;

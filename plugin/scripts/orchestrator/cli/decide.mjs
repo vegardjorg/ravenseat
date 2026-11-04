@@ -13,6 +13,7 @@
 // Used by: queue.mjs (dispatch). Tested in: lib/__tests__/queueDecide.test.ts.
 // =============================================================
 
+import { baseRedLine } from './baseHealth.mjs';
 import { a, branchFor, branchInfo, CQ, cut, FOLDER, L, PREFIX, read, require, S, val, WIDTH } from './context.mjs';
 
 const T = require('./lib/queueBoard.js');
@@ -45,7 +46,7 @@ export function currentInbox(queue, { now = Date.now() } = {}) {
 }
 
 /** The JSON shape for the skill: each item with its impact line and the command per option. */
-export function decisionJson(inbox, { listening = false, cq = CQ } = {}) {
+export function decisionJson(inbox, { listening = false, cq = CQ, baseRed = null } = {}) {
   const items = DEC.decisions(inbox).map((x, i) => ({
     nr: i + 1,
     ...x,
@@ -60,6 +61,8 @@ export function decisionJson(inbox, { listening = false, cq = CQ } = {}) {
   return {
     count: items.length,
     listening,
+    // A red base stops every merge, so it stands above the list (null when the base is not red).
+    base_red: baseRed,
     items,
     decided: inbox?.decided ?? [],
     // Answers given but not entered in the decision log yet (the orchestrator does that).
@@ -70,6 +73,7 @@ export function decisionJson(inbox, { listening = false, cq = CQ } = {}) {
 /** The list as text lines (what `cq decide` prints). */
 export function decisionLines(j, { width = WIDTH, max = Infinity, cq = CQ } = {}) {
   const out = [];
+  if (j.base_red) out.push(j.base_red, '');
   if (!j.count) {
     out.push('Nothing waiting on you.');
   } else {
@@ -116,7 +120,7 @@ export function cmdDecide() {
   } catch {
     listening = false;
   }
-  const j = decisionJson(inbox, { listening });
+  const j = decisionJson(inbox, { listening, baseRed: baseRedLine() });
   if (a.includes('--json')) {
     console.log(JSON.stringify(j, null, 2));
     return;

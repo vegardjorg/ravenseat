@@ -3895,6 +3895,12 @@ fieldset.setting legend {
   flex-direction: column;
   gap: var(--distance-md);
 }
+.decide-base-red {
+  flex-basis: 100%;
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-error);
+}
 .decide-head {
   display: flex;
   flex-wrap: wrap;
