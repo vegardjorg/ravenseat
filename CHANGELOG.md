@@ -3,6 +3,29 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.13 (2026-11-04)
+
+### Changed: a project with no checks now hears about it
+- The push guard asks before a plain push of the base branch when the project has no CI config or no gates, also on a
+  first push. It says what is missing and how many commits go out, and points to `/cq:setup`. It never blocks.
+  `"push": { "controlsWarning": false }` turns the question off. CI is detected by its config file, which does not prove
+  that it runs on this push.
+- A K task in such a project gets a short agent review (`reviewer-light`): plain misses against the mission, secrets,
+  access and injection. This uses tokens. `cq helpers` shows what it has cost, and `cq helpers off reviewer-light` turns it
+  off.
+
+### Added
+- `cq receive` says `NO CHECKS RAN` when there are no quick gates and no done command.
+- `cq merge` records a verification status on the task: verified (your gates or done command passed), audited (only an
+  agent review ran) or unverified (nothing ran). A review alone never makes a task verified.
+- Cards on the board show **Merged, not verified** or **Audited**, and the detail panel shows the status. Tasks merged
+  before this version have no status.
+- `cq push-check` names the missing controls.
+
+### Fixed
+- Mission text is the same on every platform. A Windows checkout of the mission template left one extra blank line in
+  track prompts, and the Ubuntu CI jobs for 0.8.12 failed on it. The difference was whitespace only.
+
 ## 0.8.12 (2026-11-04)
 
 ### Changed: check this if a check needs a token
