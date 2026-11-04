@@ -33,6 +33,7 @@ import {
   BASE_SETUP, BH, flakyRecheck, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf, writeReport,
 } from './baseHealth.mjs';
 import { logEvent } from './events.mjs';
+import { cleanupWorktree } from '../cleanup-worktree.mjs';
 import { proposeGate } from './gate.mjs';
 
 const ER = require('./lib/eventRows.js');
@@ -1283,12 +1284,31 @@ export async function cmdMerge() {
     return ox;
   });
   ML.clearState(FOLDER, id);
+  tidyAfterMerge(branch, { resume });
   console.log(`Full log: ${logFile}`);
   printBase();
   console.log(CONTROLS.verificationLine(verified));
   // The merge went through, but the base gate made the base red: exit 9 (as a refused merge), so a script that chains
   // merges stops here instead of reading a 0.
   if (baseSettled && BH.verdict(BH.readState(HEALTH_FILE), mergeCommit) === 'red') process.exit(BH.EXIT_RED_BASE);
+}
+
+/**
+ * Best effort after a whole merge; it never changes the merge's result. A resume never ran merge-track's worktree
+ * cleanup, so it runs here. The queue's own branch goes with `git branch -d`, which refuses anything not merged; a
+ * branch the owner named (a picked task's own) stays.
+ */
+function tidyAfterMerge(branch, { resume }) {
+  if (resume) {
+    try {
+      const r = cleanupWorktree(branch, { against: BASE, main: GIT_ROOT });
+      console.log(`Worktree: ${r.status}: ${r.message}`);
+    } catch (e) {
+      console.log(`Worktree: the cleanup failed, the merge stands: ${e?.message ?? e}`);
+    }
+  }
+  if (!branch.startsWith(CONFIG.branchPrefix ?? 'queue/')) return;
+  console.log(git(['branch', '-d', branch]) == null ? `Branch: ${branch} kept (git branch -d refused).` : `Branch: ${branch} deleted (merged).`);
 }
 
 /** `cq block` (the usage is at the top of queue.mjs). */

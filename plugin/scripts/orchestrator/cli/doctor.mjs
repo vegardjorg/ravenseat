@@ -13,7 +13,7 @@
 //   lock        a lock (<dataFolder>/.lockState) older than 60 s: a process died holding it
 //   worktrees   folders under <mainTree>/.claude/worktrees without .git (a half-deleted worktree blocks agent starts),
 //               and git worktrees whose folder is gone (`git worktree list --porcelain`)
-//   branches    queue branches of done or cancelled tasks that are still there (WARN only)
+//   branches    queue branches of done or cancelled tasks, and merged agent branches, still there (WARN only)
 //   git         INFO when git is older than 2.38: no `git merge-tree --write-tree`, so the conflict prediction
 //               (lib/conflictPredict.js) falls back to file overlap (QUEUE_GIT_VERSION overrides the version, tests)
 //   ci-cost     .github/workflows/*.yml that run on push: WARN without concurrency cancel-in-progress, INFO without a
@@ -360,14 +360,25 @@ function checkBranches() {
     .filter((o) => ['done', 'cancelled'].includes(o?.status))
     .map((o) => o.branch ?? branchFor(o.id))
     .filter((b) => have.has(b) && b !== CONFIG.baseBranch);
-  if (!left.length) return [ok('branches', 'no branches of finished tasks left')];
-  const shown = left.slice(0, 5).join(' ');
-  return [
-    warn(
+  // Claude Code's own agent branches: only merged ones with no worktree left (a running agent's new branch also counts
+  // as merged, but it has a worktree).
+  const agents = (git(['for-each-ref', '--merged', CONFIG.baseBranch, '--format=%(refname:short)|%(worktreepath)', 'refs/heads/worktree-agent-*']) ?? '')
+    .split(/\r?\n/)
+    .map((l) => l.split('|'))
+    .filter(([b, wt]) => b && !wt)
+    .map(([b]) => b);
+  if (!left.length && !agents.length) return [ok('branches', 'no branches of finished tasks left')];
+  const line = (what, list) => {
+    const shown = list.slice(0, 5).join(' ');
+    return warn(
       'branches',
-      `${left.length} branch(es) of done or cancelled tasks still exist: ${shown}${left.length > 5 ? ' ...' : ''}`,
+      `${list.length} ${what}: ${shown}${list.length > 5 ? ' ...' : ''}`,
       `git branch -d ${shown} (-d refuses unmerged work; check those by hand)`,
-    ),
+    );
+  };
+  return [
+    ...(left.length ? [line('branch(es) of done or cancelled tasks still exist', left)] : []),
+    ...(agents.length ? [line('merged agent branch(es) with no worktree left', agents)] : []),
   ];
 }
 

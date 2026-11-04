@@ -333,7 +333,8 @@ receive and merge the same track. Compaction is still the usual path for a long 
   orchestrator while merging, from the wiring specification in the track report.
 - New work discovered by a track becomes a proposal (`cq add`), never scope creep.
 - The worktree rule: never `npm install` inside a worktree (shared folders are links to the main tree), and clean up
-  worktrees only with `cleanup-worktree.mjs`.
+  worktrees only with `cleanup-worktree.mjs`. A whole `cq merge` (also `--resume`) removes the worktree and deletes the
+  merged queue branch with `git branch -d`; `cq doctor` names merged `worktree-agent-*` branches with no worktree left.
 
 ## Gates and the precheck
 

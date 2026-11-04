@@ -150,7 +150,7 @@ export function checkDoneInBase() {
     warn(
       'in-base',
       `${missing.length} done task(s) whose work is not in ${BASE}: ${shown}${missing.length > 5 ? ' ...' : ''}${notChecked}`,
-      `if ${BASE} was reset, merge the branch again (git merge --no-ff <branch>); a squash merge also shows here and is fine`,
+      `if ${BASE} was reset, merge the branch or the stored merge_commit again (git merge --no-ff <ref>); a squash merge also shows here and is fine`,
     ),
   ];
 }

@@ -1303,6 +1303,8 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
 
     // Allowed environment: the whole run, merge-track with --wave-base, the push command from the config, set done and fill.
     setEnvironment('test');
+    const tipM = g(['rev-parse', 'queue/M']);
+    const tipK = g(['rev-parse', 'queue/K']);
     const s = run('merge', 'M');
     expect(s.error).toBe('');
     expect(s.code).toBe(0);
@@ -1321,7 +1323,7 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
       '--track-base',
       head,
       '--track-tip',
-      g(['rev-parse', 'queue/M']),
+      tipM,
     ]);
     // The task id for the gate row in the time log.
     expect(k1[2].args.slice(7, 9)).toEqual(['--track', 'M']);
@@ -1333,8 +1335,9 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
     const u = run('merge', 'K', '--without-fill');
     expect(u.code).toBe(0);
     expect(call().map((x) => x.step)).toEqual(['merge', 'gates', 'done']);
-    // Undo K's merge (and M's): the guard checks below merge K again.
+    // Undo K's merge (and M's): the guard checks below merge K again. A whole merge deleted the branch.
     g(['reset', '-q', '--hard', head]);
+    g(['branch', '-f', 'queue/K', tipK]);
 
     // Wrong status: waiting cannot be merged.
     expect(run('merge', 'V').error).toMatch(/merge applies to review/);

@@ -35,7 +35,7 @@
 // migration number wins, and the other's change silently disappears.
 //
 // AFTER a successful merge the track worktree is cleaned up (cleanup-worktree.mjs: the links are removed as links, then
-// `git worktree remove` without --force). The branch is kept. The cleanup is best effort: it never turns a successful merge
+// `git worktree remove` without --force). The branch is kept here (`cq merge` deletes a merged queue branch at the very end). The cleanup is best effort: it never turns a successful merge
 // into exit ≠ 0, and locked, dirty or unmerged worktrees are left alone.
 //
 // USE:

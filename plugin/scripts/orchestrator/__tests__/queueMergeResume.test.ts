@@ -246,6 +246,24 @@ describe('cq merge checks that the track tip is in the base before done (M6)', (
     expect(p.gTry(['merge-base', '--is-ancestor', tip, mc]).status).toBe(0);
     expect(p.find('A')?.status).toBe('done');
     expect(fs.existsSync(p.stateFile('A'))).toBe(false);
+    // The merged queue branch is gone; its commits are in the base.
+    expect(m.out).toContain('Branch: queue/A deleted (merged).');
+    expect(p.gTry(['rev-parse', '-q', '--verify', 'refs/heads/queue/A']).status).not.toBe(0);
+  });
+
+  it('--resume removes the worktree and the branch too', () => {
+    const p = project();
+    p.track('A', { 'a.txt': 'from A\n' });
+    const wt = path.join(p.repo, '.claude', 'worktrees', 'a');
+    p.g(['worktree', 'add', '-q', wt, 'queue/A']);
+    p.scenario({ gates: { signal: 'SIGINT' } });
+    p.run('merge', 'A', '--without-fill');
+    p.scenario({});
+    const r = p.run('merge', 'A', '--resume', '--without-fill');
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/Worktree: removed/);
+    expect(fs.existsSync(wt)).toBe(false);
+    expect(r.out).toContain('Branch: queue/A deleted (merged).');
   });
 });
 

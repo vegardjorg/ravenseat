@@ -61,7 +61,7 @@ function project({ config = {}, files = {}, loose = {} }: { config?: object; fil
   };
   const text = () => spawnSync(process.execPath, [QUEUE, 'doctor'], { encoding: 'utf8', env, cwd: root }).stdout;
   const lines = (name: string) => run().checks.filter((c) => c.name === name);
-  return { root, run, text, lines };
+  return { root, g, run, text, lines };
 }
 
 describe('cq doctor: the safety baseline', () => {
@@ -148,6 +148,20 @@ describe('cq doctor: the safety baseline', () => {
     expect(p.lines('prod')).toEqual([]);
     p = project({ files: { 'data/dump.bin': big } });
     expect(p.lines('largefile')[0].status).toBe('OK');
+  }, 60_000);
+
+  it('branches: a merged agent branch is named, one with a worktree or unmerged work is not', () => {
+    const p = project({ config: { baseBranch: 'main' } });
+    p.g('branch', 'worktree-agent-old');
+    p.g('branch', 'worktree-agent-live');
+    p.g('worktree', 'add', '-q', path.join(p.root, '.claude', 'worktrees', 'live'), 'worktree-agent-live');
+    p.g('switch', '-q', '-c', 'worktree-agent-open');
+    p.g('commit', '-q', '--allow-empty', '-m', 'not merged');
+    p.g('switch', '-q', 'main');
+    const b = p.lines('branches');
+    expect(b).toHaveLength(1);
+    expect(b[0]).toMatchObject({ status: 'WARN', message: '1 merged agent branch(es) with no worktree left: worktree-agent-old' });
+    expect(b[0].fix).toContain('git branch -d worktree-agent-old');
   }, 60_000);
 
   it('config: the new keys are known, and bad values FAIL', () => {
