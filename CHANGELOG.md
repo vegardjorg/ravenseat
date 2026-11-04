@@ -28,7 +28,7 @@ All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). 
 
 ### Fixed
 - `cq init` and `cq setup` stop outside git in a plugin install and say to run `git init` first. They used to write into
-  the plugin's own folder. This was read from the code and fixed; `cq setup` has not been run against the new check.
+  the plugin's own folder.
 
 ## 0.8.13 (2026-11-04)
 
