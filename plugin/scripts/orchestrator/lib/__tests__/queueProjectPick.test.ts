@@ -406,6 +406,16 @@ describe('visual QA', () => {
     ],
   });
 
+  it('set cancelled closes an open block at that time; other statuses leave it open', () => {
+    const block = () => ({ code: 'gate-red', from: '2026-01-01T00:00:00.000Z' });
+    const cancelled = o('C-1', { status: 'review', blocks: [block()] });
+    expect(K.setStatus(cancelled, 'cancelled', ISO).error).toBeUndefined();
+    expect((cancelled.blocks as { to?: string }[])[0].to).toBe(new Date(ISO).toISOString());
+    const review = o('C-2', { status: 'running', blocks: [block()] });
+    K.setStatus(review, 'review', ISO);
+    expect((review.blocks as { to?: string }[])[0].to).toBeUndefined();
+  });
+
   it('set done on a visual task gives qa_status waiting; otherwise no QA', () => {
     const queue = base();
     const r = K.setStatus(queue.tasks[0], 'done', ISO);

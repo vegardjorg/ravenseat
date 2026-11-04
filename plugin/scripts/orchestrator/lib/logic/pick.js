@@ -20,6 +20,7 @@ const { parkedNow, rankingContext, parkedText, ranking, compareRanking } = requi
 const { statusAtAdd } = require('./questions.js');
 const { uncommittedCollision } = require('./commits.js');
 const { migrTens, assignStartBlock } = require('./select.js');
+const { closeBlock } = require('./monitor.js');
 
 // ---- Picking ---------------------------------------------------------------------------------------
 
@@ -216,6 +217,8 @@ function setStatus(o, status, now = new Date().toISOString()) {
     delete o.picked_at;
     delete o.cloud;
   }
+  // A cancelled task blocks nothing any more, so an open block (gate-red, for example) must not stay open and count.
+  if (status === 'cancelled') closeBlock(o, { now: Date.parse(now) });
   o.status = status;
   return { task: o, qa };
 }
