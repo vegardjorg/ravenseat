@@ -95,7 +95,7 @@ function project(config: Record<string, unknown> = { gates: { quick: [OK_GATE] }
     fs.writeFileSync(env.QUEUE_CONFIG as string, JSON.stringify({ baseBranch: 'develop', maxFixRounds: 3, ...c }));
   setConfig(config);
   fs.mkdirSync(path.join(scratch, 'A'), { recursive: true });
-  fs.writeFileSync(path.join(scratch, 'A', 'report.md'), `${RES}\n`);
+  fs.writeFileSync(path.join(scratch, 'A', 'track-result.md'), `${RES}\n`);
   const run = (args: string[], opts: { cwd?: string; extraEnv?: NodeJS.ProcessEnv } = {}) => {
     const r = spawnSync(process.execPath, [QUEUE, ...args], {
       encoding: 'utf8',

@@ -357,7 +357,18 @@ function tamperReason(command) {
   return null;
 }
 
+/**
+ * Does the last receive stop the merge? Only a recorded red counts: a task with no record (no quick gates, or a picked
+ * task that never went through receive) goes on, as before.
+ * @returns {null | 'same-tip' | 'moved'} same-tip: red on this exact commit. moved: red, and the commits after it are unchecked.
+ */
+function mergeStop(gateCheck, tip) {
+  if (gateCheck?.ok !== false) return null;
+  return gateCheck.tip === tip ? 'same-tip' : 'moved';
+}
+
 module.exports = {
+  mergeStop,
   FILE_NAME,
   MAX_ENTRIES,
   WRITER,

@@ -190,7 +190,7 @@
 //         out (--done-cwd overrides), with config().doneCheck.timeoutSec. Red: no reviewers, the blocker gate-red, only
 //         the output tail in <folder>/done-<id>.md, and resume --reason fix is run (exit 1; exit 8 at the fix-round cap).)
 //   node scripts/orchestrator/queue.mjs deliveries [--json]
-//        (adoption: active tasks with a report.md that has not been received: first line RESULT status=DONE|PARTIAL and
+//        (adoption: active tasks with a track-result.md that has not been received: first line RESULT status=DONE|PARTIAL and
 //         newer than the start, the delivery and the last receive. `orchestrator pulse` prints the new ones every round (and
 //         remembers them in report_seen), so a new session that has adopted the tracks sees the delivery without
 //         <task-notification>.)
@@ -208,7 +208,7 @@
 //         the owner question <id>.fixcap<N>, puts it in waiting_on, opens the blocker owner-question and exits 8; a resolved
 //         question allows exactly one more round. A red done command's tail goes into the fix brief.)
 //        (adoption: prompt-<id>-r<N>.md for a NEW agent on the same branch, fix round (default) or continuation after the
-//         context guard: the same template as fill, with prepare-track --continue, the paths to report.md, handover.md,
+//         context guard: the same template as fill, with prepare-track --continue, the paths to track-result.md, handover.md,
 //         the review package and the findings, and the original mission. N is the next free round. Not `continue`,
 //         which takes tasks off hold.)
 //   node scripts/orchestrator/queue.mjs set <id> done [--findings "FINDINGS H=0 M=1 L=3 …"] [--result "…"] [--without-cost]
@@ -285,7 +285,7 @@
 //   node scripts/orchestrator/queue.mjs info <id> [--field <name>] [--json]   (short view; one field raw, also cost.usd)
 //   node scripts/orchestrator/queue.mjs ask <id> ["<question>"] [--bundle] [--json] [--max-chars <n>] [--out <file>]
 //        [--scratchpad <dir>]   (a question about an earlier track without resuming its agent: a size-capped,
-//         secret-redacted bundle of the mission, report.md, handover.md, the queue's notes and owner answers, the
+//         secret-redacted bundle of the mission, track-result.md, handover.md, the queue's notes and owner answers, the
 //         commits and diffstat, and the transcript tail. Prints it with an answer instruction; --bundle writes it to
 //         <scratchpad>/ask-<id>/bundle.md and prints the path, for /cq:ask. Read-only. cli/ask.mjs, lib/askBundle.js)
 //   node scripts/orchestrator/queue.mjs edit <id> --bonus "<text>"  (to the mission, in the track block from the next
@@ -349,7 +349,7 @@
 //   node scripts/orchestrator/queue.mjs qa deviation <id> "<text>"       (owner only; creates fixTask <id>-QA<n>)
 //   node scripts/orchestrator/queue.mjs qa evidence <id> <type>[=<ref>]  (the types are config().qa.evidenceTypes, default
 //                                                                  screenshot|test|manual; receive otherwise reads the
-//                                                                  EVIDENCE line in report.md)
+//                                                                  EVIDENCE line in track-result.md)
 //   node scripts/orchestrator/queue.mjs qa auto [--run] [<id...>]        (entries with auto evidence, default test: run
 //                                                                  config().qa.autoCommand and close the green ones)
 //   node scripts/orchestrator/queue.mjs edit-many --file <json> [--dry] [--expect-changed <iso>] [--json] [--by "..."]
@@ -379,7 +379,7 @@
 //                                                                  do it themselves for the queue's own tasks; a NEW
 //                                                                  --session name = new session (emergency rotation), resets
 //                                                                  the wind-down; the usual path is compaction; also
-//                                                                  prints NEW DELIVERY for report.md files that came since
+//                                                                  prints NEW DELIVERY for track-result.md files that came since
 //                                                                  the last pulse, see `deliveries`)
 //   node scripts/orchestrator/queue.mjs orchestrator stop            (the loop is stopped or handed over; also removes
 //                                                                  the wind-down flag)

@@ -41,7 +41,7 @@ function project(config: Record<string, unknown> = {}, { ci = false } = {}) {
   const scratch = path.join(folder, 'scratch');
   fs.mkdirSync(repo);
   fs.mkdirSync(path.join(scratch, 'A'), { recursive: true });
-  fs.writeFileSync(path.join(scratch, 'A', 'report.md'), `${RES}\n`);
+  fs.writeFileSync(path.join(scratch, 'A', 'track-result.md'), `${RES}\n`);
   const globalConfig = path.join(folder, 'global-gitconfig');
   fs.writeFileSync(globalConfig, '');
   const env = {
@@ -209,7 +209,7 @@ describe('receive and merge with no checks', () => {
 });
 
 describe('receive and a known bug', () => {
-  const report = (p: { folder: string }, text: string) => fs.writeFileSync(path.join(p.folder, 'scratch', 'A', 'report.md'), `${RES}\n${text}\n`);
+  const report = (p: { folder: string }, text: string) => fs.writeFileSync(path.join(p.folder, 'scratch', 'A', 'track-result.md'), `${RES}\n${text}\n`);
   const gateTasks = (p: { folder: string }) =>
     JSON.parse(fs.readFileSync(path.join(p.folder, 'queue.json'), 'utf8')).tasks.filter((o: { labels?: string[] }) => o.labels?.includes('gate'));
 

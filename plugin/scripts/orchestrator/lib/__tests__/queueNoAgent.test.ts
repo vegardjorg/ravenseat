@@ -73,7 +73,7 @@ describe('startedWithoutAgent (pure)', () => {
     expect(L.startedWithoutAgent({ tasks: [late] }, { now: NOW })).toHaveLength(1);
   });
 
-  it('leaves out a delivered track (report.md exists, the worktree may be gone)', () => {
+  it('leaves out a delivered track (track-result.md exists, the worktree may be gone)', () => {
     const hits = L.startedWithoutAgent(
       { tasks: [running('A')] },
       { hasReport: (o) => o.id === 'A', now: NOW },

@@ -279,7 +279,7 @@ export function cmdQa() {
         '\nApprove: cq qa ok <id...> · deviation: cq qa deviation <id> "<what is wrong, and where>"',
       );
   } else if (under === 'evidence') {
-    // Sets the evidence on a task by hand (receive otherwise reads it from the EVIDENCE line in report.md).
+    // Sets the evidence on a task by hand (receive otherwise reads it from the EVIDENCE line in track-result.md).
     const [id, spec] = positional(2);
     const qa = L.qaConfig();
     if (!id || !spec)

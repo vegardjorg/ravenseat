@@ -83,7 +83,7 @@
   "loadGuard": { "minFreeMemoryPct": 10, "adaptive": true, "minSlots": 1, "allSlotsFreeMemoryPct": 40, "allSlotsCpuPct": null, "minSlotsCpuPct": null },
   "_proposals": "Auto-accept of agent proposals (default off): a proposal that fits the rules is approved by the queue itself, logged and can be undone (cq proposals). Never D or D+, never with waiting_on, legal/owner labels, open legal points or protected paths. cq proposals auto and the board write the queue's own rules, which win.",
   "proposals": { "autoAccept": { "enabled": false, "classes": ["K"], "maxEstimateMin": 60, "maxValue": null } },
-  "_qa": "QA evidence: tracks write EVIDENCE <type>[=<ref>] in report.md and receive stores it. autoTypes are closed by cq qa auto --run when autoCommand is green ({refs} = the refs, {id} = the task id; a string or { type: command }). evidenceLabels = labels receive warns for when the line is missing.",
+  "_qa": "QA evidence: tracks write EVIDENCE <type>[=<ref>] in track-result.md and receive stores it. autoTypes are closed by cq qa auto --run when autoCommand is green ({refs} = the refs, {id} = the task id; a string or { type: command }). evidenceLabels = labels receive warns for when the line is missing.",
   "qa": {
     "evidenceTypes": ["screenshot", "test", "manual"],
     "autoTypes": ["test"],

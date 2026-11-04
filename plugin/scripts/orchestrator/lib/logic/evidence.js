@@ -15,7 +15,7 @@ const { hasLabel, groups } = require('./projects.js');
 // ---- Evidence in the QA entry --------------------------------------------------------------------------------
 //
 // Every QA entry (a finished task waiting on QA) has one piece of evidence: how the owner, or the queue itself, sees that
-// the delivery works. The track writes it as one line in report.md, `EVIDENCE <type>[=<ref>[,<ref>...]]`, and `receive`
+// the delivery works. The track writes it as one line in track-result.md, `EVIDENCE <type>[=<ref>[,<ref>...]]`, and `receive`
 // stores it as `evidence: { type, ref: [...] }` on the task (`qa evidence <id>` sets it by hand). The types and what
 // they mean are config().qa (queue.config.json); the defaults:
 //   screenshot   the owner looks at a screen; ref = the route or the screen
@@ -61,7 +61,7 @@ function validateEvidence(e, qa = qaConfig()) {
 }
 
 /**
- * Reads the EVIDENCE line in a text (report.md or the answer): `EVIDENCE test=src/x.test.ts`, `EVIDENCE: screenshot`,
+ * Reads the EVIDENCE line in a text (track-result.md or the answer): `EVIDENCE test=src/x.test.ts`, `EVIDENCE: screenshot`,
  * `- EVIDENCE manual=the camera on a phone`. The first line that starts with EVIDENCE counts.
  * @returns {null | { error: string } | { evidence: { type: string, ref: string[] } }}
  */
@@ -99,11 +99,11 @@ function evidenceRequired(o, qa = qaConfig()) {
  */
 function evidenceWarning({ o, evidence = null, evidenceError = null }, qa = qaConfig()) {
   if (evidenceError)
-    return `WARNING: ${o.id}: ${evidenceError}. Fix the line in report.md, or set it: cq qa evidence ${o.id} <type>[=<ref>].`;
+    return `WARNING: ${o.id}: ${evidenceError}. Fix the line in track-result.md, or set it: cq qa evidence ${o.id} <type>[=<ref>].`;
   if (!evidenceRequired(o, qa) || evidence || o.evidence) return null;
   const labels = qa.evidenceLabels.filter((l) => hasLabel(o, l)).join(', ');
   return (
-    `WARNING: ${o.id} has the label ${labels}, but report.md has no EVIDENCE line ` +
+    `WARNING: ${o.id} has the label ${labels}, but track-result.md has no EVIDENCE line ` +
     `(EVIDENCE ${qa.evidenceTypes.map((t) => (qa.manualTypes.includes(t) ? `${t}=<what>` : `${t}=<ref>`)).join(' | ')}). ` +
     `Set it by hand: cq qa evidence ${o.id} <type>[=<ref>].`
   );

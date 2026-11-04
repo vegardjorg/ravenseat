@@ -125,7 +125,7 @@ function activeLines(queue, now = Date.now()) {
  * must start the agent from the "Start these in the SAME turn" lines. When fill runs where nobody reads its output (a
  * `merge` in the background, a script that chains several merges), the track stays "running" with no agent, and the
  * queue stalls without any error. A real agent runs `prepare-track` within minutes, and that checks the branch out in
- * its worktree. So: running, older than `graceMin`, no worktree has the branch, and no report.md = no agent.
+ * its worktree. So: running, older than `graceMin`, no worktree has the branch, and no track-result.md = no agent.
  * Picked tasks and cloud sessions are left out (they have no local worktree). `worktreeBranches` is a Set of branch
  * names, `hasReport(o)` says whether the track has delivered.
  */
@@ -166,7 +166,7 @@ function withoutAgentLines(list) {
  * board server, with lib/trackActivity.js) as the newest of: the last commit on the branch, the newest mtime in the
  * worktree, the track folder in the scratchpad and the agent transcript. `lastActivity` maps id -> that time in ms
  * (missing = nothing found). The start time counts as activity too, so a new track always gets the whole limit.
- * Picked tasks, cloud sessions and delivered tracks (report.md) are left out. limits.silentMin sets the limit
+ * Picked tasks, cloud sessions and delivered tracks (track-result.md) are left out. limits.silentMin sets the limit
  * (`cq limit silentMin <n>`, 0 = off).
  */
 const SILENT_DEFAULT_MIN = 20;

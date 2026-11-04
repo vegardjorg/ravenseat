@@ -25,7 +25,7 @@
 //     is no longer counted, so later compactions of that agent are not logged.
 //   - The PARTIAL trigger is logged as one line in the time log (config().timeLog, event "contextGuard", with
 //     `compactions` and `cause`; QUEUE_TIME_LOG overrides the file, as in hook-time.mjs). The reminder is not logged.
-//   - At about 200k (TRACK_REPORT_WARNING overrides) one reminder comes that the long content belongs in report.md and the
+//   - At about 200k (TRACK_REPORT_WARNING overrides) one reminder comes that the long content belongs in track-result.md and the
 //     reply under the report cap (readHint.js, assessReportHint). The marker "report" in the same state file prevents
 //     repetition; the reminder is not logged in the time log.
 //   - A Bash/PowerShell result over about 15,000 characters (TRACK_BASH_WARNING overrides) gives a soft output hint

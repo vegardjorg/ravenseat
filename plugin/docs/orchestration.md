@@ -16,7 +16,7 @@ branch (`queue/<ID>`), with a self-contained mission file.
    agent proposed gets an [intake triage](#intake-triage) first: `fill` skips it, prints the triage step and starts
    the others.
 3. A track finishes and answers with one `RESULT …` line plus at most a few lines; the long report is in
-   `report.md` in its scratch folder.
+   `track-result.md` in its scratch folder.
 4. `cq receive <ID>`: reads the result line and builds a review package (diff, changed files in full, the track's
    report). The orchestrator starts the reviewers `receive` prints: the fixed ones for the class (`reviewers` in
    `queue.config.json`; by default none for K and U, `reviewer` for D, `reviewer` and `reviewer-security` for D+)
@@ -269,12 +269,12 @@ context size. The system keeps both small:
 
 Tracks keep running when the orchestrator session changes; only the `<task-notification>` goes to the session that
 started them. A new session adopts them without that notification:
-- **The signal:** `report.md` in the track folder (`<scratch>/<ID>/`, or `<scratch>/<ID>-r<N>/` for a fix round) with
+- **The signal:** `track-result.md` in the track folder (`<scratch>/<ID>/`, or `<scratch>/<ID>-r<N>/` for a fix round) with
   the `RESULT status=DONE|PARTIAL …` line as its first line. `queue-takeover.mjs` classifies the task DELIVERED on it;
   the old heuristic (commits, clean worktree, 20 min) is the fallback.
 - **`cq orchestrator pulse`** also applies [auto-accept](queue.md#auto-accept-of-proposals) to older proposals when
   the owner has turned it on (default off), with one `Auto-accepted <ID>` line each.
-- **`cq orchestrator pulse`** prints `NEW DELIVERY (report.md): <ID> …` once per report (the task remembers it in
+- **`cq orchestrator pulse`** prints `NEW DELIVERY (track-result.md): <ID> …` once per report (the task remembers it in
   `report_seen`), and **`cq deliveries [--json]`** lists every report that is not received yet. `cq receive <ID>`
   reads the newest report, also from a fix round folder, and saves `report_received`.
 - **`cq resume <ID> --reason fix|context`** writes `prompt-<ID>-r<N>.md` for a NEW agent on the same branch
@@ -285,7 +285,7 @@ started them. A new session adopts them without that notification:
   background, or a script that chains several merges), the track stays "running" with no agent and the queue stalls
   without an error. So `cq show` (first in the output, so it survives the after-compact trimming), `cq state`
   (`withoutAgent`) and `cq orchestrator pulse` print `STARTED WITHOUT AGENT` for a running track older than 15 minutes
-  whose branch no worktree has checked out and that has no report.md. Picked tasks and cloud sessions are left out.
+  whose branch no worktree has checked out and that has no track-result.md. Picked tasks and cloud sessions are left out.
   Fix: `cq set <ID> waiting`, then `cq fill --ids <ID>` and start what it lists in the same turn (fill checks the
   migration block again). Run `cq merge` where you read the output; in a chain or a background job use `--without-fill`
   and run fill yourself afterwards.
@@ -424,7 +424,8 @@ checkout or with cq's own `--evidence` run:
 - `cq receive` runs the quick gates itself on the delivered tip (in the worktree that has the branch checked out, with
   no uncommitted tracked changes) and saves the result as the task field `gate_check` (`ok`, `kind`, `tip`, `at`,
   `ran`, and `evidence_at` when an earlier green entry for that exact tip was reused). Red: the blocker `gate-red` and
-  a fix round, as for a red done command.
+  a fix round, as for a red done command. `cq merge` refuses while that result stands (`--force-red-gate` on the
+  owner's word, logged as `gate-red-overridden`); commits after a red result need a new `cq receive`.
 - A batch push needs `cq gates --full` run in the main checkout, on exactly the base tip, with no uncommitted tracked
   changes: `cq push-check` says `BLOCKED` while `gates.full` is set up and that entry is missing or red.
 - Out of the agents' reach: the push guard denies a queue agent's shell command that names the store or passes
@@ -463,7 +464,7 @@ only, and an open gate task for the same class is extended instead of duplicated
 The gate mission uses the same criteria as [`/cq:review`](#review-to-gate-cqreview) ("The gate criteria" in
 `skills/review/SKILL.md`): clear purpose, a reproducible failing example, low maintenance cost, red first, and the
 check lives in the project's own gates. Red first is part of the task: its `acceptance` includes the red-first
-criterion, `done_when` runs the new check when the project has a command for it, and the track's `report.md` shows
+criterion, `done_when` runs the new check when the project has a command for it, and the track's `track-result.md` shows
 both runs (failing without the fix, passing with it). A separate fix task `depends_on` the gate task so the check is
 seen red on the real bug. The loop step is in `skills/parallel-wave/SKILL.md` ("Gate from incident").
 

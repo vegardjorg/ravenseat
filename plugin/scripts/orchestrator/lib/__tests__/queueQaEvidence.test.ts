@@ -1,7 +1,7 @@
 // =============================================================
 // queueQaEvidence.test.ts: evidence in the QA entry (lib/queueLogic.js + `queue.mjs qa evidence|auto`).
 //
-// A track writes `EVIDENCE <type>[=<ref>]` in report.md and `receive` stores it; `qa evidence` sets it by hand, the QA
+// A track writes `EVIDENCE <type>[=<ref>]` in track-result.md and `receive` stores it; `qa evidence` sets it by hand, the QA
 // list is split into what the owner looks at, a manual round and auto entries, and `qa auto --run` closes the auto
 // entries whose configured command is green. The types and the command are config().qa (queue.config.json) with the
 // generic defaults screenshot, test and manual. The rules are asserted where they are enforced: the pure functions,
@@ -142,7 +142,7 @@ describe('the warning in receive', () => {
 
   it('a visual task without an EVIDENCE line gets a warning with the types and the manual command', () => {
     const w = L.evidenceWarning({ o: task() });
-    expect(w).toMatch(/V-1 has the label visual, but report\.md has no EVIDENCE line/);
+    expect(w).toMatch(/V-1 has the label visual, but track-result.md has no EVIDENCE line/);
     expect(w).toMatch(/screenshot=<ref> \| test=<ref> \| manual=<what>/);
     expect(w).toMatch(/cq qa evidence V-1/);
   });

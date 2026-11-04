@@ -62,7 +62,7 @@ const REQUIREMENT: [string, string[]][] = [
   ['cq gates --quick', ALL],
   ['RESULT status=DONE|PARTIAL', ALL],
   ['at most about 1,500 characters', ALL],
-  ['report.md', ALL],
+  ['track-result.md', ALL],
   ['owner questions', ALL],
   ['wiring specification', ALL],
   // hardening against prompt injection (make-queue-common.mjs refuses a template without the first one)

@@ -67,7 +67,7 @@ function guardFor(capabilities) {
 function artifactsFor({ capabilities, scratch, taskId, n }) {
   if (capabilities?.attemptFolder !== true || !scratch) return { report: null, handover: null };
   const folder = path.join(scratch, taskId, `a${n}`);
-  return { report: path.join(folder, 'report.md'), handover: path.join(folder, 'handover.md') };
+  return { report: path.join(folder, 'track-result.md'), handover: path.join(folder, 'handover.md') };
 }
 
 /** The current attempt of a task: the last one, or null. */

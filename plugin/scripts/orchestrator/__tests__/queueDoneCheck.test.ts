@@ -124,7 +124,7 @@ describe('queue.mjs receive, resume and merge with a done command', () => {
     const find = () => queue().tasks[0];
     const report = (dir: string, text: string) => {
       fs.mkdirSync(path.join(scratch, dir), { recursive: true });
-      const f = path.join(scratch, dir, 'report.md');
+      const f = path.join(scratch, dir, 'track-result.md');
       fs.writeFileSync(f, text);
       const later = Date.now() / 1000 + 60 * (dir.length + 1);
       fs.utimesSync(f, later, later);

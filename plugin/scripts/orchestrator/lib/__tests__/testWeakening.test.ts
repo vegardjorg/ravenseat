@@ -260,7 +260,7 @@ describe('queue.mjs receive with test weakening', () => {
     fs.writeFileSync(configFile, JSON.stringify(config));
     fs.mkdirSync(path.join(scratch, 'A'), { recursive: true });
     fs.writeFileSync(
-      path.join(scratch, 'A', 'report.md'),
+      path.join(scratch, 'A', 'track-result.md'),
       'RESULT status=DONE branch=queue/A commits=1 migr=- gates=OK probe=- ownerQuestions=0 edge=-\n',
     );
     const env = {

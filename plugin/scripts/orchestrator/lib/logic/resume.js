@@ -16,7 +16,7 @@ const { parseResult } = require('./results.js');
 //
 // The only thing that ties a track to the session that started it is the <task-notification> when the track delivers.
 // These functions make the delivery visible without the notification:
-//   - report.md in the track folder (<scratchpad>/<id>/, or the fix round <scratchpad>/<id>-r<N>/) is a SAFE delivery
+//   - track-result.md in the track folder (<scratchpad>/<id>/, or the fix round <scratchpad>/<id>-r<N>/) is a SAFE delivery
 //     signal when its first line is the RESULT line (status DONE or PARTIAL);
 //   - `queue.mjs orchestrator pulse` and `queue.mjs deliveries` report reports that came after the start or the last receive;
 //   - `queue.mjs resume <id>` makes the mission for a NEW agent on the same branch (fix round or continuation).
@@ -28,7 +28,7 @@ const { parseResult } = require('./results.js');
 const RESUME_REASONS = ['fix', 'context'];
 
 /**
- * Safe delivery signal: the first non-empty line of report.md is `RESULT status=DONE|PARTIAL …` (markdown decoration
+ * Safe delivery signal: the first non-empty line of track-result.md is `RESULT status=DONE|PARTIAL …` (markdown decoration
  * such as `#` and backticks is tolerated, as in parseResult). Otherwise null: a report that is half written or lacks the
  * line is not a delivery (then the heuristic in assessActive applies).
  * @returns {null | { status: 'DONE' | 'PARTIAL', line: string }}
@@ -55,7 +55,7 @@ function trackFolderRound(name, id) {
 
 /**
  * Looks in the scratchpad roots (the orchestrator's own and the one saved on the task, o.scratchpad) for the track's
- * folders `<id>` and `<id>-r<N>`, and for the fix round prompts `prompt-<id>-r<N>.md`. Gives the newest report.md, the
+ * folders `<id>` and `<id>-r<N>`, and for the fix round prompts `prompt-<id>-r<N>.md`. Gives the newest track-result.md, the
  * newest handover.md and the next free round number. Only reads; `fsx` and `pathx` can be swapped in tests.
  * @returns {{ report: null | { path: string, folder: string, round: number, mtimeMs: number, text: string },
  *   handover: null | { path: string, mtimeMs: number }, nextRound: number }}
@@ -84,7 +84,9 @@ function findTrackReport(id, roots, fsx = require('node:fs'), pathx = require('n
       if (round == null) continue;
       maxRound = Math.max(maxRound, round);
       const folder = pathx.join(r, n);
-      for (const file of ['report.md', 'handover.md']) {
+      // report.md is the old name: Claude Code refuses it for subagents (by file name), but a track started before the
+      // rename, or another client, can still have written it. The newest of the two wins.
+      for (const file of ['track-result.md', 'report.md', 'handover.md']) {
         const filePath = pathx.join(folder, file);
         let mtimeMs;
         try {
@@ -192,7 +194,7 @@ function assessActive({
   anotherBranch = () => null,
 }) {
   if (delivery)
-    return `DELIVERED (report.md ${delivery.status}${status === 'review' ? ', new round after receive' : ''})`;
+    return `DELIVERED (track-result.md ${delivery.status}${status === 'review' ? ', new round after receive' : ''})`;
   if (status === 'review') return commits > 0 ? 'DELIVERED (review)' : 'UNCERTAIN (review without commits)';
   if (commits > 0 && (uncommitted ?? 0) === 0 && (lastMs ?? 0) > 20 * 60_000) return 'DELIVERED';
   if (commits === 0 && (startedMs ?? 0) > 60 * 60_000) {
@@ -210,7 +212,7 @@ function deliveryLines(deliveries, nowMs = Date.now()) {
   const old = (deliveries ?? []).filter((l) => !l.new);
   const out = fresh.map(
     (l) =>
-      `NEW DELIVERY (report.md): ${l.id} ${l.status}, written ${ageText(nowMs - l.mtimeMs)} ago. ` +
+      `NEW DELIVERY (track-result.md): ${l.id} ${l.status}, written ${ageText(nowMs - l.mtimeMs)} ago. ` +
       `Next: ${cq} receive ${l.id}`,
   );
   if (old.length)
@@ -309,7 +311,7 @@ function resumeBlock({
     '',
     ...work,
     '',
-    `Report: write report.md in your own folder (\`<folder>\`, that is ${trackId}) with the RESULT line as the FIRST line;`,
+    `Report: write track-result.md in your own folder (\`<folder>\`, that is ${trackId}) with the RESULT line as the FIRST line;`,
     `it covers the whole track (branch=${branch}, commits = all on the branch ahead of ${base}). The orchestrator finds it there`,
     `(${cq} deliveries and ${cq} receive ${o.id}), also without a notification. Your answer starts with the same RESULT line.`,
     '',

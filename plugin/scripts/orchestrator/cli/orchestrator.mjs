@@ -239,7 +239,7 @@ export function cmdOrchestrator() {
         `${by.message}\n(The usual path is compaction, which lifts the wind-down. If this is still a NEW session ` +
           `(emergency rotation), run pulse with a --session name other than "${m.session}".)`,
       );
-    // Adoption: report.md files that came since the last pulse (an adopted track does not notify this session).
+    // Adoption: track-result.md files that came since the last pulse (an adopted track does not notify this session).
     deliveryWarning({ update: true });
     // Auto-accept (default off): older proposals that fit the owner's rules now. Only written when something is accepted.
     if (autoAcceptRules(read()).enabled) {

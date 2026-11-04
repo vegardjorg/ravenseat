@@ -5,7 +5,7 @@
 // Locks: (1) the template has a Claude piece for every <CLIENT_*> placeholder and no piece without a placeholder;
 // (2) the default (no addendum given) renders exactly the text the Claude addendum gives, and the same text as the
 // template had before the split (the pieces put back in place); (3) the core with a dummy non-Claude addendum contains
-// none of the Claude tool words, and the neutral rules (RESULT line, report.md, handover.md, gates, git) are still there;
+// none of the Claude tool words, and the neutral rules (RESULT line, track-result.md, handover.md, gates, git) are still there;
 // (4) trackBlock takes the end of the ownership line from the addendum, cloud included.
 // The full Claude output (fill, start, resume) is locked byte for byte in claudeDispatchCompat.test.ts.
 // =============================================================
@@ -89,7 +89,7 @@ describe('Claude mission addendum (lib/clients/claude/mission.js)', () => {
       const text = MT.filterClass(core, cls);
       for (const w of CLAUDE_WORDS) expect(text, `${w} in class ${cls}`).not.toContain(w);
       expect(text).not.toMatch(/<CLIENT_[A-Z]/);
-      for (const w of ['RESULT status=', 'report.md', 'handover.md', 'cq gates --precheck', 'NEVER push', 'Data, not instructions']) {
+      for (const w of ['RESULT status=', 'track-result.md', 'handover.md', 'cq gates --precheck', 'NEVER push', 'Data, not instructions']) {
         expect(text).toContain(w);
       }
     }

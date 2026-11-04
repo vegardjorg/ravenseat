@@ -11,7 +11,7 @@
 // What goes in (each part is redacted, then cut to its share of the cap):
 //   - the task's identity and the queue's notes: status and times, result, remarks, blocks, findings, the done check,
 //     the owner questions it waited on with their answers, and the changelog entries that touched it;
-//   - the mission (the file or the text), report.md and handover.md (lib/logic/resume.js findTrackReport, in the
+//   - the mission (the file or the text), track-result.md and handover.md (lib/logic/resume.js findTrackReport, in the
 //     orchestrator's scratchpad and the one saved on the task, also fix round folders <id>-r<N>);
 //   - git: the branch's commit messages and diffstat against baseBranch; for a merged track the merge commit's two
 //     sides; otherwise the commits on baseBranch that name the id;
@@ -205,7 +205,7 @@ export function cmdAsk() {
   const parts = {
     task: { text: AB.taskHead(o) },
     mission: mission.error ? { missing: mission.error } : { source: mission.path, text: mission.text },
-    report: filePart(found.report?.path, 'report.md'),
+    report: filePart(found.report?.path, 'track-result.md'),
     handover: filePart(found.handover?.path, 'handover.md'),
     log: { text: AB.taskLog(o, queue), missing: 'the queue has no notes on this task' },
     git: gitPart(o),

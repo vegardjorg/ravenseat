@@ -110,7 +110,7 @@ function project(config: Record<string, unknown>) {
   let n = 0;
   const report = (dir: string, text: string) => {
     fs.mkdirSync(path.join(scratch, dir), { recursive: true });
-    const f = path.join(scratch, dir, 'report.md');
+    const f = path.join(scratch, dir, 'track-result.md');
     fs.writeFileSync(f, text);
     const later = Date.now() / 1000 + 60 * ++n;
     fs.utimesSync(f, later, later);
@@ -404,5 +404,108 @@ describe('what receive says about the run, and the done command', () => {
     expect(r.error).toContain('the owner decides');
     expect(p.find().status).toBe('running');
     expect(JSON.stringify(p.find())).not.toContain('gate-red');
+  });
+});
+
+describe('cq merge respects what cq receive found', () => {
+  // Green on the base branch and on a fixed track; red only on a track that has A.ts without OK.ts, so the base gate says nothing here.
+  const TRACK_RED = `node -e "const f=require('fs').existsSync;process.exit(f('lib/A.ts')&&!f('lib/OK.ts')?1:0)"`;
+  const merged = (p: ReturnType<typeof project>) => p.g(['branch', '--contains', 'queue/A', '--list', 'develop']) !== '';
+
+  it('red at receive: merge stops, nothing is merged, also when receive and merge are run in a row', () => {
+    const p = project({ gates: { quick: [TRACK_RED] } });
+    p.g(['config', 'user.name', 'Queue Owner']);
+    p.g(['config', 'user.email', 'owner@company.no']);
+    p.report('A', `${RES}\n`);
+    expect(p.run('receive', 'A').code).toBe(1);
+    const r = p.run('merge', 'A', '--without-fill');
+    expect(r.code).toBe(1);
+    expect(r.error).toContain('The quick gates were red on this exact commit');
+    expect(r.error).toContain('--force-red-gate');
+    expect(merged(p)).toBe(false);
+  });
+
+  it('a commit after the red result needs a new receive, and then the merge goes on', () => {
+    const p = project({ gates: { quick: [TRACK_RED] } });
+    p.g(['config', 'user.name', 'Queue Owner']);
+    p.g(['config', 'user.email', 'owner@company.no']);
+    p.report('A', `${RES}\n`);
+    expect(p.run('receive', 'A').code).toBe(1);
+    fs.writeFileSync(path.join(p.worktree, 'lib', 'OK.ts'), 'export const ok = 1;\n');
+    p.g(['add', '--', 'lib/OK.ts'], p.worktree);
+    p.g(['commit', '-q', '-m', 'fix'], p.worktree);
+    const stopped = p.run('merge', 'A', '--without-fill');
+    expect(stopped.code).toBe(1);
+    expect(stopped.error).toContain('have not been checked');
+    expect(merged(p)).toBe(false);
+    p.report('A-r1', `${RES}\n`);
+    expect(p.run('receive', 'A').code).toBe(0);
+    expect(p.find().gate_check).toMatchObject({ ok: true });
+    const r = p.run('merge', 'A', '--without-fill');
+    expect(r.error).not.toContain('The quick gates were red');
+    expect(merged(p)).toBe(true);
+  });
+
+  it('--force-red-gate passes the stop and is logged', () => {
+    const p = project({ gates: { quick: [TRACK_RED] } });
+    p.g(['config', 'user.name', 'Queue Owner']);
+    p.g(['config', 'user.email', 'owner@company.no']);
+    p.report('A', `${RES}\n`);
+    expect(p.run('receive', 'A').code).toBe(1);
+    const r = p.run('merge', 'A', '--without-fill', '--force-red-gate');
+    expect(r.out).toContain('WARNING: --force-red-gate');
+    expect(fs.readFileSync(p.timeLog, 'utf8')).toContain('gate-red-overridden');
+    expect(merged(p)).toBe(true);
+  });
+
+  it('a project that removed its quick gates is not stopped by an old red result', () => {
+    const p = project({ gates: { quick: [TRACK_RED] } });
+    p.g(['config', 'user.name', 'Queue Owner']);
+    p.g(['config', 'user.email', 'owner@company.no']);
+    p.report('A', `${RES}\n`);
+    expect(p.run('receive', 'A').code).toBe(1);
+    fs.writeFileSync(path.join(p.folder, 'queue.config.json'), JSON.stringify({ baseBranch: 'develop', maxFixRounds: 3 }));
+    expect(p.run('receive', 'A').code).toBe(0);
+    expect(p.find()).not.toHaveProperty('gate_check');
+  });
+});
+
+describe('the report can be refused by the client', () => {
+  // The track's answer as cq finds it: its transcript and its row in the time log.
+  const reply = (p: ReturnType<typeof project>, text: string) => {
+    const session = path.join(p.folder, 'transcripts', 'session1', 'subagents');
+    fs.mkdirSync(session, { recursive: true });
+    const time = new Date().toISOString();
+    fs.writeFileSync(
+      path.join(session, 'agent-trackA1.jsonl'),
+      JSON.stringify({ type: 'assistant', timestamp: time, message: { id: 's1', role: 'assistant', content: [{ type: 'text', text }], usage: { input_tokens: 1, output_tokens: 1 } } }) + '\n',
+    );
+    fs.writeFileSync(
+      p.timeLog,
+      JSON.stringify({ time, wave: 'queue', track: 'A', event: 'done', agent_id: 'trackA1', agent_type: 'track', tokens: { input: 1, output: 1 } }) + '\n',
+    );
+  };
+
+  it('no report file: the answer gives the result and the GATE line, and receive says the file is missing', () => {
+    const p = project({ mode: 'lite' });
+    reply(p, `${RES}\nGATE a fetch result used without checking the error\ntrack-result.md was refused.`);
+    const r = p.run('receive', 'A');
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('A: review · RESULT status=DONE');
+    expect(r.out).toContain('WARNING: A has no track-result.md');
+    const queue = JSON.parse(fs.readFileSync(path.join(p.folder, 'queue.json'), 'utf8')) as Queue;
+    expect(queue.tasks.map((o) => o.title).join('\n')).toContain('a fetch result used without checking the error');
+  });
+
+  it('a report under the old name is still read', () => {
+    const p = project({});
+    fs.mkdirSync(path.join(p.scratch, 'A'), { recursive: true });
+    fs.writeFileSync(path.join(p.scratch, 'A', 'report.md'), `${RES}\n`);
+    const later = Date.now() / 1000 + 60;
+    fs.utimesSync(path.join(p.scratch, 'A', 'report.md'), later, later);
+    const r = p.run('receive', 'A');
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('A: review · RESULT status=DONE');
+    expect(r.out).not.toContain('has no track-result.md');
   });
 });

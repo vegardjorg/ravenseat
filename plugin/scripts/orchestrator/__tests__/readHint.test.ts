@@ -55,7 +55,7 @@ describe('assessReadHint', () => {
 describe('assessReportHint', () => {
   it('once above the threshold, only for tracks', () => {
     expect(assessReportHint({ agentType: 'track', context: 199_000 })).toBeNull();
-    expect(assessReportHint({ agentType: 'track-d', context: 201_000 })).toMatch(/report\.md/);
+    expect(assessReportHint({ agentType: 'track-d', context: 201_000 })).toMatch(/track-result.md/);
     expect(assessReportHint({ agentType: 'track', context: 250_000, said: true })).toBeNull();
     expect(assessReportHint({ agentType: 'general-purpose', context: 250_000 })).toBeNull();
   });

@@ -122,7 +122,7 @@ A failure that got past the gates once can get past them again, so a repeatable 
   on the fixed code (both runs shown in the report).`, and `done_when` is the command that runs the new check when the
   project has one. When the fix is a separate task it `depends_on` the gate task, so the check is shown red on the real
   bug first; when the fix has already merged, the red run is on the commit before the fix or on a reproduction kept as
-  a fixture. On delivery, read the "Red first" section of `report.md`: a gate task without both runs gets a fix round.
+  a fixture. On delivery, read the "Red first" section of `track-result.md`: a gate task without both runs gets a fix round.
 
 ## Review
 
@@ -141,12 +141,12 @@ A failure that got past the gates once can get past them again, so a repeatable 
 
 - `SendMessage` only to a track under about 150k context that has been idle under 5 min. Otherwise, and always on
   PARTIAL: a NEW `track` agent with a narrow mission: track block `=====<ID>-r<N>=====` with `BRANCH: queue/<ID>`, the
-  findings with file:line, the paths to `report.md`/`handover.md` and the review files.
+  findings with file:line, the paths to `track-result.md`/`handover.md` and the review files.
 - The branch must be free (`git worktree list`; `git -C <old worktree> switch --detach`).
 - The new agent starts with `cq prepare-track <ID>-r<N> --branch queue/<ID> --continue …`: takes the branch over with
   `git switch`, no reset. Never `prepare-track` without `--continue` for a fix round.
 - In the queue, `cq resume <id> --reason fix|context [--findings-file <file>] [--from <reviewer,...>]` writes that mission
-  (`prompt-<id>-r<N>.md`, N = the next free round) and prints the agent message. The fix round writes its report.md
+  (`prompt-<id>-r<N>.md`, N = the next free round) and prints the agent message. The fix round writes its track-result.md
   in `<scratch>/<id>-r<N>/`, where `cq deliveries`, the pulse and `cq receive` find it.
 
 ## Compact, do not rotate
@@ -159,8 +159,8 @@ updated after every merge and decision: decisions go to a file at once, that is 
 about 350k the hook sets wind-down (no new starts, exit 6) until the owner compacts.
 
 **Emergency rotation** (the session has hung or is broken) needs no quiet window. The new session adopts the tracks
-that run: report.md with the RESULT line on top is the delivery signal, `cq orchestrator pulse` prints
-`NEW DELIVERY (report.md)` for it without a `<task-notification>`, and `cq resume` starts fix rounds with a new agent
+that run: track-result.md with the RESULT line on top is the delivery signal, `cq orchestrator pulse` prints
+`NEW DELIVERY (track-result.md)` for it without a `<task-notification>`, and `cq resume` starts fix rounds with a new agent
 on the same branch. Stop the old session first, so two orchestrators do not receive and merge the same track.
 
 ## Projects, picking and visual QA
@@ -172,7 +172,7 @@ on the same branch. Stop the old session first, so two orchestrators do not rece
   released by the orchestrator, and arrives as `review` after `cq deliver <id>`.
 - **Visual QA:** tasks with the label `visual` get `qa_status: waiting` when finished. `cq qa` lists them; only the
   owner decides (`qa ok`, `qa deviation <id> "<text>"`, which creates `<id>-QA<n>`). Each entry carries evidence
-  (`EVIDENCE <type>[=<ref>]` in the track's `report.md`, stored by `receive`, or `cq qa evidence <id> <type>[=<ref>]`);
+  (`EVIDENCE <type>[=<ref>]` in the track's `track-result.md`, stored by `receive`, or `cq qa evidence <id> <type>[=<ref>]`);
   `cq qa auto --run` closes the entries whose evidence type is automatic (default `test`) when `qa.autoCommand` is
   green.
 - **The board:** `cq board` (local, 127.0.0.1, link with a key) shows the queue as

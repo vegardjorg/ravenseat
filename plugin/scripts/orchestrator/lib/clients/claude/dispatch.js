@@ -64,7 +64,7 @@ function trackMessage(id, promptPath) {
   return (
     `You are track ${id} in the work queue (continuous queue, wave "queue"). Your mission is in ${promptPath} and is ` +
     'binding: read it first and follow the protocol there. Your answer to the orchestrator is at most approx. 1,500 characters: ' +
-    'RESULT line first, at most 5 lines, then the path to report.md (the long version is there).'
+    'RESULT line first, at most 5 lines, then the path to track-result.md (the long version is there).'
   );
 }
 

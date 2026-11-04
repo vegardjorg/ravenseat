@@ -5,7 +5,7 @@
 // (hook-read-guard.mjs, lib/trackGuard.js) DENIES only files that are loaded automatically and whole large files. Here are
 // the soft hints, which never block:
 //   assessReadHint     Read without offset/limit of a file over about 300 lines, or the same file whole a second time.
-//   assessReportHint  one reminder when the context passes about 200k: the long content in report.md, the reply under the cap.
+//   assessReportHint  one reminder when the context passes about 200k: the long content in track-result.md, the reply under the cap.
 //   assessBashHint     a Bash/PowerShell result over about 15,000 characters. Shell output (grep, sed/cat/head, psql) is
 //                      often the largest read source, and the read guard only sees Read. The hint is tailored to the
 //                      command and given at most BASH_HINT_MAX times per agent, so it never fills the context itself.
@@ -77,8 +77,8 @@ function assessReportHint({ agentType, context, said = false, threshold = REPORT
   if (typeof context !== 'number' || !Number.isFinite(context) || context < threshold) return null;
   return (
     `[report reminder] The context is over about ${Math.round(threshold / 1000)}k. Write the long content (gates, ` +
-    'self-review, owner questions, coupling specification) with Write to <folder>\\report.md as you go. The reply to ' +
-    'the orchestrator is only the RESULT line, at most 5 lines and the path to report.md (at most about 1,500 characters).'
+    'self-review, owner questions, coupling specification) with Write to <folder>\\track-result.md as you go. The reply to ' +
+    'the orchestrator is only the RESULT line, at most 5 lines and the path to track-result.md (at most about 1,500 characters).'
   );
 }
 

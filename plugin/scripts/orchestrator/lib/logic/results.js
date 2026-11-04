@@ -400,7 +400,7 @@ function reviewPackageIndex({
   if (files.trackReply)
     lines.push("- `trackReply.md`: the track's last answer (the report to the orchestrator).");
   if (files.report)
-    lines.push("- `trackReport.md`: the track's `report.md` (self-review, test run, connections).");
+    lines.push("- `trackReport.md`: the track's `track-result.md` (self-review, test run, connections).");
   if (files.handover) lines.push('- `handover.md`: the handover from a PARTIAL track.');
   if (files.mission) lines.push("- `mission.md`: the track's mission (its prompt file).");
   if (skipped.length)

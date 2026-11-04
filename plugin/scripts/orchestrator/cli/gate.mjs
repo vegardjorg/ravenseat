@@ -4,7 +4,7 @@
 //   cq gate "<failure class>" [--from <task>] [--where <file:line>] [--detail "..."]
 //   cq gate list
 //
-// cq receive calls proposeGate for a `GATE <failure class>` line in report.md. The rules (the setting
+// cq receive calls proposeGate for a `GATE <failure class>` line in track-result.md. The rules (the setting
 // gates.fromKnownBugs, the cap, the same class again) are in lib/knownBugGate.js. A proposal never starts by itself.
 // =============================================================
 

@@ -24,7 +24,7 @@ const { SAME_TURN } = require('../clients/claude/dispatch.js');
 //   "Start these in the SAME turn:" after fill and receive, and the report cap (approx. 1,500 characters) for the agents' answers.
 // The migration step exists only when config().migrations has both `folder` and `pushCommand`.
 
-/** The cap for the agent's answer to the orchestrator (characters). The long version is in report.md. */
+/** The cap for the agent's answer to the orchestrator (characters). The long version is in track-result.md. */
 const REPORT_CAP = 1500;
 
 /** The migration setup from config(), or "off" when the config cannot be read (pure tests without config). */
@@ -290,7 +290,7 @@ function reportCapWarning(text, cap = REPORT_CAP) {
   if (n <= cap) return null;
   return (
     `WARNING: trackReply.md is ${n} characters (cap approx. ${cap}). The answer should be the RESULT line, at most 5 lines and the path to ` +
-    'report.md; the long version goes in report.md (see docs/mission-template.md, "Report").'
+    'track-result.md; the long version goes in track-result.md (see docs/mission-template.md, "Report").'
   );
 }
 

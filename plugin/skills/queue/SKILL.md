@@ -47,16 +47,16 @@ Run these in parallel where possible:
    double merges. If unclear, say so and recommend that the owner stops the old one first.
 5. **Tracks that run or have delivered to another session (adoption):** tracks live on when the session changes; only
    the `<task-notification>` goes to the session that started them. The new session adopts them like this:
-   - `queue-takeover.mjs` classifies DELIVERED safely when `<scratchpad>/<id>/report.md` (or `<id>-r<N>/`) has the
+   - `queue-takeover.mjs` classifies DELIVERED safely when `<scratchpad>/<id>/track-result.md` (or `<id>-r<N>/`) has the
      RESULT line on top; the heuristic (commits, clean worktree, 20 min) is only the fallback.
-   - `cq orchestrator pulse` (every loop round) prints `NEW DELIVERY (report.md): <id> …` for reports that came since
+   - `cq orchestrator pulse` (every loop round) prints `NEW DELIVERY (track-result.md): <id> …` for reports that came since
      the last pulse, also without a notification; `cq deliveries` shows all that are not received. The next step is
      `cq receive <id>` as usual (it finds the report in the task's saved scratchpad).
    - Fix round or continuation (PARTIAL, context guard) for an adopted track: `cq resume <id> --reason fix|context
      [--findings-file <file>]` writes `prompt-<id>-r<N>.md` (prepare-track `--continue`, the paths to the report,
      handover, review package and findings); start a new track agent with the message it prints. SendMessage to the
      old agent does not work from a new session.
-   - No report.md (the track died before it wrote one): `cq receive <id> --scratchpad <scratch>` fetches the track's
+   - No track-result.md (the track died before it wrote one): `cq receive <id> --scratchpad <scratch>` fetches the track's
      last answer from the agent transcript; otherwise rebuild the picture from `git log <baseBranch>..queue/<id>`.
 
 ## Phase 2: Short report to the owner (at most about 20 lines)

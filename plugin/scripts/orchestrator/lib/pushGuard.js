@@ -358,7 +358,7 @@ function agentQueueReason(call) {
   }
   return (
     `\`${shown}\` is not for queue agents: merging, status changes, edits, approvals, answers and undo belong to the ` +
-    `orchestrator and the owner. Allowed: ${AGENT_QUEUE_LIST}. Put what you need in report.md or ask with cq question.`
+    `orchestrator and the owner. Allowed: ${AGENT_QUEUE_LIST}. Put what you need in track-result.md or ask with cq question.`
   );
 }
 

@@ -349,7 +349,7 @@ export function scratchpadFor(reserve = null) {
 // ---- Adoption: deliveries without <task-notification> (a new session has adopted the tracks) ----
 /** The scratchpad roots where the track folder can lie: the orchestrator's (--scratchpad/env) and the one saved on the task. */
 export const trackRoots = (o) => [scratchpadFor(), o?.scratchpad ?? null].filter(Boolean);
-/** Active tasks (running, review; not picked) with a report.md that has not been received (queueLogic.assessDelivery). */
+/** Active tasks (running, review; not picked) with a track-result.md that has not been received (queueLogic.assessDelivery). */
 export function findDeliveries(queue) {
   return queue.tasks
     .filter((o) => ['running', 'review'].includes(o.status) && !o.picked_by)

@@ -11,7 +11,7 @@
 //      config().migrations.environmentFile is set, which environment the migrations are linked to.
 //   3. Each active task (running/review): commits on the branch ahead of baseBranch, age of the last commit, uncommitted in
 //      the worktree, and a classification: DELIVERED (ready for intake), EMPTY (nothing completed) or UNCERTAIN.
-//      Adoption: report.md in the track folder with the RESULT line on top is the safe signal (DELIVERED with the status
+//      Adoption: track-result.md in the track folder with the RESULT line on top is the safe signal (DELIVERED with the status
 //      from the line); the heuristic is the fallback. Running tracks are adopted: `queue.mjs orchestrator pulse` reports
 //      new reports, and `queue.mjs resume <id>` makes the mission for a new agent on the same branch (fix round or
 //      continuation).
@@ -121,7 +121,7 @@ const activeOnes = tasks
       ? (git(['status', '--porcelain'], wtPath) ?? '').split('\n').filter(Boolean).length
       : null;
     const startedMs = o.started ? NOW - Date.parse(o.started) : null;
-    // Adoption: the safe signal first (report.md with the RESULT line on top, newer than the start and the last receive,
+    // Adoption: the safe signal first (track-result.md with the RESULT line on top, newer than the start and the last receive,
     // in the task's or the QUEUE_SCRATCHPAD scratchpad); the heuristic (commits, clean worktree, 20 min) is the fallback.
     const delivery = L.assessDelivery(
       o,

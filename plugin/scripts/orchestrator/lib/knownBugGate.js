@@ -1,7 +1,7 @@
 // =============================================================
 // lib/knownBugGate.js: a known bug that can happen again becomes a gate task. Pure logic.
 //
-// A track writes one line `GATE <failure class>` in report.md, `cq receive` reads it, and `cq gate` does the same by hand.
+// A track writes one line `GATE <failure class>` in track-result.md, `cq receive` reads it, and `cq gate` does the same by hand.
 // gates.fromKnownBugs in queue.config.json decides what happens:
 //   propose (default)  a proposed task; it starts only when the owner approves it
 //   auto               an approved task; it runs when the queue gets to it, and it uses tokens without asking
@@ -87,10 +87,10 @@ function gateTask({ id, title, from, where, detail }) {
       '1. Clear purpose: one sentence naming the failure class it stops and why that matters here.',
       '2. Reproducible failing example: the original finding (file:line) or a minimal reproduction kept as a fixture or test case next to the check.',
       '3. Low maintenance cost: fast enough for the quick gate, no network, few false alarms, and exceptions only in an explicit list with a reason per entry.',
-      '4. Red first: show the new check failing on the original bug or the reproduction, and passing on the fixed code. Put both runs (command and result line) in report.md.',
-      "5. In the project's own gates: a test, lint rule or script that the project's existing check commands already run. If they would not run it, say in report.md which command to add to gates.quick; do not edit queue.config.json.",
+      '4. Red first: show the new check failing on the original bug or the reproduction, and passing on the fixed code. Put both runs (command and result line) in track-result.md.',
+      "5. In the project's own gates: a test, lint rule or script that the project's existing check commands already run. If they would not run it, say in track-result.md which command to add to gates.quick; do not edit queue.config.json.",
       '',
-      'If a good check would cost more than it saves, stop and say so in report.md. Never push, deploy or change settings on the git host.',
+      'If a good check would cost more than it saves, stop and say so in track-result.md. Never push, deploy or change settings on the git host.',
     ].join('\n'),
   };
 }

@@ -175,7 +175,7 @@ describe('buildBundle', () => {
       now: '2026-11-02T00:00:00.000Z',
       parts: {
         task: { text: '- id: A-1' },
-        report: { text: `RESULT status=DONE\n${'r'.repeat(5000)}\nkey ${GH}\nEND OF REPORT`, source: '/s/A-1/report.md' },
+        report: { text: `RESULT status=DONE\n${'r'.repeat(5000)}\nkey ${GH}\nEND OF REPORT`, source: '/s/A-1/track-result.md' },
         transcript: { text: 'x'.repeat(20000) + 'LAST LINE' },
         git: { missing: 'no branch' },
       },
@@ -183,7 +183,7 @@ describe('buildBundle', () => {
     expect(b.chars).toBeLessThanOrEqual(8000);
     expect(b.text).toContain('Question: Why the lock?');
     expect(b.text).toContain('(none: no branch)');
-    expect(b.text).toContain('Source: /s/A-1/report.md');
+    expect(b.text).toContain('Source: /s/A-1/track-result.md');
     expect(b.text).toContain('RESULT status=DONE');
     expect(b.text).toContain('END OF REPORT');
     expect(b.text).toContain('LAST LINE');
@@ -267,7 +267,7 @@ describe('queue.mjs ask (end to end)', () => {
   const configFile = path.join(folder, 'queue.config.json');
   fs.writeFileSync(configFile, JSON.stringify({}));
   fs.mkdirSync(path.join(scratch, 'A'), { recursive: true });
-  fs.writeFileSync(path.join(scratch, 'A', 'report.md'), `RESULT status=DONE lock replaced\nUsed key ${GH} in a test.\n`);
+  fs.writeFileSync(path.join(scratch, 'A', 'track-result.md'), `RESULT status=DONE lock replaced\nUsed key ${GH} in a test.\n`);
   fs.writeFileSync(path.join(scratch, 'A', 'handover.md'), 'Nothing left.\n');
   const transcripts = path.join(folder, 'transcripts');
   fs.mkdirSync(path.join(transcripts, 'sess1', 'subagents'), { recursive: true });

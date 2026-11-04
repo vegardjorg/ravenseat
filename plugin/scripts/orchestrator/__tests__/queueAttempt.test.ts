@@ -145,7 +145,7 @@ function project(tasks: Task[], config: Record<string, unknown> = {}) {
   };
   const report = (dir: string, text: string) => {
     fs.mkdirSync(path.join(scratch, dir), { recursive: true });
-    fs.writeFileSync(path.join(scratch, dir, 'report.md'), `${text}\n`);
+    fs.writeFileSync(path.join(scratch, dir, 'track-result.md'), `${text}\n`);
   };
   return { folder, repo, scratch, file, timeLog, env, run, concurrent, hook, transcript, queue, find, patch, branch, worktree, report, g };
 }
@@ -463,7 +463,7 @@ describe('receive records on the attempt', () => {
     });
     expect(o.attempts![0].started).toBeTruthy();
     expect(o.attempts![0].ended).toBeTruthy();
-    expect(o.attempts![0].artifacts).toMatchObject({ report: path.join(p.scratch, 'A', 'report.md') });
+    expect(o.attempts![0].artifacts).toMatchObject({ report: path.join(p.scratch, 'A', 'track-result.md') });
     expect(r.out).not.toMatch(/attempt/i);
   });
 

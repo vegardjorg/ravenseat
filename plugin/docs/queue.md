@@ -118,9 +118,9 @@ still pass `--by owner`, and the changelog (`cq undo --show`) records who did.
 | `triage` / `triage <id> --verdict ready\|done\|stale\|adjust [--note "…"]` / `triage <id> --prompt --scratchpad <dir>` | The tasks that need an intake verdict before they start / record the triage helper's verdict (done and stale become an owner question, adjust adds the note to the mission) / write the triage prompt again (see orchestration.md, Intake triage) |
 | `fill --scratchpad <dir>` | Starts as many tasks as the limits allow and writes the mission prompts |
 | `receive <id>` | Receives a finished track: reads the RESULT line, builds the review package |
-| `deliveries` | Tracks with a `report.md` (RESULT line on top) that is not received yet; the pulse prints new ones as `NEW DELIVERY` |
+| `deliveries` | Tracks with a `track-result.md` (RESULT line on top) that is not received yet; the pulse prints new ones as `NEW DELIVERY` |
 | `resume <id> --reason fix\|context` | Writes `prompt-<id>-r<N>.md` for a new agent on the same branch (fix round or continuation of an adopted track) |
-| `merge <id>` | Merges the track branch into the base branch (after review). Exit 9: the base branch is red (the base gate, see orchestration.md; only its fix task merges, `--force-red-base` overrides and is logged). Exit 4: the merge guard stopped it (protected paths the task does not own); `--allow-guard` overrides |
+| `merge <id>` | Merges the track branch into the base branch (after review). Exit 9: the base branch is red (the base gate, see orchestration.md; only its fix task merges, `--force-red-base` overrides and is logged). Exit 4: the merge guard stopped it (protected paths the task does not own); `--allow-guard` overrides. Exit 1: the quick gates were red at the last receive (`gate_check`): a fix round, or `cq receive` again when commits came after it; `--force-red-gate` overrides and is logged |
 | `set <id> <status>` | Sets status by hand |
 | `cancel <id> [--remark "…"]` | Cancels a waiting or proposed task (decline a proposal with `--remark "declined: …"`); logged, so `undo` puts it back. Running and review tasks: `set <id> cancelled` |
 | `edit <id> --json '{…}'` | Changes fields (logged; `undo` rolls it back) |
@@ -145,7 +145,7 @@ still pass `--by owner`, and the changelog (`cq undo --show`) records who did.
 | `state` | Machine-readable state (exit 3 when there is nothing to do) |
 | `undo` | Undo the last write |
 | `qa` / `qa ok <id…>` / `qa deviation <id> "…"` | The QA list (split into what to look at, a manual round and auto entries) / the owner approves / the owner finds a deviation (fix task `<id>-QA<n>`) |
-| `qa evidence <id> <type>[=<ref>]` / `qa auto [--run]` | Sets the QA evidence by hand (`receive` reads the `EVIDENCE` line in `report.md`) / runs `qa.autoCommand` for auto evidence and closes the green entries |
+| `qa evidence <id> <type>[=<ref>]` / `qa auto [--run]` | Sets the QA evidence by hand (`receive` reads the `EVIDENCE` line in `track-result.md`) / runs `qa.autoCommand` for auto evidence and closes the green entries |
 | `follow [add\|log\|show\|report\|close\|extend]` | Follow-up entries: observations with a start, an end, goals, a log and a fixed report template (see below) |
 
 ### Forecast
@@ -348,7 +348,7 @@ The board shows the same steps under Settings, and a short line in the status ba
 ### Known bugs become gates
 
 A bug that can happen again should be caught next time. A track says so with one line `GATE <failure class>` in
-`report.md`, and `cq gate "<failure class>" [--from <task>] [--where <file:line>]` does the same by hand. It becomes a
+`track-result.md`, and `cq gate "<failure class>" [--from <task>] [--where <file:line>]` does the same by hand. It becomes a
 gate task (`GATE-<n>`, label `gate`), and `gates.fromKnownBugs` decides how:
 
 - `propose` (default): the task waits for your yes.

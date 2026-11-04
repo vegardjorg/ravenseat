@@ -3,7 +3,7 @@
 //
 // receive (take in a finished track), merge (merge-track.mjs, the gates and the migration push, with the merge guard
 // and the base gate of cli/baseHealth.mjs: a red base branch refuses the merge, a merge that makes it red adds a fix task),
-// the merge blocks, deliver/release of a picked task, deliveries (a report.md that has not been received yet), and the
+// the merge blocks, deliver/release of a picked task, deliveries (a track-result.md that has not been received yet), and the
 // migration number blocks (next-migr, migr). merge holds the merge lock, refuses while git has a merge (or rebase,
 // cherry-pick, revert) in progress, checks that the track tip is in base before done, records each step in the merge
 // state and continues a cut-off merge with --resume (lib/mergeLock.js).
@@ -357,7 +357,7 @@ export function cmdReceive() {
     fs.writeFileSync(templateFile, content);
     copied.push(filePath);
   }
-  // The track's answer (from the transcript), report.md and handover.md from the track folder in the scratchpad.
+  // The track's answer (from the transcript), track-result.md and handover.md from the track folder in the scratchpad.
   const agents = taskAgents(o0);
   // The attempt (lib/logic/attempt.js): its rows are read here, before the lock and after taskAgents wrote any killed
   // agent's row. Every way out of receive below records on it, so the fix round a red check starts is a new attempt.
@@ -461,7 +461,7 @@ export function cmdReceive() {
   // Nothing automatic looked at this delivery (lib/controls.js). A warning, never a stop; a PARTIAL track runs nothing anyway.
   if (result?.status !== 'PARTIAL' && !CONTROLS.commandsOf(CONFIG.gates?.quick).length && !doneCheck)
     console.log(CONTROLS.noChecksLine(id));
-  // QA evidence: the EVIDENCE line (report.md first, otherwise the answer) and the warning when a task that needs it
+  // QA evidence: the EVIDENCE line (track-result.md first, otherwise the answer) and the warning when a task that needs it
   // (config().qa.evidenceLabels) has none. A warning, not a stop.
   const evidenceRead = L.parseEvidence(reportText) ?? L.parseEvidence(trackReply);
   const evidenceWarn = L.evidenceWarning({
@@ -536,6 +536,8 @@ export function cmdReceive() {
     }
     if (result) o.result = result;
     if (gateCheck.record) o.gate_check = gateCheck.record;
+    // The project no longer has quick gates: an old red result has nothing to say, and must not stop the merge for good.
+    else if (result?.status !== 'PARTIAL') delete o.gate_check;
     if (doneCheck) o.done_check = doneCheck.record;
     if (evidenceRead?.evidence) o.evidence = evidenceRead.evidence;
     o.review_package = folder;
@@ -557,13 +559,21 @@ export function cmdReceive() {
     `${id}: review · ${result ? result.line : 'no RESULT line (read trackReply.md)'}\n` +
       `Package: ${folder} (00-package.md; ${copied.length} file(s), ${dbObjects.length} DB object(s))`,
   );
-  // The report cap (about 1,500 chars); the long part belongs in report.md.
+  // No report file: what the mission asks for there (owner questions, assumptions, red first) must be looked for elsewhere.
+  if (!files.report)
+    console.log(
+      `WARNING: ${id} has no track-result.md, so the package only has ${trackReply ? "the track's answer (trackReply.md)" : 'the diff'}. ` +
+        'Check owner questions and assumptions there before you merge.',
+    );
+  // The report cap (about 1,500 chars); the long part belongs in track-result.md.
   const capWarning = L.reportCapWarning(trackReply);
   if (capWarning) console.log(capWarning);
   if (evidenceRead?.evidence) console.log(`QA evidence: ${L.evidenceText(evidenceRead.evidence)}`);
   if (evidenceWarn) console.log(evidenceWarn);
-  // A known bug the track says can happen again (`GATE <failure class>` in report.md). Never stops the delivery.
-  const knownBug = require('./lib/knownBugGate.js').parseGateLine(reportText);
+  // A known bug the track says can happen again (`GATE <failure class>` in track-result.md). Never stops the delivery.
+  // The answer is the fallback, as for RESULT and EVIDENCE: a report file can be refused by the client.
+  const KB = require('./lib/knownBugGate.js');
+  const knownBug = KB.parseGateLine(reportText) ?? KB.parseGateLine(trackReply);
   if (knownBug) {
     try {
       const line = proposeGate({ title: knownBug, from: id });
@@ -676,7 +686,7 @@ export async function cmdMerge() {
   const id = positional(1, ['--scratchpad', '--done-cwd'])[0];
   if (!id)
     die(
-      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--force-red-base]',
+      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--force-red-base] [--force-red-gate]',
     );
   const resume = a.includes('--resume');
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
@@ -771,6 +781,23 @@ export async function cmdMerge() {
         : mergeCommitFor(trackTip, BASE);
   // The first parent of the merge commit: the base as it was before the merge (for the plan's diff when resuming).
   const beforeMerge = resumeCommit ? (git(['rev-parse', '-q', '--verify', `${resumeCommit}^1`]) ?? null) : null;
+  // What receive found (lib/gateEvidence.js mergeStop): a red quick gate is a fix round, never a merge. The merge's own
+  // gates run after the merge, so without this stop the red code is on the base branch before anyone says no. A resume
+  // does not ask: the merge is in already.
+  if (!resume) {
+    const stop = require('./lib/gateEvidence.js').mergeStop(o.gate_check, trackTip);
+    if (stop && !a.includes('--force-red-gate'))
+      die(
+        `STOP: ${id} is not merged. ${stop === 'same-tip'
+          ? `The quick gates were red on this exact commit (${String(trackTip).slice(0, 12)}) at receive. Fix it in a fix round: ${CQ} resume ${id}.`
+          : `The quick gates were red at the last receive, and the commits since then have not been checked. Run ${CQ} receive ${id}.`} ` +
+          `On the owner's word only: ${CQ} merge ${id} --force-red-gate (logged as "gate-red-overridden"). Nothing was done.`,
+      );
+    if (stop) {
+      logTime(id, 'gate-red-overridden', `tip ${String(trackTip).slice(0, 12)}, receive said red at ${String(o.gate_check.tip).slice(0, 12)}`);
+      console.log(`WARNING: --force-red-gate: merging ${id} past a red quick gate; logged as "gate-red-overridden".`);
+    }
+  }
   // The base gate (lib/baseHealth.js) BEFORE anything else runs: a red base refuses the merge (exit 9) unless this is the
   // base fix task or --force-red-base (logged); an unknown verdict (the tip moved since the last check) is checked first.
   // `wasRed` is the red record the merge goes on despite, so the record after it keeps the merge that made it red.
@@ -1441,11 +1468,11 @@ export function cmdRelease() {
 
 /** `cq deliveries` (the usage is at the top of queue.mjs). */
 export function cmdDeliveries() {
-  // ---- Adoption: report.md files that have not been received (read-only; pulse does the same and remembers what it reported) ----
+  // ---- Adoption: track-result.md files that have not been received (read-only; pulse does the same and remembers what it reported) ----
   const found = findDeliveries(read());
   if (a.includes('--json')) console.log(JSON.stringify(found, null, 2));
   else if (!found.length)
-    console.log('No deliveries waiting (no report.md newer than the start or the last receive).');
+    console.log('No deliveries waiting (no track-result.md newer than the start or the last receive).');
   else
     for (const l of found)
       console.log(

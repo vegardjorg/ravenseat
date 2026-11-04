@@ -15,7 +15,7 @@
 // =============================================================
 'use strict';
 
-/** What the queue expects back from every track: report.md, handover.md and the RESULT line. */
+/** What the queue expects back from every track: track-result.md, handover.md and the RESULT line. */
 const EXPECTS = Object.freeze(['report', 'handover', 'result']);
 
 /**

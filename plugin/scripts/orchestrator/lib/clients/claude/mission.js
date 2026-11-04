@@ -2,7 +2,7 @@
 // clients/claude/mission.js: the Claude Code addendum to the mission text (plans: client adapters, phase 0).
 //
 // Why: the mission a track gets is mostly client-neutral (task, ownership, gates, git rules, the RESULT line,
-// report.md and handover.md). The parts that name Claude Code tools or depend on how Claude Code runs (the Write and
+// track-result.md and handover.md). The parts that name Claude Code tools or depend on how Claude Code runs (the Write and
 // Read tools with offset/limit, SendMessage, the prompt cache, CLAUDE.md, the hooks behind the push guard) live here,
 // so another client adapter can supply its own addendum and the core never asks which client it is.
 //
@@ -58,7 +58,7 @@ function missionAddendum(ctx = {}) {
       ASK_BLOCKING: '; SendMessage to the orchestrator only when\n  the question blocks the whole track',
       // Gates: what stops a track from writing the gate evidence or the queue files.
       EVIDENCE_GUARD: ' (a hook denies it)',
-      // Report: the tool that writes report.md.
+      // Report: the tool that writes track-result.md.
       REPORT_WITH: ' with Write',
       // Client code: the project instructions file the client loads (Claude Code: CLAUDE.md).
       INSTRUCTIONS_FILE: '`CLAUDE.md` and ',

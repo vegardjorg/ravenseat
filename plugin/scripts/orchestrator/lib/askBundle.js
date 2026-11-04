@@ -232,7 +232,7 @@ function taskHead(o) {
 const ORDER = Object.freeze([
   ['task', 'Task', 'head'],
   ['mission', 'Mission', 'head'],
-  ['report', 'report.md (the track\'s report)', 'both'],
+  ['report', 'track-result.md (the track\'s report)', 'both'],
   ['handover', 'handover.md', 'both'],
   ['log', 'Queue notes (status, remarks, owner answers, changelog)', 'head'],
   ['git', 'Git (commits and diffstat)', 'head'],

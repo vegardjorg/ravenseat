@@ -301,7 +301,7 @@ const STANDARD = Object.freeze({
     autoAccept: { enabled: false, classes: ['K'], maxEstimateMin: 60, maxValue: null },
   },
   // QA evidence: how the owner (or the queue itself) sees that a delivery works. A track writes one line
-  // `EVIDENCE <type>[=<ref>[,<ref>...]]` in report.md, and `queue.mjs receive` stores it on the task (field `evidence`).
+  // `EVIDENCE <type>[=<ref>[,<ref>...]]` in track-result.md, and `queue.mjs receive` stores it on the task (field `evidence`).
   qa: {
     // The evidence types a track may write. screenshot = the owner looks at a screen or route, test = a test file,
     // manual = something the owner checks by hand.

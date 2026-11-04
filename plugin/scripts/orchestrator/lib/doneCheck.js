@@ -134,7 +134,7 @@ function acceptanceBlock(o) {
     `**${ACCEPTANCE_TITLE}:**`,
     ...list.map((c, i) => `${i + 1}. ${c}`),
     'The owner set these before the start, and `cq edit` refuses to change them from your worktree. The gap reviewer',
-    'checks each one (MET / NOT MET / UNCLEAR) against the delivery, so say in report.md how each is met (file:line or',
+    'checks each one (MET / NOT MET / UNCLEAR) against the delivery, so say in track-result.md how each is met (file:line or',
     'test). One that is wrong or impossible: say so in the report (or SendMessage); never work around it.',
   ].join('\n');
 }

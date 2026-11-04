@@ -1,7 +1,7 @@
 // =============================================================
 // queueAdopt.test.ts: a new orchestrator session adopts tracks that are running.
 //
-// Locks: (1) the safe delivery signal (report.md with the RESULT line as the first line) goes before the heuristic in
+// Locks: (1) the safe delivery signal (track-result.md with the RESULT line as the first line) goes before the heuristic in
 // queue-takeover; (2) pulse and `queue.mjs deliveries` see a delivery without <task-notification>, report it as new only
 // once, and `receive` makes it received; (3) `queue.mjs resume` makes the mission for a new agent on the same branch with
 // prepare-track --continue, and the fix round's report (<id>-r<N>/) becomes a new delivery that receive reads.
@@ -102,15 +102,15 @@ describe('trackFolderRound and findTrackReport', () => {
     const r1 = tmp();
     const r2 = tmp();
     fs.mkdirSync(path.join(r1, 'A'));
-    fs.writeFileSync(path.join(r1, 'A', 'report.md'), `${RES}\nround 0`);
+    fs.writeFileSync(path.join(r1, 'A', 'track-result.md'), `${RES}\nround 0`);
     fs.writeFileSync(path.join(r1, 'A', 'handover.md'), 'remaining');
     fs.mkdirSync(path.join(r2, 'A-r1'));
-    fs.writeFileSync(path.join(r2, 'A-r1', 'report.md'), `${RES}\nround 1`);
+    fs.writeFileSync(path.join(r2, 'A-r1', 'track-result.md'), `${RES}\nround 1`);
     fs.writeFileSync(path.join(r2, 'prompt-A-r2.md'), 'prompt');
     fs.mkdirSync(path.join(r2, 'AB'));
-    fs.writeFileSync(path.join(r2, 'AB', 'report.md'), RES);
+    fs.writeFileSync(path.join(r2, 'AB', 'track-result.md'), RES);
     const later = Date.now() / 1000 + 120;
-    fs.utimesSync(path.join(r2, 'A-r1', 'report.md'), later, later);
+    fs.utimesSync(path.join(r2, 'A-r1', 'track-result.md'), later, later);
     const f = L.findTrackReport('A', [r1, r2, r1, null, path.join(r1, 'does-not-exist')]);
     expect(f.report?.round).toBe(1);
     expect(f.report?.text).toContain('round 1');
@@ -154,7 +154,7 @@ describe('assessDelivery and assessActive', () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/^Report waiting, not received: A \(DONE\) \(.*deliveries\)$/);
     const fresh = L.deliveryLines([{ ...l!, new: true }], t('2026-10-30T11:10:00Z'));
-    expect(fresh[0]).toMatch(/^NEW DELIVERY \(report\.md\): A DONE, written 10 min ago/);
+    expect(fresh[0]).toMatch(/^NEW DELIVERY \(track-result.md\): A DONE, written 10 min ago/);
     expect(fresh[0]).toMatch(/receive A$/);
     expect(L.deliveryLines([])).toEqual([]);
   });
@@ -167,9 +167,9 @@ describe('assessDelivery and assessActive', () => {
     // The signal beats "uncommitted in worktree" and "last commit 2 min ago".
     expect(
       L.assessActive({ status: 'running', commits: 2, uncommitted: 3, lastMs: 120_000, delivery: del }),
-    ).toBe('DELIVERED (report.md PARTIAL)');
+    ).toBe('DELIVERED (track-result.md PARTIAL)');
     expect(L.assessActive({ status: 'review', commits: 2, delivery: del })).toBe(
-      'DELIVERED (report.md PARTIAL, new round after receive)',
+      'DELIVERED (track-result.md PARTIAL, new round after receive)',
     );
     expect(L.assessActive({ status: 'running', commits: 2, uncommitted: 0, lastMs: 21 * 60_000 })).toBe(
       'DELIVERED',
@@ -206,7 +206,7 @@ describe('resumeBlock and resumePromptAdjust', () => {
       o,
       round: 2,
       reason: 'fix',
-      reportPath: 'C:\\s\\A\\report.md',
+      reportPath: 'C:\\s\\A\\track-result.md',
       handoverPath: null,
       reviewFolder: 'C:\\s\\rev-A',
       reviewFiles: ['findings-review.md'],
@@ -218,7 +218,7 @@ describe('resumeBlock and resumePromptAdjust', () => {
     expect(b).toContain('BLOCK: 3600–3609');
     expect(b).toContain('BRANCH: queue/A');
     expect(b).toContain('## Fix round 2 for A');
-    expect(b).toContain('C:\\s\\A\\report.md');
+    expect(b).toContain('C:\\s\\A\\track-result.md');
     expect(b).toContain("the reviewers' files there: findings-review.md");
     expect(b).toContain('5. The findings to fix: C:\\s\\findings.md');
     expect(b).toContain('The mission for A.');
@@ -338,10 +338,10 @@ describe('queue.mjs: pulse, deliveries, receive and resume against a temporary q
 
     // The track delivers (the old session gets the notification; the new one only sees the file).
     fs.mkdirSync(path.join(scratch, 'A'));
-    fs.writeFileSync(path.join(scratch, 'A', 'report.md'), `${RES}\n\n# Report A\n`);
+    fs.writeFileSync(path.join(scratch, 'A', 'track-result.md'), `${RES}\n\n# Report A\n`);
     expect(deliveries()).toMatchObject([{ id: 'A', status: 'DONE', new: true }]);
     const p1 = run('orchestrator', 'pulse', '--session', 'new-session');
-    expect(p1.out).toMatch(/NEW DELIVERY \(report\.md\): A DONE/);
+    expect(p1.out).toMatch(/NEW DELIVERY \(track-result.md\): A DONE/);
     expect(find().report_seen).toBeGreaterThan(0);
     // Second pulse: no longer new, but still not received.
     const p2 = run('orchestrator', 'pulse', '--session', 'new-session');
@@ -378,7 +378,7 @@ describe('queue.mjs: pulse, deliveries, receive and resume against a temporary q
     expect(prompt).not.toMatch(/git checkout -B queue\/A develop`;/);
     expect(prompt).toContain('## Fix round 1 for A');
     expect(prompt).toContain('git log --oneline develop..queue/A');
-    expect(prompt).toContain(path.join(scratch, 'A', 'report.md'));
+    expect(prompt).toContain(path.join(scratch, 'A', 'track-result.md'));
     expect(prompt).toContain(path.join(scratch, 'rev-A'));
     expect(prompt).toContain(path.join(scratch, 'findings.md'));
     expect(prompt).toContain('The mission for A.');
@@ -388,7 +388,7 @@ describe('queue.mjs: pulse, deliveries, receive and resume against a temporary q
 
     // The fix round delivers in its own folder: a new delivery, and receive reads it.
     fs.mkdirSync(path.join(scratch, 'A-r1'));
-    const r1 = path.join(scratch, 'A-r1', 'report.md');
+    const r1 = path.join(scratch, 'A-r1', 'track-result.md');
     fs.writeFileSync(r1, `${RES}\nEVIDENCE test=src/a.test.ts\n\n# Fix round 1\n`);
     const later = Date.now() / 1000 + 120;
     fs.utimesSync(r1, later, later);
@@ -398,7 +398,7 @@ describe('queue.mjs: pulse, deliveries, receive and resume against a temporary q
     expect(fs.readFileSync(path.join(scratch, 'rev-A', 'trackReport.md'), 'utf8')).toContain(
       '# Fix round 1',
     );
-    // The EVIDENCE line in report.md is stored on the task (QA evidence).
+    // The EVIDENCE line in track-result.md is stored on the task (QA evidence).
     expect(m2.out).toContain('QA evidence: test src/a.test.ts');
     expect((find() as unknown as { evidence: unknown }).evidence).toEqual({
       type: 'test',

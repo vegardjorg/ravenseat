@@ -23,7 +23,7 @@
 //     starts again after every compaction. A new session is only an emergency measure.
 //     Why compaction over a new session: the token cost is about equal (both cost about one turn), while rotation
 //     costs the owner work and waiting, and the background agents belong to the session that started them (notices and
-//     fix rounds are lost on rotation). Everything important lives in files (queue.json, mission, report.md, the note), so a
+//     fix rounds are lost on rotation). Everything important lives in files (queue.json, mission, track-result.md, the note), so a
 //     compacted session is in practice a new session that keeps its agents. Quality safeguards: decisions written to file
 //     at once, focus in the /compact line, and the queue state and a resume instruction are added back by
 //     hook-after-compact.mjs (SessionStart, matcher compact).

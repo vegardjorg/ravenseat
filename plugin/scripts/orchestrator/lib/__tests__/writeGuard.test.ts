@@ -43,7 +43,7 @@ describe('writeGuard (pure)', () => {
     // Let through: the orchestrator, an unguarded agent type, another file, a queue.json outside the data folder.
     expect(WG.assessWrite({ agentType: null, filePath: at('gate-evidence.json'), folder: FOLDER, guardedTypes: types })).toBeNull();
     expect(WG.assessWrite({ agentType: 'general-purpose', filePath: at('queue.json'), folder: FOLDER, guardedTypes: types })).toBeNull();
-    expect(WG.assessWrite({ agentType: 'track', filePath: at('A-1/report.md'), folder: FOLDER, guardedTypes: types })).toBeNull();
+    expect(WG.assessWrite({ agentType: 'track', filePath: at('A-1/track-result.md'), folder: FOLDER, guardedTypes: types })).toBeNull();
     expect(WG.assessWrite({ agentType: 'track', filePath: path.join(os.tmpdir(), 'app', 'queue.json'), folder: FOLDER, guardedTypes: types })).toBeNull();
   });
 });

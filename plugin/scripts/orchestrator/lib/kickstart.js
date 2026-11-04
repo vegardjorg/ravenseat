@@ -110,11 +110,11 @@ const TASKS = {
     mission:
       'The project has no automatic checks yet. Add the smallest useful one: a test runner that fits the stack, and one ' +
       'test of the most important behavior you can find, plus a project script that runs it (for Node: "test" in ' +
-      'package.json). Do not add more tools than that, and do not edit queue.config.json. In report.md, say in plain ' +
+      'package.json). Do not add more tools than that, and do not edit queue.config.json. In track-result.md, say in plain ' +
       `words what the test protects and which command runs it. ${NEVER_PUSH}`,
     acceptance: [
       'One command runs the test and passes on the current code',
-      'report.md shows that same command failing on a deliberate bug, which is then removed',
+      'track-result.md shows that same command failing on a deliberate bug, which is then removed',
     ],
   }),
   secrets: () => ({
@@ -126,8 +126,8 @@ const TASKS = {
       'Run `cq doctor` and read its `secrets` lines. Add the local secret files to .gitignore (for example .env and .env.* ' +
       'with !.env.example), and add a .env.example with the variable names only, never the values. A secret that is ' +
       'already tracked in git must be changed by the owner, because removing the file does not clean the history: say ' +
-      `so in report.md, with the file name and never the value. ${NEVER_PUSH}`,
-    acceptance: ['No secret file shows as untracked and not ignored', 'report.md lists any key the owner must change'],
+      `so in track-result.md, with the file name and never the value. ${NEVER_PUSH}`,
+    acceptance: ['No secret file shows as untracked and not ignored', 'track-result.md lists any key the owner must change'],
   }),
   ci: () => ({
     id: 'KS-CI',
@@ -139,10 +139,10 @@ const TASKS = {
       'to the base branch and on pull requests, not a list of its own. Add the runtime setup and install step for this ' +
       'stack. Read the versions from the project (for example .nvmrc or engines). Set `permissions: contents: read`, ' +
       'cancel superseded runs with `concurrency`, skip docs-only pushes with `paths-ignore`, and pin actions to a major ' +
-      `version. The first run can only be checked after the owner pushes: say so in report.md. ${NEVER_PUSH}`,
+      `version. The first run can only be checked after the owner pushes: say so in track-result.md. ${NEVER_PUSH}`,
     acceptance: [
       'The workflow runs the same commands as gates.quick',
-      'The commands pass locally, and report.md says that the first CI run is still unverified',
+      'The commands pass locally, and track-result.md says that the first CI run is still unverified',
     ],
   }),
 };

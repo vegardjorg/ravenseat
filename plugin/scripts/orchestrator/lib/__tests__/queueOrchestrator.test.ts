@@ -601,7 +601,7 @@ describe('queue.mjs show, fill, receive, set done and cost (against a copy)', ()
     g(['commit', '-q', '-m', 'A']);
     g(['switch', '-q', 'main']);
     fs.mkdirSync(path.join(scratch, 'A'), { recursive: true });
-    fs.writeFileSync(path.join(scratch, 'A', 'report.md'), '# Report A\nSelf-review OK.\n');
+    fs.writeFileSync(path.join(scratch, 'A', 'track-result.md'), '# Report A\nSelf-review OK.\n');
 
     // The transcripts and the time log: the track agent (answers with RESULT) and two reviewers (FINDINGS), one without a track label.
     const session = path.join(transcripts, 'session1', 'subagents');

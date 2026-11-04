@@ -74,7 +74,7 @@ describe('reserve', () => {
   it('names an attempt folder only for a client that declares it', () => {
     const own = AT.reserve([], { ...base, capabilities: { ...CAPS, attemptFolder: true } }).attempt!;
     expect(own.artifacts).toEqual({
-      report: path.join('/s', 'A', 'a1', 'report.md'),
+      report: path.join('/s', 'A', 'a1', 'track-result.md'),
       handover: path.join('/s', 'A', 'a1', 'handover.md'),
     });
     // No scratchpad: no folder to name, so the fallback rule applies.
@@ -277,11 +277,11 @@ describe('findTrackReport and the attempt folder', () => {
   const withFolder = (root: string, n: string, round = 0) => ({
     id: n,
     round,
-    artifacts: { report: path.join(root, 'A', n, 'report.md'), handover: path.join(root, 'A', n, 'handover.md') },
+    artifacts: { report: path.join(root, 'A', n, 'track-result.md'), handover: path.join(root, 'A', n, 'handover.md') },
   });
 
   it('an old report is not accepted for a new attempt that has a folder, however new its mtime', () => {
-    const root = scratch({ 'A/report.md': 0, 'A/handover.md': 0, 'A-r1/report.md': 0 });
+    const root = scratch({ 'A/track-result.md': 0, 'A/handover.md': 0, 'A-r1/track-result.md': 0 });
     const r = R.findTrackReport('A', [root], undefined, undefined, withFolder(root, 'a2', 2));
     expect(r.report).toBeNull();
     expect(r.handover).toBeNull();
@@ -289,23 +289,23 @@ describe('findTrackReport and the attempt folder', () => {
   });
 
   it('nor one from an earlier attempt\'s folder', () => {
-    const root = scratch({ 'A/a1/report.md': 0 });
+    const root = scratch({ 'A/a1/track-result.md': 0 });
     expect(R.findTrackReport('A', [root], undefined, undefined, withFolder(root, 'a2')).report).toBeNull();
   });
 
   it('prefers the attempt\'s folder over a newer file elsewhere', () => {
-    const root = scratch({ 'A/a2/report.md': 100, 'A/a2/handover.md': 100, 'A/report.md': 0 });
+    const root = scratch({ 'A/a2/track-result.md': 100, 'A/a2/handover.md': 100, 'A/track-result.md': 0 });
     const r = R.findTrackReport('A', [root], undefined, undefined, withFolder(root, 'a2', 3));
-    expect(r.report?.path).toBe(path.join(root, 'A', 'a2', 'report.md'));
+    expect(r.report?.path).toBe(path.join(root, 'A', 'a2', 'track-result.md'));
     expect(r.report?.round).toBe(3);
     expect(r.handover?.path).toBe(path.join(root, 'A', 'a2', 'handover.md'));
   });
 
   it('falls back to the mtime rule without an attempt, or with one that names no folder (today\'s flow)', () => {
-    const root = scratch({ 'A/report.md': 100, 'A-r1/report.md': 0 });
+    const root = scratch({ 'A/track-result.md': 100, 'A-r1/track-result.md': 0 });
     for (const attempt of [undefined, null, { id: 'a1', artifacts: { report: null, handover: null } }, { id: 'a1' }]) {
       const r = R.findTrackReport('A', [root], undefined, undefined, attempt);
-      expect(r.report?.path).toBe(path.join(root, 'A-r1', 'report.md'));
+      expect(r.report?.path).toBe(path.join(root, 'A-r1', 'track-result.md'));
       expect(r.report?.round).toBe(1);
       expect(r.nextRound).toBe(2);
     }

@@ -88,7 +88,7 @@ orchestration rules, and `/cq:start` to open a session cheaply before you paste 
 ```
  you ──> orchestrator chat (/cq:queue) ──> cq fill ──> track agents in worktrees (queue/<ID> branches)
                  ^                                            │
-                 │                                   RESULT line + report.md
+                 │                                   RESULT line + track-result.md
                  │                                            v
           questions for you <── review (reviewer agents) <── cq receive
                  │

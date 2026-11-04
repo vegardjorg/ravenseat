@@ -52,12 +52,12 @@ settings, agent definitions or CI unless the mission owns the file.
 - Ask the owner only on: (1) unclear product requirements (what the feature should do for its users); (2) choices
   that are hard to reverse: the data model or schema, a public API or file format, a new dependency, deleting data
   or a feature; (3) security or legal tradeoffs.
-- Ask through the owner questions: the "Owner questions" section in `report.md` (the question, 2 to 4 choices and
+- Ask through the owner questions: the "Owner questions" section in `track-result.md` (the question, 2 to 4 choices and
   your recommendation), counted in `ownerQuestions=<n>` on the RESULT line; SendMessage to the orchestrator only when
   the question blocks the whole track. Do the parts that do not depend on the answer, and never build a hard-to-reverse
   choice on a guess.
 - Everything else you decide yourself. Record each non-trivial assumption in the "Assumptions" section of
-  `report.md`: one line with what you assumed, why, and how to change it if it is wrong.
+  `track-result.md`: one line with what you assumed, why, and how to change it if it is wrong.
 
 **Git:** `prepare-track --continue` runs `git switch queue/K1` (without reset); HEAD must be <HEAD> or newer.
 - Commit only on your own branch with `git commit -- <files>` (new files: `git add` first), in strict `&&` chains,
@@ -97,29 +97,29 @@ the log folder, so read the log file of a red gate instead of running it again):
 - Your own gate runs are informational: `cq receive` runs the quick gates again on your delivered tip, so commit
   everything before you report. Never write the gate evidence or the queue files yourself (a hook denies it).
 
-**Report:** write the long version with Write to `<folder>/report.md`, NEVER in the answer. The answer STARTS with
+**Report:** write the long version with Write to `<folder>/track-result.md`, NEVER in the answer. The answer STARTS with
 one result line in a fixed format (the queue reads it with `cq receive` and `set done`), with no spaces inside
 the values:
 `RESULT status=DONE|PARTIAL branch=<branch> commits=<n> migr=<first-last|-> gates=OK|RED probe=<before→after|-> ownerQuestions=<n> edge=<functions|->`,
 for example `RESULT status=DONE branch=queue/X commits=3 migr=- gates=OK probe=- ownerQuestions=0 edge=-`.
-The same line goes at the top of `report.md`. (`DONE` = done, `PARTIAL` = partial, `RED` = red, `ownerQuestions` = questions
+The same line goes at the top of `track-result.md`. If the file is refused, do not try other names: put the `GATE` and `EVIDENCE` lines and the owner questions in the answer, and say the file was refused. (`DONE` = done, `PARTIAL` = partial, `RED` = red, `ownerQuestions` = questions
 for the owner, `edge` = server functions that must be deployed.)
 **Report cap: the answer to the orchestrator is at most about 1,500 characters**: the RESULT line, then at most 5
 lines (owner questions with one sentence each, HIGH findings, what must be deployed, what the orchestrator must do
-while merging), then the path to `<folder>/report.md`. In `report.md`: status, branch and commits, the gate summary
+while merging), then the path to `<folder>/track-result.md`. In `track-result.md`: status, branch and commits, the gate summary
 line, append-only files touched, deploy needs, **owner questions** in their own section, **Assumptions** in their
 own section (one line each: what, why, how to change it; "none" when there were none), and the wiring specification
 (file, anchor, exact line).
 **Known bugs:** when you fixed a bug that another change could easily repeat, add one line `GATE <failure class>` to
-`report.md`, naming the class and not the place (`GATE a fetch result used without checking the error`). A one-off, such
+`track-result.md`, naming the class and not the place (`GATE a fetch result used without checking the error`). A one-off, such
 as a typo or a single wrong value, gets no line. `cq receive` turns the line into a task the owner decides on.
 **Gate tasks (label `gate`, title `Gate: <failure class>`):** red first. Show the new check failing on the original
 bug or a minimal reproduction (the commit before the fix, or a fixture kept next to the check) and passing on the
-fixed code. `report.md` has a "Red first" section with both runs: the command and its result line, red then green. A
-gate task without both runs is not DONE. When the track block has **Acceptance criteria (fixed, do not change)**, `report.md`
+fixed code. `track-result.md` has a "Red first" section with both runs: the command and its result line, red then green. A
+gate task without both runs is not DONE. When the track block has **Acceptance criteria (fixed, do not change)**, `track-result.md`
 says for each one how it is met (file:line or test); the gap reviewer checks them one by one.
 **QA evidence:** when the task has a label that needs evidence (`qa.evidenceLabels` in `queue.config.json`, default
-`visual`; see `cq info K1-r1 --field labels`), `report.md` has one line `EVIDENCE <type>[=<ref>[,<ref>...]]` saying how
+`visual`; see `cq info K1-r1 --field labels`), `track-result.md` has one line `EVIDENCE <type>[=<ref>[,<ref>...]]` saying how
 the owner sees that the delivery works. The types are `qa.evidenceTypes` (default `screenshot=<route or screen>`,
 `test=<test file>` or `manual=<what to check by hand>`). Pure logic takes `test`, which is closed automatically when
 the configured command is green (`cq qa auto --run`); `manual` is gathered in one manual round. `cq receive` stores
@@ -142,7 +142,7 @@ Fix the review findings: HIGH, and MEDIUM that is not small and mechanical; LOW 
 Fix at the file:line the findings point to, and only in the files the track owns. A finding you disagree with:
 give the reason in the report instead of fixing it.
 
-Report: write report.md in your own folder (`<folder>`, that is K1-r1) with the RESULT line as the FIRST line;
+Report: write track-result.md in your own folder (`<folder>`, that is K1-r1) with the RESULT line as the FIRST line;
 it covers the whole track (branch=queue/K1, commits = all on the branch ahead of main). The orchestrator finds it there
 (cq deliveries and cq receive K1), also without a notification. Your answer starts with the same RESULT line.
 
