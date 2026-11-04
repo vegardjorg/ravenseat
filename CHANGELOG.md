@@ -3,6 +3,33 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.16 (2026-11-04)
+
+### Fixed
+- `cq setup` wrote `main` and `npm run lint` from its template. It now reads the branch and the checks from the project,
+  and `cq doctor` names a branch or a gate script that does not exist.
+- Merge stops and a red base reach the owner: each stop has its own code and its own text in `cq decide` and on the board,
+  and only real conflicts count as conflicts. A green `cq receive` closes `gate-red`.
+- A whole `cq merge` removes the worktree and the merged queue branch, also at `--resume`. `cq doctor` names merged agent
+  branches that are left behind.
+- `cq cost` counts an undone merge as a defect, and only fix rounds that really ran.
+- `cq setup` writes the plugin's absolute status line path to `.claude/settings.local.json`, and moves an old one there.
+- `cq doctor` and `cq fill` warn about a git identity `cq merge` will refuse, before the agents spend tokens.
+- `cq push-check` no longer fails before the first push. It says that is normal and what comes next.
+- `cq setup` adds `.env`, `.env.*` and `!.env.example` to `.gitignore`.
+- `cq receive` on a branch without commits no longer guesses that the work was merged. It says the task stays as it was,
+  and names the next steps.
+- A cancelled task closes its open block.
+- `cq mode` changes one word. `push.mode` no longer made it rewrite the whole config. It also says to commit the file.
+- `cq takeover` warns about another orchestrator only with a cursor or a running task, not after setup or `cq add`.
+- `cq kickstart` says only what it knows about CI: the config exists, not what it runs.
+
+### Added
+- `cq add --depends a,b` in lite mode. An unknown id is refused.
+- `cq add` warns when a task owns a protected path, since that lets its changes past the merge guard.
+- `cq receive` names `--scratchpad` in its merge line when `cq merge` would not find the folder itself.
+- The guide says what `--scope project` limits.
+
 ## 0.8.15 (2026-11-04)
 
 ### Fixed
