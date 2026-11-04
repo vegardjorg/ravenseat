@@ -30,7 +30,8 @@
 //
 // The secret precheck (config().secretScan, lib/secretScan.js): the same plain push of baseBranch by the orchestrator
 // scans the added lines of `<remote>/<baseBranch>..<baseBranch>` (gitleaks when on PATH, else built-in patterns) and
-// asks with file:line on a hit. Skipped silently over secretScan.maxBytes, on a timeout or any error (fails open).
+// asks with file:line on a hit. A first push scans the branch. A scan that does not finish (over secretScan.maxBytes, a
+// timeout, an error) asks too, and says so.
 // deployCommands: a command that starts with one of them gets "ask" (agents and the main session).
 //
 // The missing controls (lib/controls.js, push.controlsWarning): the same plain push asks when the project has no CI config

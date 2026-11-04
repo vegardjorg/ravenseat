@@ -2,7 +2,7 @@
 // secretScan.test.ts: the secret precheck before a push (lib/secretScan.js) and its wiring in hook-push-guard.mjs.
 //
 // Why: a key that reaches the remote stays in its history. The guard must name file:line on a hit, NEVER the value
-// (the dialog and the transcript would copy it), stay quiet on placeholders and test files, skip a diff over the cap
+// (the dialog and the transcript would copy it), stay quiet on placeholders and test files, ask on a diff over the cap
 // and a first push, and fail open. Temporary git repos with a bare remote; the fake keys are built at run time so
 // this file holds none of them literally.
 // =============================================================
@@ -212,16 +212,61 @@ describe('scanPush (temporary repos)', () => {
     const r = repo({ 'src/app.ts': 'export const port = 3000;\n' });
     expect(scanPush({ cwd: r.work, remote: 'origin', branch: 'main' })?.hits).toEqual([]);
   });
-  it('cap: a diff over maxBytes is skipped (null), and so is a first push without a remote ref', () => {
-    const r = repo({ 'src/config.ts': `${'x'.repeat(5000)}\nkey = "${AWS}"\n` });
-    expect(scanPush({ cwd: r.work, remote: 'origin', branch: 'main', setup: { maxBytes: 1000 } })).toBeNull();
+  it('a first push scans what it sends: the whole branch, every commit', () => {
     const first = repo({ 'src/config.ts': `key = "${AWS}"\n` }, { push: false });
-    expect(scanPush({ cwd: first.work, remote: 'origin', branch: 'main' })).toBeNull();
+    const out = scanPush({ cwd: first.work, remote: 'origin', branch: 'main' });
+    expect(out?.hits.map((h) => h.file)).toEqual(['src/config.ts']);
+    expect(out?.incomplete).toBeUndefined();
+    expect(question(out)).toContain('src/config.ts:1');
+    expect(question(out)).not.toContain(AWS);
   });
-  it('fails open on a folder that is not a repo', () => {
+  it('a first push of a clean branch asks nothing', () => {
+    const first = repo({ 'src/app.ts': 'export const port = 3000;\n' }, { push: false });
+    expect(question(scanPush({ cwd: first.work, remote: 'origin', branch: 'main' }))).toBeNull();
+  });
+  it('a first push does not rescan what the remote already has on another branch', () => {
+    // The branch with the key goes to the remote under another name, so the key is already out there.
+    const r = repo({ 'src/config.ts': `key = "${AWS}"\n` });
+    const git = (...a: string[]) =>
+      spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-C', r.work, ...a], { encoding: 'utf8' });
+    git('push', '-q', 'origin', 'main:other');
+    git('push', '-q', 'origin', '--delete', 'main');
+    git('update-ref', '-d', 'refs/remotes/origin/main');
+    git('fetch', '-q', 'origin');
+    fs.writeFileSync(path.join(r.work, 'new.ts'), 'export const a = 1;\n');
+    git('add', 'new.ts');
+    git('commit', '-qm', 'new');
+    const out = scanPush({ cwd: r.work, remote: 'origin', branch: 'main' });
+    expect(out?.hits).toEqual([]);
+    expect(out?.incomplete).toBeUndefined();
+  });
+  it('an incomplete scan gives a question, never a silent pass, and says how to go on', () => {
+    const r = repo({ 'src/config.ts': `${'x'.repeat(5000)}\nkey = "${AWS}"\n` });
+    const out = scanPush({ cwd: r.work, remote: 'origin', branch: 'main', setup: { maxBytes: 1000 } });
+    expect(out?.hits).toEqual([]);
+    expect(out?.incomplete).toMatch(/too large/);
+    const q = question(out);
+    expect(q).toMatch(/did not finish/);
+    expect(q).toMatch(/too large/);
+    expect(q).toContain('secretScan.maxBytes');
+  });
+  it('a log over the cap with a net diff under it: scanned, and the question says only the net result was', () => {
+    const r = repo({ 'a.ts': 'export const a = 1;\n' });
+    const git = (...a: string[]) =>
+      spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-C', r.work, ...a], { encoding: 'utf8' });
+    fs.writeFileSync(path.join(r.work, 'big.ts'), `${'y'.repeat(5000)}\n`);
+    git('add', 'big.ts');
+    git('commit', '-qm', 'big');
+    git('rm', '-q', 'big.ts');
+    git('commit', '-qm', 'gone');
+    const out = scanPush({ cwd: r.work, remote: 'origin', branch: 'main', setup: { maxBytes: 3000 } });
+    expect(out?.incomplete).toMatch(/net result/);
+    expect(question(out)).toMatch(/net result/);
+  });
+  it('a folder that is not a repo gives the same question, not a silent pass', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-secret-norepo-'));
     temporary.push(dir);
-    expect(scanPush({ cwd: dir, remote: 'origin', branch: 'main' })).toBeNull();
+    expect(question(scanPush({ cwd: dir, remote: 'origin', branch: 'main' }))).toMatch(/did not finish/);
   });
   const hasGitleaks = spawnSync('gitleaks', ['version'], { stdio: 'ignore' }).status === 0;
   it.skipIf(!hasGitleaks)('uses gitleaks when it is on PATH (and still never shows the value)', () => {

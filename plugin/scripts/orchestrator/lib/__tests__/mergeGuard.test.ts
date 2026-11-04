@@ -14,6 +14,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { assessGuard, globMatch, isProtected, migrCovered, readDiff, taskIdFromBranch } from '../mergeGuard';
+import { mergePlan } from '../logic/merge';
 import { STANDARD } from '../queueConfig';
 
 const changed = (...paths: string[]) => paths.map((p) => ({ status: 'M', paths: [p] }));
@@ -61,6 +62,50 @@ describe('protected paths: the M3 additions and case (plans/review-2026-11-02.md
     const r = assessGuard({ changes: changed('.CLAUDE/settings.json'), ownedFiles: ['src/'] });
     expect(r.stop).toBe(true);
     expect(r.violations.map((v) => v.path)).toEqual(['.CLAUDE/settings.json']);
+  });
+});
+
+describe('a migration from a task that does not own it stops the merge (NESTE 5)', () => {
+  const change = (p: string) => [{ status: 'A', paths: [p] }];
+  it('the usual migration folders, also in a subfolder, with no migration flow configured', () => {
+    for (const p of [
+      'supabase/migrations/1_a.sql',
+      'prisma/migrations/2_b/migration.sql',
+      'apps/api/prisma/migrations/3_c/migration.sql',
+      'db/migrate/4_d.rb',
+      'db/migrations/5_e.sql',
+      'migrations/6_f.sql',
+      'alembic/versions/7_g.py',
+      'drizzle/0001_h.sql',
+    ]) {
+      const g = assessGuard({ changes: change(p) });
+      expect(g.stop, p).toBe(true);
+      expect(g.violations[0].reason, p).toMatch(/migration/);
+    }
+  });
+  it('the configured folder counts too, whatever its name', () => {
+    const g = assessGuard({ changes: change('database/changes/1_a.sql'), migrations: { folder: 'database/changes' } });
+    expect(g.stop).toBe(true);
+  });
+  it('a task with the migration block, or that owns the file, passes', () => {
+    const migrations = { folder: 'db/migrations' };
+    expect(assessGuard({ changes: change('db/migrations/3601_a.sql'), migrBlock: '3600-3609', migrations }).stop).toBe(false);
+    expect(assessGuard({ changes: change('db/migrations/3601_a.sql'), ownedFiles: ['db/migrations/'], migrations }).stop).toBe(false);
+  });
+  it('only a task with a migration block pushes migrations by itself, also after an overridden guard', () => {
+    const migrations = { folder: 'db/migrations', pushCommand: 'npm run db:migrate' };
+    const files = ['db/migrations/3601_a.sql'];
+    const withBlock = mergePlan({ o: { migr_block: '3600-3609' }, files, migrations });
+    expect(withBlock.migrPush).toBe(true);
+    const without = mergePlan({ o: {}, files, migrations });
+    expect(without.migrPush).toBe(false);
+    expect(without.step).not.toContain('migr-push');
+    expect(without.notes.join(' ')).toMatch(/NOT pushed/);
+  });
+  it('ordinary code with a similar name does not stop, and an empty protected list turns it off', () => {
+    expect(assessGuard({ changes: change('src/migrations.ts') }).stop).toBe(false);
+    expect(assessGuard({ changes: change('src/migrate/index.ts') }).stop).toBe(false);
+    expect(assessGuard({ changes: change('migrations/1_a.sql'), protectedPaths: [] }).stop).toBe(false);
   });
 });
 

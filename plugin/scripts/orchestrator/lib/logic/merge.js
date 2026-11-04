@@ -113,7 +113,11 @@ function mergePlan({ o, files, withoutMigrPush = false, withoutFill = false, bas
       );
     else if (hasMigr && withoutMigrPush)
       notes.push('migration push skipped (--without-migr-push): the migrations are NOT pushed yet');
-    migrPush = hasMigr && !!m.pushCommand && !withoutMigrPush;
+    // Only a task given a migration block pushes by itself. An override of the merge guard is not an answer to this.
+    const mayPush = !!o?.migr_block;
+    if (hasMigr && m.pushCommand && !withoutMigrPush && !mayPush)
+      notes.push('the branch has migrations, but the task has no migration block: they are NOT pushed. Check them, and push them yourself');
+    migrPush = hasMigr && !!m.pushCommand && !withoutMigrPush && mayPush;
   }
   const step = ['merge', ...(migrPush ? ['migr-push'] : []), 'gates', ...(baseGate ? ['base-gate'] : []), 'done'];
   if (!withoutFill) step.push('fill');

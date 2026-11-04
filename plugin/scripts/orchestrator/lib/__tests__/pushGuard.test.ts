@@ -136,6 +136,34 @@ const track = { agentType: 'track', branch: 'queue/A', knownPackage: (n: string)
 const trackD = { ...track, agentType: 'track-d' };
 const pluginTrack = { ...track, agentType: 'cq:track' };
 
+describe('queue agents do not run migration commands (NESTE 5)', () => {
+  const agent = { ...track, knownPackage: () => true };
+  it('the configured command and the usual tools are denied, for every queue agent', () => {
+    for (const c of [
+      'npx dbTool migrate push --yes',
+      'supabase db push',
+      'npx supabase db reset',
+      'npx prisma migrate deploy',
+      'prisma migrate dev --name a',
+      'npx prisma db push',
+      'npx drizzle-kit migrate',
+      'npm run db:migrate',
+      'bundle exec rails db:migrate',
+      'python manage.py migrate',
+      'alembic upgrade head',
+      'flyway migrate',
+    ])
+      expect(decision(c, { ...agent, migrations: MIG }), c).toBe('deny');
+    expect(decision('supabase db push', { ...trackD, knownPackage: () => true, migrations: MIG })).toBe('deny');
+    expect(assess('supabase db push', { ...STD, ...agent, migrations: MIG })?.reason).toMatch(/owner/);
+  });
+  it('the orchestrator is not stopped by it, and other commands pass', () => {
+    expect(decision('supabase db push', { migrations: MIG })).toBeNull();
+    expect(decision('npx prisma generate', { ...agent, migrations: MIG })).toBeNull();
+    expect(decision('npm test', { ...agent, migrations: MIG })).toBeNull();
+  });
+});
+
 describe('network guard (agent_type track/track-d)', () => {
   it('denies network commands for track, track-d and the plugin form, with a reason that points the way', () => {
     for (const k of [

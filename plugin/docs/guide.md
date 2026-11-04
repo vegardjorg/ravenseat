@@ -233,8 +233,12 @@ What Ravenseat checks for you:
   filter.
 - The push guard: no force push and no other branch than `baseBranch` from Claude Code; before a plain push of the
   base branch it scans what is about to be pushed for secrets (gitleaks when it is on your PATH, otherwise a few
-  built-in patterns) and asks, naming file and line, never the value. It also asks before any of your
-  `deployCommands`. It only sees commands run inside Claude Code, not your own terminal.
+  built-in patterns) and asks, naming file and line, never the value. A first push is scanned too, and a scan that
+  does not finish asks instead of passing silently. It also asks before any of your `deployCommands`. It only sees
+  commands run inside Claude Code, not your own terminal.
+- Migrations: a queue agent writes a migration file but does not run migration commands (the usual tools and your
+  `migrations.pushCommand`). An ordinary task that delivers one stops at `cq merge` for you to decide, also with no
+  migration flow configured.
 - The gates (`gates.quick`, `gates.full`), with results bound to the commit and run by the orchestrator, the base
   gate that stops merges on a red base, and the batch push threshold.
 - `/cq:setup` can write a GitHub Actions workflow that runs your `gates.quick` on push and pull requests (opt-in,

@@ -180,6 +180,17 @@ function taskIdFromBranch(branch, branchPrefix = 'queue/') {
   return m ? m[1] : null;
 }
 
+/** The migration folders of the usual tools, at any depth: a project with no migration flow configured has them too. */
+const MIGRATION_PATH = /(^|\/)(migrations|db\/migrate|alembic\/versions|drizzle)\//i;
+
+/** Is the path a migration file, in a usual folder or in config().migrations.folder? */
+function isMigrationPath(p, migrations = null) {
+  const path = norm(p);
+  if (MIGRATION_PATH.test(path)) return true;
+  const folder = migrations?.folder ? norm(migrations.folder).replace(/\/+$/, '') : '';
+  return Boolean(folder) && path.toLowerCase().startsWith(`${folder.toLowerCase()}/`);
+}
+
 /**
  * Assess a diff against the task's ownership.
  * @param {{ changes: { status: string, paths: string[] }[], ownedFiles?: string[], sharedPatch?: string[],
@@ -217,6 +228,9 @@ function assessGuard({
         if (move && e.status === 'R')
           reason += i === 1 ? ` (renamed from ${e.paths[0]})` : ` (renamed to ${e.paths[1]})`;
         violations.push({ path: p, reason });
+      } else if (!migrBlock && (protectedPaths || []).length > 0 && isMigrationPath(p, migrations)) {
+        // A migration changes a database, so it never goes in with an ordinary task. An empty list turns the guard off.
+        violations.push({ path: p, reason: 'migration file, and the task has no migration block and does not own it' });
       } else if (hasOwnership) drift.push(p);
     });
   }
@@ -230,6 +244,7 @@ function assessGuard({
 
 module.exports = {
   isProtected,
+  isMigrationPath,
   globMatch,
   readDiff,
   migrCovered,

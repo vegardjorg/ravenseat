@@ -8,16 +8,15 @@
 // What is scanned: the added lines of EVERY commit the push sends, `git log -p --no-merges <remote>/<baseBranch>..
 // <baseBranch>` (M4 in plans/review-2026-11-02.md). The net diff alone missed a key added in one commit and deleted in
 // the next: the remote still gets it in the history. A log over secretScan.maxBytes falls back to the net diff (better
-// than nothing), and that one over the cap is skipped as before.
+// than nothing). A first push has no remote ref, so it scans the branch minus what the remote has on other branches.
 //   - gitleaks, when it is on PATH: `gitleaks git --log-opts=<range> --redact`, with the time cap. Any problem with
 //     it (an old version without `git`, a crash, the time cap) falls back to the built-in patterns.
 //   - otherwise the built-in patterns below (PATTERNS): few, specific formats with a low false-positive rate (JWTs
 //     included), plus three rules that skip test, fixture, example and Markdown files: a URI with a password in it
 //     (scheme://user:pass@host), a value line in a `.env` style file (.env, .env.local, .env.production; never
 //     .env.example and the like), and the generic "name = long value" rule.
-// Limits (fails OPEN, the push goes on without a question):
-//   - the output is larger than secretScan.maxBytes even as a net diff: skipped, silently (a big push is not slowed);
-//   - git takes longer than secretScan.timeoutMs, the remote ref is missing (a first push), or any error.
+// An incomplete scan is a question too, never a silent pass (the owner can still push): the output over
+// secretScan.maxBytes even as a net diff, git over secretScan.timeoutMs, or any error. The answer's `incomplete` says why.
 // The question names file:line, the rule and the commit only, NEVER the matched text (the dialog and the transcript
 // would otherwise copy the secret around).
 //
@@ -226,14 +225,20 @@ function gitleaks(cwd, range, timeoutMs) {
  * @param {{ maxBytes?: number, timeoutMs?: number }} [o.setup]
  */
 function scanPush(o) {
-  return scanRange({ cwd: o.cwd, from: `refs/remotes/${o.remote}/${o.branch}`, to: `refs/heads/${o.branch}`, setup: o.setup });
+  return scanRange({
+    cwd: o.cwd,
+    from: `refs/remotes/${o.remote}/${o.branch}`,
+    to: `refs/heads/${o.branch}`,
+    remote: o.remote,
+    setup: o.setup,
+  });
 }
 
 /**
  * Scan the commits in `from..to` one by one (`git log -p --no-merges`), so a secret added and later removed in the
- * range is still found. Returns { hits, scanner } or null (skipped: `from` missing, the output over the cap even as a
- * net diff, a timeout, any error).
- * @param {{ cwd: string, from: string, to: string, setup?: { maxBytes?: number, timeoutMs?: number } }} o
+ * range is still found. Returns { hits, scanner, incomplete? }; `incomplete` says what was not scanned (the output over
+ * the cap, a timeout, any error). With `remote` a missing `from` is a first push: `to` minus all the remote has.
+ * @param {{ cwd: string, from: string, to: string, remote?: string, setup?: { maxBytes?: number, timeoutMs?: number } }} o
  */
 function scanRange(o) {
   const maxBytes = Number(o.setup?.maxBytes) > 0 ? Number(o.setup.maxBytes) : 2_000_000;
@@ -242,36 +247,53 @@ function scanRange(o) {
     spawnSync('git', ['-C', o.cwd, ...args], { encoding: 'utf8', timeout: timeoutMs, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, ...extra });
   const quote = ['-c', 'core.quotepath=off'];
   const plain = ['--no-color', '--no-ext-diff', '--no-textconv', '--unified=0'];
+  const notScanned = (why) => ({ hits: [], scanner: 'none', incomplete: why });
+  const overCap = (e) => /ENOBUFS|maxBuffer/i.test(`${e?.code ?? ''} ${e?.message ?? ''}`);
   try {
-    // A first push (no remote ref) would scan the whole history: skipped (fails open).
-    if (run(['rev-parse', '-q', '--verify', o.from]).status !== 0) return null;
-    const range = `${o.from}..${o.to}`;
+    if (run(['rev-parse', '-q', '--verify', o.to]).status !== 0) return notScanned(`git cannot read ${o.to}`);
+    const hasFrom = run(['rev-parse', '-q', '--verify', o.from]).status === 0;
+    if (!hasFrom && !o.remote) return notScanned(`git cannot read ${o.from}`);
+    const revs = hasFrom ? [`${o.from}..${o.to}`] : [o.to, '--not', `--remotes=${o.remote}`];
     // Every commit's own added lines. Merge commits are skipped: the commits they bring in are in the range themselves.
-    let d = run([...quote, 'log', '-p', '--no-merges', '--format=commit %H', ...plain, range], { maxBuffer: maxBytes });
-    // The log over the cap: the net diff instead (it still sees what the tip holds); that one over the cap is skipped.
-    if (d.error && /ENOBUFS|maxBuffer/i.test(`${d.error.code ?? ''} ${d.error.message ?? ''}`))
-      d = run([...quote, 'diff', ...plain, range], { maxBuffer: maxBytes });
-    // Over the cap (ENOBUFS), over the time (ETIMEDOUT) or a git error: no question.
-    if (d.error || d.status !== 0) return null;
-    if (!d.stdout.trim()) return { hits: [], scanner: 'none' };
-    const leaks = gitleaks(o.cwd, range, timeoutMs);
-    if (leaks) return { hits: leaks, scanner: 'gitleaks' };
-    return { hits: scanLines(addedLines(d.stdout)), scanner: 'built-in' };
+    let d = run([...quote, 'log', '-p', '--no-merges', '--format=commit %H', ...plain, ...revs], { maxBuffer: maxBytes });
+    // The log over the cap: the net diff instead (it still sees what the tip holds, but not a key deleted again).
+    let partial = null;
+    if (overCap(d.error)) {
+      partial = 'the commits were too large to read one by one, so only their net result was scanned';
+      let netRange = revs;
+      if (!hasFrom) {
+        const empty = run(['hash-object', '-t', 'tree', '--stdin'], { input: '', stdio: ['pipe', 'pipe', 'ignore'] });
+        netRange = [empty.stdout.trim(), o.to];
+      }
+      d = run([...quote, 'diff', ...plain, ...netRange], { maxBuffer: maxBytes });
+    }
+    if (overCap(d.error)) return notScanned('what this push sends is too large to scan');
+    if (d.error?.code === 'ETIMEDOUT') return notScanned('the scan took too long');
+    if (d.error || d.status !== 0) return notScanned('git could not read the commits');
+    const answer = (hits, scanner) => (partial ? { hits, scanner, incomplete: partial } : { hits, scanner });
+    if (!d.stdout.trim()) return answer([], 'none');
+    const leaks = gitleaks(o.cwd, revs.join(' '), timeoutMs);
+    if (leaks) return answer(leaks, 'gitleaks');
+    return answer(scanLines(addedLines(d.stdout)), 'built-in');
   } catch {
-    return null;
+    return notScanned('the scan failed');
   }
 }
 
-/** The push guard's question for the hits, or null. Names file:line, the rule and the commit, never the value. */
+/** The push guard's question for the hits or an incomplete scan, or null. Names file:line, the rule and the commit, never the value. */
 function question(result) {
   const hits = result?.hits ?? [];
-  if (!hits.length) return null;
+  const unfinished = result?.incomplete
+    ? `The secret check did not finish: ${result.incomplete}. Nothing here says this push is clean: look for keys yourself, ` +
+      'or raise secretScan.maxBytes and secretScan.timeoutMs in queue.config.json and push again. Push anyway when you have checked.'
+    : null;
+  if (!hits.length) return unfinished;
   const shown = hits.slice(0, 5).map((h) => `${h.file}:${h.line} (${h.rule})${h.commit ? ` in ${h.commit}` : ''}`);
   const more = hits.length > 5 ? ` and ${hits.length - 5} more` : '';
   return (
     `Possible secret in what this push sends (${result.scanner} scan): ${shown.join(', ')}${more}. ` +
     'Check those lines before you push: every commit is scanned, so a line deleted again later still counts; once ' +
-    'pushed, a key stays in the history, so change it if it was real. A false alarm: push anyway.'
+    `pushed, a key stays in the history, so change it if it was real. A false alarm: push anyway.${unfinished ? ` ${unfinished}` : ''}`
   );
 }
 

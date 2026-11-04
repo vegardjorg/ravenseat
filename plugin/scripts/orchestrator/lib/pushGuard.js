@@ -90,6 +90,26 @@ function pushTemplate(args, currentBranch) {
   return { template, force, all, deletes };
 }
 
+/** The usual tools' commands that change a database. A queue agent writes the migration; it does not run it. */
+const MIGRATION_COMMANDS = [
+  'supabase db push',
+  'supabase db reset',
+  'supabase migration up',
+  'prisma migrate',
+  'prisma db push',
+  'drizzle-kit push',
+  'drizzle-kit migrate',
+  'knex migrate:latest',
+  'db:migrate', // npm run, rails, rake, sequelize
+  'manage.py migrate',
+  'alembic upgrade',
+  'flyway migrate',
+  'dbmate up',
+  'dbmate migrate',
+];
+/** Commands that only name a migration command in their text (git commit, grep db:migrate): never a run of one. */
+const ONLY_MENTIONS = new Set(['git', 'grep', 'rg', 'echo', 'cat', 'ls', 'cq']);
+
 /** Programs that only start another program (npx foo, npm exec foo): skipped when commands are compared. */
 const STARTERS = new Set(['npx', 'pnpx', 'bunx', 'exec', 'env', 'command', 'npm', 'pnpm', 'yarn']);
 
@@ -116,6 +136,12 @@ function isCommand(candidate, command) {
     if (k.every((word, j) => c[i + j] === word)) return true;
   }
   return false;
+}
+
+/** The migration command this run is, or null: the configured one or a usual tool's. */
+function migrationMatch(t, migrations) {
+  if (ONLY_MENTIONS.has(core(t)[0])) return null;
+  return [migrations?.pushCommand, ...MIGRATION_COMMANDS].find((m) => m && isCommand(t, m)) ?? null;
 }
 
 /** The config values the guard needs, from the context or (by default) from config(). */
@@ -467,6 +493,14 @@ function assess(command, context = {}) {
       const call = SC.queueCall(t, i0);
       const reason = call ? agentQueueReason(call) : null;
       if (reason) findings.push({ decision: 'deny', reason });
+      const migration = migrationMatch(t, migrations);
+      if (migration)
+        findings.push({
+          decision: 'deny',
+          reason:
+            `\`${migration}\` changes a database. Queue agents write the migration file and do not run it: the owner decides when ` +
+            'it runs. Say in your result that it has not run.',
+        });
     }
 
     const deploy = deployCommands.length ? deployMatch(t, deployCommands) : null;

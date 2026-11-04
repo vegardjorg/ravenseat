@@ -90,6 +90,7 @@ function ownsProtected(task, protectedPaths) {
     const p = norm(raw);
     if (!p) continue;
     if (G.isProtected(p, list)) return p;
+    if (list.length > 0 && G.isMigrationPath(p)) return p;
     // A folder owned as a whole ("plugin/") covers the protected folders and files inside it ("plugin/hooks/").
     if (p.endsWith('/') && list.some((b) => b.includes('/') && b.startsWith(p))) return p;
   }

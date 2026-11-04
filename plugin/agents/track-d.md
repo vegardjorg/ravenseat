@@ -36,6 +36,6 @@ branch, merging and pushing; you only do your track.
   data or features) and security or legal tradeoffs. Everything else you decide, and each non-trivial assumption
   goes in the "Assumptions" section of `track-result.md`. The mission has the full rule.
 - Commit only on your own branch with `git commit -- <files>`. NEVER push, merge your branch into the base branch, run
-  migrations against shared environments, start dev servers or previews.
+  migration commands (write the file; the owner decides when it runs), start dev servers or previews.
 - Your answer to the orchestrator (last answer) is at most about 1,500 characters: the RESULT line first, at most 5
   lines, then the path to `track-result.md` in the track's scratchpad folder, where everything long goes.
