@@ -54,6 +54,13 @@ describe('the steps', () => {
   const facts = (own: object = {}) => ({
     git: true, remote: 'github', stacks: ['Node'], checks: [], hasGates: false, ciHosts: [], secretsOk: true, ...own,
   });
+  it('CI config found: done, and the title says only what cq knows', () => {
+    const ci = K.steps({ facts: facts({ ciHosts: ['GitHub'] }), tasks: [] }).find((s: { key: string }) => s.key === 'ci');
+    expect(ci.state).toBe('done');
+    expect(ci.title).toContain('CI config found (GitHub)');
+    expect(ci.title).toContain('does not check');
+    expect(ci.title).not.toContain('Run the checks');
+  });
   const next = (f: object, tasks: object[] = []) => K.nextStep(K.steps({ facts: facts(f), tasks }));
   const state = (key: string, f: object, tasks: object[] = []) =>
     K.steps({ facts: facts(f), tasks }).find((s: { key: string }) => s.key === key).state;

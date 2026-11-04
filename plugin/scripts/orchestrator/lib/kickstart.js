@@ -235,7 +235,8 @@ function steps({ facts, tasks = [] }) {
     list.push({
       key: 'ci',
       state: 'done',
-      title: 'Run the checks on every push (CI)',
+      // cq only sees that the config exists. It does not read what the config runs, so it must not claim that.
+      title: `CI config found (${facts.ciHosts.join(', ')}); cq does not check that it runs your checks`,
       why: `CI config found: ${facts.ciHosts.join(', ')}.`,
       how: '',
     });
