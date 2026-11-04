@@ -18,8 +18,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  a, autoAcceptIn, byName, CONFIG, CQ, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
-  positional, read, readPlans, undoHint, val, values, withLock, write,
+  a, autoAcceptContext, autoAcceptIn, byName, CONFIG, CQ, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
+  positional, PR, read, readPlans, undoHint, val, values, withLock, write,
   require,
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
@@ -138,7 +138,7 @@ export function cmdMode() {
   } catch (e) {
     die(`mode: could not write ${KK.configFile()} (${e.message}). Nothing changed.`);
   }
-  console.log(w.changed ? `Mode: ${want} (written to ${KK.configFile()}).` : `Mode: ${want} already (nothing changed).`);
+  console.log(w.changed ? `Mode: ${want} (written to ${KK.configFile()}; remember to commit it).` : `Mode: ${want} already (nothing changed).`);
   if (want === 'lite') console.log(LM.switchLine(CQ));
 }
 
@@ -349,6 +349,15 @@ export function cmdAdd() {
           '; ',
         )}. Fix with cq edit-many --file <json> ([{ "id": "...", "project": "...", "feature": "..." }]).`,
     );
+  // Owning a protected path is what lets a change there past the merge guard, so it should not happen unnoticed.
+  const protectedPaths = autoAcceptContext(read()).protectedPaths;
+  for (const n of newOnes) {
+    const owned = PR.ownsProtected(n, protectedPaths);
+    if (owned)
+      console.log(
+        `WARNING: ${n.id} owns the protected path ${owned}, so the merge guard will not stop its changes there. Remove it from the task's files unless that is what you want.`,
+      );
+  }
   for (const x of added.projectWarnings) console.log(`WARNING: ${x}`);
   for (const x of added.planWarnings) console.log(`WARNING: ${x}`);
   const linked = [...new Set(newOnes.map((n) => n?.plan).filter(Boolean))];

@@ -606,7 +606,8 @@ export function cmdReceive() {
       `Class ${o0.class}: no review (config().reviewers has none for the class, and no helper agent is on and hits).`,
     );
   console.log(
-    `Merge (after an approved review, from Bash): ${CQ} merge ${id}  ` +
+    // merge finds the scratchpad in the task or the environment; a folder given only with this command must be given again.
+    `Merge (after an approved review, from Bash): ${CQ} merge ${id}${o0.scratchpad || process.env.QUEUE_SCRATCHPAD ? '' : ` --scratchpad "${scratch}"`}  ` +
       `(by hand: merge-track.mjs ${branch} --wave-base ${o0.head_start ?? '<HEAD at start>'})`,
   );
   // The end of a track is a natural checkpoint for the parallelism.

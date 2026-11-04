@@ -167,10 +167,17 @@ function setModeText(text, value) {
     }
   };
   const key = /("mode"\s*:\s*)"[^"\\]*"/g;
-  if (Object.hasOwn(obj, 'mode') && (src.match(key) ?? []).length === 1) {
-    // A callback, so a "$" in the file can never act as a replacement pattern.
-    const out = ok(src.replace(key, (_, head) => `${head}"${value}"`));
-    if (out) return out;
+  if (Object.hasOwn(obj, 'mode')) {
+    // A nested key can have the same name (push.mode), so take the occurrence that changes the top-level key and nothing else.
+    const wanted = JSON.stringify({ ...obj, mode: value });
+    for (const m of src.matchAll(key)) {
+      const out = `${src.slice(0, m.index)}${m[1]}"${value}"${src.slice(m.index + m[0].length)}`;
+      try {
+        if (JSON.stringify(JSON.parse(out)) === wanted) return out;
+      } catch {
+        /* this occurrence was not a real key: try the next one */
+      }
+    }
   }
   if (!Object.hasOwn(obj, 'mode')) {
     const first = /\{(\r?\n)([ \t]*)"/.exec(src);

@@ -391,6 +391,54 @@ describe('running, from the hook row', () => {
   });
 });
 
+describe('cq takeover: the warning about another orchestrator', () => {
+  const takeover = (p: ReturnType<typeof project>) =>
+    JSON.parse(
+      spawnSync(process.execPath, [path.join(SCRIPTS, 'queue-takeover.mjs'), '--json'], { encoding: 'utf8', env: p.env, cwd: p.folder }).stdout,
+    );
+
+  it('a queue that was only just changed: no warning; a running task or a cursor: the warning', () => {
+    const p = project([task('A'), task('B')]);
+    expect(p.run(['add', '--json', JSON.stringify(task('C'))]).code).toBe(0);
+    expect(takeover(p).possible_live_orchestrator).toBe(false);
+    expect(p.run(['orchestrator', 'pulse', '--session', 'one']).code).toBe(0);
+    expect(takeover(p).possible_live_orchestrator).toBe(true);
+    const q = project([task('A')]);
+    expect(q.run(['start', 'A']).code).toBe(0);
+    expect(takeover(q).possible_live_orchestrator).toBe(true);
+  });
+});
+
+describe('cq add: owning a protected path', () => {
+  it('warns and still adds; an ordinary file gives no warning', () => {
+    const p = project([task('A')]);
+    const r = p.run(['add', '--json', JSON.stringify({ ...task('B'), owned_files: ['.claude/settings.json'] })]);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toContain('WARNING: B owns the protected path .claude/settings.json');
+    expect(p.find('B')).toBeTruthy();
+    const plain = p.run(['add', '--json', JSON.stringify({ ...task('C'), owned_files: ['src/c.ts'] })]);
+    expect(plain.out).not.toContain('protected path');
+  });
+});
+
+describe('cq receive: the merge line', () => {
+  it('names --scratchpad only when merge would not find the folder itself', () => {
+    const p = project([task('A')]);
+    p.run(['start', 'A']);
+    p.branch('A');
+    p.report('A', RESULT('A'));
+    expect(p.run(['receive', 'A']).out).not.toContain('merge A --scratchpad');
+    p.patch('A', (o) => {
+      delete o.scratchpad;
+    });
+    const scratch = p.env.QUEUE_SCRATCHPAD as string;
+    delete p.env.QUEUE_SCRATCHPAD;
+    const r = p.run(['receive', 'A', '--scratchpad', scratch]);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toContain('merge A --scratchpad');
+  });
+});
+
 describe('cq receive without commits', () => {
   it('refuses, leaves the task as it was and names the next steps; --force still makes the package', () => {
     const p = project([task('A')]);

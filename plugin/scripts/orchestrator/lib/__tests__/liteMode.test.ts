@@ -92,6 +92,13 @@ describe('liteDefaults and quickTask', () => {
 });
 
 describe('setModeText', () => {
+  it('a nested mode key (push.mode) stays as it is, and only the one word changes', () => {
+    const src = '{\n  "push": { "mode": "owner" },\n  "mode": "lite",\n  "gates": { "quick": [] }\n}\n';
+    expect(LM.setModeText(src, 'full')).toBe(src.replace('"lite"', '"full"'));
+    const same = '{\n  "push": { "mode": "lite" },\n  "mode": "lite"\n}\n';
+    expect(LM.setModeText(same, 'full')).toBe('{\n  "push": { "mode": "lite" },\n  "mode": "full"\n}\n');
+  });
+
   it('inserts the key with the file own indentation and keeps the rest as written', () => {
     const src = '{\n    "projectName": "x",\n    "gates": { "quick": [] }\n}\n';
     const out = LM.setModeText(src, 'lite');
