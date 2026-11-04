@@ -30,6 +30,7 @@
   "secretScan": { "enabled": true, "maxBytes": 2000000, "timeoutMs": 3000 },
   "_largeFileMb": "cq doctor warns about tracked files larger than this (MB).",
   "largeFileMb": 5,
+  "gitSurface": "stop",
   "_migrations": "Optional numbered migrations. folder = null turns the whole migration flow off.",
   "migrations": {
     "folder": null,

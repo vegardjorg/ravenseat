@@ -67,7 +67,7 @@ const AS_JSON = a.includes('--json');
 // What runs at the next git command, against what was accepted. The push itself would run a planted pre-push hook. Read
 // only: no baseline yet means nothing to compare (cq fill, start, resume, receive and merge record it).
 const GB = require('./lib/gitSurfaceBaseline.js');
-const surfaceDrift = GB.driftDetail(dataFolder(), process.env.QUEUE_GIT ?? K.root);
+const surfaceDrift = GB.stopDetail(dataFolder(), process.env.QUEUE_GIT ?? K.root, { cq: require('./lib/projectRoot.js').cqCommand() });
 if (surfaceDrift) {
   const message = GB.driftMessage({ ...surfaceDrift, cq: require('./lib/projectRoot.js').cqCommand() });
   console.log(AS_JSON ? JSON.stringify({ surface_drift: surfaceDrift.reason, message }, null, 2) : message);

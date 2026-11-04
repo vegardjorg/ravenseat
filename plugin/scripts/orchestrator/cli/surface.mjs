@@ -32,6 +32,7 @@ function trackBranchHere() {
 }
 
 function showDifferences() {
+  if (GB.mode() !== 'stop') console.log(`gitSurface is ${GB.mode()} in queue.config.json: a difference does not stop anything.`);
   const baseline = GB.read(FOLDER);
   if (!baseline) {
     console.log(`No accepted baseline yet on ${FOLDER}. The next fill, start, resume, receive or merge records the current state.`);

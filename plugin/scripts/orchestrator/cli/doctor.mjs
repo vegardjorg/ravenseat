@@ -217,6 +217,7 @@ function checkConfig() {
     }
   }
   if (own.mode != null && !['lite', 'full'].includes(own.mode)) wrong.push(`mode is "${own.mode}", expected lite or full`);
+  if (own.gitSurface != null && !GB.MODES.includes(own.gitSurface)) wrong.push(`gitSurface is "${own.gitSurface}", expected ${GB.MODES.join(', ')} (treated as stop)`);
   // The push keys have value rules beyond the type (lib/pushBatch.js setupProblems).
   wrong.push(...PB.setupProblems(own.push).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   // The CI watch keys (lib/ciWatch.js setupProblems): off or github, positive interval and timeout.
@@ -269,8 +270,9 @@ function checkState() {
 
 /** The git hooks and config that run code against the accepted baseline. Reads only: no ensure here. */
 function checkSurface() {
+  if (GB.mode() === 'off') return [ok('surface', 'not compared: gitSurface is off in queue.config.json, so a changed git hook or setting goes unnoticed')];
   if (!GB.read(FOLDER)) return [ok('surface', 'no accepted git baseline yet (the next fill, start, resume, receive or merge records it)')];
-  const reason = GB.driftReason(FOLDER, GIT_ROOT);
+  const reason = GB.driftDetail(FOLDER, GIT_ROOT)?.reason;
   if (!reason) return [ok('surface', 'the git hooks and config that run code match the accepted baseline')];
   return [warn('surface', reason, `${CQ} surface shows where; ${CQ} surface accept --by owner if you made the change, otherwise remove it`)];
 }

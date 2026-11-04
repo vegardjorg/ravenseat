@@ -508,6 +508,91 @@ describe('cq surface', () => {
   });
 });
 
+describe('the gitSurface setting', () => {
+  const OK = { gates: { quick: [OK_GATE] } };
+
+  it('warn: receive and push-check go on past a difference and say so', () => {
+    const p = project({ ...OK, gitSurface: 'warn' });
+    expect(p.run(['surface']).code).toBe(0);
+    baselineLib().ensure(p.folder, p.repo);
+    p.plant();
+    const r = p.run(['receive', 'A']);
+    expect(r.code).toBe(0);
+    expect(r.err).toContain('gitSurface is warn');
+    expect(r.err).toContain('hook added: post-merge');
+    expect(p.find().status).toBe('review');
+    const check = p.pushCheck();
+    expect(check.code).not.toBe(2);
+    expect(check.out).toContain('gitSurface is warn');
+    const json = spawnSync(process.execPath, [PUSH_CHECK, '--from', 'develop', '--to', 'develop', '--json'], { cwd: p.folder, encoding: 'utf8', env: p.env });
+    expect(() => JSON.parse(json.stdout)).not.toThrow();
+  });
+
+  it('warn: a gate that plants a hook is named, the run stays green and not tampered', () => {
+    const p = project({ gates: { quick: ['node plant.cjs'] }, gitSurface: 'warn' }, { 'plant.cjs': PLANT_GATE });
+    const r = p.run(['receive', 'A']);
+    expect(r.code).toBe(0);
+    expect(r.err).toContain('gitSurface is warn');
+    expect(r.err).toContain('hook added: post-merge');
+    expect(p.evidence().at(-1)).toMatchObject({ ok: true });
+    expect(p.evidence().at(-1)?.tampered).toBeFalsy();
+    expect(p.find().status).toBe('review');
+  });
+
+  it('off: no word about it, and a gate that plants a hook stays green', () => {
+    const p = project({ gates: { quick: ['node plant.cjs'] }, gitSurface: 'off' }, { 'plant.cjs': PLANT_GATE });
+    baselineLib().ensure(p.folder, p.repo);
+    p.plant('pre-push');
+    const r = p.run(['receive', 'A']);
+    expect(r.code).toBe(0);
+    expect(r.all).not.toMatch(/gitSurface|TAMPERED|accepted baseline/);
+    expect(p.find().status).toBe('review');
+    expect(p.pushCheck().code).not.toBe(2);
+  });
+
+  it('off and warn: cq surface and cq doctor still report the real state', () => {
+    const p = project({ ...OK, gitSurface: 'warn' });
+    baselineLib().ensure(p.folder, p.repo);
+    p.plant();
+    const surface = p.run(['surface']);
+    expect(surface.out).toContain('gitSurface is warn');
+    expect(surface.out).toContain('post-merge');
+    const check = () => JSON.parse(p.run(['doctor', '--json']).out).checks.find((c: { name: string }) => c.name === 'surface');
+    expect(check().status).toBe('WARN');
+    p.setConfig({ ...OK, gitSurface: 'off' });
+    expect(check()).toMatchObject({ status: 'OK' });
+    expect(check().message ?? JSON.stringify(check())).toContain('gitSurface is off');
+  });
+
+  it('a gate that writes gitSurface off into the config during a stop run is named and red', () => {
+    const write = [
+      "const fs = require('fs');",
+      'const f = process.env.CONFIG_TO_WEAKEN;',
+      "fs.writeFileSync(f, JSON.stringify({ ...JSON.parse(fs.readFileSync(f, 'utf8')), gitSurface: 'off' }));",
+      '',
+    ].join('\n');
+    const p = project({ gates: { quick: ['node weaken.cjs'] } }, { 'weaken.cjs': write });
+    const r = p.run(['receive', 'A'], { extraEnv: { CONFIG_TO_WEAKEN: p.env.QUEUE_CONFIG as string } });
+    expect(r.code).toBe(1);
+    expect(r.all).toContain('gitSurface setting was weakened');
+    expect(p.evidence().at(-1)).toMatchObject({ ok: false, tampered: true });
+  });
+
+  it('a wrong value counts as stop and doctor names it; the stop text names the setting', () => {
+    const p = project({ ...OK, gitSurface: 'nope' });
+    baselineLib().ensure(p.folder, p.repo);
+    p.plant();
+    const r = p.run(['receive', 'A']);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain('"gitSurface": "warn"');
+    const doctor = JSON.parse(p.run(['doctor', '--json']).out).checks.find((c: { name: string; status: string }) => c.name === 'config' && c.status === 'FAIL');
+    expect(doctor.message).toContain('gitSurface is "nope"');
+    expect(baselineLib().modeOf({ gitSurface: 'nope' })).toBe('stop');
+    expect(baselineLib().modeOf({})).toBe('stop');
+    expect(baselineLib().modeOf({ gitSurface: 'off' })).toBe('off');
+  });
+});
+
 describe('cq doctor', () => {
   it('WARN on drift with the fix hint, OK otherwise, and nothing written', () => {
     const p = project();

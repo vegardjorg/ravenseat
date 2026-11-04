@@ -102,6 +102,10 @@ const STANDARD = Object.freeze({
   // Attempts (lib/logic/attempt.js): how long, in minutes, a reservation with no start row counts as live. After that it
   // reads as expired and the next start takes a new attempt. A reservation never blocks a start either way.
   attempts: { reservationTtlMin: 30 },
+  // The check of git hooks and executing git config against the accepted baseline (lib/gitSurfaceBaseline.js): "stop" = a
+  // difference stops receive, merge and the push check until the owner decides; "warn" = the same text as a warning, nothing
+  // stops; "off" = no comparison. For a repository where hook tools or git settings change often enough to be friction.
+  gitSurface: 'stop',
   // The fix-round cap per task (`resume --reason fix`, also the one receive starts after a red done command). At the cap
   // the task becomes an owner question instead of another round. The task field `max_fix_rounds` overrides it.
   maxFixRounds: 3,

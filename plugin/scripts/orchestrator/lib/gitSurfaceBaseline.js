@@ -24,7 +24,13 @@
 // remove this file outside a gate run (the guards deny the commands that name it, see lib/gateEvidence.js tamperReason
 // and lib/writeGuard.js). What exists at the first ensure is trusted.
 //
-// Pure: toBaseline's rule, parseConfigOrigins, differences, hookManagerHint, driftMessage, tamperedMessage. The rest is
+// The setting: config().gitSurface. "stop" (the default) is all of the above; "warn" says the same things on stderr and
+// stops nothing; "off" compares nothing. Read here, in mode(), so that every check follows it. `cq surface`, `cq surface
+// accept` and cq doctor still report the real state in any mode. The evidence store's own check (lib/gateEvidence.js) is
+// not part of this setting. queue.config.json is a protected path for a track; a run of track code that weakens the
+// setting directly in the file is named by watch.
+//
+// Pure: toBaseline's rule, modeOf, parseConfigOrigins, differences, hookManagerHint, driftMessage, tamperedMessage. The rest is
 // I/O and never throws. Tested in __tests__/gitSurfaceBaseline.test.ts.
 // =============================================================
 'use strict';
@@ -36,6 +42,8 @@ const path = require('node:path');
 const GX = require('./gitExecSurface.js');
 
 const FILE_NAME = 'git-surface.json';
+/** The values of the gitSurface setting. */
+const MODES = ['stop', 'warn', 'off'];
 /** The start of a reason that is about the accepted baseline alone (nothing changed during the run). */
 const DRIFT_PREFIX = 'git hooks or config differ from the accepted baseline';
 /** How much of a changed hook is read for the hint. */
@@ -52,6 +60,28 @@ const MANAGERS = [
 const DOCS = 'docs/queue.md, "Git hooks and config"';
 
 const fileOf = (folder) => (folder ? path.join(folder, FILE_NAME) : null);
+
+/** The mode a config asks for; anything else is "stop" (cq doctor names a wrong value). Pure. */
+const modeOf = (k) => (MODES.includes(k?.gitSurface) ? k.gitSurface : 'stop');
+
+/** The mode for this process. A config that cannot be read means "stop". */
+function mode() {
+  try {
+    return modeOf(require('./queueConfig.js').config());
+  } catch {
+    return 'stop';
+  }
+}
+
+/** The mode in the file right now, past the process's buffered config: what a run could have changed. */
+function modeInFile() {
+  try {
+    const QC = require('./queueConfig.js');
+    return modeOf(QC.config({ root: QC.config().root }));
+  } catch {
+    return 'stop';
+  }
+}
 
 /** The baseline file's text, or null when it is missing or there is no folder. */
 function readText(folder) {
@@ -169,8 +199,9 @@ function changesNow(folder, cwd) {
   return GX.surfaceChanges(b, current(cwd).now);
 }
 
-/** The reason text for a drifted surface, or null (also null when there is no baseline). Names only. */
+/** The reason text for a drifted surface when the mode is "stop", or null (also null when there is no baseline). Names only. */
 function driftReason(folder, cwd) {
+  if (mode() !== 'stop') return null;
   const list = changesNow(folder, cwd);
   return list.length ? `${DRIFT_PREFIX} (${list.join('; ')})` : null;
 }
@@ -182,14 +213,19 @@ const isDriftOnly = (reason) => String(reason ?? '').startsWith(DRIFT_PREFIX);
  * Started before the first command of a run of track code: `finish()` after the last one.
  * Combines (1) the comparison during the run, (2) the baseline file itself: a change is undone (the old text written
  * back, or the file removed when there was none) and named, (3) the drift check, unless `drift: false` (a track's own run:
- * an owner's new hook must not make every track red). @returns the reason text, or null. Names only.
+ * an owner's new hook must not make every track red), (4) the setting weakened in the file during the run.
+ * Mode "warn": (1) and (2) go to stderr and the reason is null. Mode "off": nothing is read. @returns the reason text, or
+ * null. Names only.
  */
 function watch(folder, cwd) {
+  const startMode = mode();
+  if (startMode === 'off') return { finish: () => null };
   const before = GX.readSurface(cwd);
   const textBefore = readText(folder);
   return {
     finish({ drift = true } = {}) {
       const parts = [];
+      if (startMode === 'stop' && modeInFile() !== 'stop') parts.push('git hooks or config: the gitSurface setting was weakened during the run');
       const during = GX.surfaceChanges(before, GX.readSurface(cwd));
       if (during.length) parts.push(`git hooks or config changed during the run (${during.join('; ')})`);
       if (readText(folder) !== textBefore) {
@@ -201,6 +237,10 @@ function watch(folder, cwd) {
           back = 'the old text could NOT be written back';
         }
         parts.push(`the accepted baseline file changed during the run; ${back}`);
+      }
+      if (startMode === 'warn') {
+        for (const part of parts) console.error(`WARNING (gitSurface is warn, nothing stopped): ${part}.`);
+        return null;
       }
       if (drift) {
         const left = changesNow(folder, cwd).filter((c) => !during.includes(c));
@@ -321,6 +361,18 @@ function driftDetail(folder, cwd) {
   return { reason, changes, differences: list, hint };
 }
 
+/**
+ * What a check that may stop acts on: driftDetail in mode "stop"; in "warn" a short note on stderr and null; in "off" null.
+ */
+function stopDetail(folder, cwd, { cq = 'cq' } = {}) {
+  const m = mode();
+  if (m === 'off') return null;
+  const detail = driftDetail(folder, cwd);
+  if (!detail || m === 'stop') return detail;
+  console.error(`WARNING (gitSurface is warn, nothing stopped): ${detail.reason}. ${cq} surface shows each difference.`);
+  return null;
+}
+
 /** The owner's two ways out, in the words of the stop message. Pure. */
 function nextSteps({ cq, again }) {
   return [
@@ -346,6 +398,7 @@ function driftMessage({ changes, hint = null, cq, again = null, afterRun = false
     'Why it stops: hooks and these settings run code at the next git command, with your credentials, and automated work',
     'in this repository could have put them there. Only you can tell which it is.',
     ...nextSteps({ cq, again }),
+    'Too much friction for this repository? Set "gitSurface": "warn" (or "off") in queue.config.json.',
     `${afterRun ? '' : 'Nothing changed. '}More in ${DOCS}.`,
   ].join('\n');
 }
@@ -370,6 +423,9 @@ function tamperedMessage({ what, reason, cq, again = null }) {
 
 module.exports = {
   FILE_NAME,
+  MODES,
+  modeOf,
+  mode,
   read,
   readText,
   realPath,
@@ -384,6 +440,7 @@ module.exports = {
   differences,
   hookManagerHint,
   driftDetail,
+  stopDetail,
   driftMessage,
   tamperedMessage,
 };

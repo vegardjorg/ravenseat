@@ -363,9 +363,12 @@ cq surface accept --by owner   # you made the change: one command, then run agai
 ```
 
 If you did not make the change, remove it (the hook file, or the setting with `git config --unset`) and run again. A
-hook tool's name in the output (`looks like a hook manager`) is a hint and accepts nothing. There is no override flag;
-`cq doctor` warns about the same difference. A global setting stops the queue like a local one, because a program can
-write that file too.
+hook tool's name in the output (`looks like a hook manager`) is a hint and accepts nothing. `cq doctor` warns about the
+same difference. A global setting stops the queue like a local one, because a program can write that file too.
+
+If this is more friction than it is worth in your repository, change `gitSurface` in `queue.config.json`: `"warn"` says
+the same things as a warning and stops nothing, `"off"` compares nothing. The cost is that a hook planted by automated
+work then runs at the next git command, with your credentials. `cq doctor` says when the check is off.
 
 `TAMPERED` means something else: a check that ran the code under review changed these things *during* its run. That is
 also your decision and never goes back to an agent as a fix round. The same two ways out apply. The limits: this detects,
@@ -395,6 +398,7 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `deployCommands` | `[]` | Commands that deploy, e.g. `["vercel --prod", "fly deploy"]`: the push guard asks before any command that starts with one of them, from an agent or the main session (a prefix match after env prefixes, so `npx vercel --prod` needs its own entry; a command inside `bash -c "..."`, `( )` or `cmd /c` is seen too). Empty = off |
 | `secretScan.enabled`, `maxBytes`, `timeoutMs` | `true`, `2000000`, `3000` | Secret check before a plain push of the base branch from the main session: the added lines of every commit in `<remote>/<baseBranch>..<baseBranch>` are scanned (gitleaks when on PATH, else built-in patterns, JWTs, URI passwords and `.env` files included) and a hit asks with file:line, never the value. A diff over `maxBytes` and a first push (no remote ref) are skipped silently; `timeoutMs` per git or gitleaks call; any error lets the push through |
 | `largeFileMb` | `5` | `cq doctor` warns about tracked files larger than this |
+| `gitSurface` | `"stop"` | Git hooks and executing git config against the accepted baseline: `"stop"` stops receive, merge and the push check on a difference, `"warn"` only warns, `"off"` compares nothing (see "Git hooks and config") |
 | `architectureRules` | `[]` | Short rules copied into every mission |
 | `sharedLinks` | `["node_modules"]` | Folders linked into each worktree instead of reinstalled |
 | `readGuard` | built-in lists | Extra agent types, auto-loaded files and large-file globs for the reading guard |

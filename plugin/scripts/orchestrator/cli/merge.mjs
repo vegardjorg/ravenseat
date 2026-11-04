@@ -44,11 +44,11 @@ const GB = require('./lib/gitSurfaceBaseline.js');
 /**
  * The stop at the top of receive and merge, before any git command that could run a hook: records the baseline on first
  * use, and on a difference stops (exit 1, nothing changed: no status, no blocker, no fix round). It is sticky until the
- * owner removes the difference or accepts it; there is no override flag.
+ * owner removes the difference or accepts it, or sets config gitSurface to warn or off (GB.stopDetail).
  */
 function stopOnDrift(again, extra = () => []) {
   GB.ensure(FOLDER, GIT_ROOT);
-  const detail = GB.driftDetail(FOLDER, GIT_ROOT);
+  const detail = GB.stopDetail(FOLDER, GIT_ROOT, { cq: CQ });
   if (detail) die([GB.driftMessage({ ...detail, cq: CQ, again }), ...extra()].join('\n'));
 }
 
@@ -253,6 +253,8 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
     { cwd, encoding: 'utf8', env: process.env, maxBuffer: 1 << 26 },
   );
   const durationSec = Math.round((Date.now() - t0) / 100) / 10;
+  // Mode "warn": the gates' own output is only shown when they are red, so what the run left behind is said here.
+  if (GB.mode() === 'warn') GB.stopDetail(FOLDER, GIT_ROOT, { cq: CQ });
   const found = GE.latest(GE.readStore(storeFile).entries, { sha: tip, kinds: ['quick'], commands, ...trust });
   // Written by THIS run (not before it started; a second of slack for the clock's resolution), or none.
   const entry = found && Date.parse(found.time) >= t0 - 1000 ? found : null;
