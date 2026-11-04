@@ -51,6 +51,12 @@
       name: 'Merge stopped',
       next: (id) => `Next: fix the cause named above, then cq merge ${id} again. Nothing was merged by this stop.`,
     },
+    'track-question': {
+      name: 'The track asks you',
+      next: (id) =>
+        `Next: answer, and the orchestrator passes it on in a new round (cq resume ${id} --reason context), or cq set ${id} cancelled. ` +
+        `If it needs a file the task does not own: cq edit ${id} --files <files> first. A finished delivery that needs no answer can be merged.`,
+    },
     'gate-red': {
       name: 'Gates red',
       next: (id) => `Next: the orchestrator starts a fix round (cq resume ${id} --reason fix), or cq merge ${id} --resume once the cause is fixed.`,
@@ -236,7 +242,7 @@
       id: h.id,
       title: h.title || h.id,
       text: null,
-      context: [h.stop.note, stop.next(h.id)].filter(Boolean),
+      context: [h.stop.note, h.stop.file ? `The whole text: ${h.stop.file}` : null, stop.next(h.id)].filter(Boolean),
       recommendation: options[0].label,
       impact: taskImpact(0, h),
       options,

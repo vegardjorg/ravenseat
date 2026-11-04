@@ -648,6 +648,8 @@ export function cmdResume() {
     const x = q.tasks.find((y) => y.id === id);
     const reserved = reserveAttempt(x, { round, head, scratch, rows: attemptLog });
     if (found.report) x.report_seen = Math.max(Number(x.report_seen ?? 0), found.report.mtimeMs);
+    // The new round is the answer to what the track asked.
+    if (L.openBlockOf(x)?.code === 'track-question') L.closeBlock(x);
     (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}) });
     return reserved;
   });

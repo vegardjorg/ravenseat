@@ -393,4 +393,11 @@ if (isMain) {
   if (log.replaced.length) console.log(`  replaced: ${log.replaced.join(', ')}`);
   if (log.skipped.length) console.log(`  kept (already there): ${log.skipped.join(', ')}`);
   for (const n of log.notes) console.log(`  ${n}`);
+  // A kept copy may be older than the plugin: the mission every agent gets is built from it.
+  if (!flags.has('--overwrite')) {
+    const PF = require('./lib/projectFiles.js');
+    const stale = PF.staleFiles(PLUGIN_ROOT, target);
+    const message = PF.staleMessage(stale);
+    if (message) console.log(`  NOTE: ${message}.\n  ${stale.changed.length ? PF.STALE_FIX : 'Run cq setup again to add the new files.'}`);
+  }
 }

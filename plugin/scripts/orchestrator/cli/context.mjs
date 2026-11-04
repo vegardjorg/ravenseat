@@ -101,8 +101,9 @@ export const values = (name) => {
 // The positional arguments after the command, without flags and flag values (the flags with a value are listed in `withValue`).
 export const positional = (from, withValue = []) =>
   a.slice(from).filter((x, i, arr) => !x.startsWith('--') && !withValue.includes(arr[i - 1]));
-// Width of the terminal (narrow window: shorter titles). Outside a terminal (pipe, log) 110 is used.
-export const WIDTH = Math.max(60, Math.min(process.stdout.columns || 110, 160));
+// Width of the terminal (narrow window: shorter titles). Outside a terminal (a pipe, a log, the Bash tool of an agent)
+// nothing is cut: there is no window to fit, and a cut line can lose the command the reader was told to run.
+export const WIDTH = process.stdout.isTTY ? Math.max(60, Math.min(process.stdout.columns || 110, 160)) : Infinity;
 export const cut = (s, n) => {
   const t = String(s ?? '');
   return n <= 1 ? '' : t.length > n ? `${t.slice(0, n - 1)}…` : t;

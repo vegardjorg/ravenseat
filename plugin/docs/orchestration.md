@@ -296,7 +296,7 @@ started them. A new session adopts them without that notification:
   (right after STARTED WITHOUT AGENT), `cq state` (`silent`) and `cq orchestrator pulse` print `SILENT`, and the board
   marks the card "silent". Check the track, then `cq resume <ID> --reason context` and start the new agent, or stop it.
 - **Blocker reasons:** `cq block <ID> <code> [--note "…"]` / `cq unblock <ID>` record why a task is stuck, with codes
-  from one fixed table (`merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `context`, `quota`, `owner-question`, `dependency`, `no-agent`,
+  from one fixed table (`merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `context`, `quota`, `owner-question`, `track-question`, `dependency`, `no-agent`,
   `silent`, `other`). `cq merge` opens `merge-conflict` (a real conflict), `merge-guard` (protected paths), `merge-stopped` (any other stop
   in the merge step, such as the identity guard) or `gate-red` (a stop in the gates) by itself and closes the open one
   after the next successful merge; a green `cq receive` closes `gate-red` too. A task in review with one of these open

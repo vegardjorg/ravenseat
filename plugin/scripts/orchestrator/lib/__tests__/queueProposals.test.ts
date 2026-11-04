@@ -266,3 +266,21 @@ describe('queue.mjs proposals, add and orchestrator pulse (against a temporary r
     expect(run('proposals', 'log', '--json').out).toContain('"undone"');
   });
 });
+
+describe('a mission that names a protected path the task does not own (test round 2: M22)', () => {
+  const names = (PR as unknown as { missionNamesProtected: (t: unknown, l: string[]) => string | null }).missionNamesProtected;
+  const list = ['.claude/', '**/.claude/', '.github/workflows/', 'lefthook.yml', 'tsconfig*.json'];
+  it('is named, in the title or the mission, also with backslashes', () => {
+    expect(names({ title: 'x', mission: 'Change .claude/settings.json so it runs' }, list)).toBe('.claude/');
+    expect(names({ title: 'Update .github/workflows/ci.yml', mission: '' }, list)).toBe('.github/workflows/');
+    expect(names({ mission: 'Edit .claude\\settings.json' }, list)).toBe('.claude/');
+    expect(names({ mission: 'Add a hook to lefthook.yml' }, list)).toBe('lefthook.yml');
+  });
+  it('is quiet when the task owns it, when nothing is named, on a similar name and on globs', () => {
+    expect(names({ mission: 'Change .claude/settings.json', owned_files: ['.claude/settings.json'] }, list)).toBeNull();
+    expect(names({ mission: 'Fix the parser', owned_files: ['src/a.ts'] }, list)).toBeNull();
+    expect(names({ mission: 'See my.claude/notes and x.github/workflows/' }, list)).toBeNull();
+    expect(names({ mission: 'tsconfig.json needs a look' }, list)).toBeNull();
+    expect(names({ mission: 'Change .claude/settings.json' }, [])).toBeNull();
+  });
+});

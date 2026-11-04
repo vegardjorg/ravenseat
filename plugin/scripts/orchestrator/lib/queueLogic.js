@@ -134,6 +134,8 @@ const {
 const {
   parseResult, parseFindings, batchFindings, lastAnswer, firstUserMessage, mentionsTask, taskAgentTypes,
   agentsForTask, sumCost, costStatistics, packageFiles, dbObjectsFromDiff, reviewPackageIndex, reviewerPrompt,
+  ownerQuestionSection,
+  trackQuestion,
 } = require('./logic/results.js');
 const {
   planMatch, fileRootMatch, suggestProject, classifyQueue, prefixWarnings, addProjectWarnings,
@@ -373,6 +375,8 @@ module.exports = {
   trackMessage,
   stateLine,
   summaryView,
+  ownerQuestionSection,
+  trackQuestion,
   parseResult,
   parseFindings,
   batchFindings,

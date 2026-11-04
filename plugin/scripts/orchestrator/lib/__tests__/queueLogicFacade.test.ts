@@ -45,7 +45,7 @@ const EXPORTS = [
   'longestPrefix', 'markLogged', 'mentionedIds', 'mentionsTask', 'mergePlan', 'migrBlockText', 'migrFiles',
   'migrSetup', 'migrTens', 'minFreeMemoryFor', 'missingProject', 'modelFor', 'modelPart', 'moveBlockInText',
   'newCursor', 'newRegister', 'nextMigrGuard', 'nightGuard', 'openBlock', 'openBlockOf', 'openQuestion',
-  'orchestratorStatus', 'ownStep', 'ownerAnswerBonus', 'packageFiles', 'park', 'parkedNow', 'parkedValue',
+  'orchestratorStatus', 'ownStep', 'ownerAnswerBonus', 'ownerQuestionSection', 'packageFiles', 'park', 'parkedNow', 'parkedValue',
   'parseEvidence', 'parseFindings', 'parseLimit', 'parseMoveBlock', 'parseNightWindow', 'parseResult', 'parseStep',
   'parseToDate', 'pick', 'pickChoice', 'pickable', 'planMatch', 'prefixWarnings', 'projectFor', 'projectOverview', 'projectPaused',
   'promptTask', 'pushPlan', 'qaAutoOutcome', 'qaConfig', 'qaDeviation', 'qaList', 'qaOk', 'qaSplit',
@@ -56,7 +56,7 @@ const EXPORTS = [
   'setArea', 'setFocus', 'setQuestion', 'setStatus', 'silentCandidates', 'silentLines', 'silentMinFor',
   'silentTracks', 'smallTaskError', 'spaceUse', 'startGuard', 'startedWithoutAgent', 'state', 'stateLine',
   'statusAtAdd', 'stepMatch', 'stepText', 'stepTitle', 'successors', 'suggestProject', 'sumCost', 'summaryView',
-  'syncFocusEnd', 'takenBlocks', 'trackBlock', 'trackFileWarning', 'trackFolderRound', 'trackMessage', 'uncommittedCollision',
+  'syncFocusEnd', 'takenBlocks', 'trackBlock', 'trackFileWarning', 'trackFolderRound', 'trackMessage', 'trackQuestion', 'uncommittedCollision',
   'uncommittedSkipped', 'undoEntry', 'unlogged', 'validQuestionId', 'validate', 'validateEvidence',
   'validateNewField', 'waitingOnError', 'windDownGuard', 'withIndex', 'withoutAgentLines',
 ];

@@ -238,6 +238,7 @@ const BLOCK_CODES = [
   { code: 'context', text: 'the agent ran out of context' },
   { code: 'quota', text: 'the usage quota or budget stopped it' },
   { code: 'owner-question', text: 'waiting on an owner answer' },
+  { code: 'track-question', text: 'the track delivered and asks the owner something' },
   { code: 'dependency', text: 'waiting on another task' },
   { code: 'no-agent', text: 'marked running without an agent' },
   { code: 'silent', text: 'the agent went silent' },

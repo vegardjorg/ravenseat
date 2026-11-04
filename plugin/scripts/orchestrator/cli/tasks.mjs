@@ -357,6 +357,11 @@ export function cmdAdd() {
       console.log(
         `WARNING: ${n.id} owns the protected path ${owned}, so the merge guard will not stop its changes there. Remove it from the task's files unless that is what you want.`,
       );
+    const named = PR.missionNamesProtected(n, protectedPaths);
+    if (named)
+      console.log(
+        `WARNING: ${n.id} names the protected path ${named} without owning it. If the task is to change it, add it with --files (cq edit ${n.id} --files <files>): the agent will otherwise refuse, or the merge guard stops the change.`,
+      );
   }
   for (const x of added.projectWarnings) console.log(`WARNING: ${x}`);
   for (const x of added.planWarnings) console.log(`WARNING: ${x}`);

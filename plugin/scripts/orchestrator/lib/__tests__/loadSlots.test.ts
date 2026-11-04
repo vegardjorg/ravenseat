@@ -323,3 +323,23 @@ describe('queue.mjs: load-aware next and fill', () => {
     expect(run(['limit'], 'free=20').out).toContain('slots now: 2 of 4 slots: free memory 20 %');
   });
 });
+
+describe('the fix task for a red base goes ahead of the slots (test round 2: M14)', () => {
+  const base = (over: Record<string, unknown> = {}) => task('BASE-1', { added_by: 'base gate', value: 10, ...over });
+  const review = (id: string) => task(id, { status: 'review' });
+  const queue = (tasks: unknown[], max = 2) => ({ tasks, limits: { maxConcurrent: max, maxDPlus: 2, maxPerDomain: 7, maxDb: 6, minFreeMemoryPct: 10 }, resolved: [] });
+  it('deliveries that cannot merge hold every slot: the fix task still starts, and nothing else does', () => {
+    const ids = L.selectNext(queue([review('R0'), review('R1'), task('A'), base()]) as never).map((v) => v.id);
+    expect(ids).toEqual(['BASE-1']);
+  });
+  it('also when the load has closed the slots, and for the fix task from the CI watch', () => {
+    const q = queue([task('A'), base()], 5);
+    if (!darwin) expect(L.selectNext(q as never, Date.now(), { load: { freeMemoryPct: 11 } }).map((v) => v.id)).toContain('BASE-1');
+    const ci = queue([review('R0'), review('R1'), task('CI-1', { added_by: 'ci watch' })]);
+    expect(L.selectNext(ci as never).map((v) => v.id)).toEqual(['CI-1']);
+  });
+  it('an ordinary task of the same value still waits for a slot', () => {
+    const q = queue([review('R0'), review('R1'), task('A', { value: 10 })]);
+    expect(L.selectNext(q as never)).toEqual([]);
+  });
+});

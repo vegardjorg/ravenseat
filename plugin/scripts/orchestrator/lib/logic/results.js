@@ -44,6 +44,9 @@ function keyValues(rest) {
   return out;
 }
 
+/** At most this much of a report's owner questions is printed. */
+const QUESTION_TEXT_MAX = 1500;
+
 const numberOrNull = (v) => (v != null && /^\d+$/.test(v) ? Number(v) : null);
 
 /**
@@ -72,6 +75,30 @@ function parseResult(text) {
     edge: kv.edge ?? null,
     extra,
   };
+}
+
+/** The text under the "Owner questions" heading of a report (up to the next heading), or null. */
+function ownerQuestionSection(text) {
+  const lines = String(text ?? '').split(/\r?\n/);
+  const start = lines.findIndex((l) => /^\s*(#{1,6}\s*|\*\*)?owner questions?\b/i.test(l));
+  if (start < 0) return null;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => /^\s*#{1,6}\s/.test(l));
+  const body = (end < 0 ? rest : rest.slice(0, end)).join('\n').trim();
+  return body && !/^[-*\s]*(none|-)?\.?$/i.test(body) ? body.slice(0, QUESTION_TEXT_MAX) : null;
+}
+
+/**
+ * The owner questions a track says it has (`ownerQuestions=<n>` on the RESULT line), for the output and the card in cq
+ * decide. null when it says it has none: the number decides, since a report often has the heading with "none" under it.
+ * @returns {null | { count: number, text: string|null, note: string }}
+ */
+function trackQuestion({ result, reportText = null, reply = null }) {
+  const count = result?.ownerQuestions ?? 0;
+  if (!count) return null;
+  const text = ownerQuestionSection(reportText) ?? ownerQuestionSection(reply);
+  const first = text?.split(/\r?\n/).map((l) => l.replace(/^[\s*\-\d.)]+/, '').trim()).find(Boolean);
+  return { count, text, note: first ?? `${count} owner question(s) in the track's report` };
 }
 
 /**
@@ -445,6 +472,8 @@ function reviewerPrompt({ o, type, folder }) {
 
 module.exports = {
   parseResult,
+  ownerQuestionSection,
+  trackQuestion,
   parseFindings,
   batchFindings,
   lastAnswer,

@@ -32,6 +32,10 @@ const { focusStatus } = require('./focus.js');
  * next ones in the order take their slots, so the parallelism is kept.
  */
 function selectNext(queue, now = Date.now(), { uncommitted = [], load = null, skip = null } = {}) {
+  // The fix task for a red base (added by the base gate or the CI watch) is the only way forward: every delivery in review
+  // holds a slot and cannot merge until the base is green, so waiting for a free slot could wait for ever. It goes ahead
+  // of the slot count and the load-aware slots. The hard stops (the machine is full, budget, wind-down) still apply.
+  const fixesTheBase = (o) => o.added_by === 'base gate' || o.added_by === 'ci watch';
   const tasks = queue.tasks ?? [];
   const register = queue.projects ?? {};
   const use = spaceUse(queue);
@@ -60,7 +64,7 @@ function selectNext(queue, now = Date.now(), { uncommitted = [], load = null, sk
 
   const selected = [];
   for (const { o, s, r } of candidates) {
-    if (available <= 0) break;
+    if (available <= 0 && !fixesTheBase(o)) continue;
     if (o.class === 'D+' && dPlus >= g.maxDPlus) continue;
     if (hasMigr(o) && db >= g.maxDb) continue;
     if ((perDomain.get(o.domain) ?? 0) >= g.maxPerDomain) continue;

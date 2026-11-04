@@ -175,7 +175,7 @@
       return [
         { text: 'Update the plugin in a terminal:', command: `claude plugin update ${PLUGIN}@${MARKETPLACE}` },
         { text: 'Run /reload-plugins in Claude Code, or start a new session.', command: '/reload-plugins' },
-        { text: 'Refresh the project settings (the status line path holds the version):', command: 'cq setup --settings' },
+        { text: 'Refresh the project settings (the status line path holds the version). It also names the project files older than the plugin:', command: 'cq setup --settings' },
       ];
     const target = projectFolder ? `"${String(projectFolder).split('\\').join('/')}"` : '<your project folder>';
     return [

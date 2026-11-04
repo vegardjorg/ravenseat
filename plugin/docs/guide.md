@@ -124,6 +124,12 @@ stopped at 400k so a long chat does not keep paying for its whole history; compa
 the message with `continue:` to send it anyway. The limits can be changed with environment
 variables ([orchestration](orchestration.md)).
 
+**After a plugin update.** Run `cq setup --settings` (it refreshes the status line path) and `cq doctor`. The docs and
+the mission template in `docs/queue/` are your project's own copies, so an update leaves them as they are, and agents
+keep getting the old instructions. Doctor and setup name the ones that differ; `cq setup --overwrite --dry` lists what
+would be replaced, and `cq setup --overwrite` replaces them (your own edits in them are lost, `queue.config.json` is
+kept). Commit the result.
+
 **Status line and handover.** `cq setup --settings` adds a status line with context, cost, quota and running
 tracks (run it again after a plugin update). The orchestrator keeps a handover note; after compaction it reads only
 the "Now" part, and a new orchestrator chat can adopt tracks that are still running (`cq deliveries`, `cq resume`).

@@ -98,6 +98,25 @@ function ownsProtected(task, protectedPaths) {
 }
 
 /**
+ * The protected path the task's title or mission names without the task owning it, or null. Such a task costs a round
+ * for nothing: the agent should refuse the file (the mission template) or, if it changes it, the merge guard stops it.
+ * Only literal entries are looked for: a glob says nothing about what a sentence means.
+ */
+function missionNamesProtected(task, protectedPaths) {
+  const said = `${task?.title ?? ''}\n${task?.mission ?? ''}`.replace(/\\/g, '/').toLowerCase();
+  for (const raw of protectedPaths ?? []) {
+    const entry = String(raw ?? '').trim().replace(/^(\*\*\/|\.\/)+/, '');
+    if (!entry || /[*?]/.test(entry)) continue;
+    const at = said.indexOf(entry.toLowerCase());
+    if (at < 0) continue;
+    // A path of its own, not the end of another name (my.claude/, x.github/).
+    if (at > 0 && /[\w./-]/.test(said[at - 1])) continue;
+    if (!ownsProtected(task, [raw])) return entry;
+  }
+  return null;
+}
+
+/**
  * Should the queue accept this proposal by itself?
  * @param {object} task
  * @param {{ enabled, classes, maxEstimateMin, maxValue }} rules rulesFor(...)
@@ -283,6 +302,7 @@ module.exports = {
   rulesFor,
   rulesError,
   ownsProtected,
+  missionNamesProtected,
   autoAcceptDecision,
   openLegalPlans,
   undoneIds,

@@ -636,10 +636,13 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
   }));
 
   // A task in review whose merge or gates stopped: nothing moves until someone acts, however young it is. A running task
-  // is left out: its fix round is already under way.
+  // is left out: its fix round is already under way. The exception is a track that asked the owner and left: it can still
+  // be "running" (no commits), with nothing under way.
   const stopInfo = (k) => {
     const b = L.openBlockOf(map.perId.get(k.id));
-    return k.status === 'review' && b && DEC.STOP_TEXT[b.code] ? { code: b.code, note: b.note ?? null } : null;
+    return (k.status === 'review' || b?.code === 'track-question') && b && DEC.STOP_TEXT[b.code]
+      ? { code: b.code, note: b.note ?? null, file: b.file ?? null }
+      : null;
   };
   const stuck = [...(columns.inProgress ?? []), ...(columns.review ?? [])]
     .filter((k) => k.aging || (k.status === 'picked' && k.old) || stopInfo(k))

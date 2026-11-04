@@ -330,13 +330,43 @@ export function cmdReceive() {
   const branch = o0.branch ?? branchFor(id);
   const gi = branchInfo(branch);
   if (!gi.exists) die(`Branch ${branch} does not exist.`);
-  if (gi.commits === 0 && !a.includes('--force'))
+  /** Prints the track's owner questions. They would otherwise stay in a file nobody opens. */
+  const printQuestion = (asked) => {
+    console.log(`Owner question(s) from the track (${asked.count}), also in ${CQ} decide:`);
+    console.log(asked.text ?? "  (no \"Owner questions\" section: read the track's report and answer)");
+  };
+  /** The card in cq decide. The report's path goes with it, since the note holds only the start of the question. */
+  const openQuestion = (o, asked, file) => {
+    const opened = L.openBlock(o, 'track-question', { note: asked.note });
+    if (opened.block && file) opened.block.file = file;
+  };
+  if (gi.commits === 0 && !a.includes('--force')) {
+    // No commits is no delivery, but the track may have said why: a mission it could not do without the owner's answer.
+    // What it said is read first, so the answer does not stay in a file while the task looks like it is running.
+    const reply = lastTrackReply(taskAgents(o0));
+    const found = trackReport(o0, [scratch, o0.scratchpad ?? null]);
+    const file = found.report?.path && fs.existsSync(found.report.path) ? found.report.path : null;
+    // A report from before the last cq resume has been dealt with (resume saves report_seen).
+    const fresh = !file || found.report.mtimeMs > Number(o0.report_seen ?? 0);
+    const reportText = file && fresh ? fs.readFileSync(file, 'utf8') : null;
+    const said = fresh ? (L.parseResult(val('--result')) ?? L.parseResult(reply) ?? L.parseResult(reportText)) : null;
+    if (said) console.log(`The track says: ${said.line}`);
+    const asked = L.trackQuestion({ result: said, reportText, reply });
+    if (asked) {
+      printQuestion(asked);
+      edit((queue) => {
+        const o = queue.tasks.find((x) => x.id === id);
+        o.result = said;
+        openQuestion(o, asked, file);
+      });
+    }
     die(
       `Nothing to receive: ${branch} has no commits ahead of ${BASE}, and ${id} stays ${o0.status}.\n` +
         'The agent may not have committed: look for uncommitted work in its worktree (git worktree list).\n' +
         `Next: ${CQ} resume ${id} --reason context for a new round, ${CQ} set ${id} done if the work is already on ${BASE}, ` +
         `or ${CQ} set ${id} cancelled --remark "<why>". --force makes an empty package anyway.`,
     );
+  }
   const scope = `${BASE}...${branch}`;
   const folder = path.join(scratch, `rev-${id}`);
   // The package is made again every time (a new round after a fix replaces the old one). Only files we made ourselves.
@@ -390,6 +420,8 @@ export function cmdReceive() {
     L.parseResult(val('--result')) ??
     L.parseResult(trackReply) ??
     L.parseResult(reportText);
+  const asked = L.trackQuestion({ result, reportText, reply: trackReply });
+  if (asked) printQuestion(asked);
   // The quick gates bound to the delivered tip (receiveGates), BEFORE the done command and any reviewer: the track's own
   // claim is informational only. A PARTIAL track is known to be unfinished, so no gate runs for it.
   if (result?.gates != null)
@@ -554,6 +586,8 @@ export function cmdReceive() {
     o.t_receive ??= new Date().toISOString();
     // The gates and the done command are green on this delivery: an earlier gate-red is over.
     if (result?.status !== 'PARTIAL' && L.openBlockOf(o)?.code === 'gate-red') L.closeBlock(o);
+    // A stop that is already open says more about what blocks the task than the question does.
+    if (asked && (!L.openBlockOf(o) || L.openBlockOf(o).code === 'track-question')) openQuestion(o, asked, trackFound.report?.path ?? null);
     recordAttempt(o);
     autoCleanFocus(queue, `receive ${id}`);
     return o;
@@ -565,12 +599,23 @@ export function cmdReceive() {
     `${id}: review · ${result ? result.line : 'no RESULT line (read trackReply.md)'}\n` +
       `Package: ${folder} (00-package.md; ${copied.length} file(s), ${dbObjects.length} DB object(s))`,
   );
+  // PARTIAL: receive ran no gates on it (above), so the delivery says nothing about whether it works.
+  if (result?.status === 'PARTIAL')
+    console.log(`${id} delivered PARTIAL: unfinished, so no gates and no done command ran on it. Do not merge it; next: ${CQ} resume ${id} --reason context.`);
+  // The track's count is its own claim; a report that says nothing was committed, on a branch with commits, is worth a look.
+  if (result?.commits === 0 && gi.commits > 0)
+    console.log(`NB: the track's RESULT says commits=0, but the branch has ${gi.commits}. Read the diff, not only the report.`);
   // No report file: what the mission asks for there (owner questions, assumptions, red first) must be looked for elsewhere.
-  if (!files.report)
+  if (!files.report) {
     console.log(
       `WARNING: ${id} has no track-result.md, so the package only has ${trackReply ? "the track's answer (trackReply.md)" : 'the diff'}. ` +
         'Check owner questions and assumptions there before you merge.',
     );
+    // An old copy of the mission template can name another report file: the usual cause after a plugin update.
+    const PF = require('./lib/projectFiles.js');
+    if (PF.staleFiles(path.resolve(HERE, '..', '..'), MAIN_TREE)?.mission)
+      console.log(`${PF.MISSION} differs from the plugin, and an old template can ask for another report file: see ${CQ} doctor.`);
+  }
   // The report cap (about 1,500 chars); the long part belongs in track-result.md.
   const capWarning = L.reportCapWarning(trackReply);
   if (capWarning) console.log(capWarning);

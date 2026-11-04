@@ -52,6 +52,7 @@ describe('blocker reasons (pure)', () => {
       'context',
       'quota',
       'owner-question',
+      'track-question',
       'dependency',
       'no-agent',
       'silent',

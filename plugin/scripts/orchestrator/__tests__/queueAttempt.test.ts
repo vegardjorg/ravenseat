@@ -683,3 +683,116 @@ describe('compatibility', () => {
     expect(takeover.status, takeover.stderr).toBe(0);
   });
 });
+
+describe('what the track says reaches the owner (test round 2: M20, M21)', () => {
+  const asks = (id: string, commits = 0, status = 'PARTIAL') =>
+    [
+      `RESULT status=${status} branch=queue/${id} commits=${commits} migr=- gates=- probe=- ownerQuestions=1 edge=-`,
+      '',
+      '## Owner questions',
+      '',
+      '- The mission needs .claude/settings.json, which the task does not own. Add it to the task? Recommended: yes.',
+      '',
+      '## Assumptions',
+      '',
+      '- none',
+    ].join('\n');
+
+  it('no commits: the status and the question are printed, and the question opens a card in cq decide', () => {
+    const p = project([task('A')]);
+    p.run(['start', 'A']);
+    if (!p.g(['branch', '--list', 'queue/A'])) p.g(['branch', 'queue/A']);
+    p.report('A', asks('A'));
+    const r = p.run(['receive', 'A']);
+    expect(r.code).toBe(1);
+    expect(r.error).toContain('Nothing to receive');
+    expect(r.out).toContain('status=PARTIAL');
+    expect(r.out).toContain('Add it to the task?');
+    expect(r.out).not.toContain('## Assumptions');
+    expect(p.find('A').status).toBe('running');
+    const decide = JSON.parse(p.run(['decide', '--json']).out);
+    const card = decide.items.find((x: { id: string }) => x.id === 'A');
+    expect(card.kind).toBe('stopped');
+    expect(card.context.join(' ')).toContain('Add it to the task?');
+    expect(card.context.join(' ')).toContain('track-result.md');
+    expect(card.context.join(' ')).toContain('resume A --reason context');
+  });
+  it('the card goes when the task is resumed, and an old report does not bring it back', () => {
+    const p = project([task('A')]);
+    p.run(['start', 'A']);
+    if (!p.g(['branch', '--list', 'queue/A'])) p.g(['branch', 'queue/A']);
+    p.report('A', asks('A'));
+    p.run(['receive', 'A']);
+    expect(p.run(['resume', 'A', '--reason', 'context']).code).toBe(0);
+    const open = () => JSON.parse(p.run(['decide', '--json']).out).items.filter((x: { kind: string }) => x.kind === 'stopped');
+    expect(open()).toEqual([]);
+    p.run(['receive', 'A']);
+    expect(open()).toEqual([]);
+  });
+  it('no commits and no question: the same refusal as before, and no card', () => {
+    const p = project([task('A')]);
+    p.run(['start', 'A']);
+    if (!p.g(['branch', '--list', 'queue/A'])) p.g(['branch', 'queue/A']);
+    p.report('A', RESULT('A', 'PARTIAL').replace('commits=1', 'commits=0'));
+    expect(p.run(['receive', 'A']).error).toContain('Nothing to receive');
+    expect(JSON.parse(p.run(['decide', '--json']).out).items.filter((x: { kind: string }) => x.kind === 'stopped')).toEqual([]);
+  });
+  it('a PARTIAL delivery with commits: says it is unfinished and that nothing ran, shows the question, and the wrong commit count', () => {
+    const p = project([task('A')]);
+    p.run(['start', 'A']);
+    p.branch('A');
+    p.report('A', asks('A'));
+    const r = p.run(['receive', 'A']);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toMatch(/PARTIAL: unfinished/);
+    expect(r.out).toContain('resume A --reason context');
+    expect(r.out).toContain('Add it to the task?');
+    expect(r.out).toMatch(/commits=0.*branch has/);
+    expect(p.find('A').status).toBe('review');
+    expect(JSON.parse(p.run(['decide', '--json']).out).items.find((x: { id: string }) => x.id === 'A').kind).toBe('stopped');
+  });
+  it('a DONE delivery without questions gets none of these lines', () => {
+    const p = project([task('A')]);
+    p.run(['start', 'A']);
+    p.branch('A');
+    p.report('A', RESULT('A'));
+    const r = p.run(['receive', 'A']);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).not.toMatch(/PARTIAL: unfinished|Owner question/);
+    expect(r.out).not.toMatch(/branch has/);
+  });
+  it('no report file and a mission template older than the plugin: the warning points at cq doctor', () => {
+    const p = project([task('A')]);
+    p.run(['start', 'A']);
+    p.branch('A');
+    // The harness's project root is the folder (QUEUE_ROOT), not the repo.
+    fs.mkdirSync(path.join(p.folder, 'docs', 'queue'), { recursive: true });
+    fs.writeFileSync(path.join(p.folder, 'docs', 'queue', 'mission-template.md'), 'old\n');
+    const r = p.run(['receive', 'A']);
+    expect(r.out).toContain('has no track-result.md');
+    expect(r.out).toMatch(/mission-template\.md differs.*cq doctor/);
+  });
+});
+
+describe('cq add warns about a protected path in the mission (test round 2: M22)', () => {
+  it('names it, and points at --files', () => {
+    const p = project([], { mode: 'lite' });
+    const r = p.run(['add', 'Change the settings', '--mission', 'Set autoCompactWindow in .claude/settings.json']);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toMatch(/names the protected path \.claude\/ without owning it/);
+    expect(r.out).toContain('--files');
+    const owned = p.run(['add', 'Change them again', '--mission', 'Set a key in .claude/settings.json', '--files', '.claude/settings.json']);
+    expect(owned.out).not.toMatch(/names the protected path/);
+    expect(owned.out).toMatch(/owns the protected path/);
+  });
+});
+
+describe('long lines outside a terminal (test round 2: L1)', () => {
+  it('cq decide keeps the whole title and command when the output is piped', () => {
+    const title = `Long title ${'x'.repeat(200)} the end`;
+    const p = project([task('A', { status: 'proposed', title, added_by: 'agent' })]);
+    const r = p.run(['decide']);
+    expect(r.out).toContain(`${title}`);
+    expect(r.out).not.toContain('…');
+  });
+});

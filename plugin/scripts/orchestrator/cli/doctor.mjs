@@ -349,6 +349,20 @@ function checkWorktrees() {
   return out;
 }
 
+/** What a plugin update leaves behind: the project's own copies of the docs and mission template, and the status line path. */
+function checkProjectFiles() {
+  const PF = require('./lib/projectFiles.js');
+  const plugin = path.resolve(HERE, '..', '..');
+  const out = [];
+  const stale = PF.staleFiles(plugin, MAIN_TREE);
+  const message = PF.staleMessage(stale);
+  // Only the mission template changes what agents do; the rest is reading matter, and a file that is merely new is added by cq setup.
+  if (message) out.push((stale.mission ? warn : info)('project files', message, stale.changed.length ? PF.STALE_FIX : 'cq setup adds the new files and keeps the rest'));
+  for (const s of PF.staleStatusLines(plugin, MAIN_TREE))
+    out.push(warn('project files', `the status line in ${s.file} runs plugin version ${s.version}, not ${PF.pluginVersion(plugin)}`, 'cq setup --settings'));
+  return out;
+}
+
 /** Queue branches of done or cancelled tasks that are still there. */
 function checkBranches() {
   const q = readJson(FILE);
@@ -445,7 +459,7 @@ function checkGit() {
 
 /** `cq doctor [--json]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const checks = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, ...REPO_CHECKS, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const checks = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, ...REPO_CHECKS, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

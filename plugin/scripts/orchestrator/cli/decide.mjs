@@ -84,13 +84,13 @@ export function decisionLines(j, { width = WIDTH, max = Infinity, cq = CQ } = {}
     for (const x of j.items.slice(0, max)) {
       out.push('');
       out.push(cut(`${x.nr}. ${x.verb.toUpperCase()}  ${x.id}  ${x.title}`, width));
-      out.push(cut(`   ${x.impact_line}`, width));
-      for (const c of x.context) out.push(cut(`   ${c}`, width));
+      out.push(`   ${x.impact_line}`);
+      for (const c of x.context) out.push(`   ${c}`);
       x.options.forEach((o, i) => {
         const label = `${i + 1}) ${o.label}${o.recommended ? ' (recommended)' : ''}`;
-        out.push(cut(`   ${label.padEnd(34)} ${o.cli ?? '(writes nothing)'}`, width));
+        out.push(`   ${label.padEnd(34)} ${o.cli ?? '(writes nothing)'}`);
       });
-      if (x.free) out.push(cut(`   ${'or in your own words:'.padEnd(34)} ${x.free.cli}`, width));
+      if (x.free) out.push(`   ${'or in your own words:'.padEnd(34)} ${x.free.cli}`);
     }
     if (j.items.length > max) out.push('', `... and ${j.items.length - max} more (${cq} decide --json for all).`);
   }
