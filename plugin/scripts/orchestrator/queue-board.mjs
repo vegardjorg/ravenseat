@@ -649,6 +649,17 @@ function flowPlans() {
   }
 }
 
+let revertedCache = { time: 0, commits: new Set() };
+/** The commits reverted on the base. Read at most once a minute, like the base tip. */
+function revertedNow() {
+  if (Date.now() - revertedCache.time > 60_000)
+    revertedCache = {
+      time: Date.now(),
+      commits: ES.revertedCommitsIn(gitRead(['log', BASE, '--grep=This reverts commit', '--format=%B'])),
+    };
+  return revertedCache.commits;
+}
+
 /** The flow figures for the last 14 days (lib/eventStatistics.js, the same as in cq cost); an error leaves the box out. */
 function boardFlow(queue, events) {
   try {
@@ -658,6 +669,7 @@ function boardFlow(queue, events) {
       to,
       plans: flowPlans(),
       reviewerTypes: L.REVIEWER_TYPES,
+      revertedCommits: revertedNow(),
     });
   } catch (e) {
     console.error(`the flow figures failed: ${e?.message ?? e}`);

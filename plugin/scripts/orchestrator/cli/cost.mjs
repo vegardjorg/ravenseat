@@ -13,7 +13,7 @@
 // =============================================================
 
 import {
-  a, CE, CH, CONFIG, cut, D, die, edit, FC, FOLDER, HELP, L, positional, read, readPlans, require, TK, val, WIDTH,
+  a, BASE, CE, CH, CONFIG, cut, D, die, edit, FC, FOLDER, git, HELP, L, positional, read, readPlans, require, TK, val, WIDTH,
 } from './context.mjs';
 import {
   dailyUsageFor, measureLoad, measurementLine, measureTask, readTimeLog, saveMeasurement, sinceTime,
@@ -200,7 +200,8 @@ export function cmdCost() {
     } catch {
       plans = null; // error-ignored: the findings are one input of the right-first-time figure
     }
-    const flow = ES.flowStatistics(queue, rows, { from, to, plans, reviewerTypes: L.REVIEWER_TYPES });
+    const revertedCommits = ES.revertedCommitsIn(git(['log', BASE, '--grep=This reverts commit', '--format=%B']));
+    const flow = ES.flowStatistics(queue, rows, { from, to, plans, reviewerTypes: L.REVIEWER_TYPES, revertedCommits });
     // Cost per task with all its runs (first track, fix rounds, continuations, reviewers, fix tasks), by cost. All
     // time unless --since, like the per-class lines.
     const perTask = CE.taskTotals({ queue, events, since: since ? Date.parse(since) : null });

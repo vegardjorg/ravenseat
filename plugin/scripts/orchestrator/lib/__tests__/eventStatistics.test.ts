@@ -93,6 +93,35 @@ describe('session cost and the orchestration overhead', () => {
 });
 
 describe('flow figures', () => {
+  it('a fix round that never ran is not counted; a reverted or cancelled merge is a defect', () => {
+    const done = at(DAY);
+    const sha = 'a'.repeat(40);
+    const queue = {
+      tasks: [
+        // Prepared with cq resume, no agent ever started.
+        { id: 'A', status: 'done', done, resumed: [{ round: 1, reason: 'fix' }], attempts: [{ round: 1, state: 'ended', outcome: 'expired' }] },
+        // Ran and delivered.
+        { id: 'B', status: 'done', done, resumed: [{ round: 1, reason: 'fix' }], attempts: [{ round: 1, state: 'ended', delivered_sha: 'x' }] },
+        // Merged, then undone on the base.
+        { id: 'C', status: 'done', done, merge_commit: sha },
+        // Merged, then cancelled.
+        { id: 'D', status: 'cancelled', t_merge: done, merge_commit: 'b'.repeat(40) },
+        // Cancelled without ever merging: not in the figures.
+        { id: 'E', status: 'cancelled' },
+      ],
+    };
+    const rows = [
+      { time: done, event: 'fixRound', task: 'A', reason: 'fix', round: 1 },
+      { time: done, event: 'fixRound', task: 'B', reason: 'fix', round: 1 },
+    ];
+    const revertedCommits = ES.revertedCommitsIn(`Revert "x"\n\nThis reverts commit ${sha}, reversing\n`);
+    const f = ES.flowStatistics(queue, rows, { from: T0, to: T0 + 14 * DAY, revertedCommits });
+    expect(f.fixRounds.started).toBe(1);
+    expect(f.firstPass).toMatchObject({ merged: 3, first_pass: 2 });
+    expect(f.rightFirstTime).toMatchObject({ merged: 4, right: 1, defects: 2 });
+    expect(f.rightFirstTime.misses.filter((m: { reverted: boolean }) => m.reverted).map((m: { id: string }) => m.id)).toEqual(['C', 'D']);
+  });
+
   it('flowStatistics: first pass, fix rounds, conflicts, base gate, pushes and triage in the window', () => {
     const done = at(DAY);
     const queue = {

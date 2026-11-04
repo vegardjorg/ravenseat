@@ -25,7 +25,8 @@
 // "nothing recorded", never as an error):
 //   rightFirstTime: a merged task (the same tasks as firstPass) is right first time when it had 0 fix rounds, no QA
 //     deviation (qa_status deviation or a qa_note), was not reopened (a changelog change of its status away from done),
-//     and has no post-merge defect. A post-merge defect is a fix task that names it (`fixes`, or `qa_original` for the
+//     and has no post-merge defect. A post-merge defect is a reverted merge (git says "This reverts commit <merge_commit>",
+//     or the task was cancelled after it merged: those count among the merged here), a fix task that names it (`fixes`, or `qa_original` for the
 //     QA fix chain; a base gate fix task names the task that made the base red) or a finding whose `finding.causes`
 //     names it (`cq finding --cause <id>`). Owner interventions are the changelog entries by owner or theBoard that
 //     change the task between its start (started, otherwise picked_at) and done. The changelog keeps the last 50
@@ -219,8 +220,22 @@ function overheadLines(o, label) {
 
 // ---- Flow figures ------------------------------------------------------------------------------------------------
 
-/** The fix rounds a task has had (queue.json `resumed` with reason fix; the same rule as lib/doneCheck.js). */
-const fixRounds = (o) => (Array.isArray(o?.resumed) ? o.resumed : []).filter((r) => r?.reason === 'fix').length;
+/**
+ * Did this `resumed` entry's round really run? `cq resume` only prepares a round, so its attempt (same round number)
+ * must have started or delivered. Tasks from before attempts existed have none: their rounds count.
+ */
+function roundRan(o, r) {
+  const attempts = (Array.isArray(o?.attempts) ? o.attempts : []).filter((x) => x?.round === r?.round);
+  return !attempts.length || attempts.some((x) => x.started || x.delivered_sha || x.state === 'running');
+}
+/** The fix rounds that ran. The cap in lib/doneCheck.js counts every one issued, on purpose: it stops a loop. */
+const fixList = (o) => (Array.isArray(o?.resumed) ? o.resumed : []).filter((r) => r?.reason === 'fix' && roundRan(o, r));
+const fixRounds = (o) => fixList(o).length;
+
+/** The commits a `git log --format=%B` text says were reverted ("This reverts commit <sha>"). */
+function revertedCommitsIn(text) {
+  return new Set([...String(text ?? '').matchAll(/This reverts commit ([0-9a-f]{7,40})/g)].map((m) => m[1]));
+}
 
 /** The task's `fixes` as a list (a string or a list; lib/fixLinks.js). */
 const fixesOf = (o) => (Array.isArray(o?.fixes) ? o.fixes : typeof o?.fixes === 'string' && o.fixes ? [o.fixes] : []);
@@ -233,8 +248,9 @@ const per10 = (n, of) => (of > 0 ? round1((n / of) * 10) : null);
  * @param {object[]} merged the tasks done in the window that are not fix tasks
  * @param {object} queue  for the other tasks (fix tasks) and the changelog
  * @param {object|null} plans the plan register (findings with `finding.causes`); null = no findings known
+ * @param {(o: object) => boolean} wasReverted the merge was undone afterwards: one defect
  */
-function rightFirstTime(merged, queue, plans) {
+function rightFirstTime(merged, queue, plans, wasReverted = () => false) {
   const tasks = (queue?.tasks ?? []).filter(Boolean);
   const log = (Array.isArray(queue?.changelog) ? queue.changelog : []).filter((e) => e && Array.isArray(e.changes));
   // The changelog keeps its last entries only: when entry 1 is gone, what happened before the oldest kept one is unknown.
@@ -255,7 +271,8 @@ function rightFirstTime(merged, queue, plans) {
       e.changes.some((c) => c?.id === o.id && c.field === 'status' && c.before === 'done' && c.after !== 'done'),
     );
     const rounds = fixRounds(o);
-    const d = fixTasks.length + caused.length;
+    const reverted = wasReverted(o);
+    const d = fixTasks.length + caused.length + (reverted ? 1 : 0);
     defects += d;
     if (!rounds && !qa && !reopened && !d) right += 1;
     else
@@ -264,7 +281,8 @@ function rightFirstTime(merged, queue, plans) {
         fix_rounds: rounds,
         qa_deviation: qa,
         reopened,
-        defects: [...fixTasks.map((t) => t.id), ...caused.map((p) => p.id)],
+        reverted,
+        defects: [...fixTasks.map((t) => t.id), ...caused.map((p) => p.id), ...(reverted ? [`${o.id} reverted`] : [])],
       });
     // Owner interventions: the owner's logged edits of the task while it ran (start to done).
     const start = Date.parse(o.started ?? o.picked_at ?? '');
@@ -307,7 +325,6 @@ function reviewerStatistics(queue, { from, to, types = null }) {
   const done = (queue?.tasks ?? []).filter(
     (o) => o && o.external !== true && o.status === 'done' && inWindow(Date.parse(o.done ?? '')) && Array.isArray(o.cost?.agents),
   );
-  const fixList = (o) => (Array.isArray(o.resumed) ? o.resumed : []).filter((r) => r?.reason === 'fix');
   // A red done command (from done_when) is no reviewer's: it neither counts as attributed nor gets a row.
   const from_ = (r) => (Array.isArray(r?.from) ? r.from : []).filter((x) => x !== DONE_WHEN);
   const rounds = done.flatMap(fixList);
@@ -437,7 +454,7 @@ function autonomyStatistics(queue, merged, rft, { from, to }) {
   };
   for (const o of done) {
     const alone = !ownerTouched(o, queue);
-    for (const r of (Array.isArray(o.resumed) ? o.resumed : []).filter((x) => x?.reason === 'fix')) {
+    for (const r of fixList(o)) {
       const k = (Array.isArray(r.from) ? r.from : []).includes(DONE_WHEN) ? 'done_when' : 'fix_rounds';
       corrected[k].total += 1;
       if (alone) corrected[k].without_owner += 1;
@@ -515,7 +532,7 @@ function inflowStatistics(queue, { from, to }) {
  * @param {{ from: number, to: number, plans?: object|null, reviewerTypes?: string[]|null }} window  plans = the plan
  *   register (for the findings' causes), reviewerTypes = queueLogic.REVIEWER_TYPES
  */
-function flowStatistics(queue, rows, { from, to, plans = null, reviewerTypes = null }) {
+function flowStatistics(queue, rows, { from, to, plans = null, reviewerTypes = null, revertedCommits = new Set() }) {
   const weeks = Math.max(1 / 7, (to - from) / (7 * DAY_MS));
   const inWindow = (t) => Number.isFinite(t) && t >= from && t < to;
   const tasks = (queue?.tasks ?? []).filter((o) => o && o.external !== true);
@@ -523,8 +540,17 @@ function flowStatistics(queue, rows, { from, to, plans = null, reviewerTypes = n
   const rounds = merged.map(fixRounds);
   const first = rounds.filter((n) => n === 0).length;
 
-  const rft = rightFirstTime(merged, queue, plans);
+  // A merge that was undone: the commit was reverted on the base, or the task was cancelled after it merged. A cancelled
+  // one is no longer "done", but it did merge, so right first time must still see it.
+  const cancelledMerges = tasks.filter(
+    (o) => o.status === 'cancelled' && o.merge_commit && inWindow(Date.parse(o.t_merge ?? o.done ?? '')) && !isFixTask(o),
+  );
+  const wasReverted = (o) => !!o.merge_commit && (o.status === 'cancelled' || revertedCommits.has(o.merge_commit));
+  const rft = rightFirstTime([...merged, ...cancelledMerges], queue, plans, wasReverted);
   const fixRows = rowsOf(rows, 'fixRound', from, to);
+  const byId = new Map(tasks.map((o) => [o.id, o]));
+  // The row is written when the round is prepared; a round that never ran is not one (a row without its task counts).
+  const ranRow = (r) => !byId.has(r.task) || roundRan(byId.get(r.task), r);
   const conflicts = rowsOf(rows, 'mergeConflict', from, to);
   const real = conflicts.filter((r) => !r.guard);
   const gates = rowsOf(rows, 'baseGate', from, to);
@@ -555,7 +581,7 @@ function flowStatistics(queue, rows, { from, to, plans = null, reviewerTypes = n
     },
     fixRounds: {
       per_task: merged.length ? round2(rounds.reduce((a, b) => a + b, 0) / merged.length) : null,
-      started: fixRows.filter((r) => r.reason === 'fix').length,
+      started: fixRows.filter((r) => r.reason === 'fix' && ranRow(r)).length,
       continuations: fixRows.filter((r) => r.reason !== 'fix').length,
     },
     mergeConflicts: {
@@ -745,6 +771,7 @@ module.exports = {
   orchestrationOverhead,
   overheadLines,
   fixRounds,
+  revertedCommitsIn,
   REVIEWER_HINT_RUNS,
   INFLOW_WEEKS,
   INFLOW_SOURCES,
