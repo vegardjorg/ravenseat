@@ -214,7 +214,7 @@ context size. The system keeps both small:
 - **Status line.** `statusline.mjs` shows `ctx 142k 71% | $3.21 | 5h 23% 7d 41% | tracks 2 (+1 review)`: context,
   session cost, the 5-hour and 7-day quota, and running tracks (the count is cached on the queue file's mtime, so
   it is cheap). A plugin cannot set `statusLine` itself, so `cq setup --settings` writes it to
-  `.claude/settings.json` with the plugin's absolute path; run it again after a plugin update. A status line of your
+  `.claude/settings.local.json` (personal, gitignored) with the plugin's absolute path; run it again after a plugin update. A status line of your
   own is kept. The line also saves the last quota reading in `<dataFolder>/rate-limits.json`, and
   `cq capacity --calibrate auto` uses its 7-day percentage as a calibration point (refused when it is over 1 h old).
 - **Context limits in every chat.** The same hook also watches every other chat in a project with the queue, not only

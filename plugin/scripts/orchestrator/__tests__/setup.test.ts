@@ -140,11 +140,16 @@ describe('setup.mjs mergeSettings', () => {
 
   const settingsFile = () => join(target, '.claude', 'settings.json');
   const read = () => JSON.parse(readFileSync(settingsFile(), 'utf8'));
+  const localFile = () => join(target, '.claude', 'settings.local.json');
+  const readLocal = () => JSON.parse(readFileSync(localFile(), 'utf8'));
   const pluginCommand = `node "${join(PLUGIN_ROOT, 'scripts', 'orchestrator', 'statusline.mjs').split('\\').join('/')}"`;
 
-  it('statusLine: a plugin install writes the absolute plugin path, a vendored one the $CLAUDE_PROJECT_DIR form', () => {
+  it('statusLine: a plugin install writes the absolute path to the personal settings, a vendored one the $CLAUDE_PROJECT_DIR form', () => {
     mergeSettings(target, { keys: true });
-    expect(read().statusLine).toMatchObject({ type: 'command', command: pluginCommand, padding: 0 });
+    expect(readLocal().statusLine).toMatchObject({ type: 'command', command: pluginCommand, padding: 0 });
+    // Never in the committed file: the path holds the user name and the version.
+    expect(read().statusLine).toBeUndefined();
+    expect(readFileSync(settingsFile(), 'utf8')).not.toContain('statusline.mjs');
     rmSync(settingsFile());
     mergeSettings(target, { keys: true, hooks: true });
     expect(read().statusLine.command).toBe('node "$CLAUDE_PROJECT_DIR/scripts/orchestrator/statusline.mjs"');
@@ -156,7 +161,7 @@ describe('setup.mjs mergeSettings', () => {
     expect(notes).toContain('statusLine=');
   });
 
-  it('statusLine: an old plugin path is refreshed, someone else`s status line is kept', () => {
+  it('statusLine: an old plugin path moves to the personal settings, someone else`s status line is kept', () => {
     mkdirSync(join(target, '.claude'));
     writeFileSync(
       settingsFile(),
@@ -164,13 +169,23 @@ describe('setup.mjs mergeSettings', () => {
         statusLine: { type: 'command', command: 'node "/old/cq/1.0.0/scripts/orchestrator/statusline.mjs"', padding: 1 },
       }),
     );
+    writeFileSync(localFile(), JSON.stringify({ permissions: { allow: ['Bash(ls)'] } }));
     mergeSettings(target, { keys: true });
-    expect(read().statusLine).toEqual({ type: 'command', command: pluginCommand, padding: 1 });
+    expect(read().statusLine).toBeUndefined();
+    // The personal file's other settings stay.
+    expect(readLocal()).toMatchObject({
+      permissions: { allow: ['Bash(ls)'] },
+      statusLine: { type: 'command', command: pluginCommand, padding: 1 },
+    });
+    // A second run changes nothing and reports nothing about it.
+    expect(mergeSettings(target, { keys: true }).join('\n')).not.toContain('statusLine=');
 
+    rmSync(localFile());
     writeFileSync(settingsFile(), JSON.stringify({ statusLine: { type: 'command', command: 'my-line.sh' } }));
     const notes = mergeSettings(target, { keys: true }).join('\n');
     expect(notes).toContain('statusLine: kept your own');
     expect(read().statusLine).toEqual({ type: 'command', command: 'my-line.sh' });
+    expect(existsSync(localFile())).toBe(false);
   });
 });
 

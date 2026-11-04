@@ -41,8 +41,8 @@ export const PLUGIN_ROOT = path.resolve(HERE, '..', '..');
 /** Where --ci writes the GitHub Actions template (relative to the target). */
 export const CI_WORKFLOW = '.github/workflows/cq-gates.yml';
 
-/** The lines .gitignore needs: the queue's data and the agents' worktrees. */
-export const GITIGNORE_LINES = ['scripts/.queue/', '.claude/worktrees/'];
+/** The lines .gitignore needs: the queue's data, the agents' worktrees and the personal settings (an absolute path). */
+export const GITIGNORE_LINES = ['scripts/.queue/', '.claude/worktrees/', '.claude/settings.local.json'];
 
 /**
  * Sets up `target`. Returns a log { copied, replaced, skipped, notes } and writes nothing when `dry`.
@@ -248,18 +248,44 @@ export function mergeSettings(target, o = {}) {
   const changes = [];
   const wanted = [];
   // statusLine (statusline.mjs): a plugin cannot set it, and $CLAUDE_PLUGIN_ROOT is not expanded in project settings,
-  // so a plugin install writes the plugin's absolute path. That path holds the plugin version, so a status line that
-  // is already ours (it runs scripts/orchestrator/statusline.mjs) is refreshed. Someone else's is kept untouched (no
-  // subkeys merged into it).
-  if (fresh.statusLine) {
+  // so a plugin install writes the plugin's absolute path. That path holds the user name and the plugin version, so it
+  // goes in .claude/settings.local.json (personal, not committed), and one left in settings.json by an earlier setup
+  // moves there. A status line that is already ours (it runs scripts/orchestrator/statusline.mjs) is refreshed. Someone
+  // else's is kept untouched (no subkeys merged into it).
+  const isOurs = (s) => String(s?.command ?? '').includes('scripts/orchestrator/statusline.mjs');
+  if (fresh.statusLine && !o.hooks) {
+    const localPath = path.join(target, '.claude', 'settings.local.json');
+    let local = null;
+    try {
+      local = fs.existsSync(localPath) ? JSON.parse(fs.readFileSync(localPath, 'utf8')) : {};
+    } catch (e) {
+      changes.push(`.claude/settings.local.json: could not read it as JSON (${e.message}); status line not set`);
+    }
+    const shared = existing.statusLine;
+    const own = local?.statusLine;
+    if (!local) {
+      /* said above */
+    } else if ((shared !== undefined && !isOurs(shared)) || (own !== undefined && !isOurs(own))) {
+      changes.push('statusLine: kept your own (the queue status line is scripts/orchestrator/statusline.mjs)');
+    } else {
+      const command = `node "${path.join(PLUGIN_ROOT, 'scripts', 'orchestrator', 'statusline.mjs').split(path.sep).join('/')}"`;
+      if (own?.command !== command || shared !== undefined) {
+        wanted.push(`statusLine=${command} (in .claude/settings.local.json)`);
+        if (o.keys) {
+          local.statusLine = { ...fresh.statusLine, ...shared, ...own, command };
+          delete existing.statusLine;
+          fs.mkdirSync(path.dirname(localPath), { recursive: true });
+          fs.writeFileSync(localPath, JSON.stringify(local, null, 2) + '\n');
+        }
+      }
+    }
+  } else if (fresh.statusLine) {
     const ours = { ...fresh.statusLine };
-    if (!o.hooks)
-      ours.command = `node "${path.join(PLUGIN_ROOT, 'scripts', 'orchestrator', 'statusline.mjs').split(path.sep).join('/')}"`;
     const own = existing.statusLine;
     if (own === undefined) {
       wanted.push(`statusLine=${ours.command}`);
       if (o.keys) existing.statusLine = ours;
-    } else if (String(own?.command ?? '').includes('scripts/orchestrator/statusline.mjs')) {
+    } else if (isOurs(own)) {
       if (own.command !== ours.command) {
         wanted.push(`statusLine=${ours.command} (refreshed)`);
         if (o.keys) existing.statusLine = { ...own, command: ours.command };
