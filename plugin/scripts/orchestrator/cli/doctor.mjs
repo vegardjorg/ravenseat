@@ -376,22 +376,28 @@ function checkBranches() {
     .filter((b) => have.has(b) && b !== CONFIG.baseBranch);
   // Claude Code's own agent branches: only merged ones with no worktree left (a running agent's new branch also counts
   // as merged, but it has a worktree).
-  const agents = (git(['for-each-ref', '--merged', CONFIG.baseBranch, '--format=%(refname:short)|%(worktreepath)', 'refs/heads/worktree-agent-*']) ?? '')
-    .split(/\r?\n/)
-    .map((l) => l.split('|'))
-    .filter(([b, wt]) => b && !wt)
-    .map(([b]) => b);
+  const agents = require('./lib/queueGit.js').mergedAgentBranches(git, CONFIG.baseBranch);
   if (!left.length && !agents.length) return [ok('branches', 'no branches of finished tasks left')];
+  // git refuses to delete a branch a worktree has checked out, so those need the worktree cleaned up first.
+  const checkedOut = new Set((gitWorktrees() ?? []).map((w) => w.branch).filter(Boolean));
+  const held = left.filter((b) => checkedOut.has(b));
+  const free = left.filter((b) => !checkedOut.has(b));
   const line = (what, list) => {
-    const shown = list.slice(0, 5).join(' ');
-    return warn(
-      'branches',
-      `${list.length} ${what}: ${shown}${list.length > 5 ? ' ...' : ''}`,
-      `git branch -d ${shown} (-d refuses unmerged work; check those by hand)`,
-    );
+    const shown = list.join(' ');
+    return warn('branches', `${list.length} ${what}: ${shown}`, `git branch -d ${shown} (-d refuses unmerged work; check those by hand)`);
   };
   return [
-    ...(left.length ? [line('branch(es) of done or cancelled tasks still exist', left)] : []),
+    ...(held.length
+      ? [
+          warn(
+            'branches',
+            `${held.length} branch(es) of done or cancelled tasks still have a worktree: ${held.join(' ')}`,
+            `cq cleanup-worktree --all --execute removes the merged ones (without --execute it only lists them), then git branch -d ${held.join(' ')}. ` +
+              'A cancelled task with commits: cq cleanup-worktree <branch> --abandon --execute (the branch stays).',
+          ),
+        ]
+      : []),
+    ...(free.length ? [line('branch(es) of done or cancelled tasks still exist', free)] : []),
     ...(agents.length ? [line('merged agent branch(es) with no worktree left', agents)] : []),
   ];
 }

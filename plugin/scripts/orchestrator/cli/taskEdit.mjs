@@ -16,8 +16,8 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
 import {
-  a, autoCleanFocus, byName, checkExpect, die, edit, editLogged, focusCleanOut, FX, hasLock, L, lastEntry, LOCK, P,
-  PREFIX, pulseCursor, read, readPlans, require, undoHint, val, values,
+  a, autoCleanFocus, branchFor, branchInfo, byName, checkExpect, die, edit, editLogged, focusCleanOut, FX, hasLock, L, lastEntry, LOCK, P,
+  PREFIX, pulseCursor, read, readPlans, require, undoHint, val, values, CQ, G, git,
 } from './context.mjs';
 import { logTime, measurementLine, measureTask, minutes, saveMeasurement } from './tracks.mjs';
 
@@ -102,6 +102,19 @@ export function cmdSet() {
   console.log(
     `${id}: ${status}${qa ? ' · label visual: now in the owner QA list (cq qa)' : ''}`,
   );
+  if (status === 'cancelled') {
+    // Nothing is deleted on its own, since the work may be wanted. Said here, so it does not stay unnoticed.
+    const branch = r.branch ?? branchFor(id);
+    const info = branchInfo(branch);
+    if (info.exists) {
+      const worktrees = G.readWorktrees(git);
+      const holder = worktrees.find((w) => w.branch === branch);
+      console.log(
+        `Left behind: branch ${branch}${info.commits ? ` with ${info.commits} commit(s) that are not merged` : ''}${holder ? `, worktree ${holder.path}` : ''}. ` +
+          `To drop it: ${holder ? `${CQ} cleanup-worktree ${branch} --abandon --execute (the branch stays), then ` : ''}git branch -D ${branch} (the commits go with it).`,
+      );
+    }
+  }
   focusCleanOut();
   if (orchestratorStep) pulseCursor(`set ${id} ${status}`);
 }

@@ -56,7 +56,7 @@ function stateLine(t) {
     `${t.qa ? ` · ${t.qa} in the QA list (cq qa)` : ''}${t.external ? ` · ${t.external} outside the queue (cq external)` : ''}` +
     `${t.parked ? ` · ${t.parked} parked (cq continue)` : ''}` +
     `${t.focus?.notice ? ' · FOCUS WARNING (cq focus)' : ''}` +
-    `${t.empty ? ' · THE QUEUE IS OUT OF WORK' : ''}`
+    `${t.empty ? (t.waiting ? ' · NOTHING CAN START (cq show --full says why)' : ' · THE QUEUE IS OUT OF WORK') : ''}`
   );
 }
 

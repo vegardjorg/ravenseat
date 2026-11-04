@@ -163,6 +163,15 @@ function uncommittedSkipped(queue, uncommitted) {
   }
   return out;
 }
+/** What uncommittedSkipped found, as lines for cq fill and cq decide. Empty when nothing is held back. */
+function heldBackLines(skipped, { max = 10 } = {}) {
+  if (!skipped?.length) return [];
+  return [
+    `Held back ${skipped.length} (a file the task owns is uncommitted in the main tree). Commit that file, and the task can start:`,
+    ...skipped.slice(0, max).map((h) => `  ${h.id}  file ${h.path}`),
+    ...(skipped.length > max ? [`  ... and ${skipped.length - max} more`] : []),
+  ];
+}
 /**
  * Is an orchestrator active? The cursor (scripts/.queue/orchestrator.json: { session, updated, event }) is updated by
  * the orchestrator on each loop round (`queue.mjs orchestrator pulse`, and by `start`/`set`), and is considered expired after 2 h.
@@ -213,6 +222,7 @@ module.exports = {
   pushPlan,
   uncommittedCollision,
   uncommittedSkipped,
+  heldBackLines,
   orchestratorStatus,
   newCursor,
 };

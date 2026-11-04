@@ -92,7 +92,7 @@ const {
 } = require('./logic/questions.js');
 const {
   ORCHESTRATOR_TRAILER, ORCHESTRATOR_EXPIRY_MS, COLLISION_STATUSES, hasOrchestratorTrailer, queueIdFromMerge,
-  classifyCommit, mentionedIds, consistency, pushPlan, uncommittedCollision, uncommittedSkipped, orchestratorStatus,
+  classifyCommit, mentionedIds, consistency, pushPlan, uncommittedCollision, uncommittedSkipped, heldBackLines, orchestratorStatus,
   newCursor,
 } = require('./logic/commits.js');
 const {
@@ -308,6 +308,7 @@ module.exports = {
   pushPlan,
   uncommittedCollision,
   uncommittedSkipped,
+  heldBackLines,
   externalCollisions,
   collisionText,
   trackFileWarning,

@@ -1438,3 +1438,22 @@ describe('assess: 15. answer to an owner question', () => {
     expect(K3.assess(queue, { type: 'resolve', sp: 'SP8', text: 'Resolved with the vendor' })).toEqual([]);
   });
 });
+
+describe('aging marks real waits (test round 2: M15)', () => {
+  const K = require('../queueBoard') as { aging: (o: unknown, limits: unknown, now?: number) => unknown; board: (q: unknown, o: unknown) => { inbox: { stuck: { id: string }[] } } };
+  const now = Date.parse('2026-11-04T12:00:00Z');
+  const since = (min: number) => new Date(now - min * 60_000).toISOString();
+  const limits = { K: { work: 2, cycle: 3 } };
+  const card = (status: string, min: number) => ({ id: 'A', title: 'A', class: 'K', domain: 'x', status, started: since(min), branch: 'queue/A', value: 5, content_min: 30, estimate: 30 });
+  it('a p85 from a few quick tasks does not call four minutes long', () => {
+    expect(K.aging(card('review', 4), limits, now)).toBeNull();
+    expect(K.aging(card('review', 45), limits, now)).toMatchObject({ measure: 'cycle', limit: 3, age: 45 });
+  });
+  it('a task in review is not flagged while the base is red; a running one is', () => {
+    const q = (status: string) => ({ tasks: [card(status, 45)], limits: {}, resolved: [] });
+    const stuck = (status: string, baseRed: boolean) => K.board(q(status), { now, ageLimits: limits, baseRed }).inbox.stuck.map((x) => x.id);
+    expect(stuck('review', false)).toEqual(['A']);
+    expect(stuck('review', true)).toEqual([]);
+    expect(stuck('running', true)).toEqual(['A']);
+  });
+});

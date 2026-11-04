@@ -77,6 +77,10 @@ function worktreePerBranch() {
   return map;
 }
 
+if (!fs.existsSync(QUEUE_FILE)) {
+  console.error(`The queue does not exist. Run: ${require('./lib/projectRoot.js').cqCommand()} init`);
+  process.exit(1);
+}
 const queue = JSON.parse(fs.readFileSync(QUEUE_FILE, 'utf8'));
 const tasks = queue.tasks ?? [];
 

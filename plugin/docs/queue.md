@@ -347,7 +347,7 @@ The board shows the same steps under Settings, and a short line in the status ba
 
 ### Known bugs become gates
 
-A bug that can happen again should be caught next time. A track says so with one line `GATE <failure class>` in
+A bug that can happen again should be caught next time. A track says so with one line `GATE <failure class> @ <file:line>` in
 `track-result.md`, and `cq gate "<failure class>" [--from <task>] [--where <file:line>]` does the same by hand. It becomes a
 gate task (`GATE-<n>`, label `gate`), and `gates.fromKnownBugs` decides how:
 

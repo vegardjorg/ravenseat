@@ -29,7 +29,7 @@
 // =============================================================
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -399,5 +399,13 @@ if (isMain) {
     const stale = PF.staleFiles(PLUGIN_ROOT, target);
     const message = PF.staleMessage(stale);
     if (message) console.log(`  NOTE: ${message}.\n  ${stale.changed.length ? PF.STALE_FIX : 'Run cq setup again to add the new files.'}`);
+  }
+  if (!flags.has('--dry')) {
+    // A task that owns an uncommitted file is held back, and these are the files setup just wrote.
+    const status = spawnSync('git', ['-C', target, 'status', '--porcelain'], { encoding: 'utf8' });
+    const open = status.status === 0 ? status.stdout.split(/\r?\n/).filter(Boolean).length : 0;
+    if (open) console.log(`  NOTE: ${open} path(s) are uncommitted here. Commit them before the first cq fill: a task that owns one of them is held back.`);
+    if (!fs.existsSync(path.join(path.dirname(setupRecordFile(target)), 'queue.json')))
+      console.log('  Next: cq init makes the empty queue (lite; cq init --full for full mode), then cq add.');
   }
 }

@@ -239,6 +239,7 @@ function resumeBlock({
   findingsFile = null,
   original = '',
   doneCheck = null,
+  gateCheck = null,
 }) {
   const base = baseBranch();
   const trackId = `${o.id}-r${round}`;
@@ -280,13 +281,34 @@ function resumeBlock({
   // A merge that stopped on a real conflict (cq merge saved merge_conflict): the files and the other tasks that touched
   // them, so the fix round starts informed (lib/conflictPredict.js briefLines).
   const conflictLines = fix ? require('../conflictPredict.js').briefLines(o.merge_conflict, { base, branch }) : [];
+  // Red quick gates at receive: as the done command. The mission below is reference, and it may be what made them red.
+  const gateRed =
+    fix && gateCheck
+      ? [
+          `The quick gates are RED on the delivered commit (exit ${gateCheck.exit ?? '?'})${gateCheck.commands ? `: ${gateCheck.commands}` : ''}. cq receive runs them again on your commit.`,
+          'Make them green in your worktree (run them yourself before you report). If the mission below rules out the only way',
+          'to do that, say so under owner questions and deliver status=PARTIAL. Their last output lines:',
+          '',
+          '~~~~',
+          ...(gateCheck.tail ?? []),
+          '~~~~',
+          '',
+        ]
+      : [];
+  // A red check or a conflict is the work when no reviewer has looked yet: "fix the review findings" would point at nothing.
+  const machineOnly = (conflictLines.length || doneRed.length || gateRed.length) && !reviewFiles.length;
   const work = fix
     ? [
         ...conflictLines,
         ...doneRed,
-        'Fix the review findings: HIGH, and MEDIUM that is not small and mechanical; LOW findings in the same files come along.',
-        'Fix at the file:line the findings point to, and only in the files the track owns. A finding you disagree with:',
-        'give the reason in the report instead of fixing it.',
+        ...gateRed,
+        ...(machineOnly
+          ? ['There are no review findings for this round; the above is the work. Change only the files the track owns.']
+          : [
+              'Fix the review findings: HIGH, and MEDIUM that is not small and mechanical; LOW findings in the same files come along.',
+              'Fix at the file:line the findings point to, and only in the files the track owns. A finding you disagree with:',
+              'give the reason in the report instead of fixing it.',
+            ]),
       ]
     : [
         'Continue where the previous agent stopped (context guard): do "remaining" from the handover, with "next command"',

@@ -338,6 +338,7 @@ export function cmdFill() {
   const waitLine = askedLine(triageWaiting);
   if (!selected.length) {
     console.log('Nothing can start now (see show and state).');
+    for (const l of L.heldBackLines(L.uncommittedSkipped(read(), uncommitted))) console.log(l);
     for (const l of triageOut.lines) console.log(l);
     if (waitLine) console.log(waitLine);
     if (triageOut.agents.length) pulseCursor(`fill triage ${triageOut.agents.map((x) => x.id).join(' ')}`);
@@ -532,7 +533,14 @@ export function cmdResume() {
   if (!branchInfo(branch).exists)
     die(`Branch ${branch} does not exist; resume continues a branch that exists (otherwise fill --ids).`);
   const found = trackReport(o);
-  const round = val('--round') != null ? Number(val('--round')) : found.nextRound;
+  // cq receive makes the round for a red check itself, and cq decide then says to run resume. No agent has run that
+  // round (its attempt is still only reserved, and it has no report), so this is the same round: same number, no new count.
+  const last = (o.resumed ?? []).at(-1);
+  const again =
+    // Only that case: a second receive or a reviewer's findings (--from) is a real next round, and the cap must see it.
+    val('--round') == null && !fromList.length && last?.reason === reason && last.from?.includes('done_when') && found.report?.round !== last.round &&
+    (o.attempts ?? []).some((x) => x.state === 'reserved' && x.round === last.round);
+  const round = val('--round') != null ? Number(val('--round')) : again ? last.round : found.nextRound;
   if (!Number.isInteger(round) || round < 1) die('--round must be an integer >= 1');
   const findingsFile = val('--findings-file') ? path.resolve(val('--findings-file')) : null;
   if (findingsFile && !fs.existsSync(findingsFile)) die(`Could not find --findings-file ${findingsFile}`);
@@ -541,7 +549,7 @@ export function cmdResume() {
   // waiting_on (the answer reaches the next brief) and an open blocker owner-question. Exit 8. The owner answers with
   // `cq resolve <question> --answer "…"`, which allows exactly one more round (the next one asks again).
   const DC = require('./lib/doneCheck.js');
-  if (reason === 'fix') {
+  if (reason === 'fix' && !again) {
     const cap = DC.fixCap(o, queue, CONFIG);
     if (!cap.allowed) {
       const last = o.done_check && !o.done_check.ok
@@ -584,6 +592,22 @@ export function cmdResume() {
       tail,
     };
   }
+  // Red quick gates at receive: the same, from the file receive wrote (cq merge refuses until they are green).
+  let gateCheck = null;
+  if (reason === 'fix' && o.gate_check && !o.gate_check.ok) {
+    let text = '';
+    try {
+      text = fs.readFileSync(o.gate_check.file, 'utf8');
+    } catch {
+      /* the file is gone: the brief says so */
+    }
+    const inside = (text.split('~~~~')[1] ?? '').replace(/^\r?\n/, '');
+    gateCheck = {
+      exit: o.gate_check.exit,
+      commands: /^- Commands: (.*)$/m.exec(text)?.[1]?.trim() ?? null,
+      tail: inside ? DC.tailOf(inside, DC.doneCheckSetup(CONFIG).tailLines) : ['(the output file is gone; run the gates yourself to see it)'],
+    };
+  }
   // The review package: the saved one (receive), otherwise rev-<id> in one of the roots. Files beyond the package's own are
   // the reviewers'.
   const reviewFolder =
@@ -624,6 +648,7 @@ export function cmdResume() {
       findingsFile,
       original,
       doneCheck,
+      gateCheck,
     }),
   );
   for (const [name, args] of [
@@ -650,16 +675,22 @@ export function cmdResume() {
     if (found.report) x.report_seen = Math.max(Number(x.report_seen ?? 0), found.report.mtimeMs);
     // The new round is the answer to what the track asked.
     if (L.openBlockOf(x)?.code === 'track-question') L.closeBlock(x);
-    (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}) });
+    if (!again) (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}) });
     return reserved;
   });
   // The fixRound row (lib/eventRows.js): the same round as `resumed`, countable per week (fail open).
-  logEvent(ER.fixRoundRow({ task: id, reason, round, from: fromList }));
+  if (!again) logEvent(ER.fixRoundRow({ task: id, reason, round, from: fromList }));
+  else console.log(`Round ${round} was made but never started, so this is the same round (it counts once).`);
   // done_when is what cq receive and cq merge pass for a red done command (not a reviewer, but a known cause).
   const unknownFrom = fromList.filter((x) => x !== 'done_when' && !L.REVIEWER_TYPES.includes(x));
   if (unknownFrom.length)
     console.log(`WARNING: --from ${unknownFrom.join(', ')} is not a reviewer type here (${L.REVIEWER_TYPES.join(', ')}); saved as given.`);
   pulseCursor(`resume ${id} r${round}`);
+  if (git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']) != null)
+    console.log(
+      'WARNING: the main tree has an unfinished merge. Undo it first with git merge --abort: the fix round merges the base on ' +
+        'its own branch, and until then the main tree is dirty for every other task.',
+    );
   console.log(
     `RESUME ${trackId} (${reason}): prompt ${prompt}` +
       `${adjusted.swapped ? '' : '  WARNING: could not find the setup line to add --continue to; check the prompt'}`,

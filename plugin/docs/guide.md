@@ -56,7 +56,8 @@ Requirements: Node.js 20 or newer, git and Claude Code. No npm packages are need
 
 1. **Install** (above).
 2. **Set up the project:** open your project and run `/cq:setup` (it asks first), or do it by hand with
-   `cq setup --settings` and `cq init --full` (the config, the docs, the recommended settings and the empty queue).
+   `cq setup --settings` and `cq init --full` (the config, the docs, the recommended settings and the empty queue). Commit
+   what they wrote: a task that owns an uncommitted file is held back.
 3. **Add a task:** say "add to the queue: <what you want done>", or write a JSON file and run `cq add --file task.json`.
 4. **Start the queue:** `/cq:queue`. It shows the state and asks before it starts any agent.
 5. **Open the board:** `/cq:board` gives you a local link. Answer questions under "Waiting on you"; an empty queue
@@ -129,6 +130,11 @@ the mission template in `docs/queue/` are your project's own copies, so an updat
 keep getting the old instructions. Doctor and setup name the ones that differ; `cq setup --overwrite --dry` lists what
 would be replaced, and `cq setup --overwrite` replaces them (your own edits in them are lost, `queue.config.json` is
 kept). Commit the result.
+
+**Cleaning up.** `cq merge` removes the worktree and the branch of what it merges. For the rest, `cq doctor` lists what is
+left: `cq cleanup-worktree --all` lists the worktrees of merged work, and `--execute` removes them. `cq set <id> cancelled`
+deletes nothing and says what is left; `cq cleanup-worktree <branch> --abandon --execute` removes that worktree and keeps
+the branch, and `git branch -D <branch>` drops the commits too.
 
 **Status line and handover.** `cq setup --settings` adds a status line with context, cost, quota and running
 tracks (run it again after a plugin update). The orchestrator keeps a handover note; after compaction it reads only

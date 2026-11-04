@@ -161,6 +161,15 @@ function readWorktrees(git) {
   return out;
 }
 
+/** Claude Code's own agent branches that are merged and have no worktree left (a running agent's new branch has one). */
+function mergedAgentBranches(git, base) {
+  return String(git(['for-each-ref', '--merged', base, '--format=%(refname:short)|%(worktreepath)', 'refs/heads/worktree-agent-*']) ?? '')
+    .split(/\r?\n/)
+    .map((l) => l.split('|'))
+    .filter(([b, wt]) => b && !wt)
+    .map(([b]) => b);
+}
+
 /** Number of commits, changed files (against the merge base) and last commit for a ref not merged into `base`. */
 function refInfo(git, ref, base) {
   return {
@@ -293,6 +302,7 @@ function externalForTasks(
 }
 
 module.exports = {
+  mergedAgentBranches,
   baseBranch,
   remoteName,
   branchPrefix,

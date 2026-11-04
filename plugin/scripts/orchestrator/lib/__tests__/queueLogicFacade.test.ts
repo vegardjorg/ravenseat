@@ -39,7 +39,7 @@ const EXPORTS = [
   'externalCollisions', 'externalDone', 'externalId', 'fileOverlap', 'fileRootMatch', 'fillExcerpt',
   'findTrackReport', 'firstUserMessage', 'focusApplies', 'focusCleanLines', 'focusContinues', 'focusEnd',
   'focusEndLine', 'focusEndQuestionId', 'focusEndText', 'focusRanEmpty', 'focusSpace', 'focusStatus', 'focusText',
-  'focusWithoutDone', 'groups', 'hasLabel', 'hasMigr', 'hasOrchestratorTrailer', 'highestBlockNr', 'inBatchQueue',
+  'focusWithoutDone', 'groups', 'hasLabel', 'hasMigr', 'hasOrchestratorTrailer', 'heldBackLines', 'highestBlockNr', 'inBatchQueue',
   'inNightWindow', 'infoField', 'infoValueText', 'infoView', 'isAgentSource', 'isBatched', 'isCloud', 'isExternalRow',
   'isOldPick', 'isRecommendedChoice', 'lastAnswer', 'lastUndoable', 'limitText', 'loadGuard', 'loadSlotsFor', 'lockUpCount', 'logChange',
   'longestPrefix', 'markLogged', 'mentionedIds', 'mentionsTask', 'mergePlan', 'migrBlockText', 'migrFiles',

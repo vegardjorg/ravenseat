@@ -32,9 +32,21 @@ const cleanTitle = (title) => String(title ?? '').replace(/\s+/g, ' ').trim().sl
 
 /** The failure class from a `GATE <failure class>` line in a report, or null. Upper case only, so a heading "Gate: ..." is not one. */
 function parseGateLine(text) {
+  return parseGate(text)?.title ?? null;
+}
+
+/** The same line with its place: `GATE <failure class> @ <file:line>` gives { title, where }; where is null without one. */
+function parseGate(text) {
   const m = /^[ \t]*(?:[-*][ \t]+)?`?GATE(?::|[ \t])[ \t]*([^\n`]*)`?[ \t]*$/m.exec(String(text ?? ''));
-  const title = m ? cleanTitle(m[1]) : '';
-  return !title || /^(none|n\/a|no|-)$/i.test(title) ? null : title;
+  if (!m) return null;
+  const place = /^(.*\S)\s+@\s+(\S+:\d+)\s*$/.exec(m[1]);
+  const title = cleanTitle(place ? place[1] : m[1]);
+  return !title || /^(none|n\/a|no|-)$/i.test(title) ? null : { title, where: place ? place[2] : null };
+}
+
+/** A gate task whose mission names no file and line: approving it means agent work on a guess (cq decide says so). */
+function gateWithoutPlace(o) {
+  return isGate(o) && !/seen in: .*?[\w./\\-]+:\d+/i.test(String(o.mission ?? ''));
 }
 
 /**
@@ -113,4 +125,4 @@ function summary(tasks = [], mode = 'propose') {
   };
 }
 
-module.exports = { MODES, MAX_OPEN, modeOf, classKey, cleanTitle, parseGateLine, decide, nextId, gateTask, extendedMission, summary };
+module.exports = { MODES, MAX_OPEN, modeOf, classKey, cleanTitle, parseGateLine, parseGate, gateWithoutPlace, decide, nextId, gateTask, extendedMission, summary };

@@ -372,6 +372,24 @@ function mascotNumbers(queue) {
 // lib/trackActivity.js. The measurement (git, a capped mtime walk per running track) is cached for 60 s per task set, so a
 // refresh of the board does not walk the worktrees again.
 let silentCache = { time: 0, key: null, list: [] };
+/** Tracks marked running with no agent (the Decisions card). Cached like the silent ones, since it asks git. */
+const noAgentCache = { time: 0, list: [] };
+function withoutAgentNow(queue) {
+  if (Date.now() - noAgentCache.time < 60_000) return noAgentCache.list;
+  let list = [];
+  try {
+    list = L.startedWithoutAgent(queue, {
+      worktreeBranches: new Set(G.readWorktrees(gitRead).map((w) => w.branch).filter(Boolean)),
+      hasReport: (o) => !!L.findTrackReport(o.id, o.scratchpad ? [o.scratchpad] : []).report,
+    });
+  } catch (e) {
+    console.error(`the agent check failed: ${e?.message ?? e}`);
+  }
+  noAgentCache.time = Date.now();
+  noAgentCache.list = list;
+  return list;
+}
+
 function silentNow(queue) {
   const limitMin = L.silentMinFor(queue);
   const running = (queue.tasks ?? []).filter((o) => o.status === 'running');
@@ -543,6 +561,8 @@ function state() {
       ageLimits: S.ageBounds(queue),
       // SILENT tracks (the badge on the card; cached 60 s).
       silent: silentNow(queue),
+      withoutAgent: withoutAgentNow(queue),
+      baseRed: baseHealth?.status === 'red',
       dailyUsage: s?.data.keyFigures.usageToday,
       // Suitability with the same rules as queue.mjs cloud-package (queueLogic.cloudSuitable).
       cloud: {
@@ -1967,6 +1987,7 @@ async function write(filePath, b) {
     if (type === 'cloud-cancel') return run(['cloud', 'cancel', id], `cloud cancel ${id}`);
     // "Flag for the orchestrator" on stuck work in the Decisions view: a blocker reason (cq block <id> other) with a
     // fixed note, the same command /cq:decide runs (lib/queueDecisions.js cliArgs). Never over an open blocker.
+    if (type === 'requeue') return run(['set', id, 'waiting'], `set ${id} waiting (started without an agent)`);
     if (type === 'flag-stuck') {
       const o = (queueNow().tasks ?? []).find((x) => x.id === id);
       if (!o) return no(`unknown task ${id}`);

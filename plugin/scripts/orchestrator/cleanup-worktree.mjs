@@ -27,6 +27,7 @@
 //       (config().baseBranch). Folders under .claude/worktrees/ that git does not know (leftovers after an earlier cleanup)
 //       are included too. --min-age-hours is the minimum age in hours.
 //   node scripts/orchestrator/cleanup-worktree.mjs <branch> [--execute] [--against <ref>]     (one branch, default against baseBranch)
+//       --abandon: also when the branch is not merged (a cancelled task). The branch and its commits stay.
 //   import { cleanupWorktree } from './cleanup-worktree.mjs'                            (merge-track.mjs, against HEAD)
 // Test: npx vitest run scripts/orchestrator/__tests__/cleanup-worktree.test.mjs
 // =============================================================
@@ -278,7 +279,7 @@ function realLinkFolderIn(wt) {
 const label = (w) => `${path.basename(w.path)}${w.branch ? ` (${w.branch})` : ''}`;
 
 /** Computes the criteria for a registered worktree, cheapest first, and returns the shouldCleanUp answer. */
-export function assess(w, { against = 'HEAD', minAgeHours = 0, main }) {
+export function assess(w, { against = 'HEAD', minAgeHours = 0, main, abandon = false }) {
   const input = {
     underWorktreesFolder: isUnder(w.path, path.join(main, '.claude', 'worktrees')),
     locked: w.locked,
@@ -288,7 +289,8 @@ export function assess(w, { against = 'HEAD', minAgeHours = 0, main }) {
   if (!course.cleanup) return course;
   if (w.prunable || !fs.existsSync(w.path))
     return { cleanup: false, reason: 'the folder does not exist (git worktree prune)' };
-  input.merged = !!w.head && git(['merge-base', '--is-ancestor', w.head, against], main).ok;
+  // --abandon (a cancelled task): not merged is fine, since the branch keeps the commits. Uncommitted work still stops it.
+  input.merged = abandon || (!!w.head && git(['merge-base', '--is-ancestor', w.head, against], main).ok);
   if (!input.merged) return shouldCleanUp(input);
   input.forNew = forNewTime(w.path, minAgeHours);
   if (input.forNew) return shouldCleanUp(input);
@@ -352,9 +354,9 @@ function removeTrackLinks(filePath, main, before, name) {
   return null;
 }
 
-function cleanupRegistered(w, { against, minAgeHours, main }) {
+function cleanupRegistered(w, { against, minAgeHours, main, abandon = false }) {
   const name = label(w);
-  const v = assess(w, { against, minAgeHours, main });
+  const v = assess(w, { against, minAgeHours, main, abandon });
   if (!v.cleanup) return { status: 'skipped', message: `${name}: ${v.reason}` };
   const before = fingerprint(main);
   const stop = removeTrackLinks(w.path, main, before, name);
@@ -442,16 +444,17 @@ function mainProgram() {
     const branch = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--against');
     if (!branch) {
       console.error(
-        'use: cleanup-worktree.mjs --all [--execute] [--min-age-hours 3] | <branch> [--execute] [--against <ref>]',
+        'use: cleanup-worktree.mjs --all [--execute] [--min-age-hours 3] | <branch> [--execute] [--against <ref>] [--abandon]',
       );
       process.exit(2);
     }
     const against = val('--against', baseBranch);
+    const abandon = args.includes('--abandon');
     const w = worktreeList(main).find((x) => x.branch === branch);
     if (!w) results.push({ status: 'skipped', message: `no worktree for ${branch}` });
-    else if (execute) results.push(cleanupRegistered(w, { against, minAgeHours: 0, main }));
+    else if (execute) results.push(cleanupRegistered(w, { against, minAgeHours: 0, main, abandon }));
     else {
-      const v = assess(w, { against, minAgeHours: 0, main });
+      const v = assess(w, { against, minAgeHours: 0, main, abandon });
       results.push({
         status: v.cleanup ? 'would remove' : 'skipped',
         message: `${label(w)}: ${v.reason}`,

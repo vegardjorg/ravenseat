@@ -197,13 +197,14 @@ function predecessors(id, map) {
  * to done). The bounds are queueStatistics.ageBounds; a class without a limit (too few finished) is not marked.
  * @returns {{ measure: 'work'|'cycle', limit: number, age: number } | null} minutes
  */
+const AGING_FLOOR_MIN = 30; // a p85 from a few quick tasks must not call four minutes "running long"
 function aging(o, ageLimits, now = Date.now()) {
   const measure = o.status === 'running' ? 'work' : o.status === 'review' ? 'cycle' : null;
   const start = Date.parse(o.started ?? o.picked_at ?? '');
   const limit = ageLimits?.[o.class]?.[measure];
   if (!measure || !Number.isFinite(start) || !(limit > 0)) return null;
   const age = Math.round((now - start) / 60_000);
-  return age > limit ? { measure, limit, age } : null;
+  return age > Math.max(limit, AGING_FLOOR_MIN) ? { measure, limit, age } : null;
 }
 
 /**
@@ -237,6 +238,8 @@ function buildBoard(
     cloud,
     branchPrefix = BRANCH_PREFIX,
     silent = [],
+    withoutAgent = [],
+    baseRed = false,
   } = {},
 ) {
   // SILENT tracks per id, for the small badge on the card (queueLogic.silentTracks, measured by the server).
@@ -332,6 +335,7 @@ function buildBoard(
       remarks: remarksFor(o),
       source: o.source ?? null,
       added_by: o.added_by ?? null,
+      ...(require('./knownBugGate.js').gateWithoutPlace(o) ? { gate_without_place: true } : {}),
       priority_bonus: Number(o.priority_bonus ?? 0) || 0,
       branch: branchFor(o, branchPrefix),
       migr_block: o.migr_block ?? null,
@@ -434,7 +438,7 @@ function buildBoard(
     batchQueue,
     // What the queue would start now, and what is waiting on the owner.
     next,
-    inbox: inbox(queue, columns, { map, context: fk, now }),
+    inbox: inbox(queue, columns, { map, context: fk, now, withoutAgent, baseRed }),
     // The focus line, areas and the basis for the plan view.
     focus: focusLine(queue, { now, context: fk, canStart: next.startable.map((v) => v.id) }),
     areas: L.areaOverview(queue, now).map((r) => ({
@@ -535,7 +539,7 @@ function nextUp(queue, { now = Date.now(), uncommitted = [], dailyUsage } = {}) 
  * `unlogged` (answers not entered in the decision log) is info for the orchestrator and is not counted in `count`.
  * @param {object} columns the board's columns (the cards have aging and old)
  */
-function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = null, now = Date.now() } = {}) {
+function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = null, now = Date.now(), withoutAgent = [], baseRed = false } = {}) {
   const tasks = queue.tasks ?? [];
   const register = queue.projects ?? {};
   const resolved = new Set(queue.resolved ?? []);
@@ -630,6 +634,7 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
     estimate: k.estimate,
     value: k.value,
     added_by: k.added_by,
+    gate_without_place: !!k.gate_without_place,
     // What waits on it ("unlocks N") and its focus stage, for the impact line in the decision overview.
     unlocks: k.unlocks ?? null,
     focus_step: focusStep(k.id),
@@ -644,8 +649,12 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
       ? { code: b.code, note: b.note ?? null, file: b.file ?? null }
       : null;
   };
+  // Marked running with no agent (queueLogic.startedWithoutAgent, found by the caller, since it takes git).
+  const noAgent = new Set(withoutAgent.map((x) => x.id));
+  // A red base stops every merge, and the owner sees that line above the list: a task in review only waits for it.
+  const longInReview = (k) => k.aging && !(baseRed && k.status === 'review');
   const stuck = [...(columns.inProgress ?? []), ...(columns.review ?? [])]
-    .filter((k) => k.aging || (k.status === 'picked' && k.old) || stopInfo(k))
+    .filter((k) => noAgent.has(k.id) || longInReview(k) || (k.status === 'picked' && k.old) || stopInfo(k))
     .map((k) => ({
       id: k.id,
       title: k.title,
@@ -660,6 +669,7 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
       open_block: L.openBlockOf(map.perId.get(k.id))?.code ?? null,
       // The merge or gate stop the owner should see (the decision overview gives it its own card).
       stop: stopInfo(k),
+      without_agent: noAgent.has(k.id),
     }));
 
   const unlogged = L.unlogged(queue).map((x) => ({ sp: x.sp, time: x.time ?? null, by: x.by ?? null }));

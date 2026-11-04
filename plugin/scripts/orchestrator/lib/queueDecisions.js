@@ -202,6 +202,14 @@
 
   function proposedItem(f) {
     const estimate = Number(f.estimate) || 0;
+    const approve = { label: 'Approve', recommended: !f.gate_without_place, action: { type: 'approve', id: f.id } };
+    const decline = {
+      label: 'Decline',
+      recommended: !!f.gate_without_place,
+      action: { type: 'decline', id: f.id, reason: null },
+      needsText: 'Why (optional)?',
+      optionalText: true,
+    };
     return {
       key: `approve:${f.id}`,
       verb: 'approve',
@@ -212,19 +220,13 @@
       text: null,
       context: [
         `${f.class ?? '?'} · ${estimate} min · value ${f.value ?? '?'}${f.added_by ? ` · from ${f.added_by}` : ''}`,
+        ...(f.gate_without_place
+          ? ['No file and line behind it, and the gate needs a failing example: approving means agent work on a guess. Approve if you know the bug is real.']
+          : []),
       ],
-      recommendation: 'Approve',
+      recommendation: f.gate_without_place ? 'Decline' : 'Approve',
       impact: { ...taskImpact(estimate, f), own: estimate },
-      options: [
-        { label: 'Approve', recommended: true, action: { type: 'approve', id: f.id } },
-        {
-          label: 'Decline',
-          recommended: false,
-          action: { type: 'decline', id: f.id, reason: null },
-          needsText: 'Why (optional)?',
-          optionalText: true,
-        },
-      ],
+      options: f.gate_without_place ? [decline, approve] : [approve, decline],
       free: null,
       open: f.id,
     };
@@ -251,8 +253,35 @@
     };
   }
 
+  /** Marked running, and no agent ever started: only a new start helps, so flagging it is the wrong advice. */
+  function noAgentItem(h) {
+    const options = [
+      { label: 'Put it back in the queue', recommended: true, action: { type: 'requeue', id: h.id } },
+      { label: 'Leave it running', recommended: false, action: { type: 'keep', id: h.id } },
+    ];
+    return {
+      key: `unstick:${h.id}`,
+      verb: 'unstick',
+      kind: 'stuck-no-agent',
+      kindName: 'Started without an agent',
+      id: h.id,
+      title: h.title || h.id,
+      text: null,
+      context: [
+        'Marked running, but no worktree has its branch and there is no report: the agent was never started.',
+        `Back in the queue, the next fill starts it (cq fill --ids ${h.id}).`,
+      ],
+      recommendation: options[0].label,
+      impact: taskImpact(0, h),
+      options,
+      free: null,
+      open: h.id,
+    };
+  }
+
   function stuckItem(h) {
     if (h.stop) return stopItem(h);
+    if (h.without_agent) return noAgentItem(h);
     const picked = h.status === 'picked';
     const flagged = !!h.open_block;
     const context = [
@@ -396,6 +425,8 @@
         return ['cancel', a.id, '--remark', declineRemark(a.reason), '--by', 'owner'];
       case 'release':
         return ['release', a.id];
+      case 'requeue':
+        return ['set', a.id, 'waiting'];
       case 'flag-stuck':
         return ['block', a.id, 'other', '--note', FLAG_NOTE];
       default:
@@ -428,6 +459,7 @@
       case 'qa-ok':
       case 'approve':
       case 'release':
+      case 'requeue':
       case 'flag-stuck':
         return { path: '/api/action', body: { type: a.type, id: a.id } };
       case 'qa-deviation':
@@ -448,6 +480,7 @@
     if (a.type === 'approve') return `${item.id} approved`;
     if (a.type === 'decline') return `${item.id} declined`;
     if (a.type === 'release') return `${item.id} released to the queue`;
+    if (a.type === 'requeue') return `${item.id} back in the queue`;
     if (a.type === 'flag-stuck') return `${item.id} flagged for the orchestrator`;
     return `${item.id}: kept as it is`;
   }

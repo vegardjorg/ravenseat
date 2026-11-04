@@ -796,3 +796,166 @@ describe('long lines outside a terminal (test round 2: L1)', () => {
     expect(r.out).not.toContain('…');
   });
 });
+
+describe('the first run (test round 2: M5, M6, M7)', () => {
+  it('takeover without a queue says what to do, with no stack trace', () => {
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-empty-'));
+    temporary.push(empty);
+    const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'queue-takeover.mjs')], {
+      encoding: 'utf8',
+      env: { ...process.env, QUEUE_FOLDER: empty, QUEUE_ROOT: empty, QUEUE_GIT: empty },
+      cwd: empty,
+    });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/The queue does not exist\. Run: .* init/);
+    expect(r.stderr).not.toContain('    at ');
+  });
+  it('a task that owns an uncommitted file: fill, show and decide say so', () => {
+    const p = project([task('A', { owned_files: ['README.md'] })]);
+    fs.writeFileSync(path.join(p.repo, 'README.md'), 'changed\n');
+    const fill = p.run(['fill']);
+    expect(fill.out).toContain('Held back 1');
+    expect(fill.out).toContain('A  file README.md');
+    const show = p.run(['show']);
+    expect(show.out).not.toContain('OUT OF WORK');
+    expect(show.out).toContain('NOTHING CAN START');
+    const decide = p.run(['decide']);
+    expect(decide.out).toContain('Held back 1');
+    expect(decide.out).toContain('Nothing waiting on you.');
+  });
+  it('an empty queue is still out of work', () => {
+    expect(project([]).run(['show']).out).toContain('OUT OF WORK');
+  });
+  it('setup says what is uncommitted and that the queue comes next', () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-setup-'));
+    temporary.push(folder);
+    execFileSync('git', ['-C', folder, 'init', '-q', '-b', 'main']);
+    execFileSync('git', ['-C', folder, ...ID, 'commit', '-q', '--allow-empty', '-m', 'start']);
+    const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'setup.mjs'), '--target', folder], { encoding: 'utf8', cwd: folder });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/path\(s\) are uncommitted here/);
+    expect(r.stdout).toContain('Next: cq init');
+  });
+});
+
+describe('the fix round after a red gate (test round 2: M11, M12)', () => {
+  const red = { gates: { quick: ['node -e "console.log(\'the gate says no\');process.exit(3)"'] } };
+  it('resume after receive is the same round, counts once, and the brief names the gate', () => {
+    const p = project([task('A')], red);
+    p.run(['start', 'A']);
+    p.branch('A');
+    p.worktree('A');
+    p.report('A', RESULT('A'));
+    const received = p.run(['receive', 'A']);
+    expect(received.out).toContain('RESUME A-r1');
+    const r = p.run(['resume', 'A', '--reason', 'fix']);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toContain('RESUME A-r1');
+    expect(r.out).toContain('never started');
+    expect(p.find('A').resumed.length).toBe(1);
+    const brief = fs.readFileSync(path.join(p.scratch, 'prompt-A-r1.md'), 'utf8');
+    expect(brief).toContain('quick gates are RED');
+    expect(brief).toContain('the gate says no');
+    expect(brief).not.toContain('Fix the review findings');
+  });
+  it('a resume with reviewers behind it still says to fix their findings', () => {
+    const p = project([task('A', { status: 'review', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    expect(p.run(['resume', 'A', '--reason', 'fix']).code).toBe(0);
+    expect(fs.readFileSync(path.join(p.scratch, 'prompt-A-r1.md'), 'utf8')).toContain('Fix the review findings');
+  });
+  it('resume warns about a merge left open in the main tree (M13)', () => {
+    const p = project([task('A', { status: 'review', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    fs.writeFileSync(path.join(p.repo, '.git', 'MERGE_HEAD'), `${p.g(['rev-parse', 'HEAD'])}\n`);
+    expect(p.run(['resume', 'A', '--reason', 'fix']).out).toMatch(/unfinished merge.*git merge --abort/);
+  });
+});
+
+describe('cq decide gives the advice that fits (test round 2: M16, M17)', () => {
+  const items = (p: ReturnType<typeof project>) => JSON.parse(p.run(['decide', '--json']).out).items;
+  it('a task started without an agent is put back in the queue, not flagged', () => {
+    const started = new Date(Date.now() - 3_600_000).toISOString();
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started })]);
+    const item = items(p).find((x: { id: string }) => x.id === 'A');
+    expect(item.kind).toBe('stuck-no-agent');
+    expect(item.options[0].cli).toMatch(/set A waiting$/);
+  });
+  it('a gate task with no file and line recommends declining; one with a place recommends approving', () => {
+    const gate = (id: string, seen: string) =>
+      task(id, { status: 'proposed', labels: ['gate'], added_by: 'gate agent', mission: `Stop it.\nSeen in: ${seen}.` });
+    const list = items(project([gate('G1', 'task T-1'), gate('G2', 'task T-1: src/api.js:42')]));
+    const of = (id: string) => list.find((x: { id: string }) => x.id === id);
+    expect(of('G1').options[0].label).toBe('Decline');
+    expect(of('G1').options[0].recommended).toBe(true);
+    expect(of('G1').context.join(' ')).toContain('No file and line');
+    expect(of('G2').options[0].label).toBe('Approve');
+    expect(of('G2').options[0].recommended).toBe(true);
+  });
+  it('a GATE line can carry its place, and the class stays the class', () => {
+    const KB = require('../lib/knownBugGate.js');
+    expect(KB.parseGate('GATE a fetch result unchecked @ src/api.js:42')).toEqual({ title: 'a fetch result unchecked', where: 'src/api.js:42' });
+    expect(KB.parseGate('GATE a fetch result unchecked')).toEqual({ title: 'a fetch result unchecked', where: null });
+    expect(KB.parseGateLine('GATE a fetch result unchecked @ src/api.js:42')).toBe('a fetch result unchecked');
+    expect(KB.parseGate('GATE none')).toBeNull();
+  });
+});
+
+describe('what is left behind (test round 2: M2, M4, M8, L3)', () => {
+  it('merge --resume on a done task removes the merged branches an earlier cleanup left', () => {
+    const p = project([task('A', { status: 'done', branch: 'queue/A' })]);
+    p.g(['branch', 'queue/A']);
+    p.g(['branch', 'worktree-agent-x']);
+    const r = p.run(['merge', 'A', '--resume']);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toContain('nothing to resume');
+    expect(r.out).toContain('Branch: queue/A deleted');
+    expect(r.out).toContain('Agent branches: 1 merged');
+    expect(p.g(['branch', '--list', 'worktree-agent-x'])).toBe('');
+  });
+  it('an agent branch with its own work stays', () => {
+    const p = project([task('A', { status: 'done', branch: 'queue/A' })]);
+    p.g(['branch', 'queue/A']);
+    p.g(['switch', '-q', '-c', 'worktree-agent-y']);
+    p.g(['commit', '-q', '--allow-empty', '-m', 'work']);
+    p.g(['switch', '-q', 'main']);
+    p.run(['merge', 'A', '--resume']);
+    expect(p.g(['branch', '--list', 'worktree-agent-y'])).toContain('worktree-agent-y');
+  });
+  it('cancelling says what stays and how to drop it, and deletes nothing', () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    const r = p.run(['set', 'A', 'cancelled']);
+    expect(r.out).toMatch(/Left behind: branch queue\/A with 1 commit/);
+    expect(r.out).toContain('git branch -D queue/A');
+    expect(p.g(['branch', '--list', 'queue/A'])).toContain('queue/A');
+  });
+  it('cancelling a task with no branch says nothing about it', () => {
+    const p = project([task('A')]);
+    expect(p.run(['set', 'A', 'cancelled']).out).not.toContain('Left behind');
+  });
+  it('cleanup-worktree --abandon removes the worktree of unmerged work and keeps the branch', () => {
+    const p = project([task('A')]);
+    p.branch('A');
+    const wt = path.join(p.repo, '.claude', 'worktrees', 'agent-a');
+    p.g(['worktree', 'add', '-q', wt, 'queue/A']);
+    const cleanup = (...args: string[]) =>
+      spawnSync(process.execPath, [path.join(SCRIPTS, 'cleanup-worktree.mjs'), 'queue/A', '--execute', '--against', 'main', ...args], { encoding: 'utf8', cwd: p.repo });
+    expect(cleanup().stdout).toContain('not merged');
+    expect(fs.existsSync(wt)).toBe(true);
+    cleanup('--abandon');
+    expect(fs.existsSync(wt)).toBe(false);
+    expect(p.g(['branch', '--list', 'queue/A'])).toContain('queue/A');
+  });
+  it('doctor names every branch in its advice, and treats one with a worktree differently', () => {
+    const ids = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    const p = project(ids.map((id) => task(id, { status: 'done', branch: `queue/${id}` })));
+    for (const id of ids) p.g(['branch', `queue/${id}`]);
+    const wt = path.join(p.repo, '.claude', 'worktrees', 'agent-a');
+    p.g(['worktree', 'add', '-q', wt, 'queue/A']);
+    const out = p.run(['doctor']).out;
+    expect(out).toMatch(/1 branch\(es\) of done or cancelled tasks still have a worktree: queue\/A/);
+    expect(out).toContain('cq cleanup-worktree --all --execute');
+    expect(out).toContain('git branch -d queue/B queue/C queue/D queue/E queue/F queue/G');
+  });
+});

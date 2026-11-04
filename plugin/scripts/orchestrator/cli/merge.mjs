@@ -22,7 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 import {
-  a, autoCleanFocus, BASE, branchFor, branchInfo, CONFIG, CQ, die, edit, focusCleanOut, FOLDER, git, GIT_ROOT, HELP,
+  a, autoCleanFocus, BASE, branchFor, branchInfo, CONFIG, CQ, die, edit, focusCleanOut, FOLDER, G, git, GIT_ROOT, HELP,
   HERE, L, MAIN_TREE, MIGR, parallelWarning, positional, pulseCursor, read, require, TK, val,
 } from './context.mjs';
 import {
@@ -624,13 +624,13 @@ export function cmdReceive() {
   // A known bug the track says can happen again (`GATE <failure class>` in track-result.md). Never stops the delivery.
   // The answer is the fallback, as for RESULT and EVIDENCE: a report file can be refused by the client.
   const KB = require('./lib/knownBugGate.js');
-  const knownBug = KB.parseGateLine(reportText) ?? KB.parseGateLine(trackReply);
+  const knownBug = KB.parseGate(reportText) ?? KB.parseGate(trackReply);
   if (knownBug) {
     try {
-      const line = proposeGate({ title: knownBug, from: id });
+      const line = proposeGate({ title: knownBug.title, where: knownBug.where, from: id });
       if (line) console.log(line);
     } catch (e) {
-      console.log(`Gate: could not propose "${knownBug}" (${e.message}).`);
+      console.log(`Gate: could not propose "${knownBug.title}" (${e.message}).`);
     }
   }
   focusCleanOut();
@@ -789,6 +789,9 @@ export async function cmdMerge() {
     if (o.status === 'done' && !left.some((s) => s !== 'done')) {
       ML.clearState(FOLDER, id);
       console.log(`${id} is done; nothing to resume.`);
+      // What an earlier cleanup left behind goes now. Merged work only: both steps refuse anything else.
+      const leftBranch = o.branch ?? branchFor(id);
+      if (branchInfo(leftBranch).exists) tidyAfterMerge(leftBranch, { resume: true });
       return;
     }
     if (!['review', 'done'].includes(o.status) && !(force && ['running', 'picked'].includes(o.status)))
@@ -1356,6 +1359,9 @@ function tidyAfterMerge(branch, { resume }) {
       console.log(`Worktree: the cleanup failed, the merge stands: ${e?.message ?? e}`);
     }
   }
+  // Claude Code leaves a worktree-agent-* branch per agent; once merged with no worktree, nothing is on it that the base lacks.
+  const gone = G.mergedAgentBranches(git, BASE).filter((b) => git(['branch', '-d', b]) != null);
+  if (gone.length) console.log(`Agent branches: ${gone.length} merged one(s) deleted.`);
   if (!branch.startsWith(CONFIG.branchPrefix ?? 'queue/')) return;
   console.log(git(['branch', '-d', branch]) == null ? `Branch: ${branch} kept (git branch -d refused).` : `Branch: ${branch} deleted (merged).`);
 }
