@@ -3,6 +3,45 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.12 (2026-11-04)
+
+### Changed: check this if a check needs a token
+- Gates, `done_when`, the base gate and `qa auto` now run without tokens, cloud keys and variables that point to the
+  queue's data folder. Variables are dropped by name (such as `GITHUB_TOKEN`, `*_API_KEY`, `AWS_*`, `SUPABASE_*`), the
+  rest are kept, and no setting lets a dropped one through. A check that reads one from the environment fails until it
+  gets the value another way. This guards against accidents and simple cheating. It is not a sandbox.
+- `cq receive`, `cq merge` and the push check compare git hooks and git config that run code against an accepted
+  baseline, and stop if they differ. The first run accepts what is there. After installing husky or lefthook, or
+  changing a git alias, run `cq surface accept --by owner`.
+
+### Added
+- `gitSurface` in `queue.config.json`: `stop` (default), `warn` or `off` for the baseline check above, for repositories
+  where it gives too much friction.
+- `cq surface` shows each difference against the baseline, with the full path of a hook and the file a setting comes
+  from.
+- `cq unlock` shows who holds the queue lock, and `cq unlock --force --by owner` releases it.
+- `cq attempt list <id>` and `cq attempt close <id> --outcome <...>`: each start of a task is now a recorded attempt, and
+  a running attempt blocks a new one until it is closed.
+- Gate evidence entries say what they covered (runner, shared links, untracked and ignored files).
+
+### Fixed
+- A hook planted during a gate run made that run red, but a rerun could go green. A hook written outside a gate run was
+  never seen. Both now stop against the baseline.
+- Only the orchestrator writes gate evidence, per commit and gate setup, and a run that changes the evidence store is
+  recorded red. Base health reads only this trusted evidence.
+- The queue lock has an owner: a live holder on the same machine is never taken over, and a holder that lost the lock
+  can neither publish nor remove it. `cq doctor` uses the same rule, so it no longer calls a live holder stale.
+- The command notes in `queue.mjs` describe the actual fields in `queue-fill.json`.
+- The test run ended with exit 1 although every test passed ("Timeout calling onTaskUpdate"). The 0.8.10 explanation was
+  wrong: the cause is `spawnSync` blocking the test worker past vitest's 60 s limit, not the number of workers. The event
+  loop now turns after each test and inside the two longest tests. This reduces the error but does not remove it: on a
+  heavily loaded machine a run can still end with one such error.
+
+### Internal
+- Fill, start and resume build a client-neutral mission description, and the Claude Code format comes from an adapter.
+  Compatibility snapshots check that the Claude output is unchanged. This is groundwork for other clients: no other
+  client is supported yet.
+
 ## 0.8.11 (2026-11-03)
 
 ### Fixed (found by the first CI run)

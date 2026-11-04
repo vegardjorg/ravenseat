@@ -20,6 +20,8 @@ cq ask <ID> "<question>"     # ask about an earlier track without resuming it (/
 cq doctor                    # read-only health check: node, hooks, config, state, worktrees, safety baseline
 cq surface                   # git hooks and config that run code, against what was accepted; changes nothing
 cq surface accept --by owner # accept the current state (after installing a hook tool, changing git config)
+cq unlock                    # who holds the queue lock; changes nothing (--force --by owner releases it)
+cq attempt list <ID>         # the task's attempts; `cq attempt close <ID> --outcome <...>` closes a stuck one
 cq helpers                   # helper agents: on/off and what they cost
 cq helpers add <file.md>     # a custom helper: copied, scanned, off until approved
 cq plan show                 # plan register
