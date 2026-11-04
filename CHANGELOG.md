@@ -3,6 +3,38 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.18 (2026-11-04)
+
+### Added
+- The first push is scanned for secrets, since no earlier push has checked what is in the history.
+- `cq cleanup-worktree <branch> --abandon --execute` removes the worktree of a cancelled task. The branch and its commits stay.
+- A `GATE` line can name its place: `GATE <failure class> @ <file:line>`.
+
+### Changed
+- A migration from a task that does not own it stops the merge.
+- `cq decide` recommends declining a gate task with no file and line behind it, since the gate needs a failing example.
+  `GATE` lines from an older mission template have no place, so they get this advice too.
+- Nothing counts as running long before 30 minutes, and a task in review does not count as stuck while the base is red.
+- After a merge, merged `worktree-agent-*` branches with no worktree are deleted.
+
+### Fixed
+- Output that is not a terminal is no longer cut, and `cq decide` keeps its whole lines in a terminal too.
+- A track's owner question no longer stays in a file nobody opens: `cq receive` shows it, also with no commits, and opens a card in
+  `cq decide` and on the board. `cq receive` also says when a delivery is PARTIAL, and when its commit count is wrong.
+- `cq add` warns when a mission names a protected path it does not own, and the track delivers PARTIAL with a question
+  instead of stopping late.
+- A fix task from the base gate or CI watch starts even when tasks in review fill the slots. Hard stops still apply.
+- `cq doctor` and `cq setup` say when the project's mission template, docs or status line differ from the plugin. The
+  fix is `cq setup --overwrite`, which replaces your own edits in those files.
+- `cq takeover` without a queue says to run `cq init` instead of crashing.
+- `cq fill`, `cq show` and `cq decide` name a task held back by an uncommitted file, and `cq setup` says what to commit
+  and that `cq init` comes next.
+- The fix round after red quick gates names the gates and shows their output. A `cq resume` right after `cq receive` is the
+  same round and counts once. `cq resume` warns about an unfinished merge in the main tree.
+- `cq decide` advises putting a task started without an agent back in the queue, on the board too.
+- `cq merge <id> --resume` on a done task removes what an earlier cleanup left. `cq set <id> cancelled` says what stays and
+  how to drop it. `cq doctor` lists every leftover branch, and gives its own advice for one that still has a worktree.
+
 ## 0.8.17 (2026-11-04)
 
 ### Fixed
