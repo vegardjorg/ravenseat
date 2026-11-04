@@ -3,6 +3,19 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.15 (2026-11-04)
+
+### Fixed
+- Track agents could not write their report. Claude Code refuses subagents a file named `report.md`, so reports, the
+  `GATE` line and the sections read from them were lost. The file is now `track-result.md`, and a `report.md` is still
+  read. `cq receive` also reads the `GATE` line from the agent's answer, and warns when the file is missing.
+- `cq merge` merged what `cq receive` had just stopped. It now refuses while the quick gates are red from the last
+  receive: a fix round on the same commit, a new `cq receive` after new commits. `--force-red-gate` overrides, on the
+  owner's word, and is logged as `gate-red-overridden`.
+
+### Changed
+- Track missions name `track-result.md`, and say what to put in the answer if the file is refused.
+
 ## 0.8.14 (2026-11-04)
 
 ### Added: checks you can add one step at a time
