@@ -188,6 +188,9 @@ while merging), then the path to `<folder>\report.md`. In `report.md`: status, b
 line, append-only files touched, deploy needs, **owner questions** in their own section, **Assumptions** in their
 own section (one line each: what, why, how to change it; "none" when there were none), and the wiring specification
 (file, anchor, exact line).
+**Known bugs:** when you fixed a bug that another change could easily repeat, add one line `GATE <failure class>` to
+`report.md`, naming the class and not the place (`GATE a fetch result used without checking the error`). A one-off, such
+as a typo or a single wrong value, gets no line. `cq receive` turns the line into a task the owner decides on.
 **Gate tasks (label `gate`, title `Gate: <failure class>`):** red first. Show the new check failing on the original
 bug or a minimal reproduction (the commit before the fix, or a fixture kept next to the check) and passing on the
 fixed code. `report.md` has a "Red first" section with both runs: the command and its result line, red then green. A

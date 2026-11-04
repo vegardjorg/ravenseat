@@ -247,6 +247,13 @@ function pushBatchText(p) {
   return ` · Push: ${p.text}`;
 }
 
+/** " · Checks: 2 of 4 in place (Settings)" while something is missing; nothing when all are in place or the overview is not in yet. */
+function checksText(c) {
+  if (!c?.steps?.length) return '';
+  const done = c.steps.filter((s) => s.state === 'done').length;
+  return done === c.steps.length ? '' : ` · Checks: ${done} of ${c.steps.length} in place (Settings)`;
+}
+
 function drawStatus() {
   const s = $('status');
   if (!t.key) {
@@ -275,5 +282,6 @@ function drawStatus() {
         ? ' (git status could not be read; uncommitted files are not checked)'
         : '') +
       baseHealthText(t.data?.baseHealth, t.data?.baseBranch) +
-      pushBatchText(t.data?.pushBatch);
+      pushBatchText(t.data?.pushBatch) +
+      checksText(t.data?.checks);
 }

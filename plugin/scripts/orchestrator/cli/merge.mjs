@@ -33,6 +33,7 @@ import {
   BASE_SETUP, BH, flakyRecheck, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf, writeReport,
 } from './baseHealth.mjs';
 import { logEvent } from './events.mjs';
+import { proposeGate } from './gate.mjs';
 
 const ER = require('./lib/eventRows.js');
 const CP = require('./lib/conflictPredict.js');
@@ -561,6 +562,16 @@ export function cmdReceive() {
   if (capWarning) console.log(capWarning);
   if (evidenceRead?.evidence) console.log(`QA evidence: ${L.evidenceText(evidenceRead.evidence)}`);
   if (evidenceWarn) console.log(evidenceWarn);
+  // A known bug the track says can happen again (`GATE <failure class>` in report.md). Never stops the delivery.
+  const knownBug = require('./lib/knownBugGate.js').parseGateLine(reportText);
+  if (knownBug) {
+    try {
+      const line = proposeGate({ title: knownBug, from: id });
+      if (line) console.log(line);
+    } catch (e) {
+      console.log(`Gate: could not propose "${knownBug}" (${e.message}).`);
+    }
+  }
   focusCleanOut();
   // The reviewers (D+: two, plus the helpers that hit) are started in the SAME turn.
   for (const x of reviewerList.filter((y) => !y.fixed))

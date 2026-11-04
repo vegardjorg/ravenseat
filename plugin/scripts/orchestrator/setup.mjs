@@ -280,7 +280,12 @@ if (isMain) {
     console.error(`setup: unknown option ${unknown.join(' ')}. Use: cq setup [--dry] [--overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]`);
     process.exit(2);
   }
-  const target = i >= 0 ? path.resolve(args[i + 1]) : require('./lib/projectRoot.js').roots().main;
+  const PR = require('./lib/projectRoot.js');
+  if (i < 0 && PR.noProjectFolder()) {
+    console.error('setup: this folder is not under git yet, so there is no project to set up. The queue needs git: ask Claude to run "git init" and make a first commit, then run setup again.');
+    process.exit(2);
+  }
+  const target = i >= 0 ? path.resolve(args[i + 1]) : PR.roots().main;
   const log = setupProject({
     target,
     dry: flags.has('--dry'),

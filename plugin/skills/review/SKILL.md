@@ -80,7 +80,8 @@ one-off fixes in the same files are packed into one task). In lite mode title, m
 
 - **Fix task (one-off):** mission = the finding, the file:line evidence, the fix, and "a test that fails before the
   fix". 1 to 3 `acceptance` criteria. Value by severity (H 8 to 9, M 6, L 4).
-- **Gate proposal (repeatable):** `"labels": ["gate"]`, title `Gate: <failure class>`. The mission names the failure
+- **Gate proposal (repeatable):** `cq gate "<failure class>" --where <file:line>` makes one with the criteria below and
+  follows the owner's setting. When you add it by hand: `"labels": ["gate"]`, title `Gate: <failure class>`. The mission names the failure
   class, lists the places found, and carries the gate criteria below word for word. `acceptance` must include the
   red-first criterion. When the project has a command that runs the new check, set `done_when` to it. Prefer one task
   that adds the check (red on the current code) and then fixes the places found; when the fixes are separate tasks,

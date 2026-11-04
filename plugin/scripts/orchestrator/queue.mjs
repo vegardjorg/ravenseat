@@ -317,6 +317,10 @@
 //                                                                  queue.config.json, never over gates already set)
 //   node scripts/orchestrator/queue.mjs kickstart add [gates|secrets|ci]   (proposes the next step, or the named one, as a task;
 //                                                                  it starts only after approve; cli/kickstart.mjs)
+//   node scripts/orchestrator/queue.mjs gate "<failure class>" [--from <task>] [--where <file:line>] [--detail "..."]
+//                                                                  (a known bug that can happen again becomes a gate task: proposed,
+//                                                                  or by gates.fromKnownBugs auto or off; cli/gate.mjs)
+//   node scripts/orchestrator/queue.mjs gate list                   (the gate tasks and their status)
 //   node scripts/orchestrator/queue.mjs unlock [--force --by owner]   (the queue lock: prints the holder; with both flags
 //                                                                  releases it. Refused from a track worktree; the guard
 //                                                                  denies it to queue agents. lib/queueLock.js)
@@ -623,6 +627,7 @@ import * as doctor from './cli/doctor.mjs';
 import * as finding from './cli/finding.mjs';
 import * as helpers from './cli/helpers.mjs';
 import * as kickstart from './cli/kickstart.mjs';
+import * as gate from './cli/gate.mjs';
 import * as merge from './cli/merge.mjs';
 import * as orchestrator from './cli/orchestrator.mjs';
 import * as owner from './cli/owner.mjs';
@@ -692,6 +697,8 @@ if (command === 'init') {
   helpers.cmdHelpers();
 } else if (command === 'kickstart') {
   kickstart.cmdKickstart();
+} else if (command === 'gate') {
+  gate.cmdGate();
 } else if (command === 'board-setting') {
   board.cmdBoard();
 } else if (command === 'triage') {

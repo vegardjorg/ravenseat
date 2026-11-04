@@ -118,6 +118,15 @@ function exists(f, filePath) {
   }
 }
 
+/**
+ * Outside a git repo the last fallback is where the scripts live. In a plugin install that is the plugin's own folder, and
+ * nothing may be written there: it is shared by all projects and replaced on an update. Vendored scripts live in the project.
+ * @param {{ mode: string, main: string }} r  what resolveRoots returned
+ */
+function noProjectFolder(r = roots(), o = {}) {
+  return r.mode === 'fallback' && exists(o.fs ?? fs, path.join(r.main, '.claude-plugin', 'plugin.json'));
+}
+
 let buffer = null;
 
 /** resolveRoots() for this process, computed once (cwd and the environment do not change while a script runs). */
@@ -178,6 +187,7 @@ function bareAgentType(type) {
 module.exports = {
   resolveRoots,
   roots,
+  noProjectFolder,
   queueActive,
   cqCommand,
   agentRef,

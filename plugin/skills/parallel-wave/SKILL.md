@@ -113,7 +113,7 @@ A failure that got past the gates once can get past them again, so a repeatable 
   the same mistake: a missing error check, a renamed symbol with callers left, an unescaped value). A one-off (a
   typo, a single wrong value) gets the fix and nothing more. An open gate task for the same class is extended with the
   new place, never duplicated.
-- **The proposal:** `cq add` with `"labels": ["gate"]` and the title `Gate: <failure class>`, as a proposed task (the
+- **The proposal:** `cq gate "<failure class>" --from <id> --where <file:line>` makes it, or `cq add` with `"labels": ["gate"]` and the title `Gate: <failure class>`, as a proposed task (the
   owner approves it; list it with the round's owner items). The mission names the failure class and the incident
   (merge commit, task id or the owner's report, with file:line), and carries the gate criteria from `/cq:review`
   ("The gate criteria" in its SKILL.md) word for word: clear purpose, reproducible failing example, low maintenance

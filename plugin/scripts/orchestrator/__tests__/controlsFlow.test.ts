@@ -161,7 +161,7 @@ describe('the push guard with a missing control', () => {
     const a = p.push();
     expect(a?.decision).toBe('ask');
     expect(a?.reason).toContain('1 commit(s) with no CI config and no gates');
-    expect(a?.reason).toContain('/cq:setup');
+    expect(a?.reason).toContain('/cq:kickstart');
   });
   it('names only what is missing', () => {
     expect(project({ gates: { quick: [OK_GATE] } }).push()?.reason).toContain('with no CI config, so');
@@ -205,6 +205,30 @@ describe('receive and merge with no checks', () => {
     const r = p.run('receive', 'A');
     expect(r.all).toContain('NO CHECKS RAN');
     expect(r.all).not.toContain('Light review');
+  });
+});
+
+describe('receive and a known bug', () => {
+  const report = (p: { folder: string }, text: string) => fs.writeFileSync(path.join(p.folder, 'scratch', 'A', 'report.md'), `${RES}\n${text}\n`);
+  const gateTasks = (p: { folder: string }) =>
+    JSON.parse(fs.readFileSync(path.join(p.folder, 'queue.json'), 'utf8')).tasks.filter((o: { labels?: string[] }) => o.labels?.includes('gate'));
+
+  it('a GATE line in the report becomes a proposed gate task naming the task, once', () => {
+    const p = project();
+    report(p, 'GATE a fetch result used without its error');
+    const r = p.run('receive', 'A');
+    expect(r.code).toBe(0);
+    expect(r.all).toContain('GATE-1 proposed');
+    expect(gateTasks(p)).toMatchObject([{ id: 'GATE-1', status: 'proposed' }]);
+    expect(gateTasks(p)[0].mission).toContain('task A');
+    expect(p.run('receive', 'A').code).toBe(0);
+    expect(gateTasks(p)).toHaveLength(1);
+  });
+  it('with the setting off the line does nothing, and the delivery goes on', () => {
+    const p = project({ gates: { fromKnownBugs: 'off' } });
+    report(p, 'GATE a fetch result used without its error');
+    expect(p.run('receive', 'A').code).toBe(0);
+    expect(gateTasks(p)).toEqual([]);
   });
 });
 

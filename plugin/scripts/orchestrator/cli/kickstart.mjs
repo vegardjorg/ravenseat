@@ -21,6 +21,8 @@ import { checkSecrets } from './doctorBaseline.mjs';
 
 const K = require('./lib/kickstart.js');
 const CONTROLS = require('./lib/controls.js');
+const KNOWN = require('./lib/knownBugGate.js');
+const QUEUE_PATH = fileURLToPath(new URL('../queue.mjs', import.meta.url));
 
 // Outside a git repo the project root falls back to where the scripts live, which is the plugin's own folder in a plugin
 // install. This command is meant to work before git exists, so it then reads the folder the user stands in.
@@ -65,8 +67,9 @@ function overview() {
   const facts = readFacts();
   const list = K.steps({ facts, tasks: queueTasks() });
   const next = K.nextStep(list);
+  const knownBugs = KNOWN.summary(queueTasks(), KNOWN.modeOf(CONFIG));
   if (a.includes('--json')) {
-    console.log(JSON.stringify({ facts, steps: list, next: next?.key ?? null }, null, 2));
+    console.log(JSON.stringify({ facts, steps: list, next: next?.key ?? null, knownBugs }, null, 2));
     return;
   }
   console.log(`Project: ${facts.stacks.length ? facts.stacks.join(', ') : 'no known stack found'}`);
@@ -83,6 +86,8 @@ function overview() {
   }
   // CI that has no step to take gets its reason here, so nobody wonders why it was left out.
   for (const s of list.filter((x) => x.state === 'later' && x.key === 'ci' && !x.task)) console.log(`\nCI: ${s.why}`);
+  if (knownBugs.open || knownBugs.done)
+    console.log(`\nGates from known bugs: ${knownBugs.proposed} waiting for your yes, ${knownBugs.open - knownBugs.proposed} approved, ${knownBugs.done} done (${CQ} gate list).`);
   console.log(`\nNothing here starts by itself, and you can stop at any step. ${CQ} doctor has the full health check.`);
 }
 
@@ -123,10 +128,23 @@ function needsGit() {
 }
 
 /** Full mode needs a project for the tasks; lite mode has its own. */
-function ensureProject(queuePath) {
+export function ensureProject() {
   if (LM.isLite(CONFIG) || read().projects?.cicd) return;
-  const r = spawnSync(process.execPath, [queuePath, 'project', 'cicd', '--title', 'CI setup', '--prefix', 'KS-'], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [QUEUE_PATH, 'project', 'cicd', '--title', 'CI setup', '--prefix', 'KS-', 'GATE-'], { encoding: 'utf8' });
   if (r.status !== 0) die(`Could not create the project cicd: ${r.stderr || r.stdout}`);
+}
+
+/** Adds one task through `cq add`, under its lock and its checks. { ok, output } */
+export function addTask(task, { approved = false } = {}) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-kickstart-'));
+  const taskFile = path.join(tmp, 'task.json');
+  try {
+    fs.writeFileSync(taskFile, JSON.stringify(task));
+    const r = spawnSync(process.execPath, [QUEUE_PATH, 'add', '--file', taskFile, ...(approved ? ['--approved'] : [])], { encoding: 'utf8' });
+    return { ok: r.status === 0, output: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim() };
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 function add(named) {
@@ -149,20 +167,11 @@ function add(named) {
     console.log(`Not proposed: ${reasons[step.state]}.`);
     return;
   }
-  const queuePath = fileURLToPath(new URL('../queue.mjs', import.meta.url));
-  ensureProject(queuePath);
+  ensureProject();
   const task = { ...K.taskFor(step.task, facts), ...(LM.isLite(CONFIG) ? {} : { project: 'cicd' }) };
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-kickstart-'));
-  const taskFile = path.join(tmp, 'task.json');
-  try {
-    fs.writeFileSync(taskFile, JSON.stringify(task));
-    const r = spawnSync(process.execPath, [queuePath, 'add', '--file', taskFile], { encoding: 'utf8' });
-    process.stdout.write(r.stdout ?? '');
-    process.stderr.write(r.stderr ?? '');
-    if (r.status !== 0) process.exit(r.status ?? 1);
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
+  const r = addTask(task);
+  console.log(r.output);
+  if (!r.ok) process.exit(1);
   console.log(`About ${task.content_min} min of agent work, and it uses tokens. ${CQ} approve ${task.id} (or Approve on the board) lets it run; ${CQ} set ${task.id} cancelled declines it.`);
 }
 

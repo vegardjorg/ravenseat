@@ -343,6 +343,21 @@ stop at any step, and no step is required.
 - `cq kickstart add [gates|secrets|ci]` proposes the step as a task (`KS-CHECK`, `KS-SECRETS`, `KS-CI`). It starts only
   when you approve it, and it uses tokens like any other task. Cancel it and the step stays declined.
 
+The board shows the same steps under Settings, and a short line in the status bar while something is missing.
+
+### Known bugs become gates
+
+A bug that can happen again should be caught next time. A track says so with one line `GATE <failure class>` in
+`report.md`, and `cq gate "<failure class>" [--from <task>] [--where <file:line>]` does the same by hand. It becomes a
+gate task (`GATE-<n>`, label `gate`), and `gates.fromKnownBugs` decides how:
+
+- `propose` (default): the task waits for your yes.
+- `auto`: it is approved at once and runs when the queue gets to it. It uses tokens without asking.
+- `off`: nothing happens.
+
+At most three gate tasks are open at a time. The same class again adds the new place to the open task. A class you
+cancelled is not proposed again.
+
 ## Limits and safety
 
 - `maxConcurrent` (parallel tracks), `maxDPlus`, `maxPerDomain` and `maxDb` stop the queue from starting more than
@@ -416,6 +431,7 @@ reviewer agents per class. Missing values fall back to safe defaults.
 |---|---|---|
 | `baseBranch`, `remote`, `branchPrefix` | `main`, `origin`, `queue/` | Integration branch, push remote, track branch names |
 | `gates.quick`, `gates.full` | `[]` | Commands `gates.mjs` runs (empty = green) |
+| `gates.fromKnownBugs` | `propose` | What a known bug becomes: `propose` (a task you approve), `auto` (approved at once, uses tokens without asking) or `off` |
 | `gates.precheck`, `gates.precheckBudgetSec` | `null` (the standard checks), `120` | The fail-fast precheck `cq gates --precheck` runs before the full gate, stopping at the first red check: commands or `{ name, command, files, budgetSec }`, with `{changed}` (the changed files against `baseBranch`) or `{file}` (once per file); `null` = `node --check`, `tsc --noEmit`, eslint and related tests when the project has them, `[]` = off (see orchestration.md) |
 | `migrations.folder` | `null` | Optional numbered migrations; `null` turns block numbering and migration push off |
 | `migrations.pushCommand`, `environmentFile`, `allowedEnvironment` | `null`, `null`, `[]` | `merge` runs the push command after merging (skip with `--without-migr-push`), but only when the environment file names an allowed environment |

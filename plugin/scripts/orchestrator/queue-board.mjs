@@ -462,6 +462,26 @@ function pushBatchNow(baseHealth) {
   }
 }
 
+// ---- The checks overview (`queue.mjs kickstart --json`, lib/kickstart.js) --------------------------------------------
+// It reads git and the files, so it runs in the background at most once a minute, and the board shows the last answer.
+let checksCache = { time: 0, data: null, running: false };
+function checksNow() {
+  if (!checksCache.running && Date.now() - checksCache.time > 60_000) {
+    checksCache.running = true;
+    queueMjs(['kickstart', '--json']).then((r) => {
+      let data = null;
+      try {
+        const j = r.ok ? JSON.parse(r.out) : null;
+        data = j && { steps: j.steps.map(({ key, state, title, why, how }) => ({ key, state, title, why, how })), next: j.next, knownBugs: j.knownBugs };
+      } catch {
+        /* no overview this round */
+      }
+      checksCache = { time: Date.now(), data, running: false };
+    });
+  }
+  return checksCache.data;
+}
+
 // ---- The state (cheap: rebuilt only when queue.json, git status or the logo has changed) -----------------------------
 // git status is read again every minute, so the state (age, night pause, "Next up") is recomputed at least that often.
 let quick = null;
@@ -477,7 +497,8 @@ function state() {
   // The base health: the file's time and the base tip (read with git status, at most once a minute) are in the key.
   const baseHealth = baseHealthNow();
   const pushBatch = pushBatchNow(baseHealth);
-  const baseKey = JSON.stringify([baseHealth, pushBatch]);
+  const checks = checksNow();
+  const baseKey = JSON.stringify([baseHealth, pushBatch, checks]);
   // Is a `cq wait` listening (its heartbeat is fresh)? Read every time, so the line flips without a queue change.
   const listening = OW.heartbeatState(FOLDER).listening;
   if (
@@ -544,6 +565,8 @@ function state() {
     baseHealth,
     // The push batch (lib/pushBatch.js boardBatch): "4 of 10 tasks, NOT YET"; null without a remote ref.
     pushBatch,
+    // The checks overview: the steps of `cq kickstart`; null until the first answer is in.
+    checks,
     // The module switches (lib/queueConfig.js features): the board hides the tabs, buttons and rows of those that are off.
     features: FEATURES,
     // The board's own switches (lib/queueConfig.js boardSwitches; queue.json board wins): showCloud = the Cloud tab.

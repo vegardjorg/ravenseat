@@ -283,6 +283,33 @@ function boardSection() {
   );
 }
 
+const CHECK_WORD = { done: 'In place', next: 'Next', queued: 'In the queue', declined: 'Declined', later: 'Later' };
+
+/** What the project has and the next step (`cq kickstart`). Read only: the board cannot run Claude, so it says what to run. */
+function checksSection() {
+  const c = t.data?.checks;
+  if (!c?.steps?.length) return null;
+  const next = c.steps.find((s) => s.key === c.next);
+  const known = c.knownBugs ?? {};
+  return el(
+    'section',
+    { class: 'setting', 'aria-labelledby': 'setting-checks' },
+    el('h3', { id: 'setting-checks', class: 'setting-title', text: 'Checks' }),
+    el(
+      'ul',
+      { class: 'checks-list' },
+      ...c.steps.map((s) =>
+        el('li', null, el('span', { class: `checks-word checks-${s.state}`, text: CHECK_WORD[s.state] ?? s.state }), ` ${s.title}`),
+      ),
+    ),
+    next ? el('p', { class: 'setting-explanation', text: `${next.title}: ${next.why} ${next.how}` }) : null,
+    known.open || known.done
+      ? el('p', { class: 'setting-explanation', text: `Gates from known bugs: ${known.proposed} waiting for your yes, ${known.open - known.proposed} approved, ${known.done} done.` })
+      : null,
+    el('p', { class: 'setting-explanation', text: 'Nothing starts by itself, and every step is optional. /cq:kickstart in Claude Code explains it in plain words.' }),
+  );
+}
+
 /** The first-run card: the queue has nothing open, so the columns would only say "Nothing here.". */
 function onboardingCard() {
   const code = (text) => el('code', { text });
@@ -310,6 +337,9 @@ function onboardingCard() {
         'here under "Waiting on you" when the queue needs you.',
       ),
     ),
+    t.data?.checks?.next
+      ? el('p', null, 'When you are ready: ', code('/cq:kickstart'), ' adds automatic checks one step at a time. It is optional.')
+      : null,
     el('button', {
       type: 'button',
       class: 'link-button',

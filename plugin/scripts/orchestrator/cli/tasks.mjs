@@ -20,6 +20,7 @@ import path from 'node:path';
 import {
   a, autoAcceptIn, byName, CONFIG, CQ, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
   positional, read, readPlans, undoHint, val, values, withLock, write,
+  require,
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
 
@@ -64,6 +65,8 @@ export function cmdInit() {
   // The mode (lib/liteMode.js): --lite / --full write `mode` into queue.config.json, also for an existing queue. A FRESH
   // init (no queue yet) without a flag writes "lite" when the config has no `mode` of its own; an existing install is
   // never switched without a flag. Lite gets the project "tasks" (prefix T-) instead of "example".
+  if (require('./lib/projectRoot.js').noProjectFolder())
+    die('This folder is not under git yet, so there is no project to set up. The queue needs git: ask Claude to run "git init" and make a first commit, then run init again.');
   fs.mkdirSync(FOLDER, { recursive: true });
   const fresh = !fs.existsSync(FILE);
   const flagMode = a.includes('--lite') ? 'lite' : a.includes('--full') ? 'full' : null;

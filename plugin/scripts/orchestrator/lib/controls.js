@@ -55,7 +55,7 @@ function question({ missing: what, commits }) {
   if (!what?.length || !commits) return null;
   return (
     `this push sends ${commits} commit(s) with ${what.join(' and ')}, so nothing automatic checks this code. ` +
-    '/cq:setup sets up checks. "push": { "controlsWarning": false } in queue.config.json turns this question off. ' +
+    '/cq:kickstart adds checks one step at a time. "push": { "controlsWarning": false } in queue.config.json turns this question off. ' +
     'Push anyway?'
   );
 }
@@ -74,11 +74,11 @@ function verification({ quickGates, doneCommand, reviewed }) {
 /** The line cq merge prints for a verification. */
 function verificationLine({ status, checks }) {
   if (status === 'verified') return `Verified: your checks passed (${checks.join(', ')}). The code can still be wrong.`;
-  if (status === 'audited') return 'AUDITED, not verified: an agent reviewed this change, but no check ran. /cq:setup adds checks.';
-  return 'MERGED, NOT VERIFIED: no gates, no done command and no agent review ran. /cq:setup adds checks.';
+  if (status === 'audited') return 'AUDITED, not verified: an agent reviewed this change, but no check ran. /cq:kickstart adds checks one step at a time.';
+  return 'MERGED, NOT VERIFIED: no gates, no done command and no agent review ran. /cq:kickstart adds checks one step at a time.';
 }
 
 /** The line cq receive prints when neither a gate nor a done command ran on the delivery. */
-const noChecksLine = (id) => `${id}: NO CHECKS RAN: gates.quick is empty and the task has no done command. /cq:setup adds checks.`;
+const noChecksLine = (id) => `${id}: NO CHECKS RAN: gates.quick is empty and the task has no done command. /cq:kickstart adds checks one step at a time.`;
 
 module.exports = { ciHosts, commandsOf, hasGates, missing, question, verification, verificationLine, noChecksLine };

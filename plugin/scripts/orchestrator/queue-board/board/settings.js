@@ -70,6 +70,7 @@ function drawSettings() {
       'div',
       { id: 'settings-panel-general', role: 'tabpanel', 'aria-labelledby': 'settings-tab-general' },
       helpSection(),
+      checksSection(),
       themeSection(),
       mascotSection(),
       el(

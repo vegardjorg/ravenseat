@@ -4082,3 +4082,18 @@ fieldset.setting legend {
     outline: 2px solid Highlight;
   }
 }
+
+/* Settings: the checks overview (top.js checksSection). The word carries the meaning; the weight only sets it apart. */
+.checks-list {
+  margin: var(--distance-sm) 0;
+  padding: 0;
+  list-style: none;
+  line-height: 1.6;
+}
+.checks-word {
+  display: inline-block;
+  min-width: 6.5em;
+}
+.checks-next {
+  font-weight: 600;
+}

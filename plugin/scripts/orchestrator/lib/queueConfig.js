@@ -62,6 +62,9 @@ const STANDARD = Object.freeze({
     // (node --check, tsc --noEmit, eslint and related tests on the changed files); [] = no precheck.
     precheck: null,
     precheckBudgetSec: 120, // time budget per check (seconds) when the check does not set budgetSec
+    // A known bug that can happen again (lib/knownBugGate.js): 'propose' = a task the owner approves, 'auto' = approved at
+    // once (it uses tokens without asking), 'off' = nothing.
+    fromKnownBugs: 'propose',
   },
   // The done command (task field `done_when`, lib/doneCheck.js): `receive` and `merge` run it in the track's worktree.
   // timeoutSec = the time budget per run (a run over it is red); tailLines = how many of the last output lines are kept
