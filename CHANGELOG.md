@@ -3,6 +3,33 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.14 (2026-11-04)
+
+### Added: checks you can add one step at a time
+- `cq kickstart` shows what the project has and one next step in plain words: git, gates, secret files, then CI. It reads
+  only, and works before `cq init` and without git. `/cq:kickstart` explains it for someone new to all of this.
+- `cq kickstart gates --apply` sets the checks your project already has as gates, never over gates already set. It reads
+  Node/TypeScript and Python. The skill reads other stacks itself.
+- `cq kickstart add` proposes a step as a task. It starts only when you approve it, and it uses tokens like any other task.
+  A step you cancel stays declined.
+- The board shows the same steps under Settings, with a short line in the status bar while something is missing.
+
+### Added: known bugs can become gates
+- A bug that can happen again becomes a gate task, from a line `GATE <failure class>` in `report.md` or from
+  `cq gate "<failure class>"`. `gates.fromKnownBugs` chooses `propose` (default), `auto` or `off`. `auto` uses tokens
+  without asking.
+- At most three gate tasks are open at a time. A bug stopped by that limit is not saved: the message names it and asks you
+  to approve or cancel an open task first. The same class again adds the new place to the open task, and a class you
+  cancelled is not proposed again.
+
+### Changed
+- The hints about missing checks now point to `/cq:kickstart` instead of `/cq:setup`.
+- Track missions have a new paragraph about the `GATE` line.
+
+### Fixed
+- `cq init` and `cq setup` stop outside git in a plugin install and say to run `git init` first. They used to write into
+  the plugin's own folder. This was read from the code and fixed; `cq setup` has not been run against the new check.
+
 ## 0.8.13 (2026-11-04)
 
 ### Changed: a project with no checks now hears about it
