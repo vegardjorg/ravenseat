@@ -391,6 +391,24 @@ describe('running, from the hook row', () => {
   });
 });
 
+describe('cq receive without commits', () => {
+  it('refuses, leaves the task as it was and names the next steps; --force still makes the package', () => {
+    const p = project([task('A')]);
+    p.run(['start', 'A']);
+    if (!p.g(['branch', '--list', 'queue/A'])) p.g(['branch', 'queue/A']);
+    const r = p.run(['receive', 'A']);
+    expect(r.code).toBe(1);
+    expect(r.error).toContain('Nothing to receive');
+    expect(r.error).toContain('A stays running');
+    expect(r.error).toContain('git worktree list');
+    expect(r.error).toContain('resume A --reason context');
+    expect(r.error).toContain('set A cancelled');
+    expect(r.error).not.toContain('already merged?');
+    expect(p.find('A').status).toBe('running');
+    expect(p.run(['receive', 'A', '--force']).error).not.toContain('Nothing to receive');
+  });
+});
+
 describe('cq attempt', () => {
   it('list: --json, and a task without attempts or an unknown task', () => {
     const p = project([task('A'), task('B')]);

@@ -332,7 +332,10 @@ export function cmdReceive() {
   if (!gi.exists) die(`Branch ${branch} does not exist.`);
   if (gi.commits === 0 && !a.includes('--force'))
     die(
-      `${branch} has no commits ahead of ${BASE} (already merged?). The package will be empty; --force to make it anyway.`,
+      `Nothing to receive: ${branch} has no commits ahead of ${BASE}, and ${id} stays ${o0.status}.\n` +
+        'The agent may not have committed: look for uncommitted work in its worktree (git worktree list).\n' +
+        `Next: ${CQ} resume ${id} --reason context for a new round, ${CQ} set ${id} done if the work is already on ${BASE}, ` +
+        `or ${CQ} set ${id} cancelled --remark "<why>". --force makes an empty package anyway.`,
     );
   const scope = `${BASE}...${branch}`;
   const folder = path.join(scratch, `rev-${id}`);
