@@ -84,6 +84,8 @@ The Queue workspace has these tabs:
   [Flow and quality](queue.md#cost-estimates-and-calibration)), and the legend for the badges on the cards.
 - A running card gets the badge **silent** when the track has an agent worktree but no sign of life for
   `limits.silentMin` minutes (the same rule as `SILENT` in `cq show`; the server measures it at most once a minute).
+- A built card gets the badge **Merged, not verified** when no gates, done command or agent review ran, and **Audited**
+  when only an agent review ran ([When a project has no checks](queue.md#when-a-project-has-no-checks)).
 
 **Cancel, decline and edit.** For a waiting task (also on hold or in the batch queue) the detail panel has **Edit**
 (value 1-10, content minutes and class, checked like `cq add` / `cq edit`) and **Cancel task**; for a proposal it has

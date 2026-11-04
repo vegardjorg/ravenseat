@@ -369,6 +369,8 @@ function buildBoard(
         ((Number.isFinite(doneMs) && now - doneMs <= RECENT_MS) || o.qa_status === 'waiting'),
       qa_status: o.qa_status ?? null,
       qa_note: o.qa_note ?? null,
+      verification: o.verification?.status ?? null,
+      verification_checks: o.verification?.checks ?? [],
       cloud: cloudSuitable,
       in_cloud: L.isCloud(o),
       cloud_session: o.cloud

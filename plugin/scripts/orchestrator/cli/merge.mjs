@@ -38,6 +38,7 @@ const ER = require('./lib/eventRows.js');
 const CP = require('./lib/conflictPredict.js');
 const AT = require('./lib/logic/attempt.js');
 const GB = require('./lib/gitSurfaceBaseline.js');
+const CONTROLS = require('./lib/controls.js');
 
 // ---- The git hooks and config against the accepted baseline (lib/gitSurfaceBaseline.js) -------------------------------
 
@@ -456,6 +457,9 @@ export function cmdReceive() {
     if (!o0.picked_by) pulseCursor(`receive ${id} done command red`);
     doneCommandRed(id, doneCheck, { scratch });
   }
+  // Nothing automatic looked at this delivery (lib/controls.js). A warning, never a stop; a PARTIAL track runs nothing anyway.
+  if (result?.status !== 'PARTIAL' && !CONTROLS.commandsOf(CONFIG.gates?.quick).length && !doneCheck)
+    console.log(CONTROLS.noChecksLine(id));
   // QA evidence: the EVIDENCE line (report.md first, otherwise the answer) and the warning when a task that needs it
   // (config().qa.evidenceLabels) has none. A warning, not a stop.
   const evidenceRead = L.parseEvidence(reportText) ?? L.parseEvidence(trackReply);
@@ -491,6 +495,7 @@ export function cmdReceive() {
     changedPaths: [...copy, ...skipped.map((h) => h.path)],
     missionText,
     hashes: checked.hashes,
+    missingControls: CONTROLS.missing(CONFIG, MAIN_TREE),
   });
   const reviewers = reviewerList.map((x) => x.type);
   const customReviewers = new Set(reviewerList.filter((x) => x.custom).map((x) => x.type));
@@ -559,7 +564,11 @@ export function cmdReceive() {
   focusCleanOut();
   // The reviewers (D+: two, plus the helpers that hit) are started in the SAME turn.
   for (const x of reviewerList.filter((y) => !y.fixed))
-    console.log(`Helper agent ${x.type}: ${x.reasons.join(', ')} (cq helpers off ${x.type} turns it off).`);
+    console.log(
+      x.type === 'reviewer-light'
+        ? `Light review: ${x.reasons.join(', ')}. The task becomes AUDITED, never VERIFIED. ${CQ} helpers shows what it has cost; ${CQ} helpers off reviewer-light turns it off.`
+        : `Helper agent ${x.type}: ${x.reasons.join(', ')} (cq helpers off ${x.type} turns it off).`,
+    );
   if (prompts.length)
     for (const l of L.concurrentBlock(
       prompts.map((p) => ({ subagent_type: p.type, prompt: p.file, bare: customReviewers.has(p.type) })),
@@ -1206,9 +1215,16 @@ export async function cmdMerge() {
   }
   // The timestamps and the size. t_review is the first reviewer start after t_receive (hook-time writes
   // the start row with the task id from the path rev-<id>); the tests run with an injected runner, without a real merge.
+  // What the merge was checked by (lib/controls.js): res.ok means the gates and the done command that exist were green.
+  const verified = CONTROLS.verification({
+    quickGates: CONTROLS.commandsOf(CONFIG.gates?.quick).length > 0,
+    doneCommand: !!o.done_when,
+    reviewed: reviewerFindingsLines(o).length > 0,
+  });
   edit((queue) => {
     const ox = queue.tasks.find((x) => x.id === id);
     if (!ox) return null;
+    ox.verification = { ...verified, sha: mstate.merge_commit ?? null };
     if (resume) ox.t_merge ??= new Date().toISOString();
     else ox.t_merge = new Date().toISOString();
     if (mstate.merge_commit) ox.merge_commit = mstate.merge_commit;
@@ -1226,6 +1242,7 @@ export async function cmdMerge() {
   ML.clearState(FOLDER, id);
   console.log(`Full log: ${logFile}`);
   printBase();
+  console.log(CONTROLS.verificationLine(verified));
   // The merge went through, but the base gate made the base red: exit 9 (as a refused merge), so a script that chains
   // merges stops here instead of reading a 0.
   if (baseSettled && BH.verdict(BH.readState(HEALTH_FILE), mergeCommit) === 'red') process.exit(BH.EXIT_RED_BASE);

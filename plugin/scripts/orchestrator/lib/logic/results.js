@@ -434,7 +434,7 @@ function reviewerPrompt({ o, type, folder }) {
     `You are ${type} for track ${o.id} (class ${o.class}, branch ${o.branch ?? queueBranch(o.id)}) in the work queue.`,
     `Read the review package: ${folder}${sep}00-package.md first, then diff.patch and the files under files${sep} (full version from the`,
     "branch), and the track's answer and report when they are there. Look things up in the rest of the repo only for a concrete",
-    'question, with grep -n and excerpts. At most approx. 40 turns; rather leave the question open in the report.',
+    `question, with grep -n and excerpts. At most approx. ${type === 'reviewer-light' ? 15 : 40} turns; rather leave the question open in the report.`,
     'Your answer is at most approx. 1,500 characters. First line in fixed format: FINDINGS H=<count> M=<count> L=<count>',
     'deferrable=<finding codes that can wait, comma-separated, or ->. Then one short point per H and M finding (code,',
     'file:line, fix), L findings only with code and one sentence. Do not repeat the package.',

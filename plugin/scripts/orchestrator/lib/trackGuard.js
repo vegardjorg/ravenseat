@@ -48,6 +48,7 @@ const PLUGIN_AGENT_TYPES = Object.freeze([
   'reviewer-challenger',
   'reviewer-design',
   'reviewer-docs',
+  'reviewer-light',
   'reviewer-gap',
   'reviewer-security',
   'reviewer-tests',

@@ -33,6 +33,9 @@
 // asks with file:line on a hit. Skipped silently over secretScan.maxBytes, on a timeout or any error (fails open).
 // deployCommands: a command that starts with one of them gets "ask" (agents and the main session).
 //
+// The missing controls (lib/controls.js, push.controlsWarning): the same plain push asks when the project has no CI config
+// or no gates, with what is missing and how many commits. Also on a first push, which is what a new user does. Never a deny.
+//
 // Test: lib/__tests__/pushGuard.test.ts (the logic). Smoke test of the hook itself:
 //   echo '{"tool_input":{"command":"git push --force origin main"},"cwd":"."}' | node scripts/orchestrator/hook-push-guard.mjs
 //   echo '{"agent_type":"track","tool_input":{"command":"curl https://x"},"cwd":"."}' | node scripts/orchestrator/hook-push-guard.mjs
@@ -90,6 +93,23 @@ function secretQuestion(cwd, k) {
     if (k.secretScan?.enabled === false) return null;
     const SS = require('./lib/secretScan.js');
     return SS.question(SS.scanPush({ cwd, remote: k.remote, branch: k.baseBranch, setup: k.secretScan }));
+  } catch {
+    return null;
+  }
+}
+
+/** The question for a push with no CI config or no gates (lib/controls.js), or null. Any error: null. */
+function controlsQuestion(cwd, k) {
+  try {
+    if (k.push?.controlsWarning === false) return null;
+    const C = require('./lib/controls.js');
+    const missing = C.missing(k, k.root);
+    if (!missing.length) return null;
+    const head = `refs/heads/${k.baseBranch}`;
+    const remote = `refs/remotes/${k.remote}/${k.baseBranch}`;
+    // A first push has no remote ref: everything on the branch goes.
+    const range = git(cwd, ['rev-parse', '-q', '--verify', remote]) ? `${remote}..${head}` : head;
+    return C.question({ missing, commits: Number(git(cwd, ['rev-list', '--count', range])) || 0 });
   } catch {
     return null;
   }
@@ -215,6 +235,7 @@ process.stdin.on('end', () => {
       knownPackage: guarded ? knownPackage(cwd) : undefined,
       batchQuestion: () => batchQuestion(cwd, k),
       secretQuestion: () => secretQuestion(cwd, k),
+      controlsQuestion: () => controlsQuestion(cwd, k),
     });
     if (!answer) process.exit(0);
 

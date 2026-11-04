@@ -54,6 +54,7 @@ reviewers, and the helpers only add to that. The reviewers for a task are worked
 | `reviewer-tests` | Do the tests prove the behavior; missing edge cases | class D or D+, or label `bug` | no |
 | `reviewer-gap` | The delivery against the mission, point by point | the task has a `plan`, or the mission has 8+ numbered points | no |
 | `reviewer-docs` | Docs rewrites: lost facts, findability, docs against code | more than half of the changed files are under `docs/` or `*.md` | no |
+| `reviewer-light` | A short review of a K task: mission miss, secrets, access, injection. The task becomes AUDITED, never VERIFIED | class K, and the project has no gates or no CI config | yes |
 | `triage` | Intake check BEFORE a track starts: ready, done, stale or adjust (see [Intake triage](#intake-triage)) | the task was added or last edited `triage.minAgeDays` (3) days ago or more, or an agent added it | yes (off in lite mode) |
 
 The setup lives under `helpers` in `queue.config.json`:

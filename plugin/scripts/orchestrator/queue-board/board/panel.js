@@ -281,6 +281,7 @@ function drawPanel(fresh) {
       facts('Cloud', cloudFacts(k)),
       facts('Migrations', k.migr_block),
       facts('QA', k.qa_status ? `${k.qa_status}${k.qa_note ? `: ${k.qa_note}` : ''}` : null),
+      facts('Verification', k.verification ? `${k.verification}${k.verification_checks?.length ? ` (${k.verification_checks.join(', ')})` : ''}` : null),
       facts(
         'Source',
         [k.source, k.added_by ? `added by ${k.added_by}` : null]

@@ -244,7 +244,8 @@ describe('hook-push-guard.mjs: secret check and deploy commands', () => {
   /** Runs the hook in `cwd` with a config; returns { decision, reason } or null. */
   const run = (cwd: string, config: object, payload: object) => {
     const configFile = path.join(cwd, '..', 'queue.config.json');
-    fs.writeFileSync(configFile, JSON.stringify(config));
+    // The controls question has its own flow test (controlsFlow.test.ts).
+    fs.writeFileSync(configFile, JSON.stringify({ ...config, push: { controlsWarning: false, ...(config as { push?: object }).push } }));
     const folder = path.join(cwd, '..', 'q');
     fs.mkdirSync(folder, { recursive: true });
     const env = { ...process.env, QUEUE_ROOT: cwd, QUEUE_CONFIG: configFile, QUEUE_FOLDER: folder, QUEUE_SECRET_SCANNER: 'builtin' };

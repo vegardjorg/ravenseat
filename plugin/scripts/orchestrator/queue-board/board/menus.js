@@ -88,6 +88,8 @@ const BADGES = [
   ['badge tone-warn silent-badge', 'silent', 'Running with an agent, but no sign of life for a while (cq show says what to do).'],
   ['badge qa', 'Waiting for QA', 'Built, but the owner has not looked it over.'],
   ['badge deviation', 'QA deviation', 'The owner found something during the check.'],
+  ['badge deviation', 'Merged, not verified', 'No gates, no done command and no agent review ran on this task.'],
+  ['badge qa', 'Audited', 'An agent reviewed the change, but no check ran. Not the same as verified.'],
 ];
 function legend(idPrefix) {
   const row = (badge, text) =>

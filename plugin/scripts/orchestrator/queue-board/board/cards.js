@@ -195,6 +195,11 @@ function footerFor(k, col) {
       footer.push(el('span', { class: 'badge qa', text: 'Waiting for QA' }));
     else if (k.qa_status === 'deviation')
       footer.push(el('span', { class: 'badge deviation', text: 'QA deviation' }));
+    // A verified task gets no badge: only what the owner should notice stands out on the card.
+    if (k.verification === 'unverified')
+      footer.push(el('span', { class: 'badge deviation', title: 'No gates, no done command and no agent review ran', text: 'Merged, not verified' }));
+    else if (k.verification === 'audited')
+      footer.push(el('span', { class: 'badge qa', title: 'An agent reviewed the change, but no check ran', text: 'Audited' }));
     if (k.done) footer.push(el('span', { text: `done ${age(k.done)} ago` }));
   }
   return footer;

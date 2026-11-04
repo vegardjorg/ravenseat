@@ -13,6 +13,7 @@
 //       mostlyPaths      more than half of the changed files match one of the patterns
 //       plan             (true) the task has a plan field (a plan register entry)
 //       minMissionItems  the mission file has at least this many numbered points
+//       whenControlsMissing  the task's class is in the list and the project has no CI config or no gates (lib/controls.js)
 //     The register is open: a helper is `source: "builtin"` (one of the agents the plugin ships, CATALOG) or
 //     `source: "custom"` (an agent file of the project's own, with `path` and `sha256` of that file). Conditions, the
 //     switch and the measurement are the same for both.
@@ -57,6 +58,10 @@ const CATALOG = Object.freeze({
   'reviewer-docs': {
     title: 'Docs',
     text: 'For documentation changes: no true fact lost in a rewrite, easy to find your way, and the docs match the code.',
+  },
+  'reviewer-light': {
+    title: 'Light review',
+    text: 'For a project with no gates or no CI: a short read of the diff for obvious bugs, secrets, access and injection.',
   },
   // Not a reviewer: runs BEFORE a track starts (phase intake, lib/queueTriage.js). Never in reviewersForTask.
   triage: {
@@ -124,6 +129,7 @@ function cleanHelper(h) {
     mostlyPaths: list(x.mostlyPaths),
     plan: x.plan === true,
     minMissionItems: Number.isInteger(n) && n > 0 ? n : null,
+    whenControlsMissing: list(x.whenControlsMissing),
   };
 }
 
@@ -276,9 +282,9 @@ function fixedFor(config, cls) {
  * off: `ignoreEnabled` checks the conditions only, for "would run" in the views).
  * @param {object} h a helper from helperSetup
  * @param {object} o the task (class, labels, plan)
- * @param {{ changedPaths?: string[], missionText?: string|null, ignoreEnabled?: boolean }} [c]
+ * @param {{ changedPaths?: string[], missionText?: string|null, ignoreEnabled?: boolean, missingControls?: string[] }} [c]
  */
-function helperReasons(h, o, { changedPaths = [], missionText = null, ignoreEnabled = false } = {}) {
+function helperReasons(h, o, { changedPaths = [], missionText = null, ignoreEnabled = false, missingControls = [] } = {}) {
   if (!h || (!h.enabled && !ignoreEnabled)) return [];
   // An intake helper (the triage) runs before the start, never as a reviewer (lib/queueTriage.js has its rule).
   if (h.phase === 'intake') return [];
@@ -297,6 +303,7 @@ function helperReasons(h, o, { changedPaths = [], missionText = null, ignoreEnab
     if (n * 2 > files.length) why.push(`${n} of ${files.length} changed files match`);
   }
   if (h.plan && o?.plan) why.push(`plan ${o.plan}`);
+  if (missingControls.length && h.whenControlsMissing.includes(String(o?.class))) why.push(missingControls.join(', '));
   if (h.minMissionItems && missionText != null) {
     const n = missionItems(missionText);
     if (n >= h.minMissionItems) why.push(`${n} numbered points in the mission`);
@@ -312,10 +319,10 @@ function helperReasons(h, o, { changedPaths = [], missionText = null, ignoreEnab
  * the agent lives in the project's .claude/agents/ (started by its bare name).
  * @param {object} o the task
  * @param {{ config: object, queue?: object|null, changedPaths?: string[], missionText?: string|null,
- *   hashes?: Record<string, string|null>|null }} c
+ *   hashes?: Record<string, string|null>|null, missingControls?: string[] }} c
  * @returns {{ type: string, fixed: boolean, reasons: string[], custom?: boolean }[]}
  */
-function reviewersForTask(o, { config, queue = null, changedPaths = [], missionText = null, hashes = null }) {
+function reviewersForTask(o, { config, queue = null, changedPaths = [], missionText = null, hashes = null, missingControls = [] }) {
   const setup = helperSetup(config, queue, { hashes });
   const blocked = (type) =>
     (setup[type]?.source === 'custom' && setup[type].review !== 'approved') || setup[type]?.phase === 'intake';
@@ -324,7 +331,7 @@ function reviewersForTask(o, { config, queue = null, changedPaths = [], missionT
     .map((type) => ({ type, fixed: true, reasons: [`class ${o?.class}`], ...(setup[type]?.source === 'custom' ? { custom: true } : {}) }));
   for (const [type, h] of Object.entries(setup)) {
     if (blocked(type)) continue;
-    const reasons = helperReasons(h, o, { changedPaths, missionText });
+    const reasons = helperReasons(h, o, { changedPaths, missionText, missingControls });
     if (!reasons.length) continue;
     const there = out.find((x) => x.type === type);
     if (there) there.reasons.push(...reasons.filter((r) => !there.reasons.includes(r)));
@@ -371,6 +378,7 @@ function conditionText(h, config = null) {
   if (h.labels.length) parts.push(`label ${h.labels.join(', ')}`);
   if (h.paths.length) parts.push(`changes ${h.paths.join(', ')}`);
   if (h.mostlyPaths.length) parts.push(`most changed files match ${h.mostlyPaths.join(', ')}`);
+  if (h.whenControlsMissing?.length) parts.push(`class ${h.whenControlsMissing.join(', ')} when the project has no CI config or no gates`);
   if (h.plan) parts.push('the task has a plan entry');
   if (h.minMissionItems) parts.push(`the mission has ${h.minMissionItems} or more numbered points`);
   return parts.length ? `When: ${parts.join(' or ')}.` : 'When: no condition set, so it never runs.';

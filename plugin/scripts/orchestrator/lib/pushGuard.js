@@ -382,6 +382,7 @@ const queueShaped = (command) => /(^|[\s"'`(;&|\\/])(cq|cq\.mjs|cq\.cmd|queue\.m
  *                                  git and base-health.json); asked only for the main session, and only when nothing
  *                                  else is found. null = no question.
  *   secretQuestion?: () => string|null  the secret precheck question for the same push (lib/secretScan.js), same rules.
+ *   controlsQuestion?: () => string|null  the same push with no CI config or no gates (lib/controls.js), same rules.
  *   deployCommands?: string[]      default config().deployCommands,
  * }
  * The command line is read with lib/shellCommands.js (nested shells, eval, $( ), subshells and inline git aliases
@@ -518,10 +519,10 @@ function assess(command, context = {}) {
   }
   // The network guard applies to the queue's agents: tracks, reviewers and helper agents (never the orchestrator).
   if (guarded) findings.push(...assessNetwork(command, context));
-  // The secret precheck and the batch threshold: only for the orchestrator (no agent_type; tracks never push) and only
-  // when nothing else hit. Both questions go in one dialog.
+  // The secret precheck, the missing controls and the batch threshold: only for the orchestrator (no agent_type; tracks
+  // never push) and only when nothing else hit. All the questions go in one dialog.
   if (basePush && findings.length === 0 && !context.agentType) {
-    const questions = [context.secretQuestion, context.batchQuestion]
+    const questions = [context.secretQuestion, context.controlsQuestion, context.batchQuestion]
       .map((f) => (typeof f === 'function' ? f() : null))
       .filter(Boolean);
     if (questions.length) findings.push({ decision: 'ask', reason: questions.join(' Also: ') });

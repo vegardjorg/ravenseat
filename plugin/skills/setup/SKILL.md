@@ -40,7 +40,8 @@ below. The user can switch later with `cq mode full` or `cq mode lite`.
 Fill in, asking the user where you are not sure:
 - `projectName`: a short name. `baseBranch`: the integration branch tracks branch from and merge into.
 - `gates.quick` and `gates.full`: the project's real check commands (type check, lint, tests). Read `package.json`
-  scripts (or the equivalent for the stack) and propose them; empty lists are allowed (gates then pass trivially).
+  scripts (or the equivalent for the stack) and propose them; empty lists are allowed (gates then pass trivially, and the
+  push guard, `cq receive` and `cq merge` say that no checks ran).
 - `migrations`: only if the project has numbered database migrations. Otherwise leave `folder` as `null`.
 - `modules`: ASK which areas the product has (for example "auth", "billing", "mobile"); use the answer for `modules`
   and `projectModuleSuggestion`.

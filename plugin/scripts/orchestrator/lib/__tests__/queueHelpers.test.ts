@@ -86,6 +86,7 @@ describe('the conditions: class, label, paths, mostlyPaths, plan, mission points
   it('docs: more than half of the changed files are docs/ or *.md, not exactly half', () => {
     expect(types({ class: 'K' }, on, { changedPaths: ['docs/a.txt', 'README.md', 'x.js'] })).toContain(
       'reviewer-docs',
+      'reviewer-light',
     );
     expect(types({ class: 'K' }, on, { changedPaths: ['docs/a.txt', 'x.js'] })).not.toContain('reviewer-docs');
     expect(types({ class: 'K' }, on, { changedPaths: [] })).not.toContain('reviewer-docs');
@@ -199,6 +200,7 @@ describe('switches and backward compatibility', () => {
       'reviewer-tests',
       'reviewer-gap',
       'reviewer-docs',
+      'reviewer-light',
       // The intake triage helper (phase intake): counted for the cost, never a reviewer.
       'triage',
     ]);
@@ -297,6 +299,7 @@ describe('the measurement per helper', () => {
       'reviewer-tests',
       'reviewer-gap',
       'reviewer-docs',
+      'reviewer-light',
       'triage',
     ]);
     const design = rows[1];

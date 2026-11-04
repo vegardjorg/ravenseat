@@ -246,7 +246,7 @@ function project(push: object, { red = false, extra = {} as Record<string, unkno
   fs.mkdirSync(data);
   fs.writeFileSync(path.join(data, 'queue.json'), JSON.stringify({ tasks: [], projects: {} }));
   const configFile = path.join(r.dir, 'queue.config.json');
-  fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'main', remote: 'origin', branchPrefix: 'queue/', push, ...extra }));
+  fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'main', remote: 'origin', branchPrefix: 'queue/', push: { controlsWarning: false, ...push }, ...extra }));
   const env = {
     ...process.env,
     QUEUE_ROOT: r.dir,

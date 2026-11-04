@@ -84,7 +84,8 @@ const STANDARD = Object.freeze({
   // ciWatch: "off" (default) or "github": the optional CI watch after a batch push
   // (`cq push-check --watch-ci <sha>`, lib/ciWatch.js, needs gh): polls the runs every ciWatchIntervalSec, gives up
   // after ciWatchTimeoutMin (exit 10). Local gates stay the rule; this is a safety net.
-  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90 },
+  // controlsWarning: a plain push asks when the project has no CI config or no gates (lib/controls.js); false = no question.
+  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90, controlsWarning: true },
   // The branch that goes live (production). null = unknown. `cq doctor` warns when it is the same as baseBranch: every
   // batch push would then go straight to production. Nothing else reads it yet.
   productionBranch: null,
@@ -169,6 +170,8 @@ const STANDARD = Object.freeze({
     'reviewer-tests': { enabled: false, classes: ['D', 'D+'], labels: ['bug'] },
     'reviewer-gap': { enabled: false, plan: true, minMissionItems: 8 },
     'reviewer-docs': { enabled: false, mostlyPaths: ['docs/', '*.md'] },
+    // The short review for a project with no gates or no CI (lib/controls.js). Off: `cq helpers off reviewer-light`.
+    'reviewer-light': { enabled: true, whenControlsMissing: ['K'] },
     // The intake triage (lib/queueTriage.js): runs before the start, not after receive; its rule is `triage` below.
     triage: { enabled: true },
   },

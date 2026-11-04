@@ -119,6 +119,8 @@ const blocked = [
   ...(back ? [`${FROM} has ${back} commit(s) not in ${TO}`] : []),
 ];
 const verdict = PB.batchVerdict({ batch, setup: SETUP, health, fullGate, blocked });
+// No CI config or no gates (lib/controls.js): said here too, since the orchestrator reads this before a push.
+const missingControls = require('./lib/controls.js').missing(K, K.root);
 
 const summary = (s) => String(s).slice(0, 8);
 const fileText = (files, max = 6) =>
@@ -164,6 +166,7 @@ if (AS_JSON) {
           verdict: verdict.verdict,
           reason: verdict.reason,
         },
+        controls_missing: missingControls,
         ci_watch: CI.enabled ? { mode: CI.mode, command: `cq push-check --watch-ci ${toSha}` } : null,
       },
       null,
@@ -255,6 +258,7 @@ function batchLines() {
       (batch.oldestAt ? `, oldest ${PB.ageText(batch.oldestAt)} old` : '') +
       `; base ${healthText}, full gate ${gateText} at ${summary(toSha)} (${limits}).`,
     `Verdict: ${PB.verdictWord(verdict.verdict)} (${verdict.reason}).`,
+    ...(missingControls.length ? [`Controls: ${missingControls.join(', ')}, so nothing automatic checks this push (/cq:setup).`] : []),
     ...(CI.enabled
       ? [`CI watch (${CI.mode}): after the push, start cq push-check --watch-ci ${toSha} in the background (run_in_background); exit 9 = a check failed (fix task CI-${toSha.slice(0, 7)}), 0 = green or an owner question, 10 = timeout.`]
       : []),

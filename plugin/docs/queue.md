@@ -312,6 +312,25 @@ While off, every `follow` command answers "Follow is off (features.follow in que
   and prints the close action. The command never runs the close action itself.
 - The board shows the entries read only at `/follow`.
 
+## When a project has no checks
+
+A project with no gates or no CI config still runs. You are told, and you decide:
+
+- **Before a push:** the push guard asks, with what is missing and how many commits go out. It never blocks.
+  CI is detected by its config file (GitHub, GitLab, Bitbucket, Azure, CircleCI, Jenkins), which does not prove that it
+  runs on this push. `push.controlsWarning: false` turns the question off.
+- **At `cq receive`:** with no quick gates and no done command it says `NO CHECKS RAN`. On a K task it also prepares the
+  light review (`reviewer-light`). `cq helpers off reviewer-light` turns the review off, the warning stays.
+- **At `cq merge`:** the task gets a verification status, shown in the output, on the card and in the detail panel.
+
+| Status | Means | On the card |
+|---|---|---|
+| verified | Your gates or done command passed. The code can still be wrong | no badge |
+| audited | An agent reviewed the change, but no check ran | **Audited** |
+| unverified | No gates, no done command and no agent review ran | **Merged, not verified** |
+
+Tasks merged before this came have no status and no badge. `/cq:setup` sets up gates and offers a CI template.
+
 ## Limits and safety
 
 - `maxConcurrent` (parallel tracks), `maxDPlus`, `maxPerDomain` and `maxDb` stop the queue from starting more than
@@ -392,6 +411,7 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `helpers` | challenger (U, `bug`) and design (`visual`) on; tests, gap, docs off | Optional helper agents with conditions; switch with `cq helpers on\|off <agent>` (see orchestration.md) |
 | `triage.minAgeDays`, `agentAdded`, `maxPerFill`, `askAgainMin` | `3`, `true`, `3`, `60` | Intake triage before a task starts: tasks added or last edited this many days ago (`null` = off) and agent-added tasks get a `triage` verdict first (`cq triage`); at most this many steps per fill, not asked again within this many minutes. Off with `cq helpers off triage` and in lite mode (see orchestration.md) |
 | `push.mode`, `push.minTasks`, `push.warnTasks`, `push.maxAgeHours` | `"owner"`, `10`, `50`, `null` | Batch push threshold, counted in merged tasks since the last push (`cq push-check` prints READY, NOT YET, BLOCKED or LARGE). `owner` = push only on the owner's word; `threshold` = the orchestrator may push on READY or LARGE, never BLOCKED. Below `minTasks` (0 = off) or on a red base the push guard asks before a plain push of the base branch; never denies. `maxAgeHours` makes old work ready below `minTasks`. Owner mode for new users; `threshold` with 10 and 50 for projects with expensive CI (see orchestration.md, Batch push) |
+| `push.controlsWarning` | `true` | The push guard asks before a plain push of the base branch when the project has no CI config or no gates, with what is missing and how many commits go out. It never blocks. `false` turns the question off |
 | `push.ciWatch`, `push.ciWatchIntervalSec`, `push.ciWatchTimeoutMin` | `"off"`, `60`, `90` | The optional CI watch after a batch push: `"github"` (needs `gh`) makes push-check print `cq push-check --watch-ci <sha>` for the orchestrator to start in the background. A failed check gives one fix task `CI-<sha7>` and a red base (exit 9), an infrastructure failure an owner question `ci-<sha7>-infra` and no freeze, a timeout exit 10. Local gates stay the rule (see orchestration.md, Batch push) |
 | `baseGate.flakyRerun` | `true` | Before a red base check freezes the base, only the failed commands run once more on the same sha; green then is recorded as flaky (a `flakyGate` time log row, a finding, no freeze), red twice freezes. `false` = freeze at once |
 | `productionBranch` | `null` (unknown) | The branch that goes live; `cq doctor` warns when it equals `baseBranch` (every batch push would go to production) |

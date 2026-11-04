@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { CONFIG, GIT_ROOT, MAIN_TREE } from './context.mjs';
+import { CONFIG, GIT_ROOT, MAIN_TREE, require } from './context.mjs';
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -136,26 +136,9 @@ export function checkGates() {
   ];
 }
 
-/** The CI config files of the common hosts (paths from the root; a folder counts when it has a file). */
-const CI_FILES = [
-  ['GitHub Actions', '.github/workflows', true],
-  ['GitLab CI', '.gitlab-ci.yml'],
-  ['Bitbucket Pipelines', 'bitbucket-pipelines.yml'],
-  ['Azure Pipelines', 'azure-pipelines.yml'],
-  ['CircleCI', '.circleci/config.yml'],
-  ['Jenkins', 'Jenkinsfile'],
-];
-
 /** CI: is there a CI config for one of the common hosts? */
 export function checkCi() {
-  const found = CI_FILES.filter(([, p, dir]) => {
-    const full = path.join(MAIN_TREE, p);
-    try {
-      return dir ? fs.readdirSync(full).some((f) => /\.ya?ml$/i.test(f)) : fs.statSync(full).isFile();
-    } catch {
-      return false;
-    }
-  }).map(([host]) => host);
+  const found = require('./lib/controls.js').ciHosts(MAIN_TREE);
   if (found.length) return [ok('ci', `CI config found: ${found.join(', ')}`)];
   return [
     info(

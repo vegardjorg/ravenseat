@@ -36,15 +36,17 @@ Task classes decide size and review:
 
 | Class | Meaning | Size of one task | Review |
 |---|---|---|---|
-| K | Ordinary code | 90 to 120 min of work | your gates (no reviewer agent) |
+| K | Ordinary code | 90 to 120 min of work | your gates; a light review agent when gates or CI are missing |
 | U | Investigation | about 60 min | the challenger (a helper agent) |
 | D | Database or contract change | about 40 min | one reviewer agent |
 | D+ | High-risk database or security | 25 to 30 min | two reviewer agents |
 
 The letters come from the project Ravenseat was built in: K for ordinary code, U for investigation (Norwegian
-*utredning*), D for database. A K task is checked only by your own gates, so with no gates set up nothing automatic
-checks it before the merge; `cq doctor` warns about that, and the tests or gap reviewer can be switched on as a
-safety net (`cq helpers`).
+*utredning*), D for database. A K task is checked by your own gates. With no gates or no CI config set up, a light
+review agent (`reviewer-light`) looks at it for plain misses, secrets, access and injection, and `cq receive`, `cq merge`
+and the push guard say what is missing. A review is not a check: such a task shows as audited, never verified, and
+`/cq:setup` adds real checks. `cq helpers off reviewer-light` turns the review off, and `cq helpers` shows what it has
+cost.
 
 On top of that come **helper agents**: optional reviewers you switch on and off (`cq helpers`, or the Helper agents
 tab in the board's settings). By default the challenger runs for U and `bug` tasks and the design reviewer for

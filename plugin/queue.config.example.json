@@ -21,7 +21,7 @@
   "_baseGate": "The base gate: after cq merge the base branch's new tip is checked in the main checkout and the verdict recorded per tip (scripts/.queue/base-health.json). While it is red, cq merge refuses other tracks (exit 9; --force-red-base overrides, logged) and a fix task <id>-BASE<n> is added. enabled: auto (on when there are commands), true or false. commands: null = the quick gates (the merge step's own gates run is the check), or a list run after them. timeoutSec = budget for the whole list; tailLines null = doneCheck.tailLines. flakyRerun (default true): a red check first reruns only the failed commands once on the same sha; green then is recorded as flaky (a finding, no freeze), red twice freezes.",
   "baseGate": { "enabled": "auto", "commands": null, "timeoutSec": 900, "tailLines": null, "flakyRerun": true },
   "_push": "The batch push threshold, counted in merged tasks (cq merge) not yet on <remote>/<baseBranch>. mode: owner (push only on the owner's word) or threshold (the orchestrator may push when cq push-check says READY or LARGE, never BLOCKED). minTasks: READY from this many (0 = no lower limit); below it, or on a red base, the push guard asks before a plain push of the base branch (never denies). warnTasks: LARGE from this many (push recommended; 0 = off). maxAgeHours: null, or unpushed work older than this makes the batch READY below minTasks. ciWatch: off, or github for the optional CI watch after a batch push (cq push-check --watch-ci <sha> in the background, needs gh): a failed check gives the fix task CI-<sha7> and a red base, an infrastructure failure an owner question; polled every ciWatchIntervalSec, given up after ciWatchTimeoutMin.",
-  "push": { "mode": "owner", "minTasks": 10, "warnTasks": 50, "maxAgeHours": null, "ciWatch": "off", "ciWatchIntervalSec": 60, "ciWatchTimeoutMin": 90 },
+  "push": { "mode": "owner", "minTasks": 10, "warnTasks": 50, "maxAgeHours": null, "ciWatch": "off", "ciWatchIntervalSec": 60, "ciWatchTimeoutMin": 90, "controlsWarning": true },
   "_productionBranch": "The branch that goes live (null = unknown). cq doctor warns when it equals baseBranch: every batch push would then go to production.",
   "productionBranch": null,
   "_deployCommands": "Commands that deploy; the push guard asks before any command that starts with one of them (agents and the main session). Empty = off. Examples: [\"vercel --prod\", \"fly deploy\", \"firebase deploy\", \"npm run deploy\"].",
@@ -62,6 +62,7 @@
     "reviewer-tests": { "enabled": false, "classes": ["D", "D+"], "labels": ["bug"] },
     "reviewer-gap": { "enabled": false, "plan": true, "minMissionItems": 8 },
     "reviewer-docs": { "enabled": false, "mostlyPaths": ["docs/", "*.md"] },
+    "reviewer-light": { "enabled": true, "whenControlsMissing": ["K"] },
     "triage": { "enabled": true }
   },
   "_triage": "Intake triage: before fill starts a task added or last edited minAgeDays ago or more (null = no age rule), or one an agent added (agentAdded, once), the triage helper checks it read-only against the current code: ready, done, stale or adjust (cq triage <id> --verdict ...). Never fix tasks or continuations. Off: cq helpers off triage. Lite mode: off unless switched on.",
