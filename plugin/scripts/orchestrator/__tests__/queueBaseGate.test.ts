@@ -32,7 +32,8 @@ type Queue = { tasks: Task[] };
  * One turn of the event loop, inside a test that blocks for a long time with spawnSync: past 60 s without one, vitest's own
  * progress call times out and the run ends with exit 1 (__tests__/yieldBetweenTests.setup.mjs has the why).
  */
-const loopTurn = () => new Promise((resolve) => setImmediate(resolve));
+const step = () => new Promise((resolve) => setImmediate(resolve));
+const loopTurn = () => step().then(step);
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const QUEUE = path.join(ROOT, 'scripts', 'orchestrator', 'queue.mjs');
@@ -270,11 +271,13 @@ describe('queue.mjs merge with the base gate', () => {
     const p = project({ gates: { quick: [CHECK] } });
     p.track('A', { 'lib/b.js': "exports.b = 1;\n" });
     expect(p.run('merge', 'A', '--without-fill').code).toBe(0);
+    await loopTurn();
     // H branches from the new base tip, so the merge commit gets exactly H's tree. H's own gate runs green in its
     // worktree and writes a green time log row for its tip: that is the track's claim, not evidence.
     const wtH = p.track('H', { 'lib/h.js': "exports.h = 1;\n" });
     const own = spawnSync(process.execPath, [GATES, '--quick'], { cwd: wtH, encoding: 'utf8', env: p.env });
     expect(own.status).toBe(0);
+    await loopTurn();
     const row = fs
       .readFileSync(path.join(p.folder, 'times.jsonl'), 'utf8')
       .split('\n')
@@ -296,6 +299,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(rec.code).toBe(0);
     expect(rec.out).toContain('Gates GREEN');
     expect(fs.existsSync(wt)).toBe(true);
+    await loopTurn();
     p.clearSteps();
     const m = p.run('merge', 'F', '--without-fill');
     expect(m.code).toBe(0);
@@ -309,6 +313,7 @@ describe('queue.mjs merge with the base gate', () => {
     // A track that does not contain the base (G branched before F's merge) is checked as usual.
     p.track('G', { 'lib/g.js': "exports.g = 1;\n" }, 'develop~1');
     expect(p.run('receive', 'G').code).toBe(0);
+    await loopTurn();
     p.clearSteps();
     expect(p.run('merge', 'G', '--without-fill').code).toBe(0);
     expect(p.stepsRun()).toEqual(['merge', 'gates', 'done']);
