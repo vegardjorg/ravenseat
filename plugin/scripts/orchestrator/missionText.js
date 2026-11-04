@@ -69,9 +69,11 @@ function makeQueueCommon(template, scratch, k = {}, missionAddendum = defaultAdd
   const rules = Array.isArray(k.architectureRules)
     ? k.architectureRules.filter((r) => typeof r === 'string' && r.trim())
     : [];
-  let s = template.slice(start);
-  // Client pieces first: they sit in the template text, so they take its line ending.
-  s = fillClient(s, addendum.template, s.includes('\r\n') ? '\r\n' : '\n');
+  // The template's line endings depend on the checkout (autocrlf on Windows). Work on LF so a mission has the same
+  // text on every platform: a CRLF template used to keep one blank line more after filterClass.
+  let s = template.slice(start).replace(/\r\n/g, '\n');
+  // Client pieces first: they sit in the template text.
+  s = fillClient(s, addendum.template, '\n');
   // Saver mode: the track reads only its own part of the source, in excerpts.
   s = swap(
     s,

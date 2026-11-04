@@ -7,7 +7,6 @@ Migration block: none (the project has no migration flow)
 Made from `docs/queue/mission-template.md` for theProject. Other tracks start and finish while you work. The class (K, D, D+, U) is in the track block; the parts below are selected for it.
 Base branch: `main`. Quick gate: none set up in queue.config.json. Full gate: none set up in queue.config.json.
 
-
 **Setup (first call):** `cq prepare-track D1 --branch queue/D1 --scratchpad
 "<ROOT>/scratch"`, run from the worktree. It links shared folders (for example `node_modules`) from the main tree,
 creates `<ROOT>/scratch/D1/` (`<folder>` below) and sets the branch. Answer: `READY …` (ready) or `DENIES …`
