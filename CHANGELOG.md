@@ -3,6 +3,24 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.21 (2026-11-05)
+
+### Changed
+- `cq resume` frees the branch itself when it continues a PARTIAL delivery and the old worktree is clean. A fix round
+  still gets the advice, since it may be fixed in that worktree.
+- The `cq takeover` warning about another orchestrator says what it saw, so you can tell when it was your own command.
+- `cq receive` mentions an approved review in its merge line only when a review starts.
+- `cq add` names the usual wrong field names (`minutes` is `content_min`), and `cq edit` names a flag it did not
+  understand when nothing changed.
+
+### Fixed
+- A base fix task nobody has started is cancelled when the base goes green, so the next fill does not start an agent on
+  nothing. A started task, or one the CI watch added, stays and is pointed out.
+- The owner's answer stays first in the brief when the same round is written again with `cq resume`.
+- With an open track question, `cq receive` and `cq merge` name `--answer` in their next step.
+- An answer to a track counts in `cq decide --today` and under Decided today on the board.
+- A continuation without a handover no longer tells the agent to work from one.
+
 ## 0.8.20 (2026-11-05)
 
 ### Added
