@@ -13,7 +13,7 @@
 //   - the heartbeat file is written, and the board's heartbeatState reads it.
 // =============================================================
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,6 +39,8 @@ const W = require('../ownerWait.js') as {
   snapshot: (q: Queue, o?: { since?: number | null }) => unknown;
   ownerActions: (q: Queue, base: unknown) => Act[];
   actedLine: (acts: Act[]) => string;
+  trackKeys: (noAgent: unknown[], silent: unknown[]) => string[];
+  tracksLine: (keys: string[]) => string;
   pidAlive: (pid: unknown) => boolean;
   heartbeatState: (folder: string, now?: number) => { listening: boolean; beatAt: string | null };
 };
@@ -150,6 +152,27 @@ describe('ownerWait.js: what counts as an owner action', () => {
     q.tasks[3].qa_ok = T1;
     q.tasks[3].qa_ok_by = 'auto';
     expect(W.ownerActions(q, base)).toEqual([]);
+  });
+
+  it('an owner answer through cq resume is an action, a new answer again, and an orchestrator answer is not', () => {
+    const q = baseQueue();
+    const base = W.snapshot(q);
+    q.tasks[0].resumed = [{ round: 1, reason: 'context', answer: SECRET, answered_at: T1 }];
+    expect(W.ownerActions(q, base)).toEqual([]);
+    q.tasks[0].resumed = [{ round: 1, reason: 'context', answer: SECRET, answered_at: T1, by: 'owner' }];
+    const acts = W.ownerActions(q, base);
+    expect(acts).toEqual([{ action: 'answer', id: 'T-1' }]);
+    expect(W.actedLine(acts)).toBe('OWNER ACTED: answer T-1');
+    expect(W.ownerActions(q, W.snapshot(q))).toEqual([]);
+  });
+
+  it('trackKeys and tracksLine: a new round is a new key, and only ids are printed', () => {
+    const keys = W.trackKeys(
+      [{ id: 'G1' }, { id: 'G7', prepared: true, round: 2 }],
+      [{ id: 'G3' }],
+    );
+    expect(keys).toEqual(['no-agent G1', 'no-agent G7 r2', 'silent G3']);
+    expect(W.tracksLine(keys)).toBe('TRACKS NEED A LOOK: no-agent G1, G7 r2; silent G3');
   });
 
   it('heartbeatState: fresh is listening, old or missing or broken is not', () => {
@@ -295,6 +318,43 @@ describe('queue.mjs wait', () => {
     // The logged edits come first, then resolutions, then the task fields.
     expect(lines[0]).toBe('OWNER ACTED: edit T-1; resolve Q1, Q2; approve T-3; qa ok T-4');
     expect(r.out).not.toContain(SECRET);
+  }, 90_000);
+
+  it('an owner answer through cq resume wakes it, and it says the round still needs its agent', async () => {
+    const q = baseQueue();
+    q.tasks[0] = { ...q.tasks[0], status: 'review', branch: 'queue/T-1', started: T0 };
+    writeQueue(q);
+    const w = start('wait', '--debounce', '0', '--timeout', '0.05');
+    await started(w);
+    // Written as the board's answer is: the fields cq resume --answer --by owner stores (it needs a whole track to run).
+    const now = JSON.parse(fs.readFileSync(path.join(folder, 'queue.json'), 'utf8')) as Queue;
+    now.tasks[0].resumed = [{ round: 1, reason: 'context', answer: SECRET, answered_at: T1, by: 'owner' }];
+    writeQueue(now);
+    const r = await w.done;
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain('OWNER ACTED: answer T-1\n');
+    expect(r.out).toContain('resume T-1 --reason context');
+    expect(r.out).not.toContain(SECRET);
+  });
+
+  it('a track without an agent wakes it with exit 11, and the same finding never wakes it twice', async () => {
+    execFileSync('git', ['init', '-q', '-b', 'main', root]);
+    const q = baseQueue();
+    q.tasks = [task('G1', { status: 'running', branch: 'queue/G1', started: T0 })];
+    writeQueue(q);
+    const first = await start('wait', '--check-min', '0.01', '--timeout', String(30 / 3600)).done;
+    expect(first.code, first.out).toBe(11);
+    expect(first.out).toContain('TRACKS NEED A LOOK: no-agent G1\n');
+    expect(first.out).toContain('run: cq show');
+    expect(fs.existsSync(lockFile())).toBe(false);
+    // Started again with the same finding: it waits.
+    const again = await start('wait', '--check-min', '0.01', '--timeout', String(3 / 3600)).done;
+    expect(again.code, again.out).toBe(10);
+    expect(again.out).not.toContain('TRACKS NEED A LOOK');
+    // --check-min 0 turns the check off.
+    fs.rmSync(path.join(folder, 'wait-tracks-seen.json'));
+    const off = await start('wait', '--check-min', '0', '--timeout', String(2 / 3600)).done;
+    expect(off.code, off.out).toBe(10);
   }, 90_000);
 
   it('one waiter at a time: a second one prints ALREADY WAITING (pid n) and exits 0', async () => {

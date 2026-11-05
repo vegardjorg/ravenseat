@@ -34,7 +34,7 @@ Run these in parallel where possible:
      or `handover-archive/`; grep them only when you need an old detail.
    - when the queue was last changed, and a warning if another orchestrator may still be alive
    - branch, HEAD, commits ahead of the remote, and any leftover `index.lock`
-   - every active task with commits on `queue/<id>` and an assessment: DELIVERED, EMPTY or UNCERTAIN
+   - every active task with commits on `queue/<id>` and an assessment: DELIVERED, EMPTY, NO AGENT or UNCERTAIN
    - what can start now, and which owner questions unlock the most tasks
    - the orchestrator marker (`scripts/.queue/orchestrator.json`): who was orchestrator last, ACTIVE or expired (2 h)
 2. `cq show` (SHORT: active, startable now, counts, about 1-3k characters). The full table
@@ -102,6 +102,7 @@ Follow `parallel-wave` ("Continuous queue") unchanged. Specific to taking over:
 - **Fill slots:** `cq fill --scratchpad <scratch>` (one call; start all agents in the SAME turn with the messages
   under "Start these in the SAME turn:"). Old and agent-added tasks get a `triage` agent there instead of a track;
   record its answer with `cq triage <id> --verdict <v> --note "..."` (see `parallel-wave`, the loop).
+- **NO AGENT tracks:** `cq show` gives the command for each (a prepared round: `cq resume`, then start the agent line; a first start: back in the queue). A `DELIVERED (no report ...)` track may be an agent that died: read the branch before you receive it.
 - **EMPTY tracks:** `cq set <id> waiting`; remove the dead worktree and branch only if the branch has 0 commits;
   the loop restarts the task.
 - **Picked tasks** (status `picked`) are never EMPTY or UNCERTAIN: a person or session owns them. Do not touch them.

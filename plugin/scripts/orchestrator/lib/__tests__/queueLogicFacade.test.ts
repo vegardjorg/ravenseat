@@ -54,7 +54,7 @@ const EXPORTS = [
   'resolveWaitsLines', 'restText', 'resumeBlock', 'resumePromptAdjust', 'reviewPackageIndex', 'reviewerPrompt',
   'reviewerTypes', 'reviewersFor', 'reviewersForTask', 'saveFocusPlan', 'score', 'scoreParts', 'selectNext',
   'setArea', 'setFocus', 'setQuestion', 'setStatus', 'silentCandidates', 'silentLines', 'silentMinFor',
-  'silentTracks', 'smallTaskError', 'spaceUse', 'startGuard', 'startedWithoutAgent', 'state', 'stateLine',
+  'silentTracks', 'smallTaskError', 'spaceUse', 'startGuard', 'reportSinceStart', 'reservedWithoutAgent', 'noAgentTracks', 'waitingOnCancelled', 'waitingOnCancelledLines', 'SILENT_CARD_MIN', 'startedWithoutAgent', 'state', 'stateLine',
   'statusAtAdd', 'stepMatch', 'stepText', 'stepTitle', 'successors', 'suggestProject', 'sumCost', 'summaryView',
   'syncFocusEnd', 'takenBlocks', 'trackBlock', 'trackFileWarning', 'trackFolderRound', 'trackMessage', 'trackQuestion', 'uncommittedCollision',
   'uncommittedSkipped', 'undoEntry', 'unlogged', 'validQuestionId', 'validate', 'validateEvidence',
@@ -63,7 +63,7 @@ const EXPORTS = [
 
 describe('queueLogic.js facade', () => {
   it('exports exactly the same names as before the split', () => {
-    expect(Object.keys(L).sort()).toEqual(EXPORTS);
+    expect(Object.keys(L).sort()).toEqual([...EXPORTS].sort());
   });
 
   it('keeps the getters and the alias', () => {

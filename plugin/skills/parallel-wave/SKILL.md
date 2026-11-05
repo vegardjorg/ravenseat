@@ -99,7 +99,9 @@ word.
 7. **Wait on the owner:** when a round ends, something waits on the owner (owner questions, proposed tasks, QA) and
    no agent is running, start `cq wait` with `run_in_background: true` (a no-op when one already runs). It exits with
    `OWNER ACTED: ...` when the owner answers on the board: run a normal round, starting with
-   `cq resolutions --unlogged`. On `TIMEOUT` (exit 10, after 8 h) start it once more, then stop. It only works while
+   `cq resolutions --unlogged`. `answer <id>` in that line means the round is ready and needs its agent: `cq resume <id> --reason context`,
+   then start the agent line. `TRACKS NEED A LOOK: ...` (exit 11) means a track never started or has gone silent: `cq show` says what to do
+   for each; do it, then start `cq wait` again (each finding wakes it once). On `TIMEOUT` (exit 10, after 8 h) start it once more, then stop. It only works while
    this session is open (also via Remote Control) and costs no tokens while it waits.
 8. **Stop** when `cq state` gives exit 3 or the day budget is used: present the owner questions that unlock the
    rest (sorted by how many tasks each unlocks). `cq orchestrator stop` when the loop stops.

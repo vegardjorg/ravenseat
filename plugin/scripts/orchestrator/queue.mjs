@@ -99,11 +99,11 @@
 //   node scripts/orchestrator/queue.mjs board-setting [cloud on|off]   (the board's own switches: without arguments the values;
 //                                                                  cloud on|off shows or hides the Cloud tab, queue.json
 //                                                                  board.showCloud, default hidden; cli/board.mjs)
-//   node scripts/orchestrator/queue.mjs wait [--debounce <s>] [--timeout <h>] [--since <log-nr>]   (blocks until the owner
+//   node scripts/orchestrator/queue.mjs wait [--debounce <s>] [--timeout <h>] [--since <log-nr>] [--check-min <n>]   (blocks until the owner
 //                                                                  acts: resolve, approve, qa ok/fail, add, or an edit by owner/
 //                                                                  theBoard after the start point; then waits --debounce (30 s)
 //                                                                  for more and prints OWNER ACTED: <action> <ids>; ... (ids
-//                                                                  only), exit 0. TIMEOUT after --timeout (8 h), exit 10. One
+//                                                                  only), exit 0. TIMEOUT after --timeout (8 h), exit 10. Every --check-min (5) min it runs the track checks: TRACKS NEED A LOOK, exit 11. One
 //                                                                  at a time (ALREADY WAITING, exit 0); started with
 //                                                                  run_in_background by the orchestrator loop; cli/wait.mjs)
 //   node scripts/orchestrator/queue.mjs question <id> --text "..." [--type question|condition|lawyer|owner-task]

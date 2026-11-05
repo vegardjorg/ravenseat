@@ -172,12 +172,17 @@ describe('assessDelivery and assessActive', () => {
       'DELIVERED (track-result.md PARTIAL, new round after receive)',
     );
     expect(L.assessActive({ status: 'running', commits: 2, uncommitted: 0, lastMs: 21 * 60_000 })).toBe(
-      'DELIVERED',
+      'DELIVERED (no report: commits, clean, quiet for 20 min)',
     );
     expect(L.assessActive({ status: 'running', commits: 2, uncommitted: 0, lastMs: 60_000 })).toBe(
       'UNCERTAIN',
     );
     expect(L.assessActive({ status: 'review', commits: 1 })).toBe('DELIVERED (review)');
+    // No agent took the round: the commits are from an earlier one.
+    expect(L.assessActive({ status: 'review', commits: 1, noAgent: { prepared: true, round: 2 } })).toBe(
+      'NO AGENT (round 2 prepared, never started)',
+    );
+    expect(L.assessActive({ status: 'running', commits: 0, noAgent: {} })).toBe('NO AGENT');
     expect(L.assessActive({ status: 'review', commits: 0 })).toBe('UNCERTAIN (review without commits)');
     expect(L.assessActive({ status: 'running', commits: 0, startedMs: 2 * 3_600_000 })).toBe('EMPTY');
     expect(

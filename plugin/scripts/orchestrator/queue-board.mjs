@@ -378,9 +378,20 @@ function withoutAgentNow(queue) {
   if (Date.now() - noAgentCache.time < 60_000) return noAgentCache.list;
   let list = [];
   try {
-    list = L.startedWithoutAgent(queue, {
+    list = L.noAgentTracks(queue, {
       worktreeBranches: new Set(G.readWorktrees(gitRead).map((w) => w.branch).filter(Boolean)),
-      hasReport: (o) => !!L.findTrackReport(o.id, o.scratchpad ? [o.scratchpad] : []).report,
+      reportOf: (o) => L.findTrackReport(o.id, o.scratchpad ? [o.scratchpad] : []).report,
+      rows: () => {
+        try {
+          return TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+        } catch {
+          return [];
+        }
+      },
+      lastCommitMs: (o) => {
+        const s = String(gitRead(['log', '-1', '--format=%ct', `refs/heads/${o.branch}`, '--']) ?? '').trim();
+        return /^\d+$/.test(s) ? Number(s) * 1000 : null;
+      },
     });
   } catch (e) {
     console.error(`the agent check failed: ${e?.message ?? e}`);
@@ -429,7 +440,7 @@ function silentNow(queue) {
         list = L.silentTracks(queue, {
           worktreeBranches,
           lastActivity,
-          hasReport: (o) => !!L.findTrackReport(o.id, o.scratchpad ? [o.scratchpad] : []).report,
+          hasReport: (o) => L.reportSinceStart(o, L.findTrackReport(o.id, o.scratchpad ? [o.scratchpad] : []).report),
           now,
           limitMin,
         });
@@ -2037,7 +2048,7 @@ async function write(filePath, b) {
     if (type === 'track-answer') {
       const text = cleanText(b.text, 2000);
       if (!text) return no('write your answer');
-      return run(['resume', id, '--reason', 'context', '--answer', text], `resume ${id} with the owner's answer`);
+      return run(['resume', id, '--reason', 'context', '--answer', text, '--by', 'owner'], `resume ${id} with the owner's answer`);
     }
     if (type === 'qa-deviation') {
       const text = cleanText(b.text, 2000);

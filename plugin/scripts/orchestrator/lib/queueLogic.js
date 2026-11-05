@@ -145,7 +145,7 @@ const {
   concurrentBlock, reportCapWarning,
 } = require('./logic/merge.js');
 const {
-  infoField, infoValueText, infoView, activeLines, NO_AGENT_GRACE_MIN, startedWithoutAgent, withoutAgentLines,
+  infoField, infoValueText, infoView, activeLines, NO_AGENT_GRACE_MIN, startedWithoutAgent, reportSinceStart, reservedWithoutAgent, noAgentTracks, withoutAgentLines, waitingOnCancelled, waitingOnCancelledLines, SILENT_CARD_MIN,
   SILENT_DEFAULT_MIN, silentMinFor, silentCandidates, silentTracks, silentLines, BLOCK_CODES, openBlockOf, openBlock,
   closeBlock, blockerSummary, blockerLines, highestBlockNr, nextMigrGuard,
 } = require('./logic/monitor.js');
@@ -441,7 +441,13 @@ module.exports = {
   bonusBlock,
   activeLines,
   startedWithoutAgent,
+  reportSinceStart,
+  reservedWithoutAgent,
+  noAgentTracks,
   withoutAgentLines,
+  waitingOnCancelled,
+  waitingOnCancelledLines,
+  SILENT_CARD_MIN,
   NO_AGENT_GRACE_MIN,
   SILENT_DEFAULT_MIN,
   silentMinFor,

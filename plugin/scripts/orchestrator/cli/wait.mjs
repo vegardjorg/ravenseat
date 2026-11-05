@@ -1,12 +1,16 @@
 // =============================================================
 // cli/wait.mjs: `cq wait`, a background waiter that exits when the owner acts.
 //
-//   cq wait [--debounce <s>] [--timeout <h>] [--since <log-nr>]
+//   cq wait [--debounce <s>] [--timeout <h>] [--since <log-nr>] [--check-min <n>]
 //        blocks until an owner action (lib/ownerWait.js: resolve, approve, qa ok/fail, add, and the logged edits by
 //        owner or theBoard) appears after the start point, waits --debounce seconds (default 30) for more, then prints
 //        one line "OWNER ACTED: resolve Q12, Q14; approve T-40" (ids only, never the answer text) and the hint
 //        "run: cq resolutions --unlogged", exit 0. After --timeout hours (default 8) without an action: TIMEOUT, exit 10.
 //        The start point is the end of the changelog when it starts, so old actions never fire; --since <log-nr> sets it.
+//        Every --check-min minutes (default 5, 0 = off) it also runs the checks `cq show` runs: a track no agent took, or
+//        a silent one, gives "TRACKS NEED A LOOK: ..." and exit 11. Each finding wakes it once (<dataFolder>/wait-tracks-seen.json),
+//        so starting it again does not loop on a track the owner has chosen to leave. An owner answer through cq resume
+//        (the board) counts as an action; the waiter then says the round still needs its agent.
 //
 // Why: the orchestrator only runs when an agent finishes or the owner types in the session, so an answer given on the
 // board sits unseen while everything waits on the owner. Claude Code starts a new turn when a run_in_background Bash
@@ -29,11 +33,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { a, CQ, die, FILE, FOLDER, require, val } from './context.mjs';
+import { findSilent, findWithoutAgent } from './tracks.mjs';
 
 const W = require('./lib/ownerWait.js');
 
 /** The exit code for TIMEOUT (0, 1 and 3-7 are taken; see the bottom of the usage in queue.mjs). */
 export const EXIT_TIMEOUT = 10;
+/** The exit code when a track needs a look. */
+export const EXIT_TRACKS = 11;
+const TRACKS_SEEN = path.join(FOLDER, 'wait-tracks-seen.json');
 const LOCK_FILE = path.join(FOLDER, 'wait.lock');
 const HEARTBEAT = path.join(FOLDER, W.HEARTBEAT_FILE);
 const BEAT_MS = 30_000;
@@ -53,6 +61,16 @@ function readQueue() {
     return JSON.parse(fs.readFileSync(FILE, 'utf8'));
   } catch {
     return null;
+  }
+}
+
+/** The findings that have woken a waiter already. Missing or broken: none. */
+function readSeen() {
+  try {
+    const seen = JSON.parse(fs.readFileSync(TRACKS_SEEN, 'utf8'));
+    return Array.isArray(seen) ? seen : [];
+  } catch {
+    return [];
   }
 }
 
@@ -91,6 +109,7 @@ export function cmdWait() {
   const debounceMs = number('--debounce', 30) * 1000;
   const timeoutMs = number('--timeout', 8) * 3_600_000;
   const since = a.includes('--since') ? number('--since', 0) : null;
+  const checkMs = number('--check-min', 5) * 60_000;
   if (timeoutMs <= 0) die('--timeout needs a number of hours above 0');
   // setTimeout takes at most about 24 days.
   if (timeoutMs > 2_000_000_000) die('--timeout is at most 500 hours');
@@ -135,8 +154,11 @@ export function cmdWait() {
   const finish = () => {
     const now = readQueue() ?? queue;
     const acts = W.ownerActions(now, base);
-    console.log(W.actedLine(acts.length ? acts : first));
+    const all = acts.length ? acts : first;
+    console.log(W.actedLine(all));
     console.log(`run: ${CQ} resolutions --unlogged`);
+    for (const x of all.filter((y) => y.action === 'answer'))
+      console.log(`${x.id}: the owner answered and the round is ready, but no agent runs. Run ${CQ} resume ${x.id} --reason context and start the agent line it prints.`);
     process.exit(0);
   };
   const check = () => {
@@ -182,6 +204,29 @@ export function cmdWait() {
       check();
     }
   }, POLL_MS);
+  // The tracks: a track that never started wakes nobody by itself. Git only runs here, every few minutes, so waiting
+  // stays cheap, and no tokens are spent unless something is found.
+  const checkTracks = () => {
+    if (acting) return;
+    const now = readQueue();
+    if (!now) return;
+    const keys = W.trackKeys(findWithoutAgent(now), findSilent(now));
+    const seen = readSeen();
+    const fresh = keys.filter((k) => !seen.includes(k));
+    // Written also when nothing is new: a finding that went away may wake it again if it comes back.
+    if (keys.length !== seen.length || fresh.length) {
+      try {
+        fs.writeFileSync(TRACKS_SEEN, `${JSON.stringify(keys)}\n`);
+      } catch {
+        /* then it may wake once more; waiting goes on */
+      }
+    }
+    if (!fresh.length) return;
+    console.log(W.tracksLine(fresh));
+    console.log(`run: ${CQ} show`);
+    process.exit(EXIT_TRACKS);
+  };
+  if (checkMs > 0) setInterval(checkTracks, checkMs);
   setTimeout(() => {
     if (acting) return;
     console.log('TIMEOUT');

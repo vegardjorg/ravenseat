@@ -1310,6 +1310,8 @@ describe('the board answers a track through the same command (test round 3: N12)
       expect(ok.status, await ok.clone().text()).toBe(200);
       expect(JSON.stringify(p.find('A').bonus)).toContain('Call it halv2');
       expect(p.find('A').resumed).toHaveLength(1);
+      // Marked as the owner's, which is what wakes cq wait.
+      expect(p.find('A').resumed[0]).toMatchObject({ by: 'owner', answer: 'Call it halv2' });
     } finally {
       const gone = new Promise((done) => board.once('exit', done));
       board.kill();

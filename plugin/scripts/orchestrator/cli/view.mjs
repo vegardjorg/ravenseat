@@ -42,6 +42,8 @@ export function cmdShowSummary() {
   // Silent tracks (an agent worktree, but no sign of life), right after.
   const silent = L.silentLines(findSilent(queue));
   if (silent.length) console.log(`${silent.join('\n')}\n`);
+  const onCancelled = L.waitingOnCancelledLines(L.waitingOnCancelled(queue));
+  if (onCancelled.length) console.log(`${onCancelled.join('\n')}\n`);
   // The base branch's health (lib/baseHealth.js): one line, also first, since a red base stops every merge.
   const baseLine = baseHealthLine();
   if (baseLine) console.log(baseLine);

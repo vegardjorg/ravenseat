@@ -12,6 +12,8 @@
 
 const { estimate, ageText, cutText } = require('./base.js');
 const { blockInterval } = require('./select.js');
+const AT = require('./attempt.js');
+const TK = require('../timeCost.js');
 
 /** The fields `info` shows by default (summary), in this order. */
 const INFO_FIELD = [
@@ -143,18 +145,120 @@ function startedWithoutAgent(
     .map(({ o, from }) => ({ id: o.id, branch: o.branch, migr_block: o.migr_block ?? null, age_ms: now - from }));
 }
 
-/** The warning lines for `startedWithoutAgent` (show, orchestrator pulse). Empty list when all is well. */
+/**
+ * Does this report belong to the current start? One from before the start (the task was put back and filled again) says
+ * nothing about the agent now, so it must not turn the warnings off. The same idea as assessDelivery.
+ */
+function reportSinceStart(o, report) {
+  if (!report) return false;
+  const started = Date.parse(o?.started ?? '');
+  return !Number.isFinite(started) || report.mtimeMs > started;
+}
+
+/**
+ * The attempts no agent ever took: cq fill and cq resume reserve an attempt, and the start row from the time log turns it
+ * into running (lib/logic/attempt.js). A reservation older than `graceMin`, with no commit or report since it was made,
+ * was never started. This also sees what startedWithoutAgent cannot: a round on a task still in review, and an old
+ * worktree that holds the branch. A task waiting for review has its attempt ended by receive, so it never shows here.
+ * Only with evidence that the start hook works: a client with hooks, and at least one start row in the log. An agent
+ * whose rows have no label yet could be this one, so it holds the warning back until it is labelled or has stopped.
+ * @param {object} queue
+ * @param {{ rows?: object[]|(() => object[]), reportOf?: (o: object) => object|null,
+ *   lastCommitMs?: (o: object) => number|null, now?: number, graceMin?: number }} [options]
+ */
+function reservedWithoutAgent(
+  queue,
+  { rows = [], reportOf = () => null, lastCommitMs = () => null, now = Date.now(), graceMin = NO_AGENT_GRACE_MIN } = {},
+) {
+  const old = (queue?.tasks ?? []).filter((o) => {
+    const x = AT.current(o);
+    return (
+      ['running', 'review'].includes(o.status) && !o.picked_by && !o.cloud && o.branch &&
+      x?.state === 'reserved' && x.guard?.hooks === true && now - Date.parse(x.reserved) >= graceMin * 60_000
+    );
+  });
+  if (!old.length) return [];
+  const log = typeof rows === 'function' ? rows() : rows;
+  const starts = log.filter((r) => r?.event === 'start' && r.agent_id && TK.isBuildAgent(r.agent_type));
+  if (!starts.length) return [];
+  const labelled = new Set(log.filter((r) => r?.agent_id && r.track && !String(r.agent_id).startsWith(r.track)).map((r) => r.agent_id));
+  const unknown = starts.filter((r) => !labelled.has(r.agent_id));
+  const out = [];
+  for (const o of old) {
+    const x = AT.current({ attempts: AT.deriveRunning(o.attempts, log, { taskId: o.id }).attempts });
+    if (x?.state !== 'reserved') continue;
+    const from = Date.parse(x.reserved);
+    if (unknown.some((r) => Date.parse(r.time) >= from)) continue;
+    const report = reportOf(o);
+    if (report && report.mtimeMs > from) continue;
+    if (Number(lastCommitMs(o)) > from) continue;
+    const round = x.round ?? 0;
+    out.push({
+      id: o.id,
+      branch: o.branch,
+      migr_block: o.migr_block ?? null,
+      age_ms: now - from,
+      // A round after a delivery is started with cq resume; a first start that never ran goes back in the queue.
+      ...(round > 0 || o.status === 'review'
+        ? { prepared: true, round, reason: (o.resumed ?? []).at(-1)?.reason ?? 'context' }
+        : {}),
+    });
+  }
+  return out;
+}
+
+/** Everything no agent works on: startedWithoutAgent and reservedWithoutAgent, each task once. */
+function noAgentTracks(queue, { worktreeBranches, reportOf = () => null, rows = [], lastCommitMs, now = Date.now() } = {}) {
+  const first = startedWithoutAgent(queue, {
+    worktreeBranches,
+    hasReport: (o) => reportSinceStart(o, reportOf(o)),
+    now,
+  });
+  const seen = new Set(first.map((x) => x.id));
+  return [...first, ...reservedWithoutAgent(queue, { rows, reportOf, lastCommitMs, now }).filter((x) => !seen.has(x.id))];
+}
+
+/** The warning lines for `noAgentTracks` (show, orchestrator pulse). Empty list when all is well. */
 function withoutAgentLines(list) {
+  const started = (list ?? []).filter((x) => !x.prepared);
+  const rounds = (list ?? []).filter((x) => x.prepared);
+  return [
+    ...(started.length
+      ? [
+          `STARTED WITHOUT AGENT (${started.length}): marked running, but no agent has started and there is no report from this start. ` +
+            'fill or start marked them and the agents were never started (was fill run where nobody read the output?). ' +
+            'For each: cq set <id> waiting, then cq fill --ids <id> and start what it lists in the SAME turn ' +
+            '(fill checks the migration block again).',
+          ...started.map(
+            (x) =>
+              `  ${x.id}  ${x.branch}  running for ${ageText(x.age_ms)}${x.migr_block ? `  migr ${x.migr_block}` : ''}`,
+          ),
+        ]
+      : []),
+    ...(rounds.length
+      ? [
+          `ROUND WITHOUT AGENT (${rounds.length}): a new round was prepared, but no agent has started it, and the task holds its slot. ` +
+            'For each: run the cq resume below (it makes the same round again and prints the agent line), and start that agent in the SAME turn.',
+          ...rounds.map((x) => `  ${x.id}  round ${x.round}, prepared ${ageText(x.age_ms)} ago: cq resume ${x.id} --reason ${x.reason}`),
+        ]
+      : []),
+  ];
+}
+
+/** Tasks waiting on a cancelled task never start, and nothing else says why. Direct dependencies only. */
+function waitingOnCancelled(queue) {
+  const tasks = queue?.tasks ?? [];
+  const cancelled = new Set(tasks.filter((o) => o.status === 'cancelled').map((o) => o.id));
+  return tasks
+    .filter((o) => o.status === 'waiting')
+    .flatMap((o) => (o.depends_on ?? []).filter((d) => cancelled.has(d)).map((dep) => ({ id: o.id, dep })));
+}
+
+function waitingOnCancelledLines(list) {
   if (!list?.length) return [];
   return [
-    `STARTED WITHOUT AGENT (${list.length}): marked running, but no worktree has the branch and there is no report. ` +
-      'fill or start marked them and the agents were never started (was fill run where nobody read the output?). ' +
-      'For each: cq set <id> waiting, then cq fill --ids <id> and start what it lists in the SAME turn ' +
-      '(fill checks the migration block again).',
-    ...list.map(
-      (x) =>
-        `  ${x.id}  ${x.branch}  running for ${ageText(x.age_ms)}${x.migr_block ? `  migr ${x.migr_block}` : ''}`,
-    ),
+    `Waiting on a cancelled task (${list.length}): these never start. Change the dependency with cq edit <id> --json '{"depends_on":[...]}', or cancel them:`,
+    ...list.map((x) => `  ${x.id}  waits on ${x.dep}`),
   ];
 }
 
@@ -170,6 +274,8 @@ function withoutAgentLines(list) {
  * (`cq limit silentMin <n>`, 0 = off).
  */
 const SILENT_DEFAULT_MIN = 20;
+/** How long a track is silent before it becomes a decision card: a short stop is the orchestrator's, not the owner's. */
+const SILENT_CARD_MIN = 60;
 
 /** The silence limit in minutes: limits.silentMin, otherwise the default. 0 turns the check off. */
 function silentMinFor(queue) {
@@ -362,8 +468,14 @@ module.exports = {
   activeLines,
   NO_AGENT_GRACE_MIN,
   startedWithoutAgent,
+  reportSinceStart,
+  reservedWithoutAgent,
+  noAgentTracks,
   withoutAgentLines,
+  waitingOnCancelled,
+  waitingOnCancelledLines,
   SILENT_DEFAULT_MIN,
+  SILENT_CARD_MIN,
   silentMinFor,
   silentCandidates,
   silentTracks,

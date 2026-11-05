@@ -15,7 +15,7 @@
 
 import { baseRedLine } from './baseHealth.mjs';
 import { a, branchFor, branchInfo, CQ, cut, FOLDER, L, PREFIX, read, require, S, uncommittedPaths, val, WIDTH } from './context.mjs';
-import { findWithoutAgent } from './tracks.mjs';
+import { findSilent, findWithoutAgent } from './tracks.mjs';
 
 const T = require('./lib/queueBoard.js');
 const DEC = require('./lib/queueDecisions.js');
@@ -43,11 +43,11 @@ export function currentInbox(queue, { now = Date.now() } = {}) {
   } catch {
     /* no time history: no aging */
   }
-  return T.board(showQueue, { now, branches, branchPrefix: PREFIX, ageLimits, withoutAgent: findWithoutAgent(queue), baseRed: !!baseRedLine() }).inbox;
+  return T.board(showQueue, { now, branches, branchPrefix: PREFIX, ageLimits, withoutAgent: findWithoutAgent(queue), silent: findSilent(queue), baseRed: !!baseRedLine() }).inbox;
 }
 
 /** The JSON shape for the skill: each item with its impact line and the command per option. */
-export function decisionJson(inbox, { listening = false, cq = CQ, baseRed = null, heldBack = [] } = {}) {
+export function decisionJson(inbox, { listening = false, cq = CQ, baseRed = null, heldBack = [], onCancelled = [] } = {}) {
   const items = DEC.decisions(inbox).map((x, i) => ({
     nr: i + 1,
     ...x,
@@ -66,6 +66,8 @@ export function decisionJson(inbox, { listening = false, cq = CQ, baseRed = null
     base_red: baseRed,
     // Not a decision, but the reason nothing starts (a task that owns an uncommitted file), so it is not hidden behind "nothing waiting".
     ...(heldBack.length ? { held_back: heldBack } : {}),
+    // Also not a decision card: tasks that never start, because what they wait on was cancelled.
+    ...(onCancelled.length ? { waiting_on_cancelled: onCancelled } : {}),
     items,
     decided: inbox?.decided ?? [],
     // Answers given but not entered in the decision log yet (the orchestrator does that).
@@ -78,6 +80,7 @@ export function decisionLines(j, { width = WIDTH, max = Infinity, cq = CQ } = {}
   const out = [];
   if (j.base_red) out.push(j.base_red, '');
   if (j.held_back) out.push(...L.heldBackLines(j.held_back), '');
+  if (j.waiting_on_cancelled) out.push(...L.waitingOnCancelledLines(j.waiting_on_cancelled), '');
   if (!j.count) {
     out.push('Nothing waiting on you.');
   } else {
@@ -124,7 +127,7 @@ export function cmdDecide() {
   } catch {
     listening = false;
   }
-  const j = decisionJson(inbox, { listening, baseRed: baseRedLine(), heldBack: L.uncommittedSkipped(queue, uncommittedPaths()) });
+  const j = decisionJson(inbox, { listening, baseRed: baseRedLine(), heldBack: L.uncommittedSkipped(queue, uncommittedPaths()), onCancelled: L.waitingOnCancelled(queue) });
   if (a.includes('--json')) {
     console.log(JSON.stringify(j, null, 2));
     return;

@@ -43,6 +43,12 @@ function lastLogNr(queue) {
   return log(queue).reduce((m, p) => Math.max(m, Number(p?.nr) || 0), 0);
 }
 
+/** When the owner last answered this task through cq resume --answer --by owner, or null. */
+function ownerAnswerAt(o) {
+  const hit = (o?.resumed ?? []).filter((x) => x?.answered_at && isOwner(x.by)).at(-1);
+  return hit?.answered_at ?? null;
+}
+
 /**
  * The state the waiter compares against: the start point in the changelog and the field values that change on an owner
  * action. `since` overrides the changelog start point (tests, or a caller that knows where it left off).
@@ -56,6 +62,7 @@ function snapshot(queue, { since = null } = {}) {
     approved: per('approved'),
     qaOk: per('qa_ok'),
     qaNote: per('qa_note'),
+    answers: Object.fromEntries(tasks(queue).map((o) => [o.id, ownerAnswerAt(o)])),
     ids: tasks(queue).map((o) => o.id),
   };
 }
@@ -96,8 +103,29 @@ function ownerActions(queue, base) {
     if (o.qa_ok && o.qa_ok !== (base.qaOk[o.id] ?? null) && o.qa_ok_by !== 'auto') push('qa ok', o.id);
     if (o.qa_status === 'deviation' && o.qa_note && o.qa_note !== (base.qaNote[o.id] ?? null)) push('qa fail', o.id);
     if (!known.has(o.id) && isOwner(o.added_by) && !o.qa_original) push('add', o.id);
+    // The board answers a track with cq resume: the round is ready, and only the orchestrator can start its agent.
+    const answered = ownerAnswerAt(o);
+    if (answered && answered !== (base.answers?.[o.id] ?? null)) push('answer', o.id);
   }
   return out;
+}
+
+/** What a track check found, as stable keys: a new round of the same task is a new key. */
+function trackKeys(noAgent, silent) {
+  return [
+    ...(noAgent ?? []).map((x) => `no-agent ${x.id}${x.prepared ? ` r${x.round}` : ''}`),
+    ...(silent ?? []).map((x) => `silent ${x.id}`),
+  ];
+}
+
+/** The one line for the keys that are new: "TRACKS NEED A LOOK: no-agent G1, G7 r1; silent G3". */
+function tracksLine(keys) {
+  const groups = new Map();
+  for (const k of keys) {
+    const [kind, ...rest] = k.split(' ');
+    groups.set(kind, [...(groups.get(kind) ?? []), rest.join(' ')]);
+  }
+  return `TRACKS NEED A LOOK: ${[...groups].map(([kind, ids]) => `${kind} ${ids.join(', ')}`).join('; ')}`;
 }
 
 /** The one line the waiter prints: "OWNER ACTED: resolve Q12, Q14; approve T-40" (ids only). */
@@ -140,6 +168,8 @@ module.exports = {
   lastLogNr,
   snapshot,
   ownerActions,
+  trackKeys,
+  tracksLine,
   actedLine,
   pidAlive,
   heartbeatState,

@@ -286,9 +286,61 @@
     };
   }
 
+  /** A round was prepared and no agent took it: only the orchestrator can start one, so there is nothing to choose here. */
+  function noAgentRoundItem(h) {
+    const options = [{ label: 'Seen', recommended: true, action: { type: 'keep', id: h.id } }];
+    const { round, reason } = h.no_agent_round;
+    return {
+      key: `unstick:${h.id}`,
+      verb: 'unstick',
+      kind: 'stuck-no-agent',
+      kindName: 'Round without an agent',
+      id: h.id,
+      title: h.title || h.id,
+      text: null,
+      context: [
+        `Round ${round} was prepared, but no agent has started it, and the task holds its slot.`,
+        `The orchestrator starts it: cq resume ${h.id} --reason ${reason}, then the agent line it prints. If no session is open, open one and run /cq:queue.`,
+      ],
+      recommendation: options[0].label,
+      impact: taskImpact(0, h),
+      options,
+      free: null,
+      open: h.id,
+    };
+  }
+
+  /** Silent for so long that it is no longer a short stop. */
+  function silentItem(h) {
+    const options = [
+      { label: 'Seen', recommended: true, action: { type: 'keep', id: h.id } },
+      { label: 'Put it back in the queue', recommended: false, action: { type: 'requeue', id: h.id } },
+    ];
+    return {
+      key: `unstick:${h.id}`,
+      verb: 'unstick',
+      kind: 'stuck-silent',
+      kindName: 'Silent',
+      id: h.id,
+      title: h.title || h.id,
+      text: null,
+      context: [
+        `No commit, file change or transcript write for ${minutesText(h.long_silent)}: the agent may have hung or run out of context.`,
+        `The orchestrator checks it: cq resume ${h.id} --reason context, then the agent line it prints.`,
+      ],
+      recommendation: options[0].label,
+      impact: taskImpact(0, h),
+      options,
+      free: null,
+      open: h.id,
+    };
+  }
+
   function stuckItem(h) {
     if (h.stop) return stopItem(h);
+    if (h.no_agent_round) return noAgentRoundItem(h);
     if (h.without_agent) return noAgentItem(h);
+    if (h.long_silent) return silentItem(h);
     const picked = h.status === 'picked';
     const flagged = !!h.open_block;
     const context = [
@@ -435,7 +487,7 @@
       case 'requeue':
         return ['set', a.id, 'waiting'];
       case 'track-answer':
-        return ['resume', a.id, '--reason', 'context', '--answer', String(a.text ?? '')];
+        return ['resume', a.id, '--reason', 'context', '--answer', String(a.text ?? ''), '--by', 'owner'];
       case 'flag-stuck':
         return ['block', a.id, 'other', '--note', FLAG_NOTE];
       default:

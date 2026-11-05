@@ -438,7 +438,7 @@ function buildBoard(
     batchQueue,
     // What the queue would start now, and what is waiting on the owner.
     next,
-    inbox: inbox(queue, columns, { map, context: fk, now, withoutAgent, baseRed }),
+    inbox: inbox(queue, columns, { map, context: fk, now, withoutAgent, silent, baseRed }),
     // The focus line, areas and the basis for the plan view.
     focus: focusLine(queue, { now, context: fk, canStart: next.startable.map((v) => v.id) }),
     areas: L.areaOverview(queue, now).map((r) => ({
@@ -539,7 +539,7 @@ function nextUp(queue, { now = Date.now(), uncommitted = [], dailyUsage } = {}) 
  * `unlogged` (answers not entered in the decision log) is info for the orchestrator and is not counted in `count`.
  * @param {object} columns the board's columns (the cards have aging and old)
  */
-function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = null, now = Date.now(), withoutAgent = [], baseRed = false } = {}) {
+function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = null, now = Date.now(), withoutAgent = [], silent = [], baseRed = false } = {}) {
   const tasks = queue.tasks ?? [];
   const register = queue.projects ?? {};
   const resolved = new Set(queue.resolved ?? []);
@@ -650,11 +650,15 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
       : null;
   };
   // Marked running with no agent (queueLogic.startedWithoutAgent, found by the caller, since it takes git).
-  const noAgent = new Set(withoutAgent.map((x) => x.id));
+  const noAgent = new Map(withoutAgent.map((x) => [x.id, x]));
+  // Silent for so long that the owner should know (shorter stops stay with the orchestrator: cq show, pulse).
+  const longSilent = new Map(
+    (silent ?? []).filter((x) => x.silent_ms >= L.SILENT_CARD_MIN * 60_000).map((x) => [x.id, x.silent_ms / 60_000]),
+  );
   // A red base stops every merge, and the owner sees that line above the list: a task in review only waits for it.
   const longInReview = (k) => k.aging && !(baseRed && k.status === 'review');
   const stuck = [...(columns.inProgress ?? []), ...(columns.review ?? [])]
-    .filter((k) => noAgent.has(k.id) || longInReview(k) || (k.status === 'picked' && k.old) || stopInfo(k))
+    .filter((k) => noAgent.has(k.id) || longSilent.has(k.id) || longInReview(k) || (k.status === 'picked' && k.old) || stopInfo(k))
     .map((k) => ({
       id: k.id,
       title: k.title,
@@ -670,6 +674,8 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
       // The merge or gate stop the owner should see (the decision overview gives it its own card).
       stop: stopInfo(k),
       without_agent: noAgent.has(k.id),
+      no_agent_round: noAgent.get(k.id)?.prepared ? { round: noAgent.get(k.id).round, reason: noAgent.get(k.id).reason } : null,
+      long_silent: longSilent.get(k.id) ?? null,
     }));
 
   const unlogged = L.unlogged(queue).map((x) => ({ sp: x.sp, time: x.time ?? null, by: x.by ?? null }));

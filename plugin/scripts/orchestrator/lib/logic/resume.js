@@ -191,12 +191,15 @@ function assessActive({
   lastMs = null,
   startedMs = null,
   delivery = null,
+  noAgent = null,
   anotherBranch = () => null,
 }) {
   if (delivery)
     return `DELIVERED (track-result.md ${delivery.status}${status === 'review' ? ', new round after receive' : ''})`;
+  // No agent has taken it (queueLogic.noAgentTracks): commits from an earlier round say nothing about this one.
+  if (noAgent) return noAgent.prepared ? `NO AGENT (round ${noAgent.round} prepared, never started)` : 'NO AGENT';
   if (status === 'review') return commits > 0 ? 'DELIVERED (review)' : 'UNCERTAIN (review without commits)';
-  if (commits > 0 && (uncommitted ?? 0) === 0 && (lastMs ?? 0) > 20 * 60_000) return 'DELIVERED';
+  if (commits > 0 && (uncommitted ?? 0) === 0 && (lastMs ?? 0) > 20 * 60_000) return 'DELIVERED (no report: commits, clean, quiet for 20 min)';
   if (commits === 0 && (startedMs ?? 0) > 60 * 60_000) {
     const another = anotherBranch();
     return another ? `UNCERTAIN (commit ${another} mentions the id on another branch)` : 'EMPTY';

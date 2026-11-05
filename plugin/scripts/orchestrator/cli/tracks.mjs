@@ -378,17 +378,25 @@ export function deliveryWarning({ update = false } = {}) {
     return [];
   }
 }
+/** The time of the newest commit on a task's branch in ms, or null. */
+function lastCommitMs(o) {
+  const s = String(gitRead(['log', '-1', '--format=%ct', `refs/heads/${o.branch}`, '--']) ?? '').trim();
+  return /^\d+$/.test(s) ? Number(s) * 1000 : null;
+}
 /**
- * Running tracks without an agent (queueLogic.startedWithoutAgent): no worktree has the branch and there is no report.
+ * Tracks no agent works on (queueLogic.noAgentTracks): marked running with no worktree on the branch and no report from
+ * this start, or an attempt or round that no agent ever took.
  * Read-only; `show`, `state` and `orchestrator pulse` use it, so the check also runs after every compaction (the
  * after-compact hook includes `show`). An error never stops the command it is attached to.
  */
 export function findWithoutAgent(queue) {
   try {
     const worktreeBranches = new Set(G.readWorktrees(gitRead).map((w) => w.branch).filter(Boolean));
-    return L.startedWithoutAgent(queue, {
+    return L.noAgentTracks(queue, {
       worktreeBranches,
-      hasReport: (o) => !!trackReport(o).report,
+      reportOf: (o) => trackReport(o).report,
+      rows: readTimeLog,
+      lastCommitMs,
     });
   } catch (e) {
     console.error(`(The agent check failed: ${e?.message ?? e})`);
@@ -427,13 +435,17 @@ export function findSilent(queue) {
         freshMs,
       }).ms;
     }
-    return L.silentTracks(queue, {
+    const list = L.silentTracks(queue, {
       worktreeBranches,
       lastActivity,
-      hasReport: (o) => !!trackReport(o).report,
+      hasReport: (o) => L.reportSinceStart(o, trackReport(o).report),
       now,
       limitMin,
     });
+    if (!list.length) return list;
+    // An old worktree can hold the branch of a track no agent took: that one has its own warning.
+    const none = new Set(findWithoutAgent(queue).map((x) => x.id));
+    return list.filter((x) => !none.has(x.id));
   } catch (e) {
     console.error(`(The silence check failed: ${e?.message ?? e})`);
     return [];

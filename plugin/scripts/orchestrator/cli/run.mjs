@@ -271,8 +271,14 @@ export function cmdFill() {
           out.push({ o, new: true });
         } else {
           const loadLine = o.status === 'waiting' ? loadSlotsLine(queue, load) : null;
+          const blocks = o.status === 'waiting' ? L.blockers(o, queue.tasks, queue.resolved) : [];
+          const why = blocks.length
+            ? `: ${blocks.join('; ')}`
+            : o.status === 'waiting'
+              ? ': nothing blocks it directly, but other tasks rank ahead of it for the free slots, or a limit is full'
+              : '';
           die(
-            `${id} (${o.status}) cannot be started now (see next and show --full; start --force only on the owner's word). ` +
+            `${id} (${o.status}) cannot be started now${why} (see next and show --full; start --force only on the owner's word). ` +
               (loadLine ? `${loadLine} (fill --over-load overrides.) ` : '') +
               'Nothing was started.',
           );
@@ -513,14 +519,18 @@ export function cmdResume() {
   // The same template as fill (make-queue-common + make-mission), with the track block from queueLogic.resumeBlock and
   // --continue in the setup. The track id is <id>-r<N>, so the agent's report lands in <scratchpad>/<id>-r<N>/ (receive
   // finds it).
-  const id = positional(1, ['--reason', '--round', '--scratchpad', '--findings-file', '--from', '--answer'])[0];
+  const id = positional(1, ['--reason', '--round', '--scratchpad', '--findings-file', '--from', '--answer', '--by'])[0];
   const reason = val('--reason') ?? 'fix';
   const use =
-    'resume <id> [--reason fix|context] [--round N] [--findings-file <file>] [--from <reviewer,...>] [--answer "<text>"] [--scratchpad <folder>]';
+    'resume <id> [--reason fix|context] [--round N] [--findings-file <file>] [--from <reviewer,...>] [--answer "<text>" [--by owner]] [--scratchpad <folder>]';
   if (!id || !L.RESUME_REASONS.includes(reason)) die(use);
   // --answer: the owner's answer to what the track asked. First in the brief, and saved as an addition to the mission.
   const answer = a.includes('--answer') ? String(val('--answer') ?? '').trim() : null;
   if (answer === '') die(`${use}\n--answer is empty.`);
+  // --by owner: the owner answered (the board, cq decide), so nobody may be reading this output. cq wait wakes on it.
+  const answerFields = answer
+    ? { answer, answered_at: new Date().toISOString(), ...(val('--by') ? { by: String(val('--by')).trim() } : {}) }
+    : {};
   GB.ensure(FOLDER, GIT_ROOT);
   // --from: the reviewer types whose findings caused this fix round (the reviewer hit rate, lib/eventStatistics.js).
   // Saved in `resumed` and the fixRound row; a name that is not a known reviewer type is kept, with a warning.
@@ -692,8 +702,8 @@ export function cmdResume() {
       const t = L.addToBonus(x, `The owner's answer: ${answer}`, new Date().toISOString());
       if (t) die(`Invalid answer: ${t}`);
     }
-    if (!again) (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}), ...(answer ? { answer } : {}) });
-    else if (answer) x.resumed.at(-1).answer = answer;
+    if (!again) (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}), ...answerFields });
+    else if (answer) Object.assign(x.resumed.at(-1), answerFields);
     return reserved;
   });
   // The fixRound row (lib/eventRows.js): the same round as `resumed`, countable per week (fail open).

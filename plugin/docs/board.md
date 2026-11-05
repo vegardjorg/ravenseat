@@ -84,6 +84,7 @@ The Queue workspace has these tabs:
   [Flow and quality](queue.md#cost-estimates-and-calibration)), and the legend for the badges on the cards.
 - A running card gets the badge **silent** when the track has an agent worktree but no sign of life for
   `limits.silentMin` minutes (the same rule as `SILENT` in `cq show`; the server measures it at most once a minute).
+  After 60 minutes it also gets a card under Decisions. A track or a prepared round no agent took gets a card at once.
 - A built card gets the badge **Merged, not verified** when no gates, done command or agent review ran, and **Audited**
   when only an agent review ran ([When a project has no checks](queue.md#when-a-project-has-no-checks)).
 

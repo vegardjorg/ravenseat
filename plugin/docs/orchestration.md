@@ -33,7 +33,7 @@ branch (`queue/<ID>`), with a self-contained mission file.
 8. When the round ends with only owner items left (questions, proposals, QA) and no agent running, the orchestrator
    starts `cq wait` with `run_in_background`. Claude Code starts a new turn when a background command exits, so an
    answer on the board (`OWNER ACTED: ...`) starts the next round, beginning with `cq resolutions --unlogged`. On
-   `TIMEOUT` (8 h, exit 10) it is started once more, then the loop stops. This only works while the Claude Code session
+   `TIMEOUT` (8 h, exit 10) it is started once more, then the loop stops. Every `--check-min` minutes (default 5, 0 = off) it also runs the track checks: `TRACKS NEED A LOOK: ...`, exit 11, once per finding. This only works while the Claude Code session
    is open (also via Remote Control); it costs no tokens while it waits. The board's **Waiting on you** says
    "Orchestrator listening" while the waiter's heartbeat (`<dataFolder>/wait-heartbeat.json`) is fresh.
 
@@ -285,16 +285,17 @@ started them. A new session adopts them without that notification:
   background, or a script that chains several merges), the track stays "running" with no agent and the queue stalls
   without an error. So `cq show` (first in the output, so it survives the after-compact trimming), `cq state`
   (`withoutAgent`) and `cq orchestrator pulse` print `STARTED WITHOUT AGENT` for a running track older than 15 minutes
-  whose branch no worktree has checked out and that has no track-result.md. Picked tasks and cloud sessions are left out.
+  whose branch no worktree has checked out and that has no track-result.md from this start (an older one no longer turns the warning off). Picked tasks and cloud sessions are left out.
   Fix: `cq set <ID> waiting`, then `cq fill --ids <ID>` and start what it lists in the same turn (fill checks the
   migration block again). Run `cq merge` where you read the output; in a chain or a background job use `--without-fill`
   and run fill yourself afterwards.
+- **Round without an agent:** `cq resume` and `cq fill` reserve an attempt, and the start row in the time log turns it into running. A reservation older than 15 minutes with no start row, commit or report since gives `ROUND WITHOUT AGENT` (a prepared round; `STARTED WITHOUT AGENT` for a first start held by an old worktree), a card in `cq decide`, and `NO AGENT` in `cq takeover`. It needs a client with hooks and at least one start row in the log, so a project without the hook is not warned falsely. Fix: `cq resume <ID> --reason <reason>` gives the same round and the agent line. Answers on the board use `cq resume --by owner`, which wakes `cq wait`.
 - **Silent:** a running track whose branch a worktree HAS checked out (so the agent started), but that has shown no
   sign of life for `limits.silentMin` minutes (default 20, `cq limit silentMin <n>`, 0 = off). The sign of life is the
   newest of: the last commit on the branch, the newest mtime in the worktree (node_modules and .git skipped, a capped
   walk), the track folder in the scratchpad, and the agent transcript and time log rows tied to the task. `cq show`
   (right after STARTED WITHOUT AGENT), `cq state` (`silent`) and `cq orchestrator pulse` print `SILENT`, and the board
-  marks the card "silent". Check the track, then `cq resume <ID> --reason context` and start the new agent, or stop it.
+  marks the card "silent". After 60 minutes it also gets a card in `cq decide`. Check the track, then `cq resume <ID> --reason context` and start the new agent, or stop it.
 - **Blocker reasons:** `cq block <ID> <code> [--note "…"]` / `cq unblock <ID>` record why a task is stuck, with codes
   from one fixed table (`merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `context`, `quota`, `owner-question`, `track-question`, `dependency`, `no-agent`,
   `silent`, `other`). `cq merge` opens `merge-conflict` (a real conflict), `merge-guard` (protected paths), `merge-stopped` (any other stop
