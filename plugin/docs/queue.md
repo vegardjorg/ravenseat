@@ -341,7 +341,7 @@ the project's files. Nothing is run, so it shows what is set up, not that it wor
 `checks-report.json` in the queue folder.
 
 Each suggestion has a button, "Add investigation to queue" (`cq checks plan <key>`). That adds one class U task from the
-suggestion's template. It ends in a plan and in proposed build tasks for you to approve, never in code. "Set aside" removes the
+suggestion's template. It ends in a plan in the track result, with the build steps it recommends for you to pick from, never in code. "Set aside" removes the
 card until you bring it back.
 
 **Opting out:** `cq checks off`, or the switch on the tab and in Settings. It removes the tab, the overview and the setup

@@ -135,7 +135,7 @@ function checksButton(s) {
     class: 'button button-filled',
     text: busy ? 'Adding …' : 'Add investigation to queue',
     disabled: busy,
-    title: `About ${s.contentMin} min of agent work, and it uses tokens. It delivers a plan and proposals, no code.`,
+    title: `About ${s.contentMin} min of agent work, and it uses tokens. It delivers a plan and recommended steps, no code.`,
     onclick: () => checksWrite({ action: 'plan', key: s.key }, 'Added to the queue'),
   });
 }
@@ -254,7 +254,7 @@ function drawChecks() {
   const shown = open.filter((s) => wanted === 'all' || s.category === wanted);
   wrap.append(
     el('div', { class: 'checks-head' }, el('h3', { class: 'decide-group-title', text: 'Suggestions, most important first' }), filter),
-    el('p', { class: 'decide-hint', text: 'Optional, all of them. The button adds an investigation that ends in a plan and proposals. Nothing is built before you approve it.' }),
+    el('p', { class: 'decide-hint', text: 'Optional, all of them. The button adds an investigation that ends in a plan with recommended steps. Nothing is built before you approve it.' }),
     shown.length
       ? el('ul', { class: 'checks-grid' }, ...shown.map((s) => checksSuggestionCard(s, r.categories)))
       : el('p', { class: 'checks-text', text: 'No suggestions right now.' }),

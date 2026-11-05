@@ -134,7 +134,7 @@ function plan(key) {
   if (s.state === 'dismissed') setDismissed(key, false);
   console.log(r.output);
   console.log(
-    `About ${task.content_min} min of agent work, and it uses tokens. It delivers a plan and proposals, no code. ` +
+    `About ${task.content_min} min of agent work, and it uses tokens. It delivers a plan with recommended steps, no code. ` +
       (approved ? `${CQ} set ${task.id} cancelled takes it out.` : `${CQ} approve ${task.id} (or Approve on the board) lets it run.`),
   );
 }

@@ -105,7 +105,7 @@ user in at most eight lines: what you found (say that nothing was run, so it sho
 top three suggestions with their `why`, in plain words. Then ASK one question, with these answers:
 - "Not now" (recommended if they are new): stop here. The suggestions stay on the board's Checks tab.
 - One of the suggestions: run `cq checks plan <key> --approved`. Say that it is about N minutes of agent work, uses tokens, and
-  ends in a plan and proposals, not code. A suggestion with `action: gates` needs no agent: `cq kickstart gates --apply`.
+  ends in a plan and suggested build steps, not code. A suggestion with `action: gates` needs no agent: `cq kickstart gates --apply`.
 - "I do not want this": run `cq checks off`. It removes the Checks tab and this overview. Gates and guards are not touched.
 
 Never add more than the user picked, and do not list the whole catalog unless they ask.

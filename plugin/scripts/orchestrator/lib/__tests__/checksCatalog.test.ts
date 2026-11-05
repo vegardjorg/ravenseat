@@ -140,6 +140,10 @@ describe('planTask', () => {
     expect(t.mission).toContain('Do not build it');
     expect(t.mission).toContain('Tests: CI (ci.yml), gate');
     expect(t.mission).toContain('Never push');
+    // The plan goes in the track result: a queue agent is denied `cq add`, and `cq finding` needs a registered project.
+    expect(t.mission).toContain('track-result.md');
+    expect(t.mission).not.toContain('cq add');
+    expect(t.mission).not.toContain('cq finding');
   });
   it('a suggestion investigated before gets a free id, and a longer key is not mixed up', () => {
     expect(C.planTask(s, found, [{ id: 'KS-PLAN-TESTS-IN-CI', status: 'cancelled' }]).id).toBe('KS-PLAN-TESTS-IN-CI-2');

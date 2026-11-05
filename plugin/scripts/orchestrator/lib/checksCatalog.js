@@ -233,9 +233,9 @@ function planTask(s, found, tasks) {
       `## Investigate\n${s.investigate}`,
       `## Plan and build\n${s.plan}`,
       '## Deliver\nWrite track-result.md in plain words for someone who may never have used CI: what you found, your recommendation (saying it is not worth doing is a fine result), what it costs in agent time and CI minutes, and the risks. ' +
-        'Add each build step you recommend with `cq add` (they become proposals the owner approves). Do not change the project\'s code, its config or queue.config.json. Never push, deploy or change settings on the git host.',
+        'End track-result.md with the plan: each build step you recommend, as title, why, files and size. The owner decides which become tasks. Do not change the project\'s code, its config or queue.config.json. Never push, deploy or change settings on the git host.',
     ].join('\n\n'),
-    acceptance: ['track-result.md has a recommendation and what it costs', 'No project files are changed, and every build step is a proposal for the owner'],
+    acceptance: ['track-result.md has a recommendation and what it costs', 'No project files are changed, and each recommended build step is listed for the owner'],
   };
 }
 
