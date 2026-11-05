@@ -48,21 +48,33 @@ const path = require('node:path');
 const SC = require('./shellCommands.js');
 const { tokens, segments, commandWord, firstWordIndex } = SC;
 
+/** Does the name match a push.allowBranches pattern? "*" is any text, also a slash. Exact otherwise. */
+function allowedBranch(name, patterns) {
+  return (Array.isArray(patterns) ? patterns : []).some((p) => {
+    if (typeof p !== 'string' || !p) return false;
+    const r = p.split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*');
+    return new RegExp(`^${r}$`).test(name);
+  });
+}
+
 /**
  * Which branches does a `git push` with these arguments match?
- * Returns { template: [branch], force, all, deletes: [branch] } (all = --all/--mirror, i.e. all branches; deletes = the
- * remote branches the push deletes: `--delete`/`-d`, or a refspec with an empty source, `:branch`).
+ * Returns { template: [branch], force, all, tags, deletes: [branch] } (all = --all/--mirror, i.e. all branches; tags =
+ * --tags/--follow-tags, whatever else is named; deletes = the remote branches the push deletes: `--delete`/`-d`, or a
+ * refspec with an empty source, `:branch`).
  */
 function pushTemplate(args, currentBranch) {
   let force = false;
   let all = false;
   let del = false;
+  let tags = false;
   const pos = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--force' || a === '-f' || a.startsWith('--force-with-lease')) force = true;
     else if (a === '--all' || a === '--mirror' || a === '--branches') all = true;
     else if (a === '--delete') del = true;
+    else if (a === '--tags' || a === '--follow-tags') tags = true;
     else if (a === '-o' || a === '--push-option' || a === '--repo' || a === '--receive-pack' || a === '--exec') i++;
     else if (/^-[a-zA-Z]+$/.test(a)) {
       // short flags, also combined (-uf, -fd)
@@ -71,9 +83,9 @@ function pushTemplate(args, currentBranch) {
     } else if (!a.startsWith('-')) pos.push(a);
   }
   const refspecs = pos.slice(1); // first positional is the remote
-  if (all) return { template: [], force, all, deletes: [] };
+  if (all) return { template: [], force, all, tags, deletes: [] };
   if (refspecs.length === 0)
-    return { template: currentBranch ? [currentBranch] : ['<unknown>'], force, all, deletes: [] };
+    return { template: currentBranch ? [currentBranch] : ['<unknown>'], force, all, tags, deletes: [] };
   const deletes = [];
   const template = refspecs.map((r) => {
     let x = r;
@@ -87,7 +99,7 @@ function pushTemplate(args, currentBranch) {
     if (del || (x.startsWith(':') && name)) deletes.push(branch);
     return branch;
   });
-  return { template, force, all, deletes };
+  return { template, force, all, tags, deletes };
 }
 
 /** The usual tools' commands that change a database. A queue agent writes the migration; it does not run it. */
@@ -399,6 +411,8 @@ const queueShaped = (command) => /(^|[\s"'`(;&|\\/])(cq|cq\.mjs|cq\.cmd|queue\.m
  *   branch: string|null            current branch,
  *   environment: string|null           the contents of migrations.environmentFile (trimmed), null when the file does not exist,
  *   baseBranch?: string            default config().baseBranch,
+ *   allowBranches?: string[]       config().push.allowBranches: other branches the main session may push,
+ *   allowedBranchQuestion?: (name) => string|null  the secret precheck for such a push,
  *   migrations?: { pushCommand, environmentFile, allowedEnvironment }   default config().migrations,
  *   agentType?: string|null        the hook payload's agent_type; tracks, reviewers and helpers get the network guard,
  *                                  never push, and run only the allowed queue commands,
@@ -422,6 +436,7 @@ function assess(command, context = {}) {
   const guarded = isGuardedAgent(context.agentType, context.guardedTypes);
   const findings = [];
   let basePush = false;
+  const allowedPushes = [];
   const read = SC.commandList(command);
   const unread = [...read.unsure];
   for (const c of read.commands) {
@@ -450,7 +465,7 @@ function assess(command, context = {}) {
             'commands, so the guard can see what runs.',
         });
     } else if (g && sub === 'push') {
-      const { template, force, all, deletes } = pushTemplate(g.args, context.branch || null);
+      const { template, force, all, tags, deletes } = pushTemplate(g.args, context.branch || null);
       if (force) {
         findings.push({
           decision: 'deny',
@@ -467,19 +482,27 @@ function assess(command, context = {}) {
           decision: 'deny',
           reason: `Deleting baseBranch (${baseBranch}) on the remote is blocked (\`--delete\` or \`:${baseBranch}\`).`,
         });
+      } else if (tags) {
+        findings.push({
+          decision: 'deny',
+          reason: `\`git push --tags\` is blocked: only baseBranch (${baseBranch}) is pushed. Tags go by name, from your own terminal or with the owner's yes to a pattern in push.allowBranches.`,
+        });
       } else {
-        const others = template.filter((m) => m !== baseBranch && m !== '<unknown>');
+        const named = template.filter((m) => m !== baseBranch && m !== '<unknown>');
+        const allowed = named.filter((m) => !deletes.includes(m) && allowedBranch(m, context.allowBranches));
+        const others = named.filter((m) => !allowed.includes(m));
+        allowedPushes.push(...allowed);
         if (others.length > 0) {
           findings.push({
             decision: 'deny',
-            reason: `Push of ${others.join(', ')} is blocked: only baseBranch (${baseBranch}) is pushed, and in batches. Track branches are merged locally.`,
+            reason: `Push of ${others.join(', ')} is blocked: only baseBranch (${baseBranch}) is pushed, and in batches. Track branches are merged locally. For pull requests, the owner can allow branches with push.allowBranches in queue.config.json; ask them first.`,
           });
         } else if (template.includes('<unknown>')) {
           findings.push({
             decision: 'ask',
             reason: `Could not determine which branch is pushed. Confirm that it is baseBranch (${baseBranch}).`,
           });
-        } else if (template.length > 0) basePush = true;
+        } else if (template.includes(baseBranch)) basePush = true;
       }
     } else if (g && (SC.isGitPush(g) || (g.aliasFromEnv && pushShaped(command)))) {
       // send-pack, `subtree push`, or an alias the guard cannot see: the main session confirms.
@@ -559,6 +582,11 @@ function assess(command, context = {}) {
     const questions = [context.secretQuestion, context.controlsQuestion, context.batchQuestion]
       .map((f) => (typeof f === 'function' ? f() : null))
       .filter(Boolean);
+    if (questions.length) findings.push({ decision: 'ask', reason: questions.join(' Also: ') });
+  }
+  // A branch the owner allowed (push.allowBranches): no batch or CI question, but a secret is as bad on any branch.
+  if (allowedPushes.length && findings.length === 0 && !context.agentType && typeof context.allowedBranchQuestion === 'function') {
+    const questions = allowedPushes.map((name) => context.allowedBranchQuestion(name)).filter(Boolean);
     if (questions.length) findings.push({ decision: 'ask', reason: questions.join(' Also: ') });
   }
   if (findings.length === 0) return null;

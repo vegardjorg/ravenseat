@@ -41,6 +41,26 @@ function norm(p) {
     .replace(/^(\.\/)+/, '');
 }
 
+// The floor: the files that carry the switches and the rules. Always protected, also when a project replaces or empties
+// protectedPaths; otherwise a track could turn the guards off through the config it delivers. --allow-guard still works
+// per merge, with the diff in front of the owner.
+const CORE_PROTECTED = [
+  '.claude/',
+  '**/.claude/',
+  '.claude-plugin/',
+  '.githooks/',
+  '.husky/',
+  'lefthook.yml',
+  '.lefthook.yml',
+  'lefthook-local.yml',
+  'CLAUDE.md',
+  'CLAUDE.local.md',
+  'CLAUDE.queue.md',
+  'queue.config.json',
+  'settings.queue.json',
+  'scripts/orchestrator/',
+];
+
 /** The default list (STANDARD.protectedPaths), read lazily so this module stays pure for the tests. */
 function defaultProtected() {
   return require('./queueConfig.js').STANDARD.protectedPaths;
@@ -93,14 +113,14 @@ function globMatch(pattern, p, o = {}) {
 /**
  * Is the path protected?
  * @param {string} p
- * @param {string[]} [protectedPaths] default STANDARD.protectedPaths
+ * @param {string[]} [protectedPaths] default STANDARD.protectedPaths; CORE_PROTECTED always counts on top
  */
 function isProtected(p, protectedPaths = defaultProtected()) {
   // Compared in lower case (see the top of the file): .CLAUDE/ is .claude/ on Windows and macOS.
   const s = norm(p).toLowerCase();
   if (s.startsWith('node_modules/') || s.includes('/node_modules/')) return false;
   const name = s.split('/').pop();
-  return (protectedPaths || []).map((b) => norm(b).toLowerCase()).some((b) => {
+  return [...CORE_PROTECTED, ...(protectedPaths || [])].map((b) => norm(b).toLowerCase()).some((b) => {
     if (!b) return false;
     if (/[*?]/.test(b)) return globMatch(b, s, { ignoreCase: true });
     if (b.endsWith('/')) return s.startsWith(b);

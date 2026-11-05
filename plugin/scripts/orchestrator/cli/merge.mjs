@@ -41,6 +41,7 @@ const CP = require('./lib/conflictPredict.js');
 const AT = require('./lib/logic/attempt.js');
 const GB = require('./lib/gitSurfaceBaseline.js');
 const CONTROLS = require('./lib/controls.js');
+const GUIDANCE = require('./lib/guidance.js');
 
 // ---- The git hooks and config against the accepted baseline (lib/gitSurfaceBaseline.js) -------------------------------
 
@@ -496,7 +497,7 @@ export function cmdReceive() {
   }
   // Nothing automatic looked at this delivery (lib/controls.js). A warning, never a stop; a PARTIAL track runs nothing anyway.
   if (result?.status !== 'PARTIAL' && !CONTROLS.commandsOf(CONFIG.gates?.quick).length && !doneCheck)
-    console.log(CONTROLS.noChecksLine(id));
+    console.log(CONTROLS.noChecksLine(id, { quiet: GUIDANCE.isQuiet(read()) }));
   // QA evidence: the EVIDENCE line (track-result.md first, otherwise the answer) and the warning when a task that needs it
   // (config().qa.evidenceLabels) has none. A warning, not a stop.
   const evidenceRead = L.parseEvidence(reportText) ?? L.parseEvidence(trackReply);
@@ -630,7 +631,7 @@ export function cmdReceive() {
   const knownBug = KB.parseGate(reportText) ?? KB.parseGate(trackReply);
   if (knownBug) {
     try {
-      const line = proposeGate({ title: knownBug.title, where: knownBug.where, from: id });
+      const line = GUIDANCE.isQuiet(read()) ? null : proposeGate({ title: knownBug.title, where: knownBug.where, from: id });
       if (line) console.log(line);
     } catch (e) {
       console.log(`Gate: could not propose "${knownBug.title}" (${e.message}).`);
@@ -1347,7 +1348,7 @@ export async function cmdMerge() {
   tidyAfterMerge(branch, { resume, start: o.head_start });
   console.log(`Full log: ${logFile}`);
   printBase();
-  console.log(CONTROLS.verificationLine(verified));
+  console.log(CONTROLS.verificationLine(verified, { quiet: GUIDANCE.isQuiet(read()) }));
   // The merge went through, but the base gate made the base red: exit 9 (as a refused merge), so a script that chains
   // merges stops here instead of reading a 0.
   if (baseSettled && BH.verdict(BH.readState(HEALTH_FILE), mergeCommit) === 'red') process.exit(BH.EXIT_RED_BASE);

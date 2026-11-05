@@ -200,6 +200,8 @@ function helperSetup(config, queue = null, { hashes = null } = {}) {
     const c = cleanHelper(h);
     const switchedInQueue = isObject(s) && typeof s.enabled === 'boolean';
     if (switchedInQueue) c.enabled = s.enabled;
+    // Quiet guidance (lib/guidance.js) turns these off; a helper's own switch wins.
+    else if (require('./guidance.js').isQuiet(queue) && require('./guidance.js').QUIET_HELPERS.includes(name)) c.enabled = false;
     const src = helperSource(name, h);
     const wantedOn = c.enabled;
     let review = null;

@@ -71,14 +71,17 @@ function verification({ quickGates, doneCommand, reviewed }) {
   return { status, checks: [...checks, ...(reviewed ? ['agent review'] : [])] };
 }
 
-/** The line cq merge prints for a verification. */
-function verificationLine({ status, checks }) {
+/** The line cq merge prints for a verification. Quiet guidance (lib/guidance.js) keeps the fact and drops the advice. */
+function verificationLine({ status, checks }, { quiet = false } = {}) {
+  if (quiet && status === 'audited') return 'Audited, not verified: an agent reviewed this change, but no check ran.';
+  if (quiet && status === 'unverified') return 'Not verified: no gates, done command or agent review ran.';
   if (status === 'verified') return `Verified: your checks passed (${checks.join(', ')}). The code can still be wrong.`;
   if (status === 'audited') return 'AUDITED, not verified: an agent reviewed this change, but no check ran. /cq:kickstart adds checks one step at a time.';
   return 'MERGED, NOT VERIFIED: no gates, no done command and no agent review ran. /cq:kickstart adds checks one step at a time.';
 }
 
 /** The line cq receive prints when neither a gate nor a done command ran on the delivery. */
-const noChecksLine = (id) => `${id}: NO CHECKS RAN: gates.quick is empty and the task has no done command. /cq:kickstart adds checks one step at a time.`;
+const noChecksLine = (id, { quiet = false } = {}) =>
+  quiet ? `${id}: no checks ran.` : `${id}: NO CHECKS RAN: gates.quick is empty and the task has no done command. /cq:kickstart adds checks one step at a time.`;
 
 module.exports = { ciHosts, commandsOf, hasGates, missing, question, verification, verificationLine, noChecksLine };

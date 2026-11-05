@@ -213,6 +213,8 @@ function checkConfig() {
         continue;
       }
       const wantN = kind(S[k][n]);
+      // A default of "auto" also takes true or false (baseGate.enabled: false is the documented way to turn it off).
+      if (S[k][n] === 'auto' && typeof w === 'boolean') continue;
       if (w !== null && wantN !== 'null' && kind(w) !== wantN) wrong.push(`${k}.${n} is ${kind(w)}, expected ${wantN}`);
     }
   }
@@ -448,7 +450,7 @@ function checkCiCost() {
     onPush++;
     if (!c.concurrency)
       out.push(
-        warn(
+        info(
           'ci-cost',
           `${f} runs on push without concurrency cancel-in-progress: an older run is not stopped when a newer push replaces it`,
           'add `concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }` at the top level',
@@ -483,7 +485,7 @@ function checkGit() {
 
 /** `cq doctor [--json]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const checks = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, ...REPO_CHECKS, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, ...REPO_CHECKS, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {
@@ -491,8 +493,10 @@ export function cmdDoctor() {
       return [fail(f.name.replace(/^check/, '').toLowerCase(), `the check failed: ${e?.message ?? e}`, 'report it as a bug')];
     }
   });
+  // Quiet guidance (lib/guidance.js) drops the advice rows, never a FAIL, and says how many went.
+  const { rows: checks, hidden } = require('./lib/guidance.js').filterDoctor(every, require('./lib/guidance.js').readQuiet(FOLDER));
   const failed = checks.some((c) => c.status === 'FAIL');
-  if (a.includes('--json')) console.log(JSON.stringify({ ok: !failed, checks }, null, 2));
+  if (a.includes('--json')) console.log(JSON.stringify({ ok: !failed, checks, advice_hidden: hidden }, null, 2));
   else {
     for (const c of checks) {
       console.log(`${c.status.padEnd(4)}  ${c.name.padEnd(9)}  ${c.message}`);
@@ -500,6 +504,7 @@ export function cmdDoctor() {
     }
     const n = (s) => checks.filter((c) => c.status === s).length;
     console.log(`\n${n('OK')} OK, ${n('WARN')} WARN, ${n('INFO')} INFO, ${n('FAIL')} FAIL${failed ? ' (exit 1)' : ''}. Nothing was changed.`);
+    if (hidden) console.log(`${hidden} advice line(s) not shown: guidance is quiet (${CQ} guidance guided shows them).`);
   }
   if (failed) process.exit(1);
 }

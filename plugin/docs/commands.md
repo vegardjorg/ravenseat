@@ -26,6 +26,7 @@ cq surface                   # git hooks and config that run code, against what 
 cq surface accept --by owner # accept the current state (after installing a hook tool, changing git config)
 cq unlock                    # who holds the queue lock; changes nothing (--force --by owner releases it)
 cq attempt list <ID>         # the task's attempts; `cq attempt close <ID> --outcome <...>` closes a stuck one
+cq guidance [guided|quiet]   # one switch for advice about CI, gates and lockfiles; never a guard
 cq helpers                   # helper agents: on/off and what they cost
 cq helpers add <file.md>     # a custom helper: copied, scanned, off until approved
 cq plan show                 # plan register

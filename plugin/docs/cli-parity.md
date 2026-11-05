@@ -42,6 +42,7 @@ commands cover them.
 
 | Board action | Endpoint | Claude Code |
 | --- | --- | --- |
+| Guidance, guided or quiet | `/api/guidance` | `cq guidance guided|quiet` (same command) |
 | Helper agents on or off | `/api/helper` | `cq helpers on|off <agent>` (same command) |
 | Add a custom helper | `/api/helper-add` | `cq helpers add <file.md>` (same command) |
 | Auto-accept rules | `/api/proposals` | `cq proposals auto …` (same command) |

@@ -20,6 +20,20 @@ import { STANDARD } from '../queueConfig';
 const changed = (...paths: string[]) => paths.map((p) => ({ status: 'M', paths: [p] }));
 const MIGR = { folder: 'db/migrations', filePattern: '^(\\d+)_.*\\.sql$' };
 
+describe('the floor of the protected paths', () => {
+  it('holds when a project empties or replaces the list', () => {
+    for (const list of [[], ['docs/']]) {
+      for (const p of ['queue.config.json', '.claude/settings.json', 'sub/.claude/x.md', 'CLAUDE.md', 'CLAUDE.queue.md', '.husky/pre-push', 'scripts/orchestrator/queue.mjs'])
+        expect(isProtected(p, list), p).toBe(true);
+    }
+  });
+  it('lets the rest of the list go when the project says so', () => {
+    expect(isProtected('package.json', [])).toBe(false);
+    expect(isProtected('package.json')).toBe(true);
+    expect(isProtected('src/a.ts', [])).toBe(false);
+  });
+});
+
 describe('protected paths: the M3 additions and case (plans/review-2026-11-02.md)', () => {
   it('git hook managers, package manager configs, editor tasks and CLAUDE.md at any level are protected', () => {
     for (const p of [
@@ -151,10 +165,10 @@ describe('protected paths (the default list)', () => {
     expect(isProtected('.\\.claude\\settings.json')).toBe(true);
     expect(isProtected('./package.json')).toBe(true);
   });
-  it('follows a configured list, and an empty list turns the guard off', () => {
+  it('follows a configured list, and an empty list leaves only the floor', () => {
     expect(isProtected('infra/deploy.sh', ['infra/'])).toBe(true);
-    expect(isProtected('.claude/settings.json', ['infra/'])).toBe(false);
-    expect(isProtected('.claude/settings.json', [])).toBe(false);
+    expect(isProtected('package.json', ['infra/'])).toBe(false);
+    expect(isProtected('package.json', [])).toBe(false);
     expect(STANDARD.protectedPaths).toContain('queue.config.json');
   });
 });

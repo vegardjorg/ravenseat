@@ -528,7 +528,8 @@ function state() {
   // The base health: the file's time and the base tip (read with git status, at most once a minute) are in the key.
   const baseHealth = baseHealthNow();
   const pushBatch = pushBatchNow(baseHealth);
-  const checks = checksNow();
+  // Quiet guidance (lib/guidance.js): no overview, so the status line, the Checks section and the card have nothing to say.
+  const checks = require('./lib/guidance.js').readQuiet(FOLDER) ? null : checksNow();
   const baseKey = JSON.stringify([baseHealth, pushBatch, checks]);
   // Is a `cq wait` listening (its heartbeat is fresh)? Read every time, so the line flips without a queue change.
   const listening = OW.heartbeatState(FOLDER).listening;
@@ -1843,6 +1844,11 @@ async function write(filePath, b) {
     info = v.info;
     return run(['limit', name, val], `limit ${name} ${val}`);
   }
+  // The guidance switch in General: goes through `cq guidance` (queue.json, under the lock).
+  if (filePath === '/api/guidance') {
+    if (!['guided', 'quiet'].includes(b?.mode)) return no('mode must be guided or quiet');
+    return run(['guidance', b.mode], `guidance ${b.mode}`);
+  }
   // The "Helper agents" tab: a switch goes through `cq helpers on|off <agent>` (queue.json, under the lock).
   // A custom helper that is not approved for its file as it is now is refused here (and again in queue.mjs).
   if (filePath === '/api/helper') {
@@ -2431,6 +2437,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, {
           ok: true,
           field: T.settings(queue, { migrations: !!CONFIG.migrations?.folder }),
+          guidance: require('./lib/guidance.js').modeOf(queue),
           usageToday: stat.keyFigures.usageToday,
           night: L.nightGuard(queue),
           setup: setup(queue, stat),

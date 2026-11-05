@@ -233,6 +233,8 @@
 //                                                                  USD and the cost factor; lib/costEstimate.js. The ~$ cost
 //                                                                  estimates in show, next, fill, info and state use it;
 //                                                                  the weights and the order are never changed by it)
+//   node scripts/orchestrator/queue.mjs guidance [guided|quiet]     (one switch for advice about CI, gates and lockfiles, the
+//                                                                  light review, triage and gate proposals; never a guard)
 //   node scripts/orchestrator/queue.mjs helpers [--json]            (the helper agents: on/off, when they run, and the
 //                                                                  measurement: runs, minutes, tokens, USD, share, findings)
 //   node scripts/orchestrator/queue.mjs helpers on|off <agent>      (switches a helper in queue.json; wins over
@@ -701,6 +703,8 @@ if (command === 'init') {
   cost.cmdLimit();
 } else if (command === 'helpers') {
   helpers.cmdHelpers();
+} else if (command === 'guidance') {
+  helpers.cmdGuidance();
 } else if (command === 'kickstart') {
   kickstart.cmdKickstart();
 } else if (command === 'gate') {

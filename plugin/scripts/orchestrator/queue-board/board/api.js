@@ -250,8 +250,10 @@ function pushBatchText(p) {
 /** " · Checks: 2 of 4 in place (Settings)" while something is missing; nothing when all are in place or the overview is not in yet. */
 function checksText(c) {
   if (!c?.steps?.length) return '';
-  const done = c.steps.filter((s) => s.state === 'done').length;
-  return done === c.steps.length ? '' : ` · Checks: ${done} of ${c.steps.length} in place (Settings)`;
+  // A step the owner declined is settled: it does not count as missing.
+  const wanted = c.steps.filter((s) => s.state !== 'declined');
+  const done = wanted.filter((s) => s.state === 'done').length;
+  return done === wanted.length ? '' : ` · Checks: ${done} of ${wanted.length} in place (Settings)`;
 }
 
 function drawStatus() {

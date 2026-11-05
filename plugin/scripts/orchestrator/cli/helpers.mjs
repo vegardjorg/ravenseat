@@ -17,6 +17,24 @@ import path from 'node:path';
 import { a, CONFIG, CQ, cut, die, edit, HELP, MAIN_TREE, positional, read, require, val, values } from './context.mjs';
 
 /** `cq helpers` (the usage is at the top of queue.mjs). */
+/** `cq guidance [guided|quiet]`: the one switch for advice about the project (lib/guidance.js). Never a guard. */
+export function cmdGuidance() {
+  const GD = require('./lib/guidance.js');
+  const wanted = a[1];
+  if (wanted && !GD.MODES.includes(wanted)) die(`Use: ${CQ} guidance [${GD.MODES.join('|')}]`);
+  if (wanted)
+    edit((queue) => {
+      if (wanted === 'quiet') queue.guidance = 'quiet';
+      else delete queue.guidance;
+    });
+  const mode = GD.modeOf(read());
+  console.log(
+    mode === 'quiet'
+      ? `Guidance: quiet. No advice about CI, gates or lockfiles, no light review, no intake triage, no gate proposals. The secret check, merge guard, base gate and the limits on agents stay on. A helper you switch on yourself stays on. Back: ${CQ} guidance guided.`
+      : `Guidance: guided. Ravenseat points out what is missing and offers next steps. For no advice: ${CQ} guidance quiet.`,
+  );
+}
+
 export function cmdHelpers() {
   // ---- The helper agents (lib/queueHelpers.js): list, switch one on or off, and the custom helpers of the project
   // (add, scan, approve, when, remove). Every write goes to queue.json (helpers.<agent>) under the lock, like `limit`,

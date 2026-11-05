@@ -265,7 +265,9 @@ function batchLines() {
       (batch.oldestAt ? `, oldest ${PB.ageText(batch.oldestAt)} old` : '') +
       `; base ${healthText}, full gate ${gateText} at ${summary(toSha)} (${limits}).`,
     `Verdict: ${PB.verdictWord(verdict.verdict)} (${verdict.reason}).`,
-    ...(missingControls.length ? [`Controls: ${missingControls.join(', ')}, so nothing automatic checks this push (/cq:setup).`] : []),
+    ...(missingControls.length && K.push?.controlsWarning !== false && !require('./lib/guidance.js').readQuiet(dataFolder())
+      ? [`Controls: ${missingControls.join(', ')}, so nothing automatic checks this push (/cq:kickstart).`]
+      : []),
     ...(CI.enabled
       ? [`CI watch (${CI.mode}): after the push, start cq push-check --watch-ci ${toSha} in the background (run_in_background); exit 9 = a check failed (fix task CI-${toSha.slice(0, 7)}), 0 = green or an owner question, 10 = timeout.`]
       : []),

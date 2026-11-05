@@ -65,6 +65,13 @@ ASK one question, and write only what the user says yes to:
 - Deploy commands (`deployCommands`) stay empty unless the user names theirs; the push guard then asks before any of
   them runs. The secret check before push is on by default (`secretScan`); mention it, do not change it.
 
+### How much guidance (one question)
+
+Ask once, after the cq init in the next step has made the queue: "Do you want Ravenseat to point out what is missing, like
+CI, tests and next steps (recommended if you are new to agents or CI), or do you run your own setup?" On "my own setup", run
+`cq guidance quiet`. It stops that advice, the light review, the intake triage and the gate proposals. The safety guards
+stay on, and nothing then tells them if no check runs. The board's settings or `cq guidance guided` turn it back.
+
 ## 3. Create the queue and smoke test it
 
 Lite:

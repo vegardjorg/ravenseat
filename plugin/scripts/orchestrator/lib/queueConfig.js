@@ -87,8 +87,10 @@ const STANDARD = Object.freeze({
   // ciWatch: "off" (default) or "github": the optional CI watch after a batch push
   // (`cq push-check --watch-ci <sha>`, lib/ciWatch.js, needs gh): polls the runs every ciWatchIntervalSec, gives up
   // after ciWatchTimeoutMin (exit 10). Local gates stay the rule; this is a safety net.
+  // allowBranches: branches the main session may push besides baseBranch, for pull request flows ("feat/*"; * is any text).
+  // Queue agents never push, and a forced push or a delete stays denied. The secret scan runs on these too.
   // controlsWarning: a plain push asks when the project has no CI config or no gates (lib/controls.js); false = no question.
-  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90, controlsWarning: true },
+  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90, controlsWarning: true, allowBranches: [] },
   // The branch that goes live (production). null = unknown. `cq doctor` warns when it is the same as baseBranch: every
   // batch push would then go straight to production. Nothing else reads it yet.
   productionBranch: null,
@@ -98,7 +100,7 @@ const STANDARD = Object.freeze({
   deployCommands: [],
   // The secret precheck before a plain push of baseBranch from the main session (lib/secretScan.js): the added lines of
   // what the push sends are scanned (gitleaks when it is on PATH, else built-in patterns) and a hit gets a confirmation
-  // dialog naming file:line, never the value. maxBytes: a larger diff is skipped silently. timeoutMs: per git or
+  // dialog naming file:line, never the value. maxBytes: a larger diff is not scanned, and the push asks. timeoutMs: per git or
   // gitleaks call. Fails open.
   secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000 },
   // `cq doctor` warns about tracked files larger than this (MB).
@@ -203,7 +205,7 @@ const STANDARD = Object.freeze({
   // run code or give instructions with the owner's rights in the orchestrator session: hooks, settings, agents, skills,
   // the orchestrator scripts and the queue config. "folder/" = the folder from the root, "dir/file" = that exact path,
   // a bare name (no slash) = that file name in any folder, an entry with * or ? = a glob (without a slash on the file
-  // name in any folder, with a slash on the path from the root, "**/" = any folders). An empty list turns the guard off.
+  // name in any folder, with a slash on the path from the root, "**/" = any folders). An empty list leaves only the floor (CORE_PROTECTED in lib/mergeGuard.js), which holds whatever this says.
   // A list in queue.config.json REPLACES this one (lists are not merged): copy the entries you want to keep.
   // The match ignores case (lib/mergeGuard.js): .CLAUDE/ and .claude/ are the same folder on Windows and macOS.
   protectedPaths: [

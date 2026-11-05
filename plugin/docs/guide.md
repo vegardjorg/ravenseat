@@ -277,9 +277,9 @@ Known gaps in the command guard: it does not read the contents of script files a
 `npm run` script), or commands built from string pieces inside an interpreter. Treat it as a strong default, not
 as isolation.
 
-Known gaps in the secret scan: it is skipped on the first push of a branch (no remote ref to compare with), and a push
-whose net diff is over 2 MB, or a git call over 3 seconds, goes through without a question. Like every hook here, it fails open on an
-internal error. Queue agents cannot push at all, so these gaps only apply to your own pushes from the main session.
+Known gaps in the secret scan: it finds known patterns, not every secret, and like every hook here it fails open on an
+internal error. A scan that does not finish (a diff over 2 MB, a git call over 3 seconds) asks instead of passing. Queue agents
+cannot push at all, so these gaps only apply to your own pushes from the main session.
 
 Deleted tests and skip markers do not stop a merge: a skip can be intended. `cq receive` prints a `WARN test
 weakening` line and the reviewers decide; for a class K task with no reviewer agent, read that line yourself.

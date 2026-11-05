@@ -70,6 +70,7 @@ function drawSettings() {
       'div',
       { id: 'settings-panel-general', role: 'tabpanel', 'aria-labelledby': 'settings-tab-general' },
       helpSection(),
+      guidanceSection(d),
       checksSection(),
       themeSection(),
       mascotSection(),
@@ -99,6 +100,52 @@ function drawSettings() {
     ),
   );
   panel.scrollTop = scroll;
+}
+
+/** The one switch for advice about the project (`cq guidance`, lib/guidance.js). It never stops a guard. */
+function guidanceSection(d) {
+  const error = el('p', { class: 'setting-error', role: 'alert', hidden: true });
+  const box = el('input', {
+    id: 'guidance-quiet',
+    type: 'checkbox',
+    role: 'switch',
+    class: 'switch',
+    checked: d.guidance === 'quiet',
+    'aria-describedby': 'guidance-help',
+  });
+  box.addEventListener('change', async () => {
+    error.hidden = true;
+    const wanted = box.checked;
+    box.disabled = true;
+    try {
+      const answer = await writeWithGuard('/api/guidance', { mode: wanted ? 'quiet' : 'guided' });
+      if (!answer) {
+        box.checked = !wanted; // cancelled
+        return;
+      }
+      messageWithInfo(wanted ? 'Advice off' : 'Advice on', answer);
+      await getSettings();
+      $('guidance-quiet')?.focus();
+    } catch (e) {
+      box.checked = !wanted;
+      error.textContent = e.message;
+      error.hidden = false;
+    } finally {
+      box.disabled = false;
+    }
+  });
+  return el(
+    'section',
+    { class: 'setting', 'aria-labelledby': 'setting-guidance' },
+    el('h3', { id: 'setting-guidance', class: 'setting-title', text: 'Guidance' }),
+    el('label', { for: 'guidance-quiet' }, box, ' I run my own setup'),
+    el('p', {
+      id: 'guidance-help',
+      class: 'setting-explanation',
+      text: 'Stops advice about CI, gates and lockfiles, the light review, intake triage and gate proposals. The secret check, merge guard, base gate and the limits on agents stay on. If no check is set up, nothing reminds you.',
+    }),
+    error,
+  );
 }
 
 // ---- The settings tabs: General and Helper agents ----

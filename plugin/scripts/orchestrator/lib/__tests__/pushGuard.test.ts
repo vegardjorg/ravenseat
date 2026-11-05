@@ -21,6 +21,59 @@ const MIG = {
 const STD = { baseBranch: 'main', migrations: MIG };
 const decision = (k: string, context = {}) => assess(k, { ...STD, ...context })?.decision ?? null;
 
+describe('push.allowBranches', () => {
+  const allow = { allowBranches: ['feat/*', 'release'] };
+  it('lets the main session push a branch that matches, also several folders down', () => {
+    expect(decision('git push origin feat/x', allow)).toBeNull();
+    expect(decision('git push -u origin feat/a/b', allow)).toBeNull();
+    expect(decision('git push origin release', allow)).toBeNull();
+    expect(decision('git push', { ...allow, branch: 'feat/x' })).toBeNull();
+  });
+  it('still denies what does not match, is not exact, or is empty', () => {
+    expect(decision('git push origin other', allow)).toBe('deny');
+    expect(decision('git push origin release2', allow)).toBe('deny');
+    expect(decision('git push origin feat/x')).toBe('deny');
+    expect(decision('git push origin feat/x', { allowBranches: [] })).toBe('deny');
+  });
+  it('asks none of the base push questions for an allowed branch', () => {
+    const never = () => 'asked';
+    const c = { ...STD, ...allow, batchQuestion: never, controlsQuestion: never, secretQuestion: never };
+    expect(assess('git push origin feat/x', c)).toBeNull();
+    expect(assess('git push origin main', c)?.decision).toBe('ask');
+  });
+  it('never allows a forced push, a delete, or --all', () => {
+    expect(decision('git push --force origin feat/x', allow)).toBe('deny');
+    expect(decision('git push --force-with-lease origin feat/x', allow)).toBe('deny');
+    expect(decision('git push origin +feat/x', allow)).toBe('deny');
+    expect(decision('git push origin :feat/x', allow)).toBe('deny');
+    expect(decision('git push --delete origin feat/x', allow)).toBe('deny');
+    expect(decision('git push --all origin', allow)).toBe('deny');
+  });
+  it('never lets a queue agent push', () => {
+    expect(decision('git push origin feat/x', { ...allow, agentType: 'track' })).toBe('deny');
+  });
+  it('asks the secret question for that branch, and not for the agent or a base push', () => {
+    const asked: string[] = [];
+    const q = (name: string) => {
+      asked.push(name);
+      return 'a secret';
+    };
+    const answer = assess('git push origin feat/x', { ...STD, ...allow, allowedBranchQuestion: q });
+    expect(answer?.decision).toBe('ask');
+    expect(asked).toEqual(['feat/x']);
+    expect(assess('git push origin main', { ...STD, ...allow, allowedBranchQuestion: q })).toBeNull();
+  });
+  it('tells the session to ask the owner, not to change the config itself', () => {
+    expect(assess('git push origin feat/x', STD)?.reason).toContain('ask them first');
+  });
+  it('--tags is denied like a named tag, in every form', () => {
+    expect(decision('git push --tags', { branch: 'main' })).toBe('deny');
+    expect(decision('git push origin --tags', { branch: 'main' })).toBe('deny');
+    expect(decision('git push --follow-tags origin main')).toBe('deny');
+    expect(decision('git push origin v1.0')).toBe('deny');
+  });
+});
+
 describe('git push', () => {
   it('lets push to baseBranch through, in any form', () => {
     expect(decision('git push origin main')).toBeNull();

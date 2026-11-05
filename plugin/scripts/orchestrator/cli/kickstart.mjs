@@ -72,6 +72,7 @@ function overview() {
     console.log(JSON.stringify({ facts, steps: list, next: next?.key ?? null, knownBugs }, null, 2));
     return;
   }
+  if (require('./lib/guidance.js').readQuiet(KK.dataFolder())) console.log(`Guidance is quiet (${CQ} guidance guided). Showing this because you asked.\n`);
   console.log(`Project: ${facts.stacks.length ? facts.stacks.join(', ') : 'no known stack found'}`);
   if (facts.checks.length) console.log(`Checks found: ${facts.checks.map((c) => `${c.command} (${c.source})`).join(', ')}`);
   console.log('');

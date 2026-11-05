@@ -126,7 +126,7 @@ via `/api/proposals`, and the log of what was auto-accepted with an Undo button 
 `cq proposals undo <id>`; see [queue.md](queue.md#auto-accept-of-proposals)) and the read-only setup. **Helper agents**: one row per [helper agent](orchestration.md#helper-agents) with what it does,
 when it runs (classes, labels, paths in plain text), an on/off switch (a checkbox with role switch; Space toggles it)
 and what it has cost: runs, median and total minutes, tokens and USD, its share of the task cost, and H/M/L findings
-per run ("No runs yet" until it has run). The switch is saved through `cq helpers on|off <agent>` (the board posts
+per run ("No runs yet" until it has run). General also has the Guidance switch, `cq guidance quiet`: no advice about CI, gates or lockfiles, and the guards stay on. The switch is saved through `cq helpers on|off <agent>` (the board posts
 to `/api/helper` behind the key and the Origin check, like every other write; it never writes files itself). The
 arrow keys move between the two tabs, and the board remembers the last one.
 

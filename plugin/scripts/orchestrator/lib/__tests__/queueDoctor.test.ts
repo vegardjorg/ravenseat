@@ -190,7 +190,7 @@ describe('cq doctor', () => {
     expect(r.out).toMatch(/^WARN {2}config {5}unknown key\(s\) ignored: push\.minTask$/m);
   }, 60_000);
 
-  it('ci-cost: WARN without cancel-in-progress, INFO without a path filter, nothing for workflows not on push', () => {
+  it('ci-cost: INFO without cancel-in-progress or a path filter, nothing for workflows not on push', () => {
     const p = project({ config: { loadGuard: { minFreeMemoryPct: null } } });
     // No workflows folder: no ci-cost line at all.
     expect(p.json().checks.some((c) => c.name === 'ci-cost')).toBe(false);
@@ -205,11 +205,11 @@ describe('cq doctor', () => {
     fs.writeFileSync(path.join(dir, 'notes.txt'), 'on: push\n');
     const r = p.run();
     expect(r.code).toBe(0);
-    expect(r.out).toMatch(/^WARN {2}ci-cost {4}ci\.yml runs on push without concurrency cancel-in-progress/m);
+    expect(r.out).toMatch(/^INFO {2}ci-cost {4}ci\.yml runs on push without concurrency cancel-in-progress/m);
     expect(r.out).toMatch(/^INFO {2}ci-cost {4}ci\.yml runs on push without a paths\/paths-ignore filter/m);
     expect(r.out).toMatch(/fix: add `concurrency: /);
     expect(r.out).not.toMatch(/good\.yaml|pr\.yml|notes\.txt/);
-    expect(p.json().checks.filter((c) => c.name === 'ci-cost').map((c) => c.status)).toEqual(['WARN', 'INFO']);
+    expect(p.json().checks.filter((c) => c.name === 'ci-cost').map((c) => c.status)).toEqual(['INFO', 'INFO']);
     // All fixed: one OK line.
     fs.rmSync(path.join(dir, 'ci.yml'));
     expect(p.run().out).toMatch(/^OK {4}ci-cost {4}1 workflow\(s\) on push, all with cancel-in-progress and a path filter$/m);

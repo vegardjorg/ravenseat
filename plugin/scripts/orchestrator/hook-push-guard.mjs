@@ -89,11 +89,11 @@ function batchQuestion(cwd, k) {
 }
 
 /** The secret precheck question for a plain push of baseBranch (lib/secretScan.js), or null. Any error: null. */
-function secretQuestion(cwd, k) {
+function secretQuestion(cwd, k, branch = k.baseBranch) {
   try {
     if (k.secretScan?.enabled === false) return null;
     const SS = require('./lib/secretScan.js');
-    return SS.question(SS.scanPush({ cwd, remote: k.remote, branch: k.baseBranch, setup: k.secretScan }));
+    return SS.question(SS.scanPush({ cwd, remote: k.remote, branch, setup: k.secretScan }));
   } catch {
     return null;
   }
@@ -102,7 +102,7 @@ function secretQuestion(cwd, k) {
 /** The question for a push with no CI config or no gates (lib/controls.js), or null. Any error: null. */
 function controlsQuestion(cwd, k) {
   try {
-    if (k.push?.controlsWarning === false) return null;
+    if (k.push?.controlsWarning === false || require('./lib/guidance.js').readQuiet(dataFolder())) return null;
     const C = require('./lib/controls.js');
     const missing = C.missing(k, k.root);
     if (!missing.length) return null;
@@ -229,6 +229,8 @@ process.stdin.on('end', () => {
       branch: branch === 'HEAD' ? null : branch,
       environment,
       baseBranch: k.baseBranch,
+      allowBranches: k.push?.allowBranches,
+      allowedBranchQuestion: (name) => secretQuestion(cwd, k, name),
       migrations: k.migrations,
       deployCommands: k.deployCommands,
       agentType,
