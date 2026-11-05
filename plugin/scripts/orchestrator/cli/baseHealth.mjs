@@ -252,7 +252,8 @@ export function writeReport({ folder, tip, run, cause = null }) {
  * fix task itself), the record keeps the merge that first made it red.
  * `fixTask`: a fix task the caller already added (the CI watch, CI-<sha7>) is the record's fix task and no base fix
  * task is added. A green `run` with `flaky` (the flaky check) records `flaky` and a note.
- * @returns {{ entry: object, previous: object|null, fix: { id: string, reused: boolean } | null }}
+ * Green also settles the open fix task (settleFixTask): `openFix` is the line to show when it could not be closed.
+ * @returns {{ entry: object, previous: object|null, fix: { id: string, reused: boolean } | null, openFix: string|null }}
  */
 export function recordVerdict({
   tip, ok, run = null, file = null, causeId = null, wasRed = null, skipped = null, note = null, fixTask = null,
@@ -266,7 +267,8 @@ export function recordVerdict({
     const entry = { ...base, ...(skipped ? { skipped } : {}), ...(note ? { note } : {}), ...flaky };
     BH.writeState(HEALTH_FILE, BH.record(state, entry));
     logBaseGate({ entry, run });
-    return { entry, previous, fix: null };
+    const candidate = wasRed?.fix_task ?? (previous?.status === 'red' ? previous.fix_task : null);
+    return { entry, previous, fix: null, openFix: settleFixTask({ candidate, causeId, tip, at }) };
   }
   // Already red before this merge: this merge did not make it red, so the earlier cause (possibly none) is kept.
   const madeRedBy = wasRed ? (wasRed.made_red_by ?? null) : causeId ? { task: causeId, merge_commit: tip } : null;
@@ -317,7 +319,30 @@ export function recordVerdict({
   };
   BH.writeState(HEALTH_FILE, BH.record(state, entry));
   logBaseGate({ entry, run });
-  return { entry, previous, fix };
+  return { entry, previous, fix, openFix: null };
+}
+
+/**
+ * The base is green, so the fix task that was added for the red has nothing left to do. Left waiting, the next fill would
+ * start an agent on it. Cancelled only when the base gate itself added it and no agent has started on it: a CI fix task
+ * (CI-<sha>) answers a red CI, which a green base gate does not settle, and a started task may hold work.
+ * @returns {string|null} the line to show when the fix task stays open, otherwise null.
+ */
+function settleFixTask({ candidate, causeId, tip, at }) {
+  if (!candidate || candidate === causeId) return null;
+  const r = edit((queue) => {
+    const t = (queue.tasks ?? []).find((x) => x.id === candidate);
+    if (!t || ['done', 'cancelled'].includes(t.status)) return { state: 'gone' };
+    if (t.added_by !== 'base gate' || t.started || !['waiting', 'proposed'].includes(t.status)) return { state: 'open' };
+    const s = L.setStatus(t, 'cancelled', at);
+    if (s.error) return { state: 'open' };
+    t.remarks = [...(t.remarks ?? []), `${at} the base is green again at ${short(tip)}: nothing left to fix`];
+    return { state: 'cancelled' };
+  });
+  if (r.state === 'cancelled') console.log(`${candidate}: cancelled, ${BASE} is green again at ${short(tip)} and it has nothing left to fix.`);
+  return r.state === 'open'
+    ? `${BASE} is green again, but the base fix task ${candidate} is still open: cancel it if it is obsolete (${CQ} set ${candidate} cancelled).`
+    : null;
 }
 
 /** The baseGate row for a recorded verdict (lib/eventRows.js). Fail open: never stops the merge flow. */
@@ -405,6 +430,7 @@ export function guardBeforeMerge({ id, force, folder }) {
       die(GB.tamperedMessage({ what: 'the base check', reason: check.run.tampered, cq: CQ, again: `${CQ} merge ${id}` }));
     const v = recordVerdict({ tip, ok: check.run.ok, run: check.run, file: check.file, note: `checked before merging ${id}` });
     if (!check.run.ok) for (const l of redLines({ entry: v.entry, run: check.run, fix: v.fix })) console.log(l);
+    if (v.openFix) console.log(v.openFix);
     state = readHealth();
   }
   const m = BH.mergeAllowed({ state, tip, id, force });

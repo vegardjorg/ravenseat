@@ -1129,6 +1129,48 @@ describe('answering what a track asked (test round 3: N12, N22)', () => {
     expect(JSON.stringify(p.find('A').bonus)).toContain('Call it halv2');
     expect(JSON.parse(p.run(['decide', '--json']).out).items.find((x: { id: string }) => x.id === 'A')).toBeUndefined();
   });
+  it('the same round written again keeps the answer first, once (test round 4: P6)', () => {
+    const p = asked();
+    expect(p.run(['resume', 'A', '--reason', 'context', '--answer', 'Call it halv2']).code).toBe(0);
+    const again = p.run(['resume', 'A', '--reason', 'context']);
+    expect(again.code, again.error).toBe(0);
+    expect(again.out).toContain('this is the same round');
+    const brief = () => fs.readFileSync(path.join(p.scratch, 'prompt-A-r1.md'), 'utf8');
+    expect(brief()).toContain("The owner answers the track's question:** Call it halv2");
+    expect(p.find('A').resumed).toHaveLength(1);
+    expect(JSON.stringify(p.find('A').bonus).split('Call it halv2')).toHaveLength(2);
+    // A new answer replaces it.
+    expect(p.run(['resume', 'A', '--reason', 'context', '--answer', 'Call it halv3']).code).toBe(0);
+    expect(brief()).toContain("The owner answers the track's question:** Call it halv3");
+    expect(brief()).not.toContain("question:** Call it halv2");
+    expect(p.run(['resume', 'A', '--reason', 'context']).code).toBe(0);
+    expect(brief()).toContain("The owner answers the track's question:** Call it halv3");
+  });
+  it('an open question makes the next step carry --answer (test round 4: P7)', () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    p.report('A', 'RESULT status=PARTIAL branch=queue/A commits=1 migr=- gates=- probe=- ownerQuestions=1 edge=-\n\nOwner questions:\n1. Which name?');
+    expect(p.run(['receive', 'A']).out).toContain('resume A --reason context --answer "<text>".');
+    const stop = p.run(['merge', 'A']);
+    expect(stop.code).not.toBe(0);
+    expect(stop.out + stop.error).toContain('resume A --reason context --answer "<text>", then');
+  });
+  it('without commits, the question still makes the next step carry --answer (test round 4: P7)', () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.g(['branch', 'queue/A']);
+    p.report('A', 'RESULT status=PARTIAL branch=queue/A commits=0 migr=- gates=- probe=- ownerQuestions=1 edge=-\n\nOwner questions:\n1. Which name?');
+    const r = p.run(['receive', 'A']);
+    expect(r.code).toBe(1);
+    expect(r.out + r.error).toContain('resume A --reason context --answer "<text>" for a new round');
+  });
+  it('a PARTIAL with no question has no answer to carry', () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    p.report('A', 'RESULT status=PARTIAL branch=queue/A commits=1 migr=- gates=- probe=- ownerQuestions=0 edge=-');
+    const r = p.run(['receive', 'A']);
+    expect(r.out).toContain('resume A --reason context.');
+    expect(r.out).not.toContain('--answer');
+  });
   it('an empty answer stops before any round is made', () => {
     const p = asked();
     expect(p.run(['resume', 'A', '--reason', 'context', '--answer', '']).code).not.toBe(0);

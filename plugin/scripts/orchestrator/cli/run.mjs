@@ -550,6 +550,8 @@ export function cmdResume() {
     val('--round') == null && !fromList.length && last?.reason === reason && (reason === 'context' || last.from?.includes('done_when')) && found.report?.round !== last.round &&
     (o.attempts ?? []).some((x) => x.state === 'reserved' && x.round === last.round);
   const round = val('--round') != null ? Number(val('--round')) : again ? last.round : found.nextRound;
+  // The same round written again keeps the answer it was made with, first in the brief (a new --answer replaces it).
+  const briefAnswer = answer ?? (again ? (last.answer ?? null) : null);
   if (!Number.isInteger(round) || round < 1) die('--round must be an integer >= 1');
   const findingsFile = val('--findings-file') ? path.resolve(val('--findings-file')) : null;
   if (findingsFile && !fs.existsSync(findingsFile)) die(`Could not find --findings-file ${findingsFile}`);
@@ -659,7 +661,7 @@ export function cmdResume() {
       original,
       doneCheck,
       gateCheck,
-      answer,
+      answer: briefAnswer,
     }),
   );
   for (const [name, args] of [
@@ -690,7 +692,8 @@ export function cmdResume() {
       const t = L.addToBonus(x, `The owner's answer: ${answer}`, new Date().toISOString());
       if (t) die(`Invalid answer: ${t}`);
     }
-    if (!again) (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}) });
+    if (!again) (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}), ...(answer ? { answer } : {}) });
+    else if (answer) x.resumed.at(-1).answer = answer;
     return reserved;
   });
   // The fixRound row (lib/eventRows.js): the same round as `resumed`, countable per week (fail open).

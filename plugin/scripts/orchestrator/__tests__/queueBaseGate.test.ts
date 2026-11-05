@@ -268,6 +268,57 @@ describe('queue.mjs merge with the base gate', () => {
     expect(log).toContain('"track":"E"');
   }, 240_000);
 
+  // Test round 4 (P10): a hand commit made the base green, and the next fill started an agent on the fix task.
+  const redThenFixedByHand = () => {
+    const p = project({ gates: { quick: [CHECK] } });
+    p.track('A', { 'README.md': 'a\n' });
+    fs.writeFileSync(path.join(p.repo, 'lib', 'z.js'), "throw new Error('broken by hand');\n");
+    p.g(['add', '--', 'lib/z.js']);
+    p.g(['commit', '-q', '-m', 'by hand']);
+    const fix = `BASE-${p.tip().slice(0, 7)}`;
+    expect(p.run('merge', 'A', '--without-fill').code).toBe(9);
+    expect(p.find(fix)?.status).toBe('waiting');
+    const heal = () => {
+      p.g(['rm', '-q', '--', 'lib/z.js']);
+      p.g(['commit', '-q', '-m', 'fixed by hand']);
+    };
+    const change = (fields: Record<string, unknown>) => {
+      const q = p.queue();
+      Object.assign(q.tasks.find((t) => t.id === fix) as Task, fields);
+      fs.writeFileSync(path.join(p.folder, 'queue.json'), JSON.stringify(q));
+    };
+    return { p, fix, heal, change };
+  };
+
+  it('a green base cancels the fix task nobody started, and fill leaves it alone', async () => {
+    const { p, fix, heal } = redThenFixedByHand();
+    await loopTurn();
+    heal();
+    const m = p.run('merge', 'A', '--without-fill');
+    expect(m.code, m.error).toBe(0);
+    expect(m.out).toContain(`${fix}: cancelled, develop is green again`);
+    expect(m.out).not.toContain('is still open');
+    expect(p.find(fix)?.status).toBe('cancelled');
+    expect(JSON.stringify(p.find(fix)?.remarks)).toContain('nothing left to fix');
+    await loopTurn();
+    expect(p.run('fill', '--scratchpad', p.scratch).out).not.toContain(fix);
+    expect(p.find(fix)?.status).toBe('cancelled');
+  }, 240_000);
+
+  it.each([
+    ['one an agent has started', { status: 'running', started: '2026-01-01T00:00:00.000Z' }, 'running'],
+    ['one the CI watch added', { added_by: 'ci watch' }, 'waiting'],
+  ])('a green base only points at %s', async (_name, fields, status) => {
+    const { p, fix, heal, change } = redThenFixedByHand();
+    change(fields);
+    await loopTurn();
+    heal();
+    const m = p.run('merge', 'A', '--without-fill');
+    expect(m.code, m.error).toBe(0);
+    expect(m.out).toContain(`the base fix task ${fix} is still open`);
+    expect(p.find(fix)?.status).toBe(status);
+  }, 240_000);
+
   it('the skip rule trusts only cq receive\'s gate run, never the track\'s own run or a time log row', async () => {
     const p = project({ gates: { quick: [CHECK] } });
     p.track('A', { 'lib/b.js': "exports.b = 1;\n" });

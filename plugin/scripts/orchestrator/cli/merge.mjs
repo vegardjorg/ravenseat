@@ -363,7 +363,7 @@ export function cmdReceive() {
     die(
       `Nothing to receive: ${branch} has no commits ahead of ${BASE}, and ${id} stays ${o0.status}.\n` +
         'The agent may not have committed: look for uncommitted work in its worktree (git worktree list).\n' +
-        `Next: ${CQ} resume ${id} --reason context for a new round, ${CQ} set ${id} done if the work is already on ${BASE}, ` +
+        `Next: ${CQ} resume ${id} --reason context${asked ? ' --answer "<text>"' : ''} for a new round, ${CQ} set ${id} done if the work is already on ${BASE}, ` +
         `or ${CQ} set ${id} cancelled --remark "<why>". --force makes an empty package anyway.`,
     );
   }
@@ -604,7 +604,7 @@ export function cmdReceive() {
   );
   // PARTIAL: receive ran no gates on it (above), so the delivery says nothing about whether it works.
   if (result?.status === 'PARTIAL')
-    console.log(`${id} delivered PARTIAL: unfinished, so no gates and no done command ran on it. Do not merge it; next: ${CQ} resume ${id} --reason context.`);
+    console.log(`${id} delivered PARTIAL: unfinished, so no gates and no done command ran on it. Do not merge it; next: ${CQ} resume ${id} --reason context${asked ? ' --answer "<text>"' : ''}.`);
   // The track's count is its own claim; a report that says nothing was committed, on a branch with commits, is worth a look.
   if (result?.commits === 0 && gi.commits > 0)
     console.log(`NB: the track's RESULT says commits=0, but the branch has ${gi.commits}. Read the diff, not only the report.`);
@@ -846,7 +846,7 @@ export async function cmdMerge() {
   if (!resume) {
     if (o.delivered_partial && !a.includes('--allow-partial'))
       die(
-        `STOP: ${id} is not merged. Its last receive was a PARTIAL delivery: unfinished, and no gates ran on it. Next: ${CQ} resume ${id} --reason context, then ${CQ} receive ${id}. ` +
+        `STOP: ${id} is not merged. Its last receive was a PARTIAL delivery: unfinished, and no gates ran on it. Next: ${CQ} resume ${id} --reason context${L.openBlockOf(o)?.code === 'track-question' ? ' --answer "<text>"' : ''}, then ${CQ} receive ${id}. ` +
           `On the owner's word only: ${CQ} merge ${id} --allow-partial (logged as "partial-overridden"). Nothing was done.`,
       );
     if (o.delivered_partial) {
@@ -1052,12 +1052,7 @@ export async function cmdMerge() {
       return;
     }
     baseLines.push(`BASE GREEN: ${BASE} at ${short(mergeCommit)}${skipped ? ` (not run again: ${skipped})` : ''}.`);
-    const before = wasRed ?? (v.previous?.status === 'red' ? v.previous : null);
-    if (before?.fix_task && before.fix_task !== id)
-      baseLines.push(
-        `${BASE} is green again, but the base fix task ${before.fix_task} is still open: cancel it if it is obsolete ` +
-          `(${CQ} set ${before.fix_task} cancelled).`,
-      );
+    if (v.openFix) baseLines.push(v.openFix);
   };
   // The skip rule: the merge commit has the tree of the track tip, and cq's own gate run (receive) was green on that
   // tip. The rows are the trusted gate evidence (lib/gateEvidence.js), never the time log a track can append to.
