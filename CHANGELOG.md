@@ -3,6 +3,37 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.22 (2026-11-05)
+
+### Added
+- `cq wait` checks the tracks every 5 minutes (`--check-min`, 0 = off). A track no agent took, or a silent one, gives
+  `TRACKS NEED A LOOK` and exit 11, once per finding. The check costs no tokens.
+- `ROUND WITHOUT AGENT` in `cq show` and the pulse: a round from `cq resume` that no agent started after 15 minutes, with
+  the command to run. `cq decide` and the board get a card, and `cq takeover` says `NO AGENT`. It needs a client with
+  hooks and a start row in the time log, so a project without the hook gets no false warning.
+- A track silent for 60 minutes gets a card in `cq decide` and on the board.
+- `cq guidance quiet`, also on the board and asked in setup: stops advice about CI, gates and lockfiles, the light
+  review, intake triage and gate proposals. Guard stops still apply.
+- `push.allowBranches` for pull request flows. Agents still never push, force and delete stay denied, and the secret
+  scan runs.
+- `cq show` and `cq decide` list tasks waiting on a cancelled task.
+
+### Changed
+- The merge guard has a floor that `protectedPaths` cannot remove: the queue config, `.claude/`, git hooks, `CLAUDE*.md`
+  and the queue scripts.
+- `git push --tags` is denied like a named tag.
+- `cq fill --ids` says why a task cannot start.
+- `cq takeover` says when `DELIVERED` rests on commits without a report.
+- `ci-cost` in `cq doctor` is INFO.
+
+### Fixed
+- An owner's answer on the board wakes `cq wait`. Before, the orchestrator slept on while the round stood ready.
+- A report from before the start no longer turns off `STARTED WITHOUT AGENT` and `SILENT`.
+- `baseGate.enabled: false` gave a FAIL in `cq doctor`.
+- `cq push-check` ignored `controlsWarning`.
+- A declined check counted as missing on the board.
+- The guide contradicted the secret scan.
+
 ## 0.8.21 (2026-11-05)
 
 ### Changed
