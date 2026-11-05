@@ -17,7 +17,7 @@ import fs from 'node:fs';
 
 import {
   a, autoCleanFocus, branchFor, branchInfo, byName, checkExpect, die, edit, editLogged, focusCleanOut, FX, hasLock, L, lastEntry, LOCK, P,
-  PREFIX, pulseCursor, read, readPlans, require, undoHint, val, values, CONFIG, CQ, G, git,
+  PREFIX, pulseCursor, read, readCursor, readPlans, require, undoHint, val, values, CONFIG, CQ, G, git,
 } from './context.mjs';
 import { logTime, measurementLine, measureTask, minutes, saveMeasurement } from './tracks.mjs';
 
@@ -117,7 +117,8 @@ export function cmdSet() {
     }
   }
   focusCleanOut();
-  if (orchestratorStep) pulseCursor(`set ${id} ${status}`);
+  // Only a live cursor: an expired one belongs to a session long gone, and this would make it look alive under its name.
+  if (orchestratorStep && L.orchestratorStatus(readCursor()).active) pulseCursor(`set ${id} ${status}`);
 }
 
 /** `cq cancel` (the usage is at the top of queue.mjs). */

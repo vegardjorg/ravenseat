@@ -459,22 +459,35 @@ function baseHealthNow() {
 
 // ---- The push batch (merged tasks not on <remote>/<baseBranch>, lib/pushBatch.js) ------------------------------------
 const PUSH_SETUP = PB.pushSetup(CONFIG);
-let pushBatchCache = { time: 0, batch: null };
+let pushBatchCache = { time: 0, batch: null, blocked: [], fullGate: 'off' };
+/** What push-check would stop on besides the base: external commits and a remote ahead of us, and the full gate on the tip. */
+function pushStops(from, to, batch) {
+  if (!batch) return { blocked: [], fullGate: 'off' };
+  const raw = G.readFirstParents(gitRead, { from, to }) ?? [];
+  const plan = L.pushPlan(G.classify(gitRead, raw, { from }).reverse());
+  const behind = Number(String(gitRead(['rev-list', '--count', `${to}..${from}`]) ?? '0').trim()) || 0;
+  return {
+    blocked: PB.blockedTexts({ external: plan.externalOnes.length, behind, from: `${REMOTE}/${BASE}`, to: BASE }),
+    fullGate: require('./lib/gateEvidence.js').fullGateVerdict({ folder: FOLDER, sha: batch.tip, cfg: CONFIG }),
+  };
+}
 /** { verdict, tasks, minTasks, text } or null (no remote ref yet, or git failed). git is read at most once a minute. */
 function pushBatchNow(baseHealth) {
   try {
-    if (Date.now() - pushBatchCache.time > 60_000)
-      pushBatchCache = {
-        time: Date.now(),
-        batch: PB.readBatch(gitRead, {
-          from: `refs/remotes/${REMOTE}/${BASE}`,
-          to: `refs/heads/${BASE}`,
-          prefix: BRANCH_PREFIX,
-          withCommits: false,
-        }),
-      };
+    if (Date.now() - pushBatchCache.time > 60_000) {
+      const from = `refs/remotes/${REMOTE}/${BASE}`;
+      const to = `refs/heads/${BASE}`;
+      const batch = PB.readBatch(gitRead, { from, to, prefix: BRANCH_PREFIX, withCommits: false });
+      pushBatchCache = { time: Date.now(), batch, ...pushStops(from, to, batch) };
+    }
     // The health is the base gate's verdict for the tip (red blocks); unknown when the gate is off.
-    return PB.boardBatch({ batch: pushBatchCache.batch, setup: PUSH_SETUP, health: baseHealth?.status ?? 'unknown' });
+    return PB.boardBatch({
+      batch: pushBatchCache.batch,
+      setup: PUSH_SETUP,
+      health: baseHealth?.status ?? 'unknown',
+      fullGate: pushBatchCache.fullGate,
+      blocked: pushBatchCache.blocked,
+    });
   } catch {
     return null;
   }

@@ -28,7 +28,8 @@ const spType = (type) => QUESTION_TYPE[type] ?? QUESTION_TYPE.question;
 
 /** The counter on the button at the top: everything waiting on the owner (question, QA, proposed, what is stuck). */
 function drawInboxButton() {
-  const n = t.data?.inbox?.count ?? 0;
+  // The same number as the Decisions tab (a card just answered has left both), when the board has the Decisions rules.
+  const n = window.QueueDecisions && typeof decisionItems === 'function' ? decisionItems().length : (t.data?.inbox?.count ?? 0);
   inboxButton.replaceChildren(
     'Waiting on you',
     ...(n ? [el('span', { class: 'inbox-count', text: String(n) })] : []),

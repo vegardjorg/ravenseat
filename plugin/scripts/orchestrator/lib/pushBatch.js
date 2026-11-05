@@ -188,6 +188,14 @@ function batchVerdict({ batch, setup, health = 'unknown', fullGate = 'off', bloc
   return { verdict: 'NOT_YET', reason: `${n} of ${setup.minTasks} merged tasks`, aged };
 }
 
+/** What stops a push beyond the base and the full gate; push-check and the board give the same texts. */
+function blockedTexts({ external = 0, behind = 0, from = 'the remote', to = 'the base' }) {
+  return [
+    ...(external ? [`${external} external commit(s): ask the owner first`] : []),
+    ...(behind ? [`${from} has ${behind} commit(s) not in ${to}`] : []),
+  ];
+}
+
 /** The verdict word as printed ("NOT YET" with a space). */
 const verdictWord = (v) => (v === 'NOT_YET' ? 'NOT YET' : v);
 
@@ -220,11 +228,14 @@ function ageText(at, now = Date.now()) {
 }
 
 /** The short form for the board's status line: { verdict, text } or null without a batch. */
-function boardBatch({ batch, setup, health = 'unknown', now = Date.now() }) {
+function boardBatch({ batch, setup, health = 'unknown', fullGate = 'off', blocked = [], now = Date.now() }) {
   if (!batch) return null;
-  const v = batchVerdict({ batch, setup, health, now });
+  const v = batchVerdict({ batch, setup, health, fullGate, blocked, now });
   const counts = setup.minTasks > 0 ? `${batch.taskCount} of ${setup.minTasks}` : `${batch.taskCount}`;
-  const text = v.verdict === 'NOTHING' ? 'nothing to push' : `${counts} tasks, ${verdictWord(v.verdict)}`;
+  const text =
+    v.verdict === 'NOTHING'
+      ? 'nothing to push'
+      : `${counts} tasks, ${verdictWord(v.verdict)}${v.verdict === 'BLOCKED' ? ` (${v.reason})` : ''}`;
   return { verdict: v.verdict, tasks: batch.taskCount, minTasks: setup.minTasks, text };
 }
 
@@ -279,6 +290,7 @@ module.exports = {
   parseRows,
   readBatch,
   batchVerdict,
+  blockedTexts,
   verdictWord,
   queueIdFromMerge,
   guardQuestion,

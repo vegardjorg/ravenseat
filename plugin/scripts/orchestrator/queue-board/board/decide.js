@@ -48,6 +48,10 @@ function drawDecisionsTab() {
     ...(n ? [el('span', { class: 'inbox-count', text: String(n) })] : []),
   );
   decideTab.setAttribute('aria-label', n ? `Decisions: ${n} waiting` : 'Decisions: nothing waiting');
+  // "Seen" and an answer still in its undo window leave this count first; cq decide lists them until they are written.
+  const out = DV() && t.data?.inbox ? DV().fromInbox(t.data.inbox).length - n : 0;
+  decideTab.title = out ? `${out} set aside on this board until it is reloaded; cq decide still lists them` : '';
+  if (typeof drawInboxButton === 'function') drawInboxButton();
   drawRoomTabs();
 }
 
@@ -226,6 +230,8 @@ function decisionButtons(item) {
       'data-focus': `decide:${item.key}:${i}`,
       'aria-keyshortcuts': o.recommended ? `Enter ${i + 1}` : String(i + 1),
       title: o.recommended ? `The recommendation (key: Enter or ${i + 1})` : `Key: ${i + 1}`,
+      // The name a screen reader gives: what the button does. Some read the title above instead of the text.
+      'aria-label': o.recommended ? `${o.label} (recommended)` : o.label,
       onclick: () => pickOption(item, i),
     },
     el('span', { class: 'decide-key', 'aria-hidden': 'true', text: String(i + 1) }),

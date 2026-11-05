@@ -191,13 +191,13 @@ try {
   /* no cursor */
 }
 const orchestrator = L.orchestratorStatus(cursor, NOW);
-// Under 15 min since the last change, and an orchestrator has checked in or a task is running: another orchestrator is
-// probably alive. Two at once give double starts and double merges, so the skill stops then and asks the owner. Without
+// Under 15 min since the last change, and an orchestrator has checked in within its 2 hours or a task is running: another
+// orchestrator is probably alive. Two at once give double starts and double merges, so the skill stops then and asks the owner. Without
 // either one, the change was setup or someone adding tasks, as on the first run in a new project.
 const possibleLive =
   queueChangedMs != null &&
   queueChangedMs < 15 * 60_000 &&
-  (Boolean(orchestrator.session) || tasks.some((o) => o.status === 'running'));
+  (orchestrator.active || tasks.some((o) => o.status === 'running'));
 // The wind-down flag (hook-context at about 350k) and the newest handover note are shown at the top.
 const windDown = L.windDownGuard(cursor, NOW);
 

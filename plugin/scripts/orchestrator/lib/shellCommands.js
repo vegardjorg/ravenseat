@@ -248,6 +248,28 @@ function innerSubstitutions(word) {
  * @param {string} command
  * @param {number} [depth]
  */
+/**
+ * Drops the text of a heredoc that only writes it away: `cat > file <<'EOF'` and `git commit -F - <<'EOF'`. A report that
+ * quotes a forbidden command is not that command. Narrow on purpose: the delimiter must be quoted (otherwise $( ) in the
+ * text runs), nothing may follow on the line (a pipe could feed a shell), and any other receiver keeps its text, since
+ * `bash <<'EOF'` runs it. Without a closing delimiter nothing is dropped.
+ */
+function withoutWrittenHeredocs(command) {
+  const lines = String(command || '').split(/\r?\n/);
+  const opens = /(?:^|&&|;)\s*(cat\s[^|;&`$()<]*|git\s+commit\s[^|;&`$()<>]*-F\s+-\s*)<<(-?)\s*(['"])([A-Za-z_][\w-]*)\3([^|;&`$()<]*)$/;
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    out.push(lines[i]);
+    const m = opens.exec(lines[i]);
+    // cat without a file sends the text on to whatever reads its output.
+    if (!m || (m[1].startsWith('cat') && !m[1].includes('>') && !m[5].includes('>'))) continue;
+    const isEnd = (l) => (m[2] ? l.replace(/^\t+/, '') : l) === m[4];
+    const end = lines.findIndex((l, n) => n > i && isEnd(l));
+    if (end > i) i = end;
+  }
+  return out.join('\n');
+}
+
 function commandList(command, depth = 0) {
   const out = { commands: [], unsure: [] };
   const nested = (text) => {
@@ -259,7 +281,7 @@ function commandList(command, depth = 0) {
     out.commands.push(...r.commands);
     out.unsure.push(...r.unsure);
   };
-  for (const seg of segments(command)) {
+  for (const seg of segments(withoutWrittenHeredocs(command))) {
     const t = stripRedirects(tokens(seg.text));
     const i0 = firstWordIndex(t);
     if (i0 >= t.length) continue;

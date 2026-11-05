@@ -124,10 +124,7 @@ const health = BH.verdict(BH.readState(path.join(dataFolder(), 'base-health.json
 // The full gate on exactly the tip, from the trusted gate evidence (lib/gateEvidence.js: the orchestrator's own runs,
 // never a track's rows in the time log). 'off' when gates.full has no commands.
 const fullGate = GE.fullGateVerdict({ folder: dataFolder(), sha: toSha, cfg: K });
-const blocked = [
-  ...(plan.externalOnes.length ? [`${plan.externalOnes.length} external commit(s): ask the owner first`] : []),
-  ...(back ? [`${FROM} has ${back} commit(s) not in ${TO}`] : []),
-];
+const blocked = PB.blockedTexts({ external: plan.externalOnes.length, behind: back, from: FROM, to: TO });
 const verdict = PB.batchVerdict({ batch, setup: SETUP, health, fullGate, blocked });
 // No CI config or no gates (lib/controls.js): said here too, since the orchestrator reads this before a push.
 const missingControls = require('./lib/controls.js').missing(K, K.root);

@@ -407,6 +407,13 @@ describe('cq takeover: the warning about another orchestrator', () => {
     expect(q.run(['start', 'A']).code).toBe(0);
     expect(takeover(q).possible_live_orchestrator).toBe(true);
   });
+  it('a cursor whose time ran out, after someone ran cq set: no warning (test round 2: M10)', () => {
+    const p = project([task('A'), task('B')]);
+    const old = new Date(Date.now() - 5 * 3_600_000).toISOString();
+    fs.writeFileSync(path.join(p.folder, 'orchestrator.json'), JSON.stringify({ session: 'gone', updated: old, event: 'pulse' }));
+    expect(p.run(['set', 'A', 'cancelled']).code).toBe(0);
+    expect(takeover(p).possible_live_orchestrator).toBe(false);
+  });
 });
 
 describe('cq add: owning a protected path', () => {
@@ -1267,4 +1274,66 @@ describe('the board answers a track through the same command (test round 3: N12)
       await gone;
     }
   }, 120_000);
+});
+
+describe('test round 3, P2', () => {
+  it('M3: cq show <id> shows that task, and an unknown id says so', () => {
+    const p = project([task('A', { title: 'the first one' }), task('B', { title: 'the other one' })]);
+    const r = p.run(['show', 'A']);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toContain('the first one');
+    expect(r.out).not.toContain('the other one');
+    expect(p.run(['show', 'NOPE']).code).not.toBe(0);
+    expect(p.run(['show', '--all']).code).toBe(0);
+  });
+  it('M9: the board text says BLOCKED and why, as push-check does', () => {
+    const PB = require('../lib/pushBatch.js');
+    const batch = { taskCount: 3, firstParent: 3, tip: 'abcdef0', oldestAt: new Date().toISOString() };
+    const setup = { mode: 'owner', minTasks: 10, warnTasks: 0, maxAgeHours: null };
+    expect(PB.boardBatch({ batch, setup }).text).toBe('3 of 10 tasks, NOT YET');
+    const blocked = PB.blockedTexts({ external: 1 });
+    const board = PB.boardBatch({ batch, setup, blocked });
+    expect(board.verdict).toBe(PB.batchVerdict({ batch, setup, blocked }).verdict);
+    expect(board.text).toBe('3 of 10 tasks, BLOCKED (1 external commit(s): ask the owner first)');
+    expect(PB.boardBatch({ batch, setup, fullGate: 'missing' }).verdict).toBe('BLOCKED');
+  });
+  it('M10: cq set does not revive an orchestrator whose time ran out, and keeps a live one fresh', () => {
+    const file = (p: ReturnType<typeof project>) => path.join(p.folder, 'orchestrator.json');
+    const old = new Date(Date.now() - 5 * 3_600_000).toISOString();
+    const stale = project([task('A')]);
+    fs.writeFileSync(file(stale), JSON.stringify({ session: 'gone', updated: old, event: 'pulse' }));
+    expect(stale.run(['set', 'A', 'cancelled']).code).toBe(0);
+    expect(JSON.parse(fs.readFileSync(file(stale), 'utf8')).updated).toBe(old);
+    const live = project([task('A')]);
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    fs.writeFileSync(file(live), JSON.stringify({ session: 'here', updated: recent, event: 'pulse' }));
+    expect(live.run(['set', 'A', 'cancelled']).code).toBe(0);
+    expect(JSON.parse(fs.readFileSync(file(live), 'utf8')).event).toBe('set A cancelled');
+  });
+  describe('L8: text in a heredoc', () => {
+    const SC = require('../lib/shellCommands.js');
+    const PG = require('../lib/pushGuard.js');
+    const denied = (command: string) => PG.assess(command, { branch: 'main', baseBranch: 'main', environment: null })?.decision === 'deny';
+    const FORCE = ['git', 'push', '--force', 'origin', 'main'].join(' ');
+    it('written to a file or a commit message, it is not a command', () => {
+      expect(denied(`cat >> report.md <<'EOF'\n${FORCE}\nEOF`)).toBe(false);
+      expect(denied(`cd docs && cat > report.md <<'EOF'\n${FORCE}\nEOF`)).toBe(false);
+      expect(denied(`git commit -F - <<'EOF'\n${FORCE}\nEOF`)).toBe(false);
+      expect(denied(`cat <<-'EOF' > a.md\n	${FORCE}\n	EOF`)).toBe(false);
+    });
+    it('anything that could run it still stops', () => {
+      expect(denied(FORCE)).toBe(true);
+      expect(denied(`cat > a.md <<'EOF'\ntext\nEOF\n${FORCE}`)).toBe(true);
+      expect(denied(`${FORCE} && cat > a.md <<'EOF'\ntext\nEOF`)).toBe(true);
+      // Unquoted delimiter (substitutions run), a pipe, no redirect, no end: the text stays visible to the guard.
+      expect(denied(`cat > a.md <<EOF\n${FORCE}\nEOF`)).toBe(true);
+      expect(denied(`cat <<'EOF' | bash\n${FORCE}\nEOF`)).toBe(true);
+      expect(denied(`cat <<'EOF'\n${FORCE}\nEOF`)).toBe(true);
+      expect(denied(`bash <<'EOF'\n${FORCE}\nEOF`)).toBe(true);
+      expect(denied(`cat > a.md <<'EOF'\n${FORCE}`)).toBe(true);
+    });
+    it('reading the list still works', () => {
+      expect(SC.commandList(`cat > a.md <<'EOF'\nrm -rf x\nEOF`).commands).toHaveLength(1);
+    });
+  });
 });

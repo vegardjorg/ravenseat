@@ -41,6 +41,7 @@
 //                                                                  remaining tasks (the focus stages, otherwise all open)
 //                                                                  are done at 50/85/95 %, from the daily throughput)
 //   node scripts/orchestrator/queue.mjs show                           (short: active ones, startable now and counts)
+//   node scripts/orchestrator/queue.mjs show <id>                      (one task, the same as info <id>)
 //   node scripts/orchestrator/queue.mjs show --full [--all]           (table: status, class, estimate, priority, blocker;
 //                                                                  the proposals separately at the bottom; --all/--grouped/
 //                                                                  --project also give the full one)
@@ -661,6 +662,8 @@ if (command === 'init') {
   tasks.cmdMode();
 } else if (command === 'add') {
   tasks.cmdAdd();
+} else if (command === 'show' && a[1] && !a[1].startsWith('-')) {
+  view.cmdInfo(); // cq show <id>: the same as cq info <id>, rather than a summary that ignores the id
 } else if (
   command === 'show' &&
   !['--full', '--all', '--grouped', '--project'].some((f) => a.includes(f))
