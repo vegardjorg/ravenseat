@@ -123,7 +123,7 @@ function doneLockError(o, changes, { by = null, inTrack = null } = {}) {
   if (inTrack)
     return `${names} cannot be changed from inside a track worktree (branch ${inTrack}); ask the owner (cq question)`;
   if (!lockStarted(o) || OWNER_BY.has(String(by ?? '').trim())) return null;
-  return `${names} ${touched.length > 1 ? 'are' : 'is'} locked after start; ask the owner (cq question)`;
+  return `${names} ${touched.length > 1 ? 'are' : 'is'} locked after start; ask the owner (cq question). On the owner's word: the same command with --by owner, or the board`;
 }
 
 /** The criteria in the track block (the mission); null without criteria. */

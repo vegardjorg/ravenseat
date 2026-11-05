@@ -297,7 +297,9 @@ export function assess(w, { against = 'HEAD', minAgeHours = 0, main, abandon = f
   const s = git(['-C', w.path, 'status', '--porcelain'], main);
   input.dirty = s.ok ? s.out.split('\n').filter(Boolean).length : -1;
   input.realLinkFolder = realLinkFolderIn(w.path);
-  return shouldCleanUp(input);
+  const answer = shouldCleanUp(input);
+  // --abandon did not ask whether it is merged, so the answer must not say it is.
+  return abandon && answer.cleanup ? { ...answer, reason: 'clean and unlocked; --abandon does not need it merged, and the branch keeps the commits' } : answer;
 }
 
 /** Step 5: the folder is left behind after git has unregistered it. */
@@ -385,6 +387,20 @@ export function cleanupWorktree(branch, { against = 'HEAD', minAgeHours = 0, mai
   return cleanupRegistered(w, { against, minAgeHours, main });
 }
 
+/**
+ * The detached worktrees under .claude/worktrees/ holding a task's work (from its start commit up to the branch tip), cleaned
+ * up once it is merged. The mission template has an agent run `git switch --detach` when it delivers, so looking for the branch
+ * name misses them. assess still stops on uncommitted work or anything not merged. No start commit: nothing is known, nothing is touched.
+ */
+export function cleanupDetachedOf(branch, { start, against = 'HEAD', main = mainTree() } = {}) {
+  if (!start) return [];
+  const within = (x, y) => git(['merge-base', '--is-ancestor', x, y], main).ok;
+  const root = path.join(main, '.claude', 'worktrees');
+  return worktreeList(main)
+    .filter((w) => w.detached && w.head && isUnder(w.path, root) && within(w.head, branch) && !within(w.head, start))
+    .map((w) => cleanupRegistered(w, { against, minAgeHours: 0, main }));
+}
+
 /** Folders under .claude/worktrees/ that git does not know: leftovers after an earlier cleanup. */
 function cleanupUnregistered(filePath, { minAgeHours, main, execute }) {
   const name = `${path.basename(filePath)} (not registered)`;
@@ -450,15 +466,19 @@ function mainProgram() {
     }
     const against = val('--against', baseBranch);
     const abandon = args.includes('--abandon');
-    const w = worktreeList(main).find((x) => x.branch === branch);
-    if (!w) results.push({ status: 'skipped', message: `no worktree for ${branch}` });
-    else if (execute) results.push(cleanupRegistered(w, { against, minAgeHours: 0, main, abandon }));
-    else {
-      const v = assess(w, { against, minAgeHours: 0, main, abandon });
-      results.push({
-        status: v.cleanup ? 'would remove' : 'skipped',
-        message: `${label(w)}: ${v.reason}`,
-      });
+    // Also the worktrees an agent detached when it delivered: they hold the branch's work, without its name.
+    const within = (x, y) => git(['merge-base', '--is-ancestor', x, y], main).ok;
+    const found = require('./lib/queueGit.js').worktreesOfBranch(worktreeList(main), within, branch, against);
+    if (!found.length) results.push({ status: 'skipped', message: `no worktree for ${branch}` });
+    for (const w of found) {
+      if (execute) results.push(cleanupRegistered(w, { against, minAgeHours: 0, main, abandon }));
+      else {
+        const v = assess(w, { against, minAgeHours: 0, main, abandon });
+        results.push({
+          status: v.cleanup ? 'would remove' : 'skipped',
+          message: `${label(w)}: ${v.reason}`,
+        });
+      }
     }
   }
 
@@ -467,7 +487,7 @@ function mainProgram() {
   for (const r of results) perStatus[r.status] = (perStatus[r.status] || 0) + 1;
   const perReason = {};
   for (const r of results.filter((x) => x.status === 'skipped')) {
-    const g = r.message.slice(r.message.indexOf(': ') + 2).replace(/\(\d+\)/, '(n)');
+    const g = r.message.slice(r.message.includes(': ') ? r.message.indexOf(': ') + 2 : 0).replace(/\(\d+\)/, '(n)');
     perReason[g] = (perReason[g] || 0) + 1;
   }
   console.log(

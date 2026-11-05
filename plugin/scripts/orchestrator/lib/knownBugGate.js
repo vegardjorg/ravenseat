@@ -27,12 +27,16 @@ const modeOf = (config) => (MODES.includes(config?.gates?.fromKnownBugs) ? confi
 /** "Gate: A missing check" and "a missing check." are the same class. */
 const classKey = (title) => String(title ?? '').replace(/^gate:\s*/i, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
-/** One plain line of at most MAX_TITLE characters. */
-const cleanTitle = (title) => String(title ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE).trim();
+/** The failure class as one plain line, whole. */
+const plainLine = (title) => String(title ?? '').replace(/\s+/g, ' ').trim();
+
+/** One plain line of at most MAX_TITLE characters. Only for titles: the mission keeps the whole class. */
+const cleanTitle = (title) => plainLine(title).slice(0, MAX_TITLE).trim();
 
 /** The failure class from a `GATE <failure class>` line in a report, or null. Upper case only, so a heading "Gate: ..." is not one. */
 function parseGateLine(text) {
-  return parseGate(text)?.title ?? null;
+  const found = parseGate(text);
+  return found ? cleanTitle(found.title) : null;
 }
 
 /** The same line with its place: `GATE <failure class> @ <file:line>` gives { title, where }; where is null without one. */
@@ -40,7 +44,7 @@ function parseGate(text) {
   const m = /^[ \t]*(?:[-*][ \t]+)?`?GATE(?::|[ \t])[ \t]*([^\n`]*)`?[ \t]*$/m.exec(String(text ?? ''));
   if (!m) return null;
   const place = /^(.*\S)\s+@\s+(\S+:\d+)\s*$/.exec(m[1]);
-  const title = cleanTitle(place ? place[1] : m[1]);
+  const title = plainLine(place ? place[1] : m[1]);
   return !title || /^(none|n\/a|no|-)$/i.test(title) ? null : { title, where: place ? place[2] : null };
 }
 
@@ -77,7 +81,7 @@ const seenLine = ({ from, where, detail }) =>
   [from && `task ${from}`, where, detail].map((x) => (x ? String(x).replace(/\s+/g, ' ').trim() : '')).filter(Boolean).join(': ');
 
 /** The gate task, ready for `cq add`. added_by makes it proposed unless it is added with --approved. */
-function gateTask({ id, title, from, where, detail }) {
+function gateTask({ id, title, whole = title, from, where, detail }) {
   const seen = seenLine({ from, where, detail });
   return {
     id,
@@ -92,7 +96,7 @@ function gateTask({ id, title, from, where, detail }) {
     own_track: 'a gate for a known bug',
     acceptance: [RED_FIRST],
     mission: [
-      `A known bug can happen again, so add a check that stops this failure class: ${title}.`,
+      `A known bug can happen again, so add a check that stops this failure class: ${whole}.`,
       seen ? `Seen in: ${seen}.` : 'Find a place in the code that shows it, or write a minimal reproduction.',
       '',
       'The gate criteria:',
@@ -125,4 +129,4 @@ function summary(tasks = [], mode = 'propose') {
   };
 }
 
-module.exports = { MODES, MAX_OPEN, modeOf, classKey, cleanTitle, parseGateLine, parseGate, gateWithoutPlace, decide, nextId, gateTask, extendedMission, summary };
+module.exports = { MODES, MAX_OPEN, modeOf, classKey, cleanTitle, plainLine, parseGateLine, parseGate, gateWithoutPlace, decide, nextId, gateTask, extendedMission, summary };

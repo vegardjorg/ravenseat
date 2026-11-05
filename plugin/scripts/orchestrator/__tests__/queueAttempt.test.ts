@@ -959,3 +959,139 @@ describe('what is left behind (test round 2: M2, M4, M8, L3)', () => {
     expect(out).toContain('git branch -d queue/B queue/C queue/D queue/E queue/F queue/G');
   });
 });
+
+describe('cq edit --files (test round 3: N11, N14)', () => {
+  it('sets the files, takes backslashes, and an empty list empties it', () => {
+    const p = project([task('A')]);
+    expect(p.run(['edit', 'A', '--files', 'a.js, b\\c.js']).code).toBe(0);
+    expect(p.find('A').owned_files).toEqual(['a.js', 'b/c.js']);
+    expect(p.run(['edit', 'A', '--files', '']).code).toBe(0);
+    expect(p.find('A').owned_files).toEqual([]);
+  });
+  it('an edit with nothing to write is an error, not "changed:"', () => {
+    const p = project([task('A')]);
+    const r = p.run(['edit', 'A', '--filez', 'a.js']);
+    expect(r.code).not.toBe(0);
+    expect(r.error).toContain('Nothing changed');
+  });
+  it('after the start the error says how the owner does it, and --by owner does', () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    const r = p.run(['edit', 'A', '--files', 'a.js']);
+    expect(r.code).not.toBe(0);
+    expect(r.error).toContain('--by owner');
+    expect(p.run(['edit', 'A', '--files', 'a.js', '--by', 'owner']).code).toBe(0);
+    expect(p.find('A').owned_files).toEqual(['a.js']);
+  });
+  it('the card for a track question gives the command that works', () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    p.report('A', 'RESULT status=PARTIAL branch=queue/A commits=0 migr=- gates=- probe=- ownerQuestions=1 edge=-\n\nOwner questions:\n1. May I change a file?');
+    p.run(['receive', 'A']);
+    expect(p.run(['decide']).out).toContain('--files <files> --by owner');
+  });
+});
+
+describe('a PARTIAL delivery is not merged by mistake (test round 3: N17)', () => {
+  const delivered = () => {
+    const p = project([task('A')], { gates: { quick: ['node -e "process.exit(0)"'] } });
+    p.run(['start', 'A']);
+    p.branch('A');
+    p.worktree('A');
+    p.report('A', RESULT('A', 'PARTIAL'));
+    return { p, received: p.run(['receive', 'A']) };
+  };
+  it('receive no longer shows the way to merge, and merge stops', () => {
+    const { p, received } = delivered();
+    expect(received.out).toContain('Do not merge it');
+    expect(received.out).not.toContain('Merge (after');
+    expect(received.out).not.toContain('receive checks the tip itself');
+    const r = p.run(['merge', 'A']);
+    expect(r.code).not.toBe(0);
+    expect(r.error).toContain('PARTIAL');
+    expect(r.error).toContain('--allow-partial');
+    expect(p.find('A').status).toBe('review');
+  });
+  it('the next round delivering DONE clears the stop', () => {
+    const { p } = delivered();
+    p.report('A', RESULT('A'));
+    const again = p.run(['receive', 'A']);
+    expect(again.out).toContain('Merge (after');
+    expect(p.find('A').delivered_partial).toBeUndefined();
+  });
+});
+
+describe('a worktree the agent detached when it delivered (test round 3: N18, N2, N4)', () => {
+  const started = (id: string, extra = {}) => task(id, { status: 'running', branch: `queue/${id}`, started: new Date().toISOString(), ...extra });
+  const detached = (p: ReturnType<typeof project>, name: string, at: string) => {
+    const wt = path.join(p.repo, '.claude', 'worktrees', name);
+    p.g(['worktree', 'add', '-q', '--detach', wt, at]);
+    return wt;
+  };
+  const cleanup = (p: ReturnType<typeof project>, ...args: string[]) =>
+    spawnSync(process.execPath, [path.join(SCRIPTS, 'cleanup-worktree.mjs'), ...args, '--against', 'main'], { encoding: 'utf8', cwd: p.repo });
+
+  it('cancelling names it, and --abandon finds and removes it without calling it merged', () => {
+    const p = project([started('A')]);
+    p.branch('A');
+    const wt = detached(p, 'agent-a', 'queue/A');
+    const cancelled = p.run(['set', 'A', 'cancelled']);
+    expect(cancelled.out).toContain('agent-a');
+    expect(cancelled.out).toContain('--abandon --execute');
+    const dry = cleanup(p, 'queue/A', '--abandon');
+    expect(dry.stdout).toContain('would remove');
+    expect(dry.stdout).not.toContain('merged, clean');
+    cleanup(p, 'queue/A', '--abandon', '--execute');
+    expect(fs.existsSync(wt)).toBe(false);
+    expect(p.g(['branch', '--list', 'queue/A'])).toContain('queue/A');
+  });
+  it('a detached worktree on a commit the base has is not the branch\'s', () => {
+    const p = project([started('A')]);
+    p.branch('A');
+    const wt = detached(p, 'agent-b', 'main');
+    const dry = cleanup(p, 'queue/A', '--abandon');
+    expect(dry.stdout).toContain('no worktree for queue/A');
+    expect(dry.stdout).toContain('kept: 1 × no worktree for queue/A');
+    expect(fs.existsSync(wt)).toBe(true);
+  });
+  it('merge --resume removes the merged worktrees of the task and leaves the others', () => {
+    const p = project([task('A', { status: 'done', branch: 'queue/A' })]);
+    const start = p.g(['rev-parse', 'HEAD']);
+    p.patch('A', (o) => { (o as Record<string, unknown>).head_start = start; });
+    p.branch('A');
+    const own = detached(p, 'agent-c', 'queue/A');
+    const other = detached(p, 'agent-d', start);
+    p.g(['merge', '-q', '--no-ff', '-m', 'merge A', 'queue/A']);
+    const r = p.run(['merge', 'A', '--resume']);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toContain('Worktree: removed');
+    expect(fs.existsSync(own)).toBe(false);
+    expect(fs.existsSync(other)).toBe(true);
+  });
+  it('doctor names both kinds, and leaves a task still in work alone', () => {
+    const p = project([task('A', { status: 'cancelled', branch: 'queue/A' }), started('B')]);
+    p.branch('A');
+    p.branch('B');
+    detached(p, 'agent-e', 'queue/A');
+    detached(p, 'agent-f', 'queue/B');
+    detached(p, 'agent-g', 'main');
+    const out = p.run(['doctor']).out;
+    expect(out).toMatch(/1 detached worktree\(s\) hold nothing the base lacks: agent-g/);
+    expect(out).toMatch(/still hold the work of finished or cancelled: queue\/A/);
+    expect(out).not.toContain('agent-f');
+  });
+});
+
+describe('a long failure class (test round 3: N9)', () => {
+  const long = `a failure class ${'that goes on '.repeat(20)}and ends here`;
+  it('cq gate cuts the title and keeps the whole class in the mission', () => {
+    const p = project([]);
+    p.run(['gate', long]);
+    const o = p.queue().tasks[0];
+    expect(o.title.length).toBeLessThan(110);
+    expect(o.mission).toContain('and ends here');
+  });
+  it('a GATE line keeps its whole class too', () => {
+    const KB = require('../lib/knownBugGate.js');
+    expect(KB.parseGate(`GATE ${long} @ src/a.js:1`)).toEqual({ title: long.trim(), where: 'src/a.js:1' });
+  });
+});

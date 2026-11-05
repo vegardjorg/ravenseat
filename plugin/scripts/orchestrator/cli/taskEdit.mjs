@@ -17,7 +17,7 @@ import fs from 'node:fs';
 
 import {
   a, autoCleanFocus, branchFor, branchInfo, byName, checkExpect, die, edit, editLogged, focusCleanOut, FX, hasLock, L, lastEntry, LOCK, P,
-  PREFIX, pulseCursor, read, readPlans, require, undoHint, val, values, CQ, G, git,
+  PREFIX, pulseCursor, read, readPlans, require, undoHint, val, values, CONFIG, CQ, G, git,
 } from './context.mjs';
 import { logTime, measurementLine, measureTask, minutes, saveMeasurement } from './tracks.mjs';
 
@@ -108,10 +108,11 @@ export function cmdSet() {
     const info = branchInfo(branch);
     if (info.exists) {
       const worktrees = G.readWorktrees(git);
-      const holder = worktrees.find((w) => w.branch === branch);
+      const holders = G.worktreesOfBranch(worktrees, (x, y) => git(['merge-base', '--is-ancestor', x, y]) != null, branch, CONFIG.baseBranch);
+      const holder = holders.length ? holders.map((w) => w.path).join(', ') : null;
       console.log(
-        `Left behind: branch ${branch}${info.commits ? ` with ${info.commits} commit(s) that are not merged` : ''}${holder ? `, worktree ${holder.path}` : ''}. ` +
-          `To drop it: ${holder ? `${CQ} cleanup-worktree ${branch} --abandon --execute (the branch stays), then ` : ''}git branch -D ${branch} (the commits go with it).`,
+        `Left behind: branch ${branch}${info.commits ? ` with ${info.commits} commit(s) that are not merged` : ''}${holder ? `, worktree ${holder}` : ''}. ` +
+          `To drop it: ${holder ? `${CQ} cleanup-worktree ${branch} --abandon --execute (the branch stays), then ` : ''}git branch -D ${branch}${info.commits ? ' (the commits go with it)' : ''}.`,
       );
     }
   }
@@ -153,6 +154,9 @@ export function cmdEdit() {
   // --accept "<criterion>" (repeatable) replaces the acceptance criteria (null in --json removes them).
   const accepts = values('--accept');
   if (accepts.length) field.acceptance = accepts;
+  // --files a,b replaces the files the task owns (--files "" empties the list). Locked after the start like --json.
+  if (a.includes('--files'))
+    field.owned_files = String(val('--files') ?? '').split(',').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean);
   // --bonus "<text>" adds text to the mission (the track block) and the remarks, with a timestamp.
   const bonus = a.includes('--bonus') ? (val('--bonus') ?? '') : null;
   if (bonus != null && !String(bonus).trim())
@@ -178,6 +182,9 @@ export function cmdEdit() {
     'attempts',
   ])
     delete field[f];
+  // An edit with nothing to write (a mistyped flag, or only fields with their own commands) must not look like it worked.
+  if (!Object.keys(field).length && bonus == null)
+    die(`Nothing changed: edit ${id} needs --json '{...}', --files a,b, --accept "<criterion>" or --bonus "<text>". Status: ${CQ} set ${id} <status>.`);
   editLogged('edit', (queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);

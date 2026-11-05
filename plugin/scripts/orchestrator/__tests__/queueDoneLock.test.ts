@@ -25,7 +25,7 @@ type Queue = { tasks: Task[]; changelog?: unknown[] };
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const ID = ['-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.invalid'];
-const LOCKED = 'locked after start; ask the owner (cq question)';
+const LOCKED = "locked after start; ask the owner (cq question). On the owner's word: the same command with --by owner, or the board";
 
 const temporary: string[] = [];
 afterAll(() => {

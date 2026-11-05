@@ -33,7 +33,7 @@ import {
   BASE_SETUP, BH, flakyRecheck, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf, writeReport,
 } from './baseHealth.mjs';
 import { logEvent } from './events.mjs';
-import { cleanupWorktree } from '../cleanup-worktree.mjs';
+import { cleanupDetachedOf, cleanupWorktree } from '../cleanup-worktree.mjs';
 import { proposeGate } from './gate.mjs';
 
 const ER = require('./lib/eventRows.js');
@@ -424,7 +424,7 @@ export function cmdReceive() {
   if (asked) printQuestion(asked);
   // The quick gates bound to the delivered tip (receiveGates), BEFORE the done command and any reviewer: the track's own
   // claim is informational only. A PARTIAL track is known to be unfinished, so no gate runs for it.
-  if (result?.gates != null)
+  if (result?.gates != null && result.status !== 'PARTIAL')
     console.log(`The track's RESULT gates=${result.gates} is self-reported (informational only; receive checks the tip itself).`);
   const gateCheck = result?.status === 'PARTIAL' ? { status: 'off' } : receiveGates(o0, { branch, scratch });
   // A run that changed what runs at the next git command (or the evidence store) is the owner's decision: no red path,
@@ -571,6 +571,9 @@ export function cmdReceive() {
       if (s.error) die(s.error);
     }
     if (result) o.result = result;
+    // cq merge stops on this. Every receive sets it anew, so the next round's delivery clears it.
+    if (result?.status === 'PARTIAL') o.delivered_partial = true;
+    else delete o.delivered_partial;
     if (gateCheck.record) o.gate_check = gateCheck.record;
     // The project no longer has quick gates: an old red result has nothing to say, and must not stop the merge for good.
     else if (result?.status !== 'PARTIAL') delete o.gate_check;
@@ -650,7 +653,8 @@ export function cmdReceive() {
     console.log(
       `Class ${o0.class}: no review (config().reviewers has none for the class, and no helper agent is on and hits).`,
     );
-  console.log(
+  // A PARTIAL delivery was told above not to be merged, and what to do next.
+  if (result?.status !== 'PARTIAL') console.log(
     // merge finds the scratchpad in the task or the environment; a folder given only with this command must be given again.
     `Merge (after an approved review, from Bash): ${CQ} merge ${id}${o0.scratchpad || process.env.QUEUE_SCRATCHPAD ? '' : ` --scratchpad "${scratch}"`}  ` +
       `(by hand: merge-track.mjs ${branch} --wave-base ${o0.head_start ?? '<HEAD at start>'})`,
@@ -738,7 +742,7 @@ export async function cmdMerge() {
   const id = positional(1, ['--scratchpad', '--done-cwd'])[0];
   if (!id)
     die(
-      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--force-red-base] [--force-red-gate]',
+      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--force-red-base] [--force-red-gate]',
     );
   const resume = a.includes('--resume');
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
@@ -791,7 +795,7 @@ export async function cmdMerge() {
       console.log(`${id} is done; nothing to resume.`);
       // What an earlier cleanup left behind goes now. Merged work only: both steps refuse anything else.
       const leftBranch = o.branch ?? branchFor(id);
-      if (branchInfo(leftBranch).exists) tidyAfterMerge(leftBranch, { resume: true });
+      if (branchInfo(leftBranch).exists) tidyAfterMerge(leftBranch, { resume: true, start: o.head_start });
       return;
     }
     if (!['review', 'done'].includes(o.status) && !(force && ['running', 'picked'].includes(o.status)))
@@ -840,6 +844,15 @@ export async function cmdMerge() {
   // gates run after the merge, so without this stop the red code is on the base branch before anyone says no. A resume
   // does not ask: the merge is in already.
   if (!resume) {
+    if (o.delivered_partial && !a.includes('--allow-partial'))
+      die(
+        `STOP: ${id} is not merged. Its last receive was a PARTIAL delivery: unfinished, and no gates ran on it. Next: ${CQ} resume ${id} --reason context, then ${CQ} receive ${id}. ` +
+          `On the owner's word only: ${CQ} merge ${id} --allow-partial (logged as "partial-overridden"). Nothing was done.`,
+      );
+    if (o.delivered_partial) {
+      logTime(id, 'partial-overridden', `tip ${String(trackTip).slice(0, 12)}`);
+      console.log(`WARNING: --allow-partial: merging ${id}, which the track itself called unfinished; logged as "partial-overridden".`);
+    }
     const stop = require('./lib/gateEvidence.js').mergeStop(o.gate_check, trackTip);
     if (stop && !a.includes('--force-red-gate'))
       die(
@@ -1336,7 +1349,7 @@ export async function cmdMerge() {
     return ox;
   });
   ML.clearState(FOLDER, id);
-  tidyAfterMerge(branch, { resume });
+  tidyAfterMerge(branch, { resume, start: o.head_start });
   console.log(`Full log: ${logFile}`);
   printBase();
   console.log(CONTROLS.verificationLine(verified));
@@ -1350,7 +1363,12 @@ export async function cmdMerge() {
  * cleanup, so it runs here. The queue's own branch goes with `git branch -d`, which refuses anything not merged; a
  * branch the owner named (a picked task's own) stays.
  */
-function tidyAfterMerge(branch, { resume }) {
+function tidyAfterMerge(branch, { resume, start }) {
+  try {
+    for (const r of cleanupDetachedOf(branch, { start, against: BASE, main: GIT_ROOT })) console.log(`Worktree: ${r.status}: ${r.message}`);
+  } catch (e) {
+    console.log(`Worktree: the cleanup failed, the merge stands: ${e?.message ?? e}`);
+  }
   if (resume) {
     try {
       const r = cleanupWorktree(branch, { against: BASE, main: GIT_ROOT });

@@ -55,7 +55,7 @@
       name: 'The track asks you',
       next: (id) =>
         `Next: answer, and the orchestrator passes it on in a new round (cq resume ${id} --reason context), or cq set ${id} cancelled. ` +
-        `If it needs a file the task does not own: cq edit ${id} --files <files> first. A finished delivery that needs no answer can be merged.`,
+        `If it needs a file the task does not own: cq edit ${id} --files <files> --by owner first. A finished delivery that needs no answer can be merged.`,
     },
     'gate-red': {
       name: 'Gates red',

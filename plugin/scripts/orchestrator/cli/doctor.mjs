@@ -376,8 +376,25 @@ function checkBranches() {
     .filter((b) => have.has(b) && b !== CONFIG.baseBranch);
   // Claude Code's own agent branches: only merged ones with no worktree left (a running agent's new branch also counts
   // as merged, but it has a worktree).
-  const agents = require('./lib/queueGit.js').mergedAgentBranches(git, CONFIG.baseBranch);
-  if (!left.length && !agents.length) return [ok('branches', 'no branches of finished tasks left')];
+  const QG = require('./lib/queueGit.js');
+  const agents = QG.mergedAgentBranches(git, CONFIG.baseBranch);
+  // A worktree detached by an agent when it delivered has no branch name, so nothing above sees it.
+  const within = (x, y) => git(['merge-base', '--is-ancestor', x, y]) != null;
+  const root = path.resolve(GIT_ROOT, '.claude', 'worktrees').toLowerCase();
+  const detached = QG.readWorktrees(git).filter((w) => w.detached && w.head && path.resolve(w.path).toLowerCase().startsWith(root));
+  const merged = detached.filter((w) => within(w.head, CONFIG.baseBranch));
+  const abandoned = left.filter((b) => detached.some((w) => !within(w.head, CONFIG.baseBranch) && within(w.head, b)));
+  const detachedLines = [
+    ...(merged.length
+      ? [warn('branches', `${merged.length} detached worktree(s) hold nothing the base lacks: ${merged.map((w) => path.basename(w.path)).join(' ')}`,
+          'cq cleanup-worktree --all --execute removes them once they are 3 hours old (without --execute it only lists them)')]
+      : []),
+    ...(abandoned.length
+      ? [warn('branches', `detached worktree(s) still hold the work of finished or cancelled: ${abandoned.join(' ')}`,
+          `cq cleanup-worktree ${abandoned[0]} --abandon --execute (the branch stays; the same for each)`)]
+      : []),
+  ];
+  if (!left.length && !agents.length && !detachedLines.length) return [ok('branches', 'no branches of finished tasks left')];
   // git refuses to delete a branch a worktree has checked out, so those need the worktree cleaned up first.
   const checkedOut = new Set((gitWorktrees() ?? []).map((w) => w.branch).filter(Boolean));
   const held = left.filter((b) => checkedOut.has(b));
@@ -399,6 +416,7 @@ function checkBranches() {
       : []),
     ...(free.length ? [line('branch(es) of done or cancelled tasks still exist', free)] : []),
     ...(agents.length ? [line('merged agent branch(es) with no worktree left', agents)] : []),
+    ...detachedLines,
   ];
 }
 

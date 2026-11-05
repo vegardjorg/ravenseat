@@ -161,6 +161,16 @@ function readWorktrees(git) {
   return out;
 }
 
+/**
+ * The worktrees holding a branch's work: the one with it checked out, and detached ones on a commit of the branch that the
+ * base lacks (an agent runs `git switch --detach` when it delivers). A commit the base has says nothing: every worktree starts on one.
+ * @param {{ branch?: string|null, head?: string|null, detached?: boolean }[]} worktrees
+ * @param {(ancestor: string, of: string) => boolean} within
+ */
+function worktreesOfBranch(worktrees, within, branch, base) {
+  return worktrees.filter((w) => w.branch === branch || (w.detached && w.head && within(w.head, branch) && !within(w.head, base)));
+}
+
 /** Claude Code's own agent branches that are merged and have no worktree left (a running agent's new branch has one). */
 function mergedAgentBranches(git, base) {
   return String(git(['for-each-ref', '--merged', base, '--format=%(refname:short)|%(worktreepath)', 'refs/heads/worktree-agent-*']) ?? '')
@@ -303,6 +313,7 @@ function externalForTasks(
 
 module.exports = {
   mergedAgentBranches,
+  worktreesOfBranch,
   baseBranch,
   remoteName,
   branchPrefix,

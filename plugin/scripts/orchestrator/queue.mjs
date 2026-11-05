@@ -54,6 +54,8 @@
 //   node scripts/orchestrator/queue.mjs set <id> <proposed|waiting|running|review|done|cancelled> [--remark "..."]
 //   node scripts/orchestrator/queue.mjs edit <id> --json '{"value":8,"priority_bonus":50}' [--by "..."] [--answer-json]
 //        (logged in the changelog, so `undo` rolls it back; --answer-json: the answer as JSON with the changelog no.)
+//   node scripts/orchestrator/queue.mjs edit <id> --files a,b [--by owner]   (replaces the files the task owns; "" empties the
+//        list. Locked after the start, like done_when: only --by owner or the board then. An edit that changes nothing is an error.)
 //   node scripts/orchestrator/queue.mjs edit <id> --accept "<criterion>" [--accept "..."]   (replaces the acceptance
 //        criteria; null in --json removes them. done_when and acceptance are LOCKED once the task has started: only
 //        --by owner (or the board, theBoard) changes them then, and never from inside a track worktree (the cwd on a
@@ -259,7 +261,7 @@
 // Fewer orchestrator turns: `fill` and `receive` end with "Start these in the SAME turn:" and one line per agent
 // (subagent_type + message); start them in one turn. `receive` warns when the track's answer exceeds the report cap (about 1,500 chars).
 //   node scripts/orchestrator/queue.mjs merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force]
-//        [--allow-guard] [--done-cwd <folder>] [--force-red-base]
+//        [--allow-guard] [--allow-partial] [--done-cwd <folder>] [--force-red-base]
 //        [--resume]
 //        (one merge at a time per repo: the lock <dataFolder>/merge.lock with pid, host and start time; a held lock
 //         refuses with the holder, a stale one (the pid is gone, or older than 6 h) is taken over. A merge, rebase,
