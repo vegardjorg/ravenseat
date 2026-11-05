@@ -3,6 +3,31 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.19 (2026-11-05)
+
+### Added
+- A track's question can be answered: `cq resume <id> --reason context --answer "<text>"`. It is the recommended option in
+  `cq decide` and on the board. The answer leads the new agent's brief and stays for later rounds.
+- `cq edit <id> --files a,b` sets the files a task owns.
+
+### Changed
+- `cq merge` stops on a PARTIAL delivery unless you pass `--allow-partial`, and `cq receive` no longer shows the way to merge one.
+  The next round delivering DONE clears the stop.
+- `cq edit` with nothing to write is an error instead of printing `changed:`.
+- A `GATE` line or `cq gate` with a long failure class keeps the whole class in the mission. Only the title is cut.
+
+### Fixed
+- A worktree the agent detached when it delivered is found: cancelling names it, `cq cleanup-worktree --abandon` removes it,
+  `cq merge --resume` tidies it and `cq doctor` lists it.
+- When nothing can start, `cq fill` says which tasks hold the slots. It shows held-back tasks also when the machine is full,
+  and names the file the task owns rather than git's folder.
+- `cq setup` leaves `settings.json` alone when nothing in it changes, and names what is uncommitted.
+- A block left open on a cancelled task no longer counts as open or grows.
+- A continuation made twice with no agent between counts as one round, and a brief after a red gate no longer points at
+  a review package that was never written.
+- `cq <command> --help` shows the help for queue commands instead of running them.
+- Clearer texts for merge conflicts, a red base, the git identity warning and changed files.
+
 ## 0.8.18 (2026-11-04)
 
 ### Added
