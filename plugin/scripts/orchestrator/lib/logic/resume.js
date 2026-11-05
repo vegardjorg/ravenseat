@@ -180,6 +180,7 @@ function assessDelivery(o, report) {
 /**
  * The classification in queue-takeover.mjs for an active task. The safe signal (a delivery from assessDelivery) goes
  * first; the heuristic is the fallback:
+ *   WORKING: in review with a round prepared or under way (`workingRound`) and no report from it yet.
  *   DELIVERED: commits ahead of baseBranch, a clean worktree, and no new commit in 20 min (the agent has finished).
  *   EMPTY: no commits and started over an hour ago (the agent died before it did anything). `anotherBranch` is only
  *          called then (git log --all is expensive) and gives a commit on another branch that mentions the id, or null.
@@ -192,12 +193,15 @@ function assessActive({
   startedMs = null,
   delivery = null,
   noAgent = null,
+  workingRound = null,
   anotherBranch = () => null,
 }) {
   if (delivery)
     return `DELIVERED (track-result.md ${delivery.status}${status === 'review' ? ', new round after receive' : ''})`;
   // No agent has taken it (queueLogic.noAgentTracks): commits from an earlier round say nothing about this one.
   if (noAgent) return noAgent.prepared ? `NO AGENT (round ${noAgent.round} prepared, never started)` : 'NO AGENT';
+  // A new round is prepared or working: the commits are from the earlier one, so they are not a delivery.
+  if (status === 'review' && workingRound != null) return `WORKING (round ${workingRound} prepared or running, no report yet)`;
   if (status === 'review') return commits > 0 ? 'DELIVERED (review)' : 'UNCERTAIN (review without commits)';
   if (commits > 0 && (uncommitted ?? 0) === 0 && (lastMs ?? 0) > 20 * 60_000) return 'DELIVERED (no report: commits, clean, quiet for 20 min)';
   if (commits === 0 && (startedMs ?? 0) > 60 * 60_000) {

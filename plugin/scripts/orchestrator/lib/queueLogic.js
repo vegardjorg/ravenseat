@@ -142,11 +142,11 @@ const {
 } = require('./logic/classify.js');
 const {
   REPORT_CAP, migrSetup, environmentCheck, migrFiles, mergePlan, errorExcerpt, executeMerge, fillExcerpt, SAME_TURN,
-  concurrentBlock, reportCapWarning,
+  concurrentBlock, reportCapWarning, fixRoundLine,
 } = require('./logic/merge.js');
 const {
   infoField, infoValueText, infoView, activeLines, NO_AGENT_GRACE_MIN, startedWithoutAgent, reportSinceStart, reservedWithoutAgent, noAgentTracks, withoutAgentLines, waitingOnCancelled, waitingOnCancelledLines, SILENT_CARD_MIN,
-  SILENT_DEFAULT_MIN, silentMinFor, silentCandidates, silentTracks, silentLines, BLOCK_CODES, openBlockOf, openBlock,
+  SILENT_DEFAULT_MIN, silentMinFor, silentCandidates, silentWatched, roundOpen, silentTracks, silentLines, BLOCK_CODES, openBlockOf, openBlock,
   closeBlock, blockerSummary, blockerLines, highestBlockNr, nextMigrGuard,
 } = require('./logic/monitor.js');
 const {
@@ -433,6 +433,7 @@ module.exports = {
   fillExcerpt,
   SAME_TURN,
   concurrentBlock,
+  fixRoundLine,
   reportCapWarning,
   infoField,
   infoValueText,
@@ -452,6 +453,8 @@ module.exports = {
   SILENT_DEFAULT_MIN,
   silentMinFor,
   silentCandidates,
+  silentWatched,
+  roundOpen,
   silentTracks,
   silentLines,
   BLOCK_CODES,

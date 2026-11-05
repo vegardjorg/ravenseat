@@ -269,6 +269,7 @@
     return {
       key: `unstick:${h.id}`,
       verb: 'unstick',
+      heading: 'NO AGENT',
       kind: 'stuck-no-agent',
       kindName: 'Started without an agent',
       id: h.id,
@@ -293,6 +294,7 @@
     return {
       key: `unstick:${h.id}`,
       verb: 'unstick',
+      heading: 'NO AGENT',
       kind: 'stuck-no-agent',
       kindName: 'Round without an agent',
       id: h.id,
@@ -319,6 +321,7 @@
     return {
       key: `unstick:${h.id}`,
       verb: 'unstick',
+      heading: 'SILENT',
       kind: 'stuck-silent',
       kindName: 'Silent',
       id: h.id,

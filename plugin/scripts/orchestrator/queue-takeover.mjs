@@ -10,7 +10,7 @@
 //   2. Git state in mainTree (branch, HEAD, ahead/behind <remote>/<baseBranch>, leftover index.lock) and, when
 //      config().migrations.environmentFile is set, which environment the migrations are linked to.
 //   3. Each active task (running/review): commits on the branch ahead of baseBranch, age of the last commit, uncommitted in
-//      the worktree, and a classification: DELIVERED (ready for intake), EMPTY (nothing completed), NO AGENT or UNCERTAIN.
+//      the worktree, and a classification: DELIVERED (ready for intake), WORKING (a new round under way), EMPTY (nothing completed), NO AGENT or UNCERTAIN.
 //      Adoption: track-result.md in the track folder with the RESULT line on top is the safe signal (DELIVERED with the status
 //      from the line); the heuristic is the fallback. Running tracks are adopted: `queue.mjs orchestrator pulse` reports
 //      new reports, and `queue.mjs resume <id>` makes the mission for a new agent on the same branch (fix round or
@@ -157,6 +157,7 @@ const activeOnes = tasks
       startedMs,
       delivery,
       noAgent: noAgent.get(o.id) ?? null,
+      workingRound: L.roundOpen(o) ? (o.attempts.at(-1).round ?? 0) : null,
       // The work may be on another branch (e.g. hotfix/<id>): look for commits that mention the id.
       anotherBranch: () =>
         git(['log', '--all', '-1', '--format=%h', `--grep=${o.id}\\b`, '--extended-regexp']) || null,

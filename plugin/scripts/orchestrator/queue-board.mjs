@@ -403,8 +403,8 @@ function withoutAgentNow(queue) {
 
 function silentNow(queue) {
   const limitMin = L.silentMinFor(queue);
-  const running = (queue.tasks ?? []).filter((o) => o.status === 'running');
-  const key = `${limitMin}|${running.map((o) => `${o.id}:${o.started ?? ''}`).join(',')}`;
+  const running = (queue.tasks ?? []).filter((o) => L.silentWatched(o));
+  const key = `${limitMin}|${running.map((o) => `${o.id}:${o.started ?? ''}:${o.attempts?.at(-1)?.reserved ?? ''}`).join(',')}`;
   if (silentCache.key === key && Date.now() - silentCache.time < 60_000) return silentCache.list;
   let list = [];
   try {

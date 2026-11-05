@@ -284,6 +284,18 @@ const FILL_NOTE =
  * descriptors instead.
  * @param {{ subagent_type: string, prompt: string, message?: string|null, bare?: boolean }[]} agents
  */
+/**
+ * The last line after a red gate. A NOTE above it can say the old worktree still holds the branch, and then the new agent
+ * cannot start until it is freed, so "start now" alone was wrong (test round 5, Q3).
+ */
+function fixRoundLine(output, cq, id) {
+  const held = /^NOTE: .+ is checked out in /m.test(output ?? '');
+  return (
+    (held ? 'If the old agent is done, run the git switch --detach from the NOTE first. ' : '') +
+    `Start the fix round in the SAME turn (the line above), then ${cq} receive ${id} again.`
+  );
+}
+
 function concurrentBlock(agents) {
   return require('../clients/index.js').clientFor().sameTurnBlock(agents);
 }
@@ -309,5 +321,6 @@ module.exports = {
   fillExcerpt,
   SAME_TURN,
   concurrentBlock,
+  fixRoundLine,
   reportCapWarning,
 };

@@ -166,7 +166,7 @@ function doneCommandRed(id, check, { scratch, what = 'done command' }) {
   );
   if (r.stdout) process.stdout.write(r.stdout);
   if (r.stderr) process.stderr.write(r.stderr);
-  if (r.status === 0) console.log(`Start the fix round in the SAME turn (the line above), then ${CQ} receive ${id} again.`);
+  if (r.status === 0) console.log(L.fixRoundLine(r.stdout, CQ, id));
   process.exit(r.status === 8 ? 8 : 1);
 }
 

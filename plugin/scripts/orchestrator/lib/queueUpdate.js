@@ -185,6 +185,16 @@
   }
 
   /**
+   * The same news as the board's setup banner, for cq show. Only when setup HAS been recorded and is older than the
+   * running version: a project that never ran setup has not asked to hear about it on every show.
+   */
+  function setupBehindLine({ mode, installed, setupVersion }) {
+    if (!setupVersion) return null;
+    if (notice({ mode, installed, setupVersion })?.setup !== 'run') return null;
+    return `Setup is behind: cq ${installed} is installed, the project was set up for cq ${setupVersion}. Run: cq setup --settings`;
+  }
+
+  /**
    * What the banner says, computed on the server and sent in the state as `update`. null when there is nothing to say.
    * @param {object} o
    * @param {'plugin'|'vendored'} o.mode
@@ -240,6 +250,7 @@
     fetchLatest,
     latestVersion,
     readSetupRecord,
+    setupBehindLine,
     steps,
     notice,
     visible,

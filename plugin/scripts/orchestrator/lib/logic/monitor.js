@@ -151,9 +151,26 @@ function startedWithoutAgent(
  */
 function reportSinceStart(o, report) {
   if (!report) return false;
-  const started = Date.parse(o?.started ?? '');
+  const started = watchedSince(o);
   return !Number.isFinite(started) || report.mtimeMs > started;
 }
+
+/** A round is prepared or working: the last attempt has not ended (cq receive and a close end it). */
+function roundOpen(o) {
+  const x = AT.current(o);
+  return !!x && x.state !== 'ended';
+}
+
+/** When the work now under way began: the start, or the open round when that came later. NaN when neither is known. */
+function watchedSince(o) {
+  const times = [o?.started, roundOpen(o) ? AT.current(o).reserved : null]
+    .map((s) => Date.parse(s ?? ''))
+    .filter(Number.isFinite);
+  return times.length ? Math.max(...times) : NaN;
+}
+
+/** Can this task go silent: running, or in review with a round under way (the agent of a new round can hang too). */
+const silentWatched = (o) => o.status === 'running' || (o.status === 'review' && roundOpen(o));
 
 /**
  * The attempts no agent ever took: cq fill and cq resume reserve an attempt, and the start row from the time log turns it
@@ -288,7 +305,7 @@ function silentMinFor(queue) {
 function silentCandidates(queue, worktreeBranches) {
   const branches = worktreeBranches ?? new Set();
   return (queue?.tasks ?? []).filter(
-    (o) => o.status === 'running' && !o.picked_by && !o.cloud && o.branch && branches.has(o.branch),
+    (o) => silentWatched(o) && !o.picked_by && !o.cloud && o.branch && branches.has(o.branch),
   );
 }
 
@@ -301,7 +318,7 @@ function silentTracks(
   const activity = lastActivity instanceof Map ? Object.fromEntries(lastActivity) : (lastActivity ?? {});
   return silentCandidates(queue, worktreeBranches)
     .map((o) => {
-      const started = Date.parse(o.started ?? '');
+      const started = watchedSince(o);
       const seen = Number(activity[o.id]);
       const last = Math.max(
         Number.isFinite(started) ? started : -Infinity,
@@ -478,6 +495,8 @@ module.exports = {
   SILENT_CARD_MIN,
   silentMinFor,
   silentCandidates,
+  silentWatched,
+  roundOpen,
   silentTracks,
   silentLines,
   BLOCK_CODES,

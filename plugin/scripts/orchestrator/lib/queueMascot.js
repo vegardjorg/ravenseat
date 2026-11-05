@@ -645,7 +645,10 @@
 
   const ids = (list) => new Set((list ?? []).map((k) => k.id));
   const empty = (d) =>
-    !(d?.columns?.inProgress ?? []).length && !(d?.columns?.queue ?? []).some((k) => k.ready);
+    !(d?.columns?.inProgress ?? []).length &&
+    !(d?.columns?.review ?? []).length &&
+    !(d?.columns?.proposed ?? []).length &&
+    !(d?.columns?.queue ?? []).some((k) => k.ready);
 
   /**
    * The events between the previous and the current state (the shape from queueBoard.board, with `mascotNumbers`).

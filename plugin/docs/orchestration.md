@@ -289,6 +289,9 @@ started them. A new session adopts them without that notification:
   Fix: `cq set <ID> waiting`, then `cq fill --ids <ID>` and start what it lists in the same turn (fill checks the
   migration block again). Run `cq merge` where you read the output; in a chain or a background job use `--without-fill`
   and run fill yourself afterwards.
+- **A round under way:** a task in review whose last attempt is still open (`cq resume` or a fix round) is not aged as
+  "in review", and `cq takeover` says `WORKING` instead of `DELIVERED (review)`. If its agent hangs, the track gets
+  `SILENT`, counted from when the round was prepared. A report from an earlier round does not turn that off.
 - **Round without an agent:** `cq resume` and `cq fill` reserve an attempt, and the start row in the time log turns it into running. A reservation older than 15 minutes with no start row, commit or report since gives `ROUND WITHOUT AGENT` (a prepared round; `STARTED WITHOUT AGENT` for a first start held by an old worktree), a card in `cq decide`, and `NO AGENT` in `cq takeover`. It needs a client with hooks and at least one start row in the log, so a project without the hook is not warned falsely. Fix: `cq resume <ID> --reason <reason>` gives the same round and the agent line. Answers on the board use `cq resume --by owner`, which wakes `cq wait`.
 - **Silent:** a running track whose branch a worktree HAS checked out (so the agent started), but that has shown no
   sign of life for `limits.silentMin` minutes (default 20, `cq limit silentMin <n>`, 0 = off). The sign of life is the

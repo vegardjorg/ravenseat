@@ -400,8 +400,11 @@ function drawInbox(fresh) {
   for (const id of [...t.selectedSuggestion]) if (!suggestionIds.has(id)) t.selectedSuggestion.delete(id);
   if (t.answerOpen && !d.question.some((s) => s.sp === t.answerOpen)) t.answerOpen = null;
 
-  const parts = [header, listeningLine(d.count)];
-  if (!d.count)
+  // A card set aside with Seen on the Decisions tab has left the tab and the counter, so it leaves this list too.
+  const stuckRows = d.stuck.filter((h) => !t.decide?.hidden?.has(`unstick:${h.id}`));
+  const waiting = d.count - (d.stuck.length - stuckRows.length);
+  const parts = [header, listeningLine(waiting)];
+  if (!waiting)
     parts.push(
       el(
         'p',
@@ -592,16 +595,16 @@ function drawInbox(fresh) {
     );
   }
 
-  if (d.stuck.length)
+  if (stuckRows.length)
     parts.push(
       inboxPart(
         'stuck',
         'Stuck',
-        d.stuck.length,
+        stuckRows.length,
         el(
           'ul',
           { class: 'inbox-list' },
-          d.stuck.map((h) =>
+          stuckRows.map((h) =>
             el(
               'li',
               { class: 'inbox-row row-summary' },

@@ -53,7 +53,7 @@ const EXPORTS = [
   'ranking', 'rankingContext', 'release', 'removeFocus', 'reportCapWarning', 'resetConfig', 'resolve', 'resolveWaits',
   'resolveWaitsLines', 'restText', 'resumeBlock', 'resumePromptAdjust', 'reviewPackageIndex', 'reviewerPrompt',
   'reviewerTypes', 'reviewersFor', 'reviewersForTask', 'saveFocusPlan', 'score', 'scoreParts', 'selectNext',
-  'setArea', 'setFocus', 'setQuestion', 'setStatus', 'silentCandidates', 'silentLines', 'silentMinFor',
+  'setArea', 'setFocus', 'setQuestion', 'setStatus', 'silentCandidates', 'silentWatched', 'roundOpen', 'fixRoundLine', 'silentLines', 'silentMinFor',
   'silentTracks', 'smallTaskError', 'spaceUse', 'startGuard', 'reportSinceStart', 'reservedWithoutAgent', 'noAgentTracks', 'waitingOnCancelled', 'waitingOnCancelledLines', 'SILENT_CARD_MIN', 'startedWithoutAgent', 'state', 'stateLine',
   'statusAtAdd', 'stepMatch', 'stepText', 'stepTitle', 'successors', 'suggestProject', 'sumCost', 'summaryView',
   'syncFocusEnd', 'takenBlocks', 'trackBlock', 'trackFileWarning', 'trackFolderRound', 'trackMessage', 'trackQuestion', 'uncommittedCollision',

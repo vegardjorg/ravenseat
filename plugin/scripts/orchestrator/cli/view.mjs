@@ -12,8 +12,12 @@
 //   cliHelp.test.ts.
 // =============================================================
 
+import fs from 'node:fs';
+import path from 'node:path';
+
 import {
-  a, branchFor, branchInfo, CE, cut, D, die, FX, L, positional, read, readCursor, uncommittedPaths, val, WIDTH,
+  a, branchFor, branchInfo, CE, cut, D, die, FOLDER, FX, HERE, L, MAIN_TREE, positional, read, readCursor, require,
+  uncommittedPaths, val, WIDTH,
 } from './context.mjs';
 import { costEstimateState, dailyUsageFor, findSilent, findWithoutAgent, measureLoad, nextCostUsd } from './tracks.mjs';
 import { batchGroupLine } from './batch.mjs';
@@ -31,10 +35,32 @@ function pickLine(o) {
   return `picked by ${o.picked_by ?? '?'} ${age} ago · ${g.commits} commit(s) on ${o.branch ?? branchFor(o.id)}${old}`;
 }
 
+/** One line when setup was last run for an older version (the board has it as a banner). Never stops the view. */
+function setupBehindLine() {
+  try {
+    const U = require('./lib/queueUpdate.js');
+    const src = require('./lib/queueBoard.js').setupSources(HERE, MAIN_TREE, (f) => fs.existsSync(f));
+    const file = src.manifest ?? path.join(HERE, 'cq-version.json');
+    return U.setupBehindLine({
+      mode: src.mode,
+      installed: JSON.parse(fs.readFileSync(file, 'utf8')).version ?? null,
+      setupVersion: U.readSetupRecord(fs, path.join(FOLDER, 'setup.json')),
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** show prints tables for people. Silently ignoring --json gave a script text it could not parse (test round 5, Q10). */
+function refuseJson() {
+  if (a.includes('--json')) die('show has no --json. Use cq state for JSON, or cq info <id> --json for one task.');
+}
+
 /** `cq show` without --full/--all/--grouped/--project: the short view (the usage is at the top of queue.mjs). */
 export function cmdShowSummary() {
   // The short view by default (active ones, startable and counts, under about 3,000 chars); the full table was
   // about 66,000 chars (about 20,000 tokens per call). `--summary` is also accepted. The full one: `show --full`.
+  refuseJson();
   const queue = read();
   // First, so it survives when the after-compact hook trims the show output.
   const withoutAgent = L.withoutAgentLines(findWithoutAgent(queue));
@@ -47,6 +73,8 @@ export function cmdShowSummary() {
   // The base branch's health (lib/baseHealth.js): one line, also first, since a red base stops every merge.
   const baseLine = baseHealthLine();
   if (baseLine) console.log(baseLine);
+  const setupLine = setupBehindLine();
+  if (setupLine) console.log(setupLine);
   // The calibrated cost estimate (~$x) on the startable lines and the budget outlook (lib/costEstimate.js).
   const costModel = CE.costModel(queue);
   for (const l of L.summaryView(queue, {
@@ -71,6 +99,7 @@ export function cmdShowSummary() {
 
 /** `cq show` (the usage is at the top of queue.mjs). */
 export function cmdShow() {
+  refuseJson();
   const queue = read();
   const all = a.includes('--all');
   const register = queue.projects ?? {};

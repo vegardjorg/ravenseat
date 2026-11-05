@@ -279,7 +279,7 @@ export function cmdFill() {
               : '';
           die(
             `${id} (${o.status}) cannot be started now${why} (see next and show --full; start --force only on the owner's word). ` +
-              (loadLine ? `${loadLine} (fill --over-load overrides.) ` : '') +
+              (loadLine ? `${loadLine}${blocks.length ? '' : ' (fill --over-load overrides.)'} ` : '') +
               'Nothing was started.',
           );
         }

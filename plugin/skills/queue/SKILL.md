@@ -34,7 +34,7 @@ Run these in parallel where possible:
      or `handover-archive/`; grep them only when you need an old detail.
    - when the queue was last changed, and a warning if another orchestrator may still be alive
    - branch, HEAD, commits ahead of the remote, and any leftover `index.lock`
-   - every active task with commits on `queue/<id>` and an assessment: DELIVERED, EMPTY, NO AGENT or UNCERTAIN
+   - every active task with commits on `queue/<id>` and an assessment: DELIVERED, WORKING, EMPTY, NO AGENT or UNCERTAIN
    - what can start now, and which owner questions unlock the most tasks
    - the orchestrator marker (`scripts/.queue/orchestrator.json`): who was orchestrator last, ACTIVE or expired (2 h)
 2. `cq show` (SHORT: active, startable now, counts, about 1-3k characters). The full table

@@ -199,6 +199,9 @@ function predecessors(id, map) {
  */
 const AGING_FLOOR_MIN = 30; // a p85 from a few quick tasks must not call four minutes "running long"
 function aging(o, ageLimits, now = Date.now()) {
+  // A round is prepared or working: nobody is sitting on this review. A hung agent gets SILENT, a round no agent took its
+  // own warning, so "flag it for the orchestrator" would only be noise (test round 5, Q7).
+  if (o.status === 'review' && L.roundOpen(o)) return null;
   const measure = o.status === 'running' ? 'work' : o.status === 'review' ? 'cycle' : null;
   const start = Date.parse(o.started ?? o.picked_at ?? '');
   const limit = ageLimits?.[o.class]?.[measure];
