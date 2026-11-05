@@ -52,7 +52,7 @@ undo.
 
 ## Findings
 
-A track that notices a bug or a smell outside its own files runs `cq finding "<title>"` instead of fixing it. The
+A track that notices a bug or a smell outside its own files runs `cq finding "<title>"` instead of fixing it. In a project with no projects registered yet, the first finding creates one called `general`. The
 finding lands here, not in the batch queue: the batch queue holds small tasks someone has decided to do (class,
 estimate, owned files), while a finding is an observation nobody has looked at yet, which is what an idea is.
 

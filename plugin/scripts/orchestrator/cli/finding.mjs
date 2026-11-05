@@ -4,7 +4,8 @@
 //   cq finding "<title>" [--detail "..."] [--task <id>] [--cause <id>[,<id>]] [--files a,b] [--project <pid>] [--dry] [--json]
 //        an idea in the plan register (PL-FINDING-<n>, priority later), linked to the reporting task and deduplicated
 //        on the normalized title. --task defaults to the task whose queue branch the worktree is on. The project is
-//        --project, otherwise the task's project, otherwise the only project in the register. --cause names the
+//        --project, otherwise the task's project, otherwise the only project in the register. With no project at all
+//        (a fresh project; an agent may not run cq project) it creates one called general. --cause names the
 //        merged task(s) the finding is a defect of (a post-merge defect in the right-first-time figure).
 //   cq finding list [--all] [--json]
 //        the findings nobody has triaged yet (--all: every finding)
@@ -17,10 +18,14 @@
 
 import { execFileSync } from 'node:child_process';
 
-import { a, CQ, cut, die, L, MAIN_TREE, PREFIX, readPlans, readQueueForPlan, ROOT, require, val, WIDTH } from './context.mjs';
+import { a, CQ, cut, die, editLogged, L, MAIN_TREE, PREFIX, readPlans, readQueueForPlan, ROOT, require, val, WIDTH } from './context.mjs';
 import { editPlans, planAnswer } from './planShared.mjs';
 
 const FI = require('./lib/queueFindings.js');
+
+// Where a finding lands while the project has no projects registered yet.
+const FIRST_PROJECT = 'general';
+const FIRST_PROJECT_FIELDS = { title: 'General' };
 
 /** The task id from the branch the current worktree is on (<branchPrefix><id>), or null. */
 function taskFromBranch(tasks) {
@@ -100,17 +105,25 @@ export function cmdFinding() {
   const projects = queue.projects ?? {};
   const own = task ? L.projectFor(tasks.find((o) => o.id === task), projects) : null;
   const names = Object.keys(projects);
+  const none = !names.length && val('--project') == null;
   const project =
-    val('--project') ?? (own && Object.hasOwn(projects, own) ? own : names.length === 1 ? names[0] : null);
+    val('--project') ?? (own && Object.hasOwn(projects, own) ? own : names.length === 1 ? names[0] : none ? FIRST_PROJECT : null);
   if (!project)
     die(
       `Which project? ${task ? `${task} has no registered project. ` : ''}Give --project <pid> (${names.join(', ') || `none yet: ${CQ} project <pid> --title "..."`}).`,
     );
+  // The first finding in a fresh project also registers the project, so it can be triaged like any other. --dry writes nothing.
+  if (none && !a.includes('--dry'))
+    editLogged('project', (q) => {
+      const made = L.newRegister(q.projects, { [FIRST_PROJECT]: FIRST_PROJECT_FIELDS }, q.areas);
+      if (made.error.length) die(`Nothing changed:\n  ${made.error.join('\n  ')}`);
+      q.projects = made.register;
+    });
   const r = editPlans('finding', (reg, q) =>
     FI.recordFinding(
       reg,
       { title, detail: val('--detail') ?? null, task, files: parsed.files, causes, project },
-      { projects: q.projects ?? {}, question: q.question ?? {} },
+      { projects: none ? { ...q.projects, [FIRST_PROJECT]: FIRST_PROJECT_FIELDS } : (q.projects ?? {}), question: q.question ?? {} },
     ),
   );
   if (a.includes('--json')) return planAnswer(r, '');
@@ -131,5 +144,6 @@ export function cmdFinding() {
       `${task ? ` from ${task}` : ''}, an idea in the plan register (project ${project}). ` +
       'Do not fix it in this track; the orchestrator triages it.',
   );
-  for (const x of r.warnings ?? []) console.log(`WARNING: ${x}`);
+  // A project without a module is for the owner to sort out, not for the agent reporting a finding.
+  for (const x of r.warnings ?? []) if (!x.includes('has no module')) console.log(`WARNING: ${x}`);
 }

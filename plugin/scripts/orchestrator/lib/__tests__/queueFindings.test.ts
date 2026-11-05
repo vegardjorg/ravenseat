@@ -140,6 +140,31 @@ afterAll(() => {
 });
 
 describe('cq finding (against a temporary queue)', () => {
+  it('works in a fresh project with no projects registered, without asking an agent for anything it may not run', () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-finding-'));
+    temporary.push(folder);
+    const queueFile = path.join(folder, 'queue.json');
+    fs.writeFileSync(queueFile, JSON.stringify({ projects: {}, resolved: [], tasks: [] }));
+    const configFile = path.join(folder, 'queue.config.json');
+    fs.writeFileSync(configFile, '{}');
+    const env = { ...process.env, QUEUE_FOLDER: folder, QUEUE_CONFIG: configFile, QUEUE_ROOT: folder, QUEUE_GIT: folder, QUEUE_TIME_LOG: path.join(folder, 'times.jsonl') };
+    const run = (...args: string[]) => {
+      const r = spawnSync(process.execPath, [QUEUE_MJS, ...args], { encoding: 'utf8', env, cwd: folder });
+      return { code: r.status, out: r.stdout ?? '', error: r.stderr ?? '' };
+    };
+    const projects = () => JSON.parse(fs.readFileSync(queueFile, 'utf8')).projects;
+    // A preview writes nothing.
+    expect(run('finding', 'Only a look', '--dry').code).toBe(0);
+    expect(projects()).toEqual({});
+    const first = run('finding', 'No linter in this project', '--detail', 'Why');
+    expect(first.code).toBe(0);
+    expect(first.out).toMatch(/FINDING PL-FINDING-1: .* \(project general\)/);
+    expect(first.out).not.toMatch(/WARNING/);
+    expect(Object.keys(projects())).toEqual(['general']);
+    // The next one lands in the same project, and it can be triaged.
+    expect(run('finding', 'No tests either').out).toMatch(/PL-FINDING-2/);
+    expect(run('plan', 'prioritize', 'PL-FINDING-1', 'owner', '--reason', 'Looked at it', '--set-by', 'owner').code).toBe(0);
+  });
   it('records, deduplicates, lists, and shows the count in pulse, show and state', () => {
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-finding-'));
     temporary.push(folder);
