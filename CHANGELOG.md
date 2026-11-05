@@ -3,6 +3,22 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.20 (2026-11-05)
+
+### Added
+- `cq show <id>` shows that task, the same as `cq info <id>`.
+
+### Changed
+- The board's push line gives the same verdict and reason as `cq push-check`, also for external commits, a remote ahead of
+  the base and a missing full gate.
+- The guards no longer read text as commands when a quoted heredoc only writes it to a file or a commit message
+  (`cat > file <<'EOF'`, `git commit -F - <<'EOF'`). Anything that could run the text is still read.
+
+### Fixed
+- `cq set` no longer makes an orchestrator whose time ran out look alive, and `cq takeover` does not warn about one.
+- The board's answer buttons are named for what they do, and its two counters agree. An answer in its undo window or a card
+  marked Seen leaves both, and the Decisions tab says when `cq decide` still lists something.
+
 ## 0.8.19 (2026-11-05)
 
 ### Added
