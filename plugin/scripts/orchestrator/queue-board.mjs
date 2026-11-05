@@ -2015,6 +2015,11 @@ async function write(filePath, b) {
     if (type === 'release') return run(['release', id], `release ${id}`);
     if (type === 'qa-ok') return run(['qa', 'ok', id, '--by', 'owner'], `qa ok ${id}`);
     if (type === 'approve') return run(['approve', id, '--by', 'owner'], `approve ${id}`);
+    if (type === 'track-answer') {
+      const text = cleanText(b.text, 2000);
+      if (!text) return no('write your answer');
+      return run(['resume', id, '--reason', 'context', '--answer', text], `resume ${id} with the owner's answer`);
+    }
     if (type === 'qa-deviation') {
       const text = cleanText(b.text, 2000);
       if (!text) return no('write what is wrong, and where');

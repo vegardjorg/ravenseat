@@ -293,8 +293,9 @@ function blockerSummary(queue, { now = Date.now(), days = 7 } = {}) {
     const finished = o?.status === 'done' && o.done ? Date.parse(o.done) : NaN;
     for (const b of Array.isArray(o?.blocks) ? o.blocks : []) {
       const from = Date.parse(b?.from ?? '');
-      const open = !b?.to && !Number.isFinite(finished);
-      const to = b?.to ? Date.parse(b.to) : Number.isFinite(finished) ? finished : now;
+      const cancelled = o?.status === 'cancelled';
+      const open = !b?.to && !Number.isFinite(finished) && !cancelled;
+      const to = b?.to ? Date.parse(b.to) : Number.isFinite(finished) ? finished : cancelled ? from : now;
       if (!Number.isFinite(from) || !Number.isFinite(to) || to < windowFrom || from > now) continue;
       const r = per.get(b.code) ?? { code: b.code, count: 0, ms: 0, open: 0 };
       r.count += 1;

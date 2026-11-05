@@ -226,7 +226,7 @@ export function cmdFill() {
   // Said before the work starts, not after it at the merge. A warning: the tracks themselves can run.
   const identity = GI.readIdentity(GIT_ROOT);
   if (identity.refused)
-    console.log(`WARNING: cq merge will refuse this git identity (${identity.ident || 'none'}). Fix it now: ${GI.IDENTITY_FIX}`);
+    console.log(`WARNING: cq merge will refuse this git identity (${identity.ident || 'none'}): a test or missing address would end up in every merge commit. Fix it now: ${GI.IDENTITY_FIX}`);
   const usage = dailyUsageFor(read());
   const uncommitted = uncommittedPaths();
   // Measured before the lock; --over-load (the owner's word) overrides the load guard.
@@ -280,7 +280,10 @@ export function cmdFill() {
       }
     } else {
       const guard = L.startGuard(queue, usage, { cursor: readCursor(), load });
-      if (guard) die(guard.message, guard.code);
+      if (guard) {
+        for (const l of L.heldBackLines(L.uncommittedSkipped(queue, uncommitted))) console.log(l);
+        die(guard.message, guard.code);
+      }
       // The quota forecast (soft). Mode notice: just a line. Mode cap: at most so many new ones that the number of concurrent
       // tracks keeps the quota until the next reset; --over-quota overrides. An error in the forecast never stops fill.
       let quotaMax = Infinity;
@@ -338,6 +341,9 @@ export function cmdFill() {
   const waitLine = askedLine(triageWaiting);
   if (!selected.length) {
     console.log('Nothing can start now (see show and state).');
+    const holding = read().tasks.filter((o) => ['running', 'review', 'picked'].includes(o.status));
+    if (loadMessage && holding.length)
+      console.log(`The slots are held by: ${holding.map((o) => `${o.id} (${o.status})`).join(', ')}. A task in review holds its slot until it is merged or cancelled.`);
     for (const l of L.heldBackLines(L.uncommittedSkipped(read(), uncommitted))) console.log(l);
     for (const l of triageOut.lines) console.log(l);
     if (waitLine) console.log(waitLine);
@@ -414,7 +420,7 @@ export function cmdFill() {
   for (const d of descriptors)
     console.log(
       `${d.task_id}  ${CL.clientFor(d.client).agentLabel(d)}  migr ${d.migr_block ?? '-'}${d.new ? '' : '  (was already running)'}` +
-        `${d.warning ? '  WARNING in the track file (changed outside the queue)' : ''}` +
+        `${d.warning ? '  NB: files it owns changed since it was added (the track is told to read the diff)' : ''}` +
         `  (${fillEstimate(d.task_id)})`,
     );
   for (const l of triageOut.lines) console.log(l);
@@ -507,11 +513,14 @@ export function cmdResume() {
   // The same template as fill (make-queue-common + make-mission), with the track block from queueLogic.resumeBlock and
   // --continue in the setup. The track id is <id>-r<N>, so the agent's report lands in <scratchpad>/<id>-r<N>/ (receive
   // finds it).
-  const id = positional(1, ['--reason', '--round', '--scratchpad', '--findings-file', '--from'])[0];
+  const id = positional(1, ['--reason', '--round', '--scratchpad', '--findings-file', '--from', '--answer'])[0];
   const reason = val('--reason') ?? 'fix';
   const use =
-    'resume <id> [--reason fix|context] [--round N] [--findings-file <file>] [--from <reviewer,...>] [--scratchpad <folder>]';
+    'resume <id> [--reason fix|context] [--round N] [--findings-file <file>] [--from <reviewer,...>] [--answer "<text>"] [--scratchpad <folder>]';
   if (!id || !L.RESUME_REASONS.includes(reason)) die(use);
+  // --answer: the owner's answer to what the track asked. First in the brief, and saved as an addition to the mission.
+  const answer = a.includes('--answer') ? String(val('--answer') ?? '').trim() : null;
+  if (answer === '') die(`${use}\n--answer is empty.`);
   GB.ensure(FOLDER, GIT_ROOT);
   // --from: the reviewer types whose findings caused this fix round (the reviewer hit rate, lib/eventStatistics.js).
   // Saved in `resumed` and the fixRound row; a name that is not a known reviewer type is kept, with a warning.
@@ -538,7 +547,7 @@ export function cmdResume() {
   const last = (o.resumed ?? []).at(-1);
   const again =
     // Only that case: a second receive or a reviewer's findings (--from) is a real next round, and the cap must see it.
-    val('--round') == null && !fromList.length && last?.reason === reason && last.from?.includes('done_when') && found.report?.round !== last.round &&
+    val('--round') == null && !fromList.length && last?.reason === reason && (reason === 'context' || last.from?.includes('done_when')) && found.report?.round !== last.round &&
     (o.attempts ?? []).some((x) => x.state === 'reserved' && x.round === last.round);
   const round = val('--round') != null ? Number(val('--round')) : again ? last.round : found.nextRound;
   if (!Number.isInteger(round) || round < 1) die('--round must be an integer >= 1');
@@ -625,6 +634,7 @@ export function cmdResume() {
   const reviewFiles = reviewFolder
     ? fs.readdirSync(reviewFolder).filter((n) => !PACKAGE.has(n) && !n.startsWith('reviewer-'))
     : [];
+  const packageToRead = reviewFolder && (reviewFiles.length || fs.existsSync(path.join(reviewFolder, '00-package.md'))) ? reviewFolder : null;
   const sourcePath = missionFile(o);
   const original = L.trackBlock(o, queue, {
     text: sourcePath ? fs.readFileSync(sourcePath, 'utf8') : o.mission,
@@ -643,12 +653,13 @@ export function cmdResume() {
       reason,
       reportPath: found.report?.path ?? null,
       handoverPath: found.handover?.path ?? null,
-      reviewFolder,
+      reviewFolder: packageToRead,
       reviewFiles,
       findingsFile,
       original,
       doneCheck,
       gateCheck,
+      answer,
     }),
   );
   for (const [name, args] of [
@@ -675,6 +686,10 @@ export function cmdResume() {
     if (found.report) x.report_seen = Math.max(Number(x.report_seen ?? 0), found.report.mtimeMs);
     // The new round is the answer to what the track asked.
     if (L.openBlockOf(x)?.code === 'track-question') L.closeBlock(x);
+    if (answer) {
+      const t = L.addToBonus(x, `The owner's answer: ${answer}`, new Date().toISOString());
+      if (t) die(`Invalid answer: ${t}`);
+    }
     if (!again) (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}) });
     return reserved;
   });

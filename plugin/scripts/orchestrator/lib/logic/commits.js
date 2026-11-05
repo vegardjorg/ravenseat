@@ -168,7 +168,7 @@ function heldBackLines(skipped, { max = 10 } = {}) {
   if (!skipped?.length) return [];
   return [
     `Held back ${skipped.length} (a file the task owns is uncommitted in the main tree). Commit that file, and the task can start:`,
-    ...skipped.slice(0, max).map((h) => `  ${h.id}  file ${h.path}`),
+    ...skipped.slice(0, max).map((h) => `  ${h.id}  file ${h.file}`),
     ...(skipped.length > max ? [`  ... and ${skipped.length - max} more`] : []),
   ];
 }

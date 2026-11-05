@@ -49,7 +49,12 @@ function liteMode() {
   }
 }
 
-const [first, ...rest] = process.argv.slice(2);
+let [first, ...rest] = process.argv.slice(2);
+// `cq decide --help` asks about decide; running the command instead would answer something else, or change something.
+// A script (cq board, cq setup) has its own --help, so it still goes there.
+if (first && first !== 'help' && !HELP.ALIASES[first] && !scripts().includes(first) && (rest[0] === '--help' || rest[0] === '-h')) {
+  [first, rest] = ['help', [first]];
+}
 
 if (!first || first === 'help' || first === '--help' || first === '-h') {
   // The texts and the parsing are in lib/cliHelp.js; the full usage list lives as the comment at the top of queue.mjs.

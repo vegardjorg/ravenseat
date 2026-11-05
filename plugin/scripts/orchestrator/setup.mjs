@@ -355,7 +355,12 @@ export function mergeSettings(target, o = {}) {
   const touched = (o.keys && wanted.length) || changes.some((c) => c.startsWith('hook'));
   if (touched && !o.dry) {
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-    fs.writeFileSync(settingsPath, JSON.stringify(existing, null, 2) + '\n');
+    // Only the local status line changed: rewriting this file would change nothing but its line endings, and git would
+    // then call it modified. A real change keeps the file's line endings.
+    const next = JSON.stringify(existing, null, 2) + '\n';
+    const before = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8') : null;
+    if (before == null || before.replace(/\r\n/g, '\n') !== next)
+      fs.writeFileSync(settingsPath, before?.includes('\r\n') ? next.replace(/\n/g, '\r\n') : next);
   }
   return [`.claude/settings.json: ${changes.length ? changes.join('; ') : 'nothing to add'}`];
 }
@@ -403,8 +408,9 @@ if (isMain) {
   if (!flags.has('--dry')) {
     // A task that owns an uncommitted file is held back, and these are the files setup just wrote.
     const status = spawnSync('git', ['-C', target, 'status', '--porcelain'], { encoding: 'utf8' });
-    const open = status.status === 0 ? status.stdout.split(/\r?\n/).filter(Boolean).length : 0;
-    if (open) console.log(`  NOTE: ${open} path(s) are uncommitted here. Commit them before the first cq fill: a task that owns one of them is held back.`);
+    const paths = status.status === 0 ? status.stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3)) : [];
+    const open = paths.length;
+    if (open) console.log(`  NOTE: ${open} path(s) are uncommitted here (${paths.slice(0, 6).join(', ')}${open > 6 ? ', ...' : ''}). Commit them before the first cq fill: a task that owns one of them is held back.`);
     if (!fs.existsSync(path.join(path.dirname(setupRecordFile(target)), 'queue.json')))
       console.log('  Next: cq init makes the empty queue (lite; cq init --full for full mode), then cq add.');
   }

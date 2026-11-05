@@ -54,7 +54,7 @@
     'track-question': {
       name: 'The track asks you',
       next: (id) =>
-        `Next: answer, and the orchestrator passes it on in a new round (cq resume ${id} --reason context), or cq set ${id} cancelled. ` +
+        `Next: answer it, and a new agent gets the answer (cq resume ${id} --reason context --answer "<text>"), or cq set ${id} cancelled. ` +
         `If it needs a file the task does not own: cq edit ${id} --files <files> --by owner first. A finished delivery that needs no answer can be merged.`,
     },
     'gate-red': {
@@ -235,10 +235,17 @@
   /** A stop in the merge or the gates. "Seen" writes nothing: the card goes when the blocker closes. */
   function stopItem(h) {
     const stop = STOP_TEXT[h.stop.code];
-    const options = [{ label: 'Seen', recommended: true, action: { type: 'keep', id: h.id } }];
+    const asks = h.stop.code === 'track-question';
+    const options = [
+      ...(asks
+        ? [{ label: 'Answer, and prepare a new round', recommended: true, needsText: 'Your answer to the track', action: { type: 'track-answer', id: h.id, text: null } }]
+        : []),
+      { label: 'Seen', recommended: !asks, action: { type: 'keep', id: h.id } },
+    ];
     return {
       key: `unstick:${h.id}`,
       verb: 'unstick',
+      ...(asks ? { heading: 'ANSWER' } : {}),
       kind: 'stopped',
       kindName: stop.name,
       id: h.id,
@@ -427,6 +434,8 @@
         return ['release', a.id];
       case 'requeue':
         return ['set', a.id, 'waiting'];
+      case 'track-answer':
+        return ['resume', a.id, '--reason', 'context', '--answer', String(a.text ?? '')];
       case 'flag-stuck':
         return ['block', a.id, 'other', '--note', FLAG_NOTE];
       default:
@@ -464,6 +473,8 @@
         return { path: '/api/action', body: { type: a.type, id: a.id } };
       case 'qa-deviation':
         return { path: '/api/action', body: { type: 'qa-deviation', id: a.id, text: String(a.text ?? '') } };
+      case 'track-answer':
+        return { path: '/api/action', body: { type: 'track-answer', id: a.id, text: String(a.text ?? '') } };
       case 'decline':
         return { path: '/api/task-edit', body: { type: 'decline', id: a.id, ...(a.reason ? { reason: a.reason } : {}) } };
       default:
@@ -481,6 +492,7 @@
     if (a.type === 'decline') return `${item.id} declined`;
     if (a.type === 'release') return `${item.id} released to the queue`;
     if (a.type === 'requeue') return `${item.id} back in the queue`;
+    if (a.type === 'track-answer') return `${item.id}: answered. The new round is ready; the orchestrator starts its agent`;
     if (a.type === 'flag-stuck') return `${item.id} flagged for the orchestrator`;
     return `${item.id}: kept as it is`;
   }

@@ -1095,3 +1095,176 @@ describe('a long failure class (test round 3: N9)', () => {
     expect(KB.parseGate(`GATE ${long} @ src/a.js:1`)).toEqual({ title: long.trim(), where: 'src/a.js:1' });
   });
 });
+
+describe('answering what a track asked (test round 3: N12, N22)', () => {
+  const asked = () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    p.report('A', 'RESULT status=PARTIAL branch=queue/A commits=1 migr=- gates=- probe=- ownerQuestions=1 edge=-\n\nOwner questions:\n1. Which name?');
+    p.run(['receive', 'A']);
+    return p;
+  };
+  it('the card recommends answering, under its own heading', () => {
+    const p = asked();
+    const item = JSON.parse(p.run(['decide', '--json']).out).items.find((x: { id: string }) => x.id === 'A');
+    expect(item.options[0].label).toContain('Answer');
+    expect(item.options[0].recommended).toBe(true);
+    expect(item.options[0].cli).toContain('--answer');
+    expect(item.options[1].recommended).toBe(false);
+    expect(p.run(['decide']).out).toMatch(/ANSWER {2}A /);
+  });
+  it('resume --answer puts it first in the brief, keeps it for later rounds and closes the card', () => {
+    const p = asked();
+    const r = p.run(['resume', 'A', '--reason', 'context', '--answer', 'Call it halv2']);
+    expect(r.code, r.error).toBe(0);
+    const brief = fs.readFileSync(path.join(p.scratch, 'prompt-A-r1.md'), 'utf8');
+    expect(brief).toContain("The owner answers the track's question:** Call it halv2");
+    expect(JSON.stringify(p.find('A').bonus)).toContain('Call it halv2');
+    expect(JSON.parse(p.run(['decide', '--json']).out).items.find((x: { id: string }) => x.id === 'A')).toBeUndefined();
+  });
+  it('an empty answer stops before any round is made', () => {
+    const p = asked();
+    expect(p.run(['resume', 'A', '--reason', 'context', '--answer', '']).code).not.toBe(0);
+    expect(p.find('A').resumed).toBeUndefined();
+  });
+  it('another stop still says Seen', () => {
+    const p = project([task('A', { status: 'review', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.g(['branch', 'queue/A']);
+    p.patch('A', (o) => { (o as Record<string, unknown>).blocks = [{ code: 'merge-guard', from: new Date().toISOString() }]; });
+    const item = JSON.parse(p.run(['decide', '--json']).out).items.find((x: { id: string }) => x.id === 'A');
+    expect(item.options[0].label).toBe('Seen');
+  });
+});
+
+describe('when nothing can start (test round 3: N6, N7, N23)', () => {
+  const dirty = () => {
+    const p = project([task('A', { owned_files: ['new/deep.txt'] })]);
+    fs.mkdirSync(path.join(p.repo, 'new'));
+    fs.writeFileSync(path.join(p.repo, 'new', 'deep.txt'), 'x\n');
+    return p;
+  };
+  it('names the file the task owns, not the folder git shows', () => {
+    const r = dirty().run(['fill']);
+    expect(r.out).toContain('A  file new/deep.txt');
+  });
+  it('a full machine does not hide what is held back', () => {
+    const p = dirty();
+    const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'queue.mjs'), 'fill', '--scratchpad', p.scratch], { encoding: 'utf8', env: { ...p.env, QUEUE_LOAD: 'free=1' }, cwd: p.folder });
+    expect(r.status).toBe(7);
+    expect(r.stdout).toContain('Held back 1');
+    expect(r.stderr).toContain('THE MACHINE IS FULL');
+  });
+  it('with few slots it says a task in review holds one', () => {
+    const p = project([task('A', { status: 'review', branch: 'queue/A', started: new Date().toISOString() }), task('B')]);
+    p.g(['branch', 'queue/A']);
+    const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'queue.mjs'), 'fill', '--scratchpad', p.scratch], { encoding: 'utf8', env: { ...p.env, QUEUE_LOAD: 'free=11' }, cwd: p.folder });
+    expect(r.stdout).toContain('Nothing can start');
+    expect(r.stdout).toContain('The slots are held by: A (review)');
+  });
+});
+
+describe('rounds and briefs (test round 3: N15, N20)', () => {
+  it('a continuation made twice with no agent between is one round', () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    expect(p.run(['resume', 'A', '--reason', 'context']).out).toContain('RESUME A-r1');
+    const again = p.run(['resume', 'A', '--reason', 'context']);
+    expect(again.out).toContain('RESUME A-r1');
+    expect(again.out).toContain('never started');
+    expect(p.find('A').resumed).toHaveLength(1);
+  });
+  it('after a red gate at receive the brief points at no package', () => {
+    const p = project([task('A')], { gates: { quick: ['node -e "process.exit(3)"'] } });
+    p.run(['start', 'A']);
+    p.branch('A');
+    p.worktree('A');
+    p.report('A', RESULT('A'));
+    p.run(['receive', 'A']);
+    p.run(['resume', 'A', '--reason', 'fix']);
+    expect(fs.readFileSync(path.join(p.scratch, 'prompt-A-r1.md'), 'utf8')).not.toContain('00-package.md first');
+  });
+});
+
+describe('false signals (test round 3: N1, N31, N32)', () => {
+  it('setup --settings leaves settings.json as it was when nothing in it changes', () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-setup-'));
+    temporary.push(folder);
+    execFileSync('git', ['-C', folder, 'init', '-q', '-b', 'main']);
+    const setup = () => spawnSync(process.execPath, [path.join(SCRIPTS, 'setup.mjs'), '--target', folder, '--settings'], { encoding: 'utf8', cwd: folder });
+    expect(setup().status).toBe(0);
+    const file = path.join(folder, '.claude', 'settings.json');
+    const crlf = fs.readFileSync(file, 'utf8').replace(/\n/g, '\r\n');
+    fs.writeFileSync(file, crlf);
+    setup();
+    expect(fs.readFileSync(file, 'utf8')).toBe(crlf);
+  });
+  it('setup names what is uncommitted', () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-setup-'));
+    temporary.push(folder);
+    execFileSync('git', ['-C', folder, 'init', '-q', '-b', 'main']);
+    execFileSync('git', ['-C', folder, ...ID, 'commit', '-q', '--allow-empty', '-m', 'start']);
+    const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'setup.mjs'), '--target', folder], { encoding: 'utf8', cwd: folder });
+    expect(r.stdout).toMatch(/uncommitted here \(.*queue\.config\.json/);
+  });
+  it('a block left open on a cancelled task is not open and does not grow', () => {
+    const L = require('../lib/queueLogic.js');
+    const from = new Date(Date.now() - 3_600_000).toISOString();
+    const [row] = L.blockerSummary({ tasks: [{ id: 'A', status: 'cancelled', blocks: [{ code: 'gate-red', from }] }] });
+    expect(row).toMatchObject({ code: 'gate-red', count: 1, open: 0, ms: 0 });
+  });
+  it('cq <command> --help is the help, and runs nothing', () => {
+    const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'cq.mjs'), 'decide', '--help'], { encoding: 'utf8', cwd: os.tmpdir() });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('cq decide');
+    expect(r.stdout).not.toContain('Waiting on you');
+    expect(r.stdout).not.toContain('Nothing waiting');
+  });
+});
+
+describe('the board answers a track through the same command (test round 3: N12)', () => {
+  it('POST /api/action { type: track-answer } starts the new round; an empty answer gives 400', async () => {
+    const { spawn } = require('node:child_process');
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    p.report('A', 'RESULT status=PARTIAL branch=queue/A commits=1 migr=- gates=- probe=- ownerQuestions=1 edge=-\n\nOwner questions:\n1. Which name?');
+    p.run(['receive', 'A']);
+    const net = require('node:net');
+    const port = await new Promise<number>((done) => {
+      const s = net.createServer().listen(0, '127.0.0.1', () => {
+        const free = s.address().port;
+        s.close(() => done(free));
+      });
+    });
+    const board = spawn(process.execPath, [path.join(SCRIPTS, 'queue-board.mjs'), '--port', String(port)], { cwd: p.folder, env: p.env });
+    let said = '';
+    board.stderr.on('data', (d: Buffer) => (said += String(d)));
+    try {
+      const open = await new Promise<RegExpExecArray>((done, fail) => {
+        let out = '';
+        const timer = setTimeout(() => fail(new Error(`no start line: ${out} ${said}`)), 60_000);
+        board.stdout.on('data', (d: Buffer) => {
+          out += String(d);
+          const m = /Open: (http:\/\/[^/\s]+)\/#key=(\S+)/.exec(out);
+          if (m) { clearTimeout(timer); done(m); }
+        });
+      });
+      const post = (text: string) =>
+        fetch(`${open[1]}/api/action`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-queue-key': open[2] },
+          body: JSON.stringify({ type: 'track-answer', id: 'A', text }),
+        });
+      const empty = await post('  ');
+      expect(empty.status).toBe(400);
+      expect(p.find('A').resumed).toBeUndefined();
+      const ok = await post('Call it halv2');
+      expect(ok.status, await ok.clone().text()).toBe(200);
+      expect(JSON.stringify(p.find('A').bonus)).toContain('Call it halv2');
+      expect(p.find('A').resumed).toHaveLength(1);
+    } finally {
+      const gone = new Promise((done) => board.once('exit', done));
+      board.kill();
+      await gone;
+    }
+  }, 120_000);
+});

@@ -352,7 +352,7 @@ export function redLines({ entry, run, fix, causeId = null, stayedInReview = fal
       '.',
     ...BH.excerpt(tail).map((l) => `  | ${l}`),
     ...(entry.tail_file ? [`Output tail: ${entry.tail_file}`] : []),
-    `The merge stays (no automatic revert). ${CQ} merge refuses every other track until ${BASE} is green again (exit ${BH.EXIT_RED_BASE}).`,
+    `${by ? `The merge of ${by.task} stays` : 'What is on the base stays'} (no automatic revert). ${CQ} merge refuses every other track until ${BASE} is green again (exit ${BH.EXIT_RED_BASE}).`,
   ];
   if (fix)
     lines.push(

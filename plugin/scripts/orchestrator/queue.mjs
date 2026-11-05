@@ -203,7 +203,8 @@
 //        (a running attempt blocks a new one, so close it when its agent is gone. For Claude the guard is best effort; the
 //         cases are at the top of lib/logic/attempt.js. Refused inside a track worktree; logged, so cq undo takes it back.)
 //   node scripts/orchestrator/queue.mjs resume <id> [--reason fix|context] [--round N] [--findings-file <file>]
-//                                                [--from <reviewer,...>] [--scratchpad <folder>]
+//                                                [--from <reviewer,...>] [--answer "<text>"] [--scratchpad <folder>]
+//        (--answer: the owner's answer to what the track asked; first in the brief, and kept as an addition to the mission.)
 //        (--from: the reviewer types whose findings caused the fix round, saved in `resumed[].from` and the fixRound
 //         row; the reviewer hit rate in cq cost and the board's Flow box counts them.)
 //        (fix-round cap: at max_fix_rounds (task) or config().maxFixRounds (default 3) fix rounds, --reason fix registers

@@ -1296,7 +1296,7 @@ export async function cmdMerge() {
         console.log(`RESUME: when the cause is fixed, ${CQ} merge ${id} --resume runs the steps that are left (${left.join(', ')}).`);
     } else if (ML.gitInProgress(gitPathOf).some((x) => x.kind === 'merge'))
       console.log(
-        `RESUME: resolve the files, git add them and git commit --no-edit, then ${CQ} merge ${id} --resume runs the rest ` +
+        `RESUME, doing it yourself: resolve the files, git add them and git commit --no-edit, then ${CQ} merge ${id} --resume runs the rest ` +
           '(or undo with git merge --abort).',
       );
     // A real conflict: the files and the other tasks that touched them go on the task (merge_conflict), so the fix

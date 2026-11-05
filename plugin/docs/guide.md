@@ -134,7 +134,8 @@ kept). Commit the result.
 **Cleaning up.** `cq merge` removes the worktree and the branch of what it merges. For the rest, `cq doctor` lists what is
 left: `cq cleanup-worktree --all` lists the worktrees of merged work, and `--execute` removes them. `cq set <id> cancelled`
 deletes nothing and says what is left; `cq cleanup-worktree <branch> --abandon --execute` removes that worktree and keeps
-the branch, and `git branch -D <branch>` drops the commits too.
+the branch, and `git branch -D <branch>` drops the commits too. Claude Code's auto mode can refuse these when an agent
+runs them, since they delete things; run them yourself in that case.
 
 **Status line and handover.** `cq setup --settings` adds a status line with context, cost, quota and running
 tracks (run it again after a plugin update). The orchestrator keeps a handover note; after compaction it reads only

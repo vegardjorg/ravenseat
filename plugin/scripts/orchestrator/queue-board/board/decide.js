@@ -102,7 +102,7 @@ function scheduleDecision(item, option, text) {
   const action = { ...option.action };
   if (text != null) {
     if (action.type === 'resolve') action.answer = text;
-    else if (action.type === 'qa-deviation') action.text = text;
+    else if (action.type === 'qa-deviation' || action.type === 'track-answer') action.text = text;
     else if (action.type === 'decline') action.reason = text;
   }
   const label = D.doneText(item, option, text);

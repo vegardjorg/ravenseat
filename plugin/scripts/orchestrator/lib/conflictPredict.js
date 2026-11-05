@@ -482,7 +482,7 @@ function mergeStopLines(mc, { id, cq = 'cq' }) {
   return [
     `CONFLICTING FILES for ${id}:`,
     ...conflictFileLines(mc).map((l) => `  ${l}`),
-    `A fix round starts informed: git merge --abort here first, then ${cq} resume ${id} --reason fix (the brief names these files and tasks).`,
+    `Or leave it to an agent, and the fix round starts informed: git merge --abort here first, then ${cq} resume ${id} --reason fix (the brief names these files and tasks).`,
   ];
 }
 

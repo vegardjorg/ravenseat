@@ -87,7 +87,7 @@ export function decisionLines(j, { width = WIDTH, max = Infinity, cq = CQ } = {}
     );
     for (const x of j.items.slice(0, max)) {
       out.push('');
-      out.push(cut(`${x.nr}. ${x.verb.toUpperCase()}  ${x.id}  ${x.title}`, width));
+      out.push(cut(`${x.nr}. ${x.heading ?? x.verb.toUpperCase()}  ${x.id}  ${x.title}`, width));
       out.push(`   ${x.impact_line}`);
       for (const c of x.context) out.push(`   ${c}`);
       x.options.forEach((o, i) => {
