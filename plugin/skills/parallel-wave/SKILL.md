@@ -191,7 +191,7 @@ on the same branch. Stop the old session first, so two orchestrators do not rece
 - `next`/`start` skip tasks that own an uncommitted file in the main tree.
 - **Push check** before every push: `cq push-check`. Exit 0: push (when the owner has said
   "push", or in push mode `threshold` when the verdict line says READY or LARGE; BLOCKED = never push, NOT YET =
-  keep collecting). Exit 2: external commits: ask the owner (take everything / push only the queue's part when a safe cut point
+  keep collecting). Exit 2 (mode threshold): external commits: ask the owner (take everything / push only the queue's part when a safe cut point
   is printed / wait). History is never rewritten.
   A push needs a green `cq gates --full` run in the main checkout on the tip with no uncommitted changes (BLOCKED
   otherwise). With `push.ciWatch` on (push-check prints the line), start `cq push-check --watch-ci <sha>` with

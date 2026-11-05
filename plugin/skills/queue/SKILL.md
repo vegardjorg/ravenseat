@@ -112,7 +112,7 @@ Follow `parallel-wave` ("Continuous queue") unchanged. Specific to taking over:
 - **Push:** always `cq push-check` right before, and read its verdict line. Push mode `owner` (the default in
   queue.config.json `push.mode`): never `git push` before the owner says "push". Mode `threshold`: push by yourself
   when the verdict is READY or LARGE, never when it is BLOCKED (base red, external commits, remote ahead); NOT YET =
-  keep collecting. Exit 2 (external commits) = ask the owner first. Below `push.minTasks` the push guard shows a
+  keep collecting. Exit 2 (external commits, mode threshold only) = ask the owner first. In mode owner they are one line; pass it on when the owner says "push". Below `push.minTasks` the push guard shows a
   confirmation dialog; that is a reminder for the owner, never something to work around. Your own commits on the base branch get
   `--trailer "Queue: orchestrator"`.
 - **Shared working tree:** always commit with `git commit -- <files>`, and never touch files another session has

@@ -23,7 +23,8 @@
 // --watch-ci is the optional CI watch after a batch push (config().push.ciWatch, off by default; cli/ciWatch.mjs):
 // started in the background, it exits 0 green or infrastructure (an owner question), 9 on a failed check (the fix task
 // CI-<sha7>, the base red), 10 on timeout. When it is on, the verdict below names the command to start.
-// Exit: 0 = no external commits (or nothing to push); 2 = external commits (the list, and a safe cut point when one
+// In push mode "owner" commits outside the queue are one neutral line and exit 0: nothing goes out before the owner's word.
+// Exit: 0 = no external commits (or nothing to push); in mode threshold 2 = external commits (the list, and a safe cut point when one
 // exists), or the git hooks and config differ from the accepted baseline (lib/gitSurfaceBaseline.js: said first, before
 // any other git command, because `git status` below can start a planted core.fsmonitor); 1 = error (e.g. unknown ref).
 // QUEUE_GIT overrides the repo (smoke test against a temporary repo), as in queue.mjs.
@@ -124,7 +125,7 @@ const health = BH.verdict(BH.readState(path.join(dataFolder(), 'base-health.json
 // The full gate on exactly the tip, from the trusted gate evidence (lib/gateEvidence.js: the orchestrator's own runs,
 // never a track's rows in the time log). 'off' when gates.full has no commands.
 const fullGate = GE.fullGateVerdict({ folder: dataFolder(), sha: toSha, cfg: K });
-const blocked = PB.blockedTexts({ external: plan.externalOnes.length, behind: back, from: FROM, to: TO });
+const blocked = PB.blockedTexts({ external: plan.externalOnes.length, behind: back, from: FROM, to: TO, mode: SETUP.mode });
 const verdict = PB.batchVerdict({ batch, setup: SETUP, health, fullGate, blocked });
 // No CI config or no gates (lib/controls.js): said here too, since the orchestrator reads this before a push.
 const missingControls = require('./lib/controls.js').missing(K, K.root);
@@ -184,13 +185,13 @@ if (AS_JSON) {
   console.log(textReport().join('\n'));
 }
 // exitCode (not process.exit), so the output in a pipe is always written in full.
-process.exitCode = plan.externalOnes.length ? 2 : 0;
+process.exitCode = plan.externalOnes.length && SETUP.mode !== 'owner' ? 2 : 0;
 
 function textReport() {
   const out = [];
   out.push(
     `Push-check ${FROM} (${summary(fromSha)})..${TO} (${summary(toSha)}): ${plan.total} commit(s) on the first-parent line ` +
-      `(${total} in total): ${plan.queue} from the queue, ${plan.orchestrator} from the orchestrator, ${plan.externalOnes.length} external.`,
+      `(${total} in total): ${plan.queue} from the queue, ${plan.orchestrator} from the orchestrator, ${plan.externalOnes.length} outside the queue.`,
   );
   if (back)
     out.push(
@@ -202,6 +203,12 @@ function textReport() {
       SETUP.mode === 'threshold'
         ? 'No external commits: everything belongs to the queue and the orchestrator. Push mode threshold: push when the verdict below is READY or LARGE, never BLOCKED.'
         : 'No external commits: everything belongs to the queue and the orchestrator. Push only when the owner has said "push".',
+    );
+  else if (SETUP.mode === 'owner')
+    out.push(
+      `${plan.externalOnes.length} commit(s) outside the queue go along with the next push (cq external lists them).` +
+        (plan.cutPoint ? ` To leave them out: git push ${K.remote} ${plan.cutPoint}:${K.baseBranch}` : '') +
+        ' Push only when the owner has said "push".',
     );
   else {
     out.push('');

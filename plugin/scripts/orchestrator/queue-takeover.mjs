@@ -390,6 +390,6 @@ if (AS_JSON) {
     out.push(
       `    ${outside.collisions_pending} collision(s) with pending tasks (cq external)`,
     );
-  out.push('  Push: run push-check.mjs first; external commits are never pushed without an owner answer.');
+  out.push('  Push: run push-check.mjs first; it names commits outside the queue, and nothing goes out without the owner.');
   console.log(out.join('\n'));
 }

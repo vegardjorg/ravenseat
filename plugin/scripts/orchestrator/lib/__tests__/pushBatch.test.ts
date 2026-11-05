@@ -395,6 +395,13 @@ describe('push-check batch status', () => {
     q.queueMerge('A-1');
     q.commit('x.txt', 'docs: from another session');
     c = q.pushCheck();
+    expect(c.code).toBe(0);
+    expect(c.out).toContain('1 commit(s) outside the queue go along with the next push');
+    expect(c.out).not.toContain('BLOCKED');
+    const t = project({ minTasks: 1, mode: 'threshold' });
+    t.queueMerge('A-1');
+    t.commit('x.txt', 'docs: from another session');
+    c = t.pushCheck();
     expect(c.code).toBe(2);
     expect(c.out).toContain('Verdict: BLOCKED (1 external commit(s): ask the owner first).');
   }, 60_000);

@@ -681,13 +681,22 @@ describe('a legitimate change is explained, not accused', () => {
     expect(p.run(['receive', 'A']).code).toBe(0);
   });
 
-  it('the message reads the same in lite mode', () => {
-    const p = project({ mode: 'lite', gates: { quick: [OK_GATE] } });
+  it('the message reads the same in lite mode with gitSurface stop', () => {
+    const p = project({ mode: 'lite', gitSurface: 'stop', gates: { quick: [OK_GATE] } });
     p.run(['surface', 'accept', '--by', 'owner']);
     fs.writeFileSync(p.globalConfig, '[alias]\n\tst = status\n');
     const r = p.run(['receive', 'A']);
     expect(r.code).toBe(1);
     expectFriendly(r.err);
+  });
+
+  it('lite without a setting warns and goes on', () => {
+    const p = project({ mode: 'lite', gates: { quick: [OK_GATE] } });
+    p.run(['surface', 'accept', '--by', 'owner']);
+    fs.writeFileSync(p.globalConfig, '[alias]\n\tst = status\n');
+    const r = p.run(['receive', 'A']);
+    expect(r.err).toContain('gitSurface is warn');
+    expect(r.err).not.toContain('Nothing was received');
   });
 });
 

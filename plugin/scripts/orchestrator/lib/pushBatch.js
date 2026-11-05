@@ -188,10 +188,14 @@ function batchVerdict({ batch, setup, health = 'unknown', fullGate = 'off', bloc
   return { verdict: 'NOT_YET', reason: `${n} of ${setup.minTasks} merged tasks`, aged };
 }
 
-/** What stops a push beyond the base and the full gate; push-check and the board give the same texts. */
-function blockedTexts({ external = 0, behind = 0, from = 'the remote', to = 'the base' }) {
+/**
+ * What stops a push beyond the base and the full gate; push-check and the board give the same texts. In mode "owner" a
+ * commit outside the queue stops nothing: nothing is pushed before the owner's word, and it is usually the owner's commit.
+ * In mode "threshold" the orchestrator pushes by itself, so it must not take such a commit along unasked.
+ */
+function blockedTexts({ external = 0, behind = 0, from = 'the remote', to = 'the base', mode = 'threshold' }) {
   return [
-    ...(external ? [`${external} external commit(s): ask the owner first`] : []),
+    ...(external && mode !== 'owner' ? [`${external} external commit(s): ask the owner first`] : []),
     ...(behind ? [`${from} has ${behind} commit(s) not in ${to}`] : []),
   ];
 }

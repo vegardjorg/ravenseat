@@ -41,10 +41,20 @@ describe('push.allowBranches', () => {
     expect(assess('git push origin feat/x', c)).toBeNull();
     expect(assess('git push origin main', c)?.decision).toBe('ask');
   });
-  it('never allows a forced push, a delete, or --all', () => {
-    expect(decision('git push --force origin feat/x', allow)).toBe('deny');
-    expect(decision('git push --force-with-lease origin feat/x', allow)).toBe('deny');
-    expect(decision('git push origin +feat/x', allow)).toBe('deny');
+  it('a forced push of an allowed branch asks; the base, another branch and an agent stay denied', () => {
+    expect(decision('git push --force origin feat/x', allow)).toBe('ask');
+    expect(decision('git push --force-with-lease origin feat/x', allow)).toBe('ask');
+    expect(decision('git push origin +feat/x', allow)).toBe('ask');
+    expect(decision('git push --force origin main', allow)).toBe('deny');
+    expect(decision('git push --force origin feat/x main', allow)).toBe('deny');
+    expect(decision('git push --force origin other', allow)).toBe('deny');
+    expect(decision('git push --force origin feat/x', { ...allow, agentType: 'worker' })).toBe('deny');
+    expect(decision('git push --force origin feat/x')).toBe('deny');
+    const secret = { ...allow, allowedBranchQuestion: () => 'A key in x.ts:3.' };
+    expect(assess('git push --force origin feat/x', { ...STD, ...secret })?.reason).toContain('A key in x.ts:3.');
+  });
+
+  it('never allows a delete or --all', () => {
     expect(decision('git push origin :feat/x', allow)).toBe('deny');
     expect(decision('git push --delete origin feat/x', allow)).toBe('deny');
     expect(decision('git push --all origin', allow)).toBe('deny');

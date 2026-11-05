@@ -478,7 +478,7 @@ function pushStops(from, to, batch) {
   const plan = L.pushPlan(G.classify(gitRead, raw, { from }).reverse());
   const behind = Number(String(gitRead(['rev-list', '--count', `${to}..${from}`]) ?? '0').trim()) || 0;
   return {
-    blocked: PB.blockedTexts({ external: plan.externalOnes.length, behind, from: `${REMOTE}/${BASE}`, to: BASE }),
+    blocked: PB.blockedTexts({ external: plan.externalOnes.length, behind, from: `${REMOTE}/${BASE}`, to: BASE, mode: PUSH_SETUP.mode }),
     fullGate: require('./lib/gateEvidence.js').fullGateVerdict({ folder: FOLDER, sha: batch.tip, cfg: CONFIG }),
   };
 }

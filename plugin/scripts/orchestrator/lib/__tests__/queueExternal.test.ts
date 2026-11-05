@@ -511,10 +511,10 @@ describe('against a temporary git repo', () => {
     expect(p).toMatchObject({ total: 2, queue: 1, orchestrator: 1, externalOnes: [] });
     const cli = run('push-check.mjs', [], { QUEUE_GIT: r.dir });
     expect(cli.code).toBe(0);
-    expect(cli.out).toContain('0 external.');
+    expect(cli.out).toContain('0 outside the queue.');
   }, 60_000);
 
-  it('external commit AFTER the queue ones: a safe cutPoint (exit 2, git push origin <sha>:main)', () => {
+  it('external commit AFTER the queue ones: a safe cutPoint (git push origin <sha>:main)', () => {
     const r = makeRepo();
     const merge = r.queueMerge('A-1', 'a.txt');
     r.commit('docs/plan.md', 'docs: plan from another session');
@@ -522,10 +522,8 @@ describe('against a temporary git repo', () => {
     expect(p).toMatchObject({ cutPoint: merge, merged: false });
     expect(p.externalOnes).toHaveLength(1);
     const cli = run('push-check.mjs', [], { QUEUE_GIT: r.dir });
-    expect(cli.code).toBe(2);
-    expect(cli.out).toContain(`safe cut point: ${merge.slice(0, 8)}`);
-    expect(cli.out).toContain(`git push origin ${merge}:main`);
-    expect(cli.out).toContain('docs/plan.md');
+    expect(cli.code).toBe(0);
+    expect(cli.out).toContain(`To leave them out: git push origin ${merge}:main`);
   }, 60_000);
 
   it('external commit BEFORE the queue ones: no cutPoint, and the history is never rewritten', () => {
@@ -534,7 +532,7 @@ describe('against a temporary git repo', () => {
     r.queueMerge('A-1', 'a.txt');
     expect(plan(r)).toMatchObject({ cutPoint: null, merged: true });
     const cli = run('push-check.mjs', ['--json'], { QUEUE_GIT: r.dir });
-    expect(cli.code).toBe(2);
+    expect(cli.code).toBe(0);
     expect(JSON.parse(cli.out)).toMatchObject({ cutPoint: null, merged: true, queue: 1 });
   }, 60_000);
 

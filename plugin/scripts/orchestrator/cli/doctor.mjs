@@ -16,7 +16,7 @@
 //   branches    queue branches of done or cancelled tasks, and merged agent branches, still there (WARN only)
 //   git         INFO when git is older than 2.38: no `git merge-tree --write-tree`, so the conflict prediction
 //               (lib/conflictPredict.js) falls back to file overlap (QUEUE_GIT_VERSION overrides the version, tests)
-//   ci-cost     .github/workflows/*.yml that run on push: WARN without concurrency cancel-in-progress, INFO without a
+//   ci-cost     only with --all: .github/workflows/*.yml that run on push: INFO without concurrency cancel-in-progress or a
 //               paths/paths-ignore filter (a text scan, lib/pushBatch.js workflowCost)
 //   merge, settings, in-base (cli/doctorRepo.mjs): a lingering MERGE_HEAD in the main checkout, disableAllHooks in a
 //               Claude Code settings file, done tasks whose merge commit or branch is not in baseBranch (all WARN)
@@ -52,7 +52,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus'];
+const CLOSED = ['identity', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -219,6 +219,7 @@ function checkConfig() {
     }
   }
   if (own.mode != null && !['lite', 'full'].includes(own.mode)) wrong.push(`mode is "${own.mode}", expected lite or full`);
+  if (own.dependencyFiles != null && !['stop', 'warn'].includes(own.dependencyFiles)) wrong.push(`dependencyFiles is "${own.dependencyFiles}", expected stop or warn`);
   if (own.gitSurface != null && !GB.MODES.includes(own.gitSurface)) wrong.push(`gitSurface is "${own.gitSurface}", expected ${GB.MODES.join(', ')} (treated as stop)`);
   // The push keys have value rules beyond the type (lib/pushBatch.js setupProblems).
   wrong.push(...PB.setupProblems(own.push).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
@@ -483,7 +484,7 @@ function checkGit() {
   ];
 }
 
-/** `cq doctor [--json]` (the usage is at the top of queue.mjs). */
+/** `cq doctor [--json] [--all]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
   const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, ...REPO_CHECKS, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
@@ -493,8 +494,10 @@ export function cmdDoctor() {
       return [fail(f.name.replace(/^check/, '').toLowerCase(), `the check failed: ${e?.message ?? e}`, 'report it as a bug')];
     }
   });
-  // Quiet guidance (lib/guidance.js) drops the advice rows, never a FAIL, and says how many went.
-  const { rows: checks, hidden } = require('./lib/guidance.js').filterDoctor(every, require('./lib/guidance.js').readQuiet(FOLDER));
+  // Quiet guidance (lib/guidance.js) drops the advice rows, never a FAIL, and says how many went. --all shows everything.
+  const { rows: checks, hidden } = require('./lib/guidance.js').filterDoctor(every, require('./lib/guidance.js').readQuiet(FOLDER), {
+    all: a.includes('--all'),
+  });
   const failed = checks.some((c) => c.status === 'FAIL');
   if (a.includes('--json')) console.log(JSON.stringify({ ok: !failed, checks, advice_hidden: hidden }, null, 2));
   else {
@@ -504,7 +507,7 @@ export function cmdDoctor() {
     }
     const n = (s) => checks.filter((c) => c.status === s).length;
     console.log(`\n${n('OK')} OK, ${n('WARN')} WARN, ${n('INFO')} INFO, ${n('FAIL')} FAIL${failed ? ' (exit 1)' : ''}. Nothing was changed.`);
-    if (hidden) console.log(`${hidden} advice line(s) not shown: guidance is quiet (${CQ} guidance guided shows them).`);
+    if (hidden) console.log(`${hidden} advice line(s) not shown: guidance is quiet (${CQ} doctor --all shows them).`);
   }
   if (failed) process.exit(1);
 }

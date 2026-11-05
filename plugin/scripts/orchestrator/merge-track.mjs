@@ -184,7 +184,15 @@ function writeWithNewAttempt(file, text) {
     migrations: K.migrations,
     protectedPaths: G.withPaths(Array.isArray(K.protectedPaths) ? K.protectedPaths : undefined, helperPaths),
     allowGuard: ALLOW_GUARD,
+    dependencyFiles: K.dependencyFiles,
   });
+  if (guard.warned.length > 0) {
+    console.log(
+      `WARNING dependency file(s) changed (${taskName ?? branch}): ${guard.warned.join(', ')}. They can run code on install ` +
+        `and hold check settings, so read the diff (git diff HEAD...${branch} -- <path>). dependencyFiles: "stop" in ` +
+        'queue.config.json makes this a stop.',
+    );
+  }
   if (guard.drift.length > 0) {
     console.log(
       `WARNING ownership drift (${taskName ?? branch}): ${guard.drift.length} file(s) outside owned_files + shared_patch:`,

@@ -490,12 +490,14 @@ commit. Projects with gates and the harness as their safety net push 20 to 500+ 
   GREEN|RED|not checked at <sha>` and one verdict line (`--json` has it under `batch`):
   - `READY`: at least `push.minTasks` merged tasks, or the oldest work is older than `push.maxAgeHours`;
   - `NOT YET (n of minTasks)`: below the threshold;
-  - `BLOCKED`: the base is red at the tip (the [base gate](#the-base-gate-a-red-base-stops-the-merges)), there are
-    external commits, or the remote has commits the base branch does not;
+  - `BLOCKED`: the base is red at the tip (the [base gate](#the-base-gate-a-red-base-stops-the-merges)), the remote has
+    commits the base branch does not, or (mode `threshold`) there are commits outside the queue;
   - `LARGE`: at least `push.warnTasks` merged tasks: push recommended (a large batch makes a red CI harder to bisect).
     A warning, never a block;
   - `NOTHING`: nothing to push.
-  The verdict does not change push-check's exit code (0, or 2 for external commits, as before).
+  The verdict does not change push-check's exit code: 0, or in mode `threshold` 2 for commits outside the queue. In mode
+  `owner` such commits are one neutral line, with the command that leaves them out when there is a safe cut point, and
+  `cq external` lists them: nothing goes out before the owner's word anyway.
 - **The modes.** `push.mode` `"owner"` (the default): the orchestrator never pushes on its own, only when the owner
   says "push", as before. `"threshold"`: the orchestrator may push by itself when push-check says `READY` or `LARGE`,
   never when it says `BLOCKED` (and never with external commits the owner has not answered for).

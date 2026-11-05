@@ -211,12 +211,17 @@ function isMigrationPath(p, migrations = null) {
   return Boolean(folder) && path.toLowerCase().startsWith(`${folder.toLowerCase()}/`);
 }
 
+// Dependency files: protected by default, but a task adding a library is ordinary work. dependencyFiles "warn" lets them
+// through with a warning. Only these names, and only when the floor does not cover the path.
+const DEPENDENCY_FILES = ['package.json', 'package-lock.json', 'pyproject.toml', 'cargo.toml'];
+const isDependencyFile = (p) => DEPENDENCY_FILES.includes(norm(p).toLowerCase().split('/').pop()) && !isProtected(p, []);
+
 /**
  * Assess a diff against the task's ownership.
  * @param {{ changes: { status: string, paths: string[] }[], ownedFiles?: string[], sharedPatch?: string[],
  *           migrBlock?: string | null, migrations?: { folder?: string|null, filePattern?: string } | null,
- *           protectedPaths?: string[], allowGuard?: boolean }} input
- * @returns {{ violations: { path: string, reason: string }[], drift: string[], stop: boolean, overridden: boolean }}
+ *           protectedPaths?: string[], allowGuard?: boolean, dependencyFiles?: string }} input
+ * @returns {{ violations: { path: string, reason: string }[], drift: string[], warned: string[], stop: boolean, overridden: boolean }}
  */
 function assessGuard({
   changes,
@@ -226,6 +231,7 @@ function assessGuard({
   migrations = null,
   protectedPaths = defaultProtected(),
   allowGuard = false,
+  dependencyFiles = 'stop',
 }) {
   const owned = [...(ownedFiles || []), ...(sharedPatch || [])].map(norm).filter(Boolean);
   const hasOwnership = owned.length > 0 || Boolean(migrBlock);
@@ -233,6 +239,7 @@ function assessGuard({
 
   const violations = [];
   const drift = [];
+  const warned = [];
   const seen = new Set();
   for (const e of changes || []) {
     const move = (e.status === 'R' || e.status === 'C') && e.paths.length === 2;
@@ -243,7 +250,8 @@ function assessGuard({
       if (seen.has(p)) return;
       seen.add(p);
       if (isOwned(p)) return;
-      if (isProtected(p, protectedPaths)) {
+      if (dependencyFiles === 'warn' && isProtected(p, protectedPaths) && isDependencyFile(p)) warned.push(p);
+      else if (isProtected(p, protectedPaths)) {
         let reason = "protected path, not in the task's owned_files/shared_patch";
         if (move && e.status === 'R')
           reason += i === 1 ? ` (renamed from ${e.paths[0]})` : ` (renamed to ${e.paths[1]})`;
@@ -257,6 +265,7 @@ function assessGuard({
   return {
     violations,
     drift,
+    warned,
     stop: violations.length > 0 && !allowGuard,
     overridden: violations.length > 0 && Boolean(allowGuard),
   };

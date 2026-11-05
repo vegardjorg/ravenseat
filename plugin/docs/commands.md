@@ -21,7 +21,7 @@ cq kickstart                 # which checks the project has and one next step, i
 cq kickstart gates --apply   # sets the checks your project already has as gates
 cq kickstart add             # proposes the next step as a task; it starts only when you approve it
 cq gate "<failure class>"    # a known bug becomes a proposed gate task; gates.fromKnownBugs: propose, auto or off
-cq doctor                    # read-only health check: node, hooks, config, state, worktrees, safety baseline
+cq doctor [--all]            # read-only health check: node, hooks, config, state, worktrees, safety baseline (--all adds CI cost tips)
 cq surface                   # git hooks and config that run code, against what was accepted; changes nothing
 cq surface accept --by owner # accept the current state (after installing a hook tool, changing git config)
 cq unlock                    # who holds the queue lock; changes nothing (--force --by owner releases it)

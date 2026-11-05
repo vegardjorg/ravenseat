@@ -193,7 +193,7 @@ describe('cq doctor', () => {
   it('ci-cost: INFO without cancel-in-progress or a path filter, nothing for workflows not on push', () => {
     const p = project({ config: { loadGuard: { minFreeMemoryPct: null } } });
     // No workflows folder: no ci-cost line at all.
-    expect(p.json().checks.some((c) => c.name === 'ci-cost')).toBe(false);
+    expect(JSON.parse(p.run('--json', '--all').out).checks.some((c: any) => c.name === 'ci-cost')).toBe(false);
     const dir = path.join(p.root, '.github', 'workflows');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'ci.yml'), ['name: ci', 'on:', '  push:', '    branches: [main]', 'jobs:', '  t:', '    runs-on: x', ''].join('\n'));
@@ -203,15 +203,17 @@ describe('cq doctor', () => {
     );
     fs.writeFileSync(path.join(dir, 'pr.yml'), 'on: pull_request\njobs: {}\n');
     fs.writeFileSync(path.join(dir, 'notes.txt'), 'on: push\n');
-    const r = p.run();
+    // Off unless asked for.
+    expect(p.run().out).not.toContain('ci-cost');
+    const r = p.run('--all');
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/^INFO {2}ci-cost {4}ci\.yml runs on push without concurrency cancel-in-progress/m);
     expect(r.out).toMatch(/^INFO {2}ci-cost {4}ci\.yml runs on push without a paths\/paths-ignore filter/m);
     expect(r.out).toMatch(/fix: add `concurrency: /);
     expect(r.out).not.toMatch(/good\.yaml|pr\.yml|notes\.txt/);
-    expect(p.json().checks.filter((c) => c.name === 'ci-cost').map((c) => c.status)).toEqual(['INFO', 'INFO']);
+    expect(JSON.parse(p.run('--json', '--all').out).checks.filter((c: any) => c.name === 'ci-cost').map((c: any) => c.status)).toEqual(['INFO', 'INFO']);
     // All fixed: one OK line.
     fs.rmSync(path.join(dir, 'ci.yml'));
-    expect(p.run().out).toMatch(/^OK {4}ci-cost {4}1 workflow\(s\) on push, all with cancel-in-progress and a path filter$/m);
+    expect(p.run('--all').out).toMatch(/^OK {4}ci-cost {4}1 workflow\(s\) on push, all with cancel-in-progress and a path filter$/m);
   }, 60_000);
 });

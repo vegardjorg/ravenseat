@@ -18,6 +18,17 @@ describe('guidance', () => {
     expect(isQuiet({ guidance: 'quiet' })).toBe(true);
   });
 
+  it('ci-cost shows only with --all, in guided too, and is not counted as hidden', () => {
+    const rows = [
+      { name: 'ci-cost', status: 'INFO' },
+      { name: 'ci-cost', status: 'FAIL' },
+      { name: 'gates', status: 'WARN' },
+    ];
+    expect(filterDoctor(rows, false)).toEqual({ rows: rows.slice(1), hidden: 0 });
+    expect(filterDoctor(rows, false, { all: true })).toEqual({ rows, hidden: 0 });
+    expect(filterDoctor(rows, true, { all: true })).toEqual({ rows, hidden: 0 });
+  });
+
   it('drops advice rows from doctor, never a FAIL and never another check', () => {
     const rows = [
       { name: 'ci', status: 'INFO' },
@@ -29,9 +40,9 @@ describe('guidance', () => {
       { name: 'config', status: 'OK' },
     ];
     const r = filterDoctor(rows, true);
-    expect(r.hidden).toBe(4);
+    expect(r.hidden).toBe(3);
     expect(r.rows.map((c) => `${c.name} ${c.status}`)).toEqual(['gates FAIL', 'secrets WARN', 'config OK']);
-    expect(filterDoctor(rows, false)).toEqual({ rows, hidden: 0 });
+    expect(filterDoctor(rows, false)).toEqual({ rows: rows.filter((c) => c.name !== 'ci-cost'), hidden: 0 });
   });
 
   it('keeps the fact and drops the pointer in the merge and receive lines', () => {

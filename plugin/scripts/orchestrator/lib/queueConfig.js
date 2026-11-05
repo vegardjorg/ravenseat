@@ -88,7 +88,8 @@ const STANDARD = Object.freeze({
   // (`cq push-check --watch-ci <sha>`, lib/ciWatch.js, needs gh): polls the runs every ciWatchIntervalSec, gives up
   // after ciWatchTimeoutMin (exit 10). Local gates stay the rule; this is a safety net.
   // allowBranches: branches the main session may push besides baseBranch, for pull request flows ("feat/*"; * is any text).
-  // Queue agents never push, and a forced push or a delete stays denied. The secret scan runs on these too.
+  // Queue agents never push, and a delete stays denied. A forced push of such a branch asks first; of the base, never. The
+  // secret scan runs on these too.
   // controlsWarning: a plain push asks when the project has no CI config or no gates (lib/controls.js); false = no question.
   push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90, controlsWarning: true, allowBranches: [] },
   // The branch that goes live (production). null = unknown. `cq doctor` warns when it is the same as baseBranch: every
@@ -111,7 +112,15 @@ const STANDARD = Object.freeze({
   // The check of git hooks and executing git config against the accepted baseline (lib/gitSurfaceBaseline.js): "stop" = a
   // difference stops receive, merge and the push check until the owner decides; "warn" = the same text as a warning, nothing
   // stops; "off" = no comparison. For a repository where hook tools or git settings change often enough to be friction.
+  // Not set: "warn" in lite mode, "stop" in full (config() below). A value in the file always wins.
   gitSurface: 'stop',
+  // A task that changes a dependency file it does not own (package.json, package-lock.json, pyproject.toml, Cargo.toml):
+  // "stop" = the merge guard stops it like any protected path; "warn" = a warning, and the merge goes on. Not set: "warn"
+  // in lite mode, "stop" in full. The floor (CORE_PROTECTED in lib/mergeGuard.js) never softens.
+  dependencyFiles: 'stop',
+  // Git identity: the addresses the identity guard accepts although they look like a test identity (user@example.com).
+  // Exact, not case sensitive. A missing identity is always refused.
+  identity: { allow: [] },
   // The fix-round cap per task (`resume --reason fix`, also the one receive starts after a red done command). At the cap
   // the task becomes an owner question instead of another round. The task field `max_fix_rounds` overrides it.
   maxFixRounds: 3,
@@ -444,6 +453,11 @@ function config(o = {}) {
   const file = configFile(root);
   const { own, error } = readConfigFile(file);
   const k = merge(STANDARD, own);
+  // Lite is for a first try: what a surprised new user meets as a hard stop is a warning there, unless the file says otherwise.
+  if (k.mode === 'lite') {
+    if (own.gitSurface === undefined) k.gitSurface = 'warn';
+    if (own.dependencyFiles === undefined) k.dependencyFiles = 'warn';
+  }
   k.root = root;
   if (error) Object.defineProperty(k, 'configError', { value: error, enumerable: false });
   if (!o.root) buffer = k;

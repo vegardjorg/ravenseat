@@ -9,19 +9,35 @@
 const { spawnSync } = require('node:child_process');
 
 /** The one-line advice: repo-local, not --global. */
-const IDENTITY_FIX = 'git config user.name "Your Name" && git config user.email you@yourdomain.com (for this repo only)';
+const IDENTITY_FIX =
+  'git config user.name "Your Name" && git config user.email you@yourdomain.com (for this repo only). If the address is meant, add it to identity.allow in queue.config.json';
 
-/** Does `git var GIT_COMMITTER_IDENT` text look like a test identity, or is it missing? */
-function identityRefused(ident) {
+/** The address in `Name <address>`, lower case; '' when there is none. */
+const addressOf = (text) => (text.match(/<([^>]*)>/)?.[1] ?? '').trim().toLowerCase();
+
+/**
+ * Does `git var GIT_COMMITTER_IDENT` text look like a test identity, or is it missing? `allow` (identity.allow) lists the
+ * addresses the owner accepts anyway. A missing identity cannot be allowed.
+ */
+function identityRefused(ident, allow = []) {
   const text = String(ident ?? '').trim();
-  return !text || /@(example\.(com|org|net|invalid)|[^>\s]*\.invalid)>/i.test(text);
+  if (!text) return true;
+  const address = addressOf(text);
+  if (address && (Array.isArray(allow) ? allow : []).some((a) => String(a).trim().toLowerCase() === address)) return false;
+  return /@(example\.(com|org|net|invalid)|[^>\s]*\.invalid)>/i.test(text);
 }
 
 /** The identity git would commit with here: { ident, refused }. */
 function readIdentity(cwd) {
   const r = spawnSync('git', ['var', 'GIT_COMMITTER_IDENT'], { encoding: 'utf8', ...(cwd ? { cwd } : {}) });
   const ident = r.status === 0 ? String(r.stdout ?? '').trim().replace(/\s+\d+\s+[+-]\d{4}$/, '') : '';
-  return { ident, refused: identityRefused(ident) };
+  let allow = [];
+  try {
+    allow = require('./queueConfig.js').config().identity?.allow ?? [];
+  } catch {
+    // An unreadable config allows nothing extra.
+  }
+  return { ident, refused: identityRefused(ident, allow) };
 }
 
 module.exports = { IDENTITY_FIX, identityRefused, readIdentity };

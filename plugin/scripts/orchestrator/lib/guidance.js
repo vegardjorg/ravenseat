@@ -33,11 +33,19 @@ function readQuiet(folder) {
   }
 }
 
-/** The doctor rows split into what shows and how many advice rows went. */
-function filterDoctor(rows, quiet) {
-  if (!quiet) return { rows, hidden: 0 };
-  const shown = rows.filter((c) => !(ADVICE_CHECKS.includes(c.name) && (c.status === 'WARN' || c.status === 'INFO')));
-  return { rows: shown, hidden: rows.length - shown.length };
+/** Doctor lines nobody asked for: tuning of the project's CI bill. Only `cq doctor --all` shows them, in every mode. */
+const ON_REQUEST_CHECKS = ['ci-cost'];
+
+/**
+ * The doctor rows split into what shows and how many advice rows quiet took. A line shown only on request is not counted:
+ * it is off, not hidden. --all shows every row.
+ */
+function filterDoctor(rows, quiet, { all = false } = {}) {
+  if (all) return { rows, hidden: 0 };
+  const asked = rows.filter((c) => !(ON_REQUEST_CHECKS.includes(c.name) && c.status !== 'FAIL'));
+  if (!quiet) return { rows: asked, hidden: 0 };
+  const shown = asked.filter((c) => !(ADVICE_CHECKS.includes(c.name) && (c.status === 'WARN' || c.status === 'INFO')));
+  return { rows: shown, hidden: asked.length - shown.length };
 }
 
-module.exports = { MODES, QUIET_HELPERS, ADVICE_CHECKS, modeOf, isQuiet, readQuiet, filterDoctor };
+module.exports = { MODES, QUIET_HELPERS, ADVICE_CHECKS, ON_REQUEST_CHECKS, modeOf, isQuiet, readQuiet, filterDoctor };

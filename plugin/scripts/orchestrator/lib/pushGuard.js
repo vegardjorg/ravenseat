@@ -6,7 +6,8 @@
 // instead of the rule only living as text the agents can forget. Normal work is not blocked.
 //
 // Decisions (Claude Code PreToolUse: allow | ask | deny):
-//   deny  forced push (--force, -f, --force-with-lease, +ref), on any branch: history is never rewritten.
+//   deny  forced push (--force, -f, --force-with-lease, +ref): shared history is never rewritten.
+//   ask   the same on branches in push.allowBranches only, from the main session: the owner's own branch, their call.
 //   deny  `git push` to a branch other than baseBranch (config().baseBranch), and --all/--mirror. Tracks are merged
 //         locally; only baseBranch is pushed (in batches).
 //   ask   `git push` where the branch cannot be determined (detached HEAD).
@@ -466,11 +467,33 @@ function assess(command, context = {}) {
         });
     } else if (g && sub === 'push') {
       const { template, force, all, tags, deletes } = pushTemplate(g.args, context.branch || null);
-      if (force) {
+      // A branch in push.allowBranches is the owner's own (a pull request branch after a rebase): forced asks first. The
+      // base, an unknown branch and an agent stay denied, and a delete or --all has its own rule below.
+      const forceAllowed =
+        force &&
+        !all &&
+        !tags &&
+        !context.agentType &&
+        !deletes.length &&
+        template.length > 0 &&
+        template.every((m) => m !== baseBranch && m !== '<unknown>' && allowedBranch(m, context.allowBranches));
+      if (forceAllowed) {
+        const secrets =
+          typeof context.allowedBranchQuestion === 'function'
+            ? template.map((name) => context.allowedBranchQuestion(name)).filter(Boolean)
+            : [];
+        findings.push({
+          decision: 'ask',
+          reason: [
+            `Forced push of ${template.join(', ')} replaces that branch's history on the remote. It is allowed by push.allowBranches, so it is your call.`,
+            ...secrets,
+          ].join(' Also: '),
+        });
+      } else if (force) {
         findings.push({
           decision: 'deny',
           reason:
-            'Forced push is forbidden: shared history is never rewritten. Merge instead, and push normally.',
+            'Forced push is forbidden: shared history is never rewritten. Merge instead, and push normally. For your own pull request branch, the owner can add it to push.allowBranches in queue.config.json; then a forced push asks first.',
         });
       } else if (all) {
         findings.push({
