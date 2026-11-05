@@ -333,6 +333,27 @@ Tasks merged before this came have no status and no badge. `/cq:setup` sets up g
 
 ### Adding checks one step at a time
 
+### The Checks tab and `cq checks`
+
+The board's Checks tab and `cq checks` show two things, as cards: what the project has (CI files with triggers and jobs, and
+each kind of check with where it runs: CI, gate, script or git hook), and prioritized suggestions for what to add. It only reads
+the project's files. Nothing is run, so it shows what is set up, not that it works. The picture is saved as
+`checks-report.json` in the queue folder.
+
+Each suggestion has a button, "Add investigation to queue" (`cq checks plan <key>`). That adds one class U task from the
+suggestion's template. It ends in a plan and in proposed build tasks for you to approve, never in code. "Set aside" removes the
+card until you bring it back.
+
+**Opting out:** `cq checks off`, or the switch on the tab and in Settings. It removes the tab, the overview and the setup
+suggestions, and changes no gates or guards. Without its own setting it follows `cq guidance`, so quiet turns it off too.
+
+**Changing the suggestions:** every suggestion is a template file with an "Investigate" and a "Plan and build" section, and the
+categories are one list. Nothing is written in code. To add, change or remove them for a project, use the same layout in
+`docs/queue/checks/`. A file with the same name replaces the plugin's, and `off: true` removes it. The format and the
+conditions are in `scripts/orchestrator/checks-catalog/README.md` in the plugin.
+
+### Kickstart
+
 `cq kickstart` (or `/cq:kickstart`, which explains it in plain words) shows what the project has and one next step: git,
 gates, secret files, then CI. It works before `cq init` and in a folder without git, and it changes nothing. You can
 stop at any step, and no step is required.

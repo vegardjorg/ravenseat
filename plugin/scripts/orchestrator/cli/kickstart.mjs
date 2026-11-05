@@ -27,7 +27,7 @@ const QUEUE_PATH = fileURLToPath(new URL('../queue.mjs', import.meta.url));
 // Outside a git repo the project root falls back to where the scripts live, which is the plugin's own folder in a plugin
 // install. This command is meant to work before git exists, so it then reads the folder the user stands in.
 const NO_PROJECT_ROOT = require('./lib/projectRoot.js').roots().mode === 'fallback';
-const PROJECT = NO_PROJECT_ROOT ? process.cwd() : MAIN_TREE;
+export const PROJECT = NO_PROJECT_ROOT ? process.cwd() : MAIN_TREE;
 
 function git(args) {
   try {
@@ -38,7 +38,7 @@ function git(args) {
 }
 
 /** What the steps are decided from. Reads files and local git only. */
-function readFacts() {
+export function readFacts() {
   const exists = (f) => fs.existsSync(path.join(PROJECT, f));
   const readFile = (f) => {
     try {

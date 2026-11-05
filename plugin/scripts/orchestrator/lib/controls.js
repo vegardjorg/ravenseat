@@ -84,4 +84,4 @@ function verificationLine({ status, checks }, { quiet = false } = {}) {
 const noChecksLine = (id, { quiet = false } = {}) =>
   quiet ? `${id}: no checks ran.` : `${id}: NO CHECKS RAN: gates.quick is empty and the task has no done command. /cq:kickstart adds checks one step at a time.`;
 
-module.exports = { ciHosts, commandsOf, hasGates, missing, question, verification, verificationLine, noChecksLine };
+module.exports = { CI_FILES, ciHosts, commandsOf, hasGates, missing, question, verification, verificationLine, noChecksLine };

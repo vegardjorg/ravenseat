@@ -17,6 +17,11 @@ cq calibrate                 # how far minute and cost estimates are off, per cl
 cq decide                    # everything waiting on you, most impact first (/cq:decide walks it)
 cq conflicts                 # predicted merge conflicts between running tracks and the base
 cq ask <ID> "<question>"     # ask about an earlier track without resuming it (/cq:ask)
+cq checks                    # what the project has for checking its code (read from files, nothing runs) and suggestions
+cq checks show <key>         # what a suggestion's investigation and plan cover
+cq checks plan <key>         # proposes its investigation and planning as a task (--approved: ready to run)
+cq checks dismiss <key>      # sets a suggestion aside (restore brings it back)
+cq checks off                # no Checks tab, overview or setup suggestions (on turns them back); guards are not touched
 cq kickstart                 # which checks the project has and one next step, in plain words; changes nothing
 cq kickstart gates --apply   # sets the checks your project already has as gates
 cq kickstart add             # proposes the next step as a task; it starts only when you approve it

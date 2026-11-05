@@ -412,6 +412,7 @@ document.addEventListener('keydown', (e) => {
     t.view !== 'cloud' &&
     t.view !== 'plan' && // the plan has no cards to select
     t.view !== 'decisions' && // nor the Decisions view
+    t.view !== 'checks' && // nor the Checks view
     !document.body.classList.contains('room-plans') // the Queue room is hidden
   ) {
     e.preventDefault();

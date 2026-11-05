@@ -62,9 +62,13 @@ function drawRoomTabs() {
   const d = !plans && t.view === 'decisions';
   decideTab.setAttribute('aria-selected', d ? 'true' : 'false');
   decideTab.tabIndex = d ? 0 : -1;
+  const c = !plans && t.view === 'checks';
+  const checks = $('show-checks');
+  checks.setAttribute('aria-selected', c ? 'true' : 'false');
+  checks.tabIndex = c ? 0 : -1;
   const q = $('room-queue');
-  q.setAttribute('aria-selected', !plans && !d ? 'true' : 'false');
-  q.tabIndex = !plans && !d ? 0 : -1;
+  q.setAttribute('aria-selected', !plans && !d && !c ? 'true' : 'false');
+  q.tabIndex = !plans && !d && !c ? 0 : -1;
 }
 
 /** Opens the Decisions view (from Plans too). */
@@ -78,7 +82,7 @@ function openDecisions() {
 decideTab?.addEventListener('click', openDecisions);
 // "Queue" from the Decisions view goes back to the queue view the owner had (Plans handles its own room).
 $('room-queue').addEventListener('click', () => {
-  if (t.view !== 'decisions' || document.body.classList.contains('room-plans')) return;
+  if ((t.view !== 'decisions' && t.view !== 'checks') || document.body.classList.contains('room-plans')) return;
   setView(t.decide.queueView);
   draw();
   drawRoomTabs();

@@ -53,6 +53,8 @@
 //   - CANCEL, DECLINE, EDIT (the detail panel): POST /api/task-edit { type: cancel|decline|edit, id, reason?, form? } runs
 //     `queue.mjs cancel <id> --remark …` or `queue.mjs edit <id> --json {value, content_min, class}` with --by theBoard
 //     (rules in lib/queueTaskEdit.js: only waiting and proposed tasks). Both are logged, so the answer's `log` goes to /api/undo.
+//   - CHECKS (board/checks.js): what the project has and prioritized suggestions. GET /api/checks = `queue.mjs checks --json`,
+//     POST /api/checks { action, key } = `queue.mjs checks plan|dismiss|restore|on|off` (lib/checksCatalog.js, checks-catalog/).
 //   - PLANS (see docs/plan-register.md): the Plans workspace (queue-board/plans/). GET /api/plans reads plans.json and
 //     queue.json (read only) and sends what queuePlanView.plansData makes, with a version so unchanged data is not sent
 //     again. The same response has the document register for the Documents and agreements view. The priority map saves a draft with
@@ -524,6 +526,33 @@ function checksNow() {
   return checksCache.data;
 }
 
+/** The Checks tab's switch. Unreadable queue: on, so the tab is not lost to a passing read error. */
+function checksPanelNow() {
+  try {
+    return require('./lib/guidance.js').checksPanelOn(JSON.parse(fs.readFileSync(FILE, 'utf8')));
+  } catch {
+    return true;
+  }
+}
+
+// ---- The Checks tab (`queue.mjs checks --json`, lib/checksCatalog.js) ---------------------------------------------------
+// Runs when the tab asks, at most once a minute unless the tab asks for a fresh one (Read again, after a write).
+let checksReport = { time: 0, report: null };
+async function checksReportNow(fresh) {
+  if (!fresh && checksReport.report && Date.now() - checksReport.time < 60_000) return { ok: true, report: checksReport.report };
+  const r = await queueMjs(['checks', '--json']);
+  if (!r.ok) return { ok: false, message: r.error || r.out || 'cq checks failed' };
+  try {
+    const answer = JSON.parse(r.out);
+    // Switched off, the answer is {off:true}: no report, so the view has nothing to draw while the tab goes away.
+    const report = answer.off ? null : answer;
+    checksReport = { time: Date.now(), report };
+    return { ok: true, report };
+  } catch {
+    return { ok: false, message: 'cq checks gave an answer that could not be read' };
+  }
+}
+
 // ---- The state (cheap: rebuilt only when queue.json, git status or the logo has changed) -----------------------------
 // git status is read again every minute, so the state (age, night pause, "Next up") is recomputed at least that often.
 let quick = null;
@@ -539,9 +568,11 @@ function state() {
   // The base health: the file's time and the base tip (read with git status, at most once a minute) are in the key.
   const baseHealth = baseHealthNow();
   const pushBatch = pushBatchNow(baseHealth);
-  // Quiet guidance (lib/guidance.js): no overview, so the status line, the Checks section and the card have nothing to say.
-  const checks = require('./lib/guidance.js').readQuiet(FOLDER) ? null : checksNow();
-  const baseKey = JSON.stringify([baseHealth, pushBatch, checks]);
+  // The Checks tab's switch (lib/guidance.js checksPanelOn: its own setting, otherwise the guidance). Off: no overview, so
+  // the status line and the first-run card have nothing to say.
+  const checksPanel = checksPanelNow();
+  const checks = checksPanel ? checksNow() : null;
+  const baseKey = JSON.stringify([baseHealth, pushBatch, checks, checksPanel]);
   // Is a `cq wait` listening (its heartbeat is fresh)? Read every time, so the line flips without a queue change.
   const listening = OW.heartbeatState(FOLDER).listening;
   if (
@@ -612,6 +643,8 @@ function state() {
     pushBatch,
     // The checks overview: the steps of `cq kickstart`; null until the first answer is in.
     checks,
+    // Does the Checks tab show (`cq checks on|off`)?
+    checksPanel,
     // The module switches (lib/queueConfig.js features): the board hides the tabs, buttons and rows of those that are off.
     features: FEATURES,
     // The board's own switches (lib/queueConfig.js boardSwitches; queue.json board wins): showCloud = the Cloud tab.
@@ -1860,6 +1893,18 @@ async function write(filePath, b) {
     if (!['guided', 'quiet'].includes(b?.mode)) return no('mode must be guided or quiet');
     return run(['guidance', b.mode], `guidance ${b.mode}`);
   }
+  // The Checks tab: every write goes through `cq checks ...` (or `cq kickstart gates`). "plan" is --approved, because the
+  // owner's click on this board (behind the key) is the yes. The key only names a file in the catalog.
+  if (filePath === '/api/checks') {
+    checksReport = { time: 0, report: null };
+    if (b?.action === 'on' || b?.action === 'off') return run(['checks', b.action], `checks ${b.action}`);
+    if (b?.action === 'gates') return run(['kickstart', 'gates', '--apply'], 'kickstart gates');
+    const key = typeof b?.key === 'string' && /^[a-z0-9][a-z0-9-]{0,59}$/.test(b.key) ? b.key : null;
+    if (!key) return no('invalid suggestion');
+    if (b.action === 'plan') return run(['checks', 'plan', key, '--approved'], `checks plan ${key}`);
+    if (b.action === 'dismiss' || b.action === 'restore') return run(['checks', b.action, key], `checks ${b.action} ${key}`);
+    return no('action must be plan, dismiss, restore, gates, on or off');
+  }
   // The "Helper agents" tab: a switch goes through `cq helpers on|off <agent>` (queue.json, under the lock).
   // A custom helper that is not approved for its file as it is now is refused here (and again in queue.mjs).
   if (filePath === '/api/helper') {
@@ -2223,6 +2268,7 @@ const BOARD_SCRIPTS = [
   'settings.js',
   'inbox.js',
   'decide.js',
+  'checks.js',
   'panel.js',
   'edit.js',
   'select.js',
@@ -2441,6 +2487,10 @@ const server = http.createServer(async (req, res) => {
       const r = await planCheck();
       return json(res, r.ok ? 200 : 503, r);
     }
+    if (req.method === 'GET' && filePath === '/api/checks') {
+      const r = await checksReportNow(url.searchParams.get('fresh') === '1');
+      return json(res, r.ok ? 200 : 503, r);
+    }
     if (req.method === 'GET' && filePath === '/api/settings') {
       try {
         const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
@@ -2449,6 +2499,7 @@ const server = http.createServer(async (req, res) => {
           ok: true,
           field: T.settings(queue, { migrations: !!CONFIG.migrations?.folder }),
           guidance: require('./lib/guidance.js').modeOf(queue),
+          checksPanel: require('./lib/guidance.js').checksPanelOn(queue),
           usageToday: stat.keyFigures.usageToday,
           night: L.nightGuard(queue),
           setup: setup(queue, stat),

@@ -25,4 +25,7 @@ it suits them. Never make them finish a setup. Explain each word the first time 
 5. If `facts.stacks` is empty, read the project yourself, and propose the check commands you find. Write them to
    `gates.quick` and `gates.full` in `queue.config.json` only after a yes.
 
+For more than the next step, `cq checks` lists what the project has and prioritized suggestions, and `cq checks plan <key>`
+adds an investigation that ends in a plan (the same as the button on the board's Checks tab).
+
 Never push, never change settings on the git host, and never approve a task for the user unless they say so.

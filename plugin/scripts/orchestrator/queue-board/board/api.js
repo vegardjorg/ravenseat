@@ -208,6 +208,7 @@ async function update(force) {
       // "Waiting on you": the counter at the top, and the panel when it is open.
       drawInboxButton();
       if (typeof drawDecisionsTab === 'function') drawDecisionsTab();
+      if (typeof drawChecksTab === 'function') drawChecksTab();
       if (t.inbox) drawInbox();
     }
   } catch (e) {
@@ -247,13 +248,13 @@ function pushBatchText(p) {
   return ` · Push: ${p.text}`;
 }
 
-/** " · Checks: 2 of 4 in place (Settings)" while something is missing; nothing when all are in place or the overview is not in yet. */
+/** " · Checks: 2 of 4 in place" while something is missing; nothing when all are in place or the overview is not in yet. */
 function checksText(c) {
   if (!c?.steps?.length) return '';
   // A step the owner declined is settled: it does not count as missing.
   const wanted = c.steps.filter((s) => s.state !== 'declined');
   const done = wanted.filter((s) => s.state === 'done').length;
-  return done === wanted.length ? '' : ` · Checks: ${done} of ${wanted.length} in place (Settings)`;
+  return done === wanted.length ? '' : ` · Checks: ${done} of ${wanted.length} in place`;
 }
 
 function drawStatus() {

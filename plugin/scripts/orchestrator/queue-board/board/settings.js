@@ -71,7 +71,7 @@ function drawSettings() {
       { id: 'settings-panel-general', role: 'tabpanel', 'aria-labelledby': 'settings-tab-general' },
       helpSection(),
       guidanceSection(d),
-      checksSection(),
+      checksSwitchSection(d),
       themeSection(),
       mascotSection(),
       el(
@@ -143,6 +143,49 @@ function guidanceSection(d) {
       id: 'guidance-help',
       class: 'setting-explanation',
       text: 'Stops advice about CI, gates and lockfiles, the light review, intake triage and gate proposals. The secret check, merge guard, base gate and the limits on agents stay on. If no check is set up, nothing reminds you.',
+    }),
+    error,
+  );
+}
+
+/** The opt-out for the Checks tab (`cq checks on|off`). It is not a guard: gates and guards run as before. */
+function checksSwitchSection(d) {
+  const error = el('p', { class: 'setting-error', role: 'alert', hidden: true });
+  const box = el('input', {
+    id: 'checks-panel',
+    type: 'checkbox',
+    role: 'switch',
+    class: 'switch',
+    checked: !!d.checksPanel,
+    'aria-describedby': 'checks-panel-help',
+  });
+  box.addEventListener('change', async () => {
+    error.hidden = true;
+    const wanted = box.checked;
+    box.disabled = true;
+    try {
+      await writeWithGuard('/api/checks', { action: wanted ? 'on' : 'off' });
+      message(wanted ? 'Checks tab on' : 'Checks tab off');
+      await update(true);
+      await getSettings();
+      $('checks-panel')?.focus();
+    } catch (e) {
+      box.checked = !wanted;
+      error.textContent = e.message;
+      error.hidden = false;
+    } finally {
+      box.disabled = false;
+    }
+  });
+  return el(
+    'section',
+    { class: 'setting', 'aria-labelledby': 'setting-checks' },
+    el('h3', { id: 'setting-checks', class: 'setting-title', text: 'Checks' }),
+    el('label', { for: 'checks-panel' }, box, ' Show the Checks tab'),
+    el('p', {
+      id: 'checks-panel-help',
+      class: 'setting-explanation',
+      text: 'What your project has for checking its code, and suggestions for what to add. Also cq checks on|off in Claude Code. Off changes no gates or guards. Guidance above stops other advice.',
     }),
     error,
   );

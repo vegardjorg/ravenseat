@@ -33,6 +33,17 @@ function readQuiet(folder) {
   }
 }
 
+/**
+ * Is the Checks tab on (`cq checks`, stored as queue.checksPanel.mode)? Its own switch wins, as a helper's does: without
+ * one it follows the guidance, so someone who runs their own setup does not get suggestions.
+ */
+function checksPanelOn(queue) {
+  const mode = queue?.checksPanel?.mode;
+  if (mode === 'on') return true;
+  if (mode === 'off') return false;
+  return !isQuiet(queue);
+}
+
 /** Doctor lines nobody asked for: tuning of the project's CI bill. Only `cq doctor --all` shows them, in every mode. */
 const ON_REQUEST_CHECKS = ['ci-cost'];
 
@@ -48,4 +59,4 @@ function filterDoctor(rows, quiet, { all = false } = {}) {
   return { rows: shown, hidden: asked.length - shown.length };
 }
 
-module.exports = { MODES, QUIET_HELPERS, ADVICE_CHECKS, ON_REQUEST_CHECKS, modeOf, isQuiet, readQuiet, filterDoctor };
+module.exports = { MODES, QUIET_HELPERS, ADVICE_CHECKS, ON_REQUEST_CHECKS, modeOf, isQuiet, readQuiet, checksPanelOn, filterDoctor };

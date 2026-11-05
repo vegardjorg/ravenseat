@@ -317,6 +317,11 @@
 //                                                                  merge-conflict/merge-guard/merge-stopped/gate-red when it stops there and closes
 //                                                                  the open one after a successful merge)
 //   node scripts/orchestrator/queue.mjs unblock <id>                  (closes the open blocker)
+//   node scripts/orchestrator/queue.mjs checks [--json]             (what the project has for checking its code, read from its files,
+//                                                                  and prioritized suggestions; cli/checks.mjs)
+//   node scripts/orchestrator/queue.mjs checks show|plan|dismiss|restore <key>   (a suggestion's template; adds its investigation and
+//                                                                  planning to the queue, a proposal without --approved; sets it aside)
+//   node scripts/orchestrator/queue.mjs checks on|off               (the opt-out: the Checks tab, the overview, the setup suggestions)
 //   node scripts/orchestrator/queue.mjs kickstart [--json]          (which controls the project has and one next step, in plain words;
 //                                                                  read-only, works before init and without git)
 //   node scripts/orchestrator/queue.mjs kickstart gates [--apply]   (the project's own checks as gates; --apply writes them to
@@ -632,6 +637,7 @@ import * as board from './cli/board.mjs';
 import * as doctor from './cli/doctor.mjs';
 import * as finding from './cli/finding.mjs';
 import * as helpers from './cli/helpers.mjs';
+import * as checks from './cli/checks.mjs';
 import * as kickstart from './cli/kickstart.mjs';
 import * as gate from './cli/gate.mjs';
 import * as merge from './cli/merge.mjs';
@@ -705,6 +711,8 @@ if (command === 'init') {
   helpers.cmdHelpers();
 } else if (command === 'guidance') {
   helpers.cmdGuidance();
+} else if (command === 'checks') {
+  checks.cmdChecks();
 } else if (command === 'kickstart') {
   kickstart.cmdKickstart();
 } else if (command === 'gate') {

@@ -4089,17 +4089,127 @@ fieldset.setting legend {
   }
 }
 
-/* Settings: the checks overview (top.js checksSection). The word carries the meaning; the weight only sets it apart. */
-.checks-list {
-  margin: var(--distance-sm) 0;
-  padding: 0;
+/* ---- Checks (board/checks.js): what the project has, and suggestions, as cards ---- */
+.board.checks {
+  padding: var(--distance-md) var(--distance-lg);
+}
+.checks-view {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-md);
+}
+.checks-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs) var(--distance-md);
+}
+.checks-note {
+  flex-basis: 100%;
+}
+.checks-filter {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.checks-select {
+  font: inherit;
+  color: var(--color-on-surface);
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  padding: var(--distance-xs);
+}
+.checks-grid {
   list-style: none;
-  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: var(--distance-sm);
+  align-items: start;
 }
-.checks-word {
-  display: inline-block;
-  min-width: 6.5em;
+.checks-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+  min-width: 0;
+  padding: var(--distance-md);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
 }
-.checks-next {
+.checks-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--distance-sm);
+}
+.checks-card-title {
+  margin: 0;
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+}
+.checks-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.checks-source {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+.checks-places {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+.checks-where {
   font-weight: 600;
+}
+/* The word carries the priority; the weight of the border only sets the order apart. */
+.checks-priority {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.checks-suggestion.checks-high {
+  border-color: var(--color-primary);
+}
+.checks-details summary {
+  cursor: pointer;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.checks-details h5 {
+  margin: var(--distance-xs) 0 0;
+  font-size: var(--text-xs);
+}
+.checks-template {
+  margin: 0;
+  font-size: var(--text-xs);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.checks-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs) var(--distance-sm);
+}
+.checks-state {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.checks-aside {
+  margin: var(--distance-xs) 0 0;
+  padding-left: var(--distance-md);
 }

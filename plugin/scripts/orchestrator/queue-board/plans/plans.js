@@ -206,8 +206,8 @@
   $('room-queue').addEventListener('click', () => selectRoom('queue'));
   // The room tabs: the arrow keys move focus, Enter or space selects (like the view tabs).
   $('room-option').addEventListener('keydown', (e) => {
-    // Plans can be off; Decisions (board/decide.js) is the third tab.
-    const buttons = [$('room-plans'), $('room-queue'), $('show-decisions')].filter((b) => b && !b.hidden);
+    // Plans can be off and so can Checks; Decisions (board/decide.js) and Checks (board/checks.js) come after Queue.
+    const buttons = [$('room-plans'), $('room-queue'), $('show-decisions'), $('show-checks')].filter((b) => b && !b.hidden);
     const i = buttons.indexOf(document.activeElement);
     if (i < 0) return;
     const j = window.QueueA11y.tabMeasure(buttons.length, i, e.key);

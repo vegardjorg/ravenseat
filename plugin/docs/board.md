@@ -69,6 +69,10 @@ The Queue workspace has these tabs:
   between the columns. "Areas …" creates and names the areas. A **Forecast** box above the columns says when the
   remaining tasks in the focus are done at 50, 85 and 95 % (the same as `cq forecast`; the saved focus counts).
 - **Dependencies:** a graph of which tasks wait on which.
+- **Checks:** what the project has for checking its code, and prioritized suggestions for what to add, as cards. A
+  suggestion's button adds its investigation and planning to the queue; building needs your approval afterwards. Read from
+  files, nothing is run. Off with the link on the tab, in Settings or with `cq checks off`
+  (see [the Checks tab](queue.md#the-checks-tab-and-cq-checks)).
 - **Cloud:** tasks that can run in a cloud session, and the cloud sessions (off by default, see [Modules](#modules)).
 - **Statistics:** done per day, added versus finished, time per class, cost per day (API-equivalent USD), context at
   the end of tracks, key figures (first **Cost per merged change**: all measured cost in the last 14 days divided by

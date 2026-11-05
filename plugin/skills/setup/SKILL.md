@@ -98,6 +98,18 @@ cq set EX-1 cancelled
 `EX-`); offer to rename it with `cq project`. In lite mode the project is `tasks` (ids `T-001`, `T-002` ...). Then tell the user they can open the board with `/cq:board` (Claude starts it in the background
 and gives a URL with an access key; never stop it by killing node by name).
 
+### What the project has, and what to add (one question)
+
+Skip this if the user chose "my own setup" above. Run `cq checks`. It reads the project's files and runs nothing. Tell the
+user in at most eight lines: what you found (say that nothing was run, so it shows what is set up, not that it works), and the
+top three suggestions with their `why`, in plain words. Then ASK one question, with these answers:
+- "Not now" (recommended if they are new): stop here. The suggestions stay on the board's Checks tab.
+- One of the suggestions: run `cq checks plan <key> --approved`. Say that it is about N minutes of agent work, uses tokens, and
+  ends in a plan and proposals, not code. A suggestion with `action: gates` needs no agent: `cq kickstart gates --apply`.
+- "I do not want this": run `cq checks off`. It removes the Checks tab and this overview. Gates and guards are not touched.
+
+Never add more than the user picked, and do not list the whole catalog unless they ask.
+
 ## 4. Bring in the user's own work
 
 ASK: "Do you want me to look through your own notes, TODOs and plans (for example `docs/`, `TODO.md`, `ROADMAP.md`,

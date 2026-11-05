@@ -1,0 +1,32 @@
+[
+  {
+    "key": "setup",
+    "title": "Using what you have",
+    "text": "Checks that are already in the project, but do not guard the agents yet."
+  },
+  {
+    "key": "tests",
+    "title": "Tests",
+    "text": "Code that checks that the behavior is still right."
+  },
+  {
+    "key": "ci",
+    "title": "CI",
+    "text": "Your checks running on a clean machine on every push. It uses CI minutes."
+  },
+  {
+    "key": "quality",
+    "title": "Code quality",
+    "text": "Fast checks that catch whole groups of mistakes without running the code."
+  },
+  {
+    "key": "security",
+    "title": "Security",
+    "text": "Keys, known holes and risky code."
+  },
+  {
+    "key": "dependencies",
+    "title": "Dependencies",
+    "text": "The libraries your project relies on."
+  }
+]

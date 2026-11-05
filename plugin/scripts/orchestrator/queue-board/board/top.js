@@ -283,33 +283,6 @@ function boardSection() {
   );
 }
 
-const CHECK_WORD = { done: 'In place', next: 'Next', queued: 'In the queue', declined: 'Declined', later: 'Later' };
-
-/** What the project has and the next step (`cq kickstart`). Read only: the board cannot run Claude, so it says what to run. */
-function checksSection() {
-  const c = t.data?.checks;
-  if (!c?.steps?.length) return null;
-  const next = c.steps.find((s) => s.key === c.next);
-  const known = c.knownBugs ?? {};
-  return el(
-    'section',
-    { class: 'setting', 'aria-labelledby': 'setting-checks' },
-    el('h3', { id: 'setting-checks', class: 'setting-title', text: 'Checks' }),
-    el(
-      'ul',
-      { class: 'checks-list' },
-      ...c.steps.map((s) =>
-        el('li', null, el('span', { class: `checks-word checks-${s.state}`, text: CHECK_WORD[s.state] ?? s.state }), ` ${s.title}`),
-      ),
-    ),
-    next ? el('p', { class: 'setting-explanation', text: `${next.title}: ${next.why} ${next.how}` }) : null,
-    known.open || known.done
-      ? el('p', { class: 'setting-explanation', text: `Gates from known bugs: ${known.proposed} waiting for your yes, ${known.open - known.proposed} approved, ${known.done} done.` })
-      : null,
-    el('p', { class: 'setting-explanation', text: 'Nothing starts by itself, and every step is optional. /cq:kickstart in Claude Code explains it in plain words.' }),
-  );
-}
-
 /** The first-run card: the queue has nothing open, so the columns would only say "Nothing here.". */
 function onboardingCard() {
   const code = (text) => el('code', { text });
@@ -351,16 +324,16 @@ function onboardingCard() {
 
 function setView(v) {
   t.view = v;
-  // 'decisions' (board/decide.js) is not one of the VIEWS tabs and is not saved: the board picks it on load when
-  // anything waits on the owner. The queue view the owner had is kept for the way back.
-  if (v !== 'decisions') {
+  // 'decisions' (board/decide.js) and 'checks' (board/checks.js) are not VIEWS tabs and are not saved: the board picks
+  // Decisions on load when anything waits on the owner. The queue view the owner had is kept for the way back.
+  if (v !== 'decisions' && v !== 'checks') {
     store.setItem('queue-board-view', v);
     if (t.decide) t.decide.queueView = v;
   }
   if (typeof drawRoomTabs === 'function') drawRoomTabs();
   // Real tabs. The selected tab is the only tab stop in the tab list (roving tabindex).
-  // In Decisions no view tab is selected; the one the owner had stays the tab stop.
-  const stop = v === 'decisions' ? (t.decide?.queueView ?? 'flat') : v;
+  // In Decisions and Checks no view tab is selected; the one the owner had stays the tab stop.
+  const stop = v === 'decisions' || v === 'checks' ? (t.decide?.queueView ?? 'flat') : v;
   for (const x of VIEWS) {
     const tab = $(`show-${x}`);
     tab.setAttribute('aria-selected', x === v ? 'true' : 'false');
@@ -373,6 +346,10 @@ function setView(v) {
   if (v === 'cloud') {
     closeFilter(false);
     getCloudQueue();
+  }
+  if (v === 'checks') {
+    closeFilter(false);
+    closeViews(false);
   }
   // The plan shows areas and projects, not cards: the filter and view menus are closed.
   if (v === 'plan') {
@@ -401,7 +378,7 @@ $('tabs').addEventListener('keydown', (e) => {
 // If focus leaves the tab list without anything being selected, the selected tab is the tab stop again.
 $('tabs').addEventListener('focusout', (e) => {
   if ($('tabs').contains(e.relatedTarget)) return;
-  const current = t.view === 'decisions' ? (t.decide?.queueView ?? 'flat') : t.view;
+  const current = t.view === 'decisions' || t.view === 'checks' ? (t.decide?.queueView ?? 'flat') : t.view;
   for (const x of VIEWS) $(`show-${x}`).tabIndex = x === current ? 0 : -1;
 });
 
