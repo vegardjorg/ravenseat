@@ -3,6 +3,38 @@
 All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.23 (2026-11-06)
+
+### Added
+- `cq checks` and a Checks tab on the board: what the project has for checking its code (CI files, triggers and jobs, each
+  kind of check and where it runs) and prioritized suggestions as cards. Files are only read, nothing is run. A button
+  adds one investigation task that ends in a plan, never in code. Each suggestion is a template file, and a project can
+  add, replace or remove them in `docs/queue/checks`. Turn it off with `cq checks off`, on the tab or in Settings.
+- `dependencyFiles` in the merge guard. It warns in lite and stops in full.
+- `identity.allow` accepts a listed address.
+
+### Changed
+- `gitSurface` warns in lite and stops in full, so a first try does not stop where it should not.
+- A forced push of a branch in `push.allowBranches` asks first. The base, other branches and agents stay denied.
+- Commits outside the queue are one neutral line and exit 0 in push mode owner. They still stop in threshold.
+- The `ci-cost` lines show only with `cq doctor --all`, and doctor says when the secret check is off.
+- `cq setup --overwrite --dry` lists only files that would change, and says how many are already up to date.
+- The cleanup after a track says `Shared folders in the main tree, unchanged` instead of a raw fingerprint.
+- `cq decide` headings name the problem, and `cq show` says when setup is behind.
+
+### Fixed
+- The push guard now also reads the Monitor tool, quotes or a backslash inside a word (`g"i"t`, `g\it`) and brace lists
+  outside quotes. It is still no security boundary, and the docs name what it cannot read.
+- `cq finding` stopped with `Which project?` in a project with no projects registered, and an agent could not fix that.
+  The first finding now creates a project called `general`.
+- A task in review with an open round is no longer aged or called `DELIVERED` by `cq takeover`. A hung agent in such a
+  round gets `SILENT`, and an earlier round's report does not turn that off.
+- The fix round line says to free the branch when a note says it is held.
+- `cq show` refuses `--json`, and `edit` on an unknown id says so.
+- `--over-load` is only offered when it helps.
+- The Waiting on you panel follows Seen on the Decisions tab.
+- Tasks in review or proposed are not an empty queue for the mascot.
+
 ## 0.8.22 (2026-11-05)
 
 ### Added
