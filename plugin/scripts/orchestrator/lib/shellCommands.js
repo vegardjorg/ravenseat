@@ -12,6 +12,8 @@
 //   - recursion (at most MAX_DEPTH levels) into the inner command of a shell (bash/sh/zsh/dash -c, pwsh/powershell
 //     -Command, cmd /c|/k), eval/iex/Invoke-Expression, runners that take a command (timeout, nice, wsl, doas),
 //     `$( … )` and backticks inside a double-quoted word, and a git shell alias (`-c alias.x=!…`);
+//   - quotes inside a word and a backslash in a command word are read as the shell does (`g"i"t`, `g\it`, `git pu"s"h`);
+//   - a brace list outside quotes (`{git,push}`, `git {push,-f}`) is expanded by the shell, so the line counts as unread;
 //   - a command the reading cannot see into is marked `opaque` with a reason: an encoded PowerShell command, a
 //     variable as the command word (`& $g push`), Start-Process, xargs, find -exec, a pipe into a shell, inline
 //     interpreter code (node -e, python -c …) or nesting deeper than MAX_DEPTH. The push guard asks (main session)
@@ -22,8 +24,10 @@
 //
 // Known limits (on purpose, a guard and not a shell): a script file's contents (`bash x.sh`), a git alias stored in
 // the repo config (queue agents get a deny on any git subcommand that is not a known builtin instead), and a command
-// built from string pieces inside an interpreter (`node -e` with "pu"+"sh") are not seen.
-// Tested in lib/__tests__/queueAgentGuard.test.ts (M1, nested shells) and lib/__tests__/pushGuard.test.ts.
+// built from string pieces inside an interpreter (`node -e` with "pu"+"sh") are not seen. A relative Windows path with
+// no extension (`tools\git`) reads as an escaped word. The aim is the usual ways of writing a command, not every way.
+// Tested in lib/__tests__/shellCommands.test.ts, lib/__tests__/queueAgentGuard.test.ts (M1, nested shells) and
+// lib/__tests__/pushGuard.test.ts.
 // =============================================================
 'use strict';
 
@@ -33,9 +37,9 @@ const path = require('node:path');
 /** How deep the reading follows nested shells, eval and $( ). Deeper nesting is opaque. */
 const MAX_DEPTH = 4;
 
-/** Simple tokens: whitespace split, surrounding quotes removed. */
+/** Simple tokens: whitespace split, and quotes removed wherever they stand in a word, as the shell does (`g"i"t` is git). */
 function tokens(chunk) {
-  return (String(chunk || '').match(/"[^"]*"|'[^']*'|\S+/g) || []).map((t) => t.replace(/^(["'])(.*)\1$/, '$2'));
+  return (String(chunk || '').match(/(?:"[^"]*"|'[^']*'|\S)+/g) || []).map((t) => t.replace(/"([^"]*)"|'([^']*)'/g, (_, a, b) => a ?? b));
 }
 
 /**
@@ -124,9 +128,16 @@ function stripRedirects(t) {
   return out;
 }
 
+/**
+ * A backslash in a word that is no path is an escape: `g\it` runs git. It is a path with a drive, a leading .\ ~ \ or /,
+ * another /, or a program's extension (`tools\git.exe`).
+ */
+const withoutEscapes = (t) =>
+  /\\/.test(t) && !/^[A-Za-z]:|^\.{0,2}[\\/~]|\/|\.(exe|cmd|bat|ps1|mjs|js)$/i.test(t) ? t.replace(/\\/g, '') : t;
+
 /** The command word in a token: without path, without .exe/.cmd/.bat/.ps1, lower case. */
 const commandWord = (t) =>
-  String(t || '')
+  withoutEscapes(String(t || ''))
     .split(/[\\/]/)
     .pop()
     .replace(/\.(exe|cmd|bat|ps1)$/i, '')
@@ -270,8 +281,12 @@ function withoutWrittenHeredocs(command) {
   return out.join('\n');
 }
 
+/** A brace list the shell expands, outside quotes: `{git,push}`, `git {push,-f}`. `HEAD@{1}` has no comma and is not one. */
+const hasBraceList = (command) => /\{[^{}\s]*,[^{}\s]*\}/.test(String(command || '').replace(/"[^"]*"|'[^']*'/g, '""'));
+
 function commandList(command, depth = 0) {
   const out = { commands: [], unsure: [] };
+  if (hasBraceList(withoutWrittenHeredocs(command))) out.unsure.push('a brace list the shell expands');
   const nested = (text) => {
     if (depth >= MAX_DEPTH) {
       out.unsure.push(`nested more than ${MAX_DEPTH} levels`);
@@ -335,7 +350,7 @@ function gitInvocation(t, i0) {
     else i++;
   }
   if (i >= t.length) return null;
-  let sub = t[i];
+  let sub = t[i].replace(/\\/g, ''); // `git pu\sh` is push; a subcommand is never a path
   let args = t.slice(i + 1);
   for (let n = 0; n < 8; n++) {
     const key = sub.toLowerCase();

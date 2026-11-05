@@ -233,8 +233,11 @@ context size. The system keeps both small:
   `:<base>`). It reads the whole command line (`lib/shellCommands.js`): `bash -c`, `sh -c`, `powershell -Command`,
   `pwsh -c`, `cmd /c`, `eval`/`iex`, the `&` call operator, `( )`, `$( )`, backticks, `;`/`&&`/`||`/pipes, env
   prefixes, `git -C` and inline aliases (`git -c alias.p=push p`). A part it cannot see into (inline `node -e` code, a
-  variable as the command, `xargs`, `Start-Process` …) in a line that looks like a push gives a question in the main
-  session and a deny for a queue agent.
+  variable as the command, a brace list, `xargs`, `Start-Process` …) in a line that looks like a push gives a question
+  in the main session and a deny for a queue agent. It also covers the Monitor tool, and reads `g"i"t` and `g\it` as git.
+  **Known limits:** the guard catches the usual ways of writing a command, not every way. It does not see inside a script
+  file (`bash x.sh`) or code that builds the command at run time (`node -e`), and the agents run as the same OS user, so
+  it is no security boundary.
 - **Time and cost log.** `hook-time.mjs` logs subagent start and stop; `cq cost` turns the measured sessions into
   per-class statistics, so estimates get better over time. The same file (`timeLog`, overridden by `QUEUE_TIME_LOG`)
   also gets rows for the benchmark in `bench/` (formats in `lib/timeLogRows.js`): one `gate` row per gate run (see

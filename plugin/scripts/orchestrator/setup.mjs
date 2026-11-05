@@ -68,7 +68,7 @@ export const GITIGNORE_LINES = [
  * @param {(text: string) => string} [o.transformMd]  rewrites the Markdown on the way (install.mjs: cq -> node form)
  */
 export function setupProject(o) {
-  const log = { copied: [], replaced: [], skipped: [], notes: [] };
+  const log = { copied: [], replaced: [], same: [], skipped: [], notes: [] };
   const t = path.resolve(o.target);
   const rel = (p) => path.relative(t, p).split(path.sep).join('/');
   const write = (to, text) => {
@@ -80,10 +80,16 @@ export function setupProject(o) {
   const copy = (from, to, overwrite = o.overwrite) => {
     if (fs.existsSync(to)) {
       if (!overwrite) return void log.skipped.push(rel(to));
+    }
+    const source = fs.readFileSync(from, 'utf8');
+    const text = from.endsWith('.md') && o.transformMd ? o.transformMd(source) : source;
+    if (fs.existsSync(to)) {
+      // The same content (git may have changed the line endings) is not a replacement, so --dry shows what really changes.
+      const lf = (s) => s.replace(/\r\n/g, '\n');
+      if (lf(fs.readFileSync(to, 'utf8')) === lf(text)) return void log.same.push(rel(to));
       log.replaced.push(rel(to));
     } else log.copied.push(rel(to));
-    const text = fs.readFileSync(from, 'utf8');
-    write(to, from.endsWith('.md') && o.transformMd ? o.transformMd(text) : text);
+    write(to, text);
   };
 
   // 1-3: files. queue.config.json holds the project's own options and is never replaced. A new one gets the project's
@@ -395,7 +401,8 @@ if (isMain) {
   });
   console.log(`${flags.has('--dry') ? '[DRY] ' : ''}Set up the work queue in ${target}`);
   console.log(`  copied: ${log.copied.join(', ') || '-'}`);
-  if (log.replaced.length) console.log(`  replaced: ${log.replaced.join(', ')}`);
+  if (log.replaced.length) console.log(`  ${flags.has('--dry') ? 'would replace (new content)' : 'replaced'}: ${log.replaced.join(', ')}`);
+  if (log.same.length) console.log(`  already up to date: ${log.same.length} file(s)`);
   if (log.skipped.length) console.log(`  kept (already there): ${log.skipped.join(', ')}`);
   for (const n of log.notes) console.log(`  ${n}`);
   // A kept copy may be older than the plugin: the mission every agent gets is built from it.

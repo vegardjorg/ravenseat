@@ -495,8 +495,9 @@ function mainProgram() {
   );
   for (const [g, n] of Object.entries(perReason).sort((a, b) => b[1] - a[1]))
     console.log(`  kept: ${n} × ${g}`);
-  const fp = fingerprint(main);
-  console.log(`Fingerprint mainTree: ${JSON.stringify(fp)}`);
+  // How many entries the main tree's shared folders hold (the cleanup stops if it changes). A folder that is not there says nothing.
+  const shared = Object.entries(fingerprint(main)).filter(([, n]) => n >= 0);
+  if (shared.length) console.log(`Shared folders in the main tree, unchanged: ${shared.map(([f, n]) => `${f} (${n} entries)`).join(', ')}`);
   process.exit(results.some((r) => r.status === 'error') ? 1 : 0);
 }
 

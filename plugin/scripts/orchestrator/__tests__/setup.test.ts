@@ -270,6 +270,22 @@ describe('setup.mjs --ci: the GitHub Actions template (opt-in, never over an exi
     expect(PB.workflowCost(text)).toEqual({ push: true, concurrency: true, pathFilter: true });
   });
 
+  it('--overwrite tells a file with new content from one that is already the same, also with other line endings', () => {
+    setupProject({ target });
+    const guide = join(target, 'docs', 'queue', 'guide.md');
+    const mission = join(target, 'docs', 'queue', 'mission-template.md');
+    writeFileSync(guide, 'my own edit\n');
+    writeFileSync(mission, readFileSync(mission, 'utf8').replace(/\r?\n/g, '\r\n'));
+    const crlf = readFileSync(mission, 'utf8');
+    const dry = setupProject({ target, overwrite: true, dry: true });
+    expect(dry.replaced).toEqual(['docs/queue/guide.md']);
+    expect(dry.same).toContain('docs/queue/mission-template.md');
+    expect(readFileSync(guide, 'utf8')).toBe('my own edit\n');
+    setupProject({ target, overwrite: true });
+    expect(readFileSync(guide, 'utf8')).not.toBe('my own edit\n');
+    expect(readFileSync(mission, 'utf8')).toBe(crlf);
+  });
+
   it('never replaces an existing workflow, also not with --overwrite, and names other workflows', () => {
     mkdirSync(join(target, '.github', 'workflows'), { recursive: true });
     writeFileSync(workflow(), 'mine\n');

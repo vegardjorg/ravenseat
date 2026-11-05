@@ -133,7 +133,9 @@ function mainTree(top) {
 }
 
 /** Only commands that can match: git, a deploy command or the first word of the migration command. Saves git calls. */
-function canHit(command, k) {
+function canHit(raw, k) {
+  // Without quotes and backslashes, so `g"i"t` and `g\it` reach the reading in lib/pushGuard.js too.
+  const command = raw.replace(/["'\\]/g, '');
   if (/\bgit\b/.test(command)) return true;
   const deploys = Array.isArray(k.deployCommands) ? k.deployCommands : [];
   if (deploys.some((d) => String(d || '').trim() && command.includes(String(d).trim().split(/\s+/)[0]))) return true;
