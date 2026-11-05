@@ -656,7 +656,7 @@ export function cmdReceive() {
   // A PARTIAL delivery was told above not to be merged, and what to do next.
   if (result?.status !== 'PARTIAL') console.log(
     // merge finds the scratchpad in the task or the environment; a folder given only with this command must be given again.
-    `Merge (after an approved review, from Bash): ${CQ} merge ${id}${o0.scratchpad || process.env.QUEUE_SCRATCHPAD ? '' : ` --scratchpad "${scratch}"`}  ` +
+    `Merge (${prompts.length ? 'after an approved review, ' : ''}from Bash): ${CQ} merge ${id}${o0.scratchpad || process.env.QUEUE_SCRATCHPAD ? '' : ` --scratchpad "${scratch}"`}  ` +
       `(by hand: merge-track.mjs ${branch} --wave-base ${o0.head_start ?? '<HEAD at start>'})`,
   );
   // The end of a track is a natural checkpoint for the parallelism.

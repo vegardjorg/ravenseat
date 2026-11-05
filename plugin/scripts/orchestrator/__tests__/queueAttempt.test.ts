@@ -1379,3 +1379,118 @@ describe('test round 3, P2', () => {
     });
   });
 });
+
+describe('test round 4, P1', () => {
+  const ASKS = 'RESULT status=PARTIAL branch=queue/A commits=1 migr=- gates=- probe=- ownerQuestions=1 edge=-\n\nOwner questions:\n1. Which name?';
+  const inWorktree = () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    return { p, wt: p.worktree('A') };
+  };
+  const onBranch = (p: ReturnType<typeof project>, wt: string) => p.g(['branch', '--show-current'], wt);
+
+  it('resume frees the branch when the old agent reported and its worktree is clean', () => {
+    const { p, wt } = inWorktree();
+    const tip = p.g(['rev-parse', 'queue/A']);
+    p.report('A', ASKS);
+    p.run(['receive', 'A']);
+    const r = p.run(['resume', 'A', '--reason', 'context', '--answer', 'Call it halv2']);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toContain('freed for the new agent');
+    expect(r.out).not.toContain('NOTE: queue/A is checked out');
+    expect(onBranch(p, wt)).toBe('');
+    expect(p.g(['rev-parse', 'queue/A'])).toBe(tip);
+  });
+  it('resume leaves a worktree with uncommitted work alone', () => {
+    const { p, wt } = inWorktree();
+    p.report('A', ASKS);
+    p.run(['receive', 'A']);
+    fs.writeFileSync(path.join(wt, 'half.txt'), 'half\n');
+    const r = p.run(['resume', 'A', '--reason', 'context']);
+    expect(r.out).toContain('NOTE: queue/A is checked out');
+    expect(onBranch(p, wt)).toBe('queue/A');
+    expect(fs.existsSync(path.join(wt, 'half.txt'))).toBe(true);
+  });
+  it('resume leaves the branch where it is when no report says the old agent is done', () => {
+    const { p, wt } = inWorktree();
+    const r = p.run(['resume', 'A', '--reason', 'context']);
+    expect(r.out).toContain('NOTE: queue/A is checked out');
+    expect(onBranch(p, wt)).toBe('queue/A');
+  });
+  it('a fix round leaves the worktree on the branch: it may be fixed right there', () => {
+    const { p, wt } = inWorktree();
+    p.report('A', RESULT('A'));
+    p.run(['receive', 'A']);
+    const r = p.run(['resume', 'A', '--reason', 'fix']);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toContain('NOTE: queue/A is checked out');
+    expect(onBranch(p, wt)).toBe('queue/A');
+  });
+  it('resume never detaches the main checkout', () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    p.report('A', ASKS);
+    p.run(['receive', 'A']);
+    p.g(['checkout', '-q', 'queue/A']);
+    const r = p.run(['resume', 'A', '--reason', 'context']);
+    expect(r.out).toContain('NOTE: queue/A is checked out');
+    expect(onBranch(p, p.repo)).toBe('queue/A');
+  });
+  it('the takeover warning says what it saw (F9), and the expiry is in English (F3)', () => {
+    const p = project([task('A')]);
+    expect(p.run(['start', 'A']).code).toBe(0);
+    const text = () => spawnSync(process.execPath, [path.join(SCRIPTS, 'queue-takeover.mjs')], { encoding: 'utf8', env: p.env, cwd: p.folder }).stdout;
+    expect(text()).toContain('another orchestrator may be alive (seen: start A, session "orchestrator"; if that was you, carry on)');
+    p.patch('A', (o) => { (o as Record<string, unknown>).status = 'running'; });
+    fs.writeFileSync(path.join(p.folder, 'orchestrator.json'), JSON.stringify({ session: 'gone', updated: new Date(Date.now() - 5 * 3_600_000).toISOString(), event: 'pulse' }));
+    expect(text()).toContain('(seen: running: A; if that was you, carry on)');
+    expect(text()).toContain('expired (over 2 h)');
+  });
+  it('an answer to a track counts as decided today (F11)', () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    p.report('A', ASKS);
+    p.run(['receive', 'A']);
+    expect(p.run(['decide', '--today']).out).not.toContain('Call it halv2');
+    expect(p.run(['resume', 'A', '--reason', 'context', '--answer', 'Call it halv2']).code).toBe(0);
+    expect(p.run(['decide', '--today']).out).toContain('Call it halv2');
+  });
+  it('a continuation without a handover does not point at one (F12)', () => {
+    const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+    p.branch('A');
+    p.report('A', ASKS);
+    p.run(['receive', 'A']);
+    expect(p.run(['resume', 'A', '--reason', 'context', '--answer', 'Call it halv2']).code).toBe(0);
+    const brief = fs.readFileSync(path.join(p.scratch, 'prompt-A-r1.md'), 'utf8');
+    expect(brief).toContain('its report and commits show what is left');
+    expect(brief).not.toContain('from the handover, with');
+  });
+  it('the merge line mentions a review only when one starts (F14)', () => {
+    const receive = (helperOff: boolean) => {
+      const p = project([task('A', { status: 'running', branch: 'queue/A', started: new Date().toISOString() })]);
+      p.branch('A');
+      p.report('A', RESULT('A'));
+      if (helperOff) expect(p.run(['helpers', 'off', 'reviewer-light']).code).toBe(0);
+      return p.run(['receive', 'A']).out;
+    };
+    const none = receive(true);
+    expect(none).toContain('no review');
+    expect(none).toContain('Merge (from Bash): ');
+    expect(none).not.toContain('after an approved review');
+    expect(receive(false)).toContain('Merge (after an approved review, from Bash): ');
+  });
+  it('cq add names a field the queue does not read (F4)', () => {
+    const p = project([task('A')]);
+    const wrong = p.run(['add', '--json', JSON.stringify(task('B', { minutes: 10 }))]);
+    expect(wrong.code, wrong.error).toBe(0);
+    expect(wrong.out).toContain('WARNING: B: the queue does not read "minutes"; the field is content_min.');
+    expect(p.run(['add', '--json', JSON.stringify(task('C', { content_min: 40 }))]).out).not.toContain('does not read');
+  });
+  it('cq edit names the flag it did not understand (F5)', () => {
+    const p = project([task('A')]);
+    const r = p.run(['edit', 'A', '--filez', 'x']);
+    expect(r.code).toBe(1);
+    expect(r.out + r.error).toContain('Nothing changed: edit does not know --filez. edit A needs');
+    expect(p.run(['edit', 'A']).error + p.run(['edit', 'A']).out).toContain('Nothing changed: edit A needs');
+  });
+});

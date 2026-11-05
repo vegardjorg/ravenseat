@@ -291,13 +291,17 @@ if (AS_JSON) {
     for (const l of note.excerpt.split('\n')) out.push(`  | ${l}`);
     out.push('');
   }
+  // What the warning rests on: the owner's own cq start or cq fill looks the same, so they can tell from this.
+  const liveSeen = orchestrator.active
+    ? `${orchestrator.event ?? 'a pulse'}, session "${orchestrator.session}"`
+    : `running: ${tasks.filter((o) => o.status === 'running').map((o) => o.id).join(', ')}`;
   out.push(
-    `The queue last changed: ${report.queue_last_changed} ago${possibleLive ? '  ⚠ another orchestrator may be alive' : ''}`,
+    `The queue last changed: ${report.queue_last_changed} ago${possibleLive ? `  ⚠ another orchestrator may be alive (seen: ${liveSeen}; if that was you, carry on)` : ''}`,
   );
   out.push(
     orchestrator.session
       ? `Orchestrator cursor: "${orchestrator.session}", updated ${age(orchestrator.age_ms)} ago` +
-          `${orchestrator.event ? ` (${orchestrator.event})` : ''} → ${orchestrator.active ? 'ACTIVE' : 'expired (over 2 t)'}`
+          `${orchestrator.event ? ` (${orchestrator.event})` : ''} → ${orchestrator.active ? 'ACTIVE' : 'expired (over 2 h)'}`
       : 'Orchestrator cursor: none (no orchestrator has checked in with cq orchestrator pulse)',
   );
   out.push(

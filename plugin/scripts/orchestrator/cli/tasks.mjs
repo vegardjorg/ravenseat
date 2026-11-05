@@ -349,6 +349,11 @@ export function cmdAdd() {
           '; ',
         )}. Fix with cq edit-many --file <json> ([{ "id": "...", "project": "...", "feature": "..." }]).`,
     );
+  // A field the queue does not read is kept without a word, so the task looks right and is not (test round 4: minutes).
+  const WRONG_NAMES = { minutes: 'content_min', estimate: 'content_min', duration: 'content_min', priority: 'value', files: 'owned_files', depends: 'depends_on' };
+  for (const n of newOnes)
+    for (const [wrong, right] of Object.entries(WRONG_NAMES))
+      if (Object.hasOwn(n, wrong)) console.log(`WARNING: ${n.id}: the queue does not read "${wrong}"; the field is ${right}.`);
   // Owning a protected path is what lets a change there past the merge guard, so it should not happen unnoticed.
   const protectedPaths = autoAcceptContext(read()).protectedPaths;
   for (const n of newOnes) {

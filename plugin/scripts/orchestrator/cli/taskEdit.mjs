@@ -184,8 +184,9 @@ export function cmdEdit() {
   ])
     delete field[f];
   // An edit with nothing to write (a mistyped flag, or only fields with their own commands) must not look like it worked.
+  const unknownFlags = a.filter((x) => x.startsWith('--') && !['--json', '--files', '--accept', '--bonus', '--by'].includes(x));
   if (!Object.keys(field).length && bonus == null)
-    die(`Nothing changed: edit ${id} needs --json '{...}', --files a,b, --accept "<criterion>" or --bonus "<text>". Status: ${CQ} set ${id} <status>.`);
+    die(`Nothing changed: ${unknownFlags.length ? `edit does not know ${unknownFlags.join(', ')}. ` : ''}edit ${id} needs --json '{...}', --files a,b, --accept "<criterion>" or --bonus "<text>". Status: ${CQ} set ${id} <status>.`);
   editLogged('edit', (queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);

@@ -508,7 +508,8 @@
 
   /**
    * What the owner decided since the start of today (local time), newest first, from the queue's own timestamps:
-   * resolutions (time, by), approved (not by the auto-accept), qa_ok (not auto), and the remarks of a decline and a QA deviation.
+   * resolutions (time, by), approved (not by the auto-accept), qa_ok (not auto), an answer to what a track asked (the round
+   * it made), and the remarks of a decline and a QA deviation.
    * @returns {{ verb: string, id: string, what: string, at: string, by: string|null }[]}
    */
   function decidedToday(queue, { now = Date.now(), max = 50 } = {}) {
@@ -528,6 +529,9 @@
         out.push({ verb: 'approve', id: o.id, what: 'approved', at: o.approved, by: o.approved_by ?? null });
       if (today(o.qa_ok) && o.qa_ok_by !== 'auto')
         out.push({ verb: 'check', id: o.id, what: 'QA ok', at: o.qa_ok, by: o.qa_ok_by ?? null });
+      for (const round of o.resumed ?? [])
+        if (round?.answer && today(round.time))
+          out.push({ verb: 'decide', id: o.id, what: String(round.answer), at: round.time, by: null });
       for (const line of o.remarks ?? []) {
         const m = /^(\S+) (declined(?:: .*)?|QA deviation, fix \S+)$/.exec(String(line));
         if (!m || !today(m[1])) continue;

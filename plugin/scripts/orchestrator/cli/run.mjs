@@ -717,14 +717,21 @@ export function cmdResume() {
   const d = MD.missionDescriptor(o, { client: adapterFor(o).id, trackId, branch, promptFile: prompt, baseSha: head, attemptId: attempt.id });
   console.log(CL.clientFor(d.client).resumeLine(d));
   // If the branch is still checked out in a worktree, prepare-track --continue refuses: the old agent must be done.
-  const holder = (git(['worktree', 'list', '--porcelain']) ?? '')
-    .split(/\r?\n\r?\n/)
-    .find((b) => b.split(/\r?\n/).includes(`branch refs/heads/${branch}`));
+  const worktrees = (git(['worktree', 'list', '--porcelain']) ?? '').split(/\r?\n\r?\n/);
+  const holder = worktrees.find((b) => b.split(/\r?\n/).includes(`branch refs/heads/${branch}`));
   if (holder) {
     const where = holder.split(/\r?\n/)[0].replace(/^worktree /, '');
+    // Only the continuation of a PARTIAL delivery: that agent has stopped and said so, and with a clean worktree nothing
+    // can be lost (the branch keeps the commits and no file moves). Not a fix round: it may be fixed right there, and a
+    // commit on a detached HEAD would miss the branch. Never the main checkout (the first in the list).
+    const freed =
+      reason === 'context' && o.delivered_partial && holder !== worktrees[0] && git(['-C', where, 'status', '--porcelain']) === '' &&
+      git(['-C', where, 'switch', '--detach']) != null;
     console.log(
-      `NOTE: ${branch} is checked out in ${where}. If the old agent is done: git -C "${where}" switch --detach ` +
-        'before the new agent starts (otherwise prepare-track --continue refuses).',
+      freed
+        ? `${branch} was checked out in ${where}, where the old agent is done: freed for the new agent (git switch --detach).`
+        : `NOTE: ${branch} is checked out in ${where}. If the old agent is done: git -C "${where}" switch --detach ` +
+            'before the new agent starts (otherwise prepare-track --continue refuses).',
     );
   }
 }

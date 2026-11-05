@@ -311,10 +311,12 @@ function resumeBlock({
               'give the reason in the report instead of fixing it.',
             ]),
       ]
-    : [
-        'Continue where the previous agent stopped (context guard): do "remaining" from the handover, with "next command"',
-        'first. What is already committed is not redone.',
-      ];
+    : handoverPath
+      ? [
+          'Continue where the previous agent stopped (context guard): do "remaining" from the handover, with "next command"',
+          'first. What is already committed is not redone.',
+        ]
+      : ['Continue where the previous agent stopped: its report and commits show what is left. What is already committed is not redone.'];
   // What the owner answered goes first: it is why this round exists. Later rounds find it among the additions to the mission.
   if (answer) work.unshift(`**The owner answers the track's question:** ${answer}`, '');
   return [
