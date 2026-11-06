@@ -237,7 +237,8 @@ context size. The system keeps both small:
   in the main session and a deny for a queue agent. It also covers the Monitor tool, and reads `g"i"t` and `g\it` as git.
   **Known limits:** the guard catches the usual ways of writing a command, not every way. It does not see inside a script
   file (`bash x.sh`) or code that builds the command at run time (`node -e`), and the agents run as the same OS user, so
-  it is no security boundary.
+  it is no security boundary. A queue agent's `cq add` is judged by the branch the hook sees: a track that reached the main
+  checkout by such a route could add a task that is ready to run.
 - **Time and cost log.** `hook-time.mjs` logs subagent start and stop; `cq cost` turns the measured sessions into
   per-class statistics, so estimates get better over time. The same file (`timeLog`, overridden by `QUEUE_TIME_LOG`)
   also gets rows for the benchmark in `bench/` (formats in `lib/timeLogRows.js`): one `gate` row per gate run (see
@@ -338,7 +339,8 @@ receive and merge the same track. Compaction is still the usual path for a long 
 - Tracks never kill processes by pattern; other tracks run the same scripts.
 - Ownership is exclusive while a task runs. Hotspot files (navigation, central registries) are changed by the
   orchestrator while merging, from the wiring specification in the track report.
-- New work discovered by a track becomes a proposal (`cq add`), never scope creep.
+- New work discovered by a track becomes a proposal (`cq add` from its worktree), never scope creep. The queue sets
+  `added_by` from the branch, `--approved` is refused, and a track may have 3 open proposals.
 - The worktree rule: never `npm install` inside a worktree (shared folders are links to the main tree), and clean up
   worktrees only with `cleanup-worktree.mjs`. A whole `cq merge` (also `--resume`) removes the worktree and deletes the
   merged queue branch with `git branch -d`; `cq doctor` names merged `worktree-agent-*` branches with no worktree left.
@@ -596,7 +598,7 @@ Windows, so there are four layers:
   `subtree push`), a git subcommand that is not a builtin (an alias from the git config) and defining an alias
   (`git config alias.*`). Of the queue's own CLI (`cq …`, `node …/queue.mjs …`, `node …/cq.mjs …`, the orchestrator's
   scripts) they run only an allow-list: `prepare-track`, `gates`, `show`, `info`, `help`, `blockers`, `finding`,
-  `question`, `block`, `deliver` and `plan show|get`; never `merge`, `set`, `edit`, `approve`, `resolve`, `undo` and
+  `question`, `block`, `deliver`, `plan show|get` and, from a track's own branch without `--approved`, `add`; never `merge`, `set`, `edit`, `approve`, `resolve`, `undo` and
   the rest, and never `--allow-guard`, `--force*` or `--by owner`/`--by theBoard`. The ownership the merge guard
   checks (`owned_files`, `shared_patch`, `owner_db`, `migr_block`) is locked after the start like `done_when` and
   `acceptance`: only `--by owner` or the board changes it, and never from a track worktree.

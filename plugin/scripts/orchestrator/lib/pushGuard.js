@@ -356,7 +356,7 @@ const AGENT_PUSH_REASON =
  * The queue commands a queue agent may run (an allow-list; everything else is denied for them). What tracks and the
  * review and helper agents legitimately need (agents/*.md, docs/mission-template.md): the setup and the gates, the
  * read-only views, and the few writes that report upwards (a finding, an owner question, a blocker, deliver). A list
- * value limits the command to those sub-words (`cq plan show|get`).
+ * value limits the command to those sub-words (`cq plan show|get`). `add` has its own rule (agentAddReason).
  */
 const AGENT_QUEUE_COMMANDS = Object.freeze({
   'prepare-track': true,
@@ -373,10 +373,26 @@ const AGENT_QUEUE_COMMANDS = Object.freeze({
   plan: ['show', 'get'],
 });
 /** For the reasons: the allowed commands as text. */
-const AGENT_QUEUE_LIST = 'prepare-track, gates, show, info, help, blockers, finding, question, block, deliver, plan show|get';
+const AGENT_QUEUE_LIST = 'prepare-track, gates, show, info, help, blockers, finding, question, block, deliver, plan show|get, add (from your own track branch)';
+
+/**
+ * The deny reason for a queue agent's cq add, or null. It is only allowed from the agent's own track branch, because
+ * there the CLI makes it a proposal and sets added_by from the branch (cli/tasks.mjs). Anywhere else the CLI would take it
+ * for the orchestrator's, and the task would be ready to start with no owner having seen it. So: never --approved, a queue
+ * branch where the command runs, and nothing in the line that moves it somewhere else.
+ */
+function agentAddReason(call, { branch, branchPrefix, moved }) {
+  if (call.args.some((x) => x === '--approved' || x.startsWith('--approved=')))
+    return '`cq add --approved` is for the orchestrator and the owner. Without it your task becomes a proposal the owner approves.';
+  if (moved)
+    return '`cq add` must run in your worktree as it is, with no cd or QUEUE_ variable in the same command: that is how the queue knows which track added it. Run it on its own.';
+  if (!branch || !branchPrefix || !branch.startsWith(branchPrefix) || branch === branchPrefix)
+    return `\`cq add\` is only for a track, from its own branch (${branchPrefix ?? 'the queue prefix'}<id>). Elsewhere put it in your report or use cq finding.`;
+  return null;
+}
 
 /** The deny reason for a queue agent's call of the queue CLI, or null (allowed). */
-function agentQueueReason(call) {
+function agentQueueReason(call, where = {}) {
   const name = String(call.name);
   const shown = name ? `cq ${name}` : 'cq';
   const flag = call.args.find((x) => x === '--allow-guard' || /^--force/.test(x));
@@ -388,6 +404,7 @@ function agentQueueReason(call) {
     if (['owner', 'theboard'].includes(String(who ?? '').trim().toLowerCase()))
       return `A queue agent never acts as the owner (\`--by ${who}\`); ask the owner with cq question.`;
   }
+  if (name === 'add') return agentAddReason(call, where);
   const rule = Object.hasOwn(AGENT_QUEUE_COMMANDS, name) ? AGENT_QUEUE_COMMANDS[name] : false;
   if (rule === true) return null;
   if (Array.isArray(rule)) {
@@ -425,6 +442,7 @@ const queueShaped = (command) => /(^|[\s"'`(;&|\\/])(cq|cq\.mjs|cq\.cmd|queue\.m
  *   secretQuestion?: () => string|null  the secret precheck question for the same push (lib/secretScan.js), same rules.
  *   controlsQuestion?: () => string|null  the same push with no CI config or no gates (lib/controls.js), same rules.
  *   deployCommands?: string[]      default config().deployCommands,
+ *   branchPrefix?: string          config().branchPrefix: a queue agent's `cq add` must run on such a branch,
  * }
  * The command line is read with lib/shellCommands.js (nested shells, eval, $( ), subshells and inline git aliases
  * included). A part it cannot see into, in a line that looks like a push (or, for a queue agent, a queue CLI call),
@@ -440,6 +458,8 @@ function assess(command, context = {}) {
   const allowedPushes = [];
   const read = SC.commandList(command);
   const unread = [...read.unsure];
+  // A queue agent's `cq add` is judged by the branch where it runs: a line that moves or repoints it first is not that branch.
+  let moved = /\bQUEUE_[A-Z_]+\s*=/.test(command);
   for (const c of read.commands) {
     const { t, i0 } = c;
     if (c.opaque) unread.push(c.opaque);
@@ -537,7 +557,8 @@ function assess(command, context = {}) {
 
     if (guarded) {
       const call = SC.queueCall(t, i0);
-      const reason = call ? agentQueueReason(call) : null;
+      const reason = call ? agentQueueReason(call, { branch: context.branch, branchPrefix: context.branchPrefix, moved }) : null;
+      if (['cd', 'pushd', 'popd', 'chdir', 'set-location', 'push-location', 'pop-location', 'sl'].includes(String(SC.commandWord(t[i0])).toLowerCase())) moved = true;
       if (reason) findings.push({ decision: 'deny', reason });
       const migration = migrationMatch(t, migrations);
       if (migration)

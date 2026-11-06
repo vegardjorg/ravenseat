@@ -97,8 +97,8 @@ function makeQueueCommon(template, scratch, k = {}, missionAddendum = defaultAdd
       '**New work you discover** (outside the mission, or a follow-up bug): do not do it yourself. Write a JSON file' +
         (addendum.newWorkWrite ?? '\n') +
         ' (id, title, domain, class K|D|D+|U, mission = short self-contained description, value 1-10, content_min,',
-      'depends_on, waiting_on, owned_files, shared_patch, source, added_by = your track id) and run',
-      `\`${require('./lib/projectRoot.js').cqCommand()} add --file <file>\`. It becomes a proposal the owner approves. Mention the id in`,
+      'depends_on, waiting_on, owned_files, shared_patch, source) and run, in your worktree as a command of its own,',
+      `\`${require('./lib/projectRoot.js').cqCommand()} add --file <file>\`. It becomes a proposal the owner approves (at most 3 open per track). Mention the id in`,
       'the report, and a HIGH security finding in its own section.',
       `Noticed something outside your scope? Run \`${require('./lib/projectRoot.js').cqCommand()} finding "<title>" [--detail "..."] [--files a,b]\` instead of fixing it.`,
     ].join('\n'),

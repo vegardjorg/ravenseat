@@ -16,9 +16,7 @@
 // Tested in: lib/__tests__/queueFindings.test.ts.
 // =============================================================
 
-import { execFileSync } from 'node:child_process';
-
-import { a, CQ, cut, die, editLogged, L, MAIN_TREE, PREFIX, readPlans, readQueueForPlan, ROOT, require, val, WIDTH } from './context.mjs';
+import { a, CQ, cut, die, editLogged, L, queueBranchId, readPlans, readQueueForPlan, require, val, WIDTH } from './context.mjs';
 import { editPlans, planAnswer } from './planShared.mjs';
 
 const FI = require('./lib/queueFindings.js');
@@ -29,20 +27,8 @@ const FIRST_PROJECT_FIELDS = { title: 'General' };
 
 /** The task id from the branch the current worktree is on (<branchPrefix><id>), or null. */
 function taskFromBranch(tasks) {
-  if (ROOT === MAIN_TREE) return null;
-  let branch = null;
-  try {
-    branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return null;
-  }
-  if (!branch?.startsWith(PREFIX)) return null;
-  const id = branch.slice(PREFIX.length);
-  return tasks.some((o) => o.id === id) ? id : null;
+  const id = queueBranchId();
+  return id && tasks.some((o) => o.id === id) ? id : null;
 }
 
 /** The new findings line for pulse and show, or null; never throws (an unreadable plans.json is not this view's problem). */

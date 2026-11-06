@@ -17,6 +17,7 @@ const L = require('../queueLogic.js');
 
 /** The sorted export names of queueLogic.js before the split (276), plus the ones added on purpose since. */
 const EXPORTS = [
+  'MAX_OPEN_PER_TRACK', 'asTrackProposal', 'trackLimitError',
   'ACTIVE', 'AGENT_MODELS', 'BATCHED_BLOCKER', 'BATCH_MEASURE', 'BLOCK_CODES', 'CALIBRATED', 'CHANGELOG_MAX',
   'CLOUD_BUNDLE_MAX', 'CLOUD_BUNDLE_MIN', 'CLOUD_BY', 'CLOUD_MAX', 'COLLISION_STATUSES', 'DEFAULT_LIMITS',
   'DEFAULT_REVIEWERS', 'FOCUS_END_CHOICES', 'FOCUS_PLAN_MAX', 'FOCUS_REST', 'LABEL_PATTERN', 'LIMIT_EXTRA', 'LIMIT_NAME',

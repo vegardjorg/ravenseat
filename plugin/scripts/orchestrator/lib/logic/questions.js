@@ -39,6 +39,23 @@ function statusAtAdd(fresh, tasks = [], { approved = false } = {}) {
   return isAgentSource(fresh?.added_by, tasks) ? 'proposed' : 'waiting';
 }
 
+/** How many proposals one track may have waiting for the owner. An agent should not be able to bury the owner in work. */
+const MAX_OPEN_PER_TRACK = 3;
+
+/** Makes a task from a track's `cq add` a proposal from that track: the branch says who, and the file cannot approve itself. */
+function asTrackProposal(task, track) {
+  if (!task || typeof task !== 'object' || Array.isArray(task)) return;
+  for (const k of ['approved', 'approved_by', 'auto_accepted']) delete task[k];
+  task.added_by = track;
+}
+
+/** The refusal when a track would pass MAX_OPEN_PER_TRACK open proposals, or null. */
+function trackLimitError(track, tasks = [], adding = 0) {
+  const open = tasks.filter((o) => o.added_by === track && o.status === 'proposed').length;
+  if (open + adding <= MAX_OPEN_PER_TRACK) return null;
+  return `${track} has ${open} open proposal(s), and a track may have ${MAX_OPEN_PER_TRACK}. Put the rest in your report.`;
+}
+
 /**
  * Approves proposed tasks: proposed → waiting. Changes tasks in `queue` (the caller writes the file under lock).
  * @returns {{ approved: string[], error: string[] }}
@@ -478,6 +495,9 @@ function migrBlockText(b) {
 }
 
 module.exports = {
+  MAX_OPEN_PER_TRACK,
+  asTrackProposal,
+  trackLimitError,
   isAgentSource,
   statusAtAdd,
   approve,

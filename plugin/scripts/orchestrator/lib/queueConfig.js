@@ -114,7 +114,8 @@ const STANDARD = Object.freeze({
   // stops; "off" = no comparison. For a repository where hook tools or git settings change often enough to be friction.
   // Not set: "warn" in lite mode, "stop" in full (config() below). A value in the file always wins.
   gitSurface: 'stop',
-  // A task that changes a dependency file it does not own (package.json, package-lock.json, pyproject.toml, Cargo.toml):
+  // A task that changes a dependency file it does not own (package.json, package-lock.json, pyproject.toml, Cargo.toml,
+  // requirements*.txt, go.mod, Gemfile, pom.xml, build.gradle(.kts), composer.json):
   // "stop" = the merge guard stops it like any protected path; "warn" = a warning, and the merge goes on. Not set: "warn"
   // in lite mode, "stop" in full. The floor (CORE_PROTECTED in lib/mergeGuard.js) never softens.
   dependencyFiles: 'stop',
@@ -247,6 +248,14 @@ const STANDARD = Object.freeze({
     'settings.queue.json',
     'package.json',
     'package-lock.json',
+    // The same for other languages: a new library is the owner's call (dependencyFiles above softens these in lite).
+    'requirements*.txt',
+    'go.mod',
+    'Gemfile',
+    'pom.xml',
+    'build.gradle',
+    'build.gradle.kts',
+    'composer.json',
     // The test, lint and type configs (any folder): a track must not get green by switching a check off, narrowing
     // what a runner collects or loosening a threshold. Formatter configs are left out (formatting cannot hide a bug).
     // Some of these files hold more than check config (pyproject.toml, Cargo.toml, setup.cfg, Makefile): a task that

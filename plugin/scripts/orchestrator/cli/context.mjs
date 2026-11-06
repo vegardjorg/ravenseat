@@ -236,6 +236,20 @@ export const die = (message, code = 1) => {
   releaseLock();
   process.exit(code);
 };
+/**
+ * The id in the queue branch this worktree is on (<branchPrefix><id>), or null: the main tree, another branch, or no git.
+ * This is how the queue knows that a command comes from a track, and which one, without taking the track's word for it.
+ */
+export function queueBranchId() {
+  if (ROOT === MAIN_TREE) return null;
+  try {
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return branch.startsWith(PREFIX) && branch !== PREFIX ? branch.slice(PREFIX.length) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---- Lock and storage --------------------------------------------------------------------------------------
 export function withLock(fn) {
   fs.mkdirSync(FOLDER, { recursive: true });

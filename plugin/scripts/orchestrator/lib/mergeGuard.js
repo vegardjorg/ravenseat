@@ -213,8 +213,9 @@ function isMigrationPath(p, migrations = null) {
 
 // Dependency files: protected by default, but a task adding a library is ordinary work. dependencyFiles "warn" lets them
 // through with a warning. Only these names, and only when the floor does not cover the path.
-const DEPENDENCY_FILES = ['package.json', 'package-lock.json', 'pyproject.toml', 'cargo.toml'];
-const isDependencyFile = (p) => DEPENDENCY_FILES.includes(norm(p).toLowerCase().split('/').pop()) && !isProtected(p, []);
+const DEPENDENCY_FILES = ['package.json', 'package-lock.json', 'pyproject.toml', 'cargo.toml', 'go.mod', 'gemfile', 'pom.xml', 'build.gradle', 'build.gradle.kts', 'composer.json'];
+const isDependencyName = (name) => DEPENDENCY_FILES.includes(name) || /^requirements.*\.txt$/.test(name);
+const isDependencyFile = (p) => isDependencyName(norm(p).toLowerCase().split('/').pop()) && !isProtected(p, []);
 
 /**
  * Assess a diff against the task's ownership.

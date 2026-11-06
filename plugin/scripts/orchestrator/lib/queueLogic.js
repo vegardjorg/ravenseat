@@ -85,6 +85,7 @@ const {
   score, scoreParts,
 } = require('./logic/ranking.js');
 const {
+  MAX_OPEN_PER_TRACK, asTrackProposal, trackLimitError,
   isAgentSource, statusAtAdd, approve, QUESTION_TYPES, validQuestionId, setQuestion, resolve, unlogged, markLogged,
   choicesError, choiceLines, isRecommendedChoice, pickChoice,
   questionOverview, questionWithoutText, QUESTION_ID_PATTERN, questionRegistered, waitingOnError, resolveWaits,
@@ -212,6 +213,9 @@ module.exports = {
   minFreeMemoryFor,
   limitText,
   parseLimit,
+  MAX_OPEN_PER_TRACK,
+  asTrackProposal,
+  trackLimitError,
   isAgentSource,
   statusAtAdd,
   approve,

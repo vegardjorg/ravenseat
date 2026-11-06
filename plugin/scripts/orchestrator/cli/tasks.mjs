@@ -19,7 +19,7 @@ import path from 'node:path';
 
 import {
   a, autoAcceptContext, autoAcceptIn, byName, CONFIG, CQ, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
-  positional, PR, read, readPlans, undoHint, val, values, withLock, write,
+  positional, PR, queueBranchId, read, readPlans, undoHint, val, values, withLock, write,
   require,
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
@@ -202,6 +202,9 @@ export function cmdAdd() {
     newOnes[0].acceptance = accepts;
   }
   const approved = a.includes('--approved');
+  // From a track's own branch it is always a proposal from that track (the agents' rule is in lib/pushGuard.js agentAddReason).
+  const track = queueBranchId();
+  if (track && approved) die(`Nothing added: a track's task is a proposal, so --approved does not apply on ${track}'s branch.`);
   // --plan <id> links tasks (that do not have their own `plan`) to a plan entry. Set in the file or with --plan:
   // the plan entry must exist in the plan register (an unknown or merged entry is refused), and the entry becomes in-queue automatically.
   const planArg = a.includes('--plan') ? val('--plan') : null;
@@ -217,6 +220,11 @@ export function cmdAdd() {
       const d = LM.liteDefaults(newOnes, queue);
       newOnes.splice(0, newOnes.length, ...d.tasks);
       liteNotes.splice(0, liteNotes.length, ...d.notes);
+    }
+    if (track) {
+      for (const n of newOnes) L.asTrackProposal(n, track);
+      const limit = L.trackLimitError(track, queue.tasks, newOnes.length);
+      if (limit) die(`Nothing added: ${limit}`);
     }
     if (planArg || newOnes.some((n) => n?.plan != null)) {
       // Under the same lock as the queue, so the register does not change between the check and the write.
@@ -265,7 +273,7 @@ export function cmdAdd() {
     for (const n of newOnes) {
       // An agent (track, reviewer, fold/investigation agent) adds proposals, not work that starts by itself.
       // The status is computed against the queue BEFORE the new ones are added (a new task cannot make another one an agent source).
-      const status = L.statusAtAdd(n, queue.tasks, { approved });
+      const status = track ? 'proposed' : L.statusAtAdd(n, queue.tasks, { approved });
       result.push({ id: n.id, status });
       // `fixes` is stored as a list (one id is accepted); an empty one is left out.
       const fixes = FX.fixesList(n.fixes);

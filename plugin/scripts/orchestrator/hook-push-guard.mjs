@@ -222,7 +222,8 @@ process.stdin.on('end', () => {
 
     const cwd = typeof p.cwd === 'string' && p.cwd ? p.cwd : process.cwd();
     // The git calls only when the command can be a push or a migration push.
-    const branch = gitContext ? git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']) : null;
+    // Also for a queue agent's `cq add`, which only a track's own branch may run (lib/pushGuard.js agentAddReason).
+    const branch = gitContext || (guarded && /\badd\b/.test(command)) ? git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']) : null;
     const top = gitContext ? git(cwd, ['rev-parse', '--show-toplevel']) : null;
     const environment = gitContext
       ? readEnvironment([top, top && mainTree(top), k.root], k.migrations?.environmentFile)
@@ -231,6 +232,7 @@ process.stdin.on('end', () => {
       branch: branch === 'HEAD' ? null : branch,
       environment,
       baseBranch: k.baseBranch,
+      branchPrefix: k.branchPrefix,
       allowBranches: k.push?.allowBranches,
       allowedBranchQuestion: (name) => secretQuestion(cwd, k, name),
       migrations: k.migrations,
