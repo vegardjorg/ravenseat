@@ -64,7 +64,7 @@ function missionAddendum(ctx = {}) {
       INSTRUCTIONS_FILE: '`CLAUDE.md` and ',
     },
     readExcerpts: ' with `offset`/`limit`',
-    newWorkWrite: ' with\nWrite',
+    newWorkWrite: ' with Write',
     reportOutside: ctx.cloud
       ? 'if you need to, stop with CLOUD-STOP and say what is needed.'
       : 'if you need to, report it (SendMessage) instead of editing it.',

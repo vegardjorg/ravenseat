@@ -630,7 +630,9 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
     const p = L.focusSpace(o, fk);
     return p.step == null || p.parked ? null : p.step;
   };
-  const proposed = (columns.proposed ?? []).map((k) => ({
+  // A proposal in the batch queue has its card there, but it still waits on the owner.
+  const proposedCards = [...(columns.proposed ?? []), ...(columns.batch ?? []).filter((k) => k.status === 'proposed')];
+  const proposed = proposedCards.map((k) => ({
     id: k.id,
     title: k.title,
     class: k.class,

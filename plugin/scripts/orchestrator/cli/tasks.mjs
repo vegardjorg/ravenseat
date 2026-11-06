@@ -250,6 +250,13 @@ export function cmdAdd() {
     }
     if (track) {
       for (const n of newOnes) L.asTrackProposal(n, track, queue.tasks);
+      // A proposal is already a question to the owner, who decides its size on approval. In the batch queue it would
+      // not be named as a decision and would not start when approved (test round 0.8.25).
+      for (const n of newOnes) {
+        if (n?.batched !== true) continue;
+        delete n.batched;
+        liteNotes.push(`${n.id}: a proposal does not go in the batch queue; the owner decides that when approving it.`);
+      }
       const limit = L.trackLimitError(track, queue.tasks, newOnes.length);
       if (limit) die(`Nothing added: ${limit}`);
     }
@@ -292,7 +299,8 @@ export function cmdAdd() {
       const f = L.batchedError({ status: 'waiting', ...n }, after, queue.resolved);
       if (f.length) error.push(`${n.id ?? '(without id)'}: ${f.join('; ')}`);
       // The small-task guard (fix now, batch queue, or ask the owner about the priority).
-      const s = L.smallTaskError({ status: 'waiting', ...n }, after, queue.resolved);
+      // Not for a track's proposal: the guard asks a question only the owner can answer, and the owner gets the proposal.
+      const s = L.smallTaskError({ status: 'waiting', ...n, content_min: track ? undefined : n.content_min }, after, queue.resolved);
       if (s.length) error.push(`${n.id ?? '(without id)'}: ${s.join('; ')}`);
     }
     if (error.length) die(`Nothing added:\n  ${error.join('\n  ')}`);
@@ -404,7 +412,8 @@ export function cmdAdd() {
         `WARNING: ${n.id} names the protected path ${named} without owning it. If the task is to change it, add it with --files (ravenseat edit ${n.id} --files <files>): the agent will otherwise refuse, or the merge guard stops the change.`,
       );
   }
-  for (const x of added.projectWarnings) console.log(`WARNING: ${x}`);
+  // A track was just told it has nothing to do about the project; these are for whoever approves.
+  if (!track) for (const x of added.projectWarnings) console.log(`WARNING: ${x}`);
   for (const x of added.planWarnings) console.log(`WARNING: ${x}`);
   const linked = [...new Set(newOnes.map((n) => n?.plan).filter(Boolean))];
   if (linked.length) console.log(`Linked to plan entry: ${linked.join(', ')} (in-queue automatically)`);

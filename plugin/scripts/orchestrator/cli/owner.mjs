@@ -164,9 +164,11 @@ export function cmdApprove() {
     if (answer.error.length) die(`Nothing approved:\n  ${answer.error.join('\n  ')}`);
     // Who approved (the board and /ravenseat:decide pass --by owner), next to the time in `approved`.
     if (by) for (const o of queue.tasks) if (answer.approved.includes(o.id)) o.approved_by = by;
-    return answer;
+    return { ...answer, batched: queue.tasks.filter((o) => answer.approved.includes(o.id) && L.isBatched(o)).map((o) => o.id) };
   });
   console.log(`Approved (waiting now): ${r.approved.join(', ')}`);
+  for (const id of r.batched)
+    console.log(`${id} is in the batch queue, so it does not start alone: ravenseat batch packs it, ravenseat edit ${id} --json '{"batched":false}' lets it start by itself.`);
 }
 
 /** `ravenseat proposals` (the usage is at the top of queue.mjs). */
@@ -180,7 +182,7 @@ export function cmdProposals() {
     const open = (queue.tasks ?? []).filter((o) => o.status === 'proposed');
     if (open.length) {
       console.log(`Proposals waiting (${open.length}; ravenseat approve <id> lets one start, ravenseat set <id> cancelled declines it):`);
-      for (const o of open) console.log(`  ${o.id.padEnd(14)} ${o.added_by ? `from ${o.added_by}  ` : ''}${o.title ?? ''}`);
+      for (const o of open) console.log(`  ${o.id.padEnd(14)} ${o.added_by ? `from ${o.added_by}  ` : ''}${L.isBatched(o) ? '[batch queue]  ' : ''}${o.title ?? ''}`);
     }
     const fit = (queue.tasks ?? []).filter(
       (o) => o.status === 'proposed' && PR.autoAcceptDecision(o, { ...rules, enabled: true }, ctx).accept,

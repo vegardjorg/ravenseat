@@ -223,10 +223,10 @@ describe('batch-queue tasks are never startable or pickable', () => {
     expect(k.tasks[0].status).toBe('waiting');
   });
 
-  it('state counts the batch queue separately (not as waiting or proposed, not blocked)', () => {
+  it('state counts the batch queue separately (not as waiting, not blocked), and a proposal in it still counts as proposed', () => {
     const t = L.state(queue());
     expect(t.waiting).toBe(1);
-    expect(t.proposed).toBe(0);
+    expect(t.proposed).toBe(1);
     expect(t.batched).toBe(2);
     expect(t.canStart).toBe(1);
     expect(t.blocked.map((b) => b.id)).toEqual([]);

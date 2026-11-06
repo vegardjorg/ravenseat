@@ -347,6 +347,9 @@ export function cmdFill() {
   const waitLine = askedLine(triageWaiting);
   if (!selected.length) {
     console.log('Nothing can start now (see show and state).');
+    const inBatch = read().tasks.filter((o) => o.status === 'waiting' && L.isBatched(o)).map((o) => o.id);
+    if (inBatch.length)
+      console.log(`In the batch queue, not started alone: ${inBatch.join(', ')}. ravenseat batch packs them; ravenseat edit <id> --json '{"batched":false}' lets one start by itself.`);
     const holding = read().tasks.filter((o) => ['running', 'review', 'picked'].includes(o.status));
     if (loadMessage && holding.length)
       console.log(`The slots are held by: ${holding.map((o) => `${o.id} (${o.status})`).join(', ')}. A task in review holds its slot until it is merged or cancelled.`);

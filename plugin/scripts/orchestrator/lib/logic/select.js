@@ -311,7 +311,8 @@ function state(
     activeOnes: activeOnes.length,
     picked: picked.length,
     waiting: waiting.length,
-    proposed: tasks.filter((o) => o.status === 'proposed' && !isBatched(o)).length,
+    // Every proposal waits on the owner, also one in the batch queue (which is then in `batched` too).
+    proposed: tasks.filter((o) => o.status === 'proposed').length,
     batched: batched.length,
     qa: tasks.filter((o) => o.status === 'done' && o.qa_status === 'waiting').length,
     external: tasks.filter((o) => o.status === 'external').length,

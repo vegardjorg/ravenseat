@@ -49,7 +49,7 @@ const REQUIREMENT: [string, string[]][] = [
   ['conflict markers', ALL],
   ['NEVER kill by pattern', ALL],
   ['hotspots', ALL],
-  ['ravenseat add --file', ALL],
+  ['ravenseat add --json', ALL],
   ['Noticed something outside your scope? Run `ravenseat finding "<title>"', ALL],
   ['HIGH security finding', ALL],
   ['Context cap about 300k', ALL],

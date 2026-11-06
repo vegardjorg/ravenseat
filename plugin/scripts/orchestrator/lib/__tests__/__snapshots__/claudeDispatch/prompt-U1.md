@@ -61,16 +61,10 @@ names the file, so the owner can add it to the task.
 - Everything else you decide yourself. Record each non-trivial assumption in the "Assumptions" section of
   `track-result.md`: one line with what you assumed, why, and how to change it if it is wrong.
 
-**New work outside the mission:** do not build it, propose it:
-`ravenseat add --json '{"id":"<new id>","title":"<short title>","mission":"<what, why, where, how to check it>"}'`.
-It waits for approval, and a track may have 3 open proposals. Domain, project and feature follow your track and the class is K,
-unless you set them (`"class":"D"` for database work). Run it on its own from your worktree: no `cd`, no `QUEUE_` variable,
-no `--approved`, and nothing else in the same command. On Windows, or with quotes in the text, write the JSON to a file in
-`<folder>` and use `--file`.
-
 **Git:** `prepare-track` runs `git checkout -B queue/U1 main`; HEAD must be <HEAD> or newer.
-- Commit only on your own branch with `git commit -- <files>` (new files: `git add` first), in strict `&&` chains,
-  after searching for conflict markers.
+- Commit only on your own branch with `git commit -- <files>` (new files: `git add` first), in strict `&&` chains
+  (Windows PowerShell 5.1 has no `&&` and the guard cannot read `if ($?)`: there, one command per call), after searching for
+  conflict markers.
 - NEVER push, merge your branch into the base branch, deploy, run a dev server or open a preview.
 - Stop only processes you started yourself, with the pid you got. NEVER kill by pattern (`taskkill /IM`, `pkill`,
   command line filters): other tracks run the same scripts.
@@ -80,11 +74,13 @@ no `--approved`, and nothing else in the same command. On Windows, or with quote
 Your ownership is listed in the track block. Other tasks run at the same time and own their files
 (`ravenseat show`, works from the worktree). Never touch what they own.
 
-**New work you discover** (outside the mission, or a follow-up bug): do not do it yourself. Write a JSON file with
-Write (id, title, domain, class K|D|D+|U, mission = short self-contained description, value 1-10, content_min,
-depends_on, waiting_on, owned_files, shared_patch, source) and run, in your worktree as a command of its own,
-`ravenseat add --file <file>`. It becomes a proposal the owner approves (at most 3 open per track). Mention the id in
-the report, and a HIGH security finding in its own section.
+**New work you discover** (outside the mission, or a follow-up bug): do not build it, propose it:
+`ravenseat add --json '{"id":"<new id>","title":"<short title>","mission":"<what, why, where, how to check it>"}'`.
+That is all it needs: it waits for approval, the owner decides its size and priority, and a track may have 3 open proposals.
+Domain, project and feature follow your track and the class is K, unless you set them (`"class":"D"` for database work). Add
+`"owned_files":[...]` if you know the files. Run it on its own from your worktree: no `cd`, no `QUEUE_` variable, no `--approved`,
+and nothing else in the same command. On Windows, or with quotes in the text, write the JSON to a file in `<folder>` with Write and use `--file`.
+Mention the id in the report, and a HIGH security finding in its own section.
 Noticed something outside your scope? Run `ravenseat finding "<title>" [--detail "..."] [--files a,b]` instead of fixing it.
 
 - Change only what you own. Files the project lists as hotspots (navigation, layouts, central registries) are never

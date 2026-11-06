@@ -46,13 +46,12 @@ const dummy: Addendum = (ctx = {}) => ({
     INSTRUCTIONS_FILE: '`AGENTS.md` and ',
   },
   readExcerpts: '',
-  newWorkWrite: '\nwith',
+  newWorkWrite: '',
   reportOutside: ctx.cloud ? 'stop and say what is needed.' : 'put it in the report instead of editing it.',
 });
 
 const CLAUDE_WORDS = [
   'with Write',
-  'Write (id',
   'SendMessage',
   'offset',
   'prompt cache',
@@ -97,7 +96,7 @@ describe('Claude mission addendum (lib/clients/claude/mission.js)', () => {
     expect(core).toContain('heading, then excerpts).\n- The project architecture rules');
     expect(core).toContain('imports the database.\n- Read large files in excerpts.\n- **When the context runs low**:');
     expect(core).toContain('on the RESULT line. Do the parts');
-    expect(core).toContain('Write a JSON file\nwith (id, title');
+    expect(core).toContain('write the JSON to a file in `<folder>`');
   });
 
   it('fillClient leaves a placeholder without a piece in place', () => {

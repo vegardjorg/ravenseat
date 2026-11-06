@@ -118,16 +118,10 @@ names the file, so the owner can add it to the task.
 - Everything else you decide yourself. Record each non-trivial assumption in the "Assumptions" section of
   `track-result.md`: one line with what you assumed, why, and how to change it if it is wrong.
 
-**New work outside the mission:** do not build it, propose it:
-`ravenseat add --json '{"id":"<new id>","title":"<short title>","mission":"<what, why, where, how to check it>"}'`.
-It waits for approval, and a track may have 3 open proposals. Domain, project and feature follow your track and the class is K,
-unless you set them (`"class":"D"` for database work). Run it on its own from your worktree: no `cd`, no `QUEUE_` variable,
-no `--approved`, and nothing else in the same command. On Windows, or with quotes in the text, write the JSON to a file in
-`<folder>` and use `--file`.
-
 **Git:** `prepare-track` runs `git checkout -B <BRANCH> <base>`; HEAD must be <HEAD> or newer.
-- Commit only on your own branch with `git commit -- <files>` (new files: `git add` first), in strict `&&` chains,
-  after searching for conflict markers.
+- Commit only on your own branch with `git commit -- <files>` (new files: `git add` first), in strict `&&` chains
+  (Windows PowerShell 5.1 has no `&&` and the guard cannot read `if ($?)`: there, one command per call), after searching for
+  conflict markers.
 - NEVER push, merge your branch into the base branch, deploy, run a dev server or open a preview.
 - Stop only processes you started yourself, with the pid you got. NEVER kill by pattern (`taskkill /IM`, `pkill`,
   command line filters): other tracks run the same scripts.

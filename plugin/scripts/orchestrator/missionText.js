@@ -93,13 +93,14 @@ function makeQueueCommon(template, scratch, k = {}, missionAddendum = defaultAdd
       'Your ownership is listed in the track block. Other tasks run at the same time and own their files',
       `(\`${require('./lib/projectRoot.js').cliCommand()} show\`, works from the worktree). Never touch what they own.`,
       '',
-      // newWorkWrite carries the line break (Claude: " with\nWrite"), so the wrapping is the same as before the split.
-      '**New work you discover** (outside the mission, or a follow-up bug): do not do it yourself. Write a JSON file' +
-        (addendum.newWorkWrite ?? '\n') +
-        ' (id, title, domain, class K|D|D+|U, mission = short self-contained description, value 1-10, content_min,',
-      'depends_on, waiting_on, owned_files, shared_patch, source) and run, in your worktree as a command of its own,',
-      `\`${require('./lib/projectRoot.js').cliCommand()} add --file <file>\`. It becomes a proposal the owner approves (at most 3 open per track). Mention the id in`,
-      'the report, and a HIGH security finding in its own section.',
+      // Here and not in the template: a project keeps its own copy of the template, and this reaches it with the plugin update.
+      '**New work you discover** (outside the mission, or a follow-up bug): do not build it, propose it:',
+      `\`${require('./lib/projectRoot.js').cliCommand()} add --json '{"id":"<new id>","title":"<short title>","mission":"<what, why, where, how to check it>"}'\`.`,
+      'That is all it needs: it waits for approval, the owner decides its size and priority, and a track may have 3 open proposals.',
+      'Domain, project and feature follow your track and the class is K, unless you set them (`"class":"D"` for database work). Add',
+      '`"owned_files":[...]` if you know the files. Run it on its own from your worktree: no `cd`, no `QUEUE_` variable, no `--approved`,',
+      `and nothing else in the same command. On Windows, or with quotes in the text, write the JSON to a file in \`<folder>\`${addendum.newWorkWrite ?? ''} and use \`--file\`.`,
+      'Mention the id in the report, and a HIGH security finding in its own section.',
       `Noticed something outside your scope? Run \`${require('./lib/projectRoot.js').cliCommand()} finding "<title>" [--detail "..."] [--files a,b]\` instead of fixing it.`,
     ].join('\n'),
   );

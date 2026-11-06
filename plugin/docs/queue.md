@@ -48,7 +48,7 @@ a track adding a proposal) cannot corrupt the file. `ravenseat undo` undoes the 
 | `owned_files`, `owner_db` | Files and DB objects the task owns exclusively while it runs |
 | `shared_patch` | Shared functions the task changes in patch form |
 | `project`, `feature`, `source` | Project id (must exist), feature name, and the plan section the task comes from |
-| `batched` | `true` for small low-value tasks: they go to the batch queue (`ravenseat batch`) instead of their own track |
+| `batched` | `true` for small low-value tasks: they go to the batch queue (`ravenseat batch`) instead of their own track. Approving such a proposal does not start it: it starts when packed, or alone after `edit <id> --json '{"batched":false}'` |
 | `done_when` | Optional: a shell command (one line, at most 500 characters) that must exit 0 in the track's worktree for the track to count as done, e.g. `npm test -- src/x.test.ts`. The mission tells the track to run it before it reports; `receive` and `merge` run it again (see [the done command](#the-done-command-and-the-fix-round-cap)). `null` in `edit` removes it. A proposal with it is never auto-accepted |
 | `acceptance` | Optional: a list of 1 to 10 short criteria (one line each, at most 300 characters), set with `ravenseat add ... --accept "..." --accept "..."` (one task) or `ravenseat edit <id> --accept "..."` (replaces the list). The mission copies them under "Acceptance criteria (fixed, do not change)", `ravenseat info` and the board's detail panel show them, and `reviewer-gap` answers MET / NOT MET / UNCLEAR per criterion. Locked after the start, like `done_when` (see [the lock](#the-finish-line-is-locked-after-the-start)). `null` in `edit` removes it |
 | `max_fix_rounds` | Optional: this task's fix-round cap, a whole number 0 to 20 (0 = no fix round without the owner); overrides `maxFixRounds` in `queue.config.json` (default 3). `null` in `edit` removes it |
@@ -58,7 +58,7 @@ a track adding a proposal) cannot corrupt the file. `ravenseat undo` undoes the 
 Status flow: `proposed` → `waiting` (approved, ready to run) → `running` → `review` → `done`, or `cancelled`. Tasks
 added by an agent start as `proposed` and need `approve`; tasks the owner or the orchestrator adds start as `waiting`.
 A track adds from its own worktree: the queue sets `added_by` from the branch, refuses `--approved` and allows 3 open
-proposals per track. In full mode too, its proposal needs only `id`, `title` and `mission`: `domain`, `project` and `feature`
+proposals per track. The small-task guard does not apply to it and `batched` is dropped, since the owner decides the size when approving. In full mode too, its proposal needs only `id`, `title` and `mission`: `domain`, `project` and `feature`
 follow the track and the class is `K`, unless the task sets them.
 With [auto-accept](#auto-accept-of-proposals) on, the queue approves the proposals that fit the owner's rules itself.
 

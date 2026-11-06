@@ -56,7 +56,7 @@ function stateLine(t) {
     `${t.qa ? ` · ${t.qa} in the QA list (ravenseat qa)` : ''}${t.external ? ` · ${t.external} outside the queue (ravenseat external)` : ''}` +
     `${t.parked ? ` · ${t.parked} parked (ravenseat continue)` : ''}` +
     `${t.focus?.notice ? ' · FOCUS WARNING (ravenseat focus)' : ''}` +
-    `${t.empty ? (t.waiting ? ' · NOTHING CAN START (ravenseat show --full says why)' : ' · THE QUEUE IS OUT OF WORK') : ''}`
+    `${t.empty ? (t.waiting ? ' · NOTHING CAN START (ravenseat show --full says why)' : t.batched ? ' · ONLY THE BATCH QUEUE IS LEFT (ravenseat batch)' : ' · THE QUEUE IS OUT OF WORK') : ''}`
   );
 }
 
@@ -158,12 +158,13 @@ function summaryView(
     out.push(
       `Waiting per class: ${perClass}; ${t.blocked.length} of them are blocked now (see show --full).`,
     );
-  // Proposals by name: a count alone does not tell the owner that something new came in.
-  const proposals = tasks.filter((o) => o.status === 'proposed' && !isBatched(o));
+  // Proposals by name: a count alone does not tell the owner that something new came in. One in the batch queue is
+  // marked, because approving it does not start it.
+  const proposals = tasks.filter((o) => o.status === 'proposed');
   if (proposals.length) {
     out.push(`PROPOSED (${proposals.length}; ravenseat approve <id> lets one start):`);
     for (const o of proposals.slice(0, MAX_PROPOSALS_SHOWN))
-      out.push(cut(`  ${o.id.padEnd(12)} ${o.added_by ? `from ${o.added_by}  ` : ''}${o.title ?? ''}`));
+      out.push(cut(`  ${o.id.padEnd(12)} ${o.added_by ? `from ${o.added_by}  ` : ''}${isBatched(o) ? '[batch queue]  ' : ''}${o.title ?? ''}`));
     if (proposals.length > MAX_PROPOSALS_SHOWN)
       out.push(`  ... and ${proposals.length - MAX_PROPOSALS_SHOWN} more (ravenseat proposals)`);
   }

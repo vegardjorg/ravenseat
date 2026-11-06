@@ -138,6 +138,24 @@ describe('ravenseat add from a track in full mode', () => {
     expect(r.out).toContain('nothing for you to do');
     expect(r.out).not.toContain('edit-many');
   });
+  it('the small-task guard and the batch queue do not apply to a proposal', () => {
+    const p = project('full');
+    const small = { id: 'N-1', title: 'New', mission: 'm', value: 2, content_min: 10 };
+    expect(p.fromTrack('add', '--json', JSON.stringify(small)).code).toBe(0);
+    expect(p.task('N-1')).toMatchObject({ status: 'proposed', content_min: 10 });
+    const r = p.fromTrack('add', '--json', JSON.stringify({ ...small, id: 'N-2', batched: true }));
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('does not go in the batch queue');
+    expect(p.task('N-2').batched).toBeUndefined();
+    // Approved, it can be started: nothing holds it back.
+    expect(p.fromMain('approve', 'N-2').out).not.toContain('batch queue');
+  });
+  it('the guard still stops the same task from the main checkout', () => {
+    const p = project('full');
+    const r = p.fromMain('add', '--json', JSON.stringify({ id: 'M-1', title: 'New', mission: 'm', domain: 'x', class: 'K', value: 2, content_min: 10 }));
+    expect(r.code).not.toBe(0);
+    expect(r.out).toContain('small task');
+  });
   it('still needs a mission', () => {
     const p = project('full');
     const r = p.fromTrack('add', '--json', JSON.stringify({ id: 'N-1', title: 'New' }));
@@ -158,6 +176,26 @@ describe('the owner sees the proposals', () => {
     expect(proposals).toContain('Proposals waiting (1;');
     expect(proposals).toMatch(/N-1\s+from A-1\s+Document it/);
   });
+  it('a proposal in the batch queue is named everywhere, and approving it says it does not start alone', () => {
+    const p = project('full');
+    const small = { id: 'M-1', title: 'Small one', mission: 'm', domain: 'x', class: 'K', project: 'p', feature: 'f', value: 2, content_min: 10, batched: true, added_by: 'A-1' };
+    expect(p.fromMain('add', '--json', JSON.stringify(small)).code).toBe(0);
+    expect(p.task('M-1')).toMatchObject({ status: 'proposed', batched: true });
+    const show = p.fromMain('show').out;
+    expect(show).toContain('1 proposed');
+    expect(show).toMatch(/M-1\s+from A-1\s+\[batch queue\]\s+Small one/);
+    expect(p.fromMain('proposals').out).toMatch(/M-1\s+from A-1\s+\[batch queue\]\s+Small one/);
+    expect(p.fromMain('decide', '--json').out).toContain('M-1');
+    const approved = p.fromMain('approve', 'M-1').out;
+    expect(approved).toContain('M-1 is in the batch queue');
+    expect(approved).toContain('{"batched":false}');
+  });
+  it('with only the batch queue left, the summary does not say the queue is out of work', () => {
+    const { stateLine } = require('../lib/queueLogic.js');
+    const base = { activeOnes: 0, picked: 0, waiting: 0, proposed: 0, canStart: 0, empty: true };
+    expect(stateLine({ ...base, batched: 1 })).toContain('ONLY THE BATCH QUEUE IS LEFT');
+    expect(stateLine({ ...base, batched: 0 })).toContain('THE QUEUE IS OUT OF WORK');
+  });
   it('show cuts the list at 5 and says where the rest is', () => {
     const { summaryView } = require('../lib/queueLogic.js');
     const tasks = Array.from({ length: 7 }, (_, i) => ({ id: `N-${i}`, title: 't', domain: 'x', class: 'K', status: 'proposed', mission: 'm' }));
@@ -169,9 +207,15 @@ describe('the owner sees the proposals', () => {
 
 describe('the mission', () => {
   const template = fs.readFileSync(path.resolve(__dirname, '..', '..', '..', 'docs', 'mission-template.md'), 'utf8');
+  const rendered = fs.readFileSync(path.resolve(__dirname, '..', 'lib', '__tests__', '__snapshots__', 'claudeDispatch', 'prompt-K1.md'), 'utf8');
+  it('says it once, without the fields that send a track to the small-task guard', () => {
+    expect(rendered.match(/New work/g)).toHaveLength(1);
+    expect(rendered).not.toContain('content_min');
+    expect(template).not.toContain('New work');
+  });
   it('tells a track how to propose, and the form works as it stands', () => {
-    expect(template).toContain('ravenseat add --json');
-    const form = template.match(/ravenseat add --json '(\{.*\})'/);
+    expect(rendered).toContain('ravenseat add --json');
+    const form = rendered.match(/ravenseat add --json '(\{.*\})'/);
     expect(form).not.toBeNull();
     const p = project('full');
     const r = p.fromTrack('add', '--json', (form as RegExpMatchArray)[1].replace('<new id>', 'N-1'));
