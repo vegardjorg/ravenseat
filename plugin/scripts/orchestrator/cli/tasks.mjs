@@ -25,15 +25,14 @@ import {
 import { highestMigr } from './tracks.mjs';
 
 /**
- * Adds the data folder to the repo's .gitignore on a fresh init, so a new user does not have to. Does nothing outside a
- * git repo, when git already ignores the folder, or when the folder lies outside the repo. Never fails init: a .gitignore
- * that cannot be written only gives a hint.
+ * Adds the data folder and the agents' worktrees to the repo's .gitignore on a fresh init, so a new user does not have to.
+ * Does nothing outside a git repo, and skips what git already ignores or a data folder outside the repo. Never fails init:
+ * a .gitignore that cannot be written only gives a hint.
  */
 function ignoreDataFolder() {
   const git = (...args) => spawnSync('git', args, { cwd: FOLDER, encoding: 'utf8' });
   const top = git('rev-parse', '--show-toplevel');
   if (top.status !== 0) return;
-  if (git('check-ignore', '-q', FOLDER).status === 0) return;
   // Compare real paths: git prints the long, resolved path, while FOLDER may be a Windows 8.3 short name
   // (C:\Users\RUNNER~1\...) or go through a symlink (/var -> /private/var on macOS). Without this the folder looks
   // outside the repo and nothing is added.
@@ -46,15 +45,42 @@ function ignoreDataFolder() {
   };
   const repo = real(top.stdout.trim());
   const rel = path.relative(repo, real(FOLDER)).split(path.sep).join('/');
-  if (!rel || rel.startsWith('..')) return;
+  const lines = [];
+  if (rel && !rel.startsWith('..') && git('check-ignore', '-q', FOLDER).status !== 0) lines.push(`${rel}/`);
+  // A file inside the folder: an open track's worktree would otherwise show as untracked in git status.
+  if (git('check-ignore', '-q', path.join(repo, '.claude', 'worktrees', 'x')).status !== 0) lines.push('.claude/worktrees/');
+  if (!lines.length) return;
   const file = path.join(repo, '.gitignore');
   try {
     const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
     const sep = before && !before.endsWith('\n') ? '\n' : '';
-    fs.appendFileSync(file, `${sep}# Ravenseat queue data (local state)\n${rel}/\n`);
-    console.log(`Added ${rel}/ to .gitignore (the queue data is local state, not for git).`);
+    fs.appendFileSync(file, `${sep}# Ravenseat (local state, not for git)\n${lines.join('\n')}\n`);
+    console.log(`Added ${lines.join(' ')} to .gitignore (local state, not for git).`);
   } catch (e) {
-    console.log(`Note: could not add ${rel}/ to .gitignore (${e.message}); add it yourself.`);
+    console.log(`Note: could not add ${lines.join(' ')} to .gitignore (${e.message}); add it yourself.`);
+  }
+}
+
+/**
+ * A fresh init on a repo without the default base branch (a repo on master): writes the current branch as baseBranch, or
+ * every track would fail to start. A base branch the config names, or a default branch that exists, is left alone, so an
+ * init on a feature branch does not make that branch the base. Never fails init: without an answer the default stays, and
+ * ravenseat doctor names the missing branch.
+ */
+function pickBaseBranch() {
+  const git = (...args) => spawnSync('git', args, { cwd: FOLDER, encoding: 'utf8' });
+  try {
+    const own = JSON.parse(fs.readFileSync(KK.configFile(), 'utf8'));
+    if (Object.hasOwn(own, 'baseBranch')) return;
+    const head = git('symbolic-ref', '--short', '-q', 'HEAD');
+    if (head.status !== 0) return; // not git, or a detached HEAD
+    if (git('rev-parse', '--verify', '-q', `refs/heads/${CONFIG.baseBranch}`).status === 0) return;
+    const branch = head.stdout.trim();
+    if (!branch || branch === CONFIG.baseBranch) return;
+    fs.writeFileSync(KK.configFile(), `${JSON.stringify({ ...own, baseBranch: branch }, null, 2)}\n`);
+    console.log(`Base branch: ${branch} (there is no ${CONFIG.baseBranch} here; written to ${KK.configFile()}).`);
+  } catch (e) {
+    console.log(`Note: could not set the base branch (${e.message}); ravenseat doctor checks it.`);
   }
 }
 
@@ -110,6 +136,7 @@ export function cmdInit() {
     console.log('Note: --next-migr is ignored; the migration flow is off (migrations.folder in queue.config.json).');
   withLock(() => write(queue));
   ignoreDataFolder();
+  pickBaseBranch();
   if (initMode === 'lite') {
     console.log(`The queue is created: ${FILE} (lite mode).`);
     console.log(`Next: ${CLI} add "<what you want done>", then /ravenseat:queue (or ${CLI} fill) to start it.`);

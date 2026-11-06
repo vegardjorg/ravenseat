@@ -17,8 +17,9 @@ For one project only, run `claude plugin install ravenseat@ravenseat --scope pro
 the plugin. The marketplace entry still goes in your user settings unless `claude plugin marketplace add` also gets
 `--scope project`.
 
-Installed the old `cq` plugin? Swap it (add `--scope project` to the first and last if you installed it for one project; your
-queue data stays), then run `ravenseat setup --overwrite --settings` in the project and commit:
+Installed the old `cq` plugin? Swap it in a terminal (add `--scope project` to the first and last if you installed it for one
+project; your queue data stays). Then open Claude Code in the project, ask it to run `ravenseat setup --overwrite --settings`
+(the command is only on the PATH inside Claude Code), and commit:
 
 ```
 claude plugin uninstall cq@ravenseat
@@ -48,7 +49,8 @@ Requirements: Node.js 20 or newer, git and Claude Code. No npm packages are need
 ## Lite mode in more detail
 
 - **Init:** `ravenseat init --lite` (a fresh `ravenseat init` is lite too) writes `"mode": "lite"` to `queue.config.json` and an
-  empty queue in `scripts/.queue/`. In a git repo it adds that folder to `.gitignore` unless git already ignores it.
+  empty queue in `scripts/.queue/`. In a git repo it adds that folder and `.claude/worktrees/` to `.gitignore` unless git already ignores them, and when the
+  config names no base branch and `main` does not exist, it writes the current branch as `baseBranch`.
 - **A mission:** add one when the title is not enough:
   `ravenseat add "Fix the login bug" --mission "Users with a + in the email cannot log in; add a test"`.
 - **Priority:** `--priority 1-10` moves a task up (5 is normal); otherwise tasks run in the order you added them.

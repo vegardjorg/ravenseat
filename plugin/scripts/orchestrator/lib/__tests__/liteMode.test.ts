@@ -167,24 +167,70 @@ describe('ravenseat init and .gitignore', () => {
     expect(spawnSync('git', ['init', '-q'], { cwd: root }).status).toBe(0);
     const init = await ravenseat('init');
     expect(init.status, init.stderr).toBe(0);
-    expect(init.stdout).toContain('Added q/ to .gitignore');
+    expect(init.stdout).toContain('Added q/ .claude/worktrees/ to .gitignore');
     expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toContain('\nq/\n');
     expect(spawnSync('git', ['check-ignore', '-q', 'q'], { cwd: root }).status).toBe(0);
+    expect(spawnSync('git', ['check-ignore', '-q', '.claude/worktrees/x'], { cwd: root }).status).toBe(0);
     await ravenseat('init');
     expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8').match(/^q\/$/gm)).toHaveLength(1);
   });
 
-  it('a folder git already ignores is left alone, and outside git nothing is written', async () => {
+  it('what git already ignores is left alone', async () => {
+    expect(spawnSync('git', ['init', '-q'], { cwd: root }).status).toBe(0);
+    fs.writeFileSync(path.join(root, '.gitignore'), 'q/\n.claude/worktrees/\n');
+    expect((await ravenseat('init')).stdout).not.toContain('to .gitignore');
+    expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe('q/\n.claude/worktrees/\n');
+  });
+
+  it('a data folder git already ignores does not stop the worktrees line', async () => {
     expect(spawnSync('git', ['init', '-q'], { cwd: root }).status).toBe(0);
     fs.writeFileSync(path.join(root, '.gitignore'), 'q/\n');
-    expect((await ravenseat('init')).stdout).not.toContain('to .gitignore');
-    expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe('q/\n');
+    expect((await ravenseat('init')).stdout).toContain('Added .claude/worktrees/ to .gitignore');
+    expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8').match(/^q\/$/gm)).toHaveLength(1);
   });
 
   it('outside a git repo: no .gitignore', async () => {
     const init = await ravenseat('init');
     expect(init.status, init.stderr).toBe(0);
     expect(fs.existsSync(path.join(root, '.gitignore'))).toBe(false);
+  });
+});
+
+describe('ravenseat init and the base branch', () => {
+  const git = (...args: string[]) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t.invalid', ...args], { cwd: root, encoding: 'utf8' });
+  const own = () => JSON.parse(fs.readFileSync(configFile(), 'utf8'));
+
+  it('a repo on master without main: writes master, and a second init changes nothing', async () => {
+    expect(git('init', '-q', '-b', 'master').status).toBe(0);
+    expect(git('commit', '-q', '--allow-empty', '-m', 'x').status).toBe(0);
+    const init = await ravenseat('init');
+    expect(init.status, init.stderr).toBe(0);
+    expect(init.stdout).toContain('Base branch: master');
+    expect(own()).toMatchObject({ mode: 'lite', baseBranch: 'master' });
+    expect((await ravenseat('init')).stdout).toContain('already exists');
+    expect(own().baseBranch).toBe('master');
+  });
+
+  it('a repo with main, on a feature branch: the default stays and nothing is written', async () => {
+    expect(git('init', '-q', '-b', 'main').status).toBe(0);
+    expect(git('commit', '-q', '--allow-empty', '-m', 'x').status).toBe(0);
+    expect(git('switch', '-q', '-c', 'feature').status).toBe(0);
+    const init = await ravenseat('init');
+    expect(init.stdout).not.toContain('Base branch');
+    expect(own().baseBranch).toBeUndefined();
+  });
+
+  it('a base branch the config names is never replaced', async () => {
+    expect(git('init', '-q', '-b', 'master').status).toBe(0);
+    fs.writeFileSync(configFile(), JSON.stringify({ baseBranch: 'develop' }));
+    await ravenseat('init');
+    expect(own().baseBranch).toBe('develop');
+  });
+
+  it('outside git: nothing about a base branch', async () => {
+    const init = await ravenseat('init');
+    expect(init.status, init.stderr).toBe(0);
+    expect(own().baseBranch).toBeUndefined();
   });
 });
 
