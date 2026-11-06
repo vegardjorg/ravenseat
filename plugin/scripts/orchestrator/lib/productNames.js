@@ -5,8 +5,7 @@
 // `<new name> merge X-1` straight past the push guard. So every guard asks this file, and a test
 // (lib/__tests__/productNames.test.ts) fails when plugin/bin/ or plugin.json holds a name that is not listed here.
 //
-// CLI_NAMES stays complete for good: an old name costs one word here, and a project may still have it in its copies of
-// the docs and the mission templates. No dependencies: the hooks load this first.
+// No dependencies: the hooks load this first.
 // =============================================================
 'use strict';
 
@@ -14,14 +13,12 @@
 const CLI_NAME = 'ravenseat';
 /** The name in plugin.json: the prefix of the skills (/<name>:queue) and agents (<name>:track). */
 const PLUGIN_NAME = 'ravenseat';
-/** The entry script of the old name: bin/cq and vendored copies still reach it. Not a command of its own. */
-const OLD_ENTRY_SCRIPTS = ['cq.mjs'];
-/** Every name the CLI has or had. Guards recognise all of them. */
-const CLI_NAMES = ['ravenseat', 'cq'];
-/** Every name the plugin has or had. */
-const PLUGIN_NAMES = ['ravenseat', 'cq'];
+/** Every name the CLI answers to. Guards recognise all of them. */
+const CLI_NAMES = [CLI_NAME];
+/** Every name the plugin goes by. */
+const PLUGIN_NAMES = [PLUGIN_NAME];
 
-/** For regexes: the CLI names as alternatives, "ravenseat|cq". */
+/** For regexes: the CLI names as alternatives. */
 const CLI_PATTERN = CLI_NAMES.join('|');
 
 /** Is this word the queue's own CLI? Takes a command word without folder and .cmd (shellCommands.js commandWord). */
@@ -34,4 +31,4 @@ function bareAgentType(type) {
   return hit ? type.slice(hit.length + 1) : type;
 }
 
-module.exports = { CLI_NAME, PLUGIN_NAME, OLD_ENTRY_SCRIPTS, CLI_NAMES, PLUGIN_NAMES, CLI_PATTERN, isCliName, bareAgentType };
+module.exports = { CLI_NAME, PLUGIN_NAME, CLI_NAMES, PLUGIN_NAMES, CLI_PATTERN, isCliName, bareAgentType };

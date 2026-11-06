@@ -34,7 +34,7 @@ const ALIASES = HELP.ALIASES;
 function scripts() {
   return fs
     .readdirSync(HERE)
-    .filter((f) => f.endsWith('.mjs') && !f.startsWith('hook-') && f !== 'ravenseat.mjs' && !createRequire(import.meta.url)('./lib/productNames.js').OLD_ENTRY_SCRIPTS.includes(f))
+    .filter((f) => f.endsWith('.mjs') && !f.startsWith('hook-') && f !== 'ravenseat.mjs')
     .map((f) => f.slice(0, -'.mjs'.length))
     .sort();
 }

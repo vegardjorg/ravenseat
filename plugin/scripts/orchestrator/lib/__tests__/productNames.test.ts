@@ -1,9 +1,9 @@
 // =============================================================
-// productNames.test.ts: every name the product has or had reaches every guard, tried against the real guards.
+// productNames.test.ts: the product's name reaches every guard, tried against the real guards.
 //
 // Locks: (1) no file in plugin/bin/ and no plugin.json name is unknown to productNames.js, so a new name cannot leave a
-// guard behind; (2) each guard treats every CLI and plugin name the same. The names are listed by hand here on purpose:
-// a search-and-replace over the code must not be able to drop an old name unnoticed.
+// guard behind; (2) each guard treats every CLI and plugin name the same. The name is written by hand here on purpose:
+// a search-and-replace over the code must not be able to change it unnoticed.
 // =============================================================
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -23,8 +23,8 @@ const PLUGIN = path.resolve(ORCH, '..', '..');
 const HOOK_PUSH = path.join(ORCH, 'hook-push-guard.mjs');
 const HOOK_CONTEXT = path.join(ORCH, 'hook-track-context.mjs');
 
-// Spelled out: the point of the matrix. Not built from N.CLI_NAMES.
-const ALL_NAMES = ['ravenseat', 'c' + 'q'];
+// Spelled out: the point of the matrix. Not built from N.CLI_NAMES. A second name goes here if the CLI ever gets one.
+const ALL_NAMES = ['ravenseat'];
 
 const temporary: string[] = [];
 afterAll(() => {
@@ -62,21 +62,12 @@ describe('the list of names', () => {
   });
 });
 
-describe('the old name as an alias', () => {
-  const help = (script: string, ...args: string[]) => spawnSync(process.execPath, [path.join(ORCH, script), ...args], { encoding: 'utf8', cwd: folder() });
-  it('the old entry script gives the same as the new one, and is not listed as a command', () => {
-    const now = help('ravenseat.mjs', 'help', 'all');
-    const old = help('cq.mjs', 'help', 'all');
-    expect(now.status).toBe(0);
-    expect(old.stdout).toBe(now.stdout);
-    expect(now.stdout).not.toMatch(/\bcq\b/);
+describe('the install', () => {
+  it('both bin shims start the entry script', () => {
+    for (const f of ['ravenseat', 'ravenseat.cmd']) expect(fs.readFileSync(path.join(PLUGIN, 'bin', f), 'utf8'), f).toContain('ravenseat.mjs');
   });
-  it('both bin shims start the new entry script', () => {
-    for (const f of ['ravenseat', 'ravenseat.cmd', 'cq', 'cq.cmd']) expect(fs.readFileSync(path.join(PLUGIN, 'bin', f), 'utf8'), f).toContain('ravenseat.mjs');
-  });
-  it('the marketplace moves an install of the old name for good', () => {
+  it('the marketplace lists the plugin under its name', () => {
     const market = JSON.parse(fs.readFileSync(path.resolve(PLUGIN, '..', '.claude-plugin', 'marketplace.json'), 'utf8'));
-    expect(market.renames).toEqual({ cq: 'ravenseat' });
     expect(market.plugins.map((p: { name: string }) => p.name)).toEqual(['ravenseat']);
   });
 });
@@ -101,7 +92,7 @@ describe.each(ALL_NAMES)('the CLI name %s', (name) => {
       const r = p.run(HOOK_PUSH, { tool_name: 'Bash', tool_input: { command }, agent_type });
       return r.stdout ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : null;
     };
-    for (const agent of ['track', 'cq:track', 'ravenseat:track', 'reviewer', 'ravenseat:reviewer']) {
+    for (const agent of ['track', 'ravenseat:track', 'reviewer', 'ravenseat:reviewer']) {
       expect(decision(agent, `${name} merge X-1`), agent).toBe('deny');
       expect(decision(agent, `${name}.cmd merge X-1`), agent).toBe('deny');
       expect(decision(agent, `node "${p.repo}/${name}.mjs" merge X-1`), agent).toBe('deny');
@@ -149,7 +140,6 @@ describe('the context hook', () => {
   it('asks productNames for the track, and has no name of its own', () => {
     const source = fs.readFileSync(HOOK_CONTEXT, 'utf8');
     expect(source).toContain('bareAgentType(firstInput');
-    expect(source).not.toMatch(/\(\?:cq:\)/);
   });
   it.each(['track', 'track-d', ...ALL_NAMES.map((n) => `${n}:track`), ...ALL_NAMES.map((n) => `${n}:track-d`)])(
     '%s passes the first check',

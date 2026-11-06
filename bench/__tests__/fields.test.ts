@@ -49,7 +49,7 @@ describe('normalize', () => {
   });
 
   it('strips the plugin prefix from agent types', () => {
-    expect(F.bareType('claude-code-queue:track-d')).toBe('track-d');
+    expect(F.bareType('ravenseat:track-d')).toBe('track-d');
     expect(F.bareType('spor')).toBe('track');
     expect(F.bareType(null)).toBeNull();
   });

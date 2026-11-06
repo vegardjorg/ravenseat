@@ -40,8 +40,6 @@ export const PLUGIN_ROOT = path.resolve(HERE, '..', '..');
 
 /** Where --ci writes the GitHub Actions template (relative to the target). */
 export const CI_WORKFLOW = '.github/workflows/ravenseat-gates.yml';
-/** What setup called the workflow before the rename: a project that has it must not get a second one. */
-const OLD_CI_WORKFLOW = '.github/workflows/cq-gates.yml';
 
 /**
  * The lines .gitignore needs: the queue's data, the agents' worktrees, the personal settings (an absolute path) and
@@ -197,7 +195,6 @@ export function fillConfigFromProject(text, target) {
 export function writeCiTemplate(target, o = {}) {
   const to = path.join(target, ...CI_WORKFLOW.split('/'));
   if (fs.existsSync(to)) return `${CI_WORKFLOW}: kept (already there; setup never overwrites a workflow)`;
-  if (fs.existsSync(path.join(target, ...OLD_CI_WORKFLOW.split('/')))) return `${OLD_CI_WORKFLOW}: kept (the same workflow under its old name; setup never overwrites a workflow)`;
   const from = path.join(PLUGIN_ROOT, 'templates', 'ci-github.yml');
   if (!fs.existsSync(from)) return `${CI_WORKFLOW}: not written (no template in this install: ${from})`;
   const KK = require('./lib/queueConfig.js');

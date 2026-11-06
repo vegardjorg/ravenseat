@@ -830,7 +830,7 @@ if (command === 'init') {
   // A mistyped command: one line with the closest known command (lib/cliHelp.js), same exit code as before.
   const scripts = fs
     .readdirSync(HERE)
-    .filter((f) => f.endsWith('.mjs') && !f.startsWith('hook-') && f !== 'ravenseat.mjs' && !require('./lib/productNames.js').OLD_ENTRY_SCRIPTS.includes(f))
+    .filter((f) => f.endsWith('.mjs') && !f.startsWith('hook-') && f !== 'ravenseat.mjs')
     .map((f) => f.slice(0, -'.mjs'.length));
   die(require('./lib/cliHelp.js').unknownCommandMessage(command, require('./lib/cliHelp.js').knownCommands(scripts), CLI), 1);
 } else {

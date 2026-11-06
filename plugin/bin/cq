@@ -1,3 +1,0 @@
-#!/bin/sh
-# The old name of ravenseat, kept until 1.0: a project's own copies of the docs and mission templates may still say it.
-exec node "$(dirname "$0")/../scripts/orchestrator/ravenseat.mjs" "$@"

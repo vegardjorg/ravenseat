@@ -64,7 +64,6 @@ and the work it blocks.
 
 That is the basic workflow. Plain words work, and the commands are there when you want explicit control
 ([all commands](plugin/docs/commands.md)). More in the [guide](plugin/docs/guide.md#lite-mode-in-more-detail).
-Installed it as `cq` or claude-code-queue before? See [install](plugin/docs/guide.md#install) for the extra step.
 
 ## From task to verified change
 

@@ -104,7 +104,7 @@ const MODE = { rask: 'quick', full: 'full' };
 const AGENT_TYPE = { spor: 'track', 'spor-d': 'track-d' };
 const SOURCE = { transkript: 'transcript', tidslogg: 'timeLog' };
 
-/** "claude-code-queue:track" -> "track" (plugin agents carry the plugin name as a prefix). */
+/** "ravenseat:track" -> "track" (plugin agents carry the plugin name as a prefix). */
 function bareType(type) {
   if (typeof type !== 'string') return type ?? null;
   const t = type.includes(':') ? type.slice(type.lastIndexOf(':') + 1) : type;

@@ -17,21 +17,14 @@ For one project only, run `claude plugin install ravenseat@ravenseat --scope pro
 the plugin. The marketplace entry still goes in your user settings unless `claude plugin marketplace add` also gets
 `--scope project`.
 
-Installed it as claude-code-queue before? Run `/plugin marketplace remove claude-code-queue` first, then the two
-lines above. Your queue data stays as it is.
-
-Installed it as `cq` before? The plugin is now called `ravenseat`, and a plain plugin update fails with "not found". Run
-these two right after each other, because the plugin and its guards are not loaded between them:
+Installed the old `cq` plugin? Swap it (add `--scope project` to the first and last if you installed it for one project; your
+queue data stays), then run `ravenseat setup --overwrite --settings` in the project and commit:
 
 ```
-/plugin marketplace update ravenseat
-/plugin install ravenseat@ravenseat
+claude plugin uninstall cq@ravenseat
+claude plugin marketplace update ravenseat
+claude plugin install ravenseat@ravenseat
 ```
-
-Add `--scope project` to the second line (in a terminal, as `claude plugin install`) if you installed it for one project.
-Claude Code then rewrites the plugin's line in `.claude/settings.json`, so commit that file. Your queue data stays as it is. The
-old `cq` command keeps working until 1.0, and your project's copies of the docs still say `cq` until you run
-`ravenseat setup --overwrite`. If your status line stopped working, `ravenseat setup --settings` points it at the new folder.
 
 Then open your own project and run `/ravenseat:setup`. It:
 - creates `queue.config.json`, `docs/queue/` and `CLAUDE.queue.md`, and adds two lines to `.gitignore`;

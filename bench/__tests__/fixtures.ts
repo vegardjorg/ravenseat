@@ -68,7 +68,7 @@ export function queue() {
 export function transcriptFiles() {
   return [
     { id: 'orch-1', kind: 'main', parent: null, meta: null, text: transcript(null, 10, { startMin: 0, compact: 1 }) },
-    { id: 'a1', kind: 'subagent', parent: 'orch-1', meta: { agentType: 'claude-code-queue:track' }, text: transcript('X-1', 5, { startMin: 1 }) },
+    { id: 'a1', kind: 'subagent', parent: 'orch-1', meta: { agentType: 'ravenseat:track' }, text: transcript('X-1', 5, { startMin: 1 }) },
     { id: 'a2', kind: 'subagent', parent: 'orch-1', meta: { agentType: 'track-d' }, text: transcript('X-2', 10, { startMin: 11 }) },
     { id: 'a3', kind: 'subagent', parent: 'orch-1', meta: { agentType: 'reviewer' }, text: transcript('X-2', 2, { startMin: 71 }) },
     { id: 'a4', kind: 'subagent', parent: 'orch-1', meta: { agentType: 'track-d' }, text: transcript('X-2-r2', 3, { startMin: 75 }) },
