@@ -219,13 +219,16 @@ the keyboard); changes are collected in a draft you review before anything is sa
   <img src="../../assets/screenshots/dark-01-queue.jpg" alt="The queue in dark mode" width="400">
   <img src="../../assets/screenshots/dark-03-dependencies.jpg" alt="The dependency graph in dark mode" width="400">
 </p>
-<p align="center"><img src="../../assets/screenshots/dark-10-plan-tree-map.jpg" alt="The plan tree map in dark mode" width="400"></p>
+<p align="center">
+  <img src="../../assets/screenshots/dark-10-plan-tree-map.jpg" alt="The plan tree map in dark mode" width="400">
+  <img src="../../assets/screenshots/dark-13-checks.jpg" alt="The Checks tab in dark mode" width="400">
+</p>
 
 ### Settings
 
-<p align="center"><img src="../../assets/screenshots/light-11-settings.jpg" alt="The settings panel with theme and queue limits" width="800"></p>
+<p align="center"><img src="../../assets/screenshots/light-11-settings.jpg" alt="The settings panel with help, guidance, checks and theme" width="800"></p>
 
-The gear holds the help, the theme and the queue's limits (how many tracks run at once, how many heavy
+The gear holds the help, the switches for guidance and the Checks tab, the theme, the mascot and the queue's limits (how many tracks run at once, how many heavy
 D+ tracks, tracks per domain, daily budget, night pause, automatic compaction). Each setting shows its current
 value, the default and, for the track limits, the recommended ceiling that keeps the weekly quota from running out
 early.

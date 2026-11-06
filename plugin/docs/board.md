@@ -33,9 +33,13 @@ files, cost and the actions for its status (see [task detail](guide.md#task-deta
 
 <p align="center"><img src="../../assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
 
-**Waiting on you and Decisions.** Everything only you can decide lands here: questions from agents (with their
+**Waiting on you.** Everything only you can decide lands here: questions from agents (with their
 recommendation), owner tasks and conditions. Each shows which tasks it blocks. Answer on the board, and the
-orchestrator picks up the answer and unblocks the tasks. The **Decisions** tab is the same list as `/ravenseat:decide`,
+orchestrator picks up the answer and unblocks the tasks.
+
+<p align="center"><img src="../../assets/screenshots/light-14-decisions.jpg" alt="The Decisions tab: open decisions with the recommendation as the main button" width="800"></p>
+
+**Decisions.** The same list as `/ravenseat:decide`,
 sorted by what each answer unlocks and grouped as Decide, Check, Approve and Unstick. The board opens on it when
 anything waits. The recommendation is the main button, an answer can be undone for 5 seconds, and j/k, Enter, 1-4 and
 u work from the keyboard.
@@ -44,6 +48,17 @@ u work from the keyboard.
 
 **Dependencies.** The chains as a graph: circles are tasks (solid ring = in progress, dashed = blocked), squares are
 open questions. It shows at a glance which single answer unlocks the most work.
+
+<p align="center"><img src="../../assets/screenshots/light-15-focus.jpg" alt="The Focus tab: the forecast above the columns Now, Next, Later and Waiting" width="800"></p>
+
+**Focus.** The order the queue takes work in: drag areas, projects and features between Now, Next, Later and Waiting.
+The forecast above the columns says when the remaining tasks are done.
+
+<p align="center"><img src="../../assets/screenshots/light-13-checks.jpg" alt="The Checks tab: what the project has for checking its code, and suggestions for what to add" width="800"></p>
+
+**Checks.** Cards for what your project already has for checking its code, and suggestions for what to add, most
+important first. It is read from your files, so it shows what is set up, not that it works. A suggestion's button adds
+an investigation to the queue, and nothing is built before you approve it. Turn the tab off if you run your own setup.
 
 <p align="center"><img src="../../assets/screenshots/light-04-statistics.jpg" alt="Statistics: throughput, cycle time, estimate accuracy and cost" width="800"></p>
 

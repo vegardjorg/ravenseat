@@ -94,7 +94,7 @@ The orchestration runs inside Claude Code. The board is a companion, not a requi
 
 - **Claude Code CLI or desktop app:** manage everything from one conversation.
 - **Remote Control:** follow and answer from your phone, using Claude Code's own Remote Control feature.
-- **The board:** a local web page with tasks, dependencies, decisions, plans and statistics, in light and dark mode.
+- **The board:** a local web page with tasks, dependencies, decisions, plans, checks and statistics, in light and dark mode.
 
 <p align="center"><img src="assets/infographics/claude-code-and-board.webp" alt="Claude Code as the control surface plus the optional visual board, both on top of the same orchestration: task queue, agents, checks and your decisions" width="800"></p>
 
@@ -102,6 +102,11 @@ The board shows the same project state from a wider angle; it does not run a sep
 makes to the queue has a command behind it. Open it with `/ravenseat:board`, or ask Claude to open the board.
 
 <p align="center"><img src="assets/screenshots/dark-03-dependencies.jpg" alt="The dependency graph on the board in dark mode" width="800"></p>
+
+<p align="center"><img src="assets/screenshots/light-13-checks.jpg" alt="The Checks tab: what the project has for checking its code, and suggestions for what to add" width="800"></p>
+
+The **Checks** tab reads what your project already has for checking its code and suggests what to add. Nothing is
+run, and nothing is built before you approve it.
 
 [A tour of the board](plugin/docs/board.md#a-tour)
 
