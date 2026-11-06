@@ -28,7 +28,7 @@ claude plugin install ravenseat@ravenseat
 ```
 
 Then open your own project and run `/ravenseat:setup`. It:
-- creates `queue.config.json`, `docs/queue/` and `CLAUDE.queue.md`, and adds two lines to `.gitignore`;
+- creates `queue.config.json`, `docs/queue/` and `CLAUDE.queue.md`, and adds the queue's data, the agents' worktrees, your personal settings and `.env` files to `.gitignore`;
 - asks before it changes `CLAUDE.md` or `.claude/settings.json`;
 - fills in your checks (type check, lint, tests) and your project's areas with you;
 - creates the empty queue and runs a short smoke test;
@@ -36,7 +36,9 @@ Then open your own project and run `/ravenseat:setup`. It:
 
 The plugin's hooks do nothing in projects without a `queue.config.json`, so it is safe to keep installed.
 
-Update with `/plugin update`; the board shows a banner when a new version is out, with the steps (turn the check off
+Update with `/plugin update`, then run `ravenseat setup --settings` in the project: it refreshes the settings and names the
+project files older than the plugin, such as the mission template your agents get (**After a plugin update** under
+[how it works](#how-it-works) says how to replace them). The board shows a banner when a new version is out, with the steps (turn the check off
 with `"board": { "updateCheck": false }`, see [board](board.md#update-banner)). To try it without installing:
 `claude --plugin-dir <path-to-this-repo>/plugin`.
 

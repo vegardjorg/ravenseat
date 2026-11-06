@@ -340,7 +340,8 @@ receive and merge the same track. Compaction is still the usual path for a long 
 - Ownership is exclusive while a task runs. Hotspot files (navigation, central registries) are changed by the
   orchestrator while merging, from the wiring specification in the track report.
 - New work discovered by a track becomes a proposal (`ravenseat add` from its worktree), never scope creep. The queue sets
-  `added_by` from the branch, `--approved` is refused, and a track may have 3 open proposals.
+  `added_by` from the branch, `--approved` is refused, and a track may have 3 open proposals. The mission shows the command, and
+  the proposal needs only `id`, `title` and `mission`: the rest follows the track, and the class is K unless the task sets it.
 - The worktree rule: never `npm install` inside a worktree (shared folders are links to the main tree), and clean up
   worktrees only with `cleanup-worktree.mjs`. A whole `ravenseat merge` (also `--resume`) removes the worktree and deletes the
   merged queue branch with `git branch -d`; `ravenseat doctor` names merged `worktree-agent-*` branches with no worktree left.

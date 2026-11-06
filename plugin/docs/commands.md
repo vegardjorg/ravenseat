@@ -15,6 +15,8 @@ ravenseat merge <ID>                # merge it
 ravenseat cost                      # USD per merged change, cost per task (all runs), then per class
 ravenseat calibrate                 # how far minute and cost estimates are off, per class
 ravenseat decide                    # everything waiting on you, most impact first (/ravenseat:decide walks it)
+ravenseat proposals                 # the proposals waiting, and the auto-accept rules
+ravenseat approve <ID>              # lets a proposal start (`ravenseat set <ID> cancelled` declines it)
 ravenseat conflicts                 # predicted merge conflicts between running tracks and the base
 ravenseat ask <ID> "<question>"     # ask about an earlier track without resuming it (/ravenseat:ask)
 ravenseat checks                    # what the project has for checking its code (read from files, nothing runs) and suggestions

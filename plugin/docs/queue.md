@@ -58,7 +58,8 @@ a track adding a proposal) cannot corrupt the file. `ravenseat undo` undoes the 
 Status flow: `proposed` → `waiting` (approved, ready to run) → `running` → `review` → `done`, or `cancelled`. Tasks
 added by an agent start as `proposed` and need `approve`; tasks the owner or the orchestrator adds start as `waiting`.
 A track adds from its own worktree: the queue sets `added_by` from the branch, refuses `--approved` and allows 3 open
-proposals per track.
+proposals per track. In full mode too, its proposal needs only `id`, `title` and `mission`: `domain`, `project` and `feature`
+follow the track and the class is `K`, unless the task sets them.
 With [auto-accept](#auto-accept-of-proposals) on, the queue approves the proposals that fit the owner's rules itself.
 
 ## The done command and the fix-round cap
@@ -113,16 +114,16 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `add --file task.json` / `add --json '{…}'` | Adds one task or a list |
 | `decide [--json] [--max N]` / `decide --today` | Everything waiting on the owner (questions, QA, proposals, stuck work) as one list, most impact first, each answer with its exact `ravenseat` command; read only. `/ravenseat:decide` walks it one decision at a time / what was decided today |
 | `approve <id> [--by owner]` | Approves a proposal (`--by` records who) |
-| `proposals [auto [on\|off] …]` / `proposals log` / `proposals undo <id>` | Auto-accept of proposals by the owner's rules (default off) / what was auto-accepted / back to proposed (see below) |
+| `proposals [auto [on\|off] …]` / `proposals log` / `proposals undo <id>` | Lists the proposals waiting, and auto-accept of proposals by the owner's rules (default off) / what was auto-accepted / back to proposed (see below) |
 | `forecast [--project <pid>] [--days 28] [--json]` | When the remaining tasks are done at 50, 85 and 95 % (Monte Carlo, see below) |
-| `show` / `show --full` | Short view (under about 3,000 characters) / full table |
+| `show` / `show --full` | Short view (under about 3,000 characters; names up to 5 proposals with the track they came from) / full table |
 | `next` | What can start now, without changing anything |
 | `triage` / `triage <id> --verdict ready\|done\|stale\|adjust [--note "…"]` / `triage <id> --prompt --scratchpad <dir>` | The tasks that need an intake verdict before they start / record the triage helper's verdict (done and stale become an owner question, adjust adds the note to the mission) / write the triage prompt again (see orchestration.md, Intake triage) |
 | `fill --scratchpad <dir>` | Starts as many tasks as the limits allow and writes the mission prompts |
 | `receive <id>` | Receives a finished track: reads the RESULT line, builds the review package |
 | `deliveries` | Tracks with a `track-result.md` (RESULT line on top) that is not received yet; the pulse prints new ones as `NEW DELIVERY` |
 | `resume <id> --reason fix\|context` | Writes `prompt-<id>-r<N>.md` for a new agent on the same branch (fix round or continuation of an adopted track) |
-| `merge <id>` | Merges the track branch into the base branch (after review). A migration file from a task without a migration block stops at the merge guard (exit 4), also with no migration flow configured, and is never pushed by itself. Exit 9: the base branch is red (the base gate, see orchestration.md; only its fix task merges, `--force-red-base` overrides and is logged). Exit 4: the merge guard stopped it (protected paths the task does not own); `--allow-guard` overrides. Exit 1: the quick gates were red at the last receive (`gate_check`): a fix round, or `ravenseat receive` again when commits came after it; `--force-red-gate` overrides and is logged |
+| `merge <id>` | Merges the track branch into the base branch (after review). A migration file from a task without a migration block stops at the merge guard (exit 4), also with no migration flow configured, and is never pushed by itself. Exit 9: the base branch is red (the base gate, see orchestration.md; only its fix task merges, `--force-red-base` overrides and is logged). Exit 4: the merge guard stopped it (protected paths the task does not own); `--allow-guard` overrides. Exit 1: the quick gates were red at the last receive (`gate_check`): a fix round, or `ravenseat receive` again when commits came after it; `--force-red-gate` overrides and is logged. A PARTIAL delivery stops the merge unless you pass `--allow-partial` (on the owner's word, logged); a later round that delivers DONE clears the stop |
 | `set <id> <status>` | Sets status by hand |
 | `cancel <id> [--remark "…"]` | Cancels a waiting or proposed task (decline a proposal with `--remark "declined: …"`); logged, so `undo` puts it back. Running and review tasks: `set <id> cancelled` |
 | `edit <id> --json '{…}'` | Changes fields (logged; `undo` rolls it back) |

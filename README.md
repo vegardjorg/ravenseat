@@ -50,8 +50,8 @@ Start in lite mode: the core loop only. You can add the advanced features later.
 You need Node.js 20 or newer and git.
 
 **2. Set up your project.** Ask Claude: *"Set up the queue."* (`/ravenseat:setup`, the guided setup that also finds your
-checks). Or run `ravenseat init` for a minimal lite setup: it keeps the queue in `scripts/.queue/` and adds that folder to
-`.gitignore`.
+checks). Or run `ravenseat init` for a minimal lite setup: it keeps the queue in `scripts/.queue/` and adds that folder and
+the agents' worktrees to `.gitignore`.
 
 **3. Add some work.** Tell Claude what needs doing: *"Add to the queue: fix the login bug and add a regression
 test."*

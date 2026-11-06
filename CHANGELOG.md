@@ -7,6 +7,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 **A track can now propose work with only an id, a title and a mission, and the owner sees the proposal in `ravenseat show`.**
 
+An existing project keeps its own copy of the mission template, so its tracks get the new instructions only after `ravenseat setup --overwrite` (it replaces your own edits in the copied files; `--dry` lists them first). Commit the result.
+
 ### Changed
 - The mission now shows a track how to propose work outside its mission, also the `--file` form for Windows. Before, only one line in `CLAUDE.queue.md` mentioned it.
 - A proposal from a track needs only `id`, `title` and `mission`. `domain`, `project` and `feature` follow the track and the class is K, unless the task sets them. A track that does database work should set `"class":"D"`, or the proposal counts as K, also for auto-accept when that is on.
@@ -38,7 +40,7 @@ The explanatory `_` lines in your own `queue.config.json` keep the old name, whi
 ### Changed
 - Renamed to `ravenseat`: the plugin, the CLI, the skills (`/ravenseat:queue`), the agents (`ravenseat:track`), the entry script and every text. A new CI workflow is written as `.github/workflows/ravenseat-gates.yml`. An existing `cq-gates.yml` is not recognised, so delete it if you run `setup --ci` again, or you get two workflows.
 - All guards read the product's name from one file (`lib/productNames.js`), and a test fails when a command in `plugin/bin/` is not listed there.
-- A track may now add proposals with `ravenseat add` from its own branch, as its mission already told it to. Never with `--approved`, it always becomes a proposal, and at most 3 can be open per track. Elsewhere, or moved with `cd` or a `QUEUE_` variable, it stays denied.
+- A track may now add proposals with `ravenseat add` from its own branch. Never with `--approved`, it always becomes a proposal, and at most 3 can be open per track. Elsewhere, or moved with `cd` or a `QUEUE_` variable, it stays denied.
 - `requirements*.txt`, `go.mod`, `Gemfile`, `pom.xml`, `build.gradle(.kts)` and `composer.json` now count as dependency files: they stop in full and warn in lite.
 
 ### Fixed
