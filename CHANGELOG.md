@@ -1,7 +1,35 @@
 # Changelog
 
-All notable changes to Ravenseat (the `cq` plugin, formerly claude-code-queue). The version is in
+All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
+
+## 0.8.24 (2026-11-06)
+
+**The plugin and its command are now called `ravenseat`. `cq` is gone, with no alias.**
+
+### If you have the old `cq` plugin
+
+A plain update does not work: `claude plugin update cq@ravenseat` fails with `Plugin "cq" not found`. The update banner in 0.8.23 suggests that command, so ignore it. As soon as the marketplace updates, `cq` fails to load and its hooks, the push guard among them, are off. Swap it in a terminal (add `--scope project` to the first and last line if you installed it for one project; your queue data stays):
+
+```
+claude plugin uninstall cq@ravenseat
+claude plugin marketplace update ravenseat
+claude plugin install ravenseat@ravenseat
+```
+
+Then open Claude Code in the project, ask it to run `ravenseat setup --overwrite --settings` (the command is only on the PATH inside Claude Code), and commit.
+
+The explanatory `_` lines in your own `queue.config.json` keep the old name, which is harmless. Scripts of your own that call `cq` must be changed.
+
+### Changed
+- Renamed to `ravenseat`: the plugin, the CLI, the skills (`/ravenseat:queue`), the agents (`ravenseat:track`), the entry script and every text. A new CI workflow is written as `.github/workflows/ravenseat-gates.yml`. An existing `cq-gates.yml` is not recognised, so delete it if you run `setup --ci` again, or you get two workflows.
+- All guards read the product's name from one file (`lib/productNames.js`), and a test fails when a command in `plugin/bin/` is not listed there.
+- A track may now add proposals with `ravenseat add` from its own branch, as its mission already told it to. Never with `--approved`, it always becomes a proposal, and at most 3 can be open per track. Elsewhere, or moved with `cd` or a `QUEUE_` variable, it stays denied.
+- `requirements*.txt`, `go.mod`, `Gemfile`, `pom.xml`, `build.gradle(.kts)` and `composer.json` now count as dependency files: they stop in full and warn in lite.
+
+### Fixed
+- `ravenseat init` in a repo without `main` (a repo on `master`) left the base branch at `main`: `show` said a task could start, and `fill` failed. Init now writes the current branch. A base branch in the config, or an existing `main`, is left alone.
+- `ravenseat init` now also adds `.claude/worktrees/` to `.gitignore`, so an open track no longer shows as untracked in `git status`.
 
 ## 0.8.23 (2026-11-06)
 
