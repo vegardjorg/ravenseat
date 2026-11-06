@@ -94,7 +94,7 @@ function infoView(o, { fixedBy = [], costEstimate = null } = {}) {
   if (mark.length)
     out.push(`remarks: ${mark.length}; last: ${cutText(mark[mark.length - 1], 160)}`);
   if (o.mission) out.push(`mission: ${cutText(String(o.mission).replace(/\s+/g, ' '), 200)}`);
-  out.push('One field: cq info <id> --field <name> (also cost.usd, result.line).');
+  out.push('One field: ravenseat info <id> --field <name> (also cost.usd, result.line).');
   return out;
 }
 
@@ -155,7 +155,7 @@ function reportSinceStart(o, report) {
   return !Number.isFinite(started) || report.mtimeMs > started;
 }
 
-/** A round is prepared or working: the last attempt has not ended (cq receive and a close end it). */
+/** A round is prepared or working: the last attempt has not ended (ravenseat receive and a close end it). */
 function roundOpen(o) {
   const x = AT.current(o);
   return !!x && x.state !== 'ended';
@@ -173,7 +173,7 @@ function watchedSince(o) {
 const silentWatched = (o) => o.status === 'running' || (o.status === 'review' && roundOpen(o));
 
 /**
- * The attempts no agent ever took: cq fill and cq resume reserve an attempt, and the start row from the time log turns it
+ * The attempts no agent ever took: ravenseat fill and ravenseat resume reserve an attempt, and the start row from the time log turns it
  * into running (lib/logic/attempt.js). A reservation older than `graceMin`, with no commit or report since it was made,
  * was never started. This also sees what startedWithoutAgent cannot: a round on a task still in review, and an old
  * worktree that holds the branch. A task waiting for review has its attempt ended by receive, so it never shows here.
@@ -215,7 +215,7 @@ function reservedWithoutAgent(
       branch: o.branch,
       migr_block: o.migr_block ?? null,
       age_ms: now - from,
-      // A round after a delivery is started with cq resume; a first start that never ran goes back in the queue.
+      // A round after a delivery is started with ravenseat resume; a first start that never ran goes back in the queue.
       ...(round > 0 || o.status === 'review'
         ? { prepared: true, round, reason: (o.resumed ?? []).at(-1)?.reason ?? 'context' }
         : {}),
@@ -244,7 +244,7 @@ function withoutAgentLines(list) {
       ? [
           `STARTED WITHOUT AGENT (${started.length}): marked running, but no agent has started and there is no report from this start. ` +
             'fill or start marked them and the agents were never started (was fill run where nobody read the output?). ' +
-            'For each: cq set <id> waiting, then cq fill --ids <id> and start what it lists in the SAME turn ' +
+            'For each: ravenseat set <id> waiting, then ravenseat fill --ids <id> and start what it lists in the SAME turn ' +
             '(fill checks the migration block again).',
           ...started.map(
             (x) =>
@@ -255,8 +255,8 @@ function withoutAgentLines(list) {
     ...(rounds.length
       ? [
           `ROUND WITHOUT AGENT (${rounds.length}): a new round was prepared, but no agent has started it, and the task holds its slot. ` +
-            'For each: run the cq resume below (it makes the same round again and prints the agent line), and start that agent in the SAME turn.',
-          ...rounds.map((x) => `  ${x.id}  round ${x.round}, prepared ${ageText(x.age_ms)} ago: cq resume ${x.id} --reason ${x.reason}`),
+            'For each: run the ravenseat resume below (it makes the same round again and prints the agent line), and start that agent in the SAME turn.',
+          ...rounds.map((x) => `  ${x.id}  round ${x.round}, prepared ${ageText(x.age_ms)} ago: ravenseat resume ${x.id} --reason ${x.reason}`),
         ]
       : []),
   ];
@@ -274,7 +274,7 @@ function waitingOnCancelled(queue) {
 function waitingOnCancelledLines(list) {
   if (!list?.length) return [];
   return [
-    `Waiting on a cancelled task (${list.length}): these never start. Change the dependency with cq edit <id> --json '{"depends_on":[...]}', or cancel them:`,
+    `Waiting on a cancelled task (${list.length}): these never start. Change the dependency with ravenseat edit <id> --json '{"depends_on":[...]}', or cancel them:`,
     ...list.map((x) => `  ${x.id}  waits on ${x.dep}`),
   ];
 }
@@ -288,7 +288,7 @@ function waitingOnCancelledLines(list) {
  * worktree, the track folder in the scratchpad and the agent transcript. `lastActivity` maps id -> that time in ms
  * (missing = nothing found). The start time counts as activity too, so a new track always gets the whole limit.
  * Picked tasks, cloud sessions and delivered tracks (track-result.md) are left out. limits.silentMin sets the limit
- * (`cq limit silentMin <n>`, 0 = off).
+ * (`ravenseat limit silentMin <n>`, 0 = off).
  */
 const SILENT_DEFAULT_MIN = 20;
 /** How long a track is silent before it becomes a decision card: a short stop is the orchestrator's, not the owner's. */
@@ -342,16 +342,16 @@ function silentLines(list) {
   return [
     `SILENT (${list.length}): running with an agent worktree, but no commit, file change or transcript write for a ` +
       'while (the agent may have hung or run out of context). For each: check the track (its worktree and ' +
-      'transcript), then cq resume <id> --reason context and start the new agent, or stop it (cq set <id> waiting; ' +
-      'cq block <id> silent records why).',
+      'transcript), then ravenseat resume <id> --reason context and start the new agent, or stop it (ravenseat set <id> waiting; ' +
+      'ravenseat block <id> silent records why).',
     ...list.map((x) => `  ${x.id}  ${x.branch}  silent for ${ageText(x.silent_ms)}`),
   ];
 }
 
 /**
- * The blocker reasons: one fixed table, so `cq blockers` and the board's statistics can cluster on them. A task has
- * `blocks: [{ code, from, to?, note? }]`, with at most one open (no `to`). `cq block` / `cq unblock` set them by hand;
- * `cq merge` opens merge-conflict, merge-guard, merge-stopped or gate-red when it stops, and closes the open one after a merge.
+ * The blocker reasons: one fixed table, so `ravenseat blockers` and the board's statistics can cluster on them. A task has
+ * `blocks: [{ code, from, to?, note? }]`, with at most one open (no `to`). `ravenseat block` / `ravenseat unblock` set them by hand;
+ * `ravenseat merge` opens merge-conflict, merge-guard, merge-stopped or gate-red when it stops, and closes the open one after a merge.
  */
 const BLOCK_CODES = [
   { code: 'merge-conflict', text: 'the merge hit a real conflict' },
@@ -430,7 +430,7 @@ function blockerSummary(queue, { now = Date.now(), days = 7 } = {}) {
   return [...per.values()].sort((x, y) => y.ms - x.ms || y.count - x.count || x.code.localeCompare(y.code));
 }
 
-/** `cq blockers` as text lines. */
+/** `ravenseat blockers` as text lines. */
 function blockerLines(summary, { days = 7 } = {}) {
   if (!summary?.length) return [`No blockers recorded in the last ${days} days.`];
   return [

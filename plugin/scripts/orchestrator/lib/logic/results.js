@@ -89,7 +89,7 @@ function ownerQuestionSection(text) {
 }
 
 /**
- * The owner questions a track says it has (`ownerQuestions=<n>` on the RESULT line), for the output and the card in cq
+ * The owner questions a track says it has (`ownerQuestions=<n>` on the RESULT line), for the output and the card in ravenseat
  * decide. null when it says it has none: the number decides, since a report often has the heading with "none" under it.
  * @returns {null | { count: number, text: string|null, note: string }}
  */

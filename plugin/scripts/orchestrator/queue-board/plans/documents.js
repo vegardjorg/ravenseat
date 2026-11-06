@@ -270,7 +270,7 @@
         h.el('p', {
           class: 'plans-help',
           text:
-            'Add documents with cq plan doc new --file <json> (the fields are listed in docs/plan-register.md).',
+            'Add documents with ravenseat plan doc new --file <json> (the fields are listed in docs/plan-register.md).',
         }),
       );
     else if (!match.length)

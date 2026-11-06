@@ -16,7 +16,7 @@
 // run that changed the git hooks or config is never called flaky, and a base gate that does it is red.
 // Runs queue.mjs against a temporary queue (QUEUE_FOLDER) and git repo (QUEUE_GIT), with an injected merge runner
 // (QUEUE_MERGE_RUNNING) that merges with plain git (merge-track.mjs refuses a test identity) and runs the other steps
-// (the real gates.mjs, the real `set done`) as cq merge would. Never the main repo or the real queue. The gate is a tiny
+// (the real gates.mjs, the real `set done`) as ravenseat merge would. Never the main repo or the real queue. The gate is a tiny
 // `node check.js` that loads every file in lib/ (cmd.exe and POSIX shells read it the same).
 // =============================================================
 import { afterAll, describe, expect, it } from 'vitest';
@@ -86,7 +86,7 @@ function project(config: Record<string, unknown>, queueExtra: Record<string, unk
   writeQueue();
   const configFile = path.join(folder, 'queue.config.json');
   fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'develop', ...config }));
-  // The merge runner: a real merge with plain git, every other step as cq merge would run it; the steps are logged.
+  // The merge runner: a real merge with plain git, every other step as ravenseat merge would run it; the steps are logged.
   const runner = path.join(folder, 'runner.mjs');
   const steps = path.join(folder, 'steps.log');
   fs.writeFileSync(
@@ -214,7 +214,7 @@ describe('queue.mjs merge with the base gate', () => {
     // B stays in review with the gate-red blocker, as before the base gate.
     expect(p.find('B')?.status).toBe('review');
     expect(p.run('show').out).toContain('BASE develop: RED at');
-    expect(p.run('orchestrator', 'pulse').out).toContain('cq merge refuses other tracks');
+    expect(p.run('orchestrator', 'pulse').out).toContain('ravenseat merge refuses other tracks');
     expect(p.run('decide').out).toMatch(/^BASE develop: RED at/);
 
     // ---- 3. Another track is refused while the base is red ----
@@ -319,7 +319,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(p.find(fix)?.status).toBe(status);
   }, 240_000);
 
-  it('the skip rule trusts only cq receive\'s gate run, never the track\'s own run or a time log row', async () => {
+  it('the skip rule trusts only ravenseat receive\'s gate run, never the track\'s own run or a time log row', async () => {
     const p = project({ gates: { quick: [CHECK] } });
     p.track('A', { 'lib/b.js': "exports.b = 1;\n" });
     expect(p.run('merge', 'A', '--without-fill').code).toBe(0);
@@ -344,7 +344,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(p.stepsRun()).toEqual(['merge', 'gates', 'done']);
     await loopTurn();
 
-    // F branches from the new base tip too; cq receive runs the quick gate on F's tip itself, and that run is what the
+    // F branches from the new base tip too; ravenseat receive runs the quick gate on F's tip itself, and that run is what the
     // skip rule trusts.
     const wt = p.track('F', { 'lib/f.js': "exports.f = 1;\n" });
     const rec = p.run('receive', 'F');
@@ -356,7 +356,7 @@ describe('queue.mjs merge with the base gate', () => {
     const m = p.run('merge', 'F', '--without-fill');
     expect(m.code).toBe(0);
     expect(m.out).toContain('not run again: same tree as the track tip');
-    expect(m.out).toContain("cq's own quick gate run was green");
+    expect(m.out).toContain("ravenseat's own quick gate run was green");
     expect(p.stepsRun()).toEqual(['merge', 'done']);
     expect(p.health().current).toMatchObject({ tip: p.tip(), status: 'green' });
     expect(p.health().current.skipped).toContain('same tree');
@@ -387,7 +387,7 @@ describe('queue.mjs merge with the base gate', () => {
     // The main checkout: evidence by default (the full gate before a batch push runs there).
     expect(spawnSync(process.execPath, [GATES, '--quick'], { cwd: p.repo, encoding: 'utf8', env: p.env }).status).toBe(0);
     expect(store().at(-1)).toMatchObject({ sha: p.tip(), kind: 'quick', ok: true, clean: true, main_tree: true });
-    // --evidence with --cwd (what cq receive passes): evidence for the worktree's tip.
+    // --evidence with --cwd (what ravenseat receive passes): evidence for the worktree's tip.
     const r = spawnSync(process.execPath, [GATES, '--quick', '--evidence', '--cwd', wt], { cwd: p.folder, encoding: 'utf8', env: p.env });
     expect(r.status).toBe(0);
     expect(store().at(-1)).toMatchObject({ sha: p.g(['rev-parse', 'queue/A']), ok: true, clean: true, main_tree: false });

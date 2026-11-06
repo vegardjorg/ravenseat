@@ -19,12 +19,12 @@
 // The batch threshold (config().push, lib/pushBatch.js): a plain push of baseBranch by the orchestrator gets "ask" when
 // the base is red at the tip or fewer than push.minTasks merged tasks are unpushed. Counting costs ONE git call, made
 // only when such a push is found: `git log --first-parent <remote>/<baseBranch>..refs/heads/<baseBranch>` with parents
-// and subject; a merge commit "Merge branch '<branchPrefix><id>' ..." (what cq merge writes) is one merged task, and the
+// and subject; a merge commit "Merge branch '<branchPrefix><id>' ..." (what ravenseat merge writes) is one merged task, and the
 // newest row is the tip whose health base-health.json records. The local remote ref (as of the last fetch) is the
 // "last push"; a missing remote ref (first push) or any error gives no question (fails open).
 //
 // The full gate (lib/gateEvidence.js): the same plain push also asks when the tip has no green, clean full-gate run
-// recorded by the orchestrator's side (`cq gates --full` in the main checkout), with the hint to run it; only when
+// recorded by the orchestrator's side (`ravenseat gates --full` in the main checkout), with the hint to run it; only when
 // gates.full has commands. For the queue's agents the guard denies a command that names the gate evidence store or
 // passes --evidence/--cwd to the gate runner, so a track cannot record its own evidence.
 //
@@ -222,7 +222,7 @@ process.stdin.on('end', () => {
 
     const cwd = typeof p.cwd === 'string' && p.cwd ? p.cwd : process.cwd();
     // The git calls only when the command can be a push or a migration push.
-    // Also for a queue agent's `cq add`, which only a track's own branch may run (lib/pushGuard.js agentAddReason).
+    // Also for a queue agent's `ravenseat add`, which only a track's own branch may run (lib/pushGuard.js agentAddReason).
     const branch = gitContext || (guarded && /\badd\b/.test(command)) ? git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']) : null;
     const top = gitContext ? git(cwd, ['rev-parse', '--show-toplevel']) : null;
     const environment = gitContext

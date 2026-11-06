@@ -7,7 +7,7 @@
 // deterministic; the rule in the mission is only advice.
 //
 // How it works:
-//   - Applies only to agent_type `track` and `track-d` (contextGuard.TRACK_AGENT_TYPES; "cq:track" counts as "track");
+//   - Applies only to agent_type `track` and `track-d` (contextGuard.TRACK_AGENT_TYPES; "ravenseat:track" counts as "track");
 //     everything else passes at once.
 //   - The track is found from the mission at the top of the agent transcript (timeCost.trackFromText), and the branch
 //     and head_start from the queue file (<dataFolder>/queue.json in the main tree; QUEUE_FOLDER overrides).
@@ -78,7 +78,7 @@ function ownCommits(track) {
 async function main() {
   const input = await readIn();
   if (input.hook_event_name && input.hook_event_name !== 'SubagentStop') return;
-  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent_type); // "cq:track" -> "track"
+  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent_type); // "ravenseat:track" -> "track"
   if (!agentType || !KV.TRACK_AGENT_TYPES.has(agentType) || !input.agent_id) return;
   const alreadyBlocked = fs.existsSync(stateFile(input.agent_id));
   if (alreadyBlocked || input.stop_hook_active) return;

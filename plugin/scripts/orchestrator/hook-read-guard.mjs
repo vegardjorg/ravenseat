@@ -100,7 +100,7 @@ function readHint(input, agentType, abs, ti, countLines) {
 
 async function main() {
   const input = await readIn();
-  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent_type); // "cq:track" (plugin) -> "track"
+  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent_type); // "ravenseat:track" (plugin) -> "track"
   if (!agentType) return; // main session: no effect
   const rules = V.readRules();
   if (!rules.types.has(agentType)) return;

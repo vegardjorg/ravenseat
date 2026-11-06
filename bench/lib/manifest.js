@@ -9,7 +9,7 @@
 //   {
 //     "experiment": "short-id",                      required, [A-Za-z0-9._-]
 //     "description": "free text",
-//     "arms": [{ "name": "cq", "kind": "cq" | "manual-fresh" | "manual-long" | "other",
+//     "arms": [{ "name": "ravenseat", "kind": "ravenseat" | "manual-fresh" | "manual-long" | "other",
 //                "models": { "<agent type>": "<model>" }, "maxParallel": 4,
 //                "window": { "from": ISO, "to": ISO },  optional: unattributed sessions in this window belong to the arm
 //                "sessions": ["<session id>"] }],        optional: main sessions (orchestrator or manual chat) of the arm
@@ -30,7 +30,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ARM_KINDS = ['cq', 'manual-fresh', 'manual-long', 'other'];
+const ARM_KINDS = ['ravenseat', 'manual-fresh', 'manual-long', 'other'];
 /** A manual outcome (replays never merge into the real project, manual arms have no queue status). */
 const OUTCOMES = ['merged', 'failed', 'abandoned'];
 const SOURCE_KEYS = ['queue', 'timeLog', 'transcripts', 'load', 'human', 'gitRepo', 'gates'];

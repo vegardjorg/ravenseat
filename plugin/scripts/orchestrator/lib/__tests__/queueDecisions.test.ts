@@ -1,5 +1,5 @@
 // =============================================================
-// queueDecisions.test.ts: the decision overview's rules (lib/queueDecisions.js), shared by `cq decide`, /cq:decide
+// queueDecisions.test.ts: the decision overview's rules (lib/queueDecisions.js), shared by `ravenseat decide`, /ravenseat:decide
 // and the board's Decisions view.
 //
 // Why: the owner's main loop is one list of everything that waits on them, most impact first. The sort (focus stage 1
@@ -160,7 +160,7 @@ describe('the writes', () => {
   });
 
   it('cliText quotes what the shell needs quoted', () => {
-    expect(D.cliText(['resolve', 'Q-1', '--answer', 'say "hi" $HOME'])).toBe('cq resolve Q-1 --answer "say \\"hi\\" \\$HOME"');
+    expect(D.cliText(['resolve', 'Q-1', '--answer', 'say "hi" $HOME'])).toBe('ravenseat resolve Q-1 --answer "say \\"hi\\" \\$HOME"');
     expect(D.cliText(null)).toBeNull();
   });
 

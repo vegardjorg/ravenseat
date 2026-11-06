@@ -44,7 +44,7 @@ function qaConfig(qa = cfg().qa) {
 /** The errors in an evidence object (empty list = valid). */
 function validateEvidence(e, qa = qaConfig()) {
   if (!e || typeof e !== 'object' || Array.isArray(e))
-    return ['evidence must be { type, ref } (set it with cq qa evidence <id> <type>[=<ref>])'];
+    return ['evidence must be { type, ref } (set it with ravenseat qa evidence <id> <type>[=<ref>])'];
   if (!qa.evidenceTypes.includes(e.type))
     return [`evidence.type must be one of ${qa.evidenceTypes.join(', ')}`];
   const ref = e.ref ?? [];
@@ -99,13 +99,13 @@ function evidenceRequired(o, qa = qaConfig()) {
  */
 function evidenceWarning({ o, evidence = null, evidenceError = null }, qa = qaConfig()) {
   if (evidenceError)
-    return `WARNING: ${o.id}: ${evidenceError}. Fix the line in track-result.md, or set it: cq qa evidence ${o.id} <type>[=<ref>].`;
+    return `WARNING: ${o.id}: ${evidenceError}. Fix the line in track-result.md, or set it: ravenseat qa evidence ${o.id} <type>[=<ref>].`;
   if (!evidenceRequired(o, qa) || evidence || o.evidence) return null;
   const labels = qa.evidenceLabels.filter((l) => hasLabel(o, l)).join(', ');
   return (
     `WARNING: ${o.id} has the label ${labels}, but track-result.md has no EVIDENCE line ` +
     `(EVIDENCE ${qa.evidenceTypes.map((t) => (qa.manualTypes.includes(t) ? `${t}=<what>` : `${t}=<ref>`)).join(' | ')}). ` +
-    `Set it by hand: cq qa evidence ${o.id} <type>[=<ref>].`
+    `Set it by hand: ravenseat qa evidence ${o.id} <type>[=<ref>].`
   );
 }
 

@@ -48,7 +48,7 @@ import { createRequire } from 'node:module';
 
 // Fast exit: this hook runs on EVERY tool call in every session, and only queue tracks need it. The input is read
 // first and the hook stops before any require (and before queueActive, which looks for the project root) unless
-// agent_type is a track (track/track-d, or cq:track/cq:track-d in a plugin install; trackGuard.CONTEXT_TYPES). A main
+// agent_type is a track (track/track-d, or ravenseat:track/ravenseat:track-d in a plugin install; trackGuard.CONTEXT_TYPES). A main
 // session then pays only for the Node start.
 let rawInput = '';
 for await (const chunk of process.stdin) rawInput += chunk;
@@ -110,7 +110,7 @@ function countCompactions(tp, compact) {
 
 async function main() {
   const input = await readIn();
-  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent_type); // "cq:track" (plugin) -> "track"
+  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent_type); // "ravenseat:track" (plugin) -> "track"
   if (!agentType || !V.CONTEXT_TYPES.has(agentType) || !input.agent_id) return; // main session: no effect
   const state = readState(input.agent_id);
   const triggered = state.triggered;

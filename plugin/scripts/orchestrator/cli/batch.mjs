@@ -74,7 +74,7 @@ function batchPackExecute(planFn) {
         newId: p.id,
         title: p.title,
         mission: missionRef(file),
-        by: 'cq batch pack',
+        by: 'ravenseat batch pack',
         now,
       });
       if (r.error.length) die(`Nothing packed (${p.id ?? 'without id'}):\n  ${r.error.join('\n  ')}`);
@@ -108,7 +108,7 @@ function batchExecutedLine(p) {
   );
 }
 
-/** `cq batch` (the usage is at the top of queue.mjs). */
+/** `ravenseat batch` (the usage is at the top of queue.mjs). */
 export function cmdBatch() {
   // Batch queue. Without arguments: the groups with their sum against the target. `pack`: one new track from the given ids, or
   // proposals for the ready groups (--auto), executed only with --execute.
@@ -147,7 +147,7 @@ export function cmdBatch() {
           console.log(cut(`    shared files: ${g.common_files.join(', ')}`, WIDTH));
       }
       if (gr.some((g) => g.ready))
-        console.log('\nSuggested packages: cq batch pack --auto (executed with --execute).');
+        console.log('\nSuggested packages: ravenseat batch pack --auto (executed with --execute).');
     }
   } else if (a.includes('--auto')) {
     const execute = a.includes('--execute');
@@ -155,13 +155,13 @@ export function cmdBatch() {
     if (!proposed.length) {
       console.log('No groups in the batch queue are ready for packing.');
     } else if (!execute) {
-      console.log(`Proposed (${proposed.length}; execute all with cq batch pack --auto --execute):`);
+      console.log(`Proposed (${proposed.length}; execute all with ravenseat batch pack --auto --execute):`);
       for (const f of proposed)
         console.log(
           f.out
             ? `  ${f.pid} ${f.class}: ${f.parts[0]} has ${f.sum} min alone; take it out: ` +
-                `cq edit ${f.parts[0]} --json '{"batched":false}'`
-            : `  ${f.pid} ${f.class}, ${f.sum} min: cq batch pack ${f.parts.join(' ')} --id ${f.id}`,
+                `ravenseat edit ${f.parts[0]} --json '{"batched":false}'`
+            : `  ${f.pid} ${f.class}, ${f.sum} min: ravenseat batch pack ${f.parts.join(' ')} --id ${f.id}`,
         );
     } else {
       // All the proposals in one write under the lock: all or nothing (the proposals are recomputed inside the lock).

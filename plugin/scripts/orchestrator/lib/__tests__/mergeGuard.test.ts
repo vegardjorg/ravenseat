@@ -282,7 +282,7 @@ describe('helpers', () => {
 describe('merge-track.mjs in a temporary repo', () => {
   const SCRIPT = path.resolve(__dirname, '..', '..', 'merge-track.mjs');
   const setup = () => {
-    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-merge-guard-'));
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-merge-guard-'));
     const g = (...a: string[]) => {
       const r = spawnSync('git', a, { cwd: repo, encoding: 'utf8' });
       if (r.status !== 0) throw new Error(`git ${a.join(' ')}: ${r.stderr}`);
@@ -406,7 +406,7 @@ describe('merge-track.mjs and a test config change', () => {
   const SCRIPT = path.resolve(__dirname, '..', '..', 'merge-track.mjs');
   /** A repo where queue/A changes vitest.config.mjs (and a.txt); `owned` is the task's owned_files, `config` the queue.config.json. */
   const setup = (owned: string[], config: object | null) => {
-    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-merge-guard-tests-'));
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-merge-guard-tests-'));
     const g = (...a: string[]) => {
       const r = spawnSync('git', a, { cwd: repo, encoding: 'utf8' });
       if (r.status !== 0) throw new Error(`git ${a.join(' ')}: ${r.stderr}`);

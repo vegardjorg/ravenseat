@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // =============================================================
-// setup.mjs: sets a project up for the work queue. Run by the /cq:setup skill as `cq setup`, and reused by
+// setup.mjs: sets a project up for the work queue. Run by the /ravenseat:setup skill as `ravenseat setup`, and reused by
 // scripts/install.mjs (vendored install), so both install paths write the same project files.
 //
 // Usage:
-//   cq setup [--dry] [--overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]
+//   ravenseat setup [--dry] [--overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]
 //
 // What it does (everything is "add to"; existing files are kept unless --overwrite, and queue.config.json is never replaced):
 //   1. queue.config.json from <plugin>/queue.config.example.json, when missing, with the current branch and the checks
@@ -19,9 +19,9 @@
 //      run --settings again after a plugin update; a status line of your own is kept.
 //   7. --settings in a plugin install records the plugin version in <dataFolder>/setup.json, so the board can show
 //      that setup must be run again after an update (lib/queueUpdate.js).
-//   8. --ci: writes the GitHub Actions template <plugin>/templates/ci-github.yml to .github/workflows/cq-gates.yml (it
+//   8. --ci: writes the GitHub Actions template <plugin>/templates/ci-github.yml to .github/workflows/ravenseat-gates.yml (it
 //      runs the project's own gates.quick, with baseBranch filled in). An existing file is NEVER replaced, also not
-//      with --overwrite. Opt-in only: /cq:setup asks first.
+//      with --overwrite. Opt-in only: /ravenseat:setup asks first.
 //   Hooks (install.mjs only, a plugin brings hooks/hooks.json): every hook in settings.queue.json is added next to the
 //   project's own, also hooks added in a later version (e.g. hook-track-end.mjs on SubagentStop). The two files must
 //   list the same scripts (__tests__/setup.test.ts checks it).
@@ -39,11 +39,13 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const PLUGIN_ROOT = path.resolve(HERE, '..', '..');
 
 /** Where --ci writes the GitHub Actions template (relative to the target). */
-export const CI_WORKFLOW = '.github/workflows/cq-gates.yml';
+export const CI_WORKFLOW = '.github/workflows/ravenseat-gates.yml';
+/** What setup called the workflow before the rename: a project that has it must not get a second one. */
+const OLD_CI_WORKFLOW = '.github/workflows/cq-gates.yml';
 
 /**
  * The lines .gitignore needs: the queue's data, the agents' worktrees, the personal settings (an absolute path) and
- * local secret files, so one `git add .` does not commit them. A file git already tracks stays tracked; cq doctor names it.
+ * local secret files, so one `git add .` does not commit them. A file git already tracks stays tracked; ravenseat doctor names it.
  */
 export const GITIGNORE_LINES = [
   'scripts/.queue/',
@@ -65,7 +67,7 @@ export const GITIGNORE_LINES = [
  * @param {boolean} [o.ci]                  write the GitHub Actions template (never over an existing file)
  * @param {boolean} [o.hooks]               also merge the hooks into .claude/settings.json (vendored install only;
  *                                          a plugin has its own hooks/hooks.json)
- * @param {(text: string) => string} [o.transformMd]  rewrites the Markdown on the way (install.mjs: cq -> node form)
+ * @param {(text: string) => string} [o.transformMd]  rewrites the Markdown on the way (install.mjs: ravenseat -> node form)
  */
 export function setupProject(o) {
   const log = { copied: [], replaced: [], same: [], skipped: [], notes: [] };
@@ -145,7 +147,7 @@ export function setupProject(o) {
 
 /**
  * The example config with the project's current branch as baseBranch and the checks its files show as gates (the same
- * detector as cq kickstart). Edits the text, so the comments in the example stay. No checks found: empty lists, and a
+ * detector as ravenseat kickstart). Edits the text, so the comments in the example stay. No checks found: empty lists, and a
  * note that says so, never a command that does not exist in the project.
  * @returns {{ text: string, notes: string[] }}
  */
@@ -161,7 +163,7 @@ export function fillConfigFromProject(text, target) {
       windowsHide: true,
     }).trim();
   } catch {
-    /* not git, or a detached HEAD: the example's value stays, and cq doctor says if the branch is missing */
+    /* not git, or a detached HEAD: the example's value stays, and ravenseat doctor says if the branch is missing */
   }
   if (branch) {
     out = out.replace(/("baseBranch":\s*)"[^"]*"/, (_, key) => `${key}${JSON.stringify(branch)}`);
@@ -186,7 +188,7 @@ export function fillConfigFromProject(text, target) {
   notes.push(
     checks.length
       ? `queue.config.json: gates.quick ${lists.quick.join(', ') || 'empty'}; gates.full ${lists.full.join(', ') || 'empty'} (found in the project; change them if they are wrong)`
-      : 'queue.config.json: no check commands found, so the gates are empty and agents run no checks. Add your own, or see cq kickstart.',
+      : 'queue.config.json: no check commands found, so the gates are empty and agents run no checks. Add your own, or see ravenseat kickstart.',
   );
   return { text: out, notes };
 }
@@ -195,6 +197,7 @@ export function fillConfigFromProject(text, target) {
 export function writeCiTemplate(target, o = {}) {
   const to = path.join(target, ...CI_WORKFLOW.split('/'));
   if (fs.existsSync(to)) return `${CI_WORKFLOW}: kept (already there; setup never overwrites a workflow)`;
+  if (fs.existsSync(path.join(target, ...OLD_CI_WORKFLOW.split('/')))) return `${OLD_CI_WORKFLOW}: kept (the same workflow under its old name; setup never overwrites a workflow)`;
   const from = path.join(PLUGIN_ROOT, 'templates', 'ci-github.yml');
   if (!fs.existsSync(from)) return `${CI_WORKFLOW}: not written (no template in this install: ${from})`;
   const KK = require('./lib/queueConfig.js');
@@ -382,7 +385,7 @@ if (isMain) {
   const known = ['--dry', '--overwrite', '--claude-md', '--settings', '--ci', '--target'];
   const unknown = [...flags].filter((f) => !known.includes(f));
   if (unknown.length) {
-    console.error(`setup: unknown option ${unknown.join(' ')}. Use: cq setup [--dry] [--overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]`);
+    console.error(`setup: unknown option ${unknown.join(' ')}. Use: ravenseat setup [--dry] [--overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]`);
     process.exit(2);
   }
   const PR = require('./lib/projectRoot.js');
@@ -410,15 +413,15 @@ if (isMain) {
     const PF = require('./lib/projectFiles.js');
     const stale = PF.staleFiles(PLUGIN_ROOT, target);
     const message = PF.staleMessage(stale);
-    if (message) console.log(`  NOTE: ${message}.\n  ${stale.changed.length ? PF.STALE_FIX : 'Run cq setup again to add the new files.'}`);
+    if (message) console.log(`  NOTE: ${message}.\n  ${stale.changed.length ? PF.STALE_FIX : 'Run ravenseat setup again to add the new files.'}`);
   }
   if (!flags.has('--dry')) {
     // A task that owns an uncommitted file is held back, and these are the files setup just wrote.
     const status = spawnSync('git', ['-C', target, 'status', '--porcelain'], { encoding: 'utf8' });
     const paths = status.status === 0 ? status.stdout.split(/\r?\n/).filter(Boolean).map((l) => l.slice(3)) : [];
     const open = paths.length;
-    if (open) console.log(`  NOTE: ${open} path(s) are uncommitted here (${paths.slice(0, 6).join(', ')}${open > 6 ? ', ...' : ''}). Commit them before the first cq fill: a task that owns one of them is held back.`);
+    if (open) console.log(`  NOTE: ${open} path(s) are uncommitted here (${paths.slice(0, 6).join(', ')}${open > 6 ? ', ...' : ''}). Commit them before the first ravenseat fill: a task that owns one of them is held back.`);
     if (!fs.existsSync(path.join(path.dirname(setupRecordFile(target)), 'queue.json')))
-      console.log('  Next: cq init makes the empty queue (lite; cq init --full for full mode), then cq add.');
+      console.log('  Next: ravenseat init makes the empty queue (lite; ravenseat init --full for full mode), then ravenseat add.');
   }
 }

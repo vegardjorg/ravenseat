@@ -2,7 +2,7 @@
 // queueFocusEnd.test.ts: what the queue does when a focus has run out (every stage done) or its period is over.
 //
 // The setting `focus.continueWhenEmpty` in queue.config.json (default off), with a per-focus override
-// `focus.continue_when_empty` (cq focus set ... --continue-when-empty on|off). Off: the queue is paused (fill starts
+// `focus.continue_when_empty` (ravenseat focus set ... --continue-when-empty on|off). Off: the queue is paused (fill starts
 // nothing), the focus gets `finished_at`, and ONE owner question "Focus X is done: set a new focus or continue the
 // regular queue?" is registered (shown in "Waiting on you"); the answer "Continue the regular queue" lifts the pause.
 // On: the queue continues as before, with one informational line. A project that never set a focus is unaffected.
@@ -141,7 +141,7 @@ describe('a finished focus pauses the queue by default (continueWhenEmpty off)',
     const n = L.focusStatus(finishedQueue(), { now: NOW })?.notice ?? '';
     expect(n).toMatch(/Focus "Goods" is done/);
     expect(n).toMatch(/paused/);
-    expect(n).toMatch(/cq focus set/);
+    expect(n).toMatch(/ravenseat focus set/);
     expect(n).toMatch(/continueWhenEmpty/);
   });
 
@@ -175,7 +175,7 @@ describe('the record and the owner question', () => {
     expect(r.end?.state).toBe('paused');
     const lines = L.focusCleanLines(r).join('\n');
     expect(lines).toMatch(/queue paused/i);
-    expect(lines).toMatch(/cq focus set/);
+    expect(lines).toMatch(/ravenseat focus set/);
     expect(Object.keys(queue.question ?? {})).toHaveLength(1);
     L.cleanFocus(queue, { by: 'test', now: ISO });
     expect(Object.keys(queue.question ?? {})).toHaveLength(1);
@@ -256,7 +256,7 @@ describe('continueWhenEmpty on (per-focus override)', () => {
   });
 });
 
-describe('queue.mjs: config key, cq focus output and set (against a copy)', () => {
+describe('queue.mjs: config key, ravenseat focus output and set (against a copy)', () => {
   const QUEUE_MJS = join(__dirname, '..', '..', 'queue.mjs');
   let folder: string;
   let configFile: string | null = null;
@@ -290,7 +290,7 @@ describe('queue.mjs: config key, cq focus output and set (against a copy)', () =
   });
   afterEach(() => rmSync(folder, { recursive: true, force: true }));
 
-  it('set <id> done empties the focus: paused line and one question; cq focus shows the setting', () => {
+  it('set <id> done empties the focus: paused line and one question; ravenseat focus shows the setting', () => {
     const s = run(['set', 'SB-1', 'done', '--without-cost']);
     expect(s.code).toBe(0);
     expect(s.out).toMatch(/Focus "Goods" is done: queue paused/);

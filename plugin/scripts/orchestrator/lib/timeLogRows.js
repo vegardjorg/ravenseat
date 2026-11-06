@@ -1,5 +1,5 @@
 // =============================================================
-// timeLogRows.js: the measurement rows cq appends to the time log (config().timeLog, the file hook-time.mjs writes;
+// timeLogRows.js: the measurement rows ravenseat appends to the time log (config().timeLog, the file hook-time.mjs writes;
 // QUEUE_TIME_LOG overrides) besides the agents' start and done rows.
 //
 // Why: a benchmark (bench/ in this repo) needs to count gate runs and reruns per task and compactions per session and
@@ -12,13 +12,13 @@
 //                 attempt > 1 is a rerun. `timed_out: true` only when a check went over its time budget. `sha` (the
 //                 HEAD commit when the run started) and `clean` (no uncommitted tracked changes then), when known.
 //                 MEASUREMENT ONLY: the time log is a file every agent appends to, so a gate row proves nothing. What
-//                 cq receive, cq merge and the push check rely on is the gate evidence store (lib/gateEvidence.js).
+//                 ravenseat receive, ravenseat merge and the push check rely on is the gate evidence store (lib/gateEvidence.js).
 //   compaction    { time, event: "compact", scope: "session", session_id, orchestrator }   a main session (SessionStart
 //                 compact; orchestrator = the session is the bound orchestrator, contextGuard.afterCompactBound)
 //                 { time, event: "compact", scope: "track", agent_id, agent_type, track, compactions }   one row per new
 //                 compaction of a track agent (hook-track-context.mjs); `compactions` is the count after it (1, 2, ...)
 //   killed agent  { time, wave, track, event: "done", killed: true, cumulative: true, agent_id, agent_type, ...the
-//                 analysis }   a done row cq writes itself (cli/tracks.mjs recordKilledAgents) for an agent that has a
+//                 analysis }   a done row ravenseat writes itself (cli/tracks.mjs recordKilledAgents) for an agent that has a
 //                 start row and no done row (stopped, crashed or killed without SubagentStop), from what its transcript
 //                 holds, so its cost is counted. It is cumulative like the hook's rows: when a real done row arrives later,
 //                 the readers take only the growth per agent_id (timeCost.usageEvents), so nothing is counted twice.

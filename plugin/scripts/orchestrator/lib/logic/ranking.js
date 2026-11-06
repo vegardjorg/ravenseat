@@ -100,14 +100,14 @@ function parseStep(raw, queue) {
     if (isArea) return { stage: `area:${s}` };
     if (isProject) return { stage: `project:${s}` };
     return {
-      error: `unknown stage ${s} (neither area nor project; see cq areas and projects)`,
+      error: `unknown stage ${s} (neither area nor project; see ravenseat areas and projects)`,
     };
   }
   const type = s.slice(0, colon);
   const rest = s.slice(colon + 1).trim();
   if (type === 'area') {
     if (!Object.hasOwn(areas, rest))
-      return { error: `unknown area ${rest} (create it with cq area ${rest} --title "…")` };
+      return { error: `unknown area ${rest} (create it with ravenseat area ${rest} --title "…")` };
     return { stage: `area:${rest}` };
   }
   if (type === 'project') {
@@ -169,7 +169,7 @@ function focusApplies(queue, now = Date.now()) {
 // A focus ENDS when every stage is done (nothing open and no rests in any stage: the same as status `done` in
 // logic/focus.js evaluateFocusStep) or when its period `to` has passed. What happens then is the setting
 // "continue the regular queue automatically when the focus is empty":
-//   queue.json         focus.continue_when_empty: true|false   per focus (cq focus set ... --continue-when-empty on|off); wins
+//   queue.json         focus.continue_when_empty: true|false   per focus (ravenseat focus set ... --continue-when-empty on|off); wins
 //   queue.config.json  focus.continueWhenEmpty                 the project's default (false)
 // Off: the queue is paused (every waiting task is out of the ranking, with focusEndText as the reason) until the owner
 // sets a new focus, turns it off, or answers the owner question (focusEndQuestionId) with "Continue the regular queue".
@@ -226,7 +226,7 @@ function focusEndText(queue, k) {
   const name = queue?.focus?.name ? ` "${queue.focus.name}"` : '';
   return (
     `focus${name} ${k?.expired ? 'period is over' : 'is done'}: queue paused ` +
-    '(cq focus set ... for a new focus, cq focus off, or focus.continueWhenEmpty)'
+    '(ravenseat focus set ... for a new focus, ravenseat focus off, or focus.continueWhenEmpty)'
   );
 }
 
@@ -333,14 +333,14 @@ function parkedText(o) {
   const p = o.parked ?? {};
   return (
     `parked${p.to ? ` until ${utcText(p.to)}` : ''} by ${p.by ?? '?'}` +
-    `${p.reason ? `: ${p.reason}` : ''} (cq continue ${o.id})`
+    `${p.reason ? `: ${p.reason}` : ''} (ravenseat continue ${o.id})`
   );
 }
 
 /** The text for a task outside the focus when the rest waits. */
 function outsideText(queue) {
   const name = queue?.focus?.name ? ` "${queue.focus.name}"` : '';
-  return `outside focus${name} (rest waiting; cq focus)`;
+  return `outside focus${name} (rest waiting; ravenseat focus)`;
 }
 
 /**

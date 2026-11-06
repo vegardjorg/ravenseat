@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 
 import {
-  a, BASE, branchFor, branchInfo, CQ, cut, die, edit, G, git, gitRead, L, missionFile, positional, PREFIX, read, REMOTE,
+  a, BASE, branchFor, branchInfo, CLI, cut, die, edit, G, git, gitRead, L, missionFile, positional, PREFIX, read, REMOTE,
   uncommittedPaths, val, values, WIDTH,
 } from './context.mjs';
 import { logTime, minutes } from './tracks.mjs';
@@ -90,7 +90,7 @@ function externalScan() {
     for (const k of v.collisions) console.log(`  ${L.collisionText(k, { withId: false })}`);
     for (const c of v.mentioned)
       console.log(
-        `  mentioned in ${c.summary} "${c.subject}"${o.status === 'waiting' ? ` -> completed? cq external accept ${onlyId} ${c.summary}` : ''}`,
+        `  mentioned in ${c.summary} "${c.subject}"${o.status === 'waiting' ? ` -> completed? ravenseat external accept ${onlyId} ${c.summary}` : ''}`,
       );
     if (!v.collisions.length && !v.mentioned.length)
       console.log('  Nothing outside the queue affects it.');
@@ -187,7 +187,7 @@ function externalScan() {
   ].filter(Boolean);
   if (missing.length) {
     out.push(cut(`Tasks in progress ${missing.join('; ')}.`, WIDTH));
-    out.push('  Fix with cq edit-many --file <json> ([{ "id", "project", "feature" }]).');
+    out.push('  Fix with ravenseat edit-many --file <json> ([{ "id", "project", "feature" }]).');
   }
 
   // Collisions and consistency.
@@ -211,7 +211,7 @@ function externalScan() {
   console.log(out.join('\n'));
 }
 
-/** `cq external` (the usage is at the top of queue.mjs). */
+/** `ravenseat external` (the usage is at the top of queue.mjs). */
 export function cmdExternal() {
   // ---- Work outside the queue ----
   const under = a[1] && !a[1].startsWith('--') ? a[1] : null;
@@ -231,7 +231,7 @@ export function cmdExternal() {
     const owner = [...r.row.owned_files, ...r.row.owner_db].join(', ');
     console.log(
       `${r.new ? 'Registered' : 'Updated'} ${r.row.id} ("${r.row.external_name}"${r.row.branch ? `, branch ${r.row.branch}` : ''}): ` +
-        `owns ${owner}. The queue starts nothing that collides until: cq external done "${r.row.external_name}"`,
+        `owns ${owner}. The queue starts nothing that collides until: ravenseat external done "${r.row.external_name}"`,
     );
     for (const x of r.warnings) console.log(`WARNING: ${x}`);
   } else if (under === 'done') {
@@ -243,7 +243,7 @@ export function cmdExternal() {
     });
     console.log(
       `${r.row.id} ("${r.row.external_name}"): done. The files are free for the queue again. If the work is committed on ${BASE}, ` +
-        'cq external shows whether it mentions pending tasks.',
+        'ravenseat external shows whether it mentions pending tasks.',
     );
   } else if (under === 'accept') {
     const [id, ref] = positional(2);
@@ -262,7 +262,7 @@ export function cmdExternal() {
     });
     console.log(
       `${id}: done (completed outside the queue in ${full.slice(0, 8)})` +
-        `${r.qa ? ' · label visual: now in the owner QA list (cq qa)' : ''}` +
+        `${r.qa ? ' · label visual: now in the owner QA list (ravenseat qa)' : ''}` +
         `${mentioned ? '' : ' · NB: the commit message does not mention the id (noted in the remark)'}`,
     );
   } else {
@@ -273,7 +273,7 @@ export function cmdExternal() {
   }
 }
 
-/** `cq cloud-package` (the usage is at the top of queue.mjs). */
+/** `ravenseat cloud-package` (the usage is at the top of queue.mjs). */
 export function cmdCloudPackage() {
   // ---- Cloud: the package for the routine "queue-cloud" or to paste into a cloud session ----
   // One id, or a bundle of at most 4 (total estimate <= about 120 min) done one after the other in the same cloud session.
@@ -303,12 +303,12 @@ export function cmdCloudPackage() {
     fs.writeFileSync(out, `${pkg}\n`);
     console.log(
       `Wrote the cloud package for ${ids.join(', ')} to ${out} (${pkg.length} chars). Start: RemoteTrigger run with ` +
-        `{ "text": <the package> }, then cq cloud start ${ids.join(' ')} --run <session-id>.`,
+        `{ "text": <the package> }, then ravenseat cloud start ${ids.join(' ')} --run <session-id>.`,
     );
   } else process.stdout.write(`${pkg}\n`);
 }
 
-/** `cq cloud-bundles` (the usage is at the top of queue.mjs). */
+/** `ravenseat cloud-bundles` (the usage is at the top of queue.mjs). */
 export function cmdCloudBundles() {
   // Proposals for bundles of cloud-suitable tasks (the same project/feature one after the other), by priority.
   const max = Number(val('--max') ?? L.CLOUD_BUNDLE_MAX);
@@ -337,7 +337,7 @@ export function cmdCloudBundles() {
           minutes: b.minutes,
           areas: b.areas,
           titles: Object.fromEntries(b.ids.map((id) => [id, titleJ.get(id)])),
-          command: `${CQ} cloud-start ${b.ids.join(' ')}`,
+          command: `${CLI} cloud-start ${b.ids.join(' ')}`,
         })),
         sessions: L.cloudSessions(queue),
         max: L.CLOUD_MAX,
@@ -356,13 +356,13 @@ export function cmdCloudBundles() {
       `Bundle ${i + 1}: ${b.ids.length} task(s), ${b.minutes} min · ${b.areas.join(' + ')}`,
     );
     for (const id of b.ids) console.log(cut(`  ${id.padEnd(12)} ${title.get(id)}`, WIDTH));
-    console.log(`  → cq cloud-package ${b.ids.join(' ')} --out <file>`);
+    console.log(`  → ravenseat cloud-package ${b.ids.join(' ')} --out <file>`);
   });
   const sessions = L.cloudSessions(queue);
   if (bundles.length) console.log(`\n${sessions} cloud session(s) running now (at most ${L.CLOUD_MAX}).`);
 }
 
-/** `cq cloud` (the usage is at the top of queue.mjs). */
+/** `ravenseat cloud` (the usage is at the top of queue.mjs). */
 export function cmdCloud() {
   const [under, id, ...more] = positional(1, ['--run', '--sha', '--branch']);
   const force = a.includes('--force');
@@ -397,7 +397,7 @@ export function cmdCloud() {
         ),
       );
     if (suitable.length > 15) console.log(`  ... and ${suitable.length - 15} more`);
-    if (suitable.length) console.log('\nPackage: cq cloud-package <id> [--out <file>]');
+    if (suitable.length) console.log('\nPackage: ravenseat cloud-package <id> [--out <file>]');
   } else if (under === 'start') {
     // More ids = a bundle in the same cloud session (the same --run).
     const ids = id ? [id, ...more] : [];
@@ -430,8 +430,8 @@ export function cmdCloud() {
       );
     if (r.overridden.length) console.log(`--force overrode: ${r.overridden.join(' · ')}`);
     console.log(
-      'When CLOUD-DONE <id> arrives: cq cloud done <id> [--branch <branch the cloud pushed>] [--sha <sha>]. ' +
-        'If it gives up (CLOUD-STOP): cq cloud cancel <id>.',
+      'When CLOUD-DONE <id> arrives: ravenseat cloud done <id> [--branch <branch the cloud pushed>] [--sha <sha>]. ' +
+        'If it gives up (CLOUD-STOP): ravenseat cloud cancel <id>.',
     );
   } else if (under === 'done') {
     if (!id) die('cloud done <id> [--branch <branch>] [--sha <sha>]');
@@ -495,9 +495,9 @@ export function cmdCloud() {
       [
         `${id}: completed in the cloud, review. ${count} commit(s) on ${REMOTE}/${branch} (tip ${String(tips).slice(0, 10)}).`,
         'The orchestrator merges:',
-        `  1. ${CQ} merge-track ${local}   (local branch = ${REMOTE}/${branch})`,
+        `  1. ${CLI} merge-track ${local}   (local branch = ${REMOTE}/${branch})`,
         `  2. git push ${REMOTE} --delete ${branch}   (after the merge; a fixed claude/... branch would otherwise be reused)`,
-        `  3. cq set ${id} done`,
+        `  3. ravenseat set ${id} done`,
       ].join('\n'),
     );
   } else if (under === 'cancel') {

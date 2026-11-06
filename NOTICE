@@ -3,7 +3,7 @@ Ravenseat includes third-party material.
 The helper agents plugin/agents/reviewer-design.md, reviewer-tests.md, reviewer-gap.md and reviewer-docs.md are
 adapted from the agent definitions in testdouble/han (https://github.com/testdouble/han, han-core/agents:
 user-experience-designer, test-engineer, edge-case-explorer, gap-analyzer, information-architect and
-content-auditor). They are rewritten for cq, not copied. That material is used under the MIT License:
+content-auditor). They are rewritten for ravenseat, not copied. That material is used under the MIT License:
 
 MIT License
 

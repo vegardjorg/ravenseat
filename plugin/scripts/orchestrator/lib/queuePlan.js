@@ -77,7 +77,7 @@ const FIELD = [
   // Set by the tool:
   'created',
   'agent_boost',
-  // `cq finding` (lib/queueFindings.js): { tasks, files, reported, last, count }, the tracks that reported it.
+  // `ravenseat finding` (lib/queueFindings.js): { tasks, files, reported, last, count }, the tracks that reported it.
   'finding',
 ];
 /** Fields the tool owns: cannot be set with `plan new` or `plan edit`. */
@@ -295,14 +295,14 @@ function validateEntry(entry, ctx = {}) {
 
   // The project must exist (the module follows from the project's area).
   if (!text(entry.project))
-    f('project missing (create it with cq project <pid> --title "…")');
+    f('project missing (create it with ravenseat project <pid> --title "…")');
   else if (!Object.hasOwn(ctx.projects ?? {}, entry.project))
     f(
-      `unknown project ${entry.project} (create it first: cq project ${entry.project} --title "…")`,
+      `unknown project ${entry.project} (create it first: ravenseat project ${entry.project} --title "…")`,
     );
   else if (!ctx.projects[entry.project]?.area)
     adv(
-      `the project ${entry.project} has no module (cq project ${entry.project} --area <oid>)`,
+      `the project ${entry.project} has no module (ravenseat project ${entry.project} --area <oid>)`,
     );
 
   // Priority, category, reason and who set it.
@@ -344,10 +344,10 @@ function validateEntry(entry, ctx = {}) {
   else if (!MATURITY_MANUAL.includes(entry.maturity))
     f(`unknown maturity ${entry.maturity} (allowed: ${MATURITY_MANUAL.join(', ')})`);
 
-  // A finding (`cq finding`): who reported it and which files they named; the shape only, the tool writes it.
+  // A finding (`ravenseat finding`): who reported it and which files they named; the shape only, the tool writes it.
   if (entry.finding != null) {
     const fi = entry.finding;
-    if (!isObject(fi)) f('finding must be an object (set by cq finding)');
+    if (!isObject(fi)) f('finding must be an object (set by ravenseat finding)');
     else {
       if (!Array.isArray(fi.tasks) || fi.tasks.some((x) => typeof x !== 'string')) f('finding.tasks must be a list of task ids');
       if (!Array.isArray(fi.files) || fi.files.some((x) => typeof x !== 'string')) f('finding.files must be a list of paths');
@@ -386,7 +386,7 @@ function validateEntry(entry, ctx = {}) {
   }
   for (const s of Array.isArray(entry.ownerQuestions) ? entry.ownerQuestions : [])
     if (ctx.question && !Object.hasOwn(ctx.question, s))
-      adv(`ownerQuestion ${s} is not in the queue (cq question ${s} --text "…")`);
+      adv(`ownerQuestion ${s} is not in the queue (ravenseat question ${s} --text "…")`);
 
   if (entry.deadline != null && !validDate(entry.deadline))
     f('deadline must be a date (YYYY-MM-DD) or null');
@@ -1288,7 +1288,7 @@ function planLinkError(reg, planId) {
   if (findEntry(reg, planId)) return null;
   if (reg?.archive?.[planId])
     return `planEntry ${planId} is merged into ${reg.archive[planId].merged_to}; use that one`;
-  return `unknown planEntry ${planId} (create it first: cq plan new --file <json>)`;
+  return `unknown planEntry ${planId} (create it first: ravenseat plan new --file <json>)`;
 }
 
 /**
@@ -1689,7 +1689,7 @@ function check(reg, queue, ctx = {}) {
     if (n)
       statusDeviation.push({
         project: pid,
-        reason: `the project ${pid} has phase plan, but ${n} queue task(s) (cq project ${pid} --phase none)`,
+        reason: `the project ${pid} has phase plan, but ${n} queue task(s) (ravenseat project ${pid} --phase none)`,
       });
   }
 
@@ -2237,7 +2237,7 @@ function validateDoc(doc, ctx = {}) {
     }
   for (const s of Array.isArray(doc.ownerQuestions) ? doc.ownerQuestions : [])
     if (ctx.question && !Object.hasOwn(ctx.question, s))
-      adv(`ownerQuestion ${s} is not in the queue (cq question ${s} --text "…")`);
+      adv(`ownerQuestion ${s} is not in the queue (ravenseat question ${s} --text "…")`);
   if (doc.deadline != null && !validDate(doc.deadline))
     f('deadline must be a date (YYYY-MM-DD) or null');
   // modules is a list of module ids from the configuration's `modules`.

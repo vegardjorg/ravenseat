@@ -275,7 +275,7 @@ function fillExcerpt(out) {
 /** Why merge must not run where nobody reads it (a background job, a script that chains merges). */
 const FILL_NOTE =
   'never run merge where nobody reads the output (in the background or chained in a script): use --without-fill there ' +
-  'and run fill yourself afterwards. cq show and the pulse warn about tracks STARTED WITHOUT AGENT.';
+  'and run fill yourself afterwards. ravenseat show and the pulse warn about tracks STARTED WITHOUT AGENT.';
 
 /**
  * The agent list the orchestrator starts in ONE turn (in parallel), for the reviewers, triage helpers and other agents
@@ -288,11 +288,11 @@ const FILL_NOTE =
  * The last line after a red gate. A NOTE above it can say the old worktree still holds the branch, and then the new agent
  * cannot start until it is freed, so "start now" alone was wrong (test round 5, Q3).
  */
-function fixRoundLine(output, cq, id) {
+function fixRoundLine(output, ravenseat, id) {
   const held = /^NOTE: .+ is checked out in /m.test(output ?? '');
   return (
     (held ? 'If the old agent is done, run the git switch --detach from the NOTE first. ' : '') +
-    `Start the fix round in the SAME turn (the line above), then ${cq} receive ${id} again.`
+    `Start the fix round in the SAME turn (the line above), then ${ravenseat} receive ${id} again.`
   );
 }
 

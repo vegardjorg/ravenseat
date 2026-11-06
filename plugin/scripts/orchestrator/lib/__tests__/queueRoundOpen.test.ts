@@ -3,8 +3,8 @@
 //
 // Why: a task in review with a new round under way was flagged "in review" and called DELIVERED while its agent worked,
 // and a hung agent in such a round got no SILENT. The rest are small texts that gave wrong advice: the fix round line,
-// cq show --json, cq edit on an unknown id, the mascot's "empty queue", the cq decide headings and the setup line.
-// The cq commands run against a temporary git repo (never the main repo or a real queue).
+// ravenseat show --json, ravenseat edit on an unknown id, the mascot's "empty queue", the ravenseat decide headings and the setup line.
+// The ravenseat commands run against a temporary git repo (never the main repo or a real queue).
 // =============================================================
 import { describe, it, expect, afterAll } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -103,7 +103,7 @@ describe('a hung agent in a new round (Q7)', () => {
   });
 });
 
-describe('the cq decide headings (Q9)', () => {
+describe('the ravenseat decide headings (Q9)', () => {
   it('name the problem on both kinds of card without an agent', () => {
     const [round] = D.decisions(
       board([inReview('reserved')], { withoutAgent: [{ id: 'R', prepared: true, round: 1, reason: 'context' }] }).inbox,
@@ -118,12 +118,12 @@ describe('the cq decide headings (Q9)', () => {
 describe('the line after a red gate (Q3)', () => {
   it('says to free the branch first only when the NOTE says it is held', () => {
     const held = 'x\nNOTE: queue/A is checked out in C:/w. If the old agent is done: git -C "C:/w" switch --detach\n';
-    expect(L.fixRoundLine(held, 'cq', 'A')).toMatch(/^If the old agent is done, run the git switch --detach/);
-    expect(L.fixRoundLine(held, 'cq', 'A')).toContain('Start the fix round in the SAME turn');
-    expect(L.fixRoundLine('queue/A was checked out in C:/w, where the old agent is done: freed\n', 'cq', 'A')).toMatch(
-      /^Start the fix round in the SAME turn \(the line above\), then cq receive A again\.$/,
+    expect(L.fixRoundLine(held, 'ravenseat', 'A')).toMatch(/^If the old agent is done, run the git switch --detach/);
+    expect(L.fixRoundLine(held, 'ravenseat', 'A')).toContain('Start the fix round in the SAME turn');
+    expect(L.fixRoundLine('queue/A was checked out in C:/w, where the old agent is done: freed\n', 'ravenseat', 'A')).toMatch(
+      /^Start the fix round in the SAME turn \(the line above\), then ravenseat receive A again\.$/,
     );
-    expect(L.fixRoundLine(undefined, 'cq', 'A')).toMatch(/^Start the fix round/);
+    expect(L.fixRoundLine(undefined, 'ravenseat', 'A')).toMatch(/^Start the fix round/);
   });
 });
 
@@ -139,13 +139,13 @@ describe('the mascot and an empty queue (Q6)', () => {
   });
 });
 
-describe('the setup line in cq show (Q2)', () => {
+describe('the setup line in ravenseat show (Q2)', () => {
   const line = (setupVersion: string | null, installed = '0.8.23', mode = 'plugin') =>
     U.setupBehindLine({ mode, installed, setupVersion });
 
   it('speaks only when setup was recorded for an older version', () => {
     expect(line('0.8.20')).toBe(
-      'Setup is behind: cq 0.8.23 is installed, the project was set up for cq 0.8.20. Run: cq setup --settings',
+      'Setup is behind: ravenseat 0.8.23 is installed, the project was set up for ravenseat 0.8.20. Run: ravenseat setup --settings',
     );
     expect(line('0.8.23')).toBeNull();
     expect(line('0.8.24')).toBeNull();
@@ -154,7 +154,7 @@ describe('the setup line in cq show (Q2)', () => {
   });
 });
 
-describe('cq against a temporary repo (Q1, Q10)', () => {
+describe('ravenseat against a temporary repo (Q1, Q10)', () => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-round-'));
   afterAll(() => fs.rmSync(folder, { recursive: true, force: true }));
   const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
@@ -200,7 +200,7 @@ describe('cq against a temporary repo (Q1, Q10)', () => {
 
   it('show has a setup line when setup.json records an older version', () => {
     fs.writeFileSync(path.join(folder, 'setup.json'), JSON.stringify({ pluginVersion: '0.0.1' }));
-    expect(run('show').out).toContain('the project was set up for cq 0.0.1. Run: cq setup --settings');
+    expect(run('show').out).toContain('the project was set up for ravenseat 0.0.1. Run: ravenseat setup --settings');
     fs.rmSync(path.join(folder, 'setup.json'));
     expect(run('show').out).not.toContain('Setup is behind');
   });

@@ -126,7 +126,7 @@ describe('depends-on-cancelled (case 1: A-10 → A-6, merged into A-8)', () => {
     expect(f?.dep).toBe('A-6');
     expect(f?.back).toBe(3);
     expect(f?.command).toBe(
-      `cq edit A-10 --json '{"depends_on":["A-8","A-5"]}'`,
+      `ravenseat edit A-10 --json '{"depends_on":["A-8","A-5"]}'`,
     );
   });
 
@@ -200,7 +200,7 @@ describe('dragged-with-paused (case 3: B-1 in the paused project beta)', () => {
     const f = find(d, 'dragged-with-paused', 'B-1');
     expect(f?.class).toBe('simple');
     expect(f?.command).toBe(
-      `cq edit B-1 --json '{"project":"alpha"}'`,
+      `ravenseat edit B-1 --json '{"project":"alpha"}'`,
     );
     // B-1 holds back itself and two in focus (B-2 dragged along, A-NEW).
     expect(f?.back).toBe(3);
@@ -224,7 +224,7 @@ describe('loose waits and answered questions', () => {
     });
     const d = D.parallelDiagnose(kk, { now: NOW });
     expect(find(d, 'lose-waiting', 'A-1')?.command).toBe(
-      'cq resolve SP-1',
+      'ravenseat resolve SP-1',
     );
     const u = find(d, 'lose-waiting', 'A-2');
     expect(u?.class).toBe('complex');
@@ -320,7 +320,7 @@ describe('the threshold and the output', () => {
     const lines = D.diagnoseLines(d);
     expect(lines[0]).toBe('LOW PARALLELISM: 2 of 6 tracks (33 %, threshold 70 %). Quick diagnosis:');
     expect(lines.length).toBeLessThanOrEqual(12);
-    expect(lines.join('\n')).toMatch(/\+\d+ more findings \(cq diagnose\)/);
+    expect(lines.join('\n')).toMatch(/\+\d+ more findings \(ravenseat diagnose\)/);
   });
 
   it('no output when the share is above the threshold (5 of 6), but diagnose shows everything', () => {

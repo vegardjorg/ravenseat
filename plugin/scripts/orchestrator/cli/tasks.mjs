@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  a, autoAcceptContext, autoAcceptIn, byName, CONFIG, CQ, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
+  a, autoAcceptContext, autoAcceptIn, byName, CONFIG, CLI, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
   positional, PR, queueBranchId, read, readPlans, undoHint, val, values, withLock, write,
   require,
 } from './context.mjs';
@@ -58,7 +58,7 @@ function ignoreDataFolder() {
   }
 }
 
-/** `cq init` (the usage is at the top of queue.mjs). */
+/** `ravenseat init` (the usage is at the top of queue.mjs). */
 export function cmdInit() {
   // Creates the data folder and an empty queue with defaultLimits and the example project "example" (prefix EX-). An existing
   // queue is never touched, so init is safe to run several times.
@@ -76,7 +76,7 @@ export function cmdInit() {
   if (flagMode || (fresh && ownMode == null)) {
     try {
       const w = LM.writeMode(KK.configFile(), initMode);
-      if (w.changed) console.log(`Mode: ${initMode} (written to ${KK.configFile()}; switch with ${CQ} mode lite|full).`);
+      if (w.changed) console.log(`Mode: ${initMode} (written to ${KK.configFile()}; switch with ${CLI} mode lite|full).`);
     } catch (e) {
       die(`init: could not write the mode to ${KK.configFile()} (${e.message}). Nothing changed.`);
     }
@@ -112,23 +112,23 @@ export function cmdInit() {
   ignoreDataFolder();
   if (initMode === 'lite') {
     console.log(`The queue is created: ${FILE} (lite mode).`);
-    console.log(`Next: ${CQ} add "<what you want done>", then /cq:queue (or ${CQ} fill) to start it.`);
-    console.log(LM.switchLine(CQ));
+    console.log(`Next: ${CLI} add "<what you want done>", then /ravenseat:queue (or ${CLI} fill) to start it.`);
+    console.log(LM.switchLine(CLI));
   } else
     console.log(
       `The queue is created: ${FILE}` +
         (queue.next_migr != null ? ` (next migration block from ${queue.next_migr})` : '') +
-        '. The example project "example" (prefix EX-) can be renamed with cq project.',
+        '. The example project "example" (prefix EX-) can be renamed with ravenseat project.',
     );
 }
 
-/** `cq mode` (the usage is at the top of queue.mjs). */
+/** `ravenseat mode` (the usage is at the top of queue.mjs). */
 export function cmdMode() {
   // `mode` shows the mode; `mode lite|full` writes it into queue.config.json (only that key; lib/liteMode.js).
   const want = a[1];
   if (want == null) {
     console.log(`Mode: ${LM.mode(CONFIG)} (${KK.configFile()}).`);
-    console.log(LM.isLite(CONFIG) ? LM.switchLine(CQ) : `Lite mode (the core loop only): ${CQ} mode lite.`);
+    console.log(LM.isLite(CONFIG) ? LM.switchLine(CLI) : `Lite mode (the core loop only): ${CLI} mode lite.`);
     process.exit(0);
   }
   if (!LM.MODES.includes(want)) die(`mode takes ${LM.MODES.join(' or ')} (or nothing, to show it)`);
@@ -139,10 +139,10 @@ export function cmdMode() {
     die(`mode: could not write ${KK.configFile()} (${e.message}). Nothing changed.`);
   }
   console.log(w.changed ? `Mode: ${want} (written to ${KK.configFile()}; remember to commit it).` : `Mode: ${want} already (nothing changed).`);
-  if (want === 'lite') console.log(LM.switchLine(CQ));
+  if (want === 'lite') console.log(LM.switchLine(CLI));
 }
 
-/** `cq add` (the usage is at the top of queue.mjs). */
+/** `ravenseat add` (the usage is at the top of queue.mjs). */
 export function cmdAdd() {
   const LITE = LM.isLite(CONFIG);
   // Lite: `add "<title>" [--mission ...] [--priority N] [--files a,b] [--depends a,b] [--id X] [--by ...]` builds the task from the flags.
@@ -153,7 +153,7 @@ export function cmdAdd() {
   if (!source && quickTitle != null) {
     if (!LITE)
       die(
-        `add requires --file <task.json> or --json '{...}' in full mode (a title alone works in lite mode: ${CQ} mode lite)`,
+        `add requires --file <task.json> or --json '{...}' in full mode (a title alone works in lite mode: ${CLI} mode lite)`,
       );
     const q = LM.quickTask({
       title: quickTitle,
@@ -172,7 +172,7 @@ export function cmdAdd() {
     source = JSON.stringify(q.task);
   }
   if (!source)
-    die(LITE ? 'add requires a title: cq add "Fix the login bug" (or --file/--json)' : "add requires --file <task.json> or --json '{...}'");
+    die(LITE ? 'add requires a title: ravenseat add "Fix the login bug" (or --file/--json)' : "add requires --file <task.json> or --json '{...}'");
   let content;
   try {
     content = JSON.parse(source);
@@ -209,7 +209,7 @@ export function cmdAdd() {
   // the plan entry must exist in the plan register (an unknown or merged entry is refused), and the entry becomes in-queue automatically.
   const planArg = a.includes('--plan') ? val('--plan') : null;
   if (a.includes('--plan') && (!planArg || planArg.startsWith('--')))
-    die('--plan requires a plan entry id (cq plan show)');
+    die('--plan requires a plan entry id (ravenseat plan show)');
   const liteNotes = [];
   const added = edit((queue) => {
     const error = [];
@@ -338,10 +338,10 @@ export function cmdAdd() {
   if (waiting.length) console.log(`Added: ${waiting.join(', ')}`);
   for (const x of liteNotes) console.log(`Note: ${x}`);
   for (const x of added.autoAccepted)
-    console.log(`Auto-accepted ${x.id} by the owner's rules (${x.reason}); undo: ${CQ} proposals undo ${x.id}`);
+    console.log(`Auto-accepted ${x.id} by the owner's rules (${x.reason}); undo: ${CLI} proposals undo ${x.id}`);
   if (proposed.length)
     console.log(
-      `Added as proposed (not started until the orchestrator or the owner approves: cq approve <id...>): ${proposed.join(', ')}`,
+      `Added as proposed (not started until the orchestrator or the owner approves: ravenseat approve <id...>): ${proposed.join(', ')}`,
     );
   const { withoutProject, withoutFeature } = added.missing;
   if (withoutProject.length || withoutFeature.length)
@@ -355,7 +355,7 @@ export function cmdAdd() {
         .filter(Boolean)
         .join(
           '; ',
-        )}. Fix with cq edit-many --file <json> ([{ "id": "...", "project": "...", "feature": "..." }]).`,
+        )}. Fix with ravenseat edit-many --file <json> ([{ "id": "...", "project": "...", "feature": "..." }]).`,
     );
   // A field the queue does not read is kept without a word, so the task looks right and is not (test round 4: minutes).
   const WRONG_NAMES = { minutes: 'content_min', estimate: 'content_min', duration: 'content_min', priority: 'value', files: 'owned_files', depends: 'depends_on' };
@@ -373,7 +373,7 @@ export function cmdAdd() {
     const named = PR.missionNamesProtected(n, protectedPaths);
     if (named)
       console.log(
-        `WARNING: ${n.id} names the protected path ${named} without owning it. If the task is to change it, add it with --files (cq edit ${n.id} --files <files>): the agent will otherwise refuse, or the merge guard stops the change.`,
+        `WARNING: ${n.id} names the protected path ${named} without owning it. If the task is to change it, add it with --files (ravenseat edit ${n.id} --files <files>): the agent will otherwise refuse, or the merge guard stops the change.`,
       );
   }
   for (const x of added.projectWarnings) console.log(`WARNING: ${x}`);
@@ -386,11 +386,11 @@ export function cmdAdd() {
   if (added.withoutText.length)
     console.log(
       `WARNING: question without text (shown without text in "Waiting on you"): ${added.withoutText.join(', ')}. ` +
-        'Add them in "question" in the add file, or: cq question <id> --text "..." --type <type>.',
+        'Add them in "question" in the add file, or: ravenseat question <id> --text "..." --type <type>.',
     );
 }
 
-/** `cq classify` (the usage is at the top of queue.mjs). */
+/** `ravenseat classify` (the usage is at the top of queue.mjs). */
 export function cmdClassify() {
   // ---- Project proposals ----
   // The same proposals add prints (queueLogic.suggestProject): longest prefix, the plan in source/mission, fileRoot. Without
@@ -439,11 +439,11 @@ export function cmdClassify() {
       if (json) console.log(JSON.stringify({ ok: true, ...k }));
       else {
         console.log(
-          `Proposed (${k.move.length}; set with cq classify --execute${filter.withoutProject ? ' --without-project' : ''}${filter.disagreeing ? ' --disagree' : ''}):`,
+          `Proposed (${k.move.length}; set with ravenseat classify --execute${filter.withoutProject ? ' --without-project' : ''}${filter.disagreeing ? ' --disagree' : ''}):`,
         );
         for (const x of k.move) console.log(rowText(x));
         console.log(
-          `Sort (${k.sort.length}; uncertain or disagreeing, fix with cq edit-many --file <json> [{ "id", "project" }]):`,
+          `Sort (${k.sort.length}; uncertain or disagreeing, fix with ravenseat edit-many --file <json> [{ "id", "project" }]):`,
         );
         for (const x of k.sort) console.log(`${rowText(x)} [${x.type}]`);
         const pre = L.prefixWarnings(read().projects ?? {});

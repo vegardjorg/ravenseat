@@ -51,7 +51,7 @@ function drawUpdateBanner() {
       el(
         'p',
         { class: 'update-banner-title' },
-        `cq ${v.latest} is out (you have ${n.installed}). `,
+        `ravenseat ${v.latest} is out (you have ${n.installed}). `,
         el('a', {
           href: v.changelog,
           target: '_blank',
@@ -69,7 +69,7 @@ function drawUpdateBanner() {
         el('p', {
           class: 'update-banner-title',
           text:
-            `Setup was run for cq ${n.setupVersion}, but this board still runs cq ${n.installed}. ` +
+            `Setup was run for ravenseat ${n.setupVersion}, but this board still runs ravenseat ${n.installed}. ` +
             'Stop the board and start it again to load the new version.',
         }),
       );
@@ -78,10 +78,10 @@ function drawUpdateBanner() {
         el('p', {
           class: 'update-banner-title',
           text: n.setupVersion
-            ? `cq ${n.installed} is installed, but the project was last set up for cq ${n.setupVersion}. Run setup again in Claude Code:`
-            : `cq ${n.installed} is installed, but setup has not been recorded for it. Run setup again in Claude Code:`,
+            ? `ravenseat ${n.installed} is installed, but the project was last set up for ravenseat ${n.setupVersion}. Run setup again in Claude Code:`
+            : `ravenseat ${n.installed} is installed, but setup has not been recorded for it. Run setup again in Claude Code:`,
         }),
-        el('ol', { class: 'update-steps' }, updateStep({ text: '', command: 'cq setup --settings' })),
+        el('ol', { class: 'update-steps' }, updateStep({ text: '', command: 'ravenseat setup --settings' })),
       );
   }
   if (!parts.length) {
@@ -97,7 +97,7 @@ function drawUpdateBanner() {
         {
           type: 'button',
           class: 'button-icon update-banner-close',
-          'aria-label': `Close the notice about cq ${n.newVersion.latest}`,
+          'aria-label': `Close the notice about ravenseat ${n.newVersion.latest}`,
           title: 'Close until a newer version is out',
           onclick: () => {
             store.setItem(U.DISMISS_KEY, n.newVersion.latest);

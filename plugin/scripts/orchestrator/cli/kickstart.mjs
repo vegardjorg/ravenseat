@@ -1,11 +1,11 @@
 // =============================================================
-// cli/kickstart.mjs: `cq kickstart`: which controls the project has, and one next step.
+// cli/kickstart.mjs: `ravenseat kickstart`: which controls the project has, and one next step.
 //
-//   cq kickstart [--json]            what was found and the next step (read-only; works before cq init and without git)
-//   cq kickstart gates [--apply]     shows the checks found as gates; --apply writes them to queue.config.json (never over
+//   ravenseat kickstart [--json]            what was found and the next step (read-only; works before ravenseat init and without git)
+//   ravenseat kickstart gates [--apply]     shows the checks found as gates; --apply writes them to queue.config.json (never over
 //                                    gates that are already set)
-//   cq kickstart add [gates|secrets|ci]   proposes the next step (or the named one) as a task. It starts only after
-//                                    cq approve or Approve on the board. A cancelled task counts as declined.
+//   ravenseat kickstart add [gates|secrets|ci]   proposes the next step (or the named one) as a task. It starts only after
+//                                    ravenseat approve or Approve on the board. A cancelled task counts as declined.
 //
 // The rules and the mission texts are in lib/kickstart.js.
 // =============================================================
@@ -16,7 +16,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { a, CONFIG, CQ, die, FILE, GIT_ROOT, KK, LM, MAIN_TREE, read, require } from './context.mjs';
+import { a, CONFIG, CLI, die, FILE, GIT_ROOT, KK, LM, MAIN_TREE, read, require } from './context.mjs';
 import { checkSecrets } from './doctorBaseline.mjs';
 
 const K = require('./lib/kickstart.js');
@@ -72,7 +72,7 @@ function overview() {
     console.log(JSON.stringify({ facts, steps: list, next: next?.key ?? null, knownBugs }, null, 2));
     return;
   }
-  if (require('./lib/guidance.js').readQuiet(KK.dataFolder())) console.log(`Guidance is quiet (${CQ} guidance guided). Showing this because you asked.\n`);
+  if (require('./lib/guidance.js').readQuiet(KK.dataFolder())) console.log(`Guidance is quiet (${CLI} guidance guided). Showing this because you asked.\n`);
   console.log(`Project: ${facts.stacks.length ? facts.stacks.join(', ') : 'no known stack found'}`);
   if (facts.checks.length) console.log(`Checks found: ${facts.checks.map((c) => `${c.command} (${c.source})`).join(', ')}`);
   console.log('');
@@ -88,8 +88,8 @@ function overview() {
   // CI that has no step to take gets its reason here, so nobody wonders why it was left out.
   for (const s of list.filter((x) => x.state === 'later' && x.key === 'ci' && !x.task)) console.log(`\nCI: ${s.why}`);
   if (knownBugs.open || knownBugs.done)
-    console.log(`\nGates from known bugs: ${knownBugs.proposed} waiting for your yes, ${knownBugs.open - knownBugs.proposed} approved, ${knownBugs.done} done (${CQ} gate list).`);
-  console.log(`\nNothing here starts by itself, and you can stop at any step. ${CQ} doctor has the full health check.`);
+    console.log(`\nGates from known bugs: ${knownBugs.proposed} waiting for your yes, ${knownBugs.open - knownBugs.proposed} approved, ${knownBugs.done} done (${CLI} gate list).`);
+  console.log(`\nNothing here starts by itself, and you can stop at any step. ${CLI} doctor has the full health check.`);
 }
 
 function gates() {
@@ -101,13 +101,13 @@ function gates() {
     return;
   }
   if (!facts.checks.length) {
-    console.log(`No check commands found. ${CQ} kickstart add gates proposes a task that adds a first one.`);
+    console.log(`No check commands found. ${CLI} kickstart add gates proposes a task that adds a first one.`);
     return;
   }
   console.log(`gates.quick (before every delivery): ${lists.quick.join(', ') || 'none'}`);
   console.log(`gates.full (before a push): ${lists.full.join(', ')}`);
   if (!a.includes('--apply')) {
-    console.log(`Nothing written. ${CQ} kickstart gates --apply writes these to queue.config.json.`);
+    console.log(`Nothing written. ${CLI} kickstart gates --apply writes these to queue.config.json.`);
     return;
   }
   const file = KK.configFile(MAIN_TREE);
@@ -120,7 +120,7 @@ function gates() {
     }
   }
   fs.writeFileSync(file, `${JSON.stringify({ ...own, gates: { ...own.gates, ...lists } }, null, 2)}\n`);
-  console.log(`Written to queue.config.json. ${CQ} gates --full runs them now, so you can see whether they pass today.`);
+  console.log(`Written to queue.config.json. ${CLI} gates --full runs them now, so you can see whether they pass today.`);
 }
 
 /** Writing needs a project root. Without git there is none, and a write would land in the plugin's own folder. */
@@ -135,9 +135,9 @@ export function ensureProject() {
   if (r.status !== 0) die(`Could not create the project cicd: ${r.stderr || r.stdout}`);
 }
 
-/** Adds one task through `cq add`, under its lock and its checks. { ok, output } */
+/** Adds one task through `ravenseat add`, under its lock and its checks. { ok, output } */
 export function addTask(task, { approved = false } = {}) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-kickstart-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-kickstart-'));
   const taskFile = path.join(tmp, 'task.json');
   try {
     fs.writeFileSync(taskFile, JSON.stringify(task));
@@ -150,7 +150,7 @@ export function addTask(task, { approved = false } = {}) {
 
 function add(named) {
   needsGit();
-  if (!fs.existsSync(FILE)) die(`The queue does not exist yet, so a task has nowhere to go. Run: ${CQ} init`);
+  if (!fs.existsSync(FILE)) die(`The queue does not exist yet, so a task has nowhere to go. Run: ${CLI} init`);
   const facts = readFacts();
   const list = K.steps({ facts, tasks: queueTasks() });
   const step = named ? list.find((s) => s.key === named) : K.nextStep(list);
@@ -173,14 +173,14 @@ function add(named) {
   const r = addTask(task);
   console.log(r.output);
   if (!r.ok) process.exit(1);
-  console.log(`About ${task.content_min} min of agent work, and it uses tokens. ${CQ} approve ${task.id} (or Approve on the board) lets it run; ${CQ} set ${task.id} cancelled declines it.`);
+  console.log(`About ${task.content_min} min of agent work, and it uses tokens. ${CLI} approve ${task.id} (or Approve on the board) lets it run; ${CLI} set ${task.id} cancelled declines it.`);
 }
 
-/** `cq kickstart ...` (the usage is at the top of queue.mjs). */
+/** `ravenseat kickstart ...` (the usage is at the top of queue.mjs). */
 export function cmdKickstart() {
   const sub = a[1];
   if (!sub || sub === '--json') return overview();
   if (sub === 'gates') return gates();
   if (sub === 'add') return add(a[2] && !a[2].startsWith('--') ? a[2] : null);
-  return die('Use: cq kickstart [--json] | cq kickstart gates [--apply] | cq kickstart add [gates|secrets|ci]');
+  return die('Use: ravenseat kickstart [--json] | ravenseat kickstart gates [--apply] | ravenseat kickstart add [gates|secrets|ci]');
 }

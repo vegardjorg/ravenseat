@@ -4,7 +4,7 @@
 // =============================================================
 // queueBoardFlow.test.ts: the "Flow last 14 days" box in the Statistics tab (statistics.js flowTable) with the quality
 // figures: right first time, post-merge defects, owner interventions, inflow by source, the reviewer hit rate table
-// and the hints. The server computes the numbers (lib/eventStatistics.js flowStatistics, the same as `cq cost`); the
+// and the hints. The server computes the numbers (lib/eventStatistics.js flowStatistics, the same as `ravenseat cost`); the
 // board only shows them. The whole board runs in jsdom with a mock server (no network).
 // =============================================================
 import { describe, it, expect, beforeAll } from 'vitest';

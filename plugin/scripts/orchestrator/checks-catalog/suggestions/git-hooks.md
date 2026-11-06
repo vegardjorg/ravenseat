@@ -15,4 +15,4 @@ why: A git hook catches mistakes on your own machine, also in work outside the q
 ## Plan and build
 
 - One hook with the fast checks only, and how a developer installs it.
-- Note: agents and CI do not rely on it, so it never replaces gates. cq will notice a new hook (gitSurface): say how to accept it.
+- Note: agents and CI do not rely on it, so it never replaces gates. ravenseat will notice a new hook (gitSurface): say how to accept it.

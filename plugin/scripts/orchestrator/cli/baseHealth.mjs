@@ -1,13 +1,13 @@
 // =============================================================
 // cli/baseHealth.mjs: the I/O of the base gate (lib/baseHealth.js): the state file, the check in the main checkout,
-// the guard before `cq merge`, the verdict after it (with the base fix task) and the one line for show and the pulse.
+// the guard before `ravenseat merge`, the verdict after it (with the base fix task) and the one line for show and the pulse.
 //
 // Why a module of its own: cli/merge.mjs is the merge flow; the base gate adds a guard before it and a record after it,
 // and show/pulse need the line without importing the merge command. The rules (when to check, when to refuse, the
 // skip rule, the fix task) are pure functions in lib/baseHealth.js; here is only the git, file and queue I/O.
 //
 // Used by: cli/merge.mjs (cmdMerge), cli/view.mjs (show), cli/orchestrator.mjs (pulse).
-// Tested in: __tests__/queueBaseGate.test.ts (cq merge against temporary repos), lib/__tests__/baseHealth.test.ts.
+// Tested in: __tests__/queueBaseGate.test.ts (ravenseat merge against temporary repos), lib/__tests__/baseHealth.test.ts.
 // =============================================================
 
 import fs from 'node:fs';
@@ -15,7 +15,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import {
-  BASE, CONFIG, CQ, die, edit, FOLDER, git, GIT_ROOT, L, P, readPlans, readQueueForPlan, require, TIME_LOG, withLock,
+  BASE, CONFIG, CLI, die, edit, FOLDER, git, GIT_ROOT, L, P, readPlans, readQueueForPlan, require, TIME_LOG, withLock,
   writePlans,
 } from './context.mjs';
 
@@ -48,13 +48,13 @@ export function readHealth() {
   return BH.readState(HEALTH_FILE);
 }
 
-/** The health line only when the base is red (for `cq decide`); null otherwise. Never throws. */
+/** The health line only when the base is red (for `ravenseat decide`); null otherwise. Never throws. */
 export function baseRedLine() {
   if (!BASE_SETUP.enabled) return null;
   try {
     const state = readHealth();
     const tip = baseTip();
-    return BH.verdict(state, tip) === 'red' ? BH.healthLine({ state, tip, setup: BASE_SETUP, branch: BASE, cq: CQ }) : null;
+    return BH.verdict(state, tip) === 'red' ? BH.healthLine({ state, tip, setup: BASE_SETUP, branch: BASE, ravenseat: CLI }) : null;
   } catch {
     return null;
   }
@@ -64,7 +64,7 @@ export function baseRedLine() {
 export function baseHealthLine() {
   if (!BASE_SETUP.enabled) return null;
   try {
-    return BH.healthLine({ state: readHealth(), tip: baseTip(), setup: BASE_SETUP, branch: BASE, cq: CQ });
+    return BH.healthLine({ state: readHealth(), tip: baseTip(), setup: BASE_SETUP, branch: BASE, ravenseat: CLI });
   } catch {
     return null;
   }
@@ -151,12 +151,12 @@ function flakyLines({ tip, run, causeId, source }) {
   for (const c of run.flaky)
     console.log(
       `FLAKY: \`${c}\` was red, then green on a rerun on the same sha (${short(tip)}); the base is not frozen.` +
-        (finding ? ` Finding ${finding} (${CQ} finding list).` : ''),
+        (finding ? ` Finding ${finding} (${CLI} finding list).` : ''),
     );
 }
 
 /**
- * Records a flaky command: one `flakyGate` row in the time log (measurement; cq cost Flow counts them) and a finding
+ * Records a flaky command: one `flakyGate` row in the time log (measurement; ravenseat cost Flow counts them) and a finding
  * in the plan register per command (deduplicated on the title, so a command that is flaky again counts on the same
  * entry). The project: the merged task's, else the only registered one; without one only the row is written.
  * Never throws (a flaky record must not stop the merge flow).
@@ -177,7 +177,7 @@ function fileFlaky({ commands, tip, causeId = null, source }) {
       const names = Object.keys(projects);
       const project = own && Object.hasOwn(projects, own) ? own : names.length === 1 ? names[0] : null;
       if (!project) {
-        console.log(`NOTE: no registered project to file the flaky finding under (${CQ} project <pid>); the time log has the row.`);
+        console.log(`NOTE: no registered project to file the flaky finding under (${CLI} project <pid>); the time log has the row.`);
         return null;
       }
       const reg = readPlans();
@@ -341,7 +341,7 @@ function settleFixTask({ candidate, causeId, tip, at }) {
   });
   if (r.state === 'cancelled') console.log(`${candidate}: cancelled, ${BASE} is green again at ${short(tip)} and it has nothing left to fix.`);
   return r.state === 'open'
-    ? `${BASE} is green again, but the base fix task ${candidate} is still open: cancel it if it is obsolete (${CQ} set ${candidate} cancelled).`
+    ? `${BASE} is green again, but the base fix task ${candidate} is still open: cancel it if it is obsolete (${CLI} set ${candidate} cancelled).`
     : null;
 }
 
@@ -377,31 +377,31 @@ export function redLines({ entry, run, fix, causeId = null, stayedInReview = fal
       '.',
     ...BH.excerpt(tail).map((l) => `  | ${l}`),
     ...(entry.tail_file ? [`Output tail: ${entry.tail_file}`] : []),
-    `${by ? `The merge of ${by.task} stays` : 'What is on the base stays'} (no automatic revert). ${CQ} merge refuses every other track until ${BASE} is green again (exit ${BH.EXIT_RED_BASE}).`,
+    `${by ? `The merge of ${by.task} stays` : 'What is on the base stays'} (no automatic revert). ${CLI} merge refuses every other track until ${BASE} is green again (exit ${BH.EXIT_RED_BASE}).`,
   ];
   if (fix)
     lines.push(
       fix.reused
-        ? `Fix task: ${fix.id} is still open; it fixes this too. Merge it with ${CQ} merge ${fix.id} (allowed while the base is red).`
+        ? `Fix task: ${fix.id} is still open; it fixes this too. Merge it with ${CLI} merge ${fix.id} (allowed while the base is red).`
         : `Fix task: ${fix.id} (value 10${causeId ? `, fixes ${causeId}` : ''}, done command = the base gate) was added. ` +
-            `Start it now (${CQ} fill), then merge it with ${CQ} merge ${fix.id} (allowed while the base is red).`,
+            `Start it now (${CLI} fill), then merge it with ${CLI} merge ${fix.id} (allowed while the base is red).`,
     );
   if (stayedInReview && causeId)
     lines.push(
       `${causeId} stays in review (the gates step stopped the merge flow): when ${fix?.id ?? 'the fix'} is merged and the ` +
-        `base is green, run ${CQ} set ${causeId} done.`,
+        `base is green, run ${CLI} set ${causeId} done.`,
     );
   if (by?.merge_commit)
     lines.push(
       `Undo instead (by hand, never done automatically): git -C "${GIT_ROOT}" revert -m 1 ${by.merge_commit}; the next ` +
-        `${CQ} merge checks the base again${fix && !fix.reused ? ` (then cancel ${fix.id})` : ''}.`,
+        `${CLI} merge checks the base again${fix && !fix.reused ? ` (then cancel ${fix.id})` : ''}.`,
     );
-  lines.push(`One merge on a red base anyway (logged as "base-red-overridden"): ${CQ} merge <id> --force-red-base`);
+  lines.push(`One merge on a red base anyway (logged as "base-red-overridden"): ${CLI} merge <id> --force-red-base`);
   return lines;
 }
 
 /**
- * The guard before `cq merge <id>`: the verdict for the base tip, the check first when it is unknown, and the refusal
+ * The guard before `ravenseat merge <id>`: the verdict for the base tip, the check first when it is unknown, and the refusal
  * (exit 9) while it is red, except for the open base fix task or with --force-red-base (logged in the time log).
  * @returns {object|null} the red record the merge goes on despite (forced, or the fix task), else null
  */
@@ -427,7 +427,7 @@ export function guardBeforeMerge({ id, force, folder }) {
     // Never a red verdict with a base fix task for an agent: the owner decides. The verdict stays unknown, so the next
     // merge checks again.
     if (check.run.tampered)
-      die(GB.tamperedMessage({ what: 'the base check', reason: check.run.tampered, cq: CQ, again: `${CQ} merge ${id}` }));
+      die(GB.tamperedMessage({ what: 'the base check', reason: check.run.tampered, ravenseat: CLI, again: `${CLI} merge ${id}` }));
     const v = recordVerdict({ tip, ok: check.run.ok, run: check.run, file: check.file, note: `checked before merging ${id}` });
     if (!check.run.ok) for (const l of redLines({ entry: v.entry, run: check.run, fix: v.fix })) console.log(l);
     if (v.openFix) console.log(v.openFix);
@@ -439,9 +439,9 @@ export function guardBeforeMerge({ id, force, folder }) {
     const by = current.made_red_by ? ` (made red by the merge of ${current.made_red_by.task})` : '';
     console.log(
       `STOP: ${BASE} is red at ${short(tip)}${by}; ${id} is not merged on a red base.` +
-        (m.fixTask ? ` Merge the fix task first: ${CQ} merge ${m.fixTask}.` : ' Fix the base first.') +
+        (m.fixTask ? ` Merge the fix task first: ${CLI} merge ${m.fixTask}.` : ' Fix the base first.') +
         `${current.tail_file ? ` Output tail: ${current.tail_file}.` : ''}\n` +
-        `On the owner's word only: ${CQ} merge ${id} --force-red-base (logged as "base-red-overridden"). Nothing was done.`,
+        `On the owner's word only: ${CLI} merge ${id} --force-red-base (logged as "base-red-overridden"). Nothing was done.`,
     );
     process.exit(BH.EXIT_RED_BASE);
   }
@@ -462,8 +462,8 @@ export function guardBeforeMerge({ id, force, folder }) {
 
 /**
  * The trusted gate runs for the skip rule and the flaky check, both decisions: the gate evidence store
- * (lib/gateEvidence.js), written by gates.mjs only for the orchestrator's own runs (cq receive, cq merge, the main
- * checkout), filtered with GE.trusted for the CURRENT gate setup and without legacy entries (as cq receive): a run under
+ * (lib/gateEvidence.js), written by gates.mjs only for the orchestrator's own runs (ravenseat receive, ravenseat merge, the main
+ * checkout), filtered with GE.trusted for the CURRENT gate setup and without legacy entries (as ravenseat receive): a run under
  * another setup, another writer's entry or an entry from before the fields existed decides nothing here, so the check
  * runs. NOT the time log: every agent can append a `gate` row there, so a row in it proves nothing. An empty list when
  * the store is missing or broken (the check runs). No history view reads through this; one that wants every row reads

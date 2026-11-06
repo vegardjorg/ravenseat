@@ -185,7 +185,7 @@ describe('short view (show)', () => {
     expect(text).toMatch(/^ACTIVE \(2\):/m);
     expect(text).toMatch(/^ {2}ACT-1 +running/m);
     expect(text).toMatch(/^ {2}REV-1 +review/m);
-    expect(text).toMatch(/STARTABLE NOW \(1; cq fill starts them\)/);
+    expect(text).toMatch(/STARTABLE NOW \(1; ravenseat fill starts them\)/);
     expect(text).toMatch(/^ {2}FREE-1 /m);
     expect(text).toMatch(/2 active · 301 waiting/);
     expect(text).toMatch(/Waiting per class: K 301; 300 of them are blocked now/);
@@ -561,7 +561,7 @@ describe('queue.mjs show, fill, receive, set done and cost (against a copy)', ()
     const v = run('show');
     expect(v.code).toBe(0);
     expect(v.out).toMatch(/STARTABLE NOW \(1;/);
-    expect(v.out).toContain('Full list: cq show --full');
+    expect(v.out).toContain('Full list: ravenseat show --full');
     expect(run('show', '--full').out).toMatch(/Q1/);
 
     // fill: starts A (D, migration block), creates the prompt file and the JSON with agent type and message.
@@ -569,14 +569,14 @@ describe('queue.mjs show, fill, receive, set done and cost (against a copy)', ()
     const f = run('fill', '--scratchpad', scratch);
     expect(f.error).toBe('');
     expect(f.code).toBe(0);
-    // (cq:)? : a plugin install prefixes the agent (cq:track-d), a vendored one does not (lib/projectRoot.js agentRef).
-    expect(f.out).toMatch(/A {2}subagent_type=(cq:)?track-d/);
+    // (ravenseat:)? : a plugin install prefixes the agent (ravenseat:track-d), a vendored one does not (lib/projectRoot.js agentRef).
+    expect(f.out).toMatch(/A {2}subagent_type=(ravenseat:)?track-d/);
     const json = JSON.parse(fs.readFileSync(path.join(scratch, 'queue-fill.json'), 'utf8')) as {
       head: string;
       track: { id: string; subagent_type: string; prompt: string; message: string }[];
     };
     expect(json.track.map((s) => s.id)).toEqual(['A']);
-    expect(json.track[0].subagent_type).toMatch(/^(cq:)?track-d$/);
+    expect(json.track[0].subagent_type).toMatch(/^(ravenseat:)?track-d$/);
     const prompt = fs.readFileSync(json.track[0].prompt, 'utf8');
     expect(prompt).toContain('The mission for A.');
     expect(prompt).toContain('queue/A');
@@ -643,7 +643,7 @@ describe('queue.mjs show, fill, receive, set done and cost (against a copy)', ()
     expect(m.error).toBe('');
     expect(m.code).toBe(0);
     expect(m.out).toMatch(/A: review · RESULT status=DONE/);
-    expect(m.out).toMatch(/subagent_type=(cq:)?reviewer/);
+    expect(m.out).toMatch(/subagent_type=(ravenseat:)?reviewer/);
     expect(m.out).not.toMatch(/reviewer-security/);
     expect(m.out).toContain(`--wave-base ${json.head}`);
     const pkg = path.join(scratch, 'rev-A');
@@ -1064,9 +1064,9 @@ describe('concurrent calls, report cap, info, bonus, activeOnes and next-migr', 
       { subagent_type: 'reviewer', prompt: 'C:\\s\\rev-A\\reviewer-reviewer.md' },
     ]);
     expect(l[0]).toBe(K2.SAME_TURN);
-    expect(l[1]).toMatch(/subagent_type=(cq:)?track-d · message: You are track A/);
+    expect(l[1]).toMatch(/subagent_type=(ravenseat:)?track-d · message: You are track A/);
     expect(l[2]).toMatch(
-      /subagent_type=(cq:)?reviewer · message: the content of .*reviewer-reviewer\.md/,
+      /subagent_type=(ravenseat:)?reviewer · message: the content of .*reviewer-reviewer\.md/,
     );
   });
 
@@ -1239,7 +1239,7 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
         '  fs.appendFileSync(process.env.MERGE_TEST_CALL, JSON.stringify({ step: x.step, cmd: x.cmd, args: x.args }) + "\\n");',
         "  const sc = JSON.parse(fs.readFileSync(process.env.MERGE_TEST_SCENARIO, 'utf8'));",
         "  const r = sc[x.step] ?? { code: 0, out: 'ok' };",
-        "  // A green merge step merges for real: cq merge checks that the track tip is in the base (review 2026-11-02, M6).",
+        "  // A green merge step merges for real: ravenseat merge checks that the track tip is in the base (review 2026-11-02, M6).",
         "  if (x.step === 'merge' && r.code === 0) spawnSync('git', ['-C', process.env.QUEUE_GIT, '-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.invalid', 'merge', '--no-ff', '--no-edit', x.args[1]], { encoding: 'utf8' });",
         "  return r;",
         '}',

@@ -4,7 +4,7 @@ These instructions are written TO Claude Code. The user has downloaded this repo
 into their project. Follow the steps in order, and ask the user where a step says ASK. Do not push anything.
 
 This is the vendored install: everything is copied into the project. The recommended way is the Claude Code plugin
-(`/plugin marketplace add vegardjorg/ravenseat`, `/plugin install cq@ravenseat`, then `/cq:setup`).
+(`/plugin marketplace add vegardjorg/ravenseat`, `/plugin install ravenseat@ravenseat`, then `/ravenseat:setup`).
 If the user has not chosen, ASK which they want before you copy anything.
 
 ## 0. Check the prerequisites
@@ -35,9 +35,9 @@ It copies:
 | `plugin/docs/*.md` | `docs/queue/` |
 | `plugin/CLAUDE.queue.md` | `CLAUDE.queue.md` |
 | `plugin/queue.config.example.json` | `queue.config.json` (only if missing) |
-| `plugin/.claude-plugin/plugin.json` (the version) | `scripts/orchestrator/cq-version.json` (the board's update banner compares it) |
+| `plugin/.claude-plugin/plugin.json` (the version) | `scripts/orchestrator/ravenseat-version.json` (the board's update banner compares it) |
 
-In the copied Markdown, `cq <...>` becomes `node scripts/orchestrator/cq.mjs <...>` (there is no `cq` on PATH without
+In the copied Markdown, `ravenseat <...>` becomes `node scripts/orchestrator/ravenseat.mjs <...>` (there is no `ravenseat` on PATH without
 the plugin). It merges `plugin/settings.queue.json` into `.claude/settings.json` (adds missing keys and hooks, keeps every
 existing value; older shell-form queue hooks are rewritten to exec form, `"command": "node"` with the script in `args`), and adds `scripts/.queue/` and `.claude/worktrees/` to `.gitignore`.
 
@@ -78,27 +78,27 @@ they can edit it.
 In the target project:
 
 ```
-node scripts/orchestrator/cq.mjs init
-node scripts/orchestrator/cq.mjs show
-node scripts/orchestrator/cq.mjs plan show
+node scripts/orchestrator/ravenseat.mjs init
+node scripts/orchestrator/ravenseat.mjs show
+node scripts/orchestrator/ravenseat.mjs plan show
 ```
 
 `init` creates the queue in `scripts/.queue/` (gitignored) with one example project `example` (prefix `EX-`); rename it
-with `node scripts/orchestrator/cq.mjs project`. The plan register file is created on the first `plan` write. Then run
-`node scripts/orchestrator/cq.mjs plan modules` to create the modules from `queue.config.json`.
+with `node scripts/orchestrator/ravenseat.mjs project`. The plan register file is created on the first `plan` write. Then run
+`node scripts/orchestrator/ravenseat.mjs plan modules` to create the modules from `queue.config.json`.
 
 ## 5. Smoke test
 
 ```
-node scripts/orchestrator/cq.mjs add --json '{"id":"EX-1","title":"Demo task","domain":"demo","class":"U","project":"example","feature":"Demo","mission":"Write a one-paragraph note about the repository layout.","value":5,"content_min":60}'
-node scripts/orchestrator/cq.mjs show
-node scripts/orchestrator/cq.mjs next
-node scripts/orchestrator/cq.mjs board
+node scripts/orchestrator/ravenseat.mjs add --json '{"id":"EX-1","title":"Demo task","domain":"demo","class":"U","project":"example","feature":"Demo","mission":"Write a one-paragraph note about the repository layout.","value":5,"content_min":60}'
+node scripts/orchestrator/ravenseat.mjs show
+node scripts/orchestrator/ravenseat.mjs next
+node scripts/orchestrator/ravenseat.mjs board
 ```
 
 Open the board URL it prints (it contains an access key), check that EX-1 is shown, then stop the board (the pid it printed, or Ctrl+C in
 its terminal; never kill node by name). Remove the demo task with
-`node scripts/orchestrator/cq.mjs set EX-1 cancelled`.
+`node scripts/orchestrator/ravenseat.mjs set EX-1 cancelled`.
 
 ## 6. Bring in the user's own work
 
@@ -107,14 +107,14 @@ ASK the user: "Do you want me to look through your own notes, TODOs and plans (f
 queue tasks?"
 
 If yes:
-1. List what you found (file, short title) and propose for each: plan entry (`node scripts/orchestrator/cq.mjs plan new`) for ideas and larger
-   plans, queue task (`node scripts/orchestrator/cq.mjs add`) for concrete, ready work. Show the proposal before writing anything.
+1. List what you found (file, short title) and propose for each: plan entry (`node scripts/orchestrator/ravenseat.mjs plan new`) for ideas and larger
+   plans, queue task (`node scripts/orchestrator/ravenseat.mjs add`) for concrete, ready work. Show the proposal before writing anything.
 2. Plan entries you create without the user's priority get `"priority": "owner"`, `"maturity": "idea"`,
    `"priority_set_by": "agent"` and a one-sentence `priority_reason`. Each entry needs an existing `project`
    (create projects first, from the user's answer about areas) and `sources` as `[{ "path": "<path>" }]`.
 3. Queue tasks you add here go straight to `waiting` and can start at once, so add only the ones the user said yes to
    in step 1. Only tasks an agent adds (`added_by` is a track id, a reviewer or an "... agent") start as `proposed` and
-   wait for `node scripts/orchestrator/cq.mjs approve <id>` or Approve on the board.
+   wait for `node scripts/orchestrator/ravenseat.mjs approve <id>` or Approve on the board.
 4. Never copy document contents into the register; point to them with `sources`.
 
 If no: leave the queue empty. The user can run `/add-to-queue` later.
@@ -134,7 +134,7 @@ Do not push unless the user asks.
 ## 8. Tell the user how to start
 
 - `/start` to open a session cheaply before pasting a task (it only answers "ready"). For the queue state,
-  run `node scripts/orchestrator/cq.mjs show`.
+  run `node scripts/orchestrator/ravenseat.mjs show`.
 - `/queue` to run this chat as the orchestrator.
 - `/add-to-queue` to turn a request into queue tasks, `/plans` for plan work, `/pick` to do one task by hand.
-- The board: `node scripts/orchestrator/cq.mjs board`.
+- The board: `node scripts/orchestrator/ravenseat.mjs board`.

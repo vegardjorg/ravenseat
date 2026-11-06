@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Applies to | Every track started from the work queue (`cq`) or in a parallel wave (skill `parallel-wave`) |
+| Applies to | Every track started from the work queue (`ravenseat`) or in a parallel wave (skill `parallel-wave`) |
 | Status | Living template. Update it when a wave teaches you something new. |
 | Used by | `scripts/orchestrator/make-queue-common.mjs` and `make-mission.mjs` (via `missionText.js`) |
 
@@ -50,14 +50,14 @@ Before starting tracks:
   queue's own scripts, hooks, agents, skills and config files, `package.json` and its lockfile, and the test, lint and
   type configs in any folder (`vitest.config.*`, `jest.config.*`, `tsconfig*.json`, the eslint configs,
   `pyproject.toml`, `Makefile` and similar), so a track cannot get green by switching a check off. Otherwise `merge-track.mjs` stops (exit
-  4, before the merge). `cq merge <ID> --allow-guard` overrides after the diff has been read, and is logged as
+  4, before the merge). `ravenseat merge <ID> --allow-guard` overrides after the diff has been read, and is logged as
   `guard-overridden` in the time log. Other files outside the ownership only give a warning (ownership drift).
 
 After tracks:
-- The full gate run happens once, at the orchestrator, after merging: `cq gates --full`. A batch push needs it green
-  in the main checkout, on the base tip, with no uncommitted changes (the gate evidence `cq push-check` reads).
-- A track's own gate runs are informational; `cq receive` reruns the quick gates on the delivered tip (`gate_check`).
-- Merging is done with `scripts/orchestrator/merge-track.mjs` (through `cq merge`).
+- The full gate run happens once, at the orchestrator, after merging: `ravenseat gates --full`. A batch push needs it green
+  in the main checkout, on the base tip, with no uncommitted changes (the gate evidence `ravenseat push-check` reads).
+- A track's own gate runs are informational; `ravenseat receive` reruns the quick gates on the delivered tip (`gate_check`).
+- Merging is done with `scripts/orchestrator/merge-track.mjs` (through `ravenseat merge`).
 
 ## Fix round and continuation (new agent)
 
@@ -79,7 +79,7 @@ and with this content:
 
 ## Common protocol (copied into every mission)
 
-**Setup (first call):** `cq prepare-track <TRACK> --branch <BRANCH> --scratchpad
+**Setup (first call):** `ravenseat prepare-track <TRACK> --branch <BRANCH> --scratchpad
 "<scratchpad-root>"`, run from the worktree. It links shared folders (for example `node_modules`) from the main tree,
 creates `<scratchpad>\<TRACK>\` (`<folder>` below) and sets the branch. Answer: `READY …` (ready) or `DENIES …`
 (refused: stop and report).
@@ -161,24 +161,24 @@ names the file, so the owner can add it to the task.
 Pure logic goes where it can be unit tested. No secrets or personal data in logs or error messages.
 <!-- /class -->
 
-**Gates** (`cq gates`; NEVER write your own check script; one line per gate and the full log in
+**Gates** (`ravenseat gates`; NEVER write your own check script; one line per gate and the full log in
 the log folder, so read the log file of a red gate instead of running it again):
-- Precheck first, every time: `cq gates --precheck` (the cheapest checks on your changed files, stops at the first red
+- Precheck first, every time: `ravenseat gates --precheck` (the cheapest checks on your changed files, stops at the first red
   one, a few minutes). Only a green precheck goes on to the class's full gate below; on RED fix the first error and
   run the precheck again. TIMEOUT (exit 3) means a check was only slow: go on to the full gate.
-- While working: `cq gates --quick`.
+- While working: `ravenseat gates --quick`.
 <!-- class: K U -->
-- Before delivery, K and U: `cq gates --quick --log "<folder>\gates"`. The orchestrator runs
+- Before delivery, K and U: `ravenseat gates --quick --log "<folder>\gates"`. The orchestrator runs
   `--full` after merging.
 <!-- /class -->
 <!-- class: D D+ -->
-- Before delivery, D and D+: `cq gates --full --log "<folder>\gates"` (must be green).
+- Before delivery, D and D+: `ravenseat gates --full --log "<folder>\gates"` (must be green).
 <!-- /class -->
-- Your own gate runs are informational: `cq receive` runs the quick gates again on your delivered tip, so commit
+- Your own gate runs are informational: `ravenseat receive` runs the quick gates again on your delivered tip, so commit
   everything before you report. Never write the gate evidence or the queue files yourself<CLIENT_EVIDENCE_GUARD>.
 
 **Report:** write the long version<CLIENT_REPORT_WITH> to `<folder>\track-result.md`, NEVER in the answer. The answer STARTS with
-one result line in a fixed format (the queue reads it with `cq receive` and `set done`), with no spaces inside
+one result line in a fixed format (the queue reads it with `ravenseat receive` and `set done`), with no spaces inside
 the values:
 `RESULT status=DONE|PARTIAL branch=<branch> commits=<n> migr=<first-last|-> gates=OK|RED probe=<before→after|-> ownerQuestions=<n> edge=<functions|->`,
 for example `RESULT status=DONE branch=queue/X commits=3 migr=- gates=OK probe=- ownerQuestions=0 edge=-`.
@@ -192,17 +192,17 @@ own section (one line each: what, why, how to change it; "none" when there were 
 (file, anchor, exact line).
 **Known bugs:** when you fixed a bug that another change could easily repeat, add one line `GATE <failure class> @ <file:line>` to
 `track-result.md`, with the class in general words and the place of the bug you fixed (`GATE a fetch result used without checking the error @ src/api.js:42`). No bug fixed, no line. A one-off, such
-as a typo or a single wrong value, gets no line. `cq receive` turns the line into a task the owner decides on.
+as a typo or a single wrong value, gets no line. `ravenseat receive` turns the line into a task the owner decides on.
 **Gate tasks (label `gate`, title `Gate: <failure class>`):** red first. Show the new check failing on the original
 bug or a minimal reproduction (the commit before the fix, or a fixture kept next to the check) and passing on the
 fixed code. `track-result.md` has a "Red first" section with both runs: the command and its result line, red then green. A
 gate task without both runs is not DONE. When the track block has **Acceptance criteria (fixed, do not change)**, `track-result.md`
 says for each one how it is met (file:line or test); the gap reviewer checks them one by one.
 **QA evidence:** when the task has a label that needs evidence (`qa.evidenceLabels` in `queue.config.json`, default
-`visual`; see `cq info <TRACK> --field labels`), `track-result.md` has one line `EVIDENCE <type>[=<ref>[,<ref>...]]` saying how
+`visual`; see `ravenseat info <TRACK> --field labels`), `track-result.md` has one line `EVIDENCE <type>[=<ref>[,<ref>...]]` saying how
 the owner sees that the delivery works. The types are `qa.evidenceTypes` (default `screenshot=<route or screen>`,
 `test=<test file>` or `manual=<what to check by hand>`). Pure logic takes `test`, which is closed automatically when
-the configured command is green (`cq qa auto --run`); `manual` is gathered in one manual round. `cq receive` stores
+the configured command is green (`ravenseat qa auto --run`); `manual` is gathered in one manual round. `ravenseat receive` stores
 the evidence and warns when the line is missing.
 <!-- class: D D+ -->
 For D and D+ also: migrations and contracts, tests (red before, green after) and the self-review.

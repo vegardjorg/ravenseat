@@ -14,14 +14,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { a, CONFIG, CQ, cut, die, edit, HELP, MAIN_TREE, positional, read, require, val, values } from './context.mjs';
+import { a, CONFIG, CLI, cut, die, edit, HELP, MAIN_TREE, positional, read, require, val, values } from './context.mjs';
 
-/** `cq helpers` (the usage is at the top of queue.mjs). */
-/** `cq guidance [guided|quiet]`: the one switch for advice about the project (lib/guidance.js). Never a guard. */
+/** `ravenseat helpers` (the usage is at the top of queue.mjs). */
+/** `ravenseat guidance [guided|quiet]`: the one switch for advice about the project (lib/guidance.js). Never a guard. */
 export function cmdGuidance() {
   const GD = require('./lib/guidance.js');
   const wanted = a[1];
-  if (wanted && !GD.MODES.includes(wanted)) die(`Use: ${CQ} guidance [${GD.MODES.join('|')}]`);
+  if (wanted && !GD.MODES.includes(wanted)) die(`Use: ${CLI} guidance [${GD.MODES.join('|')}]`);
   if (wanted)
     edit((queue) => {
       if (wanted === 'quiet') queue.guidance = 'quiet';
@@ -30,8 +30,8 @@ export function cmdGuidance() {
   const mode = GD.modeOf(read());
   console.log(
     mode === 'quiet'
-      ? `Guidance: quiet. No advice about CI, gates or lockfiles, no light review, no intake triage, no gate proposals. The secret check, merge guard, base gate and the limits on agents stay on. A helper you switch on yourself stays on. Back: ${CQ} guidance guided.`
-      : `Guidance: guided. Ravenseat points out what is missing and offers next steps. For no advice: ${CQ} guidance quiet.`,
+      ? `Guidance: quiet. No advice about CI, gates or lockfiles, no light review, no intake triage, no gate proposals. The secret check, merge guard, base gate and the limits on agents stay on. A helper you switch on yourself stays on. Back: ${CLI} guidance guided.`
+      : `Guidance: guided. Ravenseat points out what is missing and offers next steps. For no advice: ${CLI} guidance quiet.`,
   );
 }
 
@@ -51,10 +51,10 @@ export function cmdHelpers() {
   const customHelper = (n, { registeredOnly = false } = {}) => {
     const { setup, hashes } = verified();
     const h = setup[String(n ?? '')];
-    if (!h) die(`${n ?? '(no name)'} is not a helper (cq helpers lists them)`);
+    if (!h) die(`${n ?? '(no name)'} is not a helper (ravenseat helpers lists them)`);
     if (h.source !== 'custom') die(`${n} is a builtin helper: only custom helpers are added, scanned and approved`);
     if (registeredOnly && !h.registered)
-      die(`${n} comes from queue.config.json (helpers), not from cq helpers add: change it there`);
+      die(`${n} comes from queue.config.json (helpers), not from ravenseat helpers add: change it there`);
     return { h, current: hashes[n] ?? null };
   };
   const readAgent = (h) => {
@@ -76,7 +76,7 @@ export function cmdHelpers() {
 
   if (mode === 'add') {
     const [file] = positional(2, WITH_VALUE);
-    if (!file) die('use: cq helpers add <file.md> [--name <name>] [--classes K,U] [--labels a,b] [--paths p,q]');
+    if (!file) die('use: ravenseat helpers add <file.md> [--name <name>] [--classes K,U] [--labels a,b] [--paths p,q]');
     const src = HF.readSource(file, process.cwd());
     if (src.error) die(src.error);
     const fm = HS.readFrontmatter(src.text.split(/\r?\n/));
@@ -123,8 +123,8 @@ export function cmdHelpers() {
     for (const l of HS.scanText(r.scan, check.name)) console.log(l);
     console.log(`    ${HELP.conditionText({ plan: false, minMissionItems: null, mostlyPaths: [], ...r.h })}`);
     console.log(
-      `Needs review: Claude reads the whole file, reports to the owner and asks before ${CQ} helpers approve ${check.name}` +
-        ` --sha256 ${r.sha}. Then ${CQ} helpers on ${check.name}. Claude Code loads project agents at session start:` +
+      `Needs review: Claude reads the whole file, reports to the owner and asks before ${CLI} helpers approve ${check.name}` +
+        ` --sha256 ${r.sha}. Then ${CLI} helpers on ${check.name}. Claude Code loads project agents at session start:` +
         ' restart the session (or open /agents) before it can run.',
     );
   } else if (mode === 'scan') {
@@ -149,7 +149,7 @@ export function cmdHelpers() {
     }
   } else if (mode === 'approve') {
     customHelper(name);
-    const by = val('--by') ?? 'cq';
+    const by = val('--by') ?? 'ravenseat';
     const expect = val('--sha256');
     const r = edit((queue) => {
       // Read, hash and scan under the lock: the approval is for exactly these bytes.
@@ -160,7 +160,7 @@ export function cmdHelpers() {
       const scan = HS.scanHelper(f.text);
       if (scan.level === 'red' && !a.includes('--force'))
         die(
-          `${name}: the scan is RED (${scan.counts.red} red finding(s); cq helpers scan ${name}). ` +
+          `${name}: the scan is RED (${scan.counts.red} red finding(s); ravenseat helpers scan ${name}). ` +
             'Approve only with --force, after the owner has said yes to exactly that.',
         );
       const summary = HS.scanSummary(scan, f.sha256);
@@ -180,12 +180,12 @@ export function cmdHelpers() {
     });
     console.log(
       `${name}: approved by ${by} for sha256 ${r.sha} (scan ${r.scan.level}${r.scan.level === 'red' ? ', forced' : ''}). ` +
-        `It is still off: ${CQ} helpers on ${name}. A later change to the file turns it off again.`,
+        `It is still off: ${CLI} helpers on ${name}. A later change to the file turns it off again.`,
     );
   } else if (mode === 'when') {
     customHelper(name, { registeredOnly: true });
     if (!['--classes', '--labels', '--paths', '--mostly-paths'].some((f) => a.includes(f)))
-      die(`use: cq helpers when ${name} [--classes K,U] [--labels a,b] [--paths p,q] [--mostly-paths p] ("none" clears)`);
+      die(`use: ravenseat helpers when ${name} [--classes K,U] [--labels a,b] [--paths p,q] [--mostly-paths p] ("none" clears)`);
     edit((queue) => conditions(queue.helpers[name]));
     console.log(`${name}: ${HELP.conditionText(HELP.helperSetup(CONFIG, read())[name])}`);
   } else if (mode === 'remove') {
@@ -223,7 +223,7 @@ export function cmdHelpers() {
     const { hashes } = verified();
     const rows = HELP.helperRows(CONFIG, read(), { hashes });
     if (a.includes('--json')) console.log(JSON.stringify(rows, null, 2));
-    else if (!rows.length) console.log('No helper agents in the setup (helpers in queue.config.json, or cq helpers add).');
+    else if (!rows.length) console.log('No helper agents in the setup (helpers in queue.config.json, or ravenseat helpers add).');
     else
       for (const h of rows) {
         console.log(`${h.enabled ? 'on ' : 'off'} ${h.name}${h.source === 'custom' ? ' (custom)' : ''}: ${h.text}`);

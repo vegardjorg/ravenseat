@@ -69,7 +69,7 @@ function batchedError(o, tasks = [], resolved = []) {
     const d = perId.get(dep);
     if (d && d.id !== o.id && inBatchQueue(d))
       error.push(
-        `depends on ${dep}, which is in the batch queue and is not started alone (pack it or take it out first: cq edit ${dep} --json '{"batched":false}')`,
+        `depends on ${dep}, which is in the batch queue and is not started alone (pack it or take it out first: ravenseat edit ${dep} --json '{"batched":false}')`,
       );
   }
   return error;
@@ -286,7 +286,7 @@ function batchPack(queue, ids, { newId, title, mission, by, now = new Date().toI
   if (new Set(list).size !== list.length) error.push('the same id appears more than once');
   if (list.length < 2)
     error.push(
-      'pack requires at least two tasks (one task is taken out with cq edit <id> --json \'{"batched":false}\')',
+      'pack requires at least two tasks (one task is taken out with ravenseat edit <id> --json \'{"batched":false}\')',
     );
   if (!newId || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,40}$/.test(newId))
     error.push('--id <new-id> missing or has invalid characters');
@@ -345,7 +345,7 @@ function batchPack(queue, ids, { newId, title, mission, by, now = new Date().toI
     class: first.class,
     mission,
     ...(sources.length ? { source: sources.join(' | ') } : {}),
-    added_by: by ?? 'cq batch pack',
+    added_by: by ?? 'ravenseat batch pack',
     merged_from: list,
   };
   const feature = commonOrFirst(
@@ -394,7 +394,7 @@ function batchMissionText(fresh, parts, texts, now = new Date().toISOString()) {
   const lines = [
     `# ${fresh.id}: combined track (${parts.length} parts, ${fresh.class}, approx. ${fresh.content_min} content minutes)`,
     '',
-    `Combined track of ${parts.map((o) => o.id).join(', ')} (batch queue, cq batch pack ${date}, to save fixed ` +
+    `Combined track of ${parts.map((o) => o.id).join(', ')} (batch queue, ravenseat batch pack ${date}, to save fixed ` +
       'overhead per track). Do them in this order, and commit per part (the commit message mentions the part id, e.g. ' +
       `"${parts[0].id}: …"). Each part below is the original track description unchanged; "Depends on" inside the parts ` +
       'that points to another part in this track is fulfilled by doing the parts in order. Owned files, owned DB and ' +

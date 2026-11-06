@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Reviews a delivered queue track of class D or D+ from the review package made by cq receive (correctness, data integrity, contracts, tests). Read-only. Answers with a FINDINGS line first.
+description: Reviews a delivered queue track of class D or D+ from the review package made by ravenseat receive (correctness, data integrity, contracts, tests). Read-only. Answers with a FINDINGS line first.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash

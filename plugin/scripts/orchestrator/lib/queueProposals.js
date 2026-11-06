@@ -208,7 +208,7 @@ function applyAutoAccept(queue, rules, ctx = {}, { ids = null, now = new Date().
  */
 function undoAutoAccept(queue, id, now = new Date().toISOString()) {
   const entry = [...(queue?.auto_accepted ?? [])].reverse().find((x) => x?.id === id);
-  if (!entry) return `${id} was not auto-accepted (cq proposals log)`;
+  if (!entry) return `${id} was not auto-accepted (ravenseat proposals log)`;
   if (entry.undone) return `${id}: the auto-accept was already undone`;
   const o = (queue.tasks ?? []).find((x) => x.id === id);
   if (!o) return `unknown task ${id}`;

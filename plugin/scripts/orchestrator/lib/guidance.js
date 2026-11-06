@@ -7,7 +7,7 @@
 // as unverified, and the merge still says so, without the pointer).
 //
 // Stored in queue.json (`guidance`, ignored by git), like the helper switches: one person's quiet does not silence a
-// colleague. Written only by `cq guidance` and the board. A helper's own switch wins over this one.
+// colleague. Written only by `ravenseat guidance` and the board. A helper's own switch wins over this one.
 // Tested in lib/__tests__/guidance.test.ts.
 // =============================================================
 'use strict';
@@ -34,7 +34,7 @@ function readQuiet(folder) {
 }
 
 /**
- * Is the Checks tab on (`cq checks`, stored as queue.checksPanel.mode)? Its own switch wins, as a helper's does: without
+ * Is the Checks tab on (`ravenseat checks`, stored as queue.checksPanel.mode)? Its own switch wins, as a helper's does: without
  * one it follows the guidance, so someone who runs their own setup does not get suggestions.
  */
 function checksPanelOn(queue) {
@@ -44,7 +44,7 @@ function checksPanelOn(queue) {
   return !isQuiet(queue);
 }
 
-/** Doctor lines nobody asked for: tuning of the project's CI bill. Only `cq doctor --all` shows them, in every mode. */
+/** Doctor lines nobody asked for: tuning of the project's CI bill. Only `ravenseat doctor --all` shows them, in every mode. */
 const ON_REQUEST_CHECKS = ['ci-cost'];
 
 /**

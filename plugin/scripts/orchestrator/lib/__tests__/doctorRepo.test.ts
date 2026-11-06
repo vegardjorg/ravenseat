@@ -1,8 +1,8 @@
 // =============================================================
-// doctorRepo.test.ts: the repo-state checks of `cq doctor` (scripts/orchestrator/cli/doctorRepo.mjs).
+// doctorRepo.test.ts: the repo-state checks of `ravenseat doctor` (scripts/orchestrator/cli/doctorRepo.mjs).
 //
 // Why (review 2026-11-02, section 4): three ways a user breaks the queue without any message.
-//   - A merge left half-done in the main checkout (MERGE_HEAD): the next `cq merge` fails in a confusing way.
+//   - A merge left half-done in the main checkout (MERGE_HEAD): the next `ravenseat merge` fails in a confusing way.
 //   - `disableAllHooks: true` in a Claude settings file: every guard (push, read, context, end gate) is off, silently.
 //   - `git reset --hard` on the base branch after merges: the tasks stay `done` while their work is gone from base.
 // Each must give a WARN with a fix hint, never a FAIL, and the doctor must write nothing. Tested against temporary git
@@ -63,7 +63,7 @@ function project(tasks: object[]) {
   return { root, home, data, g, write, json, named };
 }
 
-describe('cq doctor: repo state', () => {
+describe('ravenseat doctor: repo state', () => {
   it('a clean repo: merge, settings and in-base are OK', () => {
     const p = project([{ id: 'A-1', status: 'done', class: 'K' }]);
     const c = p.json().checks;

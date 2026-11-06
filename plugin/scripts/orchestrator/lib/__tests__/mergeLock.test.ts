@@ -16,7 +16,7 @@ afterAll(() => {
   for (const m of temporary) fs.rmSync(m, { recursive: true, force: true });
 });
 const tmp = () => {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-mergelock-'));
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-mergelock-'));
   temporary.push(d);
   return d;
 };
@@ -69,10 +69,10 @@ describe('acquire and release', () => {
     expect(fs.readdirSync(d).filter((f) => f.includes('stale'))).toEqual([]);
   });
   it('the message names the holder and the lock file', () => {
-    const t = ML.heldMessage({ file: '/d/merge.lock', holder: { task: 'A', pid: 1, host: 'h', started: 'x', command: 'merge' }, cq: 'cq', id: 'B' });
+    const t = ML.heldMessage({ file: '/d/merge.lock', holder: { task: 'A', pid: 1, host: 'h', started: 'x', command: 'merge' }, ravenseat: 'ravenseat', id: 'B' });
     expect(t).toContain('merge A (pid 1 on h, started x)');
     expect(t).toContain('/d/merge.lock');
-    expect(t).toContain('cq merge B again');
+    expect(t).toContain('ravenseat merge B again');
   });
 });
 
@@ -84,12 +84,12 @@ describe('gitInProgress', () => {
     const found = ML.gitInProgress((name: string) => path.join(d, name));
     expect(found.map((x: { kind: string }) => x.kind)).toEqual(['merge', 'rebase']);
     expect(found[0].sha).toBe('abc123');
-    const text = ML.inProgressMessage(found, { root: '/repo', id: 'B', cq: 'cq', branch: 'queue/B', branchTip: 'fff', branchOf: () => 'queue/A', taskOf: () => 'A' });
+    const text = ML.inProgressMessage(found, { root: '/repo', id: 'B', ravenseat: 'ravenseat', branch: 'queue/B', branchTip: 'fff', branchOf: () => 'queue/A', taskOf: () => 'A' });
     expect(text).toContain('the tip of queue/A');
-    expect(text).toContain('cq merge A --resume');
+    expect(text).toContain('ravenseat merge A --resume');
     expect(text).toContain('git merge --abort');
     expect(text).toContain('git rebase --abort');
-    expect(text).toContain('Then run cq merge B again. Nothing was done.');
+    expect(text).toContain('Then run ravenseat merge B again. Nothing was done.');
   });
   it('nothing in progress: an empty list', () => {
     const d = tmp();

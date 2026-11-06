@@ -1,8 +1,8 @@
 // =============================================================
-// ownerWait.test.ts: `cq wait` exits when the owner acts, and only then.
+// ownerWait.test.ts: `ravenseat wait` exits when the owner acts, and only then.
 //
 // The orchestrator only runs when an agent finishes or the owner types in the session, so a board answer could sit
-// unseen. `cq wait` (cli/wait.mjs, rules in lib/ownerWait.js) runs in the background and exits on an owner action. Proven
+// unseen. `ravenseat wait` (cli/wait.mjs, rules in lib/ownerWait.js) runs in the background and exits on an owner action. Proven
 // where it is enforced: the pure rules in ownerWait.js, and queue.mjs wait spawned as a child process against a queue in
 // a temporary folder (never the real one), with short debounce and timeout values:
 //   - an owner resolve fires it (exit 0, one OWNER ACTED line, never the answer text),
@@ -103,11 +103,11 @@ const entry = (nr: number, by: string, id = 'T-1', action = 'edit'): Entry => ({
 
 // ---- The pure rules ----
 describe('ownerWait.js: what counts as an owner action', () => {
-  it('a changelog entry by owner or theBoard after the start point counts; agents, cq and older entries do not', () => {
+  it('a changelog entry by owner or theBoard after the start point counts; agents, ravenseat and older entries do not', () => {
     const q = baseQueue();
     q.changelog = [entry(1, 'theBoard')];
     const base = W.snapshot(q);
-    q.changelog.push(entry(2, 'T-2'), entry(3, 'cq'), entry(4, 'theBoard', 'T-2', 'cancel'));
+    q.changelog.push(entry(2, 'T-2'), entry(3, 'ravenseat'), entry(4, 'theBoard', 'T-2', 'cancel'));
     expect(W.ownerActions(q, base)).toEqual([{ action: 'cancel', id: 'T-2' }]);
     // --since 0: the first entry counts too.
     expect(W.ownerActions(q, W.snapshot(baseQueue(), { since: 0 }))).toEqual([
@@ -154,7 +154,7 @@ describe('ownerWait.js: what counts as an owner action', () => {
     expect(W.ownerActions(q, base)).toEqual([]);
   });
 
-  it('an owner answer through cq resume is an action, a new answer again, and an orchestrator answer is not', () => {
+  it('an owner answer through ravenseat resume is an action, a new answer again, and an orchestrator answer is not', () => {
     const q = baseQueue();
     const base = W.snapshot(q);
     q.tasks[0].resumed = [{ round: 1, reason: 'context', answer: SECRET, answered_at: T1 }];
@@ -176,7 +176,7 @@ describe('ownerWait.js: what counts as an owner action', () => {
   });
 
   it('heartbeatState: fresh is listening, old or missing or broken is not', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-wait-hb-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-wait-hb-'));
     try {
       expect(W.heartbeatState(dir).listening).toBe(false);
       const file = path.join(dir, W.HEARTBEAT_FILE);
@@ -201,7 +201,7 @@ describe('queue.mjs wait', () => {
   const children: ChildProcess[] = [];
 
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-wait-'));
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-wait-'));
     folder = path.join(root, 'q');
     fs.mkdirSync(folder);
     env = {
@@ -242,7 +242,7 @@ describe('queue.mjs wait', () => {
     });
     return { p, done, out: () => out };
   }
-  const cq = async (...args: string[]) => {
+  const ravenseat = async (...args: string[]) => {
     const r = await start(...args).done;
     expect(r.code, r.out).toBe(0);
     return r.out;
@@ -266,11 +266,11 @@ describe('queue.mjs wait', () => {
     expect(Number.isFinite(Date.parse(beat.startedAt))).toBe(true);
     expect(Number.isFinite(Date.parse(beat.beatAt))).toBe(true);
     expect(W.heartbeatState(folder).listening).toBe(true);
-    await cq('resolve', 'Q1', '--answer', SECRET, '--by', 'owner');
+    await ravenseat('resolve', 'Q1', '--answer', SECRET, '--by', 'owner');
     const r = await w.done;
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain('OWNER ACTED: resolve Q1\n');
-    expect(r.out).toContain('run: cq resolutions --unlogged');
+    expect(r.out).toContain('run: ravenseat resolutions --unlogged');
     expect(r.out).not.toContain(SECRET);
     expect(r.out.match(/OWNER ACTED/g)).toHaveLength(1);
     expect(fs.existsSync(lockFile())).toBe(false);
@@ -284,8 +284,8 @@ describe('queue.mjs wait', () => {
     writeQueue(q);
     const w = start('wait', '--debounce', '0', '--timeout', String(4 / 3600));
     await started(w);
-    await cq('edit', 'T-1', '--json', '{"value":7}', '--by', 'T-2');
-    await cq('resolve', 'Q1', '--answer', 'from the orchestrator');
+    await ravenseat('edit', 'T-1', '--json', '{"value":7}', '--by', 'T-2');
+    await ravenseat('resolve', 'Q1', '--answer', 'from the orchestrator');
     const r = await w.done;
     expect(r.out).not.toContain('OWNER ACTED');
     expect(r.out).toContain('TIMEOUT');
@@ -306,11 +306,11 @@ describe('queue.mjs wait', () => {
     writeQueue(baseQueue());
     const w = start('wait', '--debounce', '6', '--timeout', '0.05');
     await started(w);
-    await cq('resolve', 'Q1', '--answer', SECRET, '--by', 'owner');
-    await cq('resolve', 'Q2', '--answer', 'b', '--by', 'theBoard');
-    await cq('approve', 'T-3');
-    await cq('qa', 'ok', 'T-4');
-    await cq('edit', 'T-1', '--json', '{"value":8}', '--by', 'theBoard');
+    await ravenseat('resolve', 'Q1', '--answer', SECRET, '--by', 'owner');
+    await ravenseat('resolve', 'Q2', '--answer', 'b', '--by', 'theBoard');
+    await ravenseat('approve', 'T-3');
+    await ravenseat('qa', 'ok', 'T-4');
+    await ravenseat('edit', 'T-1', '--json', '{"value":8}', '--by', 'theBoard');
     const r = await w.done;
     expect(r.code, r.out).toBe(0);
     const lines = r.out.split('\n').filter((l) => l.startsWith('OWNER ACTED'));
@@ -320,13 +320,13 @@ describe('queue.mjs wait', () => {
     expect(r.out).not.toContain(SECRET);
   }, 90_000);
 
-  it('an owner answer through cq resume wakes it, and it says the round still needs its agent', async () => {
+  it('an owner answer through ravenseat resume wakes it, and it says the round still needs its agent', async () => {
     const q = baseQueue();
     q.tasks[0] = { ...q.tasks[0], status: 'review', branch: 'queue/T-1', started: T0 };
     writeQueue(q);
     const w = start('wait', '--debounce', '0', '--timeout', '0.05');
     await started(w);
-    // Written as the board's answer is: the fields cq resume --answer --by owner stores (it needs a whole track to run).
+    // Written as the board's answer is: the fields ravenseat resume --answer --by owner stores (it needs a whole track to run).
     const now = JSON.parse(fs.readFileSync(path.join(folder, 'queue.json'), 'utf8')) as Queue;
     now.tasks[0].resumed = [{ round: 1, reason: 'context', answer: SECRET, answered_at: T1, by: 'owner' }];
     writeQueue(now);
@@ -345,7 +345,7 @@ describe('queue.mjs wait', () => {
     const first = await start('wait', '--check-min', '0.01', '--timeout', String(30 / 3600)).done;
     expect(first.code, first.out).toBe(11);
     expect(first.out).toContain('TRACKS NEED A LOOK: no-agent G1\n');
-    expect(first.out).toContain('run: cq show');
+    expect(first.out).toContain('run: ravenseat show');
     expect(fs.existsSync(lockFile())).toBe(false);
     // Started again with the same finding: it waits.
     const again = await start('wait', '--check-min', '0.01', '--timeout', String(3 / 3600)).done;

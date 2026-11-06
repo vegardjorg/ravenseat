@@ -44,27 +44,27 @@ Start in lite mode: the core loop only. You can add the advanced features later.
 
 ```
 /plugin marketplace add vegardjorg/ravenseat
-/plugin install cq@ravenseat
+/plugin install ravenseat@ravenseat
 ```
 
 You need Node.js 20 or newer and git.
 
-**2. Set up your project.** Ask Claude: *"Set up the queue."* (`/cq:setup`, the guided setup that also finds your
-checks). Or run `cq init` for a minimal lite setup: it keeps the queue in `scripts/.queue/` and adds that folder to
+**2. Set up your project.** Ask Claude: *"Set up the queue."* (`/ravenseat:setup`, the guided setup that also finds your
+checks). Or run `ravenseat init` for a minimal lite setup: it keeps the queue in `scripts/.queue/` and adds that folder to
 `.gitignore`.
 
 **3. Add some work.** Tell Claude what needs doing: *"Add to the queue: fix the login bug and add a regression
 test."*
 
-**4. Start the queue.** *"Start the queue."* (`/cq:queue`). Ravenseat asks before it starts, then picks tasks, hands
+**4. Start the queue.** *"Start the queue."* (`/ravenseat:queue`). Ravenseat asks before it starts, then picks tasks, hands
 them to agents, runs the checks and merges what passes. It never pushes unless you tell it to.
 
-**5. Answer what waits on you.** *"What's waiting on me?"* (`/cq:decide`). Each decision comes with a recommendation
+**5. Answer what waits on you.** *"What's waiting on me?"* (`/ravenseat:decide`). Each decision comes with a recommendation
 and the work it blocks.
 
 That is the basic workflow. Plain words work, and the commands are there when you want explicit control
 ([all commands](plugin/docs/commands.md)). More in the [guide](plugin/docs/guide.md#lite-mode-in-more-detail).
-Installed it as claude-code-queue before? See [install](plugin/docs/guide.md#install) for the one extra step.
+Installed it as `cq` or claude-code-queue before? See [install](plugin/docs/guide.md#install) for the extra step.
 
 ## From task to verified change
 
@@ -75,7 +75,7 @@ merged; a failure gets another attempt with a fresh context. When the system can
 the independent tasks keep moving.
 
 Ravenseat does not replace your tests, review standards or judgment. It makes them part of a repeatable workflow, and
-it is only as strong as the checks your project has (`/cq:setup` helps you set them up).
+it is only as strong as the checks your project has (`/ravenseat:setup` helps you set them up).
 
 ## Your decisions, in one place
 
@@ -85,7 +85,7 @@ list.
 
 <p align="center"><img src="assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
 
-Each decision has context, a recommendation and the work it blocks. Answer in Claude Code with `/cq:decide`, or with
+Each decision has context, a recommendation and the work it blocks. Answer in Claude Code with `/ravenseat:decide`, or with
 one click on the board. Typical decisions: unclear requirements, security tradeoffs, hard-to-reverse changes, visual
 approval, and tasks still blocked after a fix attempt.
 
@@ -100,7 +100,7 @@ The orchestration runs inside Claude Code. The board is a companion, not a requi
 <p align="center"><img src="assets/infographics/claude-code-and-board.webp" alt="Claude Code as the control surface plus the optional visual board, both on top of the same orchestration: task queue, agents, checks and your decisions" width="800"></p>
 
 The board shows the same project state from a wider angle; it does not run a separate engine, and every change it
-makes to the queue has a command behind it. Open it with `/cq:board`, or ask Claude to open the board.
+makes to the queue has a command behind it. Open it with `/ravenseat:board`, or ask Claude to open the board.
 
 <p align="center"><img src="assets/screenshots/dark-03-dependencies.jpg" alt="The dependency graph on the board in dark mode" width="800"></p>
 
@@ -141,12 +141,12 @@ those two jobs apart.
   the merge unless explicitly allowed, and deleted tests or new skip markers are flagged.
 - **Recovery uses a fresh context.** A fix attempt starts a new agent with a short mission, not the previous agent's
   whole conversation.
-- **Merging is controlled.** One orchestrator merges, one merge at a time, and `cq conflicts` predicts conflicts
+- **Merging is controlled.** One orchestrator merges, one merge at a time, and `ravenseat conflicts` predicts conflicts
   between running worktrees.
 
 These guards reduce common failure modes. They are guard rails, not a sandbox: agents run with your user account, so
 keep production credentials off the machine and use Claude Code's permissions or sandbox when you need a real
-boundary. Without meaningful checks, no automated merge can show that a change is correct; `cq doctor` warns when
+boundary. Without meaningful checks, no automated merge can show that a change is correct; `ravenseat doctor` warns when
 your project has none. More in [full mode](plugin/docs/full-mode.md#agents-cheat-on-tests),
 [guarantees and limits](plugin/docs/guide.md#guarantees-and-limits) and
 [orchestration](plugin/docs/orchestration.md).
@@ -158,13 +158,13 @@ your project has none. More in [full mode](plugin/docs/full-mode.md#agents-cheat
 | Persistent task queue | Yes | Yes |
 | Agents in isolated worktrees | Yes | Yes |
 | Checks and fix rounds | Yes | Yes |
-| Decisions, `/cq:decide` and the board | Yes | Yes |
+| Decisions, `/ravenseat:decide` and the board | Yes | Yes |
 | Risk classes and task sizing | No | Yes |
 | Focus and value-based priority | No | Yes |
 | Plan register | No | Yes |
 | Helper agents and deeper review | No | Yes |
 
-Lite gets work moving with minimal setup. Full adds structure for larger projects. Switch with `cq mode full` when you
+Lite gets work moving with minimal setup. Full adds structure for larger projects. Switch with `ravenseat mode full` when you
 need it: [what full mode adds](plugin/docs/full-mode.md).
 
 ## What does it cost?
@@ -175,7 +175,7 @@ dependencies between worktrees and never polls in a loop.
 
 In one project, about 1,200 measured tasks gave a median of about 2.5 USD (API-equivalent) per ordinary code task
 including its review. That is one project and one developer, not a controlled benchmark, and it does not show a
-saving over plain Claude Code or other tools. Run `cq cost` to see the numbers in your own project.
+saving over plain Claude Code or other tools. Run `ravenseat cost` to see the numbers in your own project.
 [The measurements in detail](plugin/docs/costs.md).
 
 ## Is Ravenseat right for your project?

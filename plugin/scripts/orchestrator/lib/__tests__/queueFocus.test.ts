@@ -650,7 +650,7 @@ describe('evaluateFocusStep', () => {
       queue.tasks.push(o('SB-3', { batched: true }));
       const r = oneRest(queue);
       expect(r).toMatchObject({ type: 'batched', id: 'SB-3' });
-      expect(r.suggestion).toMatch(/cq batch pack/);
+      expect(r.suggestion).toMatch(/ravenseat batch pack/);
     });
 
     it('proposed: the owner must say yes', () => {
@@ -659,7 +659,7 @@ describe('evaluateFocusStep', () => {
       const r = oneRest(queue);
       expect(r).toMatchObject({ type: 'proposed', id: 'SB-3' });
       expect(r.suggestion).toMatch(/yes on the proposal/);
-      expect(r.suggestion).toMatch(/cq approve SB-3/);
+      expect(r.suggestion).toMatch(/ravenseat approve SB-3/);
     });
 
     it('waiting only on an owner question: the question id unlocks it', () => {

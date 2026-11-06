@@ -1,6 +1,6 @@
 # The suggestions on the Checks tab
 
-Every suggestion on the Checks tab and in `cq checks` is a file here. No suggestion is written in code.
+Every suggestion on the Checks tab and in `ravenseat checks` is a file here. No suggestion is written in code.
 
 - `categories.json`: the categories, in the order they show (`key`, `title`, `text`).
 - `suggestions/<key>.md`: one suggestion. The file name is its key.
@@ -45,4 +45,4 @@ same work, so the card shows it as under way. `action: gates` is for a suggestio
 
 The kinds are test, types, lint, build, coverage, secret-scan, audit, security, dep-updates and hooks.
 
-A file with a mistake is left out, and `cq checks` and the tab say what is wrong with it.
+A file with a mistake is left out, and `ravenseat checks` and the tab say what is wrong with it.

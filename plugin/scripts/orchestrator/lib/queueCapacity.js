@@ -360,7 +360,7 @@ function quotaCap(p, activeOnes) {
     };
   return {
     limit: null,
-    message: `${text} (Notice only; cq capacity --mode cap makes it a cap.)`,
+    message: `${text} (Notice only; ravenseat capacity --mode cap makes it a cap.)`,
   };
 }
 
@@ -437,8 +437,8 @@ function lines(p) {
   out.push(
     latest
       ? `Calibrated ${tt(Date.parse(latest.time))}: ${latest.percent} % = ${latest.usd} USD → ${latest.usd_per_100} per 100 %. ` +
-          'New: cq capacity --calibrate <percent from Claude>.'
-      : 'Default constant (not calibrated yet). Calibrate: cq capacity --calibrate <percent from Claude>.',
+          'New: ravenseat capacity --calibrate <percent from Claude>.'
+      : 'Default constant (not calibrated yet). Calibrate: ravenseat capacity --calibrate <percent from Claude>.',
   );
   return out;
 }

@@ -29,7 +29,7 @@ let base = '';
 let key = '';
 
 /** Runs queue.mjs async (spawnSync blocks the test worker; see helperCustom.test.ts). */
-const cq = (env: NodeJS.ProcessEnv, ...args: string[]) =>
+const ravenseat = (env: NodeJS.ProcessEnv, ...args: string[]) =>
   new Promise<number | null>((resolve, reject) => {
     const p = spawn(process.execPath, [path.resolve(__dirname, '..', '..', 'queue.mjs'), ...args], { cwd: root, env });
     p.on('error', reject);
@@ -37,7 +37,7 @@ const cq = (env: NodeJS.ProcessEnv, ...args: string[]) =>
   });
 
 beforeAll(async () => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-board-serve-'));
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-board-serve-'));
   const folder = path.join(root, 'q');
   fs.mkdirSync(folder);
   const env = {
@@ -49,7 +49,7 @@ beforeAll(async () => {
     QUEUE_GIT: root,
     DISABLE_UPDATES: '1',
   };
-  expect(await cq(env, 'init')).toBe(0);
+  expect(await ravenseat(env, 'init')).toBe(0);
   const port = await new Promise<number>((done) => {
     const s = net.createServer().listen(0, '127.0.0.1', () => {
       const p = (s.address() as net.AddressInfo).port;
@@ -151,7 +151,7 @@ describe('the board server: an owner question answered with a choice button', ()
       DISABLE_UPDATES: '1',
     };
     expect(
-      await cq(env, 'question', 'PICK-1', '--text', 'Which vendor?', '--choice', 'Vendor A', '--choice', 'Vendor B'),
+      await ravenseat(env, 'question', 'PICK-1', '--text', 'Which vendor?', '--choice', 'Vendor A', '--choice', 'Vendor B'),
     ).toBe(0);
     const post = async (body: object) => {
       const r = await fetch(`${base}/api/action`, {

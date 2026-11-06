@@ -305,7 +305,7 @@ function globToRegex(glob) {
  * The queue's own agent types: track, track-d, every agent the plugin ships (PLUGIN_AGENT_TYPES: ask, triage and all
  * reviewer-* files), the review agents in the template and every reviewer and helper agent in
  * the setup (fixed per class, the config's helpers and the custom helpers registered in queue.json with
- * `cq helpers add`, lib/queueHelpers.js allReviewerTypes). Bare names, without a plugin prefix.
+ * `ravenseat helpers add`, lib/queueHelpers.js allReviewerTypes). Bare names, without a plugin prefix.
  * The read guard (readRules) and the network guard (pushGuard.js) use this same list. The main session (the
  * orchestrator) is never in it: its hook payload has no agent_type.
  * @returns {Set<string>}

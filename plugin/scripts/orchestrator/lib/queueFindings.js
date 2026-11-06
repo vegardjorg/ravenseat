@@ -1,19 +1,19 @@
 // =============================================================
-// queueFindings.js: findings, the things a track notices outside its scope (`cq finding "<title>"`).
+// queueFindings.js: findings, the things a track notices outside its scope (`ravenseat finding "<title>"`).
 //
 // Why: a track that sees a bug or a smell in a file it does not own must not fix it (the files belong to other tasks,
-// and the change would be unreviewed scope creep), and writing a full task JSON for `cq add --file` is too much for
+// and the change would be unreviewed scope creep), and writing a full task JSON for `ravenseat add --file` is too much for
 // "this looks wrong". A finding is one line, and it lands where unvetted work belongs.
 //
 // Where it lands: the plan register, as an entry with maturity "idea" and priority "later" (set by agent), not the
 // batch queue. The batch queue holds small tasks someone has already decided to do, with class, estimate and owned
 // files; a finding is an observation nobody has looked at yet, which is exactly what an idea in the plan register is
 // (docs/plan-register.md). The orchestrator or the owner triages it from there: prioritize, investigate, drop, or turn
-// it into queue tasks with `cq add --plan <id>`.
+// it into queue tasks with `ravenseat add --plan <id>`.
 //
 // The entry: id PL-FINDING-<n>, the title, the detail as `summary`, the reporting task's project, and the tool-owned
 // field `finding` { tasks: [ids that reported it], files: [paths], reported, last, count, causes? }. `causes` (from
-// `cq finding --cause <id>`) names the done task(s) whose merge caused it: a post-merge defect of that task in the
+// `ravenseat finding --cause <id>`) names the done task(s) whose merge caused it: a post-merge defect of that task in the
 // right-first-time figure (lib/eventStatistics.js); the reporting task is not a cause. Deduplicated on the
 // normalized title (case, punctuation and spacing ignored): the same finding again adds the task and the files to the
 // existing entry and counts it; a title that matches a plan entry that is not a finding changes nothing.
@@ -28,7 +28,7 @@
 
 const P = require('./queuePlan.js');
 
-/** The id prefix of the entries `cq finding` creates. */
+/** The id prefix of the entries `ravenseat finding` creates. */
 const ID_PREFIX = 'PL-FINDING-';
 /** At most this many files are kept on one finding (they are pointers, not a diff). */
 const MAX_FILES = 20;
@@ -85,7 +85,7 @@ function recordFinding(reg, input, ctx = {}) {
   const now = ctx.now ?? new Date().toISOString();
   const title = String(input?.title ?? '').trim();
   const key = findingKey(title);
-  if (!key) return { error: ['the title is empty (cq finding "<title>")'], warnings: [] };
+  if (!key) return { error: ['the title is empty (ravenseat finding "<title>")'], warnings: [] };
   const files = input.files ?? [];
   const task = input.task ?? null;
   const causes = [...new Set((input.causes ?? []).filter(Boolean))];
@@ -134,13 +134,13 @@ function findingsSummary(reg, tasks = []) {
 }
 
 /** The line for `orchestrator pulse` and `show`, or null when there is nothing new. */
-function findingsLine(summary, cq = 'cq') {
+function findingsLine(summary, ravenseat = 'ravenseat') {
   if (!summary?.new) return null;
   const ids = summary.ids.slice(0, 5).join(', ') + (summary.ids.length > 5 ? ', ...' : '');
-  return `FINDINGS: ${summary.new} new from the tracks, not triaged (${ids}): ${cq} finding list`;
+  return `FINDINGS: ${summary.new} new from the tracks, not triaged (${ids}): ${ravenseat} finding list`;
 }
 
-/** The rows for `cq finding list`: the findings (new ones first unless `all` keeps the triaged ones too). */
+/** The rows for `ravenseat finding list`: the findings (new ones first unless `all` keeps the triaged ones too). */
 function findingRows(reg, tasks = [], { all = false } = {}) {
   return (reg?.entries ?? [])
     .filter((p) => p.finding && (all || isNewFinding(p, tasks)))

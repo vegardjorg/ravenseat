@@ -21,7 +21,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import {
-  branchFor, CE, CONFIG, CQ, die, edit, G, GIT_ROOT, gitRead, HERE, L, LS, MAIN_TREE, MIGR, missionFile, read, require,
+  branchFor, CE, CONFIG, CLI, die, edit, G, GIT_ROOT, gitRead, HERE, L, LS, MAIN_TREE, MIGR, missionFile, read, require,
   TIME_LOG, TK, val, values,
 } from './context.mjs';
 
@@ -374,7 +374,7 @@ export function deliveryWarning({ update = false } = {}) {
       });
     return found;
   } catch (e) {
-    console.error(`(The delivery check failed: ${e?.message ?? e}; ${CQ} deliveries)`);
+    console.error(`(The delivery check failed: ${e?.message ?? e}; ${CLI} deliveries)`);
     return [];
   }
 }
@@ -459,7 +459,7 @@ export function mergeBlock(id, code, note) {
       if (o) L.openBlock(o, code, { note });
       return null;
     });
-    console.log(`Blocker ${code} opened on ${id} (cq blockers; the next successful merge closes it).`);
+    console.log(`Blocker ${code} opened on ${id} (ravenseat blockers; the next successful merge closes it).`);
   } catch (e) {
     console.error(`(Could not record the blocker: ${e?.message ?? e})`);
   }
@@ -511,7 +511,7 @@ export function reserveAttempt(o, { round = 0, head = null, scratch = null, rows
     taskId: o.id,
     ttlMin: AT.reservationTtlMin(CONFIG),
   });
-  if (r.blocked) die(AT.blockMessage(o.id, r.blocked, CQ));
+  if (r.blocked) die(AT.blockMessage(o.id, r.blocked, CLI));
   o.attempts = r.attempts;
   return r.attempt;
 }

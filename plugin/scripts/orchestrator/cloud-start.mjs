@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { config, featureOn, featureOffText } = require('./lib/queueConfig.js');
-const CQ = require('./lib/projectRoot.js').cqCommand();
+const CLI = require('./lib/projectRoot.js').cliCommand();
 const K = config();
 // The cloud module is off (features.cloud in queue.config.json): say so, exit 0.
 if (!featureOn('cloud', K)) {
@@ -30,7 +30,7 @@ const args = process.argv.slice(2);
 const force = args.includes('--force');
 const ids = args.filter((a) => !a.startsWith('--'));
 if (!ids.length) {
-  console.error(`Use: ${CQ} cloud-start <id> [<id> …] [--force]`);
+  console.error(`Use: ${CLI} cloud-start <id> [<id> …] [--force]`);
   process.exit(1);
 }
 if (!process.stdout.isTTY) {

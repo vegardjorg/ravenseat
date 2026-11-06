@@ -123,7 +123,7 @@ describe('cancel, decline and edit in the detail panel', () => {
     for (const id of ['EX-3', 'EX-4']) {
       await open(id);
       const actions = panel().querySelector('.actions') as HTMLElement;
-      expect(actions.textContent).toContain(`cq set ${id} cancelled --remark`);
+      expect(actions.textContent).toContain(`ravenseat set ${id} cancelled --remark`);
       expect(actions.textContent).not.toContain('No actions for this status');
       expect(buttons()).not.toContain('Cancel task');
       expect(buttons()).not.toContain('Edit');

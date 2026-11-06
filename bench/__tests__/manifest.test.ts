@@ -12,7 +12,7 @@ afterAll(() => tmp.forEach((d) => fs.rmSync(d, { recursive: true, force: true })
 
 const ok = () => ({
   experiment: 'e1',
-  arms: [{ name: 'a', kind: 'cq' }, { name: 'b', kind: 'manual-fresh' }],
+  arms: [{ name: 'a', kind: 'ravenseat' }, { name: 'b', kind: 'manual-fresh' }],
   tasks: [
     { id: 'T-1', arm: 'a', pair: 'p1' },
     { id: 'T-2', arm: 'b', pair: 'p1' },
@@ -74,16 +74,16 @@ describe('loadManifest and withDefaults', () => {
 describe('assignPairs', () => {
   it('gives every pair one task per arm, the same way for the same seed', () => {
     const pairs = Array.from({ length: 20 }, (_, i) => ({ pair: `p${i}`, ids: [`A-${i}`, `B-${i}`] }));
-    const a = Mf.assignPairs(JSON.parse(JSON.stringify(pairs)), ['cq', 'manual'], 5);
-    const b = Mf.assignPairs(JSON.parse(JSON.stringify(pairs)), ['cq', 'manual'], 5);
+    const a = Mf.assignPairs(JSON.parse(JSON.stringify(pairs)), ['ravenseat', 'manual'], 5);
+    const b = Mf.assignPairs(JSON.parse(JSON.stringify(pairs)), ['ravenseat', 'manual'], 5);
     expect(a).toEqual(b);
     for (let i = 0; i < 20; i++) {
       const arms = a.filter((x: any) => x.pair === `p${i}`).map((x: any) => x.arm).sort();
-      expect(arms).toEqual(['cq', 'manual']);
+      expect(arms).toEqual(['manual', 'ravenseat']);
     }
     // Randomised: the first id is not always in the same arm.
-    const firstInCq = a.filter((x: any) => x.id.startsWith('A-') && x.arm === 'cq').length;
-    expect(firstInCq).toBeGreaterThan(2);
-    expect(firstInCq).toBeLessThan(18);
+    const firstInRavenseat = a.filter((x: any) => x.id.startsWith('A-') && x.arm === 'ravenseat').length;
+    expect(firstInRavenseat).toBeGreaterThan(2);
+    expect(firstInRavenseat).toBeLessThan(18);
   });
 });

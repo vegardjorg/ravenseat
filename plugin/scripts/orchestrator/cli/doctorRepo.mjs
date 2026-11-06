@@ -1,16 +1,16 @@
 // =============================================================
-// cli/doctorRepo.mjs: the repo-state checks of `cq doctor` (read-only). Review 2026-11-02, section 4.
+// cli/doctorRepo.mjs: the repo-state checks of `ravenseat doctor` (read-only). Review 2026-11-02, section 4.
 //
 // Three ways the queue breaks quietly, each a WARN with a one-line fix hint (never a FAIL: none of them is certain to be
 // wrong, and the doctor must not block on a judgement call):
-//   merge     a lingering MERGE_HEAD in the main checkout: a merge (often from an interrupted `cq merge`) was never
+//   merge     a lingering MERGE_HEAD in the main checkout: a merge (often from an interrupted `ravenseat merge`) was never
 //             finished or aborted, and the next merge fails in a confusing way. Counts the unresolved files too.
 //   settings  `disableAllHooks: true` in a Claude Code settings file (project .claude/settings.json and
 //             settings.local.json, user ~/.claude/settings.json, the managed settings file): every queue guard (push,
 //             read, context, end gate) is off without a word. A file that does not parse is skipped (not this check's
 //             business; Claude Code reports it).
 //   in-base   done tasks whose work is not contained in the base branch (e.g. after `git reset --hard` on base). Uses
-//             what the task stores: the merge commit (merge_commit, set by `cq merge`; merge_sha as an older name) when it resolves, otherwise the branch
+//             what the task stores: the merge commit (merge_commit, set by `ravenseat merge`; merge_sha as an older name) when it resolves, otherwise the branch
 //             (o.branch, or the branch prefix + id) when it exists. A task with neither is counted as "not checked".
 //             A squash merge also shows up here (its branch is not an ancestor); the hint says so.
 // Git runs read-only (rev-parse, diff --name-only, merge-base --is-ancestor). Nothing is written.

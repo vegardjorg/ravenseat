@@ -2,8 +2,8 @@
 // writeGuard.js: the write guard for the queue's trusted state files (hook-write-guard.mjs, PreToolUse on
 // Write|Edit|NotebookEdit). See docs/orchestration.md.
 //
-// Why: the gate evidence store (lib/gateEvidence.js) is what `cq push-check` and `cq receive` trust for "the gates were
-// green on this sha", and queue.json / base-health.json are what cq merge trusts for status and a red base. A queue
+// Why: the gate evidence store (lib/gateEvidence.js) is what `ravenseat push-check` and `ravenseat receive` trust for "the gates were
+// green on this sha", and queue.json / base-health.json are what ravenseat merge trusts for status and a red base. A queue
 // agent writes them only through the CLI (gates.mjs, queue.mjs), never with the file tools. The hook makes a direct
 // Write, Edit or NotebookEdit by a track or a review agent fail with a reason instead of relying on the mission text.
 //
@@ -23,16 +23,16 @@ const path = require('node:path');
 
 /** The file names the guard protects: where, and what the denial says. */
 const PROTECTED = Object.freeze([
-  { re: /^gate-evidence\.json(?:\..*)?$/i, anywhere: true, what: 'the gate evidence store', how: 'only gates.mjs writes it (cq gates)' },
-  { re: /^queue\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the queue', how: 'change it with the cq commands (cq report, cq status ...)' },
-  { re: /^base-health\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the base health', how: 'only cq merge and the base gate write it' },
-  { re: /^git-surface\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the accepted git baseline', how: 'only the owner changes it (cq surface accept --by owner)' },
+  { re: /^gate-evidence\.json(?:\..*)?$/i, anywhere: true, what: 'the gate evidence store', how: 'only gates.mjs writes it (ravenseat gates)' },
+  { re: /^queue\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the queue', how: 'change it with the ravenseat commands (ravenseat report, ravenseat status ...)' },
+  { re: /^base-health\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the base health', how: 'only ravenseat merge and the base gate write it' },
+  { re: /^git-surface\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the accepted git baseline', how: 'only the owner changes it (ravenseat surface accept --by owner)' },
 ]);
 
 /** Always guarded, whatever the config says. */
 const ALWAYS = ['track', 'track-d'];
 
-const bare = (t) => (typeof t === 'string' && t ? t.replace(/^cq:/, '') : null);
+const bare = (t) => (typeof t === 'string' && t ? t.replace(/^ravenseat:/, '') : null);
 const norm = (p) => {
   const r = path.resolve(String(p));
   return process.platform === 'win32' ? r.toLowerCase() : r;
@@ -62,7 +62,7 @@ function assessWrite({ agentType, filePath, folder, guardedTypes = new Set() }) 
   return {
     reason:
       `Write guard: ${path.basename(filePath)} is ${hit.what}, which a queue agent never writes with the file tools; ${hit.how}. ` +
-      'Report what you found in your report instead (a track\'s own gate runs are informational; cq receive reruns them).',
+      'Report what you found in your report instead (a track\'s own gate runs are informational; ravenseat receive reruns them).',
   };
 }
 

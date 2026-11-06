@@ -1,5 +1,5 @@
 // =============================================================
-// gateFlow.test.ts: `cq gate`, and `cq init` outside git, through the real CLI in a temporary project.
+// gateFlow.test.ts: `ravenseat gate`, and `ravenseat init` outside git, through the real CLI in a temporary project.
 //
 // Locks: (1) a known bug is proposed by default and never starts by itself; (2) the setting auto approves it and off does
 // nothing; (3) the same class again does not add a second task, and a cancelled one is not proposed again; (4) full mode
@@ -55,7 +55,7 @@ function project(config: object = { mode: 'lite' }) {
   return { run, tasks };
 }
 
-describe('cq gate', () => {
+describe('ravenseat gate', () => {
   it('proposes by default: the task waits for the owner', () => {
     const p = project();
     const r = p.run('gate', 'a missing error check', '--from', 'T-1', '--where', 'a.js:3');

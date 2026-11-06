@@ -1,5 +1,5 @@
 // =============================================================
-// cli/doctorBaseline.mjs: the safety baseline checks of `cq doctor` (offline, read-only).
+// cli/doctorBaseline.mjs: the safety baseline checks of `ravenseat doctor` (offline, read-only).
 //
 // The queue's own loop is guarded (gates, base gate, push guard); these lines look at the project around it, in any
 // stack, with plain git and file names only:
@@ -140,11 +140,11 @@ export function checkBaseBranch() {
   return [fail('base', `base branch ${base} does not exist, so no track can start`, fix)];
 }
 
-/** The git identity: `cq merge` refuses a test identity or none, so say it now. WARN: nothing is broken until then. */
+/** The git identity: `ravenseat merge` refuses a test identity or none, so say it now. WARN: nothing is broken until then. */
 export function checkIdentity() {
   const { ident, refused } = GI.readIdentity(GIT_ROOT);
   if (!refused) return [ok('identity', `git identity ${ident}`)];
-  return [warn('identity', `git identity looks like a test or is missing (${ident || 'none'}): cq merge will refuse it`, GI.IDENTITY_FIX)];
+  return [warn('identity', `git identity looks like a test or is missing (${ident || 'none'}): ravenseat merge will refuse it`, GI.IDENTITY_FIX)];
 }
 
 /** Gates: both lists empty means the agents deliver without running anything. */
@@ -188,7 +188,7 @@ export function checkCi() {
     info(
       'ci',
       'no CI config found: nothing checks a push except your own machine',
-      'set up CI on your git host to run your gates on every push (for GitHub: /cq:setup offers a template)',
+      'set up CI on your git host to run your gates on every push (for GitHub: /ravenseat:setup offers a template)',
     ),
   ];
 }

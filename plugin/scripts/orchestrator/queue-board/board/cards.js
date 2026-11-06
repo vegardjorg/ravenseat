@@ -115,12 +115,12 @@ function agingText(k) {
         `${duration(a.limit)} of starting. This one started ${duration(a.age)} ago.`;
 }
 
-/** The tooltip and hidden text for a SILENT track (cq show says the same, with what to do). */
+/** The tooltip and hidden text for a SILENT track (ravenseat show says the same, with what to do). */
 function silentText(k) {
   if (!k.silent) return null;
   return (
     `Silent for ${duration(k.silent.minutes)}: no commit, file change or transcript write. Check the track, then ` +
-    `cq resume ${k.id} --reason context, or stop it.`
+    `ravenseat resume ${k.id} --reason context, or stop it.`
   );
 }
 

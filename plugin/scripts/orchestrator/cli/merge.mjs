@@ -22,7 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 import {
-  a, autoCleanFocus, BASE, branchFor, branchInfo, CONFIG, CQ, die, edit, focusCleanOut, FOLDER, G, git, GIT_ROOT, HELP,
+  a, autoCleanFocus, BASE, branchFor, branchInfo, CONFIG, CLI, die, edit, focusCleanOut, FOLDER, G, git, GIT_ROOT, HELP,
   HERE, L, MAIN_TREE, MIGR, parallelWarning, positional, pulseCursor, read, require, TK, val,
 } from './context.mjs';
 import {
@@ -52,8 +52,8 @@ const GUIDANCE = require('./lib/guidance.js');
  */
 function stopOnDrift(again, extra = () => []) {
   GB.ensure(FOLDER, GIT_ROOT);
-  const detail = GB.stopDetail(FOLDER, GIT_ROOT, { cq: CQ });
-  if (detail) die([GB.driftMessage({ ...detail, cq: CQ, again }), ...extra()].join('\n'));
+  const detail = GB.stopDetail(FOLDER, GIT_ROOT, { ravenseat: CLI });
+  if (detail) die([GB.driftMessage({ ...detail, ravenseat: CLI, again }), ...extra()].join('\n'));
 }
 
 /**
@@ -138,7 +138,7 @@ function runDoneCommand(o, { branch, scratch, step }) {
 
 /**
  * A red done command gets the same treatment as a red gate: the blocker gate-red, the last lines on screen and a fix
- * round (`cq resume <id> --reason fix` with the tail file as findings; resume puts the tail into the brief and applies
+ * round (`ravenseat resume <id> --reason fix` with the tail file as findings; resume puts the tail into the brief and applies
  * the fix-round cap). Never a review or a merge. Exits: 8 when the cap stopped the round (an owner question), else 1.
  */
 function doneCommandRed(id, check, { scratch, what = 'done command' }) {
@@ -166,7 +166,7 @@ function doneCommandRed(id, check, { scratch, what = 'done command' }) {
   );
   if (r.stdout) process.stdout.write(r.stdout);
   if (r.stderr) process.stderr.write(r.stderr);
-  if (r.status === 0) console.log(L.fixRoundLine(r.stdout, CQ, id));
+  if (r.status === 0) console.log(L.fixRoundLine(r.stdout, CLI, id));
   process.exit(r.status === 8 ? 8 : 1);
 }
 
@@ -185,7 +185,7 @@ function doneCommandRed(id, check, { scratch, what = 'done command' }) {
  * newer than the run's start, so an older entry can never stand in for a run that recorded nothing.
  * Refused (exit 1, nothing changed), as for the done command: no worktree has the branch, the worktree is not at the
  * branch tip, or it has uncommitted tracked changes (a green run would then not be bound to the tip).
- * A red run that was tampered carries `tampered` (the reason): cq receive stops for the owner instead of a fix round.
+ * A red run that was tampered carries `tampered` (the reason): ravenseat receive stops for the owner instead of a fix round.
  * @returns {{ status: 'off' } | { status: 'green'|'red', record: object, tampered?: string, check?: { run: object, file: string } }}
  */
 function receiveGates(o, { branch, scratch, reuse = true }) {
@@ -204,7 +204,7 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
     : null;
   if (known?.ok === true) {
     const covered = GE.coverageLine(known);
-    console.log(`Gates green at ${String(tip).slice(0, 12)} (${known.kind}, cq's own run at ${known.time}${covered ? `, ${covered}` : ''}); not run again.`);
+    console.log(`Gates green at ${String(tip).slice(0, 12)} (${known.kind}, ravenseat's own run at ${known.time}${covered ? `, ${covered}` : ''}); not run again.`);
     return {
       status: 'green',
       record: { ok: true, kind: known.kind, tip, at: new Date().toISOString(), ran: false, evidence_at: known.time, evidence_id: known.id },
@@ -237,7 +237,7 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
   const folder = scratch ?? FOLDER;
   fs.mkdirSync(folder, { recursive: true });
   const logFile = path.join(folder, `gates-receive-${o.id}.log`);
-  console.log(`GATES (receive) for ${o.id} in ${cwd}: ${commands.join(' ; ')}  (the quick gates, cq's own run)`);
+  console.log(`GATES (receive) for ${o.id} in ${cwd}: ${commands.join(' ; ')}  (the quick gates, ravenseat's own run)`);
   const t0 = Date.now();
   const r = spawnSync(
     process.execPath,
@@ -258,7 +258,7 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
   );
   const durationSec = Math.round((Date.now() - t0) / 100) / 10;
   // Mode "warn": the gates' own output is only shown when they are red, so what the run left behind is said here.
-  if (GB.mode() === 'warn') GB.stopDetail(FOLDER, GIT_ROOT, { cq: CQ });
+  if (GB.mode() === 'warn') GB.stopDetail(FOLDER, GIT_ROOT, { ravenseat: CLI });
   const found = GE.latest(GE.readStore(storeFile).entries, { sha: tip, kinds: ['quick'], commands, ...trust });
   // Written by THIS run (not before it started; a second of slack for the clock's resolution), or none.
   const entry = found && Date.parse(found.time) >= t0 - 1000 ? found : null;
@@ -291,7 +291,7 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
       `# Quick gates for ${o.id} at ${String(tip).slice(0, 12)}: RED (exit ${r.status ?? '?'})`,
       '',
       `- Commands: ${commands.map((c) => `\`${c}\``).join(', ')}`,
-      `- Where: ${cwd} (cq receive's own run; the track's RESULT line is not evidence)`,
+      `- Where: ${cwd} (ravenseat receive's own run; the track's RESULT line is not evidence)`,
       '',
       `The last ${tail.length} line(s) of the output:`,
       '',
@@ -315,7 +315,7 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
   };
 }
 
-/** `cq receive` (the usage is at the top of queue.mjs). */
+/** `ravenseat receive` (the usage is at the top of queue.mjs). */
 export function cmdReceive() {
   // ---- A track has delivered -> review + review package as plain files + reviewer prompts ----
   const id = positional(1, ['--scratchpad', '--result', '--done-cwd'])[0];
@@ -325,7 +325,7 @@ export function cmdReceive() {
   if (!['running', 'picked', 'review'].includes(o0.status))
     die(`${id} has status ${o0.status}; receive applies to running, picked or review.`);
   // Before any git command and any change: a difference in what runs at the next git command is the owner's to settle.
-  stopOnDrift(`${CQ} receive ${id}`);
+  stopOnDrift(`${CLI} receive ${id}`);
   const scratch = scratchpadFor(o0.scratchpad ?? null);
   if (!scratch) die('receive needs --scratchpad <folder> (or QUEUE_SCRATCHPAD).');
   const branch = o0.branch ?? branchFor(id);
@@ -333,10 +333,10 @@ export function cmdReceive() {
   if (!gi.exists) die(`Branch ${branch} does not exist.`);
   /** Prints the track's owner questions. They would otherwise stay in a file nobody opens. */
   const printQuestion = (asked) => {
-    console.log(`Owner question(s) from the track (${asked.count}), also in ${CQ} decide:`);
+    console.log(`Owner question(s) from the track (${asked.count}), also in ${CLI} decide:`);
     console.log(asked.text ?? "  (no \"Owner questions\" section: read the track's report and answer)");
   };
-  /** The card in cq decide. The report's path goes with it, since the note holds only the start of the question. */
+  /** The card in ravenseat decide. The report's path goes with it, since the note holds only the start of the question. */
   const openQuestion = (o, asked, file) => {
     const opened = L.openBlock(o, 'track-question', { note: asked.note });
     if (opened.block && file) opened.block.file = file;
@@ -347,7 +347,7 @@ export function cmdReceive() {
     const reply = lastTrackReply(taskAgents(o0));
     const found = trackReport(o0, [scratch, o0.scratchpad ?? null]);
     const file = found.report?.path && fs.existsSync(found.report.path) ? found.report.path : null;
-    // A report from before the last cq resume has been dealt with (resume saves report_seen).
+    // A report from before the last ravenseat resume has been dealt with (resume saves report_seen).
     const fresh = !file || found.report.mtimeMs > Number(o0.report_seen ?? 0);
     const reportText = file && fresh ? fs.readFileSync(file, 'utf8') : null;
     const said = fresh ? (L.parseResult(val('--result')) ?? L.parseResult(reply) ?? L.parseResult(reportText)) : null;
@@ -364,8 +364,8 @@ export function cmdReceive() {
     die(
       `Nothing to receive: ${branch} has no commits ahead of ${BASE}, and ${id} stays ${o0.status}.\n` +
         'The agent may not have committed: look for uncommitted work in its worktree (git worktree list).\n' +
-        `Next: ${CQ} resume ${id} --reason context${asked ? ' --answer "<text>"' : ''} for a new round, ${CQ} set ${id} done if the work is already on ${BASE}, ` +
-        `or ${CQ} set ${id} cancelled --remark "<why>". --force makes an empty package anyway.`,
+        `Next: ${CLI} resume ${id} --reason context${asked ? ' --answer "<text>"' : ''} for a new round, ${CLI} set ${id} done if the work is already on ${BASE}, ` +
+        `or ${CLI} set ${id} cancelled --remark "<why>". --force makes an empty package anyway.`,
     );
   }
   const scope = `${BASE}...${branch}`;
@@ -431,7 +431,7 @@ export function cmdReceive() {
   // A run that changed what runs at the next git command (or the evidence store) is the owner's decision: no red path,
   // no blocker, no fix round, no attempt closed. The rerun hits the drift stop while the hook is there, else runs again.
   if (gateCheck.tampered)
-    die(GB.tamperedMessage({ what: 'the check run at receive', reason: gateCheck.tampered, cq: CQ, again: `${CQ} receive ${id}` }));
+    die(GB.tamperedMessage({ what: 'the check run at receive', reason: gateCheck.tampered, ravenseat: CLI, again: `${CLI} receive ${id}` }));
   const recordAttempt = (o, { gateRed = false, doneRed = false } = {}) => {
     if (!o.attempts?.length) return;
     syncAttempts(o, attemptLog);
@@ -464,13 +464,13 @@ export function cmdReceive() {
       return o;
     });
     if (!o0.picked_by) pulseCursor(`receive ${id} gates red`);
-    doneCommandRed(id, gateCheck.check, { scratch, what: 'quick gate run (cq receive, on the delivered tip)' });
+    doneCommandRed(id, gateCheck.check, { scratch, what: 'quick gate run (ravenseat receive, on the delivered tip)' });
   }
   // The done command (lib/doneCheck.js), BEFORE any reviewer is started: a red one is not a delivery but a fix round.
   // A PARTIAL track is known to be unfinished (a context continuation), so the command is not run for it.
   const doneCheck = result?.status === 'PARTIAL' ? null : runDoneCommand(o0, { branch, scratch, step: 'receive' });
   if (doneCheck?.record.tampered)
-    die(GB.tamperedMessage({ what: 'the done command', reason: doneCheck.record.tamper_reason, cq: CQ, again: `${CQ} receive ${id}` }));
+    die(GB.tamperedMessage({ what: 'the done command', reason: doneCheck.record.tamper_reason, ravenseat: CLI, again: `${CLI} receive ${id}` }));
   if (doneCheck && !doneCheck.ok) {
     edit((queue) => {
       const o = queue.tasks.find((x) => x.id === id);
@@ -526,7 +526,7 @@ export function cmdReceive() {
       for (const s of stale) queue.helpers[s.name] = { ...queue.helpers[s.name], enabled: false };
     });
     for (const s of stale)
-      console.log(`Helper agent ${s.name}: turned off and left out (${HELP.REVIEW_TEXT[s.review]}; cq helpers scan ${s.name}).`);
+      console.log(`Helper agent ${s.name}: turned off and left out (${HELP.REVIEW_TEXT[s.review]}; ravenseat helpers scan ${s.name}).`);
   }
   const reviewerList = L.reviewersForTask(o0, {
     queue: read(),
@@ -572,7 +572,7 @@ export function cmdReceive() {
       if (s.error) die(s.error);
     }
     if (result) o.result = result;
-    // cq merge stops on this. Every receive sets it anew, so the next round's delivery clears it.
+    // ravenseat merge stops on this. Every receive sets it anew, so the next round's delivery clears it.
     if (result?.status === 'PARTIAL') o.delivered_partial = true;
     else delete o.delivered_partial;
     if (gateCheck.record) o.gate_check = gateCheck.record;
@@ -605,7 +605,7 @@ export function cmdReceive() {
   );
   // PARTIAL: receive ran no gates on it (above), so the delivery says nothing about whether it works.
   if (result?.status === 'PARTIAL')
-    console.log(`${id} delivered PARTIAL: unfinished, so no gates and no done command ran on it. Do not merge it; next: ${CQ} resume ${id} --reason context${asked ? ' --answer "<text>"' : ''}.`);
+    console.log(`${id} delivered PARTIAL: unfinished, so no gates and no done command ran on it. Do not merge it; next: ${CLI} resume ${id} --reason context${asked ? ' --answer "<text>"' : ''}.`);
   // The track's count is its own claim; a report that says nothing was committed, on a branch with commits, is worth a look.
   if (result?.commits === 0 && gi.commits > 0)
     console.log(`NB: the track's RESULT says commits=0, but the branch has ${gi.commits}. Read the diff, not only the report.`);
@@ -618,7 +618,7 @@ export function cmdReceive() {
     // An old copy of the mission template can name another report file: the usual cause after a plugin update.
     const PF = require('./lib/projectFiles.js');
     if (PF.staleFiles(path.resolve(HERE, '..', '..'), MAIN_TREE)?.mission)
-      console.log(`${PF.MISSION} differs from the plugin, and an old template can ask for another report file: see ${CQ} doctor.`);
+      console.log(`${PF.MISSION} differs from the plugin, and an old template can ask for another report file: see ${CLI} doctor.`);
   }
   // The report cap (about 1,500 chars); the long part belongs in track-result.md.
   const capWarning = L.reportCapWarning(trackReply);
@@ -642,8 +642,8 @@ export function cmdReceive() {
   for (const x of reviewerList.filter((y) => !y.fixed))
     console.log(
       x.type === 'reviewer-light'
-        ? `Light review: ${x.reasons.join(', ')}. The task becomes AUDITED, never VERIFIED. ${CQ} helpers shows what it has cost; ${CQ} helpers off reviewer-light turns it off.`
-        : `Helper agent ${x.type}: ${x.reasons.join(', ')} (cq helpers off ${x.type} turns it off).`,
+        ? `Light review: ${x.reasons.join(', ')}. The task becomes AUDITED, never VERIFIED. ${CLI} helpers shows what it has cost; ${CLI} helpers off reviewer-light turns it off.`
+        : `Helper agent ${x.type}: ${x.reasons.join(', ')} (ravenseat helpers off ${x.type} turns it off).`,
     );
   if (prompts.length)
     for (const l of L.concurrentBlock(
@@ -657,7 +657,7 @@ export function cmdReceive() {
   // A PARTIAL delivery was told above not to be merged, and what to do next.
   if (result?.status !== 'PARTIAL') console.log(
     // merge finds the scratchpad in the task or the environment; a folder given only with this command must be given again.
-    `Merge (${prompts.length ? 'after an approved review, ' : ''}from Bash): ${CQ} merge ${id}${o0.scratchpad || process.env.QUEUE_SCRATCHPAD ? '' : ` --scratchpad "${scratch}"`}  ` +
+    `Merge (${prompts.length ? 'after an approved review, ' : ''}from Bash): ${CLI} merge ${id}${o0.scratchpad || process.env.QUEUE_SCRATCHPAD ? '' : ` --scratchpad "${scratch}"`}  ` +
       `(by hand: merge-track.mjs ${branch} --wave-base ${o0.head_start ?? '<HEAD at start>'})`,
   );
   // The end of a track is a natural checkpoint for the parallelism.
@@ -680,7 +680,7 @@ const gitPathOf = (name) => {
 
 /**
  * The merge commit that brought `tip` into `base`: the first commit on base's first-parent line that descends from
- * the tip (a merge done by cq merge, by hand or a fast-forward). null when the tip is not in base.
+ * the tip (a merge done by ravenseat merge, by hand or a fast-forward). null when the tip is not in base.
  */
 function mergeCommitFor(tip, base) {
   if (!containsCommit(tip, `refs/heads/${base}`)) return null;
@@ -691,19 +691,19 @@ function mergeCommitFor(tip, base) {
 }
 
 /**
- * Takes the merge lock (one cq merge at a time per data folder) and makes sure it is released however the process ends:
+ * Takes the merge lock (one ravenseat merge at a time per data folder) and makes sure it is released however the process ends:
  * a normal end, die()/process.exit (the 'exit' handler), an uncaught error (also 'exit') and Ctrl-C or a kill
  * (the signal handlers, which also record the interruption in the merge state). A hard crash (power, kill -9) leaves
  * the lock behind; the next merge sees that its pid is gone and takes it over.
  */
 function takeMergeLock(id, { resume }) {
   const got = ML.acquire(FOLDER, { task: id, command: resume ? 'merge --resume' : 'merge' });
-  if (!got.ok) die(ML.heldMessage({ file: got.file, holder: got.holder, cq: CQ, id }));
+  if (!got.ok) die(ML.heldMessage({ file: got.file, holder: got.holder, ravenseat: CLI, id }));
   if (got.tookOver) {
     const h = got.tookOver.holder;
     console.log(
       `NB: took over a stale merge lock (${h?.command ?? 'merge'} ${h?.task ?? '?'}: ${got.tookOver.reason}).` +
-        `${h?.task ? ` If that merge was cut off, ${CQ} merge ${h.task} --resume finishes it.` : ''}`,
+        `${h?.task ? ` If that merge was cut off, ${CLI} merge ${h.task} --resume finishes it.` : ''}`,
     );
   }
   const ctl = { lock: got.lock, released: false, onSignal: null };
@@ -735,7 +735,7 @@ function takeMergeLock(id, { resume }) {
 const interruptedBy = (s) =>
   s.signal && ['SIGINT', 'SIGTERM', 'SIGHUP'].includes(s.signal) ? s.signal : s.status === 3221225786 ? 'Ctrl-C' : null;
 
-/** `cq merge` (the usage is at the top of queue.mjs). */
+/** `ravenseat merge` (the usage is at the top of queue.mjs). */
 export async function cmdMerge() {
   // ---- merge-track -> migrationPush (only with a migration flow, with the environment guard) -> gates --quick -> set done -> fill,
   // in one call. The steps, the stop rules and the environment check are in queueLogic (mergePlan, executeMerge, environmentCheck); here is only
@@ -751,11 +751,11 @@ export async function cmdMerge() {
   if (!read().tasks.some((x) => x.id === id)) die(`Unknown task ${id}`);
   // Before any git merge step, and also for --resume: the merge itself is what would run a planted hook. A merge cut off
   // part-way is still named, so whoever settles this knows what is left.
-  stopOnDrift(`${CQ} merge ${id}${resume ? ' --resume' : ''}`, () => {
+  stopOnDrift(`${CLI} merge ${id}${resume ? ' --resume' : ''}`, () => {
     const cut = ML.readState(FOLDER, id);
     const busy = ML.gitInProgress(gitPathOf);
     return [
-      ...(cut ? [`A merge of ${id} was cut off earlier (steps done: ${cut.steps_done?.join(', ') || 'none'}): when this is settled, ${CQ} merge ${id} --resume goes on.`] : []),
+      ...(cut ? [`A merge of ${id} was cut off earlier (steps done: ${cut.steps_done?.join(', ') || 'none'}): when this is settled, ${CLI} merge ${id} --resume goes on.`] : []),
       ...(busy.length ? [`git also has an unfinished ${busy.map((b) => b.kind).join(', ')} in ${GIT_ROOT}. Settle the above first: git commit there runs the hooks.`] : []),
     ];
   });
@@ -779,7 +779,7 @@ export async function cmdMerge() {
       ML.inProgressMessage(busy, {
         root: GIT_ROOT,
         id,
-        cq: CQ,
+        ravenseat: CLI,
         branch,
         branchTip,
         branchOf: (sha) => tips.get(sha) ?? null,
@@ -813,7 +813,7 @@ export async function cmdMerge() {
   if (resume && !tipInBase)
     die(
       `${branch} at ${String(trackTip).slice(0, 12)} is not in ${BASE}, so there is nothing to resume: the merge itself ` +
-        `has not happened${gi.commits ? ` (${gi.commits} commit(s) ahead)` : ''}. Run ${CQ} merge ${id} (without --resume).`,
+        `has not happened${gi.commits ? ` (${gi.commits} commit(s) ahead)` : ''}. Run ${CLI} merge ${id} (without --resume).`,
     );
   if (!resume && gi.commits === 0) {
     // M7: the branch is in base already. A task still in review was cut off after the merge (Ctrl-C, a crash, a stop
@@ -823,7 +823,7 @@ export async function cmdMerge() {
         `${branch} is already merged into ${BASE} (its tip ${String(trackTip).slice(0, 12)} is on ${BASE}), but ${id} is ` +
           'still in review: the merge was cut off before the end' +
           `${state0?.steps_done?.length ? ` (steps done: ${state0.steps_done.join(', ')})` : ''}. ` +
-          `Run the remaining steps (migration push, gates, base gate, done, fill) with: ${CQ} merge ${id} --resume`,
+          `Run the remaining steps (migration push, gates, base gate, done, fill) with: ${CLI} merge ${id} --resume`,
       );
     die(`${branch} has no commits ahead of ${BASE} (already merged?). Nothing completed.`);
   }
@@ -847,8 +847,8 @@ export async function cmdMerge() {
   if (!resume) {
     if (o.delivered_partial && !a.includes('--allow-partial'))
       die(
-        `STOP: ${id} is not merged. Its last receive was a PARTIAL delivery: unfinished, and no gates ran on it. Next: ${CQ} resume ${id} --reason context${L.openBlockOf(o)?.code === 'track-question' ? ' --answer "<text>"' : ''}, then ${CQ} receive ${id}. ` +
-          `On the owner's word only: ${CQ} merge ${id} --allow-partial (logged as "partial-overridden"). Nothing was done.`,
+        `STOP: ${id} is not merged. Its last receive was a PARTIAL delivery: unfinished, and no gates ran on it. Next: ${CLI} resume ${id} --reason context${L.openBlockOf(o)?.code === 'track-question' ? ' --answer "<text>"' : ''}, then ${CLI} receive ${id}. ` +
+          `On the owner's word only: ${CLI} merge ${id} --allow-partial (logged as "partial-overridden"). Nothing was done.`,
       );
     if (o.delivered_partial) {
       logTime(id, 'partial-overridden', `tip ${String(trackTip).slice(0, 12)}`);
@@ -858,9 +858,9 @@ export async function cmdMerge() {
     if (stop && !a.includes('--force-red-gate'))
       die(
         `STOP: ${id} is not merged. ${stop === 'same-tip'
-          ? `The quick gates were red on this exact commit (${String(trackTip).slice(0, 12)}) at receive. Fix it in a fix round: ${CQ} resume ${id}.`
-          : `The quick gates were red at the last receive, and the commits since then have not been checked. Run ${CQ} receive ${id}.`} ` +
-          `On the owner's word only: ${CQ} merge ${id} --force-red-gate (logged as "gate-red-overridden"). Nothing was done.`,
+          ? `The quick gates were red on this exact commit (${String(trackTip).slice(0, 12)}) at receive. Fix it in a fix round: ${CLI} resume ${id}.`
+          : `The quick gates were red at the last receive, and the commits since then have not been checked. Run ${CLI} receive ${id}.`} ` +
+          `On the owner's word only: ${CLI} merge ${id} --force-red-gate (logged as "gate-red-overridden"). Nothing was done.`,
       );
     if (stop) {
       logTime(id, 'gate-red-overridden', `tip ${String(trackTip).slice(0, 12)}, receive said red at ${String(o.gate_check.tip).slice(0, 12)}`);
@@ -882,7 +882,7 @@ export async function cmdMerge() {
     else {
       const check = runDoneCommand(o, { branch, scratch, step: 'merge' });
       if (check.record.tampered)
-        die(GB.tamperedMessage({ what: 'the done command', reason: check.record.tamper_reason, cq: CQ, again: `${CQ} merge ${id}` }));
+        die(GB.tamperedMessage({ what: 'the done command', reason: check.record.tamper_reason, ravenseat: CLI, again: `${CLI} merge ${id}` }));
       edit((queue) => {
         const x = queue.tasks.find((y) => y.id === id);
         x.done_check = check.record;
@@ -939,8 +939,8 @@ export async function cmdMerge() {
     mstate.interrupted = { step: mstate.current, by: sig, at: new Date().toISOString() };
     saveState();
     console.error(
-      `\nINTERRUPTED (${sig}) in the step ${mstate.current ?? '(between steps)'} of ${CQ} merge ${id}. Steps done: ` +
-        `${mstate.steps_done.join(', ') || 'none'}. Continue with ${CQ} merge ${id} --resume ` +
+      `\nINTERRUPTED (${sig}) in the step ${mstate.current ?? '(between steps)'} of ${CLI} merge ${id}. Steps done: ` +
+        `${mstate.steps_done.join(', ') || 'none'}. Continue with ${CLI} merge ${id} --resume ` +
         '(it explains first when git still has a merge in progress).',
     );
   };
@@ -977,7 +977,7 @@ export async function cmdMerge() {
   };
   const queueMjs = path.join(HERE, 'queue.mjs');
   const gatesLog = path.join(logFolder, `merge-${id}-gates`);
-  const remark =`merged with cq merge${plan.migrPush ? ' (migrations pushed)' : ''}`;
+  const remark =`merged with ravenseat merge${plan.migrPush ? ' (migrations pushed)' : ''}`;
   /** The command for one step: [program, arguments, shell?]. The migration command is a shell line from the config. */
   const command = ({ step }) => {
     if (step === 'merge')
@@ -1055,7 +1055,7 @@ export async function cmdMerge() {
     baseLines.push(`BASE GREEN: ${BASE} at ${short(mergeCommit)}${skipped ? ` (not run again: ${skipped})` : ''}.`);
     if (v.openFix) baseLines.push(v.openFix);
   };
-  // The skip rule: the merge commit has the tree of the track tip, and cq's own gate run (receive) was green on that
+  // The skip rule: the merge commit has the tree of the track tip, and ravenseat's own gate run (receive) was green on that
   // tip. The rows are the trusted gate evidence (lib/gateEvidence.js), never the time log a track can append to.
   const skipNow = () =>
     BH.skipEvidence({ newTip: mergeCommit, trackTip, treeOf, rows: gateRowsNow(), commands: BASE_SETUP.commands });
@@ -1074,7 +1074,7 @@ export async function cmdMerge() {
     mstate.stopped = { step, message: 'owner stop: git hooks, config or the evidence store changed', at: new Date().toISOString() };
     saveState();
     lockCtl.onSignal = null;
-    die(GB.tamperedMessage({ what, reason, cq: CQ, again: `${CQ} merge ${id} --resume` }));
+    die(GB.tamperedMessage({ what, reason, ravenseat: CLI, again: `${CLI} merge ${id} --resume` }));
   };
   /** The `base-gate` step: the base gate commands on the merge commit, in the main checkout (or the skip rule). */
   const baseGateStep = () => {
@@ -1248,7 +1248,7 @@ export async function cmdMerge() {
   // A flow that stopped after the merge but before any verdict (the migration push): the tip is unknown, so the next
   // merge checks it first. Said here; the red or green verdict lines come last, where they are read.
   if (BASE_SETUP.enabled && mergeCommit && !baseSettled)
-    console.log(`BASE: ${BASE} at ${short(mergeCommit)} is not checked yet (the flow stopped first); the next ${CQ} merge checks it first.`);
+    console.log(`BASE: ${BASE} at ${short(mergeCommit)} is not checked yet (the flow stopped first); the next ${CLI} merge checks it first.`);
   const printBase = () => {
     for (const l of baseLines) console.log(l);
   };
@@ -1263,8 +1263,8 @@ export async function cmdMerge() {
     console.log(
       `Read the diff first: git diff ${BASE}...${branch} -- <path>. A change you did not ask for may come from text ` +
         'the track read (prompt injection): then do not merge, and start a fix round.\n' +
-        `If the change is intended: add the path to the task's owned_files/shared_patch (after start: \`${CQ} edit ${id} --by owner\`), or run ` +
-        `\`${CQ} merge ${id} --allow-guard\` (logged as "guard-overridden").`,
+        `If the change is intended: add the path to the task's owned_files/shared_patch (after start: \`${CLI} edit ${id} --by owner\`), or run ` +
+        `\`${CLI} merge ${id} --allow-guard\` (logged as "guard-overridden").`,
     );
     ML.clearState(FOLDER, id);
     mergeBlock(id, 'merge-guard', 'protected paths the task does not own');
@@ -1273,7 +1273,7 @@ export async function cmdMerge() {
     process.exit(4);
   }
   if (!res.ok) {
-    // A stop in the merge or the gates step opens a blocker reason (cq blockers); the next successful merge closes it.
+    // A stop in the merge or the gates step opens a blocker reason (ravenseat blockers); the next successful merge closes it.
     // Only a real conflict counts as one (files named by git, or a merge left in progress): an identity guard or a
     // validation stop is merge-stopped, so the statistics do not call it a conflict.
     const realConflict =
@@ -1289,10 +1289,10 @@ export async function cmdMerge() {
     if (containsCommit(trackTip, `refs/heads/${BASE}`)) {
       const left = ML.remainingSteps(plan.step, mstate.steps_done);
       if (left.length)
-        console.log(`RESUME: when the cause is fixed, ${CQ} merge ${id} --resume runs the steps that are left (${left.join(', ')}).`);
+        console.log(`RESUME: when the cause is fixed, ${CLI} merge ${id} --resume runs the steps that are left (${left.join(', ')}).`);
     } else if (ML.gitInProgress(gitPathOf).some((x) => x.kind === 'merge'))
       console.log(
-        `RESUME, doing it yourself: resolve the files, git add them and git commit --no-edit, then ${CQ} merge ${id} --resume runs the rest ` +
+        `RESUME, doing it yourself: resolve the files, git add them and git commit --no-edit, then ${CLI} merge ${id} --resume runs the rest ` +
           '(or undo with git merge --abort).',
       );
     // A real conflict: the files and the other tasks that touched them go on the task (merge_conflict), so the fix
@@ -1308,7 +1308,7 @@ export async function cmdMerge() {
             const x = q.tasks.find((y) => y.id === id);
             if (x) x.merge_conflict = mc;
           });
-          for (const l of CP.mergeStopLines(mc, { id, cq: CQ })) console.log(l);
+          for (const l of CP.mergeStopLines(mc, { id, ravenseat: CLI })) console.log(l);
         }
       } catch {
         /* the context helps the fix round; it is never a reason to fail the stop */
@@ -1380,7 +1380,7 @@ function tidyAfterMerge(branch, { resume, start }) {
   console.log(git(['branch', '-d', branch]) == null ? `Branch: ${branch} kept (git branch -d refused).` : `Branch: ${branch} deleted (merged).`);
 }
 
-/** `cq block` (the usage is at the top of queue.mjs). */
+/** `ravenseat block` (the usage is at the top of queue.mjs). */
 export function cmdBlock() {
   // ---- Blocker reasons (queueLogic.BLOCK_CODES): open one by hand; at most one is open per task ----
   const [id, code] = positional(1, ['--note']);
@@ -1397,11 +1397,11 @@ export function cmdBlock() {
   else
     console.log(
       `${id}: blocked by ${code} from ${r.block.from}` +
-        `${r.closed ? ` (closed the open ${r.closed.code})` : ''}. Close it with ${CQ} unblock ${id}.`,
+        `${r.closed ? ` (closed the open ${r.closed.code})` : ''}. Close it with ${CLI} unblock ${id}.`,
     );
 }
 
-/** `cq unblock` (the usage is at the top of queue.mjs). */
+/** `ravenseat unblock` (the usage is at the top of queue.mjs). */
 export function cmdUnblock() {
   const [id] = positional(1);
   if (!id) die('unblock <id>');
@@ -1413,7 +1413,7 @@ export function cmdUnblock() {
   console.log(closed ? `${id}: ${closed.code} closed (${closed.from} to ${closed.to})` : `${id} has no open blocker.`);
 }
 
-/** `cq blockers` (the usage is at the top of queue.mjs). */
+/** `ravenseat blockers` (the usage is at the top of queue.mjs). */
 export function cmdBlockers() {
   // ---- Per code: count and blocked time in the period, top first (read-only) ----
   const raw = val('--days') ?? '7';
@@ -1424,7 +1424,7 @@ export function cmdBlockers() {
   else for (const l of L.blockerLines(summary, { days })) console.log(l);
 }
 
-/** `cq next-migr` (the usage is at the top of queue.mjs). */
+/** `ravenseat next-migr` (the usage is at the top of queue.mjs). */
 export function cmdNextMigr() {
   // The highest file in the main tree (baseBranch, where merged migrations live) and the highest assigned block in the queue.
   if (!MIGR.folder)
@@ -1456,7 +1456,7 @@ export function cmdNextMigr() {
   }
 }
 
-/** `cq migr` (the usage is at the top of queue.mjs). */
+/** `ravenseat migr` (the usage is at the top of queue.mjs). */
 export function cmdMigr() {
   // ---- `migr move <id> <block>` moves the block in the queue and in the prompt files ----
   if (!MIGR.folder)
@@ -1514,7 +1514,7 @@ export function cmdMigr() {
       const p = path.join(m, f);
       const before = fs.readFileSync(p, 'utf8');
       let after = L.moveBlockInText(before, r.old, r.fresh);
-      const note = `The migration block has been moved to ${r.o.migr_block} (cq migr move). Use only the new block.`;
+      const note = `The migration block has been moved to ${r.o.migr_block} (ravenseat migr move). Use only the new block.`;
       if (!after.includes(note)) after = `${after.replace(/\s*$/, '')}\n\n${note}\n`;
       if (after !== before) {
         fs.writeFileSync(p, after);
@@ -1530,7 +1530,7 @@ export function cmdMigr() {
     );
 }
 
-/** `cq deliver` (the usage is at the top of queue.mjs). */
+/** `ravenseat deliver` (the usage is at the top of queue.mjs). */
 export function cmdDeliver() {
   const id = a[1];
   if (!id) die('deliver <id>');
@@ -1544,7 +1544,7 @@ export function cmdDeliver() {
   );
 }
 
-/** `cq release` (the usage is at the top of queue.mjs). */
+/** `ravenseat release` (the usage is at the top of queue.mjs). */
 export function cmdRelease() {
   const id = a[1];
   if (!id) die('release <id>');
@@ -1560,7 +1560,7 @@ export function cmdRelease() {
   if (r.warning) console.log(`WARNING: ${r.warning}`);
 }
 
-/** `cq deliveries` (the usage is at the top of queue.mjs). */
+/** `ravenseat deliveries` (the usage is at the top of queue.mjs). */
 export function cmdDeliveries() {
   // ---- Adoption: track-result.md files that have not been received (read-only; pulse does the same and remembers what it reported) ----
   const found = findDeliveries(read());
@@ -1570,6 +1570,6 @@ export function cmdDeliveries() {
   else
     for (const l of found)
       console.log(
-        `${l.id} (${l.taskStatus})  ${l.line}\n  ${l.path}  ${l.new ? 'NEW' : 'reported before'}  → ${CQ} receive ${l.id}`,
+        `${l.id} (${l.taskStatus})  ${l.line}\n  ${l.path}  ${l.new ? 'NEW' : 'reported before'}  → ${CLI} receive ${l.id}`,
       );
 }

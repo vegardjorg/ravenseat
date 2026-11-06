@@ -7,7 +7,7 @@
 // So the runners that start track code (gates.mjs, the done command, the base gate) read this surface before the first
 // command and compare it after the last one. A change makes the run red and names what changed. lib/gitSurfaceBaseline.js
 // keeps the accepted state between runs: a rerun cannot go green over a planted hook, and what an agent's own Bash wrote
-// outside any run is seen at the next cq receive, cq merge or push-check, before their git commands.
+// outside any run is seen at the next ravenseat receive, ravenseat merge or push-check, before their git commands.
 //
 // This is DETECTION, against accidents and simple cheating, not prevention: the planted hook stays until someone removes
 // it or accepts it (no hook or config is restored, the message says what to inspect), a change that is undone before the

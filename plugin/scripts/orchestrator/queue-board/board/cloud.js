@@ -135,7 +135,7 @@ function drawCloudQueue() {
         ? null
         : el('p', {
             class: 'cloud-help',
-            text: 'The Cloud tab is hidden. Turn it on in Settings, Board (or cq board-setting cloud on).',
+            text: 'The Cloud tab is hidden. Turn it on in Settings, Board (or ravenseat board-setting cloud on).',
           }),
       el('p', { class: 'cloud-help', text: cloudHelp() }),
       chunk(`In cloud now (${inCloud.length}${sessions})`, inProgress),

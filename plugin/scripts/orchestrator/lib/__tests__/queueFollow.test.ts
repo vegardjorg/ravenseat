@@ -151,9 +151,9 @@ describe('queueFollow: data model and validation', () => {
   it('accepts related and close_action (text or list) and refuses the wrong type', () => {
     const r = withEntry({
       related: { tasks: ['Q-COMPACT-2'], memory: ['compact-trial'] },
-      close_action: 'cq compact manual',
+      close_action: 'ravenseat compact manual',
     });
-    expect(r.entries[0].close_action).toEqual(['cq compact manual']);
+    expect(r.entries[0].close_action).toEqual(['ravenseat compact manual']);
     const s = F.add(F.emptyRegister(), { ...baseEntry(), related: { tasks: 'X' } }, { now: NOW });
     expect(s.error.join(' ')).toMatch(/related/);
   });
@@ -208,7 +208,7 @@ describe('queueFollow: due date', () => {
     expect(before[0]).not.toMatch(/TO REPORT/);
     const after = F.shortLines(r, '2026-10-20', { pulse: true });
     expect(after.join('\n')).toMatch(/TO REPORT: F-TEST/);
-    expect(after.join('\n')).toMatch(/cq follow report F-TEST/);
+    expect(after.join('\n')).toMatch(/ravenseat follow report F-TEST/);
     expect(after.join('\n')).toMatch(/every pulse/);
   });
 
@@ -277,7 +277,7 @@ describe('queueFollow: log, extend and close', () => {
 
 describe('queueFollow: the report', () => {
   it('has the fixed headings in order, with setup, measurements and log filled in', () => {
-    const r = withEntry({ close_action: ['cq compact manual'] });
+    const r = withEntry({ close_action: ['ravenseat compact manual'] });
     F.log(r, 'F-TEST', { text: 'went well', values: { count: '2' } }, { now: NOW });
     F.log(r, 'F-TEST', { values: { count: '3', loss: 'no' } }, { now: '2026-10-12T09:00:00Z' });
     const t = F.reportText(r.entries[0], { now: NOW });
@@ -289,7 +289,7 @@ describe('queueFollow: the report', () => {
     expect(t).toMatch(/count.*count in the log.*>= 1/);
     expect(t).toMatch(/last: 3/);
     expect(t).toContain('went well');
-    expect(t).toContain('cq compact manual');
+    expect(t).toContain('ravenseat compact manual');
     expect(t).toMatch(/Owner decision\n\n\(not decided/);
   });
 
@@ -338,7 +338,7 @@ describe('queue.mjs follow', () => {
     const file = join(folder, 'entry.json');
     writeFileSync(
       file,
-      JSON.stringify({ ...baseEntry(), start: '2026-01-01', end: '2026-01-08', close_action: 'cq compact manual' }),
+      JSON.stringify({ ...baseEntry(), start: '2026-01-01', end: '2026-01-08', close_action: 'ravenseat compact manual' }),
     );
     const added = run(['follow', 'add', '--file', file]);
     expect(added.error).toBe('');
@@ -365,7 +365,7 @@ describe('queue.mjs follow', () => {
 
     const c = run(['follow', 'close', 'F-TEST', '--decision', 'Back to manual.']);
     expect(c.code).toBe(0);
-    expect(c.out).toMatch(/Close action.*\n {2}cq compact manual/);
+    expect(c.out).toMatch(/Close action.*\n {2}ravenseat compact manual/);
     expect(readFileSync(repFile, 'utf8')).toContain('Back to manual.');
     expect(readReg().entries[0].decision).toBe('Back to manual.');
   });

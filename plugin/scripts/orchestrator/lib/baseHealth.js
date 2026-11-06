@@ -1,11 +1,11 @@
 // =============================================================
-// baseHealth.js: the base gate, a health check of the base branch itself after `cq merge` (config().baseGate).
+// baseHealth.js: the base gate, a health check of the base branch itself after `ravenseat merge` (config().baseGate).
 //
 // Why: each track's gates run on its own branch. Two tracks can each be green and still break the base branch together
 // (a semantic conflict: one renames a function, the other adds a new call to the old name; git merges both without a
 // textual conflict). Until now nothing remembered that the base was red, so every later merge built on a red base and
 // the next track's red gate looked like that track's fault. The base gate records the base branch's health per tip and
-// `cq merge` refuses to merge another track while the recorded health for the current tip is red.
+// `ravenseat merge` refuses to merge another track while the recorded health for the current tip is red.
 //
 // The flow (the I/O lives in cli/baseHealth.mjs and cli/merge.mjs):
 //   - Before a merge: the recorded verdict for the base tip. Green: merge. Red: refused (exit 9), except for the base fix
@@ -16,17 +16,17 @@
 //     other commands (`baseGate.commands`, e.g. the full gate) a `base-gate` step runs them after the quick gates.
 //   - Red after a merge: the merge stays (no automatic revert), a fix task `<id>-BASE<n>` (value 10, `fixes` the merged
 //     task, `done_when` = the base gate commands) is added, and the next merge is refused until a check is green again.
-//   - The skip rule (skipEvidence): the merge commit has exactly the tree of the track tip, and a TRUSTED gate run (cq's
-//     own, from the gate evidence store, lib/gateEvidence.js; normally the one `cq receive` ran) was green on that commit
+//   - The skip rule (skipEvidence): the merge commit has exactly the tree of the track tip, and a TRUSTED gate run (ravenseat's
+//     own, from the gate evidence store, lib/gateEvidence.js; normally the one `ravenseat receive` ran) was green on that commit
 //     with the base gate commands: the check would run the same commands on the same files, so green is recorded
 //     without running them. The track's own runs and the time log's gate rows are never used: a track can write those.
 //   - The flaky check (baseGate.flakyRerun, default true): before a red check freezes the base, only the failed
 //     commands run once more on the same sha in the main checkout (afterFailed, flakyResult). Green on the rerun: the
-//     verdict is green with `flaky` = those commands, a finding is filed (cq finding, deduplicated on the command) and a
-//     `flakyGate` row goes to the time log (cq cost Flow counts them); nothing is frozen. Red twice: frozen as above.
+//     verdict is green with `flaky` = those commands, a finding is filed (ravenseat finding, deduplicated on the command) and a
+//     `flakyGate` row goes to the time log (ravenseat cost Flow counts them); nothing is frozen. Red twice: frozen as above.
 //   - CI (cli/ciWatch.mjs, the optional CI watch after a push) can mark a tip red too, with its own fix task CI-<sha7>.
 //
-// Where the check runs: the main checkout (config root / QUEUE_GIT), which `cq merge` already requires to be on the base
+// Where the check runs: the main checkout (config root / QUEUE_GIT), which `ravenseat merge` already requires to be on the base
 // branch and where the merge and the quick gates run. A separate worktree would need the shared links (node_modules) to
 // run the project's gates, and creating and removing such worktrees is the known hazard cleanup-worktree.mjs handles.
 // The check never writes to the checkout itself; when a gate leaves tracked files changed, the caller warns.
@@ -41,7 +41,7 @@
 // The history keeps the last HISTORY_MAX entries (the newest last).
 //
 // Pure except readState/writeState (one small file) and runBaseGate (it runs the commands; `spawn` can be swapped).
-// Tested in lib/__tests__/baseHealth.test.ts and __tests__/queueBaseGate.test.ts (cq merge against temporary repos).
+// Tested in lib/__tests__/baseHealth.test.ts and __tests__/queueBaseGate.test.ts (ravenseat merge against temporary repos).
 // =============================================================
 'use strict';
 
@@ -53,7 +53,7 @@ const GE = require('./gateEvidence.js');
 const DEFAULT_TIMEOUT_SEC = 900;
 /** Entries kept in the state file's history. */
 const HISTORY_MAX = 20;
-/** The exit code of `cq merge` when the base is red. */
+/** The exit code of `ravenseat merge` when the base is red. */
 const EXIT_RED_BASE = 9;
 /** The longest done_when (lib/doneCheck.js); the fix task gets the base gate commands as its done command when they fit. */
 const DONE_WHEN_MAX = DC.DONE_WHEN_MAX;
@@ -143,7 +143,7 @@ function verdict(state, tip) {
 }
 
 /**
- * May `cq merge <id>` go on? Only after the verdict is known (the caller runs the check first when it is unknown).
+ * May `ravenseat merge <id>` go on? Only after the verdict is known (the caller runs the check first when it is unknown).
  * Allowed: green; red for the open base fix task itself (it is what makes the base green again); red with --force-red-base.
  * @returns {{ allow: boolean, forced: boolean, fixTask: string|null }}
  */
@@ -179,7 +179,7 @@ function gateRows(text) {
  *   2. a trusted gate run was green on exactly that track tip, in a clean worktree (no uncommitted tracked changes,
  *      which a green run could have depended on), and ran every base gate command (a quick or full entry with `sha` =
  *      the track tip). The NEWEST such run decides (GE.latest): a later red or tampered run beats an earlier green one.
- *      `rows` are the gate evidence entries (lib/gateEvidence.js, written by gates.mjs for cq receive and cq merge) the
+ *      `rows` are the gate evidence entries (lib/gateEvidence.js, written by gates.mjs for ravenseat receive and ravenseat merge) the
  *      caller has already filtered with GE.trusted (cli/baseHealth.mjs gateRowsNow), never the time log's gate rows (any
  *      agent can append one there).
  * Anything less (another tree, a dirty or older run, a row without sha) runs the check.
@@ -198,7 +198,7 @@ function skipEvidence({ newTip, trackTip, treeOf, rows, commands }) {
   if (!hit) return { skip: false, reason: `no green, clean gate run of the base gate commands on ${short(trackTip)}` };
   return {
     skip: true,
-    reason: `same tree as the track tip ${short(trackTip)}, where cq's own ${hit.kind} gate run was green at ${hit.time ?? '?'}`,
+    reason: `same tree as the track tip ${short(trackTip)}, where ravenseat's own ${hit.kind} gate run was green at ${hit.time ?? '?'}`,
   };
 }
 
@@ -281,7 +281,7 @@ function fixTask({ tasks, causeTask = null, tip, branch, commands, tailFile, fai
   const blame = causeTask
     ? `The merge of ${causeTask.id} ("${causeTask.title ?? ''}") made it red: merge commit ${tip}. ${causeTask.id}'s own ` +
       'gates were green on its branch, so the break is most likely the combination with what was merged before it.'
-    : `The tip ${tip} is red, and no merge through cq merge is known to have caused it (a commit made by hand, or a merge ` +
+    : `The tip ${tip} is red, and no merge through ravenseat merge is known to have caused it (a commit made by hand, or a merge ` +
       'whose check did not run).';
   return {
     id,
@@ -296,7 +296,7 @@ function fixTask({ tasks, causeTask = null, tip, branch, commands, tailFile, fai
       `The tail of its output is in ${tailFile} (read it first).\n\n` +
       `Make the base gate green on top of ${branch} as it is now (branch from its tip, which has the merge), with the ` +
       'smallest change that keeps both sides\' intent. Do not revert the merged work unless that is the only fix; say so ' +
-      'in the report if you do. cq merge refuses every other track until this task is merged and the base is green.',
+      'in the report if you do. ravenseat merge refuses every other track until this task is merged and the base is green.',
     value: 10,
     content_min: 30,
     migr_tens: 0,
@@ -344,10 +344,10 @@ function ago(at, now = Date.now()) {
 }
 
 /**
- * The one line for `cq show` and the orchestrator pulse. null when the feature is off.
- * @param {{ state: object, tip: string|null, setup: object, branch: string, cq?: string, now?: number }} x
+ * The one line for `ravenseat show` and the orchestrator pulse. null when the feature is off.
+ * @param {{ state: object, tip: string|null, setup: object, branch: string, ravenseat?: string, now?: number }} x
  */
-function healthLine({ state, tip, setup, branch, cq = 'cq', now = Date.now() }) {
+function healthLine({ state, tip, setup, branch, ravenseat = 'ravenseat', now = Date.now() }) {
   if (!setup?.enabled) return null;
   const c = state?.current;
   const v = verdict(state, tip);
@@ -355,13 +355,13 @@ function healthLine({ state, tip, setup, branch, cq = 'cq', now = Date.now() }) 
     return `BASE ${branch}: GREEN at ${short(tip)} (checked ${ago(c.at, now)} ago${c.skipped ? ', the track\'s own run' : ''}).`;
   if (v === 'red') {
     const by = c.made_red_by ? ` by the merge of ${c.made_red_by.task}` : '';
-    const fix = c.fix_task ? `; fix task ${c.fix_task} (${cq} merge ${c.fix_task} is allowed)` : '';
-    return `BASE ${branch}: RED at ${short(tip)}${by} (${ago(c.at, now)} ago)${fix}. ${cq} merge refuses other tracks.`;
+    const fix = c.fix_task ? `; fix task ${c.fix_task} (${ravenseat} merge ${c.fix_task} is allowed)` : '';
+    return `BASE ${branch}: RED at ${short(tip)}${by} (${ago(c.at, now)} ago)${fix}. ${ravenseat} merge refuses other tracks.`;
   }
-  if (!c) return `BASE ${branch}: not checked yet; the next ${cq} merge runs the base gate first.`;
+  if (!c) return `BASE ${branch}: not checked yet; the next ${ravenseat} merge runs the base gate first.`;
   return (
     `BASE ${branch}: unknown at ${short(tip)} (the last check was ${c.status} at ${short(c.tip)}); ` +
-    `the next ${cq} merge runs the base gate first.`
+    `the next ${ravenseat} merge runs the base gate first.`
   );
 }
 

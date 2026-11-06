@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { resolveRoots, gitTree, samePath, queueActive, cqCommand } from '../projectRoot';
+import { resolveRoots, gitTree, samePath, queueActive, cliCommand } from '../projectRoot';
 
 const git = (cwd: string, ...args: string[]) => {
   const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -20,7 +20,7 @@ const git = (cwd: string, ...args: string[]) => {
 };
 
 // realpath: on macOS os.tmpdir() is a symlink (/var -> /private/var), and Windows may give a short 8.3 name.
-const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'cq-root-')));
+const base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-root-')));
 const project = path.join(base, 'project');
 const worktree = path.join(project, '.claude', 'worktrees', 'EX-1');
 const outside = path.join(base, 'outside'); // not a git repo
@@ -157,26 +157,26 @@ describe('queueActive (the hooks exit at once when it is false)', () => {
   });
 });
 
-describe('cq', () => {
-  it('cqCommand: `cq` for a plugin, the node form for a vendored install', () => {
-    expect(cqCommand({ mode: 'cwd' })).toBe('cq');
-    expect(cqCommand({ mode: 'vendored' })).toBe('node scripts/orchestrator/cq.mjs');
-    expect(cqCommand({ mode: 'vendored', fromWorktree: true })).toBe('node <mainTree>/scripts/orchestrator/cq.mjs');
+describe('ravenseat', () => {
+  it('cliCommand: `ravenseat` for a plugin, the node form for a vendored install', () => {
+    expect(cliCommand({ mode: 'cwd' })).toBe('ravenseat');
+    expect(cliCommand({ mode: 'vendored' })).toBe('node scripts/orchestrator/ravenseat.mjs');
+    expect(cliCommand({ mode: 'vendored', fromWorktree: true })).toBe('node <mainTree>/scripts/orchestrator/ravenseat.mjs');
   });
 
   it('dispatches: a queue command goes to queue.mjs, a script name to that script', () => {
-    const cq = path.resolve(__dirname, '..', '..', 'cq.mjs');
+    const ravenseat = path.resolve(__dirname, '..', '..', 'ravenseat.mjs');
     const run = (...args: string[]) =>
-      spawnSync(process.execPath, [cq, ...args], {
+      spawnSync(process.execPath, [ravenseat, ...args], {
         cwd: project,
         encoding: 'utf8',
-        env: { ...process.env, QUEUE_ROOT: project, QUEUE_FOLDER: path.join(base, 'cq-queue') },
+        env: { ...process.env, QUEUE_ROOT: project, QUEUE_FOLDER: path.join(base, 'ravenseat-queue') },
       });
     expect(run('help', 'all').stdout).toContain('prepare-track');
     const init = run('init');
     expect(init.status, init.stderr).toBe(0);
-    expect(fs.existsSync(path.join(base, 'cq-queue', 'queue.json'))).toBe(true);
-    // `cq board --help` reaches queue-board.mjs (its usage line), not queue.mjs.
+    expect(fs.existsSync(path.join(base, 'ravenseat-queue', 'queue.json'))).toBe(true);
+    // `ravenseat board --help` reaches queue-board.mjs (its usage line), not queue.mjs.
     expect(run('board', '--help').stdout).toContain('Kanban board');
   });
 });

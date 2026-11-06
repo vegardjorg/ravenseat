@@ -7,7 +7,7 @@
 // read-only agent (the `triage` helper, plugin/agents/triage.md) answers first.
 //
 // The parts:
-//   - triageSetup(config, queue): is triage on, and the rule's numbers. The switch is the helper switch (`cq helpers
+//   - triageSetup(config, queue): is triage on, and the rule's numbers. The switch is the helper switch (`ravenseat helpers
 //     on|off triage`, the board's Helper agents tab, `helpers.triage.enabled`); the rule is `triage` in
 //     queue.config.json. Lite mode: off unless the owner switched it on in the queue.
 //   - needsTriage(o, queue, ...): THE rule. A waiting task needs a verdict when it was added or last edited at least
@@ -16,13 +16,13 @@
 //     the last edit (and younger than minAgeDays) satisfies it.
 //   - triageCandidates(queue, ...): the startable tasks that need a verdict, in ranked order. `fill` skips them (other
 //     tasks take the slots) and prints the triage step for the first few instead.
-//   - recordVerdict(queue, id, ...): `cq triage <id> --verdict ready|done|stale|adjust`. ready: startable. adjust: the
+//   - recordVerdict(queue, id, ...): `ravenseat triage <id> --verdict ready|done|stale|adjust`. ready: startable. adjust: the
 //     note goes into the mission as an addition (the bonus, like an owner answer), then startable. done and stale: an
 //     owner question with choices; the task never starts or closes by itself.
-//   - ownerChoice(queue, questionId, answer): the owner's answer to that question (`cq resolve <q> --choice <n>`):
-//     close (cancelled), keep (startable) or rewrite (parked until the mission is rewritten and `cq continue`).
+//   - ownerChoice(queue, questionId, answer): the owner's answer to that question (`ravenseat resolve <q> --choice <n>`):
+//     close (cancelled), keep (startable) or rewrite (parked until the mission is rewritten and `ravenseat continue`).
 //   - triagePrompt / triageMessage: the prompt file and the short message the orchestrator starts the agent with.
-//   - verdictStatistics(queue): the verdict counts for the helper measurement (cq helpers, the board).
+//   - verdictStatistics(queue): the verdict counts for the helper measurement (ravenseat helpers, the board).
 //
 // Pure logic (no file I/O), tested in lib/__tests__/queueTriage.test.ts.
 // =============================================================
@@ -67,9 +67,9 @@ function triageSetup(config, queue = null) {
   const lite = require('./liteMode.js').isLite(config);
   let why = null;
   if (!h) why = 'the triage helper is not in the setup';
-  else if (!h.enabled) why = 'switched off (cq helpers on triage)';
+  else if (!h.enabled) why = 'switched off (ravenseat helpers on triage)';
   // Lite mode keeps the core loop: triage only when the owner switched it on in the queue itself.
-  else if (lite && !(h.switchedInQueue && h.wantedOn)) why = 'off in lite mode (cq helpers on triage)';
+  else if (lite && !(h.switchedInQueue && h.wantedOn)) why = 'off in lite mode (ravenseat helpers on triage)';
   return { on: !why, why, ...ruleSetup(config) };
 }
 
@@ -189,7 +189,7 @@ function choicesFor(verdict) {
 }
 
 /**
- * Records a verdict (`cq triage <id> --verdict ...`). Mutates the queue (the caller writes it under the lock).
+ * Records a verdict (`ravenseat triage <id> --verdict ...`). Mutates the queue (the caller writes it under the lock).
  *   ready   the task may start.
  *   adjust  the note is added to the mission (bonus "TRIAGE adjust (<date>): <note>"), then the task may start.
  *   done    an owner question `triage-<id>` with choices (Close as done, Keep and start anyway, Rewrite); the task
@@ -244,11 +244,11 @@ function recordVerdict(queue, id, { verdict, note = null, by = null, head = null
 }
 
 /**
- * The owner's answer to a triage question (`cq resolve <q> --choice <n>`, also from the board). Called under the same
+ * The owner's answer to a triage question (`ravenseat resolve <q> --choice <n>`, also from the board). Called under the same
  * lock as the resolve, after it. Mutates the queue.
  *   Close as done / Close as stale   the task is cancelled (the owner's own choice, with a remark).
  *   Keep and start anyway            the task may start (the verdict counts as kept from now).
- *   Rewrite                          the task is parked until the mission is rewritten (cq edit) and `cq continue`.
+ *   Rewrite                          the task is parked until the mission is rewritten (ravenseat edit) and `ravenseat continue`.
  * A free-text answer does nothing here (the orchestrator reads it and acts).
  * @returns {{ id: string, action: 'close'|'keep'|'rewrite'|'none', error?: string|null }|null} null = not a triage question
  */
@@ -273,7 +273,7 @@ function ownerChoice(queue, questionId, answer, { by = null, now = new Date().to
   }
   if (s.startsWith('rewrite')) {
     done();
-    const p = L.park(queue, [o.id], { by: by ?? 'owner', reason: `rewrite the mission after triage (${questionId}), then cq continue ${o.id}`, now });
+    const p = L.park(queue, [o.id], { by: by ?? 'owner', reason: `rewrite the mission after triage (${questionId}), then ravenseat continue ${o.id}`, now });
     return { id: o.id, action: 'rewrite', error: p.error?.length ? p.error.join('; ') : null };
   }
   return { id: o.id, action: 'none', error: null };
@@ -291,7 +291,7 @@ function triageMessage(id, promptPath) {
  * The triage prompt file: the task, its mission and owned files, and the answer format. `missionText` is the mission
  * (the file's text when the mission is a path); `head` the base branch's commit the check is against.
  */
-function triagePrompt(o, { reason, base, head = null, missionText = null, missionPath = null, cq = 'cq' } = {}) {
+function triagePrompt(o, { reason, base, head = null, missionText = null, missionPath = null, ravenseat = 'ravenseat' } = {}) {
   const list = (x) => (Array.isArray(x) && x.length ? x.map((f) => `- \`${f}\``).join('\n') : '- (none listed)');
   const bonus = (Array.isArray(o.bonus) ? o.bonus : []).map((b) => `- ${b.time}: ${b.text}`);
   return [
@@ -327,7 +327,7 @@ function triagePrompt(o, { reason, base, head = null, missionText = null, missio
     '  part that is already done, what to do instead. It is added to the mission as it is, so write it for the track.',
     '',
     'Then at most 5 short lines. The orchestrator records it:',
-    `\`${cq} triage ${o.id} --verdict <ready|done|stale|adjust> --note "<your note>"\`.`,
+    `\`${ravenseat} triage ${o.id} --verdict <ready|done|stale|adjust> --note "<your note>"\`.`,
   ].join('\n');
 }
 
@@ -349,7 +349,7 @@ function verdictStatistics(queue, { since = null } = {}) {
   return out;
 }
 
-/** The rule in words, for `cq helpers` and the board ("When: ..."). */
+/** The rule in words, for `ravenseat helpers` and the board ("When: ..."). */
 function whenText(setup) {
   const parts = [];
   if (setup.minAgeDays != null) parts.push(`a task added or last edited ${setup.minAgeDays}+ days ago`);

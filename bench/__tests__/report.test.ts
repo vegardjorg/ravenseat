@@ -22,8 +22,8 @@ describe('render', () => {
     for (const h of ['# Benchmark report: synthetic', '## Data warnings', '## Arms', '## Usage by session type', '## Gates',
       '## System load', '## Paired comparisons', '## Defects after merge', '## Tasks'])
       expect(md).toContain(h);
-    expect(md).toContain('$3.30'); // cq USD per merged change
-    expect(md).toContain('| cq | manual | usd | 2 |');
+    expect(md).toContain('$3.30'); // ravenseat USD per merged change
+    expect(md).toContain('| ravenseat | manual | usd | 2 |');
     expect(md).not.toMatch(/NaN|undefined/);
   });
 
@@ -50,7 +50,7 @@ describe('paths', () => {
 
   it('the default results root honours BENCH_RESULTS and otherwise lies in the home folder', () => {
     expect(PT.defaultResultsRoot({ BENCH_RESULTS: os.tmpdir() })).toBe(path.resolve(os.tmpdir()));
-    expect(PT.defaultResultsRoot({})).toBe(path.join(os.homedir(), '.cq-bench', 'results'));
+    expect(PT.defaultResultsRoot({})).toBe(path.join(os.homedir(), '.ravenseat-bench', 'results'));
     expect(PT.runFolderName('e', new Date(0))).toBe('e-1970-01-01T00-00-00-000Z');
   });
 });

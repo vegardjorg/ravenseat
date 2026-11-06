@@ -1,5 +1,5 @@
 // =============================================================
-// queueDoctor.test.ts: `cq doctor`, the read-only health check (scripts/orchestrator/cli/doctor.mjs).
+// queueDoctor.test.ts: `ravenseat doctor`, the read-only health check (scripts/orchestrator/cli/doctor.mjs).
 //
 // Why: a half-deleted worktree folder, a hooks file that points at a missing script or a config value of the wrong
 // type stop the queue quietly. The doctor must name each of them with a fix hint, exit 1 on a FAIL, and never change
@@ -82,8 +82,8 @@ function snapshot(dir: string): Record<string, string> {
   return out;
 }
 
-describe('cq doctor', () => {
-  it('a live holder of an old lock is not called stale, and the fix names cq unlock', () => {
+describe('ravenseat doctor', () => {
+  it('a live holder of an old lock is not called stale, and the fix names ravenseat unlock', () => {
     const p = project({ config: { baseBranch: 'main', loadGuard: { minFreeMemoryPct: null } } });
     const lock = path.join(p.data, '.lockState');
     fs.mkdirSync(lock);
@@ -172,7 +172,7 @@ describe('cq doctor', () => {
     fs.rmSync(path.join(p.data, 'plans.json'));
     fs.writeFileSync(path.join(p.root, 'queue.config.json'), '{}');
     r = p.run();
-    expect(r.out).toMatch(/^WARN {2}queue {6}no queue at .*\n {17}fix: run cq init$/m);
+    expect(r.out).toMatch(/^WARN {2}queue {6}no queue at .*\n {17}fix: run ravenseat init$/m);
     expect(r.code).toBe(0);
   }, 60_000);
 

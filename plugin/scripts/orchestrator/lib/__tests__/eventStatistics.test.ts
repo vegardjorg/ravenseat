@@ -98,7 +98,7 @@ describe('flow figures', () => {
     const sha = 'a'.repeat(40);
     const queue = {
       tasks: [
-        // Prepared with cq resume, no agent ever started.
+        // Prepared with ravenseat resume, no agent ever started.
         { id: 'A', status: 'done', done, resumed: [{ round: 1, reason: 'fix' }], attempts: [{ round: 1, state: 'ended', outcome: 'expired' }] },
         // Ran and delivered.
         { id: 'B', status: 'done', done, resumed: [{ round: 1, reason: 'fix' }], attempts: [{ round: 1, state: 'ended', delivered_sha: 'x' }] },

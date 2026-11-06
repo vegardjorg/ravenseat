@@ -197,7 +197,7 @@ export function planModules(json) {
   if (!dry && !empty && undoHint()) console.log(undoHint());
   if (!link)
     console.log(
-      'Projects are linked with cq plan modules --link (proposed) or cq project <pid> --area <oid>.',
+      'Projects are linked with ravenseat plan modules --link (proposed) or ravenseat project <pid> --area <oid>.',
     );
 }
 /**
@@ -242,7 +242,7 @@ export function planBackup() {
   console.log(
     push
       ? 'Backup done and pushed.'
-      : 'Backup done (push with cq plan backup --push).',
+      : 'Backup done (push with ravenseat plan backup --push).',
   );
 }
 /**
@@ -275,6 +275,6 @@ export function planActive(json) {
     console.log(r.changed ? `${id}: the cursor is removed.` : `${id}: had no marker.`);
   else
     console.log(
-      `${id}: under work (by ${r.cursor.by}, ${r.cursor.at}); end with cq plan active ${id} --end`,
+      `${id}: under work (by ${r.cursor.by}, ${r.cursor.at}); end with ravenseat plan active ${id} --end`,
     );
 }

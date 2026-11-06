@@ -2,10 +2,10 @@
 // helperFiles.js: the file side of the custom helper agents (lib/queueHelpers.js holds the rules, lib/helperScan.js the
 // scan). See docs/orchestration.md ("Custom helper agents").
 //
-// Only reads and hashes files, and copies the one file `cq helpers add` brings in. Nothing here runs anything from an
+// Only reads and hashes files, and copies the one file `ravenseat helpers add` brings in. Nothing here runs anything from an
 // agent file. Every path is project relative and must stay inside the project root (no "..", no absolute path).
 //
-// Tested through lib/__tests__/helperCustom.test.ts (cq helpers add/approve/remove and the hash check).
+// Tested through lib/__tests__/helperCustom.test.ts (ravenseat helpers add/approve/remove and the hash check).
 // =============================================================
 'use strict';
 
@@ -55,7 +55,7 @@ function currentHashes(config, queue, root) {
   return out;
 }
 
-/** The setup with the files checked: the one call `cq helpers`, `cq receive` and the board use. */
+/** The setup with the files checked: the one call `ravenseat helpers`, `ravenseat receive` and the board use. */
 function verifiedSetup(config, queue, root) {
   const hashes = currentHashes(config, queue, root);
   return { hashes, setup: HELP.helperSetup(config, queue, { hashes }) };
@@ -77,7 +77,7 @@ function pluginAgentNames(here = __dirname) {
 }
 
 /**
- * Reads the agent file `cq helpers add` was given. Only a regular .md file up to 256 kB; its text is returned, never run.
+ * Reads the agent file `ravenseat helpers add` was given. Only a regular .md file up to 256 kB; its text is returned, never run.
  * @returns {{ text: string, abs: string } | { error: string }}
  */
 function readSource(file, cwd) {

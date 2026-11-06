@@ -3,7 +3,7 @@
 // log, and the reads the views need (the session state, the subagents per session).
 //
 // Every function here is fail open: an error is swallowed and the command goes on exactly as without the row. The
-// rows are measurement only (cq cost, cq limit, the board's Statistics tab).
+// rows are measurement only (ravenseat cost, ravenseat limit, the board's Statistics tab).
 //
 // Used by: cli/run.mjs (fill, start, resume), cli/merge.mjs (merge), cli/baseHealth.mjs (recordVerdict),
 //   cli/triage.mjs (triage --verdict), cli/cost.mjs (cost, limit).

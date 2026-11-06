@@ -1,8 +1,8 @@
 // =============================================================
-// ownerWait.js: what counts as an owner action for `cq wait`, and the heartbeat the board reads.
+// ownerWait.js: what counts as an owner action for `ravenseat wait`, and the heartbeat the board reads.
 //
 // Why: the orchestrator only runs when an agent finishes or the owner types in the session. When everything waits on the
-// owner, an answer given on the board sits unseen. `cq wait` (cli/wait.mjs) runs with run_in_background and exits when
+// owner, an answer given on the board sits unseen. `ravenseat wait` (cli/wait.mjs) runs with run_in_background and exits when
 // the owner acts, and Claude Code starts a new turn when a background command exits.
 //
 // Where an owner action is recorded. Only some writes go through the changelog (queue.changelog, lib/logic/edit.js:
@@ -16,7 +16,7 @@
 //   - a task with a new `qa_ok` time, not `qa_ok_by: "auto"` (qa ok),
 //   - a task with a new QA deviation note (qa fail; the fix task it adds is not listed again as an add),
 //   - a new task with `added_by` owner or theBoard (add).
-// `cq set` writes no `by` and is not detected. Agent and orchestrator writes (by a task id, "cq", or no --by) do not
+// `ravenseat set` writes no `by` and is not detected. Agent and orchestrator writes (by a task id, "ravenseat", or no --by) do not
 // count. Only ids are returned, never answer or note text.
 //
 // Everything here is pure (queue in, list out) apart from the heartbeat reader, which the board calls.
@@ -43,7 +43,7 @@ function lastLogNr(queue) {
   return log(queue).reduce((m, p) => Math.max(m, Number(p?.nr) || 0), 0);
 }
 
-/** When the owner last answered this task through cq resume --answer --by owner, or null. */
+/** When the owner last answered this task through ravenseat resume --answer --by owner, or null. */
 function ownerAnswerAt(o) {
   const hit = (o?.resumed ?? []).filter((x) => x?.answered_at && isOwner(x.by)).at(-1);
   return hit?.answered_at ?? null;
@@ -103,7 +103,7 @@ function ownerActions(queue, base) {
     if (o.qa_ok && o.qa_ok !== (base.qaOk[o.id] ?? null) && o.qa_ok_by !== 'auto') push('qa ok', o.id);
     if (o.qa_status === 'deviation' && o.qa_note && o.qa_note !== (base.qaNote[o.id] ?? null)) push('qa fail', o.id);
     if (!known.has(o.id) && isOwner(o.added_by) && !o.qa_original) push('add', o.id);
-    // The board answers a track with cq resume: the round is ready, and only the orchestrator can start its agent.
+    // The board answers a track with ravenseat resume: the round is ready, and only the orchestrator can start its agent.
     const answered = ownerAnswerAt(o);
     if (answered && answered !== (base.answers?.[o.id] ?? null)) push('answer', o.id);
   }

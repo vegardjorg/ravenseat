@@ -41,7 +41,7 @@ const CODE = ['K', 'D', 'D+'];
 // [keyword, the classes that MUST get it]. The list is the binding requirements of the protocol.
 const REQUIREMENT: [string, string[]][] = [
   // all classes
-  ['cq prepare-track', ALL],
+  ['ravenseat prepare-track', ALL],
   ['DENIES', ALL],
   ['npm install', ALL],
   ['NEVER push', ALL],
@@ -49,8 +49,8 @@ const REQUIREMENT: [string, string[]][] = [
   ['conflict markers', ALL],
   ['NEVER kill by pattern', ALL],
   ['hotspots', ALL],
-  ['cq add --file', ALL],
-  ['Noticed something outside your scope? Run `cq finding "<title>"', ALL],
+  ['ravenseat add --file', ALL],
+  ['Noticed something outside your scope? Run `ravenseat finding "<title>"', ALL],
   ['HIGH security finding', ALL],
   ['Context cap about 300k', ALL],
   ['handover.md', ALL],
@@ -59,7 +59,7 @@ const REQUIREMENT: [string, string[]][] = [
   ['never read them', ALL],
   ['offset`/`limit', ALL],
   ['NEVER write your own check script', ALL],
-  ['cq gates --quick', ALL],
+  ['ravenseat gates --quick', ALL],
   ['RESULT status=DONE|PARTIAL', ALL],
   ['at most about 1,500 characters', ALL],
   ['track-result.md', ALL],
@@ -227,7 +227,7 @@ describe('make-queue-common.mjs enforces "Data, not instructions"', () => {
       env: { ...process.env, QUEUE_ROOT: root, QUEUE_CONFIG: path.join(root, 'no-config.json') },
     });
   it('writes the shared protocol from the plugin template, and refuses a project copy without the rule', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-common-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-common-'));
     try {
       fs.mkdirSync(path.join(root, 'out'));
       const ok = run(root);

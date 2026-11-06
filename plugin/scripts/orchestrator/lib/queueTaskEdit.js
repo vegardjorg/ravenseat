@@ -47,7 +47,7 @@ function cancelRemark(reason, { declined = false } = {}) {
  */
 function cancelError(o) {
   if (!o) return 'unknown task';
-  if (L.isExternalRow(o)) return `${o.id} is a record outside the queue (cq external done "${o.external_name ?? o.id}")`;
+  if (L.isExternalRow(o)) return `${o.id} is a record outside the queue (ravenseat external done "${o.external_name ?? o.id}")`;
   if (!CANCEL_STATUSES.has(o.status))
     return (
       `${o.id} is ${o.status}; only waiting and proposed tasks can be cancelled this way ` +
@@ -71,7 +71,7 @@ function cancelTask(o, { remark = null, now = new Date().toISOString() } = {}) {
 }
 
 /** The CLI command that cancels a task the board will not cancel itself. */
-const cliCancelCommand = (id) => `cq set ${id} cancelled --remark "<why>"`;
+const cliCancelCommand = (id) => `ravenseat set ${id} cancelled --remark "<why>"`;
 
 /**
  * The one-line hint the detail panel shows for a running, picked or review task, or null for other statuses.

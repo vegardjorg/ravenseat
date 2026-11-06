@@ -20,7 +20,7 @@ const WG = require('../writeGuard.js') as {
 };
 
 const HOOK = path.resolve(__dirname, '..', '..', 'hook-write-guard.mjs');
-const FOLDER = path.resolve(os.tmpdir(), 'cq-wg', 'q');
+const FOLDER = path.resolve(os.tmpdir(), 'ravenseat-wg', 'q');
 const types = new Set(['reviewer', 'triage']);
 
 describe('writeGuard (pure)', () => {
@@ -32,7 +32,7 @@ describe('writeGuard (pure)', () => {
 
   it('denies a queue agent the trusted state files, never the orchestrator', () => {
     const at = (f: string) => path.join(FOLDER, f);
-    for (const agentType of ['track', 'cq:track', 'track-d', 'cq:reviewer']) {
+    for (const agentType of ['track', 'ravenseat:track', 'track-d', 'ravenseat:reviewer']) {
       expect(WG.assessWrite({ agentType, filePath: at('gate-evidence.json'), folder: FOLDER, guardedTypes: types })?.reason).toMatch(/gate evidence/);
       expect(WG.assessWrite({ agentType, filePath: at('queue.json'), folder: FOLDER, guardedTypes: types })).not.toBeNull();
       expect(WG.assessWrite({ agentType, filePath: at('base-health.json'), folder: FOLDER, guardedTypes: types })).not.toBeNull();
@@ -55,14 +55,14 @@ describe('hook-write-guard.mjs', () => {
   };
 
   it("denies a track's Write on the gate evidence store and lets the orchestrator through", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-writeguard-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-writeguard-'));
     try {
       const folder = path.join(root, 'q');
       fs.mkdirSync(folder);
       fs.writeFileSync(path.join(folder, 'queue.json'), JSON.stringify({ tasks: [] }));
       const env: NodeJS.ProcessEnv = { ...process.env, QUEUE_ROOT: root, QUEUE_FOLDER: folder, QUEUE_CONFIG: path.join(root, 'no-config.json') };
       const store = path.join(folder, 'gate-evidence.json');
-      const write = run(env, { agent_type: 'cq:track', tool_name: 'Write', tool_input: { file_path: store, content: '{}' }, cwd: root });
+      const write = run(env, { agent_type: 'ravenseat:track', tool_name: 'Write', tool_input: { file_path: store, content: '{}' }, cwd: root });
       expect(write.decision).toBe('deny');
       expect(JSON.parse(write.out).hookSpecificOutput.permissionDecisionReason).toContain('gate evidence');
       const editQueue = run(env, { agent_type: 'track', tool_name: 'Edit', tool_input: { file_path: path.join(folder, 'queue.json') }, cwd: root });
@@ -75,7 +75,7 @@ describe('hook-write-guard.mjs', () => {
   });
 
   it('is inert outside a queue project', () => {
-    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-writeguard-off-'));
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-writeguard-off-'));
     try {
       const env = { ...process.env };
       for (const k of Object.keys(env)) if (k.startsWith('QUEUE_')) delete env[k];

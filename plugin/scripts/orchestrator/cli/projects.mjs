@@ -18,13 +18,13 @@ import {
   undoHint, val, values, WIDTH,
 } from './context.mjs';
 
-/** `cq projects` (the usage is at the top of queue.mjs). */
+/** `ravenseat projects` (the usage is at the top of queue.mjs). */
 export function cmdProjects() {
   // ---- Project and feature ----
   const queue = read();
   if (!Object.keys(queue.projects ?? {}).length)
     console.log(
-      'The register is empty: create one with cq project <pid> --title "..." --prefix EX- (or edit-many --file).\n',
+      'The register is empty: create one with ravenseat project <pid> --title "..." --prefix EX- (or edit-many --file).\n',
     );
   for (const r of L.projectOverview(queue)) {
     const parts = [
@@ -64,7 +64,7 @@ export function cmdProjects() {
   }
 }
 
-/** `cq project` (the usage is at the top of queue.mjs). */
+/** `ravenseat project` (the usage is at the top of queue.mjs). */
 export function cmdProject() {
   const pid = a[1];
   if (!pid || pid.startsWith('--'))
@@ -120,7 +120,7 @@ export function cmdProject() {
   if (undoHint()) console.log(undoHint());
 }
 
-/** `cq area` (the usage is at the top of queue.mjs). */
+/** `ravenseat area` (the usage is at the top of queue.mjs). */
 export function cmdArea() {
   // ---- Areas, focus and parking ----
   const oid = a[1];
@@ -150,12 +150,12 @@ export function cmdArea() {
     );
 }
 
-/** `cq areas` (the usage is at the top of queue.mjs). */
+/** `ravenseat areas` (the usage is at the top of queue.mjs). */
 export function cmdAreas() {
   const queue = read();
   if (!Object.keys(queue.areas ?? {}).length)
     console.log(
-      'No areas yet: create one with cq area <oid> --title "..." --projects <pid> ...\n',
+      'No areas yet: create one with ravenseat area <oid> --title "..." --projects <pid> ...\n',
     );
   for (const r of L.areaOverview(queue)) {
     const parts = [
@@ -174,7 +174,7 @@ export function cmdAreas() {
   }
 }
 
-/** `cq focus` (the usage is at the top of queue.mjs). */
+/** `ravenseat focus` (the usage is at the top of queue.mjs). */
 export function cmdFocus() {
   const under = a[1];
   if (under === 'set') {
@@ -269,7 +269,7 @@ export function cmdFocus() {
     const ev = L.evaluateFocusStep(queue);
     if (a.includes('--json')) {
       console.log(JSON.stringify({ ok: true, focus: !!queue.focus, stages: ev }));
-    } else if (!ev.length) console.log('No focus set (cq focus set ...).');
+    } else if (!ev.length) console.log('No focus set (ravenseat focus set ...).');
     else {
       const max = a.includes('--all') ? Infinity : 10;
       for (const t of ev) {
@@ -284,7 +284,7 @@ export function cmdFocus() {
         if (t.rests.length > max) console.log(`    … and ${t.rests.length - max} more (--all shows all)`);
       }
       const done = ev.filter((t) => t.status === 'done').length;
-      if (done) console.log(`${done} stage(s) are done: cq focus clean takes them out.`);
+      if (done) console.log(`${done} stage(s) are done: ravenseat focus clean takes them out.`);
     }
   } else if (under === 'clean') {
     // Takes out the stages with status done (queueLogic.cleanFocus); --dry computes without writing.
@@ -295,7 +295,7 @@ export function cmdFocus() {
     if (dry) console.log(`Dry run (nothing written): ${r.taken_out.length} stage(s) would be taken out.`);
     if (!r.taken_out.length) console.log('No done focus stages to take out.');
     for (const l of L.focusCleanLines(r)) console.log(l);
-    if (r.entry) console.log(`Changelog no. ${r.entry.nr}; undo: cq undo`);
+    if (r.entry) console.log(`Changelog no. ${r.entry.nr}; undo: ravenseat undo`);
   } else if (under === 'off') {
     const oldOne = edit((queue) => L.removeFocus(queue));
     console.log(
@@ -312,7 +312,7 @@ export function cmdFocus() {
     if (!queue.focus) {
       console.log(
         'No focus set: the queue is ranked by score and projectBonus.\n' +
-          'Set: cq focus set area:<oid> project:<pid> feature:<pid>/<name> ... [--rest wait|fill] [--to <date>]' +
+          'Set: ravenseat focus set area:<oid> project:<pid> feature:<pid>/<name> ... [--rest wait|fill] [--to <date>]' +
           ' [--continue-when-empty on|off]\n' +
           `When a focus has ended: continue when empty: ${L.focusContinues(queue).setting ? 'on' : 'off'} ` +
           '(config focus.continueWhenEmpty)',
@@ -337,13 +337,13 @@ export function cmdFocus() {
           `${st.halted ? ' · QUEUE PAUSED' : ''}`,
       );
       if (st.active) {
-        // Done stages and stages with only rests are marked (the details: cq focus evaluate).
+        // Done stages and stages with only rests are marked (the details: ravenseat focus evaluate).
         const ev = L.evaluateFocusStep(queue);
         const mark = (e) =>
           e?.status === 'done'
-            ? ' · DONE (cq focus clean)'
+            ? ' · DONE (ravenseat focus clean)'
             : e?.status === 'done-with-rests'
-              ? ` · DONE WITH ${e.rests.length} REST(S) (cq focus evaluate)`
+              ? ` · DONE WITH ${e.rests.length} REST(S) (ravenseat focus evaluate)`
               : '';
         st.per_step.forEach((t, i) =>
           console.log(
@@ -391,7 +391,7 @@ export function cmdFocus() {
   }
 }
 
-/** `cq park` (the usage is at the top of queue.mjs). */
+/** `ravenseat park` (the usage is at the top of queue.mjs). */
 export function cmdPark() {
   const ids = positional(1, ['--reason', '--to', '--by', '--expect-changed']);
   const r = editLogged('park', (queue) => {
@@ -404,13 +404,13 @@ export function cmdPark() {
     return s;
   });
   console.log(
-    `Parked (stays until cq continue${val('--to') ? ' or the date' : ''}): ${r.parked.join(', ')}`,
+    `Parked (stays until ravenseat continue${val('--to') ? ' or the date' : ''}): ${r.parked.join(', ')}`,
   );
   for (const x of r.warnings) console.log(`WARNING: ${x}`);
   if (undoHint()) console.log(undoHint());
 }
 
-/** `cq continue` (the usage is at the top of queue.mjs). */
+/** `ravenseat continue` (the usage is at the top of queue.mjs). */
 export function cmdContinue() {
   const ids = positional(1, ['--by', '--expect-changed']);
   const r = editLogged('continue', (queue) => {
@@ -423,7 +423,7 @@ export function cmdContinue() {
   if (undoHint()) console.log(undoHint());
 }
 
-/** `cq rank` (the usage is at the top of queue.mjs). */
+/** `ravenseat rank` (the usage is at the top of queue.mjs). */
 export function cmdRank() {
   // ---- Block moves ----
   // Moves tasks together within the focus stage and keeps the order they had among themselves (queueLogic.rankBlock), by

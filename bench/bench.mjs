@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // =============================================================
-// bench.mjs: command line for the cq benchmark (token use, cost, savings and system load). See bench/README.md.
+// bench.mjs: command line for the ravenseat benchmark (token use, cost, savings and system load). See bench/README.md.
 //
 //   node bench/bench.mjs validate --manifest <file>
 //   node bench/bench.mjs assign   --pairs <file> --arms <a,b> [--seed <n>]

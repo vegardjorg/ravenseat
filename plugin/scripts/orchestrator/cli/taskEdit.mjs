@@ -17,7 +17,7 @@ import fs from 'node:fs';
 
 import {
   a, autoCleanFocus, branchFor, branchInfo, byName, checkExpect, die, edit, editLogged, focusCleanOut, FX, hasLock, L, lastEntry, LOCK, P,
-  PREFIX, pulseCursor, read, readCursor, readPlans, require, undoHint, val, values, CONFIG, CQ, G, git,
+  PREFIX, pulseCursor, read, readCursor, readPlans, require, undoHint, val, values, CONFIG, CLI, G, git,
 } from './context.mjs';
 import { logTime, measurementLine, measureTask, minutes, saveMeasurement } from './tracks.mjs';
 
@@ -27,7 +27,7 @@ import { logTime, measurementLine, measureTask, minutes, saveMeasurement } from 
 const D = require('./lib/doneCheck.js');
 let trackBranchCache;
 /**
- * The track branch the cwd is on (`<branchPrefix><id>`), or null. A track agent runs cq from its worktree, so this is
+ * The track branch the cwd is on (`<branchPrefix><id>`), or null. A track agent runs ravenseat from its worktree, so this is
  * what tells a track's edit apart from the owner's, whatever --by says. Asked only when a locked field is touched.
  */
 export function trackBranchHere() {
@@ -52,7 +52,7 @@ const lockError = (o, changes) =>
     inTrack: D.LOCKED_FIELDS.some((f) => Object.hasOwn(changes, f)) ? trackBranchHere() : null,
   });
 
-/** `cq set` (the usage is at the top of queue.mjs). */
+/** `ravenseat set` (the usage is at the top of queue.mjs). */
 export function cmdSet() {
   const [, id, status] = a;
   if (!id || !status) die('set <id> <status>');
@@ -100,7 +100,7 @@ export function cmdSet() {
     );
   }
   console.log(
-    `${id}: ${status}${qa ? ' · label visual: now in the owner QA list (cq qa)' : ''}`,
+    `${id}: ${status}${qa ? ' · label visual: now in the owner QA list (ravenseat qa)' : ''}`,
   );
   if (status === 'cancelled') {
     // Nothing is deleted on its own, since the work may be wanted. Said here, so it does not stay unnoticed.
@@ -112,7 +112,7 @@ export function cmdSet() {
       const holder = holders.length ? holders.map((w) => w.path).join(', ') : null;
       console.log(
         `Left behind: branch ${branch}${info.commits ? ` with ${info.commits} commit(s) that are not merged` : ''}${holder ? `, worktree ${holder}` : ''}. ` +
-          `To drop it: ${holder ? `${CQ} cleanup-worktree ${branch} --abandon --execute (the branch stays), then ` : ''}git branch -D ${branch}${info.commits ? ' (the commits go with it)' : ''}.`,
+          `To drop it: ${holder ? `${CLI} cleanup-worktree ${branch} --abandon --execute (the branch stays), then ` : ''}git branch -D ${branch}${info.commits ? ' (the commits go with it)' : ''}.`,
       );
     }
   }
@@ -121,7 +121,7 @@ export function cmdSet() {
   if (orchestratorStep && L.orchestratorStatus(readCursor()).active) pulseCursor(`set ${id} ${status}`);
 }
 
-/** `cq cancel` (the usage is at the top of queue.mjs). */
+/** `ravenseat cancel` (the usage is at the top of queue.mjs). */
 export function cmdCancel() {
   // Cancel (or decline) one waiting or proposed task, logged so `undo` can put it back (lib/queueTaskEdit.js).
   const TE = require('./lib/queueTaskEdit.js');
@@ -148,7 +148,7 @@ export function cmdCancel() {
   }
 }
 
-/** `cq edit` (the usage is at the top of queue.mjs). */
+/** `ravenseat edit` (the usage is at the top of queue.mjs). */
 export function cmdEdit() {
   const [, id] = a;
   const field = JSON.parse(val('--json') ?? '{}');
@@ -179,7 +179,7 @@ export function cmdEdit() {
     'external',
     'external_name',
     'done_outside_queue',
-    // The attempts are the queue's own record of what ran (lib/logic/attempt.js); only cq attempt close changes one by hand.
+    // The attempts are the queue's own record of what ran (lib/logic/attempt.js); only ravenseat attempt close changes one by hand.
     'attempts',
   ])
     delete field[f];
@@ -187,7 +187,7 @@ export function cmdEdit() {
   const unknownFlags = a.filter((x) => x.startsWith('--') && !['--json', '--files', '--accept', '--bonus', '--by'].includes(x));
   if (!Object.keys(field).length && bonus == null && !read().tasks.some((x) => x.id === id)) die(`Unknown task ${id}`);
   if (!Object.keys(field).length && bonus == null)
-    die(`Nothing changed: ${unknownFlags.length ? `edit does not know ${unknownFlags.join(', ')}. ` : ''}edit ${id} needs --json '{...}', --files a,b, --accept "<criterion>" or --bonus "<text>". Status: ${CQ} set ${id} <status>.`);
+    die(`Nothing changed: ${unknownFlags.length ? `edit does not know ${unknownFlags.join(', ')}. ` : ''}edit ${id} needs --json '{...}', --files a,b, --accept "<criterion>" or --bonus "<text>". Status: ${CLI} set ${id} <status>.`);
   editLogged('edit', (queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
@@ -238,13 +238,13 @@ export function cmdEdit() {
     console.log(`${id} changed: ${changedField.join(', ')}`);
     if (bonus != null)
       console.log(
-        'The addition is in the track block from now on (cq trackFile / fill --ids). If the track is already running: send it with SendMessage.',
+        'The addition is in the track block from now on (ravenseat trackFile / fill --ids). If the track is already running: send it with SendMessage.',
       );
     if (undoHint()) console.log(undoHint());
   }
 }
 
-/** `cq edit-many` (the usage is at the top of queue.mjs). */
+/** `ravenseat edit-many` (the usage is at the top of queue.mjs). */
 export function cmdEditMany() {
   const file = val('--file');
   if (!file) die('edit-many --file <json>');
@@ -329,7 +329,7 @@ export function cmdEditMany() {
   }
 }
 
-/** `cq undo` (the usage is at the top of queue.mjs). */
+/** `ravenseat undo` (the usage is at the top of queue.mjs). */
 export function cmdUndo() {
   // ---- Undo the last change ----
   // Rolls back the last changelog entry that is not undone, when the fields still have the values the entry set.
@@ -358,7 +358,7 @@ export function cmdUndo() {
       console.log(
         s.error.length
           ? `Can NOT be undone now:\n  ${s.error.join('\n  ')}`
-          : 'Can be undone (cq undo).',
+          : 'Can be undone (ravenseat undo).',
       );
     }
   } else {

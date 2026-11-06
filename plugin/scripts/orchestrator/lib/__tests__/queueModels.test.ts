@@ -40,7 +40,7 @@ describe('models: model per agent', () => {
   it('a set model is printed on the start line; the plugin prefix and case do not matter', () => {
     const out = withConfig(
       { models: { 'reviewer-docs': 'Sonnet', track: 'opus' } },
-      `console.log(L.modelFor('cq:reviewer-docs'), L.modelFor('track'), L.modelFor('reviewer'));
+      `console.log(L.modelFor('ravenseat:reviewer-docs'), L.modelFor('track'), L.modelFor('reviewer'));
        console.log(L.concurrentBlock([{ subagent_type: 'reviewer-docs', prompt: 'p.md' }, { subagent_type: 'reviewer', prompt: 'q.md' }]).join('\\n'));`,
     );
     expect(out).toContain('sonnet opus null');

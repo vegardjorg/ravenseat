@@ -35,8 +35,8 @@ const FEATURES = Object.freeze({
 const STANDARD = Object.freeze({
   // "full" (every feature) or "lite" (the core loop only: init, add with just a title, show, fill, receive, merge; one
   // task type, no small-task guard or batch queue, the short help; owner questions stay). See lib/liteMode.js. A config
-  // without the key is full, so existing installs keep working as before; a fresh `cq init` writes "lite" (opt out
-  // with `cq init --full`). Switch with `cq mode lite|full`.
+  // without the key is full, so existing installs keep working as before; a fresh `ravenseat init` writes "lite" (opt out
+  // with `ravenseat init --full`). Switch with `ravenseat mode lite|full`.
   mode: 'full',
   // The project name in texts (mission, agent messages, the board).
   projectName: 'theProject',
@@ -70,29 +70,29 @@ const STANDARD = Object.freeze({
   // timeoutSec = the time budget per run (a run over it is red); tailLines = how many of the last output lines are kept
   // for the fix brief (only the tail, so a secret printed early in a long run is not copied around).
   doneCheck: { timeoutSec: 600, tailLines: 40 },
-  // The base gate (lib/baseHealth.js): after `cq merge` the base branch's new tip is checked in the main checkout and the
+  // The base gate (lib/baseHealth.js): after `ravenseat merge` the base branch's new tip is checked in the main checkout and the
   // verdict recorded per tip; a red base stops further merges until a fix task makes it green. enabled: "auto" (on when
   // there are commands), true or false. commands: null = the quick gates (then the merge step's own gates run is the
   // check, nothing runs twice), or a list (e.g. the full gate) run after the quick gates. timeoutSec = the budget for
   // the whole list; tailLines = the output lines kept for the fix task (null = doneCheck.tailLines). flakyRerun: a red
   // check reruns only the failed commands once on the same sha first; green then is "flaky" (a finding, no freeze).
   baseGate: { enabled: 'auto', commands: null, timeoutSec: 900, tailLines: null, flakyRerun: true },
-  // The batch push threshold (lib/pushBatch.js; `cq push-check`, the push guard, the board). Every push of baseBranch
-  // runs the whole CI, so pushes come in batches of MERGED TASKS (merges through cq merge not yet on <remote>).
+  // The batch push threshold (lib/pushBatch.js; `ravenseat push-check`, the push guard, the board). Every push of baseBranch
+  // runs the whole CI, so pushes come in batches of MERGED TASKS (merges through ravenseat merge not yet on <remote>).
   // mode: "owner" = the orchestrator never pushes on its own, only on the owner's word; "threshold" = it may push by
   // itself when push-check says READY or LARGE (never BLOCKED). minTasks: the batch is ready at this many merged tasks
   // (0 = no lower limit); a plain push below it gets a confirmation dialog in both modes. warnTasks: from this many,
   // push-check says LARGE (a warning, never a block: a big batch makes a red CI harder to bisect; 0 = off).
   // maxAgeHours: when set, the oldest unpushed work older than this makes the batch ready below minTasks.
   // ciWatch: "off" (default) or "github": the optional CI watch after a batch push
-  // (`cq push-check --watch-ci <sha>`, lib/ciWatch.js, needs gh): polls the runs every ciWatchIntervalSec, gives up
+  // (`ravenseat push-check --watch-ci <sha>`, lib/ciWatch.js, needs gh): polls the runs every ciWatchIntervalSec, gives up
   // after ciWatchTimeoutMin (exit 10). Local gates stay the rule; this is a safety net.
   // allowBranches: branches the main session may push besides baseBranch, for pull request flows ("feat/*"; * is any text).
   // Queue agents never push, and a delete stays denied. A forced push of such a branch asks first; of the base, never. The
   // secret scan runs on these too.
   // controlsWarning: a plain push asks when the project has no CI config or no gates (lib/controls.js); false = no question.
   push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90, controlsWarning: true, allowBranches: [] },
-  // The branch that goes live (production). null = unknown. `cq doctor` warns when it is the same as baseBranch: every
+  // The branch that goes live (production). null = unknown. `ravenseat doctor` warns when it is the same as baseBranch: every
   // batch push would then go straight to production. Nothing else reads it yet.
   productionBranch: null,
   // Commands that deploy (e.g. "vercel --prod", "fly deploy"). The push guard ASKS before any command that starts with
@@ -104,7 +104,7 @@ const STANDARD = Object.freeze({
   // dialog naming file:line, never the value. maxBytes: a larger diff is not scanned, and the push asks. timeoutMs: per git or
   // gitleaks call. Fails open.
   secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000 },
-  // `cq doctor` warns about tracked files larger than this (MB).
+  // `ravenseat doctor` warns about tracked files larger than this (MB).
   largeFileMb: 5,
   // Attempts (lib/logic/attempt.js): how long, in minutes, a reservation with no start row counts as live. After that it
   // reads as expired and the next start takes a new attempt. A reservation never blocks a start either way.
@@ -177,7 +177,7 @@ const STANDARD = Object.freeze({
   // Helper agents: optional reviewers on top of the fixed ones (lib/queueHelpers.js). One runs for a task when it is
   // enabled AND at least one condition hits: classes, labels, paths (a changed file matches), mostlyPaths (more than
   // half of the changed files match), plan (the task has a plan entry), minMissionItems (numbered points in the
-  // mission). `cq helpers on|off <agent>` (and the board's "Helper agents" tab) switch them in queue.json, which wins.
+  // mission). `ravenseat helpers on|off <agent>` (and the board's "Helper agents" tab) switch them in queue.json, which wins.
   // Path patterns: "dir/" = the folder from the root, "*.md" = that file name anywhere, "**" = any folders.
   helpers: {
     'reviewer-challenger': { enabled: true, classes: ['U'], labels: ['bug'] },
@@ -185,7 +185,7 @@ const STANDARD = Object.freeze({
     'reviewer-tests': { enabled: false, classes: ['D', 'D+'], labels: ['bug'] },
     'reviewer-gap': { enabled: false, plan: true, minMissionItems: 8 },
     'reviewer-docs': { enabled: false, mostlyPaths: ['docs/', '*.md'] },
-    // The short review for a project with no gates or no CI (lib/controls.js). Off: `cq helpers off reviewer-light`.
+    // The short review for a project with no gates or no CI (lib/controls.js). Off: `ravenseat helpers off reviewer-light`.
     'reviewer-light': { enabled: true, whenControlsMissing: ['K'] },
     // The intake triage (lib/queueTriage.js): runs before the start, not after receive; its rule is `triage` below.
     triage: { enabled: true },
@@ -193,14 +193,14 @@ const STANDARD = Object.freeze({
   // Intake triage (lib/queueTriage.js, the `triage` helper): before `fill` starts a task that was added or last edited
   // minAgeDays ago or more (null = no age rule), or that an agent added (agentAdded, once), a short read-only agent
   // checks it against the current code: ready, done, stale or adjust. Never fix tasks or continuations. At most
-  // maxPerFill triage steps per fill; a printed step is not printed again for askAgainMin minutes. Off: `cq helpers
+  // maxPerFill triage steps per fill; a printed step is not printed again for askAgainMin minutes. Off: `ravenseat helpers
   // off triage` (or helpers.triage.enabled false). Lite mode: off unless switched on in the queue.
   triage: { minAgeDays: 3, agentAdded: true, maxPerFill: 3, askAgainMin: 60 },
   // When a focus has ended (every stage done, or its period `to` is over; lib/logic/ranking.js "When the focus has
   // ended"): continueWhenEmpty false (the default) pauses the queue (fill starts nothing) and asks the owner one
   // question in "Waiting on you": set a new focus or continue the regular queue. true = the queue continues by itself
   // (rest fill keeps filling, an expired focus is ranked as without focus), with one line saying so. A focus can
-  // override it: cq focus set ... --continue-when-empty on|off. A project that never set a focus is not affected.
+  // override it: ravenseat focus set ... --continue-when-empty on|off. A project that never set a focus is not affected.
   focus: { continueWhenEmpty: false },
   // Read guard (hook-read-guard.mjs): in addition to the built-in lists.
   readGuard: {
@@ -361,10 +361,10 @@ const STANDARD = Object.freeze({
     mascot: 'chatty',
     // The update banner: the board checks GitHub for a newer plugin version at start (at most once per 24 hours, a
     // plain GET that sends nothing about you). false turns it off; so do DISABLE_UPDATES and
-    // CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC. The local "run cq setup --settings" notice works either way.
+    // CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC. The local "run ravenseat setup --settings" notice works either way.
     updateCheck: true,
     // The Cloud tab (with features.cloud on): hidden unless this is true. queue.json board.showCloud wins (written
-    // by `cq board-setting cloud on|off` and the gear's Board section). A saved Cloud view still opens with the tab hidden.
+    // by `ravenseat board-setting cloud on|off` and the gear's Board section). A saved Cloud view still opens with the tab hidden.
     showCloud: false,
   },
   // The modules that can be switched off (FEATURES above): { "cloud": true } turns one on. Unknown keys are ignored.
@@ -451,7 +451,7 @@ function readConfigFile(file) {
 
 /**
  * Reads queue.config.json (once per process) and merges it with STANDARD. When the file exists but does not parse,
- * the result still holds the defaults (so `cq doctor` and the hooks can run), plus `configError` ({ file, message,
+ * the result still holds the defaults (so `ravenseat doctor` and the hooks can run), plus `configError` ({ file, message,
  * line, column }). The CLI stops on it (stopIfConfigUnreadable); the push guard asks or denies the push, migration and
  * deploy shaped commands (lib/configGuard.js). Nothing else may act on such a config as if it were the project's.
  * @param {{ root?: string, fresh?: boolean }} [o]
@@ -485,13 +485,13 @@ function configErrorText(error) {
     `  ${error.message}`,
     '  The queue does not run on the default values instead: they would drop your base branch, gates, migration',
     '  guard and deploy commands. Fix the file (a trailing comma or a missing quote is the usual cause), then run',
-    '  `cq doctor` to check it. Until then the push guard asks before every push, migration and deploy command.',
+    '  `ravenseat doctor` to check it. Until then the push guard asks before every push, migration and deploy command.',
   ].join('\n');
 }
 
 /**
  * Stops the process (exit 1, the message on stderr) when queue.config.json exists but does not parse. Called by the
- * CLI entry points (cq.mjs, cli/context.mjs, gates.mjs, push-check.mjs); `cq doctor` and `cq help` are exempt there.
+ * CLI entry points (ravenseat.mjs, cli/context.mjs, gates.mjs, push-check.mjs); `ravenseat doctor` and `ravenseat help` are exempt there.
  * @param {object} [k] the configuration (default: config())
  */
 function stopIfConfigUnreadable(k = config()) {
@@ -530,7 +530,7 @@ function features(cfg = config()) {
 
 /**
  * The board's own switches: STANDARD.board merged with config board and then queue.json `board` (the owner's choice
- * from `cq board-setting` or the gear, which wins). Only the known boolean switches (BOARD_SWITCHES) and real booleans count.
+ * from `ravenseat board-setting` or the gear, which wins). Only the known boolean switches (BOARD_SWITCHES) and real booleans count.
  * @param {object} [cfg] the configuration (default: config())
  * @param {object} [queue] queue.json (its `board` object), or null
  * @returns {{ showCloud: boolean }}

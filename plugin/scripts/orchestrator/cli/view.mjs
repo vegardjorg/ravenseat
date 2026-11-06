@@ -40,7 +40,7 @@ function setupBehindLine() {
   try {
     const U = require('./lib/queueUpdate.js');
     const src = require('./lib/queueBoard.js').setupSources(HERE, MAIN_TREE, (f) => fs.existsSync(f));
-    const file = src.manifest ?? path.join(HERE, 'cq-version.json');
+    const file = src.manifest ?? path.join(HERE, 'ravenseat-version.json');
     return U.setupBehindLine({
       mode: src.mode,
       installed: JSON.parse(fs.readFileSync(file, 'utf8')).version ?? null,
@@ -53,10 +53,10 @@ function setupBehindLine() {
 
 /** show prints tables for people. Silently ignoring --json gave a script text it could not parse (test round 5, Q10). */
 function refuseJson() {
-  if (a.includes('--json')) die('show has no --json. Use cq state for JSON, or cq info <id> --json for one task.');
+  if (a.includes('--json')) die('show has no --json. Use ravenseat state for JSON, or ravenseat info <id> --json for one task.');
 }
 
-/** `cq show` without --full/--all/--grouped/--project: the short view (the usage is at the top of queue.mjs). */
+/** `ravenseat show` without --full/--all/--grouped/--project: the short view (the usage is at the top of queue.mjs). */
 export function cmdShowSummary() {
   // The short view by default (active ones, startable and counts, under about 3,000 chars); the full table was
   // about 66,000 chars (about 20,000 tokens per call). `--summary` is also accepted. The full one: `show --full`.
@@ -92,12 +92,12 @@ export function cmdShowSummary() {
   // Follow up: the active entries and TO REPORT. The resume text after a compaction has this view, so due entries are
   // mentioned there too (hook-after-compact.mjs runs queue.mjs show).
   for (const l of followLines()) console.log(l);
-  // Findings from the tracks (cq finding) that nobody has triaged yet.
+  // Findings from the tracks (ravenseat finding) that nobody has triaged yet.
   const fl = findingsLineNow();
   if (fl) console.log(fl);
 }
 
-/** `cq show` (the usage is at the top of queue.mjs). */
+/** `ravenseat show` (the usage is at the top of queue.mjs). */
 export function cmdShow() {
   refuseJson();
   const queue = read();
@@ -187,7 +187,7 @@ export function cmdShow() {
     .filter(inProject);
   if (proposed.length) {
     console.log(
-      `\nSUGGESTION (${proposed.length}, not started until they are approved: cq approve <id...>):`,
+      `\nSUGGESTION (${proposed.length}, not started until they are approved: ravenseat approve <id...>):`,
     );
     for (const o of proposed.sort((x, y) => Number(y.value ?? 5) - Number(x.value ?? 5))) {
       console.log(
@@ -211,7 +211,7 @@ export function cmdShow() {
     const readyOnes = batchGr.filter((g) => g.ready).length;
     console.log(
       `\nBATCH_QUEUE (${n} task(s) in ${batchGr.length} group(s)${readyOnes ? `, ${readyOnes} ready for packing` : ''}; ` +
-        'not started alone, see cq batch):',
+        'not started alone, see ravenseat batch):',
     );
     for (const g of batchGr) console.log(cut(`  ${batchGroupLine(g)}`, WIDTH));
   }
@@ -219,7 +219,7 @@ export function cmdShow() {
   const registered = queue.tasks.filter((o) => L.isExternalRow(o) && o.status === 'external');
   if (registered.length) {
     console.log(
-      `\nOUTSIDE QUEUE (${registered.length}, registered with external add; owns the files until cq external done "<name>"):`,
+      `\nOUTSIDE QUEUE (${registered.length}, registered with external add; owns the files until ravenseat external done "<name>"):`,
     );
     for (const o of registered) {
       const age = o.added_at ? L.ageText(Date.now() - Date.parse(o.added_at)) : '?';
@@ -252,7 +252,7 @@ export function cmdShow() {
   for (const l of followLines()) console.log(l);
 }
 
-/** `cq state` (the usage is at the top of queue.mjs). */
+/** `ravenseat state` (the usage is at the top of queue.mjs). */
 export function cmdState() {
   const queue = read();
   const usage = dailyUsageFor(queue);
@@ -276,13 +276,13 @@ export function cmdState() {
   t.parallel = { ...par, findings: par.low ? par.findings : [] };
   // Open fix tasks and the task(s) they fix (`fixes`, lib/fixLinks.js; always included, empty when there are none).
   t.fixLinks = FX.openFixLinks(queue.tasks);
-  // Findings the tracks reported outside their scope (cq finding): how many are not triaged yet, and their ids.
+  // Findings the tracks reported outside their scope (ravenseat finding): how many are not triaged yet, and their ids.
   t.findings = findingsStateNow();
   console.log(JSON.stringify(t, null, 2));
   if (t.empty) process.exit(3);
 }
 
-/** `cq diagnose` (the usage is at the top of queue.mjs). */
+/** `ravenseat diagnose` (the usage is at the top of queue.mjs). */
 export function cmdDiagnose() {
   // ---- The whole queue diagnosis, regardless of parallelism (read-only) ----
   const d = D.parallelDiagnose(read());
@@ -290,7 +290,7 @@ export function cmdDiagnose() {
   else console.log(D.diagnoseFull(d).join('\n'));
 }
 
-/** `cq info` (the usage is at the top of queue.mjs). */
+/** `ravenseat info` (the usage is at the top of queue.mjs). */
 export function cmdInfo() {
   // ---- Fixed lookups instead of `node -e` against queue.json ----
   const id = positional(1, ['--field'])[0];
@@ -313,7 +313,7 @@ export function cmdInfo() {
       console.log(l);
 }
 
-/** `cq activeOnes` (the usage is at the top of queue.mjs). */
+/** `ravenseat activeOnes` (the usage is at the top of queue.mjs). */
 export function cmdActiveOnes() {
   for (const l of L.activeLines(read())) console.log(l);
 }

@@ -180,7 +180,7 @@ describe('the track hooks as processes (echoed payload)', () => {
 
   it('hook-track-context: a reminder at the 1st compaction, PARTIAL (logged) at the 2nd', () => {
     const tp = join(folder, 'agent-a1.jsonl');
-    const input = { agent_type: 'cq:track', agent_id: 'a1', agent_transcript_path: tp };
+    const input = { agent_type: 'ravenseat:track', agent_id: 'a1', agent_transcript_path: tp };
     writeFileSync(tp, usage(50_000) + '\n');
     expect(run('hook-track-context.mjs', input)).toBe('');
     writeFileSync(tp, [usage(260_000), boundary, usage(40_000)].join('\n') + '\n');

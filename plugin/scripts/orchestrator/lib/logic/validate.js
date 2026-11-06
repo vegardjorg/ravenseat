@@ -56,7 +56,7 @@ function validateNewField(o, register, { stringProject = true } = {}) {
       !Object.hasOwn(register ?? {}, o.project)
     )
       error.push(
-        `unknown project ${o.project} (create it first: cq project ${o.project} --title "…")`,
+        `unknown project ${o.project} (create it first: ravenseat project ${o.project} --title "…")`,
       );
   }
   // Plan entry the task belongs to (id in scripts/.queue/plans.json; queue.mjs checks that it exists).
@@ -91,7 +91,7 @@ function validateNewField(o, register, { stringProject = true } = {}) {
       Number.isFinite(Date.parse(p.at)) &&
       (p.to == null || (typeof p.to === 'string' && Number.isFinite(Date.parse(p.to)))) &&
       (p.reason == null || typeof p.reason === 'string');
-    if (!valid) error.push('parked must be { by, at, reason?, to? } (set with cq park)');
+    if (!valid) error.push('parked must be { by, at, reason?, to? } (set with ravenseat park)');
   }
   return error;
 }

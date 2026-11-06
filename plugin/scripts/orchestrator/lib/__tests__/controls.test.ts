@@ -40,7 +40,7 @@ describe('the push question', () => {
   it('says what is missing, how many commits, where to fix it and how to turn it off', () => {
     const q = C.question({ missing: ['no CI config', 'no gates'], commits: 12 });
     expect(q).toContain('12 commit(s) with no CI config and no gates');
-    expect(q).toContain('/cq:kickstart');
+    expect(q).toContain('/ravenseat:kickstart');
     expect(q).toContain('controlsWarning');
   });
   it('is silent with nothing missing or nothing to push', () => {

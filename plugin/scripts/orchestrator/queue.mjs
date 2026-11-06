@@ -92,9 +92,9 @@
 //   node scripts/orchestrator/queue.mjs decide [--json] [--max N] [--today]   (the decision overview, read-only: everything
 //                                                                  waiting on the owner (questions, QA, proposed, stuck work)
 //                                                                  as one list, most impact first (what the answer unlocks,
-//                                                                  focus stage 1 first), each option with its exact cq
+//                                                                  focus stage 1 first), each option with its exact ravenseat
 //                                                                  command (--by owner, the same commands the board runs);
-//                                                                  --today: what was decided today. The /cq:decide skill
+//                                                                  --today: what was decided today. The /ravenseat:decide skill
 //                                                                  walks it; lib/queueDecisions.js, cli/decide.mjs)
 //   node scripts/orchestrator/queue.mjs board-setting [cloud on|off]   (the board's own switches: without arguments the values;
 //                                                                  cloud on|off shows or hides the Cloud tab, queue.json
@@ -185,8 +185,8 @@
 //         ones by class (config().reviewers) and the helper agents that are on and hit (lib/queueHelpers.js).
 //         Saves the RESULT line. Does NOT merge; prints the merge command. The track's own gate runs (RESULT gates=) are
 //         informational: receive runs the quick gates itself on the delivered tip (gates.mjs --evidence) and saves the
-//         task field gate_check (red: the blocker gate-red and a fix round). A batch push needs cq gates --full run in the
-//         main checkout on the base tip with no uncommitted changes (cq push-check reads that gate evidence).
+//         task field gate_check (red: the blocker gate-red and a fix round). A batch push needs ravenseat gates --full run in the
+//         main checkout on the base tip with no uncommitted changes (ravenseat push-check reads that gate evidence).
 //         Adoption: the report is the newest in <folder>/<id>/ or a fix round <folder>/<id>-r<N>/, in the orchestrator's
 //         and the task's scratchpad; saves report_received.
 //         Done command (task field done_when, lib/doneCheck.js): run first in the worktree that has the branch checked
@@ -202,12 +202,12 @@
 //                                                 a reservation past attempts.reservationTtlMin reads as expired)
 //   node scripts/orchestrator/queue.mjs attempt close <id> --outcome <delivered|failed|interrupted|abandoned> [--by "..."]
 //        (a running attempt blocks a new one, so close it when its agent is gone. For Claude the guard is best effort; the
-//         cases are at the top of lib/logic/attempt.js. Refused inside a track worktree; logged, so cq undo takes it back.)
+//         cases are at the top of lib/logic/attempt.js. Refused inside a track worktree; logged, so ravenseat undo takes it back.)
 //   node scripts/orchestrator/queue.mjs resume <id> [--reason fix|context] [--round N] [--findings-file <file>]
 //                                                [--from <reviewer,...>] [--answer "<text>"] [--scratchpad <folder>]
 //        (--answer: the owner's answer to what the track asked; first in the brief, and kept as an addition to the mission.)
 //        (--from: the reviewer types whose findings caused the fix round, saved in `resumed[].from` and the fixRound
-//         row; the reviewer hit rate in cq cost and the board's Flow box counts them.)
+//         row; the reviewer hit rate in ravenseat cost and the board's Flow box counts them.)
 //        (fix-round cap: at max_fix_rounds (task) or config().maxFixRounds (default 3) fix rounds, --reason fix registers
 //         the owner question <id>.fixcap<N>, puts it in waiting_on, opens the blocker owner-question and exits 8; a resolved
 //         question allows exactly one more round. A red done command's tail goes into the fix brief.)
@@ -293,7 +293,7 @@
 //        [--scratchpad <dir>]   (a question about an earlier track without resuming its agent: a size-capped,
 //         secret-redacted bundle of the mission, track-result.md, handover.md, the queue's notes and owner answers, the
 //         commits and diffstat, and the transcript tail. Prints it with an answer instruction; --bundle writes it to
-//         <scratchpad>/ask-<id>/bundle.md and prints the path, for /cq:ask. Read-only. cli/ask.mjs, lib/askBundle.js)
+//         <scratchpad>/ask-<id>/bundle.md and prints the path, for /ravenseat:ask. Read-only. cli/ask.mjs, lib/askBundle.js)
 //   node scripts/orchestrator/queue.mjs edit <id> --bonus "<text>"  (to the mission, in the track block from the next
 //                                                                  trackFile/fill, and to the remarks, with a timestamp)
 //   node scripts/orchestrator/queue.mjs activeOnes                        (running/picked/review: id, class, branch, migr_block,
@@ -623,9 +623,9 @@
 // The layout: this file is the usage above and the dispatch on the command word below. The code of the commands is in
 // cli/, one module per area (tasks, taskEdit, view, owner, decide, run, merge, cost, doctor, finding, helpers, orchestrator, projects, batch,
 // cloud, wait, plans with planShared, planCheck and planDoc), with the shared state in cli/context.mjs and the shared track
-// helpers in cli/tracks.mjs. The usage comment stays here: lib/cliHelp.js reads it for `cq help`.
+// helpers in cli/tracks.mjs. The usage comment stays here: lib/cliHelp.js reads it for `ravenseat help`.
 import fs from 'node:fs';
-import { a, command, CONFIG, CQ, die, HERE, KK, require } from './cli/context.mjs';
+import { a, command, CONFIG, CLI, die, HERE, KK, require } from './cli/context.mjs';
 import * as ask from './cli/ask.mjs';
 import * as attempt from './cli/attempt.mjs';
 import * as batch from './cli/batch.mjs';
@@ -671,7 +671,7 @@ if (command === 'init') {
 } else if (command === 'add') {
   tasks.cmdAdd();
 } else if (command === 'show' && a[1] && !a[1].startsWith('-')) {
-  view.cmdInfo(); // cq show <id>: the same as cq info <id>, rather than a summary that ignores the id
+  view.cmdInfo(); // ravenseat show <id>: the same as ravenseat info <id>, rather than a summary that ignores the id
 } else if (
   command === 'show' &&
   !['--full', '--all', '--grouped', '--project'].some((f) => a.includes(f))
@@ -830,12 +830,12 @@ if (command === 'init') {
   // A mistyped command: one line with the closest known command (lib/cliHelp.js), same exit code as before.
   const scripts = fs
     .readdirSync(HERE)
-    .filter((f) => f.endsWith('.mjs') && !f.startsWith('hook-') && f !== 'cq.mjs')
+    .filter((f) => f.endsWith('.mjs') && !f.startsWith('hook-') && f !== 'ravenseat.mjs' && !require('./lib/productNames.js').OLD_ENTRY_SCRIPTS.includes(f))
     .map((f) => f.slice(0, -'.mjs'.length));
-  die(require('./lib/cliHelp.js').unknownCommandMessage(command, require('./lib/cliHelp.js').knownCommands(scripts), CQ), 1);
+  die(require('./lib/cliHelp.js').unknownCommandMessage(command, require('./lib/cliHelp.js').knownCommands(scripts), CLI), 1);
 } else {
   die(
-    'Use: cq <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
+    'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
       'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface> ...  (see the top of the file)',

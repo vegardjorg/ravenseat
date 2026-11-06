@@ -54,7 +54,7 @@ function countingFs() {
 describe('trackGuard.countCompactionsFrom: only the new tail is read', () => {
   let folder: string;
   beforeEach(() => {
-    folder = mkdtempSync(join(tmpdir(), 'cq-compact-count-'));
+    folder = mkdtempSync(join(tmpdir(), 'ravenseat-compact-count-'));
   });
   afterEach(() => rmSync(folder, { recursive: true, force: true }));
 
@@ -164,7 +164,7 @@ describe('hook-context.mjs: the orchestrator transcript is not read whole on eve
     });
 
   beforeEach(() => {
-    folder = mkdtempSync(join(tmpdir(), 'cq-compact-hook-'));
+    folder = mkdtempSync(join(tmpdir(), 'ravenseat-compact-hook-'));
     writeFileSync(
       join(folder, 'queue.json'),
       JSON.stringify({

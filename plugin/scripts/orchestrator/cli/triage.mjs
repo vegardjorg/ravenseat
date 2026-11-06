@@ -1,10 +1,10 @@
 // =============================================================
-// cli/triage.mjs: the intake triage on the command line: `cq triage` and the triage part of `fill`, `next` and `start`.
+// cli/triage.mjs: the intake triage on the command line: `ravenseat triage` and the triage part of `fill`, `next` and `start`.
 //
-//   cq triage                                   the tasks that need a verdict before they start, and why
-//   cq triage <id> --verdict ready|done|stale|adjust [--note "..."] [--by "..."]
+//   ravenseat triage                                   the tasks that need a verdict before they start, and why
+//   ravenseat triage <id> --verdict ready|done|stale|adjust [--note "..."] [--by "..."]
 //                                               records the triage helper's answer (lib/queueTriage.js recordVerdict)
-//   cq triage <id> --prompt [--scratchpad <dir>]
+//   ravenseat triage <id> --prompt [--scratchpad <dir>]
 //                                               writes the triage prompt again and prints the agent line
 //
 // The rule, the verdicts and the owner question live in lib/queueTriage.js; this module only reads files (the mission
@@ -17,7 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { a, BASE, CONFIG, CQ, die, edit, git, L, missionFile, positional, pulseCursor, read, readMission, require, val } from './context.mjs';
+import { a, BASE, CONFIG, CLI, die, edit, git, L, missionFile, positional, pulseCursor, read, readMission, require, val } from './context.mjs';
 import { logEvent } from './events.mjs';
 
 export const T = require('./lib/queueTriage.js');
@@ -72,7 +72,7 @@ export function writeTriageSteps(queue, steps, { scratch, head }) {
         head,
         missionText: m.error ? `(${m.error})` : m.text,
         missionPath: m.path,
-        cq: CQ,
+        ravenseat: CLI,
       }) + '\n',
     );
     agents.push({ id: o.id, subagent_type: T.TRIAGE, prompt, message: T.triageMessage(o.id, prompt) });
@@ -84,7 +84,7 @@ export function writeTriageSteps(queue, steps, { scratch, head }) {
       `TRIAGE ${steps.length} task(s) first (they do not start until they have a verdict; read-only helper ` +
         `${require('./lib/projectRoot.js').agentRef(T.TRIAGE)}, small budget):`,
       ...lines,
-      `  When each answers: ${CQ} triage <id> --verdict <ready|done|stale|adjust> --note "<its note>" (the TRIAGE line).`,
+      `  When each answers: ${CLI} triage <id> --verdict <ready|done|stale|adjust> --note "<its note>" (the TRIAGE line).`,
     ],
   };
 }
@@ -95,7 +95,7 @@ export function askedLine(list) {
   return asked.length ? `Waiting on a triage verdict (step already given): ${asked.join(', ')}.` : null;
 }
 
-/** `cq triage` (the usage is at the top of queue.mjs). */
+/** `ravenseat triage` (the usage is at the top of queue.mjs). */
 export function cmdTriage() {
   const [id] = positional(1, ['--verdict', '--note', '--by', '--scratchpad']);
   if (!id) {
@@ -144,6 +144,6 @@ export function cmdTriage() {
     console.log(
       `${id}: triage ${verdict}. It does not start: owner question ${r.question} registered with choices ` +
         `(${T.choicesFor(verdict).join(' / ')}). Ask the owner at the end of the round; the answer: ` +
-        `${CQ} resolve ${r.question} --choice <1-3>. Nothing is closed without the owner.`,
+        `${CLI} resolve ${r.question} --choice <1-3>. Nothing is closed without the owner.`,
     );
 }

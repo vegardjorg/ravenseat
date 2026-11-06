@@ -2,7 +2,7 @@
 // queueDoneLock.test.ts: the finish line is fixed before the start (lib/doneCheck.js doneLockError, acceptance).
 //
 // Locks: (1) before the start anyone may change done_when and acceptance; (2) after the start an edit or undo without
-// --by owner (or theBoard) is refused with "is locked after start; ask the owner (cq question)" and nothing is written;
+// --by owner (or theBoard) is refused with "is locked after start; ask the owner (ravenseat question)" and nothing is written;
 // (3) from inside a track worktree (the cwd on a queue/<id> branch) the change is refused whatever --by says;
 // (4) acceptance round-trips through add --accept, edit --accept and info, and reaches the track block (the mission) and
 // the reviewer-gap prompt; (5) the ownership fields the merge guard trusts (owned_files, shared_patch, owner_db,
@@ -25,7 +25,7 @@ type Queue = { tasks: Task[]; changelog?: unknown[] };
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const ID = ['-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.invalid'];
-const LOCKED = "locked after start; ask the owner (cq question). On the owner's word: the same command with --by owner, or the board";
+const LOCKED = "locked after start; ask the owner (ravenseat question). On the owner's word: the same command with --by owner, or the board";
 
 const temporary: string[] = [];
 afterAll(() => {
@@ -107,8 +107,8 @@ function setup() {
 describe('doneLockError (pure)', () => {
   const running = { id: 'R', status: 'running', started: '2026-01-01T00:00:00.000Z', done_when: 'x' };
   it('allows anyone before the start, only the owner after it, nobody from a track worktree', () => {
-    expect(D.doneLockError({ id: 'W', status: 'waiting' }, { done_when: 'y' }, { by: 'cq' })).toBeNull();
-    expect(D.doneLockError(running, { done_when: 'y' }, { by: 'cq' })).toBe(`done_when is ${LOCKED}`);
+    expect(D.doneLockError({ id: 'W', status: 'waiting' }, { done_when: 'y' }, { by: 'ravenseat' })).toBeNull();
+    expect(D.doneLockError(running, { done_when: 'y' }, { by: 'ravenseat' })).toBe(`done_when is ${LOCKED}`);
     expect(D.doneLockError(running, { acceptance: ['a'], done_when: 'y' }, { by: 'R' })).toBe(
       `done_when and acceptance are ${LOCKED}`,
     );
@@ -118,9 +118,9 @@ describe('doneLockError (pure)', () => {
       /cannot be changed from inside a track worktree \(branch queue\/R\)/,
     );
     // The same value again and other fields are not a change of the finish line.
-    expect(D.doneLockError(running, { done_when: 'x', value: 8 }, { by: 'cq' })).toBeNull();
+    expect(D.doneLockError(running, { done_when: 'x', value: 8 }, { by: 'ravenseat' })).toBeNull();
     // A released task keeps its `started` time and stays locked.
-    expect(D.doneLockError({ ...running, status: 'waiting' }, { done_when: null }, { by: 'cq' })).toBe(
+    expect(D.doneLockError({ ...running, status: 'waiting' }, { done_when: null }, { by: 'ravenseat' })).toBe(
       `done_when is ${LOCKED}`,
     );
   });
@@ -129,15 +129,15 @@ describe('doneLockError (pure)', () => {
     const r = { ...running, owned_files: ['lib/R.ts'], shared_patch: [], owner_db: [] };
     for (const field of ['owned_files', 'shared_patch', 'owner_db', 'migr_block']) {
       const change = { [field]: ['.claude/'] };
-      expect(D.doneLockError({ id: 'W', status: 'waiting' }, change, { by: 'cq' }), field).toBeNull();
-      expect(D.doneLockError(r, change, { by: 'cq' }), field).toBe(`${field} is ${LOCKED}`);
+      expect(D.doneLockError({ id: 'W', status: 'waiting' }, change, { by: 'ravenseat' }), field).toBeNull();
+      expect(D.doneLockError(r, change, { by: 'ravenseat' }), field).toBe(`${field} is ${LOCKED}`);
       expect(D.doneLockError(r, change, { by: 'R' }), field).toBe(`${field} is ${LOCKED}`);
       expect(D.doneLockError(r, change, { by: 'owner' }), field).toBeNull();
       expect(D.doneLockError(r, change, { by: 'theBoard' }), field).toBeNull();
       expect(D.doneLockError(r, change, { by: 'owner', inTrack: 'queue/R' }), field).toMatch(/from inside a track worktree/);
     }
     // The same list again is not a change.
-    expect(D.doneLockError(r, { owned_files: ['lib/R.ts'] }, { by: 'cq' })).toBeNull();
+    expect(D.doneLockError(r, { owned_files: ['lib/R.ts'] }, { by: 'ravenseat' })).toBeNull();
   });
 
   it('validates the acceptance shape', () => {

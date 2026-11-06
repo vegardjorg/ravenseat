@@ -9,7 +9,7 @@
 //   - A bad write or a hand edit that breaks the JSON: there was no copy of the state before it. keepPrevious copies
 //     the current file to queue.json.prev before each write, but only when it parses (the previous GOOD state), so a
 //     broken file never overwrites the last good copy.
-// recoveryHint is the text read() and `cq doctor` show when queue.json does not parse and queue.json.prev does. The
+// recoveryHint is the text read() and `ravenseat doctor` show when queue.json does not parse and queue.json.prev does. The
 // queue never restores the copy by itself: the owner looks first (the copy is one write older).
 //
 // Used by: cli/context.mjs (write, read), cli/doctor.mjs (checkState). Tested in: lib/__tests__/queueStateSafety.test.ts.
@@ -108,7 +108,7 @@ function writeState(file, text, o = {}) {
 
 /**
  * The hint when `file` does not parse: names <file>.prev when that one parses (with its task count and time), else
- * null. Shown by read() and `cq doctor`.
+ * null. Shown by read() and `ravenseat doctor`.
  * @param {string} file
  * @param {{ fs?: typeof nodeFs }} [o]
  * @returns {string|null}

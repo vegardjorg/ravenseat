@@ -1,9 +1,9 @@
 // =============================================================
-// cli/decide.mjs: `cq decide`, the decision overview in the terminal (the same list as the board's Decisions view).
+// cli/decide.mjs: `ravenseat decide`, the decision overview in the terminal (the same list as the board's Decisions view).
 //
 // Everything that waits on the owner (owner questions, QA, proposed tasks, stuck work) as ONE list sorted by impact
-// (what each answer unlocks, the focus stages first), each with its options and the exact `cq` command per option.
-// The /cq:decide skill reads `cq decide --json` and walks the list with the owner; the commands it runs are the ones
+// (what each answer unlocks, the focus stages first), each with its options and the exact `ravenseat` command per option.
+// The /ravenseat:decide skill reads `ravenseat decide --json` and walks the list with the owner; the commands it runs are the ones
 // printed here, the same queue.mjs commands (and --by owner) the board runs, so the log and the actor are the same.
 // Read only: this command never writes.
 //
@@ -14,7 +14,7 @@
 // =============================================================
 
 import { baseRedLine } from './baseHealth.mjs';
-import { a, branchFor, branchInfo, CQ, cut, FOLDER, L, PREFIX, read, require, S, uncommittedPaths, val, WIDTH } from './context.mjs';
+import { a, branchFor, branchInfo, CLI, cut, FOLDER, L, PREFIX, read, require, S, uncommittedPaths, val, WIDTH } from './context.mjs';
 import { findSilent, findWithoutAgent } from './tracks.mjs';
 
 const T = require('./lib/queueBoard.js');
@@ -47,7 +47,7 @@ export function currentInbox(queue, { now = Date.now() } = {}) {
 }
 
 /** The JSON shape for the skill: each item with its impact line and the command per option. */
-export function decisionJson(inbox, { listening = false, cq = CQ, baseRed = null, heldBack = [], onCancelled = [] } = {}) {
+export function decisionJson(inbox, { listening = false, ravenseat = CLI, baseRed = null, heldBack = [], onCancelled = [] } = {}) {
   const items = DEC.decisions(inbox).map((x, i) => ({
     nr: i + 1,
     ...x,
@@ -55,9 +55,9 @@ export function decisionJson(inbox, { listening = false, cq = CQ, baseRed = null
     // An answer that needs text (a QA deviation) shows `<text>` where the text goes, as `free` does.
     options: x.options.map((o) => ({
       ...o,
-      cli: DEC.cliText(DEC.cliArgs(o.needsText && !o.optionalText ? { ...o.action, text: '<text>' } : o.action), cq),
+      cli: DEC.cliText(DEC.cliArgs(o.needsText && !o.optionalText ? { ...o.action, text: '<text>' } : o.action), ravenseat),
     })),
-    free: x.free ? { ...x.free, cli: DEC.cliText(DEC.cliArgs({ ...x.free.action, answer: '<text>' }), cq) } : null,
+    free: x.free ? { ...x.free, cli: DEC.cliText(DEC.cliArgs({ ...x.free.action, answer: '<text>' }), ravenseat) } : null,
   }));
   return {
     count: items.length,
@@ -75,8 +75,8 @@ export function decisionJson(inbox, { listening = false, cq = CQ, baseRed = null
   };
 }
 
-/** The list as text lines (what `cq decide` prints). */
-export function decisionLines(j, { width = WIDTH, max = Infinity, cq = CQ } = {}) {
+/** The list as text lines (what `ravenseat decide` prints). */
+export function decisionLines(j, { width = WIDTH, max = Infinity, ravenseat = CLI } = {}) {
   const out = [];
   if (j.base_red) out.push(j.base_red, '');
   if (j.held_back) out.push(...L.heldBackLines(j.held_back), '');
@@ -99,11 +99,11 @@ export function decisionLines(j, { width = WIDTH, max = Infinity, cq = CQ } = {}
       });
       if (x.free) out.push(`   ${'or in your own words:'.padEnd(34)} ${x.free.cli}`);
     }
-    if (j.items.length > max) out.push('', `... and ${j.items.length - max} more (${cq} decide --json for all).`);
+    if (j.items.length > max) out.push('', `... and ${j.items.length - max} more (${ravenseat} decide --json for all).`);
   }
-  if (j.decided.length) out.push('', `Decided today: ${j.decided.length} (${cq} decide --today).`);
+  if (j.decided.length) out.push('', `Decided today: ${j.decided.length} (${ravenseat} decide --today).`);
   if (j.unlogged.length)
-    out.push(`Not in the decision log yet: ${j.unlogged.join(', ')} (${cq} resolutions --unlogged).`);
+    out.push(`Not in the decision log yet: ${j.unlogged.join(', ')} (${ravenseat} resolutions --unlogged).`);
   return out;
 }
 
@@ -117,7 +117,7 @@ export function decidedLines(decided, { width = WIDTH } = {}) {
   ];
 }
 
-/** `cq decide [--json] [--max N] [--today]` (the usage is at the top of queue.mjs). */
+/** `ravenseat decide [--json] [--max N] [--today]` (the usage is at the top of queue.mjs). */
 export function cmdDecide() {
   const queue = read();
   const inbox = currentInbox(queue);

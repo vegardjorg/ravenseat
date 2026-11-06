@@ -1,7 +1,7 @@
 // =============================================================
-// checksFlow.test.ts: `cq checks` through the real CLI, in a temporary project.
+// checksFlow.test.ts: `ravenseat checks` through the real CLI, in a temporary project.
 //
-// Locks: (1) it reads and writes nothing before cq init, and saves the report after; (2) the opt-out stops the overview and
+// Locks: (1) it reads and writes nothing before ravenseat init, and saves the report after; (2) the opt-out stops the overview and
 // comes back; (3) plan gives an investigation task, proposed without --approved, once; (4) a suggestion set aside stays aside;
 // (5) a project's own files in docs/queue/checks change the suggestions; (6) a file with a mistake is reported.
 // =============================================================
@@ -70,8 +70,8 @@ const OWN = 'docs/queue/checks';
 const TEMPLATE = (head: string) => `---\n${head}\n---\n\n## Investigate\n\nFind out.\n\n## Plan and build\n\nDo it.\n`;
 const NODE = { 'package.json': JSON.stringify({ scripts: { test: 'vitest run' } }) };
 
-describe('cq checks: the overview', () => {
-  it('works before cq init and writes nothing', () => {
+describe('ravenseat checks: the overview', () => {
+  it('works before ravenseat init and writes nothing', () => {
     const p = project({ queue: false, files: NODE });
     const before = fs.readdirSync(p.folder).sort();
     const r = p.run('checks');
@@ -93,11 +93,11 @@ describe('cq checks: the overview', () => {
     expect(p.run('checks', 'show', 'first-test').all).toContain('Plan and build');
     const bad = p.run('checks', 'show', 'nope');
     expect(bad.code).toBe(1);
-    expect(bad.all).toContain('cq checks lists');
+    expect(bad.all).toContain('ravenseat checks lists');
   });
 });
 
-describe('cq checks off and on', () => {
+describe('ravenseat checks off and on', () => {
   it('stops the overview, and comes back; quiet guidance also stops it unless its own switch says on', () => {
     const p = project();
     expect(p.run('checks', 'off').all).toContain('Checks: off');
@@ -108,14 +108,14 @@ describe('cq checks off and on', () => {
     p.run('guidance', 'quiet');
     expect(p.json().suggestions.length).toBeGreaterThan(0); // its own "on" wins
   });
-  it('before cq init there is nothing to save the choice in, and it says so', () => {
+  it('before ravenseat init there is nothing to save the choice in, and it says so', () => {
     const r = project({ queue: false }).run('checks', 'off');
     expect(r.code).toBe(1);
-    expect(r.all).toContain('cq init');
+    expect(r.all).toContain('ravenseat init');
   });
 });
 
-describe('cq checks plan', () => {
+describe('ravenseat checks plan', () => {
   it('adds a proposed investigation, and not twice', () => {
     const p = project();
     const r = p.run('checks', 'plan', 'first-test');
@@ -139,7 +139,7 @@ describe('cq checks plan', () => {
   });
 });
 
-describe('cq checks dismiss and restore', () => {
+describe('ravenseat checks dismiss and restore', () => {
   it('sets aside, keeps it aside after a new scan, and brings it back', () => {
     const p = project();
     p.run('checks', 'dismiss', 'first-test');

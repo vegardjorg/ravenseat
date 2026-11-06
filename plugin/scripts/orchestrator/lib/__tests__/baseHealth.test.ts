@@ -200,7 +200,7 @@ describe('the lines', () => {
     const at = '2026-01-01T00:00:00Z';
     const red = { current: { tip: T1, status: 'red', at, made_red_by: { task: 'B' }, fix_task: 'B-BASE1' }, history: [] };
     expect(BH.healthLine({ state: red, tip: T1, setup, branch: 'main', now })).toBe(
-      'BASE main: RED at aaaaaaaaaaaa by the merge of B (2 h ago); fix task B-BASE1 (cq merge B-BASE1 is allowed). cq merge refuses other tracks.',
+      'BASE main: RED at aaaaaaaaaaaa by the merge of B (2 h ago); fix task B-BASE1 (ravenseat merge B-BASE1 is allowed). ravenseat merge refuses other tracks.',
     );
     const green = { current: { tip: T1, status: 'green', at }, history: [] };
     expect(BH.healthLine({ state: green, tip: T1, setup, branch: 'main', now })).toBe('BASE main: GREEN at aaaaaaaaaaaa (checked 2 h ago).');

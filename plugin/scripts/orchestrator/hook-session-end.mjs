@@ -3,7 +3,7 @@
 // hook-session-end.mjs: SessionEnd hook that appends the main session's last cost reading to the time log.
 //
 // Why: the status line (statusline.mjs) writes a `session` row at most every $0.50 or 10 min, so the last part of a
-// session's cost would be missing from `cq cost` without a row at the end. The SessionEnd input has no cost of its own
+// session's cost would be missing from `ravenseat cost` without a row at the end. The SessionEnd input has no cost of its own
 // (session_id, transcript_path, cwd, reason), so the row takes the last reading the status line saved in
 // <dataFolder>/session-cost.json (lib/eventRows.js sessionRowFromState):
 //   { time, event: "session", session_id, usd, duration_s, api_duration_s, context_tokens, model, orchestrator,

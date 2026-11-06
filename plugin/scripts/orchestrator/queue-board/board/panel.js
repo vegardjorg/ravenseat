@@ -183,7 +183,7 @@ function drawPanel(fresh) {
       ? `could not read (${d.error})`
       : 'fetching …';
   const status = k.batched
-    ? 'In batch queue (not started alone; packed into a track with cq batch pack)'
+    ? 'In batch queue (not started alone; packed into a track with ravenseat batch pack)'
     : ({
         waiting: k.ready ? 'In queue, ready now' : 'In queue, blocked',
         proposed: 'Proposed (must be approved)',
@@ -272,7 +272,7 @@ function drawPanel(fresh) {
           : null,
       ),
       col === 'queue' && k.blockers.length ? facts('Blockers', list2(k.blockers)) : [],
-      // The finish line, read-only (locked once the task has started; cq edit --accept / --by owner changes it).
+      // The finish line, read-only (locked once the task has started; ravenseat edit --accept / --by owner changes it).
       facts('Acceptance', k.acceptance?.length ? list2(k.acceptance) : null),
       facts('Done command', k.done_when ? el('code', { text: k.done_when }) : null),
       facts('Owner files', k.owned_files.length ? list2(k.owned_files, true) : null),

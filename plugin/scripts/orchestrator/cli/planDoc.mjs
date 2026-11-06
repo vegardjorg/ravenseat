@@ -63,7 +63,7 @@ function docCheckAnswer(json, findings, ran, written) {
     for (const l of planDiffLines(written.changes)) console.log(`  ${l}`);
     for (const x of written.warnings ?? []) console.log(`WARNING: ${x}`);
     if (written.log)
-      console.log(`Changelog no. ${written.log} in plans.json; undo: cq plan undo`);
+      console.log(`Changelog no. ${written.log} in plans.json; undo: ravenseat plan undo`);
   } else if (findings.some((f) => f.doc && f.check !== 'revision'))
     console.log('Enter them as problems: add --write (--dry shows them first).');
 }
@@ -175,7 +175,7 @@ export function planDoc(json) {
     }
     if (!reg.documents.length) {
       console.log(
-        'The document register is empty. Add documents with: cq plan doc new --file <json>',
+        'The document register is empty. Add documents with: ravenseat plan doc new --file <json>',
       );
       return;
     }
@@ -305,6 +305,6 @@ export function planDoc(json) {
   } else if (under === 'web') {
     planDocWeb(json).catch((e) => die(`plan doc web failed: ${e?.message ?? e}`));
   } else {
-    die('Use: cq plan doc <show|get|new|edit|revise> ...  (see the top of the file)', under ? 1 : 0);
+    die('Use: ravenseat plan doc <show|get|new|edit|revise> ...  (see the top of the file)', under ? 1 : 0);
   }
 }

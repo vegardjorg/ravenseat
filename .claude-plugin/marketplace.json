@@ -1,10 +1,11 @@
 {
   "name": "ravenseat",
   "owner": { "name": "Vegard Cowie Jørgensen" },
+  "renames": { "cq": "ravenseat" },
   "description": "Ravenseat: a kanban board and project manager for Claude Code, with visible dependencies and a focus that finishes one feature before the next.",
   "plugins": [
     {
-      "name": "cq",
+      "name": "ravenseat",
       "source": "./plugin",
       "description": "Ravenseat, a kanban board and project manager for Claude Code: tasks with visible dependencies, a focus that finishes one feature before the next, and parallel worktree agents that work through it."
     }

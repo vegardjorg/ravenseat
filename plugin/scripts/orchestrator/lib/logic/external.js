@@ -133,7 +133,7 @@ function trackFileWarning(o, collisions = [], mentioned = []) {
       );
   }
   if (collisions.length > MAX)
-    lines.push(`- … and ${collisions.length - MAX} more (cq external)`);
+    lines.push(`- … and ${collisions.length - MAX} more (ravenseat external)`);
   if (mentioned.length)
     lines.push(
       `Commits outside the queue that mention ${o.id} (is something already done?): ` +
@@ -200,7 +200,7 @@ function externalAdd(
       domain: 'external',
       class: 'K',
       mission:
-        'Registered with cq external add. Not a task: the row owns the files until external done.',
+        'Registered with ravenseat external add. Not a task: the row owns the files until external done.',
       value: 5,
       content_min: 0,
       migr_tens: 0,
@@ -248,7 +248,7 @@ function externalDone(queue, nameOrId, now = new Date().toISOString()) {
     (o) => isExternalRow(o) && o.status === 'external' && (o.external_name === x || o.id === x),
   );
   if (!row)
-    return { error: `no active record outside the queue with the name ${x} (see cq external)` };
+    return { error: `no active record outside the queue with the name ${x} (see ravenseat external)` };
   row.status = 'done';
   row.done = now;
   return { row };
@@ -264,7 +264,7 @@ function externalAccept(queue, id, sha, { mentioned = true, now = new Date().toI
   const o = (queue.tasks ?? []).find((x) => x.id === id);
   if (!o) return { error: `unknown task ${id}` };
   if (isExternalRow(o))
-    return { error: `${id} is a record outside the queue (cq external done)` };
+    return { error: `${id} is a record outside the queue (ravenseat external done)` };
   if (!sha) return { error: 'external accept <id> <sha>' };
   if (o.status !== 'waiting' && o.status !== 'proposed') {
     const why =

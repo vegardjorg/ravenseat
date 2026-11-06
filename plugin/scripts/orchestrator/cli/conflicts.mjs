@@ -1,5 +1,5 @@
 // =============================================================
-// cli/conflicts.mjs: the predicted merge conflicts for the pulse and `cq conflicts [--json]`.
+// cli/conflicts.mjs: the predicted merge conflicts for the pulse and `ravenseat conflicts [--json]`.
 //
 // The logic (which tips, merge-tree or the file-overlap fallback, the cache, the merge order, the lines) is in
 // lib/conflictPredict.js; this module only reads the queue, the refs and the cache file and prints. Read-only for the
@@ -12,7 +12,7 @@
 
 import path from 'node:path';
 
-import { a, BASE, CQ, FOLDER, GIT_ROOT, PREFIX, read, require, val } from './context.mjs';
+import { a, BASE, CLI, FOLDER, GIT_ROOT, PREFIX, read, require, val } from './context.mjs';
 
 const CP = require('./lib/conflictPredict.js');
 
@@ -51,10 +51,10 @@ export function conflictLinesNow() {
   const r = predictionNow();
   if (!r) return [];
   if (r.error) return [r.error];
-  return CP.pulseLines(r, { cq: CQ });
+  return CP.pulseLines(r, { ravenseat: CLI });
 }
 
-/** `cq conflicts [--json] [--budget-ms <n>] [--max-checks <n>]` (the usage is at the top of queue.mjs). */
+/** `ravenseat conflicts [--json] [--budget-ms <n>] [--max-checks <n>]` (the usage is at the top of queue.mjs). */
 export function cmdConflicts() {
   const num = (name) => {
     const v = val(name);
@@ -73,7 +73,7 @@ export function cmdConflicts() {
   }
   if (!r) return console.log(`No ${BASE} branch to predict against.`);
   if (r.error) return console.log(r.error);
-  const lines = CP.pulseLines(r, { cq: CQ });
+  const lines = CP.pulseLines(r, { ravenseat: CLI });
   if (!r.pairs.length && !r.baseConflicts.length)
     lines.unshift(`No predicted conflicts: ${r.tips.length} track tip(s) checked against ${BASE} and each other.`);
   lines.push(

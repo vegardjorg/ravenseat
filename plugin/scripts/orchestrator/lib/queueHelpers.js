@@ -17,11 +17,11 @@
 //     The register is open: a helper is `source: "builtin"` (one of the agents the plugin ships, CATALOG) or
 //     `source: "custom"` (an agent file of the project's own, with `path` and `sha256` of that file). Conditions, the
 //     switch and the measurement are the same for both.
-//     The on/off switch the owner flips (`cq helpers on|off <agent>`, the board's "Helper agents" tab) is stored in
-//     queue.json (`helpers.<agent>.enabled`) and wins over queue.config.json, like `cq limit` does for the limits.
-//   - custom helpers: `cq helpers add <file.md>` registers one in queue.json (`helpers.<agent>` with source custom,
+//     The on/off switch the owner flips (`ravenseat helpers on|off <agent>`, the board's "Helper agents" tab) is stored in
+//     queue.json (`helpers.<agent>.enabled`) and wins over queue.config.json, like `ravenseat limit` does for the limits.
+//   - custom helpers: `ravenseat helpers add <file.md>` registers one in queue.json (`helpers.<agent>` with source custom,
 //     path, sha256, added_at, its conditions, enabled false). It is only ON when the owner approved the file as it is
-//     now: `cq helpers approve` stores approved_sha256 (queue.json only; queue.config.json can never approve), and the
+//     now: `ravenseat helpers approve` stores approved_sha256 (queue.json only; queue.config.json can never approve), and the
 //     caller passes the current sha256 per custom helper (`hashes`, lib/helperFiles.js). Never approved, changed since
 //     approval, missing, or not checked = off in the selection, whatever the switch or the config says.
 //
@@ -29,15 +29,15 @@
 //     They share the switch, the board tab and the measurement, but never become reviewers; their rule is in
 //     lib/queueTriage.js (`triage` in queue.config.json), and their measurement adds the verdict counts.
 //
-// reviewersForTask() is used by `cq receive` (the reviewer prompts and the review package), allReviewerTypes() by the
+// reviewersForTask() is used by `ravenseat receive` (the reviewer prompts and the review package), allReviewerTypes() by the
 // cost per task, the cost guard and the read guard. helperStatistics() is the measurement (runs, minutes, tokens, USD,
-// share of the task cost, findings per run) in the board tab, `cq helpers` and `cq cost`.
+// share of the task cost, findings per run) in the board tab, `ravenseat helpers` and `ravenseat cost`.
 //
 // Pure logic (no file I/O), tested in lib/__tests__/queueHelpers.test.ts and helperCustom.test.ts.
 // =============================================================
 'use strict';
 
-/** The helper agents the plugin ships (plugin/agents/<name>.md): one sentence each for the board and `cq helpers`. */
+/** The helper agents the plugin ships (plugin/agents/<name>.md): one sentence each for the board and `ravenseat helpers`. */
 const CATALOG = Object.freeze({
   'reviewer-challenger': {
     title: 'Challenger',
@@ -133,10 +133,10 @@ function cleanHelper(h) {
   };
 }
 
-/** Is this queue.json entry a custom helper registered with `cq helpers add` (not only a switch)? */
+/** Is this queue.json entry a custom helper registered with `ravenseat helpers add` (not only a switch)? */
 const isRegistered = (r) => isObject(r) && r.source === 'custom';
 
-/** The registration fields a `cq helpers add` record carries into the setup (conditions, path, hash, texts). */
+/** The registration fields a `ravenseat helpers add` record carries into the setup (conditions, path, hash, texts). */
 const REGISTRATION_KEYS = ['source', 'path', 'sha256', 'title', 'text', 'classes', 'labels', 'paths', 'mostlyPaths', 'plan', 'minMissionItems'];
 
 /**
@@ -146,7 +146,7 @@ const REGISTRATION_KEYS = ['source', 'path', 'sha256', 'title', 'text', 'classes
  *   changed       approved, but the file (or its path) has changed since: approve again after a new review
  *   missing       the file is not there (or the path points outside the project)
  *   unverified    the caller gave no current hashes, so nothing is known: treated as not approved (fail closed)
- * Only queue.json (`helpers.<name>`, written by `cq helpers approve` under the lock) can hold an approval; an
+ * Only queue.json (`helpers.<name>`, written by `ravenseat helpers approve` under the lock) can hold an approval; an
  * approval field in queue.config.json is never read, so a branch cannot approve its own helper.
  * @param {{ path: string|null }} src helperSource()
  * @param {object|undefined} rec the helper's entry in queue.json
@@ -162,7 +162,7 @@ function reviewState(src, rec, current) {
   return 'approved';
 }
 
-/** The review state in words, for `cq helpers` and the board. */
+/** The review state in words, for `ravenseat helpers` and the board. */
 const REVIEW_TEXT = Object.freeze({
   approved: 'Approved',
   'needs-review': 'Needs review',
@@ -173,7 +173,7 @@ const REVIEW_TEXT = Object.freeze({
 
 /**
  * The helpers in effect: config().helpers (already merged with the defaults by queueConfig) and the custom helpers
- * registered in queue.json (`cq helpers add`), with the switches in queue.json (`helpers.<agent>.enabled`) on top.
+ * registered in queue.json (`ravenseat helpers add`), with the switches in queue.json (`helpers.<agent>.enabled`) on top.
  * Names that are not valid agent names are skipped.
  *
  * A custom helper is only on when the owner approved the file as it is now: `hashes` gives the current sha256 per
@@ -193,7 +193,7 @@ function helperSetup(config, queue = null, { hashes = null } = {}) {
   for (const name of names) {
     if (!NAME.test(name)) continue;
     const s = switches[name];
-    // A registered custom helper takes its conditions and texts from its queue.json record (`cq helpers when`).
+    // A registered custom helper takes its conditions and texts from its queue.json record (`ravenseat helpers when`).
     const h = isRegistered(s)
       ? { ...(isObject(own[name]) ? own[name] : {}), ...Object.fromEntries(REGISTRATION_KEYS.filter((k) => k in s).map((k) => [k, s[k]])) }
       : own[name];
@@ -253,7 +253,7 @@ function helperSource(name, h) {
 
 /**
  * The custom helpers whose switch is on in queue.json but which are not approved for the file as it is now (changed,
- * missing or never approved). `cq helpers` and `cq receive` turn these off in queue.json, so a file that is changed
+ * missing or never approved). `ravenseat helpers` and `ravenseat receive` turn these off in queue.json, so a file that is changed
  * back later does not silently come back on.
  */
 function switchesToTurnOff(setup) {
@@ -491,7 +491,7 @@ function measurementText(s) {
 }
 
 /**
- * The rows for the board tab and `cq helpers`: one per helper, with the switch, the condition text, the classes where
+ * The rows for the board tab and `ravenseat helpers`: one per helper, with the switch, the condition text, the classes where
  * it is also fixed, and the measurement. A custom helper also has its review state (`review`, `reviewText`), who
  * approved it and when, the last scan (level and counts) and `canEnable` (approved for the file as it is now).
  * @param {object} config
@@ -537,7 +537,7 @@ function helperRows(config, queue, { hashes = null } = {}) {
 /** Why a custom helper cannot be switched on, in one sentence with what to do (null when it can). */
 function enableBlock(name, h) {
   if (!h || h.source !== 'custom' || h.review === 'approved') return null;
-  const how = `have Claude review it (cq helpers scan ${name}, then read the file), then cq helpers approve ${name}`;
+  const how = `have Claude review it (ravenseat helpers scan ${name}, then read the file), then ravenseat helpers approve ${name}`;
   if (h.review === 'changed') return `${name} changed since approval: ${how}.`;
   if (h.review === 'missing') return `${name}: the agent file ${h.path ?? '(no path)'} is missing.`;
   if (h.review === 'unverified') return `${name}: the agent file could not be checked against its approval.`;
@@ -545,19 +545,19 @@ function enableBlock(name, h) {
 }
 
 /**
- * Validates `cq helpers on|off <agent>`: the helper must be in the setup, and a custom helper can only be switched on
+ * Validates `ravenseat helpers on|off <agent>`: the helper must be in the setup, and a custom helper can only be switched on
  * when it is approved for the file as it is now. `setup` = helperSetup(config, queue, { hashes }); without it the
  * config's helpers only, and no custom helper can be switched on (nothing verified).
  */
 function parseSwitch(mode, name, config, setup = null) {
-  if (mode !== 'on' && mode !== 'off') return { error: 'use: cq helpers on|off <agent>' };
+  if (mode !== 'on' && mode !== 'off') return { error: 'use: ravenseat helpers on|off <agent>' };
   const n = String(name ?? '');
   if (!NAME.test(n)) return { error: `invalid agent name "${n}"` };
   const s = setup ?? helperSetup(config, null);
   const known = Object.keys(s);
   if (!known.includes(n))
     return {
-      error: `${n} is not a helper (known: ${known.join(', ') || 'none'}; add it under helpers in queue.config.json, or cq helpers add <file.md>)`,
+      error: `${n} is not a helper (known: ${known.join(', ') || 'none'}; add it under helpers in queue.config.json, or ravenseat helpers add <file.md>)`,
     };
   if (mode === 'on') {
     const block = enableBlock(n, s[n]);
@@ -585,7 +585,7 @@ const RESERVED = Object.freeze([
 ]);
 
 /**
- * Validates the name for `cq helpers add`: a valid agent name, not reserved, not a fixed reviewer, not already in the
+ * Validates the name for `ravenseat helpers add`: a valid agent name, not reserved, not a fixed reviewer, not already in the
  * setup (builtin or custom), and no agent file with that name in the project yet.
  * @param {string} name
  * @param {{ config: object, setup: object, fileExists?: boolean, pluginAgents?: string[] }} c
@@ -598,7 +598,7 @@ function checkNewName(name, { config, setup, fileExists = false, pluginAgents = 
   if (reserved.some((r) => r.toLowerCase() === lower))
     return { error: `${n} is a builtin agent name; choose another with --name` };
   if (Object.keys(setup ?? {}).some((k) => k.toLowerCase() === lower))
-    return { error: `${n} is already a helper (cq helpers remove ${n} first, or choose another --name)` };
+    return { error: `${n} is already a helper (ravenseat helpers remove ${n} first, or choose another --name)` };
   if (fileExists) return { error: `.claude/agents/${n}.md already exists; choose another --name` };
   return { name: n };
 }

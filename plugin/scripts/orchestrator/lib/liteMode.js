@@ -1,21 +1,21 @@
 // =============================================================
 // liteMode.js: the zero-config mode for new users ("mode": "lite" in queue.config.json).
 //
-// Why: full cq asks a new user for classes (K/D/D+/U), value 1-10, content_min, focus, the batch queue, the plan
+// Why: full ravenseat asks a new user for classes (K/D/D+/U), value 1-10, content_min, focus, the batch queue, the plan
 // register, helpers and the handover note before anything runs, and the small-task guard refuses tiny tasks. Lite mode
-// keeps the core loop only (init, add, show, fill, receive, merge) and one task type, so cq gives value in the first
+// keeps the core loop only (init, add, show, fill, receive, merge) and one task type, so ravenseat gives value in the first
 // hour. The owner questions ("Waiting on you") stay.
 //
 // What lite changes (and nothing else; every other command still works when typed):
-//   - `cq add "<title>" [--mission "<text or path>"] [--priority 1-10] [--files a,b] [--id X]` adds one task with only a
+//   - `ravenseat add "<title>" [--mission "<text or path>"] [--priority 1-10] [--files a,b] [--id X]` adds one task with only a
 //     title. A JSON task (--file/--json) may also leave out id, class, domain, mission, project, feature, value and
 //     content_min: liteDefaults() fills them (class K, value 5, content_min 30, the mission = the title).
 //   - `add` skips the small-task guard and the batch queue rules (a `batched` flag is dropped with a note, because the
 //     batch queue is only packed in full mode).
 //   - The order is the order added: equal value and size give equal priority, and the generated ids (T-001, T-002 ...)
 //     sort in the order they were added. `--priority` (value) moves a task up or down.
-//   - `cq help` shows only the core commands (lib/cliHelp.js).
-// The mode is switched with `cq mode lite|full` or `cq init --lite|--full`; both only write the `mode` key.
+//   - `ravenseat help` shows only the core commands (lib/cliHelp.js).
+// The mode is switched with `ravenseat mode lite|full` or `ravenseat init --lite|--full`; both only write the `mode` key.
 //
 // Everything here is pure except readOwnMode/writeMode (one small file), so it is unit tested in
 // lib/__tests__/liteMode.test.ts.
@@ -36,7 +36,7 @@ const LITE_DEFAULTS = Object.freeze({
   content_min: 30,
 });
 
-/** The project `cq init` creates in lite mode (full mode creates "example" with EX-). */
+/** The project `ravenseat init` creates in lite mode (full mode creates "example" with EX-). */
 const LITE_PROJECT = Object.freeze({ id: 'tasks', title: 'Tasks', prefix: 'T-' });
 
 /** Digits in a generated id (T-001). Padding keeps the ids sorting in the order they were added. */
@@ -102,7 +102,7 @@ function liteDefaults(tasks, queue = {}) {
     if (o.project == null && pid) o.project = pid;
     if (o.batched === true) {
       delete o.batched;
-      notes.push(`${o.id}: lite mode has no batch queue, so it runs as its own task (cq mode full turns the batch queue on)`);
+      notes.push(`${o.id}: lite mode has no batch queue, so it runs as its own task (ravenseat mode full turns the batch queue on)`);
     }
     return o;
   });
@@ -110,14 +110,14 @@ function liteDefaults(tasks, queue = {}) {
 }
 
 /**
- * The task `cq add "<title>"` builds from the flags. Only the title is required.
+ * The task `ravenseat add "<title>"` builds from the flags. Only the title is required.
  * @param {{ title?: string, mission?: string, priority?: string|number, files?: string, id?: string, by?: string }} f
  * @returns {{ task?: object, error: string[] }}
  */
 function quickTask(f = {}) {
   const error = [];
   const title = String(f.title ?? '').trim();
-  if (!title) error.push('add needs a title: cq add "Fix the login bug"');
+  if (!title) error.push('add needs a title: ravenseat add "Fix the login bug"');
   const task = { title };
   if (f.mission != null && String(f.mission).trim()) task.mission = String(f.mission).trim();
   if (f.priority != null) {
@@ -132,7 +132,7 @@ function quickTask(f = {}) {
       .filter(Boolean);
     if (files.length) task.owned_files = files;
   }
-  // --depends a,b: the task waits until these are done. cq add refuses an id that is not in the queue.
+  // --depends a,b: the task waits until these are done. ravenseat add refuses an id that is not in the queue.
   if (f.depends != null) {
     const depends = String(f.depends)
       .split(',')
@@ -222,8 +222,8 @@ function writeMode(file, value) {
 }
 
 /** The one line that says how to leave lite mode (help, init, mode). */
-function switchLine(cq = 'cq') {
-  return `Full mode (classes, value, focus, batch queue, plans, helpers): ${cq} mode full. Every command: ${cq} help all.`;
+function switchLine(ravenseat = 'ravenseat') {
+  return `Full mode (classes, value, focus, batch queue, plans, helpers): ${ravenseat} mode full. Every command: ${ravenseat} help all.`;
 }
 
 module.exports = {

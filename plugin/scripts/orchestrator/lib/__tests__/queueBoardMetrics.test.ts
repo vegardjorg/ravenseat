@@ -4,7 +4,7 @@
 // =============================================================
 // queueBoardMetrics.test.ts: the "models, tools and errors" section in the Statistics tab (statistics.js
 // transcriptMetricsSection). The server computes the numbers (queueStatistics.transcriptMetrics, the same as
-// `cq cost`); the board only shows them. The whole board runs in jsdom with a mock server (no network).
+// `ravenseat cost`); the board only shows them. The whole board runs in jsdom with a mock server (no network).
 // =============================================================
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'fs';

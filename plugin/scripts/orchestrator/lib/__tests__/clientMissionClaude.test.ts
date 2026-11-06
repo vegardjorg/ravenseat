@@ -89,7 +89,7 @@ describe('Claude mission addendum (lib/clients/claude/mission.js)', () => {
       const text = MT.filterClass(core, cls);
       for (const w of CLAUDE_WORDS) expect(text, `${w} in class ${cls}`).not.toContain(w);
       expect(text).not.toMatch(/<CLIENT_[A-Z]/);
-      for (const w of ['RESULT status=', 'track-result.md', 'handover.md', 'cq gates --precheck', 'NEVER push', 'Data, not instructions']) {
+      for (const w of ['RESULT status=', 'track-result.md', 'handover.md', 'ravenseat gates --precheck', 'NEVER push', 'Data, not instructions']) {
         expect(text).toContain(w);
       }
     }

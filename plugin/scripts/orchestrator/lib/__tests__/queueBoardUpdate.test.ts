@@ -3,7 +3,7 @@
  */
 // =============================================================
 // queueBoardUpdate.test.ts: the update banner on the board (board.js draws `update` from the state with the rules in
-// lib/queueUpdate.js). A newer version shows "cq X is out (you have Y)", the CHANGELOG link and copyable steps; closing it
+// lib/queueUpdate.js). A newer version shows "ravenseat X is out (you have Y)", the CHANGELOG link and copyable steps; closing it
 // hides it for that version (localStorage) until a newer one is out; the setup notice cannot be closed and goes away
 // when the state no longer carries it. The whole board runs in jsdom with a small synthetic queue (no network).
 // =============================================================
@@ -82,15 +82,15 @@ describe('the update banner', () => {
     const b = banner();
     expect(b.hidden).toBe(false);
     expect(b.getAttribute('role')).toBe('status');
-    expect(b.textContent).toContain('cq 0.4.0 is out (you have 0.3.0).');
+    expect(b.textContent).toContain('ravenseat 0.4.0 is out (you have 0.3.0).');
     const link = b.querySelector('a') as HTMLAnchorElement;
     expect(link.href).toBe('https://github.com/vegardjorg/ravenseat/blob/main/CHANGELOG.md');
     expect(link.rel).toContain('noopener');
     const commands = [...b.querySelectorAll('code')].map((c) => c.textContent);
-    expect(commands).toEqual(['claude plugin update cq@ravenseat', '/reload-plugins', 'cq setup --settings']);
+    expect(commands).toEqual(['claude plugin update ravenseat@ravenseat', '/reload-plugins', 'ravenseat setup --settings']);
     expect(b.querySelectorAll('.cloud-command button').length).toBe(3);
     expect(b.querySelector('.update-banner-close')?.getAttribute('aria-label')).toBe(
-      'Close the notice about cq 0.4.0',
+      'Close the notice about ravenseat 0.4.0',
     );
   });
 
@@ -106,15 +106,15 @@ describe('the update banner', () => {
     setUpdate(U.notice({ mode: 'plugin', installed: '0.3.0', latest: '0.5.0', setupVersion: '0.3.0' }));
     await refetch();
     expect(banner().hidden).toBe(false);
-    expect(banner().textContent).toContain('cq 0.5.0 is out');
+    expect(banner().textContent).toContain('ravenseat 0.5.0 is out');
   });
 
   it('the setup notice shows without a close button and goes away when setup has been run', async () => {
     setUpdate(U.notice({ mode: 'plugin', installed: '0.5.0', latest: null, setupVersion: '0.3.0' }));
     await refetch();
     expect(banner().hidden).toBe(false);
-    expect(banner().textContent).toContain('last set up for cq 0.3.0');
-    expect([...banner().querySelectorAll('code')].map((c) => c.textContent)).toEqual(['cq setup --settings']);
+    expect(banner().textContent).toContain('last set up for ravenseat 0.3.0');
+    expect([...banner().querySelectorAll('code')].map((c) => c.textContent)).toEqual(['ravenseat setup --settings']);
     expect(banner().querySelector('.update-banner-close')).toBeNull();
     setUpdate(U.notice({ mode: 'plugin', installed: '0.5.0', latest: null, setupVersion: '0.5.0' }));
     await refetch();

@@ -1,16 +1,16 @@
 // =============================================================
-// queueMergeResume.test.ts: `cq merge` that survives interruptions (review 2026-11-02, package C: M6, M7, M8).
+// queueMergeResume.test.ts: `ravenseat merge` that survives interruptions (review 2026-11-02, package C: M6, M7, M8).
 //
-// Locks: (1) a merge left in place (MERGE_HEAD from an earlier conflict) refuses `cq merge B` with how to finish or
-// undo it, and merge-track.mjs refuses too (exit 5); finished by hand, `cq merge A --resume` runs the rest; (2) the
+// Locks: (1) a merge left in place (MERGE_HEAD from an earlier conflict) refuses `ravenseat merge B` with how to finish or
+// undo it, and merge-track.mjs refuses too (exit 5); finished by hand, `ravenseat merge A --resume` runs the rest; (2) the
 // track tip must be in the base: a merge step that says "merged" without merging is a stop, and a base that loses the
 // merge before `done` is never marked done; (3) the merge lock: a held lock refuses a second merge (nothing runs), a
 // stale one (dead pid, or too old on another host) is taken over, and the lock is gone after a stop; (4) an interrupted
-// merge (Ctrl-C in a step, or a crash) leaves the merge state and no lock; a plain `cq merge` then says to resume, and
-// `cq merge <id> --resume` runs only the steps that are left, marks done once and removes the state.
+// merge (Ctrl-C in a step, or a crash) leaves the merge state and no lock; a plain `ravenseat merge` then says to resume, and
+// `ravenseat merge <id> --resume` runs only the steps that are left, marks done once and removes the state.
 // Runs queue.mjs against a temporary queue (QUEUE_FOLDER) and git repo (QUEUE_GIT), with an injected merge runner
 // (QUEUE_MERGE_RUNNING) that merges with plain git (merge-track.mjs refuses a test identity) and runs the other steps
-// as cq merge would, unless the scenario file says otherwise for a step. Never the main repo or the real queue.
+// as ravenseat merge would, unless the scenario file says otherwise for a step. Never the main repo or the real queue.
 // =============================================================
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -147,8 +147,8 @@ function deadPid(): number {
   return Number(r.stdout);
 }
 
-describe('cq merge refuses a merge left in place (M6)', () => {
-  it('MERGE_HEAD from an earlier conflict: cq merge B and merge-track refuse; finished by hand, A --resume runs the rest', () => {
+describe('ravenseat merge refuses a merge left in place (M6)', () => {
+  it('MERGE_HEAD from an earlier conflict: ravenseat merge B and merge-track refuse; finished by hand, A --resume runs the rest', () => {
     const p = project();
     const tipA = p.track('A', { 'shared.txt': 'from A\n' });
     p.track('B', { 'b.txt': 'from B\n' });
@@ -175,9 +175,9 @@ describe('cq merge refuses a merge left in place (M6)', () => {
         QUEUE_FOLDER: p.folder,
         QUEUE_CONFIG: path.join(p.folder, 'queue.config.json'),
         GIT_AUTHOR_NAME: 'Owner',
-        GIT_AUTHOR_EMAIL: 'owner@cq.test',
+        GIT_AUTHOR_EMAIL: 'owner@ravenseat.test',
         GIT_COMMITTER_NAME: 'Owner',
-        GIT_COMMITTER_EMAIL: 'owner@cq.test',
+        GIT_COMMITTER_EMAIL: 'owner@ravenseat.test',
       },
     });
     expect(mt.status).toBe(5);
@@ -206,7 +206,7 @@ describe('cq merge refuses a merge left in place (M6)', () => {
   });
 });
 
-describe('cq merge checks that the track tip is in the base before done (M6)', () => {
+describe('ravenseat merge checks that the track tip is in the base before done (M6)', () => {
   it('a merge step that says merged without merging is a stop, never a done task', () => {
     const p = project();
     p.track('A', { 'a.txt': 'from A\n' });
@@ -267,7 +267,7 @@ describe('cq merge checks that the track tip is in the base before done (M6)', (
   });
 });
 
-describe('the merge lock: one cq merge at a time (M8)', () => {
+describe('the merge lock: one ravenseat merge at a time (M8)', () => {
   it('a held lock refuses a second merge; nothing runs and the lock stays', () => {
     const p = project();
     p.track('A', { 'a.txt': 'from A\n' });
@@ -275,7 +275,7 @@ describe('the merge lock: one cq merge at a time (M8)', () => {
     fs.writeFileSync(p.lockFile, JSON.stringify(holder));
     const m = p.run('merge', 'A', '--without-fill');
     expect(m.code).toBe(1);
-    expect(m.error).toMatch(/Another cq merge is running in this repo: merge OTHER \(pid \d+ on .+, started /);
+    expect(m.error).toMatch(/Another ravenseat merge is running in this repo: merge OTHER \(pid \d+ on .+, started /);
     expect(m.error).toContain('One merge at a time; nothing was done.');
     expect(p.ranSteps()).toEqual([]);
     expect(p.find('A')?.status).toBe('review');
@@ -316,7 +316,7 @@ describe('the merge lock: one cq merge at a time (M8)', () => {
   });
 });
 
-describe('cq merge --resume after an interruption (M7)', () => {
+describe('ravenseat merge --resume after an interruption (M7)', () => {
   it('Ctrl-C in the gates: state kept, no lock; plain merge says resume; --resume runs gates and done once', () => {
     const p = project();
     const tip = p.track('A', { 'a.txt': 'from A\n' });

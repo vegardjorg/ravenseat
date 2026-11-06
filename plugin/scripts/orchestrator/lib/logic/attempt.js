@@ -25,8 +25,8 @@
 //      (hook-track-end.mjs) can refuse a stop after hook-time wrote its row, and recordKilledAgents can write a killed
 //      row for an agent that is only quiet. The attempt reads as ended, and a new one is allowed.
 //   5. The rows are read before the lock (the log is large; see cmdStart), so a row written in that moment is missed.
-//   6. The paths with no attempt at all: cq pick and cq cloud.
-// A false block is the other direction: an agent killed without a stop row stays running until `cq attempt close`.
+//   6. The paths with no attempt at all: ravenseat pick and ravenseat cloud.
+// A false block is the other direction: an agent killed without a stop row stays running until `ravenseat attempt close`.
 //
 // Everything here is pure: no file system, no exit. Text for the caller to print, values in and values out.
 // Used by cli/tracks.mjs, cli/run.mjs, cli/merge.mjs and cli/attempt.mjs. Tested in lib/__tests__/attempt.test.ts and,
@@ -39,7 +39,7 @@ const TK = require('../timeCost.js');
 
 /** How long a reservation without a start row counts as live (config attempts.reservationTtlMin). */
 const DEFAULT_RESERVATION_TTL_MIN = 30;
-/** What `cq attempt close --outcome` takes. */
+/** What `ravenseat attempt close --outcome` takes. */
 const CLOSE_OUTCOMES = Object.freeze(['delivered', 'failed', 'interrupted', 'abandoned']);
 
 /** The reservation bound in minutes from the config; the default for a missing or unusable value. */
@@ -89,11 +89,11 @@ const shownState = (x, o) => (isExpired(x, o) ? 'expired' : x.state);
 /** The attempt that blocks a new one: a running one, or null. A reservation never blocks. */
 const startBlock = (attempts) => (attempts ?? []).find((x) => x.state === 'running') ?? null;
 
-/** The refusal when a running attempt blocks. `cq` is the command to write in the hint. */
-function blockMessage(taskId, x, cq) {
+/** The refusal when a running attempt blocks. `ravenseat` is the command to write in the hint. */
+function blockMessage(taskId, x, ravenseat) {
   return (
     `${taskId}: attempt ${x.id} is running${x.session_id ? ` (agent ${x.session_id})` : ''}, so a new one cannot start. ` +
-    `If that agent is gone: ${cq} attempt close ${taskId} --outcome interrupted`
+    `If that agent is gone: ${ravenseat} attempt close ${taskId} --outcome interrupted`
   );
 }
 
@@ -210,7 +210,7 @@ function relabelRows(rows, lookup, { from }) {
 }
 
 /**
- * Closes the open attempt by hand (`cq attempt close`).
+ * Closes the open attempt by hand (`ravenseat attempt close`).
  * @returns {{ attempts?: object[], closed?: object, error?: string }}
  */
 function close(attempts, { outcome, now }) {

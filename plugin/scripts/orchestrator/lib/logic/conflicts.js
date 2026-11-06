@@ -98,7 +98,7 @@ function conflict(candidate, active) {
  */
 function blockerParts(o, tasks, resolved = []) {
   if (o.status === 'proposed')
-    return [{ type: 'status', text: `proposed (approve it first: cq approve ${o.id})` }];
+    return [{ type: 'status', text: `proposed (approve it first: ravenseat approve ${o.id})` }];
   if (o.status === 'picked')
     return [{ type: 'status', text: `picked by ${o.picked_by ?? '?'}` }];
   if (o.status !== 'waiting') return [{ type: 'status', text: `status ${o.status}` }];

@@ -1,5 +1,5 @@
 // =============================================================
-// kickstartFlow.test.ts: `cq kickstart` through the real CLI, in a temporary project.
+// kickstartFlow.test.ts: `ravenseat kickstart` through the real CLI, in a temporary project.
 //
 // Locks: (1) it works with no git and no queue, and writes nothing; (2) gates are written only with --apply and never over
 // existing ones; (3) `add` gives a PROPOSED task, in lite and in full mode, and asks nothing twice; (4) a cancelled step is
@@ -67,7 +67,7 @@ function project({ git = true, remote = '', config = {}, files = {} as Record<st
 
 const NODE = { 'package.json': JSON.stringify({ scripts: { test: 'vitest run', build: 'vite build' } }) };
 
-describe('cq kickstart: the overview', () => {
+describe('ravenseat kickstart: the overview', () => {
   it('works with no git and no queue, says git comes first, and writes nothing', () => {
     const p = project({ git: false, queue: false, files: NODE });
     const before = fs.readdirSync(p.folder).sort();
@@ -103,7 +103,7 @@ describe('cq kickstart: the overview', () => {
   });
 });
 
-describe('cq kickstart gates', () => {
+describe('ravenseat kickstart gates', () => {
   it('shows the lists and writes nothing without --apply', () => {
     const p = project({ files: NODE });
     const r = p.run('kickstart', 'gates');
@@ -124,7 +124,7 @@ describe('cq kickstart gates', () => {
   });
 });
 
-describe('cq kickstart add', () => {
+describe('ravenseat kickstart add', () => {
   it('proposes the next step in lite mode: it does not start, and it is not asked twice', () => {
     const p = project({ config: { mode: 'lite' } });
     const r = p.run('kickstart', 'add');

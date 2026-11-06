@@ -2062,7 +2062,7 @@ div.row-option {
   padding-top: var(--distance-sm);
 }
 
-/* Whether `cq wait` listens (lib/ownerWait.js): a dot, filled in the primary color while it does. */
+/* Whether `ravenseat wait` listens (lib/ownerWait.js): a dot, filled in the primary color while it does. */
 .inbox-listening {
   display: flex;
   align-items: center;
@@ -3477,7 +3477,7 @@ body.with-option-line .board {
   }
 }
 
-/* ---- The update banner (a newer cq version, or setup not run after an update; lib/queueUpdate.js) ---- */
+/* ---- The update banner (a newer ravenseat version, or setup not run after an update; lib/queueUpdate.js) ---- */
 .update-banner {
   display: flex;
   align-items: flex-start;

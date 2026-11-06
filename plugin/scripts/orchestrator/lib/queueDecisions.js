@@ -5,8 +5,8 @@
 // stuck work. This file turns that into ONE list of decisions, each with
 //   - a verb (Decide, Check, Approve, Unstick) the board groups by,
 //   - the impact (what the answer unlocks, in the focus stages first), which the list is sorted by,
-//   - the options, the recommended one first, each with the exact write it does: the `cq` arguments (cliArgs, used by
-//     `cq decide` and the /cq:decide skill) and the board's API call (boardCall, used by the Decisions view). Both run
+//   - the options, the recommended one first, each with the exact write it does: the `ravenseat` arguments (cliArgs, used by
+//     `ravenseat decide` and the /ravenseat:decide skill) and the board's API call (boardCall, used by the Decisions view). Both run
 //     the same queue.mjs command with the same --by, so the log and the actor are the same whichever surface is used.
 // It also builds "Decided today" (decidedToday) from the queue's own timestamps.
 //
@@ -33,33 +33,33 @@
   /** How long the board waits before it writes a one-click answer, so "Undo" can take it back without a revert. */
   const UNDO_MS = 5000;
 
-  /** The note `cq block` gets when the owner flags stuck work (the orchestrator sees it in pulse and blockers). */
+  /** The note `ravenseat block` gets when the owner flags stuck work (the orchestrator sees it in pulse and blockers). */
   const FLAG_NOTE = 'owner: looks stuck, please check';
 
   /** The stops that wait on someone (a task in review with one of these open): what to call it and the next step. */
   const STOP_TEXT = {
     'merge-conflict': {
       name: 'Merge conflict',
-      next: (id) => `Next: the orchestrator starts a fix round (cq resume ${id} --reason fix).`,
+      next: (id) => `Next: the orchestrator starts a fix round (ravenseat resume ${id} --reason fix).`,
     },
     'merge-guard': {
       name: 'Stopped by the merge guard',
       next: (id) =>
-        `Next: read the diff of the protected paths. Not asked for: a fix round (cq resume ${id} --reason fix). Intended: cq merge ${id} --allow-guard.`,
+        `Next: read the diff of the protected paths. Not asked for: a fix round (ravenseat resume ${id} --reason fix). Intended: ravenseat merge ${id} --allow-guard.`,
     },
     'merge-stopped': {
       name: 'Merge stopped',
-      next: (id) => `Next: fix the cause named above, then cq merge ${id} again. Nothing was merged by this stop.`,
+      next: (id) => `Next: fix the cause named above, then ravenseat merge ${id} again. Nothing was merged by this stop.`,
     },
     'track-question': {
       name: 'The track asks you',
       next: (id) =>
-        `Next: answer it, and a new agent gets the answer (cq resume ${id} --reason context --answer "<text>"), or cq set ${id} cancelled. ` +
-        `If it needs a file the task does not own: cq edit ${id} --files <files> --by owner first. A finished delivery that needs no answer can be merged.`,
+        `Next: answer it, and a new agent gets the answer (ravenseat resume ${id} --reason context --answer "<text>"), or ravenseat set ${id} cancelled. ` +
+        `If it needs a file the task does not own: ravenseat edit ${id} --files <files> --by owner first. A finished delivery that needs no answer can be merged.`,
     },
     'gate-red': {
       name: 'Gates red',
-      next: (id) => `Next: the orchestrator starts a fix round (cq resume ${id} --reason fix), or cq merge ${id} --resume once the cause is fixed.`,
+      next: (id) => `Next: the orchestrator starts a fix round (ravenseat resume ${id} --reason fix), or ravenseat merge ${id} --resume once the cause is fixed.`,
     },
   };
 
@@ -109,7 +109,7 @@
     const focus = s.focus ?? null;
     const choices = Array.isArray(s.choices) ? s.choices : [];
     // The choices as options, the recommended one first (the rest keep their order). The action keeps the 1-based
-    // number, which is what `cq resolve --choice` and the board's { choice } take.
+    // number, which is what `ravenseat resolve --choice` and the board's { choice } take.
     const numbered = choices.map((c, i) => ({
       label: c.label,
       recommended: !!c.recommended,
@@ -277,7 +277,7 @@
       text: null,
       context: [
         'Marked running, but no worktree has its branch and there is no report: the agent was never started.',
-        `Back in the queue, the next fill starts it (cq fill --ids ${h.id}).`,
+        `Back in the queue, the next fill starts it (ravenseat fill --ids ${h.id}).`,
       ],
       recommendation: options[0].label,
       impact: taskImpact(0, h),
@@ -302,7 +302,7 @@
       text: null,
       context: [
         `Round ${round} was prepared, but no agent has started it, and the task holds its slot.`,
-        `The orchestrator starts it: cq resume ${h.id} --reason ${reason}, then the agent line it prints. If no session is open, open one and run /cq:queue.`,
+        `The orchestrator starts it: ravenseat resume ${h.id} --reason ${reason}, then the agent line it prints. If no session is open, open one and run /ravenseat:queue.`,
       ],
       recommendation: options[0].label,
       impact: taskImpact(0, h),
@@ -329,7 +329,7 @@
       text: null,
       context: [
         `No commit, file change or transcript write for ${minutesText(h.long_silent)}: the agent may have hung or run out of context.`,
-        `The orchestrator checks it: cq resume ${h.id} --reason context, then the agent line it prints.`,
+        `The orchestrator checks it: ravenseat resume ${h.id} --reason context, then the agent line it prints.`,
       ],
       recommendation: options[0].label,
       impact: taskImpact(0, h),
@@ -429,7 +429,7 @@
     return groupItems(items).flatMap((g) => g.items);
   }
 
-  /** The decisions from the inbox, sorted: what `cq decide` lists and the skill walks. */
+  /** The decisions from the inbox, sorted: what `ravenseat decide` lists and the skill walks. */
   function decisions(inbox) {
     return sortItems(fromInbox(inbox));
   }
@@ -459,16 +459,16 @@
     return parts.join(' · ');
   }
 
-  // ---- The writes: cq arguments and board calls ------------------------------------------------------------------
+  // ---- The writes: ravenseat arguments and board calls ------------------------------------------------------------------
 
-  /** The remark `cq cancel` gets when a proposal is declined (the same text as queueTaskEdit.cancelRemark). */
+  /** The remark `ravenseat cancel` gets when a proposal is declined (the same text as queueTaskEdit.cancelRemark). */
   function declineRemark(reason) {
     const r = String(reason ?? '').replace(/\s+/g, ' ').trim();
     return r ? `declined: ${r}` : 'declined';
   }
 
   /**
-   * The `cq` arguments for an action, or null for one that writes nothing (keep). The owner's actions carry
+   * The `ravenseat` arguments for an action, or null for one that writes nothing (keep). The owner's actions carry
    * --by owner where the command records who it was (resolve, approve, qa ok, cancel).
    */
   function cliArgs(action) {
@@ -499,10 +499,10 @@
   }
 
   /** The arguments as one command line to show or paste (double quotes where needed). */
-  function cliText(args, cq = 'cq') {
+  function cliText(args, ravenseat = 'ravenseat') {
     if (!args) return null;
     const quote = (s) => (/^[A-Za-z0-9._:/=@-]+$/.test(s) ? s : `"${String(s).replace(/(["\\$`])/g, '\\$1')}"`);
-    return [cq, ...args.map(quote)].join(' ');
+    return [ravenseat, ...args.map(quote)].join(' ');
   }
 
   /**

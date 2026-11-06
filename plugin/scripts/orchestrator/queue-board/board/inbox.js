@@ -40,7 +40,7 @@ function drawInboxButton() {
 }
 
 /**
- * Whether answers given here are picked up now: `cq wait` runs in the orchestrator session and its heartbeat is fresh
+ * Whether answers given here are picked up now: `ravenseat wait` runs in the orchestrator session and its heartbeat is fresh
  * (state.listening, lib/ownerWait.js). Only shown when something waits on the owner.
  */
 function listeningLine(count) {
@@ -167,7 +167,7 @@ function questionRow(s, i) {
     ),
     el('p', {
       class: s.text ? 'sp-text' : 'sp-text missing',
-      text: s.text ?? 'No text registered yet (cq question <id> --text …).',
+      text: s.text ?? 'No text registered yet (ravenseat question <id> --text …).',
     }),
     s.recommendation ? el('p', { class: 'sp-meta', text: `Recommendation: ${s.recommendation}` }) : null,
     s.source ? el('p', { class: 'sp-meta', text: `Source: ${s.source}` }) : null,
@@ -642,7 +642,7 @@ function drawInbox(fresh) {
         class: 'inbox-info',
         text:
           `${d.unlogged.length} ${d.unlogged.length === 1 ? 'answer is' : 'answers are'} not entered in the decision log yet ` +
-          `(${d.unlogged.map((x) => x.sp).join(', ')}). The orchestrator enters them (cq resolutions --unlogged).`,
+          `(${d.unlogged.map((x) => x.sp).join(', ')}). The orchestrator enters them (ravenseat resolutions --unlogged).`,
       }),
     );
 

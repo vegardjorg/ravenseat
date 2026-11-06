@@ -52,11 +52,11 @@ function stateLine(t) {
   return (
     `${t.activeOnes} active · ${t.picked ? `${t.picked} picked · ` : ''}${t.waiting} waiting · ${t.proposed} proposed · ` +
     `${t.canStart} can start now` +
-    `${t.batched ? ` · ${t.batched} in the batch queue (cq batch)` : ''}` +
-    `${t.qa ? ` · ${t.qa} in the QA list (cq qa)` : ''}${t.external ? ` · ${t.external} outside the queue (cq external)` : ''}` +
-    `${t.parked ? ` · ${t.parked} parked (cq continue)` : ''}` +
-    `${t.focus?.notice ? ' · FOCUS WARNING (cq focus)' : ''}` +
-    `${t.empty ? (t.waiting ? ' · NOTHING CAN START (cq show --full says why)' : ' · THE QUEUE IS OUT OF WORK') : ''}`
+    `${t.batched ? ` · ${t.batched} in the batch queue (ravenseat batch)` : ''}` +
+    `${t.qa ? ` · ${t.qa} in the QA list (ravenseat qa)` : ''}${t.external ? ` · ${t.external} outside the queue (ravenseat external)` : ''}` +
+    `${t.parked ? ` · ${t.parked} parked (ravenseat continue)` : ''}` +
+    `${t.focus?.notice ? ' · FOCUS WARNING (ravenseat focus)' : ''}` +
+    `${t.empty ? (t.waiting ? ' · NOTHING CAN START (ravenseat show --full says why)' : ' · THE QUEUE IS OUT OF WORK') : ''}`
   );
 }
 
@@ -118,7 +118,7 @@ function summaryView(
   const ls = load && !guard ? loadSlotsFor(queue, load) : null;
   if (ls?.limited) out.push(cut(`LOAD: ${ls.reason}. Fewer tracks start until the load goes down.`));
   out.push(
-    `STARTABLE NOW (${startable.length}${startable.length ? '; cq fill starts them' : ''}):`,
+    `STARTABLE NOW (${startable.length}${startable.length ? '; ravenseat fill starts them' : ''}):`,
   );
   for (const v of startable) {
     const o = tasks.find((x) => x.id === v.id);
@@ -162,7 +162,7 @@ function summaryView(
     const readyOnes = batch.filter((g) => g.ready).length;
     out.push(
       `BATCH_QUEUE (${n} task(s) in ${batch.length} group(s)${readyOnes ? `, ${readyOnes} ready for packing` : ''}; ` +
-        'cq batch)',
+        'ravenseat batch)',
     );
   }
   if (t.ownerQuestion.length)
@@ -186,7 +186,7 @@ function summaryView(
     const n = nightGuard(queue, now);
     if (n.active && n.message) out.push(cut(n.message));
   }
-  out.push('Full list: cq show --full (or --all, --grouped, --project <pid>).');
+  out.push('Full list: ravenseat show --full (or --all, --grouped, --project <pid>).');
   return out;
 }
 

@@ -63,32 +63,32 @@ describe('what stays as it was', () => {
   });
 });
 
-describe('cq add from a queue agent', () => {
+describe('ravenseat add from a queue agent', () => {
   const on = (branch: string | null) => (c: string) =>
     assess(c, { baseBranch: 'main', branchPrefix: 'queue/', branch, agentType: 'queue-agent', guardedTypes: new Set(['queue-agent']) });
   const track = on('queue/A-1');
   it('is allowed on its own track branch', () => {
-    expect(track('cq add --file task.json')).toBeNull();
+    expect(track('ravenseat add --file task.json')).toBeNull();
     expect(track('node scripts/orchestrator/queue.mjs add --file task.json')).toBeNull();
   });
   it('is never --approved, and never as the owner', () => {
-    expect(track('cq add --file task.json --approved')?.decision).toBe('deny');
-    expect(track('cq add --file task.json --approved=true')?.decision).toBe('deny');
-    expect(track('cq add --file task.json --by owner')?.decision).toBe('deny');
+    expect(track('ravenseat add --file task.json --approved')?.decision).toBe('deny');
+    expect(track('ravenseat add --file task.json --approved=true')?.decision).toBe('deny');
+    expect(track('ravenseat add --file task.json --by owner')?.decision).toBe('deny');
   });
   it.each(['main', 'feature/x', 'queue/', null])('is refused on %s, where the CLI would not see a track', (b) => {
-    expect(on(b as string | null)('cq add --file task.json')?.decision).toBe('deny');
+    expect(on(b as string | null)('ravenseat add --file task.json')?.decision).toBe('deny');
   });
-  it.each(['cd ../.. && cq add --file task.json', '(cd ../.. && cq add --file task.json)', 'QUEUE_ROOT=/x cq add --file task.json', 'bash -c "cd .. && cq add --file t.json"', 'pushd .. ; cq add --file t.json'])(
+  it.each(['cd ../.. && ravenseat add --file task.json', '(cd ../.. && ravenseat add --file task.json)', 'QUEUE_ROOT=/x ravenseat add --file task.json', 'bash -c "cd .. && ravenseat add --file t.json"', 'pushd .. ; ravenseat add --file t.json'])(
     '%s is refused: the line moves it away from the branch',
     (c) => {
       expect(track(c)?.decision).toBe('deny');
     },
   );
   it('the main session is not touched, and other commands are still refused', () => {
-    expect(assess('cq add --file task.json --approved', { baseBranch: 'main' })).toBeNull();
-    expect(track('cq approve A-2')?.decision).toBe('deny');
-    expect(track('cq edit A-2')?.decision).toBe('deny');
+    expect(assess('ravenseat add --file task.json --approved', { baseBranch: 'main' })).toBeNull();
+    expect(track('ravenseat approve A-2')?.decision).toBe('deny');
+    expect(track('ravenseat edit A-2')?.decision).toBe('deny');
   });
 });
 

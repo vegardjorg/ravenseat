@@ -192,7 +192,7 @@
 
   /**
    * The forecast box: when the remaining tasks in the focus (or the whole queue without a focus) are done at 50, 85 and
-   * 95 %, from the daily throughput (the server computes it, lib/queueForecast.js; the same as `cq forecast`).
+   * 95 %, from the daily throughput (the server computes it, lib/queueForecast.js; the same as `ravenseat forecast`).
    */
   function forecastBox(f) {
     if (!f?.text) return null;

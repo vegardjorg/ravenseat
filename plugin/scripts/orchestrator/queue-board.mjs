@@ -38,7 +38,7 @@
 //   - WAITING ON YOU: the state has `inbox` (owner question, QA, proposed, what is stuck) and `next` ("Next up").
 //     Answers go via `queue.mjs resolve <id> --answer … --by owner`, QA ok and approve for several via `queue.mjs qa ok <id…>
 //     --by owner` and `queue.mjs approve <id…> --by owner`. DECISIONS (board/decide.js) is the same inbox as one list by
-//     impact (lib/queueDecisions.js, also `cq decide`); its writes are the same calls, plus { type: 'flag-stuck', id }
+//     impact (lib/queueDecisions.js, also `ravenseat decide`); its writes are the same calls, plus { type: 'flag-stuck', id }
 //     (= `queue.mjs block <id> other --note …`) for stuck work. The inbox also has `decided` ("Decided today").
 //   - BOARD SWITCHES: state.boardSwitches (lib/queueConfig.js boardSwitches). The Cloud tab shows only with features.cloud
 //     AND board.showCloud (default false); POST /api/action { type: 'board-switch', name: 'showCloud', on } runs
@@ -77,7 +77,7 @@
 //     the server fetches the published plugin.json from GitHub with a plain GET (no headers of its own, nothing about
 //     the user or the project, 3 s timeout); any error is silent. Off with board.updateCheck: false or DISABLE_UPDATES
 //     or CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC. The state carries `update`, which also says when
-//     the plugin version differs from the one `cq setup --settings` recorded in <dataFolder>/setup.json (local only).
+//     the plugin version differs from the one `ravenseat setup --settings` recorded in <dataFolder>/setup.json (local only).
 //
 // Security (another web page in the same browser must not be able to read or edit the queue):
 //   - listens only on 127.0.0.1,
@@ -123,11 +123,11 @@ const KAP = require('./lib/queueCapacity.js');
 const F = require('./lib/queueFollow.js');
 // The update banner (a newer plugin version, or setup not run after an update). Served to the browser as /queueUpdate.js.
 const U = require('./lib/queueUpdate.js');
-// `cq wait`'s heartbeat (lib/ownerWait.js): "Orchestrator listening" in "Waiting on you" while it is fresh.
+// `ravenseat wait`'s heartbeat (lib/ownerWait.js): "Orchestrator listening" in "Waiting on you" while it is fresh.
 const OW = require('./lib/ownerWait.js');
 // Cancel, decline and edit one task from the detail panel (the rules; queue.mjs cancel / edit write).
 const TE = require('./lib/queueTaskEdit.js');
-// The base gate's verdict (lib/baseHealth.js; cq merge writes base-health.json, the board only reads it).
+// The base gate's verdict (lib/baseHealth.js; ravenseat merge writes base-health.json, the board only reads it).
 const BH = require('./lib/baseHealth.js');
 // The batch push threshold (config().push): the unpushed merged tasks next to the base health in the status line.
 const PB = require('./lib/pushBatch.js');
@@ -155,7 +155,7 @@ const CURSOR = path.join(FOLDER, 'orchestrator.json');
 const PLAN_FILE = path.join(FOLDER, 'plans.json');
 // The "Follow up" entries (queue.mjs follow writes; the board only reads).
 const FOLLOW_FILE = path.join(FOLDER, 'follow.json');
-// The base gate's state file (cli/baseHealth.mjs writes it after cq merge).
+// The base gate's state file (cli/baseHealth.mjs writes it after ravenseat merge).
 const BASE_HEALTH_FILE = path.join(FOLDER, 'base-health.json');
 // Documents in the reading view live in the main tree, like the source paths in the plan register (same env var as queue.mjs).
 const SOURCE_ROOT = process.env.QUEUE_PLAN_SOURCE_ROOT ?? MAIN_TREE;
@@ -176,7 +176,7 @@ const val = (name) => {
 };
 if (a.includes('--help') || a.includes('-h')) {
   console.log(
-    `Kanban board for the work queue.\n\n  ${require('./lib/projectRoot.js').cqCommand()} board [--port <nr>] [--mascot chatty|events|off]\n\n` +
+    `Kanban board for the work queue.\n\n  ${require('./lib/projectRoot.js').cliCommand()} board [--port <nr>] [--mascot chatty|events|off]\n\n` +
       `The default port is board.port in queue.config.json (now ${CONFIG.board?.port ?? 2000}).\n` +
       `The mascot's speech bubble is board.mascot in queue.config.json (now ${CONFIG.board?.mascot ?? 'chatty'}); ` +
       '--mascot off turns it off for every viewer.\n' +
@@ -202,13 +202,13 @@ const VALID_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
 const VALID_ORIGIN = new Set([...VALID_HOSTS].map((v) => `http://${v}`));
 
 // ---- The update banner (lib/queueUpdate.js) ------------------------------------------------------------------------
-// The installed version: the plugin manifest (setupSources finds it), or cq-version.json next to the scripts in a vendored
+// The installed version: the plugin manifest (setupSources finds it), or ravenseat-version.json next to the scripts in a vendored
 // install (install.mjs writes it). Read once: a plugin update installs into a new folder, so this board keeps its version.
 const INSTALL = (() => {
   const src = T.setupSources(HERE, GIT_ROOT, (f) => fs.existsSync(f));
   let version = null;
   try {
-    const file = src.manifest ?? path.join(HERE, 'cq-version.json');
+    const file = src.manifest ?? path.join(HERE, 'ravenseat-version.json');
     version = JSON.parse(fs.readFileSync(file, 'utf8')).version ?? null;
   } catch {
     version = null;
@@ -541,7 +541,7 @@ let checksReport = { time: 0, report: null };
 async function checksReportNow(fresh) {
   if (!fresh && checksReport.report && Date.now() - checksReport.time < 60_000) return { ok: true, report: checksReport.report };
   const r = await queueMjs(['checks', '--json']);
-  if (!r.ok) return { ok: false, message: r.error || r.out || 'cq checks failed' };
+  if (!r.ok) return { ok: false, message: r.error || r.out || 'ravenseat checks failed' };
   try {
     const answer = JSON.parse(r.out);
     // Switched off, the answer is {off:true}: no report, so the view has nothing to draw while the tab goes away.
@@ -549,7 +549,7 @@ async function checksReportNow(fresh) {
     checksReport = { time: Date.now(), report };
     return { ok: true, report };
   } catch {
-    return { ok: false, message: 'cq checks gave an answer that could not be read' };
+    return { ok: false, message: 'ravenseat checks gave an answer that could not be read' };
   }
 }
 
@@ -573,7 +573,7 @@ function state() {
   const checksPanel = checksPanelNow();
   const checks = checksPanel ? checksNow() : null;
   const baseKey = JSON.stringify([baseHealth, pushBatch, checks, checksPanel]);
-  // Is a `cq wait` listening (its heartbeat is fresh)? Read every time, so the line flips without a queue change.
+  // Is a `ravenseat wait` listening (its heartbeat is fresh)? Read every time, so the line flips without a queue change.
   const listening = OW.heartbeatState(FOLDER).listening;
   if (
     quick &&
@@ -635,15 +635,15 @@ function state() {
     mascotNumbers: MASCOT_MODE === 'off' ? null : mascotNumbers(queue),
     title: TITLE,
     baseBranch: BASE,
-    // The update banner (lib/queueUpdate.js): null, or a newer version and/or "run cq setup --settings".
+    // The update banner (lib/queueUpdate.js): null, or a newer version and/or "run ravenseat setup --settings".
     update,
     // The base branch's health (lib/baseHealth.js boardHealth): null when the base gate is off; the status line shows it.
     baseHealth,
     // The push batch (lib/pushBatch.js boardBatch): "4 of 10 tasks, NOT YET"; null without a remote ref.
     pushBatch,
-    // The checks overview: the steps of `cq kickstart`; null until the first answer is in.
+    // The checks overview: the steps of `ravenseat kickstart`; null until the first answer is in.
     checks,
-    // Does the Checks tab show (`cq checks on|off`)?
+    // Does the Checks tab show (`ravenseat checks on|off`)?
     checksPanel,
     // The module switches (lib/queueConfig.js features): the board hides the tabs, buttons and rows of those that are off.
     features: FEATURES,
@@ -651,7 +651,7 @@ function state() {
     boardSwitches: KK.boardSwitches(CONFIG, queue),
     // The forecast box in the Focus view (lib/queueForecast.js, a fixed seed so the version stays stable).
     forecast: boardForecast(showQueue),
-    // `cq wait` runs and will start an orchestrator turn when the owner acts (lib/ownerWait.js heartbeatState).
+    // `ravenseat wait` runs and will start an orchestrator turn when the owner acts (lib/ownerWait.js heartbeatState).
     listening,
   };
   // Each stage gets status and rests; a stage with only rests shows them in the title (the focus line and the cards
@@ -738,7 +738,7 @@ function revertedNow() {
   return revertedCache.commits;
 }
 
-/** The flow figures for the last 14 days (lib/eventStatistics.js, the same as in cq cost); an error leaves the box out. */
+/** The flow figures for the last 14 days (lib/eventStatistics.js, the same as in ravenseat cost); an error leaves the box out. */
 function boardFlow(queue, events) {
   try {
     const to = Date.now();
@@ -770,7 +770,7 @@ function statistics() {
   const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
   const data = {
     ...S.statistics(queue, log.rows),
-    // "Blockers last 7 days" (queueLogic.blockerSummary, the same numbers as cq blockers).
+    // "Blockers last 7 days" (queueLogic.blockerSummary, the same numbers as ravenseat blockers).
     blockers: L.blockerSummary(queue, { days: 7 }),
     timeLogError: log.error,
     forecast: boardForecast(queue),
@@ -1081,7 +1081,7 @@ async function bulk(b, queueNow) {
         changes = r.data.changes ?? [];
         warnings = r.data.warnings ?? [];
         changed = r.data.changed ?? changed;
-      } else error = [errorText(r, 'cq failed')];
+      } else error = [errorText(r, 'ravenseat failed')];
     }
     const list = T.assess(queue, assessment, { now: Date.now() });
     return {
@@ -1140,7 +1140,7 @@ async function bulk(b, queueNow) {
         outdated,
         message: outdated
           ? 'The queue has changed since the preview. Review the change again.'
-          : errorText(r, 'cq failed'),
+          : errorText(r, 'ravenseat failed'),
       },
     };
   }
@@ -1166,7 +1166,7 @@ async function undo(b) {
   if (b.show === true) {
     const r = await queueJson(['undo', '--show', '--json']);
     if (!r.data)
-      return { status: 500, answer: { ok: false, message: errorText(r, 'cq failed') } };
+      return { status: 500, answer: { ok: false, message: errorText(r, 'ravenseat failed') } };
     return {
       status: 200,
       answer: {
@@ -1187,7 +1187,7 @@ async function undo(b) {
     `${new Date().toLocaleTimeString('en-GB')} undo${nr ? ` no. ${nr}` : ''}: ${r.ok ? 'ok' : `failed (${errorText(r, '?')})`}`,
   );
   if (!r.ok || r.data?.ok !== true)
-    return { status: 409, answer: { ok: false, message: errorText(r, 'cq undo failed') } };
+    return { status: 409, answer: { ok: false, message: errorText(r, 'ravenseat undo failed') } };
   const p = r.data.entry;
   return {
     status: 200,
@@ -1238,7 +1238,7 @@ async function taskEdit(b, queueNow) {
         outdated,
         message: outdated
           ? 'The queue has changed since you opened the task. Look at it again.'
-          : errorText(r, `cq ${args[0]} failed`),
+          : errorText(r, `ravenseat ${args[0]} failed`),
       },
     };
   }
@@ -1336,7 +1336,7 @@ async function focus(b, queueNow) {
         outdated,
         message: outdated
           ? 'The queue has changed since the preview. Review the focus again.'
-          : errorText(r, 'cq focus save failed'),
+          : errorText(r, 'ravenseat focus save failed'),
       },
     };
   }
@@ -1399,7 +1399,7 @@ async function area(b, queueNow) {
         message:
           r.code === 6
             ? 'The queue has changed since the preview. Review the change again.'
-            : r.error || r.out || 'cq area failed',
+            : r.error || r.out || 'ravenseat area failed',
       },
     };
   return { status: 200, answer: { ok: true, message: r.out } };
@@ -1480,7 +1480,7 @@ async function planPrioritize(b) {
         changed: ok ? (r.data.changed ?? null) : null,
         changes: ok ? (r.data.changes ?? []) : [],
         warnings: ok ? (r.data.warnings ?? []) : (r.data?.warnings ?? []),
-        error: ok ? [] : [errorText(r, 'cq plan prioritize-many failed')],
+        error: ok ? [] : [errorText(r, 'ravenseat plan prioritize-many failed')],
         can: ok,
       },
     };
@@ -1498,7 +1498,7 @@ async function planPrioritize(b) {
         outdated,
         message: outdated
           ? 'The plan register has changed since the preview. Review the draft again.'
-          : errorText(r, 'cq plan prioritize-many failed'),
+          : errorText(r, 'ravenseat plan prioritize-many failed'),
       },
     };
   }
@@ -1649,7 +1649,7 @@ async function planBulk(b) {
         ok: false,
         outdated,
         message: notUndone.length
-          ? `${reason}\nSomething was saved and could not be undone automatically (changelog no. ${written.join(', ')}). Use cq plan undo.`
+          ? `${reason}\nSomething was saved and could not be undone automatically (changelog no. ${written.join(', ')}). Use ravenseat plan undo.`
           : reason,
       },
     };
@@ -1680,7 +1680,7 @@ async function planUndo(b) {
         answer: {
           ok: false,
           undone,
-          message: `${errorText(r, 'cq plan undo failed')}${undone ? ` (${undone} of ${call.length} are undone)` : ''}`,
+          message: `${errorText(r, 'ravenseat plan undo failed')}${undone ? ` (${undone} of ${call.length} are undone)` : ''}`,
         },
       };
     }
@@ -1776,7 +1776,7 @@ async function planCheck() {
   if (checkCache?.key === key) return checkCache.answer;
   const r = await queueJson(['plan', 'check', '--json']);
   if (!(r.ok && r.data?.ok === true))
-    return { ok: false, message: errorText(r, 'cq plan check failed') };
+    return { ok: false, message: errorText(r, 'ravenseat plan check failed') };
   const unregistered = (r.data.unregistered ?? []).filter((s) => typeof s === 'string');
   const answer = { ok: true, unregistered, groups: PRIVACY.unregisteredGroups(unregistered) };
   checkCache = { key, answer };
@@ -1818,7 +1818,7 @@ async function write(filePath, b) {
     console.log(`${clock} ${what}: ${r.ok ? 'ok' : `failed (${r.error || r.out})`}`);
     return r.ok
       ? { status: 200, answer: { ok: true, message: r.out, info } }
-      : { status: 409, answer: { ok: false, message: r.error || r.out || 'cq failed' } };
+      : { status: 409, answer: { ok: false, message: r.error || r.out || 'ravenseat failed' } };
   };
   const no = (message) => ({ status: 400, answer: { ok: false, message } });
 
@@ -1888,12 +1888,12 @@ async function write(filePath, b) {
     info = v.info;
     return run(['limit', name, val], `limit ${name} ${val}`);
   }
-  // The guidance switch in General: goes through `cq guidance` (queue.json, under the lock).
+  // The guidance switch in General: goes through `ravenseat guidance` (queue.json, under the lock).
   if (filePath === '/api/guidance') {
     if (!['guided', 'quiet'].includes(b?.mode)) return no('mode must be guided or quiet');
     return run(['guidance', b.mode], `guidance ${b.mode}`);
   }
-  // The Checks tab: every write goes through `cq checks ...` (or `cq kickstart gates`). "plan" is --approved, because the
+  // The Checks tab: every write goes through `ravenseat checks ...` (or `ravenseat kickstart gates`). "plan" is --approved, because the
   // owner's click on this board (behind the key) is the yes. The key only names a file in the catalog.
   if (filePath === '/api/checks') {
     checksReport = { time: 0, report: null };
@@ -1905,7 +1905,7 @@ async function write(filePath, b) {
     if (b.action === 'dismiss' || b.action === 'restore') return run(['checks', b.action, key], `checks ${b.action} ${key}`);
     return no('action must be plan, dismiss, restore, gates, on or off');
   }
-  // The "Helper agents" tab: a switch goes through `cq helpers on|off <agent>` (queue.json, under the lock).
+  // The "Helper agents" tab: a switch goes through `ravenseat helpers on|off <agent>` (queue.json, under the lock).
   // A custom helper that is not approved for its file as it is now is refused here (and again in queue.mjs).
   if (filePath === '/api/helper') {
     const { setup } = HF.verifiedSetup(CONFIG, queueNow(), MAIN_TREE);
@@ -1913,10 +1913,10 @@ async function write(filePath, b) {
     if (h.error) return no(h.error);
     return run(h.args, `helper ${h.args[2]} ${h.args[1]}`);
   }
-  // "Add helper": a pasted path goes to `cq helpers add` (queue.mjs reads, copies, hashes and scans the file; the helper
+  // "Add helper": a pasted path goes to `ravenseat helpers add` (queue.mjs reads, copies, hashes and scans the file; the helper
   // stays off). Approving is never possible from the board: that is Claude's review and the owner's yes, in the CLI.
-  // "Auto-accept proposals" in the gear: the rules go through `cq proposals auto ...` and Undo through
-  // `cq proposals undo <id>` (queue.json under the lock, the same validation as the CLI).
+  // "Auto-accept proposals" in the gear: the rules go through `ravenseat proposals auto ...` and Undo through
+  // `ravenseat proposals undo <id>` (queue.json under the lock, the same validation as the CLI).
   if (filePath === '/api/proposals') {
     const h = PR.boardArgs(b);
     if (h.error) return no(h.error);
@@ -1999,7 +1999,7 @@ async function write(filePath, b) {
     if ((type === 'qa-ok' || type === 'approve') && Array.isArray(b.ids)) {
       const ids = b.ids.map(idOrNull);
       if (!ids.length || ids.length > 500 || ids.some((x) => !x)) return no('invalid id list');
-      // --by owner, as resolve: the actor is the same whether the owner answers here or with /cq:decide.
+      // --by owner, as resolve: the actor is the same whether the owner answers here or with /ravenseat:decide.
       const args = type === 'qa-ok' ? ['qa', 'ok', ...ids, '--by', 'owner'] : ['approve', ...ids, '--by', 'owner'];
       return run(args, `${type} ${ids.length === 1 ? ids[0] : `${ids.length} tasks`}`);
     }
@@ -2037,7 +2037,7 @@ async function write(filePath, b) {
         `batch pack ${ids.join(' ')} → ${newId}`,
       );
     }
-    // The gear's Board section: the same `cq board-setting cloud on|off` Claude Code runs (queue.json board.showCloud).
+    // The gear's Board section: the same `ravenseat board-setting cloud on|off` Claude Code runs (queue.json board.showCloud).
     if (type === 'board-switch') {
       if (b.name !== 'showCloud' || typeof b.on !== 'boolean') return no('invalid board switch');
       return run(['board-setting', 'cloud', b.on ? 'on' : 'off'], `board-setting cloud ${b.on ? 'on' : 'off'}`);
@@ -2060,8 +2060,8 @@ async function write(filePath, b) {
       return run(['cloud', 'done', id, ...(branch ? ['--branch', branch] : [])], `cloud done ${id}`);
     }
     if (type === 'cloud-cancel') return run(['cloud', 'cancel', id], `cloud cancel ${id}`);
-    // "Flag for the orchestrator" on stuck work in the Decisions view: a blocker reason (cq block <id> other) with a
-    // fixed note, the same command /cq:decide runs (lib/queueDecisions.js cliArgs). Never over an open blocker.
+    // "Flag for the orchestrator" on stuck work in the Decisions view: a blocker reason (ravenseat block <id> other) with a
+    // fixed note, the same command /ravenseat:decide runs (lib/queueDecisions.js cliArgs). Never over an open blocker.
     if (type === 'requeue') return run(['set', id, 'waiting'], `set ${id} waiting (started without an agent)`);
     if (type === 'flag-stuck') {
       const o = (queueNow().tasks ?? []).find((x) => x.id === id);
@@ -2193,7 +2193,7 @@ const FOLLOW_JS = `'use strict';
     a.appendChild(log.length ? list(log) : el('p', '(empty)', 'small'));
     if (p.decision) a.appendChild(el('p', 'Owner decision: ' + p.decision));
     if (p.report) a.appendChild(el('p', 'Report: ' + p.report, 'small'));
-    else if (p.status === 'to-report') a.appendChild(el('p', 'Run: cq follow report ' + p.id, 'small'));
+    else if (p.status === 'to-report') a.appendChild(el('p', 'Run: ravenseat follow report ' + p.id, 'small'));
     return a;
   }
   var target = document.getElementById('entries');
@@ -2204,7 +2204,7 @@ const FOLLOW_JS = `'use strict';
       if (!s.ok) { target.appendChild(el('p', s.d.message || 'Could not fetch the follow-up entries.')); return; }
       document.getElementById('lines').textContent = s.d.lines.join('\\n');
       if (!s.d.entries.length)
-        target.appendChild(el('p', 'No follow-up entries. Add one: cq follow add --file <json>.'));
+        target.appendChild(el('p', 'No follow-up entries. Add one: ravenseat follow add --file <json>.'));
       s.d.entries.forEach(function (p) { target.appendChild(entry(p)); });
     })
     .catch(function () { target.textContent = 'Could not fetch the follow-up entries.'; });
@@ -2296,7 +2296,7 @@ const STATIC = {
   '/ravenseat.svg': ['ravenseat.svg', 'image/svg+xml'],
   '/queueMascot.js': [path.join('..', 'lib', 'queueMascot.js'), 'text/javascript; charset=utf-8'],
   // The Decisions view's rules (lib/queueDecisions.js: sorting, grouping, impact, the writes; the same file the tests
-  // and cq decide use); board/decide.js draws.
+  // and ravenseat decide use); board/decide.js draws.
   '/queueDecisions.js': [path.join('..', 'lib', 'queueDecisions.js'), 'text/javascript; charset=utf-8'],
   // The update banner's rules (lib/queueUpdate.js, the same file the tests use); board/start.js draws it.
   '/queueUpdate.js': [path.join('..', 'lib', 'queueUpdate.js'), 'text/javascript; charset=utf-8'],
@@ -2533,7 +2533,7 @@ const server = http.createServer(async (req, res) => {
       if (!ids.length || ids.length > 10 || ids.some((x) => !x))
         return json(res, 400, { ok: false, message: 'invalid id' });
       const r = await queueMjs(['cloud-package', ...ids]);
-      if (!r.ok) return json(res, 409, { ok: false, message: r.error || 'cq cloud-package failed' });
+      if (!r.ok) return json(res, 409, { ok: false, message: r.error || 'ravenseat cloud-package failed' });
       return json(res, 200, { ok: true, text: r.out });
     }
 
@@ -2541,11 +2541,11 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && filePath === '/api/cloud-bundles') {
       const r = await queueMjs(['cloud-bundles', '--json']);
       if (!r.ok)
-        return json(res, 500, { ok: false, message: r.error || 'cq cloud-bundles failed' });
+        return json(res, 500, { ok: false, message: r.error || 'ravenseat cloud-bundles failed' });
       try {
         return json(res, 200, { ok: true, data: JSON.parse(r.out) });
       } catch {
-        return json(res, 500, { ok: false, message: 'invalid response from cq cloud-bundles' });
+        return json(res, 500, { ok: false, message: 'invalid response from ravenseat cloud-bundles' });
       }
     }
 

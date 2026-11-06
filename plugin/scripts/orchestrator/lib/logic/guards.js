@@ -65,7 +65,7 @@ function budgetGuard(queue, dailyUsage) {
     usage,
     message: stop
       ? `DAILY BUDGET USED UP: ${counts}. No new tasks are started today. Running tasks finish ` +
-        'as usual. The owner can raise the limit (cq limit dailyBudget <usd>) or start one task with start <id> --force.'
+        'as usual. The owner can raise the limit (ravenseat limit dailyBudget <usd>) or start one task with start <id> --force.'
       : `Daily budget: ${counts} used.`,
   };
 }
@@ -118,7 +118,7 @@ function nightGuard(queue, now = Date.now(), tz = NIGHT_TZ) {
     message: stop
       ? `Night pause until ${to}: nightRun is off, so no new tasks are started between ${from} and ${to} (local time). ` +
         'Running tasks finish, and delivered tracks are received and merged as usual. The owner can turn nightRun on ' +
-        '(cq limit nightRun on) or start one task with start <id> --force.'
+        '(ravenseat limit nightRun on) or start one task with start <id> --force.'
       : `Night run is off: no new tasks are started between ${from} and ${to} (local time).`,
   };
 }
@@ -189,7 +189,7 @@ function loadGuard(queue, load) {
     message:
       `THE MACHINE IS FULL: ${reasons.join(' and ')}. No new tracks are started until the load goes down; running ` +
       'tracks finish, and delivered tracks are received and merged as usual. The owner can change the limit ' +
-      '(cq limit minFreeMemoryPct <number|off>) or start one task with start <id> --force.',
+      '(ravenseat limit minFreeMemoryPct <number|off>) or start one task with start <id> --force.',
   };
 }
 
@@ -264,7 +264,7 @@ function windDownGuard(cursor, now = Date.now()) {
       'are started from this session. Finish receiving, review, fix rounds and merge of started tasks, update ' +
       `the handover note (${handoverNote()}) and ask the owner to compact now (the hook message has ` +
       'a ready /compact line); the wind-down is lifted by itself after the compaction. A new session only as ' +
-      'a last resort (the session has hung): `cq orchestrator pulse --session "<new name>"` resets the wind-down. ' +
+      'a last resort (the session has hung): `ravenseat orchestrator pulse --session "<new name>"` resets the wind-down. ' +
       "Owner's word: start <id> --force.",
   };
 }

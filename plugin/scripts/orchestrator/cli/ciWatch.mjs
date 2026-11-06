@@ -1,12 +1,12 @@
 // =============================================================
-// cli/ciWatch.mjs: `cq push-check --watch-ci <sha>`, the optional CI watch after a batch push (lib/ciWatch.js holds the
+// cli/ciWatch.mjs: `ravenseat push-check --watch-ci <sha>`, the optional CI watch after a batch push (lib/ciWatch.js holds the
 // pure parts and the why).
 //
 // Off by default (config().push.ciWatch "off"); "github" turns it on and needs the gh CLI. The orchestrator starts it in
-// the background right after a batch push (run_in_background), as with `cq wait`: it polls `gh run list --commit <sha>`
+// the background right after a batch push (run_in_background), as with `ravenseat wait`: it polls `gh run list --commit <sha>`
 // every --interval seconds (config().push.ciWatchIntervalSec) and exits when the runs are done.
 //
-// Exit codes (as cq wait where they overlap):
+// Exit codes (as ravenseat wait where they overlap):
 //   0  green, an infrastructure failure (an owner question, nothing frozen), off, or no CI run for the commit at all
 //   9  a check failed: the fix task CI-<sha7> and a red base (as the base gate, EXIT_RED_BASE)
 //   10 timeout (--timeout minutes, config().push.ciWatchTimeoutMin): the runs were not done in time
@@ -53,7 +53,7 @@ if (process.env.QUEUE_CI_GH) {
 }
 
 const given = val('--watch-ci');
-if (!given || given.startsWith('--')) die('Use: cq push-check --watch-ci <sha> [--interval <sec>] [--timeout <min>]');
+if (!given || given.startsWith('--')) die('Use: ravenseat push-check --watch-ci <sha> [--interval <sec>] [--timeout <min>]');
 const resolved = spawnSync('git', ['-C', GIT_ROOT, 'rev-parse', '-q', '--verify', `${given}^{commit}`], { encoding: 'utf8' });
 const sha = String(resolved.stdout ?? '').trim();
 if (resolved.status !== 0 || !sha) die(`CI WATCH: unknown commit ${given} (git rev-parse). Nothing watched.`);
@@ -187,6 +187,6 @@ else if (!added.error?.length) {
       note: `ci watch: CI red at ${sha7}`,
     });
 }
-console.log(`CI RED: a check failed on ${BASE} at ${sha7} (${checks.length} run(s)). Fix task ${added.id}; cq merge lets only it through. Report: ${reportFile}`);
+console.log(`CI RED: a check failed on ${BASE} at ${sha7} (${checks.length} run(s)). Fix task ${added.id}; ravenseat merge lets only it through. Report: ${reportFile}`);
 logRow({ verdict: 'check', runs: summary.total, red: items.length, task: added.id });
 process.exit(EXIT_RED);

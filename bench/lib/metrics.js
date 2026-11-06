@@ -13,7 +13,7 @@
 //                   fix rounds and defects: the unit the paired comparison uses
 //   defects         defects after merge per merged task: later fix tasks (id <task>-F/-FIX/-FIKS/-QA, or a bug/fix
 //                   label touching the same files) and reverted commits naming the task, within the window; and a
-//                   later task that names it in `fixes` (cq's explicit link), whatever the window
+//                   later task that names it in `fixes` (ravenseat's explicit link), whatever the window
 //   loadAnalysis    gate duration and reruns against parallelism and free memory: correlations and level buckets
 //   paired          matched pair comparison of two arms on one metric, with bootstrap CIs
 //
@@ -115,7 +115,7 @@ function taskCosts(records) {
         wall_min: t.wall_min,
         build_min: t.build_min,
         fix_rounds: own.filter((s) => s.session_type === 'fix').length,
-        // gate runs on the task, and how many of them were reruns (rerun_nr > 0: cq's attempt > 1)
+        // gate runs on the task, and how many of them were reruns (rerun_nr > 0: ravenseat's attempt > 1)
         gate_runs: gates.length,
         gate_reruns: gates.filter((g) => (g.rerun_nr ?? 0) > 0).length,
         // compactions of the task's own sessions (transcript boundaries, else the time log's compact rows)

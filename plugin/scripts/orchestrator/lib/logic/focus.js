@@ -106,7 +106,7 @@ function setFocus(queue, input, now = new Date().toISOString()) {
   });
   const status = focusStatus(trial, { now: nowMs });
   if (status.active && status.readyOnes === 0)
-    warnings.push('the focus gives no ready tasks now (see cq focus)');
+    warnings.push('the focus gives no ready tasks now (see ravenseat focus)');
   queue.focus = focus;
   dropFocusEndQuestions(queue);
   return { error: [], warnings, focus };
@@ -224,7 +224,7 @@ function focusStatus(queue, { now = Date.now(), canStart = null, context = null 
     out.notice = k.halted
       ? `Focus period${name} is over (until ${utcText(f.to)}): queue paused, nothing starts. ${focusEndHow(queue)}`
       : `Focus period${name} is over (until ${utcText(f.to)}). The queue is ranked as without focus ` +
-        `(continue when empty: on, ${out.continue_when_empty.from}): cq focus set … or cq focus off.`;
+        `(continue when empty: on, ${out.continue_when_empty.from}): ravenseat focus set … or ravenseat focus off.`;
     return out;
   }
   if (!k.applies) return out;
@@ -266,7 +266,7 @@ function focusStatus(queue, { now = Date.now(), canStart = null, context = null 
       : '';
     const rest =
       out.rest === 'wait'
-        ? ' The rest waits, so free slots stay empty until the focus has ready work or is changed (cq focus).'
+        ? ' The rest waits, so free slots stay empty until the focus has ready work or is changed (ravenseat focus).'
         : ' The rest fills free slots (rest: fill).';
     out.notice =
       out.in_focus === 0 && out.inProgress === 0
@@ -298,11 +298,11 @@ const FOCUS_OPEN_ACTIVE = new Set(['running', 'picked', 'review']);
 /** The suggestion for what to do with a rest. */
 function restSuggestion(type, o, sp = []) {
   if (type === 'batched')
-    return `pack the batch queue (cq batch pack ${o.id} … --id <new-id>, or cq batch pack --auto)`;
+    return `pack the batch queue (ravenseat batch pack ${o.id} … --id <new-id>, or ravenseat batch pack --auto)`;
   if (type === 'proposed')
-    return `ask the owner for a yes on the proposal (cq approve ${o.id}), otherwise cancel it`;
+    return `ask the owner for a yes on the proposal (ravenseat approve ${o.id}), otherwise cancel it`;
   if (type === 'question') return `owner question ${sp.join(', ')} unlocks it`;
-  return 'QA with the owner (cq qa)';
+  return 'QA with the owner (ravenseat qa)';
 }
 
 /**
@@ -497,8 +497,8 @@ function focusContinueInfo(queue) {
 function focusEndHow(queue) {
   const id = focusEndQuestionId(queue?.focus);
   return (
-    'Continue: cq focus set … (a new focus), cq focus off, answer the owner question ' +
-    `${id} (cq resolve ${id} --choice 2 continues the regular queue), or set focus.continueWhenEmpty true in ` +
+    'Continue: ravenseat focus set … (a new focus), ravenseat focus off, answer the owner question ' +
+    `${id} (ravenseat resolve ${id} --choice 2 continues the regular queue), or set focus.continueWhenEmpty true in ` +
     'queue.config.json.'
   );
 }
@@ -566,9 +566,9 @@ function syncFocusEnd(queue, { now = new Date().toISOString() } = {}) {
           text:
             `Focus ${name} ${what}: set a new focus or continue the regular queue? The queue is paused until you ` +
             'choose. "Set a new focus": tell the orchestrator which areas, projects or features come next ' +
-            '(cq focus set ...). "Continue the regular queue": the rest of the queue starts by priority (to make ' +
+            '(ravenseat focus set ...). "Continue the regular queue": the rest of the queue starts by priority (to make ' +
             'that the default, set focus.continueWhenEmpty true in queue.config.json).',
-          source: 'cq focus (the focus ended)',
+          source: 'ravenseat focus (the focus ended)',
           choices: FOCUS_END_CHOICES,
         },
       },
@@ -599,10 +599,10 @@ function restText(r) {
 
 /** The suggestion per rest type in the short line (the one per rest is in focus evaluate). */
 const REST_GROUP_SUGGESTION = {
-  batched: 'pack the batch queue (cq batch pack --auto)',
-  proposed: 'ask the owner for a yes (cq approve <id>) or cancel',
+  batched: 'pack the batch queue (ravenseat batch pack --auto)',
+  proposed: 'ask the owner for a yes (ravenseat approve <id>) or cancel',
   question: 'the answer unlocks it',
-  qa: 'QA with the owner (cq qa)',
+  qa: 'QA with the owner (ravenseat qa)',
 };
 
 /** The rests grouped per type, short: "proposed 2 (SEC-1, SEC-2) → ask …; qa 1 (SK-2) → QA with the owner". */
@@ -631,18 +631,18 @@ function focusCleanLines(r) {
   const tnr = new Map((r?.evaluation ?? []).map((t) => [t.stage, t.index + 1]));
   for (const t of r?.taken_out ?? [])
     lines.push(
-      `Focus stage T${tnr.get(t.stage) ?? '?'} ${t.title} (${t.stage}) done and taken out (undo: cq undo)`,
+      `Focus stage T${tnr.get(t.stage) ?? '?'} ${t.title} (${t.stage}) done and taken out (undo: ravenseat undo)`,
     );
   for (const t of r?.with_rests ?? [])
     lines.push(
       `Focus stage T${t.index + 1} ${t.title} done with rests (${t.rests.length}): ` +
-        `${restGroupText(t.rests)}. Details: cq focus evaluate`,
+        `${restGroupText(t.rests)}. Details: ravenseat focus evaluate`,
     );
   if (r?.end_line) lines.push(r.end_line);
   else if (r?.kept)
     lines.push(
       `Focus stage T${r.kept.index + 1} ${r.kept.title} is done, and all stages are done: set a new focus ` +
-        '(cq focus set …) or cq focus off.',
+        '(ravenseat focus set …) or ravenseat focus off.',
     );
   return lines;
 }
@@ -667,10 +667,10 @@ function setArea(queue, oid, field = {}) {
       .map(([pid]) => pid);
     if (users.length)
       error.push(
-        `${oid} is used by ${users.join(', ')} (move them first: cq area ${oid} --remove …)`,
+        `${oid} is used by ${users.join(', ')} (move them first: ravenseat area ${oid} --remove …)`,
       );
     if ((queue.focus?.order ?? []).includes(`area:${oid}`))
-      error.push(`${oid} is in the focus (edit the focus first: cq focus set … or focus off)`);
+      error.push(`${oid} is in the focus (edit the focus first: ravenseat focus set … or focus off)`);
     if (error.length) return { error };
     delete areas[oid];
     queue.areas = areas;

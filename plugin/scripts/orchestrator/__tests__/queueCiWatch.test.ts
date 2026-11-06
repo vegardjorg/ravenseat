@@ -6,7 +6,7 @@
 // rerun that is red again) adds no second task; (2) an infrastructure failure (a cancelled run) gives an owner
 // question and no task, and the base stays as it was; a second watch adds no second question; (3) pending runs are
 // polled until they are done, and green exits 0; (4) off by default: nothing is polled; (5) runs that never finish
-// give TIMEOUT, exit 10 (as cq wait).
+// give TIMEOUT, exit 10 (as ravenseat wait).
 // gh is replaced by a module (QUEUE_CI_GH) that answers from a JSON file the test writes and logs every call. Runs
 // against a temporary queue (QUEUE_FOLDER) and git repo (QUEUE_GIT); never the main repo, the real queue or GitHub.
 // =============================================================

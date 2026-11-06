@@ -28,7 +28,7 @@
     <script src="/mascot.js" defer></script>
     <!-- The update banner's rules (lib/queueUpdate.js), before the board (board/start.js), which draws the banner. -->
     <script src="/queueUpdate.js" defer></script>
-    <!-- The Decisions view's rules (lib/queueDecisions.js, the same file `cq decide` uses), before board/decide.js. -->
+    <!-- The Decisions view's rules (lib/queueDecisions.js, the same file `ravenseat decide` uses), before board/decide.js. -->
     <script src="/queueDecisions.js" defer></script>
     <!-- The board itself: classic scripts in board/ that share one scope, in this order (start.js runs the board).
          Each must come after the scripts whose names it uses while it loads (see docs/board.md). -->
@@ -118,11 +118,11 @@
             aria-controls="board"
             aria-selected="false"
             tabindex="-1"
-            title="Decisions: what waits on you, most impact first (also /cq:decide in Claude Code)"
+            title="Decisions: what waits on you, most impact first (also /ravenseat:decide in Claude Code)"
           >
             Decisions
           </button>
-          <!-- What the project has for checking its code, and suggestions (board/checks.js). Opt-out: cq checks off. -->
+          <!-- What the project has for checking its code, and suggestions (board/checks.js). Opt-out: ravenseat checks off. -->
           <button
             type="button"
             id="show-checks"
@@ -287,7 +287,7 @@
         ></select>
       </div>
     </header>
-    <!-- The update banner (a newer cq version, or setup not run after an update), drawn by board/start.js from the state. -->
+    <!-- The update banner (a newer ravenseat version, or setup not run after an update), drawn by board/start.js from the state. -->
     <div id="update-banner" class="update-banner" role="status" aria-live="polite" hidden></div>
     <!-- The focus line (the steps, the rest, ready ones in focus, a notice when the focus has nothing ready). -->
     <div id="focusLine" class="focusLine" aria-label="Focus" hidden></div>

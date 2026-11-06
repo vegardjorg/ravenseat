@@ -106,7 +106,7 @@ test('fingerprint counts the entries in each shared folder, -1 when it is missin
 // hit, and a link target outside the worktree, both survive.
 
 function shellTrap(name) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-rm-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-rm-'));
   const victim = path.join(base, 'R'); // what `rmdir /s /q <base>\R&D...` would delete after the split
   fs.mkdirSync(victim);
   fs.writeFileSync(path.join(victim, 'keep.txt'), 'keep');
@@ -150,7 +150,7 @@ test('removeFolderTree removes a link inside the tree as a link and never emptie
 });
 
 test('removeLinkOnly refuses a real folder (never a recursive delete)', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-rm-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-rm-'));
   try {
     const real = path.join(base, 'R&D', 'node_modules');
     fs.mkdirSync(real, { recursive: true });

@@ -394,9 +394,9 @@ describe('COMPACT: /compact with focus before wind-down', () => {
     // The resume instruction: the note, pulse, receive, fill, without waiting for the owner.
     expect(t).toMatch(/RESUME/);
     expect(t).toContain(KV.HANDOVER_NOTE);
-    expect(t).toContain('cq orchestrator pulse');
-    expect(t).toContain('cq receive');
-    expect(t).toContain('cq fill');
+    expect(t).toContain('ravenseat orchestrator pulse');
+    expect(t).toContain('ravenseat receive');
+    expect(t).toContain('ravenseat fill');
     expect(t).toMatch(/without waiting for the owner/);
     const lang = KV.afterCompactText({
       show: 'x'.repeat(50_000),
@@ -499,7 +499,7 @@ describe('orchestratorBinding: who is the orchestrator', () => {
     expect(KV.lastOrchestratorCall(line('2026-10-07T10:00:00Z', 'queue.mjs show'))).toBeNull();
   });
 
-  it('recognises the cq forms too (plugin `cq fill`, `cq queue fill`, vendored `node .../cq.mjs fill`)', () => {
+  it('recognises the ravenseat forms too (plugin `ravenseat fill`, `ravenseat queue fill`, vendored `node .../ravenseat.mjs fill`)', () => {
     const at = '2026-10-07T10:05:00Z';
     const line = (ts: string, cmd: string) =>
       JSON.stringify({
@@ -508,12 +508,12 @@ describe('orchestratorBinding: who is the orchestrator', () => {
         message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: cmd } }] },
       });
     for (const cmd of [
-      'cq fill --scratchpad s',
-      'cd x && cq queue orchestrator pulse',
-      'node scripts/orchestrator/cq.mjs start A',
+      'ravenseat fill --scratchpad s',
+      'cd x && ravenseat queue orchestrator pulse',
+      'node scripts/orchestrator/ravenseat.mjs start A',
     ])
       expect(KV.lastOrchestratorCall(line(at, cmd)), cmd).toBe(Date.parse(at));
-    for (const cmd of ['cq show', 'cq cloud start B', 'echo acq fill'])
+    for (const cmd of ['ravenseat show', 'ravenseat cloud start B', 'echo acq fill'])
       expect(KV.lastOrchestratorCall(line(at, cmd)), cmd).toBeNull();
   });
 });

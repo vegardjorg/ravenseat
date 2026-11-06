@@ -1,5 +1,5 @@
 // =============================================================
-// timeLogRows.test.ts: the gate and compaction rows cq appends to the time log (lib/timeLogRows.js).
+// timeLogRows.test.ts: the gate and compaction rows ravenseat appends to the time log (lib/timeLogRows.js).
 //
 // Locks: the task comes from a queue branch only, the attempt counts earlier runs of the same kind for the same task
 // (or the same branch when the task is unknown), a timeout is marked, one track row per NEW compaction, and appendRows
@@ -121,7 +121,7 @@ describe('compaction rows', () => {
 
 describe('appendRows', () => {
   it('appends JSONL, creates the folder, and never throws', () => {
-    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-timelogrows-'));
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-timelogrows-'));
     try {
       const file = path.join(folder, 'sub', 'times.jsonl');
       expect(TL.appendRows(file, [{ a: 1 }, { b: 2 }])).toBe(true);

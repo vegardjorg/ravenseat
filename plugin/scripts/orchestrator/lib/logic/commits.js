@@ -97,7 +97,7 @@ function consistency(externalOnes, tasks) {
         subject: c.subject ?? '',
         id,
         status: o.status,
-        proposed: o.status === 'waiting' ? `cq external accept ${id} ${summary}` : null,
+        proposed: o.status === 'waiting' ? `ravenseat external accept ${id} ${summary}` : null,
       });
     }
   }
@@ -163,7 +163,7 @@ function uncommittedSkipped(queue, uncommitted) {
   }
   return out;
 }
-/** What uncommittedSkipped found, as lines for cq fill and cq decide. Empty when nothing is held back. */
+/** What uncommittedSkipped found, as lines for ravenseat fill and ravenseat decide. Empty when nothing is held back. */
 function heldBackLines(skipped, { max = 10 } = {}) {
   if (!skipped?.length) return [];
   return [

@@ -1,5 +1,5 @@
 // =============================================================
-// gatePrecheck.test.ts: the fail-fast precheck (`cq gates --precheck`, lib/gatePrecheck.js and gates.mjs).
+// gatePrecheck.test.ts: the fail-fast precheck (`ravenseat gates --precheck`, lib/gatePrecheck.js and gates.mjs).
 //
 // Locks: the checks run in the fixed order and stop at the first red one (the rest are NOT RUN), {changed} and {file}
 // expand to the relevant changed files, a check is skipped when no changed file is relevant (only .md changed: no
@@ -194,7 +194,7 @@ describe('errorLines and precheckLines', () => {
 describe('gates.mjs --precheck (end to end)', () => {
   const gates = path.resolve(__dirname, '..', '..', 'gates.mjs');
   it('red on a syntax error with exit 1, green and --json after the fix, usage error with two modes', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-precheck-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-precheck-'));
     try {
       const sh = (...a: string[]) => spawnSync('git', ['-C', root, ...a], { encoding: 'utf8' });
       sh('init', '-q', '-b', 'main');
@@ -260,7 +260,7 @@ describe('gates.mjs --precheck (end to end)', () => {
       expect(rows[1]).toMatchObject({ kind: 'precheck', track: 'X', failed: [], ok: true, exit: 0, attempt: 2 });
       expect(rows[0].timed_out).toBeUndefined();
 
-      // --quick with --track (as cq merge passes it): its own kind starts at attempt 1; the exit code is unchanged.
+      // --quick with --track (as ravenseat merge passes it): its own kind starts at attempt 1; the exit code is unchanged.
       fs.writeFileSync(
         path.join(root, 'queue.config.json'),
         JSON.stringify({ baseBranch: 'main', gates: { quick: ['node -e "process.exit(3)"'], full: [], precheck: [] } }),

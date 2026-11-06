@@ -5,8 +5,8 @@
 //     on class, label, changed path, most of the diff, plan or mission points; a switch in queue.json wins over the config;
 //   - an existing config with only `reviewers` (no helpers block) behaves as before for the fixed reviewers;
 //   - the measurement per helper (runs, median and sum of minutes, tokens and USD, share, findings) and the empty state;
-//   - the board's write (helperSwitchArgs turns { name, enabled } into `cq helpers on|off <name>`, nothing else);
-//   - `cq helpers on|off` in queue.mjs against a temporary queue (QUEUE_FOLDER), and the cost from set done keeping the
+//   - the board's write (helperSwitchArgs turns { name, enabled } into `ravenseat helpers on|off <name>`, nothing else);
+//   - `ravenseat helpers on|off` in queue.mjs against a temporary queue (QUEUE_FOLDER), and the cost from set done keeping the
 //     per-agent numbers the measurement reads (queueLogic.sumCost).
 // =============================================================
 import { describe, it, expect } from 'vitest';
@@ -133,7 +133,7 @@ describe('the register is open: builtin and custom helpers are treated alike', (
     expect(H.helperSetup(conf({ helpers: { x: { sha256: 'nope' } } })).x.sha256).toBeNull();
   });
   it('a custom helper that is approved for its file is selected, switched and measured exactly like a builtin one', () => {
-    // The approval lives in queue.json (cq helpers approve), bound to the file's sha256; `hashes` is the file now.
+    // The approval lives in queue.json (ravenseat helpers approve), bound to the file's sha256; `hashes` is the file now.
     const sha = 'ab'.repeat(32);
     const approved = { 'my-db-check': { approved_sha256: sha, approved_path: '.claude/agents/my-db-check.md' } };
     const hashes = { 'my-db-check': sha, 'reviewer-docs': null };
@@ -328,7 +328,7 @@ describe('the measurement per helper', () => {
 
 describe('the board write (helperSwitchArgs) and the switch in queue.mjs', () => {
   const names = ['reviewer-design', 'reviewer-tests'];
-  it('turns { name, enabled } into cq helpers on|off <name>, and refuses anything else', () => {
+  it('turns { name, enabled } into ravenseat helpers on|off <name>, and refuses anything else', () => {
     expect(B.helperSwitchArgs({ name: 'reviewer-tests', enabled: true }, names)).toEqual({
       args: ['helpers', 'on', 'reviewer-tests'],
     });
@@ -341,8 +341,8 @@ describe('the board write (helperSwitchArgs) and the switch in queue.mjs', () =>
     expect(B.helperSwitchArgs(null, names).error).toBeTruthy();
   });
 
-  it('cq helpers on|off writes queue.json under the lock and the list shows it; unknown names are refused', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-helpers-'));
+  it('ravenseat helpers on|off writes queue.json under the lock and the list shows it; unknown names are refused', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-helpers-'));
     try {
       const folder = path.join(root, 'q');
       fs.mkdirSync(folder);
@@ -353,32 +353,32 @@ describe('the board write (helperSwitchArgs) and the switch in queue.mjs', () =>
         QUEUE_CONFIG: path.join(root, 'no-config.json'),
         QUEUE_TIME_LOG: path.join(root, 'times.jsonl'),
       };
-      const cq = (...args: string[]) =>
+      const ravenseat = (...args: string[]) =>
         spawnSync(process.execPath, [path.resolve(__dirname, '..', '..', 'queue.mjs'), ...args], {
           cwd: root,
           encoding: 'utf8',
           env,
         });
-      expect(cq('init').status).toBe(0);
-      const on = cq('helpers', 'on', 'reviewer-tests');
+      expect(ravenseat('init').status).toBe(0);
+      const on = ravenseat('helpers', 'on', 'reviewer-tests');
       expect(on.status, on.stderr).toBe(0);
       expect(on.stdout).toContain('reviewer-tests: on');
-      expect(cq('helpers', 'off', 'reviewer-challenger').status).toBe(0);
+      expect(ravenseat('helpers', 'off', 'reviewer-challenger').status).toBe(0);
       const queue = JSON.parse(fs.readFileSync(path.join(folder, 'queue.json'), 'utf8'));
       expect(queue.helpers).toEqual({
         'reviewer-tests': { enabled: true },
         'reviewer-challenger': { enabled: false },
       });
-      const list = cq('helpers');
+      const list = ravenseat('helpers');
       expect(list.stdout).toMatch(/^on {2}reviewer-tests:/m);
       expect(list.stdout).toMatch(/^off reviewer-challenger:/m);
       expect(list.stdout).toContain('No runs yet');
-      const json = JSON.parse(cq('helpers', '--json').stdout);
+      const json = JSON.parse(ravenseat('helpers', '--json').stdout);
       expect(json.find((r: { name: string }) => r.name === 'reviewer-tests').enabled).toBe(true);
-      const bad = cq('helpers', 'on', 'not-a-helper');
+      const bad = ravenseat('helpers', 'on', 'not-a-helper');
       expect(bad.status).not.toBe(0);
       expect(bad.stderr + bad.stdout).toMatch(/not a helper/);
-      expect(cq('helpers', 'maybe', 'reviewer-tests').status).not.toBe(0);
+      expect(ravenseat('helpers', 'maybe', 'reviewer-tests').status).not.toBe(0);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

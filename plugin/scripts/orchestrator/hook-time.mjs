@@ -11,7 +11,7 @@
 //             api_errors { rate_limit, overloaded, other }, cache_expiry,
 //             cost_usd, tokens { input, output, cache_read, cache_written, cache_written_5m, cache_written_1h },
 //             context {...}, first_change_s, call_for_first_change, remark }
-//   (killed: true marks a done row cq wrote itself for an agent that never stopped normally: cli/tracks.mjs.)
+//   (killed: true marks a done row ravenseat wrote itself for an agent that never stopped normally: cli/tracks.mjs.)
 // The numbers for "done" are computed from the agent's transcript (agent_transcript_path) in lib/timeCost.js.
 //
 // ALL AGENT_TYPES: the script logs any agent type it is called for (track, reviewer, general-purpose ...); agent_type
@@ -136,7 +136,7 @@ async function main() {
     track: stat?.track ?? summaryId,
     event,
     agent_id: input.agent_id ?? null,
-    agent_type: require('./lib/projectRoot.js').bareAgentType(input.agent_type) ?? null, // bare name: "cq:track" is logged as "track"
+    agent_type: require('./lib/projectRoot.js').bareAgentType(input.agent_type) ?? null, // bare name: "ravenseat:track" is logged as "track"
   };
   if (event === 'done' && stat) {
     const { track: _track, ...counts } = stat;

@@ -1,6 +1,6 @@
 ---
 name: ask
-description: Answers ONE question about an earlier queue track's work from the bundle `cq ask <id> --bundle` wrote (mission, report, handover, queue notes, commits, transcript tail), so the track agent is never resumed. Read-only, small budget. Answers in one paragraph with file:line or commit references, and "unknown" where the bundle does not say.
+description: Answers ONE question about an earlier queue track's work from the bundle `ravenseat ask <id> --bundle` wrote (mission, report, handover, queue notes, commits, transcript tail), so the track agent is never resumed. Read-only, small budget. Answers in one paragraph with file:line or commit references, and "unknown" where the bundle does not say.
 model: opus
 effort: low
 tools: Read, Grep, Glob, Bash

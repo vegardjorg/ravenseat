@@ -2,10 +2,10 @@
 // collect.js: turns a project's raw logs into normalized per-task and per-session records for one experiment.
 //
 // Inputs (all read-only, paths from the manifest or the command line):
-//   queue        the queue file (cq queue.json or a Norwegian ko.json): class, estimate, status, timestamps, cost
-//   timeLog      the agent time log (cq times.jsonl from hook-time.mjs, or the Norwegian equivalent): one cumulative
+//   queue        the queue file (ravenseat queue.json or a Norwegian ko.json): class, estimate, status, timestamps, cost
+//   timeLog      the agent time log (ravenseat times.jsonl from hook-time.mjs, or the Norwegian equivalent): one cumulative
 //                "done" row per agent stop, plus gate rows ("gates"/"gate") and compaction rows where the project
-//                writes them. cq writes one "gate" row per gates.mjs run (kind, ok, attempt, timed_out) and "compact"
+//                writes them. ravenseat writes one "gate" row per gates.mjs run (kind, ok, attempt, timed_out) and "compact"
 //                rows with scope "session" (main sessions) or "track" (agent_id, compactions); see
 //                plugin/scripts/orchestrator/lib/timeLogRows.js
 //   transcripts  the Claude Code project folder (~/.claude/projects/<slug>): <session>.jsonl for main sessions and
@@ -40,7 +40,7 @@ const FIX_LABEL = /-(?:r|round|runde)\d+$/i;
 const FIX_TEXT = /\b(fix round|retterunde|review fixes|review-rettinger)\b/i;
 const TIMEOUT = /timeout|timed out|tidsavbrudd/i;
 
-/** Is a "gate" row cq's one-row-per-run format (gates.mjs: kind and attempt) rather than a single gate step? */
+/** Is a "gate" row ravenseat's one-row-per-run format (gates.mjs: kind and attempt) rather than a single gate step? */
 const isGateRun = (r) => typeof r.kind === 'string' && r.attempt != null;
 
 /** A task's `fixes` as a list of ids (one id or a list in the queue file; anything else gives []). */
@@ -192,7 +192,7 @@ function parseTimeLog(rows) {
         free_memory_pct: r.free_memory_pct ?? null,
         load_1m: r.load_1m ?? null,
       });
-    // cq's gate run row (one per gates.mjs run): it is a gate run, and also a step so timeouts are counted.
+    // ravenseat's gate run row (one per gates.mjs run): it is a gate run, and also a step so timeouts are counted.
     if (r.event === 'gate' && isGateRun(r)) {
       const attempt = Number.isInteger(Number(r.attempt)) && Number(r.attempt) > 0 ? Number(r.attempt) : 1;
       const duration = Number.isFinite(Number(r.duration_s)) ? Number(r.duration_s) : null;
@@ -232,7 +232,7 @@ function parseTimeLog(rows) {
     if (r.event === 'compact')
       compactions.push({
         time: r.time,
-        // "session" (a main session), "track" (a track agent, cq's hook-track-context) or null (older rows)
+        // "session" (a main session), "track" (a track agent, ravenseat's hook-track-context) or null (older rows)
         scope: r.scope ?? null,
         session_id: r.session_id ?? null,
         agent_id: r.agent_id ?? null,
@@ -304,15 +304,15 @@ function listTranscripts(dir, { from = null } = {}) {
 
 /**
  * Classifies a session. `overrides` (manifest settings.sessionTypes) maps an agent type or a session id to a type and
- * wins. Main sessions: listed by a cq arm or spawning build agents = orchestrator; listed by a manual arm or task =
+ * wins. Main sessions: listed by a ravenseat arm or spawning build agents = orchestrator; listed by a manual arm or task =
  * track (the human-driven chat does the build); otherwise planning.
  */
-function classify(s, { overrides = {}, cqSessions = new Set(), manualSessions = new Set(), spawnsBuild = new Set() } = {}) {
+function classify(s, { overrides = {}, queueSessions = new Set(), manualSessions = new Set(), spawnsBuild = new Set() } = {}) {
   if (overrides[s.id]) return overrides[s.id];
   if (s.agent_type && overrides[s.agent_type]) return overrides[s.agent_type];
   if (s.kind === 'main') {
     if (manualSessions.has(s.id)) return 'track';
-    if (cqSessions.has(s.id) || spawnsBuild.has(s.id)) return 'orchestrator';
+    if (queueSessions.has(s.id) || spawnsBuild.has(s.id)) return 'orchestrator';
     return 'planning';
   }
   const type = s.agent_type;
@@ -388,19 +388,19 @@ function build(manifest, data) {
   // ---- sessions: transcripts first, then time log agents that have no transcript ----
   const armOfSession = new Map();
   const taskOfSession = new Map();
-  const cqSessions = new Set();
+  const queueSessions = new Set();
   const manualSessions = new Set();
   const armKind = new Map(manifest.arms.map((a) => [a.name, a.kind]));
   for (const a of manifest.arms)
     for (const sid of a.sessions ?? []) {
       armOfSession.set(sid, a.name);
-      (a.kind === 'cq' ? cqSessions : manualSessions).add(sid);
+      (a.kind === 'ravenseat' ? queueSessions : manualSessions).add(sid);
     }
   for (const mt of manifest.tasks)
     for (const sid of mt.sessions ?? []) {
       armOfSession.set(sid, mt.arm);
       taskOfSession.set(sid, mt);
-      if (armKind.get(mt.arm) !== 'cq') manualSessions.add(sid);
+      if (armKind.get(mt.arm) !== 'ravenseat') manualSessions.add(sid);
     }
 
   const raw = [];
@@ -477,7 +477,7 @@ function build(manifest, data) {
     if (s && s.compactions === 0) s.compactions_log = n;
   }
   const spawnsBuild = new Set(raw.filter((s) => s.kind === 'subagent' && BUILD_TYPES.has(s.agent_type)).map((s) => s.parent));
-  // A main session cq's compaction hook marked as the bound orchestrator is an orchestrator too.
+  // A main session ravenseat's compaction hook marked as the bound orchestrator is an orchestrator too.
   for (const c of tl.compactions) if (c.orchestrator === true && c.session_id) spawnsBuild.add(c.session_id);
 
   const inWindow = (iso) => {
@@ -489,7 +489,7 @@ function build(manifest, data) {
   const sessions = raw.map((s) => {
     const mt = taskOfSession.get(s.id) ?? taskByLabel(s.label) ?? (s.parent ? taskOfSession.get(s.parent) : null) ?? null;
     const arm = mt?.arm ?? armOfSession.get(s.id) ?? (s.parent ? armOfSession.get(s.parent) : null) ?? inWindow(s.start);
-    const type = classify(s, { overrides: settings.sessionTypes ?? {}, cqSessions, manualSessions, spawnsBuild });
+    const type = classify(s, { overrides: settings.sessionTypes ?? {}, queueSessions, manualSessions, spawnsBuild });
     return { ...s, task: mt?.id ?? null, task_label: mt?.label ?? null, arm: arm ?? null, session_type: type };
   });
   // A second build agent on the same task (not a handover marked as such) is a fix round.
@@ -571,12 +571,12 @@ function build(manifest, data) {
       id: t.id,
       class: t.class ?? null,
       status: t.status ?? null,
-      // cq writes added_at; the Norwegian queue lagt_til (normalized to added)
+      // ravenseat writes added_at; the Norwegian queue lagt_til (normalized to added)
       added: t.added ?? t.added_at ?? null,
       labels: t.labels ?? [],
       owned_files: Array.isArray(t.owned_files) ? t.owned_files : [],
       depends_on: t.depends_on ?? [],
-      // the task(s) this one fixes (cq's `fixes` field): a merged task named here has a defect after merge
+      // the task(s) this one fixes (ravenseat's `fixes` field): a merged task named here has a defect after merge
       fixes: fixesOf(t),
     })),
     reverts: data.reverts ?? [],

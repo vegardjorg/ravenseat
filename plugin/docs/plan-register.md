@@ -1,8 +1,8 @@
-# The plan register (`cq plan …`)
+# The plan register (`ravenseat plan …`)
 
 The queue holds work that is ready to run. The plan register holds everything before that: ideas, plans,
 investigations and decisions, with priority and maturity, and links to the documents where the details live. It is
-stored in `scripts/.queue/plans.json` (gitignored) and only written through `cq plan …`, with a change log and
+stored in `scripts/.queue/plans.json` (gitignored) and only written through `ravenseat plan …`, with a change log and
 undo.
 
 ## A plan entry
@@ -20,9 +20,9 @@ undo.
 }
 ```
 
-- `project` (required): must exist (`cq projects`; create with `cq project <pid> --title "…"`). It links
-  the entry to queue tasks in the same project. The area comes from the project: `cq project <pid>
-  --area <oid>`, with the areas from `modules` in `queue.config.json` (`cq plan modules` creates them).
+- `project` (required): must exist (`ravenseat projects`; create with `ravenseat project <pid> --title "…"`). It links
+  the entry to queue tasks in the same project. The area comes from the project: `ravenseat project <pid>
+  --area <oid>`, with the areas from `modules` in `queue.config.json` (`ravenseat plan modules` creates them).
 - `priority`: `now`, `owner` (the owner must decide), `later` or `drop` (dropped). Categories such as
   `security`, `for-prod` (before production) and `important` explain why.
 - `maturity`: from `idea` to a plan that is ready to become queue tasks.
@@ -52,7 +52,7 @@ undo.
 
 ## Findings
 
-A track that notices a bug or a smell outside its own files runs `cq finding "<title>"` instead of fixing it. In a project with no projects registered yet, the first finding creates one called `general`. The
+A track that notices a bug or a smell outside its own files runs `ravenseat finding "<title>"` instead of fixing it. In a project with no projects registered yet, the first finding creates one called `general`. The
 finding lands here, not in the batch queue: the batch queue holds small tasks someone has decided to do (class,
 estimate, owned files), while a finding is an observation nobody has looked at yet, which is what an idea is.
 
@@ -63,13 +63,13 @@ estimate, owned files), while a finding is an observation nobody has looked at y
 - The same title again (case, punctuation and spacing ignored) adds the task and the files to the existing entry.
   A title that matches an entry that is not a finding changes nothing.
 - A finding is new until it is triaged: a new priority or maturity, a drop, or a queue task with `--plan <id>`.
-  `orchestrator pulse` and `cq show` print a `FINDINGS:` line with the count, and `cq state` has `findings`.
+  `orchestrator pulse` and `ravenseat show` print a `FINDINGS:` line with the count, and `ravenseat state` has `findings`.
 
 ## Rules that keep it useful
 
 1. A new plan or investigation document is registered in the SAME session it is written, either as a new entry or as
    a source on an existing one (`plan show --search "…"` first).
 2. An entry created by an agent without the owner's decision gets `"priority": "owner"`, `"maturity": "idea"`,
-   `"priority_set_by": "agent"` and a reason, and an owner question (`cq question`).
+   `"priority_set_by": "agent"` and a reason, and an owner question (`ravenseat question`).
 3. Plan work and building are separate: the skill `/plans` works on plans only and turns a mature plan into queue
    proposals; the queue builds.

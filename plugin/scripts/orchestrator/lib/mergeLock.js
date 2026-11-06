@@ -1,15 +1,15 @@
 // =============================================================
-// lib/mergeLock.js: the merge lock, the merge state file and the check for an unfinished git operation, for `cq merge`.
+// lib/mergeLock.js: the merge lock, the merge state file and the check for an unfinished git operation, for `ravenseat merge`.
 //
-// WHY: `cq merge` runs several steps in a row (merge-track, the migration push, the gates, the base gate, set done,
+// WHY: `ravenseat merge` runs several steps in a row (merge-track, the migration push, the gates, the base gate, set done,
 // fill). Three things went wrong before (review 2026-11-02, M6, M7, M8):
-//   * A merge left in place (MERGE_HEAD from an earlier conflict) made the next `cq merge B` commit A's merge and mark
+//   * A merge left in place (MERGE_HEAD from an earlier conflict) made the next `ravenseat merge B` commit A's merge and mark
 //     B done. Now the merge refuses to start while git has a merge, rebase, cherry-pick or revert in progress
 //     (gitInProgress), and the tip of the track must be in the base before `done` (cli/merge.mjs).
 //   * Ctrl-C or a crash after the merge but before `done` left the task in review with nothing to continue from. Now
 //     every step is written to a small state file (merge-state-<id>.json in the data folder) as it starts and ends,
-//     so `cq merge <id> --resume` knows which steps are left.
-//   * Two `cq merge` at the same time could merge on top of each other. Now one merge runs at a time per data folder
+//     so `ravenseat merge <id> --resume` knows which steps are left.
+//   * Two `ravenseat merge` at the same time could merge on top of each other. Now one merge runs at a time per data folder
 //     (the lock file merge.lock, with pid, host and start time).
 //
 // THE LOCK: created with the `wx` flag (exclusive create: only one process can create the file). A lock is stale when
@@ -156,13 +156,13 @@ function release(folder, lock) {
 }
 
 /** The message when another merge holds the lock. */
-function heldMessage({ file, holder, cq = 'cq', id }) {
+function heldMessage({ file, holder, ravenseat = 'ravenseat', id }) {
   const who = holder
     ? `${holder.command ?? 'merge'} ${holder.task ?? '?'} (pid ${holder.pid ?? '?'} on ${holder.host ?? '?'}, started ${holder.started ?? '?'})`
     : 'another process (the lock file cannot be read)';
   return (
-    `Another ${cq} merge is running in this repo: ${who}. One merge at a time; nothing was done.\n` +
-    `Wait for it to finish, then run ${cq} merge ${id} again. If you are sure no merge is running (the process is ` +
+    `Another ${ravenseat} merge is running in this repo: ${who}. One merge at a time; nothing was done.\n` +
+    `Wait for it to finish, then run ${ravenseat} merge ${id} again. If you are sure no merge is running (the process is ` +
     `gone and the lock was not taken over automatically, for example a merge on another machine), delete ${file}.`
   );
 }
@@ -203,7 +203,7 @@ function gitInProgress(gitPath) {
  * The refusal text for an unfinished operation, with a recovery hint. `branchOf(sha)` names the queue branch whose tip
  * is that sha (null when none); `taskOf(branch)` the task id for a branch.
  */
-function inProgressMessage(found, { root, id, cq = 'cq', branch = null, branchTip = null, branchOf = () => null, taskOf = () => null }) {
+function inProgressMessage(found, { root, id, ravenseat = 'ravenseat', branch = null, branchTip = null, branchOf = () => null, taskOf = () => null }) {
   const lines = [];
   for (const x of found) {
     if (x.kind === 'merge') {
@@ -216,14 +216,14 @@ function inProgressMessage(found, { root, id, cq = 'cq', branch = null, branchTi
           'instead (review 2026-11-02, M6).',
       );
       lines.push(
-        `  Finish it: ${x.finish}${otherTask ? `; then ${cq} merge ${otherTask} --resume runs the rest of its steps` : ''}.`,
+        `  Finish it: ${x.finish}${otherTask ? `; then ${ravenseat} merge ${otherTask} --resume runs the rest of its steps` : ''}.`,
       );
       lines.push(`  Or undo it: ${x.undo}.`);
     } else {
       lines.push(`A ${x.kind} is in progress in ${root} (${x.marker}). Finish it (${x.finish}) or undo it (${x.undo}).`);
     }
   }
-  lines.push(`Then run ${cq} merge ${id}${found.some((x) => x.kind === 'merge' && x.sha && x.sha === branchTip) ? ' --resume' : ' again'}. Nothing was done.`);
+  lines.push(`Then run ${ravenseat} merge ${id}${found.some((x) => x.kind === 'merge' && x.sha && x.sha === branchTip) ? ' --resume' : ' again'}. Nothing was done.`);
   return lines.join('\n');
 }
 

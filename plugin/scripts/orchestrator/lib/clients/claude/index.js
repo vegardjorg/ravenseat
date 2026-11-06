@@ -18,10 +18,10 @@ const { fillRecord } = require('../../logic/missionDescriptor.js');
 /**
  * What Claude Code gives the queue, as data (the core asks these, never the client name).
  *   sandbox           false: the queue's guards are hooks, not an OS sandbox around the agent
- *   resume            true: cq resume starts a new agent on the same branch with a round prompt
+ *   resume            true: ravenseat resume starts a new agent on the same branch with a round prompt
  *   usage             true: the transcripts carry token usage (lib/timeCost.js)
  *   hooks             true: the plugin's hooks (push, write, read and end guards) run for every agent
- *   cloud             true: cq cloud starts a track as a Claude Code cloud session
+ *   cloud             true: ravenseat cloud starts a track as a Claude Code cloud session
  *   structuredOutput  false: the answer is free text with a RESULT line, not a schema
  */
 const capabilities = Object.freeze({
@@ -34,7 +34,7 @@ const capabilities = Object.freeze({
 });
 
 /**
- * The Agent tool call for a track: subagent_type (cq:track in a plugin install, track in a vendored one), the model
+ * The Agent tool call for a track: subagent_type (ravenseat:track in a plugin install, track in a vendored one), the model
  * (the descriptor's when it is one the Agent tool takes, otherwise config().models; null = the agent file's) and the
  * message that points at the prompt file.
  * @param {ReturnType<typeof import('../../logic/missionDescriptor.js').missionDescriptor>} d
@@ -68,19 +68,19 @@ function fillEntry(d) {
   };
 }
 
-/** The agent part of fill's line per track: "subagent_type=cq:track" plus "  model=sonnet" when one is set. */
+/** The agent part of fill's line per track: "subagent_type=ravenseat:track" plus "  model=sonnet" when one is set. */
 function agentLabel(d) {
   const x = dispatch(d);
   return `subagent_type=${x.subagent_type}${x.model ? `  model=${x.model}` : ''}`;
 }
 
-/** The agent line `cq start` prints (the thinking level comes from the agent file the effort picks). */
+/** The agent line `ravenseat start` prints (the thinking level comes from the agent file the effort picks). */
 function startLine(d) {
   const x = dispatch(d);
   return `Agent: subagent_type ${x.subagent_type}${x.model ? ` · model=${x.model}` : ''} (thinkingLevel ${d.effort}).`;
 }
 
-/** The agent line `cq resume` prints: the agent and the message for the round prompt. */
+/** The agent line `ravenseat resume` prints: the agent and the message for the round prompt. */
 function resumeLine(d) {
   const x = dispatch(d);
   return `Agent: subagent_type ${x.subagent_type}${x.model ? ` · model=${x.model}` : ''}, message: ${x.message}`;

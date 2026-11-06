@@ -79,7 +79,7 @@ function worktreePerBranch() {
 }
 
 if (!fs.existsSync(QUEUE_FILE)) {
-  console.error(`The queue does not exist. Run: ${require('./lib/projectRoot.js').cqCommand()} init`);
+  console.error(`The queue does not exist. Run: ${require('./lib/projectRoot.js').cliCommand()} init`);
   process.exit(1);
 }
 const queue = JSON.parse(fs.readFileSync(QUEUE_FILE, 'utf8'));
@@ -111,7 +111,7 @@ const allowedEnvironment = Array.isArray(K.migrations?.allowedEnvironment) ? K.m
 
 // ---- 3. Active tasks ----
 const wt = worktreePerBranch();
-// The tracks no agent works on: the same rule as cq show.
+// The tracks no agent works on: the same rule as ravenseat show.
 const noAgent = new Map(
   L.noAgentTracks(queue, {
     worktreeBranches: new Set(wt.keys()),
@@ -304,7 +304,7 @@ if (AS_JSON) {
   if (windDown.stop) {
     out.push(`⚠ ${windDown.message}`);
     out.push(
-      '  If you take over as the new orchestrator: `cq orchestrator pulse --session "<new name>"` resets the wind-down.',
+      '  If you take over as the new orchestrator: `ravenseat orchestrator pulse --session "<new name>"` resets the wind-down.',
     );
     out.push('');
   }
@@ -313,7 +313,7 @@ if (AS_JSON) {
     for (const l of note.excerpt.split('\n')) out.push(`  | ${l}`);
     out.push('');
   }
-  // What the warning rests on: the owner's own cq start or cq fill looks the same, so they can tell from this.
+  // What the warning rests on: the owner's own ravenseat start or ravenseat fill looks the same, so they can tell from this.
   const liveSeen = orchestrator.active
     ? `${orchestrator.event ?? 'a pulse'}, session "${orchestrator.session}"`
     : `running: ${tasks.filter((o) => o.status === 'running').map((o) => o.id).join(', ')}`;
@@ -324,7 +324,7 @@ if (AS_JSON) {
     orchestrator.session
       ? `Orchestrator cursor: "${orchestrator.session}", updated ${age(orchestrator.age_ms)} ago` +
           `${orchestrator.event ? ` (${orchestrator.event})` : ''} → ${orchestrator.active ? 'ACTIVE' : 'expired (over 2 h)'}`
-      : 'Orchestrator cursor: none (no orchestrator has checked in with cq orchestrator pulse)',
+      : 'Orchestrator cursor: none (no orchestrator has checked in with ravenseat orchestrator pulse)',
   );
   out.push(
     `Git: ${branch} @ ${head}, ${ahead} ahead / ${back} behind ${REMOVE}` +
@@ -364,7 +364,7 @@ if (AS_JSON) {
     );
   }
   if (!picked.length) out.push('  (none)');
-  out.push(`QA list: ${t.qa} done task(s) waiting for the owner (cq qa).`);
+  out.push(`QA list: ${t.qa} done task(s) waiting for the owner (ravenseat qa).`);
   out.push('');
   out.push(
     `Waiting: ${t.waiting}. Can start now (${canStart.length}): ${canStart.join(', ') || '-'}`,
@@ -373,7 +373,7 @@ if (AS_JSON) {
   for (const e of report.ownerQuestion) out.push(`  ${e.sp}: ${e.tasks} task(s)`);
   if (!report.ownerQuestion.length) out.push('  (none)');
   out.push('');
-  out.push(`Work outside the queue (${outside.window}; details: cq external):`);
+  out.push(`Work outside the queue (${outside.window}; details: ravenseat external):`);
   for (const f of outside.error) out.push(`  ⚠ ${f}`);
   out.push(
     `  ${outside.external_commits.length} external commit(s) on ${BASE}, ${outside.branches.length} branch(es) outside ${K.branchPrefix}*, ` +
@@ -388,7 +388,7 @@ if (AS_JSON) {
     out.push(`    collision: ${k.slice(0, 110)}`);
   if (outside.collisions_pending)
     out.push(
-      `    ${outside.collisions_pending} collision(s) with pending tasks (cq external)`,
+      `    ${outside.collisions_pending} collision(s) with pending tasks (ravenseat external)`,
     );
   out.push('  Push: run push-check.mjs first; it names commits outside the queue, and nothing goes out without the owner.');
   console.log(out.join('\n'));

@@ -345,7 +345,7 @@ function blockerTable(rows) {
             ),
           ),
         )
-      : el('p', { class: 'empty', text: 'No blockers recorded in the last 7 days (cq block <id> <code>).' }),
+      : el('p', { class: 'empty', text: 'No blockers recorded in the last 7 days (ravenseat block <id> <code>).' }),
   );
 }
 
@@ -367,7 +367,7 @@ function metricsTableOf(head, rows) {
 
 /**
  * "Flow last 14 days": a plain table from lib/eventStatistics.js flowStatistics (the same figures as the Flow lines in
- * cq cost): first-pass rate, fix rounds per task, merge conflicts per week, base red verdicts, pushes and batch size,
+ * ravenseat cost): first-pass rate, fix rounds per task, merge conflicts per week, base red verdicts, pushes and batch size,
  * then the quality figures (right first time, post-merge defects, owner interventions, inflow by source), the reviewer
  * hit rate table and the hints.
  */
@@ -382,7 +382,7 @@ function flowTable(f) {
     ['Merge conflicts per week', v(f.mergeConflicts.per_week), `${f.mergeConflicts.count} conflict(s), ${f.mergeConflicts.files} file(s)`],
     ['Base red', v(f.baseGate.red), `of ${f.baseGate.verdicts} verdict(s), ${f.baseGate.red_tips} red tip(s)`],
     ['Pushes per week', v(f.pushes.per_week), `${f.pushes.count} push(es), ${v(f.pushes.tasks_per_push)} tasks per push`],
-    ['Triage', triage || '-', 'verdicts from cq triage'],
+    ['Triage', triage || '-', 'verdicts from ravenseat triage'],
   ];
   // The quality figures (lib/eventStatistics.js header); older server data without them shows the rows above only.
   const r = f.rightFirstTime;
@@ -457,7 +457,7 @@ function flowTable(f) {
 
 /**
  * The reviewer hit rate under the Flow table: per reviewer type the runs, the runs with findings, the fix rounds the
- * orchestrator attributed to it (cq resume --from) and the dismissed ones (lib/eventStatistics.js reviewerStatistics).
+ * orchestrator attributed to it (ravenseat resume --from) and the dismissed ones (lib/eventStatistics.js reviewerStatistics).
  */
 function reviewerTable(rv) {
   const head = ['Reviewer', 'Runs', 'With findings', 'Led to a fix', 'Dismissed'];
@@ -467,7 +467,7 @@ function reviewerTable(rv) {
     el('caption', {
       text:
         `Reviewer hit rate: fix rounds attributed ${rv.attributed} of ${rv.fix_rounds}` +
-        (rv.fix_rounds && !rv.attributed ? ' (cq resume --from records which reviewer caused one)' : ''),
+        (rv.fix_rounds && !rv.attributed ? ' (ravenseat resume --from records which reviewer caused one)' : ''),
     }),
     el('thead', null, el('tr', null, head.map((h) => el('th', { scope: 'col', text: h })))),
     el(
@@ -486,7 +486,7 @@ function reviewerTable(rv) {
 }
 
 /**
- * "Agents: models, tools and errors" (queueStatistics.transcriptMetrics, the same numbers as `cq cost`): cost per
+ * "Agents: models, tools and errors" (queueStatistics.transcriptMetrics, the same numbers as `ravenseat cost`): cost per
  * model, the top tools with their error rate, the API errors, the active time and the killed agents. Nothing when
  * the time log has no done rows in the window.
  */
@@ -772,16 +772,16 @@ function drawStatistics() {
           )
         : null,
     ),
-    // The forecast (lib/queueForecast.js, the same as `cq forecast` and the box in Focus).
+    // The forecast (lib/queueForecast.js, the same as `ravenseat forecast` and the box in Focus).
     ...(d.forecast?.text
       ? [el('p', { class: 'stat-forecast', text: `Forecast: ${d.forecast.text}` })]
       : []),
     el('div', { class: 'graphs' }, graph1, graphInOut, graph2, graph3, graph4),
-    // Blockers last 7 days (cq blockers): per reason code, count and blocked time, top first.
+    // Blockers last 7 days (ravenseat blockers): per reason code, count and blocked time, top first.
     blockerTable(d.blockers),
     // Models, tools and errors (lib/transcriptMetrics.js); append() turns null into "null", so only when it exists.
     ...(d.metrics?.agents ? [transcriptMetricsSection(d.metrics, d.windowDays)] : []),
-    // Flow last 14 days (lib/eventStatistics.js flowStatistics, the same figures as cq cost).
+    // Flow last 14 days (lib/eventStatistics.js flowStatistics, the same figures as ravenseat cost).
     ...(d.flow ? [flowTable(d.flow)] : []),
     // The legend for the classes and badges (same as in the help).
     legend('stat'),

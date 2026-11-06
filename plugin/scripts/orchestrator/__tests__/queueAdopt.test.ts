@@ -237,7 +237,7 @@ describe('resumeBlock and resumePromptAdjust', () => {
 
   it('adds --continue to the setup call and swaps checkout -B for git switch, once', () => {
     const common =
-      '**Setup (first call):** `cq prepare-track A-r1 --branch queue/A --scratchpad\n"s"`\n' +
+      '**Setup (first call):** `ravenseat prepare-track A-r1 --branch queue/A --scratchpad\n"s"`\n' +
       '**Git:** `prepare-track` runs `git checkout -B queue/A develop`; HEAD must be abc.';
     const j = L.resumePromptAdjust(common, { trackId: 'A-r1', branch: 'queue/A', base: 'develop' });
     expect(j.swapped).toBe(2);
@@ -376,7 +376,7 @@ describe('queue.mjs: pulse, deliveries, receive and resume against a temporary q
     expect(res.code).toBe(0);
     expect(res.out).toContain('RESUME A-r1 (fix)');
     expect(res.out).not.toContain('WARNING');
-    expect(res.out).toMatch(/subagent_type (cq:)?track,/);
+    expect(res.out).toMatch(/subagent_type (ravenseat:)?track,/);
     const prompt = fs.readFileSync(path.join(scratch, 'prompt-A-r1.md'), 'utf8');
     expect(prompt).toContain('prepare-track A-r1 --branch queue/A --continue');
     expect(prompt).toContain('`prepare-track --continue` runs `git switch queue/A` (without reset)');

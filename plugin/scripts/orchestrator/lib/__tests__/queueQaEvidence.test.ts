@@ -144,7 +144,7 @@ describe('the warning in receive', () => {
     const w = L.evidenceWarning({ o: task() });
     expect(w).toMatch(/V-1 has the label visual, but track-result.md has no EVIDENCE line/);
     expect(w).toMatch(/screenshot=<ref> \| test=<ref> \| manual=<what>/);
-    expect(w).toMatch(/cq qa evidence V-1/);
+    expect(w).toMatch(/ravenseat qa evidence V-1/);
   });
 
   it('a line, or evidence already stored on the task, is enough', () => {

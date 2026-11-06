@@ -46,7 +46,7 @@ function focusEndBadges(f) {
           class: 'badge old focus-halted',
           text: 'queue paused',
           title:
-            'Nothing starts until you choose: set a new focus, or continue the regular queue (Decisions, or cq resolve).',
+            'Nothing starts until you choose: set a new focus, or continue the regular queue (Decisions, or ravenseat resolve).',
         })
       : null,
   ].filter(Boolean);

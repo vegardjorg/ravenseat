@@ -5,7 +5,7 @@
 // queueBoardHelpers.test.ts: the "Helper agents" tab in the board's settings (board.js). The settings have two real
 // tabs (General, Helper agents) with the arrow keys; the helper tab has one row per helper with what it does, when it
 // runs, a real checkbox with role switch and a label, and the measurement ("No runs yet" when empty). Flipping the
-// switch posts { name, enabled } to /api/helper (the server turns it into `cq helpers on|off`), and a refused write puts
+// switch posts { name, enabled } to /api/helper (the server turns it into `ravenseat helpers on|off`), and a refused write puts
 // the switch back and shows the message. The whole board runs in jsdom with a mock server (no network).
 // =============================================================
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -56,7 +56,7 @@ const flush = async () => {
 };
 
 const config = KK.merge(KK.STANDARD, {});
-// Two custom helpers (cq helpers add): db-check approved for the file as it is now, new-check never reviewed.
+// Two custom helpers (ravenseat helpers add): db-check approved for the file as it is now, new-check never reviewed.
 const SHA = 'ab'.repeat(32);
 const custom = (name: string, o: object = {}) => ({
   source: 'custom',

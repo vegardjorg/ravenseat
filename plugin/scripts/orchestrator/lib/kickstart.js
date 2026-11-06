@@ -1,5 +1,5 @@
 // =============================================================
-// lib/kickstart.js: what `cq kickstart` knows: which checks the project already has, and the next step toward a small
+// lib/kickstart.js: what `ravenseat kickstart` knows: which checks the project already has, and the next step toward a small
 // set of controls. Pure logic: the files, git and the queue are passed in.
 //
 // The aim is understanding, not a setup to finish. A user who has never heard of CI reads one plain step with why it
@@ -67,7 +67,7 @@ function pythonChecks(exists, read) {
 
 /**
  * The project's own check commands, read from its files. Only what the files show; an unknown stack gives no checks, and
- * the /cq:kickstart skill can then read the project itself.
+ * the /ravenseat:kickstart skill can then read the project itself.
  * @param {{ exists: (file: string) => boolean, read: (file: string) => string|null }} fsLike
  * @returns {{ stacks: string[], checks: { kind: string, command: string, source: string }[] }}
  */
@@ -141,7 +141,7 @@ const TASKS = {
     content_min: 30,
     owned_files: ['.gitignore', '.env.example'],
     mission:
-      'Run `cq doctor` and read its `secrets` lines. Add the local secret files to .gitignore (for example .env and .env.* ' +
+      'Run `ravenseat doctor` and read its `secrets` lines. Add the local secret files to .gitignore (for example .env and .env.* ' +
       'with !.env.example), and add a .env.example with the variable names only, never the values. A secret that is ' +
       'already tracked in git must be changed by the owner, because removing the file does not clean the history: say ' +
       `so in track-result.md, with the file name and never the value. ${NEVER_PUSH}`,
@@ -151,9 +151,9 @@ const TASKS = {
     id: 'KS-CI',
     title: 'Run the checks on GitHub on every push',
     content_min: 45,
-    owned_files: ['.github/workflows/cq-gates.yml'],
+    owned_files: ['.github/workflows/ravenseat-gates.yml'],
     mission:
-      'Write .github/workflows/cq-gates.yml. It runs exactly the commands in gates.quick from queue.config.json on a push ' +
+      'Write .github/workflows/ravenseat-gates.yml. It runs exactly the commands in gates.quick from queue.config.json on a push ' +
       'to the base branch and on pull requests, not a list of its own. Add the runtime setup and install step for this ' +
       'stack. Read the versions from the project (for example .nvmrc or engines). Set `permissions: contents: read`, ' +
       'cancel superseded runs with `concurrency`, skip docs-only pushes with `paths-ignore`, and pin actions to a major ' +
@@ -165,7 +165,7 @@ const TASKS = {
   }),
 };
 
-/** A task for a step, ready for `cq add`. added_by makes it proposed (logic/questions.js isAgentSource). */
+/** A task for a step, ready for `ravenseat add`. added_by makes it proposed (logic/questions.js isAgentSource). */
 function taskFor(key, facts) {
   return {
     ...TASKS[key](facts),
@@ -189,7 +189,7 @@ function taskState(id, tasks, open) {
 
 /**
  * The steps in order. `facts` is what the caller read: { git, remote: 'github'|'other'|null, stacks, checks, hasGates,
- * ciHosts, secretsOk }. Each step: { key, state, title, why, how, task? (the key for `cq kickstart add`), taskId? }.
+ * ciHosts, secretsOk }. Each step: { key, state, title, why, how, task? (the key for `ravenseat kickstart add`), taskId? }.
  */
 function steps({ facts, tasks = [] }) {
   const list = [];
@@ -208,7 +208,7 @@ function steps({ facts, tasks = [] }) {
       title: 'Use the checks your project already has',
       why: 'Checks are commands that fail when the code is broken. With them set as gates, every agent has to pass them before it delivers.',
       how: facts.checks.length
-        ? `cq kickstart gates --apply sets ${facts.checks.map((c) => c.command).join(', ')} as gates. It writes queue.config.json only.`
+        ? `ravenseat kickstart gates --apply sets ${facts.checks.map((c) => c.command).join(', ')} as gates. It writes queue.config.json only.`
         : 'Set your check commands in gates.quick and gates.full in queue.config.json.',
     });
   } else {
@@ -217,7 +217,7 @@ function steps({ facts, tasks = [] }) {
       state: taskState('KS-CHECK', tasks, 'next'),
       title: 'Add a first automatic check',
       why: 'Nothing can tell yet whether a change broke something. One small test is enough to start, and it can grow later.',
-      how: 'cq kickstart add gates proposes a task for an agent. It starts only when you approve it.',
+      how: 'ravenseat kickstart add gates proposes a task for an agent. It starts only when you approve it.',
       task: 'first-check',
       taskId: 'KS-CHECK',
     });
@@ -227,7 +227,7 @@ function steps({ facts, tasks = [] }) {
     state: !facts.git ? 'later' : facts.secretsOk ? 'done' : taskState('KS-SECRETS', tasks, 'next'),
     title: 'Keep secret files out of git',
     why: 'A password or key in git can be read by anyone with the repo, also in old commits.',
-    how: 'cq kickstart add secrets proposes a task for an agent. It starts only when you approve it.',
+    how: 'ravenseat kickstart add secrets proposes a task for an agent. It starts only when you approve it.',
     task: 'secrets',
     taskId: 'KS-SECRETS',
   });
@@ -235,8 +235,8 @@ function steps({ facts, tasks = [] }) {
     list.push({
       key: 'ci',
       state: 'done',
-      // cq only sees that the config exists. It does not read what the config runs, so it must not claim that.
-      title: `CI config found (${facts.ciHosts.join(', ')}); cq does not check that it runs your checks`,
+      // ravenseat only sees that the config exists. It does not read what the config runs, so it must not claim that.
+      title: `CI config found (${facts.ciHosts.join(', ')}); ravenseat does not check that it runs your checks`,
       why: `CI config found: ${facts.ciHosts.join(', ')}.`,
       how: '',
     });
@@ -246,7 +246,7 @@ function steps({ facts, tasks = [] }) {
       state: gatesReady ? taskState('KS-CI', tasks, 'next') : 'later',
       title: 'Run the checks on GitHub on every push (CI)',
       why: 'CI runs your checks on a clean machine, so "it works on my computer" is not the only proof. It is optional, and it uses your CI minutes.',
-      how: 'cq kickstart add ci proposes a task for an agent. It starts only when you approve it.',
+      how: 'ravenseat kickstart add ci proposes a task for an agent. It starts only when you approve it.',
       task: 'ci',
       taskId: 'KS-CI',
     });
@@ -256,7 +256,7 @@ function steps({ facts, tasks = [] }) {
       state: 'later',
       title: 'Run the checks on every push (CI)',
       why: facts.remote
-        ? 'CI runs your checks on a clean machine. Your git host is not GitHub, so cq has no task for it: run your gates in that host\'s CI.'
+        ? 'CI runs your checks on a clean machine. Your git host is not GitHub, so ravenseat has no task for it: run your gates in that host\'s CI.'
         : 'CI runs your checks on a clean machine, but it needs a host such as GitHub. Your code is only on this computer, so there is nothing to do now.',
       how: '',
     });

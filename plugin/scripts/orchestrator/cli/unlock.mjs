@@ -1,10 +1,10 @@
 // =============================================================
-// cli/unlock.mjs: `cq unlock`, the owner's way to see and release the queue lock (<dataFolder>/.lockState).
+// cli/unlock.mjs: `ravenseat unlock`, the owner's way to see and release the queue lock (<dataFolder>/.lockState).
 //
 // A live holder on this machine is never taken over (lib/queueLock.js), so a command that hangs holding the lock stops
 // every other command until someone decides. That someone is the owner:
-//   cq unlock                      prints the holder, changes nothing
-//   cq unlock --force --by owner   releases it. The holder keeps running but stops at its next ownership check: it
+//   ravenseat unlock                      prints the holder, changes nothing
+//   ravenseat unlock --force --by owner   releases it. The holder keeps running but stops at its next ownership check: it
 //                                  publishes nothing more and leaves the lock alone. Between its check and its rename
 //                                  it can still publish once, which is why this is the owner's call and not a rule.
 // Like the other owner overrides: --by is owner or theBoard, it is refused from inside a track worktree whatever --by
@@ -16,7 +16,7 @@
 
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
-import { a, CQ, die, FOLDER, LOCK, PREFIX, require, val } from './context.mjs';
+import { a, CLI, die, FOLDER, LOCK, PREFIX, require, val } from './context.mjs';
 
 const QL = require('./lib/queueLock.js');
 const OWNER_BY = new Set(['owner', 'theBoard']);
@@ -51,9 +51,9 @@ function holderLines(state) {
 export function cmdUnlock() {
   const force = a.includes('--force');
   if (force && !OWNER_BY.has(String(val('--by') ?? '').trim()))
-    die(`${CQ} unlock --force needs --by owner: releasing the lock is the owner's decision. Nothing was changed.`);
+    die(`${CLI} unlock --force needs --by owner: releasing the lock is the owner's decision. Nothing was changed.`);
   const track = force ? trackBranchHere() : null;
-  if (track) die(`${CQ} unlock --force cannot be run from inside a track worktree (branch ${track}); ask the owner (cq question).`);
+  if (track) die(`${CLI} unlock --force cannot be run from inside a track worktree (branch ${track}); ask the owner (ravenseat question).`);
 
   const state = QL.readState(LOCK);
   if (!state) {
@@ -63,7 +63,7 @@ export function cmdUnlock() {
   console.log(`The lock on ${FOLDER}:`);
   for (const l of holderLines(state)) console.log(l);
   if (!force) {
-    console.log(`To release it: ${CQ} unlock --force --by owner. A live holder then stops at its next write.`);
+    console.log(`To release it: ${CLI} unlock --force --by owner. A live holder then stops at its next write.`);
     return;
   }
   const running = state.tokens.some(runsHere);

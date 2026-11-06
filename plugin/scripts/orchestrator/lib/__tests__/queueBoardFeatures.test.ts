@@ -161,8 +161,8 @@ describe('the module switches on the board', () => {
     expect(card).not.toBeNull();
     expect(card.querySelectorAll('ol.onboarding-steps > li')).toHaveLength(3);
     expect(card.textContent).toContain('add to the queue');
-    expect(card.textContent).toContain('cq add --file');
-    expect(card.textContent).toContain('/cq:queue');
+    expect(card.textContent).toContain('ravenseat add --file');
+    expect(card.textContent).toContain('/ravenseat:queue');
     expect(card.textContent).toContain('Waiting on you');
     expect(document.querySelectorAll('section.column')).toHaveLength(0);
     // The link opens the help in the panel.

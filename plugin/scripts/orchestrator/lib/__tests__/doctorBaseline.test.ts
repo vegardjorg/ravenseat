@@ -1,5 +1,5 @@
 // =============================================================
-// doctorBaseline.test.ts: the safety baseline lines of `cq doctor` (cli/doctorBaseline.mjs) and the config rules for
+// doctorBaseline.test.ts: the safety baseline lines of `ravenseat doctor` (cli/doctorBaseline.mjs) and the config rules for
 // the new keys (productionBranch, deployCommands, secretScan, largeFileMb in cli/doctor.mjs).
 //
 // Why: users have very different stacks; the checks must work with plain git and file names, name each risk in one
@@ -68,7 +68,7 @@ function project({ config = {}, files = {}, loose = {}, env: extra = {} }: { con
   return { root, g, env, run, text, lines };
 }
 
-describe('cq doctor: the safety baseline', () => {
+describe('ravenseat doctor: the safety baseline', () => {
   it('a missing base branch and a gate naming a missing script are FAIL', () => {
     const p = project({ config: { gates: { quick: ['npm run nope'], full: [] }, baseBranch: 'develop' }, files: { 'package.json': '{}' } });
     const r = p.run();
@@ -173,7 +173,7 @@ describe('cq doctor: the safety baseline', () => {
     expect(p.lines('identity')[0].status).toBe('OK');
     const bad = project({ env: { GIT_COMMITTER_NAME: 'x', GIT_COMMITTER_EMAIL: 'x@example.com' } });
     const c = bad.lines('identity')[0];
-    expect(c).toMatchObject({ status: 'WARN', message: expect.stringMatching(/x@example\.com.*cq merge will refuse/) });
+    expect(c).toMatchObject({ status: 'WARN', message: expect.stringMatching(/x@example\.com.*ravenseat merge will refuse/) });
     expect(c.fix).toContain('git config user.email');
     expect(c.fix).not.toContain('--global');
     expect(bad.run().code).toBe(0);

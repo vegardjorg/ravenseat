@@ -1,26 +1,26 @@
 ---
 name: add-to-queue
-description: Add saved-up or new work to the work queue (scripts/.queue, `cq`) as tracks of the right size (K 90-120 min, D about 40, D+ 25-30, U about 60; small non-blocking tasks in the batch queue), with risk class, project and feature, ownership, dependencies and owner questions. Also takes a plan entry from the plan register (`/add-to-queue PL-…`) and sets the plan field. Use when the user says "add to the queue", "/add-to-queue …", or wants to send work to the continuous queue. Builds nothing itself.
+description: Add saved-up or new work to the work queue (scripts/.queue, `ravenseat`) as tracks of the right size (K 90-120 min, D about 40, D+ 25-30, U about 60; small non-blocking tasks in the batch queue), with risk class, project and feature, ownership, dependencies and owner questions. Also takes a plan entry from the plan register (`/add-to-queue PL-…`) and sets the plan field. Use when the user says "add to the queue", "/add-to-queue …", or wants to send work to the continuous queue. Builds nothing itself.
 ---
 
 # Add to the work queue
 
 What goes in: **$ARGUMENTS** (if empty, ask what to add, or use the tasks the user described in the conversation).
 
-You only ADD work. Do not build, do not start agents, do not run `cq start`/`set`; the orchestrator does that.
+You only ADD work. Do not build, do not start agents, do not run `ravenseat start`/`set`; the orchestrator does that.
 Background: `${CLAUDE_PLUGIN_ROOT}/skills/parallel-wave/SKILL.md` and `docs/queue/queue.md`.
 
-**Lite mode:** run `cq mode` first. If it says `lite`, skip steps 0 to 5: add one task per thing the user asked for
-with `cq add "<short title>" --mission "<self-contained mission: what, why, where, how to check it>"` (add
+**Lite mode:** run `ravenseat mode` first. If it says `lite`, skip steps 0 to 5: add one task per thing the user asked for
+with `ravenseat add "<short title>" --mission "<self-contained mission: what, why, where, how to check it>"` (add
 `--files <paths>` when you know the files it owns, `--depends <ids>` when it must wait for other tasks, `--priority 1-10`
 only when the user gave a priority). No class,
 size, value, project, feature, splitting or packing; ids, class K and the defaults come by themselves, and nothing
 is refused for being small. A task that needs the owner's decision first still waits on a registered question: use
-`cq add --json '{"tasks":[{"title":"…","mission":"…","waiting_on":["Q-1"]}],"question":{"Q-1":{"type":"question","text":"…","recommendation":"…"}}}'`.
+`ravenseat add --json '{"tasks":[{"title":"…","mission":"…","waiting_on":["Q-1"]}],"question":{"Q-1":{"type":"question","text":"…","recommendation":"…"}}}'`.
 Then do step 7.
 
 0. **Plan entry as input.** If the argument is a plan entry (`PL-…`), or the work belongs to one
-   (`cq plan show --search "…"`), fetch it with `cq plan get <id> --json` and check:
+   (`ravenseat plan show --search "…"`), fetch it with `ravenseat plan get <id> --json` and check:
    maturity `ready` (otherwise say what is missing and suggest `/plans <id>` first), no open blocking owner questions
    (otherwise tasks that must wait get them in `waiting_on`), and that content only found in gitignored notes is lifted
    into the mission (worktree agents cannot see gitignored files). Every task gets `"plan": "<entry-id>"` and `project`
@@ -42,10 +42,10 @@ Then do step 7.
    also" (paths), numbered content, tests (red first), review needs and "Do NOT touch".
 3. **Map ownership with Grep/Glob, do not guess:** `owned_files` (exact paths, or folders ending in "/"), `owner_db`
    (functions created or redefined), `shared_patch` (shared functions patched), `migr_tens` (0 without migrations).
-4. **Project and feature (REQUIRED):** every task gets `project` (from `cq projects`) and `feature` (a short
+4. **Project and feature (REQUIRED):** every task gets `project` (from `ravenseat projects`) and `feature` (a short
    name the owner recognises). Tasks with visible UI get `"labels": ["visual"]`. Unsure of the project:
-   `cq classify --file <in.json>`. No fitting project: create one first:
-   `cq project <pid> --title "<clear title>" --prefix <PREFIX>- [--plan docs/<plan>.md] [--area <oid>]`.
+   `ravenseat classify --file <in.json>`. No fitting project: create one first:
+   `ravenseat project <pid> --title "<clear title>" --prefix <PREFIX>- [--plan docs/<plan>.md] [--area <oid>]`.
 4b. **Cloud or local:** set `requires` (list) when the task needs something a cloud session lacks: `db`, `web`,
    `local-files`, `unit`. Class D/D+ and DB ownership keep a task local anyway.
 5. **Make one JSON file** (e.g. `scripts/.queue/mission/<prefix>-in.json`):
@@ -61,14 +61,14 @@ Then do step 7.
    ```
    `id`: unique, letters/digits/"."/"_"/"-". `waiting_on` takes ONLY registered question ids (with text and type,
    from before or in the same file); `add` and `edit` refuse anything else, and the whole file stops. Types:
-   `question`, `condition`, `lawyer`, `owner-task`. When the owner answers (`cq resolve <id> --answer "…"`), every
+   `question`, `condition`, `lawyer`, `owner-task`. When the owner answers (`ravenseat resolve <id> --answer "…"`), every
    waiting task gets the answer appended to its mission.
 5b. **Acceptance criteria:** a task with user-visible behaviour gets 1-3 short, checkable criteria
-   (`"acceptance": ["..."]` in the file, or `cq add ... --accept "..."`); they are locked once the task starts.
-6. **Add and check:** `cq add --file <file.json>` and `cq show --project <pid>`.
+   (`"acceptance": ["..."]` in the file, or `ravenseat add ... --accept "..."`); they are locked once the task starts.
+6. **Add and check:** `ravenseat add --file <file.json>` and `ravenseat show --project <pid>`.
    `add` rejects the whole file on error: fix and retry.
 7. **Report briefly:** the ids added, project and feature, dependencies, and owner questions (with recommendation).
    No commit needed: `scripts/.queue/` is gitignored.
 8. **Investigations and proposals become plan entries:** if it is an idea or proposal not ready to build, register it
-   with `cq plan new --file <json>` (`"priority": "owner"`, `"maturity": "idea"`, `"priority_set_by": "agent"`, a
+   with `ravenseat plan new --file <json>` (`"priority": "owner"`, `"maturity": "idea"`, `"priority_set_by": "agent"`, a
    reason, and a linked owner question). Mention the entry id in the report.

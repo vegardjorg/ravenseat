@@ -58,7 +58,7 @@ export function planCommand() {
       return;
     }
     if (!reg.entries.length) {
-      console.log('The plan register is empty. Add entries with: cq plan new --file <json>');
+      console.log('The plan register is empty. Add entries with: ravenseat plan new --file <json>');
       return;
     }
     let previous = null;
@@ -268,7 +268,7 @@ export function planCommand() {
         console.log(
           s.error.length
             ? `Can NOT be undone now:\n  ${s.error.join('\n  ')}`
-            : 'Can be undone (cq plan undo).',
+            : 'Can be undone (ravenseat plan undo).',
         );
       }
       return;
@@ -310,7 +310,7 @@ export function planCommand() {
     planDoc(json);
   } else {
     die(
-      'Use: cq plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|active|rules|check|modules|backup|doc> ...  (see the top of the file)',
+      'Use: ravenseat plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|active|rules|check|modules|backup|doc> ...  (see the top of the file)',
       under ? 1 : 0,
     );
   }

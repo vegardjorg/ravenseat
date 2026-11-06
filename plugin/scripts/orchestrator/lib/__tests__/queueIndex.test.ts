@@ -239,7 +239,7 @@ describe('makeIndex', () => {
     );
     const r = I.makeIndex(INDEX, { entries: many }, QUEUE);
     expect(r.text).toContain(
-      `  Plan entries: ${many.length} entries, see \`cq plan show --search docs/b-plan.md\`.`,
+      `  Plan entries: ${many.length} entries, see \`ravenseat plan show --search docs/b-plan.md\`.`,
     );
   });
 });

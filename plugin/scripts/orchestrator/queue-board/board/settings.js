@@ -102,7 +102,7 @@ function drawSettings() {
   panel.scrollTop = scroll;
 }
 
-/** The one switch for advice about the project (`cq guidance`, lib/guidance.js). It never stops a guard. */
+/** The one switch for advice about the project (`ravenseat guidance`, lib/guidance.js). It never stops a guard. */
 function guidanceSection(d) {
   const error = el('p', { class: 'setting-error', role: 'alert', hidden: true });
   const box = el('input', {
@@ -148,7 +148,7 @@ function guidanceSection(d) {
   );
 }
 
-/** The opt-out for the Checks tab (`cq checks on|off`). It is not a guard: gates and guards run as before. */
+/** The opt-out for the Checks tab (`ravenseat checks on|off`). It is not a guard: gates and guards run as before. */
 function checksSwitchSection(d) {
   const error = el('p', { class: 'setting-error', role: 'alert', hidden: true });
   const box = el('input', {
@@ -185,7 +185,7 @@ function checksSwitchSection(d) {
     el('p', {
       id: 'checks-panel-help',
       class: 'setting-explanation',
-      text: 'What your project has for checking its code, and suggestions for what to add. Also cq checks on|off in Claude Code. Off changes no gates or guards. Guidance above stops other advice.',
+      text: 'What your project has for checking its code, and suggestions for what to add. Also ravenseat checks on|off in Claude Code. Off changes no gates or guards. Guidance above stops other advice.',
     }),
     error,
   );
@@ -242,7 +242,7 @@ function settingsTabs(now) {
 /**
  * The "Helper agents" tab: one row per helper with what it does, when it runs, an on/off switch (a real checkbox
  * with role switch and a label) and what it has cost (runs, minutes, tokens, USD, share of the task cost, findings).
- * The switch goes through /api/helper -> `cq helpers on|off <agent>`; the board never writes the files itself.
+ * The switch goes through /api/helper -> `ravenseat helpers on|off <agent>`; the board never writes the files itself.
  */
 function helpersPanel(d) {
   const rows = Array.isArray(d.helpers) ? d.helpers : [];
@@ -258,7 +258,7 @@ function helpersPanel(d) {
         text:
           'Optional reviewers on top of the fixed ones for the class (D: reviewer, D+: reviewer and reviewer-security). ' +
           'One runs for a task when it is on and one of its conditions hits. The conditions are in queue.config.json ' +
-          '(helpers), or for a custom helper set with cq helpers when; the switch here is saved in the queue. ' +
+          '(helpers), or for a custom helper set with ravenseat helpers when; the switch here is saved in the queue. ' +
           'A custom helper (an agent file of the project) can only be switched on after Claude has reviewed it and you have ' +
           'approved it for the file as it is now; a later change to the file turns it off.',
       }),
@@ -289,7 +289,7 @@ function helperRow(h) {
   const custom = h.source === 'custom';
   const error = el('p', { class: 'setting-error', role: 'alert', hidden: true });
   // A custom helper can only be switched on when it is approved for its file as it is now. The board can never
-  // approve: that is Claude's review and the owner's yes (cq helpers approve), so the switch is off and disabled
+  // approve: that is Claude's review and the owner's yes (ravenseat helpers approve), so the switch is off and disabled
   // until then, with the reason next to it.
   const locked = custom && h.canEnable === false;
   const described = [`${id}-text`, `${id}-when`, `${id}-measure`];
@@ -366,7 +366,7 @@ function helperReview(h, id, locked) {
 }
 
 /**
- * "Add helper": paste the path of an agent file (.md). The server runs `cq helpers add`, which copies the file to
+ * "Add helper": paste the path of an agent file (.md). The server runs `ravenseat helpers add`, which copies the file to
  * .claude/agents/, hashes and scans it and leaves the helper off and locked until it is reviewed and approved.
  */
 function helperAddForm() {
@@ -543,8 +543,8 @@ function settingField(f, d) {
 
 /**
  * "Auto-accept proposals": the switch and the rules (classes, max estimate, max value), saved together with
- * /api/proposals (= `cq proposals auto ...`), and the log with an Undo button per row (/api/proposals-undo =
- * `cq proposals undo <id>`). The hard rules (never D or D+, owner questions, legal, protected paths) are not settings.
+ * /api/proposals (= `ravenseat proposals auto ...`), and the log with an Undo button per row (/api/proposals-undo =
+ * `ravenseat proposals undo <id>`). The hard rules (never D or D+, owner questions, legal, protected paths) are not settings.
  */
 function autoAcceptSection(a) {
   if (!a?.rules) return null;

@@ -101,7 +101,7 @@ export function planAnswer(r, heading) {
   for (const l of planDiffLines(r.changes)) console.log(`  ${l}`);
   if (!r.changes.length) console.log('  (no change)');
   for (const x of r.warnings ?? []) console.log(`WARNING: ${x}`);
-  if (r.log) console.log(`Changelog no. ${r.log} in plans.json; undo: cq plan undo`);
+  if (r.log) console.log(`Changelog no. ${r.log} in plans.json; undo: ravenseat plan undo`);
 }
 /** The positional arguments before the first flag (`plan prioritize A B now --category ...`). */
 export const forFlag = (from) => {

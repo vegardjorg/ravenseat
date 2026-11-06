@@ -166,7 +166,7 @@ describe('setup.mjs mergeSettings', () => {
     writeFileSync(
       settingsFile(),
       JSON.stringify({
-        statusLine: { type: 'command', command: 'node "/old/cq/1.0.0/scripts/orchestrator/statusline.mjs"', padding: 1 },
+        statusLine: { type: 'command', command: 'node "/old/ravenseat/1.0.0/scripts/orchestrator/statusline.mjs"', padding: 1 },
       }),
     );
     writeFileSync(localFile(), JSON.stringify({ permissions: { allow: ['Bash(ls)'] } }));
@@ -249,7 +249,7 @@ describe('setup.mjs --ci: the GitHub Actions template (opt-in, never over an exi
     if (before === undefined) delete process.env.QUEUE_CONFIG;
     else process.env.QUEUE_CONFIG = before;
   });
-  const workflow = () => join(target, '.github', 'workflows', 'cq-gates.yml');
+  const workflow = () => join(target, '.github', 'workflows', 'ravenseat-gates.yml');
 
   it('writes nothing without --ci or with --dry', () => {
     setupProject({ target });
@@ -261,7 +261,7 @@ describe('setup.mjs --ci: the GitHub Actions template (opt-in, never over an exi
     writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ baseBranch: 'develop', gates: { quick: ['npm test'] } }));
     const log = setupProject({ target, ci: true });
     const text = readFileSync(workflow(), 'utf8');
-    expect(log.notes.join(' | ')).toMatch(/\.github\/workflows\/cq-gates\.yml: written \(runs gates\.quick on push to develop/);
+    expect(log.notes.join(' | ')).toMatch(/\.github\/workflows\/ravenseat-gates\.yml: written \(runs gates\.quick on push to develop/);
     expect(text).toMatch(/branches: \[develop\]/);
     expect(text).not.toContain('__BASE_BRANCH__');
     expect(text).toMatch(/jq -r '\(\.gates\.quick \/\/ \[\]\)\[\]' queue\.config\.json/);
@@ -291,7 +291,7 @@ describe('setup.mjs --ci: the GitHub Actions template (opt-in, never over an exi
     writeFileSync(workflow(), 'mine\n');
     const log = setupProject({ target, ci: true, overwrite: true });
     expect(readFileSync(workflow(), 'utf8')).toBe('mine\n');
-    expect(log.notes.join(' | ')).toMatch(/cq-gates\.yml: kept \(already there; setup never overwrites a workflow\)/);
+    expect(log.notes.join(' | ')).toMatch(/ravenseat-gates\.yml: kept \(already there; setup never overwrites a workflow\)/);
     rmSync(workflow());
     writeFileSync(join(target, '.github', 'workflows', 'build.yml'), 'on: push\n');
     const again = setupProject({ target, ci: true });
@@ -303,7 +303,7 @@ describe('setup.mjs --ci: the GitHub Actions template (opt-in, never over an exi
 describe('setup.mjs fillConfigFromProject', () => {
   const example = readFileSync(join(PLUGIN_ROOT, 'queue.config.example.json'), 'utf8');
   const fresh = (branch: string, pkg?: object) => {
-    const dir = mkdtempSync(join(tmpdir(), 'cq-setup-fill-'));
+    const dir = mkdtempSync(join(tmpdir(), 'ravenseat-setup-fill-'));
     execFileSync('git', ['-C', dir, 'init', '-q', '-b', branch]);
     if (pkg) writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg));
     return dir;

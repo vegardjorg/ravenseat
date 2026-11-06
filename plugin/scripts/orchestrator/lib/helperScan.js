@@ -1,6 +1,6 @@
 // =============================================================
 // helperScan.js: the machine scan of a custom helper agent file (an agent definition of the project's own, added with
-// `cq helpers add`). See docs/orchestration.md ("Custom helper agents").
+// `ravenseat helpers add`). See docs/orchestration.md ("Custom helper agents").
 //
 // WHY: a custom helper is a prompt that runs as a subagent in the orchestrator session, with the tools its frontmatter
 // gives it. A file found on the web or written by someone else can carry a prompt injection, ask for more tools than a

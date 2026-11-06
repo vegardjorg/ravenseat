@@ -35,13 +35,13 @@ export function manifest(extra: Record<string, unknown> = {}) {
   return {
     experiment: 'synthetic',
     arms: [
-      { name: 'cq', kind: 'cq', models: {}, maxParallel: 4, sessions: ['orch-1'], window: { from: at(-60), to: at(2000) } },
+      { name: 'ravenseat', kind: 'ravenseat', models: {}, maxParallel: 4, sessions: ['orch-1'], window: { from: at(-60), to: at(2000) } },
       { name: 'manual', kind: 'manual-fresh', models: {}, maxParallel: 1, sessions: [], window: { from: at(2000), to: at(5000) } },
     ],
     tasks: [
-      { id: 'X-1', label: 'X-1', arm: 'cq', pair: 'p1', stratum: 'K', replay: null, sessions: [], outcome: null },
+      { id: 'X-1', label: 'X-1', arm: 'ravenseat', pair: 'p1', stratum: 'K', replay: null, sessions: [], outcome: null },
       { id: 'Y-1', label: 'Y-1', arm: 'manual', pair: 'p1', stratum: 'K', replay: null, sessions: ['chat-y1'], outcome: null },
-      { id: 'X-2', label: 'X-2', arm: 'cq', pair: 'p2', stratum: 'D', replay: null, sessions: [], outcome: null },
+      { id: 'X-2', label: 'X-2', arm: 'ravenseat', pair: 'p2', stratum: 'D', replay: null, sessions: [], outcome: null },
       { id: 'Y-2', label: 'Y-2', arm: 'manual', pair: 'p2', stratum: 'D', replay: null, sessions: ['chat-y2'], outcome: null },
     ],
     sources: {},
@@ -50,7 +50,7 @@ export function manifest(extra: Record<string, unknown> = {}) {
   };
 }
 
-/** A synthetic cq-style (English) queue for the manifest above, plus a later fix task for X-2. */
+/** A synthetic ravenseat-style (English) queue for the manifest above, plus a later fix task for X-2. */
 export function queue() {
   return {
     tasks: [

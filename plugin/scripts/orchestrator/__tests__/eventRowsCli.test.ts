@@ -1,12 +1,12 @@
 // =============================================================
 // eventRowsCli.test.ts: the flow, load, push and session rows (lib/eventRows.js) the commands and hooks append to the
-// time log, written at the right moment, never failing the command, and read back by `cq cost --json` and `cq limit`.
+// time log, written at the right moment, never failing the command, and read back by `ravenseat cost --json` and `ravenseat limit`.
 //
 // Locks: (1) fill and start write one load row each, also when the load guard stops them (exit 7); (2) triage
 // --verdict, resume (fixRound) and a merge with a textual conflict write their rows; (3) every recorded base verdict
 // writes a baseGate row; (4) a push to the remote is found in the reflog at the next fill and logged once; (5) the
 // status line saves the session cost and logs it throttled, the compaction hook and the SessionEnd hook add a row with
-// the last reading; (6) a time log that cannot be written (a folder) never fails fill, triage or resume; (7) cq cost
+// the last reading; (6) a time log that cannot be written (a folder) never fails fill, triage or resume; (7) ravenseat cost
 // --json has the orchestration overhead and the flow figures.
 // Runs queue.mjs and the hooks as processes against a temporary queue (QUEUE_FOLDER), git repo (QUEUE_GIT) and bare
 // remote, with an injected merge runner (QUEUE_MERGE_RUNNING) as in queueBaseGate.test.ts. Never the main repo.
@@ -171,7 +171,7 @@ describe('the event rows written by the commands', () => {
     expect(last).toMatchObject({ command: 'fill', free_memory_pct: 100, stopped: false, running: 1 });
     expect(typeof last.max_slots).toBe('number');
 
-    // cq limit shows the history.
+    // ravenseat limit shows the history.
     const limit = p.run('limit');
     expect(limit.code).toBe(0);
     expect(limit.out).toMatch(/Load history \(last 7 days\): 4 fill\/start/);
@@ -344,7 +344,7 @@ describe('the session cost rows (status line, compaction hook, SessionEnd hook)'
     expect(p.spawn(path.join(ORCH, 'hook-session-end.mjs'), [], { input: '{broken' }).code).toBe(0);
     expect(p.rows('session')).toHaveLength(3);
 
-    // cq cost --json: the overhead from the cumulative rows (1.25 then 1.4 = 1.4), nothing subtracted.
+    // ravenseat cost --json: the overhead from the cumulative rows (1.25 then 1.4 = 1.4), nothing subtracted.
     const cost = p.run('cost', '--json');
     expect(cost.code).toBe(0);
     const j = JSON.parse(cost.out);

@@ -4,8 +4,8 @@
 //
 // Locks: (1) a rerun on the same sha after a planted hook stays red, with no green entry; (2) a gate that plants a hook at
 // receive is an owner stop, not a fix round: nothing in the queue changes, a rerun stops before running gates, and
-// removing the hook or `cq surface accept --by owner` lets it through; (3) a hook planted outside any gate run is seen at
-// the next receive; (4) cq merge refuses on drift and the planted post-merge hook does not fire; (5) push-check exits 2;
+// removing the hook or `ravenseat surface accept --by owner` lets it through; (3) a hook planted outside any gate run is seen at
+// the next receive; (4) ravenseat merge refuses on drift and the planted post-merge hook does not fire; (5) push-check exits 2;
 // (6) a gate that rewrites or removes the baseline file gets it back and is red; (7) accept is the owner's: refused
 // from a track worktree, without --by owner, and denied to agents by the push guard; (8) config values are never stored
 // or shown; (9) a worktree and the main checkout read the same surface, also with a relative core.hooksPath; (10) doctor
@@ -185,7 +185,7 @@ describe('the rerun is not green over a planted hook', () => {
   });
 });
 
-describe('cq receive: tampered is an owner stop, not a fix round', () => {
+describe('ravenseat receive: tampered is an owner stop, not a fix round', () => {
   const noFixRound = (p: ReturnType<typeof project>, all: string) => {
     expect(p.find().status).toBe('running');
     expect(JSON.stringify(p.find())).not.toContain('gate-red');
@@ -224,7 +224,7 @@ describe('cq receive: tampered is an owner stop, not a fix round', () => {
     expect(p.find().status).toBe('review');
   });
 
-  it('the same flow with cq surface accept --by owner instead of removal', () => {
+  it('the same flow with ravenseat surface accept --by owner instead of removal', () => {
     const p = project({ gates: { quick: ['node plant.cjs'] } }, { 'plant.cjs': PLANT_GATE });
     expect(p.run(['receive', 'A']).code).toBe(1);
     expect(p.run(['receive', 'A']).code).toBe(1);
@@ -299,8 +299,8 @@ describe('cq receive: tampered is an owner stop, not a fix round', () => {
   });
 });
 
-describe('cq merge and push-check on drift', () => {
-  /** A real merge with plain git in the main checkout, for a task in review; the other steps as cq merge would run them. */
+describe('ravenseat merge and push-check on drift', () => {
+  /** A real merge with plain git in the main checkout, for a task in review; the other steps as ravenseat merge would run them. */
   const runner = (p: ReturnType<typeof project>) => {
     const f = path.join(p.folder, 'runner.mjs');
     fs.writeFileSync(
@@ -321,7 +321,7 @@ describe('cq merge and push-check on drift', () => {
     return { QUEUE_MERGE_RUNNING: f } as NodeJS.ProcessEnv;
   };
 
-  it('cq merge refuses, the planted post-merge did not fire and the branch is not merged', () => {
+  it('ravenseat merge refuses, the planted post-merge did not fire and the branch is not merged', () => {
     const p = project();
     expect(p.run(['receive', 'A']).code).toBe(0);
     const { marker } = p.plant();
@@ -417,7 +417,7 @@ describe('the baseline file', () => {
     expect(fs.readFileSync(p.baselineFile, 'utf8')).toBe('{ not json');
   });
 
-  it('holds no config values, also not in cq surface', () => {
+  it('holds no config values, also not in ravenseat surface', () => {
     const VALUE = 'value-marker-that-must-not-appear';
     const p = project();
     p.g(['config', 'core.sshCommand', VALUE]);
@@ -460,7 +460,7 @@ describe('the baseline file', () => {
   });
 });
 
-describe('cq surface', () => {
+describe('ravenseat surface', () => {
   it('prints whether it matches and changes nothing; a missing baseline stays missing', () => {
     const p = project();
     const none = p.run(['surface']);
@@ -495,7 +495,7 @@ describe('cq surface', () => {
     expect(p.run(['surface', 'nonsense']).code).toBe(1);
 
     const PG = require('../lib/pushGuard.js');
-    for (const command of ['cq surface', 'cq surface accept --by owner', 'node scripts/orchestrator/queue.mjs surface accept --by owner']) {
+    for (const command of ['ravenseat surface', 'ravenseat surface accept --by owner', 'node scripts/orchestrator/queue.mjs surface accept --by owner']) {
       expect(PG.assess(command, { agentType: 'track', branch: 'queue/A', environment: null })?.decision, command).toBe('deny');
     }
   });
@@ -550,7 +550,7 @@ describe('the gitSurface setting', () => {
     expect(p.pushCheck().code).not.toBe(2);
   });
 
-  it('off and warn: cq surface and cq doctor still report the real state', () => {
+  it('off and warn: ravenseat surface and ravenseat doctor still report the real state', () => {
     const p = project({ ...OK, gitSurface: 'warn' });
     baselineLib().ensure(p.folder, p.repo);
     p.plant();
@@ -593,7 +593,7 @@ describe('the gitSurface setting', () => {
   });
 });
 
-describe('cq doctor', () => {
+describe('ravenseat doctor', () => {
   it('WARN on drift with the fix hint, OK otherwise, and nothing written', () => {
     const p = project();
     const list = () => fs.readdirSync(p.folder).sort();
@@ -660,7 +660,7 @@ describe('a legitimate change is explained, not accused', () => {
     expect(r.code).toBe(2);
   });
 
-  it('a global alias change: the plain message, the user\'s own file shown by cq surface, accept clears it', () => {
+  it('a global alias change: the plain message, the user\'s own file shown by ravenseat surface, accept clears it', () => {
     const p = project();
     p.run(['surface', 'accept', '--by', 'owner']);
     fs.writeFileSync(p.globalConfig, '[alias]\n\tst = status --value-marker\n');

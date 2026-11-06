@@ -26,12 +26,12 @@
 //
 // THE RULE (assessLock, pure):
 //   same host, pid dead       take over at once
-//   same host, pid alive      never take over, whatever the age; after the wait the error names pid, age and cq unlock
+//   same host, pid alive      never take over, whatever the age; after the wait the error names pid, age and ravenseat unlock
 //   other host, no owner      the age rule (older than 60 s, by the folder's mtime)
 //
 // WHAT REMAINS (no lock file can settle these):
 //   * Pid reuse: a dead holder's pid taken by another process reads as alive. That errs on the safe side: the lock is not
-//     taken over, and the owner releases it with cq unlock.
+//     taken over, and the owner releases it with ravenseat unlock.
 //   * Same hostname but separate pid spaces (WSL next to Windows on one folder, containers with one hostname): a live
 //     holder's pid reads as dead there and the lock is taken over. Do not share a data folder across those.
 //   * Another host: its pid cannot be asked, so a slow holder there can lose the lock by age. See stopIfLockLost in
@@ -282,7 +282,7 @@ function release(lockDir, me) {
 }
 
 /**
- * The owner's release (cq unlock --force): takes out exactly what `state` shows, checked against the bytes, so a holder
+ * The owner's release (ravenseat unlock --force): takes out exactly what `state` shows, checked against the bytes, so a holder
  * that arrived after that is left alone. Returns how many tokens it took and whether the folder is gone.
  */
 function forceRelease(lockDir, state) {
@@ -303,10 +303,10 @@ function holderText(token) {
   return usableOwner(o) ? `pid ${o.pid} on ${o.hostname}, started ${o.started ?? '?'}` : 'no readable owner';
 }
 
-/** The error when the wait ran out. `folder` is the data folder and `cq` the command to show. */
-function heldMessage({ folder, cq = 'cq', verdict, state, waitedMs = WAIT_MS }) {
+/** The error when the wait ran out. `folder` is the data folder and `ravenseat` the command to show. */
+function heldMessage({ folder, ravenseat = 'ravenseat', verdict, state, waitedMs = WAIT_MS }) {
   const tried = `tried for ${Math.round(waitedMs / 1000)} s`;
-  const how = `Look with ${cq} unlock; release it with ${cq} unlock --force --by owner.`;
+  const how = `Look with ${ravenseat} unlock; release it with ${ravenseat} unlock --force --by owner.`;
   if (!state) return `Could not get the lock on ${folder} (${tried}). Try again.`;
   const ageS = Math.round(state.ageMs / 1000);
   const token = state.tokens[0];

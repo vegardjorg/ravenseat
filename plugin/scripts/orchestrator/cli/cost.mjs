@@ -22,17 +22,17 @@ import { agentsBySession } from './events.mjs';
 
 const ES = require('./lib/eventStatistics.js');
 
-/** `cq forecast` (the usage is at the top of queue.mjs). */
+/** `ravenseat forecast` (the usage is at the top of queue.mjs). */
 export function cmdForecast() {
   // ---- Monte Carlo forecast: when are the remaining tasks done (lib/queueForecast.js) ----
   const days = a.includes('--days') ? Number(val('--days')) : FC.WINDOW_DAYS;
   if (!Number.isInteger(days) || days < 1 || days > 365) die('--days must be a whole number 1-365');
   const project = a.includes('--project') ? val('--project') : null;
   if (a.includes('--project') && (!project || project.startsWith('--')))
-    die('--project requires a project id (cq projects)');
+    die('--project requires a project id (ravenseat projects)');
   const queue = read();
   if (project && project !== L.WITHOUT_PROJECT && !Object.hasOwn(queue.projects ?? {}, project))
-    die(`Unknown project ${project} (cq projects).`);
+    die(`Unknown project ${project} (ravenseat projects).`);
   // QUEUE_FORECAST_SEED gives a fixed random sequence (tests); otherwise Math.random.
   const seed = process.env.QUEUE_FORECAST_SEED;
   const f = FC.queueForecast(queue, {
@@ -44,7 +44,7 @@ export function cmdForecast() {
   else console.log(FC.forecastText(f));
 }
 
-/** `cq limit` (the usage is at the top of queue.mjs). */
+/** `ravenseat limit` (the usage is at the top of queue.mjs). */
 export function cmdLimit() {
   const [, name, raw] = a;
   if (name) {
@@ -86,7 +86,7 @@ export function cmdLimit() {
   if (night.active) console.log(night.message);
 }
 
-/** `cq capacity` (the usage is at the top of queue.mjs). */
+/** `ravenseat capacity` (the usage is at the top of queue.mjs). */
 export function cmdCapacity() {
   // ---- Weekly quota on the subscription (lib/queueCapacity.js; reset and planName in config().capacity). Changes
   // are written under the lock in queue.json
@@ -153,7 +153,7 @@ export function cmdCapacity() {
   else console.log(CH.lines(p).join('\n'));
 }
 
-/** `cq cost` (the usage is at the top of queue.mjs). */
+/** `ravenseat cost` (the usage is at the top of queue.mjs). */
 export function cmdCost() {
   // ---- Cost per task. `cost measure <id...>` measures and saves again (e.g. older finished ones). ----
   if (a[1] === 'measure') {
@@ -232,7 +232,7 @@ export function cmdCost() {
           `  ${k.class.padEnd(2)} n=${String(k.n).padEnd(3)} median $${k.median_usd}  sum $${k.usd}` +
             (k.reviewed ? `  findings H=${k.H} M=${k.M} L=${k.L} (${k.reviewed} reviewed)` : ''),
         );
-      // What the helper agents added (lib/queueHelpers.js): the same numbers as `cq helpers`.
+      // What the helper agents added (lib/queueHelpers.js): the same numbers as `ravenseat helpers`.
       const helpers = HELP.helperRows(CONFIG, read());
       if (helpers.length) {
         const st = HELP.helperStatistics(read(), helpers.map((h) => h.name), { since: sinceTime(val('--since')) });
@@ -258,7 +258,7 @@ function transcriptMetricsSince(from) {
   return TM().metricsSummary(readTimeLog(), { from, to: Date.now() + 1 });
 }
 
-/** `cq calibrate` (the usage is at the top of queue.mjs). */
+/** `ravenseat calibrate` (the usage is at the top of queue.mjs). */
 export function cmdCalibrate() {
   // ---- The calibration view (lib/costEstimate.js): how far the minute estimates and the cost model are off per class.
   // Read-only: it never changes the weights, the order or the queue. ----

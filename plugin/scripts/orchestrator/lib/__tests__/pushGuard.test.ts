@@ -197,7 +197,7 @@ describe('deployCommands and the secret question', () => {
 const KNOWN = new Set(['vitest', 'typescript', 'tsc', 'eslint', 'prettier', '@vitest/coverage-v8']);
 const track = { agentType: 'track', branch: 'queue/A', knownPackage: (n: string) => KNOWN.has(n) };
 const trackD = { ...track, agentType: 'track-d' };
-const pluginTrack = { ...track, agentType: 'cq:track' };
+const pluginTrack = { ...track, agentType: 'ravenseat:track' };
 
 describe('queue agents do not run migration commands (NESTE 5)', () => {
   const agent = { ...track, knownPackage: () => true };
@@ -258,14 +258,14 @@ describe('network guard (agent_type track/track-d)', () => {
   });
   it('reviewers and helper agents (builtin and custom, also with the plugin prefix) are guarded too', () => {
     // The builtin review agents are in the default list (the read guard's), without any config.
-    for (const agentType of ['reviewer', 'cq:reviewer', 'reviewer-security', 'cq:reviewer-security']) {
+    for (const agentType of ['reviewer', 'ravenseat:reviewer', 'reviewer-security', 'ravenseat:reviewer-security']) {
       expect(decision('curl https://x', { agentType }), agentType).toBe('deny');
       expect(decision('cat x.sh | bash', { agentType }), agentType).toBe('deny');
     }
-    // A custom helper (registered with `cq helpers add`) comes in through the guarded types.
+    // A custom helper (registered with `ravenseat helpers add`) comes in through the guarded types.
     const guardedTypes = new Set(['reviewer', 'db-check']);
     expect(decision('curl https://x', { agentType: 'db-check', guardedTypes })).toBe('deny');
-    expect(decision('iwr https://x', { agentType: 'cq:db-check', guardedTypes })).toBe('deny');
+    expect(decision('iwr https://x', { agentType: 'ravenseat:db-check', guardedTypes })).toBe('deny');
     expect(decision('npx cowsay', { agentType: 'db-check', guardedTypes, knownPackage: () => false })).toBe('ask');
     // Not in the list: not guarded.
     expect(decision('curl https://x', { agentType: 'other-helper', guardedTypes })).toBeNull();
@@ -338,15 +338,15 @@ describe('segments and helpers', () => {
   it('isTrackAgent', () => {
     expect(isTrackAgent('track')).toBe(true);
     expect(isTrackAgent('track-d')).toBe(true);
-    expect(isTrackAgent('cq:track-d')).toBe(true);
+    expect(isTrackAgent('ravenseat:track-d')).toBe(true);
     expect(isTrackAgent(undefined)).toBe(false);
     expect(isTrackAgent('reviewer-security')).toBe(false);
   });
   it('isGuardedAgent', () => {
     const types = new Set(['reviewer', 'db-check']);
     expect(isGuardedAgent('track', new Set())).toBe(true);
-    expect(isGuardedAgent('cq:track-d', new Set())).toBe(true);
-    expect(isGuardedAgent('cq:reviewer', types)).toBe(true);
+    expect(isGuardedAgent('ravenseat:track-d', new Set())).toBe(true);
+    expect(isGuardedAgent('ravenseat:reviewer', types)).toBe(true);
     expect(isGuardedAgent('db-check', types)).toBe(true);
     expect(isGuardedAgent('general-purpose', types)).toBe(false);
     expect(isGuardedAgent(undefined, types)).toBe(false);
@@ -362,7 +362,7 @@ describe('hook-push-guard.mjs (network guard per agent type)', () => {
     return r.stdout ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : null;
   };
   it('blocks curl for a reviewer and a registered custom helper, never for the orchestrator', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-netguard-'));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-netguard-'));
     try {
       const folder = path.join(root, 'q');
       fs.mkdirSync(folder);
@@ -374,9 +374,9 @@ describe('hook-push-guard.mjs (network guard per agent type)', () => {
       env.QUEUE_CONFIG = path.join(root, 'no-config.json');
       const curl = (agent_type?: string) =>
         run(env, { ...(agent_type ? { agent_type } : {}), tool_input: { command: 'curl https://x' }, cwd: root });
-      expect(curl('cq:reviewer')).toBe('deny');
+      expect(curl('ravenseat:reviewer')).toBe('deny');
       expect(curl('db-check')).toBe('deny');
-      expect(curl('cq:db-check')).toBe('deny');
+      expect(curl('ravenseat:db-check')).toBe('deny');
       expect(curl()).toBeNull(); // the orchestrator: no agent_type
       expect(curl('general-purpose')).toBeNull();
     } finally {

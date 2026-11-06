@@ -31,7 +31,7 @@ const REPORT_TEMPLATE = [
 ];
 const ID = /^F-[A-Z0-9][A-Z0-9_-]{0,39}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-// The machine's time zone (TZ overrides it, as everywhere in cq).
+// The machine's time zone (TZ overrides it, as everywhere in ravenseat).
 const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 const emptyRegister = () => ({ version: 1, entries: [], changed: null });
@@ -150,7 +150,7 @@ function add(reg, input, { now }) {
 
 function find(reg, id) {
   const p = reg.entries.find((x) => x.id === id);
-  return p ? { p } : { error: [`Unknown follow-up entry ${id} (cq follow lists them)`] };
+  return p ? { p } : { error: [`Unknown follow-up entry ${id} (ravenseat follow lists them)`] };
 }
 const isClosed = (p) => p.decision != null || p.status === 'cancelled';
 
@@ -232,7 +232,7 @@ const PLACEHOLDER = '(assessed by the orchestrator)';
 function reportText(p, { now }) {
   const out = [`# ${p.id}: ${p.title}`, ''];
   out.push(
-    `Generated ${now} by cq follow report. Status: ${p.status}. The sections marked ${PLACEHOLDER} are written by the orchestrator.`,
+    `Generated ${now} by ravenseat follow report. Status: ${p.status}. The sections marked ${PLACEHOLDER} are written by the orchestrator.`,
   );
   const section = (name, lines) => out.push('', `## ${name}`, '', ...lines);
   section('Question', [p.why]);
@@ -270,7 +270,7 @@ function reportText(p, { now }) {
   ]);
   section('Deviations and losses', [PLACEHOLDER]);
   section('Recommendation', [PLACEHOLDER]);
-  section('Owner decision', [p.decision ?? `(not decided; cq follow close ${p.id} --decision "...")`]);
+  section('Owner decision', [p.decision ?? `(not decided; ravenseat follow close ${p.id} --decision "...")`]);
   return `${out.join('\n')}\n`;
 }
 
@@ -287,20 +287,20 @@ function shortLines(reg, today, { pulse = false } = {}) {
     out.push(
       `FOLLOW UP: ${active.length} active${parts.length ? ` (${parts.join(', ')})` : ''}` +
         (due.length ? `; ${due.length} TO REPORT` : '') +
-        ' · cq follow',
+        ' · ravenseat follow',
     );
   }
   if (due.length)
     out.push(
       `TO REPORT: ${due.map((p) => `${p.id} (end ${p.end})`).join(', ')}. ` +
-        `Run cq follow report ${due[0].id}` +
+        `Run ravenseat follow report ${due[0].id}` +
         (pulse
           ? ', assess it and present it to the owner (repeated at every pulse until the report is written).'
           : '.'),
     );
   if (decision.length)
     out.push(
-      `FOLLOW UP waiting on an owner decision: ${decision.map((p) => p.id).join(', ')} (cq follow close <id> --decision "...").`,
+      `FOLLOW UP waiting on an owner decision: ${decision.map((p) => p.id).join(', ')} (ravenseat follow close <id> --decision "...").`,
     );
   return out;
 }
@@ -309,7 +309,7 @@ const RANK = { 'to-report': 0, active: 1, reported: 2, cancelled: 3 };
 
 /** The list for queue.mjs follow: one line per entry, the open ones first. */
 function listLines(reg, today) {
-  if (!reg.entries.length) return ['No follow-up entries. Add one: cq follow add --file <json>.'];
+  if (!reg.entries.length) return ['No follow-up entries. Add one: ravenseat follow add --file <json>.'];
   const status = (p) =>
     p.decision != null && p.status === 'reported' ? 'closed' : effectiveStatus(p, today);
   const sorted = [...reg.entries].sort(

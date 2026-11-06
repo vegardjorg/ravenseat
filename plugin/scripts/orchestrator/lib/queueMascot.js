@@ -112,7 +112,7 @@
       { text: 'You are commanding an entire army of agents from the sofa. Have a glass. One.' },
       { text: 'No HIGH findings in {days} days. The auditors are bored to tears.' },
       { text: "Good job. I mean it. I'm a mascot, I have no reason to lie." },
-      { text: "Rome wasn't built in a day. But then, they didn't have cq." },
+      { text: "Rome wasn't built in a day. But then, they didn't have ravenseat." },
       { text: "Breathe. What's in Waiting on you is actually waiting. That's fine." },
       {
         text: "{done_week} tasks delivered this week. I'd raise a toast, but my glass is already up.",

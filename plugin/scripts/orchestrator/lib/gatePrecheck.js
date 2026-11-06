@@ -1,5 +1,5 @@
 // =============================================================
-// gatePrecheck.js: the precheck before the full gate run (`cq gates --precheck`, gates.mjs).
+// gatePrecheck.js: the precheck before the full gate run (`ravenseat gates --precheck`, gates.mjs).
 //
 // WHY: a track that only learns about a red error after a long full gate run has spent many minutes (and tokens) on
 // waiting. The precheck runs the cheapest checks first, in a fixed order, only on what the track changed, and STOPS at

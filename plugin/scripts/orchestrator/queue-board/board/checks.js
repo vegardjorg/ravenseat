@@ -2,9 +2,9 @@
 // checks.js: the Checks tab: what the project has for checking its code (cards), and prioritized suggestions (cards), each
 // with a button that adds its investigation and planning to the queue.
 //
-// The data is `cq checks --json` (GET /api/checks, lib/checksCatalog.js buildReport); every write is POST /api/checks, which
-// runs `cq checks ...`. The suggestions are files in checks-catalog/, so nothing about a suggestion is written here.
-// The tab is opt-out: `cq checks off` or the switch here or in Settings; state.checksPanel says whether it shows.
+// The data is `ravenseat checks --json` (GET /api/checks, lib/checksCatalog.js buildReport); every write is POST /api/checks, which
+// runs `ravenseat checks ...`. The suggestions are files in checks-catalog/, so nothing about a suggestion is written here.
+// The tab is opt-out: `ravenseat checks off` or the switch here or in Settings; state.checksPanel says whether it shows.
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md). They load in order with defer and
 // share the page's global scope, so a top-level name in one is visible in all of them, as when they were one
@@ -223,7 +223,7 @@ function drawChecks() {
         type: 'button',
         class: 'link-button',
         text: 'Turn this tab off',
-        title: 'Same as cq checks off. Settings or cq checks on brings it back. Guards and gates are not affected.',
+        title: 'Same as ravenseat checks off. Settings or ravenseat checks on brings it back. Guards and gates are not affected.',
         onclick: () => checksWrite({ action: 'off' }, 'Checks tab off'),
       }),
       el('p', {

@@ -88,7 +88,7 @@ function queueShow() {
       env: { ...process.env, COLUMNS: '110' },
     });
   } catch {
-    return '(cq show failed; run it yourself)';
+    return '(ravenseat show failed; run it yourself)';
   }
 }
 

@@ -1,7 +1,8 @@
 {
-  "name": "cq",
+  "name": "ravenseat",
+  "displayName": "Ravenseat",
   "version": "0.8.23",
-  "description": "Ravenseat, a kanban board and project manager for Claude Code: tasks with visible dependencies, a focus that finishes one feature before the next, and parallel worktree agents that work through it. Run /cq:setup in a project to start.",
+  "description": "Ravenseat, a kanban board and project manager for Claude Code: tasks with visible dependencies, a focus that finishes one feature before the next, and parallel worktree agents that work through it. Run /ravenseat:setup in a project to start.",
   "author": { "name": "Vegard Cowie Jørgensen" },
   "homepage": "https://github.com/vegardjorg/ravenseat",
   "repository": "https://github.com/vegardjorg/ravenseat",

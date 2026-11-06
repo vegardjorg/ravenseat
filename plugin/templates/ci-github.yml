@@ -1,4 +1,4 @@
-# Ravenseat CI template for GitHub Actions (written by `cq setup --ci`; edit it freely, setup never overwrites it).
+# Ravenseat CI template for GitHub Actions (written by `ravenseat setup --ci`; edit it freely, setup never overwrites it).
 #
 # It runs YOUR project's own check commands, the same ones the agents run: `gates.quick` in queue.config.json.
 # Nothing here is stack specific. Two things are left to you:

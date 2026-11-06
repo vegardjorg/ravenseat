@@ -100,11 +100,11 @@ describe('the Claude adapter', () => {
   it('dispatches by effort: high on track-d, medium on track, with the agent message', () => {
     const d = fixture('claude');
     const x = claude.dispatch(d);
-    expect(x.subagent_type).toMatch(/^(cq:)?track-d$/);
+    expect(x.subagent_type).toMatch(/^(ravenseat:)?track-d$/);
     expect(x.message).toContain(`You are track ${d.track_id} in the work queue`);
     expect(x.message).toContain(d.prompt_file);
-    expect(claude.dispatch({ ...d, effort: 'medium' }).subagent_type).toMatch(/^(cq:)?track$/);
-    expect(claude.startLine(d)).toMatch(/^Agent: subagent_type (cq:)?track-d.* \(thinkingLevel high\)\.$/);
+    expect(claude.dispatch({ ...d, effort: 'medium' }).subagent_type).toMatch(/^(ravenseat:)?track$/);
+    expect(claude.startLine(d)).toMatch(/^Agent: subagent_type (ravenseat:)?track-d.* \(thinkingLevel high\)\.$/);
   });
 
   it('the queue-fill.json entry keeps the field order skills read', () => {

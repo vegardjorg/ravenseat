@@ -131,7 +131,7 @@ describe('silentTracks (pure)', () => {
       L.silentTracks({ tasks: [running('A'), running('B')] }, { worktreeBranches: withWorktree, now: NOW }),
     );
     expect(lines[0]).toMatch(/^SILENT \(2\)/);
-    expect(lines[0]).toContain('cq resume <id> --reason context');
+    expect(lines[0]).toContain('ravenseat resume <id> --reason context');
     expect(lines.slice(1).map((l) => l.trim().split(/\s+/)[0])).toEqual(['A', 'B']);
   });
 });

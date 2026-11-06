@@ -189,7 +189,7 @@ const regexSafe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const REQUIRES = new Set(['db', 'web', 'sources', 'local-files', 'unit', 'deploy']);
 /** The blocker a task in the batch queue gets (show, the board, start, pick). */
 const BATCHED_BLOCKER =
-  'in the batch queue (packed into a track with cq batch pack; taken out with edit --json \'{"batched":false}\')';
+  'in the batch queue (packed into a track with ravenseat batch pack; taken out with edit --json \'{"batched":false}\')';
 /** Does the task have `batched: true` (and is it a queue task, not a record outside the queue)? */
 function isBatched(o) {
   return o?.batched === true && !isExternalRow(o);

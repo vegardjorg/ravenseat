@@ -4,7 +4,7 @@ category: security
 priority: low
 when: has-ci, missing:secret-scan
 content_min: 30
-why: cq checks your own pushes for secrets. A scan in CI also catches pushes from others and from outside the queue.
+why: ravenseat checks your own pushes for secrets. A scan in CI also catches pushes from others and from outside the queue.
 ---
 
 ## Investigate

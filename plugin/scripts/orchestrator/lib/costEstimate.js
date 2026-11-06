@@ -157,7 +157,7 @@ function calibratedCost(o, model) {
 const costText = (c) => L.costLabel(c);
 
 /**
- * The calibration view (`cq calibrate`): per class the sample, the median actual/estimate ratio for the minutes and
+ * The calibration view (`ravenseat calibrate`): per class the sample, the median actual/estimate ratio for the minutes and
  * the suggested weight, the median measured USD, the model's median and the cost correction factor, and the basis new
  * tasks of the class get. Only classes with at least one done task in the window.
  * @returns {{ windowDays: number, minSample: number, rows: object[], buckets: object[] }}
@@ -194,7 +194,7 @@ function calibration(queue, { now = Date.now(), windowDays = WINDOW_DAYS, minSam
 /** The calibration as text lines for the CLI. */
 function calibrationLines(c) {
   if (!c.rows.length)
-    return [`No done tasks in the last ${c.windowDays} days; nothing to calibrate (cq cost measure <id> for older ones).`];
+    return [`No done tasks in the last ${c.windowDays} days; nothing to calibrate (ravenseat cost measure <id> for older ones).`];
   const out = [
     `Calibration, done tasks in the last ${c.windowDays} days (measured data is used from n >= ${c.minSample}):`,
     '  class  n    minutes actual/estimate  weight now -> suggested   median USD  model USD  cost factor  estimates from',
@@ -334,7 +334,7 @@ function taskTotals({ queue, events = [], since = null }) {
 }
 
 /**
- * The per-task rollup as text lines for `cq cost`: the most expensive roots first, with the runs and the fix tasks
+ * The per-task rollup as text lines for `ravenseat cost`: the most expensive roots first, with the runs and the fix tasks
  * folded in. `max` rows at most.
  */
 function taskTotalLines(rows, max = 10) {
@@ -420,7 +420,7 @@ function perMergedChange({ queue, events = [], from, to }) {
   };
 }
 
-/** The figure as text lines for `cq cost`: the headline first, the parts, then the secondary estimate-based figure. */
+/** The figure as text lines for `ravenseat cost`: the headline first, the parts, then the secondary estimate-based figure. */
 function perMergedLines(p, label) {
   const $ = (x) => `$${Number(x).toFixed(2)}`;
   if (!p.merged)

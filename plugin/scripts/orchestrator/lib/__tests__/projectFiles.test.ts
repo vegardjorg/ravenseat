@@ -1,6 +1,6 @@
 // =============================================================
 // projectFiles.test.ts: after a plugin update the project still has its own copies of the docs and the mission template,
-// and a status line path with the old version in it. Locks what cq doctor, cq setup and the pure rules say about them.
+// and a status line path with the old version in it. Locks what ravenseat doctor, ravenseat setup and the pure rules say about them.
 // =============================================================
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -18,7 +18,7 @@ afterAll(() => {
   for (const m of temporary) fs.rmSync(m, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 const tmp = () => {
-  const d = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'cq-pf-')));
+  const d = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-pf-')));
   temporary.push(d);
   return d;
 };
@@ -55,7 +55,7 @@ describe('staleFiles', () => {
     expect(s.changed).toEqual(['docs/queue/mission-template.md']);
     expect(PF.staleMessage(s)).toMatch(/mission-template\.md differs from plugin 1\.2\.3/);
     expect(PF.staleMessage(s)).toMatch(/old instructions/);
-    expect(PF.STALE_FIX).toContain('cq setup --overwrite');
+    expect(PF.STALE_FIX).toContain('ravenseat setup --overwrite');
     expect(PF.STALE_FIX).toMatch(/edits .* lost/);
     expect(PF.STALE_FIX).toMatch(/commit/);
   });
@@ -77,7 +77,7 @@ describe('staleFiles', () => {
 });
 
 describe('staleStatusLines', () => {
-  const line = (v: string) => JSON.stringify({ statusLine: { type: 'command', command: `node "C:/x/plugins/cache/ravenseat/cq/${v}/scripts/orchestrator/statusline.mjs"` } });
+  const line = (v: string) => JSON.stringify({ statusLine: { type: 'command', command: `node "C:/x/plugins/cache/ravenseat/ravenseat/${v}/scripts/orchestrator/statusline.mjs"` } });
   it('finds an old version in the shared and in the local settings', () => {
     const { plugin, project } = pair();
     put(project, '.claude/settings.json', line('0.8.14'));
@@ -105,10 +105,10 @@ describe('through the commands', () => {
     g('commit', '-qm', 'start');
     return root;
   }
-  it('cq doctor warns about an old mission template and an old status line', () => {
+  it('ravenseat doctor warns about an old mission template and an old status line', () => {
     const root = project();
     put(root, 'docs/queue/mission-template.md', 'old template\n');
-    put(root, '.claude/settings.json', JSON.stringify({ statusLine: { command: 'node "C:/x/cq/0.0.1/scripts/orchestrator/statusline.mjs"' } }));
+    put(root, '.claude/settings.json', JSON.stringify({ statusLine: { command: 'node "C:/x/ravenseat/0.0.1/scripts/orchestrator/statusline.mjs"' } }));
     const data = path.join(root, 'data');
     put(data, 'queue.json', JSON.stringify({ tasks: [], projects: {} }));
     put(root, 'queue.config.json', JSON.stringify({ baseBranch: 'main' }));
@@ -119,13 +119,13 @@ describe('through the commands', () => {
     const checks = JSON.parse(r.stdout).checks as { name: string; status: string; message: string; fix?: string }[];
     const files = checks.find((c) => c.name === 'project files' && /mission-template/.test(c.message));
     expect(files?.status).toBe('WARN');
-    expect(files?.fix).toContain('cq setup --overwrite');
+    expect(files?.fix).toContain('ravenseat setup --overwrite');
     const status = checks.find((c) => c.name === 'project files' && /status line/.test(c.message));
     expect(status?.status).toBe('WARN');
     expect(status?.message).toContain('0.0.1');
-    expect(status?.fix).toContain('cq setup --settings');
+    expect(status?.fix).toContain('ravenseat setup --settings');
   });
-  it('cq setup names a kept file that differs, and says nothing about it after --overwrite', () => {
+  it('ravenseat setup names a kept file that differs, and says nothing about it after --overwrite', () => {
     const root = project();
     const setup = (...a: string[]) =>
       spawnSync(process.execPath, [path.join(SCRIPTS, 'setup.mjs'), '--target', root, ...a], { encoding: 'utf8', env: { ...process.env } });
@@ -133,7 +133,7 @@ describe('through the commands', () => {
     put(root, 'docs/queue/mission-template.md', 'old template\n');
     const again = setup();
     expect(again.stdout).toMatch(/mission-template\.md differs from plugin/);
-    expect(again.stdout).toContain('cq setup --overwrite');
+    expect(again.stdout).toContain('ravenseat setup --overwrite');
     expect(setup('--overwrite').stdout).not.toMatch(/differs from plugin/);
     expect(fs.readFileSync(path.join(root, 'docs/queue/mission-template.md'), 'utf8')).toBe(fs.readFileSync(path.join(PLUGIN, 'docs/mission-template.md'), 'utf8'));
   });

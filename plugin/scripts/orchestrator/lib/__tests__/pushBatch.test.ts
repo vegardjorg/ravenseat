@@ -4,7 +4,7 @@
 // Locks: merged tasks are counted from the queue merge commits on <remote>/<baseBranch>..<baseBranch> (distinct ids,
 // not commits), each verdict (NOTHING, NOT YET, READY, LARGE, BLOCKED) and maxAgeHours, the push guard's "ask" below
 // the threshold and on a red base (never deny, minTasks 0 turns the count question off, tracks are not asked), the hook
-// end to end, push-check's batch lines and JSON, and the workflow scan `cq doctor` uses.
+// end to end, push-check's batch lines and JSON, and the workflow scan `ravenseat doctor` uses.
 //
 // The git parts run against TEMPORARY repos with a bare remote in os.tmpdir() (never the main repo, never git config:
 // the identity is given with -c per command).
@@ -147,7 +147,7 @@ describe('the verdict', () => {
   it('BLOCKED without a green full gate on the tip when it is required (fullGate), never when it is off', () => {
     expect(PB.batchVerdict({ batch: fake(12), setup: SETUP, fullGate: 'missing', now })).toMatchObject({
       verdict: 'BLOCKED',
-      reason: 'no green full gate recorded on m0 (run cq gates --full in the main checkout, on the tip, with no uncommitted changes)',
+      reason: 'no green full gate recorded on m0 (run ravenseat gates --full in the main checkout, on the tip, with no uncommitted changes)',
     });
     expect(PB.batchVerdict({ batch: fake(12), setup: SETUP, fullGate: 'red', now }).reason).toMatch(/^the full gate is red at m0/);
     expect(PB.batchVerdict({ batch: fake(12), setup: SETUP, fullGate: 'green', now }).verdict).toBe('READY');
@@ -303,7 +303,7 @@ describe('the push guard hook', () => {
     expect(h.permissionDecision).toBe('ask');
     expect(h.permissionDecisionReason).toBe(`push-guard: base is red at ${p.g(['rev-parse', 'main']).slice(0, 7)}; push anyway?`);
   }, 60_000);
-  it('asks when the tip has no green full gate from cq; a forged time log row or another sha does not count', () => {
+  it('asks when the tip has no green full gate from ravenseat; a forged time log row or another sha does not count', () => {
     const FULL = 'node -e "process.exit(0)"';
     const p = project({ minTasks: 1 }, { extra: { gates: { full: [FULL] } } });
     p.queueMerge('A-1');
@@ -321,7 +321,7 @@ describe('the push guard hook', () => {
     const h = ask();
     expect(h?.permissionDecision).toBe('ask');
     expect(h.permissionDecisionReason).toBe(
-      `push-guard: no green full gate recorded on ${tip.slice(0, 7)} (run cq gates --full in the main checkout, on the tip, with no uncommitted changes); push anyway?`,
+      `push-guard: no green full gate recorded on ${tip.slice(0, 7)} (run ravenseat gates --full in the main checkout, on the tip, with no uncommitted changes); push anyway?`,
     );
     // The orchestrator's own full gate in the main checkout records the evidence: no question any more.
     expect(p.gates(['--full']).status).toBe(0);
@@ -335,7 +335,7 @@ describe('the push guard hook', () => {
     const decision = (command: string, agent_type?: string) =>
       p.hook(command, agent_type ? { agent_type } : {})?.permissionDecision ?? null;
     expect(decision('node scripts/orchestrator/gates.mjs --quick --evidence', 'track')).toBe('deny');
-    expect(decision('node "C:/x/cq.mjs" gates --full --cwd ../main', 'track')).toBe('deny');
+    expect(decision('node "C:/x/ravenseat.mjs" gates --full --cwd ../main', 'track')).toBe('deny');
     expect(decision('echo {} > scripts/.queue/gate-evidence.json', 'track-d')).toBe('deny');
     expect(decision('node scripts/orchestrator/gates.mjs --quick --log x', 'track')).toBeNull();
     expect(decision('git commit -m "gates: add --cwd note"', 'track')).toBeNull();
@@ -367,7 +367,7 @@ describe('push-check batch status', () => {
     const j = JSON.parse(p.pushCheck('--json').out);
     expect(j.batch).toMatchObject({ mode: 'threshold', task_count: 3, tasks: ['A-1', 'A-2', 'A-3'], verdict: 'LARGE', base_health: 'unknown' });
   }, 60_000);
-  it('BLOCKED without a green full gate from cq on the tip, READY after cq gates --full in the main checkout', () => {
+  it('BLOCKED without a green full gate from ravenseat on the tip, READY after ravenseat gates --full in the main checkout', () => {
     const p = project({ mode: 'threshold', minTasks: 1 }, { extra: { gates: { full: ['node -e "process.exit(0)"'] } } });
     p.queueMerge('A-1');
     let c = p.pushCheck();
@@ -407,7 +407,7 @@ describe('push-check batch status', () => {
   }, 60_000);
 });
 
-describe('the workflow scan (cq doctor ci-cost)', () => {
+describe('the workflow scan (ravenseat doctor ci-cost)', () => {
   it('push trigger, concurrency, path filter', () => {
     const full = [
       'name: ci',

@@ -1,18 +1,18 @@
 # The board (`queue-board.mjs`)
 
-A local web board for the queue and the plan register. It reads the same JSON files as `cq` and writes through
+A local web board for the queue and the plan register. It reads the same JSON files as `ravenseat` and writes through
 the same functions (same lock, same validation, same undo), so the board and the chat never disagree.
 
 ```
-cq board            # prints the link, e.g. http://127.0.0.1:2000/#key=… (port: board.port)
+ravenseat board            # prints the link, e.g. http://127.0.0.1:2000/#key=… (port: board.port)
 ```
 
 How to start it:
-- **In Claude Code:** `/cq:board`, or ask Claude to start the board. It runs `cq board` in the background (never in
+- **In Claude Code:** `/ravenseat:board`, or ask Claude to start the board. It runs `ravenseat board` in the background (never in
   the foreground: it is a server and would block the chat) and gives you the link. It stops with the session.
 - **From your own terminal** (keeps running on its own): in the project folder,
-  `node "<plugin folder>/scripts/orchestrator/cq.mjs" board`. `cq` itself is only on the PATH inside Claude Code;
-  `/cq:board` prints the full path. In a vendored install: `node scripts/orchestrator/cq.mjs board`.
+  `node "<plugin folder>/scripts/orchestrator/ravenseat.mjs" board`. `ravenseat` itself is only on the PATH inside Claude Code;
+  `/ravenseat:board` prints the full path. In a vendored install: `node scripts/orchestrator/ravenseat.mjs board`.
 
 It listens on 127.0.0.1 only. There is no user login, but every request needs the key in the printed link,
 and the key changes on every restart (an old tab then says "The key is old": open the new link). Do not expose
@@ -35,7 +35,7 @@ files, cost and the actions for its status (see [task detail](guide.md#task-deta
 
 **Waiting on you and Decisions.** Everything only you can decide lands here: questions from agents (with their
 recommendation), owner tasks and conditions. Each shows which tasks it blocks. Answer on the board, and the
-orchestrator picks up the answer and unblocks the tasks. The **Decisions** tab is the same list as `/cq:decide`,
+orchestrator picks up the answer and unblocks the tasks. The **Decisions** tab is the same list as `/ravenseat:decide`,
 sorted by what each answer unlocks and grouped as Decide, Check, Approve and Unstick. The board opens on it when
 anything waits. The recommendation is the main button, an answer can be undone for 5 seconds, and j/k, Enter, 1-4 and
 u work from the keyboard.
@@ -67,38 +67,38 @@ The Queue workspace has these tabs:
 - **Project lanes:** the same cards with one row per project; drag a lane to change the project's priority.
 - **Focus:** the order the queue takes work in, as Now, Next, Later and Waiting. Drag areas, projects and features
   between the columns. "Areas …" creates and names the areas. A **Forecast** box above the columns says when the
-  remaining tasks in the focus are done at 50, 85 and 95 % (the same as `cq forecast`; the saved focus counts).
+  remaining tasks in the focus are done at 50, 85 and 95 % (the same as `ravenseat forecast`; the saved focus counts).
 - **Dependencies:** a graph of which tasks wait on which.
 - **Checks:** what the project has for checking its code, and prioritized suggestions for what to add, as cards. A
   suggestion's button adds its investigation and planning to the queue; building needs your approval afterwards. Read from
-  files, nothing is run. Off with the link on the tab, in Settings or with `cq checks off`
-  (see [the Checks tab](queue.md#the-checks-tab-and-cq-checks)).
+  files, nothing is run. Off with the link on the tab, in Settings or with `ravenseat checks off`
+  (see [the Checks tab](queue.md#the-checks-tab-and-ravenseat-checks)).
 - **Cloud:** tasks that can run in a cloud session, and the cloud sessions (off by default, see [Modules](#modules)).
 - **Statistics:** done per day, added versus finished, time per class, cost per day (API-equivalent USD), context at
   the end of tracks, key figures (first **Cost per merged change**: all measured cost in the last 14 days divided by
   the tasks merged in them, with where the cost went and, as a secondary estimate-based figure, the cost per content
   minute; see [Cost estimates and calibration](queue.md#cost-estimates-and-calibration); then usage today), the forecast line, the table **Blockers last 7 days** (per
-  blocker code: count and blocked time, the same numbers as `cq blockers`), the section **Agents last 14 days: models,
+  blocker code: count and blocked time, the same numbers as `ravenseat blockers`), the section **Agents last 14 days: models,
   tools and errors** (cost and share per model, the top tools with their error rate, API errors, active time and
-  killed agents, the same numbers as `cq cost`), the box **Flow last 14 days** (first pass, fix rounds, merge
+  killed agents, the same numbers as `ravenseat cost`), the box **Flow last 14 days** (first pass, fix rounds, merge
   conflicts, base red, pushes and triage, then right first time, post-merge defects and owner interventions per 10
   merged, the autonomy figures (verified tasks per owner intervention, the longest stretch without the owner, failures
   corrected without the owner), inflow by source with added/done for the last 3 weeks, the reviewer hit rate table
   and the hints; see
   [Flow and quality](queue.md#cost-estimates-and-calibration)), and the legend for the badges on the cards.
 - A running card gets the badge **silent** when the track has an agent worktree but no sign of life for
-  `limits.silentMin` minutes (the same rule as `SILENT` in `cq show`; the server measures it at most once a minute).
+  `limits.silentMin` minutes (the same rule as `SILENT` in `ravenseat show`; the server measures it at most once a minute).
   After 60 minutes it also gets a card under Decisions. A track or a prepared round no agent took gets a card at once.
 - A built card gets the badge **Merged, not verified** when no gates, done command or agent review ran, and **Audited**
   when only an agent review ran ([When a project has no checks](queue.md#when-a-project-has-no-checks)).
 
 **Cancel, decline and edit.** For a waiting task (also on hold or in the batch queue) the detail panel has **Edit**
-(value 1-10, content minutes and class, checked like `cq add` / `cq edit`) and **Cancel task**; for a proposal it has
-**Edit** and **Decline**. Cancel and decline ask first, with an optional one-line reason, and run `cq cancel <id>
---remark "cancelled: …"` or `"declined: …"` (the same result as `cq set <id> cancelled --remark …`, but logged).
-Edit runs `cq edit <id> --json '{…}'`. All three go through `/api/task-edit` and give **Undo** for 30 seconds. A
+(value 1-10, content minutes and class, checked like `ravenseat add` / `ravenseat edit`) and **Cancel task**; for a proposal it has
+**Edit** and **Decline**. Cancel and decline ask first, with an optional one-line reason, and run `ravenseat cancel <id>
+--remark "cancelled: …"` or `"declined: …"` (the same result as `ravenseat set <id> cancelled --remark …`, but logged).
+Edit runs `ravenseat edit <id> --json '{…}'`. All three go through `/api/task-edit` and give **Undo** for 30 seconds. A
 running, picked or review task is never cancelled from the board, since an agent or a person may be working on it:
-the panel shows `cq set <id> cancelled --remark "<why>"` instead. **Waiting on you** has **Decline** next to
+the panel shows `ravenseat set <id> cancelled --remark "<why>"` instead. **Waiting on you** has **Decline** next to
 **Approve** for each proposal; it opens the task with the confirm step.
 
 **Decisions** (the tab next to Plans and Queue, with a count) is the owner's main view: everything that waits on
@@ -109,15 +109,15 @@ other answers next to it. A click does not write at once: the card leaves and an
 a new answer, leaving the page or the timer writes it. Keys: `j` / `k` move, `Enter` takes the recommendation, `1`-`4`
 picks an answer, `u` undoes. With nothing waiting it shows the listening status; **Decided today** (closed) is at the
 bottom. The board opens on Decisions when anything waits and on the queue otherwise. The rules are
-`lib/queueDecisions.js`, the same file `cq decide` and `/cq:decide` use, so the writes are the same commands (see
-[CLI parity](cli-parity.md)). "Flag for the orchestrator" on running work is `cq block <id> other` with a fixed note.
+`lib/queueDecisions.js`, the same file `ravenseat decide` and `/ravenseat:decide` use, so the writes are the same commands (see
+[CLI parity](cli-parity.md)). "Flag for the orchestrator" on running work is `ravenseat block <id> other` with a fixed note.
 
 **Waiting on you** (the button at the top) collects what needs the owner: owner questions, proposals to approve,
 QA (done tasks with the label `visual` that wait for a manual check, `qa ok` / `qa deviation`) and what is stuck.
 An owner question with `choices` shows one button per choice (the recommended one filled); a click answers it through
 the same `POST /api/action { type: 'resolve' }` with `{ choice: <n> }`, and the text in the open answer field goes
 along as a note. "Answer in your own words" keeps the free text answer. A line under the title says
-"Orchestrator listening" while `cq wait` runs in the orchestrator session (its heartbeat is under 90 s old), so an
+"Orchestrator listening" while `ravenseat wait` runs in the orchestrator session (its heartbeat is under 90 s old), so an
 answer starts the next round at once; otherwise "Answers are picked up the next time the orchestrator runs".
 
 The **Plans** workspace is the plan register. **Overview** has one card per area, what is being worked on now and
@@ -126,12 +126,12 @@ filters and the details of the selected entry. **Documents and agreements**, **L
 show the documents, the legal points, the owner decisions and what stands between the plan and launch.
 
 The gear holds the settings and the help, in two tabs. **General**: theme, mascot, the queue's limits, **Auto-accept
-proposals** (the switch, the classes K and U, max estimate and max value, saved together through `cq proposals auto`
+proposals** (the switch, the classes K and U, max estimate and max value, saved together through `ravenseat proposals auto`
 via `/api/proposals`, and the log of what was auto-accepted with an Undo button per row, `/api/proposals-undo` =
-`cq proposals undo <id>`; see [queue.md](queue.md#auto-accept-of-proposals)) and the read-only setup. **Helper agents**: one row per [helper agent](orchestration.md#helper-agents) with what it does,
+`ravenseat proposals undo <id>`; see [queue.md](queue.md#auto-accept-of-proposals)) and the read-only setup. **Helper agents**: one row per [helper agent](orchestration.md#helper-agents) with what it does,
 when it runs (classes, labels, paths in plain text), an on/off switch (a checkbox with role switch; Space toggles it)
 and what it has cost: runs, median and total minutes, tokens and USD, its share of the task cost, and H/M/L findings
-per run ("No runs yet" until it has run). General also has the Guidance switch, `cq guidance quiet`: no advice about CI, gates or lockfiles, and the guards stay on. The switch is saved through `cq helpers on|off <agent>` (the board posts
+per run ("No runs yet" until it has run). General also has the Guidance switch, `ravenseat guidance quiet`: no advice about CI, gates or lockfiles, and the guards stay on. The switch is saved through `ravenseat helpers on|off <agent>` (the board posts
 to `/api/helper` behind the key and the Origin check, like every other write; it never writes files itself). The
 arrow keys move between the two tabs, and the board remembers the last one.
 
@@ -140,15 +140,15 @@ green) and its review state: **Approved** (with who approved it and when, in loc
 **Changed since approval** (the file differs from the approved one, so it is turned off). Its switch is disabled,
 with the reason read out to a screen reader, until it is approved for the file as it is now. **Add a custom helper**
 takes the path to an agent file (`.md`) and an optional name, and posts to `/api/helper-add`, which runs
-`cq helpers add`: the file is copied, scanned and registered, and stays off. The board has no way to approve a
-helper: approval is `cq helpers approve`, after Claude has read the file and the owner has said yes (the `add-helper`
+`ravenseat helpers add`: the file is copied, scanned and registered, and stays off. The board has no way to approve a
+helper: approval is `ravenseat helpers approve`, after Claude has read the file and the owner has said yes (the `add-helper`
 skill), and `/api/helper` refuses to switch on a helper that is not approved.
 
 ## Empty queue
 
 When the queue has no task that is not done or cancelled, Flat and Project lanes show a first-run card instead of
-empty columns: 1. add work (say "add to the queue" in Claude Code, or `cq add --file`), 2. start the queue with
-`/cq:queue`, 3. answer questions here under **Waiting on you**, plus a link to the help.
+empty columns: 1. add work (say "add to the queue" in Claude Code, or `ravenseat add --file`), 2. start the queue with
+`/ravenseat:queue`, 3. answer questions here under **Waiting on you**, plus a link to the help.
 
 ## Modules
 
@@ -169,14 +169,14 @@ The gear's **General** tab has a read-only **Modules** section: each module, On 
 is no switch in the browser; change the file and restart the board.
 
 The **Cloud** tab also needs `board.showCloud`, which is off by default: turn it on in the gear (**Board**, "Show the
-Cloud tab") or with `cq board-setting cloud on` (both write `board.showCloud` in queue.json, which wins over
+Cloud tab") or with `ravenseat board-setting cloud on` (both write `board.showCloud` in queue.json, which wins over
 queue.config.json). A saved Cloud view still opens while the tab is hidden, with a note where to turn it on.
 
 ## Update banner
 
-When a newer cq is out, a banner below the top says "cq X is out (you have Y)", links to the CHANGELOG and lists the
-steps with a Copy button each: `claude plugin update cq@ravenseat`, then `/reload-plugins` (or a new session),
-then `cq setup --settings`. A vendored install gets `git pull` in your Ravenseat folder and
+When a newer ravenseat is out, a banner below the top says "ravenseat X is out (you have Y)", links to the CHANGELOG and lists the
+steps with a Copy button each: `claude plugin update ravenseat@ravenseat`, then `/reload-plugins` (or a new session),
+then `ravenseat setup --settings`. A vendored install gets `git pull` in your Ravenseat folder and
 `node scripts/install.mjs <project> --overwrite` instead. Close it with the X: it stays away until a newer version is out
 (remembered in this browser).
 
@@ -186,9 +186,9 @@ nothing about you or the project; any error just means no banner. Turn it off wi
 in `queue.config.json`; it is also off when `DISABLE_UPDATES` or
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
 
-Setup after an update (local, no network, also with the check off): `cq setup --settings` records the plugin version
+Setup after an update (local, no network, also with the check off): `ravenseat setup --settings` records the plugin version
 it set up in `<dataFolder>/setup.json`. When the installed plugin differs from that record, the banner says to run
-`cq setup --settings` again (the status line path holds the plugin version). This notice cannot be closed; it goes
+`ravenseat setup --settings` again (the status line path holds the plugin version). This notice cannot be closed; it goes
 away once setup has run. If setup was run for a newer plugin than the running board, it says to restart the board.
 
 ## Logo
@@ -216,7 +216,7 @@ browser comes from `queue.config.json`:
 "board": { "port": 2000, "title": "Queue board", "mascot": "chatty" }
 ```
 
-`cq board --mascot off` overrides it for one run. With `"off"` from the config or
+`ravenseat board --mascot off` overrides it for one run. With `"off"` from the config or
 the flag, the mascot is off for every viewer: no bubbles, no click, nothing is computed on the server, and the choice
 in the gear is locked.
 

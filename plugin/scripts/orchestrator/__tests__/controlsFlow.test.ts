@@ -161,7 +161,7 @@ describe('the push guard with a missing control', () => {
     const a = p.push();
     expect(a?.decision).toBe('ask');
     expect(a?.reason).toContain('1 commit(s) with no CI config and no gates');
-    expect(a?.reason).toContain('/cq:kickstart');
+    expect(a?.reason).toContain('/ravenseat:kickstart');
   });
   it('names only what is missing', () => {
     expect(project({ gates: { quick: [OK_GATE] } }).push()?.reason).toContain('with no CI config, so');

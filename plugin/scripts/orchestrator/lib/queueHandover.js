@@ -282,7 +282,7 @@ function localStamp(d) {
 
 /** The text appended to an archive file (with a local time stamp for the run). */
 function archiveAddition(text, now = new Date()) {
-  return `\n<!-- archived ${localStamp(now)} from handover-ongoing.md (cq handover archive) -->\n${text}`;
+  return `\n<!-- archived ${localStamp(now)} from handover-ongoing.md (ravenseat handover archive) -->\n${text}`;
 }
 
 module.exports = {

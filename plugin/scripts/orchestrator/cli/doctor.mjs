@@ -1,5 +1,5 @@
 // =============================================================
-// cli/doctor.mjs: `cq doctor`, a read-only health check of the queue setup.
+// cli/doctor.mjs: `ravenseat doctor`, a read-only health check of the queue setup.
 //
 // Each check prints one line OK, WARN or FAIL with what it saw, and a one-line fix hint when it is not OK:
 //   node        the Node version (>= 20, package.json engines), and that `node` is found on PATH the way the hooks
@@ -35,7 +35,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { a, branchFor, CONFIG, CQ, FILE, FOLDER, FOLLOW_FILE, git, GIT_ROOT, HERE, KK, LOCK, MAIN_TREE, require, SF } from './context.mjs';
+import { a, branchFor, CONFIG, CLI, FILE, FOLDER, FOLLOW_FILE, git, GIT_ROOT, HERE, KK, LOCK, MAIN_TREE, require, SF } from './context.mjs';
 import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 import { REPO_CHECKS } from './doctorRepo.mjs';
 
@@ -145,7 +145,7 @@ function checkHooks() {
   const src = BOARD.setupSources(HERE, MAIN_TREE, (p) => fs.existsSync(p));
   const file = process.env.QUEUE_HOOKS ?? src.hooksFile;
   const where = src.mode === 'plugin' ? 'the plugin' : 'the project';
-  const reinstall = src.mode === 'plugin' ? 'reinstall or update the plugin' : `run ${CQ} setup again (vendored: node scripts/install.mjs)`;
+  const reinstall = src.mode === 'plugin' ? 'reinstall or update the plugin' : `run ${CLI} setup again (vendored: node scripts/install.mjs)`;
   let settings;
   try {
     settings = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -179,7 +179,7 @@ function checkConfig() {
     own = KK.parseConfigText(text);
   } catch (e) {
     if (e?.code === 'ENOENT')
-      return [warn('config', `no ${path.basename(file)}: the defaults apply and the hooks stay off`, `run ${CQ} setup`)];
+      return [warn('config', `no ${path.basename(file)}: the defaults apply and the hooks stay off`, `run ${CLI} setup`)];
     // The same reading as config() (lib/queueConfig.js readConfigFile): the queue commands stop on it, and the push
     // guard asks (main session) or denies (queue agents) every push, migration and deploy command until it is fixed.
     const at = KK.parseErrorPosition(e?.message, text);
@@ -249,7 +249,7 @@ function readJson(file) {
 function checkState() {
   const out = [];
   const q = readJson(FILE);
-  if (!q) out.push(warn('queue', `no queue at ${FILE}`, `run ${CQ} init`));
+  if (!q) out.push(warn('queue', `no queue at ${FILE}`, `run ${CLI} init`));
   else if (q.error)
     out.push(
       fail(
@@ -259,7 +259,7 @@ function checkState() {
         SF.recoveryHint(FILE) ?? 'restore it from queue.json.*.tmp or a backup; never edit it while the queue runs',
       ),
     );
-  else if (!Array.isArray(q.value?.tasks)) out.push(fail('queue', 'queue.json has no tasks list', `restore it from a backup, or ${CQ} init in a fresh data folder`));
+  else if (!Array.isArray(q.value?.tasks)) out.push(fail('queue', 'queue.json has no tasks list', `restore it from a backup, or ${CLI} init in a fresh data folder`));
   else out.push(ok('queue', `queue.json parses (${q.value.tasks.length} task(s))`));
   for (const [name, file] of [
     ['plans.json', path.join(FOLDER, 'plans.json')],
@@ -277,7 +277,7 @@ function checkSurface() {
   if (!GB.read(FOLDER)) return [ok('surface', 'no accepted git baseline yet (the next fill, start, resume, receive or merge records it)')];
   const reason = GB.driftDetail(FOLDER, GIT_ROOT)?.reason;
   if (!reason) return [ok('surface', 'the git hooks and config that run code match the accepted baseline')];
-  return [warn('surface', reason, `${CQ} surface shows where; ${CQ} surface accept --by owner if you made the change, otherwise remove it`)];
+  return [warn('surface', reason, `${CLI} surface shows where; ${CLI} surface accept --by owner if you made the change, otherwise remove it`)];
 }
 
 /** A lock left behind by a process that died. */
@@ -295,7 +295,7 @@ function checkLock() {
     warn(
       'lock',
       `lock ${LOCK} held for ${seconds} s by a live process (${owner ? QL.holderText(state.tokens[0]) : 'unknown'})`,
-      `${CQ} unlock shows the holder; if it hangs, stop it, or release the lock with ${CQ} unlock --force --by owner`,
+      `${CLI} unlock shows the holder; if it hangs, stop it, or release the lock with ${CLI} unlock --force --by owner`,
     ),
   ];
 }
@@ -359,10 +359,10 @@ function checkProjectFiles() {
   const out = [];
   const stale = PF.staleFiles(plugin, MAIN_TREE);
   const message = PF.staleMessage(stale);
-  // Only the mission template changes what agents do; the rest is reading matter, and a file that is merely new is added by cq setup.
-  if (message) out.push((stale.mission ? warn : info)('project files', message, stale.changed.length ? PF.STALE_FIX : 'cq setup adds the new files and keeps the rest'));
+  // Only the mission template changes what agents do; the rest is reading matter, and a file that is merely new is added by ravenseat setup.
+  if (message) out.push((stale.mission ? warn : info)('project files', message, stale.changed.length ? PF.STALE_FIX : 'ravenseat setup adds the new files and keeps the rest'));
   for (const s of PF.staleStatusLines(plugin, MAIN_TREE))
-    out.push(warn('project files', `the status line in ${s.file} runs plugin version ${s.version}, not ${PF.pluginVersion(plugin)}`, 'cq setup --settings'));
+    out.push(warn('project files', `the status line in ${s.file} runs plugin version ${s.version}, not ${PF.pluginVersion(plugin)}`, 'ravenseat setup --settings'));
   return out;
 }
 
@@ -390,11 +390,11 @@ function checkBranches() {
   const detachedLines = [
     ...(merged.length
       ? [warn('branches', `${merged.length} detached worktree(s) hold nothing the base lacks: ${merged.map((w) => path.basename(w.path)).join(' ')}`,
-          'cq cleanup-worktree --all --execute removes them once they are 3 hours old (without --execute it only lists them)')]
+          'ravenseat cleanup-worktree --all --execute removes them once they are 3 hours old (without --execute it only lists them)')]
       : []),
     ...(abandoned.length
       ? [warn('branches', `detached worktree(s) still hold the work of finished or cancelled: ${abandoned.join(' ')}`,
-          `cq cleanup-worktree ${abandoned[0]} --abandon --execute (the branch stays; the same for each)`)]
+          `ravenseat cleanup-worktree ${abandoned[0]} --abandon --execute (the branch stays; the same for each)`)]
       : []),
   ];
   if (!left.length && !agents.length && !detachedLines.length) return [ok('branches', 'no branches of finished tasks left')];
@@ -412,8 +412,8 @@ function checkBranches() {
           warn(
             'branches',
             `${held.length} branch(es) of done or cancelled tasks still have a worktree: ${held.join(' ')}`,
-            `cq cleanup-worktree --all --execute removes the merged ones (without --execute it only lists them), then git branch -d ${held.join(' ')}. ` +
-              'A cancelled task with commits: cq cleanup-worktree <branch> --abandon --execute (the branch stays).',
+            `ravenseat cleanup-worktree --all --execute removes the merged ones (without --execute it only lists them), then git branch -d ${held.join(' ')}. ` +
+              'A cancelled task with commits: ravenseat cleanup-worktree <branch> --abandon --execute (the branch stays).',
           ),
         ]
       : []),
@@ -478,13 +478,13 @@ function checkGit() {
   return [
     info(
       'git',
-      `git ${v ?? '(version unknown)'} is older than ${CP.MIN_GIT_TEXT}: the conflict prediction (pulse, ${CQ} conflicts) uses file overlap instead of git merge-tree --write-tree`,
+      `git ${v ?? '(version unknown)'} is older than ${CP.MIN_GIT_TEXT}: the conflict prediction (pulse, ${CLI} conflicts) uses file overlap instead of git merge-tree --write-tree`,
       `update git to ${CP.MIN_GIT_TEXT} or newer`,
     ),
   ];
 }
 
-/** `cq doctor [--json] [--all]` (the usage is at the top of queue.mjs). */
+/** `ravenseat doctor [--json] [--all]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
   const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, ...REPO_CHECKS, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
@@ -507,7 +507,7 @@ export function cmdDoctor() {
     }
     const n = (s) => checks.filter((c) => c.status === s).length;
     console.log(`\n${n('OK')} OK, ${n('WARN')} WARN, ${n('INFO')} INFO, ${n('FAIL')} FAIL${failed ? ' (exit 1)' : ''}. Nothing was changed.`);
-    if (hidden) console.log(`${hidden} advice line(s) not shown: guidance is quiet (${CQ} doctor --all shows them).`);
+    if (hidden) console.log(`${hidden} advice line(s) not shown: guidance is quiet (${CLI} doctor --all shows them).`);
   }
   if (failed) process.exit(1);
 }

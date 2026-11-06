@@ -85,7 +85,7 @@ describe('queue.mjs receive, resume and merge with a done command', () => {
     );
     fs.mkdirSync(path.join(folder, 'docs'));
     fs.copyFileSync(path.join(ROOT, 'docs', 'mission-template.md'), path.join(folder, 'docs', 'mission-template.md'));
-    // The merge runner: every step green, no migration push or gate. The merge step merges for real: cq merge checks
+    // The merge runner: every step green, no migration push or gate. The merge step merges for real: ravenseat merge checks
     // that the track tip is in the base (review 2026-11-02, M6).
     const runner = path.join(folder, 'runner.mjs');
     fs.writeFileSync(

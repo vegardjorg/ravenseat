@@ -1,9 +1,9 @@
 // =============================================================
 // transcriptMetrics.js: the per-model cost, the tool calls and errors, the API errors and the active time from the
-// agents' done rows in the time log, for `cq cost`, `log-time.mjs --cost` and the board's Statistics tab.
+// agents' done rows in the time log, for `ravenseat cost`, `log-time.mjs --cost` and the board's Statistics tab.
 //
 // The numbers come from hook-time.mjs (lib/timeCost.js analyzeTranscript): byModel, tools, api_errors, active_s,
-// idle_gaps and duration_s per done row, and killed: true on the rows cq writes itself for killed agents
+// idle_gaps and duration_s per done row, and killed: true on the rows ravenseat writes itself for killed agents
 // (lib/timeLogRows.js killedDoneRow). The rows are CUMULATIVE per agent (one per stop), so every row gives only the
 // GROWTH since the previous row for the same agent, as in timeCost.usageEvents: the sum over all rows = the last row per
 // agent, and a window (day or from/to) gets only what grew in it.
@@ -163,7 +163,7 @@ function hours(s) {
 }
 
 /**
- * The text lines for the CLI (`cq cost`, `log-time.mjs --cost`): per model, the top tools with their error rate, the
+ * The text lines for the CLI (`ravenseat cost`, `log-time.mjs --cost`): per model, the top tools with their error rate, the
  * API errors, the active time and the killed agents. Empty list when there is nothing to show.
  * @param {ReturnType<typeof metricsSummary>} m
  * @param {{ topTools?: number }} [option]

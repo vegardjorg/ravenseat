@@ -183,7 +183,7 @@ const CLOUD_BUNDLE_MIN = 120;
 
 const CLOUD_GATES =
   'npm install; the tests for the new/changed files; and at the end, before push, ' +
-  `\`${require('../projectRoot.js').cqCommand()} gates --quick --wave cloud --track <id>\` (the quick gates from config().gates.quick). ` +
+  `\`${require('../projectRoot.js').cliCommand()} gates --quick --wave cloud --track <id>\` (the quick gates from config().gates.quick). ` +
   'If a gate is red, fix it and run it again; if it is red because of something outside the task or an environment issue in the cloud, ' +
   'mention it in the report.';
 // npm install can rewrite package-lock.json; then the session must reset it itself.

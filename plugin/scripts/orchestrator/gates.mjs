@@ -13,7 +13,7 @@
 // Output: one line per gate (GREEN/RED + duration, and the first error line for red ones) and a final line.
 // Exit 0 when all are green (or no gates are set up), 1 otherwise.
 //   --log <file>  writes the whole output of each gate to the file (for debugging without filling the context).
-//   --timeout-sec <n>  (--quick/--full) one time budget for the whole list; a gate over it is red (cq merge passes the
+//   --timeout-sec <n>  (--quick/--full) one time budget for the whole list; a gate over it is red (ravenseat merge passes the
 //                 base gate's budget when the quick gates are the base gate, lib/baseHealth.js).
 //
 //   --precheck  the fail-fast precheck a track runs BEFORE the class's full gate: the cheapest checks first, in a fixed
@@ -25,14 +25,14 @@
 //
 // Time log: every run (quick, full or precheck) appends one `gate` row to the time log (config().timeLog; QUEUE_TIME_LOG
 // overrides): the kind, the gates that ran and the red ones, the duration, the exit code and `attempt` (the how-many-th
-// run of this kind for the task), so reruns can be counted. The task is --track <id> (cq merge passes it) or the branch
+// run of this kind for the task), so reruns can be counted. The task is --track <id> (ravenseat merge passes it) or the branch
 // <branchPrefix><id>, otherwise null. The row also has the HEAD commit (`sha`) and `clean` (no uncommitted tracked
 // changes) from the start of the run. The row format lives in lib/timeLogRows.js. Writing it never changes the result
 // or the exit code (fail open). The time log row is MEASUREMENT ONLY: every agent can append to that file.
 //
-// Gate evidence (lib/gateEvidence.js): what cq receive, cq merge (the base gate's skip rule) and the push check rely on.
+// Gate evidence (lib/gateEvidence.js): what ravenseat receive, ravenseat merge (the base gate's skip rule) and the push check rely on.
 // A --quick/--full run records one entry in <dataFolder>/gate-evidence.json (sha, clean, the commands, green or red) only
-// when the orchestrator's side runs it: with --evidence (cq receive and cq merge pass it) or in the MAIN checkout (not a
+// when the orchestrator's side runs it: with --evidence (ravenseat receive and ravenseat merge pass it) or in the MAIN checkout (not a
 // linked worktree; the full gate before a batch push). A track's own run in its worktree is never evidence.
 // Who writes it: THIS process, the orchestrator's side, and only after every gate command has exited. The gate commands
 // load the track's code, so they run as child processes that only report an exit code; they get a scrubbed environment
@@ -54,7 +54,7 @@
 // the comparison during the run only: an owner's new hook must not make every track red. The baseline file itself is
 // watched in both: a change to it during the run is undone and makes the run red.
 //   --evidence  record evidence also outside the main checkout (the push guard denies it to queue agents).
-//   --cwd <folder>  run in that folder (cq receive: the track's worktree).
+//   --cwd <folder>  run in that folder (ravenseat receive: the track's worktree).
 //
 // Use: node scripts/orchestrator/gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>] [--evidence] [--cwd <folder>]
 //      node scripts/orchestrator/gates.mjs --precheck [--json] [--base <ref>] [--track <id>] [--log <file>]
@@ -99,7 +99,7 @@ function inProject(filePath) {
   const rel = path.relative(K.root, filePath);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
-// --cwd <folder>: run there (cq receive runs the quick gate in the track's worktree, which need not be under the root).
+// --cwd <folder>: run there (ravenseat receive runs the quick gate in the track's worktree, which need not be under the root).
 const cwd = option('--cwd') ? path.resolve(option('--cwd')) : inProject(process.cwd()) ? process.cwd() : K.root;
 
 /**
@@ -179,7 +179,7 @@ function childEnvironment() {
 const CHILD_ENV = childEnvironment();
 
 /**
- * Does this run record evidence? Only when the orchestrator's side runs it: --evidence (cq receive, cq merge) or a run
+ * Does this run record evidence? Only when the orchestrator's side runs it: --evidence (ravenseat receive, ravenseat merge) or a run
  * in the main checkout. A track's own run in its worktree never does. Decided BEFORE the gate commands run.
  */
 function evidenceWanted() {
@@ -415,7 +415,7 @@ const start = Date.now();
 let failedCount = 0;
 const failedGates = [];
 
-// --timeout-sec <n>: one time budget for the whole list (cq merge passes config().baseGate.timeoutSec when the quick
+// --timeout-sec <n>: one time budget for the whole list (ravenseat merge passes config().baseGate.timeoutSec when the quick
 // gates are the base gate, so a hanging gate cannot hold the merge forever). Each gate gets what is left; a gate over
 // it is red. As for the done command, on Windows a child the shell started can live on until it ends by itself.
 const budgetSec = Number(option('--timeout-sec'));
@@ -488,9 +488,9 @@ if (surfaceChange) {
   // Nothing happened during the run: the plain message for someone who may simply have installed a hook tool.
   const detail = GB.isDriftOnly(surfaceChange) ? GB.driftDetail(SURFACE_FOLDER, cwd) : null;
   const text = detail
-    ? `RED (${total} s). ${GB.driftMessage({ ...detail, afterRun: true, cq: require('./lib/projectRoot.js').cqCommand() })}`
+    ? `RED (${total} s). ${GB.driftMessage({ ...detail, afterRun: true, ravenseat: require('./lib/projectRoot.js').cliCommand() })}`
     : `RED: ${recorded.reason ?? surfaceChange}. ${GX.INSPECT} (${total} s)`;
-  // In the log too: cq receive and cq merge take the fix brief and the base report from the log's tail.
+  // In the log too: ravenseat receive and ravenseat merge take the fix brief and the base report from the log's tail.
   if (logFile) fs.appendFileSync(logFile, `\n${text}\n`);
   console.log(`${text}${logFile ? `, full log: ${logFile}` : ''}`);
 } else if (recorded.tampered)

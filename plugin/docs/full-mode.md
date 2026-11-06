@@ -1,7 +1,7 @@
 # Full mode
 
 Lite is the loop. Full mode is the same loop plus answers to the problems that show up once a project and its queue
-grow. Switch with `cq mode full` (`cq mode lite` goes back), and run `/cq:setup` to fill in your checks and areas
+grow. Switch with `ravenseat mode full` (`ravenseat mode lite` goes back), and run `/ravenseat:setup` to fill in your checks and areas
 ([first run in full mode](guide.md#first-run-in-full-mode)). The [README](../../README.md) has the short version.
 
 <p align="center"><img src="../../assets/infographics/architecture.webp" alt="One Claude Code conversation drives the orchestrator, which keeps persistent state, starts agents in isolated worktrees and sends their work through checks and integration" width="800"></p>
@@ -22,7 +22,7 @@ come back with the work.
   does the work, runs your checks, commits on its branch and answers with one line. The long report goes to a file,
   not into the orchestrator's context.
 - **Board:** a local web page (kanban, plans, dependencies, cost, and "Waiting on you"). It is optional: everything
-  works from Claude Code, and `/cq:decide` is the main loop for what waits on you.
+  works from Claude Code, and `/ravenseat:decide` is the main loop for what waits on you.
 
 Worktrees do not reinstall your dependencies: `prepare-track.mjs` links the folders in `sharedLinks` (default
 `["node_modules"]`) from the main tree into each worktree, as a junction on Windows and a symlink otherwise, and the
@@ -43,45 +43,45 @@ Task classes decide size and review:
 
 The letters come from the project Ravenseat was built in: K for ordinary code, U for investigation (Norwegian
 *utredning*), D for database. A K task is checked by your own gates. With no gates or no CI config set up, a light
-review agent (`reviewer-light`) looks at it for plain misses, secrets, access and injection, and `cq receive`, `cq merge`
+review agent (`reviewer-light`) looks at it for plain misses, secrets, access and injection, and `ravenseat receive`, `ravenseat merge`
 and the push guard say what is missing. A review is not a check: such a task shows as audited, never verified, and
-`/cq:setup` adds real checks. `cq helpers off reviewer-light` turns the review off, and `cq helpers` shows what it has
+`/ravenseat:setup` adds real checks. `ravenseat helpers off reviewer-light` turns the review off, and `ravenseat helpers` shows what it has
 cost.
 
-On top of that come **helper agents**: optional reviewers you switch on and off (`cq helpers`, or the Helper agents
+On top of that come **helper agents**: optional reviewers you switch on and off (`ravenseat helpers`, or the Helper agents
 tab in the board's settings). By default the challenger runs for U and `bug` tasks and the design reviewer for
 `visual` tasks; the tests, gap and docs reviewers are off. The board shows what each one costs in minutes, tokens and
 dollars, and how many findings it gives. See [orchestration](orchestration.md#helper-agents).
-You can add your own agent file as a **custom helper** (`cq helpers add <file.md>`, or "add this as a helper
+You can add your own agent file as a **custom helper** (`ravenseat helpers add <file.md>`, or "add this as a helper
 agent"): it is copied, scanned, read by Claude and approved by you against its hash before it can be switched on,
 and it turns off again if the file changes. See [custom helper agents](orchestration.md#custom-helper-agents).
 
-`/cq:review <area> [<lens>]` reviews a path or feature (security, logic, ux, architecture) and turns its findings into
+`/ravenseat:review <area> [<lens>]` reviews a path or feature (security, logic, ux, architecture) and turns its findings into
 fix tasks, gate tasks and questions.
 
 ## "Half-done features everywhere"
 
-- **Focus:** you choose the areas to work on now (`cq focus set`, or the Focus tab). The queue finishes the connected
+- **Focus:** you choose the areas to work on now (`ravenseat focus set`, or the Focus tab). The queue finishes the connected
   tasks in that focus, fixes and follow-ups included, before it picks up new feature work. When the focus is done,
   the queue pauses and asks whether to set a new focus or continue the regular queue (`focus.continueWhenEmpty`, off
-  by default). `cq forecast` says when the rest of the focus is done.
+  by default). `ravenseat forecast` says when the rest of the focus is done.
 - **Dependency graph:** each task says what it waits for, whether another task or a decision only you can make, so
   you see what is blocked and what can start right now.
-- **Plan register:** what is not ready yet lives as plan entries (`cq plan show`, `/cq:plans`) and moves into the
+- **Plan register:** what is not ready yet lives as plan entries (`ravenseat plan show`, `/ravenseat:plans`) and moves into the
   queue when it is ready.
 
 ## "Agents cheat on tests"
 
 A track cannot grade its own work:
-- **Gate evidence bound to the commit.** A track cannot report its own checks as green: `cq receive` needs a clean,
+- **Gate evidence bound to the commit.** A track cannot report its own checks as green: `ravenseat receive` needs a clean,
   green gate run on exactly the delivered commit, recorded by the orchestrator, and otherwise runs the gate itself. A
   push needs a green full gate on the commit being pushed.
 - **Locked acceptance criteria.** `done_when` and the acceptance criteria are fixed once a task starts, and a gap
   reviewer answers MET or NOT MET per criterion.
 - **Guards on the guards.** Test, lint and type configs are protected paths (`protectedPaths` in
-  `queue.config.json`), and `cq receive` warns about deleted tests and added skip markers. The merge stops (exit 4)
+  `queue.config.json`), and `ravenseat receive` warns about deleted tests and added skip markers. The merge stops (exit 4)
   when a branch changes hooks, settings, agents, the orchestrator scripts or the queue config without owning them
-  (`cq merge <ID> --allow-guard` overrides).
+  (`ravenseat merge <ID> --allow-guard` overrides).
 - **The queue-agent guard.** Tracks, reviewers and helpers cannot push in any form and may run only an allow-list of
   queue commands (no merge, set, edit, approve or resolve). They treat what they read as data, not instructions, and
   cannot run `curl`, `wget`, `iwr` or a pipe into a shell
@@ -92,7 +92,7 @@ A track cannot grade its own work:
 ## "My PC chokes on parallel builds"
 
 With many parallel tracks the machine, not the token quota, is often the limit: gates slow down and go red from
-memory and timeouts, and reruns eat the gain. So the **load guard** makes `cq fill` open fewer slots than
+memory and timeouts, and reruns eat the gain. So the **load guard** makes `ravenseat fill` open fewer slots than
 `maxConcurrent` while free memory is low (all slots from 40 % free, one at the hard limit of 10 %, linear in between;
 CPU optional) and says why: `LOAD: 2 of 5 slots: free memory 18 % (all slots from 40 %)`. Below the hard limit no new
 tracks start (exit 7). Settings: `loadGuard` in `queue.config.json`
@@ -106,14 +106,14 @@ tracks start (exit 7). Settings: `loadGuard` in `queue.config.json`
 The queue keeps working when something stops. A task that waits on you is parked, and everything else goes on. A red
 check gives a fix round with a fresh agent, and a red base gets its own fix task while other merges wait. A gate that
 fails once and passes on a rerun is recorded as flaky instead of freezing the base.
-- **Fewer surprises at merge.** `cq conflicts` predicts which running tracks will conflict with each other or with
+- **Fewer surprises at merge.** `ravenseat conflicts` predicts which running tracks will conflict with each other or with
   the base (`git merge-tree`, nothing written) and suggests a merge order.
 - **Optional CI watch after a push** (`push.ciWatch`, off by default). Local first is the rule: push only when the
   local checks are green. The watch is a second net that turns a red CI run into one fix task.
 - **Merges that survive interruptions.** One merge runs at a time (`merge.lock`, a stale lock is taken over), a merge
-  refuses while git has a merge or rebase in progress, and after Ctrl-C, a crash or a stop `cq merge <ID> --resume`
+  refuses while git has a merge or rebase in progress, and after Ctrl-C, a crash or a stop `ravenseat merge <ID> --resume`
   finishes the remaining steps. `queue.json.prev` keeps the previous good queue state.
-- **Ask an earlier track.** `cq ask <id> "why X?"` answers from the track's mission, report, commits and transcript
+- **Ask an earlier track.** `ravenseat ask <id> "why X?"` answers from the track's mission, report, commits and transcript
   tail, without resuming a large agent.
 
 ## You only make the decisions
@@ -126,8 +126,8 @@ orchestrator merges. What is left for you is what a machine should not decide al
   assumptions are written down in the report;
 - approving tasks agents propose, visual QA, and work that is stuck.
 
-`/cq:decide` walks the list one decision at a time, the recommendation first, and tells you what each answer
-unlocks. The board's Decisions tab shows the same list with one-click answers and undo. `cq cost` shows the flow
+`/ravenseat:decide` walks the list one decision at a time, the recommendation first, and tells you what each answer
+unlocks. The board's Decisions tab shows the same list with one-click answers and undo. `ravenseat cost` shows the flow
 numbers behind this: right first time, defects after merge, and how many tasks were verified per owner intervention.
 Every change the board makes to the queue has a command behind it ([CLI parity](cli-parity.md) lists the one
 remaining gap, a draft-file export).

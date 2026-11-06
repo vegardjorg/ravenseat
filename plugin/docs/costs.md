@@ -31,8 +31,8 @@ The classes are explained in [full mode](full-mode.md#agents-skip-security-and-e
   compaction it delivers PARTIAL. A SubagentStop gate (`hook-track-end.mjs`) sends a track back once if it stops with
   neither a commit nor a RESULT line.
 - The orchestrator's handover note grew to thousands of lines that every takeover read in full. So it has a short
-  "Now" part and a dated log; `cq handover archive` moves old log entries to a monthly archive, and only "Now" is read
-  after compaction and at takeover. A status line (`cq setup --settings`) shows context, cost, quota and running
+  "Now" part and a dated log; `ravenseat handover archive` moves old log entries to a monthly archive, and only "Now" is read
+  after compaction and at takeover. A status line (`ravenseat setup --settings`) shows context, cost, quota and running
   tracks while you work.
 - Prompt cache expiry while waiting was about 23% of all usage. So there are no sleep or polling loops, and
   subagents use a 1-hour cache.
@@ -50,4 +50,4 @@ The classes are explained in [full mode](full-mode.md#agents-skip-security-and-e
   project, finding files, running checks), and you do the coordination yourself: no shared queue, no file ownership,
   no review step, and merge conflicts when chats overlap.
 
-Run `cq cost` in your own project to see where your tokens go.
+Run `ravenseat cost` in your own project to see where your tokens go.

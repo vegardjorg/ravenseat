@@ -96,7 +96,7 @@ function bulkField(type) {
       'bulk-project',
       'Project',
       option,
-      'A new project is created with cq project <pid> --title "…".',
+      'A new project is created with ravenseat project <pid> --title "…".',
     );
   }
   if (type === 'feature')

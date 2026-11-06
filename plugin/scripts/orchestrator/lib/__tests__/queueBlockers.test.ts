@@ -1,5 +1,5 @@
 // =============================================================
-// queueBlockers.test.ts: blocker reasons with clustering (`cq block`, `cq unblock`, `cq blockers`, merge auto-opening).
+// queueBlockers.test.ts: blocker reasons with clustering (`ravenseat block`, `ravenseat unblock`, `ravenseat blockers`, merge auto-opening).
 //
 // Why: "why was the queue stuck last week" had no answer except reading logs. A task now records
 // `blocks: [{ code, from, to?, note? }]` with codes from ONE fixed table (queueLogic.BLOCK_CODES), so the reasons can be
@@ -176,7 +176,7 @@ describe('queue.mjs block, unblock, blockers and merge (against a temporary repo
         'export default function run(x) {',
         "  const sc = JSON.parse(fs.readFileSync(process.env.MERGE_TEST_SCENARIO, 'utf8'));",
         "  const r = sc[x.step] ?? { code: 0, out: 'ok' };",
-        "  // A green merge step merges for real: cq merge checks that the track tip is in the base (review 2026-11-02, M6).",
+        "  // A green merge step merges for real: ravenseat merge checks that the track tip is in the base (review 2026-11-02, M6).",
         "  if (x.step === 'merge' && r.code === 0) spawnSync('git', ['-C', process.env.QUEUE_GIT, '-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.invalid', 'merge', '--no-ff', '--no-edit', x.args[1]], { encoding: 'utf8' });",
         "  return r;",
         '}',

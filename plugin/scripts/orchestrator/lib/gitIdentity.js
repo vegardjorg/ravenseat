@@ -1,6 +1,6 @@
 // =============================================================
 // gitIdentity.js: is this git identity fit for merge commits? One rule for merge-track.mjs (the guard that stops the
-// merge), cq doctor and cq fill (which say so before hours of work reach that stop).
+// merge), ravenseat doctor and ravenseat fill (which say so before hours of work reach that stop).
 //
 // Why: a test identity left in a repo's config would end up in every merge commit, so the merge refuses it. The
 // advice is the repo-local command, so it never changes the owner's other projects.

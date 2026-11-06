@@ -1,8 +1,8 @@
 // =============================================================
 // conflictPredict.test.ts: predicted merge conflicts (lib/conflictPredict.js, cli/conflicts.mjs, the pulse lines,
-// the merge-conflict context in cq merge and the fix round brief, and the doctor's git line).
+// the merge-conflict context in ravenseat merge and the fix round brief, and the doctor's git line).
 //
-// Why: two tracks that edit the same lines only meet at `cq merge`, after both have spent their time. With
+// Why: two tracks that edit the same lines only meet at `ravenseat merge`, after both have spent their time. With
 // `git merge-tree --write-tree` the orchestrator sees it while they run, and a real conflict starts its fix round
 // knowing which files and which other tasks. Tested against TEMPORARY git repos (never the main repo): two branches
 // editing the same lines (predicted), different files (not predicted), a base conflict, the cache, the budget, and
@@ -62,7 +62,7 @@ const CP = require('../conflictPredict.js') as {
     base: { id: string; files: string[] }[],
     pairs: { a: string; b: string; files: string[] }[],
   ) => { ids: string[]; rule: string };
-  pulseLines: (r: Result, o?: { cq?: string }) => string[];
+  pulseLines: (r: Result, o?: { ravenseat?: string }) => string[];
   conflictFilesFromOutput: (out: string) => string[];
   mergeConflictContext: (p: {
     out?: string;
@@ -73,7 +73,7 @@ const CP = require('../conflictPredict.js') as {
     branch: string;
     prefix?: string;
   }) => MergeContext;
-  mergeStopLines: (mc: MergeContext, o: { id: string; cq?: string }) => string[];
+  mergeStopLines: (mc: MergeContext, o: { id: string; ravenseat?: string }) => string[];
   briefLines: (mc: MergeContext | undefined, o: { base?: string; branch: string }) => string[];
 };
 const L = require('../queueLogic.js') as {
@@ -331,7 +331,7 @@ describe('a real merge conflict: the context for the fix round', () => {
     const stop = CP.mergeStopLines(mc, { id: 'A' });
     expect(stop[0]).toBe('CONFLICTING FILES for A:');
     expect(stop[1]).toBe('  f.txt (also touched by B, E)');
-    expect(stop[2]).toContain('cq resume A --reason fix');
+    expect(stop[2]).toContain('ravenseat resume A --reason fix');
     // The fix round brief carries the same lines (logic/resume.js through queueLogic).
     const o = { id: 'A', title: 'Task A', class: 'K', branch: 'queue/A', merge_conflict: mc };
     const brief = L.resumeBlock({ o, round: 1, reason: 'fix', original: 'mission' });
@@ -358,7 +358,7 @@ describe('a real merge conflict: the context for the fix round', () => {
   });
 });
 
-describe('the CLI: cq conflicts, the pulse, cq merge and cq doctor (temporary repo)', () => {
+describe('the CLI: ravenseat conflicts, the pulse, ravenseat merge and ravenseat doctor (temporary repo)', () => {
   function cli(extraEnv: Record<string, string> = {}) {
     const s = setup();
     const data = path.join(s.folder, 'data');
@@ -393,7 +393,7 @@ describe('the CLI: cq conflicts, the pulse, cq merge and cq doctor (temporary re
     return { ...s, data, env, run, queue };
   }
 
-  it('cq conflicts --json and the pulse print the prediction and keep the cache', () => {
+  it('ravenseat conflicts --json and the pulse print the prediction and keep the cache', () => {
     const c = cli();
     const j = c.run('conflicts', '--json');
     expect(j.code).toBe(0);
@@ -423,10 +423,10 @@ describe('the CLI: cq conflicts, the pulse, cq merge and cq doctor (temporary re
     expect(d2.checks.find((x) => x.name === 'git')).toBeUndefined();
   });
 
-  it('cq merge on a conflict records merge_conflict and prints the files; a later merge clears it', () => {
-    const scenarioFile = path.join(os.tmpdir(), `cq-conflict-scenario-${process.pid}-${Date.now()}.json`);
+  it('ravenseat merge on a conflict records merge_conflict and prints the files; a later merge clears it', () => {
+    const scenarioFile = path.join(os.tmpdir(), `ravenseat-conflict-scenario-${process.pid}-${Date.now()}.json`);
     temporary.push(scenarioFile);
-    const runner = path.join(os.tmpdir(), `cq-conflict-runner-${process.pid}-${Date.now()}.mjs`);
+    const runner = path.join(os.tmpdir(), `ravenseat-conflict-runner-${process.pid}-${Date.now()}.mjs`);
     temporary.push(runner);
     fs.writeFileSync(
       runner,
@@ -436,7 +436,7 @@ describe('the CLI: cq conflicts, the pulse, cq merge and cq doctor (temporary re
         'export default function run(x) {',
         "  const sc = JSON.parse(fs.readFileSync(process.env.MERGE_TEST_SCENARIO, 'utf8'));",
         "  const r = sc[x.step] ?? { code: 0, out: 'ok' };",
-        "  // A green merge step merges for real: cq merge checks that the track tip is in the base (review 2026-11-02, M6). -X theirs: the conflict on f.txt is resolved as by hand.",
+        "  // A green merge step merges for real: ravenseat merge checks that the track tip is in the base (review 2026-11-02, M6). -X theirs: the conflict on f.txt is resolved as by hand.",
         "  if (x.step === 'merge' && r.code === 0) spawnSync('git', ['-C', process.env.QUEUE_GIT, '-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.invalid', 'merge', '--no-ff', '--no-edit', '-X', 'theirs', x.args[1]], { encoding: 'utf8' });",
         "  return r;",
         '}',

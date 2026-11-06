@@ -11,10 +11,10 @@
 //      If a file already exists, it is skipped (with --overwrite it is replaced).
 //   2. Copies the skills (plugin/skills/*, except setup, which is this script's job) to <target>/.claude/skills/ and the
 //      agents (plugin/agents/*) to <target>/.claude/agents/ the same way.
-//   3. The project files, through setup.mjs (the same code /cq:setup runs): queue.config.json, docs/queue/,
+//   3. The project files, through setup.mjs (the same code /ravenseat:setup runs): queue.config.json, docs/queue/,
 //      CLAUDE.queue.md, .gitignore, and plugin/settings.queue.json merged into <target>/.claude/settings.json, here
 //      WITH the hooks (a plugin brings its own hooks/hooks.json; a vendored install needs them in the settings).
-// The Markdown is written for the plugin: `cq <...>` becomes `node scripts/orchestrator/cq.mjs <...>` and
+// The Markdown is written for the plugin: `ravenseat <...>` becomes `node scripts/orchestrator/ravenseat.mjs <...>` and
 // ${CLAUDE_PLUGIN_ROOT}/skills/ becomes .claude/skills/ on the way.
 // --dry shows what would happen, without writing anything.
 // =============================================================
@@ -57,13 +57,13 @@ function makeFolder(dir) {
 }
 
 /**
- * The skills, agents and docs are written for the plugin, where `cq` is on PATH and the skills live under
- * ${CLAUDE_PLUGIN_ROOT}. A vendored install has neither: `cq <...>` becomes `node scripts/orchestrator/cq.mjs <...>`
+ * The skills, agents and docs are written for the plugin, where `ravenseat` is on PATH and the skills live under
+ * ${CLAUDE_PLUGIN_ROOT}. A vendored install has neither: `ravenseat <...>` becomes `node scripts/orchestrator/ravenseat.mjs <...>`
  * (the same entry point) and ${CLAUDE_PLUGIN_ROOT}/skills/ becomes .claude/skills/.
  */
 function vendoredCommands(text) {
   return text
-    .replace(/(?<![\w./-])cq(?= )/g, 'node scripts/orchestrator/cq.mjs')
+    .replace(/(?<![\w./-])ravenseat(?= )/g, 'node scripts/orchestrator/ravenseat.mjs')
     .replace(/\$\{CLAUDE_PLUGIN_ROOT\}\/skills\//g, '.claude/skills/');
 }
 
@@ -118,7 +118,7 @@ copyFolder(
 // .claude-plugin/plugin.json, so the version is written next to the scripts. Same rule as the other files: kept
 // unless --overwrite, so it always matches the scripts that are there.
 {
-  const vf = path.join(TARGET, 'scripts', 'orchestrator', 'cq-version.json');
+  const vf = path.join(TARGET, 'scripts', 'orchestrator', 'ravenseat-version.json');
   const manifest = JSON.parse(fs.readFileSync(path.join(PLUGIN, '.claude-plugin', 'plugin.json'), 'utf8'));
   const exists = fs.existsSync(vf);
   if (exists && !OVERWRITE) log.skippedOver.push(path.relative(TARGET, vf));
@@ -155,5 +155,5 @@ console.log('');
 console.log('Next steps:');
 console.log('  1. Edit queue.config.json (baseBranch, gates, modules).');
 console.log("  2. Add the line @CLAUDE.queue.md to the project's CLAUDE.md.");
-console.log('  3. node scripts/orchestrator/cq.mjs init');
-console.log('  4. node scripts/orchestrator/cq.mjs show');
+console.log('  3. node scripts/orchestrator/ravenseat.mjs init');
+console.log('  4. node scripts/orchestrator/ravenseat.mjs show');

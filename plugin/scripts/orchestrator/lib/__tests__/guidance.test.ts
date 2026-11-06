@@ -47,7 +47,7 @@ describe('guidance', () => {
 
   it('keeps the fact and drops the pointer in the merge and receive lines', () => {
     const none = { status: 'unverified', checks: [] } as const;
-    expect(verificationLine(none)).toContain('/cq:kickstart');
+    expect(verificationLine(none)).toContain('/ravenseat:kickstart');
     expect(verificationLine(none, { quiet: true })).toMatch(/^Not verified/);
     expect(verificationLine(none, { quiet: true })).not.toContain('kickstart');
     expect(verificationLine({ status: 'audited', checks: ['agent review'] }, { quiet: true })).not.toContain('kickstart');

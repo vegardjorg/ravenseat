@@ -1,14 +1,14 @@
 ---
 name: ask
-description: Answer a question about an earlier queue track's work without resuming the track agent. Builds a compact, secret-redacted bundle with `cq ask <id> --bundle` (mission, report, handover, queue notes and owner answers, commits and diffstat, transcript tail) and has the read-only ask agent answer in one paragraph with file:line or commit references. Use when the user types "/ask <id> <question>", "/cq:ask …", or asks why or how a finished or delivered track did something ("why did A-4 change the lock?", "what did T-012 leave out?").
+description: Answer a question about an earlier queue track's work without resuming the track agent. Builds a compact, secret-redacted bundle with `ravenseat ask <id> --bundle` (mission, report, handover, queue notes and owner answers, commits and diffstat, transcript tail) and has the read-only ask agent answer in one paragraph with file:line or commit references. Use when the user types "/ask <id> <question>", "/ravenseat:ask …", or asks why or how a finished or delivered track did something ("why did A-4 change the lock?", "what did T-012 leave out?").
 ---
 
-# /cq:ask: a question about an earlier track
+# /ravenseat:ask: a question about an earlier track
 
 Argument: **$ARGUMENTS**. The form is `<task-id> <question>`. No id or no question: ask for the missing part in one
 line and wait.
 
-**Never resume the track agent** (`cq resume`, SendMessage to it) for a question: that loads its whole context again.
+**Never resume the track agent** (`ravenseat resume`, SendMessage to it) for a question: that loads its whole context again.
 This skill reads and answers; it changes nothing in the queue, the code or the track's files.
 
 ## 1. Build the bundle
@@ -16,7 +16,7 @@ This skill reads and answers; it changes nothing in the queue, the code or the t
 Run, with your session's scratchpad folder:
 
 ```
-cq ask <id> "<question>" --bundle --scratchpad <your scratchpad>
+ravenseat ask <id> "<question>" --bundle --scratchpad <your scratchpad>
 ```
 
 The first line of the output is the bundle's path; the second says its size, how many secret-looking values were
@@ -27,7 +27,7 @@ Otherwise use the agent.
 
 ## 2. One read-only agent
 
-Start ONE agent: `subagent_type: cq:ask` (a vendored install: `ask`). Always Opus (the agent sets it). The prompt,
+Start ONE agent: `subagent_type: ravenseat:ask` (a vendored install: `ask`). Always Opus (the agent sets it). The prompt,
 short:
 - "Bundle: <path>"
 - "Question: <the question>"

@@ -1,7 +1,7 @@
 // =============================================================
 // lib/knownBugGate.js: a known bug that can happen again becomes a gate task. Pure logic.
 //
-// A track writes one line `GATE <failure class>` in track-result.md, `cq receive` reads it, and `cq gate` does the same by hand.
+// A track writes one line `GATE <failure class>` in track-result.md, `ravenseat receive` reads it, and `ravenseat gate` does the same by hand.
 // gates.fromKnownBugs in queue.config.json decides what happens:
 //   propose (default)  a proposed task; it starts only when the owner approves it
 //   auto               an approved task; it runs when the queue gets to it, and it uses tokens without asking
@@ -48,7 +48,7 @@ function parseGate(text) {
   return !title || /^(none|n\/a|no|-)$/i.test(title) ? null : { title, where: place ? place[2] : null };
 }
 
-/** A gate task whose mission names no file and line: approving it means agent work on a guess (cq decide says so). */
+/** A gate task whose mission names no file and line: approving it means agent work on a guess (ravenseat decide says so). */
 function gateWithoutPlace(o) {
   return isGate(o) && !/seen in: .*?[\w./\\-]+:\d+/i.test(String(o.mission ?? ''));
 }
@@ -80,7 +80,7 @@ function nextId(tasks = []) {
 const seenLine = ({ from, where, detail }) =>
   [from && `task ${from}`, where, detail].map((x) => (x ? String(x).replace(/\s+/g, ' ').trim() : '')).filter(Boolean).join(': ');
 
-/** The gate task, ready for `cq add`. added_by makes it proposed unless it is added with --approved. */
+/** The gate task, ready for `ravenseat add`. added_by makes it proposed unless it is added with --approved. */
 function gateTask({ id, title, whole = title, from, where, detail }) {
   const seen = seenLine({ from, where, detail });
   return {

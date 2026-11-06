@@ -73,8 +73,8 @@ describe('the rules (pure)', () => {
   });
 
   it('the CLI hint is for running, picked and review only', () => {
-    expect(TE.cliCancelHint(task('A', 'running'))).toContain('cq set A cancelled --remark');
-    expect(TE.cliCancelHint(task('A', 'review'))).toContain('cq set A cancelled');
+    expect(TE.cliCancelHint(task('A', 'running'))).toContain('ravenseat set A cancelled --remark');
+    expect(TE.cliCancelHint(task('A', 'review'))).toContain('ravenseat set A cancelled');
     expect(TE.cliCancelHint(task('A', 'waiting'))).toBeNull();
   });
 
@@ -124,7 +124,7 @@ let root = '';
 let folder = '';
 let env: NodeJS.ProcessEnv = {};
 // Async on purpose (spawnSync blocks the test worker; see helperCustom.test.ts).
-const cq = (...args: string[]) =>
+const ravenseat = (...args: string[]) =>
   new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve, reject) => {
     const p = spawn(process.execPath, [path.resolve(__dirname, '..', '..', 'queue.mjs'), ...args], { cwd: root, env });
     let stdout = '';
@@ -139,7 +139,7 @@ const readQueue = () => JSON.parse(fs.readFileSync(queueFile(), 'utf8'));
 const find = (id: string) => (readQueue().tasks as Task[]).find((o) => o.id === id)!;
 
 beforeAll(async () => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-task-edit-'));
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-task-edit-'));
   folder = path.join(root, 'q');
   fs.mkdirSync(folder);
   env = {
@@ -151,7 +151,7 @@ beforeAll(async () => {
     QUEUE_GIT: root,
     DISABLE_UPDATES: '1',
   };
-  expect((await cq('init')).status).toBe(0);
+  expect((await ravenseat('init')).status).toBe(0);
   const q = readQueue();
   q.tasks = [
     task('W-1', 'waiting'),
@@ -170,7 +170,7 @@ afterAll(() => {
 
 describe('queue.mjs cancel and edit --answer-json', () => {
   it('cancel sets a waiting task cancelled with the remark, logged; undo puts it back', async () => {
-    const r = await cq('cancel', 'W-3', '--remark', 'cancelled: not needed', '--by', 'test', '--json');
+    const r = await ravenseat('cancel', 'W-3', '--remark', 'cancelled: not needed', '--by', 'test', '--json');
     expect(r.status, r.stderr).toBe(0);
     const answer = JSON.parse(r.stdout.trim().split('\n').pop()!);
     expect(answer).toMatchObject({ ok: true, id: 'W-3' });
@@ -178,21 +178,21 @@ describe('queue.mjs cancel and edit --answer-json', () => {
     expect(String((find('W-3').remarks as string[])[0])).toMatch(/ cancelled: not needed$/);
     const entry = readQueue().changelog.find((p: { nr: number }) => p.nr === answer.log);
     expect(entry).toMatchObject({ action: 'cancel', by: 'test' });
-    const u = await cq('undo', '--nr', String(answer.log), '--json');
+    const u = await ravenseat('undo', '--nr', String(answer.log), '--json');
     expect(u.status, u.stdout + u.stderr).toBe(0);
     expect(find('W-3').status).toBe('waiting');
     expect(find('W-3').remarks ?? null).toBeNull();
   }, 30_000);
 
   it('cancel refuses a running task and leaves it as it is', async () => {
-    const r = await cq('cancel', 'R-1', '--json');
+    const r = await ravenseat('cancel', 'R-1', '--json');
     expect(r.status).toBe(1);
     expect(JSON.parse(r.stdout.trim()).error[0]).toMatch(/only waiting and proposed/);
     expect(find('R-1').status).toBe('running');
   }, 30_000);
 
   it('edit --answer-json gives the changelog no.', async () => {
-    const r = await cq('edit', 'W-3', '--json', '{"value":9}', '--by', 'test', '--answer-json');
+    const r = await ravenseat('edit', 'W-3', '--json', '{"value":9}', '--by', 'test', '--answer-json');
     expect(r.status, r.stderr).toBe(0);
     const answer = JSON.parse(r.stdout.trim());
     expect(answer).toMatchObject({ ok: true, id: 'W-3', changed: ['value'] });

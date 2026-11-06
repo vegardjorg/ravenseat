@@ -13,16 +13,16 @@
 // The field names follow the status line payload of Claude Code 2.x (code.claude.com/docs/en/statusline).
 //
 // Calibration point: when the input has rate_limits, the last reading is saved in <dataFolder>/rate-limits.json (when
-// the percentages change, otherwise at most every 15 min; lib/rateLimits.js). `cq capacity --calibrate auto` uses it.
+// the percentages change, otherwise at most every 15 min; lib/rateLimits.js). `ravenseat capacity --calibrate auto` uses it.
 //
 // Session cost: the session's cost.total_cost_usd (cumulative for the session id) is saved per session in
 // <dataFolder>/session-cost.json when it changes, and a `session` row goes to the time log when it grew by $0.50 or
 // more since the last row, or 10 min after the last row when it grew at all (lib/eventRows.js sessionDecision). The
 // payload has no cumulative token counts (context_window.total_input_tokens is the context now), so only the cost,
-// the durations, the context size and the model are kept. `cq cost` shows it as the orchestration overhead.
+// the durations, the context size and the model are kept. `ravenseat cost` shows it as the orchestration overhead.
 //
 // Set up: a plugin cannot set `statusLine` itself (it is a user or project setting, not a plugin component), so
-// `cq setup --settings` writes it to .claude/settings.json (settings.queue.json has the vendored form). An existing
+// `ravenseat setup --settings` writes it to .claude/settings.json (settings.queue.json has the vendored form). An existing
 // status line of your own is kept.
 //
 // Cheap: the script runs every few seconds in every session. queue.json can be several MB, so the count is cached in a
@@ -119,7 +119,7 @@ function trackCount(folder) {
   return answer;
 }
 
-/** Saves the quota reading for `cq capacity --calibrate auto` (lib/rateLimits.js decides when). */
+/** Saves the quota reading for `ravenseat capacity --calibrate auto` (lib/rateLimits.js decides when). */
 function saveRateLimits(folder, input) {
   const RL = require('./lib/rateLimits.js');
   const next = RL.fromStatusInput(input);

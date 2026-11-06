@@ -307,8 +307,8 @@ describe('queue.mjs: fill, next, start, triage and resolve', () => {
     expect(fs.readFileSync(prompt, 'utf8')).toContain('The mission for OLD.');
     // The triage agent is in the same-turn block with the track.
     const block = f.out.slice(f.out.indexOf('Start these in the SAME turn:'));
-    expect(block).toMatch(/subagent_type=(cq:)?track /);
-    expect(block).toMatch(/subagent_type=(cq:)?triage · message: You are the triage helper for track OLD/);
+    expect(block).toMatch(/subagent_type=(ravenseat:)?track /);
+    expect(block).toMatch(/subagent_type=(ravenseat:)?triage · message: You are the triage helper for track OLD/);
     // The next fill does not ask again while the agent may be running, and still does not start OLD.
     const again = h.fill();
     expect(again.out).not.toMatch(/TRIAGE 1 task/);
@@ -352,7 +352,7 @@ describe('queue.mjs: fill, next, start, triage and resolve', () => {
     const f = h.fill();
     expect(f.out).not.toMatch(/TRIAGE/);
     expect(h.find('OLD').status).toBe('running');
-    // And the switch from the board / cq helpers works the same way.
+    // And the switch from the board / ravenseat helpers works the same way.
     const h2 = harness([task('OLD', { added_at: realAgo(10) })]);
     expect(h2.run('helpers', 'off', 'triage').out).toMatch(/triage: off/);
     h2.fill();

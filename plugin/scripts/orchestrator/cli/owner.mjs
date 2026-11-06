@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 import {
-  a, autoAcceptContext, autoAcceptRules, CQ, cut, die, edit, FOLDER, GIT_ROOT, L, positional, PR, read, require, val, WIDTH,
+  a, autoAcceptContext, autoAcceptRules, CLI, cut, die, edit, FOLDER, GIT_ROOT, L, positional, PR, read, require, val, WIDTH,
 } from './context.mjs';
 
 // The intake triage's owner questions (close, keep, rewrite) are acted on in resolve.
@@ -24,7 +24,7 @@ const T = require('./lib/queueTriage.js');
 /** The values of a repeated flag (`--choice A --choice B`): the argument right after each occurrence. */
 const repeated = (flag) => a.flatMap((x, i) => (x === flag ? [a[i + 1] ?? ''] : []));
 
-/** `cq resolve` (the usage is at the top of queue.mjs). */
+/** `ravenseat resolve` (the usage is at the top of queue.mjs). */
 export function cmdResolve() {
   const sp = positional(1, ['--answer', '--by', '--choice']);
   if (!sp.length) die('resolve <question> [...] [--answer "..."] [--choice <n|text>] [--by "..."]');
@@ -54,15 +54,15 @@ export function cmdResolve() {
     );
   for (const t of r.triage) {
     if (t.error) console.log(`Triage ${t.id}: ${t.error}`);
-    else if (t.action === 'close') console.log(`Triage ${t.id}: cancelled, as the owner chose (cq undo does not apply; cq set ${t.id} waiting puts it back).`);
+    else if (t.action === 'close') console.log(`Triage ${t.id}: cancelled, as the owner chose (ravenseat undo does not apply; ravenseat set ${t.id} waiting puts it back).`);
     else if (t.action === 'keep') console.log(`Triage ${t.id}: kept; it can start (the next fill).`);
     else if (t.action === 'rewrite')
-      console.log(`Triage ${t.id}: parked for a rewrite. Rewrite the mission (cq edit ${t.id} --json '{"mission": "..."}'), then cq continue ${t.id}.`);
+      console.log(`Triage ${t.id}: parked for a rewrite. Rewrite the mission (ravenseat edit ${t.id} --json '{"mission": "..."}'), then ravenseat continue ${t.id}.`);
     else console.log(`Triage ${t.id}: the answer is not one of the choices; act on it by hand (cancel, edit or continue).`);
   }
 }
 
-/** `cq resolutions` (the usage is at the top of queue.mjs). */
+/** `ravenseat resolutions` (the usage is at the top of queue.mjs). */
 export function cmdResolutions() {
   if (a.includes('--mark-logged')) {
     const sp = positional(1);
@@ -96,12 +96,12 @@ export function cmdResolutions() {
     if (onlyUnlogged && rows.length)
       console.log(
         `\nEnter the answers in the decision log (and the plan the question is in), commit with --trailer "Queue: orchestrator", ` +
-          `then: cq resolutions --mark-logged ${rows.map((r) => r.sp).join(' ')}`,
+          `then: ravenseat resolutions --mark-logged ${rows.map((r) => r.sp).join(' ')}`,
       );
   }
 }
 
-/** `cq question` (the usage is at the top of queue.mjs). */
+/** `ravenseat question` (the usage is at the top of queue.mjs). */
 export function cmdQuestion() {
   const file = val('--file');
   const [id] = positional(1, ['--file', '--text', '--type', '--recommendation', '--source', '--choice']);
@@ -143,17 +143,17 @@ export function cmdQuestion() {
         : `open, ${r.tasks.length} ${r.tasks.length === 1 ? 'task waiting' : 'tasks waiting'}`;
       console.log(cut(`${r.sp}  [${r.type}; ${status}]`, WIDTH));
       console.log(
-        `  ${cut(r.text ?? '(missing text: cq question <id> --text "...")', WIDTH - 2)}`,
+        `  ${cut(r.text ?? '(missing text: ravenseat question <id> --text "...")', WIDTH - 2)}`,
       );
       for (const line of L.choiceLines(r)) console.log(`    ${cut(line, WIDTH - 4)}`);
       if (r.recommendation) console.log(`  ${cut(`recommendation: ${r.recommendation}`, WIDTH - 2)}`);
       if (r.choices.length && !r.resolved)
-        console.log(`  answer: cq resolve ${r.sp} --choice <1-${r.choices.length}> [--answer "note"]`);
+        console.log(`  answer: ravenseat resolve ${r.sp} --choice <1-${r.choices.length}> [--answer "note"]`);
     }
   }
 }
 
-/** `cq approve` (the usage is at the top of queue.mjs). */
+/** `ravenseat approve` (the usage is at the top of queue.mjs). */
 export function cmdApprove() {
   const ids = positional(1, ['--by']);
   if (!ids.length) die('approve <id> [...] [--by "<who>"]');
@@ -162,14 +162,14 @@ export function cmdApprove() {
     const answer = L.approve(queue, ids);
     // All or nothing: a write error in one id must not approve half the list.
     if (answer.error.length) die(`Nothing approved:\n  ${answer.error.join('\n  ')}`);
-    // Who approved (the board and /cq:decide pass --by owner), next to the time in `approved`.
+    // Who approved (the board and /ravenseat:decide pass --by owner), next to the time in `approved`.
     if (by) for (const o of queue.tasks) if (answer.approved.includes(o.id)) o.approved_by = by;
     return answer;
   });
   console.log(`Approved (waiting now): ${r.approved.join(', ')}`);
 }
 
-/** `cq proposals` (the usage is at the top of queue.mjs). */
+/** `ravenseat proposals` (the usage is at the top of queue.mjs). */
 export function cmdProposals() {
   // ---- Auto-accept of agent proposals by the owner's rules (lib/queueProposals.js) ----
   const [under, arg] = positional(1, ['--classes', '--max-estimate', '--max-value', '--max']);
@@ -228,13 +228,13 @@ export function cmdProposals() {
       const f = PR.undoAutoAccept(queue, arg);
       if (f) die(`Nothing changed: ${f}.`);
     });
-    console.log(`${arg} is back to proposed (cq approve ${arg} approves it by hand). It is never auto-accepted again.`);
+    console.log(`${arg} is back to proposed (ravenseat approve ${arg} approves it by hand). It is never auto-accepted again.`);
   } else {
     die('proposals [auto [on|off] [--classes K,U] [--max-estimate <min|none>] [--max-value <1-10|none>] | log [--json] | undo <id>]');
   }
 }
 
-/** `cq qa` (the usage is at the top of queue.mjs). */
+/** `ravenseat qa` (the usage is at the top of queue.mjs). */
 export function cmdQa() {
   // ---- Visual QA: only the owner sets qa ok / qa deviation (qa auto --run closes green auto evidence) ----
   const under = a[1];
@@ -269,14 +269,14 @@ export function cmdQa() {
     }
     if (split.auto.length) {
       console.log(
-        `\nClosed automatically when the command is green (${split.auto.length}): ${CQ} qa auto --run`,
+        `\nClosed automatically when the command is green (${split.auto.length}): ${CLI} qa auto --run`,
       );
       for (const o of split.auto)
         console.log(`  ${o.id.padEnd(12)} ${cut(L.evidenceText(o.evidence), WIDTH - 15)}`);
     }
     if (total)
       console.log(
-        '\nApprove: cq qa ok <id...> · deviation: cq qa deviation <id> "<what is wrong, and where>"',
+        '\nApprove: ravenseat qa ok <id...> · deviation: ravenseat qa deviation <id> "<what is wrong, and where>"',
       );
   } else if (under === 'evidence') {
     // Sets the evidence on a task by hand (receive otherwise reads it from the EVIDENCE line in track-result.md).
@@ -327,7 +327,7 @@ export function cmdQa() {
         `${o.id.padEnd(12)} ${green ? 'green, QA ok (auto)' : `red (exit ${s.status ?? '?'}), stays in the QA list`} · ${L.evidenceText(o.evidence)}`,
       );
     }
-    if (candidates.length && !run) console.log(`\nRun and close the green ones: ${CQ} qa auto --run [<id...>]`);
+    if (candidates.length && !run) console.log(`\nRun and close the green ones: ${CLI} qa auto --run [<id...>]`);
   } else if (under === 'ok') {
     const ids = positional(2, ['--by']);
     if (!ids.length) die('qa ok <id> [...] [--by "<who>"]');
@@ -336,7 +336,7 @@ export function cmdQa() {
       const s = L.qaOk(queue, ids);
       // All or nothing, like approve.
       if (s.error.length) die(`Nothing changed:\n  ${s.error.join('\n  ')}`);
-      // Who said QA ok (qa auto --run sets "auto"; the board and /cq:decide pass --by owner).
+      // Who said QA ok (qa auto --run sets "auto"; the board and /ravenseat:decide pass --by owner).
       if (by && by !== 'auto') for (const o of queue.tasks) if (s.ok.includes(o.id)) o.qa_ok_by = by;
       return s;
     });

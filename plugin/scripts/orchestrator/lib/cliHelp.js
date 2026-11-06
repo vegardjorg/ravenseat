@@ -1,18 +1,18 @@
 // =============================================================
-// cliHelp.js: the help text for `cq help` and the "Did you mean" line for a mistyped command.
+// cliHelp.js: the help text for `ravenseat help` and the "Did you mean" line for a mistyped command.
 //
-// Why: `cq help` used to print about 200 lines regex-filtered from the comment at the top of queue.mjs, and an unknown
-// command printed one line with every command. Now `cq help` prints a short hand-written list in groups, `cq help all`
-// the full list, `cq help <command>` the lines for one command, and a typo gets a suggestion.
+// Why: `ravenseat help` used to print about 200 lines regex-filtered from the comment at the top of queue.mjs, and an unknown
+// command printed one line with every command. Now `ravenseat help` prints a short hand-written list in groups, `ravenseat help all`
+// the full list, `ravenseat help <command>` the lines for one command, and a typo gets a suggestion.
 //
-// Everything here is pure (strings in, strings out), so it is unit tested in lib/__tests__/cliHelp.test.ts. cq.mjs and
+// Everything here is pure (strings in, strings out), so it is unit tested in lib/__tests__/cliHelp.test.ts. ravenseat.mjs and
 // queue.mjs do the reading of files and the printing.
 // =============================================================
 'use strict';
 
 /**
- * The short help: a few key commands per group, one line each. `cmd` is the command word cq dispatches on (a queue.mjs
- * command or a cq script/alias); the test checks that every one really exists. Keep it between 10 and 14 commands.
+ * The short help: a few key commands per group, one line each. `cmd` is the command word ravenseat dispatches on (a queue.mjs
+ * command or a ravenseat script/alias); the test checks that every one really exists. Keep it between 10 and 14 commands.
  */
 const GROUPS = [
   {
@@ -35,7 +35,7 @@ const GROUPS = [
   {
     title: 'Owner',
     commands: [
-      { cmd: 'decide', usage: 'decide', text: 'everything waiting on you, most impact first (or /cq:decide)' },
+      { cmd: 'decide', usage: 'decide', text: 'everything waiting on you, most impact first (or /ravenseat:decide)' },
       { cmd: 'resolve', usage: 'resolve <q> --answer "..." | --choice <n>', text: 'answer one; waiting tasks get the answer' },
       { cmd: 'approve', usage: 'approve <id>', text: 'approve a task an agent proposed' },
     ],
@@ -45,7 +45,7 @@ const GROUPS = [
     commands: [
       { cmd: 'takeover', usage: 'takeover', text: 'the status picture for a new orchestrator session' },
       { cmd: 'fill', usage: 'fill --scratchpad <dir>', text: 'start as many tracks as the limits allow' },
-      { cmd: 'receive', usage: 'receive <id>', text: 'take in a finished track (cq reruns the quick gates on its tip: gate_check) and build the review package' },
+      { cmd: 'receive', usage: 'receive <id>', text: 'take in a finished track (ravenseat reruns the quick gates on its tip: gate_check) and build the review package' },
       { cmd: 'merge', usage: 'merge <id>', text: 'merge a reviewed track, run the gates, set it done' },
     ],
   },
@@ -53,7 +53,7 @@ const GROUPS = [
 
 /**
  * The short help in lite mode ("mode": "lite", lib/liteMode.js): only the core loop and the owner questions. The other
- * commands still work when typed; `cq help all` lists them.
+ * commands still work when typed; `ravenseat help all` lists them.
  */
 const LITE_GROUPS = [
   {
@@ -65,7 +65,7 @@ const LITE_GROUPS = [
     ],
   },
   {
-    title: 'Run it (or let /cq:queue do it)',
+    title: 'Run it (or let /ravenseat:queue do it)',
     commands: [
       { cmd: 'fill', usage: 'fill --scratchpad <dir>', text: 'start the next tasks as agents' },
       { cmd: 'receive', usage: 'receive <id>', text: 'take in a finished task' },
@@ -75,7 +75,7 @@ const LITE_GROUPS = [
   {
     title: 'Waiting on you',
     commands: [
-      { cmd: 'decide', usage: 'decide', text: 'everything waiting on you (or /cq:decide)' },
+      { cmd: 'decide', usage: 'decide', text: 'everything waiting on you (or /ravenseat:decide)' },
       { cmd: 'question', usage: 'question', text: 'the questions the agents have for you' },
       { cmd: 'resolve', usage: 'resolve <q> --answer "..."', text: 'answer one; the waiting tasks go on' },
     ],
@@ -91,28 +91,28 @@ const QUEUE_COMMANDS = [
   'release', 'resolutions', 'resolve', 'resume', 'set', 'show', 'start', 'state', 'surface', 'trackFile', 'triage', 'unblock', 'undo', 'unlock', 'wait',
 ];
 
-/** Short names cq.mjs maps to a script file (cq board = queue-board.mjs). */
+/** Short names ravenseat.mjs maps to a script file (ravenseat board = queue-board.mjs). */
 const ALIASES = { queue: 'queue', board: 'queue-board', takeover: 'queue-takeover' };
 
-/** Scripts the other scripts start by themselves (or Claude Code does): listed only under "Internal" in `cq help all`. */
+/** Scripts the other scripts start by themselves (or Claude Code does): listed only under "Internal" in `ravenseat help all`. */
 const INTERNAL_SCRIPTS = ['context-measure', 'cost-guard-statistics', 'make-mission', 'make-queue-common', 'statusline'];
 
 /**
- * The short grouped help, as lines. `cq` is the command to show (cq, or node scripts/orchestrator/cq.mjs).
+ * The short grouped help, as lines. `ravenseat` is the command to show (ravenseat, or node scripts/orchestrator/ravenseat.mjs).
  * `lite`: the core commands only (LITE_GROUPS) and one line on how to switch to full mode.
  */
-function shortHelp(cq = 'cq', { lite = false } = {}) {
+function shortHelp(ravenseat = 'ravenseat', { lite = false } = {}) {
   const groups = lite ? LITE_GROUPS : GROUPS;
   const all = groups.flatMap((g) => g.commands);
-  const width = Math.max(...all.map((c) => `${cq} ${c.usage}`.length)) + 2;
-  const out = [lite ? 'cq: the work queue for Claude Code (lite mode).' : 'cq: the work queue for Claude Code.', ''];
+  const width = Math.max(...all.map((c) => `${ravenseat} ${c.usage}`.length)) + 2;
+  const out = [lite ? 'ravenseat: the work queue for Claude Code (lite mode).' : 'ravenseat: the work queue for Claude Code.', ''];
   for (const g of groups) {
     out.push(`${g.title}:`);
-    for (const c of g.commands) out.push(`  ${`${cq} ${c.usage}`.padEnd(width)}${c.text}`);
+    for (const c of g.commands) out.push(`  ${`${ravenseat} ${c.usage}`.padEnd(width)}${c.text}`);
     out.push('');
   }
-  if (lite) out.push(require('./liteMode.js').switchLine(cq));
-  else out.push(`More: ${cq} help all (every command), ${cq} help <command> (one command in full).`);
+  if (lite) out.push(require('./liteMode.js').switchLine(ravenseat));
+  else out.push(`More: ${ravenseat} help all (every command), ${ravenseat} help <command> (one command in full).`);
   return out;
 }
 
@@ -121,9 +121,9 @@ const QUEUE_LINE = /^\/\/\s+node scripts\/orchestrator\/queue\.mjs\s+(\S+)/;
 /**
  * The usage blocks in the comment at the top of queue.mjs: each `node scripts/orchestrator/queue.mjs <command> ...` line
  * with the indented continuation lines under it (the old filter dropped many of them, so descriptions stopped
- * mid-sentence). Returns [{ command, lines }] with `// ` removed and the long path replaced by `cq`.
+ * mid-sentence). Returns [{ command, lines }] with `// ` removed and the long path replaced by `ravenseat`.
  */
-function usageBlocks(source, cq = 'cq') {
+function usageBlocks(source, ravenseat = 'ravenseat') {
   const blocks = [];
   let current = null;
   for (const l of String(source).split(/\r?\n/)) {
@@ -136,7 +136,7 @@ function usageBlocks(source, cq = 'cq') {
       current = null;
       continue;
     }
-    current.lines.push(l.replace(/^\/\/ ?/, '').replace('node scripts/orchestrator/queue.mjs', cq));
+    current.lines.push(l.replace(/^\/\/ ?/, '').replace('node scripts/orchestrator/queue.mjs', ravenseat));
   }
   return blocks;
 }
@@ -155,28 +155,28 @@ function scriptHeader(source) {
 }
 
 /**
- * `cq help all`: the scripts users run, the queue commands in full, and the internal scripts under their own heading.
- * `scripts` = the script names cq.mjs finds (without hooks and cq itself).
+ * `ravenseat help all`: the scripts users run, the queue commands in full, and the internal scripts under their own heading.
+ * `scripts` = the script names ravenseat.mjs finds (without hooks and ravenseat itself).
  */
-function fullHelp(source, scripts, cq = 'cq') {
+function fullHelp(source, scripts, ravenseat = 'ravenseat') {
   const visible = scripts.filter((s) => !INTERNAL_SCRIPTS.includes(s) && s !== 'queue');
   const internal = scripts.filter((s) => INTERNAL_SCRIPTS.includes(s));
   return [
-    'cq: the work queue for Claude Code. Every command (the short list: cq help).',
+    'ravenseat: the work queue for Claude Code. Every command (the short list: ravenseat help).',
     '',
-    `Scripts: ${cq} <script> [args], one of: ${visible.join(', ')}`,
-    `  (${cq} board = queue-board, ${cq} takeover = queue-takeover; ${cq} help <script> shows its header)`,
+    `Scripts: ${ravenseat} <script> [args], one of: ${visible.join(', ')}`,
+    `  (${ravenseat} board = queue-board, ${ravenseat} takeover = queue-takeover; ${ravenseat} help <script> shows its header)`,
     '',
     'Queue commands (from the top of queue.mjs):',
-    ...usageBlocks(source, cq).flatMap((b) => b.lines),
+    ...usageBlocks(source, ravenseat).flatMap((b) => b.lines),
     '',
     `Internal (started by the other scripts or by Claude Code, not by hand): ${internal.join(', ')}`,
   ];
 }
 
 /** The lines of one queue command, or null when queue.mjs has no usage line for it. */
-function commandHelp(source, command, cq = 'cq') {
-  const lines = usageBlocks(source, cq)
+function commandHelp(source, command, ravenseat = 'ravenseat') {
+  const lines = usageBlocks(source, ravenseat)
     .filter((b) => b.command === command)
     .flatMap((b) => b.lines);
   return lines.length ? lines : null;
@@ -219,16 +219,16 @@ function suggest(word, candidates, max = 3) {
     .map((x) => x.c);
 }
 
-/** `Unknown command "shwo". Did you mean "show"? See cq help.` (without the middle part when nothing is close). */
-function unknownCommandMessage(word, candidates, cq = 'cq') {
+/** `Unknown command "shwo". Did you mean "show"? See ravenseat help.` (without the middle part when nothing is close). */
+function unknownCommandMessage(word, candidates, ravenseat = 'ravenseat') {
   const hits = suggest(word, candidates).map((h) => `"${h}"`);
   // "a", "a" or "b", "a", "b" or "c".
   const list = hits.length > 1 ? `${hits.slice(0, -1).join(', ')} or ${hits[hits.length - 1]}` : hits[0];
   const mean = hits.length ? ` Did you mean ${list}?` : '';
-  return `Unknown command "${word}".${mean} See ${cq} help.`;
+  return `Unknown command "${word}".${mean} See ${ravenseat} help.`;
 }
 
-/** Every word cq accepts as a command: the queue commands, the aliases, the scripts and help. */
+/** Every word ravenseat accepts as a command: the queue commands, the aliases, the scripts and help. */
 function knownCommands(scripts = []) {
   return [...QUEUE_COMMANDS, ...Object.keys(ALIASES), ...scripts, 'help'];
 }

@@ -42,7 +42,7 @@ function statusAtAdd(fresh, tasks = [], { approved = false } = {}) {
 /** How many proposals one track may have waiting for the owner. An agent should not be able to bury the owner in work. */
 const MAX_OPEN_PER_TRACK = 3;
 
-/** Makes a task from a track's `cq add` a proposal from that track: the branch says who, and the file cannot approve itself. */
+/** Makes a task from a track's `ravenseat add` a proposal from that track: the branch says who, and the file cannot approve itself. */
 function asTrackProposal(task, track) {
   if (!task || typeof task !== 'object' || Array.isArray(task)) return;
   for (const k of ['approved', 'approved_by', 'auto_accepted']) delete task[k];
@@ -82,7 +82,7 @@ function approve(queue, ids, now = new Date().toISOString()) {
 // the board can show what the owner must answer. `resolutions`: { "<id>": { time, answer, by, logged? } } is the answer with
 // a timestamp; the id still sits in `resolved` (that list is what the blockers read). Both fields are optional: an
 // old queue.json without them works unchanged. `choices` (optional) is 2-4 short answer options the owner can pick
-// with one click on the board or `cq resolve <id> --choice <n|text>`; a question without choices works as before.
+// with one click on the board or `ravenseat resolve <id> --choice <n|text>`; a question without choices works as before.
 
 /** The types an owner question can have. `condition` is answered with how the condition is fulfilled. */
 const QUESTION_TYPES = ['question', 'condition', 'lawyer', 'owner-task'];
@@ -283,7 +283,7 @@ function markLogged(queue, ids) {
   if (!list.length) error.push('--mark-logged requires at least one question id');
   for (const id of list) {
     const a = queue.resolutions?.[id];
-    if (!a) error.push(`${id} is not resolved with a timestamp (cq resolve ${id} --answer "…")`);
+    if (!a) error.push(`${id} is not resolved with a timestamp (ravenseat resolve ${id} --answer "…")`);
     else if (a.answer == null) error.push(`${id} has no answer to enter`);
   }
   if (error.length) return { marked: [], error };
@@ -377,7 +377,7 @@ function waitingOnError(o, queue, { earlier = [] } = {}) {
     else if (!questionRegistered(queue, sp))
       error.push(
         `waiting_on ${sp} is not registered with text and type: add it under "question" in the add file, or first ` +
-          `cq question ${sp} --text "…" --type <${QUESTION_TYPES.join('|')}>`,
+          `ravenseat question ${sp} --text "…" --type <${QUESTION_TYPES.join('|')}>`,
       );
   }
   return error;
@@ -415,8 +415,8 @@ function resolveWaitsLines(list, { max = 10 } = {}) {
   if (!list?.length) return [];
   const what = {
     freeText: 'free text, not a question id: register a question and switch to the id',
-    unregistered: 'unregistered: cq question <id> --text "…" --type <type>',
-    'resolved-blocks': 'answered, but not in resolved: cq resolve <id> again',
+    unregistered: 'unregistered: ravenseat question <id> --text "…" --type <type>',
+    'resolved-blocks': 'answered, but not in resolved: ravenseat resolve <id> again',
   };
   const taskIds = new Set(list.map((x) => x.id));
   return [
@@ -429,7 +429,7 @@ function resolveWaitsLines(list, { max = 10 } = {}) {
           `  ${x.id} (${x.status}) waiting on "${cutText(x.sp, 70)}": ${what[x.reason] ?? x.reason}`,
       ),
     ...(list.length > max
-      ? [`  +${list.length - max} more (cq state, the field resolveWaits)`]
+      ? [`  +${list.length - max} more (ravenseat state, the field resolveWaits)`]
       : []),
   ];
 }
@@ -481,7 +481,7 @@ function answerBlock(o, queue) {
     return `- ${id}${what} ${word}: "${a.answer}" (${a.by ?? '?'}, ${utcText(a.time)}).`;
   });
   return [
-    '**Owner answer to what the task waited on** (binding; from `cq resolve`, entered in the decision log by the orchestrator):',
+    '**Owner answer to what the task waited on** (binding; from `ravenseat resolve`, entered in the decision log by the orchestrator):',
     ...lines,
   ].join('\n');
 }

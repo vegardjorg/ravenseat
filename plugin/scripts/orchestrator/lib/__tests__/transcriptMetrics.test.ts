@@ -3,7 +3,7 @@
 //   - per-model split and pricing (lib/timeCost.js PRICE_TABLE, priceFor, the `prices` override, byModel, costOf)
 //   - tool calls and errors per tool name, API error entries (rate limit, overloaded, other)
 //   - active time (gaps longer than the idle threshold left out)
-//   - killed agents: a done row with killed: true from the transcript (lib/timeLogRows.js and `cq cost measure`),
+//   - killed agents: a done row with killed: true from the transcript (lib/timeLogRows.js and `ravenseat cost measure`),
 //     never counted twice when a real done row arrives later
 //   - older rows without the new fields still work (lib/transcriptMetrics.js metricsSummary)
 // =============================================================
@@ -332,7 +332,7 @@ describe('metricsSummary: growth per agent and older rows', () => {
   });
 });
 
-// ---- Process: `cq cost measure` against a temporary queue writes the killed agent's row once ----
+// ---- Process: `ravenseat cost measure` against a temporary queue writes the killed agent's row once ----
 describe('queue.mjs cost measure: a killed agent is measured from its transcript', () => {
   const ORCHESTRATOR = path.join(__dirname, '..', '..');
   const temporary: string[] = [];

@@ -35,7 +35,7 @@
 // migration number wins, and the other's change silently disappears.
 //
 // AFTER a successful merge the track worktree is cleaned up (cleanup-worktree.mjs: the links are removed as links, then
-// `git worktree remove` without --force). The branch is kept here (`cq merge` deletes a merged queue branch at the very end). The cleanup is best effort: it never turns a successful merge
+// `git worktree remove` without --force). The branch is kept here (`ravenseat merge` deletes a merged queue branch at the very end). The cleanup is best effort: it never turns a successful merge
 // into exit ≠ 0, and locked, dirty or unmerged worktrees are left alone.
 //
 // USE:
@@ -60,7 +60,7 @@ import { cleanupWorktree } from './cleanup-worktree.mjs';
 
 const require = createRequire(import.meta.url);
 const { config } = require('./lib/queueConfig.js');
-const CQ = require('./lib/projectRoot.js').cqCommand();
+const CLI = require('./lib/projectRoot.js').cliCommand();
 const K = config();
 
 const args = process.argv.slice(2);
@@ -72,7 +72,7 @@ const KEEP_WORKTREE = args.includes('--keep-worktree');
 const ALLOW_GUARD = args.includes('--allow-guard');
 if (!branch) {
   console.error(
-    `Use: ${CQ} merge-track <branch> [--wave-base <sha>] [--without-commit] [--keep-worktree] [--allow-guard]`,
+    `Use: ${CLI} merge-track <branch> [--wave-base <sha>] [--without-commit] [--keep-worktree] [--allow-guard]`,
   );
   process.exit(2);
 }
@@ -158,7 +158,7 @@ function writeWithNewAttempt(file, text) {
   const { dataFolder, timeLog } = require('./lib/queueConfig.js');
   const id = G.taskIdFromBranch(branch, K.branchPrefix);
   let task = null;
-  // The agent files of the custom helpers (cq helpers add) are protected like .claude/, also when protectedPaths was
+  // The agent files of the custom helpers (ravenseat helpers add) are protected like .claude/, also when protectedPaths was
   // changed: a track cannot rewrite an approved helper without owning its file.
   let helperPaths = [];
   try {
@@ -208,7 +208,7 @@ function writeWithNewAttempt(file, text) {
           'Hooks, settings, agents, orchestrator scripts, the queue config and package.json can run code with the owner\'s rights.\n' +
           'The test, lint and type configs (vitest.config.*, tsconfig*.json, pytest.ini …) can switch checks off.\n' +
           `Read the diff (git diff HEAD...${branch} -- <path>). If the change is intended: add the path to the task's\n` +
-          'owned_files/shared_patch (locked after start: the owner, cq edit <id> --json ... --by owner), or merge\n' +
+          'owned_files/shared_patch (locked after start: the owner, ravenseat edit <id> --json ... --by owner), or merge\n' +
           'with --allow-guard (logged as "guard-overridden"). Nothing was merged.',
       );
       process.exit(4);

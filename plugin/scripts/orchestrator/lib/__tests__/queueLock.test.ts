@@ -132,11 +132,11 @@ function project() {
     const old = new Date(Date.now() - seconds * 1000);
     fs.utimesSync(lock, old, old);
   };
-  const cq = (args: string[], o: { cwd?: string } = {}) => {
+  const ravenseat = (args: string[], o: { cwd?: string } = {}) => {
     const r = spawnSync(process.execPath, [QUEUE, ...args], { env, encoding: 'utf8', cwd: o.cwd ?? root });
     return { code: r.status, out: r.stdout ?? '', err: r.stderr ?? '' };
   };
-  return { root, data, lock, queueFile, start, env, spawnChild, signal, go, replaceToken, age, cq };
+  return { root, data, lock, queueFile, start, env, spawnChild, signal, go, replaceToken, age, ravenseat };
 }
 
 describe('assessLock (the takeover rule)', () => {
@@ -192,10 +192,10 @@ describe('the small rules', () => {
   });
   it('the message for a live holder names pid, age and how to release; the others say try again', () => {
     const state = { ageMs: 300_000, tokens: [{ owner: { pid: 42, hostname: 'h', started: 'then' } }], other: [] };
-    const live = QL.heldMessage({ folder: '/d', cq: 'cq', state, verdict: { holderAlive: true }, waitedMs: 15_000 });
+    const live = QL.heldMessage({ folder: '/d', ravenseat: 'ravenseat', state, verdict: { holderAlive: true }, waitedMs: 15_000 });
     expect(live).toMatch(/pid 42 on h/);
     expect(live).toMatch(/300 s/);
-    expect(live).toContain('cq unlock --force --by owner');
+    expect(live).toContain('ravenseat unlock --force --by owner');
     expect(QL.heldMessage({ folder: '/d', state: null })).toMatch(/Could not get the lock on \/d \(tried for 15 s\)\. Try again\./);
   });
 });
@@ -529,10 +529,10 @@ describe('two or more waiters on a dead lock', () => {
   });
 });
 
-describe('cq unlock', () => {
+describe('ravenseat unlock', () => {
   it('without a lock: says so', () => {
     const p = project();
-    const r = p.cq(['unlock']);
+    const r = p.ravenseat(['unlock']);
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/No lock held/);
   });
@@ -542,7 +542,7 @@ describe('cq unlock', () => {
     await p.signal('ready');
     p.age(90);
     const before = fs.readdirSync(p.lock);
-    const r = p.cq(['unlock']);
+    const r = p.ravenseat(['unlock']);
     expect(r.code).toBe(0);
     expect(r.out).toContain(`pid ${holder.child.pid} on ${HOST}`);
     expect(r.out).toMatch(/alive/);
@@ -558,12 +558,12 @@ describe('cq unlock', () => {
     await p.signal('ready');
     const before = fs.readdirSync(p.lock);
     for (const args of [['--force'], ['--force', '--by', 'agent'], ['--force', '--by']]) {
-      const r = p.cq(['unlock', ...args]);
+      const r = p.ravenseat(['unlock', ...args]);
       expect(r.code, args.join(' ')).toBe(1);
       expect(r.err).toMatch(/--by owner/);
       expect(fs.readdirSync(p.lock)).toEqual(before);
     }
-    expect(p.cq(['unlock', '--by', 'owner']).code).toBe(0);
+    expect(p.ravenseat(['unlock', '--by', 'owner']).code).toBe(0);
     expect(fs.readdirSync(p.lock)).toEqual(before);
     p.go();
     await holder.done;
@@ -572,7 +572,7 @@ describe('cq unlock', () => {
     const p = project();
     const holder = p.spawnChild('publish');
     await p.signal('ready');
-    const r = p.cq(['unlock', '--force', '--by', 'owner']);
+    const r = p.ravenseat(['unlock', '--force', '--by', 'owner']);
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/Released/);
     expect(r.out).toMatch(/still running/);
@@ -587,8 +587,8 @@ describe('cq unlock', () => {
   it('releases an old lock folder without a token', () => {
     const p = project();
     fs.mkdirSync(p.lock);
-    expect(p.cq(['unlock']).out).toMatch(/no readable owner/);
-    expect(p.cq(['unlock', '--force', '--by', 'owner']).code).toBe(0);
+    expect(p.ravenseat(['unlock']).out).toMatch(/no readable owner/);
+    expect(p.ravenseat(['unlock', '--force', '--by', 'owner']).code).toBe(0);
     expect(fs.existsSync(p.lock)).toBe(false);
   });
   it('is refused from inside a track worktree, whatever --by says', () => {
@@ -599,13 +599,13 @@ describe('cq unlock', () => {
     const g = (...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: tree, stdio: 'pipe' });
     g('init', '-q', '-b', 'queue/A-1');
     g('commit', '-q', '--allow-empty', '-m', 'start');
-    const r = p.cq(['unlock', '--force', '--by', 'owner'], { cwd: tree });
+    const r = p.ravenseat(['unlock', '--force', '--by', 'owner'], { cwd: tree });
     expect(r.code).toBe(1);
     expect(r.err).toMatch(/track worktree/);
     expect(fs.existsSync(p.lock)).toBe(true);
   });
   it('is denied to queue agents by the push guard, also just looking', () => {
-    for (const command of ['cq unlock', 'cq unlock --force --by owner', 'node scripts/orchestrator/queue.mjs unlock --force --by owner']) {
+    for (const command of ['ravenseat unlock', 'ravenseat unlock --force --by owner', 'node scripts/orchestrator/queue.mjs unlock --force --by owner']) {
       expect(PG.assess(command, { agentType: 'track', branch: 'queue/A-1', environment: null })?.decision, command).toBe('deny');
     }
   });

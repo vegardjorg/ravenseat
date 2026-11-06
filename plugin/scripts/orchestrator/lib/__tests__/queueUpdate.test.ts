@@ -72,7 +72,7 @@ describe('latestVersion (fetch and cache)', () => {
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
   it('fetches with a plain GET (no headers, only the timeout signal) and writes the cache', async () => {
-    const fetch = answering(JSON.stringify({ name: 'cq', version: '0.4.0' }));
+    const fetch = answering(JSON.stringify({ name: 'ravenseat', version: '0.4.0' }));
     const r = await U.latestVersion({ ...base(), fetch });
     expect(r).toEqual({ latest: '0.4.0', checkedAt: 1_000 * HOUR, cached: false });
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -133,9 +133,9 @@ describe('notice and visible', () => {
     expect(n.newVersion.latest).toBe('0.4.0');
     expect(n.newVersion.changelog).toBe('https://github.com/vegardjorg/ravenseat/blob/main/CHANGELOG.md');
     expect(n.newVersion.steps.map((s: { command: string }) => s.command)).toEqual([
-      'claude plugin update cq@ravenseat',
+      'claude plugin update ravenseat@ravenseat',
       '/reload-plugins',
-      'cq setup --settings',
+      'ravenseat setup --settings',
     ]);
     expect(n.setup).toBeNull();
   });

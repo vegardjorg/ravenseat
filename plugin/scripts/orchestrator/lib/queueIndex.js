@@ -152,7 +152,7 @@ function sectionFor(entriesHere, projects, modules = P.modules()) {
 function planEntriesLine(paths, entriesHere) {
   if (!entriesHere.length) return null;
   if (entriesHere.length > MAX_ENTRIES_ON_LINE)
-    return `${PLAN_ENTRIES_PREFIX}${entriesHere.length} entries, see \`${require('./projectRoot.js').cqCommand()} plan show --search ${paths[0]}\`.`;
+    return `${PLAN_ENTRIES_PREFIX}${entriesHere.length} entries, see \`${require('./projectRoot.js').cliCommand()} plan show --search ${paths[0]}\`.`;
   return `${PLAN_ENTRIES_PREFIX}${entriesHere.map((p) => `\`${p.id}\``).join(', ')}.`;
 }
 

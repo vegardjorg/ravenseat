@@ -1,5 +1,5 @@
 // =============================================================
-// queueGateEvidence.test.ts: `cq receive` binds the gate result to the delivered tip (lib/gateEvidence.js).
+// queueGateEvidence.test.ts: `ravenseat receive` binds the gate result to the delivered tip (lib/gateEvidence.js).
 //
 // Locks: (1) a track that claims green (RESULT gates=OK) and has a forged green gate row in the time log for its tip,
 // and a forged evidence entry for ANOTHER sha, is not believed: receive runs the quick gate itself in the track's
@@ -126,7 +126,7 @@ function project(config: Record<string, unknown>) {
   return { folder, repo, worktree, scratch, g, run, find, report, evidence, tip, timeLog, env };
 }
 
-describe('cq receive with gate evidence', () => {
+describe('ravenseat receive with gate evidence', () => {
   it('a self-reported green and forged rows (time log, another sha) are not believed: receive runs the gate', () => {
     const p = project({ gates: { quick: [GATE] } });
     const tipA = p.tip();
@@ -176,7 +176,7 @@ describe('cq receive with gate evidence', () => {
     const r2 = p.run('receive', 'A');
     expect((p.find().blocks as { code: string; to?: string }[]).every((b) => !!b.to)).toBe(true);
     expect(r2.code).toBe(0);
-    expect(r2.out).toMatch(/Gates green at [0-9a-f]{12} \(quick, cq's own run/);
+    expect(r2.out).toMatch(/Gates green at [0-9a-f]{12} \(quick, ravenseat's own run/);
     expect(r2.out).not.toContain('GATES (receive)');
     expect(p.find().gate_check).toMatchObject({ ok: true, ran: false });
 
@@ -333,7 +333,7 @@ describe('the gate commands cannot write their own evidence', () => {
 
 describe('what receive says about the run, and the done command', () => {
   const REPORT = `${RES}\n\n# Report A\n`;
-  /** Sets fields on the task directly: the done lock refuses cq edit once a task has started. */
+  /** Sets fields on the task directly: the done lock refuses ravenseat edit once a task has started. */
   const setTask = (p: ReturnType<typeof project>, fields: Record<string, unknown>) => {
     const file = path.join(p.folder, 'queue.json');
     const q = JSON.parse(fs.readFileSync(file, 'utf8')) as Queue;
@@ -349,7 +349,7 @@ describe('what receive says about the run, and the done command', () => {
     expect(r1.code).toBe(0);
     expect(r1.out).toContain("recorded as evidence for that commit; ran locally in the track's worktree, 1 untracked.");
     const r2 = p.run('receive', 'A');
-    expect(r2.out).toMatch(/Gates green at [0-9a-f]{12} \(quick, cq's own run at [^,]+, ran locally in the track's worktree, 1 untracked\); not run again\./);
+    expect(r2.out).toMatch(/Gates green at [0-9a-f]{12} \(quick, ravenseat's own run at [^,]+, ran locally in the track's worktree, 1 untracked\); not run again\./);
     expect(p.evidence().at(-1)).toMatchObject({ runner: 'local-worktree', untracked: 1, ignored_present: 0, shared_links: [] });
   });
 
@@ -363,7 +363,7 @@ describe('what receive says about the run, and the done command', () => {
     fs.writeFileSync(file, JSON.stringify(store));
     const r = p.run('receive', 'A');
     expect(r.code).toBe(0);
-    expect(r.out).toMatch(/\(quick, cq's own run at [^)]+\); not run again\./);
+    expect(r.out).toMatch(/\(quick, ravenseat's own run at [^)]+\); not run again\./);
     expect(r.out).not.toContain('ran locally');
   });
 
@@ -410,7 +410,7 @@ describe('what receive says about the run, and the done command', () => {
   });
 });
 
-describe('cq merge respects what cq receive found', () => {
+describe('ravenseat merge respects what ravenseat receive found', () => {
   // Green on the base branch and on a fixed track; red only on a track that has A.ts without OK.ts, so the base gate says nothing here.
   const TRACK_RED = `node -e "const f=require('fs').existsSync;process.exit(f('lib/A.ts')&&!f('lib/OK.ts')?1:0)"`;
   const merged = (p: ReturnType<typeof project>) => p.g(['branch', '--contains', 'queue/A', '--list', 'develop']) !== '';
@@ -474,7 +474,7 @@ describe('cq merge respects what cq receive found', () => {
 });
 
 describe('the report can be refused by the client', () => {
-  // The track's answer as cq finds it: its transcript and its row in the time log.
+  // The track's answer as ravenseat finds it: its transcript and its row in the time log.
   const reply = (p: ReturnType<typeof project>, text: string) => {
     const session = path.join(p.folder, 'transcripts', 'session1', 'subagents');
     fs.mkdirSync(session, { recursive: true });

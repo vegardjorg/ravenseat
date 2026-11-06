@@ -155,21 +155,21 @@ function queueActive(o = {}) {
 }
 
 /**
- * The command to write in hints, missions and handover notes: `cq` in a plugin install (bin/cq is on PATH), and
- * `node scripts/orchestrator/cq.mjs` in a vendored install, where nothing is on PATH. With `fromWorktree`, the vendored
+ * The command to write in hints, missions and handover notes: `ravenseat` in a plugin install (bin/ravenseat is on PATH), and
+ * `node scripts/orchestrator/ravenseat.mjs` in a vendored install, where nothing is on PATH. With `fromWorktree`, the vendored
  * form points at the main tree's copy, for commands a track runs inside its worktree.
  * @param {{ fromWorktree?: boolean, mode?: string }} [o]
  */
-function cqCommand(o = {}) {
+function cliCommand(o = {}) {
   if ((o.mode ?? roots().mode) !== 'vendored') return CLI_NAME;
-  return o.fromWorktree ? 'node <mainTree>/scripts/orchestrator/cq.mjs' : 'node scripts/orchestrator/cq.mjs';
+  return o.fromWorktree ? 'node <mainTree>/scripts/orchestrator/ravenseat.mjs' : 'node scripts/orchestrator/ravenseat.mjs';
 }
 
-/** The plugin's name in .claude-plugin/plugin.json: the prefix of its skills (/cq:queue) and agents (cq:track). */
+/** The plugin's name in .claude-plugin/plugin.json: the prefix of its skills (/ravenseat:queue) and agents (ravenseat:track). */
 const { CLI_NAME, PLUGIN_NAME, bareAgentType } = require('./productNames.js');
 
 /**
- * The subagent_type to start an agent with. A plugin's agents are named `<plugin>:<agent>` (cq:track); a vendored
+ * The subagent_type to start an agent with. A plugin's agents are named `<plugin>:<agent>` (ravenseat:track); a vendored
  * install has them in .claude/agents/ under the bare name. Names that already have a prefix are left alone.
  * @param {string} name  bare agent name, e.g. "track" or "reviewer"
  * @param {{ mode?: string }} [o]
@@ -184,7 +184,7 @@ module.exports = {
   roots,
   noProjectFolder,
   queueActive,
-  cqCommand,
+  cliCommand,
   agentRef,
   bareAgentType,
   PLUGIN_NAME,

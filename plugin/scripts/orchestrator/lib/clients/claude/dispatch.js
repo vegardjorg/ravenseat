@@ -10,7 +10,7 @@
 // and the message). Verified 2026-11-03 (plans: client adapters, "Verifiserte fakta" 4 and 5). When Claude Code
 // changes a name or the model list, fix it here and only here.
 //
-// Pure apart from reading the config (cfg) and the install mode (lib/projectRoot.js agentRef: cq:track in a plugin
+// Pure apart from reading the config (cfg) and the install mode (lib/projectRoot.js agentRef: ravenseat:track in a plugin
 // install, track in a vendored one).
 // Used by clients/claude/index.js (the adapter) and lib/logic/agents.js (re-exports for the queueLogic.js facade).
 // Tested in lib/__tests__/queueOrchestrator.test.ts, queueModels.test.ts (through queueLogic.js),

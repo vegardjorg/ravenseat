@@ -2,7 +2,7 @@
 // lib/checksScan.js: what the project already has for checking its code, read from its files.
 //
 // Trust boundary: this only READS. It never runs a check, a script or a workflow, so it is safe in a repo someone else
-// wrote, and a finding means "the file says so", never "it works". The Checks tab and `cq checks` say that in words.
+// wrote, and a finding means "the file says so", never "it works". The Checks tab and `ravenseat checks` say that in words.
 //
 //   classify(command)         the kinds of check a command line is (a line can be several: vitest --coverage)
 //   parseWorkflow(text)       triggers, jobs and commands of a GitHub Actions file (by lines, no YAML dependency)

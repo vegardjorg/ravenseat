@@ -2,9 +2,9 @@
 // decide.js: the Decisions view, everything that waits on the owner as one list, one card per decision.
 //
 // The data is the same inbox "Waiting on you" shows (state.inbox, lib/queueBoard.js); the rules are
-// lib/queueDecisions.js (window.QueueDecisions, the same file `cq decide` and the tests use): the items, the impact
+// lib/queueDecisions.js (window.QueueDecisions, the same file `ravenseat decide` and the tests use): the items, the impact
 // sort, the groups Decide / Check / Approve / Unstick, the impact line and the write each option does. So the board and
-// /cq:decide make the same queue.mjs calls with the same --by. The side panel "Waiting on you" (inbox.js) stays: it has
+// /ravenseat:decide make the same queue.mjs calls with the same --by. The side panel "Waiting on you" (inbox.js) stays: it has
 // the bulk tools (QA ok and approve for many) and the Sort cleanup; the view links to it.
 //
 // A one-click answer is not written at once: the card leaves the list and an "Undo" toast stands for
@@ -48,9 +48,9 @@ function drawDecisionsTab() {
     ...(n ? [el('span', { class: 'inbox-count', text: String(n) })] : []),
   );
   decideTab.setAttribute('aria-label', n ? `Decisions: ${n} waiting` : 'Decisions: nothing waiting');
-  // "Seen" and an answer still in its undo window leave this count first; cq decide lists them until they are written.
+  // "Seen" and an answer still in its undo window leave this count first; ravenseat decide lists them until they are written.
   const out = DV() && t.data?.inbox ? DV().fromInbox(t.data.inbox).length - n : 0;
-  decideTab.title = out ? `${out} set aside on this board until it is reloaded; cq decide still lists them` : '';
+  decideTab.title = out ? `${out} set aside on this board until it is reloaded; ravenseat decide still lists them` : '';
   if (typeof drawInboxButton === 'function') drawInboxButton();
   drawRoomTabs();
 }
@@ -454,7 +454,7 @@ function drawDecisions(fresh) {
       el('p', { class: 'inbox-empty' }, icon('checkmark'), el('span', { text: 'Nothing waiting on you' })),
       el('p', {
         class: 'inbox-info',
-        text: 'New questions, checks and proposals land here. You can also answer them in Claude Code with /cq:decide.',
+        text: 'New questions, checks and proposals land here. You can also answer them in Claude Code with /ravenseat:decide.',
       }),
     );
   for (const g of groups)

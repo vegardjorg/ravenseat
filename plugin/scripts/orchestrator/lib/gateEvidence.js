@@ -1,14 +1,14 @@
 // =============================================================
-// gateEvidence.js: the trusted gate evidence, the gate runs `cq receive`, `cq merge` and the push check rely on.
+// gateEvidence.js: the trusted gate evidence, the gate runs `ravenseat receive`, `ravenseat merge` and the push check rely on.
 //
-// Why: `cq receive` used to trust the track's own RESULT line (`gates=OK`), and the base gate's skip rule trusted the
+// Why: `ravenseat receive` used to trust the track's own RESULT line (`gates=OK`), and the base gate's skip rule trusted the
 // `gate` rows in the time log. Both come from the track: it writes the RESULT line itself, and the time log is a plain
 // file every agent appends to (hook-time.mjs, gates.mjs run in the track's worktree). A track that wanted to (or text it
 // read that told it to) could claim a green gate it never ran, or add a green row for a sha nobody tested. The time log
 // stays what it was: measurement. Decisions read only this store.
 //
 // The rule: an entry is evidence for a commit only when ALL hold:
-//   - it was written by gates.mjs (`--quick` or `--full`) when run by the orchestrator's side: `cq receive` and `cq merge`
+//   - it was written by gates.mjs (`--quick` or `--full`) when run by the orchestrator's side: `ravenseat receive` and `ravenseat merge`
 //     pass `--evidence`, and a run in the MAIN checkout (not a linked worktree: what the orchestrator does before a batch
 //     push) records by default. A track's own run in its worktree never records evidence, so it is informational, like
 //     its RESULT line;
@@ -26,7 +26,7 @@
 //
 // Legacy entries (written before setup_hash and writer existed, so they have neither field): they count only where they
 // counted before, that is for the push check (fullGateVerdict) and for callers that pass no setup hash, and only while
-// the caller allows legacy (`legacy: true`, the default). `cq receive` reuses only an entry with the current setup hash
+// the caller allows legacy (`legacy: true`, the default). `ravenseat receive` reuses only an entry with the current setup hash
 // and writer "orchestrator" (`legacy: false`), so after the upgrade it runs the quick gates once more. An entry that HAS
 // a writer other than "orchestrator" is never accepted, by any caller.
 //
@@ -338,7 +338,7 @@ function fullGateVerdict({ folder, sha, cfg }) {
 
 /**
  * The push guard's reason to deny a queue agent's shell command that could forge evidence, or null: it names the store
- * file, or it passes `--evidence` or `--cwd` to the gate runner (`cq gates`, `gates.mjs`). A track runs its own gates
+ * file, or it passes `--evidence` or `--cwd` to the gate runner (`ravenseat gates`, `gates.mjs`). A track runs its own gates
  * without either flag; only the orchestrator's side records evidence.
  */
 function tamperReason(command) {
@@ -347,13 +347,13 @@ function tamperReason(command) {
     return `the gate evidence (${FILE_NAME}) is written only by the orchestrator's gate runs; a queue agent may not touch it`;
   // The accepted git baseline (lib/gitSurfaceBaseline.js): removing it would make the next first use accept a planted hook.
   if (c.includes('git-surface'))
-    return "the accepted git baseline (git-surface.json) is the owner's (cq surface accept --by owner); a queue agent may not touch it";
-  // The gate runner itself (gates.mjs, `cq gates`, `queue.mjs gates`), not any command that mentions the word.
+    return "the accepted git baseline (git-surface.json) is the owner's (ravenseat surface accept --by owner); a queue agent may not touch it";
+  // The gate runner itself (gates.mjs, `ravenseat gates`, `queue.mjs gates`), not any command that mentions the word.
   const gateRun = /\bgates\.mjs\b/.test(c) || new RegExp(`\\b((?:${CLI_PATTERN})(?:\\.mjs|\\.cmd)?|queue\\.mjs)["']?\\s+gates\\b`).test(c);
   if (gateRun && /(^|\s)--(evidence|cwd)\b/.test(c))
     return (
-      'a queue agent runs its gates without --evidence and --cwd (the evidence comes from cq receive and cq merge, ' +
-      'not from the track); run `cq gates --quick` or `--full` in your own worktree'
+      'a queue agent runs its gates without --evidence and --cwd (the evidence comes from ravenseat receive and ravenseat merge, ' +
+      'not from the track); run `ravenseat gates --quick` or `--full` in your own worktree'
     );
   return null;
 }

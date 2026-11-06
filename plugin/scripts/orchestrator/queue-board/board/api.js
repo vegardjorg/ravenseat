@@ -238,7 +238,7 @@ function indexes() {
 function baseHealthText(b, branch) {
   if (!b) return '';
   const word = { green: 'green', red: 'RED', unknown: 'not checked at this tip' }[b.status] ?? b.status;
-  const fix = b.status === 'red' && b.fixTask ? ` (fix task ${b.fixTask}; cq merge refuses other tracks)` : '';
+  const fix = b.status === 'red' && b.fixTask ? ` (fix task ${b.fixTask}; ravenseat merge refuses other tracks)` : '';
   return ` · Base ${branch ?? ''}: ${word}${fix}`;
 }
 

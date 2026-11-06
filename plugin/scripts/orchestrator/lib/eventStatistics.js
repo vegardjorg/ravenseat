@@ -5,7 +5,7 @@
 // was limited by the load.
 //
 // Pure functions on the time log rows (timeCost.readRows), the usage events (timeCost.usageEvents) and the queue,
-// apart from readAgentsBySession (one readdir per session). Used by cli/cost.mjs (cq cost, cq limit) and
+// apart from readAgentsBySession (one readdir per session). Used by cli/cost.mjs (ravenseat cost, ravenseat limit) and
 // queue-board.mjs (the Statistics tab).
 //
 // THE ORCHESTRATION OVERHEAD (orchestrationOverhead): the main sessions' cost comes from the status line payload
@@ -28,12 +28,12 @@
 //     and has no post-merge defect. A post-merge defect is a reverted merge (git says "This reverts commit <merge_commit>",
 //     or the task was cancelled after it merged: those count among the merged here), a fix task that names it (`fixes`, or `qa_original` for the
 //     QA fix chain; a base gate fix task names the task that made the base red) or a finding whose `finding.causes`
-//     names it (`cq finding --cause <id>`). Owner interventions are the changelog entries by owner or theBoard that
+//     names it (`ravenseat finding --cause <id>`). Owner interventions are the changelog entries by owner or theBoard that
 //     change the task between its start (started, otherwise picked_at) and done. The changelog keeps the last 50
 //     entries, so a task started before the oldest kept entry is "unknown" for interventions (when entries fell out).
 //   reviewers: per reviewer type, over the tasks done in the window with a cost measurement (cost.agents, saved at
 //     set done): runs, runs whose FINDINGS line had H+M+L > 0, runs with no FINDINGS line recorded, the fix rounds the
-//     orchestrator attributed to the type (`resumed[].from`, from `cq resume --from`), and the dismissed ones (runs
+//     orchestrator attributed to the type (`resumed[].from`, from `ravenseat resume --from`), and the dismissed ones (runs
 //     with findings minus attributed fixes, never below 0). A type with REVIEWER_HINT_RUNS runs or more and no fix gets
 //     a hint, but only once some fix round in the window carries `from` (otherwise every type would look useless).
 //   autonomy: how far the queue got without the owner.
@@ -47,7 +47,7 @@
 //       added_at) and tasks the owner added. Old tasks without a start add no work time.
 //     corrected = the failures on the tasks done in the window that ended green with no owner action on that task:
 //       fix rounds from review (resumed reason fix), red done commands (fix rounds with from done_when, written by
-//       cq receive and cq merge) and base red fix tasks (added_by base gate). An owner action on the task: an owner
+//       ravenseat receive and ravenseat merge) and base red fix tasks (added_by base gate). An owner action on the task: an owner
 //       changelog entry that changes it, a QA deviation on it, or an owner answer to its fix-round cap question.
 //   inflow: the tasks added in the window by source (fix tasks, tasks from a finding via its plan entry = triage,
 //     agent proposals, the owner, other = the orchestrator or unknown), and added versus done for the last
@@ -65,13 +65,13 @@ const { isAgentSource } = require('./logic/questions.js');
 const DAY_MS = 86_400_000;
 /** The `by` values that mean the owner (the board writes theBoard for edits and owner for answers; lib/ownerWait.js). */
 const OWNER_BY = new Set(['owner', 'theBoard']);
-/** The id prefix of the plan entries `cq finding` creates (lib/queueFindings.js). */
+/** The id prefix of the plan entries `ravenseat finding` creates (lib/queueFindings.js). */
 const FINDING_PREFIX = 'PL-FINDING-';
 /** A reviewer type with at least this many runs and no fix round gets the hint. */
 const REVIEWER_HINT_RUNS = 10;
 /** Inflow above outflow this many whole weeks in a row gives the hint. */
 const INFLOW_WEEKS = 3;
-/** The `--from` value cq receive and cq merge pass for a fix round after a red done command (not a reviewer). */
+/** The `--from` value ravenseat receive and ravenseat merge pass for a fix round after a red done command (not a reviewer). */
 const DONE_WHEN = 'done_when';
 /** The inflow sources, in the order they are shown. */
 const INFLOW_SOURCES = ['owner', 'agent', 'fix', 'triage', 'other'];
@@ -195,12 +195,12 @@ function orchestrationOverhead({ rows, events = [], from, to, merged = 0, trackU
   };
 }
 
-/** The overhead as text lines for `cq cost` (after the headline). */
+/** The overhead as text lines for `ravenseat cost` (after the headline). */
 function overheadLines(o, label) {
   const $ = (x) => `$${Number(x).toFixed(2)}`;
   if (!o.sessions && !o.other.sessions)
     return [
-      `Orchestration overhead (${label}): no session cost recorded (the status line saves it; cq setup --settings sets it up).`,
+      `Orchestration overhead (${label}): no session cost recorded (the status line saves it; ravenseat setup --settings sets it up).`,
     ];
   const out = [];
   if (o.sessions)
@@ -221,7 +221,7 @@ function overheadLines(o, label) {
 // ---- Flow figures ------------------------------------------------------------------------------------------------
 
 /**
- * Did this `resumed` entry's round really run? `cq resume` only prepares a round, so its attempt (same round number)
+ * Did this `resumed` entry's round really run? `ravenseat resume` only prepares a round, so its attempt (same round number)
  * must have started or delivered. Tasks from before attempts existed have none: their rounds count.
  */
 function roundRan(o, r) {
@@ -616,7 +616,7 @@ function flowStatistics(queue, rows, { from, to, plans = null, reviewerTypes = n
   };
 }
 
-/** The flow figures as text lines for `cq cost`. */
+/** The flow figures as text lines for `ravenseat cost`. */
 function flowLines(f, label) {
   const pct = (x) => (x == null ? '-' : `${x} %`);
   const v = (x) => (x == null ? '-' : String(x));
@@ -681,7 +681,7 @@ function qualityLines(f) {
     else {
       out.push(
         `  reviewers (${rv.tasks} measured task(s); fix rounds attributed ${rv.attributed} of ${rv.fix_rounds}` +
-          (rv.fix_rounds && !rv.attributed ? ', cq resume --from records it' : '') +
+          (rv.fix_rounds && !rv.attributed ? ', ravenseat resume --from records it' : '') +
           '):',
       );
       for (const x of rv.rows)
@@ -745,7 +745,7 @@ function loadStatistics(rows, { from, to, recent = 5 } = {}) {
   };
 }
 
-/** The load history as text lines for `cq limit`. */
+/** The load history as text lines for `ravenseat limit`. */
 function loadLines(s, label) {
   if (!s.rows) return [`Load history (${label}): no fill or start recorded yet.`];
   const by = Object.entries(s.by)

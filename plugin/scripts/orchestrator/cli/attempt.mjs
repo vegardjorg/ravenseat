@@ -1,9 +1,9 @@
 // =============================================================
-// cli/attempt.mjs: `cq attempt list <id>` and `cq attempt close <id> --outcome <...>`.
+// cli/attempt.mjs: `ravenseat attempt list <id>` and `ravenseat attempt close <id> --outcome <...>`.
 //
 // list derives the states from the time log (lib/logic/attempt.js deriveRunning) and saves them under the lock, but only
 // when they changed: a read must not move queue.changed, or the board's --expect-changed would go stale. close is the
-// way out for a running attempt whose agent is gone. It is logged in the changelog like an edit (so `cq undo` works) and
+// way out for a running attempt whose agent is gone. It is logged in the changelog like an edit (so `ravenseat undo` works) and
 // refused from inside a track worktree, whatever --by says, as the locked fields are (cli/taskEdit.mjs). A queue agent
 // never gets here: the push guard's allow-list (lib/pushGuard.js) does not have the command.
 //
@@ -42,7 +42,7 @@ function attemptLine(x, ttl) {
   return parts.join(' ');
 }
 
-/** `cq attempt list <id>`. */
+/** `ravenseat attempt list <id>`. */
 function list(id) {
   if (!id) die(USE);
   // The rows are read before the lock (the log can be large), as for the usage in cmdStart.
@@ -64,12 +64,12 @@ function list(id) {
   for (const x of attempts) console.log(attemptLine(x, ttl));
 }
 
-/** `cq attempt close <id> --outcome <...>`. */
+/** `ravenseat attempt close <id> --outcome <...>`. */
 function close(id) {
   const outcome = val('--outcome');
   if (!id || !outcome) die(USE);
   const branch = trackBranchHere();
-  if (branch) die(`An attempt cannot be closed from inside a track worktree (branch ${branch}); ask the owner (cq question).`);
+  if (branch) die(`An attempt cannot be closed from inside a track worktree (branch ${branch}); ask the owner (ravenseat question).`);
   const rows = attemptRows([taskIn(read(), id)]);
   const closed = editLogged('attempt-close', (queue) => {
     const o = taskIn(queue, id);
@@ -83,7 +83,7 @@ function close(id) {
   if (undoHint()) console.log(undoHint());
 }
 
-/** `cq attempt` (the usage is at the top of queue.mjs). */
+/** `ravenseat attempt` (the usage is at the top of queue.mjs). */
 export function cmdAttempt() {
   const [sub, id] = positional(1, ['--outcome', '--by']);
   if (sub === 'list') list(id);

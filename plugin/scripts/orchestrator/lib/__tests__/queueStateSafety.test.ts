@@ -4,7 +4,7 @@
 // Why: queue.json is the queue. Locks that each write keeps the previous GOOD state as queue.json.prev (a broken file
 // never overwrites the good copy), that a rename refused for a moment on Windows (EPERM, EBUSY, EACCES) is retried
 // with a short backoff while other errors are not, and that a queue.json that does not parse stops the CLI with the
-// way back through queue.json.prev, in the command and in `cq doctor`. Temporary folders only.
+// way back through queue.json.prev, in the command and in `ravenseat doctor`. Temporary folders only.
 // =============================================================
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -21,7 +21,7 @@ afterAll(() => {
   for (const d of temporary) fs.rmSync(d, { recursive: true, force: true });
 });
 const tmpDir = () => {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-state-'));
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-state-'));
   temporary.push(d);
   return d;
 };

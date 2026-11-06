@@ -13,14 +13,14 @@
 // again, and when neither the base nor any tip has moved since the last complete run, the last result is returned
 // without any check. A run that hit the budget is PARTIAL: the next run continues from the cache.
 //
-// The real conflict (mergeConflictContext): when `cq merge` stops in the merge step, the conflicting files are read
+// The real conflict (mergeConflictContext): when `ravenseat merge` stops in the merge step, the conflicting files are read
 // from merge-track's output (or the unmerged paths), and for each one the other tasks that touched it are named:
 // active tasks that own it (owned_files) and queue merges on the base since the branch forked (git log). The fix
 // round brief (logic/resume.js resumeBlock) prints them (briefLines), so the fix agent starts informed.
 //
 // The git runner is injected (makeRunner gives the real one: (args) -> { code, stdout }), and so is the git version,
 // so the tests run against temporary repos and can force the fallback. Used by cli/conflicts.mjs (pulse and
-// `cq conflicts`), cli/merge.mjs (the merge-conflict stop), cli/doctor.mjs (the git version line) and
+// `ravenseat conflicts`), cli/merge.mjs (the merge-conflict stop), cli/doctor.mjs (the git version line) and
 // logic/resume.js (the fix round brief). Tested in lib/__tests__/conflictPredict.test.ts.
 // =============================================================
 'use strict';
@@ -387,7 +387,7 @@ const fileList = (files) =>
  * The pulse lines: PREDICTED CONFLICT A x B, CONFLICTS WITH BASE, the order (only when something conflicts), the
  * fallback note, and a partial or error line. Nothing at all when there is nothing to say.
  */
-function pulseLines(r, { cq = 'cq' } = {}) {
+function pulseLines(r, { ravenseat = 'ravenseat' } = {}) {
   if (!r) return [];
   const out = [];
   const conflicts = r.pairs.length + r.baseConflicts.length;
@@ -398,7 +398,7 @@ function pulseLines(r, { cq = 'cq' } = {}) {
   if (r.partial)
     out.push(
       `CONFLICT PREDICTION PARTIAL: ${r.skipped} check(s) left over the budget; the next pulse continues from the cache ` +
-        `(${cq} conflicts for the full picture).`,
+        `(${ravenseat} conflicts for the full picture).`,
     );
   for (const e of r.errors) out.push(`WARNING: conflict prediction could not check ${e}.`);
   return out;
@@ -476,13 +476,13 @@ function conflictFileLines(mc) {
   });
 }
 
-/** The lines `cq merge` prints at the merge-conflict stop. */
-function mergeStopLines(mc, { id, cq = 'cq' }) {
+/** The lines `ravenseat merge` prints at the merge-conflict stop. */
+function mergeStopLines(mc, { id, ravenseat = 'ravenseat' }) {
   if (!mc?.files?.length) return [];
   return [
     `CONFLICTING FILES for ${id}:`,
     ...conflictFileLines(mc).map((l) => `  ${l}`),
-    `Or leave it to an agent, and the fix round starts informed: git merge --abort here first, then ${cq} resume ${id} --reason fix (the brief names these files and tasks).`,
+    `Or leave it to an agent, and the fix round starts informed: git merge --abort here first, then ${ravenseat} resume ${id} --reason fix (the brief names these files and tasks).`,
   ];
 }
 

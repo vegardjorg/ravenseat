@@ -198,7 +198,7 @@ describe('queue.mjs handover, hook-after-compact and statusline.mjs (against a t
   let folder: string;
   const script = (name: string) => join(__dirname, '..', '..', name);
   const env = () => ({ ...process.env, QUEUE_FOLDER: folder, QUEUE_GIT: folder });
-  const cq = (...args: string[]) =>
+  const ravenseat = (...args: string[]) =>
     execFileSync(process.execPath, [script('queue.mjs'), 'handover', ...args], { encoding: 'utf8', env: env() });
   const note = () => join(folder, 'handover-ongoing.md');
 
@@ -210,22 +210,22 @@ describe('queue.mjs handover, hook-after-compact and statusline.mjs (against a t
   afterEach(() => rmSync(folder, { recursive: true, force: true }));
 
   it('--dry writes nothing', () => {
-    expect(cq('archive', '--dry')).toMatch(/dry run.*2 entries/);
+    expect(ravenseat('archive', '--dry')).toMatch(/dry run.*2 entries/);
     expect(existsSync(join(folder, 'handover-archive'))).toBe(false);
     expect(readFileSync(note(), 'utf8')).toContain('old');
   });
 
   it('archive moves to handover-archive/<year-month>.md, and a second run moves nothing', () => {
-    expect(cq('archive')).toMatch(/2 entries \(2 lines\) moved to handover-archive\/2020-01\.md/);
+    expect(ravenseat('archive')).toMatch(/2 entries \(2 lines\) moved to handover-archive\/2020-01\.md/);
     expect(readFileSync(note(), 'utf8')).toBe('# Note\n\n## Now\n- active: A\n');
     const archived = readFileSync(join(folder, 'handover-archive', '2020-01.md'), 'utf8');
     expect(archived).toMatch(/<!-- archived .* -->\n## Log\n- 2020-01-05: old\n- 2020-01-06: also old\n$/);
-    expect(cq('archive')).toMatch(/0 entries/);
+    expect(ravenseat('archive')).toMatch(/0 entries/);
     expect(readFileSync(join(folder, 'handover-archive', '2020-01.md'), 'utf8')).toBe(archived);
   });
 
   it('now prints only the "Now" part', () => {
-    expect(cq('now').trim()).toBe('## Now\n- active: A');
+    expect(ravenseat('now').trim()).toBe('## Now\n- active: A');
   });
 
   it('hook-after-compact adds only the "Now" part, not the log', () => {
@@ -264,7 +264,7 @@ describe('queue.mjs handover, hook-after-compact and statusline.mjs (against a t
     // The second time from the cache (same mtime and size), the same answer.
     expect(existsSync(join(folder, 'cache.json'))).toBe(true);
     expect(line(full)).toBe('ctx 142k 71% | $3.21 | 5h 23% 7d 41% | tracks 2 (+1 review)\n');
-    // The quota reading was saved for `cq capacity --calibrate auto`.
+    // The quota reading was saved for `ravenseat capacity --calibrate auto`.
     expect(JSON.parse(readFileSync(join(folder, 'rate-limits.json'), 'utf8')).seven_day.used_percentage).toBe(41);
     expect(line('{}')).toBe('ctx - | $- | 5h - 7d - | tracks 2 (+1 review)\n');
     expect(

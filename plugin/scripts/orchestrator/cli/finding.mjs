@@ -1,22 +1,22 @@
 // =============================================================
-// cli/finding.mjs: `cq finding`, what a track reports when it notices something outside its scope.
+// cli/finding.mjs: `ravenseat finding`, what a track reports when it notices something outside its scope.
 //
-//   cq finding "<title>" [--detail "..."] [--task <id>] [--cause <id>[,<id>]] [--files a,b] [--project <pid>] [--dry] [--json]
+//   ravenseat finding "<title>" [--detail "..."] [--task <id>] [--cause <id>[,<id>]] [--files a,b] [--project <pid>] [--dry] [--json]
 //        an idea in the plan register (PL-FINDING-<n>, priority later), linked to the reporting task and deduplicated
 //        on the normalized title. --task defaults to the task whose queue branch the worktree is on. The project is
 //        --project, otherwise the task's project, otherwise the only project in the register. With no project at all
-//        (a fresh project; an agent may not run cq project) it creates one called general. --cause names the
+//        (a fresh project; an agent may not run ravenseat project) it creates one called general. --cause names the
 //        merged task(s) the finding is a defect of (a post-merge defect in the right-first-time figure).
-//   cq finding list [--all] [--json]
+//   ravenseat finding list [--all] [--json]
 //        the findings nobody has triaged yet (--all: every finding)
 // The rules (where it lands, dedup, when it stops being new) are in lib/queueFindings.js. The write goes through
-// cli/planShared.mjs editPlans: the same lock, changelog and `cq plan undo` as every plan command.
+// cli/planShared.mjs editPlans: the same lock, changelog and `ravenseat plan undo` as every plan command.
 //
 // Used by: queue.mjs (dispatch).
 // Tested in: lib/__tests__/queueFindings.test.ts.
 // =============================================================
 
-import { a, CQ, cut, die, editLogged, L, queueBranchId, readPlans, readQueueForPlan, require, val, WIDTH } from './context.mjs';
+import { a, CLI, cut, die, editLogged, L, queueBranchId, readPlans, readQueueForPlan, require, val, WIDTH } from './context.mjs';
 import { editPlans, planAnswer } from './planShared.mjs';
 
 const FI = require('./lib/queueFindings.js');
@@ -34,13 +34,13 @@ function taskFromBranch(tasks) {
 /** The new findings line for pulse and show, or null; never throws (an unreadable plans.json is not this view's problem). */
 export function findingsLineNow() {
   try {
-    return FI.findingsLine(FI.findingsSummary(readPlans(), readQueueForPlan().tasks ?? []), CQ);
+    return FI.findingsLine(FI.findingsSummary(readPlans(), readQueueForPlan().tasks ?? []), CLI);
   } catch {
     return null;
   }
 }
 
-/** The { new, ids } summary for `cq state`; empty when the register cannot be read. */
+/** The { new, ids } summary for `ravenseat state`; empty when the register cannot be read. */
 export function findingsStateNow() {
   try {
     return FI.findingsSummary(readPlans(), readQueueForPlan().tasks ?? []);
@@ -49,7 +49,7 @@ export function findingsStateNow() {
   }
 }
 
-/** `cq finding list [--all] [--json]`. */
+/** `ravenseat finding list [--all] [--json]`. */
 function findingList() {
   const rows = FI.findingRows(readPlans(), readQueueForPlan().tasks ?? [], { all: a.includes('--all') });
   if (a.includes('--json')) {
@@ -57,7 +57,7 @@ function findingList() {
     return;
   }
   if (!rows.length) {
-    console.log(a.includes('--all') ? 'No findings in the plan register.' : `No new findings (${CQ} finding list --all shows every one).`);
+    console.log(a.includes('--all') ? 'No findings in the plan register.' : `No new findings (${CLI} finding list --all shows every one).`);
     return;
   }
   for (const r of rows) {
@@ -67,16 +67,16 @@ function findingList() {
     if (r.files.length) console.log(cut(`${' '.repeat(21)}files: ${r.files.join(', ')}`, WIDTH));
   }
   console.log(
-    `Triage: ${CQ} plan prioritize <id> now|owner|drop --reason "...", ${CQ} plan edit <id> --field maturity=investigated, ` +
-      `or tasks with ${CQ} add --file <f> --plan <id>.`,
+    `Triage: ${CLI} plan prioritize <id> now|owner|drop --reason "...", ${CLI} plan edit <id> --field maturity=investigated, ` +
+      `or tasks with ${CLI} add --file <f> --plan <id>.`,
   );
 }
 
-/** `cq finding` (the usage is at the top of queue.mjs). */
+/** `ravenseat finding` (the usage is at the top of queue.mjs). */
 export function cmdFinding() {
   if (a[1] === 'list') return findingList();
   const title = a[1];
-  const usage = `${CQ} finding "<title>" [--detail "..."] [--task <id>] [--cause <id>[,<id>]] [--files a,b] [--project <pid>]`;
+  const usage = `${CLI} finding "<title>" [--detail "..."] [--task <id>] [--cause <id>[,<id>]] [--files a,b] [--project <pid>]`;
   if (!title || title.startsWith('--')) die(`Use: ${usage}`);
   const queue = readQueueForPlan();
   const tasks = queue.tasks ?? [];
@@ -96,7 +96,7 @@ export function cmdFinding() {
     val('--project') ?? (own && Object.hasOwn(projects, own) ? own : names.length === 1 ? names[0] : none ? FIRST_PROJECT : null);
   if (!project)
     die(
-      `Which project? ${task ? `${task} has no registered project. ` : ''}Give --project <pid> (${names.join(', ') || `none yet: ${CQ} project <pid> --title "..."`}).`,
+      `Which project? ${task ? `${task} has no registered project. ` : ''}Give --project <pid> (${names.join(', ') || `none yet: ${CLI} project <pid> --title "..."`}).`,
     );
   // The first finding in a fresh project also registers the project, so it can be triaged like any other. --dry writes nothing.
   if (none && !a.includes('--dry'))

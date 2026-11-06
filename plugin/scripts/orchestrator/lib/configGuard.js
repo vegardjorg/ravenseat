@@ -107,7 +107,7 @@ function assessUnreadableConfig(command, o = {}) {
   const what = kind === 'configured' ? 'a deploy or migration command' : `a ${kind} command`;
   const reason =
     `config unreadable: queue.config.json does not parse (${where(o.error)}), so the project's base branch, ` +
-    `migration guard and deploy commands are unknown and this is ${what}. Fix the file (cq doctor shows the error)` +
+    `migration guard and deploy commands are unknown and this is ${what}. Fix the file (ravenseat doctor shows the error)` +
     (o.guarded ? '; a queue agent may not run it until then.' : ', or confirm only if you are sure this is safe.');
   return { decision: o.guarded ? 'deny' : 'ask', reason };
 }

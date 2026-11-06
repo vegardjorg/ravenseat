@@ -196,7 +196,7 @@ function boardSwitch(name) {
  */
 function applyFeatures() {
   for (const [view, name] of Object.entries(VIEW_FEATURE)) $(`show-${view}`).hidden = !featureOn(name);
-  // The Cloud tab also needs the board switch showCloud (default off; `cq board-setting cloud on` or Settings, Board). A saved
+  // The Cloud tab also needs the board switch showCloud (default off; `ravenseat board-setting cloud on` or Settings, Board). A saved
   // Cloud view still opens without the tab (the view shows a note), so only a module that is off leaves the view.
   if (!boardSwitch('showCloud')) $('show-cloud').hidden = true;
   if (VIEW_FEATURE[t.view] && !featureOn(VIEW_FEATURE[t.view])) setView('flat');
@@ -237,7 +237,7 @@ function modulesSection() {
 }
 
 /**
- * The gear's "Board" section: the board's own switches (state.boardSwitches). A change runs `cq board-setting cloud on|off`
+ * The gear's "Board" section: the board's own switches (state.boardSwitches). A change runs `ravenseat board-setting cloud on|off`
  * (queue.json board.showCloud), the same command Claude Code can run, so it holds for every viewer.
  */
 function boardSection() {
@@ -277,7 +277,7 @@ function boardSection() {
       id: 'board-show-cloud-help',
       class: 'setting-explanation',
       text: cloudModule
-        ? 'Off by default. Saved in queue.json for everyone; Claude Code: cq board-setting cloud on|off.'
+        ? 'Off by default. Saved in queue.json for everyone; Claude Code: ravenseat board-setting cloud on|off.'
         : 'The cloud module is off (features.cloud in queue.config.json), so there is no Cloud tab.',
     }),
   );
@@ -299,10 +299,10 @@ function onboardingCard() {
         null,
         el('strong', { text: 'Add work: ' }),
         'say "add to the queue" in Claude Code (or ',
-        code('cq add --file task.json'),
+        code('ravenseat add --file task.json'),
         ').',
       ),
-      el('li', null, el('strong', { text: 'Start the queue: ' }), code('/cq:queue'), '.'),
+      el('li', null, el('strong', { text: 'Start the queue: ' }), code('/ravenseat:queue'), '.'),
       el(
         'li',
         null,
@@ -311,7 +311,7 @@ function onboardingCard() {
       ),
     ),
     t.data?.checks?.next
-      ? el('p', null, 'When you are ready: ', code('/cq:kickstart'), ' adds automatic checks one step at a time. It is optional.')
+      ? el('p', null, 'When you are ready: ', code('/ravenseat:kickstart'), ' adds automatic checks one step at a time. It is optional.')
       : null,
     el('button', {
       type: 'button',

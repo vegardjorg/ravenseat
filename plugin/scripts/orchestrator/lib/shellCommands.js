@@ -19,7 +19,7 @@
 //     interpreter code (node -e, python -c …) or nesting deeper than MAX_DEPTH. The push guard asks (main session)
 //     or denies (queue agents) when such a command line also looks like a push or a queue CLI call.
 // gitInvocation() finds the git subcommand after the global options (-C, -c, --git-dir …) and expands inline aliases
-// (-c alias.<name>=<value>); queueCall() finds a call of the queue's own CLI (`cq …`, `node …/queue.mjs …`, any of
+// (-c alias.<name>=<value>); queueCall() finds a call of the queue's own CLI (`ravenseat …`, `node …/queue.mjs …`, any of
 // the orchestrator's scripts) and gives the command name the push guard checks against its allow-list.
 //
 // Known limits (on purpose, a guard and not a shell): a script file's contents (`bash x.sh`), a git alias stored in
@@ -414,13 +414,13 @@ function orchestratorScripts() {
   return scriptNames;
 }
 
-/** The short script names cq.mjs knows (lib/cliHelp.js ALIASES). */
-const CQ_ALIASES = { board: 'queue-board', takeover: 'queue-takeover' };
+/** The short script names ravenseat.mjs knows (lib/cliHelp.js ALIASES). */
+const CLI_ALIASES = { board: 'queue-board', takeover: 'queue-takeover' };
 
 /**
- * A call of the queue's own CLI: `cq <command>`, `node …/cq.mjs <command>`, `node …/queue.mjs <command>` or one of
+ * A call of the queue's own CLI: `ravenseat <command>`, `node …/ravenseat.mjs <command>`, `node …/queue.mjs <command>` or one of
  * the orchestrator's scripts (`node …/merge-track.mjs …`, `./gates.mjs`). Returns null, or { name, args }:
- * name = the queue command (show, merge …) or the script name (merge-track, gates …), '' for bare `cq` (help);
+ * name = the queue command (show, merge …) or the script name (merge-track, gates …), '' for bare `ravenseat` (help);
  * args = the words after it.
  * @param {string[]} t @param {number} i0
  */
@@ -450,7 +450,7 @@ function queueCall(t, i0) {
   if (cli || script === 'queue') {
     if (cli && rest[0] === 'queue') rest = rest.slice(1);
     const first = rest[0] ?? '';
-    const name = cli ? (CQ_ALIASES[first] ?? first) : first;
+    const name = cli ? (CLI_ALIASES[first] ?? first) : first;
     return { name: name.startsWith('-') ? 'help' : name, args: rest.slice(1) };
   }
   return { name: script, args: rest };

@@ -7,7 +7,7 @@
 //     project) and a short timeout. Any error (network, timeout, invalid JSON, no valid version) gives null and no
 //     message. Off with board.updateCheck: false in queue.config.json, or when DISABLE_UPDATES or
 //     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC is set.
-//   - SETUP NOT RUN (local, no network, also with the check off): `cq setup --settings` records the plugin version it set
+//   - SETUP NOT RUN (local, no network, also with the check off): `ravenseat setup --settings` records the plugin version it set
 //     up in <dataFolder>/setup.json. A plugin install whose version differs from that record (or has none) shows that
 //     setup must be run again (the status line holds the plugin's versioned path).
 // Closing the banner hides the new-version part for that version until a newer one is out (localStorage in board.js,
@@ -29,7 +29,7 @@
   const CHANGELOG_URL = 'https://github.com/vegardjorg/ravenseat/blob/main/CHANGELOG.md';
   /** The marketplace name in the repo's .claude-plugin/marketplace.json (a test checks they match). */
   const MARKETPLACE = 'ravenseat';
-  const PLUGIN = 'cq';
+  const PLUGIN = 'ravenseat';
   /** At most one check per day. */
   const MAX_AGE_MS = 24 * 60 * 60 * 1000;
   const TIMEOUT_MS = 3000;
@@ -154,7 +154,7 @@
     return i > 0 ? s.slice(0, i) : '.';
   }
 
-  /** The version `cq setup --settings` recorded last (<dataFolder>/setup.json), or null. */
+  /** The version `ravenseat setup --settings` recorded last (<dataFolder>/setup.json), or null. */
   function readSetupRecord(fs, file) {
     try {
       const r = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -175,7 +175,7 @@
       return [
         { text: 'Update the plugin in a terminal:', command: `claude plugin update ${PLUGIN}@${MARKETPLACE}` },
         { text: 'Run /reload-plugins in Claude Code, or start a new session.', command: '/reload-plugins' },
-        { text: 'Refresh the project settings (the status line path holds the version). It also names the project files older than the plugin:', command: 'cq setup --settings' },
+        { text: 'Refresh the project settings (the status line path holds the version). It also names the project files older than the plugin:', command: 'ravenseat setup --settings' },
       ];
     const target = projectFolder ? `"${String(projectFolder).split('\\').join('/')}"` : '<your project folder>';
     return [
@@ -185,20 +185,20 @@
   }
 
   /**
-   * The same news as the board's setup banner, for cq show. Only when setup HAS been recorded and is older than the
+   * The same news as the board's setup banner, for ravenseat show. Only when setup HAS been recorded and is older than the
    * running version: a project that never ran setup has not asked to hear about it on every show.
    */
   function setupBehindLine({ mode, installed, setupVersion }) {
     if (!setupVersion) return null;
     if (notice({ mode, installed, setupVersion })?.setup !== 'run') return null;
-    return `Setup is behind: cq ${installed} is installed, the project was set up for cq ${setupVersion}. Run: cq setup --settings`;
+    return `Setup is behind: ravenseat ${installed} is installed, the project was set up for ravenseat ${setupVersion}. Run: ravenseat setup --settings`;
   }
 
   /**
    * What the banner says, computed on the server and sent in the state as `update`. null when there is nothing to say.
    * @param {object} o
    * @param {'plugin'|'vendored'} o.mode
-   * @param {string|null} o.installed      the running version (plugin.json, or cq-version.json in a vendored install)
+   * @param {string|null} o.installed      the running version (plugin.json, or ravenseat-version.json in a vendored install)
    * @param {string|null} [o.latest]       the published version (latestVersion), null when unknown or off
    * @param {string|null} [o.setupVersion] the version setup --settings recorded last
    * @param {string} [o.projectFolder]

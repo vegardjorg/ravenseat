@@ -1,16 +1,16 @@
 ---
 name: review
-description: Review an area of the project (a path, feature or project) through a lens (security, logic, ux, architecture or free text) with read-only Opus review agents, then turn the findings into work - one-off bugs into fix tasks, repeatable mistakes into gate proposals (a new check in the project's own CI, red first), and design questions into owner questions or plan entries - after ONE question to the owner. Records the review in the plan register. Use when the user types "/review …", "/cq:review …", "review <area> for <lens>", or wants a full review whose findings grow the project's gates.
+description: Review an area of the project (a path, feature or project) through a lens (security, logic, ux, architecture or free text) with read-only Opus review agents, then turn the findings into work - one-off bugs into fix tasks, repeatable mistakes into gate proposals (a new check in the project's own CI, red first), and design questions into owner questions or plan entries - after ONE question to the owner. Records the review in the plan register. Use when the user types "/review …", "/ravenseat:review …", "review <area> for <lens>", or wants a full review whose findings grow the project's gates.
 ---
 
-# /cq:review: review an area and grow the gates
+# /ravenseat:review: review an area and grow the gates
 
 Argument: **$ARGUMENTS**. The form is `<area> [<lens>]`: the area is a path, a feature or a project name; the lens is
 `security`, `logic`, `ux`, `architecture` or free text (e.g. "offline behaviour"). No lens: ask.
 
-**You review and register; you never fix.** Do not change code or tests, do not start tracks, do not run `cq start`,
+**You review and register; you never fix.** Do not change code or tests, do not start tracks, do not run `ravenseat start`,
 `set` or `fill`. Nothing is added to the queue or the plan register before the owner has answered the question in
-step 4. Background: `docs/queue/plan-register.md` (findings and plan entries) and `/cq:add-to-queue` (task fields).
+step 4. Background: `docs/queue/plan-register.md` (findings and plan entries) and `/ravenseat:add-to-queue` (task fields).
 
 ## Growing your gates
 
@@ -37,7 +37,7 @@ Ravenseat ships none of these rules: they belong to the project, in the project'
 
 ## 2. Review agents (read only, in parallel)
 
-Start all review agents **in the same turn**, one per part: `subagent_type: cq:reviewer-area` (a vendored install:
+Start all review agents **in the same turn**, one per part: `subagent_type: ravenseat:reviewer-area` (a vendored install:
 `reviewer-area`). Always Opus (the agent sets it); never Sonnet. The prompt per agent, short:
 - the area, the part (paths or feature) and the lens, plus the checklist points for a free-text lens;
 - "Answer in your format: the FINDINGS line first, one line per finding with file:line, severity and class."
@@ -70,26 +70,26 @@ findings numbered and take the owner's numbers. A "no" ends the review here: rec
 
 ## 5. Add what the owner chose
 
-Run `cq mode` first. Use `--by review-<YYYY-MM-DD>` (or `"added_by"` in the file) so new tasks are `proposed`; add
+Run `ravenseat mode` first. Use `--by review-<YYYY-MM-DD>` (or `"added_by"` in the file) so new tasks are `proposed`; add
 `--approved` only when the owner said to approve them. Make the record entry (step 6) first, and give every task
-`"plan": "<record id>"`, so the review keeps its tasks together in `cq plan get`. One JSON file for all tasks
-(`scripts/.queue/mission/review-<date>-in.json`) and `cq add --file <file>`. In full mode follow `/cq:add-to-queue`
+`"plan": "<record id>"`, so the review keeps its tasks together in `ravenseat plan get`. One JSON file for all tasks
+(`scripts/.queue/mission/review-<date>-in.json`) and `ravenseat add --file <file>`. In full mode follow `/ravenseat:add-to-queue`
 for class, size, `project`, `feature`, `value` and `owned_files` (a small fix can land in the batch queue; related
 one-off fixes in the same files are packed into one task). In lite mode title, mission, labels, acceptance and
 `done_when` are enough.
 
 - **Fix task (one-off):** mission = the finding, the file:line evidence, the fix, and "a test that fails before the
   fix". 1 to 3 `acceptance` criteria. Value by severity (H 8 to 9, M 6, L 4).
-- **Gate proposal (repeatable):** `cq gate "<failure class>" --where <file:line>` makes one with the criteria below and
+- **Gate proposal (repeatable):** `ravenseat gate "<failure class>" --where <file:line>` makes one with the criteria below and
   follows the owner's setting. When you add it by hand: `"labels": ["gate"]`, title `Gate: <failure class>`. The mission names the failure
   class, lists the places found, and carries the gate criteria below word for word. `acceptance` must include the
   red-first criterion. When the project has a command that runs the new check, set `done_when` to it. Prefer one task
   that adds the check (red on the current code) and then fixes the places found; when the fixes are separate tasks,
   they `depends_on` the gate task, so the check is shown red on the real bug first.
 - **Decision (architecture):** a registered owner question:
-  `cq question Q-REV-<n> --text "…" --type question --choice "…" --choice "…" [--choice …] --recommendation "…"`
+  `ravenseat question Q-REV-<n> --text "…" --type question --choice "…" --choice "…" [--choice …] --recommendation "…"`
   (2 to 4 choices of at most 60 characters, the recommended one first). A larger design topic instead becomes a plan
-  entry with `cq plan new --file <json>` (`"maturity": "idea"`, `"priority": "owner"`, `"priority_set_by": "agent"`,
+  entry with `ravenseat plan new --file <json>` (`"maturity": "idea"`, `"priority": "owner"`, `"priority_set_by": "agent"`,
   a `priority_reason` and the question in `ownerQuestions`). Tasks that must wait on the answer get it in
   `waiting_on`.
 
@@ -111,19 +111,19 @@ the fixed code (both runs shown in the report).`
 ## 6. Record the review
 
 The plan register keeps the history. Make one entry per review, before the tasks are added, with
-`cq plan new --file <json>` (`<AREA>` in capitals, digits and hyphens; `project` is required: the area's project from
-`cq projects`, or ask):
+`ravenseat plan new --file <json>` (`<AREA>` in capitals, digits and hyphens; `project` is required: the area's project from
+`ravenseat projects`, or ask):
 ```json
 { "id": "PL-REVIEW-<AREA>-<YYYYMMDD>", "title": "Review: <area> (<lens>)", "project": "<pid>",
   "summary": "<date>, area <area>, lens <lens>, parts <n>. H=<n> M=<n> L=<n>; fix <n>, gate <n>, decisions <n>.",
   "priority": "later", "priority_set_by": "agent",
   "priority_reason": "Record of a finished review; the tasks carry the work.", "maturity": "ready" }
 ```
-After adding, put the ids in it: `cq plan edit <record id> --field summary="… Tasks: <ids>. Questions: <ids>."`,
-then `cq plan verify <record id> --findings "<lens> review of <area>: H=<n> M=<n> L=<n>"` to stamp the date.
+After adding, put the ids in it: `ravenseat plan edit <record id> --field summary="… Tasks: <ids>. Questions: <ids>."`,
+then `ravenseat plan verify <record id> --findings "<lens> review of <area>: H=<n> M=<n> L=<n>"` to stamp the date.
 Findings the owner did not add stay in the summary as "not added: <n>", so a later review can see them.
 
 ## 7. Close
 
 One short closing line: the record id, the task ids by class, the question ids, and the next step (the orchestrator
-approves the proposals, or `cq approve <ids>`).
+approves the proposals, or `ravenseat approve <ids>`).

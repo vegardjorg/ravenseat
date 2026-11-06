@@ -7,7 +7,7 @@ Migration block: none (the project has no migration flow)
 Made from `docs/queue/mission-template.md` for theProject. Other tracks start and finish while you work. The class (K, D, D+, U) is in the track block; the parts below are selected for it.
 Base branch: `main`. Quick gate: none set up in queue.config.json. Full gate: none set up in queue.config.json.
 
-**Setup (first call):** `cq prepare-track D1 --branch queue/D1 --scratchpad
+**Setup (first call):** `ravenseat prepare-track D1 --branch queue/D1 --scratchpad
 "<ROOT>/scratch"`, run from the worktree. It links shared folders (for example `node_modules`) from the main tree,
 creates `<ROOT>/scratch/D1/` (`<folder>` below) and sets the branch. Answer: `READY …` (ready) or `DENIES …`
 (refused: stop and report).
@@ -71,14 +71,14 @@ names the file, so the owner can add it to the task.
 **Ownership:**
 
 Your ownership is listed in the track block. Other tasks run at the same time and own their files
-(`cq show`, works from the worktree). Never touch what they own.
+(`ravenseat show`, works from the worktree). Never touch what they own.
 
 **New work you discover** (outside the mission, or a follow-up bug): do not do it yourself. Write a JSON file with
 Write (id, title, domain, class K|D|D+|U, mission = short self-contained description, value 1-10, content_min,
 depends_on, waiting_on, owned_files, shared_patch, source) and run, in your worktree as a command of its own,
-`cq add --file <file>`. It becomes a proposal the owner approves (at most 3 open per track). Mention the id in
+`ravenseat add --file <file>`. It becomes a proposal the owner approves (at most 3 open per track). Mention the id in
 the report, and a HIGH security finding in its own section.
-Noticed something outside your scope? Run `cq finding "<title>" [--detail "..."] [--files a,b]` instead of fixing it.
+Noticed something outside your scope? Run `ravenseat finding "<title>" [--detail "..."] [--files a,b]` instead of fixing it.
 
 - Change only what you own. Files the project lists as hotspots (navigation, layouts, central registries) are never
   edited by a track: deliver the component and a wiring specification (file, anchor, exact line) instead.
@@ -106,18 +106,18 @@ Noticed something outside your scope? Run `cq finding "<title>" [--detail "..."]
 **Client code:** follow the project's architecture rules (see `CLAUDE.md` and `architectureRules` in `queue.config.json`).
 Pure logic goes where it can be unit tested. No secrets or personal data in logs or error messages.
 
-**Gates** (`cq gates`; NEVER write your own check script; one line per gate and the full log in
+**Gates** (`ravenseat gates`; NEVER write your own check script; one line per gate and the full log in
 the log folder, so read the log file of a red gate instead of running it again):
-- Precheck first, every time: `cq gates --precheck` (the cheapest checks on your changed files, stops at the first red
+- Precheck first, every time: `ravenseat gates --precheck` (the cheapest checks on your changed files, stops at the first red
   one, a few minutes). Only a green precheck goes on to the class's full gate below; on RED fix the first error and
   run the precheck again. TIMEOUT (exit 3) means a check was only slow: go on to the full gate.
-- While working: `cq gates --quick`.
-- Before delivery, D and D+: `cq gates --full --log "<folder>/gates"` (must be green).
-- Your own gate runs are informational: `cq receive` runs the quick gates again on your delivered tip, so commit
+- While working: `ravenseat gates --quick`.
+- Before delivery, D and D+: `ravenseat gates --full --log "<folder>/gates"` (must be green).
+- Your own gate runs are informational: `ravenseat receive` runs the quick gates again on your delivered tip, so commit
   everything before you report. Never write the gate evidence or the queue files yourself (a hook denies it).
 
 **Report:** write the long version with Write to `<folder>/track-result.md`, NEVER in the answer. The answer STARTS with
-one result line in a fixed format (the queue reads it with `cq receive` and `set done`), with no spaces inside
+one result line in a fixed format (the queue reads it with `ravenseat receive` and `set done`), with no spaces inside
 the values:
 `RESULT status=DONE|PARTIAL branch=<branch> commits=<n> migr=<first-last|-> gates=OK|RED probe=<before→after|-> ownerQuestions=<n> edge=<functions|->`,
 for example `RESULT status=DONE branch=queue/X commits=3 migr=- gates=OK probe=- ownerQuestions=0 edge=-`.
@@ -131,17 +131,17 @@ own section (one line each: what, why, how to change it; "none" when there were 
 (file, anchor, exact line).
 **Known bugs:** when you fixed a bug that another change could easily repeat, add one line `GATE <failure class> @ <file:line>` to
 `track-result.md`, with the class in general words and the place of the bug you fixed (`GATE a fetch result used without checking the error @ src/api.js:42`). No bug fixed, no line. A one-off, such
-as a typo or a single wrong value, gets no line. `cq receive` turns the line into a task the owner decides on.
+as a typo or a single wrong value, gets no line. `ravenseat receive` turns the line into a task the owner decides on.
 **Gate tasks (label `gate`, title `Gate: <failure class>`):** red first. Show the new check failing on the original
 bug or a minimal reproduction (the commit before the fix, or a fixture kept next to the check) and passing on the
 fixed code. `track-result.md` has a "Red first" section with both runs: the command and its result line, red then green. A
 gate task without both runs is not DONE. When the track block has **Acceptance criteria (fixed, do not change)**, `track-result.md`
 says for each one how it is met (file:line or test); the gap reviewer checks them one by one.
 **QA evidence:** when the task has a label that needs evidence (`qa.evidenceLabels` in `queue.config.json`, default
-`visual`; see `cq info D1 --field labels`), `track-result.md` has one line `EVIDENCE <type>[=<ref>[,<ref>...]]` saying how
+`visual`; see `ravenseat info D1 --field labels`), `track-result.md` has one line `EVIDENCE <type>[=<ref>[,<ref>...]]` saying how
 the owner sees that the delivery works. The types are `qa.evidenceTypes` (default `screenshot=<route or screen>`,
 `test=<test file>` or `manual=<what to check by hand>`). Pure logic takes `test`, which is closed automatically when
-the configured command is green (`cq qa auto --run`); `manual` is gathered in one manual round. `cq receive` stores
+the configured command is green (`ravenseat qa auto --run`); `manual` is gathered in one manual round. `ravenseat receive` stores
 the evidence and warns when the line is missing.
 For D and D+ also: migrations and contracts, tests (red before, green after) and the self-review.
 

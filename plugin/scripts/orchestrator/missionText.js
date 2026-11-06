@@ -91,16 +91,16 @@ function makeQueueCommon(template, scratch, k = {}, missionAddendum = defaultAdd
     '<OWNERSHIP>',
     [
       'Your ownership is listed in the track block. Other tasks run at the same time and own their files',
-      `(\`${require('./lib/projectRoot.js').cqCommand()} show\`, works from the worktree). Never touch what they own.`,
+      `(\`${require('./lib/projectRoot.js').cliCommand()} show\`, works from the worktree). Never touch what they own.`,
       '',
       // newWorkWrite carries the line break (Claude: " with\nWrite"), so the wrapping is the same as before the split.
       '**New work you discover** (outside the mission, or a follow-up bug): do not do it yourself. Write a JSON file' +
         (addendum.newWorkWrite ?? '\n') +
         ' (id, title, domain, class K|D|D+|U, mission = short self-contained description, value 1-10, content_min,',
       'depends_on, waiting_on, owned_files, shared_patch, source) and run, in your worktree as a command of its own,',
-      `\`${require('./lib/projectRoot.js').cqCommand()} add --file <file>\`. It becomes a proposal the owner approves (at most 3 open per track). Mention the id in`,
+      `\`${require('./lib/projectRoot.js').cliCommand()} add --file <file>\`. It becomes a proposal the owner approves (at most 3 open per track). Mention the id in`,
       'the report, and a HIGH security finding in its own section.',
-      `Noticed something outside your scope? Run \`${require('./lib/projectRoot.js').cqCommand()} finding "<title>" [--detail "..."] [--files a,b]\` instead of fixing it.`,
+      `Noticed something outside your scope? Run \`${require('./lib/projectRoot.js').cliCommand()} finding "<title>" [--detail "..."] [--files a,b]\` instead of fixing it.`,
     ].join('\n'),
   );
   s = swap(s, '<BRANCH>', '__BRANCH__');

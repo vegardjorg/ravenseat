@@ -28,7 +28,7 @@
 //
 // Network guard for the queue's agents (hardening against prompt injection). Applies ONLY when the hook payload has an
 // agent_type that is a track (track, track-d) or a reviewer or helper agent, builtin or custom (the same list as the read
-// guard, trackGuard.js queueAgentTypes; also with the plugin prefix, "cq:track", "cq:reviewer"). None of them needs the
+// guard, trackGuard.js queueAgentTypes; also with the plugin prefix, "ravenseat:track", "ravenseat:reviewer"). None of them needs the
 // network. The orchestrator (the main session, the field is missing), other agent types and the owner are not affected:
 //   deny  curl, wget, Invoke-WebRequest/iwr, Invoke-RestMethod/irm, Start-BitsTransfer as a command (also inside
 //         `powershell -c "…"`, `bash -c "…"`, `$(…)` and `(…)`), and a pipe into a shell (`| sh`, `| bash`, `| iex` …).
@@ -192,7 +192,7 @@ function deployMatch(t, deployCommands) {
 
 /** The track agent types (the hook payload's agent_type, without a plugin prefix). Always network guarded. */
 const TRACK_AGENT_TYPES = new Set(['track', 'track-d']);
-/** The agent type without a plugin prefix ("cq:reviewer" -> "reviewer"). */
+/** The agent type without a plugin prefix ("ravenseat:reviewer" -> "reviewer"). */
 const bare = (agentType) => String(agentType || '').replace(/^.*:/, '');
 const isTrackAgent = (agentType) => TRACK_AGENT_TYPES.has(bare(agentType));
 
@@ -357,13 +357,13 @@ const AGENT_PUSH_REASON =
  * The queue commands a queue agent may run (an allow-list; everything else is denied for them). What tracks and the
  * review and helper agents legitimately need (agents/*.md, docs/mission-template.md): the setup and the gates, the
  * read-only views, and the few writes that report upwards (a finding, an owner question, a blocker, deliver). A list
- * value limits the command to those sub-words (`cq plan show|get`). `add` has its own rule (agentAddReason).
+ * value limits the command to those sub-words (`ravenseat plan show|get`). `add` has its own rule (agentAddReason).
  */
 const AGENT_QUEUE_COMMANDS = Object.freeze({
   'prepare-track': true,
   gates: true,
   help: true,
-  '': true, // bare `cq`: the help
+  '': true, // bare `ravenseat`: the help
   show: true,
   info: true,
   blockers: true,
@@ -377,18 +377,18 @@ const AGENT_QUEUE_COMMANDS = Object.freeze({
 const AGENT_QUEUE_LIST = 'prepare-track, gates, show, info, help, blockers, finding, question, block, deliver, plan show|get, add (from your own track branch)';
 
 /**
- * The deny reason for a queue agent's cq add, or null. It is only allowed from the agent's own track branch, because
+ * The deny reason for a queue agent's ravenseat add, or null. It is only allowed from the agent's own track branch, because
  * there the CLI makes it a proposal and sets added_by from the branch (cli/tasks.mjs). Anywhere else the CLI would take it
  * for the orchestrator's, and the task would be ready to start with no owner having seen it. So: never --approved, a queue
  * branch where the command runs, and nothing in the line that moves it somewhere else.
  */
 function agentAddReason(call, { branch, branchPrefix, moved }) {
   if (call.args.some((x) => x === '--approved' || x.startsWith('--approved=')))
-    return '`cq add --approved` is for the orchestrator and the owner. Without it your task becomes a proposal the owner approves.';
+    return '`ravenseat add --approved` is for the orchestrator and the owner. Without it your task becomes a proposal the owner approves.';
   if (moved)
-    return '`cq add` must run in your worktree as it is, with no cd or QUEUE_ variable in the same command: that is how the queue knows which track added it. Run it on its own.';
+    return '`ravenseat add` must run in your worktree as it is, with no cd or QUEUE_ variable in the same command: that is how the queue knows which track added it. Run it on its own.';
   if (!branch || !branchPrefix || !branch.startsWith(branchPrefix) || branch === branchPrefix)
-    return `\`cq add\` is only for a track, from its own branch (${branchPrefix ?? 'the queue prefix'}<id>). Elsewhere put it in your report or use cq finding.`;
+    return `\`ravenseat add\` is only for a track, from its own branch (${branchPrefix ?? 'the queue prefix'}<id>). Elsewhere put it in your report or use ravenseat finding.`;
   return null;
 }
 
@@ -403,7 +403,7 @@ function agentQueueReason(call, where = {}) {
   if (by >= 0) {
     const who = call.args[by].startsWith('--by=') ? call.args[by].slice(5) : call.args[by + 1];
     if (['owner', 'theboard'].includes(String(who ?? '').trim().toLowerCase()))
-      return `A queue agent never acts as the owner (\`--by ${who}\`); ask the owner with cq question.`;
+      return `A queue agent never acts as the owner (\`--by ${who}\`); ask the owner with ravenseat question.`;
   }
   if (name === 'add') return agentAddReason(call, where);
   const rule = Object.hasOwn(AGENT_QUEUE_COMMANDS, name) ? AGENT_QUEUE_COMMANDS[name] : false;
@@ -415,7 +415,7 @@ function agentQueueReason(call, where = {}) {
   }
   return (
     `\`${shown}\` is not for queue agents: merging, status changes, edits, approvals, answers and undo belong to the ` +
-    `orchestrator and the owner. Allowed: ${AGENT_QUEUE_LIST}. Put what you need in track-result.md or ask with cq question.`
+    `orchestrator and the owner. Allowed: ${AGENT_QUEUE_LIST}. Put what you need in track-result.md or ask with ravenseat question.`
   );
 }
 
@@ -447,7 +447,7 @@ const queueShaped = (command) => QUEUE_SHAPED.test(command);
  *   secretQuestion?: () => string|null  the secret precheck question for the same push (lib/secretScan.js), same rules.
  *   controlsQuestion?: () => string|null  the same push with no CI config or no gates (lib/controls.js), same rules.
  *   deployCommands?: string[]      default config().deployCommands,
- *   branchPrefix?: string          config().branchPrefix: a queue agent's `cq add` must run on such a branch,
+ *   branchPrefix?: string          config().branchPrefix: a queue agent's `ravenseat add` must run on such a branch,
  * }
  * The command line is read with lib/shellCommands.js (nested shells, eval, $( ), subshells and inline git aliases
  * included). A part it cannot see into, in a line that looks like a push (or, for a queue agent, a queue CLI call),
@@ -463,7 +463,7 @@ function assess(command, context = {}) {
   const allowedPushes = [];
   const read = SC.commandList(command);
   const unread = [...read.unsure];
-  // A queue agent's `cq add` is judged by the branch where it runs: a line that moves or repoints it first is not that branch.
+  // A queue agent's `ravenseat add` is judged by the branch where it runs: a line that moves or repoints it first is not that branch.
   let moved = /\bQUEUE_[A-Z_]+\s*=/.test(command);
   for (const c of read.commands) {
     const { t, i0 } = c;
@@ -620,7 +620,7 @@ function assess(command, context = {}) {
     else if (guarded && queueShaped(command))
       findings.push({
         decision: 'deny',
-        reason: `The push guard cannot read this command (${why}) and it calls the queue CLI. Run cq directly; allowed for queue agents: ${AGENT_QUEUE_LIST}.`,
+        reason: `The push guard cannot read this command (${why}) and it calls the queue CLI. Run ravenseat directly; allowed for queue agents: ${AGENT_QUEUE_LIST}.`,
       });
   }
   // The network guard applies to the queue's agents: tracks, reviewers and helper agents (never the orchestrator).

@@ -68,7 +68,7 @@ function project(config: Record<string, unknown>, files: Record<string, string> 
   }
   if (Object.keys(files).length) g(['commit', '-q', '-m', 'the track'], worktree);
   fs.writeFileSync(env.QUEUE_CONFIG as string, JSON.stringify({ baseBranch: 'develop', ...config }));
-  /** gates.mjs as cq receive runs it: --evidence in the track's worktree. */
+  /** gates.mjs as ravenseat receive runs it: --evidence in the track's worktree. */
   const gates = () => {
     const r = spawnSync(process.execPath, [GATES, '--quick', '--evidence', '--cwd', worktree, '--track', 'A'], {
       cwd: worktree,

@@ -48,7 +48,7 @@ export const SF = require('./lib/stateFile.js');
 export const FX = require('./lib/fixLinks.js');
 // Calibrated cost estimates (~$ in show, next, fill, info, state), `calibrate`, and USD per merged change (`cost`).
 export const CE = require('./lib/costEstimate.js');
-// Lite mode ("mode": "lite"): quick add with only a title, no small-task guard or batch queue on add, `cq mode`.
+// Lite mode ("mode": "lite"): quick add with only a title, no small-task guard or batch queue on add, `ravenseat mode`.
 export const LM = require('./lib/liteMode.js');
 // Load-aware slots: the measurement (free memory, optional CPU) for the load guard and the adaptive slot count.
 export const LS = require('./lib/loadSlots.js');
@@ -71,8 +71,8 @@ export const HERE = path.dirname(fileURLToPath(new URL('../queue.mjs', import.me
 // ROOT = the tree we run in (a worktree for a track); MAIN_TREE = the main tree, where the queue ALWAYS lives, otherwise
 // each track would get its own empty queue. Both come from lib/projectRoot.js. QUEUE_FOLDER overrides (tests).
 export const { tree: ROOT, main: MAIN_TREE } = require('./lib/projectRoot.js').roots();
-// The command to write in hints: `cq` (plugin) or `node scripts/orchestrator/cq.mjs` (vendored install).
-export const CQ = require('./lib/projectRoot.js').cqCommand();
+// The command to write in hints: `ravenseat` (plugin) or `node scripts/orchestrator/ravenseat.mjs` (vendored install).
+export const CLI = require('./lib/projectRoot.js').cliCommand();
 export const FOLDER = KK.dataFolder();
 export const FILE = path.join(FOLDER, 'queue.json');
 export const LOCK = path.join(FOLDER, '.lockState');
@@ -199,16 +199,16 @@ export function writeExternalWarning(o) {
   if (v.collisions.length) {
     console.log(
       `WARNING: ${v.collisions.length} change(s) in the owned files outside the queue since ${o.id} was added. ` +
-        'The track file gets the warning (cq trackFile), so the track reads the diff before it builds:',
+        'The track file gets the warning (ravenseat trackFile), so the track reads the diff before it builds:',
     );
     for (const k of v.collisions.slice(0, 5))
       console.log(`  ${L.collisionText(k, { withId: false })}`);
     if (v.collisions.length > 5)
-      console.log(`  ... and ${v.collisions.length - 5} more (cq external --all)`);
+      console.log(`  ... and ${v.collisions.length - 5} more (ravenseat external --all)`);
   }
   if (v.mentioned.length)
     console.log(
-      `NOTE: commits outside the queue mention ${o.id}; is it already completed? (cq external accept ${o.id} <sha>): ` +
+      `NOTE: commits outside the queue mention ${o.id}; is it already completed? (ravenseat external accept ${o.id} <sha>): ` +
         v.mentioned
           .slice(0, 3)
           .map((c) => `${c.summary} "${c.subject.slice(0, 50)}"`)
@@ -254,7 +254,7 @@ export function queueBranchId() {
 export function withLock(fn) {
   fs.mkdirSync(FOLDER, { recursive: true });
   const got = QL.acquire(LOCK, { waitMs: QL.waitMsFrom(process.env.QUEUE_LOCK_WAIT_MS) });
-  if (!got.ok) die(QL.heldMessage({ folder: FOLDER, cq: CQ, ...got }));
+  if (!got.ok) die(QL.heldMessage({ folder: FOLDER, ravenseat: CLI, ...got }));
   held = got.me;
   if (!releaseOnExit) {
     releaseOnExit = true;
@@ -269,10 +269,10 @@ export function withLock(fn) {
   }
 }
 /**
- * Stops the command if it holds the lock no more (taken over, or released with cq unlock): it must not publish.
+ * Stops the command if it holds the lock no more (taken over, or released with ravenseat unlock): it must not publish.
  * The gap between this check and the rename: on one machine it is closed by the rule in lib/queueLock.js, not by the
  * check, because a live holder is never taken over, so a holder that gets here and still lives keeps the lock through
- * the rename. (Only the owner's cq unlock --force breaks that, on the owner's word.) For a holder on another host the
+ * the rename. (Only the owner's ravenseat unlock --force breaks that, on the owner's word.) For a holder on another host the
  * age rule still applies: a holder pausing right here past 60 s can publish after losing the lock. The check only makes
  * that window small; a data folder shared across machines would need a lease or a real database to close it.
  */
@@ -284,7 +284,7 @@ function stopIfLockLost(what) {
     );
 }
 export function read() {
-  if (!fs.existsSync(FILE)) die(`The queue does not exist. Run: ${CQ} init`);
+  if (!fs.existsSync(FILE)) die(`The queue does not exist. Run: ${CLI} init`);
   const text = fs.readFileSync(FILE, 'utf8');
   try {
     return JSON.parse(text);
@@ -305,7 +305,7 @@ export function parallelWarning() {
   try {
     for (const l of D.diagnoseLines(D.parallelDiagnose(read()))) console.log(l);
   } catch (e) {
-    console.log(`(The queue diagnosis failed: ${e?.message ?? e}. Run cq diagnose.)`);
+    console.log(`(The queue diagnosis failed: ${e?.message ?? e}. Run ravenseat diagnose.)`);
   }
 }
 // The write keeps queue.json.prev (the previous good state) and retries the rename on Windows EPERM/EBUSY/EACCES
@@ -323,7 +323,7 @@ export const edit = (fn) =>
     return answer;
   });
 // Who made the change (the changelog) and optimistic concurrency (--expect-changed).
-export const byName = () => val('--by') ?? 'cq';
+export const byName = () => val('--by') ?? 'ravenseat';
 /** Refuses with exit 6 when the queue has changed after the time the caller previewed (called under the lock). */
 export function checkExpect(queue) {
   const f = L.expectCheck(queue, val('--expect-changed') ?? null);
@@ -362,7 +362,7 @@ export const editLogged = (action, fn) =>
 let focusClean = null;
 export function autoCleanFocus(queue, action) {
   try {
-    focusClean = L.cleanFocus(queue, { by: `cq ${action} (auto)` });
+    focusClean = L.cleanFocus(queue, { by: `ravenseat ${action} (auto)` });
   } catch (e) {
     focusClean = { error: e?.message ?? String(e) };
   }
@@ -370,13 +370,13 @@ export function autoCleanFocus(queue, action) {
 export function focusCleanOut() {
   if (!focusClean) return;
   if (focusClean.error)
-    console.log(`WARNING: the focus cleaning failed (${focusClean.error}); see cq focus evaluate.`);
+    console.log(`WARNING: the focus cleaning failed (${focusClean.error}); see ravenseat focus evaluate.`);
   else for (const l of L.focusCleanLines(focusClean)) console.log(l);
 }
 /** "(undo: queue.mjs undo)" after a logged write. */
 export const undoHint = () =>
   lastEntry
-    ? `Changelog no. ${lastEntry.nr} (${lastEntry.changes.length} field(s)); undo: cq undo`
+    ? `Changelog no. ${lastEntry.nr} (${lastEntry.changes.length} field(s)); undo: ravenseat undo`
     : null;
 // ---- The plan register: storage under the same lock as the queue ---------------------------------------
 const PLAN_FILE = path.join(FOLDER, 'plans.json');

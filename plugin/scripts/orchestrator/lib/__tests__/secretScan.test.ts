@@ -32,7 +32,7 @@ afterAll(() => {
 
 /** A repo with a bare remote, one pushed commit, and `files` committed on top (not pushed). */
 function repo(files: Record<string, string>, { push = true } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-secret-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-secret-'));
   temporary.push(dir);
   const remote = path.join(dir, 'remote.git');
   const work = path.join(dir, 'work');
@@ -264,7 +264,7 @@ describe('scanPush (temporary repos)', () => {
     expect(question(out)).toMatch(/net result/);
   });
   it('a folder that is not a repo gives the same question, not a silent pass', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-secret-norepo-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-secret-norepo-'));
     temporary.push(dir);
     expect(question(scanPush({ cwd: dir, remote: 'origin', branch: 'main' }))).toMatch(/did not finish/);
   });

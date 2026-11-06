@@ -196,7 +196,7 @@ const COMPACT_COMMAND =
 
 /**
  * How the owner turns Claude Code's own compaction on and off. Two separate settings: autoCompactEnabled (on/off,
- * default on) and the window (autoCompactWindow, which cq setup --settings sets to 300000; /autocompact 300k sets the same
+ * default on) and the window (autoCompactWindow, which ravenseat setup --settings sets to 300000; /autocompact 300k sets the same
  * window for the current model). "/autocompact auto" only resets the window to the model's own; it does not turn
  * compaction off. /config does not open in the desktop app, so the settings file line is given too.
  */
@@ -212,8 +212,8 @@ function compactMode(queue) {
 /** The mode in plain language, as it appears in the messages. */
 function modeText(mode) {
   return mode === 'auto'
-    ? 'automatic compaction (cq compact manual turns it off)'
-    : 'manual compaction (cq compact auto turns on automatic)';
+    ? 'automatic compaction (ravenseat compact manual turns it off)'
+    : 'manual compaction (ravenseat compact auto turns on automatic)';
 }
 
 /**
@@ -332,7 +332,7 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
         additionalContext: fresh
-          ? `[hook-context] WIND_DOWN (about ${k(n)} tokens). From now on: start NO new tasks (cq next/start/fill ` +
+          ? `[hook-context] WIND_DOWN (about ${k(n)} tokens). From now on: start NO new tasks (ravenseat next/start/fill ` +
             'refuses with exit 6). Allowed: receive delivered tracks (receive), review, fix rounds for already started ' +
             'tasks, merge, db push/deploy for what is merged, set done, resolve. Update the ' +
             `handover note ${note} (active tasks with branch/worktree/prompt, review packages and reviewers, ` +
@@ -391,16 +391,16 @@ const AFTER_COMPACT_NOW_MAX = 4_000;
  * by itself (the SessionStart hook cannot start one), so the instruction then applies to the first message afterwards.
  */
 function resumeText(mode) {
-  const cq = require('./projectRoot.js').cqCommand();
+  const ravenseat = require('./projectRoot.js').cliCommand();
   return [
     'RESUME NOW, without waiting for the owner:',
-    `  1. Read the "Now" part of the handover note ${HANDOVER_NOTE} (below, or \`${cq} handover now\`; the ` +
-      `scratchpad path and open matters are there). Run \`${cq} handover archive\` first; grep the rest of the ` +
+    `  1. Read the "Now" part of the handover note ${HANDOVER_NOTE} (below, or \`${ravenseat} handover now\`; the ` +
+      `scratchpad path and open matters are there). Run \`${ravenseat} handover archive\` first; grep the rest of the ` +
       'note and handover-archive/ only when you need an old detail.',
-    `  2. ${cq} orchestrator pulse`,
-    `  3. Receive tracks that have delivered (track-result.md exists): ${cq} receive <id>. Tracks under STARTED WITHOUT ` +
-      `AGENT have no agent: ${cq} set <id> waiting, then they come back in step 4.`,
-    `  4. ${cq} fill --scratchpad <scratchpad from the note>, and start ALL the agents it ` +
+    `  2. ${ravenseat} orchestrator pulse`,
+    `  3. Receive tracks that have delivered (track-result.md exists): ${ravenseat} receive <id>. Tracks under STARTED WITHOUT ` +
+      `AGENT have no agent: ${ravenseat} set <id> waiting, then they come back in step 4.`,
+    `  4. ${ravenseat} fill --scratchpad <scratchpad from the note>, and start ALL the agents it ` +
       'lists in the same turn.',
     mode === 'auto'
       ? '  Automatic compaction: the turn continues by itself, so do this now.'
@@ -441,7 +441,7 @@ function afterCompactText({
   ];
   if (windDownRevoked)
     header.push(
-      'The wind-down for this session is revoked (the owner compacted), so cq fill works again.',
+      'The wind-down for this session is revoked (the owner compacted), so ravenseat fill works again.',
     );
   header.push(resumeText(mode));
   if (now === null)
@@ -450,7 +450,7 @@ function afterCompactText({
         'most 40 lines) so the next compaction and takeover can read only that part.',
     );
   else if (typeof now === 'string' && now.trim()) {
-    const cutNow = '\n… (truncated; run cq handover now)';
+    const cutNow = '\n… (truncated; run ravenseat handover now)';
     const n = now.trimEnd();
     header.push(
       'The handover note, "Now" part (read from the file just now):\n' +
@@ -458,7 +458,7 @@ function afterCompactText({
     );
   }
   header.push(`Unpushed commits on ${base}: ${unpushed == null ? 'unknown' : unpushed}`);
-  // With choices, they follow numbered on their own lines (the owner answers with cq resolve <id> --choice <n>).
+  // With choices, they follow numbered on their own lines (the owner answers with ravenseat resolve <id> --choice <n>).
   const openOnes = (question ?? []).map(
     (s) =>
       `  ${s.sp}: ${s.text ?? '(missing text)'}${s.recommendation ? ` (recommendation: ${s.recommendation})` : ''}` +
@@ -471,11 +471,11 @@ function afterCompactText({
       ? `Open owner questions (${openOnes.length}):\n${openOnes.join('\n')}`
       : 'No open owner questions.',
   );
-  header.push('The queue (cq show):');
+  header.push('The queue (ravenseat show):');
   const start = header.join('\n') + '\n';
   const rest = Math.max(0, maxDraw - start.length);
   const v = String(show ?? '').trimEnd();
-  const cut = '\n… (truncated; run cq show)';
+  const cut = '\n… (truncated; run ravenseat show)';
   const body = v.length <= rest ? v : v.slice(0, Math.max(0, rest - cut.length)) + cut;
   return (start + body).slice(0, maxDraw);
 }

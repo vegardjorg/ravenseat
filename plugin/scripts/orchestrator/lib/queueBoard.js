@@ -28,7 +28,7 @@
 // =============================================================
 
 const L = require('./queueLogic.js');
-// The decision overview ("Decided today" in the inbox; the sorting and the writes are used by the board and cq decide).
+// The decision overview ("Decided today" in the inbox; the sorting and the writes are used by the board and ravenseat decide).
 const DEC = require('./queueDecisions.js');
 
 /** How far past the neighbor a card or a lane lands at the top or bottom (in priority points). */
@@ -654,7 +654,7 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
   };
   // Marked running with no agent (queueLogic.startedWithoutAgent, found by the caller, since it takes git).
   const noAgent = new Map(withoutAgent.map((x) => [x.id, x]));
-  // Silent for so long that the owner should know (shorter stops stay with the orchestrator: cq show, pulse).
+  // Silent for so long that the owner should know (shorter stops stay with the orchestrator: ravenseat show, pulse).
   const longSilent = new Map(
     (silent ?? []).filter((x) => x.silent_ms >= L.SILENT_CARD_MIN * 60_000).map((x) => [x.id, x.silent_ms / 60_000]),
   );
@@ -672,7 +672,7 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
       aging: k.aging,
       unlocks: k.unlocks ?? null,
       focus_step: focusStep(k.id),
-      // An open blocker reason (cq block): the decision overview does not flag it again.
+      // An open blocker reason (ravenseat block): the decision overview does not flag it again.
       open_block: L.openBlockOf(map.perId.get(k.id))?.code ?? null,
       // The merge or gate stop the owner should see (the decision overview gives it its own card).
       stop: stopInfo(k),
@@ -1296,7 +1296,7 @@ function assess(queue, action = {}, context = {}) {
     if (context.orchestrator?.active)
       add(
         'info',
-        `An orchestrator is active: deliver when you are done (cq deliver ${o.id}), then the orchestrator merges.`,
+        `An orchestrator is active: deliver when you are done (ravenseat deliver ${o.id}), then the orchestrator merges.`,
       );
     if (L.hasMigr(o))
       add(
@@ -1685,7 +1685,7 @@ function assessBulk(queue, action, add) {
 
   if (h === 'project' && val.pid) {
     if (!Object.hasOwn(register, val.pid))
-      add('stop', `The project ${val.pid} does not exist. Create it first (cq project).`);
+      add('stop', `The project ${val.pid} does not exist. Create it first (ravenseat project).`);
     else if (register[val.pid]?.pause === true)
       add(
         'warning',
@@ -1826,7 +1826,7 @@ function settings(queue, { migrations = true } = {}) {
 }
 
 /**
- * The "Helper agents" tab writes a switch: the body { name, enabled } becomes `cq helpers on|off <name>` (queue.mjs does
+ * The "Helper agents" tab writes a switch: the body { name, enabled } becomes `ravenseat helpers on|off <name>` (queue.mjs does
  * the write under the lock, never the board). `names` are the helpers in the setup; anything else is refused here.
  * `setup` (helperSetup with the files checked) refuses to switch on a custom helper that is not approved for its file
  * as it is now, before queue.mjs is even asked (queue.mjs refuses it too). The board can never approve.
@@ -1845,7 +1845,7 @@ function helperSwitchArgs(b, names, setup = null) {
 }
 
 /**
- * The "Add helper" field: the body { path, name? } becomes `cq helpers add <path> [--name <name>]`. queue.mjs reads,
+ * The "Add helper" field: the body { path, name? } becomes `ravenseat helpers add <path> [--name <name>]`. queue.mjs reads,
  * copies, hashes and scans the file on the server side and leaves the helper OFF; nothing from the file is run.
  * Only a .md path without control characters, and a valid agent name, get through.
  * @returns {{ args: string[] } | { error: string }}

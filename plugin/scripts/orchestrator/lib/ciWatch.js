@@ -1,7 +1,7 @@
 // =============================================================
-// ciWatch.js: the pure parts of the CI watch (`cq push-check --watch-ci <sha>`, cli/ciWatch.mjs).
+// ciWatch.js: the pure parts of the CI watch (`ravenseat push-check --watch-ci <sha>`, cli/ciWatch.mjs).
 //
-// Why: the local gates are the primary rule (a push needs a green `cq gates --full` on the tip), but the project's CI
+// Why: the local gates are the primary rule (a push needs a green `ravenseat gates --full` on the tip), but the project's CI
 // can still go red on what the batch push sent (another OS, a service the local run mocks, a secret only CI has).
 // Nothing in the queue noticed that until someone opened GitHub. The CI watch is an OPTIONAL safety net
 // (config().push.ciWatch: "off" by default, "github" to turn it on): after a batch push the orchestrator starts it in the
@@ -11,7 +11,7 @@
 //   green  every run completed with success, skipped or neutral.
 //   check  a run failed because a check failed: one fix task CI-<sha7> (value 10, class K, added_by "ci watch", so
 //          waiting, as the base fix task), and the base is marked red at that tip the way the base gate does it (with
-//          CI-<sha7> as its fix task), so cq merge refuses other tracks until it is fixed.
+//          CI-<sha7> as its fix task), so ravenseat merge refuses other tracks until it is fixed.
 //   infra  every red run failed for a reason outside the code (cancelled, timed out, a runner that never started or
 //          went away, billing): an owner question ci-<sha7>-infra (rerun or ignore). Nothing is frozen.
 // Never twice: the task id and the question id are derived from the sha, so a rerun that is red again finds them.
@@ -72,7 +72,7 @@ function ciWatchSetup(cfg = {}) {
   };
 }
 
-/** The problems in the ciWatch keys of config().push, for `cq doctor` (texts, empty when valid). */
+/** The problems in the ciWatch keys of config().push, for `ravenseat doctor` (texts, empty when valid). */
 function setupProblems(push) {
   if (!isObject(push)) return [];
   const out = [];
@@ -161,7 +161,7 @@ function fixTask({ sha, branch, runs, reportFile, project = null }) {
       `The local gates were green on that commit, so the difference is in what CI runs or where it runs.\n\n` +
       `The tail of the failed jobs' log (redacted) is in ${reportFile} (read it first; the runs are linked there).\n\n` +
       `Make CI green on top of ${branch} as it is now with the smallest change. When the cause is the CI setup and not ` +
-      'the code, say so in the report. cq merge refuses every other track until this task is merged and the base is green.',
+      'the code, say so in the report. ravenseat merge refuses every other track until this task is merged and the base is green.',
     value: 10,
     content_min: 30,
     migr_tens: 0,
@@ -184,8 +184,8 @@ function infraQuestion({ sha, branch, items, reportFile }) {
     question: {
       type: 'question',
       text:
-        `CI on ${branch} at ${short(sha)} failed for a reason outside the code (${what}). Nothing was frozen: cq merge ` +
-        `goes on. Details: ${reportFile}. Rerun the failed jobs${first ? ` (gh run rerun ${first} --failed, then cq push-check --watch-ci ${sha})` : ''}, or ignore this run?`,
+        `CI on ${branch} at ${short(sha)} failed for a reason outside the code (${what}). Nothing was frozen: ravenseat merge ` +
+        `goes on. Details: ${reportFile}. Rerun the failed jobs${first ? ` (gh run rerun ${first} --failed, then ravenseat push-check --watch-ci ${sha})` : ''}, or ignore this run?`,
       recommendation: 'Rerun the failed jobs',
       source: 'ci watch',
       choices: ['Rerun the failed jobs', 'Ignore this run'],

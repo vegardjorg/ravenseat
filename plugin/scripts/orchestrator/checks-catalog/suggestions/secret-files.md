@@ -10,7 +10,7 @@ why: A password or key in git can be read by anyone with the repo, also in old c
 
 ## Investigate
 
-- Run `cq doctor` and read its `secrets` lines.
+- Run `ravenseat doctor` and read its `secrets` lines.
 - Which secret files are not ignored, and is any key already in the git history? Name files, never values.
 
 ## Plan and build

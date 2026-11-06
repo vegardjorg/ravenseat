@@ -8,10 +8,10 @@
 //
 // How merged tasks are counted (cheap, and the same in push-check, the push guard and the board):
 //   the first-parent line of <remote>/<baseBranch>..<baseBranch> (one `git log --first-parent`), where a commit with two
-//   or more parents and the subject "Merge branch '<branchPrefix><id>' ..." is a merged task (the message `cq merge`
+//   or more parents and the subject "Merge branch '<branchPrefix><id>' ..." is a merged task (the message `ravenseat merge`
 //   writes with `git merge --no-ff --no-edit`; logic/commits.js queueIdFromMerge). Distinct ids, so a task merged twice
 //   counts once. The queue state (queue.json) is not read: the merge commits on the line ARE the tasks that are done
-//   via cq merge and not yet on the remote, and git answers that in one call without parsing the queue. Commits are the
+//   via ravenseat merge and not yet on the remote, and git answers that in one call without parsing the queue. Commits are the
 //   secondary figure (`git rev-list --count`, everything the push sends, also the track commits under the merges).
 //   The remote ref is the local <remote>/<baseBranch> (as of the last fetch); nothing here fetches.
 //   The age is the committer time of the oldest commit on the first-parent line: when the oldest unpushed work landed
@@ -52,7 +52,7 @@ const count = (v, standard) => (Number.isInteger(v) && v >= 0 ? v : standard);
 
 /**
  * The push setup from the configuration, with the defaults for missing or invalid values (a wrong value never stops a
- * push; `cq doctor` names it).
+ * push; `ravenseat doctor` names it).
  * @returns {{ mode: 'owner'|'threshold', minTasks: number, warnTasks: number, maxAgeHours: number|null }}
  */
 function pushSetup(cfg = {}) {
@@ -66,7 +66,7 @@ function pushSetup(cfg = {}) {
 }
 
 /**
- * The problems in config().push, for `cq doctor` (texts, empty when valid).
+ * The problems in config().push, for `ravenseat doctor` (texts, empty when valid).
  * @param {unknown} push the raw `push` value from queue.config.json
  */
 function setupProblems(push) {
@@ -147,9 +147,9 @@ const hoursSince = (at, now) => (now - Date.parse(at ?? '')) / 3_600_000;
 /** The hint for a missing or red full gate on the tip (push-check and the push guard say the same). */
 function fullGateText(fullGate, tip) {
   const at = String(tip ?? '').slice(0, 7);
-  if (fullGate === 'red') return `the full gate is red at ${at} (cq gates --full in the main checkout, then fix it)`;
+  if (fullGate === 'red') return `the full gate is red at ${at} (ravenseat gates --full in the main checkout, then fix it)`;
   if (fullGate === 'missing')
-    return `no green full gate recorded on ${at} (run cq gates --full in the main checkout, on the tip, with no uncommitted changes)`;
+    return `no green full gate recorded on ${at} (run ravenseat gates --full in the main checkout, on the tip, with no uncommitted changes)`;
   return null;
 }
 
@@ -243,7 +243,7 @@ function boardBatch({ batch, setup, health = 'unknown', fullGate = 'off', blocke
   return { verdict: v.verdict, tasks: batch.taskCount, minTasks: setup.minTasks, text };
 }
 
-// ---- CI cost of the project's workflows (for `cq doctor`) ------------------------------------------------------------
+// ---- CI cost of the project's workflows (for `ravenseat doctor`) ------------------------------------------------------------
 //
 // A plain text scan of a GitHub Actions workflow, no YAML parser (the plugin has no dependencies). Limits, on purpose:
 //   - the trigger block is the top-level `on:` key (also `"on":` and `true:`, how some YAML tools write it) up to the next

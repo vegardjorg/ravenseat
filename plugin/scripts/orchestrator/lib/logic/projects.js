@@ -266,7 +266,7 @@ function newRegister(register, changes, areas = {}) {
         error.push(`${pid}: area must be a short kebab-case id`);
       else if (!Object.hasOwn(areas ?? {}, field.area))
         error.push(
-          `${pid}: unknown area ${field.area} (create it first: cq area ${field.area} --title "…")`,
+          `${pid}: unknown area ${field.area} (create it first: ravenseat area ${field.area} --title "…")`,
         );
     }
     fresh[pid] = p;

@@ -3,7 +3,7 @@
 //
 // Why: comparing the surface before and after one run has two holes. A hook planted by a gate makes that run red, but a
 // rerun compares against the already changed "before" and goes green; and a hook written outside any run is never seen.
-// So the data folder keeps what was last accepted, and cq receive, cq merge and push-check compare against that BEFORE
+// So the data folder keeps what was last accepted, and ravenseat receive, ravenseat merge and push-check compare against that BEFORE
 // the next git command that could run it. A difference is the owner's decision, never a fix round.
 //
 // Most differences are not an attack: someone installed husky or lefthook, or changed a global alias. The stop text
@@ -15,7 +15,7 @@
 // through realpath so that a Windows 8.3 path and a long path are the same folder.
 //
 // Who writes it: ensure (trust on first use: only when the file is missing; a file that does not parse stops instead,
-// so breaking it cannot get a new silent first use), accept (`cq surface accept --by owner`) and watch's write-back.
+// so breaking it cannot get a new silent first use), accept (`ravenseat surface accept --by owner`) and watch's write-back.
 //
 // The surface is read in the MAIN checkout whatever folder is asked (mainCheckout): that is where the orchestrator's git
 // commands run, and a relative core.hooksPath (husky's .husky/_) or an includeIf gitdir: names another folder per worktree.
@@ -25,8 +25,8 @@
 // and lib/writeGuard.js). What exists at the first ensure is trusted.
 //
 // The setting: config().gitSurface. "stop" (the default) is all of the above; "warn" says the same things on stderr and
-// stops nothing; "off" compares nothing. Read here, in mode(), so that every check follows it. `cq surface`, `cq surface
-// accept` and cq doctor still report the real state in any mode. The evidence store's own check (lib/gateEvidence.js) is
+// stops nothing; "off" compares nothing. Read here, in mode(), so that every check follows it. `ravenseat surface`, `ravenseat surface
+// accept` and ravenseat doctor still report the real state in any mode. The evidence store's own check (lib/gateEvidence.js) is
 // not part of this setting. queue.config.json is a protected path for a track; a run of track code that weakens the
 // setting directly in the file is named by watch.
 //
@@ -61,7 +61,7 @@ const DOCS = 'docs/queue.md, "Git hooks and config"';
 
 const fileOf = (folder) => (folder ? path.join(folder, FILE_NAME) : null);
 
-/** The mode a config asks for; anything else is "stop" (cq doctor names a wrong value). Pure. */
+/** The mode a config asks for; anything else is "stop" (ravenseat doctor names a wrong value). Pure. */
 const modeOf = (k) => (MODES.includes(k?.gitSurface) ? k.gitSurface : 'stop');
 
 /** The mode for this process. A config that cannot be read means "stop". */
@@ -334,7 +334,7 @@ function hookStart(file) {
 }
 
 /**
- * What differs in full, for the stop message and `cq surface`: null when it matches or there is no baseline.
+ * What differs in full, for the stop message and `ravenseat surface`: null when it matches or there is no baseline.
  * @returns {null | { reason: string, changes: string[], differences: object[], hint: string|null }}
  */
 function driftDetail(folder, cwd) {
@@ -364,21 +364,21 @@ function driftDetail(folder, cwd) {
 /**
  * What a check that may stop acts on: driftDetail in mode "stop"; in "warn" a short note on stderr and null; in "off" null.
  */
-function stopDetail(folder, cwd, { cq = 'cq' } = {}) {
+function stopDetail(folder, cwd, { ravenseat = 'ravenseat' } = {}) {
   const m = mode();
   if (m === 'off') return null;
   const detail = driftDetail(folder, cwd);
   if (!detail || m === 'stop') return detail;
-  console.error(`WARNING (gitSurface is warn, nothing stopped): ${detail.reason}. ${cq} surface shows each difference.`);
+  console.error(`WARNING (gitSurface is warn, nothing stopped): ${detail.reason}. ${ravenseat} surface shows each difference.`);
   return null;
 }
 
 /** The owner's two ways out, in the words of the stop message. Pure. */
-function nextSteps({ cq, again }) {
+function nextSteps({ ravenseat, again }) {
   return [
     'Next step:',
-    `  ${cq} surface                     shows each difference and where it lives`,
-    `  ${cq} surface accept --by owner   if you made this change: accepts it, one command, nothing else to do`,
+    `  ${ravenseat} surface                     shows each difference and where it lives`,
+    `  ${ravenseat} surface accept --by owner   if you made this change: accepts it, one command, nothing else to do`,
     `  Otherwise remove it${again ? `, then run ${again} again` : ', then run this again'}.`,
   ];
 }
@@ -386,9 +386,9 @@ function nextSteps({ cq, again }) {
 /**
  * The stop message for a drifted surface. For someone who did nothing wrong: what differs (names only), that this is
  * normal, why the stop, the next step. No queue words: it must read the same in lite mode. Pure.
- * @param {{ changes: string[], hint?: string|null, cq: string, again?: string|null, afterRun?: boolean }} o
+ * @param {{ changes: string[], hint?: string|null, ravenseat: string, again?: string|null, afterRun?: boolean }} o
  */
-function driftMessage({ changes, hint = null, cq, again = null, afterRun = false }) {
+function driftMessage({ changes, hint = null, ravenseat, again = null, afterRun = false }) {
   const what = "this repository's git hooks or git settings are not the ones accepted earlier.";
   return [
     afterRun ? `This check counts as failed: ${what}` : `Stopped before running anything: ${what}`,
@@ -397,7 +397,7 @@ function driftMessage({ changes, hint = null, cq, again = null, afterRun = false
     'This is normal after installing a hook tool (husky, lefthook) or changing your git config.',
     'Why it stops: hooks and these settings run code at the next git command, with your credentials, and automated work',
     'in this repository could have put them there. Only you can tell which it is.',
-    ...nextSteps({ cq, again }),
+    ...nextSteps({ ravenseat, again }),
     'Too much friction for this repository? Set "gitSurface": "warn" (or "off") in queue.config.json.',
     `${afterRun ? '' : 'Nothing changed. '}More in ${DOCS}.`,
   ].join('\n');
@@ -406,9 +406,9 @@ function driftMessage({ changes, hint = null, cq, again = null, afterRun = false
 /**
  * The stop when a run of the code under test changed something. This one does say tampered: it was seen during the run.
  * Pure.
- * @param {{ what: string, reason: string, cq: string, again?: string|null }} o
+ * @param {{ what: string, reason: string, ravenseat: string, again?: string|null }} o
  */
-function tamperedMessage({ what, reason, cq, again = null }) {
+function tamperedMessage({ what, reason, ravenseat, again = null }) {
   const storeOnly = !/git hooks or config|baseline/.test(reason);
   return [
     `STOP, the owner decides: ${what} changed something outside the code it was checking.`,
@@ -416,7 +416,7 @@ function tamperedMessage({ what, reason, cq, again = null }) {
     'No fix round is started: code that changes these should not be sent back to an agent to be fixed.',
     ...(storeOnly
       ? [`What it changed was dropped. Read the code that ran; ${again ?? 'the same command'} runs it again.`]
-      : [`${GX.INSPECT}.`, ...nextSteps({ cq, again })]),
+      : [`${GX.INSPECT}.`, ...nextSteps({ ravenseat, again })]),
     `Nothing changed in the queue. More in ${DOCS}.`,
   ].join('\n');
 }

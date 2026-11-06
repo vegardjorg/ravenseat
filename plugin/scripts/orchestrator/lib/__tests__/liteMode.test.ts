@@ -28,7 +28,7 @@ const LM = require('../liteMode') as {
 const H = require('../cliHelp') as {
   QUEUE_COMMANDS: string[];
   LITE_GROUPS: { commands: { cmd: string }[] }[];
-  shortHelp: (cq?: string, o?: { lite?: boolean }) => string[];
+  shortHelp: (ravenseat?: string, o?: { lite?: boolean }) => string[];
 };
 const KK = require('../queueConfig') as { STANDARD: Task; merge: (a: Task, b: Task) => Task };
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -119,11 +119,11 @@ describe('setModeText', () => {
 describe('the lite help', () => {
   it('lists only core commands that exist, and says how to switch to full mode', () => {
     for (const c of H.LITE_GROUPS.flatMap((g) => g.commands)) expect(H.QUEUE_COMMANDS).toContain(c.cmd);
-    const lite = H.shortHelp('cq', { lite: true }).join('\n');
+    const lite = H.shortHelp('ravenseat', { lite: true }).join('\n');
     expect(lite).toMatch(/lite mode/);
-    expect(lite).toMatch(/cq mode full/);
+    expect(lite).toMatch(/ravenseat mode full/);
     expect(lite).not.toMatch(/approve|takeover|pick/);
-    expect(H.shortHelp('cq').join('\n')).not.toMatch(/lite mode/);
+    expect(H.shortHelp('ravenseat').join('\n')).not.toMatch(/lite mode/);
   });
 });
 
@@ -142,12 +142,12 @@ const run = (script: string, ...args: string[]) =>
     p.on('error', reject);
     p.on('close', (status) => resolve({ status, stdout, stderr }));
   });
-const cq = (...args: string[]) => run('queue.mjs', ...args);
+const ravenseat = (...args: string[]) => run('queue.mjs', ...args);
 const configFile = () => path.join(root, 'queue.config.json');
 const queue = () => JSON.parse(fs.readFileSync(path.join(root, 'q', 'queue.json'), 'utf8'));
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-lite-'));
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-lite-'));
   env = {
     ...process.env,
     QUEUE_ROOT: root,
@@ -162,50 +162,50 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
-describe('cq init and .gitignore', () => {
+describe('ravenseat init and .gitignore', () => {
   it('in a git repo, a fresh init adds the data folder once; a second init adds nothing', async () => {
     expect(spawnSync('git', ['init', '-q'], { cwd: root }).status).toBe(0);
-    const init = await cq('init');
+    const init = await ravenseat('init');
     expect(init.status, init.stderr).toBe(0);
     expect(init.stdout).toContain('Added q/ to .gitignore');
     expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toContain('\nq/\n');
     expect(spawnSync('git', ['check-ignore', '-q', 'q'], { cwd: root }).status).toBe(0);
-    await cq('init');
+    await ravenseat('init');
     expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8').match(/^q\/$/gm)).toHaveLength(1);
   });
 
   it('a folder git already ignores is left alone, and outside git nothing is written', async () => {
     expect(spawnSync('git', ['init', '-q'], { cwd: root }).status).toBe(0);
     fs.writeFileSync(path.join(root, '.gitignore'), 'q/\n');
-    expect((await cq('init')).stdout).not.toContain('to .gitignore');
+    expect((await ravenseat('init')).stdout).not.toContain('to .gitignore');
     expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe('q/\n');
   });
 
   it('outside a git repo: no .gitignore', async () => {
-    const init = await cq('init');
+    const init = await ravenseat('init');
     expect(init.status, init.stderr).toBe(0);
     expect(fs.existsSync(path.join(root, '.gitignore'))).toBe(false);
   });
 });
 
-describe('cq init, add, help and mode', () => {
+describe('ravenseat init, add, help and mode', () => {
   it('a fresh init is lite; add takes a title, refuses nothing for its size, keeps owner questions', async () => {
-    const init = await cq('init');
+    const init = await ravenseat('init');
     expect(init.status, init.stderr).toBe(0);
     expect(JSON.parse(fs.readFileSync(configFile(), 'utf8'))).toEqual({ mode: 'lite' });
     expect(Object.keys(queue().projects)).toEqual(['tasks']);
 
-    const typo = await cq('add', 'Later', '--depends', 'T-999');
+    const typo = await ravenseat('add', 'Later', '--depends', 'T-999');
     expect(typo.status).not.toBe(0);
     expect(typo.stderr + typo.stdout).toContain('unknown task(s): T-999');
-    const a = await cq('add', 'Fix the login bug');
+    const a = await ravenseat('add', 'Fix the login bug');
     expect(a.status, a.stderr).toBe(0);
     expect(a.stdout).toContain('Added: T-001');
     // A 5-minute task with low value: refused by the small-task guard in full mode, added in lite.
-    const small = await cq('add', '--json', '{"title":"Tiny fix","content_min":5,"value":2}');
+    const small = await ravenseat('add', '--json', '{"title":"Tiny fix","content_min":5,"value":2}');
     expect(small.status, small.stderr).toBe(0);
     // Owner questions stay: waiting_on with a registered question blocks the task until it is resolved.
-    const q = await cq(
+    const q = await ravenseat(
       'add',
       '--json',
       '{"tasks":[{"title":"Needs you","waiting_on":["Q-1"]}],"question":{"Q-1":{"type":"question","text":"Which colour?"}}}',
@@ -214,45 +214,45 @@ describe('cq init, add, help and mode', () => {
     const t = queue().tasks;
     expect(t.map((o: Task) => o.id)).toEqual(['T-001', 'T-002', 'T-003']);
     expect(t[0]).toMatchObject({ class: 'K', value: 5, content_min: 30, status: 'waiting', mission: 'Fix the login bug' });
-    const next = await cq('next');
+    const next = await ravenseat('next');
     expect(next.stdout).toContain('T-001');
     expect(next.stdout).not.toContain('T-003');
 
-    const help = await run('cq.mjs', 'help');
+    const help = await run('ravenseat.mjs', 'help');
     expect(help.stdout).toContain('(lite mode)');
-    expect(help.stdout).toContain('cq mode full');
+    expect(help.stdout).toContain('ravenseat mode full');
   });
 
-  it('cq mode full switches back: the guard and the JSON-only add return', async () => {
-    expect((await cq('init', '--lite')).status).toBe(0);
-    const m = await cq('mode', 'full');
+  it('ravenseat mode full switches back: the guard and the JSON-only add return', async () => {
+    expect((await ravenseat('init', '--lite')).status).toBe(0);
+    const m = await ravenseat('mode', 'full');
     expect(m.status, m.stderr).toBe(0);
     expect(JSON.parse(fs.readFileSync(configFile(), 'utf8')).mode).toBe('full');
-    const quick = await cq('add', 'A title');
+    const quick = await ravenseat('add', 'A title');
     expect(quick.status).not.toBe(0);
     expect(quick.stderr).toMatch(/lite mode/);
-    const small = await cq(
+    const small = await ravenseat(
       'add',
       '--json',
       '{"id":"T-9","title":"t","domain":"d","class":"K","mission":"m","content_min":5,"value":2}',
     );
     expect(small.status).not.toBe(0);
     expect(small.stderr).toMatch(/small task/);
-    expect((await cq('mode')).stdout).toMatch(/Mode: full/);
+    expect((await ravenseat('mode')).stdout).toMatch(/Mode: full/);
   });
 
   it('never switches an existing install or a config with its own mode', async () => {
     // A config with mode full: a fresh init keeps full and the example project.
     fs.writeFileSync(configFile(), '{\n  "mode": "full"\n}\n');
-    expect((await cq('init')).status).toBe(0);
+    expect((await ravenseat('init')).status).toBe(0);
     expect(Object.keys(queue().projects)).toEqual(['example']);
     // An existing queue with a config without mode: init changes nothing.
     fs.writeFileSync(configFile(), '{\n  "projectName": "x"\n}\n');
-    const again = await cq('init');
+    const again = await ravenseat('init');
     expect(again.stdout).toContain('already exists');
     expect(fs.readFileSync(configFile(), 'utf8')).toBe('{\n  "projectName": "x"\n}\n');
     // With a flag it does switch (the user asked).
-    expect((await cq('init', '--lite')).status).toBe(0);
+    expect((await ravenseat('init', '--lite')).status).toBe(0);
     expect(JSON.parse(fs.readFileSync(configFile(), 'utf8'))).toEqual({ mode: 'lite', projectName: 'x' });
   });
 });

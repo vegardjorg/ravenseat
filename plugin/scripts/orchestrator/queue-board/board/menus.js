@@ -85,7 +85,7 @@ const BADGES = [
   ['badge locks', 'unlocks 3', 'This many tasks are waiting on this one via the chain.'],
   ['badge cloud-badge', 'Cloud', 'Running in a cloud session.'],
   ['badge old', 'old', 'Picked or registered outside the queue more than 72 hours ago.'],
-  ['badge tone-warn silent-badge', 'silent', 'Running with an agent, but no sign of life for a while (cq show says what to do).'],
+  ['badge tone-warn silent-badge', 'silent', 'Running with an agent, but no sign of life for a while (ravenseat show says what to do).'],
   ['badge qa', 'Waiting for QA', 'Built, but the owner has not looked it over.'],
   ['badge deviation', 'QA deviation', 'The owner found something during the check.'],
   ['badge deviation', 'Merged, not verified', 'No gates, no done command and no agent review ran on this task.'],
@@ -175,7 +175,7 @@ function openHelp() {
     el('p', {
       class: 'inbox-info',
       text:
-        'Everything the board writes goes via cq with a lock, and nothing changes before you have seen the explanation and confirmed.',
+        'Everything the board writes goes via ravenseat with a lock, and nothing changes before you have seen the explanation and confirmed.',
     }),
   );
   panel.querySelector('.button-icon')?.focus();

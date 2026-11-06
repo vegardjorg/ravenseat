@@ -1,5 +1,5 @@
 // =============================================================
-// askBundle.test.ts: `cq ask <id>`, the bundle for a question about an earlier track (lib/askBundle.js, cli/ask.mjs).
+// askBundle.test.ts: `ravenseat ask <id>`, the bundle for a question about an earlier track (lib/askBundle.js, cli/ask.mjs).
 //
 // Why: the bundle replaces resuming a huge track agent, so it must hold the pieces that answer questions (report,
 // handover, mission, queue notes and owner answers, commits, transcript tail), stay under its size cap, and NEVER carry

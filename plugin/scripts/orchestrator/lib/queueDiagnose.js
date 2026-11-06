@@ -26,7 +26,7 @@ const L = require('./queueLogic.js');
 const DEFAULT_THRESHOLD = 0.7;
 
 /** The command the findings suggest (run from the repo root, also from a worktree). */
-const QUEUE = require('./projectRoot.js').cqCommand();
+const QUEUE = require('./projectRoot.js').cliCommand();
 
 /**
  * The remark batch pack (and the orchestrator) writes on a cancelled task: "<time> merged into <new-id>".
@@ -206,13 +206,13 @@ function bottleneckRecommendation(o, queue) {
   if (o.status === 'running')
     return `let ${o.id} finish; no action unless the track is stuck`;
   if (o.status === 'picked')
-    return `ask ${o.picked_by ?? 'whoever picked it'} about progress, or cq release ${o.id}`;
+    return `ask ${o.picked_by ?? 'whoever picked it'} about progress, or ravenseat release ${o.id}`;
   if (o.status === 'proposed') return `the owner approves or rejects: ${QUEUE} approve ${o.id}`;
   const sp = L.openQuestion(o, queue.resolved);
   if (sp.length) return `an owner answer on ${sp.join(', ')} unlocks it`;
   if (L.projectPaused(o, queue.projects ?? {}))
     return `the owner decides whether project ${L.projectFor(o, queue.projects ?? {})} should be unpaused`;
-  return 'see the blockers (cq show --full); no mechanical fix';
+  return 'see the blockers (ravenseat show --full); no mechanical fix';
 }
 
 /**
@@ -531,18 +531,18 @@ function diagnoseLines(d, { max = 12 } = {}) {
   const out = [heading(d)];
   if (!important.length) {
     out.push(
-      '  No mechanical errors in dependencies or waits. See cq show (limits, conflicts, focus that is waiting).',
+      '  No mechanical errors in dependencies or waits. See ravenseat show (limits, conflicts, focus that is waiting).',
     );
     return out;
   }
   const tail = [
-    '  Simple: the orchestrator runs the command. Complex: put the choice with the recommendation before the owner (cq diagnose).',
+    '  Simple: the orchestrator runs the command. Complex: put the choice with the recommendation before the owner (ravenseat diagnose).',
   ];
   const space = Math.max(1, max - 1 - tail.length);
   const show = important.slice(0, important.length > space ? space - 1 : space);
   for (const f of show) out.push(findingsLine(f));
   if (important.length > show.length)
-    out.push(`  +${important.length - show.length} more findings (cq diagnose)`);
+    out.push(`  +${important.length - show.length} more findings (ravenseat diagnose)`);
   return [...out, ...tail];
 }
 

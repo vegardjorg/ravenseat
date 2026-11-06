@@ -3,9 +3,9 @@
 //
 // Why: a fix that lands after a task was merged is a defect of that task. Until now the only trace was a naming habit
 // (<id>-QA1, <id>-FIX) or a label; with `fixes` the link is explicit data, so the benchmark (bench/) can count defects
-// after merge per task, and `cq info`/`cq state` can show what a fix task is for.
+// after merge per task, and `ravenseat info`/`ravenseat state` can show what a fix task is for.
 //
-// The field: one task id or a list of ids in what is added (`cq add`) or edited (`cq edit`); stored as a list. Every id
+// The field: one task id or a list of ids in what is added (`ravenseat add`) or edited (`ravenseat edit`); stored as a list. Every id
 // must exist in the queue (or be added in the same `add`), and a task cannot fix itself. `qa deviation` sets it on the
 // fix task it creates (queueLogic.qaDeviation).
 //
@@ -63,7 +63,7 @@ function fixedBy(id, tasks = []) {
 }
 
 /**
- * The open fix links for `cq state`: every task that is not done or cancelled and has `fixes`, as
+ * The open fix links for `ravenseat state`: every task that is not done or cancelled and has `fixes`, as
  * { id, status, fixes }. Done fix tasks are left out so the list stays short; the queue file keeps them all.
  */
 function openFixLinks(tasks = []) {

@@ -9,7 +9,7 @@
 //
 // It also prints the batch status (lib/pushBatch.js, config().push): merged tasks and commits not pushed, the oldest
 // unpushed work, the base health of the tip (base-health.json, the base gate), the full gate on the tip (the gate
-// evidence store, lib/gateEvidence.js: a green, clean `cq gates --full` run in the main checkout on exactly that commit)
+// evidence store, lib/gateEvidence.js: a green, clean `ravenseat gates --full` run in the main checkout on exactly that commit)
 // and a verdict line: READY, NOT YET (n of minTasks), BLOCKED (base red, no green full gate on the tip while gates.full
 // is set up, external commits, or the remote is ahead), LARGE (over warnTasks: push recommended)
 // or NOTHING. In push mode "threshold" the orchestrator may push on READY or LARGE by itself, never on BLOCKED; in mode
@@ -66,11 +66,11 @@ const TO = val('--to') ?? K.baseBranch;
 const AS_JSON = a.includes('--json');
 
 // What runs at the next git command, against what was accepted. The push itself would run a planted pre-push hook. Read
-// only: no baseline yet means nothing to compare (cq fill, start, resume, receive and merge record it).
+// only: no baseline yet means nothing to compare (ravenseat fill, start, resume, receive and merge record it).
 const GB = require('./lib/gitSurfaceBaseline.js');
-const surfaceDrift = GB.stopDetail(dataFolder(), process.env.QUEUE_GIT ?? K.root, { cq: require('./lib/projectRoot.js').cqCommand() });
+const surfaceDrift = GB.stopDetail(dataFolder(), process.env.QUEUE_GIT ?? K.root, { ravenseat: require('./lib/projectRoot.js').cliCommand() });
 if (surfaceDrift) {
-  const message = GB.driftMessage({ ...surfaceDrift, cq: require('./lib/projectRoot.js').cqCommand() });
+  const message = GB.driftMessage({ ...surfaceDrift, ravenseat: require('./lib/projectRoot.js').cliCommand() });
   console.log(AS_JSON ? JSON.stringify({ surface_drift: surfaceDrift.reason, message }, null, 2) : message);
   process.exit(2);
 }
@@ -175,7 +175,7 @@ if (AS_JSON) {
           reason: verdict.reason,
         },
         controls_missing: missingControls,
-        ci_watch: CI.enabled ? { mode: CI.mode, command: `cq push-check --watch-ci ${toSha}` } : null,
+        ci_watch: CI.enabled ? { mode: CI.mode, command: `ravenseat push-check --watch-ci ${toSha}` } : null,
       },
       null,
       2,
@@ -206,7 +206,7 @@ function textReport() {
     );
   else if (SETUP.mode === 'owner')
     out.push(
-      `${plan.externalOnes.length} commit(s) outside the queue go along with the next push (cq external lists them).` +
+      `${plan.externalOnes.length} commit(s) outside the queue go along with the next push (ravenseat external lists them).` +
         (plan.cutPoint ? ` To leave them out: git push ${K.remote} ${plan.cutPoint}:${K.baseBranch}` : '') +
         ' Push only when the owner has said "push".',
     );
@@ -273,10 +273,10 @@ function batchLines() {
       `; base ${healthText}, full gate ${gateText} at ${summary(toSha)} (${limits}).`,
     `Verdict: ${PB.verdictWord(verdict.verdict)} (${verdict.reason}).`,
     ...(missingControls.length && K.push?.controlsWarning !== false && !require('./lib/guidance.js').readQuiet(dataFolder())
-      ? [`Controls: ${missingControls.join(', ')}, so nothing automatic checks this push (/cq:kickstart).`]
+      ? [`Controls: ${missingControls.join(', ')}, so nothing automatic checks this push (/ravenseat:kickstart).`]
       : []),
     ...(CI.enabled
-      ? [`CI watch (${CI.mode}): after the push, start cq push-check --watch-ci ${toSha} in the background (run_in_background); exit 9 = a check failed (fix task CI-${toSha.slice(0, 7)}), 0 = green or an owner question, 10 = timeout.`]
+      ? [`CI watch (${CI.mode}): after the push, start ravenseat push-check --watch-ci ${toSha} in the background (run_in_background); exit 9 = a check failed (fix task CI-${toSha.slice(0, 7)}), 0 = green or an owner question, 10 = timeout.`]
       : []),
   ];
 }

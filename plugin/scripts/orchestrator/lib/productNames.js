@@ -11,9 +11,11 @@
 'use strict';
 
 /** The name of the command today (plugin/bin/<name>). */
-const CLI_NAME = 'cq';
+const CLI_NAME = 'ravenseat';
 /** The name in plugin.json: the prefix of the skills (/<name>:queue) and agents (<name>:track). */
-const PLUGIN_NAME = 'cq';
+const PLUGIN_NAME = 'ravenseat';
+/** The entry script of the old name: bin/cq and vendored copies still reach it. Not a command of its own. */
+const OLD_ENTRY_SCRIPTS = ['cq.mjs'];
 /** Every name the CLI has or had. Guards recognise all of them. */
 const CLI_NAMES = ['ravenseat', 'cq'];
 /** Every name the plugin has or had. */
@@ -32,4 +34,4 @@ function bareAgentType(type) {
   return hit ? type.slice(hit.length + 1) : type;
 }
 
-module.exports = { CLI_NAME, PLUGIN_NAME, CLI_NAMES, PLUGIN_NAMES, CLI_PATTERN, isCliName, bareAgentType };
+module.exports = { CLI_NAME, PLUGIN_NAME, OLD_ENTRY_SCRIPTS, CLI_NAMES, PLUGIN_NAMES, CLI_PATTERN, isCliName, bareAgentType };

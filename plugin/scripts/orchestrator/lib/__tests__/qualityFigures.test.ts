@@ -38,12 +38,12 @@ describe('right first time', () => {
       changelog: [
         { nr: 1, at: at(DAY / 2), by: 'owner', action: 'edit', changes: [{ id: 'OK', field: 'value', before: 5, after: 6 }] },
         { nr: 2, at: at(DAY / 2), by: 'theBoard', action: 'edit', changes: [{ id: 'B', field: 'value', before: 5, after: 7 }] },
-        { nr: 3, at: at(DAY / 2), by: 'cq', action: 'edit', changes: [{ id: 'B', field: 'value', before: 7, after: 8 }] },
+        { nr: 3, at: at(DAY / 2), by: 'ravenseat', action: 'edit', changes: [{ id: 'B', field: 'value', before: 7, after: 8 }] },
         { nr: 4, at: at(2 * DAY), by: 'owner', action: 'edit', changes: [{ id: 'B', field: 'value', before: 8, after: 9 }] },
         {
           nr: 5,
           at: at(2 * DAY),
-          by: 'cq',
+          by: 'ravenseat',
           action: 'edit',
           changes: [{ id: 'RE', field: 'status', before: 'done', after: 'waiting' }],
         },
@@ -67,7 +67,7 @@ describe('right first time', () => {
       B: { defects: ['PL-FINDING-1'] },
       G: { defects: ['G-QA1'] },
     });
-    // Owner interventions: owner and theBoard edits while the task ran (nr 1 and 2); cq, and after done, are not.
+    // Owner interventions: owner and theBoard edits while the task ran (nr 1 and 2); ravenseat, and after done, are not.
     expect(r.interventions).toBe(2);
     expect(r.interventions_known).toBe(7);
     expect(r.interventions_per_10).toBe(2.9);
@@ -186,7 +186,7 @@ describe('reviewer hit rate', () => {
     const unknown = ES.reviewerStatistics({ tasks: tasks(10, false) }, window);
     expect(unknown.hints).toEqual([]);
     expect(ES.flowLines(ES.flowStatistics({ tasks: tasks(10, false) }, [], window), 'x').join('\n')).toContain(
-      'fix rounds attributed 0 of 1, cq resume --from records it',
+      'fix rounds attributed 0 of 1, ravenseat resume --from records it',
     );
   });
 });
@@ -203,8 +203,8 @@ describe('inflow by source', () => {
         { id: 'AP', added_at: added, added_by: 'someone', approved: added },
         { id: 'X', added_at: added, added_by: 'owner', fixes: ['O'] },
         { id: 'BG', added_at: added, added_by: 'base gate' },
-        { id: 'TR', added_at: added, added_by: 'cq', plan: 'PL-FINDING-3' },
-        { id: 'C', added_at: added, added_by: 'cq' },
+        { id: 'TR', added_at: added, added_by: 'ravenseat', plan: 'PL-FINDING-3' },
+        { id: 'C', added_at: added, added_by: 'ravenseat' },
         { id: 'N', added_at: added }, // no added_by: other
         { id: 'E', added_at: added, external: true },
         { id: 'OLD', added_at: at(-30 * DAY), added_by: 'owner' },

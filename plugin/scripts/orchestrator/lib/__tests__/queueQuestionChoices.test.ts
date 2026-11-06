@@ -1,10 +1,10 @@
 // =============================================================
 // queueQuestionChoices.test.ts: `choices` on owner questions (2-4 short answer options).
 //
-// A question can carry `choices`, so the owner answers with one click on the board or `cq resolve <id> --choice <n|text>`.
+// A question can carry `choices`, so the owner answers with one click on the board or `ravenseat resolve <id> --choice <n|text>`.
 // The tests prove the rules where they are enforced: setQuestion (validation, all or nothing, a question without choices
 // unchanged), resolve with a choice (the stored answer is the choice's text, plus a note), the printed lines for the
-// orchestrator (choiceLines, cq question, cq resolutions, the after-compact text), and queue.mjs against a copy of the queue
+// orchestrator (choiceLines, ravenseat question, ravenseat resolutions, the after-compact text), and queue.mjs against a copy of the queue
 // in a temporary folder (QUEUE_FOLDER), never the real one.
 // =============================================================
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -218,7 +218,7 @@ describe('queue.mjs: question --choice, resolve --choice, and the lists', () => 
     const list = run(['question']).out;
     expect(list).toContain('    1. Vendor A (recommended)');
     expect(list).toContain('    2. Vendor B');
-    expect(list).toContain('cq resolve V1 --choice <1-2>');
+    expect(list).toContain('ravenseat resolve V1 --choice <1-2>');
 
     expect(run(['question', 'V1', '--no-choices']).code).toBe(0);
     expect(readQueue().question?.V1.choices).toBeUndefined();

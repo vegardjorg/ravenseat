@@ -243,11 +243,11 @@ function addProjectWarnings(newOnes, register) {
     if (pid === WITHOUT_PROJECT) {
       out.push(
         f.pid
-          ? `${n.id} has no project; proposed ${f.pid} (${f.reason}). Set "project": "${f.pid}", or run cq classify --execute${f.safe ? '' : ' (the suggestion is uncertain: see cq classify)'}`
+          ? `${n.id} has no project; proposed ${f.pid} (${f.reason}). Set "project": "${f.pid}", or run ravenseat classify --execute${f.safe ? '' : ' (the suggestion is uncertain: see ravenseat classify)'}`
           : `${n.id} has no project and lands in "Sort" (${f.reason}). Set "project", or give the project a fileRoot/prefix`,
       );
     } else if (f.disagree) {
-      out.push(`${n.id}: ${f.reason}. Check the project (cq classify --disagree)`);
+      out.push(`${n.id}: ${f.reason}. Check the project (ravenseat classify --disagree)`);
     }
     const known = reg[pid]?.features;
     if (

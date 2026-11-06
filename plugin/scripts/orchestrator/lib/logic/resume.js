@@ -214,17 +214,17 @@ function assessActive({
 
 /** The lines pulse and `deliveries` print: one per new delivery (with the next command), and one summary line for the rest. */
 function deliveryLines(deliveries, nowMs = Date.now()) {
-  const cq = require('../projectRoot.js').cqCommand();
+  const ravenseat = require('../projectRoot.js').cliCommand();
   const fresh = (deliveries ?? []).filter((l) => l.new);
   const old = (deliveries ?? []).filter((l) => !l.new);
   const out = fresh.map(
     (l) =>
       `NEW DELIVERY (track-result.md): ${l.id} ${l.status}, written ${ageText(nowMs - l.mtimeMs)} ago. ` +
-      `Next: ${cq} receive ${l.id}`,
+      `Next: ${ravenseat} receive ${l.id}`,
   );
   if (old.length)
     out.push(
-      `Report waiting, not received: ${old.map((l) => `${l.id} (${l.status})`).join(', ')} (${cq} deliveries)`,
+      `Report waiting, not received: ${old.map((l) => `${l.id} (${l.status})`).join(', ')} (${ravenseat} deliveries)`,
     );
   return out;
 }
@@ -256,7 +256,7 @@ function resumeBlock({
     o.migr_block ?? 'none (the track must not have migrations; if it needs them, ask the orchestrator)';
   const fix = reason === 'fix';
   const name = fix ? 'Fix round' : 'Continuation';
-  const cq = require('../projectRoot.js').cqCommand();
+  const ravenseat = require('../projectRoot.js').cliCommand();
   const read = [
     `1. \`git log --oneline ${base}..${branch}\` and \`git diff --stat ${base}...${branch}\` (what is done; do not redo it).`,
     reportPath
@@ -286,14 +286,14 @@ function resumeBlock({
           '',
         ]
       : [];
-  // A merge that stopped on a real conflict (cq merge saved merge_conflict): the files and the other tasks that touched
+  // A merge that stopped on a real conflict (ravenseat merge saved merge_conflict): the files and the other tasks that touched
   // them, so the fix round starts informed (lib/conflictPredict.js briefLines).
   const conflictLines = fix ? require('../conflictPredict.js').briefLines(o.merge_conflict, { base, branch }) : [];
   // Red quick gates at receive: as the done command. The mission below is reference, and it may be what made them red.
   const gateRed =
     fix && gateCheck
       ? [
-          `The quick gates are RED on the delivered commit (exit ${gateCheck.exit ?? '?'})${gateCheck.commands ? `: ${gateCheck.commands}` : ''}. cq receive runs them again on your commit.`,
+          `The quick gates are RED on the delivered commit (exit ${gateCheck.exit ?? '?'})${gateCheck.commands ? `: ${gateCheck.commands}` : ''}. ravenseat receive runs them again on your commit.`,
           'Make them green in your worktree (run them yourself before you report). If the mission below rules out the only way',
           'to do that, say so under owner questions and deliver status=PARTIAL. Their last output lines:',
           '',
@@ -347,7 +347,7 @@ function resumeBlock({
     '',
     `Report: write track-result.md in your own folder (\`<folder>\`, that is ${trackId}) with the RESULT line as the FIRST line;`,
     `it covers the whole track (branch=${branch}, commits = all on the branch ahead of ${base}). The orchestrator finds it there`,
-    `(${cq} deliveries and ${cq} receive ${o.id}), also without a notification. Your answer starts with the same RESULT line.`,
+    `(${ravenseat} deliveries and ${ravenseat} receive ${o.id}), also without a notification. Your answer starts with the same RESULT line.`,
     '',
     `## The original mission for ${o.id} (reference; ownership, gates and "Do NOT touch" still apply)`,
     '',

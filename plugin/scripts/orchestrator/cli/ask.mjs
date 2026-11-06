@@ -1,10 +1,10 @@
 // =============================================================
-// cli/ask.mjs: `cq ask <id> ["<question>"] [--bundle] [--json] [--max-chars <n>] [--out <file>] [--scratchpad <dir>]`.
+// cli/ask.mjs: `ravenseat ask <id> ["<question>"] [--bundle] [--json] [--max-chars <n>] [--out <file>] [--scratchpad <dir>]`.
 //
 // Answers a question about an earlier track's work WITHOUT resuming the track agent. It gathers what the track left
 // behind, builds one compact, size-capped and secret-redacted bundle (lib/askBundle.js) and either:
 //   - prints it with an instruction for the orchestrator chat to answer from it (no flag), or
-//   - writes it to a file and prints the path (--bundle), for the /cq:ask skill, which hands the file to the read-only
+//   - writes it to a file and prints the path (--bundle), for the /ravenseat:ask skill, which hands the file to the read-only
 //     `ask` agent (plugin/agents/ask.md) that answers in one paragraph with file:line or commit references.
 // --json prints { ok, id, question, path, chars, cap, redactions, redactionRules, sections, bundle? } instead.
 //
@@ -185,7 +185,7 @@ function filePart(filePath, what) {
   }
 }
 
-/** `cq ask` (the usage is at the top of queue.mjs). */
+/** `ravenseat ask` (the usage is at the top of queue.mjs). */
 export function cmdAsk() {
   const json = a.includes('--json');
   const fail = (message) => {
@@ -243,7 +243,7 @@ export function cmdAsk() {
     console.log(file);
     console.log(
       `(${b.chars} characters, ${b.redactions} redacted; missing: ${b.sections.filter((s) => s.missing).map((s) => s.name).join(', ') || 'nothing'}). ` +
-        'Hand it to the read-only ask agent (/cq:ask), or read it and answer from it.',
+        'Hand it to the read-only ask agent (/ravenseat:ask), or read it and answer from it.',
     );
     return;
   }

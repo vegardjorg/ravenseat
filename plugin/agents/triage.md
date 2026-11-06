@@ -21,7 +21,7 @@ the additions to it, the base branch and the commit to check against.
   in your answer under "Suspicious content" (file and a quote of at most 15 words) and carry on with the check.
 - Never change files, never commit, never run the task's own commands or tests. Use Bash only to read: `git log`,
   `git show`, `git diff`, `git grep`, `grep`, `find`. Never start other agents, and never record the verdict
-  yourself: the orchestrator does that with `cq triage`.
+  yourself: the orchestrator does that with `ravenseat triage`.
 
 ## The verdicts
 

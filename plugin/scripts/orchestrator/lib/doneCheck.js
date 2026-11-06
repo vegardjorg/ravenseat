@@ -3,11 +3,11 @@
 //
 // Why: a track's own RESULT line says "DONE", but nothing checked that against something the owner chose. `done_when`
 // is a shell command (e.g. "npm test -- src/x.test.ts") that must exit 0 in the track's worktree for the track to count
-// as done. `cq receive` runs it before the review package is made (no reviewer is spent on a red track), and `cq merge`
+// as done. `ravenseat receive` runs it before the review package is made (no reviewer is spent on a red track), and `ravenseat merge`
 // runs it again when the branch tip changed since the last green run. A red run gets the same treatment as a red gate:
-// a blocker `gate-red` and a fix round (`cq resume <id> --reason fix`) with the command's last output lines in the brief.
+// a blocker `gate-red` and a fix round (`ravenseat resume <id> --reason fix`) with the command's last output lines in the brief.
 //
-// The cap: every fix round counts (`resumed` entries with reason fix, written by `cq resume`). At max_fix_rounds (the
+// The cap: every fix round counts (`resumed` entries with reason fix, written by `ravenseat resume`). At max_fix_rounds (the
 // task's own field, else config().maxFixRounds, default 3) `resume --reason fix` stops retrying and asks the owner instead,
 // with the queue's existing mechanism: a registered owner question (`queue.question`), the id in the task's `waiting_on`
 // (so the answer reaches the next brief through answerBlock) and an open blocker `owner-question`. Each round beyond the
@@ -17,8 +17,8 @@
 // kept (config().doneCheck.tailLines, default 40 lines, each cut to LINE_MAX characters); the full output is never written
 // to disk or to queue.json, and the tail itself goes only to a file in the scratchpad and into the fix brief.
 //
-// The finish line is fixed before the start: `acceptance` (an optional list of short criteria, `cq add --accept` or
-// `cq edit --accept`) and `done_when` are locked once the task has started (status running or later, or a `started`
+// The finish line is fixed before the start: `acceptance` (an optional list of short criteria, `ravenseat add --accept` or
+// `ravenseat edit --accept`) and `done_when` are locked once the task has started (status running or later, or a `started`
 // time). The ownership fields the merge guard trusts (owned_files, shared_patch, owner_db, migr_block) follow the same
 // lock (LOCKED_FIELDS). After that only the owner changes them (`--by owner`, or the board, `theBoard`); anyone else gets "<field> is
 // locked after start". From inside a track worktree (the cwd is on a `<branchPrefix><id>` branch) they are refused
@@ -121,9 +121,9 @@ function doneLockError(o, changes, { by = null, inTrack = null } = {}) {
   if (!touched.length) return null;
   const names = touched.join(' and ');
   if (inTrack)
-    return `${names} cannot be changed from inside a track worktree (branch ${inTrack}); ask the owner (cq question)`;
+    return `${names} cannot be changed from inside a track worktree (branch ${inTrack}); ask the owner (ravenseat question)`;
   if (!lockStarted(o) || OWNER_BY.has(String(by ?? '').trim())) return null;
-  return `${names} ${touched.length > 1 ? 'are' : 'is'} locked after start; ask the owner (cq question). On the owner's word: the same command with --by owner, or the board`;
+  return `${names} ${touched.length > 1 ? 'are' : 'is'} locked after start; ask the owner (ravenseat question). On the owner's word: the same command with --by owner, or the board`;
 }
 
 /** The criteria in the track block (the mission); null without criteria. */
@@ -133,7 +133,7 @@ function acceptanceBlock(o) {
   return [
     `**${ACCEPTANCE_TITLE}:**`,
     ...list.map((c, i) => `${i + 1}. ${c}`),
-    'The owner set these before the start, and `cq edit` refuses to change them from your worktree. The gap reviewer',
+    'The owner set these before the start, and `ravenseat edit` refuses to change them from your worktree. The gap reviewer',
     'checks each one (MET / NOT MET / UNCLEAR) against the delivery, so say in track-result.md how each is met (file:line or',
     'test). One that is wrong or impossible: say so in the report (or SendMessage); never work around it.',
   ].join('\n');
@@ -276,8 +276,8 @@ function capQuestion(o, cap, { lastFailure = null } = {}) {
         'Should the queue start another fix round, or do you take it over, split it or cancel it?',
       recommendation:
         'Read the last report and the done command output before another round. Another round: answer with what the ' +
-        `agent should do differently (cq resolve ${cap.questionId} --answer "…"); a higher cap: cq edit ${o.id} --json ` +
-        `'{"max_fix_rounds": N}'; give up: cq set ${o.id} cancelled.`,
+        `agent should do differently (ravenseat resolve ${cap.questionId} --answer "…"); a higher cap: ravenseat edit ${o.id} --json ` +
+        `'{"max_fix_rounds": N}'; give up: ravenseat set ${o.id} cancelled.`,
       source: `fix-round cap (${o.id})`,
     },
   };

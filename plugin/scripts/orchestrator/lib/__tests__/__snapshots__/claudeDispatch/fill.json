@@ -4,7 +4,7 @@
     {
       "id": "U1",
       "class": "U",
-      "subagent_type": "cq:track",
+      "subagent_type": "ravenseat:track",
       "model": null,
       "prompt": "<ROOT>/scratch/prompt-U1.md",
       "message": "You are track U1 in the work queue (continuous queue, wave \"queue\"). Your mission is in <ROOT>/scratch/prompt-U1.md and is binding: read it first and follow the protocol there. Your answer to the orchestrator is at most approx. 1,500 characters: RESULT line first, at most 5 lines, then the path to track-result.md (the long version is there).",
@@ -16,7 +16,7 @@
     {
       "id": "K1",
       "class": "K",
-      "subagent_type": "cq:track",
+      "subagent_type": "ravenseat:track",
       "model": null,
       "prompt": "<ROOT>/scratch/prompt-K1.md",
       "message": "You are track K1 in the work queue (continuous queue, wave \"queue\"). Your mission is in <ROOT>/scratch/prompt-K1.md and is binding: read it first and follow the protocol there. Your answer to the orchestrator is at most approx. 1,500 characters: RESULT line first, at most 5 lines, then the path to track-result.md (the long version is there).",
@@ -28,7 +28,7 @@
     {
       "id": "S1",
       "class": "K",
-      "subagent_type": "cq:track",
+      "subagent_type": "ravenseat:track",
       "model": null,
       "prompt": "<ROOT>/scratch/prompt-S1.md",
       "message": "You are track S1 in the work queue (continuous queue, wave \"queue\"). Your mission is in <ROOT>/scratch/prompt-S1.md and is binding: read it first and follow the protocol there. Your answer to the orchestrator is at most approx. 1,500 characters: RESULT line first, at most 5 lines, then the path to track-result.md (the long version is there).",
@@ -40,7 +40,7 @@
     {
       "id": "D1",
       "class": "D",
-      "subagent_type": "cq:track-d",
+      "subagent_type": "ravenseat:track-d",
       "model": null,
       "prompt": "<ROOT>/scratch/prompt-D1.md",
       "message": "You are track D1 in the work queue (continuous queue, wave \"queue\"). Your mission is in <ROOT>/scratch/prompt-D1.md and is binding: read it first and follow the protocol there. Your answer to the orchestrator is at most approx. 1,500 characters: RESULT line first, at most 5 lines, then the path to track-result.md (the long version is there).",
@@ -52,7 +52,7 @@
     {
       "id": "P1",
       "class": "D+",
-      "subagent_type": "cq:track-d",
+      "subagent_type": "ravenseat:track-d",
       "model": null,
       "prompt": "<ROOT>/scratch/prompt-P1.md",
       "message": "You are track P1 in the work queue (continuous queue, wave \"queue\"). Your mission is in <ROOT>/scratch/prompt-P1.md and is binding: read it first and follow the protocol there. Your answer to the orchestrator is at most approx. 1,500 characters: RESULT line first, at most 5 lines, then the path to track-result.md (the long version is there).",

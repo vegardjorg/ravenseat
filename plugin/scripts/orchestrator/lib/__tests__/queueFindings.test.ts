@@ -1,5 +1,5 @@
 // =============================================================
-// queueFindings.test.ts: `cq finding`, what a track reports outside its scope (lib/queueFindings.js, cli/finding.mjs).
+// queueFindings.test.ts: `ravenseat finding`, what a track reports outside its scope (lib/queueFindings.js, cli/finding.mjs).
 //
 // Locks: a finding lands as an idea in the plan register (PL-FINDING-<n>, priority later, set by agent), linked to the
 // reporting task and its project; the same title (case, punctuation and spacing ignored) is deduplicated onto the
@@ -30,7 +30,7 @@ const FI = require('../queueFindings') as {
   ) => { error: string[]; warnings: string[]; entry?: Entry; created?: boolean; duplicate?: string; finding?: boolean };
   isNewFinding: (e: Entry, tasks?: object[]) => boolean;
   findingsSummary: (reg: Reg, tasks?: object[]) => { new: number; ids: string[] };
-  findingsLine: (s: { new: number; ids: string[] }, cq?: string) => string | null;
+  findingsLine: (s: { new: number; ids: string[] }, ravenseat?: string) => string | null;
 };
 const P = require('../queuePlan') as {
   emptyRegister: () => Reg;
@@ -69,7 +69,7 @@ describe('queueFindings (pure)', () => {
     expect(P.validateEntry(r.entry!, { projects: PROJECTS }).error).toEqual([]);
     expect(FI.findingsSummary(reg)).toEqual({ new: 1, ids: ['PL-FINDING-5'] });
     expect(FI.findingsLine(FI.findingsSummary(reg))).toBe(
-      'FINDINGS: 1 new from the tracks, not triaged (PL-FINDING-5): cq finding list',
+      'FINDINGS: 1 new from the tracks, not triaged (PL-FINDING-5): ravenseat finding list',
     );
     expect(FI.findingsLine({ new: 0, ids: [] })).toBeNull();
   });
@@ -139,7 +139,7 @@ afterAll(() => {
   for (const m of temporary) fs.rmSync(m, { recursive: true, force: true });
 });
 
-describe('cq finding (against a temporary queue)', () => {
+describe('ravenseat finding (against a temporary queue)', () => {
   it('works in a fresh project with no projects registered, without asking an agent for anything it may not run', () => {
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-finding-'));
     temporary.push(folder);
@@ -210,12 +210,12 @@ describe('cq finding (against a temporary queue)', () => {
     expect(which.error).toMatch(/Which project\? Z-1 has no registered project\. Give --project <pid> \(app, web\)/);
     expect(run('finding', 'x', '--task', 'NOPE').error).toMatch(/Unknown task NOPE/);
     expect(run('finding', 'x', '--cause', 'A-1,NOPE').error).toMatch(/Unknown task NOPE \(--cause/);
-    expect(run('finding').error).toMatch(/Use: cq finding "<title>"/);
+    expect(run('finding').error).toMatch(/Use: ravenseat finding "<title>"/);
 
     expect(run('finding', 'Second issue', '--task', 'A-1', '--dry').out).toMatch(/^Preview \(nothing written\): FINDING PL-FINDING-2/m);
     expect(reg().entries).toHaveLength(1);
 
-    const line = /^FINDINGS: 1 new from the tracks, not triaged \(PL-FINDING-1\): cq finding list$/m;
+    const line = /^FINDINGS: 1 new from the tracks, not triaged \(PL-FINDING-1\): ravenseat finding list$/m;
     expect(run('orchestrator', 'pulse', '--session', 'test').out).toMatch(line);
     expect(run('show').out).toMatch(line);
     expect(JSON.parse(run('state').out).findings).toEqual({ new: 1, ids: ['PL-FINDING-1'] });

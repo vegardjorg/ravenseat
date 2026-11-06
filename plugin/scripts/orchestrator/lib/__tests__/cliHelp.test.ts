@@ -1,9 +1,9 @@
 // =============================================================
-// cliHelp.test.ts: `cq help` in groups and "Did you mean" for a mistyped command.
+// cliHelp.test.ts: `ravenseat help` in groups and "Did you mean" for a mistyped command.
 //
-// Why: `cq help` was a 200-line wall filtered out of the comment in queue.mjs (descriptions stopped mid-sentence and
+// Why: `ravenseat help` was a 200-line wall filtered out of the comment in queue.mjs (descriptions stopped mid-sentence and
 // internal scripts were listed as if users run them), and a typo printed every command on one line. The texts and the
-// suggestion are pure (lib/cliHelp.js) and tested here; cq.mjs and queue.mjs are run once each to see they use them.
+// suggestion are pure (lib/cliHelp.js) and tested here; ravenseat.mjs and queue.mjs are run once each to see they use them.
 // =============================================================
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -17,23 +17,23 @@ const H = require('../cliHelp') as {
   QUEUE_COMMANDS: string[];
   ALIASES: Record<string, string>;
   INTERNAL_SCRIPTS: string[];
-  shortHelp: (cq?: string) => string[];
-  usageBlocks: (source: string, cq?: string) => { command: string; lines: string[] }[];
-  fullHelp: (source: string, scripts: string[], cq?: string) => string[];
-  commandHelp: (source: string, command: string, cq?: string) => string[] | null;
+  shortHelp: (ravenseat?: string) => string[];
+  usageBlocks: (source: string, ravenseat?: string) => { command: string; lines: string[] }[];
+  fullHelp: (source: string, scripts: string[], ravenseat?: string) => string[];
+  commandHelp: (source: string, command: string, ravenseat?: string) => string[] | null;
   scriptHeader: (source: string) => string[];
   editDistance: (a: string, b: string) => number;
   suggest: (word: string, candidates: string[], max?: number) => string[];
-  unknownCommandMessage: (word: string, candidates: string[], cq?: string) => string;
+  unknownCommandMessage: (word: string, candidates: string[], ravenseat?: string) => string;
   knownCommands: (scripts?: string[]) => string[];
 };
 
 const DIR = path.resolve(__dirname, '..', '..');
-const CQ = path.join(DIR, 'cq.mjs');
+const CLI = path.join(DIR, 'ravenseat.mjs');
 const SOURCE = fs.readFileSync(path.join(DIR, 'queue.mjs'), 'utf8');
 const SCRIPTS = fs
   .readdirSync(DIR)
-  .filter((f) => f.endsWith('.mjs') && !f.startsWith('hook-') && f !== 'cq.mjs')
+  .filter((f) => f.endsWith('.mjs') && !f.startsWith('hook-') && f !== 'ravenseat.mjs')
   .map((f) => f.slice(0, -'.mjs'.length));
 /** The command words queue.mjs really dispatches on. */
 const DISPATCHED = new Set([...SOURCE.matchAll(/command === '([A-Za-z-]+)'/g)].map((m) => m[1]));
@@ -64,14 +64,14 @@ describe('the help texts', () => {
   it('shortHelp has the groups, one line per command, and points to help all', () => {
     const lines = H.shortHelp();
     expect(lines).toContain('Daily:');
-    expect(lines.some((l) => /^ {2}cq show \[--full\]\s+\S/.test(l))).toBe(true);
-    expect(lines[lines.length - 1]).toContain('cq help all');
+    expect(lines.some((l) => /^ {2}ravenseat show \[--full\]\s+\S/.test(l))).toBe(true);
+    expect(lines[lines.length - 1]).toContain('ravenseat help all');
     expect(lines.length).toBeLessThan(30);
   });
 
   it('usageBlocks keeps the continuation lines the old filter dropped', () => {
     const fill = H.commandHelp(SOURCE, 'fill')!;
-    expect(fill[0]).toMatch(/^ {2}cq fill --scratchpad/);
+    expect(fill[0]).toMatch(/^ {2}ravenseat fill --scratchpad/);
     // The 8-space continuation lines (the old regex only took 20+ spaces) are there, up to the closing parenthesis.
     expect(fill.join('\n')).toContain('(next -> start -> trackFile');
     expect(fill[fill.length - 1].trim().endsWith(')')).toBe(true);
@@ -89,8 +89,8 @@ describe('the help texts', () => {
       '//        after a blank line',
     ].join('\n');
     expect(H.usageBlocks(src)).toEqual([
-      { command: 'a', lines: ['  cq a      (one', '         two)'] },
-      { command: 'b', lines: ['  cq b'] },
+      { command: 'a', lines: ['  ravenseat a      (one', '         two)'] },
+      { command: 'b', lines: ['  ravenseat b'] },
     ]);
   });
 
@@ -137,26 +137,26 @@ describe('suggest and the unknown-command message', () => {
 
   it('the message has the suggestion only when there is one', () => {
     expect(H.unknownCommandMessage('shwo', ['show', 'start'])).toBe(
-      'Unknown command "shwo". Did you mean "show"? See cq help.',
+      'Unknown command "shwo". Did you mean "show"? See ravenseat help.',
     );
     expect(H.unknownCommandMessage('st', ['set', 'start', 'state'])).toBe(
-      'Unknown command "st". Did you mean "set", "start" or "state"? See cq help.',
+      'Unknown command "st". Did you mean "set", "start" or "state"? See ravenseat help.',
     );
-    expect(H.unknownCommandMessage('xyzzy', known, 'node scripts/orchestrator/cq.mjs')).toBe(
-      'Unknown command "xyzzy". See node scripts/orchestrator/cq.mjs help.',
+    expect(H.unknownCommandMessage('xyzzy', known, 'node scripts/orchestrator/ravenseat.mjs')).toBe(
+      'Unknown command "xyzzy". See node scripts/orchestrator/ravenseat.mjs help.',
     );
   });
 });
 
-describe('cq.mjs (spawned)', () => {
+describe('ravenseat.mjs (spawned)', () => {
   // QUEUE_FOLDER points away from any real queue; neither command reads or writes it.
   const run = (...args: string[]) =>
-    spawnSync(process.execPath, [CQ, ...args], {
+    spawnSync(process.execPath, [CLI, ...args], {
       encoding: 'utf8',
-      env: { ...process.env, QUEUE_FOLDER: path.join(os.tmpdir(), 'cq-help-test-unused') },
+      env: { ...process.env, QUEUE_FOLDER: path.join(os.tmpdir(), 'ravenseat-help-test-unused') },
     });
 
-  it('cq help prints the short grouped list and exits 0', () => {
+  it('ravenseat help prints the short grouped list and exits 0', () => {
     const r = run('help');
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('Get started:');

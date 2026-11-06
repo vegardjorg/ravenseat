@@ -1,5 +1,5 @@
 // =============================================================
-// queueGuidance.test.ts: `cq guidance` and what it reaches, through real queue.mjs and hook processes against a temporary
+// queueGuidance.test.ts: `ravenseat guidance` and what it reaches, through real queue.mjs and hook processes against a temporary
 // repo: the doctor lines, the push question, push-check, and base gate off giving no FAIL.
 // =============================================================
 import { afterAll, describe, expect, it } from 'vitest';
@@ -30,7 +30,7 @@ function project(config: Record<string, unknown> = {}) {
   const configFile = path.join(folder, 'queue.config.json');
   fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'main', ...config }));
   const env = { ...process.env, QUEUE_FOLDER: data, QUEUE_CONFIG: configFile, QUEUE_ROOT: folder, QUEUE_GIT: folder, QUEUE_SECRET_SCANNER: 'builtin' };
-  const cq = (...args: string[]) => {
+  const ravenseat = (...args: string[]) => {
     const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'queue.mjs'), ...args], { cwd: folder, env, encoding: 'utf8' });
     return { code: r.status, out: r.stdout, error: r.stderr };
   };
@@ -54,27 +54,27 @@ function project(config: Record<string, unknown> = {}) {
     g('add', '--', 'b.txt');
     g('commit', '-q', '-m', 'more');
   };
-  return { cq, hook, pushCheck, g, origin, folder };
+  return { ravenseat, hook, pushCheck, g, origin, folder };
 }
 
-describe('cq guidance', () => {
+describe('ravenseat guidance', () => {
   it('switches, stores and refuses anything else', () => {
     const p = project();
-    expect(p.cq('guidance').out).toContain('Guidance: guided');
-    expect(p.cq('guidance', 'quiet').out).toContain('Guidance: quiet');
-    expect(p.cq('guidance').out).toContain('Guidance: quiet');
-    expect(p.cq('guidance', 'guided').out).toContain('Guidance: guided');
-    expect(p.cq('guidance', 'odd').code).toBe(1);
+    expect(p.ravenseat('guidance').out).toContain('Guidance: guided');
+    expect(p.ravenseat('guidance', 'quiet').out).toContain('Guidance: quiet');
+    expect(p.ravenseat('guidance').out).toContain('Guidance: quiet');
+    expect(p.ravenseat('guidance', 'guided').out).toContain('Guidance: guided');
+    expect(p.ravenseat('guidance', 'odd').code).toBe(1);
   });
 
   it('stops the advice in doctor, the push question and push-check, and the secret scan still asks', () => {
     const p = project();
     p.origin();
     expect(p.pushCheck()).toContain('Controls:');
-    expect(p.cq('doctor').out).toContain('no CI config found');
+    expect(p.ravenseat('doctor').out).toContain('no CI config found');
     expect(p.hook('git push origin main')?.permissionDecisionReason).toContain('no CI config');
-    p.cq('guidance', 'quiet');
-    const doctor = p.cq('doctor').out;
+    p.ravenseat('guidance', 'quiet');
+    const doctor = p.ravenseat('doctor').out;
     expect(doctor).not.toContain('no CI config found');
     expect(doctor).toContain('guidance is quiet');
     const answer = p.hook('git push origin main');
@@ -93,13 +93,13 @@ describe('cq guidance', () => {
 
 describe('fixes around the switches', () => {
   it('baseGate.enabled: false is valid in doctor', () => {
-    const r = project({ baseGate: { enabled: false } }).cq('doctor');
+    const r = project({ baseGate: { enabled: false } }).ravenseat('doctor');
     expect(r.out).not.toContain('baseGate.enabled');
     expect(r.out).not.toMatch(/FAIL\s+config/);
   });
 
   it('a wrong type there is still a fault', () => {
-    expect(project({ baseGate: { enabled: 5 } }).cq('doctor').out).toContain('baseGate.enabled');
+    expect(project({ baseGate: { enabled: 5 } }).ravenseat('doctor').out).toContain('baseGate.enabled');
   });
 
   it('push-check respects push.controlsWarning', () => {

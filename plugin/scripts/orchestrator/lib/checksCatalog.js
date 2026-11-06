@@ -13,8 +13,8 @@
 //   mergeCatalog(builtin, own)    the project's files over the plugin's
 //   loadCatalog({ builtin, own }) reads the two folders
 //   holds(when, facts)            does a suggestion apply? Named conditions only, see CONDITIONS
-//   buildReport(...)              what `cq checks --json`, the board and checks-report.json read
-//   planTask(...)                 the investigation task for `cq add`
+//   buildReport(...)              what `ravenseat checks --json`, the board and checks-report.json read
+//   planTask(...)                 the investigation task for `ravenseat add`
 //
 // Used by: cli/checks.mjs. Tested in: lib/__tests__/checksCatalog.test.ts.
 // =============================================================
@@ -105,7 +105,7 @@ function parseTemplate(text, key) {
   for (const field of ['title', 'category', 'why']) if (!out[field]) out.errors.push(`${key}: "${field}" is missing`);
   if (!PRIORITIES.includes(out.priority)) out.errors.push(`${key}: priority must be ${PRIORITIES.join(', ')}`);
   for (const c of conditionsOf(out.when)) if (!knownCondition(c)) out.errors.push(`${key}: unknown condition "${c}"`);
-  // A suggestion with its own action (cq kickstart gates) needs no agent, so it has no mission to fill.
+  // A suggestion with its own action (ravenseat kickstart gates) needs no agent, so it has no mission to fill.
   if (!out.action && (!out.investigate || !out.plan)) out.errors.push(`${key}: needs the sections "## Investigate" and "## Plan and build"`);
   return out;
 }
@@ -229,7 +229,7 @@ function planTask(s, found, tasks) {
     mission: [
       `Investigate and plan: ${s.title}. Do not build it in this task.`,
       `Why it was suggested: ${s.why}`,
-      `What cq read from the project's files (nothing was run):\n${foundLines(found)}`,
+      `What ravenseat read from the project's files (nothing was run):\n${foundLines(found)}`,
       `## Investigate\n${s.investigate}`,
       `## Plan and build\n${s.plan}`,
       '## Deliver\nWrite track-result.md in plain words for someone who may never have used CI: what you found, your recommendation (saying it is not worth doing is a fine result), what it costs in agent time and CI minutes, and the risks. ' +

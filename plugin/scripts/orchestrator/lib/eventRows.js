@@ -1,15 +1,15 @@
 // =============================================================
-// eventRows.js: the flow, load and session rows cq appends to the time log (config().timeLog; QUEUE_TIME_LOG
+// eventRows.js: the flow, load and session rows ravenseat appends to the time log (config().timeLog; QUEUE_TIME_LOG
 // overrides), next to the agent rows (hook-time.mjs) and the gate and compaction rows (lib/timeLogRows.js).
 //
 // Why: the queue already knew about fix rounds (queue.json `resumed`), merge conflicts (a blocker), the base gate
 // (base-health.json), triage verdicts (queue.json) and pushes (git), but only as the current state, so nothing could
 // say "how many first-pass merges this week" or "when was parallelism limited". One appended JSON line per event makes
 // that countable. The rows (all with `time` and `event`):
-//   fixRound      { task, reason, round, from? }            cq resume (cli/run.mjs), also when receive or merge
+//   fixRound      { task, reason, round, from? }            ravenseat resume (cli/run.mjs), also when receive or merge
 //                                                            resumes by itself; reason fix or context; from = the
-//                                                            reviewer types that caused it (cq resume --from)
-//   mergeConflict { task, files, branch, guard? }           cq merge stopped in the merge step (cli/merge.mjs);
+//                                                            reviewer types that caused it (ravenseat resume --from)
+//   mergeConflict { task, files, branch, guard? }           ravenseat merge stopped in the merge step (cli/merge.mjs);
 //                                                            files = "Conflicts in N files." from merge-track.mjs (null
 //                                                            when not printed); guard: true when the merge guard stopped
 //   baseGate      { tip, ok, skipped, duration_s, made_red_by, fix_task?, note? }
@@ -19,12 +19,12 @@
 //                                                            on the same sha (cli/baseHealth.mjs, the flaky check)
 //   ciWatch       { sha, verdict, runs, red, task?, question? }
 //                                                            the CI watch's verdict for a pushed commit (cli/ciWatch.mjs)
-//   triage       { task, verdict, by? }                    cq triage <id> --verdict
+//   triage       { task, verdict, by? }                    ravenseat triage <id> --verdict
 //   push          { remote, branch, from, tip, tasks, task_count, commits, base_health, verdict, detected_at }
 //                                                            detected after the fact from the reflog of the remote
-//                                                            tracking ref (see pushesFromReflog), at cq fill
+//                                                            tracking ref (see pushesFromReflog), at ravenseat fill
 //   load          { command, free_memory_pct, cpu_pct, slots, max_slots, running, limited_by, reason, stopped,
-//                   stop_reason? }                           one per cq fill and cq start (cli/events.mjs logLoad)
+//                   stop_reason? }                           one per ravenseat fill and ravenseat start (cli/events.mjs logLoad)
 //   session       { session_id, usd, duration_s, api_duration_s, context_tokens, model, orchestrator, trigger }
 //                                                            the main session's cost from the status line payload;
 //                                                            CUMULATIVE per session_id (see sessionDecision)
@@ -259,7 +259,7 @@ function writeSessionState(file, state) {
 // WHY THE REFLOG: the push guard (a PreToolUse hook) sees the command but not whether the push went through, and
 // push-check runs BEFORE a push. After a successful `git push <remote> <base>` git moves refs/remotes/<remote>/<base>
 // and writes "update by push" in that ref's reflog, with the time; a fetch writes "fetch: ..." instead. So the reflog
-// says exactly which pushes happened and when, also pushes made by the owner by hand, and `cq fill` reads it
+// says exactly which pushes happened and when, also pushes made by the owner by hand, and `ravenseat fill` reads it
 // (one git call) and logs the new ones. The batch of a push is the first-parent line between the ref before it (the
 // next older reflog entry) and the pushed tip. Requires reflogs for remote refs (core.logAllRefUpdates, on by default
 // in a non-bare repo); without them no push row is written.

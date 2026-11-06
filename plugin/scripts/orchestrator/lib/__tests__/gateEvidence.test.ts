@@ -57,7 +57,7 @@ describe('latest and verdict', () => {
 
 describe('the store', () => {
   it('reads missing and broken files as empty, appends atomically and keeps the newest MAX_ENTRIES', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-gate-evidence-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-gate-evidence-'));
     temporary.push(dir);
     const file = GE.storeFile(dir);
     expect(path.basename(file)).toBe('gate-evidence.json');
@@ -73,7 +73,7 @@ describe('the store', () => {
     expect(store.entries.at(-1)?.time).toBe(String(GE.MAX_ENTRIES + 4));
   });
   it('fullGateVerdict: off without full gates, missing without a store, green with a clean full run', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-gate-evidence-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-gate-evidence-'));
     temporary.push(dir);
     const cfg = { gates: { full: ['npm run all'] } };
     expect(GE.fullGateVerdict({ folder: dir, sha: A, cfg: { gates: { full: [] } } })).toBe('off');
@@ -88,8 +88,8 @@ describe('tamperReason', () => {
   it('hits the store and --evidence/--cwd on the gate runner only', () => {
     expect(GE.tamperReason('cat scripts/.queue/gate-evidence.json')).toMatch(/only by the orchestrator/);
     expect(GE.tamperReason('node scripts/orchestrator/gates.mjs --quick --evidence')).toMatch(/without --evidence and --cwd/);
-    expect(GE.tamperReason('node "C:/p/cq.mjs" gates --full --cwd ..')).toMatch(/without --evidence/);
-    expect(GE.tamperReason('cq gates --quick --evidence')).toMatch(/without --evidence/);
+    expect(GE.tamperReason('node "C:/p/ravenseat.mjs" gates --full --cwd ..')).toMatch(/without --evidence/);
+    expect(GE.tamperReason('ravenseat gates --quick --evidence')).toMatch(/without --evidence/);
     expect(GE.tamperReason('node scripts/orchestrator/gates.mjs --quick --log x')).toBeNull();
     expect(GE.tamperReason('git commit -m "gates --cwd docs"')).toBeNull();
     expect(GE.tamperReason('node tool.mjs --cwd x')).toBeNull();
@@ -142,7 +142,7 @@ describe('setup hash, writer and legacy entries', () => {
     expect(GE.verdict([track], { sha: A, commands: cmds })).toBe('missing');
     expect(GE.verdict([{ ...track, setup_hash: S1 }], { sha: A, commands: cmds, setupHash: S1 })).toBe('missing');
     // A legacy file on disk is read as it was written, and the push check still accepts a legacy full run.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-gate-evidence-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-gate-evidence-'));
     temporary.push(dir);
     fs.writeFileSync(GE.storeFile(dir), JSON.stringify({ version: 1, entries: [{ ...legacy, kind: 'full', gates: ['npm run all'] }] }));
     expect(GE.readStore(GE.storeFile(dir)).entries[0]).toMatchObject({ sha: A, kind: 'full' });
@@ -155,7 +155,7 @@ describe('setup hash, writer and legacy entries', () => {
   });
 
   it('recordRun appends when the store did not change, and drops a change made during the run', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-gate-evidence-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-gate-evidence-'));
     temporary.push(dir);
     const file = GE.storeFile(dir);
     GE.append(file, e({ time: 'old', setupHash: S1 }));
@@ -173,7 +173,7 @@ describe('setup hash, writer and legacy entries', () => {
     expect(GE.verdict(after, { sha: B, commands: cmds })).toBe('missing');
 
     // A store that did not exist before and was created during the run is dropped too.
-    const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-gate-evidence-'));
+    const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-gate-evidence-'));
     temporary.push(dir2);
     const file2 = GE.storeFile(dir2);
     GE.append(file2, e({ time: 'forged' }));

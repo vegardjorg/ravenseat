@@ -62,6 +62,25 @@ describe('the list of names', () => {
   });
 });
 
+describe('the old name as an alias', () => {
+  const help = (script: string, ...args: string[]) => spawnSync(process.execPath, [path.join(ORCH, script), ...args], { encoding: 'utf8', cwd: folder() });
+  it('the old entry script gives the same as the new one, and is not listed as a command', () => {
+    const now = help('ravenseat.mjs', 'help', 'all');
+    const old = help('cq.mjs', 'help', 'all');
+    expect(now.status).toBe(0);
+    expect(old.stdout).toBe(now.stdout);
+    expect(now.stdout).not.toMatch(/\bcq\b/);
+  });
+  it('both bin shims start the new entry script', () => {
+    for (const f of ['ravenseat', 'ravenseat.cmd', 'cq', 'cq.cmd']) expect(fs.readFileSync(path.join(PLUGIN, 'bin', f), 'utf8'), f).toContain('ravenseat.mjs');
+  });
+  it('the marketplace moves an install of the old name for good', () => {
+    const market = JSON.parse(fs.readFileSync(path.resolve(PLUGIN, '..', '.claude-plugin', 'marketplace.json'), 'utf8'));
+    expect(market.renames).toEqual({ cq: 'ravenseat' });
+    expect(market.plugins.map((p: { name: string }) => p.name)).toEqual(['ravenseat']);
+  });
+});
+
 describe.each(ALL_NAMES)('the CLI name %s', (name) => {
   it('is a queue call in every written form', () => {
     for (const line of [

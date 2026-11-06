@@ -1,7 +1,7 @@
 // =============================================================
 // fields.js: one normalized vocabulary for queue files and time logs, whatever language they were written in.
 //
-// Why: the benchmark reads two kinds of projects. A cq project writes English field names (queue.json, times.jsonl),
+// Why: the benchmark reads two kinds of projects. A ravenseat project writes English field names (queue.json, times.jsonl),
 // while an older vendored install of the same queue model writes Norwegian ones (ko.json, .bolge-tider.jsonl). The
 // two have the same shape, so a small key map plus a few value maps is enough: every collector calls `normalize`
 // first and then only ever sees the English names. Unknown keys are kept as they are, so new fields are never lost.

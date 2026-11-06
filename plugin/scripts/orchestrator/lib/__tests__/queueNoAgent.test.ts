@@ -108,7 +108,7 @@ describe('startedWithoutAgent (pure)', () => {
       L.startedWithoutAgent({ tasks: [running('A'), running('B')] }, { now: NOW }),
     );
     expect(lines[0]).toMatch(/^STARTED WITHOUT AGENT \(2\)/);
-    expect(lines[0]).toContain('cq set <id> waiting');
+    expect(lines[0]).toContain('ravenseat set <id> waiting');
     expect(lines[0]).toContain('fill --ids <id>');
     expect(lines.slice(1).map((l) => l.trim().split(/\s+/)[0])).toEqual(['A', 'B']);
   });
@@ -191,7 +191,7 @@ describe('reservedWithoutAgent: an attempt no agent took (test report R1)', () =
   it('the round warning gives the command that makes the same round again', () => {
     const lines = L.withoutAgentLines(L.reservedWithoutAgent({ tasks: [prepared('G7')] }, { rows: HOOK_WORKS, now: NOW }));
     expect(lines[0]).toMatch(/^ROUND WITHOUT AGENT \(1\)/);
-    expect(lines[1]).toContain('cq resume G7 --reason context');
+    expect(lines[1]).toContain('ravenseat resume G7 --reason context');
   });
 });
 
@@ -224,7 +224,7 @@ describe('waiting on a cancelled task (test report R7)', () => {
   });
 });
 
-describe('the cards in cq decide (test report R1, R4)', () => {
+describe('the cards in ravenseat decide (test report R1, R4)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const T = require('../queueBoard.js') as { board: (q: unknown, o?: unknown) => any };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -238,7 +238,7 @@ describe('the cards in cq decide (test report R1, R4)', () => {
       withoutAgent: [{ id: 'G7', branch: 'queue/G7', prepared: true, round: 1, reason: 'context' }],
     });
     expect(card).toMatchObject({ kind: 'stuck-no-agent', id: 'G7' });
-    expect(card.context.join(' ')).toContain('cq resume G7 --reason context');
+    expect(card.context.join(' ')).toContain('ravenseat resume G7 --reason context');
     expect(card.options.map((x: { label: string }) => x.label)).toEqual(['Seen']);
   });
 

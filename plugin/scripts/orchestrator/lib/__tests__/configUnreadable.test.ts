@@ -4,7 +4,7 @@
 // Why: a parse error used to give the default values in silence. With the defaults the base branch is "main", the
 // migration guard and the deploy commands are gone and the gate lists are empty, so a push to production or a merge
 // with zero gates could go through. Locks that config() reports the error (file, line, column) while still giving the
-// defaults to `cq doctor`, that the CLI entry points stop with a clear message (doctor and help still run), and that
+// defaults to `ravenseat doctor`, that the CLI entry points stop with a clear message (doctor and help still run), and that
 // the push guard's answer for an unreadable config asks (main session) or denies (queue agents) only the push,
 // migration and deploy shaped commands. Temporary folders only.
 // =============================================================
@@ -26,7 +26,7 @@ afterAll(() => {
 
 /** A temporary project folder with a queue.config.json holding `text`. */
 function project(text: string) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cq-badconfig-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-badconfig-'));
   temporary.push(root);
   const file = path.join(root, 'queue.config.json');
   fs.writeFileSync(file, text);
@@ -78,18 +78,18 @@ describe('config() on an unreadable queue.config.json', () => {
 });
 
 describe('the CLI stops instead of running on the defaults', () => {
-  it('queue.mjs show and cq gates stop with the file, the position and a hint; nothing is written', () => {
+  it('queue.mjs show and ravenseat gates stop with the file, the position and a hint; nothing is written', () => {
     const p = project(BROKEN);
     const show = p.run('queue.mjs', 'show');
     expect(show.code).toBe(1);
     expect(show.error).toContain(`${p.file}:4:1`);
     expect(show.error).toMatch(/cannot be read/);
-    expect(show.error).toMatch(/cq doctor/);
+    expect(show.error).toMatch(/ravenseat doctor/);
     const init = p.run('queue.mjs', 'init');
     expect(init.code).toBe(1);
     expect(fs.existsSync(path.join(p.data, 'queue.json'))).toBe(false);
     expect(fs.readFileSync(p.file, 'utf8')).toBe(BROKEN);
-    const gates = p.run('cq.mjs', 'gates', '--quick');
+    const gates = p.run('ravenseat.mjs', 'gates', '--quick');
     expect(gates.code).toBe(1);
     expect(gates.error).toMatch(/cannot be read/);
     const direct = p.run('gates.mjs', '--quick');
@@ -97,13 +97,13 @@ describe('the CLI stops instead of running on the defaults', () => {
     expect(direct.error).toMatch(/cannot be read/);
   }, 60_000);
 
-  it('cq doctor still runs and FAILs the config with the line and column; cq help still works', () => {
+  it('ravenseat doctor still runs and FAILs the config with the line and column; ravenseat help still works', () => {
     const p = project(BROKEN);
     const d = p.run('queue.mjs', 'doctor');
     expect(d.code).toBe(1);
     expect(d.out).toMatch(/^FAIL {2}config {5}.*queue\.config\.json does not parse \(line 4, column 1\)/m);
     expect(d.out).toMatch(/the queue commands stop/);
-    expect(p.run('cq.mjs', 'help').code).toBe(0);
+    expect(p.run('ravenseat.mjs', 'help').code).toBe(0);
   }, 60_000);
 });
 

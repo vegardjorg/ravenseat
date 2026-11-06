@@ -118,7 +118,7 @@ describe('the board in jsdom', () => {
     expect(silentCard).not.toBeNull();
     const badge = silentCard.querySelector('.silent-badge') as HTMLElement;
     expect(badge?.textContent).toBe('silent');
-    expect(badge.getAttribute('title')).toContain('cq resume EX-1 --reason context');
+    expect(badge.getAttribute('title')).toContain('ravenseat resume EX-1 --reason context');
     // Keyboard and screen reader users get the same text (not only the tooltip).
     expect(silentCard.textContent).toContain('Silent for 30 min');
     expect(otherCard.querySelector('.silent-badge')).toBeNull();

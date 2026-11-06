@@ -153,7 +153,7 @@ function project(tasks: Task[], config: Record<string, unknown> = {}) {
 const RESULT = (id: string, status = 'DONE') => `RESULT status=${status} branch=queue/${id} commits=1 migr=- gates=OK probe=- ownerQuestions=0 edge=-`;
 const startPayload = (agent: string, transcriptPath: string | null) => ({
   agent_id: agent,
-  agent_type: 'cq:track',
+  agent_type: 'ravenseat:track',
   ...(transcriptPath ? { agent_transcript_path: transcriptPath } : {}),
 });
 
@@ -332,7 +332,7 @@ describe('running, from the hook row', () => {
     const p = project([task('A')]);
     p.run(['start', 'A']);
     const t = p.transcript('rev1', 'A');
-    p.hook('SubagentStart', { agent_id: 'rev1', agent_type: 'cq:reviewer', agent_transcript_path: t });
+    p.hook('SubagentStart', { agent_id: 'rev1', agent_type: 'ravenseat:reviewer', agent_transcript_path: t });
     expect(p.run(['attempt', 'list', 'A']).out).toMatch(/a1\s+reserved/);
   });
 
@@ -391,7 +391,7 @@ describe('running, from the hook row', () => {
   });
 });
 
-describe('cq takeover: the warning about another orchestrator', () => {
+describe('ravenseat takeover: the warning about another orchestrator', () => {
   const takeover = (p: ReturnType<typeof project>) =>
     JSON.parse(
       spawnSync(process.execPath, [path.join(SCRIPTS, 'queue-takeover.mjs'), '--json'], { encoding: 'utf8', env: p.env, cwd: p.folder }).stdout,
@@ -407,7 +407,7 @@ describe('cq takeover: the warning about another orchestrator', () => {
     expect(q.run(['start', 'A']).code).toBe(0);
     expect(takeover(q).possible_live_orchestrator).toBe(true);
   });
-  it('a cursor whose time ran out, after someone ran cq set: no warning (test round 2: M10)', () => {
+  it('a cursor whose time ran out, after someone ran ravenseat set: no warning (test round 2: M10)', () => {
     const p = project([task('A'), task('B')]);
     const old = new Date(Date.now() - 5 * 3_600_000).toISOString();
     fs.writeFileSync(path.join(p.folder, 'orchestrator.json'), JSON.stringify({ session: 'gone', updated: old, event: 'pulse' }));
@@ -416,7 +416,7 @@ describe('cq takeover: the warning about another orchestrator', () => {
   });
 });
 
-describe('cq add: owning a protected path', () => {
+describe('ravenseat add: owning a protected path', () => {
   it('warns and still adds; an ordinary file gives no warning', () => {
     const p = project([task('A')]);
     const r = p.run(['add', '--json', JSON.stringify({ ...task('B'), owned_files: ['.claude/settings.json'] })]);
@@ -428,7 +428,7 @@ describe('cq add: owning a protected path', () => {
   });
 });
 
-describe('cq receive: the merge line', () => {
+describe('ravenseat receive: the merge line', () => {
   it('names --scratchpad only when merge would not find the folder itself', () => {
     const p = project([task('A')]);
     p.run(['start', 'A']);
@@ -446,7 +446,7 @@ describe('cq receive: the merge line', () => {
   });
 });
 
-describe('cq receive without commits', () => {
+describe('ravenseat receive without commits', () => {
   it('refuses, leaves the task as it was and names the next steps; --force still makes the package', () => {
     const p = project([task('A')]);
     p.run(['start', 'A']);
@@ -464,7 +464,7 @@ describe('cq receive without commits', () => {
   });
 });
 
-describe('cq attempt', () => {
+describe('ravenseat attempt', () => {
   it('list: --json, and a task without attempts or an unknown task', () => {
     const p = project([task('A'), task('B')]);
     p.run(['start', 'A']);
@@ -614,12 +614,12 @@ describe('agents cannot edit attempts', () => {
     expect(r.error).toMatch(/unknown field attempts/);
   });
 
-  it('the push guard denies a queue agent cq attempt, list and close alike', () => {
+  it('the push guard denies a queue agent ravenseat attempt, list and close alike', () => {
     /* eslint-disable-next-line @typescript-eslint/no-require-imports */
     const G = require('../lib/pushGuard.js') as {
       assess: (command: string, o: Record<string, unknown>) => { decision?: string; reason?: string } | null;
     };
-    for (const command of ['cq attempt close A --outcome abandoned', 'cq attempt list A', 'node scripts/orchestrator/queue.mjs attempt close A']) {
+    for (const command of ['ravenseat attempt close A --outcome abandoned', 'ravenseat attempt list A', 'node scripts/orchestrator/queue.mjs attempt close A']) {
       const v = G.assess(command, {
         baseBranch: 'main',
         migrations: {},
@@ -705,7 +705,7 @@ describe('what the track says reaches the owner (test round 2: M20, M21)', () =>
       '- none',
     ].join('\n');
 
-  it('no commits: the status and the question are printed, and the question opens a card in cq decide', () => {
+  it('no commits: the status and the question are printed, and the question opens a card in ravenseat decide', () => {
     const p = project([task('A')]);
     p.run(['start', 'A']);
     if (!p.g(['branch', '--list', 'queue/A'])) p.g(['branch', 'queue/A']);
@@ -768,7 +768,7 @@ describe('what the track says reaches the owner (test round 2: M20, M21)', () =>
     expect(r.out).not.toMatch(/PARTIAL: unfinished|Owner question/);
     expect(r.out).not.toMatch(/branch has/);
   });
-  it('no report file and a mission template older than the plugin: the warning points at cq doctor', () => {
+  it('no report file and a mission template older than the plugin: the warning points at ravenseat doctor', () => {
     const p = project([task('A')]);
     p.run(['start', 'A']);
     p.branch('A');
@@ -777,11 +777,11 @@ describe('what the track says reaches the owner (test round 2: M20, M21)', () =>
     fs.writeFileSync(path.join(p.folder, 'docs', 'queue', 'mission-template.md'), 'old\n');
     const r = p.run(['receive', 'A']);
     expect(r.out).toContain('has no track-result.md');
-    expect(r.out).toMatch(/mission-template\.md differs.*cq doctor/);
+    expect(r.out).toMatch(/mission-template\.md differs.*ravenseat doctor/);
   });
 });
 
-describe('cq add warns about a protected path in the mission (test round 2: M22)', () => {
+describe('ravenseat add warns about a protected path in the mission (test round 2: M22)', () => {
   it('names it, and points at --files', () => {
     const p = project([], { mode: 'lite' });
     const r = p.run(['add', 'Change the settings', '--mission', 'Set autoCompactWindow in .claude/settings.json']);
@@ -795,7 +795,7 @@ describe('cq add warns about a protected path in the mission (test round 2: M22)
 });
 
 describe('long lines outside a terminal (test round 2: L1)', () => {
-  it('cq decide keeps the whole title and command when the output is piped', () => {
+  it('ravenseat decide keeps the whole title and command when the output is piped', () => {
     const title = `Long title ${'x'.repeat(200)} the end`;
     const p = project([task('A', { status: 'proposed', title, added_by: 'agent' })]);
     const r = p.run(['decide']);
@@ -841,7 +841,7 @@ describe('the first run (test round 2: M5, M6, M7)', () => {
     const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'setup.mjs'), '--target', folder], { encoding: 'utf8', cwd: folder });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/path\(s\) are uncommitted here/);
-    expect(r.stdout).toContain('Next: cq init');
+    expect(r.stdout).toContain('Next: ravenseat init');
   });
 });
 
@@ -879,7 +879,7 @@ describe('the fix round after a red gate (test round 2: M11, M12)', () => {
   });
 });
 
-describe('cq decide gives the advice that fits (test round 2: M16, M17)', () => {
+describe('ravenseat decide gives the advice that fits (test round 2: M16, M17)', () => {
   const items = (p: ReturnType<typeof project>) => JSON.parse(p.run(['decide', '--json']).out).items;
   it('a task started without an agent is put back in the queue, not flagged', () => {
     const started = new Date(Date.now() - 3_600_000).toISOString();
@@ -962,12 +962,12 @@ describe('what is left behind (test round 2: M2, M4, M8, L3)', () => {
     p.g(['worktree', 'add', '-q', wt, 'queue/A']);
     const out = p.run(['doctor']).out;
     expect(out).toMatch(/1 branch\(es\) of done or cancelled tasks still have a worktree: queue\/A/);
-    expect(out).toContain('cq cleanup-worktree --all --execute');
+    expect(out).toContain('ravenseat cleanup-worktree --all --execute');
     expect(out).toContain('git branch -d queue/B queue/C queue/D queue/E queue/F queue/G');
   });
 });
 
-describe('cq edit --files (test round 3: N11, N14)', () => {
+describe('ravenseat edit --files (test round 3: N11, N14)', () => {
   it('sets the files, takes backslashes, and an empty list empties it', () => {
     const p = project([task('A')]);
     expect(p.run(['edit', 'A', '--files', 'a.js, b\\c.js']).code).toBe(0);
@@ -1090,7 +1090,7 @@ describe('a worktree the agent detached when it delivered (test round 3: N18, N2
 
 describe('a long failure class (test round 3: N9)', () => {
   const long = `a failure class ${'that goes on '.repeat(20)}and ends here`;
-  it('cq gate cuts the title and keeps the whole class in the mission', () => {
+  it('ravenseat gate cuts the title and keeps the whole class in the mission', () => {
     const p = project([]);
     p.run(['gate', long]);
     const o = p.queue().tasks[0];
@@ -1261,10 +1261,10 @@ describe('false signals (test round 3: N1, N31, N32)', () => {
     const [row] = L.blockerSummary({ tasks: [{ id: 'A', status: 'cancelled', blocks: [{ code: 'gate-red', from }] }] });
     expect(row).toMatchObject({ code: 'gate-red', count: 1, open: 0, ms: 0 });
   });
-  it('cq <command> --help is the help, and runs nothing', () => {
-    const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'cq.mjs'), 'decide', '--help'], { encoding: 'utf8', cwd: os.tmpdir() });
+  it('ravenseat <command> --help is the help, and runs nothing', () => {
+    const r = spawnSync(process.execPath, [path.join(SCRIPTS, 'ravenseat.mjs'), 'decide', '--help'], { encoding: 'utf8', cwd: os.tmpdir() });
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain('cq decide');
+    expect(r.stdout).toContain('ravenseat decide');
     expect(r.stdout).not.toContain('Waiting on you');
     expect(r.stdout).not.toContain('Nothing waiting');
   });
@@ -1310,7 +1310,7 @@ describe('the board answers a track through the same command (test round 3: N12)
       expect(ok.status, await ok.clone().text()).toBe(200);
       expect(JSON.stringify(p.find('A').bonus)).toContain('Call it halv2');
       expect(p.find('A').resumed).toHaveLength(1);
-      // Marked as the owner's, which is what wakes cq wait.
+      // Marked as the owner's, which is what wakes ravenseat wait.
       expect(p.find('A').resumed[0]).toMatchObject({ by: 'owner', answer: 'Call it halv2' });
     } finally {
       const gone = new Promise((done) => board.once('exit', done));
@@ -1321,7 +1321,7 @@ describe('the board answers a track through the same command (test round 3: N12)
 });
 
 describe('test round 3, P2', () => {
-  it('M3: cq show <id> shows that task, and an unknown id says so', () => {
+  it('M3: ravenseat show <id> shows that task, and an unknown id says so', () => {
     const p = project([task('A', { title: 'the first one' }), task('B', { title: 'the other one' })]);
     const r = p.run(['show', 'A']);
     expect(r.code, r.error).toBe(0);
@@ -1341,7 +1341,7 @@ describe('test round 3, P2', () => {
     expect(board.text).toBe('3 of 10 tasks, BLOCKED (1 external commit(s): ask the owner first)');
     expect(PB.boardBatch({ batch, setup, fullGate: 'missing' }).verdict).toBe('BLOCKED');
   });
-  it('M10: cq set does not revive an orchestrator whose time ran out, and keeps a live one fresh', () => {
+  it('M10: ravenseat set does not revive an orchestrator whose time ran out, and keeps a live one fresh', () => {
     const file = (p: ReturnType<typeof project>) => path.join(p.folder, 'orchestrator.json');
     const old = new Date(Date.now() - 5 * 3_600_000).toISOString();
     const stale = project([task('A')]);
@@ -1481,14 +1481,14 @@ describe('test round 4, P1', () => {
     expect(none).not.toContain('after an approved review');
     expect(receive(false)).toContain('Merge (after an approved review, from Bash): ');
   });
-  it('cq add names a field the queue does not read (F4)', () => {
+  it('ravenseat add names a field the queue does not read (F4)', () => {
     const p = project([task('A')]);
     const wrong = p.run(['add', '--json', JSON.stringify(task('B', { minutes: 10 }))]);
     expect(wrong.code, wrong.error).toBe(0);
     expect(wrong.out).toContain('WARNING: B: the queue does not read "minutes"; the field is content_min.');
     expect(p.run(['add', '--json', JSON.stringify(task('C', { content_min: 40 }))]).out).not.toContain('does not read');
   });
-  it('cq edit names the flag it did not understand (F5)', () => {
+  it('ravenseat edit names the flag it did not understand (F5)', () => {
     const p = project([task('A')]);
     const r = p.run(['edit', 'A', '--filez', 'x']);
     expect(r.code).toBe(1);

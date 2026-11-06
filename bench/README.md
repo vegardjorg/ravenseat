@@ -12,7 +12,7 @@ synthetic fixtures only.
 This repo is public. The benchmark measures a real project, so:
 
 - The manifest (which names real tasks), the load log, the human minutes log, `records.json` and `report.md` all
-  live OUTSIDE this repo. The default results root is `~/.cq-bench/results` (or `BENCH_RESULTS`). `bench.mjs`
+  live OUTSIDE this repo. The default results root is `~/.ravenseat-bench/results` (or `BENCH_RESULTS`). `bench.mjs`
   refuses to write anywhere inside the repo except `bench/results/`, which `bench/.gitignore` keeps out of git.
 - Nothing from a measured project (task ids, titles, paths, numbers) is ever written into a file in this repo.
   The fixtures in `bench/__tests__/fixtures.ts` are invented.
@@ -21,7 +21,7 @@ This repo is public. The benchmark measures a real project, so:
 
 ```
 node bench/bench.mjs validate --manifest <file>
-node bench/bench.mjs assign   --pairs <pairs.json> --arms cq,manual [--seed 1]
+node bench/bench.mjs assign   --pairs <pairs.json> --arms ravenseat,manual [--seed 1]
 node bench/bench.mjs sample   --out <load.jsonl> [--interval 30] [--duration-min 600] [--queue <queue.json>] [--disk <dir>]
 node bench/bench.mjs sample   --stop --out <load.jsonl>
 node bench/bench.mjs sample   --once [--queue <queue.json>]
@@ -50,7 +50,7 @@ before putting real ids in it. Paths in `sources` are relative to the manifest f
 | Field | Meaning |
 |---|---|
 | `experiment` | Id, `[A-Za-z0-9._-]`, used in the results folder name |
-| `arms[]` | `name`, `kind` (`cq`, `manual-fresh`, `manual-long`, `other`), `models` (agent type to model, as in `queue.config.json` `models`), `maxParallel`, optional `window` `{from, to}` (sessions with no task link that start in it belong to the arm) and `sessions` (main session ids: the orchestrator for a cq arm, the long chat for `manual-long`) |
+| `arms[]` | `name`, `kind` (`ravenseat`, `manual-fresh`, `manual-long`, `other`), `models` (agent type to model, as in `queue.config.json` `models`), `maxParallel`, optional `window` `{from, to}` (sessions with no task link that start in it belong to the arm) and `sessions` (main session ids: the orchestrator for a ravenseat arm, the long chat for `manual-long`) |
 | `tasks[]` | `id` (queue id), `arm`, `pair` (matched pair id), `stratum` (e.g. class and size band), `label` (the track label in the logs, default `id`; must differ when the same task is replayed in two arms), `replay` `{base}` (built again from that commit in a throwaway worktree), `sessions` (main session ids for a manual arm), `outcome` (`merged`, `failed`, `abandoned`: required for replays and manual tasks outside the queue) |
 | `sources` | `queue`, `timeLog`, `transcripts` (the `~/.claude/projects/<slug>` folder), `load`, `human`, `gitRepo`, `gates` (an extra JSONL with gate rows) |
 | `settings` | `seed`, `bootstrap` (resamples), `defectWindowDays`, `loadMatchSec` (max distance from a gate run to a load sample), `prices` (per model, USD per MTok: `input`, `output`, `cache_read`, `cache_5m`, `cache_1h`), `sessionTypes` (agent type or session id to session type, overrides the defaults) |
@@ -63,15 +63,15 @@ before putting real ids in it. Paths in `sources` are relative to the manifest f
 |---|---|---|
 | Session tokens and USD | transcripts (preferred), else the time log's last cumulative `done` row per agent | Priced per model; a model without a price in `settings.prices` is priced as the default model and listed as a warning |
 | Session type | agent type, track label, main session lists | `orchestrator`, `planning`, `track`, `fix` (a `-r<N>`/`-round<N>` label, or a second build agent on the task), `reviewer`, `helper`; work on an abandoned task is counted as `cancelled` |
-| Context peak, compactions | transcripts (`compact_boundary` rows), time log `compact` rows | cq writes one `compact` row per main session compaction (`scope: "session"`, `orchestrator` marks the bound orchestrator, which then counts as an orchestrator session) and one per new track compaction (`scope: "track"`, the running count per `agent_id`). The log rows count only for a session whose transcript shows no compaction. Per task and per arm, plus orchestrator compactions per arm |
+| Context peak, compactions | transcripts (`compact_boundary` rows), time log `compact` rows | ravenseat writes one `compact` row per main session compaction (`scope: "session"`, `orchestrator` marks the bound orchestrator, which then counts as an orchestrator session) and one per new track compaction (`scope: "track"`, the running count per `agent_id`). The log rows count only for a session whose transcript shows no compaction. Per task and per arm, plus orchestrator compactions per arm |
 | Task class, estimate, status, times, queue cost, findings | the queue file | Replays take nothing from the queue except class and estimate |
-| Gate runs and reruns | the time log's `gates` rows (`rerun_nr`, `green`, `mode`, `concurrent_gates`, `free_memory_pct`); single `gate` rows for timeouts; cq's `gate` rows | cq's `gates.mjs` writes one `gate` row per run (`kind` quick/full/precheck, `ok`, `exit`, `attempt`, `timed_out`): read as a gate run with `rerun_nr = attempt - 1`, and as a step for timeouts. Per task (gate runs, reruns) and per arm |
+| Gate runs and reruns | the time log's `gates` rows (`rerun_nr`, `green`, `mode`, `concurrent_gates`, `free_memory_pct`); single `gate` rows for timeouts; ravenseat's `gate` rows | ravenseat's `gates.mjs` writes one `gate` row per run (`kind` quick/full/precheck, `ok`, `exit`, `attempt`, `timed_out`): read as a gate run with `rerun_nr = attempt - 1`, and as a step for timeouts. Per task (gate runs, reruns) and per arm |
 | Load | `sample` JSONL | free memory, CPU, load average (not on Windows), process and node counts, disk, running tracks |
 | Human minutes | `human` JSONL | |
 | Defects after merge | the queue (later `<id>-F*`/`-FIX*`/`-FIKS*`/`-QA*` tasks, or `bug`/`fix` labelled tasks owning the same files) and `git log` reverts naming the task, within `defectWindowDays`; a task added after the merge that names it in `fixes` | The `fixes` link is explicit, so the window does not apply to it. A fix task is counted once even when several rules match |
 
 Field names are normalized first (`lib/fields.js`), so a queue or log written with Norwegian field names (an older
-vendored install of the same queue model) reads the same as a cq one.
+vendored install of the same queue model) reads the same as a ravenseat one.
 
 ## Metrics (lib/metrics.js)
 

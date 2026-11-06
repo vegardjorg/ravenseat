@@ -101,9 +101,9 @@ describe('build (synthetic experiment)', () => {
   it('links sessions to tasks and arms, prices them and marks fix rounds and cancelled work', () => {
     const r = records();
     const by = (id: string) => r.sessions.find((s: any) => s.id === id);
-    expect(by('orch-1')).toMatchObject({ arm: 'cq', session_type: 'orchestrator', task: null, compactions: 1 });
+    expect(by('orch-1')).toMatchObject({ arm: 'ravenseat', session_type: 'orchestrator', task: null, compactions: 1 });
     expect(by('orch-1').usd).toBeCloseTo(10 * FX.TURN_USD, 6);
-    expect(by('a1')).toMatchObject({ arm: 'cq', task: 'X-1', session_type: 'track', agent_type: 'track' });
+    expect(by('a1')).toMatchObject({ arm: 'ravenseat', task: 'X-1', session_type: 'track', agent_type: 'track' });
     expect(by('a3')).toMatchObject({ task: 'X-2', session_type: 'reviewer' });
     expect(by('a4')).toMatchObject({ task: 'X-2', session_type: 'fix' });
     expect(by('chat-y1')).toMatchObject({ arm: 'manual', task: 'Y-1', session_type: 'track', cancelled: false });
@@ -115,7 +115,7 @@ describe('build (synthetic experiment)', () => {
   it('joins gate runs to tasks and to the nearest load sample', () => {
     const r = records();
     expect(r.gates.map((g: any) => g.task)).toEqual(['X-1', 'X-1', 'X-2']);
-    expect(r.gates[2]).toMatchObject({ arm: 'cq', sample_running_tracks: 10, sample_free_memory_pct: 8 });
+    expect(r.gates[2]).toMatchObject({ arm: 'ravenseat', sample_running_tracks: 10, sample_free_memory_pct: 8 });
     expect(r.gateSteps[0]).toMatchObject({ task: 'X-2', timeout: true });
   });
 
@@ -177,7 +177,7 @@ describe('files', () => {
     fs.writeFileSync(path.join(tr, 's1.jsonl'), FX.transcript(null, 1));
     fs.writeFileSync(path.join(tr, 's1', 'subagents', 'agent-a9.jsonl'), FX.transcript('X-1', 1));
     const Mf = require('../lib/manifest.js') as Record<string, any>;
-    const m = Mf.withDefaults({ experiment: 'c', arms: [{ name: 'a', kind: 'cq' }], tasks: [], sources: { transcripts: tr } });
+    const m = Mf.withDefaults({ experiment: 'c', arms: [{ name: 'a', kind: 'ravenseat' }], tasks: [], sources: { transcripts: tr } });
     const cacheFile = path.join(d, 'out', '.transcript-cache.json');
     const first = C.collectAll(m, { cacheFile });
     expect(first.transcript_cache_hits).toBe(0);

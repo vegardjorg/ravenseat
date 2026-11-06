@@ -30,7 +30,7 @@ const { dataFolder } = require('./lib/queueConfig.js');
 
 // The tree we run in (lib/projectRoot.js); the index is written here, also in a worktree.
 const ROOT = require('./lib/projectRoot.js').roots().tree;
-const CQ = require('./lib/projectRoot.js').cqCommand();
+const CLI = require('./lib/projectRoot.js').cliCommand();
 const FOLDER = dataFolder();
 const indexRel = I.indexFile();
 if (!process.env.QUEUE_INDEX_FILE && !indexRel) {
@@ -106,7 +106,7 @@ if (check || dry) {
   );
   console.log(`  now:  ${difference.now ?? '(end)'}`);
   console.log(`  new:  ${difference.new ?? '(end)'}`);
-  console.log(`  Fix: ${CQ} make-index`);
+  console.log(`  Fix: ${CLI} make-index`);
   process.exit(check ? 1 : 0);
 }
 

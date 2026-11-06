@@ -18,7 +18,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import {
-  a, autoCleanFocus, BASE, branchFor, branchInfo, CE, CH, CONFIG, CQ, cut, die, edit, focusCleanOut, FOLDER, git, GIT_ROOT, HERE, L, MIGR,
+  a, autoCleanFocus, BASE, branchFor, branchInfo, CE, CH, CONFIG, CLI, cut, die, edit, focusCleanOut, FOLDER, git, GIT_ROOT, HERE, L, MIGR,
   missionFile, parallelWarning, positional, pulseCursor, read, readCursor, require, TK, uncommittedPaths, val, values,
   WIDTH, writeExternalWarning,
 } from './context.mjs';
@@ -50,7 +50,7 @@ function adapterFor(o) {
   }
 }
 
-/** `cq next` (the usage is at the top of queue.mjs). */
+/** `ravenseat next` (the usage is at the top of queue.mjs). */
 export function cmdNext() {
   const queue = read();
   // Budget guard: over the daily budget nothing is proposed (exit 4, so a loop does not take it for "empty queue").
@@ -95,14 +95,14 @@ export function cmdNext() {
     for (const h of skipped.slice(0, 10)) console.log(`  ${h.id.padEnd(12)} file ${h.path}`);
     if (skipped.length > 10) console.log(`  ... and ${skipped.length - 10} more`);
     console.log(
-      '  Wait, ask the session to commit or register itself (cq external add), or start --force on the owner\'s word.',
+      '  Wait, ask the session to commit or register itself (ravenseat external add), or start --force on the owner\'s word.',
     );
   }
   if (b.active) console.log(b.message);
   if (b.active) console.log(CE.budgetOutlook(b, selected.reduce((x, v) => x + costFor(v).usd, 0)).message);
 }
 
-/** `cq start` (the usage is at the top of queue.mjs). */
+/** `ravenseat start` (the usage is at the top of queue.mjs). */
 export function cmdStart() {
   const id = a[1];
   if (!id) die('start <id>');
@@ -132,8 +132,8 @@ export function cmdStart() {
     const why = a.includes('--force') ? null : triageReason(queue, o);
     if (why)
       die(
-        `${id} needs an intake triage verdict before it starts (${why}): cq fill prints the step, or ` +
-          `cq triage ${id} --prompt --scratchpad <dir>. Or start --force on the owner's word.`,
+        `${id} needs an intake triage verdict before it starts (${why}): ravenseat fill prints the step, or ` +
+          `ravenseat triage ${id} --prompt --scratchpad <dir>. Or start --force on the owner's word.`,
       );
     // --force: the owner has asked for the task to go first. Overrides only the priority order in selectNext and
     // the pause on the project, never the blockers above (dependencies, ownership, owner questions).
@@ -149,18 +149,18 @@ export function cmdStart() {
       if (L.projectPaused(o, register)) {
         const pid = L.projectFor(o, register);
         die(
-          `${id} belongs to the project ${pid}, which is paused (cq project ${pid} --continue, or start --force).`,
+          `${id} belongs to the project ${pid}, which is paused (ravenseat project ${pid} --continue, or start --force).`,
         );
       }
       if (space.out)
         die(
-          `${id} cannot be started: ${space.reason}. Edit the focus (cq focus set ...), or start --force on the owner's word.`,
+          `${id} cannot be started: ${space.reason}. Edit the focus (ravenseat focus set ...), or start --force on the owner's word.`,
         );
       const u = L.uncommittedCollision(o, uncommitted);
       if (u)
         die(
           `${id} cannot be started: file ${u.path} is uncommitted in the main tree (another session is working in it). Wait, ask the session ` +
-            'to commit or register itself (cq external add), or start --force on the owner\'s word.',
+            'to commit or register itself (ravenseat external add), or start --force on the owner\'s word.',
         );
       const loadLine = loadSlotsLine(queue, load);
       die(
@@ -189,7 +189,7 @@ export function cmdStart() {
   writeExternalWarning(r);
 }
 
-/** `cq trackFile` (the usage is at the top of queue.mjs). */
+/** `ravenseat trackFile` (the usage is at the top of queue.mjs). */
 export function cmdTrackFile() {
   const out = val('--out');
   const idList = a.slice(1).filter((x, i, arr) => x !== '--out' && arr[i - 1] !== '--out');
@@ -202,11 +202,11 @@ export function cmdTrackFile() {
   );
   if (withWarning.length)
     console.log(
-      `A warning about changes outside the queue is in the track block for: ${withWarning.join(', ')} (cq external).`,
+      `A warning about changes outside the queue is in the track block for: ${withWarning.join(', ')} (ravenseat external).`,
     );
 }
 
-/** `cq fill` (the usage is at the top of queue.mjs). */
+/** `ravenseat fill` (the usage is at the top of queue.mjs). */
 export function cmdFill() {
   // ---- next -> start -> trackFile -> make-queue-common -> make-mission in one call ----
   const scratch = scratchpadFor();
@@ -226,7 +226,7 @@ export function cmdFill() {
   // Said before the work starts, not after it at the merge. A warning: the tracks themselves can run.
   const identity = GI.readIdentity(GIT_ROOT);
   if (identity.refused)
-    console.log(`WARNING: cq merge will refuse this git identity (${identity.ident || 'none'}): a test or missing address would end up in every merge commit. Fix it now: ${GI.IDENTITY_FIX}`);
+    console.log(`WARNING: ravenseat merge will refuse this git identity (${identity.ident || 'none'}): a test or missing address would end up in every merge commit. Fix it now: ${GI.IDENTITY_FIX}`);
   const usage = dailyUsageFor(read());
   const uncommitted = uncommittedPaths();
   // Measured before the lock; --over-load (the owner's word) overrides the load guard.
@@ -259,7 +259,7 @@ export function cmdFill() {
         else if (o.status === 'waiting' && triage.skip.has(id))
           die(
             `${id} needs an intake triage verdict before it starts (${triage.list.find((x) => x.id === id).reason}): ` +
-              `cq triage ${id} --prompt --scratchpad <dir>, or start --force on the owner's word. Nothing was started.`,
+              `ravenseat triage ${id} --prompt --scratchpad <dir>, or start --force on the owner's word. Nothing was started.`,
           );
         else if (o.status === 'waiting' && can.includes(id)) {
           // The wind-down also stops new starts via --ids (new prompt files for running ones still work).
@@ -302,7 +302,7 @@ export function cmdFill() {
         if (t.message) quotaMessage = t.message;
         if (t.limit != null && !a.includes('--over-quota')) quotaMax = t.limit;
       } catch (e) {
-        quotaMessage = `(The quota forecast failed: ${e?.message ?? e}; cq capacity)`;
+        quotaMessage = `(The quota forecast failed: ${e?.message ?? e}; ravenseat capacity)`;
       }
       // Load-aware slots (lib/loadSlots.js): under load selectNext opens fewer slots; the line says why.
       loadMessage = loadSlotsLine(queue, load);
@@ -325,7 +325,7 @@ export function cmdFill() {
       ? out
       : out.filter((x) => {
           const live = runningAttempt(x.o, attemptLog);
-          if (live) console.error(AT.blockMessage(x.o.id, live, CQ));
+          if (live) console.error(AT.blockMessage(x.o.id, live, CLI));
           return !live;
         });
     for (const x of go) {
@@ -381,7 +381,7 @@ export function cmdFill() {
       die(
         `${name} failed: ${String(e?.stderr ?? e?.message ?? e).trim()}\n` +
           (newIds.length ? `Started (running): ${newIds.join(', ')}. ` : '') +
-          `When the error is fixed: cq fill --ids ${selected.map((v) => v.id).join(' ')} --scratchpad "${scratch}"`,
+          `When the error is fixed: ravenseat fill --ids ${selected.map((v) => v.id).join(' ')} --scratchpad "${scratch}"`,
       );
     }
   };
@@ -439,7 +439,7 @@ export function cmdFill() {
   for (const l of CL.sameTurnLines(descriptors, triageOut.agents)) console.log(l);
 }
 
-/** `cq pickable` (the usage is at the top of queue.mjs). */
+/** `ravenseat pickable` (the usage is at the top of queue.mjs). */
 export function cmdPickable() {
   // ---- Picking ----
   const queue = read();
@@ -468,10 +468,10 @@ export function cmdPickable() {
     console.log(`  ${cut(p.title, WIDTH - 2)}`);
   }
   if (list.length)
-    console.log(`\n${list.length} can be picked. Pick: cq pick <id> --by "<who>"`);
+    console.log(`\n${list.length} can be picked. Pick: ravenseat pick <id> --by "<who>"`);
 }
 
-/** `cq pick` (the usage is at the top of queue.mjs). */
+/** `ravenseat pick` (the usage is at the top of queue.mjs). */
 export function cmdPick() {
   const id = a[1];
   if (!id || id.startsWith('--')) die('pick <id> --by "<who>" [--force]');
@@ -495,25 +495,25 @@ export function cmdPick() {
   if (r.overridden.length) console.log(`--force overrode: ${r.overridden.join(' · ')}`);
   // The owned files changed outside the queue since the task was added, or commits that mention the id.
   writeExternalWarning(o);
-  console.log(`Mission: ${file ?? `the text is in the queue (cq trackFile ${id} --out <file>)`}`);
+  console.log(`Mission: ${file ?? `the text is in the queue (ravenseat trackFile ${id} --out <file>)`}`);
   console.log(
     [
       'Next step (the same protocol as a queue track: own worktree, common protocol, gates and review by class):',
       g.exists
         ? `  1. Worktree on the existing branch (${g.commits} commit(s) ahead of ${BASE}): git worktree add ${wt} ${o.branch}`
         : `  1. Worktree: git worktree add ${wt} -b ${o.branch} ${BASE}`,
-      `  2. The mission: cq trackFile ${id} --out <scratch>/queue-track.md; make-queue-common.mjs --out <scratch>/queue-common.md;`,
+      `  2. The mission: ravenseat trackFile ${id} --out <scratch>/queue-track.md; make-queue-common.mjs --out <scratch>/queue-common.md;`,
       `     make-mission.mjs --common <scratch>/queue-common.md --track <scratch>/queue-track.md --head <HEAD>`,
-      `  3. In the worktree: ${require('./lib/projectRoot.js').cqCommand({ fromWorktree: true })} prepare-track ${id} --branch ${o.branch} --scratchpad "<scratch>"`,
-      `  4. Done: orchestrator active -> cq deliver ${id} (it merges). No orchestrator -> merge yourself`,
-      `     (merge-track.mjs ${o.branch})${MIGR.folder ? ', push the migrations' : ''}, then cq set ${id} done.`,
+      `  3. In the worktree: ${require('./lib/projectRoot.js').cliCommand({ fromWorktree: true })} prepare-track ${id} --branch ${o.branch} --scratchpad "<scratch>"`,
+      `  4. Done: orchestrator active -> ravenseat deliver ${id} (it merges). No orchestrator -> merge yourself`,
+      `     (merge-track.mjs ${o.branch})${MIGR.folder ? ', push the migrations' : ''}, then ravenseat set ${id} done.`,
       '     Never git push without the owner\'s "push".',
-      `  If you give up: cq release ${id} (the branch and the migration block are kept).`,
+      `  If you give up: ravenseat release ${id} (the branch and the migration block are kept).`,
     ].join('\n'),
   );
 }
 
-/** `cq resume` (the usage is at the top of queue.mjs). */
+/** `ravenseat resume` (the usage is at the top of queue.mjs). */
 export function cmdResume() {
   // ---- Adoption: the mission for a NEW agent that continues a track on the same branch (fix round or continuation) ----
   // The same template as fill (make-queue-common + make-mission), with the track block from queueLogic.resumeBlock and
@@ -527,7 +527,7 @@ export function cmdResume() {
   // --answer: the owner's answer to what the track asked. First in the brief, and saved as an addition to the mission.
   const answer = a.includes('--answer') ? String(val('--answer') ?? '').trim() : null;
   if (answer === '') die(`${use}\n--answer is empty.`);
-  // --by owner: the owner answered (the board, cq decide), so nobody may be reading this output. cq wait wakes on it.
+  // --by owner: the owner answered (the board, ravenseat decide), so nobody may be reading this output. ravenseat wait wakes on it.
   const answerFields = answer
     ? { answer, answered_at: new Date().toISOString(), ...(val('--by') ? { by: String(val('--by')).trim() } : {}) }
     : {};
@@ -545,14 +545,14 @@ export function cmdResume() {
   adapterFor(o); // an unknown client stops before any round file is written
   // A running attempt stops the round before any file is written; the reservation at the end checks again under the lock.
   const running = runningAttempt(o, attemptRows([o]));
-  if (running) die(AT.blockMessage(id, running, CQ));
+  if (running) die(AT.blockMessage(id, running, CLI));
   const scratch = scratchpadFor(o.scratchpad ?? null);
   if (!scratch) die(`${use}\nNeeds --scratchpad <folder> (or QUEUE_SCRATCHPAD).`);
   const branch = o.branch ?? branchFor(id);
   if (!branchInfo(branch).exists)
     die(`Branch ${branch} does not exist; resume continues a branch that exists (otherwise fill --ids).`);
   const found = trackReport(o);
-  // cq receive makes the round for a red check itself, and cq decide then says to run resume. No agent has run that
+  // ravenseat receive makes the round for a red check itself, and ravenseat decide then says to run resume. No agent has run that
   // round (its attempt is still only reserved, and it has no report), so this is the same round: same number, no new count.
   const last = (o.resumed ?? []).at(-1);
   const again =
@@ -568,7 +568,7 @@ export function cmdResume() {
   // The fix-round cap (lib/doneCheck.js): at max_fix_rounds (task) or maxFixRounds (config, default 3) the queue stops
   // retrying by itself. The task becomes an owner question the existing way: a registered question, the id in
   // waiting_on (the answer reaches the next brief) and an open blocker owner-question. Exit 8. The owner answers with
-  // `cq resolve <question> --answer "…"`, which allows exactly one more round (the next one asks again).
+  // `ravenseat resolve <question> --answer "…"`, which allows exactly one more round (the next one asks again).
   const DC = require('./lib/doneCheck.js');
   if (reason === 'fix' && !again) {
     const cap = DC.fixCap(o, queue, CONFIG);
@@ -586,9 +586,9 @@ export function cmdResume() {
       pulseCursor(`resume ${id} fix cap`);
       console.log(
         `FIX-ROUND CAP: ${id} has had ${cap.used} fix round(s) (cap ${cap.max}); no new round is started by the queue.\n` +
-          `Owner question ${cap.questionId} registered (cq question; blocker owner-question). Ask the owner at the end of the ` +
-          `round. The owner's answer allows one more round: cq resolve ${cap.questionId} --answer "…", then ` +
-          `cq resume ${id} --reason fix again. A higher cap: cq edit ${id} --json '{"max_fix_rounds": N}'.`,
+          `Owner question ${cap.questionId} registered (ravenseat question; blocker owner-question). Ask the owner at the end of the ` +
+          `round. The owner's answer allows one more round: ravenseat resolve ${cap.questionId} --answer "…", then ` +
+          `ravenseat resume ${id} --reason fix again. A higher cap: ravenseat edit ${id} --json '{"max_fix_rounds": N}'.`,
       );
       process.exit(8);
     }
@@ -613,7 +613,7 @@ export function cmdResume() {
       tail,
     };
   }
-  // Red quick gates at receive: the same, from the file receive wrote (cq merge refuses until they are green).
+  // Red quick gates at receive: the same, from the file receive wrote (ravenseat merge refuses until they are green).
   let gateCheck = null;
   if (reason === 'fix' && o.gate_check && !o.gate_check.ok) {
     let text = '';
@@ -709,7 +709,7 @@ export function cmdResume() {
   // The fixRound row (lib/eventRows.js): the same round as `resumed`, countable per week (fail open).
   if (!again) logEvent(ER.fixRoundRow({ task: id, reason, round, from: fromList }));
   else console.log(`Round ${round} was made but never started, so this is the same round (it counts once).`);
-  // done_when is what cq receive and cq merge pass for a red done command (not a reviewer, but a known cause).
+  // done_when is what ravenseat receive and ravenseat merge pass for a red done command (not a reviewer, but a known cause).
   const unknownFrom = fromList.filter((x) => x !== 'done_when' && !L.REVIEWER_TYPES.includes(x));
   if (unknownFrom.length)
     console.log(`WARNING: --from ${unknownFrom.join(', ')} is not a reviewer type here (${L.REVIEWER_TYPES.join(', ')}); saved as given.`);

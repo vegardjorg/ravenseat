@@ -2,7 +2,7 @@
 // paths.js: where benchmark results go, and the guard that keeps them out of this repo.
 //
 // Why: this repo is public, and the results name real tasks, costs and timings from the project being measured.
-// Results therefore go OUTSIDE the repo: BENCH_RESULTS, or --out, or ~/.cq-bench/results by default. A results
+// Results therefore go OUTSIDE the repo: BENCH_RESULTS, or --out, or ~/.ravenseat-bench/results by default. A results
 // folder inside this repo is refused, except bench/results/, which bench/.gitignore keeps out of git, as a last
 // resort for someone who insists. The same guard applies to the load log the sampler writes.
 //
@@ -31,9 +31,9 @@ function isInside(child, parent, platform = process.platform) {
   return c === p || c.startsWith(p.endsWith(sep) ? p : p + sep);
 }
 
-/** The default results root: BENCH_RESULTS or ~/.cq-bench/results. */
+/** The default results root: BENCH_RESULTS or ~/.ravenseat-bench/results. */
 function defaultResultsRoot(env = process.env) {
-  return env.BENCH_RESULTS ? path.resolve(env.BENCH_RESULTS) : path.join(os.homedir(), '.cq-bench', 'results');
+  return env.BENCH_RESULTS ? path.resolve(env.BENCH_RESULTS) : path.join(os.homedir(), '.ravenseat-bench', 'results');
 }
 
 /**
@@ -46,7 +46,7 @@ function safeOutput(p, { repoRoot = REPO_ROOT } = {}) {
   if (isInside(r, repoRoot) && !isInside(r, allowed))
     throw new Error(
       `refusing to write benchmark data inside the repo (${r}): this repo is public. ` +
-        'Use --out <folder outside the repo>, set BENCH_RESULTS, or use the default ~/.cq-bench/results.',
+        'Use --out <folder outside the repo>, set BENCH_RESULTS, or use the default ~/.ravenseat-bench/results.',
     );
   return r;
 }

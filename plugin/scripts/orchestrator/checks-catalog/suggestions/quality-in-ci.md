@@ -4,7 +4,7 @@ category: ci
 priority: medium
 when: has-ci, not-in-ci:types|lint
 content_min: 30
-why: These are fast and catch many mistakes, but cq cannot see them in your CI. Someone pushing outside the queue skips them.
+why: These are fast and catch many mistakes, but ravenseat cannot see them in your CI. Someone pushing outside the queue skips them.
 ---
 
 ## Investigate

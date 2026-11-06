@@ -1,5 +1,5 @@
 // =============================================================
-// trackAddFlow.test.ts: `cq add` from a track's own worktree, through the real CLI.
+// trackAddFlow.test.ts: `ravenseat add` from a track's own worktree, through the real CLI.
 //
 // Locks: (1) from a track branch it is always a proposal, whatever the file says; added_by comes from the branch; (2)
 // --approved is refused there; (3) a track may have 3 open proposals; (4) the same command in the main checkout still gives a
@@ -77,7 +77,7 @@ function project() {
   };
 }
 
-describe('cq add from a track', () => {
+describe('ravenseat add from a track', () => {
   it('is a proposal from that track, whatever the task says about itself', () => {
     const p = project();
     const task = { id: 'N-1', title: 'New', mission: 'm', added_by: 'owner', status: 'waiting', approved: 'x', approved_by: 'owner' };
@@ -115,13 +115,13 @@ describe('cq add from a track', () => {
 describe('the hook', () => {
   it('lets a track add from its worktree, and nowhere else', () => {
     const p = project();
-    expect(p.hook(p.worktree, 'track', 'cq add --file task.json')).toBeNull();
-    expect(p.hook(p.worktree, 'track', 'cq add --file task.json --approved')).toBe('deny');
-    expect(p.hook(p.worktree, 'track', `cd "${p.repo}" && cq add --file task.json`)).toBe('deny');
-    expect(p.hook(p.repo, 'track', 'cq add --file task.json')).toBe('deny');
-    expect(p.hook(p.repo, 'reviewer', 'cq add --file task.json')).toBe('deny');
+    expect(p.hook(p.worktree, 'track', 'ravenseat add --file task.json')).toBeNull();
+    expect(p.hook(p.worktree, 'track', 'ravenseat add --file task.json --approved')).toBe('deny');
+    expect(p.hook(p.worktree, 'track', `cd "${p.repo}" && ravenseat add --file task.json`)).toBe('deny');
+    expect(p.hook(p.repo, 'track', 'ravenseat add --file task.json')).toBe('deny');
+    expect(p.hook(p.repo, 'reviewer', 'ravenseat add --file task.json')).toBe('deny');
     // The main session has no agent_type and is not touched.
-    expect(p.hook(p.repo, null, 'cq add --file task.json --approved')).toBeNull();
+    expect(p.hook(p.repo, null, 'ravenseat add --file task.json --approved')).toBeNull();
   });
 });
 
@@ -136,7 +136,7 @@ describe('the dependency files', () => {
   });
 });
 
-describe('cq add from the main checkout', () => {
+describe('ravenseat add from the main checkout', () => {
   it('is as it was: ready to run, and --approved works', () => {
     const p = project();
     expect(p.fromMain('add', 'Ready', '--id', 'M-1').code).toBe(0);

@@ -91,7 +91,7 @@ function pick(
       o.status === 'picked'
         ? `already picked by ${o.picked_by ?? '?'}`
         : o.status === 'proposed'
-          ? `proposed (approve it first: cq approve ${id})`
+          ? `proposed (approve it first: ravenseat approve ${id})`
           : `status ${o.status}`;
     return { error: `${id} cannot be picked: ${why}` };
   }
@@ -190,17 +190,17 @@ function setStatus(o, status, now = new Date().toISOString()) {
   if (!STATUSES.has(status)) return { error: `unknown status ${status}` };
   if (status === 'picked')
     return {
-      error: 'status picked is set with cq pick <id> --by "<who>" (assigns branch and migration block)',
+      error: 'status picked is set with ravenseat pick <id> --by "<who>" (assigns branch and migration block)',
     };
   // Status external belongs only to records outside the queue, and such a record never becomes a task
   // that the queue can start (set waiting would have turned it into one).
   if (status === 'external')
     return {
-      error: 'status external is set with cq external add --name "<session>" --files <…> (record outside the queue)',
+      error: 'status external is set with ravenseat external add --name "<session>" --files <…> (record outside the queue)',
     };
   if (isExternalRow(o) && status !== 'done' && status !== 'cancelled')
     return {
-      error: `${o.id} is a record outside the queue; it can only be ended (cq external done "${o.external_name ?? o.id}")`,
+      error: `${o.id} is a record outside the queue; it can only be ended (ravenseat external done "${o.external_name ?? o.id}")`,
     };
   const from = o.status;
   if (status === 'review' && !o.delivered) o.delivered = now;
@@ -281,7 +281,7 @@ function qaDeviation(queue, id, text, now = new Date().toISOString()) {
   const isPath = typeof o.mission === 'string' && !/\n/.test(o.mission) && /\.md$/i.test(o.mission);
   const link = isPath
     ? `the mission: ${o.mission}`
-    : `the mission is on ${o.id} in the queue (cq show --all)`;
+    : `the mission is on ${o.id} in the queue (ravenseat show --all)`;
   const fix = {
     id: `${root}-QA${n}`,
     title: `QA fix of ${o.id}: ${summary}`,

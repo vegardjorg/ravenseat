@@ -1,10 +1,10 @@
 // =============================================================
 // lib/projectFiles.js: what a plugin update leaves behind in a project.
 //
-// cq setup copies the docs and the mission template to docs/queue/ and CLAUDE.queue.md. Those are the project's own copies
-// (they may be edited), so a plugin update does not touch them, and cq setup keeps them. The mission every agent gets is
+// ravenseat setup copies the docs and the mission template to docs/queue/ and CLAUDE.queue.md. Those are the project's own copies
+// (they may be edited), so a plugin update does not touch them, and ravenseat setup keeps them. The mission every agent gets is
 // built from the copy, so an old copy gives agents old instructions without any error. The same goes for a status line
-// path with the old version in it. This file only compares and words it: cq doctor, cq setup and cq receive say it, and
+// path with the old version in it. This file only compares and words it: ravenseat doctor, ravenseat setup and ravenseat receive say it, and
 // the owner decides, since replacing a copy loses any edits in it.
 //
 // A vendored install (no plugin manifest) is left out: its installer rewrites the Markdown, and it replaces the files
@@ -72,7 +72,7 @@ function staleMessage(s) {
 }
 
 const STALE_FIX =
-  'cq setup --overwrite --dry lists the files, cq setup --overwrite replaces them (your own edits in them are lost; ' +
+  'ravenseat setup --overwrite --dry lists the files, ravenseat setup --overwrite replaces them (your own edits in them are lost; ' +
   'queue.config.json is kept), then commit them. A file you edited on purpose can stay; compare it with the plugin first.';
 
 /**
