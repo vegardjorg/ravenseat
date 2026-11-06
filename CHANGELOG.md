@@ -3,6 +3,20 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.25 (2026-11-06)
+
+**A track can now propose work with only an id, a title and a mission, and the owner sees the proposal in `ravenseat show`.**
+
+### Changed
+- The mission now shows a track how to propose work outside its mission, also the `--file` form for Windows. Before, only one line in `CLAUDE.queue.md` mentioned it.
+- A proposal from a track needs only `id`, `title` and `mission`. `domain`, `project` and `feature` follow the track and the class is K, unless the task sets them. A track that does database work should set `"class":"D"`, or the proposal counts as K, also for auto-accept when that is on.
+- `ravenseat show` names up to 5 proposals with the track they came from, and `ravenseat proposals` lists all of them with their titles.
+- The guard's list of allowed commands says `add` must run on its own, from the track's own branch, with no `cd`.
+
+### Fixed
+- A track was told to fix a missing project or feature with `edit-many`, a command it may not run. Now it is told there is nothing for it to do.
+- The mission gave `gates --log` a folder name and called it a log folder, but `--log` writes a file, so a track failed when it tried to `cd` into it. The mission now says `gates.log`.
+
 ## 0.8.24 (2026-11-06)
 
 **The plugin and its command are now called `ravenseat`. `cq` is gone, with no alias.**
