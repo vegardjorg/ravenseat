@@ -313,6 +313,11 @@ const STANDARD = Object.freeze({
     allSlotsCpuPct: null,
     minSlotsCpuPct: null,
   },
+  // The queue for heavy gate runs (lib/gateQueue.js): a gates.mjs --quick/--full whose last run of the same kind took at
+  // least heavyAfterSec waits for one of `slots` slots shared by the whole machine (a folder under the temp folder), across
+  // worktrees and projects. No history counts as light, so a small project never notices it. QUEUE_GATE_QUEUE=off|on
+  // overrides `enabled`. The time budget starts after the wait.
+  gateQueue: { enabled: true, slots: 1, heavyAfterSec: 120 },
   // Auto-accept of agent proposals (lib/queueProposals.js): a proposal that fits the rules is approved by the queue
   // itself (in `queue.mjs add` and `orchestrator pulse`), logged and can be undone. Default off. `queue.mjs proposals
   // auto` and the board's gear write the queue's own rules (queue.json proposals.autoAccept), which win field by field.

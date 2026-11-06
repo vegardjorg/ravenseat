@@ -405,6 +405,9 @@ if (isMain) {
   if (log.same.length) console.log(`  already up to date: ${log.same.length} file(s)`);
   if (log.skipped.length) console.log(`  kept (already there): ${log.skipped.join(', ')}`);
   for (const n of log.notes) console.log(`  ${n}`);
+  // An estimate from cores and memory, only said here; setup never sets maxConcurrent.
+  const MA = require('./lib/machineAdvice.js');
+  console.log(`  ${MA.setupLine(MA.readMachine())}`);
   // A kept copy may be older than the plugin: the mission every agent gets is built from it.
   if (!flags.has('--overwrite')) {
     const PF = require('./lib/projectFiles.js');

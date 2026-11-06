@@ -11,6 +11,8 @@
 //                 same kind for the same track (or the same branch when the track is unknown): 1 is the first run, so
 //                 attempt > 1 is a rerun. `timed_out: true` only when a check went over its time budget. `sha` (the
 //                 HEAD commit when the run started) and `clean` (no uncommitted tracked changes then), when known.
+//                 `wait_sec` (seconds in the gate queue, lib/gateQueue.js; only for a run that needed a slot; `duration_s`
+//                 does not include it) and `min_free_memory_pct` (the lowest free memory during the run, lib/gateLoad.js).
 //                 MEASUREMENT ONLY: the time log is a file every agent appends to, so a gate row proves nothing. What
 //                 ravenseat receive, ravenseat merge and the push check rely on is the gate evidence store (lib/gateEvidence.js).
 //   compaction    { time, event: "compact", scope: "session", session_id, orchestrator }   a main session (SessionStart
@@ -69,7 +71,7 @@ function gateAttempt(text, { kind, track = null, branch = null }) {
  * One gate run row (see the header).
  * @param {{ time?: string, track?: string|null, branch?: string|null, kind: string, gates?: string[],
  *   failed?: string[], durationSec: number, exit: number, timedOut?: boolean, attempt?: number, sha?: string,
- *   clean?: boolean }} r
+ *   clean?: boolean, waitSec?: number|null, minFreeMemoryPct?: number|null }} r
  */
 function gateRow(r) {
   const row = {
@@ -90,6 +92,8 @@ function gateRow(r) {
   // commit). No decision reads them; the trusted copy is the gate evidence store (lib/gateEvidence.js).
   if (typeof r.sha === 'string' && r.sha) row.sha = r.sha;
   if (typeof r.clean === 'boolean') row.clean = r.clean;
+  if (Number.isFinite(r.waitSec)) row.wait_sec = r.waitSec;
+  if (Number.isFinite(r.minFreeMemoryPct)) row.min_free_memory_pct = r.minFreeMemoryPct;
   return row;
 }
 

@@ -98,6 +98,45 @@ CPU optional) and says why: `LOAD: 2 of 5 slots: free memory 18 % (all slots fro
 tracks start (exit 7). Settings: `loadGuard` in `queue.config.json`
 ([queue reference](queue.md#limits-and-safety)).
 
+The guard only looks when a track starts. Two more things cover the time after that:
+
+- **The gate queue.** Heavy `--quick` and `--full` runs (at least 120 s last time) take turns, one at a time by default,
+  across worktrees and projects on the machine. A run says who it waits for, and its time budget starts when it starts.
+  Settings: `gateQueue` ([queue reference](queue.md#the-queue-for-heavy-gates)).
+- **Memory during the check.** Every gate row in the time log has the lowest free memory of the run
+  (`min_free_memory_pct`). A red run below the guard's limit says it is probably load and not the code. It stays red.
+
+`ravenseat machine` shows cores, memory, free memory now and a suggested `maxConcurrent`. `ravenseat machine --measure`
+times one full check and gives a suggestion for this project. Both only suggest; nothing changes by itself.
+
+| Symptom | Try |
+| --- | --- |
+| Gates go red with timeouts, and green when run alone | Lower `maxConcurrent`; look at `min_free_memory_pct` |
+| `LOAD: free memory fell to ...` on a red run | Rerun when calmer; close apps; fewer tracks |
+| Many runs wait in `GATE QUEUE`, and the machine has room | Raise `gateQueue.slots`, then measure again |
+| One test run eats the machine | A cap on the test workers (suggestion in the Checks tab) |
+| Tracks spend their time on the whole test suite | Only changed tests in quick gates (suggestion in the Checks tab) |
+
+A starting point for `maxConcurrent`. These are **estimates from one machine and one large project**, not limits; a small
+project fits far more:
+
+| Memory | Tracks (estimate) |
+| --- | --- |
+| Under 16 GB | 1 |
+| 16 GB | 1-2 |
+| 32 GB | 3-5 |
+| 64 GB | 6-10 |
+
+**Measure the peaks, not the average.** A machine can look fine on average and still have almost nothing free for the
+minute that turns a gate red, so compare the longest runs and the lowest free memory. Change one thing at a time.
+
+Things that often help: close apps you do not use (browsers and other editors hold gigabytes); make lint skip local folders
+it should not read (agent worktrees, build output), since those also give false errors; remove old worktrees.
+
+Outside Ravenseat, and your own choice: the memory limit in `.wslconfig` if you use WSL or Docker on Windows, antivirus
+exclusions for project folders (Defender and others; a security trade-off), and a laptop's charge limit. Heavy runs on
+battery can drain it. Ravenseat changes none of these.
+
 **Cloud sessions** move ordinary code tasks to Claude Code's cloud sessions on claude.ai instead (off by default,
 `"features": { "cloud": true }`). See [cloud sessions](guide.md#cloud-sessions).
 

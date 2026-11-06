@@ -145,6 +145,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `diagnose` | Why the queue runs fewer tracks than it could (with suggested fixes) |
 | `finding "<title>" [--detail] [--task] [--cause <id>] [--files a,b]` / `finding list [--all]` | A track reports something outside its scope: an idea in the plan register, linked to the task and deduplicated on the title ([plan-register.md](plan-register.md#findings)). `--cause` names the merged task it is a defect of. Pulse and `show` count the new ones |
 | `doctor [--json]` | Read-only health check, one OK/WARN/FAIL line each with a fix hint: Node and the `node` the hooks find on PATH, the hooks file and its scripts, `queue.config.json` keys and types, the state files, a stale lock, half-deleted worktree folders under `.claude/worktrees/` and git worktrees whose folder is gone, branches of finished tasks, CI cost, and the safety baseline (secret files in git or not ignored, empty gates, no CI config, a manifest without its lockfile, `productionBranch` equal to `baseBranch`, tracked files over `largeFileMb`; offline). Exit 1 on any FAIL |
+| `machine [--measure]` | Cores, memory, free memory now and a suggested `maxConcurrent`, an estimate that changes nothing. `--measure`, started by you and refused while a track runs: `gates --full` once, then the time, the lowest free memory and a suggestion for this project |
 | `state` | Machine-readable state (exit 3 when there is nothing to do) |
 | `undo` | Undo the last write |
 | `qa` / `qa ok <id…>` / `qa deviation <id> "…"` | The QA list (split into what to look at, a manual round and auto entries) / the owner approves / the owner finds a deviation (fix task `<id>-QA<n>`) |
@@ -408,6 +409,7 @@ cancelled is not proposed again.
   `state` has `loadSlots`, and `ravenseat limit` shows the load and the slots now. The floor of 1 means this rule alone
   never stops the queue; only the hard guard does. Turn it off with `loadGuard.adaptive: false` in the config or
   `QUEUE_LOAD_ADAPTIVE=off`; `fill --over-load` and `start --force` skip it for one call.
+- Heavy gate runs take turns on the whole machine: [the queue for heavy gates](#the-queue-for-heavy-gates).
 - With a migration flow, `start`, `fill` and `pick` skip taken blocks: a migration file, the block of a task that is
   not finished, or a block named on a "migration block" line in an active prompt file (a move by hand).
   `next-migr` refuses a number inside a taken block.
@@ -415,6 +417,28 @@ cancelled is not proposed again.
   and the statistics per day. To use another time zone, set the `TZ` environment variable (for example
   `TZ=America/New_York`) for Claude Code.
 - Agents may only ADD proposals. Approval, merging and pushing belong to the orchestrator and the owner.
+
+### The queue for heavy gates
+
+The load guard looks when a track starts; it cannot stop several long test runs from landing at the same moment later. So
+`gates.mjs --quick` and `--full` wait for a free slot when the last run of the same kind in this project's time log took at
+least `gateQueue.heavyAfterSec` (default 120 s). No history counts as light, so a small project never notices it.
+
+- One slot by default (`gateQueue.slots`), shared by all worktrees and projects of your user on the machine: folders under
+  the system's temp folder, `ravenseat-gate-queue-<user>`. No service runs.
+- The run prints one line saying who it waits for, and looks again every 3 seconds. There is no order among waiters.
+- `--timeout-sec` starts when the check starts, not during the wait. The wait goes into the `gate` row as `wait_sec`;
+  `duration_s` does not include it.
+- A slot is free again when the run ends, also on a red run or a signal. A slot whose process is gone, or that is older than
+  3 hours, is taken over. A queue that cannot be used (no write access) runs the gate without it.
+- `--precheck` and the commands of a separate base gate (`baseGate.command`) do not queue. A gate command never queues:
+  gates.mjs gives it `QUEUE_GATE_QUEUE=off`.
+- `gateQueue.enabled: false` turns it off, `QUEUE_GATE_QUEUE=off|on` overrides that for one call, and
+  `QUEUE_GATE_QUEUE_DIR` moves the folder.
+
+It cannot deadlock with the other locks: the merge lock never waits (a second merge is refused at once), the queue's lock is
+held only for short edits and never around a gate run, and a process in a slot takes neither. `ravenseat merge` does hold the
+merge lock while its gate step waits for a slot, so other merges in that project are refused during the wait.
 
 ### Git hooks and config
 
@@ -485,6 +509,7 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `loadGuard.minFreeMemoryPct` | `10` (off on macOS) | Load guard: no new starts while free memory (percent) is below it; `ravenseat limit minFreeMemoryPct` overrides per queue |
 | `loadGuard.adaptive`, `minSlots`, `allSlotsFreeMemoryPct` | `true`, `1`, `40` (off on macOS) | Load-aware slots: fewer than `maxConcurrent` slots while free memory is below `allSlotsFreeMemoryPct`, at least `minSlots`; `QUEUE_LOAD_ADAPTIVE=off` turns it off |
 | `loadGuard.allSlotsCpuPct`, `minSlotsCpuPct` | `null`, `null` | Optional CPU part of the load-aware slots (both set, e.g. `60` and `95`) |
+| `gateQueue.enabled`, `slots`, `heavyAfterSec` | `true`, `1`, `120` | [The queue for heavy gates](#the-queue-for-heavy-gates): how many heavy `--quick`/`--full` runs may run at once on the machine, and from how many seconds (the last run of the same kind) a run counts as heavy |
 | `proposals.autoAccept` | `{ enabled: false, classes: ["K"], maxEstimateMin: 60, maxValue: null }` | Auto-accept of agent proposals by the owner's rules (`ravenseat proposals`); the queue's own rules win; never D/D+, `waiting_on`, legal/owner labels, open legal points or protected paths |
 | `qa.evidenceTypes`, `qa.autoTypes`, `qa.manualTypes` | `screenshot`, `test`, `manual`; auto `test`; manual `manual` | QA evidence types a track writes as `EVIDENCE <type>[=<ref>]`; auto types are closed by `qa auto --run`, manual ones gathered in one round |
 | `qa.autoCommand` | `null` | Shell command for auto evidence, e.g. `npx vitest run {refs}` (`{refs}`, `{id}`; or `{ "<type>": "<command>" }`); `null` = `qa auto` only lists |

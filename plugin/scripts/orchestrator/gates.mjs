@@ -14,7 +14,19 @@
 // Exit 0 when all are green (or no gates are set up), 1 otherwise.
 //   --log <file>  writes the whole output of each gate to the file (for debugging without filling the context).
 //   --timeout-sec <n>  (--quick/--full) one time budget for the whole list; a gate over it is red (ravenseat merge passes the
-//                 base gate's budget when the quick gates are the base gate, lib/baseHealth.js).
+//                 base gate's budget when the quick gates are the base gate, lib/baseHealth.js). The budget starts when the
+//                 first gate command starts, not while the run waits in the gate queue.
+//
+// The gate queue (lib/gateQueue.js, config().gateQueue): a --quick/--full run whose last run of the same kind took at least
+// heavyAfterSec waits for a slot shared by the whole machine. One line says who it waits for; the wait goes into the gate
+// row as `wait_sec`. Everything a run binds itself to (the HEAD commit, the evidence store's text, the git surface) is read
+// after the wait, so a commit or another run's evidence during the wait is not a change during the run. The gate commands
+// get QUEUE_GATE_QUEUE=off: one that runs gates.mjs again must not wait for the slot its own parent holds.
+//
+// Free memory (lib/gateLoad.js): sampled at the start, every 30 s and at the end; the lowest value goes into the gate row as
+// `min_free_memory_pct`. A red run or a timeout below the load guard's limit prints one line saying it is probably load and
+// not the code. It stays red. The gate commands run with an async spawn: a spawnSync would block the sampling timer, the
+// signal handlers and so the release of the slot.
 //
 //   --precheck  the fail-fast precheck a track runs BEFORE the class's full gate: the cheapest checks first, in a fixed
 //               order, only on the files changed against baseBranch (`gates.precheck`, with `{changed}`/`{file}`;
@@ -106,7 +118,7 @@ const cwd = option('--cwd') ? path.resolve(option('--cwd')) : inProject(process.
  * Appends this run's `gate` row to the time log (lib/timeLogRows.js). Fail open: every error is swallowed, so the log
  * can never change the gate's result or exit code.
  */
-function logRun({ kind, ran, failed, durationSec, exit, timedOut = false }) {
+function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSec = null, minFreeMemoryPct = null }) {
   try {
     const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
     const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
@@ -122,7 +134,7 @@ function logRun({ kind, ran, failed, durationSec, exit, timedOut = false }) {
     const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
     TL.appendRows(
       file,
-      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean }),
+      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct }),
     );
   } catch {
     // error-ignored: the time log is for measurement; the gate's result is what matters
@@ -139,7 +151,12 @@ function startState() {
   const status = git('status', '--porcelain', '--untracked-files=no');
   return { sha, clean: status == null ? undefined : status.trim() === '' };
 }
-const START = startState();
+// Read again after a wait in the gate queue: the run checks the commit that is there when its commands start.
+let START = startState();
+// The gate command running now, for the signal handlers. Up here because --precheck runs before the code further down.
+let runningChild = null;
+/** A gate command that prints more than this is stopped and red (the limit spawnSync's maxBuffer used to give). */
+const MAX_OUTPUT = 256 << 20;
 
 /**
  * Is the gate folder the MAIN checkout (not a linked worktree)? git-dir and git-common-dir are the same folder there.
@@ -174,7 +191,8 @@ function evidenceFile() {
  * unscrubbed one.
  */
 function childEnvironment() {
-  return require('./lib/gateEnv.js').trackCodeEnv(process.env, { storeFile: evidenceFile(), root: K.root }).env;
+  // QUEUE_GATE_QUEUE=off: a gate command that runs gates.mjs again must not wait for the slot its parent holds.
+  return { ...require('./lib/gateEnv.js').trackCodeEnv(process.env, { storeFile: evidenceFile(), root: K.root }).env, QUEUE_GATE_QUEUE: 'off' };
 }
 const CHILD_ENV = childEnvironment();
 
@@ -257,6 +275,33 @@ function coverageNow(want) {
   }
 }
 
+// Before --precheck too: its commands run in their own process group on POSIX, so Ctrl-C reaches them only through here.
+const GQ = require('./lib/gateQueue.js');
+let slot = null;
+const releaseSlot = () => {
+  if (slot) GQ.release(slot);
+  slot = null;
+};
+process.on('exit', releaseSlot);
+/**
+ * Ends the running gate command and gives the slot back, then ends as the signal asks, so a caller (ravenseat merge) still
+ * sees an interrupted child and never a red gate: on POSIX by the signal itself, on Windows with the Ctrl-C exit status.
+ */
+function onSignal(sig) {
+  if (runningChild) killTree(runningChild);
+  releaseSlot();
+  if (process.platform === 'win32') process.exit(3221225786);
+  process.removeAllListeners(sig);
+  process.kill(process.pid, sig);
+}
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  try {
+    process.on(sig, () => onSignal(sig));
+  } catch {
+    /* a signal this platform does not have */
+  }
+}
+
 if (precheck) process.exit(await precheckMode());
 
 // ---- --precheck: the cheapest checks first, stop at the first red one (lib/gatePrecheck.js) ----------------------------
@@ -322,31 +367,68 @@ function killTree(child) {
   }
 }
 
-/** Runs one shell command with a time limit. Resolves to { status, out, timedOut }. */
-function runCommand(command, { timeoutMs }) {
+/**
+ * Runs one shell command, with a time limit when `timeoutMs` is given. Resolves to { status, out, timedOut }.
+ * Async, so the event loop stays free for the memory sampling and the signal handlers.
+ */
+function runShell(command, { timeoutMs = null } = {}) {
   return new Promise((resolve) => {
     let out = '';
     let timedOut = false;
+    let full = false;
+    let grace = null;
+    let timer = null;
+    let settled = false;
     const child = spawn(command, {
       cwd,
       shell: true,
       detached: process.platform !== 'win32', // its own process group, so the whole tree can be ended
       env: CHILD_ENV, // scrubbed (lib/gateEnv.js): the check runs the track's code
       windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'], // no stdin: a command that reads it gets end of file instead of hanging
     });
-    child.stdout.on('data', (d) => (out += d));
-    child.stderr.on('data', (d) => (out += d));
-    const timer = setTimeout(() => {
-      timedOut = true;
-      killTree(child);
-    }, Math.max(1, timeoutMs));
-    child.on('error', (e) => (out += `\n${e.message}`));
-    child.on('close', (status) => {
+    runningChild = child;
+    const finish = (status) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      if (logFile) fs.appendFileSync(logFile, `\n===== ${command} (exit ${status ?? 'unknown'}${timedOut ? ', timeout' : ''}) =====\n${out}`);
+      clearTimeout(grace);
+      runningChild = null;
       resolve({ status, out, timedOut });
-    });
+    };
+    const add = (d) => {
+      if (full) return;
+      out += d;
+      if (out.length <= MAX_OUTPUT) return;
+      full = true;
+      out += `\n(stopped: more than ${MAX_OUTPUT >> 20} MB of output)`;
+      killTree(child);
+    };
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', add);
+    child.stderr.on('data', add);
+    if (timeoutMs != null)
+      timer = setTimeout(() => {
+        timedOut = true;
+        killTree(child);
+        // A process outside the tree can keep the pipes open: the run must still end.
+        grace = setTimeout(() => {
+          child.stdout.destroy();
+          child.stderr.destroy();
+          finish(null);
+        }, 5000);
+      }, Math.max(1, timeoutMs));
+    child.on('error', (e) => add(`\n${e.message}`));
+    child.on('close', (status) => finish(status));
   });
+}
+
+/** One precheck command: runShell, and the output in the --log file. */
+async function runCommand(command, { timeoutMs }) {
+  const r = await runShell(command, { timeoutMs });
+  if (logFile) fs.appendFileSync(logFile, `\n===== ${command} (exit ${r.status ?? 'unknown'}${r.timedOut ? ', timeout' : ''}) =====\n${r.out}`);
+  return r;
 }
 
 /** --precheck. Exit 0 green (or nothing to check), 1 red, 3 a check over its time budget, 2 setup error. */
@@ -400,6 +482,51 @@ if (gates.length === 0) {
   process.exit(0);
 }
 
+// ---- The gate queue and the memory sampling (lib/gateQueue.js, lib/gateLoad.js) ----
+const GL = require('./lib/gateLoad.js');
+const LS = require('./lib/loadSlots.js');
+/** The time log's text, or null when there is none yet. */
+function timeLogText() {
+  try {
+    return fs.readFileSync(timeLog(), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/** The load guard's limit in effect (the queue's own value wins, as for fill), or null when off or unknown. */
+function loadLimit() {
+  try {
+    const { dataFolder } = require('./lib/queueConfig.js');
+    let queue = null;
+    try {
+      queue = JSON.parse(fs.readFileSync(path.join(dataFolder(), 'queue.json'), 'utf8'));
+    } catch {
+      queue = null; // no queue yet: the config's value
+    }
+    return require('./lib/logic/guards.js').minFreeMemoryFor(queue);
+  } catch {
+    return null;
+  }
+}
+
+// Waiting comes first: everything below binds this run to the state when its commands start, not when it was asked for.
+const QUEUE_SETUP = GQ.setupFrom(K);
+let waitSec = null;
+if (GQ.needsSlot({ setup: QUEUE_SETUP, kind: mode, lastSec: GQ.lastDurationSec(timeLogText(), mode) })) {
+  const branchNow = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
+  const got = await GQ.acquireWait({
+    root: QUEUE_SETUP.root,
+    slots: QUEUE_SETUP.slots,
+    who: { project: K.projectName ?? path.basename(K.root), kind: mode, track: option('--track') ?? TL.trackFromBranch(branchNow, K.branchPrefix) },
+    onWait: (holders) => console.log(GQ.waitLine(holders, { slots: QUEUE_SETUP.slots })),
+  });
+  slot = got.slot;
+  waitSec = got.waitSec;
+  if (got.failedOpen) console.log(`GATE QUEUE: ${QUEUE_SETUP.root} cannot be used, so this run goes without the queue.`);
+  if (waitSec >= 1) START = startState();
+}
+
 if (logFile) fs.writeFileSync(logFile, `gates --${mode} in ${cwd}\n`);
 // Before the first gate command: does this run record evidence, and the store's text for the tamper check.
 const WANT = evidenceWanted();
@@ -419,25 +546,20 @@ const failedGates = [];
 // gates are the base gate, so a hanging gate cannot hold the merge forever). Each gate gets what is left; a gate over
 // it is red. As for the done command, on Windows a child the shell started can live on until it ends by itself.
 const budgetSec = Number(option('--timeout-sec'));
-const deadline = budgetSec > 0 ? start + budgetSec * 1000 : null;
+const deadline = GQ.budgetDeadline(start, budgetSec);
 let timedOutAny = false;
+
+// The lowest free memory during the run, with the load guard's own measure and macOS exception (lib/gateLoad.js).
+const LOAD_LIMIT = loadLimit();
+const sampler = GL.samplingOn({ limit: LOAD_LIMIT, overridden: !!process.env.QUEUE_LOAD }) ? GL.startSampler({ measure: () => LS.measure() }) : null;
 
 for (const command of gates) {
   const t0 = Date.now();
-  const r = spawnSync(command, {
-    cwd,
-    shell: true,
-    encoding: 'utf8',
-    maxBuffer: 256 << 20,
-    env: CHILD_ENV, // scrubbed (lib/gateEnv.js): the gate runs the track's code
-    ...(deadline ? { timeout: Math.max(1000, deadline - t0) } : {}),
-  });
+  const r = await runShell(command, { timeoutMs: deadline ? Math.max(1000, deadline - t0) : null });
   const sec = (Date.now() - t0) / 1000;
-  const timedOut = r.error?.code === 'ETIMEDOUT';
+  const timedOut = r.timedOut;
   if (timedOut) timedOutAny = true;
-  const out =
-    `${r.stdout || ''}${r.stderr || ''}${r.error ? `\n${r.error.message}` : ''}` +
-    (timedOut ? `\n(stopped after the time budget of ${budgetSec} s: --timeout-sec)` : '');
+  const out = `${r.out}${timedOut ? `\n(stopped after the time budget of ${budgetSec} s: --timeout-sec)` : ''}`;
   const green = r.status === 0 && !timedOut;
   if (!green) {
     failedCount++;
@@ -459,6 +581,9 @@ for (const command of gates) {
 }
 
 const total = Math.round((Date.now() - start) / 1000);
+const minFreeMemoryPct = sampler ? sampler.stop() : null;
+// The commands are done: the next heavy run can start while this process does its bookkeeping.
+releaseSlot();
 // Every gate command has exited: did one of them change what runs at the next git command (lib/gitExecSurface.js)?
 const surfaceChange = SURFACE.finish({ drift: WANT.wanted });
 // Only now does this process (the orchestrator's side) record the evidence.
@@ -482,7 +607,16 @@ logRun({
   durationSec: (Date.now() - start) / 1000,
   exit: exitCode,
   timedOut: timedOutAny,
+  waitSec,
+  minFreeMemoryPct,
 });
+// Probably load, not the code. Only a remark: the exit code above is already decided and stays as it is.
+const loadRemark = GL.loadLine({ red: failedCount > 0 || timedOutAny, minFreePct: minFreeMemoryPct, limitPct: LOAD_LIMIT });
+if (loadRemark) {
+  console.log(loadRemark);
+  // In the log too: ravenseat receive and ravenseat merge take the fix brief and the base report from the log's tail.
+  if (logFile) fs.appendFileSync(logFile, `\n${loadRemark}\n`);
+}
 if (recorded.covered) console.log(`Evidence for ${String(START.sha).slice(0, 12)}: ${recorded.covered}.`);
 if (surfaceChange) {
   // Nothing happened during the run: the plain message for someone who may simply have installed a hook tool.

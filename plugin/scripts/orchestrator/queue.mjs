@@ -160,6 +160,11 @@
 //                                                                  CI cost and the safety baseline (secret files, gates, CI,
 //                                                                  lockfiles, productionBranch, large files; offline);
 //                                                                  exit 1 on any FAIL; cli/doctor.mjs)
+//   node scripts/orchestrator/queue.mjs machine [--measure]           (cores, memory, free memory now and a suggested maxConcurrent,
+//                                                                  an estimate that changes nothing. --measure, started by
+//                                                                  you, refused while a track runs: gates --full once, then the
+//                                                                  time, the lowest free memory and a suggestion for this
+//                                                                  project; cli/machine.mjs)
 //
 // The orchestrator's routine as a script and the cost per task (the pure logic is in lib/queueLogic.js):
 //   node scripts/orchestrator/queue.mjs fill --scratchpad <folder> [--max N] [--ids <id …>] [--over-quota] [--over-load]
@@ -639,6 +644,7 @@ import * as finding from './cli/finding.mjs';
 import * as helpers from './cli/helpers.mjs';
 import * as checks from './cli/checks.mjs';
 import * as kickstart from './cli/kickstart.mjs';
+import * as machine from './cli/machine.mjs';
 import * as gate from './cli/gate.mjs';
 import * as merge from './cli/merge.mjs';
 import * as orchestrator from './cli/orchestrator.mjs';
@@ -729,6 +735,8 @@ if (command === 'init') {
   view.cmdDiagnose();
 } else if (command === 'doctor') {
   doctor.cmdDoctor();
+} else if (command === 'machine') {
+  machine.cmdMachine();
 } else if (command === 'conflicts') {
   conflicts.cmdConflicts();
 } else if (command === 'finding') {
@@ -838,7 +846,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }
