@@ -61,6 +61,13 @@ names the file, so the owner can add it to the task.
 - Everything else you decide yourself. Record each non-trivial assumption in the "Assumptions" section of
   `track-result.md`: one line with what you assumed, why, and how to change it if it is wrong.
 
+**New work outside the mission:** do not build it, propose it:
+`ravenseat add --json '{"id":"<new id>","title":"<short title>","mission":"<what, why, where, how to check it>"}'`.
+It waits for approval, and a track may have 3 open proposals. Domain, project and feature follow your track and the class is K,
+unless you set them (`"class":"D"` for database work). Run it on its own from your worktree: no `cd`, no `QUEUE_` variable,
+no `--approved`, and nothing else in the same command. On Windows, or with quotes in the text, write the JSON to a file in
+`<folder>` and use `--file`.
+
 **Git:** `prepare-track --continue` runs `git switch queue/K1` (without reset); HEAD must be <HEAD> or newer.
 - Commit only on your own branch with `git commit -- <files>` (new files: `git add` first), in strict `&&` chains,
   after searching for conflict markers.
@@ -88,13 +95,13 @@ Noticed something outside your scope? Run `ravenseat finding "<title>" [--detail
 **Client code:** follow the project's architecture rules (see `CLAUDE.md` and `architectureRules` in `queue.config.json`).
 Pure logic goes where it can be unit tested. No secrets or personal data in logs or error messages.
 
-**Gates** (`ravenseat gates`; NEVER write your own check script; one line per gate and the full log in
-the log folder, so read the log file of a red gate instead of running it again):
+**Gates** (`ravenseat gates`; NEVER write your own check script; one line per gate, and `--log` writes the full
+output to that file, so read the log file of a red gate instead of running it again):
 - Precheck first, every time: `ravenseat gates --precheck` (the cheapest checks on your changed files, stops at the first red
   one, a few minutes). Only a green precheck goes on to the class's full gate below; on RED fix the first error and
   run the precheck again. TIMEOUT (exit 3) means a check was only slow: go on to the full gate.
 - While working: `ravenseat gates --quick`.
-- Before delivery, K and U: `ravenseat gates --quick --log "<folder>/gates"`. The orchestrator runs
+- Before delivery, K and U: `ravenseat gates --quick --log "<folder>/gates.log"`. The orchestrator runs
   `--full` after merging.
 - Your own gate runs are informational: `ravenseat receive` runs the quick gates again on your delivered tip, so commit
   everything before you report. Never write the gate evidence or the queue files yourself (a hook denies it).

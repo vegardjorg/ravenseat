@@ -42,11 +42,18 @@ function statusAtAdd(fresh, tasks = [], { approved = false } = {}) {
 /** How many proposals one track may have waiting for the owner. An agent should not be able to bury the owner in work. */
 const MAX_OPEN_PER_TRACK = 3;
 
-/** Makes a task from a track's `ravenseat add` a proposal from that track: the branch says who, and the file cannot approve itself. */
-function asTrackProposal(task, track) {
+/**
+ * Makes a task from a track's `ravenseat add` a proposal from that track: the branch says who, and the file cannot approve
+ * itself. So that a track only has to say what the work is, domain, project and feature follow the track when they are not
+ * given, and the class is K. What the task gives itself wins.
+ */
+function asTrackProposal(task, track, tasks = []) {
   if (!task || typeof task !== 'object' || Array.isArray(task)) return;
   for (const k of ['approved', 'approved_by', 'auto_accepted']) delete task[k];
   task.added_by = track;
+  const from = tasks.find((o) => o.id === track);
+  for (const k of ['domain', 'project', 'feature']) if (task[k] == null && from?.[k] != null) task[k] = from[k];
+  if (task.class == null) task.class = 'K';
 }
 
 /** The refusal when a track would pass MAX_OPEN_PER_TRACK open proposals, or null. */

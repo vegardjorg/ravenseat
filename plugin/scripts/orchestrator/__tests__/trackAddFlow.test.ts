@@ -28,7 +28,7 @@ afterAll(() => {
   }
 });
 
-function project() {
+function project(mode = 'lite') {
   const folder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'queue-trackadd-')));
   temporary.push(folder);
   const repo = path.join(folder, 'repo');
@@ -41,10 +41,10 @@ function project() {
   const queueFile = path.join(data, 'queue.json');
   fs.writeFileSync(
     queueFile,
-    JSON.stringify({ limits: {}, resolved: [], projects: {}, tasks: [{ id: 'A-1', title: 'a', domain: 'x', class: 'K', status: 'running', mission: 'm' }] }),
+    JSON.stringify({ limits: {}, resolved: [], projects: { p: { title: 'P' } }, tasks: [{ id: 'A-1', title: 'a', domain: 'x', class: 'K', status: 'running', mission: 'm', project: 'p', feature: 'f' }, { id: 'B-1', title: 'b', domain: 'y', class: 'D', status: 'running', mission: 'm' }] }),
   );
   const configFile = path.join(repo, 'queue.config.json');
-  fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'main', mode: 'lite' }));
+  fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'main', mode }));
   const env = {
     ...process.env,
     GIT_CONFIG_GLOBAL: globalConfig,
@@ -59,6 +59,8 @@ function project() {
   g(['add', '--', 'queue.config.json']);
   g(['commit', '-q', '-m', 'start']);
   g(['worktree', 'add', '-q', '-b', 'queue/A-1', worktree]);
+  const worktreeB = path.join(folder, 'wt-b');
+  g(['worktree', 'add', '-q', '-b', 'queue/B-1', worktreeB]);
   const runIn = (cwd: string, ...args: string[]) => {
     const r = spawnSync(process.execPath, [QUEUE, ...args], { encoding: 'utf8', env, cwd });
     return { code: r.status, out: (r.stdout ?? '') + (r.stderr ?? '') };
@@ -73,6 +75,7 @@ function project() {
     hook,
     fromTrack: (...args: string[]) => runIn(worktree, ...args),
     fromMain: (...args: string[]) => runIn(repo, ...args),
+    fromTrackB: (...args: string[]) => runIn(worktreeB, ...args),
     task: (id: string) => JSON.parse(fs.readFileSync(queueFile, 'utf8')).tasks.find((o: { id: string }) => o.id === id),
   };
 }
@@ -109,6 +112,75 @@ describe('ravenseat add from a track', () => {
     expect(p.task('N-4')).toBeUndefined();
     expect(p.fromMain('approve', 'N-1').code).toBe(0);
     expect(p.fromTrack('add', 'Fourth', '--id', 'N-4').code).toBe(0);
+  });
+});
+
+describe('ravenseat add from a track in full mode', () => {
+  it('needs only id, title and mission: the rest follows the track, and the class is K', () => {
+    const p = project('full');
+    const r = p.fromTrack('add', '--json', JSON.stringify({ id: 'N-1', title: 'New', mission: 'm' }));
+    expect(r.code).toBe(0);
+    expect(p.task('N-1')).toMatchObject({ status: 'proposed', added_by: 'A-1', domain: 'x', class: 'K', project: 'p', feature: 'f' });
+    expect(r.out).not.toContain('WARNING');
+    expect(r.out).not.toContain('edit-many');
+  });
+  it('what the task says itself wins, and a D track does not make its proposal D', () => {
+    const p = project('full');
+    expect(p.fromTrack('add', '--json', JSON.stringify({ id: 'N-1', title: 'New', mission: 'm', domain: 'own', class: 'D' })).code).toBe(0);
+    expect(p.task('N-1')).toMatchObject({ domain: 'own', class: 'D', project: 'p' });
+    expect(p.fromTrackB('add', '--json', JSON.stringify({ id: 'N-2', title: 'New', mission: 'm' })).code).toBe(0);
+    expect(p.task('N-2')).toMatchObject({ domain: 'y', class: 'K' });
+  });
+  it('a track without a project is not told to run a command it may not run', () => {
+    const p = project('full');
+    const r = p.fromTrackB('add', '--json', JSON.stringify({ id: 'N-1', title: 'New', mission: 'm' }));
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('nothing for you to do');
+    expect(r.out).not.toContain('edit-many');
+  });
+  it('still needs a mission', () => {
+    const p = project('full');
+    const r = p.fromTrack('add', '--json', JSON.stringify({ id: 'N-1', title: 'New' }));
+    expect(r.code).not.toBe(0);
+    expect(r.out).toContain('mission missing');
+    expect(p.task('N-1')).toBeUndefined();
+  });
+});
+
+describe('the owner sees the proposals', () => {
+  it('show names them with where they came from, and proposals lists all of them', () => {
+    const p = project('full');
+    expect(p.fromTrack('add', '--json', JSON.stringify({ id: 'N-1', title: 'Document it', mission: 'm' })).code).toBe(0);
+    const show = p.fromMain('show').out;
+    expect(show).toContain('PROPOSED (1;');
+    expect(show).toMatch(/N-1\s+from A-1\s+Document it/);
+    const proposals = p.fromMain('proposals').out;
+    expect(proposals).toContain('Proposals waiting (1;');
+    expect(proposals).toMatch(/N-1\s+from A-1\s+Document it/);
+  });
+  it('show cuts the list at 5 and says where the rest is', () => {
+    const { summaryView } = require('../lib/queueLogic.js');
+    const tasks = Array.from({ length: 7 }, (_, i) => ({ id: `N-${i}`, title: 't', domain: 'x', class: 'K', status: 'proposed', mission: 'm' }));
+    const lines: string[] = summaryView({ limits: {}, resolved: [], projects: {}, tasks });
+    expect(lines.filter((l) => /^ {2}N-\d/.test(l))).toHaveLength(5);
+    expect(lines).toContain('  ... and 2 more (ravenseat proposals)');
+  });
+});
+
+describe('the mission', () => {
+  const template = fs.readFileSync(path.resolve(__dirname, '..', '..', '..', 'docs', 'mission-template.md'), 'utf8');
+  it('tells a track how to propose, and the form works as it stands', () => {
+    expect(template).toContain('ravenseat add --json');
+    const form = template.match(/ravenseat add --json '(\{.*\})'/);
+    expect(form).not.toBeNull();
+    const p = project('full');
+    const r = p.fromTrack('add', '--json', (form as RegExpMatchArray)[1].replace('<new id>', 'N-1'));
+    expect(r.code).toBe(0);
+    expect(p.task('N-1').status).toBe('proposed');
+  });
+  it('gives --log a file name, not a folder', () => {
+    expect(template).not.toContain('<folder>\\gates"');
+    expect(template).toContain('<folder>\\gates.log"');
   });
 });
 

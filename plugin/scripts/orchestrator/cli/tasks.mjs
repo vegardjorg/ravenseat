@@ -249,7 +249,7 @@ export function cmdAdd() {
       liteNotes.splice(0, liteNotes.length, ...d.notes);
     }
     if (track) {
-      for (const n of newOnes) L.asTrackProposal(n, track);
+      for (const n of newOnes) L.asTrackProposal(n, track, queue.tasks);
       const limit = L.trackLimitError(track, queue.tasks, newOnes.length);
       if (limit) die(`Nothing added: ${limit}`);
     }
@@ -371,9 +371,10 @@ export function cmdAdd() {
       `Added as proposed (not started until the orchestrator or the owner approves: ravenseat approve <id...>): ${proposed.join(', ')}`,
     );
   const { withoutProject, withoutFeature } = added.missing;
+  // A track may not run edit-many, so it is not told to: this is for whoever approves the proposal.
   if (withoutProject.length || withoutFeature.length)
     console.log(
-      `WARNING: ${[
+      `${track ? 'Note' : 'WARNING'}: ${[
         withoutProject.length
           ? `without project (ends up in ${L.WITHOUT_PROJECT}): ${withoutProject.join(', ')}`
           : null,
@@ -382,7 +383,7 @@ export function cmdAdd() {
         .filter(Boolean)
         .join(
           '; ',
-        )}. Fix with ravenseat edit-many --file <json> ([{ "id": "...", "project": "...", "feature": "..." }]).`,
+        )}. ${track ? 'Whoever approves it sets them; nothing for you to do.' : 'Fix with ravenseat edit-many --file <json> ([{ "id": "...", "project": "...", "feature": "..." }]).'}`,
     );
   // A field the queue does not read is kept without a word, so the task looks right and is not (test round 4: minutes).
   const WRONG_NAMES = { minutes: 'content_min', estimate: 'content_min', duration: 'content_min', priority: 'value', files: 'owned_files', depends: 'depends_on' };

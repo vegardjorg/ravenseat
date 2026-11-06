@@ -176,6 +176,12 @@ export function cmdProposals() {
   const showRules = (queue) => {
     const rules = autoAcceptRules(queue);
     const ctx = { ...autoAcceptContext(queue), undone: PR.undoneIds(queue) };
+    // Every proposal, also those the auto-accept rules would never take.
+    const open = (queue.tasks ?? []).filter((o) => o.status === 'proposed');
+    if (open.length) {
+      console.log(`Proposals waiting (${open.length}; ravenseat approve <id> lets one start, ravenseat set <id> cancelled declines it):`);
+      for (const o of open) console.log(`  ${o.id.padEnd(14)} ${o.added_by ? `from ${o.added_by}  ` : ''}${o.title ?? ''}`);
+    }
     const fit = (queue.tasks ?? []).filter(
       (o) => o.status === 'proposed' && PR.autoAcceptDecision(o, { ...rules, enabled: true }, ctx).accept,
     );

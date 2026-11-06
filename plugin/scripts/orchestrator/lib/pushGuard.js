@@ -374,7 +374,7 @@ const AGENT_QUEUE_COMMANDS = Object.freeze({
   plan: ['show', 'get'],
 });
 /** For the reasons: the allowed commands as text. */
-const AGENT_QUEUE_LIST = 'prepare-track, gates, show, info, help, blockers, finding, question, block, deliver, plan show|get, add (from your own track branch)';
+const AGENT_QUEUE_LIST = 'prepare-track, gates, show, info, help, blockers, finding, question, block, deliver, plan show|get, add (on its own, from your own track branch, with no cd)';
 
 /**
  * The deny reason for a queue agent's ravenseat add, or null. It is only allowed from the agent's own track branch, because

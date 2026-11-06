@@ -61,6 +61,8 @@ function stateLine(t) {
 }
 
 const SUMMARY_STATUSES = ['running', 'review', 'picked'];
+/** How many proposals the short view names; `ravenseat proposals` lists them all. */
+const MAX_PROPOSALS_SHOWN = 5;
 
 /**
  * `queue.mjs show` (short, the default for the orchestrator): one line per active task (running, review, picked) and per
@@ -156,6 +158,15 @@ function summaryView(
     out.push(
       `Waiting per class: ${perClass}; ${t.blocked.length} of them are blocked now (see show --full).`,
     );
+  // Proposals by name: a count alone does not tell the owner that something new came in.
+  const proposals = tasks.filter((o) => o.status === 'proposed' && !isBatched(o));
+  if (proposals.length) {
+    out.push(`PROPOSED (${proposals.length}; ravenseat approve <id> lets one start):`);
+    for (const o of proposals.slice(0, MAX_PROPOSALS_SHOWN))
+      out.push(cut(`  ${o.id.padEnd(12)} ${o.added_by ? `from ${o.added_by}  ` : ''}${o.title ?? ''}`));
+    if (proposals.length > MAX_PROPOSALS_SHOWN)
+      out.push(`  ... and ${proposals.length - MAX_PROPOSALS_SHOWN} more (ravenseat proposals)`);
+  }
   const batch = batchGroups(queue);
   if (batch.length) {
     const n = batch.reduce((s, g) => s + g.count, 0);
