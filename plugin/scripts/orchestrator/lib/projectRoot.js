@@ -161,12 +161,12 @@ function queueActive(o = {}) {
  * @param {{ fromWorktree?: boolean, mode?: string }} [o]
  */
 function cqCommand(o = {}) {
-  if ((o.mode ?? roots().mode) !== 'vendored') return 'cq';
+  if ((o.mode ?? roots().mode) !== 'vendored') return CLI_NAME;
   return o.fromWorktree ? 'node <mainTree>/scripts/orchestrator/cq.mjs' : 'node scripts/orchestrator/cq.mjs';
 }
 
 /** The plugin's name in .claude-plugin/plugin.json: the prefix of its skills (/cq:queue) and agents (cq:track). */
-const PLUGIN_NAME = 'cq';
+const { CLI_NAME, PLUGIN_NAME, bareAgentType } = require('./productNames.js');
 
 /**
  * The subagent_type to start an agent with. A plugin's agents are named `<plugin>:<agent>` (cq:track); a vendored
@@ -177,11 +177,6 @@ const PLUGIN_NAME = 'cq';
 function agentRef(name, o = {}) {
   if (!name || String(name).includes(':') || (o.mode ?? roots().mode) === 'vendored') return name;
   return `${PLUGIN_NAME}:${name}`;
-}
-
-/** The bare agent name from a hook payload or the time log: "cq:track" -> "track". Everything compares bare names. */
-function bareAgentType(type) {
-  return typeof type === 'string' && type.startsWith(`${PLUGIN_NAME}:`) ? type.slice(PLUGIN_NAME.length + 1) : type;
 }
 
 module.exports = {

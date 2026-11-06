@@ -15,6 +15,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { PLUGIN_NAMES } = require('./productNames.js');
 
 const MISSION = 'docs/queue/mission-template.md';
 
@@ -89,7 +90,7 @@ function staleStatusLines(pluginRoot, target) {
     } catch {
       continue;
     }
-    const m = command.replace(/\\/g, '/').match(/\/cq\/([^/]+)\/scripts\/orchestrator\/statusline\.mjs/);
+    const m = command.replace(/\\/g, '/').match(new RegExp(`/(?:${PLUGIN_NAMES.join('|')})/([^/]+)/scripts/orchestrator/statusline\\.mjs`));
     if (m && m[1] !== version) out.push({ file, version: m[1] });
   }
   return out;

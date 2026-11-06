@@ -58,9 +58,8 @@ try {
 } catch {
   process.exit(0); // unreadable input: fail open
 }
-if (!/^(?:cq:)?track(?:-d)?$/.test(String(firstInput?.agent_type ?? ''))) process.exit(0);
-
 const require = createRequire(import.meta.url);
+if (!/^track(?:-d)?$/.test(String(require('./lib/productNames.js').bareAgentType(firstInput?.agent_type) ?? ''))) process.exit(0);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
 if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
 const V = require('./lib/trackGuard.js');

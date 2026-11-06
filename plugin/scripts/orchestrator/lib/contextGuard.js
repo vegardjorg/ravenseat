@@ -40,6 +40,7 @@
 'use strict';
 
 const { orchestratorStatus, ORCHESTRATOR_EXPIRY_MS } = require('./queueLogic.js');
+const { CLI_PATTERN } = require('./productNames.js');
 
 const STANDARD = Object.freeze({
   notice: 250_000,
@@ -93,8 +94,10 @@ function isOverridden(prompt) {
 }
 
 /** Commands only the orchestrator runs (they pulse the cursor). `queue.mjs cloud start` and `set` do not count. */
-const ORCHESTRATOR_CALLS =
-  /(?:queue\.mjs["']?|cq\.mjs["']?|(?:^|[\s;&|(])cq(?:\.cmd)?)\s+(?:queue\s+)?(?:orchestrator\s+pulse|start|fill)\b/;
+const ORCHESTRATOR_CALLS = new RegExp(
+  `(?:queue\\.mjs["']?|(?:${CLI_PATTERN})\\.mjs["']?|(?:^|[\\s;&|(])(?:${CLI_PATTERN})(?:\\.cmd)?)\\s+(?:queue\\s+)?(?:orchestrator\\s+pulse|start|fill)\\b`,
+);
+const MENTIONS_CLI = new RegExp(`\\b(?:${CLI_PATTERN})\\b`);
 
 /**
  * The time (ms) of the last orchestrator call in the transcript text (JSONL, often just the tail), or null.
@@ -104,7 +107,7 @@ function lastOrchestratorCall(text) {
   const lines = String(text ?? '').split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const l = lines[i];
-    if (!(l.includes('queue.mjs') || /\bcq\b/.test(l)) || !l.includes('tool_use')) continue;
+    if (!(l.includes('queue.mjs') || MENTIONS_CLI.test(l)) || !l.includes('tool_use')) continue;
     let o;
     try {
       o = JSON.parse(l);

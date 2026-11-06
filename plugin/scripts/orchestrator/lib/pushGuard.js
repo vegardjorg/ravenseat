@@ -47,6 +47,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const SC = require('./shellCommands.js');
+const NAMES = require('./productNames.js');
 const { tokens, segments, commandWord, firstWordIndex } = SC;
 
 /** Does the name match a push.allowBranches pattern? "*" is any text, also a slash. Exact otherwise. */
@@ -121,7 +122,7 @@ const MIGRATION_COMMANDS = [
   'dbmate migrate',
 ];
 /** Commands that only name a migration command in their text (git commit, grep db:migrate): never a run of one. */
-const ONLY_MENTIONS = new Set(['git', 'grep', 'rg', 'echo', 'cat', 'ls', 'cq']);
+const ONLY_MENTIONS = new Set(['git', 'grep', 'rg', 'echo', 'cat', 'ls', ...NAMES.CLI_NAMES]);
 
 /** Programs that only start another program (npx foo, npm exec foo): skipped when commands are compared. */
 const STARTERS = new Set(['npx', 'pnpx', 'bunx', 'exec', 'env', 'command', 'npm', 'pnpm', 'yarn']);
@@ -394,7 +395,7 @@ function agentAddReason(call, { branch, branchPrefix, moved }) {
 /** The deny reason for a queue agent's call of the queue CLI, or null (allowed). */
 function agentQueueReason(call, where = {}) {
   const name = String(call.name);
-  const shown = name ? `cq ${name}` : 'cq';
+  const shown = name ? `${NAMES.CLI_NAME} ${name}` : NAMES.CLI_NAME;
   const flag = call.args.find((x) => x === '--allow-guard' || /^--force/.test(x));
   if (flag)
     return `\`${flag}\` is the orchestrator's and the owner's override; a queue agent never passes it (\`${shown}\`).`;
@@ -421,7 +422,11 @@ function agentQueueReason(call, where = {}) {
 /** Does the command line look like a push (git and the word push / send-pack)? Used when it cannot be read. */
 const pushShaped = (command) => /git/i.test(command) && /\bpush\b|send-pack/i.test(command);
 /** Does the command line mention the queue CLI? Used when it cannot be read (queue agents only). */
-const queueShaped = (command) => /(^|[\s"'`(;&|\\/])(cq|cq\.mjs|cq\.cmd|queue\.mjs|merge-track\.mjs)\b/i.test(command);
+const QUEUE_SHAPED = new RegExp(
+  `(^|[\\s"'\`(;&|\\\\/])((?:${NAMES.CLI_PATTERN})(?:\\.mjs|\\.cmd)?|queue\\.mjs|merge-track\\.mjs)\\b`,
+  'i',
+);
+const queueShaped = (command) => QUEUE_SHAPED.test(command);
 
 /**
  * Assess one command.

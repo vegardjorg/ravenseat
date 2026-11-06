@@ -33,6 +33,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { CLI_NAMES, isCliName } = require('./productNames.js');
 
 /** How deep the reading follows nested shells, eval and $( ). Deeper nesting is opaque. */
 const MAX_DEPTH = 4;
@@ -403,7 +404,7 @@ let scriptNames = null;
 /** The orchestrator's scripts (the folder above lib/), without .mjs. Read once; an error gives the fixed core names. */
 function orchestratorScripts() {
   if (scriptNames) return scriptNames;
-  scriptNames = new Set(['cq', 'queue', 'merge-track', 'gates', 'prepare-track', 'push-check']);
+  scriptNames = new Set([...CLI_NAMES, 'queue', 'merge-track', 'gates', 'prepare-track', 'push-check']);
   try {
     for (const f of fs.readdirSync(path.resolve(__dirname, '..')))
       if (f.endsWith('.mjs') && !f.startsWith('hook-')) scriptNames.add(f.slice(0, -'.mjs'.length).toLowerCase());
@@ -432,8 +433,8 @@ function queueCall(t, i0) {
   const w = commandWord(t[i0]);
   let script = null;
   let rest = [];
-  if (w === 'cq') {
-    script = 'cq';
+  if (isCliName(w)) {
+    script = w;
     rest = t.slice(i0 + 1);
   } else if (['node', 'bun', 'deno'].includes(w)) {
     let j = i0 + 1;
@@ -445,10 +446,11 @@ function queueCall(t, i0) {
     rest = t.slice(i0 + 1);
   }
   if (!script) return null;
-  if (script === 'cq' || script === 'queue') {
-    if (script === 'cq' && rest[0] === 'queue') rest = rest.slice(1);
+  const cli = isCliName(script);
+  if (cli || script === 'queue') {
+    if (cli && rest[0] === 'queue') rest = rest.slice(1);
     const first = rest[0] ?? '';
-    const name = script === 'cq' ? (CQ_ALIASES[first] ?? first) : first;
+    const name = cli ? (CQ_ALIASES[first] ?? first) : first;
     return { name: name.startsWith('-') ? 'help' : name, args: rest.slice(1) };
   }
   return { name: script, args: rest };
