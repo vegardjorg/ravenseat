@@ -3,6 +3,39 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.26 (2026-11-07)
+
+**Heavy checks now take turns across the whole machine, so several projects or tracks no longer choke it, and `ravenseat machine` suggests how many tracks your PC can carry.**
+
+An existing project keeps its own copy of the mission template, so its tracks get the new instructions on proposals only after `ravenseat setup --overwrite` (it replaces your own edits in the copied files; `--dry` lists them first). Commit the result.
+
+### Added
+- A shared queue for heavy checks. Gate runs wait for a free slot, across all projects on the machine, and the time budget starts when the check starts. The wait is shown and logged. It lets everything through if the queue itself fails, and `QUEUE_GATE_QUEUE=off` turns it off.
+- `ravenseat machine [--measure]` shows cores, memory and free memory, and suggests a `maxConcurrent`. The suggestion is an estimate, and it changes nothing. `--measure` times one full check when no track runs.
+- `ravenseat doctor` and setup give the same suggestion. `doctor` gives a WARN when `maxConcurrent` is above it, and the default of 5 does so on machines under about 33 GB.
+- Free memory is sampled during a check. The lowest value goes in the time log, and a red check on a machine short of memory says that load is the likely cause.
+- Two new cards under Checks: run only the changed tests in the quick check, and cap the number of test workers.
+- `ravenseat --version`.
+
+### Changed
+- A proposal from a track no longer goes in the batch queue or trips the small-task and project warnings. The owner decides that when approving.
+- Proposals in the batch queue are counted and shown in the inbox, the state line, `approve`, `decide` and `info`.
+- The mission has one paragraph on new work, and explains why PowerShell 5.1 needs one command per call.
+- A track's mission says what it means when no files are listed for the task.
+- The board screenshots in the docs are new, and show the Checks, Decisions and Focus tabs.
+
+### Fixed
+- A merge of a task without `owned_files` now lists the files it changed.
+- The warnings from a green merge step (ownership drift, dependency files) reach the owner. Before, they only went to the merge log.
+- A track is no longer told that someone must set its project and feature. It runs without them.
+- A time budget that runs out now stops the check's whole process tree, not only its shell. Check commands get no stdin.
+- `vitest` could end a run with exit 1 and every test green when one long test blocked its progress calls on a busy machine. The longest test now lets them through. It can still happen on a very busy machine.
+
+### Known limits
+- `ravenseat merge` holds the merge lock while it waits for a slot, so other merges in that project are refused for that time.
+- Runs waiting for a slot have no fixed order.
+- The shared queue has been tested automatically and on Windows, but not yet in a real test round or on macOS and Linux.
+
 ## 0.8.25 (2026-11-06)
 
 **A track can now propose work with only an id, a title and a mission, and the owner sees the proposal in `ravenseat show`.**
