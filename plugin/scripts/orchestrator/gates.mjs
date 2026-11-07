@@ -192,7 +192,12 @@ function evidenceFile() {
  */
 function childEnvironment() {
   // QUEUE_GATE_QUEUE=off: a gate command that runs gates.mjs again must not wait for the slot its parent holds.
-  return { ...require('./lib/gateEnv.js').trackCodeEnv(process.env, { storeFile: evidenceFile(), root: K.root }).env, QUEUE_GATE_QUEUE: 'off' };
+  // QUEUE_EVIDENCE_LOCK=held: nor for the evidence lock (below) its parent holds.
+  return {
+    ...require('./lib/gateEnv.js').trackCodeEnv(process.env, { storeFile: evidenceFile(), root: K.root }).env,
+    QUEUE_GATE_QUEUE: 'off',
+    QUEUE_EVIDENCE_LOCK: 'held',
+  };
 }
 const CHILD_ENV = childEnvironment();
 
@@ -549,6 +554,33 @@ if (GQ.needsSlot({ setup: QUEUE_SETUP, kind: mode, lastSec: GQ.lastDurationSec(t
   waitSec = got.waitSec;
   if (got.failedOpen) console.log(`GATE QUEUE: ${QUEUE_SETUP.root} cannot be used, so this run goes without the queue.`);
   if (waitSec >= 1) START = startState();
+}
+
+// The evidence lock (red team RT-03, __tests__/redteam/rt03-two-sessions.test.ts). The tamper check compares the whole
+// store before and after the run, so a second run of this project recording evidence at the same time (a second session,
+// or two tracks received at once, both quick enough to skip the gate queue) read as tampering: both runs went red and
+// receive stopped for the owner. One recording run per store at a time, the slot mechanism of the gate queue (a dead
+// holder is taken over). A nested run (a gate command that runs gates.mjs) never waits for the lock its parent holds.
+// Fail open as the gate queue: a lock folder that cannot be used means the old behaviour, never a stuck gate.
+let evidenceSlot = null;
+process.on('exit', () => {
+  if (evidenceSlot) GQ.release(evidenceSlot);
+});
+if (evidenceWanted().wanted && evidenceFile() && process.env.QUEUE_EVIDENCE_LOCK !== 'held') {
+  const branchNow = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
+  const got = await GQ.acquireWait({
+    root: `${evidenceFile()}.lock`,
+    slots: 1,
+    pollMs: 250,
+    who: { project: K.projectName ?? path.basename(K.root), kind: mode, track: option('--track') ?? TL.trackFromBranch(branchNow, K.branchPrefix) },
+    onWait: (holders) =>
+      console.log(
+        `EVIDENCE: another gate run of this project is recording evidence (${holders.map((h) => `${h.track ?? h.kind ?? '?'}, pid ${h.pid ?? '?'}`).join('; ')}); ` +
+          'this run waits for it, so neither reads the other as tampering. The time budget starts when this check starts.',
+      ),
+  });
+  evidenceSlot = got.slot;
+  if (got.waitSec >= 1) START = startState();
 }
 
 if (logFile) fs.writeFileSync(logFile, `gates --${mode} in ${cwd}\n`);

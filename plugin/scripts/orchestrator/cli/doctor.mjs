@@ -276,6 +276,25 @@ function checkState() {
           `remove one dependency: ${CLI} edit ${c[0]} --json '{"depends_on":[...]}'`,
         ),
       );
+    // A temporary file of a process that is gone (lib/stateFile.js writes queue.json.<pid>.tmp and renames it): a crash in
+    // the middle of a write. The queue above is fine and never read it; the file is only left over (red team RT-21).
+    let left = [];
+    try {
+      left = fs
+        .readdirSync(path.dirname(FILE))
+        .filter((n) => new RegExp(`^${path.basename(FILE).replace(/\./g, '\\.')}(\\.prev)?\\.(\\d+)\\.tmp$`).test(n))
+        .filter((n) => !QL.pidAlive(Number(n.match(/\.(\d+)\.tmp$/)[1])));
+    } catch {
+      left = []; // error-ignored: an unreadable folder is reported by the checks that need it
+    }
+    if (left.length)
+      out.push(
+        info(
+          'queue',
+          `left over from an interrupted write: ${left.join(', ')} (queue.json itself is fine and never read it)`,
+          `delete it when no ravenseat command is running: ${left.map((n) => path.join(path.dirname(FILE), n)).join(' ')}`,
+        ),
+      );
   }
   for (const [name, file] of [
     ['plans.json', path.join(FOLDER, 'plans.json')],

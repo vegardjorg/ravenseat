@@ -444,6 +444,13 @@ least `gateQueue.heavyAfterSec` (default 120 s). No history counts as light, so 
 - `--precheck` and the commands of a separate base gate (`baseGate.command`) do not queue. A gate command never queues:
   gates.mjs gives it `QUEUE_GATE_QUEUE=off`.
 
+Apart from that queue, a run that records gate evidence (receive, merge, and runs in the main checkout) holds the evidence
+lock of this project for as long as it runs: `<data folder>/gate-evidence.json.lock`. The tamper check compares the whole
+evidence store before and after the run, so two such runs at the same time (two tracks received at once, or a second
+session) used to read each other as tampering. Now the second one waits, looks again every quarter second, and its
+`--timeout-sec` starts after the wait. A holder whose process is gone is taken over; a lock folder that cannot be used
+means no lock, never a stuck gate. A gate command never waits for it: gates.mjs gives it `QUEUE_EVIDENCE_LOCK=held`.
+
 ### The temp folder
 
 Tests leave things in the temp folder, and over thousands of runs it fills up. So every run of `gates.mjs` gives its gate
