@@ -119,7 +119,8 @@ function project(config: Record<string, unknown>, queueExtra: Record<string, unk
   delete env.QUEUE_SCRATCHPAD;
   delete env.QUEUE_SESSION;
   const run = (...args: string[]) => {
-    const r = spawnSync(process.execPath, [QUEUE, ...args], { encoding: 'utf8', env });
+    // cwd: the project's own repo. surface accept and the other owner overrides read the cwd's branch, and must not see this test's own tree.
+    const r = spawnSync(process.execPath, [QUEUE, ...args], { encoding: 'utf8', env, cwd: repo });
     return { code: r.status, out: r.stdout ?? '', error: r.stderr ?? '' };
   };
   const queue = () => JSON.parse(fs.readFileSync(path.join(folder, 'queue.json'), 'utf8')) as Queue;
