@@ -121,7 +121,8 @@ Long-running AI development brings problems you don't see one task at a time:
 
 Ravenseat answers with a persistent queue, isolated worktrees, bounded missions, dependency tracking and explicit
 checks. The orchestration conversation keeps the direction, fresh agents do the individual tasks, and the project
-state lives outside the chat, so you can resume without rebuilding the plan from chat history.
+state lives outside the chat, so you can resume without rebuilding the plan from chat history. Heavy checks take turns
+across the machine, and `ravenseat machine` suggests how many agents your PC can carry.
 
 ### Why I built it
 
