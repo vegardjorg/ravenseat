@@ -24,7 +24,13 @@ const temporary: string[] = [];
 const children: ChildProcess[] = [];
 afterAll(() => {
   for (const c of children) c.kill('SIGKILL');
-  for (const m of temporary) fs.rmSync(m, { recursive: true, force: true });
+  for (const m of temporary) {
+    try {
+      fs.rmSync(m, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {
+      /* a child still holds a file: left for the OS */
+    }
+  }
 });
 
 const HOST = os.hostname();

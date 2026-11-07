@@ -197,6 +197,28 @@ function childEnvironment() {
 const CHILD_ENV = childEnvironment();
 
 /**
+ * The gate commands' own temp folder (lib/gateTemp.js): made at the first command, so a run waiting in the gate queue holds
+ * none, and removed when this process ends. Only the commands get it: this process keeps the real temp folder, where the
+ * gate queue's slots live. What a project's tests leave behind goes with the folder.
+ */
+let gateTempDir = null;
+let gateEnvNow = null;
+function gateCommandEnv() {
+  if (gateEnvNow) return gateEnvNow;
+  const GT = require('./lib/gateTemp.js');
+  gateTempDir = K.gateTemp?.enabled === false ? null : GT.create();
+  gateEnvNow = GT.withTemp(CHILD_ENV, gateTempDir);
+  return gateEnvNow;
+}
+/** Housekeeping: it never changes the result of the run, and a folder it leaves is swept by a later run. */
+function removeGateTemp() {
+  if (!gateTempDir) return;
+  const dir = gateTempDir;
+  gateTempDir = null;
+  if (require('./lib/gateTemp.js').remove(dir).link) console.log(`TEMP: ${dir} was left in place: it holds a link, and removing through one can delete what it points at.`);
+}
+
+/**
  * Does this run record evidence? Only when the orchestrator's side runs it: --evidence (ravenseat receive, ravenseat merge) or a run
  * in the main checkout. A track's own run in its worktree never does. Decided BEFORE the gate commands run.
  */
@@ -283,6 +305,7 @@ const releaseSlot = () => {
   slot = null;
 };
 process.on('exit', releaseSlot);
+process.on('exit', removeGateTemp);
 /**
  * Ends the running gate command and gives the slot back, then ends as the signal asks, so a caller (ravenseat merge) still
  * sees an interrupted child and never a red gate: on POSIX by the signal itself, on Windows with the Ctrl-C exit status.
@@ -290,6 +313,7 @@ process.on('exit', releaseSlot);
 function onSignal(sig) {
   if (runningChild) killTree(runningChild);
   releaseSlot();
+  removeGateTemp(); // ending by the signal below fires no 'exit' on POSIX
   if (process.platform === 'win32') process.exit(3221225786);
   process.removeAllListeners(sig);
   process.kill(process.pid, sig);
@@ -383,7 +407,7 @@ function runShell(command, { timeoutMs = null } = {}) {
       cwd,
       shell: true,
       detached: process.platform !== 'win32', // its own process group, so the whole tree can be ended
-      env: CHILD_ENV, // scrubbed (lib/gateEnv.js): the check runs the track's code
+      env: gateCommandEnv(), // scrubbed (lib/gateEnv.js): the check runs the track's code. With its own temp folder (lib/gateTemp.js)
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'], // no stdin: a command that reads it gets end of file instead of hanging
     });

@@ -144,7 +144,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `pick <id> --by "<who>"` / `deliver <id>` | A person or a separate chat takes a task by hand / delivers it |
 | `diagnose` | Why the queue runs fewer tracks than it could (with suggested fixes) |
 | `finding "<title>" [--detail] [--task] [--cause <id>] [--files a,b]` / `finding list [--all]` | A track reports something outside its scope: an idea in the plan register, linked to the task and deduplicated on the title ([plan-register.md](plan-register.md#findings)). `--cause` names the merged task it is a defect of. Pulse and `show` count the new ones |
-| `doctor [--json]` | Read-only health check, one OK/WARN/FAIL line each with a fix hint: Node and the `node` the hooks find on PATH, the hooks file and its scripts, `queue.config.json` keys and types, the state files, a stale lock, half-deleted worktree folders under `.claude/worktrees/` and git worktrees whose folder is gone, branches of finished tasks, CI cost, and the safety baseline (secret files in git or not ignored, empty gates, no CI config, a manifest without its lockfile, `productionBranch` equal to `baseBranch`, tracked files over `largeFileMb`; offline). Exit 1 on any FAIL |
+| `doctor [--json]` | Read-only health check, one OK/WARN/FAIL line each with a fix hint: Node and the `node` the hooks find on PATH, the hooks file and its scripts, `queue.config.json` keys and types, the state files, a stale lock, half-deleted worktree folders under `.claude/worktrees/` and git worktrees whose folder is gone, branches of finished tasks, CI cost, and the safety baseline (secret files in git or not ignored, empty gates, no CI config, a manifest without its lockfile, `productionBranch` equal to `baseBranch`, tracked files over `largeFileMb`; offline), and the temp folder's entries per prefix. Exit 1 on any FAIL |
 | `machine [--measure]` | Cores, memory, free memory now and a suggested `maxConcurrent`, an estimate that changes nothing. `--measure`, started by you and refused while a track runs: `gates --full` once, then the time, the lowest free memory and a suggestion for this project |
 | `state` | Machine-readable state (exit 3 when there is nothing to do) |
 | `undo` | Undo the last write |
@@ -443,6 +443,24 @@ least `gateQueue.heavyAfterSec` (default 120 s). No history counts as light, so 
   3 hours, is taken over. A queue that cannot be used (no write access) runs the gate without it.
 - `--precheck` and the commands of a separate base gate (`baseGate.command`) do not queue. A gate command never queues:
   gates.mjs gives it `QUEUE_GATE_QUEUE=off`.
+
+### The temp folder
+
+Tests leave things in the temp folder, and over thousands of runs it fills up. So every run of `gates.mjs` gives its gate
+commands a folder of their own through `TEMP`, `TMP` and `TMPDIR` and removes it when the run ends, also after a red run.
+Ravenseat does not need to know what your tests leave.
+
+- A folder holding a link or junction is left in place, and the run says so: removing through a link can delete what it
+  points at. A killed run also leaves its folder; a later run removes it when the process is gone and an hour has passed.
+- The commands of a separate base gate and a task's done command keep the normal temp folder.
+- If your tests need the shared temp folder, set `gateTemp.enabled` to `false`.
+- `ravenseat doctor` has a `temp` line with the number of entries and the prefixes with the most. It counts and removes
+  nothing else: only you can tell what another program's folders are for.
+
+Plugins multiply with the number of agents. A plugin's start hook runs once per agent session, so four tracks and an
+orchestrator run it five times, and a hook on a timer runs that much more often. A hook that installs packages can be the
+largest source of both temp folders and load. When the machine struggles, look through your installed plugins
+(`claude plugin list`) and turn off the ones this project does not use.
 - `gateQueue.enabled: false` turns it off, `QUEUE_GATE_QUEUE=off|on` overrides that for one call, and
   `QUEUE_GATE_QUEUE_DIR` moves the folder.
 
@@ -520,6 +538,7 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `loadGuard.adaptive`, `minSlots`, `allSlotsFreeMemoryPct` | `true`, `1`, `40` (off on macOS) | Load-aware slots: fewer than `maxConcurrent` slots while free memory is below `allSlotsFreeMemoryPct`, at least `minSlots`; `QUEUE_LOAD_ADAPTIVE=off` turns it off |
 | `loadGuard.allSlotsCpuPct`, `minSlotsCpuPct` | `null`, `null` | Optional CPU part of the load-aware slots (both set, e.g. `60` and `95`) |
 | `gateQueue.enabled`, `slots`, `heavyAfterSec` | `true`, `1`, `120` | [The queue for heavy gates](#the-queue-for-heavy-gates): how many heavy `--quick`/`--full` runs may run at once on the machine, and from how many seconds (the last run of the same kind) a run counts as heavy |
+| `gateTemp.enabled` | `true` | [The temp folder](#the-temp-folder): each gate run gets a temp folder of its own, removed afterwards |
 | `proposals.autoAccept` | `{ enabled: false, classes: ["K"], maxEstimateMin: 60, maxValue: null }` | Auto-accept of agent proposals by the owner's rules (`ravenseat proposals`); the queue's own rules win; never D/D+, `waiting_on`, legal/owner labels, open legal points or protected paths |
 | `qa.evidenceTypes`, `qa.autoTypes`, `qa.manualTypes` | `screenshot`, `test`, `manual`; auto `test`; manual `manual` | QA evidence types a track writes as `EVIDENCE <type>[=<ref>]`; auto types are closed by `qa auto --run`, manual ones gathered in one round |
 | `qa.autoCommand` | `null` | Shell command for auto evidence, e.g. `npx vitest run {refs}` (`{refs}`, `{id}`; or `{ "<type>": "<command>" }`); `null` = `qa auto` only lists |

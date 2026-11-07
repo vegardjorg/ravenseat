@@ -4,7 +4,7 @@
 // changelog and undo, the document checks, plus `queue.mjs plan …` against a copy in a temporary folder (never the real
 // queue or the real register). See docs/plan-register.md.
 // =============================================================
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import { execFileSync } from 'child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
@@ -13,6 +13,7 @@ import { join } from 'path';
 // The test modules are in a temporary queue.config.json (QUEUE_CONFIG). It is set before queuePlan reads the configuration,
 // and is inherited by queue.mjs in the child processes, so both see the same modules.
 const CONFIG_FOLDER = mkdtempSync(join(tmpdir(), 'queue-plan-config-'));
+afterAll(() => rmSync(CONFIG_FOLDER, { recursive: true, force: true }));
 process.env.QUEUE_CONFIG = join(CONFIG_FOLDER, 'queue.config.json');
 writeFileSync(
   process.env.QUEUE_CONFIG,

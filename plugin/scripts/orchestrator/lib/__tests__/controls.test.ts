@@ -2,7 +2,7 @@
 // controls.test.ts: what lib/controls.js answers, and that a missing control turns on the light review.
 // The real flow (hook, receive, merge) is in __tests__/controlsFlow.test.ts.
 // =============================================================
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,7 +15,15 @@ const L = require('../queueLogic.js');
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const conf = (own: object = {}) => KK.merge(KK.STANDARD, own);
-const emptyFolder = () => fs.mkdtempSync(path.join(os.tmpdir(), 'queue-controls-'));
+const made: string[] = [];
+const emptyFolder = () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-controls-'));
+  made.push(d);
+  return d;
+};
+afterAll(() => {
+  for (const d of made) fs.rmSync(d, { recursive: true, force: true });
+});
 
 describe('what is missing', () => {
   it('names both when there is neither CI nor gates', () => {

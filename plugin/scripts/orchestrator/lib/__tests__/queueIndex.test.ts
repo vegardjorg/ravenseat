@@ -4,7 +4,7 @@
 // unlinked, the plan entry line, new plan documents from the register, idempotence, plus make-index.mjs (--check, --dry,
 // writing, without a register) against a copy in a temporary folder (never the real INDEX or the real register).
 // =============================================================
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import { execFileSync } from 'child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -13,6 +13,7 @@ import { join } from 'path';
 // The test modules sit in a temporary queue.config.json (QUEUE_CONFIG), set before queueIndex/queuePlan read the configuration;
 // make-index.mjs in the child process inherits it.
 const CONFIG_FOLDER = mkdtempSync(join(tmpdir(), 'queue-index-config-'));
+afterAll(() => rmSync(CONFIG_FOLDER, { recursive: true, force: true }));
 process.env.QUEUE_CONFIG = join(CONFIG_FOLDER, 'queue.config.json');
 writeFileSync(
   process.env.QUEUE_CONFIG,

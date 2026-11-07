@@ -318,6 +318,9 @@ const STANDARD = Object.freeze({
   // worktrees and projects. No history counts as light, so a small project never notices it. QUEUE_GATE_QUEUE=off|on
   // overrides `enabled`. The time budget starts after the wait.
   gateQueue: { enabled: true, slots: 1, heavyAfterSec: 120 },
+  // A temp folder of its own for each gate run, removed afterwards (lib/gateTemp.js): what a project's tests leave goes with
+  // it. enabled false gives the gate commands the normal temp folder.
+  gateTemp: { enabled: true },
   // The pause at the subscription's usage limit (lib/usageLimit.js): the StopFailure hook saves the reset time, and no new
   // tracks or fix rounds start until then (exit 12). pause false turns it off.
   usageLimit: { pause: true },
