@@ -11,6 +11,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "redteam": "vitest run plugin/scripts/orchestrator/__tests__/redteam",
     "installer": "node scripts/install.mjs"
   },
   "devDependencies": {

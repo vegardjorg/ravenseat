@@ -251,6 +251,19 @@ for (const f of git('diff', '--cached', '--name-only').split('\n').filter(Boolea
     console.log(`  cleaned stale index for ${f} (equal to HEAD)`);
   }
 }
+// The user's own staged changes: git merge refuses to merge on top of them, but first saves and restores the working tree
+// itself, and with core.autocrlf (on by default in Git for Windows) that rewrites the user's uncommitted files with other
+// line endings. Stop before git touches anything, and say what to do (red team flow 3, __tests__/redteam/flows.test.ts).
+const staged = git('diff', '--cached', '--name-only').split('\n').filter(Boolean);
+if (staged.length) {
+  console.error(
+    `Not merged: the checkout has staged changes that are not committed: ${staged.slice(0, 10).join(', ')}` +
+      `${staged.length > 10 ? ` and ${staged.length - 10} more` : ''}.\n` +
+      'git merge refuses to merge on top of them. Nothing was touched. Commit them, or unstage them with ' +
+      '"git restore --staged <file>" (the change stays in the file), then merge again.',
+  );
+  process.exit(1);
+}
 const m = gitOk('merge', '--no-ff', '--no-edit', branch);
 const conflicts = git('diff', '--name-only', '--diff-filter=U').split('\n').filter(Boolean);
 if (m.status !== 0 && !conflicts.length) {
