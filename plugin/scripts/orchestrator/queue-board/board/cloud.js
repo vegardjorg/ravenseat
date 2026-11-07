@@ -1,6 +1,6 @@
 // =============================================================
-// cloud.js: the "Cloud" view: bundles with a ready command for cloud-start.mjs (claude --cloud, draws
-// from the cloud credit).
+// cloud.js: the "Cloud" view: bundles with a ready command to start a cloud session (cloud-start, or cloud send when
+// cloud.start is routine). A session counts against the plan's usage limits.
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md). They load in order with defer and
 // share the page's global scope, so a top-level name in one is visible in all of them, as when they were one
@@ -8,7 +8,7 @@
 // =============================================================
 'use strict';
 
-// ---- The "Cloud" view: bundles with a ready command for cloud-start.mjs (claude --cloud, draws from the cloud credit) ----
+// ---- The "Cloud" view: bundles with a ready command to start a cloud session ----
 let fetchingCloud = false;
 async function getCloudQueue() {
   if (fetchingCloud || !t.key) return;
@@ -35,9 +35,10 @@ async function copyText(text, ok) {
 
 /** The help text in the Cloud view. The base branch comes from queue.config.json (baseBranch). */
 const cloudHelp = () =>
-  'Copy a command and run it in a terminal in the project folder. It starts a cloud session with claude --cloud, ' +
-  `which draws from the cloud credit. The cloud sees only what is pushed to ${t.data?.baseBranch ?? 'main'}. ` +
-  'When the session reports CLOUD-DONE, press "Completed in cloud", and the orchestrator merges.';
+  'Copy a command and run it in a terminal in the project folder. It starts a cloud session, which counts against ' +
+  `your plan's usage limits. The cloud sees only what is pushed to ${t.data?.baseBranch ?? 'main'}. ` +
+  'When ravenseat cloud check says it has finished, press "Completed in cloud". The gates then run here, at receive and merge. ' +
+  'What it needs: ravenseat cloud setup.';
 
 function cloudRow(id, title, ...extra) {
   return el(

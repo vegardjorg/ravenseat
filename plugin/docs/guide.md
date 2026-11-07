@@ -160,22 +160,47 @@ uses to close QA entries that are green.
 
 ## Cloud sessions
 
-Tracks can also run in Claude Code's cloud sessions on claude.ai instead of on your machine. I built this to use the
-$250 in cloud credits I got from Anthropic, but it works just as well with pay-as-you-go: the cloud gives you more
-parallel tracks without more load on your own computer. Cloud is off by default: turn it on with
-`"features": { "cloud": true }` in `queue.config.json`.
+Tracks can also run in Claude Code's cloud sessions on claude.ai instead of on your machine, on a normal subscription
+(Pro, Max, Ultra or Team; Enterprise with premium seats). A session counts against your plan's usage limits like the rest
+of your use, and there is no separate charge for the machine it runs on. Cloud is off by default: `ravenseat cloud on`
+turns it on, and `ravenseat cloud setup` lists what it needs, what is in place and the next step.
+
+What it needs: a GitHub remote with your base branch pushed, a claude.ai login, and the
+[Claude GitHub App](https://github.com/apps/claude) on the repo. The app matters: without it `claude --cloud` uploads a
+copy of your local repo instead of cloning it, and on Windows that copy includes uncommitted changes in tracked files, so
+any secret sitting in one goes too. Ravenseat cannot see from here whether the app is installed.
 
 - **What can go to the cloud:** ordinary code tasks (K and U) without migrations or database changes. The queue
   decides which tasks fit, and the board's **Cloud** tab lists them, grouped into bundles of up to 4 tasks per session.
-- **Start:** copy the package from the Cloud tab into a cloud session, or run
-  `node "<plugin folder>/scripts/orchestrator/ravenseat.mjs" cloud-start <id> [<id> …]` in your own terminal from the
-  project folder (ask Claude for the full path). It opens `claude --cloud`, which draws from the cloud session credits.
-  At most 3 cloud sessions run at once.
-- **Back home:** when the cloud session reports it is done, the orchestrator fetches the branch and reviews and merges
-  it like any other track (`ravenseat cloud done <id>`).
+- **Start:** run `node "<plugin folder>/scripts/orchestrator/ravenseat.mjs" cloud-start <id> [<id> …]` in your own
+  terminal from the project folder (ask Claude for the full path), or copy the command from the Cloud tab. It opens
+  `claude --cloud`, because that needs a real terminal. Once the session is going you can close it.
+- **Start without a terminal (optional):** a scheduled task with an API trigger is the documented way to start a session
+  without a terminal. You create it on claude.ai, set `"cloud": { "start": "routine", "fireUrl": "<its URL>" }` and put the
+  token in the environment variable `RAVENSEAT_CLOUD_TOKEN`; `ravenseat cloud setup` has the steps. Then
+  `ravenseat cloud send <id>` starts a session. It only runs when someone runs it, nothing sends tasks on its own, and it
+  never retries: every accepted call makes a new session on your plan. The endpoint is marked experimental.
+- **Limits:** at most `cloud.maxSessions` sessions at once (default 3; a bundle counts as one). Nothing documents a hard
+  limit, but parallel sessions use your plan faster. During a [usage limit pause](queue.md) no cloud session starts either
+  (exit 12; `--force` overrides), since the limit is the same one.
+- **Knowing it has finished:** the last commit a session pushes says `CLOUD-DONE <id>` or `CLOUD-STOP <id> <reason>`.
+  `ravenseat cloud check` reads that from the branch, in one read of the remote, and the pulse does it at most every 5
+  minutes. There is no way to ask the CLI for a list of cloud sessions, and a session that waits for an answer shows up as
+  "no finish marker yet": look at it on [claude.ai/code](https://claude.ai/code).
+- **Back home:** `ravenseat cloud done <id>` fetches the branch, then `ravenseat receive <id>` and `ravenseat merge <id>`
+  work as for any other track. The gates run on your machine and that run is the evidence, whatever the session says it ran.
 - **Push first:** a cloud session starts from your base branch on GitHub, so it only sees what is pushed.
-- **Keep track of the credits:** `ravenseat capacity --cloud-credit <usd left>` records the cloud pot separately from your
+- **What a session does not have:** the Ravenseat plugin, your user settings and a database. Hooks in the repo's own
+  `.claude/settings.json` do load. The GitHub proxy rejects tags, branch deletions, `gh pr` and `gh issue`. The package is
+  written with that in mind. Choose the session's environment with `/remote-env` in Claude Code.
+- **A separate credit (optional):** if you have one, `ravenseat capacity --cloud-credit <usd left>` records it next to your
   plan's weekly quota.
+
+**How much it relieves your machine:** a cloud track takes the agent, its worktree, its edits and all its test and gate
+runs off your PC, which is where most of the load is. It does not take everything: `cloud done` fetches the branch, `receive`
+runs the quick gates once on the tip, `merge` runs them once more on the base, and the batch push runs the full gates. Those
+runs are one at a time through the gate queue, and they stay at home on purpose, because an agent does not grade its own
+homework. With slow gates, merge in quiet periods; a lean `gates.quick` helps every track.
 
 ## The board in detail
 

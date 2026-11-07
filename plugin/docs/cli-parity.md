@@ -56,6 +56,8 @@ commands cover them.
 | --- | --- | --- |
 | Copy the cloud package | `/api/cloudPackage` | `ravenseat cloud-package <id>` (same command) |
 | Started, completed, cancelled in cloud | `/api/action` `cloud-start`, `cloud-done`, `cloud-cancel` | `ravenseat cloud start|done|cancel <id>` (same command) |
+| What it needs, on and off (new) | none | `ravenseat cloud setup`, `ravenseat cloud on|off` |
+| Start a session, has it finished (new) | the command to copy in the Cloud tab | `ravenseat cloud-start <id>`, `ravenseat cloud send <id>`, `ravenseat cloud check` |
 
 ## Plans room
 

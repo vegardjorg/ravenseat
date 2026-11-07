@@ -19,6 +19,7 @@ import {
   a, autoAcceptIn, autoAcceptRules, CONFIG, CLI, CURSOR, cut, die, edit, F, FOLDER, FOLLOW_FILE, FOLLOW_REPORTS, HO, KK,
   KV, L, missionRef, parallelWarning, positional, pulseCursor, read, readCursor, require, val, values, WIDTH, withLock, write,
 } from './context.mjs';
+import { cloudPulseLines } from './cloud.mjs';
 import { deliveryWarning, findSilent, findWithoutAgent } from './tracks.mjs';
 import { findingsLineNow } from './finding.mjs';
 import { baseHealthLine } from './baseHealth.mjs';
@@ -285,6 +286,8 @@ export function cmdOrchestrator() {
     if (fl) console.log(fl);
     // The usage limit: new starts are paused until the reset, and after it the tracks that were running need a look.
     for (const l of usageLimitLines()) console.log(l);
+    // Cloud tracks that have finished or stopped: one read of the remote, at most every 5 minutes, and never a stop for the pulse.
+    for (const l of cloudPulseLines()) console.log(l);
     // The base branch's health (lib/baseHealth.js): one line every round, so a red base is never missed.
     const baseLine = baseHealthLine();
     if (baseLine) console.log(baseLine);

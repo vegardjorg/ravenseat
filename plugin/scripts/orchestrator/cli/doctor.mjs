@@ -22,6 +22,8 @@
 //               paths/paths-ignore filter (a text scan, lib/pushBatch.js workflowCost)
 //   merge, settings, in-base (cli/doctorRepo.mjs): a lingering MERGE_HEAD in the main checkout, disableAllHooks in a
 //               Claude Code settings file, done tasks whose merge commit or branch is not in baseBranch (all WARN)
+//   cloud rows  only with features.cloud on: what cloud tracks need (lib/cloudSetup.js), read locally; the setup itself is
+//               `ravenseat cloud setup`
 //   the safety baseline (cli/doctorBaseline.mjs, offline): secrets (a tracked .env or private key is FAIL), gates,
 //               ci, lockfile, prod (productionBranch vs baseBranch), largefile
 // Exit code 1 when any check FAILs, otherwise 0. It never changes anything: no lock, no write, no git command that
@@ -38,6 +40,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import { a, branchFor, CONFIG, CLI, FILE, FOLDER, FOLLOW_FILE, git, GIT_ROOT, HERE, KK, L, LOCK, MAIN_TREE, require, SF } from './context.mjs';
+import { cloudSetupFacts } from './cloud.mjs';
 import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 import { REPO_CHECKS } from './doctorRepo.mjs';
 
@@ -54,7 +57,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -504,9 +507,18 @@ function checkTemp() {
   return [line.status === 'INFO' ? info('temp', line.message, line.fix) : ok('temp', line.message)];
 }
 
+/** What cloud tracks need, only while they are on. The rows that are not problems stay in `ravenseat cloud setup`. */
+function checkCloud() {
+  if (!KK.featureOn('cloud', CONFIG)) return [];
+  const rows = require('./lib/cloudSetup.js').cloudSetupRows(cloudSetupFacts());
+  return rows
+    .filter((r) => r.status !== 'INFO' || r.name === 'github app')
+    .map((r) => ({ ...r, name: `cloud ${r.name}` }));
+}
+
 /** `ravenseat doctor [--json] [--all]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, ...REPO_CHECKS, checkMachine, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, ...REPO_CHECKS, checkCloud, checkMachine, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

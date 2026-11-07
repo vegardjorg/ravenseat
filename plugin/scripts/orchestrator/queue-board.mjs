@@ -2045,7 +2045,7 @@ async function write(filePath, b) {
     const id = idOrNull(b.id);
     if (!id) return no('invalid id');
     // "Started in cloud", "Completed in cloud" and "Cancel cloud" go via queue.mjs cloud … (the suitability, the git check of
-    // the branch and the limit of three cloud sessions are there).
+    // the branch and the limit on cloud sessions are there).
     if (type === 'cloud-start') {
       const execution = cleanText(b.execution, 300);
       if (execution && /\s/.test(execution)) return no('the link or session id cannot contain whitespace');

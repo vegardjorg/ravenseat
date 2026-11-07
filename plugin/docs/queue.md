@@ -532,6 +532,9 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `identity.allow` | `[]` | Addresses the identity guard accepts although they look like a test identity (`ci@example.com`). Exact, not case sensitive |
 | `testWeakening.enabled`, `testPaths`, `markers` | `true`, `[]`, `[]` | `receive` warns, never stops, about deleted test files, test files moved out of the test paths and skip or focus markers on added lines in test files (`.skip(`, `.only(`, `xit(`, `it.todo(`, `@pytest.mark.skip`, `pytest.skip(`, `@unittest.skip`, `#[ignore]`, `t.Skip(`, `@Disabled`, `@Ignore`, `pending(`, `markTestSkipped` ...): one `WARN test weakening:` line and a `Test weakening` section in `00-package.md`. `testPaths` adds test file globs (the `protectedPaths` rules), `markers` adds regular expressions; `ravenseat doctor` names an invalid one |
 | `cloudHidden` | `[]` | Paths a cloud session cannot see (missions pointing there are stopped) |
+| `cloud.maxSessions` | `3` | At most this many cloud sessions at once (a bundle counts as one). They share your plan's usage limits |
+| `cloud.start` | `terminal` | `terminal`: you run `ravenseat cloud-start <id>`. `routine`: `ravenseat cloud send <id>` fires a scheduled task, without a terminal |
+| `cloud.fireUrl` | `null` | With `routine`: the API trigger's URL on api.anthropic.com. The token goes in the environment variable `RAVENSEAT_CLOUD_TOKEN`, never in a file |
 | `capacity` | Tuesday 19:00 local time | Weekly quota reset for `ravenseat capacity` |
 | `models` | `{}` (each agent file's model, opus) | Model per agent, e.g. `{ "reviewer-docs": "sonnet" }`: printed as `model=<m>` on the start lines and passed to the Agent tool (opus, sonnet, haiku, fable; an unknown value is ignored) |
 | `loadGuard.minFreeMemoryPct` | `10` (off on macOS) | Load guard: no new starts while free memory (percent) is below it; `ravenseat limit minFreeMemoryPct` overrides per queue |

@@ -202,8 +202,11 @@ on the same branch. Stop the old session first, so two orchestrators do not rece
 ## Cloud sessions (optional)
 
 Tasks of class K/U without migrations, DB ownership, open dependencies or owner questions can run in a cloud session
-(`ravenseat cloud`, `cloud-package`, `cloud start|done|cancel`, `cloud-start.mjs`). The cloud only sees what is pushed, so the
-base branch must be pushed first. At most 3 cloud sessions at once.
+(`ravenseat cloud`, `cloud setup`, `cloud-package`, `cloud start|done|cancel`, `cloud-start.mjs`). The cloud only sees what is pushed, so the
+base branch must be pushed first. At most `cloud.maxSessions` at once, and none during a usage limit pause: a session counts against the
+plan's usage limits. Never run `cloud send` unless the owner has asked for that start: it starts a session on their plan. `cloud check` (also
+in the pulse) reads the finish marker on the branch. After `cloud done`, run `receive` and `merge` as for a local track, so the gates and the
+evidence are local.
 
 ## Known pitfalls
 

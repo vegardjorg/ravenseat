@@ -125,7 +125,7 @@ const {
   missingProject, trackBlock,
 } = require('./logic/external.js');
 const {
-  CLOUD_BY, CLOUD_MAX, isCloud, cloudReferences, cloudSuitable, CLOUD_BUNDLE_MAX, CLOUD_BUNDLE_MIN, cloudPackage,
+  CLOUD_BY, CLOUD_MAX, cloudMax, cloudMarker, cloudBranches, isCloud, cloudReferences, cloudSuitable, CLOUD_BUNDLE_MAX, CLOUD_BUNDLE_MIN, cloudPackage,
   cloudBundleCap, cloudBundlePackage, cloudBundles, cloudSessions, cloudStart, cloudDone, cloudCancel,
 } = require('./logic/cloud.js');
 const {
@@ -349,6 +349,9 @@ module.exports = {
   CLOUD_BY,
   CLOUD_MAX,
   isCloud,
+  cloudMax,
+  cloudMarker,
+  cloudBranches,
   cloudReferences,
   cloudSuitable,
   cloudPackage,

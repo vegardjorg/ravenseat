@@ -189,7 +189,7 @@ function usageBetween(events, from, to) {
 
 /**
  * Track hours in [from, to): the sum of the time queue tracks have run (started → delivered, or now while running), without
- * cloud tracks (their own cloud credit), picked tasks and entries outside the queue. Divided by the hours it gives the average number of
+ * cloud tracks (they do not run on this machine), picked tasks and entries outside the queue. Divided by the hours it gives the average number of
  * parallel tracks.
  */
 function trackHours(queue, from, to) {
@@ -428,9 +428,9 @@ function lines(p) {
   if (p.cloudCredit) {
     const s = p.cloudCredit;
     out.push(
-      `Cloud credit (separate pool, cloud sessions only): ${s.left_usd} of ${s.total_usd ?? '?'} USD left, expires ` +
+      `Cloud credit (optional, what you recorded yourself): ${s.left_usd} of ${s.total_usd ?? '?'} USD left, expires ` +
         `${s.expires ? tt(Date.parse(s.expires)) : '?'}${s.set ? ` (set ${s.set.slice(0, 10)})` : ''}. ` +
-        'Empty credit: cloud sessions count against the weekly quota.',
+        "Cloud sessions count against your plan's usage limits; this figure is only your own note.",
     );
   }
   const latest = p.calibrations.at(-1);

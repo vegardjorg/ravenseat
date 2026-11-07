@@ -496,7 +496,8 @@ describe('queue.mjs cloud-package and cloud start/done/cancel (copy of the queue
 
     const f = run('cloud', 'done', 'A', '--branch', 'claude/jolly-x', '--sha', sha.slice(0, 10));
     expect(f.code).toBe(0);
-    expect(f.out).toContain('ravenseat merge-track queue/A');
+    expect(f.out).toContain('ravenseat receive A');
+    expect(f.out).toContain('ravenseat merge A');
     expect(f.out).toContain('git push origin --delete claude/jolly-x');
     expect(find('A').status).toBe('review');
     expect(find('A').cloud).toMatchObject({ branch: 'claude/jolly-x', sha: sha.slice(0, 10) });
