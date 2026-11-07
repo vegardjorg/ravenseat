@@ -3,6 +3,23 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.27 (2026-11-07)
+
+**Ravenseat now pauses at the subscription's usage limit instead of starting work that cannot finish, and each check cleans up its own temp folder.**
+
+### Added
+- A pause at the usage limit. When a turn ends on the limit, a hook saves the reset time, and no new tracks or fix rounds start until then (exit code 12). Running tracks are left alone. The pulse and the board say when work resumes. `usageLimit.pause` false turns it off, and `ravenseat limit usageLimit clear` lifts one pause. This has only been tested against recorded signals, not a real limit.
+- Each run of `gates.mjs` gives its commands a temp folder of their own and removes it afterwards, so what a project's tests leave goes with it. A folder holding a link is left in place, and the run says so. `gateTemp.enabled` false turns it off. A separate base gate and a task's done command keep the normal temp folder.
+- `ravenseat doctor` has a `temp` line with the number of entries and the prefixes with the most. It removes nothing.
+
+### Docs
+- The orchestration guide has a section on what each kind of interruption leaves behind and how to resume, backed by new tests that kill merge and receive without warning.
+- The queue guide explains the temp folder, and why a plugin's hooks multiply with the number of agents.
+- The README mentions the shared queue for checks and `ravenseat machine`.
+
+### Fixed
+- Our own tests no longer leave folders in the temp folder.
+
 ## 0.8.26 (2026-11-07)
 
 **Heavy checks now take turns across the whole machine, so several projects or tracks no longer choke it, and `ravenseat machine` suggests how many tracks your PC can carry.**
