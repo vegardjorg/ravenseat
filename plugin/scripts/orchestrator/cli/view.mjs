@@ -152,7 +152,7 @@ export function cmdShow() {
         console.log(`  ${cut(f.feature, WIDTH - 2)}`);
         for (const o of f.tasks) {
           const r = rows.find((x) => x.o === o);
-          const col = `    ${o.id.padEnd(12)} ${o.status.padEnd(8)} ${o.class.padEnd(2)} ${`${L.estimate(o)}m`.padEnd(5)} ${costCol(o).padEnd(6)} `;
+          const col = `    ${o.id.padEnd(12)} ${o.status.padEnd(8)} ${String(o.class ?? '?').padEnd(2)} ${`${L.estimate(o)}m`.padEnd(5)} ${costCol(o).padEnd(6)} `;
           console.log(col + cut(o.title, WIDTH - col.length));
           if (o.status === 'picked') under(pickLine(o), 6);
           else if (r.h.length) under(r.h.join(' · '), 6);
@@ -164,8 +164,8 @@ export function cmdShow() {
       const col = [
         o.id.padEnd(12),
         o.status.padEnd(9),
-        o.class.padEnd(3),
-        o.domain.padEnd(14),
+        String(o.class ?? '?').padEnd(3),
+        String(o.domain ?? '?').padEnd(14),
         `${L.estimate(o)} min`.padEnd(8),
         costCol(o).padEnd(6),
         s == null ? '        ' : String(s).padEnd(8),
@@ -193,8 +193,8 @@ export function cmdShow() {
       console.log(
         [
           o.id.padEnd(12),
-          o.class.padEnd(3),
-          o.domain.padEnd(14),
+          String(o.class ?? '?').padEnd(3),
+          String(o.domain ?? '?').padEnd(14),
           `${L.estimate(o)} min`.padEnd(8),
           costCol(o).padEnd(6),
           `value ${o.value ?? 5}`.padEnd(9),

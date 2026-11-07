@@ -381,7 +381,7 @@ export function cmdFocus() {
         for (const v of canStart)
           console.log(
             cut(
-              `  ${v.id.padEnd(12)} ${v.class.padEnd(3)} ${`${v.estimate} min`.padEnd(8)} prio ${v.score}  ${L.stepText(v)}`,
+              `  ${v.id.padEnd(12)} ${String(v.class ?? '?').padEnd(3)} ${`${v.estimate} min`.padEnd(8)} prio ${v.score}  ${L.stepText(v)}`,
               WIDTH,
             ),
           );

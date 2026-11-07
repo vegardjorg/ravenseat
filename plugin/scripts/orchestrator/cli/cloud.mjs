@@ -760,7 +760,7 @@ export function cmdCloud() {
     for (const { o } of suitable.slice(0, 15))
       console.log(
         cut(
-          `  ${o.id.padEnd(12)} ${o.class.padEnd(2)} ${`${L.estimate(o)} min`.padEnd(7)} ${o.title ?? ''}`,
+          `  ${o.id.padEnd(12)} ${String(o.class ?? '?').padEnd(2)} ${`${L.estimate(o)} min`.padEnd(7)} ${o.title ?? ''}`,
           WIDTH,
         ),
       );

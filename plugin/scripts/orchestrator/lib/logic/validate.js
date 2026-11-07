@@ -96,7 +96,54 @@ function validateNewField(o, register, { stringProject = true } = {}) {
   return error;
 }
 
+/**
+ * The dependency cycles among the open tasks: each one as a list of ids that starts and ends with the same id
+ * (["X1", "X2", "X1"]). Done and cancelled tasks are left out: they block nothing, so a cycle through one never stalls
+ * the queue. A dependency on an id that is not in the list is ignored (blockers reports it). Pure, no I/O.
+ */
+function dependencyCycles(tasks = []) {
+  const open = new Map();
+  for (const o of tasks) if (o && o.id && o.status !== 'done' && o.status !== 'cancelled') open.set(o.id, o);
+  const next = (id) => (Array.isArray(open.get(id)?.depends_on) ? open.get(id).depends_on : []).filter((d) => open.has(d));
+  const cycles = [];
+  const seen = new Set();
+  // Depth first, with the current path on a stack: an edge back to an id on the stack closes a cycle.
+  const state = new Map(); // id -> 'on' (on the stack) | 'done'
+  const stack = [];
+  const visit = (id) => {
+    state.set(id, 'on');
+    stack.push(id);
+    for (const d of next(id)) {
+      if (state.get(d) === 'on') {
+        const cycle = [...stack.slice(stack.indexOf(d)), d];
+        // The same cycle found from another start is reported once (keyed on its sorted members).
+        const key = [...new Set(cycle)].sort().join(' ');
+        if (!seen.has(key)) {
+          seen.add(key);
+          cycles.push(cycle);
+        }
+      } else if (!state.has(d)) visit(d);
+    }
+    stack.pop();
+    state.set(id, 'done');
+  };
+  for (const id of open.keys()) if (!state.has(id)) visit(id);
+  return cycles;
+}
+
+/**
+ * The error for a task whose depends_on would close a cycle in the queue as it will be (`after` holds the task in its
+ * new form). Empty when there is no cycle through the task. A cycle is never started: every task in it waits on another.
+ */
+function cycleError(o, after = []) {
+  if (!o?.id) return [];
+  const own = dependencyCycles(after).filter((c) => c.includes(o.id));
+  return own.map((c) => `depends_on would create a cycle: ${c.join(' -> ')} (none of them could ever start; remove one of the dependencies)`);
+}
+
 module.exports = {
   validate,
   validateNewField,
+  dependencyCycles,
+  cycleError,
 };

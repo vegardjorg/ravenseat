@@ -265,7 +265,18 @@ function checkState() {
       ),
     );
   else if (!Array.isArray(q.value?.tasks)) out.push(fail('queue', 'queue.json has no tasks list', `restore it from a backup, or ${CLI} init in a fresh data folder`));
-  else out.push(ok('queue', `queue.json parses (${q.value.tasks.length} task(s))`));
+  else {
+    out.push(ok('queue', `queue.json parses (${q.value.tasks.length} task(s))`));
+    // A dependency cycle among open tasks: add and edit refuse a new one, but a hand edit or an older queue can hold one.
+    for (const c of L.dependencyCycles(q.value.tasks))
+      out.push(
+        warn(
+          'queue',
+          `dependency cycle: ${c.join(' -> ')} (none of these tasks can ever start)`,
+          `remove one dependency: ${CLI} edit ${c[0]} --json '{"depends_on":[...]}'`,
+        ),
+      );
+  }
   for (const [name, file] of [
     ['plans.json', path.join(FOLDER, 'plans.json')],
     ['follow.json', FOLLOW_FILE],

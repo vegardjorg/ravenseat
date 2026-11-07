@@ -295,6 +295,12 @@ export function cmdAdd() {
     // The batch queue rules against the queue as it will be (the new ones can depend on each other).
     // Lite mode has no batch queue and no small-task guard (lib/liteMode.js): nothing is refused for its size.
     const after = [...queue.tasks, ...newOnes.map((n) => ({ status: 'waiting', ...n }))];
+    // A dependency cycle (X1 waits on X2, X2 on X1) would leave every task in it waiting forever, without a word.
+    // Checked in lite mode too: a cycle stalls the queue whatever the mode.
+    for (const n of newOnes) {
+      const f = L.cycleError({ status: 'waiting', ...n }, after);
+      if (f.length) error.push(`${n.id ?? '(without id)'}: ${f.join('; ')}`);
+    }
     for (const n of LITE ? [] : newOnes) {
       const f = L.batchedError({ status: 'waiting', ...n }, after, queue.resolved);
       if (f.length) error.push(`${n.id ?? '(without id)'}: ${f.join('; ')}`);

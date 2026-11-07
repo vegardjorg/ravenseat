@@ -210,6 +210,10 @@ export function cmdEdit() {
     );
     // A new waiting_on id must be a registered question (queue.mjs question <id> --text ... first).
     f.push(...L.waitingOnError(fresh, queue, { earlier: o.waiting_on ?? [] }));
+    // A depends_on that closes a cycle leaves every task in it waiting forever. Checked only when the edit touches
+    // depends_on or status, so a cycle made before this check existed never blocks an unrelated edit (doctor reports it).
+    if ('depends_on' in field || 'status' in field)
+      f.push(...L.cycleError(fresh, queue.tasks.map((x) => (x.id === id ? fresh : x))));
     // `fixes` must name tasks in the queue, never the task itself (lib/fixLinks.js; validate has checked the shape).
     if ('fixes' in field && !FX.fixesShapeError(fresh).length)
       f.push(...FX.fixesError(fresh, queue.tasks.map((x) => x.id)));

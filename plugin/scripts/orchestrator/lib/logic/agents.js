@@ -126,7 +126,7 @@ function summaryView(
     const o = tasks.find((x) => x.id === v.id);
     out.push(
       cut(
-        `  ${v.id.padEnd(12)} ${v.class.padEnd(2)} ${String(v.domain).padEnd(12)} ${`${v.estimate} min`.padEnd(8)} ` +
+        `  ${v.id.padEnd(12)} ${String(v.class ?? '?').padEnd(2)} ${String(v.domain ?? '?').padEnd(12)} ${`${v.estimate} min`.padEnd(8)} ` +
           (costEstimate ? `${costLabel(costEstimate(o)).padEnd(6)} ` : '') +
           `prio ${v.score}${'step' in v ? ` ${stepText(v)}` : ''}  ${o?.title ?? ''}`,
       ),

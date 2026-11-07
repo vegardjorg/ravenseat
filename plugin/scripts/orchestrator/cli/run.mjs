@@ -80,7 +80,7 @@ export function cmdNext() {
     );
   for (const v of selected)
     console.log(
-      `${v.id.padEnd(12)} ${v.class.padEnd(3)} ${v.domain.padEnd(14)} ${v.estimate} min ${CE.costText(costFor(v))}  priority ${v.score}` +
+      `${v.id.padEnd(12)} ${String(v.class ?? '?').padEnd(3)} ${String(v.domain ?? '?').padEnd(14)} ${v.estimate} min ${CE.costText(costFor(v))}  priority ${v.score}` +
         (v.project !== L.WITHOUT_PROJECT ? `  (${v.project})` : '') +
         ('step' in v ? `  ${L.stepText(v)}` : ''),
     );
@@ -468,7 +468,7 @@ export function cmdPickable() {
       ...('step' in p ? [p.outside_focus ? 'outside focus' : L.stepText(p)] : []),
     ];
     const header =
-      `${p.id.padEnd(12)} ${p.class.padEnd(2)} ${`${p.estimate} min`.padEnd(7)} prio ${String(p.score).padEnd(7)} ` +
+      `${p.id.padEnd(12)} ${String(p.class ?? '?').padEnd(2)} ${`${p.estimate} min`.padEnd(7)} prio ${String(p.score).padEnd(7)} ` +
       `${p.project}${p.feature ? ` / ${p.feature}` : ''}${badges.length ? ` [${badges.join(', ')}]` : ''}`;
     console.log(cut(header, WIDTH));
     console.log(`  ${cut(p.title, WIDTH - 2)}`);

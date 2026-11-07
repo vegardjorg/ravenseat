@@ -32,7 +32,7 @@ const EXPORTS = [
   'bonusBlock', 'branchPrefix', 'budgetGuard', 'bulkDiff', 'childrenMap', 'choiceLines', 'choicesError', 'classifyCommit', 'classifyQueue',
   'cleanFocus', 'cloneJson', 'closeBlock', 'cloudBranches', 'cloudBundleCap', 'cloudBundleMax', 'cloudBundlePackage', 'cloudBundles', 'cloudCancel',
   'cloudDone', 'cloudMarker', 'cloudMax', 'cloudPackage', 'cloudReferences', 'cloudSessions', 'cloudStart', 'cloudSuitable', 'collisionText',
-  'compareRanking', 'concurrentBlock', 'conflict', 'conflictPart', 'consistency', 'continue', 'costLabel',
+  'compareRanking', 'concurrentBlock', 'conflict', 'conflictPart', 'cycleError', 'dependencyCycles', 'consistency', 'continue', 'costLabel',
   'costStatistics', 'counterAsAgent', 'dbObjectsFromDiff', 'deliver', 'deliveryBase', 'deliveryLines',
   'deliverySignal', 'diffLines', 'draggedWith', 'dropFocusEndQuestions', 'editMany', 'environmentCheck', 'equalValue', 'errorExcerpt',
   'estimate', 'estimateCost', 'estimateWall', 'evaluateFocusStep', 'evidenceCommand', 'evidenceRequired',

@@ -72,7 +72,7 @@ for (const [cls, list] of Object.entries(perClass)) {
 for (const v of notices.slice(-15)) {
   const o = perId.get(v.id);
   console.log(
-    `    ${v.time.slice(0, 16)} ${v.id.padEnd(14)} ${v.class.padEnd(3)} notice $${v.usd} (${v.factor}x $${v.average})` +
+    `    ${v.time.slice(0, 16)} ${v.id.padEnd(14)} ${String(v.class ?? '?').padEnd(3)} notice $${v.usd} (${v.factor}x $${v.average})` +
       ` -> end $${r2(usd(o))} ${o?.status ?? '?'}`,
   );
 }

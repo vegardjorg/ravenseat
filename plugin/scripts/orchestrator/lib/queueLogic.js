@@ -75,7 +75,7 @@ const {
   qaConfig, validateEvidence, parseEvidence, evidenceRequired, evidenceWarning, evidenceText, qaSplit,
   evidenceCommand, qaAutoOutcome,
 } = require('./logic/evidence.js');
-const { validate, validateNewField } = require('./logic/validate.js');
+const { validate, validateNewField, dependencyCycles, cycleError } = require('./logic/validate.js');
 const {
   fileOverlap, conflictPart, conflict, blockerParts, blockers, childrenMap, successors, lockUpCount,
 } = require('./logic/conflicts.js');
@@ -226,6 +226,8 @@ module.exports = {
   WITHOUT_FEATURE,
   OLD_PICK_MS,
   validateNewField,
+  dependencyCycles,
+  cycleError,
   projectFor,
   projectPaused,
   blockersWithPause,
