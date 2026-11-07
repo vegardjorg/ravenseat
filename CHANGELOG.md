@@ -3,6 +3,13 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.28 (2026-11-07)
+
+**A lock nobody holds no longer stops your commands.**
+
+### Fixed
+- On Windows, a queue command could fail with "Could not get the lock" although nobody held the lock. When a command released the lock, Windows could refuse to remove the lock folder, and the empty folder made the others wait until they gave up. An empty lock folder is now taken after 2 seconds.
+
 ## 0.8.27 (2026-11-07)
 
 **Ravenseat now pauses at the subscription's usage limit instead of starting work that cannot finish, and each check cleans up its own temp folder.**
