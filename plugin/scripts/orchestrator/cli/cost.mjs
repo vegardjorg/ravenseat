@@ -121,6 +121,9 @@ export function cmdCapacity() {
       return k;
     });
     console.log(`Calibrated: usd_per_100 ${r.previous} → ${r.capacity.usd_per_100}.`);
+    // The plan's percentage counts everything on the plan, and only local work is in the cost here.
+    const recent = read().tasks.filter((o) => o.cloud?.started && now - Date.parse(o.cloud.started) < 7 * 86_400_000);
+    if (recent.length) console.log(`Note: ${recent.length} cloud session task(s) ran in the last 7 days. Their use is in the plan's percentage but not in the local cost, so this figure can come out too high.`);
   }
   if (val('--set') != null) {
     const v = Number(val('--set'));
@@ -184,6 +187,7 @@ export function cmdCost() {
     const queue = read();
     const since = sinceTime(val('--since'));
     const s = L.costStatistics(queue, { since });
+    if (s.cloudNotMeasured && !a.includes('--json')) console.log(`Not measured: ${s.cloudNotMeasured} task(s) ran in the cloud. Their use is not on this machine, so they are left out of the figures below.\n`);
     // The headline: USD per merged change (lib/costEstimate.js), all measured cost in the window / merged tasks. The
     // window is --since, otherwise the last WINDOW_DAYS days (the per-class lines below keep their all-time default).
     const from = since ? Date.parse(since) : Date.now() - CE.WINDOW_DAYS * 86_400_000;

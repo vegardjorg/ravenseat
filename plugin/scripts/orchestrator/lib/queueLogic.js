@@ -126,7 +126,7 @@ const {
 } = require('./logic/external.js');
 const {
   CLOUD_BY, CLOUD_MAX, cloudMax, cloudMarker, cloudBranches, isCloud, cloudReferences, cloudSuitable, CLOUD_BUNDLE_MAX, CLOUD_BUNDLE_MIN, cloudPackage,
-  cloudBundleCap, cloudBundlePackage, cloudBundles, cloudSessions, cloudStart, cloudDone, cloudCancel,
+  cloudBundleCap, cloudBundleMax, cloudBundlePackage, cloudBundles, cloudSessions, cloudStart, cloudDone, cloudCancel,
 } = require('./logic/cloud.js');
 const {
   agentTypeFor, AGENT_MODELS, modelFor, modelPart, reviewersFor, reviewersForTask, reviewerTypes, trackMessage,
@@ -358,6 +358,7 @@ module.exports = {
   CLOUD_BUNDLE_MAX,
   CLOUD_BUNDLE_MIN,
   cloudBundleCap,
+  cloudBundleMax,
   cloudBundlePackage,
   cloudBundles,
   cloudSessions,

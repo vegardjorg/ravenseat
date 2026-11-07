@@ -1356,6 +1356,23 @@ export async function cmdMerge() {
   if (baseSettled && BH.verdict(BH.readState(HEALTH_FILE), mergeCommit) === 'red') process.exit(BH.EXIT_RED_BASE);
 }
 
+/** A cloud track's branch on the remote: a session cannot delete it, and an old one would get in the way of a new attempt. cloud.deleteBranch false keeps it. */
+function deleteCloudBranch(branch) {
+  try {
+    const id = branch.slice((CONFIG.branchPrefix ?? 'queue/').length);
+    const remoteBranch = read().tasks.find((o) => o.id === id)?.cloud?.branch;
+    if (!remoteBranch || CONFIG.cloud?.deleteBranch === false) return;
+    const remote = CONFIG.remote ?? 'origin';
+    console.log(
+      git(['push', '-q', remote, '--delete', remoteBranch]) == null
+        ? `Cloud branch: ${remoteBranch} is still on ${remote}; git push ${remote} --delete ${remoteBranch}`
+        : `Cloud branch: ${remoteBranch} removed from ${remote}.`,
+    );
+  } catch (e) {
+    console.log(`Cloud branch: could not remove it, the merge stands: ${e?.message ?? e}`);
+  }
+}
+
 /**
  * Best effort after a whole merge; it never changes the merge's result. A resume never ran merge-track's worktree
  * cleanup, so it runs here. The queue's own branch goes with `git branch -d`, which refuses anything not merged; a
@@ -1378,6 +1395,7 @@ function tidyAfterMerge(branch, { resume, start }) {
   // Claude Code leaves a worktree-agent-* branch per agent; once merged with no worktree, nothing is on it that the base lacks.
   const gone = G.mergedAgentBranches(git, BASE).filter((b) => git(['branch', '-d', b]) != null);
   if (gone.length) console.log(`Agent branches: ${gone.length} merged one(s) deleted.`);
+  deleteCloudBranch(branch);
   if (!branch.startsWith(CONFIG.branchPrefix ?? 'queue/')) return;
   console.log(git(['branch', '-d', branch]) == null ? `Branch: ${branch} kept (git branch -d refused).` : `Branch: ${branch} deleted (merged).`);
 }

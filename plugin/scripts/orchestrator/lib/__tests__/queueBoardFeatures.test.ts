@@ -69,6 +69,11 @@ const stateFor = (version: string, statuses: string[], own: object = {}) => ({
     features: KK.features(KK.merge(KK.STANDARD, own)),
     // The board's own switches (queue-board.mjs: KK.boardSwitches(CONFIG, queue)); here only from the config.
     boardSwitches: KK.boardSwitches(KK.merge(KK.STANDARD, own), null),
+    cloudSettings: [
+      { key: 'maxSessions', label: 'Sessions at once', kind: 'number', value: 3, help: 'x' },
+      { key: 'collect', label: 'When a session has finished', kind: 'choice', choices: ['off', 'ask', 'auto'], value: 'ask', help: 'x' },
+      { key: 'deleteBranch', label: 'Remove the branch', kind: 'switch', value: true, help: 'x' },
+    ],
   },
 });
 
@@ -132,9 +137,54 @@ describe('the module switches on the board', () => {
     $('filter-button').click();
   });
 
-  it('hides the Cloud tab by default, even with features.cloud on (board.showCloud is off)', async () => {
-    await serve(stateFor('v1b', ['waiting'], { features: { cloud: true } }));
-    expect($('show-cloud').hidden).toBe(true);
+  it('the gear has one Cloud switch: off shows only it, on shows the settings, and a change goes through the command', async () => {
+    const posts: unknown[] = [];
+    const w = window as any;
+    const before = w.fetch;
+    w.fetch = async (file: string, init?: { body?: string }) => {
+      if (file === '/api/action') posts.push(JSON.parse(init?.body ?? '{}'));
+      if (file.startsWith('/api/settings'))
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ok: true,
+            field: [],
+            usageToday: 0,
+            night: { active: false },
+            setup: { rules: [], rulesSource: 'x' },
+            helpers: [],
+            autoAccept: { enabled: false, allowedClasses: ['K', 'U'], log: [] },
+          }),
+        };
+      return before(file, init);
+    };
+    await serve(stateFor('gear-off', ['waiting'], { features: { cloud: false } }));
+    $('settings').click();
+    await flush();
+    const main = document.getElementById('cloud-module') as HTMLInputElement;
+    expect(main.checked).toBe(false);
+    expect(document.getElementById('cloud-setting-maxSessions')).toBeNull();
+    expect(document.getElementById('board-show-cloud')).toBeNull();
+    // The list of read-only modules does not repeat it.
+    expect(document.querySelector('[aria-labelledby="setting-modules"]')?.textContent).not.toContain('features.cloud');
+
+    await serve(stateFor('gear-on', ['waiting'], { features: { cloud: true } }));
+    $('settings').click();
+    await flush();
+    const select = document.getElementById('cloud-setting-collect') as HTMLSelectElement;
+    expect(select.value).toBe('ask');
+    expect((document.getElementById('cloud-setting-maxSessions') as HTMLInputElement).value).toBe('3');
+    expect((document.getElementById('cloud-setting-deleteBranch') as HTMLInputElement).checked).toBe(true);
+    expect(document.querySelector('label[for="cloud-setting-collect"]')?.textContent).toBe('When a session has finished');
+    select.value = 'auto';
+    select.dispatchEvent(new Event('change'));
+    await flush();
+    expect(posts).toContainEqual({ type: 'cloud-setting', key: 'collect', value: 'auto' });
+    w.fetch = before;
+  });
+
+  it('hides the Cloud tab when board.showCloud is off, even with features.cloud on', async () => {
     await serve(stateFor('v1c', ['waiting'], { features: { cloud: true }, board: { showCloud: false } }));
     expect($('show-cloud').hidden).toBe(true);
   });

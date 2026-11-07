@@ -4,7 +4,8 @@
 // cloud* say which tasks suit a cloud session (and package them), from <remote>/<baseBranch> and the local changes.
 // cloud send fires a scheduled task (lib/cloudFire.js), only when the owner has set cloud.start to routine and only when someone
 // runs it. cloud check reads the pushed branches once; the pulse does the same at most every 5 minutes, so there is no loop here.
-// cloud setup and doctor share lib/cloudSetup.js.
+// cloud setup and doctor share lib/cloudSetup.js. cloud settings and cloud set read and write the cloud part of queue.config.json.
+// cloud collect brings finished sessions home: cloud done, a worktree, prepare-track and receive. Merge stays a step of its own.
 // external scans the base branch for changes made outside the queue (and accept/add/done for them).
 //
 // Why a module: queue.mjs was one file of about 6,300 lines. It is now a thin entry point (the usage comment and the
@@ -17,6 +18,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   a, BASE, branchFor, branchInfo, CLI, CONFIG, cut, die, edit, FOLDER, G, git, GIT_ROOT, gitRead, KK, L, missionFile, positional, PREFIX, read, REMOTE,
@@ -31,6 +33,7 @@ const CS = require('./lib/cloudSetup.js');
 const CHECK_EVERY_MS = 5 * 60 * 1000;
 /** A remote that does not answer must not hold up a pulse. */
 const REMOTE_TIMEOUT_MS = 15_000;
+const SCRIPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // ---- queue.mjs cloud: suitability with git --------------------------------------------------------------------
 /** <remote>/<baseBranch> and the paths changed locally since it (committed and not pushed, plus uncommitted). */
@@ -132,8 +135,17 @@ function cloudCheck(queue = read()) {
 
 /** The line for one task, with the next step. The stop reason comes from outside, so it stays quoted data. */
 function checkLine(t) {
-  if (t.state === 'done')
-    return `${t.id}: finished in the cloud (${t.branch} at ${t.sha.slice(0, 10)}). Next: ${CLI} cloud done ${t.id} --branch ${t.branch}`;
+  if (t.state === 'done') {
+    const byHand = `${CLI} cloud done ${t.id} --branch ${t.branch}`;
+    const mode = CS.cloudSettingsView(CONFIG.cloud).find((s) => s.key === 'collect').value;
+    const next =
+      mode === 'off'
+        ? `Next: ${byHand}`
+        : mode === 'auto'
+          ? `Run now (cloud.collect is auto): ${CLI} cloud collect ${t.id}. By hand: ${byHand}`
+          : `Next, once the owner says yes: ${CLI} cloud collect ${t.id}. By hand: ${byHand}`;
+    return `${t.id}: finished in the cloud (${t.branch} at ${t.sha.slice(0, 10)}). ${next}`;
+  }
   if (t.state === 'stop')
     return (
       `${t.id}: stopped in the cloud, reason given: "${t.reason ?? 'none'}" (${t.branch}). Next: ${CLI} cloud cancel ${t.id}, and ` +
@@ -147,7 +159,6 @@ function checkLine(t) {
 /** For the pulse: only what needs doing, at most every CHECK_EVERY_MS, and it never gets in the pulse's way. */
 export function cloudPulseLines(now = Date.now()) {
   try {
-    if (!KK.featureOn('cloud', CONFIG)) return [];
     const queue = read();
     if (!queue.tasks.some(L.isCloud)) return [];
     const file = path.join(FOLDER, 'cloud-check.json');
@@ -159,6 +170,8 @@ export function cloudPulseLines(now = Date.now()) {
     }
     if (now - last < CHECK_EVERY_MS) return [];
     fs.writeFileSync(file, `${JSON.stringify({ at: new Date(now).toISOString() })}\n`);
+    // Off hides the cloud, but work that is out there must not vanish with it.
+    if (!KK.featureOn('cloud', CONFIG)) return [`Cloud is off, but still out there: ${queue.tasks.filter(L.isCloud).map((o) => o.id).join(', ')}. ${CLI} cloud check, then cloud collect or cloud cancel.`];
     return cloudCheck(queue).tasks.filter((t) => t.state === 'done' || t.state === 'stop').map((t) => `Cloud: ${checkLine(t)}`);
   } catch {
     return [];
@@ -181,8 +194,16 @@ export function cloudSetupFacts() {
     tokenSet: Boolean(process.env[CF.TOKEN_ENV]),
     maxSessions: L.cloudMax(),
     paused: L.usageLimitGuard()?.summary ?? null,
+    setupScript: CS.suggestSetupScript(rootFiles()),
     ravenseat: CLI,
   };
+}
+function rootFiles() {
+  try {
+    return fs.readdirSync(GIT_ROOT);
+  } catch {
+    return [];
+  }
 }
 const fireUrlOk = (url) => CF.validFireUrl(url, { allowLoopback: process.env.QUEUE_CLOUD_ALLOW_LOOPBACK === '1' });
 
@@ -210,7 +231,8 @@ function cloudSetup() {
     [
       '',
       `To use it: ${CLI} cloud shows what suits the cloud. ${CLI} cloud-start <id> opens a session in your terminal, and from there it runs on its own.`,
-      `${CLI} cloud check says when it has finished (the pulse asks too). Then ${CLI} cloud done <id>, ${CLI} receive <id> and ${CLI} merge <id>, as for a local track: the gates run here.`,
+      `${CLI} cloud check says when it has finished (the pulse asks too). Then ${CLI} cloud collect <id> fetches it and runs the gates here, and ${CLI} merge <id> merges it, as for a local track.`,
+      `What you can set: ${CLI} cloud settings.`,
       '',
       'To start without a terminal (optional, a scheduled task with an API trigger):',
       ...CS.routineSteps(CLI).map((l) => `  ${l}`),
@@ -218,8 +240,8 @@ function cloudSetup() {
   );
 }
 
-/** `cloud on|off`: features.cloud in the project's queue.config.json, everything else left as it is. */
-function cloudSwitch(on) {
+/** Changes the project's queue.config.json, everything else left as it is. */
+function changeOwnConfig(change) {
   const file = KK.configFile();
   let text = null;
   try {
@@ -235,12 +257,100 @@ function cloudSwitch(on) {
       die(`${file} does not parse (${e.message}). Nothing changed.`);
     }
   }
-  const next = `${JSON.stringify({ ...own, features: { ...(own.features ?? {}), cloud: on } }, null, 2)}\n`;
+  const next = `${JSON.stringify(change(own), null, 2)}\n`;
   fs.writeFileSync(file, text?.includes('\r\n') ? next.replace(/\n/g, '\r\n') : next);
+  return file;
+}
+
+/** `cloud on|off`: the one switch for all of the cloud part. Off keeps the settings, so on again gives the same setup. */
+function cloudSwitch(on) {
+  const file = changeOwnConfig((own) => ({ ...own, features: { ...(own.features ?? {}), cloud: on } }));
+  const tabHidden = KK.boardSwitches(CONFIG, read()).showCloud === false;
   console.log(
     `Cloud is ${on ? 'on' : 'off'} (features.cloud in ${file}).` +
-      (on ? ` What it needs: ${CLI} cloud setup. The Cloud tab on the board: ${CLI} board-setting cloud on.` : ''),
+      (on
+        ? ` What it needs: ${CLI} cloud setup. What you can set: ${CLI} cloud settings.${tabHidden ? ` The Cloud tab stays hidden, as you set it: ${CLI} board-setting cloud on.` : ''}`
+        : ' The tab, the pulse lines and the offer are gone. Your settings are kept.'),
   );
+  const out = read().tasks.filter(L.isCloud);
+  if (!on && out.length)
+    console.log(`Still out there: ${out.map((o) => o.id).join(', ')}. They keep running. ${CLI} cloud check, then cloud collect or cloud cancel, work while it is off.`);
+}
+
+/** `cloud settings`: everything that can be set, with its value. Reads the file, so it is right just after a change. */
+function cloudSettings() {
+  const fresh = KK.config({ fresh: true });
+  const on = KK.featureOn('cloud', fresh);
+  const rows = CS.cloudSettingsView(fresh.cloud);
+  if (a.includes('--json')) return console.log(JSON.stringify({ on, settings: rows.map(({ key, value }) => ({ key, value })) }));
+  console.log(`Cloud is ${on ? 'on' : 'off'}. ${on ? `Hide all of it: ${CLI} cloud off.` : `Turn it on: ${CLI} cloud on.`}\n`);
+  for (const r of rows) console.log(`${r.key.padEnd(13)} ${String(r.value).padEnd(9)} ${r.help}`);
+  console.log(`\nChange one: ${CLI} cloud set <setting> <value>, or the gear on the board. The Cloud tab alone: ${CLI} board-setting cloud on|off.`);
+}
+
+/** `cloud set <setting> <value>`. */
+function cloudSet(key, text) {
+  const r = CS.parseCloudSetting(key, text);
+  if (r.error) die(`${r.error}. Nothing changed.`);
+  const file = changeOwnConfig((own) => ({ ...own, cloud: { ...(own.cloud ?? {}), [key]: r.value } }));
+  console.log(`cloud.${key} is ${r.value} (${file}).`);
+}
+
+// ---- cloud collect: bring finished sessions home ----------------------------------------------------------------------
+/** The folder a branch is checked out in, or null. */
+function worktreeOf(branch) {
+  let path_ = null;
+  for (const line of String(gitRead(['worktree', 'list', '--porcelain']) ?? '').split(/\r?\n/)) {
+    if (line.startsWith('worktree ')) path_ = line.slice('worktree '.length);
+    if (line === `branch refs/heads/${branch}`) return path_;
+  }
+  return null;
+}
+
+/** One finished session: cloud done, a worktree, prepare-track, receive. Returns the exit code of the step that stopped it. */
+function collectOne(t) {
+  const node = (cwd, script, ...args) => spawnSync(process.execPath, [path.join(SCRIPTS, script), ...args], { cwd, stdio: 'inherit' }).status ?? 1;
+  const QUEUE = 'queue.mjs';
+  const done = node(GIT_ROOT, QUEUE, 'cloud', 'done', t.id, '--branch', t.branch, '--sha', t.sha, '--quiet-steps');
+  if (done !== 0) return done;
+  const local = branchFor(t.id);
+  let folder = worktreeOf(local);
+  if (!folder) {
+    folder = path.join(GIT_ROOT, '.claude', 'worktrees', `cloud-${t.id}`);
+    if (git(['worktree', 'add', '-q', folder, local]) == null) {
+      console.error(`${t.id}: could not make a worktree for ${local} in ${folder}. The task is in review; do the rest by hand: ${CLI} prepare-track, ${CLI} receive.`);
+      return 1;
+    }
+  }
+  const scratch = path.join(FOLDER, 'collect', t.id);
+  fs.mkdirSync(scratch, { recursive: true });
+  const prepared = node(folder, 'prepare-track.mjs', t.id, '--branch', local, '--continue', '--scratchpad', scratch);
+  if (prepared !== 0) return prepared;
+  return node(folder, QUEUE, 'receive', t.id, '--scratchpad', scratch);
+}
+
+/** `cloud collect [<id> ...] [--dry-run]`: one at a time, so the machine runs one set of gates. A red one does not stop the next. */
+function cloudCollect(ids) {
+  const r = cloudCheck();
+  if (!r.reachable) die(`Could not read ${REMOTE}, so nothing is known about the cloud tracks. Their tasks are unchanged.`);
+  const finished = r.tasks.filter((t) => t.state === 'done' && (!ids.length || ids.includes(t.id)));
+  for (const id of ids) if (!finished.some((t) => t.id === id)) {
+    const t = r.tasks.find((x) => x.id === id);
+    console.log(t ? checkLine(t) : `${id}: not in a cloud session.`);
+  }
+  if (!finished.length) return console.log('Nothing finished in the cloud to collect.');
+  if (a.includes('--dry-run')) {
+    console.log(`Would collect ${finished.map((t) => t.id).join(', ')}: fetch the branch, make a worktree, run the quick gates here.`);
+    return;
+  }
+  const red = [];
+  for (const t of finished) {
+    console.log(`\n--- ${t.id} ---`);
+    if (collectOne(t) !== 0) red.push(t.id);
+  }
+  const green = finished.map((t) => t.id).filter((id) => !red.includes(id));
+  console.log(`\nCollected: ${green.length ? `${green.join(', ')} (next: what receive said above, then ${CLI} merge <id>)` : 'none'}.${red.length ? ` Stopped: ${red.join(', ')} (see above).` : ''}`);
+  if (red.length) process.exitCode = 1;
 }
 
 // ---- cloud send: a session without a terminal ---------------------------------------------------------------------
@@ -551,7 +661,7 @@ export function cmdCloudPackage() {
 /** `ravenseat cloud-bundles` (the usage is at the top of queue.mjs). */
 export function cmdCloudBundles() {
   // Proposals for bundles of cloud-suitable tasks (the same project/feature one after the other), by priority.
-  const max = Number(val('--max') ?? L.CLOUD_BUNDLE_MAX);
+  const max = Number(val('--max') ?? L.cloudBundleMax());
   const maxMin = Number(val('--max-min') ?? L.CLOUD_BUNDLE_MIN);
   if (!(max >= 1) || !(maxMin > 0)) die('--max and --max-min must be numbers above 0');
   const queue = read();
@@ -608,6 +718,12 @@ export function cmdCloud() {
   const force = a.includes('--force');
   if (under === 'setup') return cloudSetup();
   if (under === 'on' || under === 'off') return cloudSwitch(under === 'on');
+  if (under === 'settings') return cloudSettings();
+  if (under === 'set') {
+    if (!id || !more.length) die('cloud set <setting> <value>. See cloud settings.');
+    return cloudSet(id, more[0]);
+  }
+  if (under === 'collect') return cloudCollect(id ? [id, ...more] : []);
   if (under === 'send')
     return void cloudSend(id ? [id, ...more] : []).catch((e) => die(`cloud send failed: ${e?.message ?? e}`));
   if (under === 'check') {
@@ -749,6 +865,7 @@ export function cmdCloud() {
       'cloud-done',
       `${count} commit(s) on ${branch}, ${minutes(r.task.cloud.started, r.task.cloud.done)} min in the cloud`,
     );
+    if (a.includes('--quiet-steps')) return void console.log(`${id}: completed in the cloud, review. ${count} commit(s) on ${REMOTE}/${branch}.`);
     console.log(
       [
         `${id}: completed in the cloud, review. ${count} commit(s) on ${REMOTE}/${branch} (tip ${String(tips).slice(0, 10)}).`,
@@ -756,7 +873,9 @@ export function cmdCloud() {
         `  1. git worktree add <folder> ${local}, then in <folder>: ${CLI} prepare-track ${id} --branch ${local} --continue   (the gates need a checkout with the shared links)`,
         `  2. ${CLI} receive ${id} --scratchpad <folder>   (runs the quick gates on the tip, and makes the review package)`,
         `  3. ${CLI} merge ${id}`,
-        `  4. git push ${REMOTE} --delete ${branch}   (a session cannot delete branches, and an old branch would get in the way of a new attempt)`,
+        CONFIG.cloud?.deleteBranch === false
+          ? `  4. git push ${REMOTE} --delete ${branch}   (cloud.deleteBranch is off; a session cannot delete branches, and an old one would get in the way of a new attempt)`
+          : `  The merge removes ${branch} from ${REMOTE} too (cloud.deleteBranch); a session cannot delete branches, and an old one would get in the way of a new attempt.`,
       ].join('\n'),
     );
   } else if (under === 'cancel') {
@@ -772,6 +891,6 @@ export function cmdCloud() {
     console.log(`${id}: the cloud session is aborted, the task is waiting again.`);
     if (r.warning) console.log(`WARNING: ${r.warning}`);
   } else {
-    die('cloud [setup | on | off | start <id> [--run ...] | send <id> | check | done <id> [--branch ...] [--sha ...] | cancel <id>]');
+    die('cloud [setup | settings | set <setting> <value> | on | off | start <id> [--run ...] | send <id> | check | collect [<id> ...] [--dry-run] | done <id> [--branch ...] [--sha ...] | cancel <id>]');
   }
 }

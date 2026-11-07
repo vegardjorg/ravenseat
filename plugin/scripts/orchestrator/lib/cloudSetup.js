@@ -36,10 +36,55 @@ function claudeCommand(env = process.env) {
 
 const row = (status, name, message, fix = null) => ({ status, name, message, fix });
 
+/** What can be set for the cloud. `cloud settings`, `cloud set` and the board's panel all read this. No upper limits: that is the machine's and the plan's business. */
+const CLOUD_SETTINGS = Object.freeze([
+  { key: 'maxSessions', label: 'Sessions at once', kind: 'number', fallback: 3, help: 'Sessions at once. They all count against your plan\'s usage limits.' },
+  { key: 'offerOnLeave', label: 'Offer sessions when I leave', kind: 'switch', fallback: true, help: 'The orchestrator offers cloud-go once when you say you are leaving.' },
+  { key: 'collect', label: 'When a session has finished', kind: 'choice', choices: ['off', 'ask', 'auto'], fallback: 'ask', help: 'When a session has finished: off = you run the steps, ask = the orchestrator asks, auto = it fetches and runs the local gates without asking.' },
+  { key: 'deleteBranch', label: 'Remove the branch after the merge', kind: 'switch', fallback: true, help: 'Remove the session\'s branch from the remote after the merge.' },
+  { key: 'bundleMax', label: 'Tasks per session', kind: 'number', fallback: 4, help: 'Tasks in one session, one after another.' },
+  { key: 'start', label: 'How a session starts', inGear: false, kind: 'choice', choices: ['terminal', 'routine'], fallback: 'terminal', help: 'How a session starts: terminal = cloud-start in your terminal, routine = a scheduled task (see cloud setup).' },
+]);
+
+/** The settings with their values. Something invalid in the file shows as the default, which is also what the code then uses. */
+function cloudSettingsView(own = {}) {
+  return CLOUD_SETTINGS.map((s) => {
+    const parsed = own?.[s.key] === undefined ? { error: 'not set' } : parseCloudSetting(s.key, String(own[s.key]));
+    return { ...s, value: parsed.error ? s.fallback : parsed.value };
+  });
+}
+
+/** Text from a command or the board to a value for queue.config.json, or { error }. */
+function parseCloudSetting(key, text) {
+  const s = CLOUD_SETTINGS.find((x) => x.key === key);
+  if (!s) return { error: `unknown setting "${key}"; these exist: ${CLOUD_SETTINGS.map((x) => x.key).join(', ')}` };
+  const v = String(text ?? '').trim();
+  if (s.kind === 'number') return /^[1-9]\d*$/.test(v) ? { value: Number(v) } : { error: `${key} must be a whole number above 0` };
+  if (s.kind === 'switch') {
+    if (['on', 'true'].includes(v)) return { value: true };
+    if (['off', 'false'].includes(v)) return { value: false };
+    return { error: `${key} must be on or off` };
+  }
+  return s.choices.includes(v) ? { value: v } : { error: `${key} must be one of: ${s.choices.join(', ')}` };
+}
+
+/** A line for the cloud environment's setup script, from the files in the project root, or null when nothing shows what to install. */
+function suggestSetupScript(files = []) {
+  const has = (f) => files.includes(f);
+  if (has('pnpm-lock.yaml')) return 'pnpm install --frozen-lockfile';
+  if (has('yarn.lock')) return 'yarn install --frozen-lockfile';
+  if (has('bun.lockb') || has('bun.lock')) return 'bun install --frozen-lockfile';
+  if (has('package-lock.json')) return 'npm ci';
+  if (has('poetry.lock')) return 'poetry install';
+  if (has('uv.lock')) return 'uv sync --frozen';
+  if (has('requirements.txt')) return 'pip install -r requirements.txt';
+  return null;
+}
+
 /**
  * @param {{ remote: string, base: string, remoteUrl: string|null, pushed: boolean, unpushed: number,
  *   start: string, fireUrlValid: boolean, tokenSet: boolean, maxSessions: number, paused: string|null,
- *   auth?: string|null, ravenseat: string }} f `auth` is left out when it was not read (doctor stays offline), null
+ *   setupScript?: string|null, auth?: string|null, ravenseat: string }} f `auth` is left out when it was not read (doctor stays offline), null
  *   when reading it failed. `paused` is the usage limit pause in words.
  * @returns {{ status: 'OK'|'WARN'|'INFO', name: string, message: string, fix: string|null }[]}
  */
@@ -91,10 +136,19 @@ function cloudSetupRows(f) {
     row(
       'INFO',
       'branches',
-      `A session is told never to push to ${f.base}, but the GitHub proxy does not stop it: it limits tags and deletions, not which branch a push updates. Only a rule on GitHub can stop it, and that cannot be checked from here.`,
+      `A session is told never to push to ${f.base}, but the GitHub proxy does not stop it: it limits tags and deletions, not which branch a push updates. Only a rule on GitHub can stop it, and that cannot be checked from here. On a public repo the branch and its work are visible as soon as the session pushes, before any gate has run.`,
       `optional: protect ${f.base} on GitHub (Settings > Rules > Rulesets, or Branches). Your own pushes must still be allowed.`,
     ),
   );
+  if (f.setupScript)
+    rows.push(
+      row(
+        'INFO',
+        'setup',
+        `A session starts without your dependencies. This project looks like it needs: ${f.setupScript}`,
+        'optional: put it in the cloud environment\'s setup script on claude.ai/code. It runs before the session and must exit with zero.',
+      ),
+    );
   if (f.start === 'routine') {
     const missing = [
       ...(f.fireUrlValid ? [] : ['cloud.fireUrl (the trigger\'s URL, https://api.anthropic.com/v1/claude_code/routines/trig_.../fire)']),
@@ -137,4 +191,4 @@ function routineSteps(ravenseat = 'ravenseat') {
   ];
 }
 
-module.exports = { claudeCommand, isGitHubRemote, cloudSetupRows, routineSteps, ROUTINE_PROMPT };
+module.exports = { claudeCommand, CLOUD_SETTINGS, cloudSettingsView, isGitHubRemote, cloudSetupRows, parseCloudSetting, routineSteps, ROUTINE_PROMPT, suggestSetupScript };

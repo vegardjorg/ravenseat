@@ -8,7 +8,7 @@
 // the same checks hold: the base branch pushed, cloud.maxSessions, the usage limit pause, no silent upload.
 //
 //   <sessions>     how many sessions to start. Default and upper limit: what cloud.maxSessions has free.
-//   --single       one task per session, so they run side by side. Default: up to 4 related tasks in one session, one after another.
+//   --single       one task per session, so they run side by side. Default: up to cloud.bundleMax (4) related tasks in one session, one after another.
 //   --dry-run      only lists what would start.
 //   --offer        for the orchestrator when the owner says they are leaving: like --dry-run, but prints nothing at all when there is
 //                  nothing to offer (cloud off, cloud.offerOnLeave false, no task that fits, no free session), so silence means say nothing.
@@ -72,6 +72,20 @@ const wanted = asked === undefined ? free : Number(asked);
 const chosen = plan.bundles.slice(0, Math.min(wanted, free));
 if (wanted > free) console.log(`You asked for ${wanted}, but cloud.maxSessions leaves room for ${free}.`);
 
+// What would stop the first start, said now and not after the owner has walked away.
+const pushed = spawnSync('git', ['rev-list', '--count', `${K.remote}/${K.baseBranch}..${K.baseBranch}`], { cwd: process.env.QUEUE_GIT ?? K.root, encoding: 'utf8' });
+const unpushed = pushed.status === 0 ? Number(pushed.stdout.trim()) : null;
+const baseProblem =
+  unpushed === null
+    ? `${K.remote}/${K.baseBranch} was not found, and a session starts from it. Push the base branch first.`
+    : unpushed > 0
+      ? `${K.baseBranch} has ${unpushed} commit(s) not on ${K.remote}, which the sessions would not see. Push first, or use --force.`
+      : null;
+if (baseProblem) console.log(`Note: ${baseProblem}`);
+if (baseProblem && !has('--force') && !has('--dry-run') && !offer) {
+  console.log('Nothing started.');
+  process.exit(1);
+}
 console.log(`${has('--dry-run') || offer ? 'Would start' : 'Starting'} ${chosen.length} cloud session(s). They count against your plan's usage limits.`);
 chosen.forEach((b, i) => {
   console.log(`  ${i + 1}. about ${b.minutes} min`);
@@ -81,6 +95,8 @@ if (has('--dry-run') || offer) process.exit(0);
 
 const routine = K.cloud?.start === 'routine';
 const passOn = [...(has('--force') ? ['--force'] : []), ...(has('--allow-upload') && !routine ? ['--allow-upload'] : [])];
+// Seen in practice: the first start in a folder stops on a question from claude, and nothing runs until it is answered.
+if (!routine) console.log('\nStay until this says the sessions have started. The first time in a folder, claude asks whether you trust it: answer in this terminal.');
 let started = 0;
 for (const b of chosen) {
   console.log(`\n--- ${b.ids.join(', ')} ---`);
@@ -95,5 +111,5 @@ for (const b of chosen) {
 }
 console.log(
   `\n${started} session(s) started. They go on without this machine, so you can close it. ` +
-    `When you are back: ${CLI} cloud check says what has finished, and the orchestrator receives and merges it here.`,
+    `When you are back: ${CLI} cloud check says what has finished, and ${CLI} cloud collect brings it home.`,
 );

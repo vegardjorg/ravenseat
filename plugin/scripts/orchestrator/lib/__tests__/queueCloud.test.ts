@@ -498,7 +498,7 @@ describe('queue.mjs cloud-package and cloud start/done/cancel (copy of the queue
     expect(f.code).toBe(0);
     expect(f.out).toContain('ravenseat receive A');
     expect(f.out).toContain('ravenseat merge A');
-    expect(f.out).toContain('git push origin --delete claude/jolly-x');
+    expect(f.out).toContain('The merge removes claude/jolly-x from origin');
     expect(find('A').status).toBe('review');
     expect(find('A').cloud).toMatchObject({ branch: 'claude/jolly-x', sha: sha.slice(0, 10) });
     // Local queue/A is on the cloud's commit, so merge-track and "Merge branch 'queue/A'" work as for a local track.

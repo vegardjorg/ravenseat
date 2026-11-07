@@ -407,6 +407,8 @@
 //   node scripts/orchestrator/queue.mjs cloud setup                      (what cloud tracks need, what is in place, the next step; changes nothing)
 //   node scripts/orchestrator/queue.mjs cloud on|off                     (features.cloud in queue.config.json)
 //   node scripts/orchestrator/cloud-start.mjs <id> [<id> ...] [--force] [--allow-upload]   (in a terminal: claude --cloud with the package)
+//   ravenseat cloud settings | cloud set <setting> <value>   (all the cloud settings; cloud on|off hides or shows all of it)
+//   ravenseat cloud collect [<id> ...] [--dry-run]   (finished sessions home: cloud done, worktree, prepare-track, receive; then merge)
 //   node scripts/orchestrator/cloud-go.mjs [<sessions>] [--single] [--dry-run] [--force] [--allow-upload]   (several sessions in one go, by priority)
 //   node scripts/orchestrator/queue.mjs cloud send <id> [<id> ...] [--force]   (without a terminal, only with cloud.start routine: fires the
 //                                                                  scheduled task once, never retries; lib/cloudFire.js)
@@ -675,7 +677,8 @@ import * as wait from './cli/wait.mjs';
 // is never switched off here: skills use it, only the board hides Plans.
 const MODULE_COMMANDS = { cloud: 'cloud', 'cloud-package': 'cloud', 'cloud-bundles': 'cloud', follow: 'follow' };
 // `cloud setup` and `cloud on` are how a project that has it off finds out what it needs and turns it on.
-const CLOUD_WHILE_OFF = command === 'cloud' && ['setup', 'on', 'off'].includes(process.argv[3]);
+// Work that is still out there can be brought home with it off too (cloud.mjs says so at cloud off and in the pulse).
+const CLOUD_WHILE_OFF = command === 'cloud' && ['setup', 'settings', 'set', 'on', 'off', 'check', 'collect', 'done', 'cancel'].includes(process.argv[3]);
 if (MODULE_COMMANDS[command] && !CLOUD_WHILE_OFF && !KK.featureOn(MODULE_COMMANDS[command], CONFIG)) {
   console.log(KK.featureOffText(MODULE_COMMANDS[command]));
   process.exit(0);

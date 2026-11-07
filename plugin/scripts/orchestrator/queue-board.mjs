@@ -104,6 +104,7 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 
 const require = createRequire(import.meta.url);
+const CS = require('./lib/cloudSetup.js');
 const T = require('./lib/queueBoard.js');
 const G = require('./lib/queueGit.js');
 const L = require('./lib/queueLogic.js');
@@ -557,6 +558,7 @@ async function checksReportNow(fresh) {
 // git status is read again every minute, so the state (age, night pause, "Next up") is recomputed at least that often.
 let quick = null;
 function state() {
+  const fresh = KK.config({ fresh: true }); // the gear changes it through the CLI, so the file is what counts
   const mtime = fs.statSync(FILE).mtimeMs;
   const g = uncommitted();
   const logo = findLogo() != null;
@@ -646,7 +648,11 @@ function state() {
     // Does the Checks tab show (`ravenseat checks on|off`)?
     checksPanel,
     // The module switches (lib/queueConfig.js features): the board hides the tabs, buttons and rows of those that are off.
-    features: FEATURES,
+    // The cloud switch is read fresh, so the gear can turn it on without a restart. The other modules are read at start.
+    features: { ...FEATURES, cloud: KK.featureOn('cloud', fresh) },
+    cloudSettings: CS.cloudSettingsView(fresh.cloud)
+      .filter((s) => s.inGear !== false)
+      .map(({ key, label, kind, choices, value, help }) => ({ key, label, kind, choices, value, help })),
     // The board's own switches (lib/queueConfig.js boardSwitches; queue.json board wins): showCloud = the Cloud tab.
     boardSwitches: KK.boardSwitches(CONFIG, queue),
     // The forecast box in the Focus view (lib/queueForecast.js, a fixed seed so the version stays stable).
@@ -2038,6 +2044,17 @@ async function write(filePath, b) {
       );
     }
     // The gear's Board section: the same `ravenseat board-setting cloud on|off` Claude Code runs (queue.json board.showCloud).
+    // The gear's Cloud section: the same commands Claude Code runs. cloud set checks the value.
+    if (type === 'cloud-switch') {
+      if (typeof b.on !== 'boolean') return no('invalid cloud switch');
+      return run(['cloud', b.on ? 'on' : 'off'], `cloud ${b.on ? 'on' : 'off'}`);
+    }
+    if (type === 'cloud-setting') {
+      const key = cleanText(b.key, 40);
+      const value = cleanText(String(b.value ?? ''), 40);
+      if (!key || !value) return no('invalid cloud setting');
+      return run(['cloud', 'set', key, value], `cloud set ${key} ${value}`);
+    }
     if (type === 'board-switch') {
       if (b.name !== 'showCloud' || typeof b.on !== 'boolean') return no('invalid board switch');
       return run(['board-setting', 'cloud', b.on ? 'on' : 'off'], `board-setting cloud ${b.on ? 'on' : 'off'}`);

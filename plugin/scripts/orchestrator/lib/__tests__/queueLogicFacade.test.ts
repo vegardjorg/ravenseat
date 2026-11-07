@@ -30,7 +30,7 @@ const EXPORTS = [
   'batchFindings', 'batchGroups', 'batchId', 'batchMissionText', 'batchPack', 'batchSuggestion', 'batchedError',
   'blockInterval', 'blockerLines', 'blockerParts', 'blockerSummary', 'blockers', 'blockersWithPause', 'blocksInText',
   'bonusBlock', 'branchPrefix', 'budgetGuard', 'bulkDiff', 'childrenMap', 'choiceLines', 'choicesError', 'classifyCommit', 'classifyQueue',
-  'cleanFocus', 'cloneJson', 'closeBlock', 'cloudBranches', 'cloudBundleCap', 'cloudBundlePackage', 'cloudBundles', 'cloudCancel',
+  'cleanFocus', 'cloneJson', 'closeBlock', 'cloudBranches', 'cloudBundleCap', 'cloudBundleMax', 'cloudBundlePackage', 'cloudBundles', 'cloudCancel',
   'cloudDone', 'cloudMarker', 'cloudMax', 'cloudPackage', 'cloudReferences', 'cloudSessions', 'cloudStart', 'cloudSuitable', 'collisionText',
   'compareRanking', 'concurrentBlock', 'conflict', 'conflictPart', 'consistency', 'continue', 'costLabel',
   'costStatistics', 'counterAsAgent', 'dbObjectsFromDiff', 'deliver', 'deliveryBase', 'deliveryLines',

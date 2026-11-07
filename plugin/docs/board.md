@@ -183,9 +183,11 @@ hides what is off:
 The gear's **General** tab has a read-only **Modules** section: each module, On or Off, and the key to set. There
 is no switch in the browser; change the file and restart the board.
 
-The **Cloud** tab also needs `board.showCloud`, which is off by default: turn it on in the gear (**Board**, "Show the
-Cloud tab") or with `ravenseat board-setting cloud on` (both write `board.showCloud` in queue.json, which wins over
-queue.config.json). A saved Cloud view still opens while the tab is hidden, with a note where to turn it on.
+The cloud is the exception, because the board has its own section for it. The gear's **Cloud** section has one switch for all
+of it (the same as `ravenseat cloud on|off`) and needs no restart. Off, nothing about the cloud shows. On, the section also
+has the Cloud tab's own switch (`board.showCloud`, on by default; `ravenseat board-setting cloud on|off`, which writes
+queue.json and wins over queue.config.json) and the settings from `ravenseat cloud settings`. A saved Cloud view still opens
+while the tab is hidden, with a note where to turn it on.
 
 ## Update banner
 

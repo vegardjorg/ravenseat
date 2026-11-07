@@ -163,7 +163,14 @@ uses to close QA entries that are green.
 Tracks can also run in Claude Code's cloud sessions on claude.ai instead of on your machine, on a normal subscription
 (Pro, Max, Ultra or Team; Enterprise with premium seats). A session counts against your plan's usage limits like the rest
 of your use, and there is no separate charge for the machine it runs on. Cloud is off by default: `ravenseat cloud on`
-turns it on, and `ravenseat cloud setup` lists what it needs, what is in place and the next step.
+turns it on, tab included, and `ravenseat cloud setup` lists what it needs, what is in place and the next step. `cloud off`
+hides all of it again and keeps your settings. Tasks still out there keep running, and the pulse names them until you have
+collected or cancelled them.
+
+`ravenseat cloud settings` shows what can be set: sessions at once, the offer when you leave, what happens when a session has
+finished, whether the branch is removed after the merge, and tasks per session. Change one with `ravenseat cloud set <setting>
+<value>`, or in the board's gear, under **Cloud**. There is no upper limit on the numbers: sessions cost your plan, so that is
+your call.
 
 What it needs: a GitHub remote with your base branch pushed, a claude.ai login, and the
 [Claude GitHub App](https://github.com/apps/claude) on the repo. The app matters: without it `claude --cloud` uploads a
@@ -185,7 +192,9 @@ repo matters, protect that branch on GitHub (Settings > Rules > Rulesets, or Bra
   never retries: every accepted call makes a new session on your plan. The endpoint is marked experimental.
 - **Several at once, when you are leaving:** `ravenseat cloud-go 3` starts three sessions on the highest priority tasks that
   fit, and `--dry-run` shows which first. Related tasks share a session, one after another; `--single` gives each task its
-  own, so they run side by side. Run it in a terminal and wait for it to finish, then close the machine. Tell the
+  own, so they run side by side. It says first if your base branch is not pushed. Run it in a terminal and stay until it says
+  the sessions have started: the first time in a folder, claude asks whether you trust it, and nothing runs until you answer.
+  Then close the machine. Tell the
   orchestrator you are logging off and it offers this once; `"cloud": { "offerOnLeave": false }` in `queue.config.json`
   turns the offer off, and the command still works.
 - **Limits:** at most `cloud.maxSessions` sessions at once (default 3; a bundle counts as one). Nothing documents a hard
@@ -195,9 +204,16 @@ repo matters, protect that branch on GitHub (Settings > Rules > Rulesets, or Bra
   `ravenseat cloud check` reads that from the branch, in one read of the remote, and the pulse does it at most every 5
   minutes. There is no way to ask the CLI for a list of cloud sessions, and a session that waits for an answer shows up as
   "no finish marker yet": look at it on [claude.ai/code](https://claude.ai/code).
-- **Back home:** `ravenseat cloud done <id>` fetches the branch, then `ravenseat receive <id>` and `ravenseat merge <id>`
-  work as for any other track. The gates run on your machine and that run is the evidence, whatever the session says it ran.
+- **Back home:** `ravenseat cloud collect` takes what has finished, one at a time: it fetches the branch, makes a worktree and
+  runs the quick gates on your machine. That run is the evidence, whatever the session says it ran. Then `ravenseat merge <id>`
+  as for any other track, which also removes the branch from GitHub (`cloud.deleteBranch`). The `cloud.collect` setting says
+  what the orchestrator does when a session has finished: `ask` (the default) asks you first, `auto` runs it without asking,
+  and `off` leaves it to you, with `cloud done`, `receive` and `merge` as separate steps. No setting merges for you.
+- **Costs:** a session's use is on your plan, not on this machine, so `ravenseat cost` leaves cloud tracks out of its figures
+  and says how many there were. See them on your plan's usage page.
 - **Push first:** a cloud session starts from your base branch on GitHub, so it only sees what is pushed.
+- **Dependencies:** a session starts without them. `ravenseat cloud setup` suggests a line from your lockfile for the cloud
+  environment's setup script on claude.ai/code. It must exit with zero, or the session does not start.
 - **What a session does not have:** the Ravenseat plugin, your user settings and a database. Hooks in the repo's own
   `.claude/settings.json` do load. The GitHub proxy rejects tags, branch deletions, `gh pr` and `gh issue`. The package is
   written with that in mind. Choose the session's environment with `/remote-env` in Claude Code.

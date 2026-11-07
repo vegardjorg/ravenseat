@@ -205,13 +205,14 @@ Tasks of class K/U without migrations, DB ownership, open dependencies or owner 
 (`ravenseat cloud`, `cloud setup`, `cloud-package`, `cloud start|done|cancel`, `cloud-start.mjs`). The cloud only sees what is pushed, so the
 base branch must be pushed first. At most `cloud.maxSessions` at once, and none during a usage limit pause: a session counts against the
 plan's usage limits. Never run `cloud send` unless the owner has asked for that start: it starts a session on their plan. `cloud check` (also
-in the pulse) reads the finish marker on the branch. After `cloud done`, run `receive` and `merge` as for a local track, so the gates and the
-evidence are local.
+in the pulse) reads the finish marker on the branch, and its line says what comes next, by `cloud.collect`. With `ask`, ask the owner once, then
+run `cloud collect`. With `auto`, run it. With `off`, leave it to them. `cloud collect` fetches, makes the worktree and runs `receive`, so the
+gates and the evidence are local. Then review and `merge` as for a local track; no setting skips that.
 
 **When the owner says they are leaving** (logging off, moving, done for the day): run `ravenseat cloud-go --offer`. No output means say nothing
 about the cloud (it is off, the owner turned the offer off with `cloud.offerOnLeave`, or nothing fits). Otherwise offer once: show what would start,
 that it counts against the plan's limits, and whether the base branch is pushed. Only on their yes: `ravenseat cloud-go [<sessions>]`, which needs a real terminal, so run it in one or give them the command. When they
-are back, `cloud check` and then receive and merge. Never start it because they went quiet.
+are back, `cloud check`, then `cloud collect` as above. Never start it because they went quiet.
 
 ## Known pitfalls
 

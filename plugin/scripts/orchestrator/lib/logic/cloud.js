@@ -43,6 +43,12 @@ function cloudMax() {
   return Number.isInteger(n) && n > 0 ? n : CLOUD_MAX;
 }
 
+/** Tasks in one session: cloud.bundleMax, otherwise the default. */
+function cloudBundleMax() {
+  const n = cfg().cloud?.bundleMax;
+  return Number.isInteger(n) && n > 0 ? n : CLOUD_BUNDLE_MAX;
+}
+
 /** Is the task in a cloud session now? (picked by "cloud", with the cloud field set by `cloud start`) */
 function isCloud(o) {
   return o?.status === 'picked' && o.picked_by === CLOUD_BY && !!o.cloud;
@@ -305,7 +311,7 @@ function cloudPackage(o, queue, { text, ownPath = null } = {}) {
  * @param {object[]} tasks
  * @returns {string[]} the reasons (empty = within the cap)
  */
-function cloudBundleCap(tasks, { max = CLOUD_BUNDLE_MAX, maxMin = CLOUD_BUNDLE_MIN } = {}) {
+function cloudBundleCap(tasks, { max = cloudBundleMax(), maxMin = CLOUD_BUNDLE_MIN } = {}) {
   const reasons = [];
   const ids = tasks.map((o) => o.id);
   if (new Set(ids).size !== ids.length) reasons.push('the same task twice');
@@ -367,7 +373,7 @@ function cloudBundlePackage(parts, queue) {
  * @param {{ id: string, project: string, feature?: string|null, estimate: number, score: number }[]} candidates
  * @returns {{ ids: string[], minutes: number, areas: string[] }[]}
  */
-function cloudBundles(candidates, { max = CLOUD_BUNDLE_MAX, maxMin = CLOUD_BUNDLE_MIN } = {}) {
+function cloudBundles(candidates, { max = cloudBundleMax(), maxMin = CLOUD_BUNDLE_MIN } = {}) {
   const groups = new Map();
   for (const k of candidates) {
     const area = `${k.project}${k.feature ? ` / ${k.feature}` : ''}`;
@@ -513,6 +519,7 @@ module.exports = {
   CLOUD_BUNDLE_MIN,
   cloudPackage,
   cloudBundleCap,
+  cloudBundleMax,
   cloudBundlePackage,
   cloudBundles,
   cloudSessions,

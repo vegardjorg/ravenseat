@@ -253,6 +253,11 @@ describe('cloudSetupRows', () => {
   };
   const row = (over: object, name: string) => S.cloudSetupRows({ ...facts, ...over }).find((r) => r.name === name);
 
+  it('shows a setup script row only when there is something to suggest', () => {
+    expect(row({ setupScript: 'npm ci' }, 'setup')?.message).toContain('npm ci');
+    expect(row({}, 'setup')).toBeUndefined();
+  });
+
   it('passes a GitHub remote and warns about the upload otherwise', () => {
     expect(row({}, 'remote')?.status).toBe('OK');
     expect(row({ remoteUrl: 'https://github.com/me/repo' }, 'remote')?.status).toBe('OK');
@@ -813,4 +818,202 @@ describe('turning cloud on, and the checklist', () => {
     const k = JSON.parse(off.run('doctor', '--json', '--all').out) as { checks: { name: string }[] };
     expect(k.checks.filter((c) => c.name.startsWith('cloud'))).toEqual([]);
   }, 120_000);
+});
+
+describe('the settings', () => {
+  const C = require('../cloudSetup') as {
+    parseCloudSetting: (key: string, text: string) => { value?: unknown; error?: string };
+    cloudSettingsView: (own?: object) => { key: string; value: unknown }[];
+    suggestSetupScript: (files: string[]) => string | null;
+  };
+
+  it('has no upper limit on a number, and refuses what is not a setting or a valid value', () => {
+    expect(C.parseCloudSetting('maxSessions', '500')).toEqual({ value: 500 });
+    expect(C.parseCloudSetting('maxSessions', '0').error).toBeTruthy();
+    expect(C.parseCloudSetting('collect', 'auto')).toEqual({ value: 'auto' });
+    expect(C.parseCloudSetting('collect', 'sometimes').error).toBeTruthy();
+    expect(C.parseCloudSetting('deleteBranch', 'off')).toEqual({ value: false });
+    expect(C.parseCloudSetting('nonsense', '1').error).toMatch(/unknown setting/);
+  });
+
+  it('shows the default for something invalid in the file', () => {
+    const value = (key: string, own: object) => C.cloudSettingsView(own).find((s) => s.key === key)?.value;
+    expect(value('collect', {})).toBe('ask');
+    expect(value('collect', { collect: 'oops' })).toBe('ask');
+    expect(value('deleteBranch', { deleteBranch: false })).toBe(false);
+    expect(value('maxSessions', { maxSessions: 12 })).toBe(12);
+  });
+
+  it('suggests a setup script from the lockfile, and nothing when none shows what to install', () => {
+    expect(C.suggestSetupScript(['README.md', 'package-lock.json'])).toBe('npm ci');
+    expect(C.suggestSetupScript(['pnpm-lock.yaml', 'package.json'])).toMatch(/^pnpm/);
+    expect(C.suggestSetupScript(['requirements.txt'])).toMatch(/^pip/);
+    expect(C.suggestSetupScript(['package.json', 'README.md'])).toBeNull();
+  });
+
+  it('cloud set writes one setting and keeps the rest; a bad value changes nothing; settings shows it, also while off', () => {
+    const p = project([o('A')], { features: { cloud: false }, maxConcurrent: 2, cloud: { maxSessions: 2 } });
+    expect(p.run('cloud', 'set', 'collect', 'off').code).toBe(0);
+    const c = JSON.parse(fs.readFileSync(p.configFile, 'utf8'));
+    expect(c.cloud).toEqual({ maxSessions: 2, collect: 'off' });
+    expect(c.maxConcurrent).toBe(2);
+    const before = fs.readFileSync(p.configFile, 'utf8');
+    const bad = p.run('cloud', 'set', 'collect', 'sometimes');
+    expect(bad.code).toBe(1);
+    expect(fs.readFileSync(p.configFile, 'utf8')).toBe(before);
+    const j = JSON.parse(p.run('cloud', 'settings', '--json').out);
+    expect(j.on).toBe(false);
+    expect(j.settings.find((s: { key: string }) => s.key === 'collect').value).toBe('off');
+    expect(p.run('cloud', 'settings').out).toMatch(/maxSessions/);
+  }, 60_000);
+
+  it('cloud.bundleMax decides the size of the bundles', () => {
+    const tasks = ['A', 'B', 'C'].map((id) => o(id, { domain: 'same' }));
+    const size = (p: ReturnType<typeof project>) =>
+      Math.max(...JSON.parse(p.run('cloud-bundles', '--json').out).bundles.map((b: { ids: string[] }) => b.ids.length));
+    expect(size(project(tasks, { cloud: { bundleMax: 1 } }))).toBe(1);
+  }, 60_000);
+});
+
+describe('off hides it, but what is out there is not lost', () => {
+  it('cloud off keeps the settings and names the tasks still out; check and cancel work while off; the pulse says so', () => {
+    const p = project([o('A'), o('B')], { cloud: { collect: 'off' } });
+    expect(p.run('cloud', 'start', 'A', '--force').code).toBe(0);
+    const off = p.run('cloud', 'off');
+    expect(off.out).toMatch(/Still out there: A/);
+    expect(JSON.parse(fs.readFileSync(p.configFile, 'utf8')).cloud.collect).toBe('off');
+    expect(p.run('cloud', 'check').code).toBe(0);
+    expect(p.run('orchestrator', 'pulse').out).toMatch(/Cloud is off, but still out there: A/);
+    expect(p.run('cloud', 'cancel', 'A').code).toBe(0);
+    expect(p.task('A').cloud).toBeUndefined();
+    // Nothing out there: off says nothing in the pulse.
+    fs.rmSync(path.join(p.folder, 'cloud-check.json'), { force: true });
+    expect(p.run('orchestrator', 'pulse').out).not.toMatch(/still out there/);
+    // And a start is still refused while it is off.
+    p.run('cloud', 'start', 'B');
+    expect(p.task('B').cloud).toBeUndefined();
+  }, 120_000);
+});
+
+describe('cloud collect', () => {
+  it('check says what comes next, by the setting', () => {
+    const line = (collect: string) => {
+      const p = project([o('A')], { cloud: { collect } });
+      p.run('cloud', 'start', 'A', '--force');
+      p.cloudPush('queue/A', 'lib/A.ts', 'CLOUD-DONE A');
+      return p.run('cloud', 'check').out;
+    };
+    expect(line('off')).not.toContain('cloud collect');
+    expect(line('ask')).toMatch(/once the owner says yes: .*cloud collect A/);
+    expect(line('auto')).toMatch(/Run now .*cloud collect A/);
+  }, 120_000);
+
+  it('--dry-run changes nothing; a real run brings the finished one home and leaves the other in the cloud', () => {
+    const p = project([o('A'), o('B')], { gates: { quick: ['node -e "process.exit(0)"'] } });
+    p.run('cloud', 'start', 'A', '--force');
+    p.run('cloud', 'start', 'B', '--force');
+    const sha = p.cloudPush('queue/A', 'lib/A.ts', 'CLOUD-DONE A');
+    p.cloudPush('queue/B', 'lib/B.ts', null);
+
+    const dry = p.run('cloud', 'collect', '--dry-run');
+    expect(dry.out).toMatch(/Would collect A/);
+    expect(p.task('A').status).toBe('picked');
+
+    const r = p.run('cloud', 'collect');
+    expect(`${r.out}${r.error}`).toMatch(/Gates GREEN/);
+    expect(r.code).toBe(0);
+    expect(p.task('A').status).toBe('review');
+    expect(p.task('B').status).toBe('picked');
+    expect(fs.existsSync(path.join(p.repo, '.claude', 'worktrees', 'cloud-A', 'lib', 'A.ts'))).toBe(true);
+    const store = fs.readdirSync(p.folder).filter((f) => /evidence/i.test(f));
+    expect(fs.readFileSync(path.join(p.folder, store[0]), 'utf8')).toContain(sha);
+    p.g(['worktree', 'remove', '--force', path.join(p.repo, '.claude', 'worktrees', 'cloud-A')]);
+  }, 180_000);
+
+  it('red gates stop that task with a non-zero exit, and nothing is merged', () => {
+    const p = project([o('A')], { gates: { quick: ['node -e "process.exit(1)"'] } });
+    p.run('cloud', 'start', 'A', '--force');
+    p.cloudPush('queue/A', 'lib/A.ts', 'CLOUD-DONE A');
+    const before = p.g(['rev-parse', 'main']);
+    const r = p.run('cloud', 'collect');
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/Stopped: A/);
+    expect(p.g(['rev-parse', 'main'])).toBe(before);
+    p.g(['worktree', 'remove', '--force', path.join(p.repo, '.claude', 'worktrees', 'cloud-A')]);
+  }, 180_000);
+
+  it('says so when nothing has finished', () => {
+    const p = project([o('A')]);
+    p.run('cloud', 'start', 'A', '--force');
+    const r = p.run('cloud', 'collect');
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/Nothing finished/);
+  }, 60_000);
+});
+
+describe('cloud-go says what would stop it before the owner leaves', () => {
+  const ahead = (p: ReturnType<typeof project>) => {
+    fs.writeFileSync(path.join(p.repo, 'local.txt'), 'x\n');
+    p.g(['add', '--', 'local.txt']);
+    p.g(['commit', '-q', '-m', 'not pushed']);
+  };
+
+  it('--dry-run warns about an unpushed base, and a real run stops', () => {
+    const p = project([o('A')]);
+    ahead(p);
+    const dry = p.script('cloud-go.mjs', ['--dry-run']);
+    expect(dry.code).toBe(0);
+    expect(dry.out).toMatch(/1 commit\(s\) not on origin/);
+    const real = p.script('cloud-go.mjs', []);
+    expect(real.code).toBe(1);
+    expect(real.out).toMatch(/Nothing started/);
+    expect(p.task('A').status).not.toBe('picked');
+  }, 60_000);
+});
+
+describe('cost figures with cloud tracks', () => {
+  const R = require('../queueLogic') as {
+    costStatistics: (q: { tasks: object[] }, o?: object) => { total: { n: number }; cloudNotMeasured: number };
+  };
+  it('leaves a cloud track out of the figures and counts it', () => {
+    const cost = { usd: 0.01, measured: NOW, tokens: { sum: 10 }, agents: [] };
+    const s = R.costStatistics({
+      tasks: [
+        { id: 'L', class: 'K', status: 'done', done: NOW, cost: { ...cost, usd: 5 } },
+        { id: 'C', class: 'K', status: 'done', done: NOW, cost, cloud: { started: NOW } },
+      ],
+    });
+    expect(s.total.n).toBe(1);
+    expect(s.cloudNotMeasured).toBe(1);
+  });
+});
+
+describe('merge removes the cloud branch', () => {
+  const mergeAll = (config: object) => {
+    const p = project([o('A')], { gates: { quick: ['node -e "process.exit(0)"'] }, ...config });
+    p.run('cloud', 'start', 'A', '--force');
+    p.cloudPush('claude/A', 'lib/A.ts', 'CLOUD-DONE A');
+    const c = p.run('cloud', 'collect');
+    expect(`${c.out}${c.error}`).toMatch(/Gates GREEN/);
+    p.g(['config', 'user.name', 'Project Owner']);
+    p.g(['config', 'user.email', 'owner@ravenseat.dev']);
+    const wt = path.join(p.repo, '.claude', 'worktrees', 'cloud-A');
+    const m = p.run('merge', 'A', '--scratchpad', wt);
+    expect(m.code, `${m.out}${m.error}`).toBe(0);
+    const out = `${m.out}${m.error}`;
+    return { out, listed: p.g(['ls-remote', '--heads', 'origin', 'claude/A']), status: p.task('A').status };
+  };
+
+  it('removes it from the remote after a whole merge', () => {
+    const r = mergeAll({});
+    expect(r.status).toBe('done');
+    expect(r.out).toMatch(/Cloud branch: claude.A removed/);
+    expect(r.listed).toBe('');
+  }, 240_000);
+
+  it('cloud.deleteBranch false keeps it', () => {
+    const r = mergeAll({ cloud: { deleteBranch: false } });
+    expect(r.status).toBe('done');
+    expect(r.listed).not.toBe('');
+  }, 240_000);
 });

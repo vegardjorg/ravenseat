@@ -196,7 +196,7 @@ function boardSwitch(name) {
  */
 function applyFeatures() {
   for (const [view, name] of Object.entries(VIEW_FEATURE)) $(`show-${view}`).hidden = !featureOn(name);
-  // The Cloud tab also needs the board switch showCloud (default off; `ravenseat board-setting cloud on` or Settings, Board). A saved
+  // The Cloud tab comes with the module, unless the board switch showCloud is off (`ravenseat board-setting cloud off` or Settings, Cloud). A saved
   // Cloud view still opens without the tab (the view shows a note), so only a module that is off leaves the view.
   if (!boardSwitch('showCloud')) $('show-cloud').hidden = true;
   if (VIEW_FEATURE[t.view] && !featureOn(VIEW_FEATURE[t.view])) setView('flat');
@@ -222,7 +222,8 @@ function modulesSection() {
       'dl',
       { class: 'facts' },
       // flatMap: el() flattens only one level, so each dt/dd pair is spread here.
-      Object.keys(f).flatMap((name) => [
+      // The cloud has its own section with a real switch.
+      Object.keys(f).filter((name) => name !== 'cloud').flatMap((name) => [
         el('dt', { text: FEATURE_LABEL[name] ?? name }),
         el('dd', {
           text: `${f[name] ? 'On' : 'Off'}: set features.${name} in queue.config.json to change`,
@@ -237,12 +238,67 @@ function modulesSection() {
 }
 
 /**
- * The gear's "Board" section: the board's own switches (state.boardSwitches). A change runs `ravenseat board-setting cloud on|off`
- * (queue.json board.showCloud), the same command Claude Code can run, so it holds for every viewer.
+ * One setting in the gear's Cloud section: a switch, a list or a number. Every change is `ravenseat cloud set`, the same command
+ * Claude Code runs, and the server re-reads the file for the next state.
+ */
+function cloudSettingRow(s) {
+  const inputId = `cloud-setting-${s.key}`;
+  const save = async (value) => {
+    try {
+      const answer = await writeWithGuard('/api/action', { type: 'cloud-setting', key: s.key, value });
+      if (answer) message(`${s.label}: ${value}.`);
+    } catch (e) {
+      message(`Could not save: ${e.message}`, true);
+    }
+    await update(true);
+    if (t.setting) drawSettings();
+  };
+  const described = { 'aria-describedby': `${inputId}-help` };
+  let input;
+  if (s.kind === 'switch') {
+    input = el('input', { id: inputId, type: 'checkbox', role: 'switch', class: 'switch', checked: s.value === true, ...described });
+    input.addEventListener('change', () => save(input.checked ? 'on' : 'off'));
+  } else if (s.kind === 'choice') {
+    input = el('select', { id: inputId, ...described }, s.choices.map((c) => el('option', { value: c, text: c, selected: c === s.value })));
+    input.addEventListener('change', () => save(input.value));
+  } else {
+    input = el('input', { id: inputId, class: 'cloud-setting-number', type: 'number', min: '1', step: '1', value: String(s.value), ...described });
+    input.addEventListener('change', () => save(input.value));
+  }
+  return el(
+    'div',
+    null,
+    el('div', { class: 'helper-head' }, input, el('label', { for: inputId, text: s.label })),
+    el('p', { id: `${inputId}-help`, class: 'setting-explanation', text: s.help }),
+  );
+}
+
+/**
+ * The gear's "Cloud" section. The first switch is all of the cloud part: off, nothing about the cloud shows anywhere. The rest only
+ * shows with it on. Changes run `ravenseat cloud on|off`, `cloud set` and `board-setting cloud on|off`, the same commands Claude Code can run.
  */
 function boardSection() {
   if (!t.data?.boardSwitches) return null;
   const cloudModule = featureOn('cloud');
+  const main = el('input', {
+    id: 'cloud-module',
+    type: 'checkbox',
+    role: 'switch',
+    class: 'switch',
+    checked: cloudModule,
+    'aria-describedby': 'cloud-module-help',
+  });
+  main.addEventListener('change', async () => {
+    main.disabled = true;
+    try {
+      const answer = await writeWithGuard('/api/action', { type: 'cloud-switch', on: main.checked });
+      if (answer) message(main.checked ? 'Cloud is on.' : 'Cloud is off, and hidden. Your settings are kept.');
+    } catch (e) {
+      message(`Could not save: ${e.message}`, true);
+    }
+    await update(true);
+    if (t.setting) drawSettings();
+  });
   const box = el('input', {
     id: 'board-show-cloud',
     type: 'checkbox',
@@ -266,20 +322,22 @@ function boardSection() {
   return el(
     'section',
     { class: 'setting', 'aria-labelledby': 'setting-board' },
-    el('h3', { id: 'setting-board', class: 'setting-title', text: 'Board' }),
-    el(
-      'div',
-      { class: 'helper-head' },
-      box,
-      el('label', { for: 'board-show-cloud', text: 'Show the Cloud tab' }),
-    ),
+    el('h3', { id: 'setting-board', class: 'setting-title', text: 'Cloud' }),
+    el('div', { class: 'helper-head' }, main, el('label', { for: 'cloud-module', text: 'Use cloud sessions' })),
     el('p', {
-      id: 'board-show-cloud-help',
+      id: 'cloud-module-help',
       class: 'setting-explanation',
-      text: cloudModule
-        ? 'Off by default. Saved in queue.json for everyone; Claude Code: ravenseat board-setting cloud on|off.'
-        : 'The cloud module is off (features.cloud in queue.config.json), so there is no Cloud tab.',
+      text: 'Tracks that run in Claude Code on the web, on your plan. Off hides all of it. What it needs: ravenseat cloud setup.',
     }),
+    cloudModule ? el('div', { class: 'helper-head' }, box, el('label', { for: 'board-show-cloud', text: 'Show the Cloud tab' })) : null,
+    cloudModule ? (t.data?.cloudSettings ?? []).map(cloudSettingRow) : null,
+    cloudModule
+      ? el('p', {
+          id: 'board-show-cloud-help',
+          class: 'setting-explanation',
+          text: 'Everything here is saved for everyone. Claude Code: ravenseat cloud settings, ravenseat board-setting cloud on|off.',
+        })
+      : null,
   );
 }
 
