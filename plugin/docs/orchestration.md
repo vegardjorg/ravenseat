@@ -465,6 +465,25 @@ checkout or with ravenseat's own `--evidence` run:
   `ravenseat merge <id> --resume` runs only the steps after the merge that have not run (migration push, gates, base gate,
   done, fill). A plain `ravenseat merge <id>` on a branch that is already in the base says so and gives that command.
 
+### What happens when it is cut off
+
+Tested by killing the real process without warning (`__tests__/queueFaultInjection.test.ts`). In every case no work is
+lost, nothing is merged twice, and nothing is marked done unless it is in the base.
+
+| Cut off | State left behind | What to do |
+|---|---|---|
+| Right after the git merge, before the queue knows | The merge is in the base, the task is still in review, a stale lock | `ravenseat merge <id> --resume`. A plain merge takes over the lock and says the same, without merging again |
+| In the gates, after the merge | The same, and the state says the gates were running | `ravenseat merge <id> --resume` runs the gates again and marks done once |
+| Right after the task was marked done | The task is done, the state says what is left | `ravenseat merge <id> --resume` runs only what is left |
+| During a write of `queue.json` | A temporary file next to an intact `queue.json` | Nothing: the write is a rename, so the old state stands |
+| `queue.json` broken by other means | Every command stops and names `queue.json.prev` | Look at the copy, then copy it over. The queue never restores it by itself |
+| Two merges at the same time | One holds the lock, the other is refused and changes nothing | Run the refused one when the first is finished |
+| An agent dying in the middle of a track | The commits and uncommitted work stay in the worktree | `ravenseat resume <id> --reason context` (not a fix round). If the attempt still reads as running: `ravenseat attempt close <id> --outcome interrupted` first |
+| `ravenseat receive` killed in its checks | The task is still running, and no result was recorded | `ravenseat receive <id>` again: the package is made anew |
+| A real conflict in a merge | Git has the merge open, and every merge refuses until it is settled | Resolve and commit, then `ravenseat merge <id> --resume`. Or `git merge --abort`, and the task is as it was |
+
+Not covered: a kill while the queue's own lock file is being written, and a disk that fails in the middle of a rename.
+
 ## Gate from incident (a failure becomes a check)
 
 The base gate catches a red base; it does not stop the same kind of mistake from coming back. So when a post-merge
