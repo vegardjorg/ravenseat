@@ -152,14 +152,20 @@ too, and keeps a table of what Ravenseat checks next to what needs a boundary ou
 Cloud sessions are off by default (`features.cloud`). Only the work of a track moves: writing code and running tests on a
 branch. `lib/logic/cloud.js` (`cloudSuitable`) lets a task go only when it is class K or U, has no migrations, owns no DB
 functions or shared patch, needs nothing marked local (database, network, local files, a device), points to no files the
-cloud cannot see, and its owned files have no local changes that are not pushed. At most 3 cloud sessions run at once
-(`CLOUD_MAX`).
+cloud cannot see, and its owned files have no local changes that are not pushed. `cloud.maxSessions` (default 3, no upper
+limit in the code) caps the sessions at once. `ravenseat cloud on|off` is the one switch for all of it, and `cloud settings`
+and `cloud set` change the rest (`lib/cloudSetup.js`, the same table for the CLI and the board's gear).
 
-Receive and merge stay at home. The cloud session only pushes a queue branch. `ravenseat cloud done <id>`
-(`cli/cloud.mjs`) fetches that branch, and `cloudDone` moves the task to review like any other delivery. The gates then
-run again at home, so the evidence of section 4 is still made by the orchestrator, on the home machine, bound to the
-fetched sha. The cloud's own test runs count for no more than a local track's own report. The cost: the cloud only sees
-what is pushed (`plugin/docs/guide.md`, "Cloud sessions"), and a task that needs a database or local files cannot go.
+Receive and merge stay at home. The cloud session only pushes a branch, whose last commit carries a finish marker
+(`CLOUD-DONE <id>` or `CLOUD-STOP <id> <reason>`) that `cloud check` reads. `ravenseat cloud collect` (`cli/cloud.mjs`) takes
+what has finished, one at a time: `cloud done` fetches the branch and `cloudDone` moves the task to review like any other
+delivery, then a worktree, `prepare-track` and `receive`. The gates run again at home, so the evidence of section 4 is still
+made by the orchestrator, on the home machine, bound to the fetched sha. The cloud's own test runs count for no more than a
+local track's own report. `cloud.collect` only decides whether the orchestrator asks before collecting; no setting skips the
+gates or the merge rules. The merge removes the branch from the remote unless `cloud.deleteBranch` is off.
+
+The costs: the cloud only sees what is pushed (`plugin/docs/guide.md`, "Cloud sessions"), a task that needs a database or
+local files cannot go, and a session's use is not on this machine, so cost figures leave cloud tracks out and say how many.
 
 ## 7. Failure modes and trust boundaries
 
