@@ -44,7 +44,7 @@ export type Allow = {
   remoteRefs?: string[];
   /** Task ids that may be added to the queue. */
   added?: string[];
-  /** Untracked paths (a trailing "/" means a folder) the queue may create, such as its own worktrees. */
+  /** Untracked paths (a trailing "/" means a folder) that are the queue's own, such as its worktrees: they may appear and go. */
   untracked?: string[];
 };
 
@@ -156,6 +156,8 @@ export function userThingsProblems(before: Snapshot, allow: Allow = {}): string[
   // The user's uncommitted work: the same files dirty, each with the same content, and the same staged changes.
   const dirtyNow = new Set(dirtyPaths(repo));
   for (const [p, h] of before.dirty) {
+    // The queue's own space (its worktrees) may come and go; it is never the user's work.
+    if (allowed(allow.untracked, p)) continue;
     if (!dirtyNow.has(p)) out.push(`uncommitted file ${p} is no longer uncommitted (committed, reverted or removed)`);
     else if (hash(path.join(repo, p)) !== h) out.push(`uncommitted file ${p} has changed content`);
   }

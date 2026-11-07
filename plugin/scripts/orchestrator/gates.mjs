@@ -566,8 +566,8 @@ const start = Date.now();
 let failedCount = 0;
 const failedGates = [];
 
-// --timeout-sec <n>: one time budget for the whole list (ravenseat merge passes config().baseGate.timeoutSec when the quick
-// gates are the base gate, so a hanging gate cannot hold the merge forever). Each gate gets what is left; a gate over
+// --timeout-sec <n>: one time budget for the whole list (ravenseat receive and merge always pass config().baseGate.timeoutSec,
+// so a hanging gate cannot hold them forever). Each gate gets what is left; a gate over
 // it is red. As for the done command, on Windows a child the shell started can live on until it ends by itself.
 const budgetSec = Number(option('--timeout-sec'));
 const deadline = GQ.budgetDeadline(start, budgetSec);

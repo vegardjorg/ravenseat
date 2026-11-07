@@ -1005,8 +1005,10 @@ export async function cmdMerge() {
           id,
           '--log',
           gatesLog,
-          // When the quick gates are the base gate, they get its time budget (a hanging gate must not hold the merge).
-          ...(BASE_SETUP.enabled && BASE_SETUP.sameAsQuick ? ['--timeout-sec', String(BASE_SETUP.timeoutSec)] : []),
+          // Always the base gate's time budget, as receive does: a hanging gate must not hold the merge, also when the
+          // base gate is off or has its own commands (red team RT-13, __tests__/redteam/rt13-hanging-gate.test.ts).
+          '--timeout-sec',
+          String(BASE_SETUP.timeoutSec),
         ],
       ];
     if (step === 'done')

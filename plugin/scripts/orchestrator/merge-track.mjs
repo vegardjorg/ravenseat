@@ -264,6 +264,33 @@ if (staged.length) {
   );
   process.exit(1);
 }
+// The same for the user's uncommitted work in a file the branch changes (a changed tracked file, or an untracked file at
+// a path the branch adds): git merge would refuse, after the same save and restore. Stop first, and name the files
+// (red team RT-01, __tests__/redteam/rt01-uncommitted-work.test.ts).
+{
+  const base = gitOk('merge-base', 'HEAD', branch);
+  const theirs =
+    base.status === 0
+      ? new Set(git('diff', '--name-only', '-z', base.stdout.trim(), branch).split('\0').filter(Boolean))
+      : new Set();
+  const mine = git('status', '--porcelain=v1', '-z', '--untracked-files=all').split('\0').filter(Boolean);
+  const blocked = [];
+  for (let i = 0; i < mine.length; i++) {
+    const code = mine[i].slice(0, 2);
+    const p = mine[i].slice(3);
+    if (code.startsWith('R') || code.startsWith('C')) i++;
+    if (theirs.has(p)) blocked.push(`${p}${code === '??' ? ' (untracked)' : ''}`);
+  }
+  if (blocked.length) {
+    console.error(
+      `Not merged: ${branch} changes files that have uncommitted work in this checkout: ${blocked.slice(0, 10).join(', ')}` +
+        `${blocked.length > 10 ? ` and ${blocked.length - 10} more` : ''}.\n` +
+        'git merge would refuse to overwrite them. Nothing was touched. Commit them, or move them aside ' +
+        '(git stash push -- <file>, or rename an untracked file), then merge again.',
+    );
+    process.exit(1);
+  }
+}
 const m = gitOk('merge', '--no-ff', '--no-edit', branch);
 const conflicts = git('diff', '--name-only', '--diff-filter=U').split('\n').filter(Boolean);
 if (m.status !== 0 && !conflicts.length) {
