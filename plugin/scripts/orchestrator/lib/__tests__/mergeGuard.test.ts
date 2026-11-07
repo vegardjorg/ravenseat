@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { assessGuard, globMatch, isProtected, migrCovered, readDiff, taskIdFromBranch } from '../mergeGuard';
+import { assessGuard, globMatch, isProtected, migrCovered, ownerNotes, readDiff, taskIdFromBranch } from '../mergeGuard';
 import { mergePlan } from '../logic/merge';
 import { STANDARD } from '../queueConfig';
 
@@ -71,6 +71,18 @@ describe('protected paths: the M3 additions and case (plans/review-2026-11-02.md
     // The glob helper keeps its case-sensitive default for its other users (the test-weakening check).
     expect(globMatch('*.test.ts', 'A.TEST.TS')).toBe(false);
     expect(globMatch('*.test.ts', 'A.TEST.TS', { ignoreCase: true })).toBe(true);
+  });
+  it('ownerNotes keeps the warnings and their file lines, and nothing else from the merge output', () => {
+    const out = 'Merging\nNOTE A: no owned_files\n  a.txt\n  b.txt\nMerge made\n  1 file changed\nWARNING ownership drift (A): 1 file(s)\n  c.txt\nDone';
+    expect(ownerNotes(out)).toEqual(['NOTE A: no owned_files', '  a.txt', '  b.txt', 'WARNING ownership drift (A): 1 file(s)', '  c.txt']);
+    expect(ownerNotes('Merged')).toEqual([]);
+  });
+  it('a task without owned_files gets its changed files as unlisted: no drift and no stop', () => {
+    const none = assessGuard({ changes: changed('README.md'), ownedFiles: [] });
+    expect(none.unlisted).toEqual(['README.md']);
+    expect(none.drift).toEqual([]);
+    expect(none.stop).toBe(false);
+    expect(assessGuard({ changes: changed('README.md'), ownedFiles: ['src/'] }).unlisted).toEqual([]);
   });
   it('a track that writes .CLAUDE/settings.json without owning it stops the merge', () => {
     const r = assessGuard({ changes: changed('.CLAUDE/settings.json'), ownedFiles: ['src/'] });
@@ -446,6 +458,18 @@ describe('merge-track.mjs and a test config change', () => {
       spawnSync(process.execPath, [SCRIPT, 'queue/A', '--keep-worktree'], { cwd: repo, encoding: 'utf8', env });
     return { repo, run };
   };
+
+  it('a task without owned_files merges, and the output names what it changed', () => {
+    const { repo, run } = setup([], { protectedPaths: [] });
+    try {
+      const r = run();
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain('no owned_files, and this merge changes 2 file(s)');
+      expect(r.stdout).toMatch(/^ {2}a\.txt$/m);
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+    }
+  });
 
   it('the defaults stop a vitest.config change by a task that does not own it', () => {
     const { repo, run } = setup(['a.txt'], null);

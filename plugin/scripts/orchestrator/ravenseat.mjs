@@ -12,6 +12,7 @@
 //   ravenseat help                       the key commands in groups (lib/cliHelp.js); in lite mode only the core loop
 //   ravenseat help all                   every command
 //   ravenseat help <command>             one queue command in full, or a script's header
+//   ravenseat --version                  the plugin's version ("unknown" in a vendored copy without the plugin manifest)
 //
 // In a plugin, bin/ravenseat (and bin/ravenseat.cmd on Windows) calls this file; the plugin's bin/ folder is on the Bash tool's PATH.
 // In a vendored install there is no `ravenseat` on PATH; there the command is `node scripts/orchestrator/ravenseat.mjs <...>`
@@ -50,6 +51,16 @@ function liteMode() {
 }
 
 let [first, ...rest] = process.argv.slice(2);
+if (first === '--version' || first === '-v') {
+  let version = 'unknown';
+  try {
+    version = JSON.parse(fs.readFileSync(path.join(HERE, '..', '..', '.claude-plugin', 'plugin.json'), 'utf8')).version ?? version;
+  } catch {
+    /* a vendored copy has no plugin manifest */
+  }
+  console.log(`ravenseat ${version}`);
+  process.exit(0);
+}
 // `ravenseat decide --help` asks about decide; running the command instead would answer something else, or change something.
 // A script (ravenseat board, ravenseat setup) has its own --help, so it still goes there.
 if (first && first !== 'help' && !HELP.ALIASES[first] && !scripts().includes(first) && (rest[0] === '--help' || rest[0] === '-h')) {

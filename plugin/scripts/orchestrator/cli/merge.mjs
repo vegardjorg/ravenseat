@@ -1183,6 +1183,8 @@ export async function cmdMerge() {
       }
       mergeCode = r.code;
       mergeOut = r.out;
+      // Said now and not at the end: a later step can stop the merge, and the warning is about what is already in.
+      if (r.code === 0) for (const note of require('./lib/mergeGuard.js').ownerNotes(r.out)) console.log(note);
     }
     if (x.step === 'gates' && r.code !== 0) {
       const tampered = gatesTamperReason({ id, since: stepStarted });

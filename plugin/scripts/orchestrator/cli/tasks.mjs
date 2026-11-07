@@ -379,7 +379,7 @@ export function cmdAdd() {
       `Added as proposed (not started until the orchestrator or the owner approves: ravenseat approve <id...>): ${proposed.join(', ')}`,
     );
   const { withoutProject, withoutFeature } = added.missing;
-  // A track may not run edit-many, so it is not told to: this is for whoever approves the proposal.
+  // A track may not run edit-many, so it is not told to. Neither field is required to run.
   if (withoutProject.length || withoutFeature.length)
     console.log(
       `${track ? 'Note' : 'WARNING'}: ${[
@@ -391,7 +391,7 @@ export function cmdAdd() {
         .filter(Boolean)
         .join(
           '; ',
-        )}. ${track ? 'Whoever approves it sets them; nothing for you to do.' : 'Fix with ravenseat edit-many --file <json> ([{ "id": "...", "project": "...", "feature": "..." }]).'}`,
+        )}. ${track ? 'It runs without them, and the owner can add them later; nothing for you to do.' : 'Fix with ravenseat edit-many --file <json> ([{ "id": "...", "project": "...", "feature": "..." }]).'}`,
     );
   // A field the queue does not read is kept without a word, so the task looks right and is not (test round 4: minutes).
   const WRONG_NAMES = { minutes: 'content_min', estimate: 'content_min', duration: 'content_min', priority: 'value', files: 'owned_files', depends: 'depends_on' };

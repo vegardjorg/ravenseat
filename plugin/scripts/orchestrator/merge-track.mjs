@@ -200,6 +200,12 @@ function writeWithNewAttempt(file, text) {
     for (const f of guard.drift.slice(0, 30)) console.log(`  ${f}`);
     if (guard.drift.length > 30) console.log(`  … and ${guard.drift.length - 30} more`);
   }
+  // A queue task without owned_files merges freely, so the owner at least sees what it changed. A wave track has no task.
+  if (task && guard.unlisted.length > 0) {
+    console.log(`NOTE ${taskName}: no owned_files, and this merge changes ${guard.unlisted.length} file(s). Check that they fit the mission:`);
+    for (const f of guard.unlisted.slice(0, 30)) console.log(`  ${f}`);
+    if (guard.unlisted.length > 30) console.log(`  … and ${guard.unlisted.length - 30} more`);
+  }
   if (guard.violations.length > 0) {
     const list = guard.violations.map((b) => `  ${b.path}  (${b.reason})`).join('\n');
     if (guard.stop) {

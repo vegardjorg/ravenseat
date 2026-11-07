@@ -135,6 +135,7 @@ describe('ravenseat add from a track in full mode', () => {
     const p = project('full');
     const r = p.fromTrackB('add', '--json', JSON.stringify({ id: 'N-1', title: 'New', mission: 'm' }));
     expect(r.code).toBe(0);
+    expect(r.out).toContain('It runs without them');
     expect(r.out).toContain('nothing for you to do');
     expect(r.out).not.toContain('edit-many');
   });
@@ -186,6 +187,14 @@ describe('the owner sees the proposals', () => {
     expect(show).toMatch(/M-1\s+from A-1\s+\[batch queue\]\s+Small one/);
     expect(p.fromMain('proposals').out).toMatch(/M-1\s+from A-1\s+\[batch queue\]\s+Small one/);
     expect(p.fromMain('decide', '--json').out).toContain('M-1');
+    // Through the real inbox: the field has to survive every step from the task to the printed line.
+    const decide = p.fromMain('decide').out;
+    expect(decide).toContain('[batch queue]');
+    expect(decide).toContain('puts it in the batch queue');
+    expect(decide).not.toContain('queues it');
+    expect(p.fromMain('info', 'M-1').out).toContain('batched: true');
+    const version = spawnSync(process.execPath, [path.resolve(__dirname, '..', 'ravenseat.mjs'), '--version'], { encoding: 'utf8' });
+    expect(version.stdout).toMatch(/^ravenseat \d+\.\d+\.\d+/);
     const approved = p.fromMain('approve', 'M-1').out;
     expect(approved).toContain('M-1 is in the batch queue');
     expect(approved).toContain('{"batched":false}');

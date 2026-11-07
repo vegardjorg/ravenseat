@@ -639,6 +639,7 @@ function inbox(queue, columns, { map = chainMap(queue.tasks ?? []), context = nu
     estimate: k.estimate,
     value: k.value,
     added_by: k.added_by,
+    batched: k.batched === true,
     gate_without_place: !!k.gate_without_place,
     // What waits on it ("unlocks N") and its focus stage, for the impact line in the decision overview.
     unlocks: k.unlocks ?? null,

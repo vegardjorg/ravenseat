@@ -43,6 +43,7 @@ ravenseat board                     # the board: prints a local link with a key
 ravenseat follow                    # follow-up entries
 ravenseat handover now              # the "Now" part of the handover note
 ravenseat help                      # all commands
+ravenseat --version                 # the plugin's version
 ```
 
 Skills: `/ravenseat:queue`, `/ravenseat:decide`, `/ravenseat:board`, `/ravenseat:setup`, `/ravenseat:add-to-queue`, `/ravenseat:plans`, `/ravenseat:pick`,

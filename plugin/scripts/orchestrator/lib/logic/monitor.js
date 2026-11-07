@@ -24,6 +24,7 @@ const INFO_FIELD = [
   'domain',
   'project',
   'feature',
+  'batched',
   'branch',
   'migr_block',
   'head_start',

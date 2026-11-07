@@ -70,6 +70,10 @@ describe('fixLinks (pure)', () => {
     ]);
   });
 
+  it('infoView shows that a task is in the batch queue', () => {
+    expect(L.infoView({ id: 'F1', title: 't', status: 'waiting', batched: true })).toContain('batched: true');
+  });
+
   it('infoView shows fixes and fixed by', () => {
     const view = L.infoView({ id: 'F1', title: 't', status: 'waiting', fixes: ['A'] }, { fixedBy: ['F4'] });
     expect(view).toContain('fixes: A');

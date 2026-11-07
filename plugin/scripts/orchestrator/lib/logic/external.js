@@ -323,6 +323,13 @@ function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = 
     `## TRACK ${o.id} (${o.title}; source: ${o.source ?? 'see the mission'}; class ${o.class}, estimate ${estimate(o)} min)`,
     '',
     `**Ownership in the queue:** files ${list(o.owned_files)}; DB ${list(o.owner_db)}; shared patch ${list(o.shared_patch)}. Do not touch anything other tasks in the queue own; ${reportFrom}`,
+    // A proposal may have no file list. Here and not in the template: a project keeps its own copy of the template.
+    ...(list(o.owned_files) === 'none' && list(o.shared_patch) === 'none'
+      ? [
+          '',
+          '**No files are listed for this task**, so "what you own" means what the mission names: change only that, and list the files you changed in the report. Protected paths (hooks, settings, scripts, dependency and check configs) and migrations still stop the merge: report a need for one instead of changing it.',
+        ]
+      : []),
     '',
     ...(done ? [done, ''] : []),
     ...(accept ? [accept, ''] : []),

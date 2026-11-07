@@ -11,7 +11,8 @@
 //   - STOP: the diff touches a protected path (config().protectedPaths) that is not in the task's owned_files or
 //     shared_patch. `--allow-guard` overrides; merge-track.mjs logs it in the time log (event "guard-overridden").
 //   - WARNING: other files outside owned_files + shared_patch (ownership drift). Migrations in the task's migr_block
-//     count as owned. If the task has no ownership at all (a wave track without a queue entry), no drift warning.
+//     count as owned. If the task has no ownership at all, no drift warning: nothing was promised, so nothing drifted.
+//     Those files come back as `unlisted`, so a queue task without owned_files still shows what its merge changes.
 //   - Ownership ending with "/" covers the whole folder; otherwise the path must be equal.
 //   - Rename and copy count both paths: moving a file INTO .claude/ is as dangerous as writing it there, and moving
 //     .claude/settings.json OUT deletes it.
@@ -222,7 +223,7 @@ const isDependencyFile = (p) => isDependencyName(norm(p).toLowerCase().split('/'
  * @param {{ changes: { status: string, paths: string[] }[], ownedFiles?: string[], sharedPatch?: string[],
  *           migrBlock?: string | null, migrations?: { folder?: string|null, filePattern?: string } | null,
  *           protectedPaths?: string[], allowGuard?: boolean, dependencyFiles?: string }} input
- * @returns {{ violations: { path: string, reason: string }[], drift: string[], warned: string[], stop: boolean, overridden: boolean }}
+ * @returns {{ violations: { path: string, reason: string }[], drift: string[], unlisted: string[], warned: string[], stop: boolean, overridden: boolean }}
  */
 function assessGuard({
   changes,
@@ -240,6 +241,7 @@ function assessGuard({
 
   const violations = [];
   const drift = [];
+  const unlisted = [];
   const warned = [];
   const seen = new Set();
   for (const e of changes || []) {
@@ -260,19 +262,38 @@ function assessGuard({
       } else if (!migrBlock && (protectedPaths || []).length > 0 && isMigrationPath(p, migrations)) {
         // A migration changes a database, so it never goes in with an ordinary task. An empty list turns the guard off.
         violations.push({ path: p, reason: 'migration file, and the task has no migration block and does not own it' });
-      } else if (hasOwnership) drift.push(p);
+      } else (hasOwnership ? drift : unlisted).push(p);
     });
   }
   return {
     violations,
     drift,
+    unlisted,
     warned,
     stop: violations.length > 0 && !allowGuard,
     overridden: violations.length > 0 && Boolean(allowGuard),
   };
 }
 
+/**
+ * What merge-track.mjs said for the owner, from its output: the warnings and notes with their indented file lines.
+ * ravenseat merge shows only these from a green merge step; the rest of the step's output goes to the log.
+ */
+function ownerNotes(out) {
+  const notes = [];
+  let inNote = false;
+  for (const line of String(out ?? '').split(/\r?\n/)) {
+    if (/^(WARNING (ownership drift|dependency file)|NOTE )/.test(line)) {
+      notes.push(line);
+      inNote = true;
+    } else if (inNote && line.startsWith('  ')) notes.push(line);
+    else inNote = false;
+  }
+  return notes;
+}
+
 module.exports = {
+  ownerNotes,
   isProtected,
   isMigrationPath,
   globMatch,

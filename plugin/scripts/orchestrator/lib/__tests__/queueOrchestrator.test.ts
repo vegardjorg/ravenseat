@@ -1281,7 +1281,7 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
     fs.writeFileSync(
       scenarioFile,
       JSON.stringify({
-        merge: { code: 0, out: 'Merged and committed: abc M' },
+        merge: { code: 0, out: 'Merged and committed: abc M\nNOTE M: no owned_files, and this merge changes 1 file(s).\n  a.txt' },
         'migr-push': { code: 0, out: 'Running 3600_m.sql\nDone: 1 migration.' },
         gates: { code: 0, out: 'gates: OK' },
         done: { code: 0, out: 'M: done' },
@@ -1294,6 +1294,8 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
     const p = run('merge', 'M');
     expect(p.code).toBe(1);
     expect(p.out).toMatch(/STOP in the step migr-push: .*production/);
+    // What the guard said about a green merge reaches the owner, also when a later step stops.
+    expect(p.out).toContain('NOTE M: no owned_files');
     expect(call().map((x) => x.step)).toEqual(['merge']);
     expect(fs.readFileSync(path.join(scratch, 'merge-M.log'), 'utf8')).toMatch(/===== merge: /);
     // The merge is in; the rest can be resumed once the environment is fixed.

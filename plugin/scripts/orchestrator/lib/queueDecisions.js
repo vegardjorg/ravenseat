@@ -215,11 +215,12 @@
       verb: 'approve',
       kind: 'proposed',
       kindName: 'Proposed',
+      batched: f.batched === true,
       id: f.id,
       title: f.title || f.id,
       text: null,
       context: [
-        `${f.class ?? '?'} · ${estimate} min · value ${f.value ?? '?'}${f.added_by ? ` · from ${f.added_by}` : ''}`,
+        `${f.class ?? '?'} · ${estimate} min · value ${f.value ?? '?'}${f.added_by ? ` · from ${f.added_by}` : ''}${f.batched === true ? ' · [batch queue]' : ''}`,
         ...(f.gate_without_place
           ? ['No file and line behind it, and the gate needs a failing example: approving means agent work on a guess. Approve if you know the bug is real.']
           : []),
@@ -439,7 +440,7 @@
     const x = item?.impact ?? {};
     const parts = [];
     if (item?.verb === 'approve') {
-      parts.push(`queues it (${minutesText(x.own ?? 0)})`);
+      parts.push(item?.batched ? `puts it in the batch queue (${minutesText(x.own ?? 0)}), where it does not start alone` : `queues it (${minutesText(x.own ?? 0)})`);
       if (x.count) parts.push(`then unlocks ${plural(x.count, 'task', 'tasks')} (${minutesText(x.minutes)})`);
     } else if (item?.verb === 'unstick') {
       parts.push(x.count ? `${plural(x.count, 'task waits', 'tasks wait')} on it (${minutesText(x.minutes)})` : 'nothing waits on it');

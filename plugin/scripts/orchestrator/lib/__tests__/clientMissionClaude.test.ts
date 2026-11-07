@@ -105,6 +105,13 @@ describe('Claude mission addendum (lib/clients/claude/mission.js)', () => {
     expect(MT.fillClient('a\r\n<CLIENT_X>\r\nb', { X: '1\n2' }, '\r\n')).toBe('a\r\n1\r\n2\r\nb');
   });
 
+  it('trackBlock explains a task with no files, and only then', () => {
+    const none = L.trackBlock({ id: 'P', title: 't', class: 'K' }, { tasks: [] }, { text: 'x' });
+    expect(none).toContain('No files are listed for this task');
+    const listed = L.trackBlock({ id: 'P', title: 't', class: 'K', owned_files: ['a.js'] }, { tasks: [] }, { text: 'x' });
+    expect(listed).not.toContain('No files are listed');
+  });
+
   it('trackBlock takes the end of the ownership line from the addendum (default Claude, cloud included)', () => {
     const o = { id: 'A', title: 'Task A', class: 'K', owned_files: ['a.ts'] };
     const q = { tasks: [o], resolved: [] };
