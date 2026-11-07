@@ -293,8 +293,9 @@ const median = (xs) => {
  * @returns {{ rows: object[], perClass: object[], total: { n: number, usd: number } }}
  */
 function costStatistics(queue, { since = null } = {}) {
+  // A cloud track's use is not in the local transcripts, so its measurement is not one: it would pull the medians down.
   const rows = (queue.tasks ?? [])
-    .filter((o) => o.status === 'done' && o.cost && Number.isFinite(Number(o.cost.usd)))
+    .filter((o) => o.status === 'done' && !o.cloud && o.cost && Number.isFinite(Number(o.cost.usd)))
     .filter((o) => !since || Date.parse(o.done ?? o.cost.measured) >= Date.parse(since))
     .map((o) => ({
       id: o.id,
@@ -327,6 +328,7 @@ function costStatistics(queue, { since = null } = {}) {
     rows,
     perClass,
     total: { n: rows.length, usd: round2(rows.reduce((s, x) => s + x.usd, 0)) },
+    cloudNotMeasured: (queue.tasks ?? []).filter((o) => o.status === 'done' && o.cloud && (!since || Date.parse(o.done ?? '') >= Date.parse(since))).length,
   };
 }
 

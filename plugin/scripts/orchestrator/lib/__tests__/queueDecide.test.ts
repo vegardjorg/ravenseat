@@ -117,17 +117,16 @@ describe('ravenseat decide', () => {
   });
 });
 
-describe('the board switches (Cloud tab hidden by default)', () => {
-  it('board.showCloud is false by default; queue.json board wins over the config', () => {
-    expect(KK.STANDARD.board.showCloud).toBe(false);
-    expect(KK.boardSwitches({ board: {} }, null)).toEqual({ showCloud: false });
+describe('the board switches (the Cloud tab comes with the module)', () => {
+  it('board.showCloud is true by default; queue.json board wins over the config', () => {
+    expect(KK.STANDARD.board.showCloud).toBe(true);
     expect(KK.boardSwitches({ board: { showCloud: true } }, null)).toEqual({ showCloud: true });
     expect(KK.boardSwitches({ board: { showCloud: true } }, { board: { showCloud: false } })).toEqual({ showCloud: false });
-    expect(KK.boardSwitches({ board: { showCloud: 'yes' } }, { board: { showCloud: 1 } })).toEqual({ showCloud: false });
+    expect(KK.boardSwitches({ board: { showCloud: 'yes' } }, { board: { showCloud: 1 } })).toEqual({ showCloud: true }); // not a boolean: the default
   });
 
   it('ravenseat board-setting cloud on|off writes queue.json board.showCloud', () => {
-    expect(run('board-setting')).toContain('Cloud tab: hidden');
+    expect(run('board-setting')).toContain('Cloud tab: shown');
     run('board-setting', 'cloud', 'on');
     expect(queue().board).toEqual({ showCloud: true });
     expect(run('board-setting')).toContain('Cloud tab: shown');

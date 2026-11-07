@@ -47,7 +47,9 @@ commands cover them.
 | Add a custom helper | `/api/helper-add` | `ravenseat helpers add <file.md>` (same command) |
 | Auto-accept rules | `/api/proposals` | `ravenseat proposals auto …` (same command) |
 | Undo an auto-accept | `/api/proposals-undo` | `ravenseat proposals undo <id>` (same command) |
-| Show the Cloud tab (new, hidden by default) | `/api/action` `board-switch` | `ravenseat board-setting cloud on|off` (same command; queue.json `board.showCloud`) |
+| Show the Cloud tab | `/api/action` `board-switch` | `ravenseat board-setting cloud on|off` (same command; queue.json `board.showCloud`) |
+| Cloud on or off | `/api/action` `cloud-switch` | `ravenseat cloud on|off` (same command) |
+| A cloud setting | `/api/action` `cloud-setting` | `ravenseat cloud set <setting> <value>` (same command) |
 | Theme, mascot bubbles, remembered tab and view | browser storage only | per viewer, nothing in the queue; `board.mascot` in queue.config.json sets the mascot for everyone |
 
 ## Cloud sessions (with `features.cloud` on)
@@ -56,6 +58,9 @@ commands cover them.
 | --- | --- | --- |
 | Copy the cloud package | `/api/cloudPackage` | `ravenseat cloud-package <id>` (same command) |
 | Started, completed, cancelled in cloud | `/api/action` `cloud-start`, `cloud-done`, `cloud-cancel` | `ravenseat cloud start|done|cancel <id>` (same command) |
+| What it needs, on and off (new) | none | `ravenseat cloud setup`, `ravenseat cloud on|off` |
+| Start a session, has it finished (new) | the command to copy in the Cloud tab | `ravenseat cloud-start <id>`, `ravenseat cloud send <id>`, `ravenseat cloud check` |
+| Start several sessions before leaving (new) | none, CLI only | `ravenseat cloud-go [<sessions>] [--single] [--dry-run]` |
 
 ## Plans room
 

@@ -4213,3 +4213,9 @@ fieldset.setting legend {
   margin: var(--distance-xs) 0 0;
   padding-left: var(--distance-md);
 }
+
+/* The number fields in the gear's Cloud section. */
+.cloud-setting-number {
+  width: 5.5rem;
+  flex: none;
+}

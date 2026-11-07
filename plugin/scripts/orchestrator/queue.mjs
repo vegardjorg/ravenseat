@@ -401,9 +401,20 @@
 //   node scripts/orchestrator/queue.mjs orchestrator stop            (the loop is stopped or handed over; also removes
 //                                                                  the wind-down flag)
 //
-// Cloud: K/U tasks without migrations and DB can run in a cloud session on claude.ai (the owner pastes the package from the board, or
-// a routine does it). The cloud only sees what is pushed; suitability is decided in queueLogic.cloudSuitable.
-// Off by default: with features.cloud false in queue.config.json the cloud commands answer "Cloud is off" (exit 0).
+// Cloud: K/U tasks without migrations and DB can run in a cloud session on claude.ai, on a normal subscription; a session counts against
+// the plan's usage limits like other use. The cloud only sees what is pushed; suitability is decided in queueLogic.cloudSuitable.
+// Off by default: with features.cloud false in queue.config.json the cloud commands answer "Cloud is off" (exit 0), except setup and on.
+//   node scripts/orchestrator/queue.mjs cloud setup                      (what cloud tracks need, what is in place, the next step; changes nothing)
+//   node scripts/orchestrator/queue.mjs cloud on|off                     (features.cloud in queue.config.json)
+//   node scripts/orchestrator/cloud-start.mjs <id> [<id> ...] [--force] [--allow-upload]   (in a terminal: claude --cloud with the package)
+//   ravenseat cloud settings | cloud set <setting> <value>   (all the cloud settings; cloud on|off hides or shows all of it)
+//   ravenseat cloud collect [<id> ...] [--dry-run]   (finished sessions home: cloud done, worktree, prepare-track, receive; then merge)
+//   node scripts/orchestrator/cloud-go.mjs [<sessions>] [--single] [--dry-run] [--force] [--allow-upload]   (several sessions in one go, by priority)
+//   node scripts/orchestrator/queue.mjs cloud send <id> [<id> ...] [--force]   (without a terminal, only with cloud.start routine: fires the
+//                                                                  scheduled task once, never retries; lib/cloudFire.js)
+//   node scripts/orchestrator/queue.mjs cloud check [--json]             (one read of the remote: which cloud tasks have pushed, and the finish
+//                                                                  marker on the branch; changes nothing in the queue. The pulse does the
+//                                                                  same at most every 5 minutes)
 //   node scripts/orchestrator/queue.mjs cloud                            (the cloud sessions running, and the pending ones that are suitable)
 //   node scripts/orchestrator/queue.mjs cloud-package <id> [<id> ...] [--out <file>] [--force]   (self-contained message; stdout without
 //                                                                  --out; refuses with the reasons when a task is not suitable.
@@ -412,12 +423,12 @@
 //   node scripts/orchestrator/queue.mjs cloud-bundles [--max 4] [--max-min 120]   (proposed: cloud-suitable ones grouped by
 //                                                                  project/feature, by priority)
 //   node scripts/orchestrator/queue.mjs cloud start <id> [<id> ...] [--run <session-id|url>] [--force]   (picked by "cloud";
-//                                                                  at most 3 cloud sessions, a bundle counts as one; again with
-//                                                                  --run only sets the run)
+//                                                                  at most cloud.maxSessions at once, a bundle counts as one; exit 12
+//                                                                  during the usage limit pause; again with --run only sets the run)
 //   node scripts/orchestrator/queue.mjs cloud done <id> [--branch <branch>] [--sha <sha>]   (git fetch of the branch (default
 //                                                                  the queue branch), at least one commit above <remote>/<baseBranch>,
 //                                                                  the local queue branch is set to it, then review; the orchestrator
-//                                                                  merges)
+//                                                                  runs receive and merge, so the gates and the evidence are local)
 //   node scripts/orchestrator/queue.mjs cloud cancel <id>                (= release)
 //   The time log gets cloud-start, cloud-done and cloud-aborted.
 //
@@ -665,7 +676,10 @@ import * as wait from './cli/wait.mjs';
 // The commands of a module that is off answer that with exit 0 (not an error: the project chose it). The plan register
 // is never switched off here: skills use it, only the board hides Plans.
 const MODULE_COMMANDS = { cloud: 'cloud', 'cloud-package': 'cloud', 'cloud-bundles': 'cloud', follow: 'follow' };
-if (MODULE_COMMANDS[command] && !KK.featureOn(MODULE_COMMANDS[command], CONFIG)) {
+// `cloud setup` and `cloud on` are how a project that has it off finds out what it needs and turns it on.
+// Work that is still out there can be brought home with it off too (cloud.mjs says so at cloud off and in the pulse).
+const CLOUD_WHILE_OFF = command === 'cloud' && ['setup', 'settings', 'set', 'on', 'off', 'check', 'collect', 'done', 'cancel'].includes(process.argv[3]);
+if (MODULE_COMMANDS[command] && !CLOUD_WHILE_OFF && !KK.featureOn(MODULE_COMMANDS[command], CONFIG)) {
   console.log(KK.featureOffText(MODULE_COMMANDS[command]));
   process.exit(0);
 }

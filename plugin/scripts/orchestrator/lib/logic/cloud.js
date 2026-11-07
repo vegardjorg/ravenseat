@@ -18,12 +18,15 @@ const { trackBlock } = require('./external.js');
 // ---- Cloud: queue tasks in cloud sessions on claude.ai --------------------------------------------------------
 // The cloud session only sees what is pushed to the remote and has no database. So only client/tool tasks
 // (K, U) without migrations and DB are suitable, and only when the owned files are pushed. The orchestrator (or the owner from the board) sends
-// the package; the cloud pushes the queue branch (<branchPrefix><id>, or the branch the session is allowed to use), and the orchestrator merges as
-// usual.
+// the package; the cloud pushes the queue branch (<branchPrefix><id>, or claude/<id> where only that is allowed), ends it with a finish
+// marker (cloudMarker), and the orchestrator receives and merges as usual: the gates run at home and the evidence is recorded there.
 
 /** Who a cloud session appears as in `picked_by`. */
 const CLOUD_BY = 'cloud';
-/** At most this many cloud sessions concurrently (does not count toward maxConcurrent). */
+/**
+ * The default limit on concurrent cloud sessions (they do not count toward maxConcurrent). Not a vendor limit: none is documented,
+ * but parallel sessions share the plan's usage limits. cloud.maxSessions in queue.config.json replaces it (cloudMax).
+ */
 const CLOUD_MAX = 3;
 const CLOUD_CLASSES = new Set(['K', 'U']);
 const CLOUD_CLOSED = new Map([
@@ -33,6 +36,18 @@ const CLOUD_CLOSED = new Map([
   ['local-files', 'needs files that only exist locally (gitignored or untracked)'],
   ['unit', "needs the owner's device or a running app"],
 ]);
+
+/** The limit in effect: cloud.maxSessions when it is a whole number above 0, otherwise CLOUD_MAX. */
+function cloudMax() {
+  const n = cfg().cloud?.maxSessions;
+  return Number.isInteger(n) && n > 0 ? n : CLOUD_MAX;
+}
+
+/** Tasks in one session: cloud.bundleMax, otherwise the default. */
+function cloudBundleMax() {
+  const n = cfg().cloud?.bundleMax;
+  return Number.isInteger(n) && n > 0 ? n : CLOUD_BUNDLE_MAX;
+}
 
 /** Is the task in a cloud session now? (picked by "cloud", with the cloud field set by `cloud start`) */
 function isCloud(o) {
@@ -181,26 +196,69 @@ function cloudRules() {
 const CLOUD_BUNDLE_MAX = 4;
 const CLOUD_BUNDLE_MIN = 120;
 
-const CLOUD_GATES =
-  'npm install; the tests for the new/changed files; and at the end, before push, ' +
-  `\`${require('../projectRoot.js').cliCommand()} gates --quick --wave cloud --track <id>\` (the quick gates from config().gates.quick). ` +
-  'If a gate is red, fix it and run it again; if it is red because of something outside the task or an environment issue in the cloud, ' +
-  'mention it in the report.';
+/**
+ * What the session runs before it pushes. The plugin is not installed in a cloud session, so the package names the
+ * project's own commands (config().gates.quick) and never a ravenseat command. These runs help the session; the evidence is
+ * the run at home (ravenseat receive), since agents do not grade their own homework.
+ */
+function cloudGates() {
+  const quick = (Array.isArray(cfg().gates?.quick) ? cfg().gates.quick : [])
+    .filter((g) => typeof g === 'string' && g.trim())
+    .map((g) => `\`${g.trim()}\``);
+  return (
+    'install what the project needs (npm install in a Node project); the tests for the new/changed files; and at the end, before push, ' +
+    `${quick.length ? `the project's quick gates: ${quick.join(', ')}` : 'whatever checks the project has'}. ` +
+    'Ravenseat is not installed in this session, so do not look for its commands. These runs are for your own use: the ' +
+    'orchestrator runs the gates again on your branch at home, and only that run counts as evidence. If a gate is red, fix it and ' +
+    'run it again; if it is red because of something outside the task or an environment issue in the cloud, mention it in the report.'
+  );
+}
 // npm install can rewrite package-lock.json; then the session must reset it itself.
 const CLOUD_LOCK =
   'Do not commit package-lock.json unless the mission says so (npm install rewrites it; reset it before commit).';
 const commitLine = (id) =>
   `Commit message: "<type>(<area>): <summary> (${id})" + line "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>".`;
-const branchLine = (branch, explanation = '') => {
+/** The branches a cloud session may push to: the queue branch, and one fixed name where access rules only allow claude/. */
+const cloudBranches = (id) => [queueBranch(id), `claude/${id}`];
+const branchLine = (id, explanation = '') => {
   const r = remoteName();
   const b = baseBranch();
+  const [branch, fallback] = cloudBranches(id);
   return (
     `Branch rule${explanation}: start from ${r}/${b} (git fetch ${r} ${b} && git checkout -b ${branch} ${r}/${b}). ` +
-    `Push only branch ${branch} to ${r}. If the push to ${branch} is rejected by access rules, push instead to the ` +
-    `branch the session is allowed to use (for example claude/...) and write the name of the branch in the report. Never ${b}, ` +
-    'never PR.'
+    `Push only branch ${branch} to ${r}. If the push to ${branch} is rejected by access rules, push the same commits to ` +
+    `${fallback} instead, exactly that name: the orchestrator looks for those two branches. Never ${b}, never PR. ` +
+    'The GitHub proxy rejects tags, branch deletions and gh pr or gh issue, so do not try them.'
   );
 };
+/**
+ * The finish marker. Nothing at home can read a session's transcript, and a pushed branch alone does not say the work is
+ * finished, so the last commit on the branch says it. `ravenseat cloud check` reads it (cloudMarker).
+ */
+const finishLine = (id) =>
+  `Finish: nobody at home can read this session, so the last thing you do for the task is one more commit on the branch, and push it: ` +
+  `git commit --allow-empty -m "CLOUD-DONE ${id}". If you cannot do the task: git commit --allow-empty -m "CLOUD-STOP ${id} <reason>" ` +
+  'and push that, even with no other commits. Without this the orchestrator keeps waiting.';
+
+/**
+ * The finish marker in a commit message: a line that is exactly CLOUD-DONE <id> (a sha may follow) or CLOUD-STOP <id> <reason>.
+ * A stop wins over a done in the same message. The reason comes from outside: control characters go, and it is cut short.
+ * @returns {{ kind: 'done'|'stop', reason: string|null } | null}
+ */
+function cloudMarker(message, id) {
+  const lines = String(message ?? '').split(/\r?\n/);
+  const stop = new RegExp(`^CLOUD-STOP ${regexSafe(id)}(?:\\s+(.*))?$`);
+  const done = new RegExp(`^CLOUD-DONE ${regexSafe(id)}(?:\\s+\\S+)?\\s*$`);
+  for (const line of lines) {
+    const m = stop.exec(line);
+    if (m) {
+      // eslint-disable-next-line no-control-regex
+      const reason = String(m[1] ?? '').replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim().slice(0, 200);
+      return { kind: 'stop', reason: reason || null };
+    }
+  }
+  return lines.some((line) => done.test(line)) ? { kind: 'done', reason: null } : null;
+}
 
 /** "Files the cloud does not see …" for all the parts in the package, or null. */
 function hiddenLine(parts) {
@@ -218,8 +276,9 @@ function hiddenLine(parts) {
 }
 
 /**
- * The cloud package: one self-contained message for the routine "queue-cloud" (or to paste into a cloud session). Structure: branch rule, gates, commit message, files the cloud does not see, rules, report format, and then
- * the mission in full with the track block.
+ * The cloud package: one self-contained message for a cloud session (claude --cloud, or a scheduled task's API trigger). A session has
+ * no plugin, so everything it needs is in here. Structure: branch rule, gates, commit message, finish marker, files the cloud does not
+ * see, rules, report format, and then the mission in full with the track block.
  * @param {{ text: string, ownPath?: string|null }} v the mission text (the file or the text itself)
  */
 function cloudPackage(o, queue, { text, ownPath = null } = {}) {
@@ -228,10 +287,11 @@ function cloudPackage(o, queue, { text, ownPath = null } = {}) {
   return [
     `# CLOUD TRACK ${id} (class ${o.class}, approx. ${estimate(o)} min)`,
     '',
-    branchLine(queueBranch(id)),
-    `Gates in the cloud: ${CLOUD_GATES}`,
+    branchLine(id),
+    `Gates in the cloud: ${cloudGates()}`,
     CLOUD_LOCK,
     commitLine(id),
+    finishLine(id),
     ...(hidden ? [hidden] : []),
     '',
     'Rules (the ones that apply to this track):',
@@ -251,7 +311,7 @@ function cloudPackage(o, queue, { text, ownPath = null } = {}) {
  * @param {object[]} tasks
  * @returns {string[]} the reasons (empty = within the cap)
  */
-function cloudBundleCap(tasks, { max = CLOUD_BUNDLE_MAX, maxMin = CLOUD_BUNDLE_MIN } = {}) {
+function cloudBundleCap(tasks, { max = cloudBundleMax(), maxMin = CLOUD_BUNDLE_MIN } = {}) {
   const reasons = [];
   const ids = tasks.map((o) => o.id);
   if (new Set(ids).size !== ids.length) reasons.push('the same task twice');
@@ -278,11 +338,12 @@ function cloudBundlePackage(parts, queue) {
     `# CLOUD BUNDLE ${ids.join(', ')} (${n} tasks, approx. ${sum} min)`,
     '',
     `Do the ${n} missions below one after another, in this order: ${ids.join(' → ')}. For EACH task:`,
-    `- ${branchLine(queueBranch('<id>'), ' (own branch per task)')} Make each branch from ${remoteName()}/${baseBranch()}, ` +
+    `- ${branchLine('<id>', ' (own branch per task)')} Make each branch from ${remoteName()}/${baseBranch()}, ` +
       'never from the previous ' +
       "task's branch, and do not bring along changes from an earlier task.",
     `- Own commit and own push. ${commitLine('<id>')}`,
-    `- Gates for the task: ${CLOUD_GATES}`,
+    `- Gates for the task: ${cloudGates()}`,
+    `- ${finishLine('<id>')}`,
     '- Report line right after the push: "CLOUD-DONE <id> <sha>", or "CLOUD-STOP <id> <reason>" when the task cannot ' +
       'be done. A stop does not hinder the next ones: move on to the next task.',
     CLOUD_LOCK,
@@ -312,7 +373,7 @@ function cloudBundlePackage(parts, queue) {
  * @param {{ id: string, project: string, feature?: string|null, estimate: number, score: number }[]} candidates
  * @returns {{ ids: string[], minutes: number, areas: string[] }[]}
  */
-function cloudBundles(candidates, { max = CLOUD_BUNDLE_MAX, maxMin = CLOUD_BUNDLE_MIN } = {}) {
+function cloudBundles(candidates, { max = cloudBundleMax(), maxMin = CLOUD_BUNDLE_MIN } = {}) {
   const groups = new Map();
   for (const k of candidates) {
     const area = `${k.project}${k.feature ? ` / ${k.feature}` : ''}`;
@@ -347,7 +408,7 @@ function cloudSessions(queue) {
 /**
  * `queue.mjs cloud start <id> [<id> …]`: picks tasks for one cloud session (picked_by "cloud", branch queue/<id>) and sets
  * `cloud: { started, execution?, bundle? }` (bundle = the ids when several run in the same session). All or nothing. Refuses when a
- * task is not suitable (`suitability` per id, computed by the caller with git), when the bundle is over the cap, or when CLOUD_MAX
+ * task is not suitable (`suitability` per id, computed by the caller with git), when the bundle is over the cap, or when cloudMax()
  * cloud sessions are already running; `force` overrides those three, and the pick's blockers. If a task is already in the cloud, only
  * the execution is set (the orchestrator got the session id after the owner pressed start).
  * @param {string|string[]} ids
@@ -389,8 +450,9 @@ function cloudStart(
   }
   if (newOnes.length) {
     const sessions = cloudSessions(queue);
-    if (sessions >= CLOUD_MAX) {
-      const f = stop(`${sessions} cloud sessions are already running (at most ${CLOUD_MAX})`);
+    const most = cloudMax();
+    if (sessions >= most) {
+      const f = stop(`${sessions} cloud sessions are already running (at most ${most})`);
       if (f) return { error: f };
     }
   }
@@ -447,6 +509,9 @@ function cloudCancel(queue, id, { commits = 0, now = new Date().toISOString() } 
 module.exports = {
   CLOUD_BY,
   CLOUD_MAX,
+  cloudMax,
+  cloudMarker,
+  cloudBranches,
   isCloud,
   cloudReferences,
   cloudSuitable,
@@ -454,6 +519,7 @@ module.exports = {
   CLOUD_BUNDLE_MIN,
   cloudPackage,
   cloudBundleCap,
+  cloudBundleMax,
   cloudBundlePackage,
   cloudBundles,
   cloudSessions,

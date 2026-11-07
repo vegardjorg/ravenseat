@@ -532,6 +532,13 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `identity.allow` | `[]` | Addresses the identity guard accepts although they look like a test identity (`ci@example.com`). Exact, not case sensitive |
 | `testWeakening.enabled`, `testPaths`, `markers` | `true`, `[]`, `[]` | `receive` warns, never stops, about deleted test files, test files moved out of the test paths and skip or focus markers on added lines in test files (`.skip(`, `.only(`, `xit(`, `it.todo(`, `@pytest.mark.skip`, `pytest.skip(`, `@unittest.skip`, `#[ignore]`, `t.Skip(`, `@Disabled`, `@Ignore`, `pending(`, `markTestSkipped` ...): one `WARN test weakening:` line and a `Test weakening` section in `00-package.md`. `testPaths` adds test file globs (the `protectedPaths` rules), `markers` adds regular expressions; `ravenseat doctor` names an invalid one |
 | `cloudHidden` | `[]` | Paths a cloud session cannot see (missions pointing there are stopped) |
+| `cloud.maxSessions` | `3` | At most this many cloud sessions at once (a bundle counts as one), with no upper limit of its own. They share your plan's usage limits. `ravenseat cloud set` or the gear changes this and the settings below |
+| `cloud.collect` | `ask` | When a session has finished: `off` you run the steps, `ask` the orchestrator asks and then runs `cloud collect`, `auto` it runs it without asking. Merge follows the usual rules in all three |
+| `cloud.deleteBranch` | `true` | Remove the session's branch from the remote after the merge |
+| `cloud.bundleMax` | `4` | Tasks in one session, one after another |
+| `cloud.offerOnLeave` | `true` | The orchestrator offers `ravenseat cloud-go` once when you say you are leaving. `false` keeps it silent; the command still works. |
+| `cloud.start` | `terminal` | `terminal`: you run `ravenseat cloud-start <id>`. `routine`: `ravenseat cloud send <id>` fires a scheduled task, without a terminal |
+| `cloud.fireUrl` | `null` | With `routine`: the API trigger's URL on api.anthropic.com. The token goes in the environment variable `RAVENSEAT_CLOUD_TOKEN`, never in a file |
 | `capacity` | Tuesday 19:00 local time | Weekly quota reset for `ravenseat capacity` |
 | `models` | `{}` (each agent file's model, opus) | Model per agent, e.g. `{ "reviewer-docs": "sonnet" }`: printed as `model=<m>` on the start lines and passed to the Agent tool (opus, sonnet, haiku, fable; an unknown value is ignored) |
 | `loadGuard.minFreeMemoryPct` | `10` (off on macOS) | Load guard: no new starts while free memory (percent) is below it; `ravenseat limit minFreeMemoryPct` overrides per queue |
@@ -548,5 +555,5 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `modules`, `projectModuleSuggestion`, `priorityRules`, `documentFolders`, `indexFile`, `documents`, `planBackup` | see `queue.config.example.json` | Plan register (see `plan-register.md`) |
 | `board.port`, `board.title` | `2000`, `Queue board` | Board |
 | `board.updateCheck` | `true` | Board: look for a newer ravenseat on GitHub at most once per 24 hours (see board.md, Update banner) |
-| `board.showCloud` | `false` | Board: show the Cloud tab (with `features.cloud` on). `ravenseat board-setting cloud on\|off` sets it in queue.json, which wins |
+| `board.showCloud` | `true` | Board: show the Cloud tab while `features.cloud` is on. `false` keeps the tab away with the module on. `ravenseat board-setting cloud on\|off` sets it in queue.json, which wins |
 | `features` | `plans`, `focus`, `statistics` on; `cloud`, `follow`, `plans.legal`, `plans.launch`, `plans.documents` off | Modules that can be switched off. Off hides them on the board (tabs, buttons, routes; see board.md, Modules); `cloud*` and `follow*` commands answer "Cloud is off (features.cloud in queue.config.json)." with exit 0, and `show` and the pulse skip follow-up lines. `plans` only hides the board's Plans room: `ravenseat plan` always works. A part (`plans.legal`) is off when its parent is off; unknown keys are ignored. Restart the board after a change |

@@ -352,6 +352,14 @@ const STANDARD = Object.freeze({
   excludeBranches: ['main', 'master'],
   // Paths a cloud session cannot see (e.g. gitignored folders); a mission that points there is stopped.
   cloudHidden: [],
+  // Cloud tracks (features.cloud turns them on, `ravenseat cloud setup` lists what they need). maxSessions: at most this many at once;
+  // they share the plan's usage limits. start: "terminal" (the owner runs `ravenseat cloud-start`) or "routine" (`ravenseat cloud send`
+  // fires the scheduled task at fireUrl, lib/cloudFire.js; the token is only ever in the environment, RAVENSEAT_CLOUD_TOKEN).
+  // offerOnLeave: the orchestrator offers cloud-go once when the owner says they are leaving; false keeps it silent.
+  // collect: what happens when a session has finished: off (you run the steps), ask (the orchestrator asks, then runs cloud collect),
+  // auto (it runs cloud collect without asking; the local gates are heavy, so that is your choice). Merge follows the usual rules either way.
+  // deleteBranch: remove the session's branch from the remote after the merge. bundleMax: tasks in one session.
+  cloud: { maxSessions: 3, start: 'terminal', fireUrl: null, offerOnLeave: true, collect: 'ask', deleteBranch: true, bundleMax: 4 },
   // Weekly quota (queue.mjs capacity): when it resets, and the subscription name in the text (null = "weeklyQuota").
   capacity: {
     resetDay: null, // 0-6 (0 = Sunday)
@@ -374,9 +382,9 @@ const STANDARD = Object.freeze({
     // plain GET that sends nothing about you). false turns it off; so do DISABLE_UPDATES and
     // CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC. The local "run ravenseat setup --settings" notice works either way.
     updateCheck: true,
-    // The Cloud tab (with features.cloud on): hidden unless this is true. queue.json board.showCloud wins (written
-    // by `ravenseat board-setting cloud on|off` and the gear's Board section). A saved Cloud view still opens with the tab hidden.
-    showCloud: false,
+    // The Cloud tab: features.cloud is the switch for all of it, so the tab comes with it. false keeps the tab away with the module on.
+    // queue.json board.showCloud wins (written by `ravenseat board-setting cloud on|off` and the gear). A saved Cloud view still opens.
+    showCloud: true,
   },
   // The modules that can be switched off (FEATURES above): { "cloud": true } turns one on. Unknown keys are ignored.
   features: FEATURES,

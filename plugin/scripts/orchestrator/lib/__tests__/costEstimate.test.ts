@@ -194,6 +194,12 @@ describe('perMergedChange', () => {
   ];
   const window = { from: NOW - 28 * 86_400_000, to: NOW + 1 };
 
+  it('a merged cloud track brings no local cost, so it is counted apart and does not divide the cost', () => {
+    const withCloud = [...tasks, done('CL', 'K', 2, { cloud: { started: ago(8), done: ago(3) } })];
+    const p = CE.perMergedChange({ queue: { tasks: withCloud }, events: [ev('A', 6, 30)], ...window });
+    expect(p).toMatchObject({ merged: 3, merged_cloud: 1, usd_per_merged: 3 });
+  });
+
   it('all measured cost in the window / the tasks merged in it, attributed by track label (fix rounds count)', () => {
     const events = [
       ev('A', 3, 30),

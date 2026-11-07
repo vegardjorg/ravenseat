@@ -95,7 +95,7 @@ function samples(queue, { now = Date.now(), windowDays = WINDOW_DAYS } = {}) {
       id: o.id,
       class: o.class,
       size: sizeBucket(o),
-      usd: o.cost && Number.isFinite(usd) && usd > 0 ? usd : null,
+      usd: !o.cloud && o.cost && Number.isFinite(usd) && usd > 0 ? usd : null, // a cloud track's use is not in the local transcripts
       model: L.estimateCost(o),
       minutes: minutesBetween(o.started, o.done),
       estimate: L.estimate(o),
@@ -276,7 +276,7 @@ function taskTotals({ queue, events = [], since = null }) {
   for (const o of tasks) {
     const evs = perTask.get(o.id) ?? [];
     let own;
-    if (o.cost && Number.isFinite(Number(o.cost.usd)))
+    if (!o.cloud && o.cost && Number.isFinite(Number(o.cost.usd)))
       own = {
         usd: Number(o.cost.usd),
         tokens: Number(o.cost.tokens?.sum ?? 0) || 0,
@@ -400,12 +400,16 @@ function perMergedChange({ queue, events = [], from, to }) {
     parts.merged = taskCost;
   }
   const content = merged.reduce((s, o) => s + contentMin(o), 0);
+  // A merged cloud track brought no measured cost along, so it does not divide the local cost either.
+  const mergedCloud = merged.filter((o) => o.cloud).length;
+  const measuredMerged = merged.length - mergedCloud;
   return {
     from: new Date(from).toISOString(),
     to: new Date(to).toISOString(),
     merged: merged.length,
     total_usd: round2(total),
-    usd_per_merged: merged.length ? round2(total / merged.length) : null,
+    merged_cloud: mergedCloud,
+    usd_per_merged: measuredMerged ? round2(total / measuredMerged) : null,
     source,
     parts: {
       merged: round2(parts.merged),
