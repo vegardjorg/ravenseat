@@ -407,6 +407,7 @@
 //   node scripts/orchestrator/queue.mjs cloud setup                      (what cloud tracks need, what is in place, the next step; changes nothing)
 //   node scripts/orchestrator/queue.mjs cloud on|off                     (features.cloud in queue.config.json)
 //   node scripts/orchestrator/cloud-start.mjs <id> [<id> ...] [--force] [--allow-upload]   (in a terminal: claude --cloud with the package)
+//   node scripts/orchestrator/cloud-go.mjs [<sessions>] [--single] [--dry-run] [--force] [--allow-upload]   (several sessions in one go, by priority)
 //   node scripts/orchestrator/queue.mjs cloud send <id> [<id> ...] [--force]   (without a terminal, only with cloud.start routine: fires the
 //                                                                  scheduled task once, never retries; lib/cloudFire.js)
 //   node scripts/orchestrator/queue.mjs cloud check [--json]             (one read of the remote: which cloud tasks have pushed, and the finish

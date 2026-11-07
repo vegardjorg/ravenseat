@@ -427,6 +427,100 @@ describe('cloud starts obey the usage limit pause', () => {
   }, 60_000);
 });
 
+describe('cloud-go.mjs: several sessions in one go', () => {
+  /** A fake claude that appends the package of every call to a log, and fails on the call number in failOn. */
+  const logging = (dir: string, failOn = 0) => {
+    const file = path.join(dir, 'fake-claude.cjs');
+    const log = path.join(dir, 'calls.json');
+    fs.writeFileSync(
+      file,
+      `const fs = require('node:fs'); const f = ${JSON.stringify(log)}; const c = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : []; ` +
+        `c.push(process.argv[3]); fs.writeFileSync(f, JSON.stringify(c)); process.exit(c.length === ${failOn} ? 7 : 0);`,
+    );
+    return { env: { QUEUE_CLOUD_FAKE_CLAUDE: file }, calls: (): string[] => (fs.existsSync(log) ? JSON.parse(fs.readFileSync(log, 'utf8')) : []) };
+  };
+  const SINGLE = ['--single', '--allow-upload'];
+
+  it('--dry-run lists what would start and starts nothing', () => {
+    const p = project([o('A'), o('B')]);
+    const f = logging(tmp('queue-ct-go-'));
+    const r = p.script('cloud-go.mjs', ['2', '--dry-run', ...SINGLE], f.env);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/Would start 2 cloud session/);
+    expect(f.calls()).toEqual([]);
+    expect(p.task('A').status).toBe('waiting');
+  }, 60_000);
+
+  it('starts as many sessions as asked, one task each with --single', () => {
+    const p = project([o('A'), o('B'), o('C')]);
+    const f = logging(tmp('queue-ct-go-'));
+    const r = p.script('cloud-go.mjs', ['2', ...SINGLE], f.env);
+    expect(r.code).toBe(0);
+    expect(f.calls().length).toBe(2);
+    expect(['A', 'B', 'C'].map((id) => p.task(id).status).sort()).toEqual(['picked', 'picked', 'waiting']);
+    expect(r.out).toMatch(/2 session\(s\) started/);
+  }, 120_000);
+
+  it('without --single related tasks share one session', () => {
+    const p = project([o('A'), o('B')]);
+    const f = logging(tmp('queue-ct-go-'));
+    const r = p.script('cloud-go.mjs', ['--allow-upload'], f.env);
+    expect(r.code).toBe(0);
+    expect(f.calls().length).toBe(1);
+    expect(f.calls()[0]).toContain('Mission for A.');
+    expect(f.calls()[0]).toContain('Mission for B.');
+  }, 60_000);
+
+  it('never goes past cloud.maxSessions, and says so', () => {
+    const p = project([o('A'), o('B'), o('C')], { cloud: { maxSessions: 1 } });
+    const f = logging(tmp('queue-ct-go-'));
+    const r = p.script('cloud-go.mjs', ['3', ...SINGLE], f.env);
+    expect(r.code).toBe(0);
+    expect(f.calls().length).toBe(1);
+    expect(r.out).toMatch(/You asked for 3, but cloud.maxSessions leaves room for 1/);
+    const again = p.script('cloud-go.mjs', ['3', ...SINGLE], f.env);
+    expect(again.code).toBe(0);
+    expect(again.out).toMatch(/Nothing started/);
+    expect(f.calls().length).toBe(1);
+  }, 120_000);
+
+  it('a failed start stops the rest', () => {
+    const p = project([o('A'), o('B'), o('C')]);
+    const f = logging(tmp('queue-ct-go-'), 1);
+    const r = p.script('cloud-go.mjs', ['3', ...SINGLE], f.env);
+    expect(r.code).toBe(7);
+    expect(f.calls().length).toBe(1);
+    expect(r.error).toMatch(/0 session\(s\) had started/);
+  }, 60_000);
+
+  it('--offer shows the proposal, and is silent when the owner has turned it off or there is nothing to offer', () => {
+    const f = logging(tmp('queue-ct-go-'));
+    const on = project([o('A')]).script('cloud-go.mjs', ['--offer'], f.env);
+    expect(on.out).toMatch(/Would start 1 cloud session/);
+    const off = project([o('A')], { cloud: { offerOnLeave: false } }).script('cloud-go.mjs', ['--offer'], f.env);
+    expect(off.code).toBe(0);
+    expect(off.out.trim()).toBe('');
+    const nothing = project([]).script('cloud-go.mjs', ['--offer'], f.env);
+    expect(nothing.code).toBe(0);
+    expect(nothing.out.trim()).toBe('');
+    expect(f.calls()).toEqual([]);
+  }, 60_000);
+
+  it('the setting only silences the offer: a plain cloud-go still starts', () => {
+    const p = project([o('A')], { cloud: { offerOnLeave: false } });
+    const f = logging(tmp('queue-ct-go-'));
+    expect(p.script('cloud-go.mjs', ['1', '--allow-upload'], f.env).code).toBe(0);
+    expect(f.calls().length).toBe(1);
+  }, 60_000);
+
+  it('refuses anything but a whole number of sessions', () => {
+    const p = project([o('A')]);
+    const f = logging(tmp('queue-ct-go-'));
+    for (const bad of ['0', 'two', '1.5']) expect(p.script('cloud-go.mjs', [bad], f.env).code, bad).toBe(1);
+    expect(f.calls()).toEqual([]);
+  }, 60_000);
+});
+
 describe('cloud-start.mjs with a fake claude', () => {
   /** A script that records its arguments; `exit` is what it exits with. */
   const fakeClaude = (dir: string, exit = 0) => {

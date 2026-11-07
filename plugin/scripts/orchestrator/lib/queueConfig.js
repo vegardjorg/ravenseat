@@ -355,7 +355,8 @@ const STANDARD = Object.freeze({
   // Cloud tracks (features.cloud turns them on, `ravenseat cloud setup` lists what they need). maxSessions: at most this many at once;
   // they share the plan's usage limits. start: "terminal" (the owner runs `ravenseat cloud-start`) or "routine" (`ravenseat cloud send`
   // fires the scheduled task at fireUrl, lib/cloudFire.js; the token is only ever in the environment, RAVENSEAT_CLOUD_TOKEN).
-  cloud: { maxSessions: 3, start: 'terminal', fireUrl: null },
+  // offerOnLeave: the orchestrator offers cloud-go once when the owner says they are leaving; false keeps it silent.
+  cloud: { maxSessions: 3, start: 'terminal', fireUrl: null, offerOnLeave: true },
   // Weekly quota (queue.mjs capacity): when it resets, and the subscription name in the text (null = "weeklyQuota").
   capacity: {
     resetDay: null, // 0-6 (0 = Sunday)

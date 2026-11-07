@@ -183,6 +183,11 @@ repo matters, protect that branch on GitHub (Settings > Rules > Rulesets, or Bra
   token in the environment variable `RAVENSEAT_CLOUD_TOKEN`; `ravenseat cloud setup` has the steps. Then
   `ravenseat cloud send <id>` starts a session. It only runs when someone runs it, nothing sends tasks on its own, and it
   never retries: every accepted call makes a new session on your plan. The endpoint is marked experimental.
+- **Several at once, when you are leaving:** `ravenseat cloud-go 3` starts three sessions on the highest priority tasks that
+  fit, and `--dry-run` shows which first. Related tasks share a session, one after another; `--single` gives each task its
+  own, so they run side by side. Run it in a terminal and wait for it to finish, then close the machine. Tell the
+  orchestrator you are logging off and it offers this once; `"cloud": { "offerOnLeave": false }` in `queue.config.json`
+  turns the offer off, and the command still works.
 - **Limits:** at most `cloud.maxSessions` sessions at once (default 3; a bundle counts as one). Nothing documents a hard
   limit, but parallel sessions use your plan faster. During a [usage limit pause](queue.md) no cloud session starts either
   (exit 12; `--force` overrides), since the limit is the same one.

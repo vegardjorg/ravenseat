@@ -208,6 +208,11 @@ plan's usage limits. Never run `cloud send` unless the owner has asked for that 
 in the pulse) reads the finish marker on the branch. After `cloud done`, run `receive` and `merge` as for a local track, so the gates and the
 evidence are local.
 
+**When the owner says they are leaving** (logging off, moving, done for the day): run `ravenseat cloud-go --offer`. No output means say nothing
+about the cloud (it is off, the owner turned the offer off with `cloud.offerOnLeave`, or nothing fits). Otherwise offer once: show what would start,
+that it counts against the plan's limits, and whether the base branch is pushed. Only on their yes: `ravenseat cloud-go [<sessions>]`, which needs a real terminal, so run it in one or give them the command. When they
+are back, `cloud check` and then receive and merge. Never start it because they went quiet.
+
 ## Known pitfalls
 
 - `String.replace` with `$'` in the replacement duplicates text; build with `split`/`join`.
