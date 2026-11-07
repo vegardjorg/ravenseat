@@ -87,6 +87,14 @@ function cloudSetupRows(f) {
       'A session is a fresh clone on a VM: the Ravenseat plugin and your user settings are not installed there (hooks in the repo\'s own .claude/settings.json do load), the GitHub proxy rejects tags, branch deletions and gh pr or gh issue, and there is no database. Choose the environment with /remote-env in claude.',
     ),
   );
+  rows.push(
+    row(
+      'INFO',
+      'branches',
+      `A session is told never to push to ${f.base}, but the GitHub proxy does not stop it: it limits tags and deletions, not which branch a push updates. Only a rule on GitHub can stop it, and that cannot be checked from here.`,
+      `optional: protect ${f.base} on GitHub (Settings > Rules > Rulesets, or Branches). Your own pushes must still be allowed.`,
+    ),
+  );
   if (f.start === 'routine') {
     const missing = [
       ...(f.fireUrlValid ? [] : ['cloud.fireUrl (the trigger\'s URL, https://api.anthropic.com/v1/claude_code/routines/trig_.../fire)']),

@@ -170,6 +170,9 @@ What it needs: a GitHub remote with your base branch pushed, a claude.ai login, 
 copy of your local repo instead of cloning it, and on Windows that copy includes uncommitted changes in tracked files, so
 any secret sitting in one goes too. Ravenseat cannot see from here whether the app is installed.
 
+A session is told never to push to your base branch, but nothing on GitHub's side stops it unless you add a rule. If the
+repo matters, protect that branch on GitHub (Settings > Rules > Rulesets, or Branches).
+
 - **What can go to the cloud:** ordinary code tasks (K and U) without migrations or database changes. The queue
   decides which tasks fit, and the board's **Cloud** tab lists them, grouped into bundles of up to 4 tasks per session.
 - **Start:** run `node "<plugin folder>/scripts/orchestrator/ravenseat.mjs" cloud-start <id> [<id> …]` in your own

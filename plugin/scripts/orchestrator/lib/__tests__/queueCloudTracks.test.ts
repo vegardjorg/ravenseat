@@ -276,6 +276,8 @@ describe('cloudSetupRows', () => {
     expect(row({ pushed: false }, 'base')?.status).toBe('WARN');
     expect(row({ unpushed: 4 }, 'base')?.status).toBe('WARN');
     expect(row({}, 'base')?.status).toBe('OK');
+    expect(row({}, 'branches')?.status).toBe('INFO');
+    expect(row({}, 'branches')?.message).toMatch(/proxy does not stop it/);
     expect(row({}, 'session')?.message).toMatch(/plugin/);
     expect(row({}, 'session')?.message).toMatch(/\/remote-env/);
   });
@@ -630,7 +632,8 @@ describe('cloud send (the routine way)', () => {
     expect(end.calls[0].auth).toBe(`Bearer ${TOKEN}`);
     expect(JSON.parse(end.calls[0].body).text).toContain('Mission for A.');
     expect(p.task('A')).toMatchObject({ status: 'picked', picked_by: 'cloud' });
-    expect(p.task('A').cloud?.execution).toBe('https://claude.ai/code/session_1');
+    // The id, since a follow-up with claude -p --cloud needs it.
+    expect(p.task('A').cloud?.execution).toBe('session_1');
     expect(`${r.out}${r.error}`).not.toContain(TOKEN);
   }, 60_000);
 

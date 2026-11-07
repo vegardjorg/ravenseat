@@ -274,9 +274,10 @@ async function cloudSend(ids) {
   for (const x of started.newOnes) logTime(x, 'cloud-start', 'cloud send');
   const r = await CF.fireRoutine({ url: own.fireUrl, token, text: pkg });
   if (r.ok) {
-    const execution = r.sessionUrl ?? r.sessionId ?? null;
+    // The id first: claude -p "..." --cloud <id> needs it for a follow-up, and the address is built from it.
+    const execution = r.sessionId ?? r.sessionUrl ?? null;
     if (execution) edit((queue) => void L.cloudStart(queue, ids, { execution, force: true }));
-    console.log(`Started in the cloud: ${ids.join(', ')}${execution ? ` (${execution})` : ''}. ${CLI} cloud check says when it has finished.`);
+    console.log(`Started in the cloud: ${ids.join(', ')}${r.sessionUrl ?? execution ? ` (${r.sessionUrl ?? execution})` : ''}. ${CLI} cloud check says when it has finished.`);
     return;
   }
   if (r.created === false) {
