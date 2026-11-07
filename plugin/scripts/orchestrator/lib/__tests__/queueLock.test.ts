@@ -279,6 +279,44 @@ describe('the atomic steps, without processes', () => {
     expect(fs.readdirSync(lock)).toEqual(['owner-1.json']);
     expect(QL.isHeld(lock, y)).toBe(true);
   });
+  describe('an empty lock folder (a release whose rmdir Windows refused, or a holder that died before its token)', () => {
+    const aged = (dir: string, ms: number) => {
+      const t = new Date(Date.now() - ms);
+      fs.utimesSync(dir, t, t);
+    };
+    it('is taken after a short age, inside the wait, not after the 60 s of the age rule', () => {
+      const lock = folder();
+      fs.mkdirSync(lock);
+      aged(lock, QL.EMPTY_AGE_MS + 1000);
+      const r = QL.acquire(lock, { waitMs: 0 });
+      expect(r.ok).toBe(true);
+      expect(r.tookOver).toMatch(/empty/);
+      expect(QL.isHeld(lock, r.me)).toBe(true);
+    });
+    it('a fresh one is left alone: a holder can be between mkdir and its token', () => {
+      const lock = folder();
+      fs.mkdirSync(lock);
+      expect(QL.acquire(lock, { waitMs: 0 }).ok).toBe(false);
+      expect(fs.readdirSync(lock)).toEqual([]);
+    });
+    it('a holder paused between mkdir and its token finds its name taken, and leaves the new holder alone', () => {
+      const lock = folder();
+      fs.mkdirSync(lock);
+      aged(lock, QL.EMPTY_AGE_MS + 1000);
+      const r = QL.acquire(lock, { waitMs: 0 });
+      expect(QL.placeToken(lock, QL.newOwner(), { tokens: [], other: [] })).toBe(false);
+      expect(QL.isHeld(lock, r.me)).toBe(true);
+    });
+    it('a folder with something unknown in it or a token that cannot be read still follows the age rule', () => {
+      for (const name of ['something-else', 'owner-1.json']) {
+        const lock = folder();
+        fs.mkdirSync(lock);
+        fs.writeFileSync(path.join(lock, name), 'not json');
+        aged(lock, QL.EMPTY_AGE_MS + 1000);
+        expect(QL.acquire(lock, { waitMs: 0 }).ok, name).toBe(false);
+      }
+    });
+  });
   it('a back-off leaves no empty folder behind for the others to wait 60 s on', () => {
     const lock = folder();
     fs.mkdirSync(lock);

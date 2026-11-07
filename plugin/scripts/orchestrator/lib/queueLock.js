@@ -21,13 +21,17 @@
 //     of two processes that meet like this at most one sees nothing new, and the other's token is never touched.
 //   * Releasing = removing my own token, then rmdir. A holder that lost the lock between its check and its release still
 //     cannot remove the new holder's lock: its token check fails, and even past that rmdir refuses a folder with a token.
-// A folder without a token is a holder between mkdir and its token, or a lock from before tokens. Both fall under the
-// age rule, so a waiter leaves a fresh one alone. A holder that was paused there past the age finds its name taken.
+// An empty folder is a holder between mkdir and its token, or what is left when a holder died there or when Windows refused
+// the rmdir of a release (a waiter was reading the folder, seen in CI). Nobody holds it, so waiters leave it alone for
+// EMPTY_AGE_MS and then take it. That is safe: taking it means creating owner-1.json with `wx`, so a holder that was paused
+// between its mkdir and its token finds its name taken and starts over. A folder with something else in it, as from before
+// tokens, falls under the age rule.
 //
 // THE RULE (assessLock, pure):
 //   same host, pid dead       take over at once
 //   same host, pid alive      never take over, whatever the age; after the wait the error names pid, age and ravenseat unlock
 //   other host, no owner      the age rule (older than 60 s, by the folder's mtime)
+//   empty folder              taken after EMPTY_AGE_MS (2 s), by the folder's mtime
 //
 // WHAT REMAINS (no lock file can settle these):
 //   * Pid reuse: a dead holder's pid taken by another process reads as alive. That errs on the safe side: the lock is not
@@ -36,7 +40,6 @@
 //     holder's pid reads as dead there and the lock is taken over. Do not share a data folder across those.
 //   * Another host: its pid cannot be asked, so a slow holder there can lose the lock by age. See stopIfLockLost in
 //     cli/context.mjs on what that means.
-//   * A process that dies between mkdir and its token leaves a folder without an owner: the others wait for the age rule.
 //
 // Used by: cli/context.mjs (withLock, write, die), cli/unlock.mjs. Tested in: lib/__tests__/queueLock.test.ts.
 // =============================================================
@@ -48,6 +51,8 @@ const path = require('node:path');
 
 /** A lock whose holder cannot be asked (other host, no readable owner) is stale after this long. */
 const STALE_AGE_MS = 60_000;
+/** A lock folder with nothing in it is free after this long: well inside WAIT_MS, so nobody gives up on an unheld lock. */
+const EMPTY_AGE_MS = 2_000;
 /** How long a caller waits for the lock before it gives up with an error. */
 const WAIT_MS = 15_000;
 const POLL_MS = 100;
@@ -236,7 +241,12 @@ function tryOnce(lockDir, { hostname, isAlive, now, pid }) {
   const judge = (owner) => assessLock({ owner, ageMs: state.ageMs, hostname, isAlive });
   // Any token that says wait decides: a live holder is never taken over, also not next to a leftover older token.
   const verdicts = state.tokens.map((t) => judge(t.owner));
-  if (!verdicts.length) verdicts.push(judge(null));
+  if (!verdicts.length)
+    verdicts.push(
+      !state.other.length && state.ageMs > EMPTY_AGE_MS
+        ? { action: 'take_over', reason: `an empty lock folder is older than ${EMPTY_AGE_MS / 1000} s`, holderAlive: false }
+        : judge(null),
+    );
   const waiting = verdicts.find((v) => v.action === 'wait');
   if (waiting) return { ok: false, verdict: waiting, state };
   const me = newOwner({ generation: (state.tokens[0]?.generation ?? 0) + 1, pid, hostname, now: now() });
@@ -320,6 +330,7 @@ function heldMessage({ folder, ravenseat = 'ravenseat', verdict, state, waitedMs
 
 module.exports = {
   STALE_AGE_MS,
+  EMPTY_AGE_MS,
   WAIT_MS,
   pidAlive,
   assessLock,
