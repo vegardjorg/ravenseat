@@ -318,6 +318,9 @@ const STANDARD = Object.freeze({
   // worktrees and projects. No history counts as light, so a small project never notices it. QUEUE_GATE_QUEUE=off|on
   // overrides `enabled`. The time budget starts after the wait.
   gateQueue: { enabled: true, slots: 1, heavyAfterSec: 120 },
+  // The pause at the subscription's usage limit (lib/usageLimit.js): the StopFailure hook saves the reset time, and no new
+  // tracks or fix rounds start until then (exit 12). pause false turns it off.
+  usageLimit: { pause: true },
   // Auto-accept of agent proposals (lib/queueProposals.js): a proposal that fits the rules is approved by the queue
   // itself (in `queue.mjs add` and `orchestrator pulse`), logged and can be undone. Default off. `queue.mjs proposals
   // auto` and the board's gear write the queue's own rules (queue.json proposals.autoAccept), which win field by field.

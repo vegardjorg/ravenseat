@@ -492,6 +492,8 @@ function nextUp(queue, { now = Date.now(), uncommitted = [], dailyUsage } = {}) 
   const withTitle = (list) => list.map((v) => ({ ...v, title: perId.get(v.id)?.title ?? '' }));
   const empty = { available, startable: [], whenAvailable: [] };
   const guard = L.startGuard(queue, dailyUsage, { now });
+  if (guard?.stop === 'usageLimit')
+    return { ...empty, stop: guard.stop, text: `Paused: ${guard.summary}.`, message: guard.message };
   if (guard?.stop === 'dailyBudget')
     return {
       ...empty,

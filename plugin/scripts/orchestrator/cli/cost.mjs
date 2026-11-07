@@ -21,6 +21,7 @@ import {
 import { agentsBySession } from './events.mjs';
 
 const ES = require('./lib/eventStatistics.js');
+const UL = require('./lib/usageLimit.js');
 
 /** `ravenseat forecast` (the usage is at the top of queue.mjs). */
 export function cmdForecast() {
@@ -47,6 +48,13 @@ export function cmdForecast() {
 /** `ravenseat limit` (the usage is at the top of queue.mjs). */
 export function cmdLimit() {
   const [, name, raw] = a;
+  // The usage limit is not a number to set: the pause ends by itself at the reset, and this ends it early.
+  if (name === 'usageLimit') {
+    if (raw !== 'clear') die('limit usageLimit clear (lifts the pause at the usage limit)');
+    UL.clear(FOLDER);
+    console.log('The usage limit pause is lifted.');
+    return;
+  }
   if (name) {
     // Validated under the lock against the limits as they are now (maxDPlus at most maxConcurrent).
     const t = edit((queue) => {
@@ -84,6 +92,8 @@ export function cmdLimit() {
   if (b.active) console.log(b.message);
   const night = L.nightGuard(queue);
   if (night.active) console.log(night.message);
+  const usageStop = L.usageLimitGuard();
+  if (usageStop) console.log(usageStop.message);
 }
 
 /** `ravenseat capacity` (the usage is at the top of queue.mjs). */

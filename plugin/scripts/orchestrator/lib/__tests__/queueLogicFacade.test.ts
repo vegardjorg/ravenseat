@@ -59,7 +59,7 @@ const EXPORTS = [
   'statusAtAdd', 'stepMatch', 'stepText', 'stepTitle', 'successors', 'suggestProject', 'sumCost', 'summaryView',
   'syncFocusEnd', 'takenBlocks', 'trackBlock', 'trackFileWarning', 'trackFolderRound', 'trackMessage', 'trackQuestion', 'uncommittedCollision',
   'uncommittedSkipped', 'undoEntry', 'unlogged', 'validQuestionId', 'validate', 'validateEvidence',
-  'validateNewField', 'waitingOnError', 'windDownGuard', 'withIndex', 'withoutAgentLines',
+  'usageLimitGuard', 'validateNewField', 'waitingOnError', 'windDownGuard', 'withIndex', 'withoutAgentLines',
 ];
 
 describe('queueLogic.js facade', () => {

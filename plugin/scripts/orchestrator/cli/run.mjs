@@ -268,6 +268,9 @@ export function cmdFill() {
           // The load guard also stops new starts via --ids (--over-load overrides).
           const lg = L.loadGuard(queue, load);
           if (lg.stop) die(`${lg.message} Nothing was started.`, 7);
+          // The usage limit also stops new starts via --ids.
+          const ul = L.usageLimitGuard();
+          if (ul) die(`${ul.message} Nothing was started.`, ul.code);
           out.push({ o, new: true });
         } else {
           const loadLine = o.status === 'waiting' ? loadSlotsLine(queue, load) : null;
@@ -545,6 +548,9 @@ export function cmdResume() {
   if (!o) die(`Unknown task ${id}`);
   if (!['running', 'review'].includes(o.status))
     die(`${id} has status ${o.status}; resume applies to running and review (a new start is fill or start).`);
+  // At the usage limit a new agent would only fail, and a fix round would be used up for nothing (exit 12).
+  const usageStop = L.usageLimitGuard();
+  if (usageStop) die(usageStop.message, usageStop.code);
   adapterFor(o); // an unknown client stops before any round file is written
   // A running attempt stops the round before any file is written; the reservation at the end checks again under the lock.
   const running = runningAttempt(o, attemptRows([o]));

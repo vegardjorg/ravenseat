@@ -176,7 +176,8 @@
 //         on the task. --ids: only these; one that is already running only gets new prompt files (after an error).
 //         QUEUE_SCRATCHPAD can replace --scratchpad. Without --ids, fill prints a quota line when the forecast
 //         empties weeklyQuota before the reset; with capacity --mode cap at most that many new ones start, and --over-quota
-//         overrides. The load guard (exit 7, the machine is full) stops new starts; --over-load overrides.
+//         overrides. The load guard (exit 7, the machine is full) stops new starts; --over-load overrides. The usage
+//         limit (exit 12, lib/usageLimit.js) stops new starts and resume until the reset; limit usageLimit clear lifts it.
 //         Intake triage (lib/queueTriage.js): a task added or last edited triage.minAgeDays (3) ago or more, or added by an
 //         agent, is not started without a verdict; other tasks take its slot, and fill writes <folder>/triage-<id>.md and
 //         puts the `triage` helper in the same-turn block for the first triage.maxPerFill (3) of them. --ids refuses such

@@ -98,7 +98,7 @@ const {
 } = require('./logic/commits.js');
 const {
   spaceUse, budgetGuard, parseNightWindow, inNightWindow, nightGuard, startGuard, minFreeMemoryFor, loadGuard,
-  loadSlotsFor, windDownGuard, LIMIT_NAME, LIMIT_EXTRA, limitText, parseLimit,
+  loadSlotsFor, windDownGuard, usageLimitGuard, LIMIT_NAME, LIMIT_EXTRA, limitText, parseLimit,
 } = require('./logic/guards.js');
 const {
   BATCH_MEASURE, batchedError, SMALL_FIX_MIN, SMALL_LOW_VALUE, smallTaskError, batchGroups, batchId, batchSuggestion,
@@ -205,6 +205,7 @@ module.exports = {
   nightGuard,
   startGuard,
   windDownGuard,
+  usageLimitGuard,
   loadGuard,
   loadSlotsFor,
   modelFor,

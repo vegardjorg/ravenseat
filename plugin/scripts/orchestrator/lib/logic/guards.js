@@ -15,6 +15,9 @@ const { counterAsAgent } = require('./projects.js');
 const { orchestratorStatus } = require('./commits.js');
 /** Load-aware slots (pure rule + measurement; no dependency back on this file). */
 const LS = require('../loadSlots.js');
+/** The pause at the subscription's usage limit (the file the StopFailure hook writes). */
+const UL = require('../usageLimit.js');
+const { dataFolder } = require('../queueConfig.js');
 
 /**
  * The slots in use now, with the same rules as selectNext: agents (running and review without picked_by) toward maxConcurrent and
@@ -124,18 +127,20 @@ function nightGuard(queue, now = Date.now(), tz = NIGHT_TZ) {
 }
 
 /**
- * Does the budget guard, night guard, wind-down guard or load guard stop new starts now? The budget first (exit 4),
- * then the night (exit 5), then the wind-down (exit 6; requires `cursor`, the orchestrator cursor), then the load
- * (exit 7; requires `load`, the measurement). `force` (owner's word, `start --force`) overrides all four. Used by
- * `next`, `start`, `fill`, `show` and `state`.
- * @returns {{ code: 4|5|6|7, stop: 'dailyBudget'|'nightPause'|'windDown'|'load', summary?: string, message: string } | null}
+ * Does a guard stop new starts now? The usage limit first (exit 12; `usageLimit` is the record, read from the data
+ * folder when not given), then the budget (exit 4), the night (exit 5), the wind-down (exit 6; requires `cursor`, the
+ * orchestrator cursor) and the load (exit 7; requires `load`, the measurement). `force` (owner's word, `start --force`)
+ * overrides all of them. Used by `next`, `start`, `fill`, `show` and `state`.
+ * @returns {{ code: 4|5|6|7|12, stop: 'usageLimit'|'dailyBudget'|'nightPause'|'windDown'|'load', summary?: string, message: string } | null}
  */
 function startGuard(
   queue,
   dailyUsage,
-  { now = Date.now(), force = false, cursor = null, load = null } = {},
+  { now = Date.now(), force = false, cursor = null, load = null, usageLimit } = {},
 ) {
   if (force) return null;
+  const ul = usageLimitGuard(now, usageLimit);
+  if (ul) return ul;
   const b = budgetGuard(queue, dailyUsage);
   if (b.stop) return { code: 4, stop: 'dailyBudget', message: b.message };
   const n = nightGuard(queue, now);
@@ -146,6 +151,22 @@ function startGuard(
   const lg = loadGuard(queue, load);
   if (lg.stop) return { code: 7, stop: 'load', summary: lg.summary, message: lg.message };
   return null;
+}
+
+/**
+ * The stop while the usage limit pause is on (lib/usageLimit.js), or null. Without a project config, or with
+ * usageLimit.pause false in it, it is off.
+ * @param {number} [now]
+ * @param {object|null} [given] the record; read from the data folder when left out
+ */
+function usageLimitGuard(now = Date.now(), given) {
+  if (given !== undefined) return UL.guard(given, now);
+  try {
+    if (cfg().usageLimit?.pause === false) return null;
+    return UL.guard(UL.read(dataFolder()), now);
+  } catch {
+    return null; // no config: off
+  }
 }
 
 // ---- Load guard ---------------------------------------------------------------------------------------------------
@@ -359,6 +380,7 @@ module.exports = {
   loadGuard,
   loadSlotsFor,
   windDownGuard,
+  usageLimitGuard,
   LIMIT_NAME,
   LIMIT_EXTRA,
   limitText,

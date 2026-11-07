@@ -394,6 +394,16 @@ cancelled is not proposed again.
   exit 7 ("THE MACHINE IS FULL") while free memory is below the limit. Default 10 % (off on macOS, which counts the page cache as used; set a number
   there to turn it on). Running tracks finish;
   `start --force` and `fill --over-load` override.
+- The usage limit: when a turn ends because the subscription's limit is reached, new tracks and fix rounds stop with
+  exit 12 ("USAGE LIMIT") until the reset, since they would only fail and use up fix rounds. Running tracks are left
+  alone, and delivered tracks can still be received and merged. The StopFailure hook (Claude Code 2.1.78 or newer) reads
+  the reset time from the session's transcript. A plain 429 does not pause anything, and a limit with no reset time
+  pauses for one hour. After the reset the pulse names the tracks that were running once;
+  `resume <id> --reason context` gives a stopped one a new agent without counting a fix round. `limit usageLimit clear`
+  lifts the pause, `start --force` starts one task anyway, and `usageLimit.pause: false` turns it off. Ravenseat does not
+  wake a stopped session. Claude Code continues an interactive session after the reset in most setups, but not in
+  Remote Control or background sessions, not for a reset more than 24 hours away, and only three times in a row;
+  otherwise start the queue again yourself.
 - Load-aware slots: above that hard stop, the number of parallel slots follows the load instead of always being
   `maxConcurrent`. With many parallel tracks the machine, not the token quota, is often the limit: gates slow down
   and go red from memory and timeouts, and the reruns cost more than the extra tracks gain. The rule:

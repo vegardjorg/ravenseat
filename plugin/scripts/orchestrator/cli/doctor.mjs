@@ -54,7 +54,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue'];
+const CLOSED = ['identity', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'usageLimit'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });

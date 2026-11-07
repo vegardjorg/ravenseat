@@ -17,12 +17,34 @@ import path from 'node:path';
 
 import {
   a, autoAcceptIn, autoAcceptRules, CONFIG, CLI, CURSOR, cut, die, edit, F, FOLDER, FOLLOW_FILE, FOLLOW_REPORTS, HO, KK,
-  KV, L, missionRef, parallelWarning, positional, pulseCursor, read, readCursor, val, values, WIDTH, withLock, write,
+  KV, L, missionRef, parallelWarning, positional, pulseCursor, read, readCursor, require, val, values, WIDTH, withLock, write,
 } from './context.mjs';
 import { deliveryWarning, findSilent, findWithoutAgent } from './tracks.mjs';
 import { findingsLineNow } from './finding.mjs';
 import { baseHealthLine } from './baseHealth.mjs';
 import { conflictLinesNow } from './conflicts.mjs';
+
+const UL = require('./lib/usageLimit.js');
+
+/**
+ * The pulse's lines about the usage limit (lib/usageLimit.js). During the pause: the stop and the tracks that were
+ * running. The first pulse after the reset: which tracks to look at, once, and the record goes.
+ */
+function usageLimitLines() {
+  const rec = UL.read(FOLDER);
+  if (!rec) return [];
+  const running = UL.runningAtLimit(read().tasks, rec);
+  const stop = L.usageLimitGuard();
+  if (stop) return [stop.message, ...(running.length ? [`Running when it hit: ${running.join(', ')}.`] : [])];
+  if (UL.isActive(rec)) return []; // turned off in the config: keep the record, say nothing
+  UL.clear(FOLDER);
+  return running.length
+    ? [
+        `The usage limit has reset. Tracks that were running when it hit: ${running.join(', ')}. An agent that stopped gets a new ` +
+          `one with ${CLI} resume <id> --reason context (not counted as a fix round).`,
+      ]
+    : ['The usage limit has reset.'];
+}
 
 // ---- queue.mjs handover: the ongoing note in two parts ---------------------------------------------------------
 /**
@@ -261,6 +283,8 @@ export function cmdOrchestrator() {
     // Findings the tracks reported outside their scope (ravenseat finding) that nobody has triaged yet.
     const fl = findingsLineNow();
     if (fl) console.log(fl);
+    // The usage limit: new starts are paused until the reset, and after it the tracks that were running need a look.
+    for (const l of usageLimitLines()) console.log(l);
     // The base branch's health (lib/baseHealth.js): one line every round, so a red base is never missed.
     const baseLine = baseHealthLine();
     if (baseLine) console.log(baseLine);
