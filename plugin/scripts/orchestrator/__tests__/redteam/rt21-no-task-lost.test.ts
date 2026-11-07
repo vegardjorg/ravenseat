@@ -125,6 +125,26 @@ describe('RT-21: no task disappears, none is doubled, none is done without proof
     });
   }, 240_000);
 
+  it('done by hand without proof is allowed but warned about, with the tasks it frees (finding 9)', () => {
+    const p = project({ tasks: [task('A'), task('B', { depends_on: ['A'] }), task('C'), task('D')] });
+    // Never started, nothing on a branch.
+    const never = p.run('set', 'A', 'done');
+    expect(never.code).toBe(0);
+    expect(never.out).toMatch(/WARNING: A is set done by hand, but the queue never started it.*B wait\(s\) on it and can start now/);
+    // Started, with a commit on its branch that is not in main.
+    p.localDelivers('C');
+    const open = p.run('set', 'C', 'done');
+    expect(open.out).toMatch(/WARNING: C is set done by hand, but branch queue\/C has 1 commit\(s\) that are not in main.*set C review, then .* merge C/);
+    // Started, and its branch merged by hand: that is proof enough, no warning.
+    p.localDelivers('D');
+    p.g(['merge', '-q', '--no-ff', '--no-edit', 'queue/D']);
+    const merged = p.run('set', 'D', 'done');
+    expect(merged.code).toBe(0);
+    expect(merged.out).not.toMatch(/WARNING: D/);
+    // Done again is no news.
+    expect(p.run('set', 'A', 'done').out).not.toMatch(/WARNING/);
+  }, 120_000);
+
   it('after a crash in the middle of a write: the dead lock is taken over, the half file ignored, nothing lost', async () => {
     const p = project({ tasks: twenty() });
     const queueFile = path.join(p.folder, 'queue.json');

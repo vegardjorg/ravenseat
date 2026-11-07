@@ -109,7 +109,34 @@ function missingScripts(commands, packageJson) {
   });
 }
 
-const NEVER_PUSH = 'Never push, deploy or change settings on the git host. Report what the owner must do by hand.';
+/** One command that checks nothing: true, exit 0, an echo, an empty or exit-0-only node -e. */
+const NO_OP =
+  /^(?:true|:|exit(?:\s+0)?|cmd(?:\.exe)?\s+\/[cC]\s+exit(?:\s+0)?|echo(?:\s.*)?|node\s+(?:-e|--eval)\s+(["']?)\s*(?:process\.exit\(\s*0?\s*\)\s*;?)?\s*\1)$/i;
+
+/**
+ * The gate commands that check nothing (red team RT-17): a no-op as above, chained no-ops (&&, ;), or a package script
+ * (npm test, npm run x, pnpm/yarn/bun) whose body is one. A gate list of only these is always green, whatever the code
+ * does. Pure; a script that is not in package.json is not a no-op here (missingScripts reports it).
+ * @param {string[]} commands
+ * @param {string|null} packageJson the text of package.json
+ * @returns {string[]}
+ */
+function noOpCommands(commands, packageJson) {
+  const pkg = parseJson(packageJson ?? '');
+  const scripts = pkg && typeof pkg.scripts === 'object' && pkg.scripts ? pkg.scripts : {};
+  const plain = (c, depth = 0) =>
+    String(c)
+      .split(/&&|;/)
+      .map((x) => x.trim())
+      .every((x) => {
+        if (NO_OP.test(x)) return true;
+        const m = /^(?:npm|pnpm|yarn|bun)\s+(?:run(?:-script)?\s+)?([^\s-]\S*)$/.exec(x);
+        return !!m && depth < 3 && typeof scripts[m[1]] === 'string' && plain(scripts[m[1]], depth + 1);
+      });
+  return commands.filter((c) => typeof c === 'string' && c.trim() && plain(c));
+}
+
+const NEVER_PUSH ='Never push, deploy or change settings on the git host. Report what the owner must do by hand.';
 
 /** The files a first-check task may touch, for the stack that was found (the merge guard protects these otherwise). */
 function firstCheckFiles(stacks) {
@@ -267,4 +294,4 @@ function steps({ facts, tasks = [] }) {
 /** The first step the owner can act on now, or null when nothing waits. */
 const nextStep = (list) => list.find((s) => s.state === 'next') ?? null;
 
-module.exports = { STATES, detectChecks, gateLists, missingScripts, steps, nextStep, taskFor };
+module.exports = { STATES, detectChecks, gateLists, missingScripts, noOpCommands, steps, nextStep, taskFor };

@@ -12,7 +12,10 @@
 //   - a skip, focus or todo marker (MARKERS) on an ADDED line in a test file. Removed lines never count, and an added
 //     line whose trimmed text was also removed somewhere in the diff is a move or a re-indent, not a new marker.
 //     Rust tests live inline in src/, so every .rs file is read for #[ignore];
-//   - the crude count: test files removed (deleted or moved out) against test files added (new or moved in).
+//   - the crude count: test files removed (deleted or moved out) against test files added (new or moved in);
+//   - a test file that had assertions at the base and has none at the tip (red team RT-08): deleting the expect lines is
+//     the simplest way to make a test pass. Only the whole file counts, never a single removed assertion, which is
+//     ordinary tidying. Needs the file text at both ends, so only when the caller passes `read` (receive does).
 //
 // A test file (isTestFile): a name like *.test.*, *.spec.*, test_*.py, *_test.py, *_test.go, *_spec.rb, *Test.java …,
 // or a code file under a __tests__/, tests/, test/ or spec/ folder at any depth (fixtures like .json there do not
@@ -157,6 +160,21 @@ function parseDiff(text) {
   return files;
 }
 
+/**
+ * The assertion forms of the common test frameworks, one expression for a line. Broad on purpose: the warning needs the
+ * count to be zero at the tip, so a missed form gives no warning, never a false one.
+ */
+const ASSERTION =
+  /\bexpect\s*[({]|\bassert\w*\b|\.should\b|\bshould\.|\b[tb]\.(?:Error|Errorf|Fatal|Fatalf|Fail|FailNow)\b|\bXCTAssert\w*|\brequire\.\w+\s*\(|\bmust_\w+|\bverify\s*\(|\btoBe\w*\s*\(|\bt\.(?:is|ok|deepEqual|true|false|throws)\s*\(/;
+
+/** How many lines of the text hold an assertion; null for no text. */
+function assertionLines(text) {
+  if (typeof text !== 'string') return null;
+  let n = 0;
+  for (const l of text.split('\n')) if (ASSERTION.test(l)) n++;
+  return n;
+}
+
 /** The extra markers from the config as { family, kind, re }; an invalid expression is left out (doctor reports it). */
 function extraMarkers(list) {
   const out = [];
@@ -174,10 +192,11 @@ function extraMarkers(list) {
  * Assess a diff.
  * @param {string} diffText the unified diff of <base>...<branch>
  * @param {{ testPaths?: string[], markers?: string[] }} [setup] config().testWeakening
+ * @param {{ read?: (side: 'base'|'tip', path: string) => string|null }} [io] the file text at the merge base and the tip
  * @returns {{ deleted: { path: string, movedTo: string|null }[], markers: { path: string, family: string,
- *   kind: string, line: string }[], testsRemoved: number, testsAdded: number }}
+ *   kind: string, line: string }[], emptied: { path: string, before: number }[], testsRemoved: number, testsAdded: number }}
  */
-function assess(diffText, setup = {}) {
+function assess(diffText, setup = {}, io = {}) {
   const extra = setup?.testPaths ?? [];
   const markers = [...MARKERS, ...extraMarkers(setup?.markers)];
   const files = parseDiff(diffText);
@@ -211,7 +230,23 @@ function assess(diffText, setup = {}) {
       found.push({ path: f.to, family: hit.family, kind: hit.kind, line: t.slice(0, 160) });
     }
   }
-  return { deleted, markers: found, testsRemoved: deleted.length, testsAdded };
+  // A test file still a test file at both ends that lost every assertion (only with io.read).
+  const emptied = [];
+  if (typeof io?.read === 'function')
+    for (const f of files) {
+      if (!['M', 'R'].includes(f.status) || !f.from || !f.to) continue;
+      if (!isTestFile(f.from, extra) || !isTestFile(f.to, extra) || !f.removed.some((l) => ASSERTION.test(l))) continue;
+      let before = null;
+      let after = null;
+      try {
+        before = assertionLines(io.read('base', f.from));
+        after = assertionLines(io.read('tip', f.to));
+      } catch {
+        continue; // error-ignored: no text means no warning, never a false one
+      }
+      if (before > 0 && after === 0) emptied.push({ path: f.to, before });
+    }
+  return { deleted, markers: found, emptied, testsRemoved: deleted.length, testsAdded };
 }
 
 /** "1 skip marker" / "2 skip markers". */
@@ -228,6 +263,8 @@ function parts(r) {
   const moved = r.deleted.length - gone;
   if (gone) out.push(count(gone, 'deleted test file'));
   if (moved) out.push(count(moved, 'test file moved out of the test paths'));
+  const emptied = r.emptied?.length ?? 0;
+  if (emptied) out.push(count(emptied, 'test file with no assertions left'));
   return out;
 }
 
@@ -249,7 +286,7 @@ function packageSection(r, { max = 30 } = {}) {
   const lines = ['', '## Test weakening', ''];
   const p = parts(r);
   if (!p.length) {
-    lines.push('- None found: no deleted test files and no added skip or focus markers in test files.');
+    lines.push('- None found: no deleted test files, no test file emptied of assertions, and no added skip or focus markers in test files.');
     return lines;
   }
   lines.push(
@@ -260,6 +297,8 @@ function packageSection(r, { max = 30 } = {}) {
   for (const d of r.deleted.slice(0, max))
     lines.push(d.movedTo ? `- moved out: \`${d.path}\` -> \`${d.movedTo}\`` : `- deleted: \`${d.path}\``);
   if (r.deleted.length > max) lines.push(`- … and ${r.deleted.length - max} more removed test files`);
+  for (const e of (r.emptied ?? []).slice(0, max))
+    lines.push(`- no assertions left: \`${e.path}\` (had ${e.before} line(s) with an assertion at the base)`);
   for (const x of r.markers.slice(0, max)) lines.push(`- ${x.kind} (${x.family}) in \`${x.path}\`: \`${x.line.replace(/`/g, "'")}\``);
   if (r.markers.length > max) lines.push(`- … and ${r.markers.length - max} more markers (see diff.patch)`);
   return lines;

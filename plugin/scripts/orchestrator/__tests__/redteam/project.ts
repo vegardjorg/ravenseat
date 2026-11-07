@@ -49,14 +49,22 @@ export const queueSpace = (id = 'A') => ({ untracked: ['.claude/'], branches: [`
  * A project with cloud on and the given quick gates. `config` is merged into queue.config.json.
  * `run` returns { code, out, ms }; out is stdout and stderr together.
  */
-export function project({ gates = ['node -e "process.exit(0)"'], config = {}, tasks = [task('A'), task('B')] }: {
+export function project({
+  gates = ['node -e "process.exit(0)"'],
+  config = {},
+  tasks = [task('A'), task('B')],
+  oddPaths = false,
+}: {
   gates?: string[];
   config?: Record<string, unknown>;
   tasks?: object[];
+  /** Folder names with spaces and æøå (RT-20), for the repo, the origin and the queue folder. */
+  oddPaths?: boolean;
 } = {}) {
-  const origin = tmp('rt-origin-');
-  const repo = tmp('rt-repo-');
-  const folder = tmp('rt-folder-');
+  const odd = oddPaths ? ' mappe æøå ' : '-';
+  const origin = tmp(`rt-origin${odd}`);
+  const repo = tmp(`rt-repo${odd}`);
+  const folder = tmp(`rt-folder${odd}`);
   const g = (args: string[], cwd = repo) =>
     execFileSync('git', ['-C', cwd, ...ID, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   g(['init', '-q', '--bare'], origin);

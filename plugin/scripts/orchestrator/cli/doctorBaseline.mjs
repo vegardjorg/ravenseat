@@ -169,7 +169,18 @@ export function checkGates() {
           'change gates.quick and gates.full in queue.config.json to commands your project has',
         ),
       ];
-    return [ok('gates', `${n} gate command(s) set`)];
+    // Gates that check nothing (red team RT-17): every delivery is green whatever the code does. A warning, never a stop:
+    // a project without tests yet may set it on purpose, and `checks` proposes real ones.
+    const empty = require('./lib/kickstart.js').noOpCommands(commands, text);
+    if (empty.length === commands.length)
+      return [
+        warn(
+          'gates',
+          `every gate command checks nothing (${empty.slice(0, 3).join(', ')}): each delivery is green whatever the code does`,
+          'set a real check in gates.quick in queue.config.json (a test run or a type check); ravenseat checks proposes some',
+        ),
+      ];
+    return [ok('gates', `${n} gate command(s) set${empty.length ? `, ${empty.length} of them check nothing (${empty.slice(0, 3).join(', ')})` : ''}`)];
   }
   return [
     warn(

@@ -74,10 +74,19 @@ export function cmdSet() {
       );
     }
   }
+  // Done by hand without proof (red team, plans/redteam-plan.md finding 9): allowed, since a picked or outside task is done
+  // that way, but said out loud, with the tasks it frees. Never a stop.
+  let unproven = null;
   const r = edit((queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
     orchestratorStep = !o.picked_by && !L.isExternalRow(o);
+    if (status === 'done' && o.status !== 'done' && !L.isExternalRow(o)) {
+      const freed = queue.tasks
+        .filter((x) => (x.depends_on ?? []).includes(id) && !['done', 'cancelled'].includes(x.status))
+        .map((x) => x.id);
+      unproven = { started: !!o.started || !!o.picked_by, branch: o.branch ?? branchFor(id), freed };
+    }
     const now = new Date().toISOString();
     // setStatus: delivered/done time, qa_status "waiting" for a visual task that becomes done, and the pick fields
     // are removed when a picked task is set back to waiting.
@@ -102,6 +111,21 @@ export function cmdSet() {
   console.log(
     `${id}: ${status}${qa ? ' · label visual: now in the owner QA list (ravenseat qa)' : ''}`,
   );
+  if (unproven) {
+    const info = branchInfo(unproven.branch);
+    const why = info.exists && info.commits
+      ? `branch ${unproven.branch} has ${info.commits} commit(s) that are not in ${CONFIG.baseBranch}: nothing of it was merged`
+      : !unproven.started
+        ? 'the queue never started it and no branch holds work for it'
+        : null;
+    if (why) {
+      const freed = unproven.freed.length ? ` ${unproven.freed.join(', ')} wait(s) on it and can start now.` : '';
+      console.error(
+        `WARNING: ${id} is set done by hand, but ${why}.${freed} ` +
+          `If the work is not really done: ${CLI} set ${id} ${info.exists && info.commits ? 'review, then ' + CLI + ' merge ' + id : 'waiting'}.`,
+      );
+    }
+  }
   if (status === 'cancelled') {
     // Nothing is deleted on its own, since the work may be wanted. Said here, so it does not stay unnoticed.
     const branch = r.branch ?? branchFor(id);

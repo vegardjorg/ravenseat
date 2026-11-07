@@ -540,7 +540,14 @@ export function cmdReceive() {
   const dbObjects = L.dbObjectsFromDiff(diff, { folder: MIGR.folder });
   // Test weakening (lib/testWeakening.js): deleted test files and added skip/focus markers. A warning, never a stop.
   const TW = require('./lib/testWeakening.js');
-  const weak = CONFIG.testWeakening?.enabled === false ? null : TW.assess(diff, CONFIG.testWeakening);
+  // The file text at both ends, for a test file emptied of assertions (red team RT-08).
+  const weakBase = (git(['merge-base', BASE, branch]) ?? '').trim();
+  const weak =
+    CONFIG.testWeakening?.enabled === false
+      ? null
+      : TW.assess(diff, CONFIG.testWeakening, {
+          read: (side, p) => (side === 'base' && !weakBase ? null : git(['show', `${side === 'base' ? weakBase : branch}:${p}`])),
+        });
   const weakLine = weak && TW.summaryLine(weak);
   if (weakLine) console.log(weakLine);
   fs.writeFileSync(

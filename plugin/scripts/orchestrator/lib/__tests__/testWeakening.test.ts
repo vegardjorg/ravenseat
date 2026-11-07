@@ -19,9 +19,11 @@ const TW = require('../testWeakening') as {
   assess: (
     diff: string,
     setup?: { testPaths?: string[]; markers?: string[] },
+    io?: { read?: (side: 'base' | 'tip', p: string) => string | null },
   ) => {
     deleted: { path: string; movedTo: string | null }[];
     markers: { path: string; family: string; kind: string; line: string }[];
+    emptied?: { path: string; before: number }[];
     testsRemoved: number;
     testsAdded: number;
   };
@@ -298,5 +300,32 @@ describe('queue.mjs receive with test weakening', () => {
     expect(m.out).not.toContain('test weakening');
     expect(m.pkg).not.toContain('## Test weakening');
     expect(m.pkg).toContain('# Review package A');
+  });
+});
+
+describe('a test file emptied of assertions (red team RT-08)', () => {
+  const file = 'src/a.test.ts';
+  const base = ["import { it, expect } from 'vitest';", "it('adds', () => {", '  expect(add(1, 1)).toBe(2);', '});'].join('\n');
+  const tip = ["import { it } from 'vitest';", "it('adds', () => {", '  add(1, 1);', '});'].join('\n');
+  const diff = patch(file, ['  add(1, 1);'], ['  expect(add(1, 1)).toBe(2);']);
+  const read = (texts: { base: string | null; tip: string | null }) => ({ read: (side: 'base' | 'tip') => texts[side] });
+
+  it('warns when every assertion is gone at the tip, with the count at the base', () => {
+    const r = TW.assess(diff, {}, read({ base, tip }));
+    expect(r.emptied).toEqual([{ path: file, before: 1 }]);
+    expect(TW.summaryLine(r)).toBe('WARN test weakening: 1 test file with no assertions left (see 00-package.md)');
+    expect(TW.packageSection(r).join('\n')).toContain(
+      'no assertions left: `src/a.test.ts` (had 1 line(s) with an assertion at the base)',
+    );
+  });
+
+  it('no warning while one assertion is left, for a removed line without one, without the text, or outside tests', () => {
+    const kept = tip.replace('  add(1, 1);', '  assert.equal(add(1, 1), 2);');
+    expect(TW.assess(diff, {}, read({ base, tip: kept })).emptied).toEqual([]);
+    expect(TW.assess(patch(file, ['// b'], ['// a']), {}, read({ base, tip })).emptied).toEqual([]);
+    expect(TW.assess(diff, {}, read({ base: null, tip })).emptied).toEqual([]);
+    expect(TW.assess(diff).emptied).toEqual([]);
+    const plain = patch('src/a.ts', ['  add(1, 1);'], ['  expect(add(1, 1)).toBe(2);']);
+    expect(TW.assess(plain, {}, read({ base, tip })).emptied).toEqual([]);
   });
 });

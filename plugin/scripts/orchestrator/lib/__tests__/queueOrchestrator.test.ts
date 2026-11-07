@@ -713,9 +713,10 @@ describe('queue.mjs show, fill, receive, set done and cost (against a copy)', ()
       ].join('\n') + '\n',
     );
 
-    // set done: cost from the transcripts (three agents), findings summed from two FINDINGS lines.
+    // set done: cost from the transcripts (three agents), findings summed from two FINDINGS lines. queue/A was never
+    // merged here, so the only thing on stderr is the set-done warning (red team finding 9).
     const s = run('set', 'A', 'done', '--remark', 'review 1 round');
-    expect(s.error).toBe('');
+    expect(s.error.trim()).toMatch(/^WARNING: A is set done by hand, but branch queue\/A has 1 commit\(s\) that are not in main[^\n]*$/);
     expect(s.out).toMatch(/Cost A: \$[\d.]+ \(3 agent\(s\)/);
     expect(s.out).toMatch(/findings H=1 M=1 L=2 \(2 report\(s\)\)/);
     const a3 = find('A');
