@@ -166,7 +166,7 @@ function project(config: Record<string, unknown>, queueExtra: Record<string, unk
 }
 
 describe('queue.mjs merge with the base gate', () => {
-  it('green, red after a semantic conflict, refusal, the fix task, a hand commit and --force-red-base', () => {
+  it('green, red after a semantic conflict, refusal, the fix task, a hand commit and --force-red-base', async () => {
     const p = project({ gates: { quick: [CHECK] } });
     // A renames name() to newName(); B adds a module that calls name(). Each is green on its own branch.
     p.track('A', { 'lib/a.js': "exports.newName = () => 'a';\n" });
@@ -183,6 +183,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(p.find('A')?.status).toBe('done');
     expect(p.run('show').out).toMatch(/BASE develop: GREEN at [0-9a-f]{12}/);
 
+    await loopTurn();
     // ---- 2. B is green alone but red on the base with A: red, a fix task, the merge stays ----
     const m2 = p.run('merge', 'B', '--without-fill');
     expect(m2.code).toBe(1);
@@ -217,6 +218,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(p.run('orchestrator', 'pulse').out).toContain('ravenseat merge refuses other tracks');
     expect(p.run('decide').out).toMatch(/^BASE develop: RED at/);
 
+    await loopTurn();
     // ---- 3. Another track is refused while the base is red ----
     const m3 = p.run('merge', 'C', '--without-fill');
     expect(m3.code).toBe(9);
@@ -225,6 +227,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(p.tip()).toBe(mergeCommit);
     expect(p.find('C')?.status).toBe('review');
 
+    await loopTurn();
     // ---- 4. The fix task is allowed, and its green merge clears the red ----
     p.track('B-BASE1', { 'lib/b.js': "require('./a.js').newName();\n" });
     const m4 = p.run('merge', 'B-BASE1', '--without-fill');
@@ -235,6 +238,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(p.find('B-BASE1')?.status).toBe('done');
     expect(p.run('merge', 'C', '--without-fill').code).toBe(0);
 
+    await loopTurn();
     // ---- 5. A commit by hand breaks the base: the tip moved, so the next merge checks first ----
     fs.writeFileSync(path.join(p.repo, 'lib', 'z.js'), "throw new Error('broken by hand');\n");
     p.g(['add', '--', 'lib/z.js']);
@@ -251,6 +255,7 @@ describe('queue.mjs merge with the base gate', () => {
     expect(p.find(handFix)).toMatchObject({ status: 'waiting', value: 10 });
     expect(p.find(handFix)?.fixes).toBeUndefined();
 
+    await loopTurn();
     // ---- 6. --force-red-base: merged anyway, logged, and the still-red base reuses the open fix task ----
     const before = p.queue().tasks.length;
     const m6 = p.run('merge', 'E', '--without-fill', '--force-red-base');
