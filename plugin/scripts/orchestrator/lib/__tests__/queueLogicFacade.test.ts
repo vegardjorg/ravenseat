@@ -26,7 +26,7 @@ const EXPORTS = [
   'REVIEWER_TYPES', 'SAME_TURN', 'SILENT_DEFAULT_MIN', 'SMALL_FIX_MIN', 'SMALL_LOW_VALUE', 'STATUSES',
   'TASK_AGENT_TYPES', 'WEIGHT', 'WITHOUT_AREA', 'WITHOUT_FEATURE', 'WITHOUT_PROJECT', 'activeLines',
   'addProjectWarnings', 'addToBonus', 'ageText', 'agentTypeFor', 'agentsForTask', 'answerBlock', 'approve', 'areaFor',
-  'areaOverview', 'assessActive', 'assessDelivery', 'assignMigrBlock', 'assignStartBlock', 'baseBranch',
+  'areaOverview', 'assessActive', 'assessDelivery', 'assignMigrBlock', 'assignStartBlock', 'assumptionSection', 'baseBranch',
   'batchFindings', 'batchGroups', 'batchId', 'batchMissionText', 'batchPack', 'batchSuggestion', 'batchedError',
   'blockInterval', 'blockerLines', 'blockerParts', 'blockerSummary', 'blockers', 'blockersWithPause', 'blocksInText',
   'bonusBlock', 'branchPrefix', 'budgetGuard', 'bulkDiff', 'childrenMap', 'choiceLines', 'choicesError', 'classifyCommit', 'classifyQueue',

@@ -423,6 +423,12 @@ export function cmdReceive() {
     L.parseResult(reportText);
   const asked = L.trackQuestion({ result, reportText, reply: trackReply });
   if (asked) printQuestion(asked);
+  // The choices the track made itself: shown here and in the package so the owner reads them before the merge.
+  const assumptions = L.assumptionSection(reportText) ?? L.assumptionSection(trackReply);
+  if (assumptions)
+    console.log(
+      `Assumptions ${id}'s track made (read them before you merge; to change one: ${CLI} resume ${id} --reason fix --answer "<text>"):\n${assumptions}`,
+    );
   // The quick gates bound to the delivered tip (receiveGates), BEFORE the done command and any reviewer: the track's own
   // claim is informational only. A PARTIAL track is known to be unfinished, so no gate runs for it.
   if (result?.gates != null && result.status !== 'PARTIAL')
@@ -565,6 +571,7 @@ export function cmdReceive() {
       migrFolder: MIGR.folder,
       reviewers: reviewerList,
       testWeakening: weak ? TW.packageSection(weak) : null,
+      assumptions,
     }),
   );
   const prompts = reviewers.map((type) => {

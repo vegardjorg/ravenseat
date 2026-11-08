@@ -89,6 +89,21 @@ function ownerQuestionSection(text) {
 }
 
 /**
+ * The text under the "Assumptions" heading of a report (up to the next heading), or null when it is missing or says none.
+ * receive prints it next to the owner questions and the review package carries it, so a choice the track made itself is
+ * in front of the owner before the merge (R5, 2026-11-08: a public API choice was written here and seen by nobody).
+ */
+function assumptionSection(text) {
+  const lines = String(text ?? '').split(/\r?\n/);
+  const start = lines.findIndex((l) => /^\s*(#{1,6}\s*|\*\*)?assumptions?\b/i.test(l));
+  if (start < 0) return null;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => /^\s*#{1,6}\s/.test(l));
+  const body = (end < 0 ? rest : rest.slice(0, end)).join('\n').trim();
+  return body && !/^[-*\s]*(none|-)?\.?$/i.test(body) ? body.slice(0, QUESTION_TEXT_MAX) : null;
+}
+
+/**
  * The owner questions a track says it has (`ownerQuestions=<n>` on the RESULT line), for the output and the card in ravenseat
  * decide. null when it says it has none: the number decides, since a report often has the heading with "none" under it.
  * @returns {null | { count: number, text: string|null, note: string }}
@@ -413,6 +428,7 @@ function reviewPackageIndex({
   migrFolder = cfg().migrations?.folder ?? null,
   reviewers = null,
   testWeakening = null,
+  assumptions = null,
 }) {
   const lines = [
     `# Review package ${o.id} (${o.class}): ${o.title ?? ''}`,
@@ -441,6 +457,15 @@ function reviewPackageIndex({
   }
   // The test-weakening section (lib/testWeakening.js packageSection), already as lines; null = the check is off.
   if (Array.isArray(testWeakening)) lines.push(...testWeakening);
+  if (assumptions)
+    lines.push(
+      '',
+      "## The track's assumptions",
+      '',
+      'Choices the track made itself. One that decides what the feature does for its users, a public API or file format, deleting data, or a security or legal tradeoff was the owner\'s to make: name it as a MEDIUM finding ("should have asked").',
+      '',
+      assumptions,
+    );
   // The reviewers for this task (queueHelpers.reviewersForTask): the fixed ones for the class (the floor), then each
   // helper agent with one line on why it was chosen.
   if (Array.isArray(reviewers)) {
@@ -475,6 +500,7 @@ function reviewerPrompt({ o, type, folder }) {
 module.exports = {
   parseResult,
   ownerQuestionSection,
+  assumptionSection,
   trackQuestion,
   parseFindings,
   batchFindings,

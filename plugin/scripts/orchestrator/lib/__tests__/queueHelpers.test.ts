@@ -225,6 +225,24 @@ describe('switches and backward compatibility', () => {
     expect(s).toContain('- `reviewer-design`: helper agent. why: label visual');
     expect(s).toContain('`mission.md`');
   });
+  // R5 (2026-11-08): a track chose a public API behaviour itself, wrote it under Assumptions, and nobody read it.
+  it('the Assumptions section is read to the next heading, and "none" counts as empty', () => {
+    const report = '## Owner questions\nnone\n\n## Assumptions\n- parse throws on bad input\n- keeps the old file name\n\n## Gates\nall green';
+    expect(L.assumptionSection(report)).toBe('- parse throws on bad input\n- keeps the old file name');
+    expect(L.assumptionSection('## Assumptions\nNone.\n## Gates\nx')).toBeNull();
+    expect(L.assumptionSection('## Assumptions\n- none\n')).toBeNull();
+    expect(L.assumptionSection('## Gates\nall green')).toBeNull();
+    expect(L.assumptionSection(null)).toBeNull();
+    expect(L.assumptionSection(`## Assumptions\n${'x'.repeat(5000)}`)!.length).toBe(1500);
+  });
+  it('the review package carries the assumptions with the "should have asked" note, and leaves the section out without them', () => {
+    const base = { o: { id: 'A-1', class: 'K', title: 'x' }, branch: 'queue/A-1', stat: '', base: 'main', migrFolder: null, files: {} };
+    const s = L.reviewPackageIndex({ ...base, assumptions: '- parse throws on bad input' });
+    expect(s).toContain("## The track's assumptions");
+    expect(s).toContain('should have asked');
+    expect(s).toContain('- parse throws on bad input');
+    expect(L.reviewPackageIndex(base)).not.toContain("## The track's assumptions");
+  });
 });
 
 describe('the measurement per helper', () => {

@@ -149,8 +149,8 @@ anything is marked. `ravenseat checks` and the Checks tab show a card with the t
 
 - **Weak tests.** Green means your checks passed, not that the change is right.
 - **Unclear tasks.** No test shows that an agent understood what you meant. In one round with real agents they asked
-  before deleting data, but one made a public API choice itself and only wrote it under Assumptions: read that section
-  of the report before you merge.
+  before deleting data, but one made a public API choice itself and only wrote it under Assumptions. `receive` now
+  prints that section and the review package carries it: read it before you merge.
 - **An agent with your account.** The guards are hooks that read commands, not a sandbox: an agent can read what your
   shell can, and a script it runs is not read. Keep production credentials off the machine, and use Claude Code's
   permissions or sandbox when you need a real boundary.

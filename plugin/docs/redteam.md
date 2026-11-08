@@ -182,7 +182,8 @@ What these tests cannot show, or show to be weak. Read this before you trust the
   markers are named; none of these stop a merge, the reviewers decide.
 - **Unclear requirements.** No deterministic test can show that an agent understood a task. One round with real agents
   (row 12) got three of four right; the fourth was a choice the agent made itself and wrote under Assumptions in its
-  report. Read the Assumptions in `track-result.md` before you merge: nothing stops a merge on them.
+  report. `receive` now prints the Assumptions and the review package asks the reviewer to flag one the owner should
+  have decided, but nothing stops a merge on them: read them before you merge.
 - **Files outside a task's ownership** stop the merge only on protected paths (hooks, CI and test config, queue settings
   and similar). An ordinary file outside the task's list gives a warning for the reviewers.
 - **Not a sandbox.** The guards are Claude Code hooks that read the commands an agent runs. They do not read the
