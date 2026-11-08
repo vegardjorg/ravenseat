@@ -63,7 +63,9 @@ for (const [cls, list] of Object.entries(perClass)) {
   const finished = list.filter((v) => perId.get(v.id)?.status === 'done');
   const after = finished.map((v) => usd(perId.get(v.id)) - v.usd).filter(Number.isFinite);
   const averageAfter = after.length ? after.reduce((a, b) => a + b, 0) / after.length : NaN;
-  const small = after.filter((e) => e < 0.25 * (list[0]?.average ?? Infinity)).length;
+  // An estimate notice (the class had too little history, lib/costGuard.js baselineFor) has no class average.
+  const classAverage = list.find((v) => v.average != null)?.average ?? Infinity;
+  const small = after.filter((e) => e < 0.25 * classAverage).length;
   console.log(
     `  ${cls}: ${list.length} notices, ${finished.length} finished; used after notice average $${r2(averageAfter)}` +
       `; ${small} used under 0.25x the class average after the notice (probably nearly finished)`,
@@ -72,7 +74,7 @@ for (const [cls, list] of Object.entries(perClass)) {
 for (const v of notices.slice(-15)) {
   const o = perId.get(v.id);
   console.log(
-    `    ${v.time.slice(0, 16)} ${v.id.padEnd(14)} ${String(v.class ?? '?').padEnd(3)} notice $${v.usd} (${v.factor}x $${v.average})` +
+    `    ${v.time.slice(0, 16)} ${v.id.padEnd(14)} ${String(v.class ?? '?').padEnd(3)} notice $${v.usd} (${v.factor}x ${v.baseline === 'estimate' ? `estimate $${v.estimate}` : `$${v.average}`})` +
       ` -> end $${r2(usd(o))} ${o?.status ?? '?'}`,
   );
 }

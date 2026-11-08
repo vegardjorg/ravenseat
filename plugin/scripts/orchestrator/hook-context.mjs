@@ -44,7 +44,7 @@
 // COST_GUARD: in the active orchestrator session the hook measures (at most every 10 min, COST_GUARD_INTERVAL_MIN overrides)
 // the usage of running tasks, the same way as `queue.mjs set <id> done` (usage from the agent transcripts,
 // queueLogic.sumCost). If a track passes FACTOR (3x) the average cost for its class (`queue.mjs cost --since 7d`; class from
-// the mission file), the owner gets a systemMessage and the orchestrator a ready-made message to send the track (wrap up or
+// the mission file; while the class has fewer than 3 such tasks, the task's own calibrated estimate), the owner gets a systemMessage and the orchestrator a ready-made message to send the track (wrap up or
 // deliver PARTIAL). No automatic stop. Each track is notified once (<dataFolder>/costGuard.json), and each notice is logged in
 // <dataFolder>/cost-guard-log.jsonl (read with cost-guard-statistics.mjs). The thresholds and text live in lib/costGuard.js,
 // with tests. COST_GUARD_BY=1 turns the guard off.
@@ -69,6 +69,7 @@ const { lastContext, readTail, cachedCompactions } = require('./lib/trackGuard.j
 export { lastContext };
 const KV = require('./lib/contextGuard.js');
 const COST = require('./lib/costGuard.js');
+const CE = require('./lib/costEstimate.js');
 const L = require('./lib/queueLogic.js');
 const TK = require('./lib/timeCost.js');
 const { config, dataFolder, timeLog } = require('./lib/queueConfig.js');
@@ -214,11 +215,17 @@ function costGuard(now) {
       rows = [];
     }
   }
-  const measurements = running.map((o) => ({
-    id: o.id,
-    class: classFor(o),
-    usd: measureTask(o, rows),
-  }));
+  // The task's own calibrated estimate: the baseline while its class has too little history (lib/costGuard.js baselineFor).
+  const model = CE.costModel(queue, { now });
+  const measurements = running.map((o) => {
+    const cls = classFor(o);
+    return {
+      id: o.id,
+      class: cls,
+      usd: measureTask(o, rows),
+      estimate: CE.calibratedCost({ ...o, class: cls ?? o.class }, model),
+    };
+  });
   const v = COST.assess({ measurements, average, notified: state.notified, now });
   try {
     const tmp = `${COST_GUARD_FILE}.${process.pid}.tmp`;

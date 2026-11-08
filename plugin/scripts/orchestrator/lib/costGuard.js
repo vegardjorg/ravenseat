@@ -4,6 +4,9 @@
 // When the usage of a running track passes FACTOR (3) x the average cost for its class (finished tasks with measured cost
 // over the last 7 days, the same numbers as `queue.mjs cost --since 7d`), the orchestrator is notified, and the track gets
 // a short message to wrap up or deliver PARTIAL. No automatic stop.
+// While a class has fewer than MIN_N (3) such tasks, the baseline is the task's own calibrated cost estimate
+// (lib/costEstimate.js calibratedCost, the class default without measured data), at the same FACTOR, so the first
+// runaway track of a class is named too. Every notice says which baseline it used.
 //
 // The measurement is the same as `queue.mjs set <id> done` and `cost measure`: usage from the agent transcripts, priced
 // with timeCost.costUsd and summed with queueLogic.sumCost. The difference is that agents still running do not have
@@ -99,11 +102,30 @@ function shouldMeasure(state, now, intervalMs = INTERVAL_MS) {
 }
 
 /**
- * The threshold logic. `measurements`: [{ id, class, usd }] for running tasks. `average`: averagePerClass. A track is
- * notified once (saved in `notified`) when usd > factor x average for the class and the class has at least minN finished
- * tasks. Tasks no longer running are removed from `notified`, so a new run (fix round) can be notified again.
- * @returns {{ notices: { id: string, class: string, usd: number, average: number, limit: number, n: number }[],
- *   notified: Record<string, { usd: number, time: string }> }}
+ * The baseline a running task is measured against, or null when there is none:
+ *   1. the class average (baseline 'average') when the class has at least minN finished tasks with a cost above 0,
+ *   2. otherwise the task's own estimate (baseline 'estimate'): the calibrated estimate from lib/costEstimate.js
+ *      (calibratedCost, which falls back to the class default of the static model). This catches the first runaway
+ *      track of a class, before the class has any history (red team scenario 18).
+ * @returns {{ baseline: 'average'|'estimate', usd: number, n: number, basis: string|null }|null}
+ */
+function baselineFor(m, average, minN) {
+  const s = average?.[m.class];
+  if (s && s.n >= minN && s.average > 0) return { baseline: 'average', usd: s.average, n: s.n, basis: null };
+  const e = m.estimate;
+  if (e && Number(e.usd) > 0) return { baseline: 'estimate', usd: round2(Number(e.usd)), n: s?.n ?? 0, basis: e.basis ?? null };
+  return null;
+}
+
+/**
+ * The threshold logic. `measurements`: [{ id, class, usd, estimate? }] for running tasks, where `estimate` is the
+ * task's calibrated cost estimate ({ usd, basis }, costEstimate.calibratedCost). `average`: averagePerClass. A track is
+ * notified once (saved in `notified`) when usd > factor x its baseline (baselineFor: the class average when the class
+ * has at least minN finished tasks, otherwise the task's own estimate). Tasks no longer running are removed from
+ * `notified`, so a new run (fix round) can be notified again.
+ * @returns {{ notices: { id: string, class: string, usd: number, baseline: 'average'|'estimate', average: number|null,
+ *   estimate?: number, basis?: string|null, limit: number, n: number }[], notified: Record<string, { usd: number, time: string }> }}
+ *   average is the class average (null on an estimate notice); n is the class's finished tasks in the window.
  */
 function assess({
   measurements,
@@ -119,27 +141,35 @@ function assess({
   );
   const notices = [];
   for (const m of measurements ?? []) {
-    const s = average?.[m.class];
-    if (!s || s.n < minN || !(s.average > 0)) continue;
-    const limit = round2(factor * s.average);
+    const b = baselineFor(m, average, minN);
+    if (!b) continue;
+    const limit = round2(factor * b.usd);
     if (!(Number(m.usd) > limit) || newNotified[m.id]) continue;
-    notices.push({
-      id: m.id,
-      class: m.class,
-      usd: round2(Number(m.usd)),
-      average: s.average,
-      limit,
-      n: s.n,
-    });
+    const base = { id: m.id, class: m.class, usd: round2(Number(m.usd)), baseline: b.baseline };
+    notices.push(
+      b.baseline === 'average'
+        ? { ...base, average: b.usd, limit, n: b.n }
+        : { ...base, average: null, estimate: b.usd, basis: b.basis, limit, n: b.n },
+    );
     newNotified[m.id] = { usd: round2(Number(m.usd)), time: new Date(now).toISOString() };
   }
   return { notices, notified: newNotified };
 }
 
+/** Where an estimate comes from, in words (costEstimate.calibratedCost basis). */
+const BASIS_TEXT = { 'class+size': 'calibrated on the class and size', class: 'calibrated on the class', model: 'the class default' };
+
+/** What the notice was measured against, in words: "the average for class K ($10)" or "its own estimate ($1.3, ...)". */
+function baselineText(v) {
+  if (v.baseline !== 'estimate') return `the average for class ${v.class} ($${v.average})`;
+  const from = BASIS_TEXT[v.basis] ?? 'the estimate';
+  return `its own estimate ($${v.estimate}, ${from}; class ${v.class ?? '?'} has fewer than ${MIN_N} finished tasks in 7 days)`;
+}
+
 /** The short message the orchestrator forwards to the track (SendMessage). */
 function trackMessage(v) {
   return (
-    `COST_GUARD ${v.id}: usage is $${v.usd}, over ${FACTOR}x the average for class ${v.class} ($${v.average}). ` +
+    `COST_GUARD ${v.id}: usage is $${v.usd}, over ${FACTOR}x ${baselineText(v)}. ` +
     'Wrap up: finish what you are doing, commit, and deliver. If the task is not done, deliver PARTIAL with ' +
     'what remains in the report. Do not start new parts.'
   );
@@ -148,14 +178,15 @@ function trackMessage(v) {
 /** Hook output (systemMessage to the owner, additionalContext to the orchestrator), or null without notices. */
 function hookText(notices) {
   if (!notices?.length) return null;
-  const lines = notices.map(
-    (v) =>
-      `${v.id} (${v.class}) $${v.usd} > ${FACTOR}x average $${v.average} (limit $${v.limit}, n=${v.n} last 7d)`,
+  const lines = notices.map((v) =>
+    v.baseline === 'estimate'
+      ? `${v.id} (${v.class ?? '?'}) $${v.usd} > ${FACTOR}x its estimate $${v.estimate} (limit $${v.limit}; baseline: the task's estimate, ${BASIS_TEXT[v.basis] ?? 'the estimate'}, since the class has n=${v.n} finished last 7d, fewer than ${MIN_N})`
+      : `${v.id} (${v.class}) $${v.usd} > ${FACTOR}x average $${v.average} (limit $${v.limit}; baseline: the class average, n=${v.n} last 7d)`,
   );
   return {
     systemMessage: `Cost guard: ${lines.join('; ')}.`,
     additionalContext:
-      `[costGuard] ${notices.length} track(s) have passed ${FACTOR}x the average cost for their class: ${lines.join('; ')}. ` +
+      `[costGuard] ${notices.length} track(s) have passed ${FACTOR}x their baseline (the average cost for their class, or the task's own estimate while the class has too little history): ${lines.join('; ')}. ` +
       'No automatic stop. Send each track this message with SendMessage (agent id from start/the time log): ' +
       notices.map((v) => `"${trackMessage(v)}"`).join(' ') +
       ' Judge for yourself whether the track should be stopped or split.',
@@ -172,6 +203,7 @@ module.exports = {
   averagePerClass,
   liveAgents,
   shouldMeasure,
+  baselineFor,
   assess,
   trackMessage,
   hookText,

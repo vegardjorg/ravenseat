@@ -79,6 +79,23 @@ describe('ravenseat doctor: the safety baseline', () => {
     expect(hit('gates')?.message).toContain('npm run nope');
   });
 
+  it('gates: a gate whose program is not installed WARNs by name (never FAIL, never run); found ones are quiet', () => {
+    // A program name no machine has, a path missing in the repo, and ones that are there (git, node, a repo script).
+    const p = project({
+      config: { gates: { quick: ['rt-no-such-tool-xyz -q', 'git status', './scripts/gone.sh'], full: ['node scripts/ok.js', './scripts/ok.js'] } },
+      files: { 'scripts/ok.js': '' },
+    });
+    const r = p.run();
+    expect(r.code).toBe(0);
+    const g = r.checks.filter((c) => c.name === 'gates');
+    expect(g.map((c) => c.status)).toEqual(['OK', 'WARN']);
+    expect(g[1].message).toBe(
+      'gate program(s) not found on PATH: rt-no-such-tool-xyz (in "rt-no-such-tool-xyz -q"), ./scripts/gone.sh (in "./scripts/gone.sh"). Such a gate is red on every run',
+    );
+    expect(g[1].fix).toMatch(/^install the program and put its folder on PATH for Claude Code .*read from the repo root$/);
+    expect(fs.existsSync(path.join(p.root, 'scripts', 'gone.sh'))).toBe(false);
+  }, 60_000);
+
   it('a clean project: OK lines, no FAIL, and nothing is written', () => {
     const p = project({
       config: { gates: { quick: ['npm test'], full: [] }, baseBranch: 'staging', productionBranch: 'main' },

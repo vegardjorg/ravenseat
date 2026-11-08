@@ -5,6 +5,7 @@
 // prove the threshold logic as pure functions, and the hook end to end as a process against a temporary queue
 // (QUEUE_FOLDER, QUEUE_TIME_LOG, QUEUE_TRANSCRIPTS), never the real one.
 //   - Warning when a track passes FACTOR (3) x the average cost for its class (finished last 7 days, at least 3), once per track.
+//   - Without that history (the first runaway track of a class, red team 18): FACTOR x the task's own estimate, named as such.
 //   - The class from the mission file, otherwise the queue's class.
 //   - No automatic stop: the output is never decision: block.
 // =============================================================
@@ -14,7 +15,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'fs'
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-type Warning = { id: string; class: string; usd: number; average: number; limit: number; n: number };
+type Warning = { id: string; class: string; usd: number; baseline: 'average' | 'estimate'; average: number | null; estimate?: number; basis?: string | null; limit: number; n: number };
 type Candidate = { agent: string; type: string; safe: boolean; row: { time: string } | null };
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -27,7 +28,7 @@ const K = require('../costGuard') as {
   liveAgents: (rows: unknown[], id: string, o?: { from?: string | null }) => Candidate[];
   shouldMeasure: (t: unknown, now: number, interval?: number) => boolean;
   assess: (a: {
-    measurements: { id: string; class: string | null; usd: number }[];
+    measurements: { id: string; class: string | null; usd: number; estimate?: { usd: number; basis: string } }[];
     average: Record<string, { average: number; n: number }>;
     notified?: Record<string, { usd: number; time: string }>;
     factor?: number;
@@ -79,11 +80,48 @@ describe('assess (the threshold)', () => {
       average: AVERAGE,
       now: NOW,
     });
-    expect(r.notices).toEqual([{ id: 'A', class: 'K', usd: 30.01, average: 10, limit: 30, n: 4 }]);
+    expect(r.notices).toEqual([{ id: 'A', class: 'K', usd: 30.01, baseline: 'average', average: 10, limit: 30, n: 4 }]);
     expect(Object.keys(r.notified)).toEqual(['A']);
   });
 
-  it('does not notify when the class has too few finished tasks or an unknown class', () => {
+  it('the first runaway track of a class: without class history its own estimate is the baseline, at the same FACTOR', () => {
+    // Red team scenario 18: class D has n=2 and U none, so no average is usable; each task's estimate is.
+    const r = K.assess({
+      measurements: [
+        { id: 'D1', class: 'D', usd: 7.51, estimate: { usd: 2.5, basis: 'model' } },
+        { id: 'D2', class: 'D', usd: 7.5, estimate: { usd: 2.5, basis: 'model' } },
+        { id: 'U1', class: 'U', usd: 4, estimate: { usd: 1.2, basis: 'class' } },
+        // A class WITH history keeps the class average, even when its estimate is lower.
+        { id: 'K1', class: 'K', usd: 20, estimate: { usd: 1, basis: 'model' } },
+      ],
+      average: AVERAGE,
+      now: NOW,
+    });
+    expect(r.notices).toEqual([
+      { id: 'D1', class: 'D', usd: 7.51, baseline: 'estimate', average: null, estimate: 2.5, basis: 'model', limit: 7.5, n: 2 },
+      { id: 'U1', class: 'U', usd: 4, baseline: 'estimate', average: null, estimate: 1.2, basis: 'class', limit: 3.6, n: 0 },
+    ]);
+    // The messages say which baseline was used.
+    const t = K.hookText(r.notices);
+    expect(t?.systemMessage).toContain("D1 (D) $7.51 > 3x its estimate $2.5 (limit $7.5; baseline: the task's estimate, the class default, since the class has n=2 finished last 7d, fewer than 3)");
+    expect(t?.systemMessage).toContain('U1 (U) $4 > 3x its estimate $1.2 (limit $3.6; baseline: the task\'s estimate, calibrated on the class');
+    expect(K.trackMessage(r.notices[0])).toMatch(/^COST_GUARD D1: usage is \$7\.51, over 3x its own estimate \(\$2\.5, the class default; class D has fewer than 3 finished tasks in 7 days\)\. Wrap up/);
+    const avg = K.assess({ measurements: [{ id: 'A', class: 'K', usd: 31 }], average: AVERAGE }).notices;
+    expect(K.hookText(avg)?.systemMessage).toContain('baseline: the class average, n=4 last 7d');
+  });
+
+  it('no baseline at all (no usable average and no estimate above 0): nothing is said', () => {
+    const r = K.assess({
+      measurements: [
+        { id: 'D1', class: 'D', usd: 100, estimate: { usd: 0, basis: 'model' } },
+        { id: 'X', class: null, usd: 100 },
+      ],
+      average: { ...AVERAGE, D: { average: 0, n: 5 } },
+    });
+    expect(r.notices).toEqual([]);
+  });
+
+  it('does not notify when the class has too few finished tasks or an unknown class, and no estimate is given', () => {
     const r = K.assess({
       measurements: [
         { id: 'D1', class: 'D', usd: 100 },
@@ -331,6 +369,23 @@ describe('hook-context.mjs: the cost guard end to end', () => {
     expect(Object.keys(state.notified)).toEqual(['X']);
     // Second time: already notified.
     expect(hook('s1')).toBeNull();
+  });
+
+  it('the first track of a class (no finished task of it): notified against its own estimate, and the log says so', () => {
+    // Make the three finished tasks class U: class K (the mission's) has no history at all.
+    const file = join(folder, 'queue.json');
+    const q = JSON.parse(readFileSync(file, 'utf8'));
+    for (const o of q.tasks) if (o.status === 'done') o.class = 'U';
+    writeFileSync(file, JSON.stringify(q));
+    run('queue.mjs', ['orchestrator', 'pulse', '--session', 'queue A']);
+    const out = hook('s3');
+    expect(out).not.toHaveProperty('decision');
+    // K default for 30 content minutes: 0.6 + 30 x 0.022 = 1.3 (queueLogic CALIBRATED.cost), limit 3x.
+    expect(out.systemMessage).toMatch(/Cost guard: X \(K\) \$[\d.]+ > 3x its estimate \$1\.3 \(limit \$3\.9; baseline: the task's estimate, the class default, since the class has n=0/);
+    expect(out.hookSpecificOutput.additionalContext).toMatch(/COST_GUARD X: usage is \$[\d.]+, over 3x its own estimate \(\$1\.3, the class default; class K has fewer than 3 finished tasks in 7 days\)/);
+    const log = readFileSync(join(folder, 'cost-guard-log.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatchObject({ id: 'X', class: 'K', baseline: 'estimate', average: null, estimate: 1.3, basis: 'model', limit: 3.9, factor: 3 });
   });
 
   it('does nothing without an active orchestrator', () => {
