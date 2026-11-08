@@ -143,7 +143,8 @@ those two jobs apart.
 - **Acceptance criteria stay fixed.** A task's completion criteria are locked when it starts, and an optional
   reviewer checks the work against them.
 - **Protected files get extra scrutiny.** Changes to test config, hooks, queue settings and other guarded paths stop
-  the merge unless explicitly allowed, and deleted tests or new skip markers are flagged.
+  the merge unless explicitly allowed, and deleted tests, new skip markers and test files emptied of assertions
+  are flagged.
 - **Recovery uses a fresh context.** A fix attempt starts a new agent with a short mission, not the previous agent's
   whole conversation.
 - **Merging is controlled.** One orchestrator merges, one merge at a time, and `ravenseat conflicts` predicts conflicts
@@ -155,6 +156,12 @@ boundary. Without meaningful checks, no automated merge can show that a change i
 your project has none. More in [full mode](plugin/docs/full-mode.md#agents-cheat-on-tests),
 [guarantees and limits](plugin/docs/guide.md#guarantees-and-limits) and
 [orchestration](plugin/docs/orchestration.md).
+
+**Tested the way a careless user would use it.** A red team suite runs real git, real `ravenseat` processes and the
+real hooks, with only the agent faked, and checks after every scenario that your uncommitted, staged and stashed work
+is as it was. The [red team page](plugin/docs/redteam.md) maps each fear to its tests and says what they cannot show;
+the [FAQ](plugin/docs/faq.md) answers the common questions with the tests behind each answer. Run `npm run redteam` to
+check it yourself.
 
 ## Start simple. Scale when you need to.
 
@@ -201,6 +208,8 @@ already does everything you need.
 - [The board](plugin/docs/board.md) and [commands](plugin/docs/commands.md), with [CLI parity](plugin/docs/cli-parity.md).
 - [Orchestration and agent safeguards](plugin/docs/orchestration.md), [queue configuration and reference](plugin/docs/queue.md),
   [plan register](plugin/docs/plan-register.md), [mission template](plugin/docs/mission-template.md).
+- [Red team](plugin/docs/redteam.md) and the [FAQ](plugin/docs/faq.md): what can go wrong, the tests that check it, and the
+  limits.
 - [What it costs in tokens](plugin/docs/costs.md) and [why I built it](plugin/docs/why-i-built-it.md).
 - [INSTALL.md](INSTALL.md) for a vendored install, and the [CHANGELOG](CHANGELOG.md) for changes per version.
 

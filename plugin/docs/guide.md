@@ -331,7 +331,7 @@ run on, and use Claude Code's permission rules or sandbox when you need a real b
 | --- | --- |
 | Gate results recorded by the orchestrator, bound to the commit | A sandbox or separate machine user, if agents must not read your files or env |
 | Locked `done_when` and acceptance, locked file ownership after start | Branch protection and required checks on GitHub, so nothing reaches `main` unreviewed |
-| Merge stop on protected paths; a warning at receive for deleted tests and skip markers | Secrets kept off the machine (a scan finds known patterns, not every secret) |
+| Merge stop on protected paths; a warning at receive for deleted tests, skip markers and test files emptied of assertions | Secrets kept off the machine (a scan finds known patterns, not every secret) |
 | Queue agents cannot push or run queue commands outside an allow-list | Network rules, if agents must not reach the internet at all |
 | Secret scan of each commit in a base-branch push from Claude Code, ask before `deployCommands` | Separate credentials per environment, so a dev machine cannot deploy to production |
 
@@ -343,8 +343,10 @@ Known gaps in the secret scan: it finds known patterns, not every secret, and li
 internal error. A scan that does not finish (a diff over 2 MB, a git call over 3 seconds) asks instead of passing. Queue agents
 cannot push at all, so these gaps only apply to your own pushes from the main session.
 
-Deleted tests and skip markers do not stop a merge: a skip can be intended. `ravenseat receive` prints a `WARN test
+Deleted tests, skip markers and a test file left with no assertions do not stop a merge: a skip can be intended. `ravenseat receive` prints a `WARN test
 weakening` line and the reviewers decide; for a class K task with no reviewer agent, read that line yourself.
+Removing some assertions while one remains is not named. What the red team tests show, and cannot show, is on the
+[red team page](redteam.md).
 
 ## Not included
 

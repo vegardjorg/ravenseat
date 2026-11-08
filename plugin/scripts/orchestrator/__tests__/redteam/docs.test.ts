@@ -1,0 +1,97 @@
+// =============================================================
+// redteam/docs.test.ts: the red team page and the FAQ point to tests that exist, and say nothing the tests do not.
+//
+// Why: plugin/docs/redteam.md and plugin/docs/faq.md answer "can it break my repo?" by naming tests. A renamed or
+// deleted test would leave an answer that points nowhere, and a new red team scenario could be left off the map. This
+// reads both pages and checks: every test named in the map and under "Verified by" is a real test file; every red team
+// test file is on the map; each map row has a known status and level; each FAQ question has one "Verified by" line;
+// every relative link resolves; and the generated result covers every red team test file (else: npm run redteam:report).
+// =============================================================
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { SCRIPTS } from './project';
+
+const PLUGIN = path.resolve(SCRIPTS, '..', '..');
+const DOCS = path.join(PLUGIN, 'docs');
+const RT_DIR = path.join(SCRIPTS, '__tests__', 'redteam');
+const read = (name: string) => fs.readFileSync(path.join(DOCS, name), 'utf8').replace(/\r\n/g, '\n');
+
+/** Every test file under the plugin, by its stem (`queueLock` for queueLock.test.ts). */
+function testStems() {
+  const stems = new Set<string>();
+  const walk = (dir: string) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.test\.ts$/.test(e.name)) stems.add(e.name.replace(/\.test\.ts$/, ''));
+    }
+  };
+  walk(SCRIPTS);
+  return stems;
+}
+
+const between = (text: string, start: string, end: string) => {
+  const a = text.indexOf(start);
+  const b = text.indexOf(end);
+  expect(a, `marker ${start}`).toBeGreaterThanOrEqual(0);
+  expect(b, `marker ${end}`).toBeGreaterThan(a);
+  return text.slice(a + start.length, b);
+};
+const ticked = (s: string) => [...s.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+const rtFiles = () => fs.readdirSync(RT_DIR).filter((f) => f.endsWith('.test.ts')).map((f) => f.replace(/\.test\.ts$/, ''));
+
+describe('the red team page and the FAQ', () => {
+  const stems = testStems();
+  const page = read('redteam.md');
+  const faq = read('faq.md');
+
+  it('the map: each row has a known status and level, and names only tests that exist', () => {
+    const rows = between(page, '<!-- redteam-map:start -->', '<!-- redteam-map:end -->')
+      .split('\n')
+      .filter((l) => l.startsWith('| ') && !l.startsWith('| #') && !l.startsWith('| ---'));
+    expect(rows.length).toBeGreaterThan(20);
+    for (const row of rows) {
+      // '| # | fear | status | level | tests |' splits into ['', '#', fear, status, level, tests, ''].
+      const [, , , status, level, tests] = row.split('|').map((c) => c.trim());
+      expect(['PASS', 'FAIL', 'KNOWN LIMITATION', 'NOT VERIFIED'], row).toContain(status);
+      expect(['mapped', 'verified', 'challenged', '-'], row).toContain(level);
+      for (const t of ticked(tests)) expect(stems.has(t), `${t} in: ${row}`).toBe(true);
+      if (status === 'PASS') expect(ticked(tests).length, row).toBeGreaterThan(0);
+    }
+  });
+
+  it('every red team test file is on the map (the page itself and the lab helpers aside)', () => {
+    const map = between(page, '<!-- redteam-map:start -->', '<!-- redteam-map:end -->');
+    for (const f of rtFiles().filter((f) => f !== 'docs')) expect(map, f).toContain(`\`${f}\``);
+  });
+
+  it('each FAQ question has one "Verified by" line, and it names only tests that exist', () => {
+    const questions = faq.split('\n### ').slice(1);
+    expect(questions.length).toBeGreaterThan(8);
+    for (const q of questions) {
+      const lines = q.split('\n').filter((l) => l.startsWith('**Verified by:**'));
+      expect(lines.length, q.split('\n')[0]).toBe(1);
+      const names = [...q.slice(q.indexOf('**Verified by:**')).matchAll(/\[`([^`]+)`\]/g)].map((m) => m[1]);
+      for (const n of names) expect(stems.has(n), `${n} under: ${q.split('\n')[0]}`).toBe(true);
+    }
+  });
+
+  it('every relative link on both pages resolves to a file', () => {
+    for (const [name, text] of [['redteam.md', page], ['faq.md', faq]] as const) {
+      for (const m of text.matchAll(/\]\(([^)#\s]+)(#[^)]*)?\)/g)) {
+        if (/^[a-z]+:/i.test(m[1])) continue;
+        expect(fs.existsSync(path.resolve(DOCS, m[1])), `${name}: ${m[1]}`).toBe(true);
+      }
+    }
+  });
+
+  // Skipped while redteam-report.mjs runs the tests: the result it is about to write cannot be checked before it exists.
+  it.skipIf(process.env.RAVENSEAT_REDTEAM_REPORT === '1')('the generated result covers every red team test file (if not: npm run redteam:report)', () => {
+    const result = between(page, '<!-- redteam-result:start -->', '<!-- redteam-result:end -->');
+    expect(result).toMatch(/Generated by `npm run redteam:report`/);
+    for (const f of rtFiles()) expect(result, `${f}: run npm run redteam:report`).toContain(`| \`${f}\` |`);
+    expect(result).not.toMatch(/\| FAIL \|/);
+  });
+});
