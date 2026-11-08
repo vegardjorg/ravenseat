@@ -3,6 +3,33 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.30 (2026-11-08)
+
+**Every row on the red team map is now tested, not only named: a cold restart of the orchestrator, two agents in the same file, files outside a task, missing tools and runaway cost run as real flows. The round found four more problems, and all four are fixed. A project without git, or without a first commit, gets a clear stop and a card with the text to give Claude.**
+
+### Added
+- Red team scenarios:
+  - the orchestrator and an agent killed with no handover, picked up by a new process from what is on disk;
+  - two real tracks changing the same line, with the second merge stopping and its fix round told both sides;
+  - a file outside a task's list (a warning) and a protected path (a stop before `git merge`);
+  - git, node, `gh` and `claude` each missing from PATH, a node older than 20, and a gate program that is not installed;
+  - a changed helper agent that has not been approved again;
+  - lite to full mode and back;
+  - a project without git or without a first commit.
+- A first-commit card on the Checks tab and in `ravenseat checks`, for a project with no git or no commit. It shows the text to give Claude in your own session (`git init`, a `.gitignore` that keeps secrets out, a first commit after your yes, no push) with a copy button. A queue agent cannot take this step, so it adds no task. Set it aside, or turn the tab off, if you know git. Suggestion files can use the new `action: ask` and the conditions `no-git` and `no-commit`.
+- `ravenseat doctor` warns when a gate's program is not found on PATH (for example `pytest` or `cargo`), so a gate that is red on every run is named before the first track. It only looks the program up and never runs the gate.
+- The cost guard warns about the first runaway track of a class too: until a class has three finished tasks in seven days, it compares with the task's own estimate. The warning says which it used.
+
+### Fixed
+- In a repo with git but no commit yet, `start` marked a task running and the agent then stopped at its first step. `start` and `fill` now refuse before anything is marked and say to make a first commit.
+- With git missing from PATH, `doctor` passed and blamed the repo. It now fails first, naming git.
+- When an agent died with uncommitted work, `resume` did not mention it, and the new agent started without it. `resume` now names the changes and how to commit them to the branch first.
+
+### Known limits
+- Unclear requirements are still not verified: that needs rounds with real agents.
+- The gate program check looks at doctor's PATH, which may differ from the agents', and does not judge a program behind `$VAR`, `npx` or an npm script.
+- Before a class has history, the cost guard's estimate is the class default, which can be far from the real cost.
+
 ## 0.8.29 (2026-11-08)
 
 **Ravenseat now has a red team suite that tests it the way a careless user would use it, with a page and a FAQ that answer "can it break my repo?" with tests. It found ten problems, and all ten are fixed. Cloud tracks also work on a normal subscription.**
