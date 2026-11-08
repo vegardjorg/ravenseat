@@ -238,7 +238,11 @@ export function cmdFill() {
   GB.ensure(FOLDER, GIT_ROOT);
   const max = val('--max') != null ? Number(val('--max')) : Infinity;
   if (!(max >= 0)) die('--max must be a number >= 0');
-  const ids = values('--ids');
+  // `--ids A B` and `--ids A,B` are the same (R5: the comma form was read as one unknown id).
+  const ids = values('--ids')
+    .flatMap((s) => s.split(','))
+    .map((s) => s.trim())
+    .filter(Boolean);
   // Without --ids fill only starts new ones; during windDown that is refused before anything else (exit 6).
   if (!ids.length) {
     const by = L.windDownGuard(readCursor());

@@ -183,7 +183,11 @@ const b = CONTINUE
       branch: BRANCH,
       exists: measureExists,
       dirty,
-      ownCommits,
+      // Only commits that would be left dangling count: those on neither the base nor the branch we switch to. A
+      // worktree that `resume` detached sits exactly on the branch tip, and was once refused here (R5, 2026-11-08).
+      ownCommits: measureExists
+        ? Number(git('rev-list', '--count', 'HEAD', `^${BASE}`, `^refs/heads/${BRANCH}`).out) || 0
+        : ownCommits,
       otherWorktree,
       base: BASE,
     })

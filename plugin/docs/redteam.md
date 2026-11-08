@@ -50,8 +50,8 @@ Challenged is required for the main guarantees only, not for all of the 3,000 te
 
 ## What the red team found
 
-Fourteen findings so far. Each one came from a test going red on the code as it was, and each fix has a test that is red
-without it.
+Sixteen findings so far. Each fix has a test that is red without it. Findings 1 to 14 came from a test going red on the
+code as it was; 15 and 16 came from the round with real agents (row 12), and their tests were written after.
 
 | # | Finding | Now |
 | --- | --- | --- |
@@ -69,6 +69,8 @@ without it.
 | 12 | In a repo with git but no commit yet, `start` marked a task running, and the agent stopped at its first step: its worktree is made from a commit | `start` and `fill` refuse before anything is marked and say to make a first commit; the Checks tab has a card with the text to give Claude |
 | 13 | With git missing from PATH, `doctor` passed and blamed the repo ("no commits", "version unknown") | `doctor` fails first, by name, with how to fix it |
 | 14 | When an agent died with uncommitted work, `resume` did not say so, and the new agent started without it (the work was kept, but unseen) | `resume` names the changes and how to commit them to the branch first |
+| 15 | A track's worktree outside the project folder ran its own gates in the main checkout: "0 changed file(s)" and green about main's commit, not the branch (receive was not affected: it runs in the track's worktree) | The gates run in any worktree of the same repo, wherever it is |
+| 16 | `resume` frees the old worktree with `git switch --detach`, and `prepare-track --continue` in it then refused: the branch tip was counted as commits that would be lost | Only commits on neither the base nor the branch are refused |
 
 ## The map
 
@@ -89,7 +91,7 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | 9 | A task that always fails is retried forever | PASS | challenged | `rt06-rt22-permanent-failure`, `doneCheck` |
 | 10 | The queue does not continue after a restart | PASS | challenged | `rt24-cold-restart`, `queueHandover`, `attempt` |
 | 11 | Circular dependencies wait forever, silently | PASS | verified | `queueCycles` |
-| 12 | Unclear requirements give the wrong result | NOT VERIFIED | - | none: needs real agents |
+| 12 | Unclear requirements give the wrong result | KNOWN LIMITATION | - | none: a round with real agents (see the notes) |
 | 13 | An agent changes files outside its task | PASS | challenged | `rt13-outside-files`, `mergeGuard` |
 | 14 | A tool the queue needs is missing | PASS | challenged | `rt14-missing-tool`, `queueDoctor`, `doctorBaseline`, `kickstart`, `conflictPredict` |
 | 15 | A test that hangs holds my merge forever | PASS | challenged | `rt13-hanging-gate`, `gateLoad` |
@@ -107,9 +109,29 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | RT-22 | One blocked task stops all the other work | PASS | challenged | `rt06-rt22-permanent-failure` |
 | RT-23 | A web page I visit can read or change my board | PASS | challenged | `rt23-board-guard`, `queueBoardServe`, `queuePlanRead` |
 | RT-25 | A project without git, or without a first commit, starts work that cannot run | PASS | challenged | `rt25-no-first-commit`, `checksCatalog` |
+| RT-26 | A track worktree outside the project folder, or one freed by resume, checks or continues the wrong thing | PASS | challenged | `rt26-worktree-outside` |
 <!-- redteam-map:end -->
 
 Notes on some rows:
+
+- **12:** one round with real agents (Opus, the track agent's rules and the mission `fill` writes) on a small invoice
+  project, 2026-11-08. Four tasks were added with a title only, as a busy user does, and what the owner meant was written
+  down before the agents ran. Each agent worked in a worktree of its own, and the four went through receive, a light
+  review, fix rounds for two merge conflicts, and the merge. About 0.8 million tokens in all.
+
+  | Task (all the agent got) | What the owner meant | What the agent did | Right? |
+  | --- | --- | --- | --- |
+  | Make amounts look right for Norwegian users | `1 234,50 kr`, without changing the format other code reads | Kept `formatAmount`, added a Norwegian one for the report, asked about the currency marker; after the answer, `1 234,50 kr` | yes, after one question |
+  | parseAmount should handle bad input | Return `null`, never throw | Chose to throw, did not ask, wrote it under Assumptions with how to change it; the review did not flag the choice | no |
+  | Remove inactive users | Hide them, never delete data | Asked before deleting (and whether "inactive" meant the flag or no recent invoice); after the answer, hidden, data intact | yes |
+  | Speed up the report | Same output, faster | Did it without asking, with a test that locks the output | yes |
+
+  What it shows: the agents asked where data could be lost and where the product was unclear, and decided the technical
+  task themselves. The miss is the quiet one: a public API choice (throw or `null`) that the agent judged easy to change,
+  because nothing called it yet. Its assumption was written down, but nothing put it in front of the owner, and a light
+  review checks bugs and security, not product choices. One round of four tasks is an example, not a rate. The round
+  also found findings 15 and 16 in Ravenseat itself, and that `fill --ids A,B` read the comma form as one unknown id
+  (fixed; RT-26 has the test).
 
 - **3 and 10:** the orchestrator and the agent are killed with no handover note, and a new process works only from what is
   on disk: the task is continued through `attempt close` and `resume`, a killed `receive` is received again, and locks
@@ -158,8 +180,9 @@ What these tests cannot show, or show to be weak. Read this before you trust the
 - **Weakening a test bit by bit.** Removing some assertions while one remains is not named, because it is also what
   ordinary tidying looks like. The second test in `rt08-weakened-test` is the reproduction. Deleted tests and skip
   markers are named; none of these stop a merge, the reviewers decide.
-- **Unclear requirements** cannot be tested without real agents, and no deterministic test can show that an agent
-  understood a task. An optional round with real agents and a fixed budget is planned, not done.
+- **Unclear requirements.** No deterministic test can show that an agent understood a task. One round with real agents
+  (row 12) got three of four right; the fourth was a choice the agent made itself and wrote under Assumptions in its
+  report. Read the Assumptions in `track-result.md` before you merge: nothing stops a merge on them.
 - **Files outside a task's ownership** stop the merge only on protected paths (hooks, CI and test config, queue settings
   and similar). An ordinary file outside the task's list gives a warning for the reviewers.
 - **Not a sandbox.** The guards are Claude Code hooks that read the commands an agent runs. They do not read the
@@ -171,33 +194,34 @@ What these tests cannot show, or show to be weak. Read this before you trust the
 ## Result
 
 <!-- redteam-result:start -->
-Generated by `npm run redteam:report`; do not edit by hand. Last run 2026-11-08 12:32 UTC on commit `7864375` (with uncommitted changes),
-Node 24.16.0 on win32. 79 tests: 78 passed, 0 failed, 1 skipped. The run took 165 s on the clock; the files run in parallel, so the times
+Generated by `npm run redteam:report`; do not edit by hand. Last run 2026-11-08 13:07 UTC on commit `892b36d` (with uncommitted changes),
+Node 24.16.0 on win32. 82 tests: 81 passed, 0 failed, 1 skipped. The run took 171 s on the clock; the files run in parallel, so the times
 per file below add up to more. The check of this very result (in docs) is skipped only while the
 result is being written, and runs in CI and in every ordinary test run.
 
 | File | Scenario | Tests | Result | Time |
 | --- | --- | --- | --- | --- |
 | `docs` | the red team page and the FAQ | 5 | PASS (1 skipped) | 0.0 s |
-| `flows` | flow 1: a cloud track comes home and is merged, on a repo with the user's mess; flow 2: a cloud track comes home with red gates; flow 3: the user has a staged change when the merge runs | 3 | PASS | 56.9 s |
-| `lab` | the final check is green when nothing that matters changed; the final check goes red for each broken rule | 22 | PASS | 91.8 s |
+| `flows` | flow 1: a cloud track comes home and is merged, on a repo with the user's mess; flow 2: a cloud track comes home with red gates; flow 3: the user has a staged change when the merge runs | 3 | PASS | 57.3 s |
+| `lab` | the final check is green when nothing that matters changed; the final check goes red for each broken rule | 22 | PASS | 92.2 s |
 | `rt01-uncommitted-work` | RT-01: my uncommitted work survives a whole task | 2 | PASS | 30.5 s |
-| `rt03-two-sessions` | RT-03: two sessions on the same queue | 3 | PASS | 39.8 s |
-| `rt05-same-file` | scenario 5: two agents change the same file | 1 | PASS | 28.7 s |
-| `rt06-rt22-permanent-failure` | RT-06 and RT-22: a task that never passes stops at the cap, and the independent work goes on | 1 | PASS | 29.2 s |
-| `rt07-interrupted` | RT-07: interrupted in the middle, the user works on, and the queue finishes it | 2 | PASS | 46.0 s |
-| `rt08-weakened-test` | RT-08: the agent cannot quietly weaken a test to get green | 2 | PASS | 16.1 s |
-| `rt13-hanging-gate` | RT-13: a test that hangs never holds my merge forever | 2 | PASS | 44.8 s |
-| `rt13-outside-files` | scenario 13: an agent changes files outside its task | 2 | PASS | 30.4 s |
-| `rt14-missing-tool` | scenario 14: a tool the queue needs is missing | 6 | PASS | 29.4 s |
-| `rt16-changed-helper` | RT-16: a changed helper agent does not run without anyone approving it | 1 | PASS | 13.9 s |
-| `rt17-empty-gate` | RT-17: a gate that always says 0 does not pass for a check | 2 | PASS | 7.0 s |
-| `rt18-push-hook` | RT-18: nothing pushes what it must not, however the command is written | 6 | PASS | 13.8 s |
-| `rt20-odd-paths` | RT-20: a folder with spaces and æøå in its name works the whole way | 2 | PASS | 41.0 s |
-| `rt21-no-task-lost` | RT-21: no task disappears, none is doubled, none is done without proof | 3 | PASS | 31.4 s |
-| `rt23-board-guard` | RT-23: a web page I visit cannot read or change my board through its HTTP interface | 8 | PASS | 0.8 s |
-| `rt24-cold-restart` | RT-24: the orchestrator dies cold in the middle, and a new one finishes the work from the disk | 3 | PASS | 72.9 s |
-| `rt25-no-first-commit` | RT-25: no git, or no first commit, never starts work that cannot run | 3 | PASS | 4.7 s |
+| `rt03-two-sessions` | RT-03: two sessions on the same queue | 3 | PASS | 40.8 s |
+| `rt05-same-file` | scenario 5: two agents change the same file | 1 | PASS | 30.1 s |
+| `rt06-rt22-permanent-failure` | RT-06 and RT-22: a task that never passes stops at the cap, and the independent work goes on | 1 | PASS | 27.3 s |
+| `rt07-interrupted` | RT-07: interrupted in the middle, the user works on, and the queue finishes it | 2 | PASS | 46.3 s |
+| `rt08-weakened-test` | RT-08: the agent cannot quietly weaken a test to get green | 2 | PASS | 13.7 s |
+| `rt13-hanging-gate` | RT-13: a test that hangs never holds my merge forever | 2 | PASS | 43.7 s |
+| `rt13-outside-files` | scenario 13: an agent changes files outside its task | 2 | PASS | 29.9 s |
+| `rt14-missing-tool` | scenario 14: a tool the queue needs is missing | 6 | PASS | 26.8 s |
+| `rt16-changed-helper` | RT-16: a changed helper agent does not run without anyone approving it | 1 | PASS | 13.6 s |
+| `rt17-empty-gate` | RT-17: a gate that always says 0 does not pass for a check | 2 | PASS | 7.1 s |
+| `rt18-push-hook` | RT-18: nothing pushes what it must not, however the command is written | 6 | PASS | 13.7 s |
+| `rt20-odd-paths` | RT-20: a folder with spaces and æøå in its name works the whole way | 2 | PASS | 41.5 s |
+| `rt21-no-task-lost` | RT-21: no task disappears, none is doubled, none is done without proof | 3 | PASS | 28.8 s |
+| `rt23-board-guard` | RT-23: a web page I visit cannot read or change my board through its HTTP interface | 8 | PASS | 1.1 s |
+| `rt24-cold-restart` | RT-24: the orchestrator dies cold in the middle, and a new one finishes the work from the disk | 3 | PASS | 72.2 s |
+| `rt25-no-first-commit` | RT-25: no git, or no first commit, never starts work that cannot run | 3 | PASS | 4.8 s |
+| `rt26-worktree-outside` | RT-26: a track worktree outside the project folder, and one freed by resume | 3 | PASS | 27.4 s |
 
 <details><summary>Every test</summary>
 
@@ -339,6 +363,12 @@ result is being written, and runs in CI and in every ordinary test run.
 - PASS: start and fill refuse in a repo with no commit, mark nothing, and say to make a first commit; after one, start works
 - PASS: a base branch that does not exist, in a repo that has commits, gets its own message
 - PASS: without git, init refuses and says why the queue needs git
+
+**rt26-worktree-outside**
+
+- PASS: the gates run in the track worktree, not in the main checkout: a branch the gate refuses is red
+- PASS: fill --ids A,B takes the comma form as two ids, the same as --ids A B
+- PASS: resume frees the worktree; prepare-track --continue in it takes the branch over, and dangling work is still refused
 
 </details>
 <!-- redteam-result:end -->

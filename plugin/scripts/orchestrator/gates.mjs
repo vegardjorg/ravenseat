@@ -106,10 +106,21 @@ const K = config();
 // queue.config.json exists but does not parse: stop (H3); empty default gates would report a green run.
 require('./lib/queueConfig.js').stopIfConfigUnreadable(K);
 
-/** Is `path` the project root or a worktree of the project (<root>/.claude/worktrees/<name>/...)? */
+/** The repo's shared git folder as seen from `dir` (the same for the main checkout and all its worktrees), or null. */
+function commonGitDir(dir) {
+  const r = spawnSync('git', ['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' });
+  return r.status === 0 && r.stdout.trim() ? path.resolve(r.stdout.trim()).toLowerCase() : null;
+}
+/**
+ * Is `path` the project root, a folder under it (<root>/.claude/worktrees/<name>/...), or a linked worktree of the same
+ * repo somewhere else? A worktree outside the root once fell back to the root, so a track's gate checked the main
+ * checkout's commit and said green (R5, 2026-11-08).
+ */
 function inProject(filePath) {
   const rel = path.relative(K.root, filePath);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) return true;
+  const mine = commonGitDir(filePath);
+  return mine !== null && mine === commonGitDir(K.root);
 }
 // --cwd <folder>: run there (ravenseat receive runs the quick gate in the track's worktree, which need not be under the root).
 const cwd = option('--cwd') ? path.resolve(option('--cwd')) : inProject(process.cwd()) ? process.cwd() : K.root;
