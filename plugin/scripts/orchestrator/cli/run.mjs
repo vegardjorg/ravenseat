@@ -102,11 +102,29 @@ export function cmdNext() {
   if (b.active) console.log(CE.budgetOutlook(b, selected.reduce((x, v) => x + costFor(v).usd, 0)).message);
 }
 
+/**
+ * The base branch must have a commit before a task starts: the agent makes its worktree from it, and in a repo with no
+ * commit yet `git worktree add` fails ("invalid reference"). Without this the task was marked running and the agent
+ * stopped at its first step (red team finding 12). Returns the commit, or stops with the way forward.
+ */
+function baseCommitOrDie() {
+  const head = git(['rev-parse', '--verify', '-q', `${BASE}^{commit}`]);
+  if (head) return head;
+  const anyCommit = git(['rev-parse', '--verify', '-q', 'HEAD^{commit}']);
+  if (!anyCommit)
+    die(
+      `This repo has no commit yet, so an agent has nothing to start from (its worktree is made from ${BASE}). ` +
+        'Ask Claude to make a first commit (with a .gitignore that keeps secrets and build output out), then start again. Nothing was started.',
+    );
+  die(`Could not find baseBranch ${BASE} in the main tree (git rev-parse ${BASE}). Set baseBranch in queue.config.json to an existing branch. Nothing was started.`);
+}
+
 /** `ravenseat start` (the usage is at the top of queue.mjs). */
 export function cmdStart() {
   const id = a[1];
   if (!id) die('start <id>');
   GB.ensure(FOLDER, GIT_ROOT);
+  baseCommitOrDie();
   // The usage is read before the lock (the log is large enough that this should not happen with the queue file locked). The same applies to
   // git status (uncommitted files in the main tree).
   const usage = dailyUsageFor(read());
@@ -221,8 +239,7 @@ export function cmdFill() {
     const by = L.windDownGuard(readCursor());
     if (by.stop) die(by.message, 6);
   }
-  const head = git(['rev-parse', BASE]);
-  if (!head) die(`Could not find baseBranch ${BASE} in the main tree (git rev-parse ${BASE}).`);
+  const head = baseCommitOrDie();
   // Said before the work starts, not after it at the merge. A warning: the tracks themselves can run.
   const identity = GI.readIdentity(GIT_ROOT);
   if (identity.refused)
