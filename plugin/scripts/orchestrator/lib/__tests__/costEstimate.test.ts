@@ -457,4 +457,47 @@ describe('queue.mjs calibrate, cost, next, show, info and state (against a tempo
     const perTask = JSON.parse(run('cost', '--json').out).perTask;
     expect(perTask.map((r: { id: string }) => r.id).slice(0, 2)).toEqual(['C-1', 'K-4']);
   }, 120_000);
+
+  it('the daily budget used up (red team 18): next and fill start nothing and say why', () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-budget-'));
+    temporary.push(folder);
+    // fill looks at the base branch first, so the folder is a repo with one commit on main.
+    const git = (...a: string[]) => spawnSync('git', ['-C', folder, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...a]);
+    git('init', '-q', '-b', 'main');
+    git('commit', '-q', '--allow-empty', '-m', 'start');
+    const task = (id: string) => ({ id, title: id, domain: id, class: 'K', status: 'waiting', content_min: 120, value: 8, mission: 'm' });
+    const queueFile = path.join(folder, 'queue.json');
+    fs.writeFileSync(queueFile, JSON.stringify({ limits: { dailyBudget: 5 }, resolved: [], projects: {}, tasks: [task('W-1'), task('W-2')] }));
+    const configFile = path.join(folder, 'queue.config.json');
+    fs.writeFileSync(configFile, '{}');
+    // $8 spent today by a track ($20 per MTok output), over the $5 budget.
+    fs.writeFileSync(
+      path.join(folder, 'times.jsonl'),
+      `${JSON.stringify({
+        time: new Date().toISOString(), event: 'done', agent_id: 'a1', agent_type: 'track', track: 'earlier',
+        model: 'claude-opus-5-5', tokens: { input: 0, output: 400_000, cache_read: 0, cache_written: 0 },
+      })}\n`,
+    );
+    const env = {
+      ...process.env,
+      QUEUE_FOLDER: folder, QUEUE_CONFIG: configFile, QUEUE_ROOT: folder, QUEUE_GIT: folder,
+      QUEUE_TIME_LOG: path.join(folder, 'times.jsonl'), QUEUE_SCRATCHPAD: path.join(folder, 'scratch'), QUEUE_LOAD: 'free=100,cpu=5',
+    };
+    const run = (...args: string[]) => {
+      const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'orchestrator', 'queue.mjs'), ...args], { encoding: 'utf8', env });
+      return { code: r.status, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
+    };
+    const statuses = () => JSON.parse(fs.readFileSync(queueFile, 'utf8')).tasks.map((o: { status: string }) => o.status);
+
+    for (const cmd of [['next'], ['fill']]) {
+      const r = run(...cmd);
+      // Exit 4, not 0: a loop must not take a used-up budget for an empty queue.
+      expect(r.code, r.out).toBe(4);
+      expect(r.out).toMatch(/DAILY BUDGET USED UP: 8\.00 of 5\.00 USD \(API equivalent, local day\)\. No new tasks are started today\./);
+      expect(r.out).toMatch(/ravenseat limit dailyBudget <usd>/);
+    }
+    expect(statuses()).toEqual(['waiting', 'waiting']);
+    // The budget is in the state the board reads.
+    expect(JSON.parse(run('state').out).stop).toBe('dailyBudget');
+  }, 120_000);
 });

@@ -16,7 +16,8 @@
 //   branches    queue branches of done or cancelled tasks, and merged agent branches, still there (WARN only)
 //   machine     cores and memory against maxConcurrent (lib/machineAdvice.js, an estimate): OK, or WARN when maxConcurrent
 //               is above the suggestion; never FAIL
-//   git         INFO when git is older than 2.38: no `git merge-tree --write-tree`, so the conflict prediction
+//   git         FAIL when `git` is not found on PATH at all (red team scenario 14).
+//               INFO when git is older than 2.38: no `git merge-tree --write-tree`, so the conflict prediction
 //               (lib/conflictPredict.js) falls back to file overlap (QUEUE_GIT_VERSION overrides the version, tests)
 //   ci-cost     only with --all: .github/workflows/*.yml that run on push: INFO without concurrency cancel-in-progress or a
 //               paths/paths-ignore filter (a text scan, lib/pushBatch.js workflowCost)
@@ -506,8 +507,25 @@ function checkCiCost() {
   return out;
 }
 
-/** git: new enough for `git merge-tree --write-tree` (the conflict prediction)? Only an INFO line when it is not. */
+/**
+ * git: on PATH at all (a FAIL when not), and new enough for `git merge-tree --write-tree` (the conflict prediction)?
+ * Only an INFO line when it is old.
+ */
 function checkGit() {
+  // git not found at all (red team scenario 14): every queue command needs it, and the other rows would only show the
+  // symptoms ("the repo has no commits", "version unknown"). Without a cwd, so a missing folder is not taken for it.
+  try {
+    execFileSync('git', ['--version'], { stdio: ['ignore', 'ignore', 'ignore'], timeout: 10_000, windowsHide: true });
+  } catch (e) {
+    if (e?.code === 'ENOENT')
+      return [
+        fail(
+          'git',
+          '`git` is not found on PATH; the queue runs every git command through it (worktrees, merges, the checks)',
+          'install git and put it on PATH for the Claude Code process (then restart Claude Code)',
+        ),
+      ];
+  }
   const v = CP.gitVersion(CP.makeRunner(MAIN_TREE));
   if (v && CP.supportsMergeTree(v)) return [];
   return [
