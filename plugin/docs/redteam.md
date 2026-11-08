@@ -55,14 +55,14 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | --- | --- | --- | --- | --- |
 | 1 | My uncommitted work is overwritten by a merge | PASS | challenged | `rt01-uncommitted-work`, `flows`, `lab` |
 | 2 | An interrupted merge leaves the repo half merged | PASS | verified | `queueFaultInjection`, `queueMergeResume`, `rt07-interrupted` |
-| 3 | Claude dies in the middle of a task | PASS | mapped | `queueFaultInjection`, `rt07-interrupted` |
+| 3 | Claude dies in the middle of a task | PASS | challenged | `rt24-cold-restart`, `queueFaultInjection`, `rt07-interrupted` |
 | 4 | Two sessions start or merge the same task | PASS | challenged | `rt03-two-sessions`, `mergeLock`, `queueLock` |
 | 5 | Two agents change the same file | PASS | challenged | `rt05-same-file`, `conflictPredict`, `queueFaultInjection` |
 | 6 | An agent reports green without passing | PASS | verified | `queueGateEvidence`, `flows`, `rt03-two-sessions` |
 | 7 | The tests are green but too weak | KNOWN LIMITATION | - | `rt17-empty-gate` |
 | 8 | The agent weakens a test to get green | PASS | challenged | `rt08-weakened-test`, `testWeakening`, `mergeGuard` |
 | 9 | A task that always fails is retried forever | PASS | challenged | `rt06-rt22-permanent-failure`, `doneCheck` |
-| 10 | The queue does not continue after a restart | PASS | mapped | `queueHandover`, `attempt` |
+| 10 | The queue does not continue after a restart | PASS | challenged | `rt24-cold-restart`, `queueHandover`, `attempt` |
 | 11 | Circular dependencies wait forever, silently | PASS | verified | `queueCycles` |
 | 12 | Unclear requirements give the wrong result | NOT VERIFIED | - | none: needs real agents |
 | 13 | An agent changes files outside its task | PASS | challenged | `rt13-outside-files`, `mergeGuard` |

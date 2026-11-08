@@ -769,5 +769,17 @@ export function cmdResume() {
         : `NOTE: ${branch} is checked out in ${where}. If the old agent is done: git -C "${where}" switch --detach ` +
             'before the new agent starts (otherwise prepare-track --continue refuses).',
     );
+    // An agent that died (killed, a crash, a closed laptop) can leave work it never committed. The new agent starts from the
+    // branch in a worktree of its own and never sees that work, so say so here, where the orchestrator decides (RT-24). git
+    // never removes a worktree with changes in it, so leaving them loses nothing. Never about the main checkout: changes
+    // there are the user's, not an agent's.
+    const dirty =
+      freed || holder === worktrees[0] ? 0 : (git(['-C', where, 'status', '--porcelain']) ?? '').split(/\r?\n/).filter(Boolean).length;
+    if (dirty)
+      console.log(
+        `WARNING: ${where} has ${dirty} uncommitted change(s) the old agent left; the new agent will not see them. ` +
+          `To keep them on the branch: git -C "${where}" add -A, then git -C "${where}" commit -m "wip: ${id} (interrupted agent)", ` +
+          'before the switch --detach. Left as they are, they stay in that worktree (it is never removed with changes in it).',
+      );
   }
 }
