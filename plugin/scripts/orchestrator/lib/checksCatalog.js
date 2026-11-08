@@ -8,6 +8,9 @@
 //
 // A template: a header (title, category, priority, when, why, content_min, also_task, action) and two sections,
 // "## Investigate" and "## Plan and build". The sections become the mission of the investigation task.
+// Two kinds need no agent: `action: gates` (ravenseat kickstart gates --apply) and `action: ask`, whose one section
+// "## Ask Claude" is the text the owner gives Claude in their own session. `ask` is for a step a queue agent cannot take,
+// such as the first commit: an agent's worktree is made from a commit.
 //
 //   parseTemplate(text, key)      one file as an object, with errors in words
 //   mergeCatalog(builtin, own)    the project's files over the plugin's
@@ -24,6 +27,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const PRIORITIES = ['high', 'medium', 'low'];
+const ACTIONS = ['gates', 'ask'];
 const REPORT_VERSION = 1;
 
 const anyKind = (arg, test) => arg.split('|').some((k) => test(k));
@@ -33,6 +37,9 @@ const placesOf = (facts, kind) => new Set((facts.kinds?.find((k) => k.key === ki
 /** What a template's `when` may say. Comma = all must hold. `missing:a|b` = at least one of a and b. */
 const CONDITIONS = {
   'has-git': (f) => !!f.git,
+  // Only when the scan says so (false), never when the fact is unknown.
+  'no-git': (f) => f.git === false,
+  'no-commit': (f) => f.hasCommit === false,
   'has-remote': (f) => !!f.remote,
   'has-ci': (f) => (f.ci?.length ?? 0) > 0,
   'no-ci': (f) => (f.ci?.length ?? 0) === 0,
@@ -98,6 +105,7 @@ function parseTemplate(text, key) {
     contentMin: Number(head.content_min) > 0 ? Number(head.content_min) : 60,
     alsoTask: head.also_task || null,
     action: head.action || null,
+    ask: (sections['ask claude'] ?? '').trim(),
     investigate: (sections.investigate ?? '').trim(),
     plan: (sections['plan and build'] ?? '').trim(),
     errors: [],
@@ -105,7 +113,9 @@ function parseTemplate(text, key) {
   for (const field of ['title', 'category', 'why']) if (!out[field]) out.errors.push(`${key}: "${field}" is missing`);
   if (!PRIORITIES.includes(out.priority)) out.errors.push(`${key}: priority must be ${PRIORITIES.join(', ')}`);
   for (const c of conditionsOf(out.when)) if (!knownCondition(c)) out.errors.push(`${key}: unknown condition "${c}"`);
-  // A suggestion with its own action (ravenseat kickstart gates) needs no agent, so it has no mission to fill.
+  if (out.action && !ACTIONS.includes(out.action)) out.errors.push(`${key}: action must be ${ACTIONS.join(' or ')}`);
+  // A suggestion with its own action needs no agent, so it has no mission to fill. `ask` needs the text to give Claude.
+  if (out.action === 'ask' && !out.ask) out.errors.push(`${key}: action ask needs the section "## Ask Claude"`);
   if (!out.action && (!out.investigate || !out.plan)) out.errors.push(`${key}: needs the sections "## Investigate" and "## Plan and build"`);
   return out;
 }
@@ -189,6 +199,7 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
       why: x.why,
       contentMin: x.contentMin,
       action: x.action,
+      ask: x.ask,
       investigate: x.investigate,
       plan: x.plan,
       ...suggestionState(x, tasks, dismissed),
@@ -198,6 +209,7 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
     scannedAt: now,
     stacks: facts.stacks ?? [],
     git: !!facts.git,
+    hasCommit: facts.hasCommit !== false,
     found: { ci: facts.ci ?? [], kinds: facts.kinds ?? [] },
     categories: catalog.categories.map(({ key, title, text }) => ({ key, title, text: text ?? '' })),
     suggestions,
@@ -239,4 +251,4 @@ function planTask(s, found, tasks) {
   };
 }
 
-module.exports = { PRIORITIES, CONDITIONS, holds, parseTemplate, mergeCatalog, loadCatalog, buildReport, planTask, planTasks };
+module.exports = { PRIORITIES, ACTIONS, CONDITIONS, holds, parseTemplate, mergeCatalog, loadCatalog, buildReport, planTask, planTasks };

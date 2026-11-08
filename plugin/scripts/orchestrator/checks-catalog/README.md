@@ -37,10 +37,13 @@ What the plan covers, and what the build steps should and should not do.
 ```
 
 `priority` is high, medium or low. `content_min` is the investigation's size in minutes. `also_task` names a task that does the
-same work, so the card shows it as under way. `action: gates` is for a suggestion that needs no agent.
+same work, so the card shows it as under way. Two kinds need no agent: `action: gates` sets the checks found as gates,
+and `action: ask` shows the text in its one section, `## Ask Claude`, for the owner to give Claude in their own session.
+Use `ask` for a step a queue agent cannot take, such as the first commit (an agent's worktree is made from a commit).
 
 `when` says when the suggestion applies. Comma means all must hold, and `|` means at least one of those kinds:
-`has-git`, `has-remote`, `has-ci`, `no-ci`, `has-gates`, `no-gates`, `checks-found`, `secrets-open`, `known-stack`,
+`has-git`, `no-git`, `no-commit` (no git, or git with no commit yet), `has-remote`, `has-ci`, `no-ci`, `has-gates`,
+`no-gates`, `checks-found`, `secrets-open`, `known-stack`,
 `missing:<kinds>`, `found:<kinds>`, `not-in-ci:<kinds>`.
 
 The kinds are test, types, lint, build, coverage, secret-scan, audit, security, dep-updates and hooks.

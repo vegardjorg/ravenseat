@@ -113,6 +113,16 @@ can read the key in your terminal, or the queue files directly.
 **Verified by:** [`rt23-board-guard`](../scripts/orchestrator/__tests__/redteam/rt23-board-guard.test.ts),
 [`queueBoardServe`](../scripts/orchestrator/lib/__tests__/queueBoardServe.test.ts).
 
+### Do I need git, and what if my project is not under git yet?
+
+Yes: each agent works in its own copy of the project, made from your latest commit, and the merge is a git merge.
+Without git, `init` and `setup` stop and say so. In a repo with no commit yet, `start` and `fill` refuse before
+anything is marked. `ravenseat checks` and the Checks tab show a card with the text to give Claude: `git init`, a
+`.gitignore` that keeps secrets out, and a first commit after you say yes. If you know git, set the card aside.
+
+**Verified by:** [`rt25-no-first-commit`](../scripts/orchestrator/__tests__/redteam/rt25-no-first-commit.test.ts),
+[`checksCatalog`](../scripts/orchestrator/lib/__tests__/checksCatalog.test.ts).
+
 ### What can Ravenseat not protect me against?
 
 - **Weak tests.** Green means your checks passed, not that the change is right.

@@ -119,8 +119,26 @@ function checksCiCard(c) {
   );
 }
 
+/** Copies the text of an `ask` card. Where the clipboard is refused, the text is on the card to select by hand. */
+async function copyChecksAsk(s) {
+  try {
+    await navigator.clipboard.writeText(s.ask);
+    message('Copied. Paste it to Claude in your own session.');
+  } catch {
+    message('Could not copy automatically: select the text on the card and copy it yourself.', true);
+  }
+}
+
 function checksButton(s) {
   const busy = t.checks.busy === s.key;
+  if (s.action === 'ask')
+    return el('button', {
+      type: 'button',
+      class: 'button button-filled',
+      text: 'Copy the text for Claude',
+      title: 'A queue agent cannot do this step. Paste the text to Claude in your own session.',
+      onclick: () => copyChecksAsk(s),
+    });
   if (s.action === 'gates')
     return el('button', {
       type: 'button',
@@ -168,7 +186,16 @@ function checksSuggestionCard(s, categories) {
     ),
     el('h4', { class: 'checks-card-title', text: s.title }),
     el('p', { class: 'checks-text', text: s.why }),
-    s.action ? null : details,
+    s.action === 'ask'
+      ? el(
+          'div',
+          { class: 'checks-ask' },
+          el('h5', { text: 'Ask Claude in your session' }),
+          el('p', { class: 'checks-template', text: s.ask }),
+        )
+      : s.action
+        ? null
+        : details,
     el(
       'div',
       { class: 'checks-actions' },

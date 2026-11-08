@@ -36,6 +36,17 @@ describe('the catalog the plugin ships', () => {
     const keys = r.suggestions.map((s: { key: string }) => s.key);
     expect(keys.slice(0, 2)).toEqual(['first-test', 'ci-on-push']);
     expect(keys).not.toContain('tests-in-ci');
+    expect(keys).not.toContain('first-commit');
+  });
+  it('no git, or git with no commit: the first commit comes first, as a step for Claude in your session', () => {
+    for (const facts of [{ git: false, hasCommit: false }, { git: true, hasCommit: false }]) {
+      const r = C.buildReport({ facts: { ...facts, remote: null, stacks: [], ci: [], kinds: [] }, catalog, now: 'x' });
+      expect(r.suggestions[0]).toMatchObject({ key: 'first-commit', action: 'ask', category: 'setup' });
+      expect(r.suggestions[0].ask).toMatch(/git init/);
+      expect(r.suggestions[0].ask).toMatch(/\.gitignore/);
+      expect(r.suggestions[0].ask).toMatch(/Do not push/);
+      expect(r.hasCommit).toBe(false);
+    }
   });
 });
 
@@ -49,6 +60,13 @@ describe('parseTemplate', () => {
     expect(C.parseTemplate(file('title: T\ncategory: ci\npriority: urgent\nwhy: W'), 'x').errors[0]).toContain('priority must be');
     expect(C.parseTemplate(file(`${GOOD}\nwhen: has-cii`), 'x').errors[0]).toContain('unknown condition "has-cii"');
     expect(C.parseTemplate(file(GOOD, '## Investigate\nOnly this.\n'), 'x').errors[0]).toContain('Plan and build');
+  });
+  it('action ask needs its text, and an unknown action is refused', () => {
+    const ask = C.parseTemplate(file(`${GOOD}\naction: ask`, '## Ask Claude\nMake a first commit.\n'), 'x');
+    expect(ask.errors).toEqual([]);
+    expect(ask.ask).toBe('Make a first commit.');
+    expect(C.parseTemplate(file(`${GOOD}\naction: ask`, ''), 'x').errors[0]).toContain('Ask Claude');
+    expect(C.parseTemplate(file(`${GOOD}\naction: build`, ''), 'x').errors[0]).toContain('action must be');
   });
   it('a suggestion with an action needs no sections, and off needs nothing else', () => {
     expect(C.parseTemplate(file(`${GOOD}\naction: gates`, ''), 'x').errors).toEqual([]);
@@ -98,6 +116,8 @@ describe('holds', () => {
     ['not-in-ci:lint', true],
     ['not-in-ci:types', false],
     ['secrets-open', false],
+    ['no-git', false],
+    ['no-commit', false],
     ['made-up', false],
     ['made-up:test', false],
   ])('%s is %s', (when, want) => {

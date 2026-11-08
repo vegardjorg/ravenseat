@@ -4189,7 +4189,8 @@ fieldset.setting legend {
   font-size: var(--text-xs);
   color: var(--color-on-surface-variant);
 }
-.checks-details h5 {
+.checks-details h5,
+.checks-ask h5 {
   margin: var(--distance-xs) 0 0;
   font-size: var(--text-xs);
 }

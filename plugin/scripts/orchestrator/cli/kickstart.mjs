@@ -51,6 +51,8 @@ export function readFacts() {
   const url = inGit ? git(['remote', 'get-url', CONFIG.remote ?? 'origin']) : null;
   return {
     git: inGit,
+    // A repo with no commit yet: the agents make their worktrees from a commit, so the queue cannot start work there.
+    hasCommit: inGit && !!git(['rev-parse', '--verify', '-q', 'HEAD^{commit}']),
     remote: !url ? null : /github\.com[:/]/i.test(url) ? 'github' : 'other',
     ...K.detectChecks({ exists, read: readFile }),
     hasGates: !NO_PROJECT_ROOT && CONTROLS.hasGates(CONFIG),

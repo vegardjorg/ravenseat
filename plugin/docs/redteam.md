@@ -81,6 +81,7 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | RT-21 | A task disappears, is doubled, or is done without proof | PASS | challenged | `rt21-no-task-lost` |
 | RT-22 | One blocked task stops all the other work | PASS | challenged | `rt06-rt22-permanent-failure` |
 | RT-23 | A web page I visit can read or change my board | PASS | challenged | `rt23-board-guard`, `queueBoardServe`, `queuePlanRead` |
+| RT-25 | A project without git, or without a first commit, starts work that cannot run | PASS | challenged | `rt25-no-first-commit`, `checksCatalog` |
 <!-- redteam-map:end -->
 
 Notes on some rows:
@@ -107,7 +108,7 @@ Notes on some rows:
 
 ## What the red team found
 
-Eleven findings so far. Each one came from a test going red on the code as it was, and each fix has a test that is red
+Twelve findings so far. Each one came from a test going red on the code as it was, and each fix has a test that is red
 without it.
 
 | # | Finding | Now |
@@ -123,6 +124,7 @@ without it.
 | 9 | `set <id> done` by hand freed the waiting tasks without proof or a word | A warning with the freed tasks and the way back |
 | 10 | A half-written `queue.json.<pid>.tmp` from a dead process was never mentioned | `doctor` names it and says it can be deleted |
 | 11 | The board showed a task's mission file through a symlink or junction, so a mission path could point at any file on the machine | The mission file gets the same path guard as the reading view (no links, the real path must match); otherwise the text itself is shown |
+| 12 | In a repo with git but no commit yet, `start` marked a task running, and the agent stopped at its first step: its worktree is made from a commit | `start` and `fill` refuse before anything is marked and say to make a first commit; the Checks tab has a card with the text to give Claude |
 
 ## Limitations
 

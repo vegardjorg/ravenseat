@@ -111,7 +111,12 @@ function suggestion(report, key) {
 function show(key) {
   const s = suggestion(makeReport(queueNow()), key);
   console.log(`${s.title} (${s.category}, ${s.priority} priority)\n\nWhy: ${s.why}\n`);
-  if (s.action) console.log(`This needs no agent: ${CLI} kickstart gates --apply.`);
+  if (s.action === 'ask') console.log(`This needs no agent. Ask Claude in your session:
+
+${s.ask}
+
+${CLI} checks dismiss ${s.key} sets it aside if you do it your own way.`);
+  else if (s.action) console.log(`This needs no agent: ${CLI} kickstart gates --apply.`);
   else console.log(`Investigate\n${s.investigate}\n\nPlan and build\n${s.plan}\n\nAbout ${s.contentMin} min of agent work for the investigation.`);
 }
 
@@ -120,6 +125,9 @@ function plan(key) {
   const queue = read();
   const report = makeReport(queue);
   const s = suggestion(report, key);
+  if (s.action === 'ask') die(`${key} needs no agent, and a queue agent cannot do it. Ask Claude in your session:
+
+${s.ask}`);
   if (s.action) die(`${key} needs no agent. Run: ${CLI} kickstart gates --apply`);
   if (s.state === 'queued' || s.state === 'planned') {
     console.log(`Not added: ${s.taskId} is already there.`);
