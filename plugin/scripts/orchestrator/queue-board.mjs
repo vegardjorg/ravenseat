@@ -933,7 +933,17 @@ function setup(queue, stat) {
   };
 }
 
-/** The mission text: the file `mission` points to (in the worktree or the main tree, never outside), otherwise the text itself. */
+/**
+ * The mission text: the file `mission` points to (in the worktree or the main tree, never outside), otherwise the text itself.
+ *
+ * "Never outside" is checked the same way as /api/doc (queueBoard.readDocument), not only on the written path:
+ *   1. the resolved path must lie under the root (stops `..` and absolute paths),
+ *   2. every part under the root is checked with lstat: a symlink or junction (Node reports both as a symlink) is refused,
+ *   3. the real path (realpath) must be exactly the real root + the same parts (catches 8.3 short names, other upper and
+ *      lower case and links step 2 did not see).
+ * Without 2 and 3 a mission path like `docs/link/secret.md`, where `link` is a junction to another folder, would let
+ * the board show any file on the machine (red team finding 11, RT-23). A refused path falls back to the text itself.
+ */
 function missionFor(o) {
   const s = String(o.mission ?? '');
   if (s && !s.includes('\n')) {
@@ -941,8 +951,24 @@ function missionFor(o) {
       const filePath = path.resolve(root, s);
       if (!filePath.startsWith(root + path.sep)) continue;
       try {
-        if (fs.statSync(filePath).isFile())
-          return { text: fs.readFileSync(filePath, 'utf8').slice(0, 200_000), path: s };
+        // Step 2: walk from the real root, part by part, and refuse any link on the way.
+        const realRoot = fs.realpathSync.native(root);
+        const parts = path.relative(root, filePath).split(path.sep);
+        let here = realRoot;
+        let linked = false;
+        for (const d of parts) {
+          here = path.join(here, d);
+          if (fs.lstatSync(here).isSymbolicLink()) {
+            linked = true;
+            break;
+          }
+        }
+        if (linked) continue;
+        // Step 3: the real path must be the path we walked, nothing else.
+        const real = fs.realpathSync.native(here);
+        if (real !== path.join(realRoot, ...parts)) continue;
+        if (fs.statSync(real).isFile())
+          return { text: fs.readFileSync(real, 'utf8').slice(0, 200_000), path: s };
       } catch {
         /* does not exist here */
       }
