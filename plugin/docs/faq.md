@@ -102,6 +102,17 @@ one of them). It cannot tell whether a real test suite is good enough; that is y
 
 **Verified by:** [`rt17-empty-gate`](../scripts/orchestrator/__tests__/redteam/rt17-empty-gate.test.ts).
 
+### Can a web page I visit control my board?
+
+Not in the ways the tests try. The board listens only on 127.0.0.1, and every API call needs the key from the link it
+printed, which a web page does not have. A request with another site's name as Host is refused, which also stops a
+page that points its own domain at 127.0.0.1 (DNS rebinding). A write must come from the board's own page and be JSON,
+so a form or script on another site cannot send one. What it does not stop: a program running under your own account
+can read the key in your terminal, or the queue files directly.
+
+**Verified by:** [`rt23-board-guard`](../scripts/orchestrator/__tests__/redteam/rt23-board-guard.test.ts),
+[`queueBoardServe`](../scripts/orchestrator/lib/__tests__/queueBoardServe.test.ts).
+
 ### What can Ravenseat not protect me against?
 
 - **Weak tests.** Green means your checks passed, not that the change is right.
