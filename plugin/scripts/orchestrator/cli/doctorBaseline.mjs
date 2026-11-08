@@ -9,7 +9,9 @@
 //              An ignored local .env is fine.
 //   base       the base branch does not exist: FAIL (in an empty repo: WARN).
 //   gates      gates.quick and gates.full both empty: WARN (the agents run no checks before delivery). A gate naming a
-//              package.json script that does not exist: FAIL (red on every run).
+//              package.json script that does not exist: FAIL (red on every run). A gate whose program is not found on
+//              PATH (`pytest -q` without pytest), or a path in it that is not in the repo: WARN (the agents' PATH may
+//              differ); a file lookup only, the gate is never run.
 //   ci         no CI config for the common hosts (GitHub, GitLab, Bitbucket, Azure, CircleCI, Jenkins): INFO.
 //   lockfile   a tracked dependency manifest in the root whose lockfile is missing (INFO) or present but not
 //              tracked (WARN).
@@ -151,6 +153,48 @@ export function checkIdentity() {
 export function checkGates() {
   const g = CONFIG.gates ?? {};
   const n = (Array.isArray(g.quick) ? g.quick.length : 0) + (Array.isArray(g.full) ? g.full.length : 0);
+  if (!n) return gateLines(g, n);
+  const commands = [...new Set([...(g.quick ?? []), ...(g.full ?? [])].filter((c) => typeof c === 'string'))];
+  return [...gateLines(g, n), ...gateProgramLines(commands)];
+}
+
+/**
+ * A gate whose program is not installed (red team scenario 14): `pytest -q` without pytest on PATH is red on every run.
+ * WARN, not FAIL: the agents run the gates with Claude Code's PATH, which may differ from this shell's. Cheap: only a
+ * file lookup per program (lib/kickstart.js gatePrograms, programFound); the gate is never run.
+ */
+export function gateProgramLines(commands) {
+  const KS = require('./lib/kickstart.js');
+  const isFile = (f) => {
+    try {
+      return fs.statSync(f).isFile();
+    } catch {
+      return false;
+    }
+  };
+  const o = {
+    pathValue: process.env.PATH ?? '',
+    pathExt: process.env.PATHEXT ?? '',
+    root: MAIN_TREE,
+    isFile,
+    join: path.join,
+    resolve: path.resolve,
+    delimiter: path.delimiter,
+  };
+  const missing = KS.gatePrograms(commands).filter((p) => !KS.programFound(p, o));
+  if (!missing.length) return [];
+  const named = missing.slice(0, 5).map((p) => `${p.program} (in "${p.command}")`);
+  return [
+    warn(
+      'gates',
+      `gate program(s) not found${missing.some((p) => !p.path) ? ' on PATH' : ''}: ${named.join(', ')}${missing.length > 5 ? ` and ${missing.length - 5} more` : ''}. Such a gate is red on every run`,
+      'install the program and put its folder on PATH for Claude Code (then restart it), or change the gate in queue.config.json; a path in a gate is read from the repo root',
+    ),
+  ];
+}
+
+/** The gates line itself: empty lists, a missing package script, or gates that check nothing. */
+function gateLines(g, n) {
   if (n) {
     // A gate that names a script the project does not have is red on every run, so every delivery would look broken.
     const commands = [...new Set([...(g.quick ?? []), ...(g.full ?? [])].filter((c) => typeof c === 'string'))];

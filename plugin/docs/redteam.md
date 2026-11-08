@@ -66,7 +66,7 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | 11 | Circular dependencies wait forever, silently | PASS | verified | `queueCycles` |
 | 12 | Unclear requirements give the wrong result | NOT VERIFIED | - | none: needs real agents |
 | 13 | An agent changes files outside its task | PASS | challenged | `rt13-outside-files`, `mergeGuard` |
-| 14 | A tool the queue needs is missing | PASS | verified | `rt14-missing-tool`, `queueDoctor`, `doctorBaseline`, `conflictPredict` |
+| 14 | A tool the queue needs is missing | PASS | challenged | `rt14-missing-tool`, `queueDoctor`, `doctorBaseline`, `kickstart`, `conflictPredict` |
 | 15 | A test that hangs holds my merge forever | PASS | challenged | `rt13-hanging-gate`, `gateLoad` |
 | 16 | I keep coding while the queue works | PASS | verified | `rt01-uncommitted-work`, `rt07-interrupted`, `queueExternal`, `conflictPredict` |
 | 17 | Switching from lite to full mode and back | PASS | challenged | `liteMode` |
@@ -95,9 +95,16 @@ Notes on some rows:
   its fix round is told both. A file outside a task's list gives a warning; a protected path stops the merge before
   `git merge`.
 - **14:** git, node for the hooks, `gh` and `claude` are each removed from PATH in turn, and each gives a named stop.
-  Not covered: a node that is too old, and a gate whose program is not installed.
-- **18:** the daily budget is off by default, and the cost guard needs three finished tasks of a class in seven days
-  before it can say one costs too much, so the first runaway track of a class is not named.
+  A fake node that prints v18.0.0, first on PATH, makes doctor FAIL the hooks' node by its version. A gate whose
+  program is not on PATH (`pytest -q`, `cargo test`) gives a named WARN, and no gate is run. Not covered: the WARN looks
+  at doctor's PATH, which may differ from the agents'; only the first word of each command part is looked up, so a
+  program behind `$VAR`, inside an npm script or behind `npx` is not judged. On Windows the old-node case needs the .NET
+  Framework `csc` to build its fake, and is skipped without it.
+- **18:** the daily budget is off by default. The cost guard warns at three times the class average once a class has
+  three finished tasks in seven days; before that it warns at three times the task's own estimate, so the first runaway
+  track of a class is named too, and the warning says which baseline it used. Not covered: before a class has measured
+  history the estimate is the static class default, which can be far from the real cost (a task without a class gets the
+  K default), and a cloud track's use is not in the local transcripts, so it is not measured.
 - **8:** a warning, never a stop. Receive and the review package name a test file left with no assertions; removing
   some assertions while one remains is ordinary tidying and is not named (see the limitations).
 - **9 and RT-22:** a task red in every round gets its fix rounds (two in the test, three by default), then one owner

@@ -9,10 +9,12 @@
 //
 //   detectChecks({ exists, read })     the project's own check commands (Node/TypeScript and Python), each with its source
 //   gateLists(checks)                  those commands as gates.quick and gates.full
+//   gatePrograms(commands), programFound(p, o)   the programs gate commands start, and whether one is installed
+//                                      (doctor's gates line, cli/doctorBaseline.mjs); nothing is run
 //   steps({ facts, tasks })            the steps in order, each with a state; see STATES
 //   nextStep(list)                     the first step the owner can act on now
 //
-// Used by: cli/kickstart.mjs. Tested in: lib/__tests__/kickstart.test.ts and __tests__/kickstartFlow.test.ts.
+// Used by: cli/kickstart.mjs, cli/doctorBaseline.mjs. Tested in: lib/__tests__/kickstart.test.ts and __tests__/kickstartFlow.test.ts.
 // =============================================================
 
 /** done: in place. next: can be acted on now. queued: a task exists. declined: the owner cancelled it. later: waits on an earlier step. */
@@ -134,6 +136,93 @@ function noOpCommands(commands, packageJson) {
         return !!m && depth < 3 && typeof scripts[m[1]] === 'string' && plain(scripts[m[1]], depth + 1);
       });
   return commands.filter((c) => typeof c === 'string' && c.trim() && plain(c));
+}
+
+/** Words the shell runs itself (sh and cmd.exe), so not a program on PATH. Compared in lower case. */
+const BUILTINS = new Set([
+  ':', '.', '[', '[[', 'true', 'false', 'cd', 'echo', 'exit', 'export', 'set', 'unset', 'source', 'test', 'eval', 'exec',
+  'pushd', 'popd', 'type', 'command', 'builtin', 'read', 'printf', 'pwd', 'shift', 'return', 'wait', 'trap', 'ulimit',
+  'umask', 'alias', 'if', 'then', 'else', 'fi', 'for', 'while', 'do', 'done', 'case', 'esac', '!', '{', '}',
+  'call', 'rem', 'dir', 'copy', 'del', 'erase', 'md', 'mkdir', 'rd', 'rmdir', 'ren', 'rename', 'move', 'cls', 'ver',
+  'vol', 'setlocal', 'endlocal', 'goto', 'start', 'title', 'chdir', 'mklink', 'assoc', 'ftype', 'path', 'prompt', 'break',
+]);
+/**
+ * Not looked up: npm and npx come with Node (doctor checks node), and the script an npm command names is judged by
+ * missingScripts. pnpm, yarn and bun are separate installs and are looked up.
+ */
+const NOT_LOOKED_UP = new Set(['npm', 'npx']);
+
+/** A command line cut at &&, ||, ;, | and & outside quotes; a redirection like 2>&1 is not a cut. */
+function segments(command) {
+  const out = [];
+  let cur = '';
+  let quote = null;
+  const s = String(command);
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (quote) {
+      if (c === quote) quote = null;
+      cur += c;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+      cur += c;
+    } else if (c === '&' && s[i - 1] === '>') {
+      cur += c;
+    } else if (c === ';' || c === '|' || c === '&') {
+      if (s[i + 1] === c) i++;
+      out.push(cur);
+      cur = '';
+    } else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+/**
+ * The programs the gate commands start, for doctor's "is it installed" check (red team scenario 14): per command
+ * segment (split at &&, ||, ;, |, &), the first word after env assignments (FOO=1) and an opening "(", quotes removed.
+ * Left out: shell builtins, npm and npx (see NOT_LOOKED_UP), and a word the shell expands ($VAR, $(...), backticks,
+ * %VAR%, a glob), which cannot be judged without running it. Pure; nothing is run.
+ * @param {string[]} commands
+ * @returns {{ program: string, command: string, path: boolean }[]}  one per distinct program; `path` when the word
+ *   names a file (has / or \), which the caller resolves from the repo root
+ */
+function gatePrograms(commands) {
+  const out = [];
+  const seen = new Set();
+  for (const command of commands ?? []) {
+    if (typeof command !== 'string') continue;
+    for (const segment of segments(command)) {
+      // Words with their quotes kept together ("C:\Program Files\x.exe" is one word), then the quotes removed.
+      const words = (segment.trim().replace(/^\(+\s*/, '').match(/(?:"[^"]*"|'[^']*'|[^\s"'])+/g) ?? []);
+      while (words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) words.shift();
+      const word = (words[0] ?? '').replace(/["']/g, '');
+      if (!word || /[$`%*?]/.test(word) || /^[<>]/.test(word)) continue;
+      if (BUILTINS.has(word.toLowerCase()) || NOT_LOOKED_UP.has(word.toLowerCase())) continue;
+      if (seen.has(word)) continue;
+      seen.add(word);
+      out.push({ program: word, command: command.trim(), path: /[\\/]/.test(word) });
+    }
+  }
+  return out;
+}
+
+/**
+ * Is the program found the way a shell finds it? A path (has / or \) is resolved from `root` (an absolute one as is);
+ * a bare name is looked for in each folder of `pathValue`. On Windows the PATHEXT endings are tried as well (also the
+ * bare name, which Git Bash runs). Pure apart from the injected `isFile`.
+ * @param {{ program: string, path: boolean }} p  from gatePrograms
+ * @param {{ pathValue?: string, pathExt?: string, platform?: string, root: string, isFile: (file: string) => boolean,
+ *   join: (...parts: string[]) => string, resolve: (...parts: string[]) => string, delimiter: string }} o
+ */
+function programFound(p, { pathValue = '', pathExt = '', platform = process.platform, root, isFile, join, resolve, delimiter }) {
+  const endings = platform === 'win32' ? ['', ...String(pathExt || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : [''];
+  const tryAll = (base) => endings.some((e) => isFile(base + e) || isFile(base + e.toLowerCase()));
+  if (p.path) return tryAll(resolve(root, p.program));
+  return String(pathValue)
+    .split(delimiter)
+    .filter(Boolean)
+    .some((dir) => tryAll(join(dir.replace(/^"|"$/g, ''), p.program)));
 }
 
 const NEVER_PUSH ='Never push, deploy or change settings on the git host. Report what the owner must do by hand.';
@@ -294,4 +383,4 @@ function steps({ facts, tasks = [] }) {
 /** The first step the owner can act on now, or null when nothing waits. */
 const nextStep = (list) => list.find((s) => s.state === 'next') ?? null;
 
-module.exports = { STATES, detectChecks, gateLists, missingScripts, noOpCommands, steps, nextStep, taskFor };
+module.exports = { STATES, detectChecks, gateLists, missingScripts, noOpCommands, gatePrograms, programFound, steps, nextStep, taskFor };

@@ -103,3 +103,40 @@ describe('the steps', () => {
     }
   });
 });
+
+describe('gatePrograms and programFound (doctor: a gate whose program is not installed, red team 14)', () => {
+  const names = (cmds: string[]) => K.gatePrograms(cmds).map((p: { program: string }) => p.program);
+
+  it('takes the first word of each segment, after env assignments, quotes removed', () => {
+    expect(names(['pytest -q', 'cargo test && cargo clippy', 'CI=1 RUST_LOG=x go vet ./...', '"C:/Program Files/x/tool.exe" run'])).toEqual([
+      'pytest',
+      'cargo',
+      'go',
+      'C:/Program Files/x/tool.exe',
+    ]);
+    expect(names(['make lint; ruff check . | tee out.txt 2>&1'])).toEqual(['make', 'ruff', 'tee']);
+  });
+
+  it('leaves out shell builtins, npm and npx, words the shell expands, and separators inside quotes', () => {
+    expect(names(['cd app && echo hi', 'exit 0', 'call x.bat', 'npm test', 'npx tsc --noEmit', '$PYTHON -m pytest', '%PY% x', 'node -e "a || b; c & d"'])).toEqual(['node']);
+    // Not a no-op list: pnpm and yarn are separate installs and are looked up.
+    expect(names(['pnpm test', 'yarn lint'])).toEqual(['pnpm', 'yarn']);
+  });
+
+  it('marks a word with a slash as a path, resolved from the repo root', () => {
+    const [p] = K.gatePrograms(['./scripts/check.sh --fast']);
+    expect(p).toEqual({ program: './scripts/check.sh', command: './scripts/check.sh --fast', path: true });
+  });
+
+  it('finds a program in a PATH folder (with PATHEXT on Windows) or a path in the repo, never runs it', () => {
+    const files = new Set(['/bin/pytest', 'C:\\tools\\cargo.EXE', '/repo/scripts/check.sh']);
+    const posix = { pathValue: '/usr/local/bin:/bin', platform: 'linux', root: '/repo', isFile: (f: string) => files.has(f), join: (...a: string[]) => a.join('/'), resolve: (r: string, f: string) => `${r}/${f.replace(/^\.\//, '')}`, delimiter: ':' };
+    expect(K.programFound({ program: 'pytest', path: false }, posix)).toBe(true);
+    expect(K.programFound({ program: 'cargo', path: false }, posix)).toBe(false);
+    expect(K.programFound({ program: './scripts/check.sh', path: true }, posix)).toBe(true);
+    expect(K.programFound({ program: './scripts/gone.sh', path: true }, posix)).toBe(false);
+    const win = { pathValue: 'C:\\tools;"C:\\other"', pathExt: '.COM;.EXE', platform: 'win32', root: 'C:\\repo', isFile: (f: string) => files.has(f), join: (...a: string[]) => a.join('\\'), resolve: (r: string, f: string) => `${r}\\${f}`, delimiter: ';' };
+    expect(K.programFound({ program: 'cargo', path: false }, win)).toBe(true);
+    expect(K.programFound({ program: 'pytest', path: false }, win)).toBe(false);
+  });
+});
