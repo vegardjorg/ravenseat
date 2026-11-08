@@ -106,12 +106,16 @@ export function cmdNext() {
  * The base branch must have a commit before a task starts: the agent makes its worktree from it, and in a repo with no
  * commit yet `git worktree add` fails ("invalid reference"). Without this the task was marked running and the agent
  * stopped at its first step (red team finding 12). Returns the commit, or stops with the way forward.
+ * `start` passes `lenient`: outside a git tree it returns null and lets the start go on as before (a queue that is not
+ * under git cannot be made by init; tests run start against a copy of the queue). `fill` always needs the commit.
  */
-function baseCommitOrDie() {
+function baseCommitOrDie({ lenient = false } = {}) {
   const head = git(['rev-parse', '--verify', '-q', `${BASE}^{commit}`]);
   if (head) return head;
-  const anyCommit = git(['rev-parse', '--verify', '-q', 'HEAD^{commit}']);
-  if (!anyCommit)
+  const inTree = git(['rev-parse', '--is-inside-work-tree']) === 'true';
+  if (!inTree && lenient) return null;
+  const anyCommit = inTree && git(['rev-parse', '--verify', '-q', 'HEAD^{commit}']);
+  if (inTree && !anyCommit)
     die(
       `This repo has no commit yet, so an agent has nothing to start from (its worktree is made from ${BASE}). ` +
         'Ask Claude to make a first commit (with a .gitignore that keeps secrets and build output out), then start again. Nothing was started.',
@@ -124,7 +128,6 @@ export function cmdStart() {
   const id = a[1];
   if (!id) die('start <id>');
   GB.ensure(FOLDER, GIT_ROOT);
-  baseCommitOrDie();
   // The usage is read before the lock (the log is large enough that this should not happen with the queue file locked). The same applies to
   // git status (uncommitted files in the main tree).
   const usage = dailyUsageFor(read());
@@ -188,9 +191,11 @@ export function cmdStart() {
     }
     // The client is checked before the start, so an unknown one never leaves a running task without an agent.
     adapterFor(o);
+    // Last, after the other guards (wind-down, night, load, batch, focus), so their answer comes first.
+    const head = baseCommitOrDie({ lenient: true });
     return markStarted(queue, o, {
       agent: val('--agent'),
-      head: git(['rev-parse', BASE]),
+      head,
       scratchpad: scratchpadFor(),
       rows: attemptLog,
     });
