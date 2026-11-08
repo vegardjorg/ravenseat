@@ -1,6 +1,5 @@
 // =============================================================
-// redteam/rt23-board-guard.test.ts: RT-23 "a web page I visit, or another program on my machine, cannot read or change
-// my board".
+// redteam/rt23-board-guard.test.ts: RT-23 "a web page I visit cannot read or change my board through its HTTP interface".
 //
 // Why: the board (queue-board.mjs) is a small web server on 127.0.0.1 that can change the queue. Listening on
 // 127.0.0.1 alone does not protect it: every web page open in the same browser can send requests to 127.0.0.1, and a
@@ -61,7 +60,7 @@ function call(port: number, o: { method?: string; path: string; headers?: Record
   });
 }
 
-describe('RT-23: a web page I visit, or another program on my machine, cannot read or change my board', () => {
+describe('RT-23: a web page I visit cannot read or change my board through its HTTP interface', () => {
   // The secret a symlinked mission must never reveal, in a folder outside the project.
   const SECRET = 'outside-secret-6f1c';
   const outside = tmp('rt23-outside-');

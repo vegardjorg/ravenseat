@@ -21,6 +21,8 @@ finished by `ravenseat merge <id> --resume`: nothing is merged twice and the tas
 in place by git (`MERGE_HEAD`) is refused until you finish it. Commits you make in between are kept. If the
 orchestrator session itself dies with no handover, a new one picks up from what is on disk: a dead agent's task is
 continued with `resume` (which names any work it left uncommitted), and locks of dead processes are taken over.
+Ravenseat does not restart itself, and nothing runs while the machine is off or asleep: the work continues when you
+start a Claude Code session again and it picks up the queue.
 
 **Verified by:** [`rt24-cold-restart`](../scripts/orchestrator/__tests__/redteam/rt24-cold-restart.test.ts),
 [`queueFaultInjection`](../scripts/orchestrator/__tests__/queueFaultInjection.test.ts),
@@ -50,7 +52,8 @@ remains is not named, because it looks like ordinary tidying.
 
 ### Can it push something to my remote that I did not want?
 
-A queue agent cannot push at all, not even `main`. From your own session, a forced push and a push of any other branch
+A queue agent is refused every push, not even `main`, through the hooks on Claude Code's Bash and PowerShell tools. That
+is a hook-level guard, not a limit set by the operating system (see the last question). From your own session, a forced push and a push of any other branch
 than the base are refused, in 17 written forms of a forced push, for both the Bash and the PowerShell tool, through the
 hooks as Claude Code runs them.
 
@@ -72,7 +75,9 @@ conflict from the running worktrees, and a real conflict goes to a fix round wit
 
 A task that is red in every round gets the fix rounds it is allowed (`maxFixRounds`, three by default), then one question to you. Tasks
 that wait on it wait; independent tasks start. A test that hangs is stopped at the time budget, in receive and in the
-merge. A track that costs far more than its class usually does is reported to the orchestrator.
+merge. A track that costs far more than its class usually does, or than its own estimate while the class has no history
+yet, is reported to the orchestrator. These limits stop endless retries; they do not cap your token bill. The daily
+budget (`ravenseat limit dailyBudget <usd>`) is off by default.
 
 **Verified by:** [`rt06-rt22-permanent-failure`](../scripts/orchestrator/__tests__/redteam/rt06-rt22-permanent-failure.test.ts),
 [`rt13-hanging-gate`](../scripts/orchestrator/__tests__/redteam/rt13-hanging-gate.test.ts),
@@ -81,8 +86,8 @@ merge. A track that costs far more than its class usually does is reported to th
 
 ### Can a task disappear, or be marked done without being done?
 
-Twenty tasks changed at the same moment, with a merge among them and a crash in the middle of a write, all stay in the
-queue exactly once, and only the merged one is done. Two tasks waiting on each other are refused when added. You can
+In a test where 20 tasks are changed by competing processes at the same moment, with a merge among them and a crash
+injected in the middle of a write, every task stays in the queue exactly once, and only the merged one is done. Two tasks waiting on each other are refused when added. You can
 still set a task done by hand (you may have merged it yourself), but if its branch has unmerged commits or it never
 started, you get a warning with the tasks it frees and the way back.
 
@@ -115,6 +120,20 @@ can read the key in your terminal, or the queue files directly.
 
 **Verified by:** [`rt23-board-guard`](../scripts/orchestrator/__tests__/redteam/rt23-board-guard.test.ts),
 [`queueBoardServe`](../scripts/orchestrator/lib/__tests__/queueBoardServe.test.ts).
+
+### Can I try it on an existing, large project?
+
+Yes, and you can start small. `ravenseat kickstart`, `ravenseat checks` and `ravenseat doctor` only read: they say
+what they found (your stack, your test and lint commands, your CI) and change nothing in your project. Setup starts in lite mode, and
+`ravenseat limit maxConcurrent 1` runs one agent at a time. Add one small task and let it go through to the merge
+before you allow more. Agents work in worktrees of their own, so your checkout changes only when a task is merged,
+and the merge stops if it would touch your uncommitted work. What the tests do not show is how well an agent
+understands a large codebase: the gates you set decide what a green result is worth.
+
+**Verified by:** [`liteMode`](../scripts/orchestrator/lib/__tests__/liteMode.test.ts),
+[`kickstart`](../scripts/orchestrator/lib/__tests__/kickstart.test.ts),
+[`queueDoctor`](../scripts/orchestrator/lib/__tests__/queueDoctor.test.ts),
+[`rt01-uncommitted-work`](../scripts/orchestrator/__tests__/redteam/rt01-uncommitted-work.test.ts).
 
 ### Do I need git, and what if my project is not under git yet?
 

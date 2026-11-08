@@ -5,7 +5,7 @@ fear, not features: *can it lose my uncommitted work, can an agent fake a green 
 want?* This page answers them with tests you can run yourself, and says plainly where there is no good answer.
 
 ```bash
-npm run redteam          # the red team tests only (about 1 minute)
+npm run redteam          # the red team tests only (a few minutes; the result at the bottom gives the last run)
 npm run redteam:report   # the same, and rewrites the result section at the bottom of this page
 ```
 
@@ -24,6 +24,9 @@ The questions in plain language, each with the tests behind its answer, are in t
   has its own test, one red case per rule.
 - **Every safety test has been red.** When a test is written, its guard is turned off for a moment and the test must
   fail. A safety test that has never failed proves little.
+- **Two kinds of work, both kept.** The scenarios here are regression tests: every finding stays fixed, in CI on every
+  push. New scenarios are written to find what nobody has thought of yet, mixing crashes, two sessions, git states and
+  you working at the same time, at each larger change. A scenario that finds nothing still joins the suite.
 - **A known weakness is a test of what should happen, never a green "it is still broken".** It has its own
   reproduction, and a weakness that gets worse cannot hide behind a passing test.
 
@@ -44,6 +47,28 @@ property:
 - **challenged**: also shown red with the guard removed.
 
 Challenged is required for the main guarantees only, not for all of the 3,000 tests.
+
+## What the red team found
+
+Fourteen findings so far. Each one came from a test going red on the code as it was, and each fix has a test that is red
+without it.
+
+| # | Finding | Now |
+| --- | --- | --- |
+| 1 | Two tasks waiting on each other were accepted without a word, and both stayed waiting | `add` and `edit` refuse a cycle and name it; `doctor` names one already in the file |
+| 2 | A hand-edited task without a domain crashed `next` | The lists show `?` for a missing field |
+| 3 | Deleting every assertion in a test gave no warning | A warning when a whole test file loses its assertions (scenario 8) |
+| 4 | With the base gate off, a hanging test held a merge for good (170 s and counting) | The merge's gates always get the time budget |
+| 5 | A gate of `exit 0` alone passed for a check | `doctor` warns when every gate checks nothing, also behind an npm script |
+| 6 | A staged change of the user's made `git merge` refuse after it had rewritten the user's files with CRLF (`core.autocrlf=true`) | The merge stops before `git merge`, with a clear message, and touches nothing |
+| 7 | The same for an uncommitted change in a file the branch changes | The overlap is checked first; the files are named and nothing is touched |
+| 8 | Two gate runs at the same moment read each other's evidence as tampering | One lock per evidence file; the second run waits |
+| 9 | `set <id> done` by hand freed the waiting tasks without proof or a word | A warning with the freed tasks and the way back |
+| 10 | A half-written `queue.json.<pid>.tmp` from a dead process was never mentioned | `doctor` names it and says it can be deleted |
+| 11 | The board showed a task's mission file through a symlink or junction, so a mission path could point at any file on the machine | The mission file gets the same path guard as the reading view (no links, the real path must match); otherwise the text itself is shown |
+| 12 | In a repo with git but no commit yet, `start` marked a task running, and the agent stopped at its first step: its worktree is made from a commit | `start` and `fill` refuse before anything is marked and say to make a first commit; the Checks tab has a card with the text to give Claude |
+| 13 | With git missing from PATH, `doctor` passed and blamed the repo ("no commits", "version unknown") | `doctor` fails first, by name, with how to fix it |
+| 14 | When an agent died with uncommitted work, `resume` did not say so, and the new agent started without it (the work was kept, but unseen) | `resume` names the changes and how to commit them to the branch first |
 
 ## The map
 
@@ -122,28 +147,6 @@ Notes on some rows:
   guard was turned off in the source once, and its test went red. A mission file behind a symlink or junction is no
   longer shown (finding 11). The guards do not stop another program running as you: it can read the key from the
   terminal, or the queue files directly.
-
-## What the red team found
-
-Fourteen findings so far. Each one came from a test going red on the code as it was, and each fix has a test that is red
-without it.
-
-| # | Finding | Now |
-| --- | --- | --- |
-| 1 | Two tasks waiting on each other were accepted without a word, and both stayed waiting | `add` and `edit` refuse a cycle and name it; `doctor` names one already in the file |
-| 2 | A hand-edited task without a domain crashed `next` | The lists show `?` for a missing field |
-| 3 | Deleting every assertion in a test gave no warning | A warning when a whole test file loses its assertions (scenario 8) |
-| 4 | With the base gate off, a hanging test held a merge for good (170 s and counting) | The merge's gates always get the time budget |
-| 5 | A gate of `exit 0` alone passed for a check | `doctor` warns when every gate checks nothing, also behind an npm script |
-| 6 | A staged change of the user's made `git merge` refuse after it had rewritten the user's files with CRLF (`core.autocrlf=true`) | The merge stops before `git merge`, with a clear message, and touches nothing |
-| 7 | The same for an uncommitted change in a file the branch changes | The overlap is checked first; the files are named and nothing is touched |
-| 8 | Two gate runs at the same moment read each other's evidence as tampering | One lock per evidence file; the second run waits |
-| 9 | `set <id> done` by hand freed the waiting tasks without proof or a word | A warning with the freed tasks and the way back |
-| 10 | A half-written `queue.json.<pid>.tmp` from a dead process was never mentioned | `doctor` names it and says it can be deleted |
-| 11 | The board showed a task's mission file through a symlink or junction, so a mission path could point at any file on the machine | The mission file gets the same path guard as the reading view (no links, the real path must match); otherwise the text itself is shown |
-| 12 | In a repo with git but no commit yet, `start` marked a task running, and the agent stopped at its first step: its worktree is made from a commit | `start` and `fill` refuse before anything is marked and say to make a first commit; the Checks tab has a card with the text to give Claude |
-| 13 | With git missing from PATH, `doctor` passed and blamed the repo ("no commits", "version unknown") | `doctor` fails first, by name, with how to fix it |
-| 14 | When an agent died with uncommitted work, `resume` did not say so, and the new agent started without it (the work was kept, but unseen) | `resume` names the changes and how to commit them to the branch first |
 
 ## Limitations
 
