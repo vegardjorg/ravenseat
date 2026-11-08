@@ -57,7 +57,7 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | 2 | An interrupted merge leaves the repo half merged | PASS | verified | `queueFaultInjection`, `queueMergeResume`, `rt07-interrupted` |
 | 3 | Claude dies in the middle of a task | PASS | mapped | `queueFaultInjection`, `rt07-interrupted` |
 | 4 | Two sessions start or merge the same task | PASS | challenged | `rt03-two-sessions`, `mergeLock`, `queueLock` |
-| 5 | Two agents change the same file | PASS | mapped | `conflictPredict`, `queueFaultInjection` |
+| 5 | Two agents change the same file | PASS | challenged | `rt05-same-file`, `conflictPredict`, `queueFaultInjection` |
 | 6 | An agent reports green without passing | PASS | verified | `queueGateEvidence`, `flows`, `rt03-two-sessions` |
 | 7 | The tests are green but too weak | KNOWN LIMITATION | - | `rt17-empty-gate` |
 | 8 | The agent weakens a test to get green | PASS | challenged | `rt08-weakened-test`, `testWeakening`, `mergeGuard` |
@@ -65,17 +65,17 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | 10 | The queue does not continue after a restart | PASS | mapped | `queueHandover`, `attempt` |
 | 11 | Circular dependencies wait forever, silently | PASS | verified | `queueCycles` |
 | 12 | Unclear requirements give the wrong result | NOT VERIFIED | - | none: needs real agents |
-| 13 | An agent changes files outside its task | PASS | mapped | `mergeGuard` |
-| 14 | A tool the queue needs is missing | PASS | mapped | `queueDoctor`, `doctorBaseline` |
+| 13 | An agent changes files outside its task | PASS | challenged | `rt13-outside-files`, `mergeGuard` |
+| 14 | A tool the queue needs is missing | PASS | verified | `rt14-missing-tool`, `queueDoctor`, `doctorBaseline`, `conflictPredict` |
 | 15 | A test that hangs holds my merge forever | PASS | challenged | `rt13-hanging-gate`, `gateLoad` |
 | 16 | I keep coding while the queue works | PASS | verified | `rt01-uncommitted-work`, `rt07-interrupted`, `queueExternal`, `conflictPredict` |
-| 17 | Switching from lite to full mode and back | PASS | mapped | `liteMode` |
-| 18 | The cost grows without anyone noticing | PASS | mapped | `costGuard`, `costEstimate`, `loadSlots`, `rt06-rt22-permanent-failure` |
-| 19 | A large queue makes the board unusable | PASS | mapped | `queueBoardScale`, `queueBoardPerformance` |
+| 17 | Switching from lite to full mode and back | PASS | challenged | `liteMode` |
+| 18 | The cost grows without anyone noticing | PASS | challenged | `costGuard`, `costEstimate`, `queueSaverMode`, `rt06-rt22-permanent-failure` |
+| 19 | A large queue makes the board unusable | PASS | verified | `queueBoardPerformance` |
 | 20 | A folder with spaces or æøå in its name breaks something | PASS | challenged | `rt20-odd-paths`, `shellCommands`, `fixLinks` |
-| RT-09 | An old task starts from stale assumptions | PASS | mapped | `queueTriage` |
+| RT-09 | An old task starts from stale assumptions | PASS | challenged | `queueTriage` |
 | RT-14 | A broken queue file loses the queue | PASS | verified | `queueStateSafety`, `queueFaultInjection`, `rt21-no-task-lost` |
-| RT-16 | A changed helper agent runs without anyone approving it | PASS | mapped | `helperCustom` |
+| RT-16 | A changed helper agent runs without anyone approving it | PASS | challenged | `rt16-changed-helper`, `helperCustom` |
 | RT-17 | A gate that always says 0 passes for a check | PASS | challenged | `rt17-empty-gate` |
 | RT-18 | Something is pushed that must not be | PASS | challenged | `rt18-push-hook`, `pushGuard` |
 | RT-21 | A task disappears, is doubled, or is done without proof | PASS | challenged | `rt21-no-task-lost` |

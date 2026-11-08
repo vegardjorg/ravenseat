@@ -287,6 +287,45 @@ describe('ravenseat init, add, help and mode', () => {
     expect((await ravenseat('mode')).stdout).toMatch(/Mode: full/);
   });
 
+  it('lite to full and back (red team 17): the queue is untouched, the other config keys stay, and the work goes on', async () => {
+    expect((await ravenseat('init', '--lite')).status).toBe(0);
+    // The owner's own config next to the mode, in their own layout.
+    const own = '{\n  "mode": "lite",\n  "gates": { "quick": ["npm test"] },\n  "push": { "mode": "owner" }\n}\n';
+    fs.writeFileSync(configFile(), own);
+    expect((await ravenseat('add', 'First')).status).toBe(0);
+    // A tiny task lite accepts and full mode would refuse at add.
+    expect((await ravenseat('add', '--json', '{"title":"Tiny","content_min":5,"value":2}')).status).toBe(0);
+    const queueFile = path.join(root, 'q', 'queue.json');
+    const tasksBefore = fs.readFileSync(queueFile, 'utf8');
+
+    // To full: only the mode word changes; the tasks made in lite are all there and still offered.
+    expect((await ravenseat('mode', 'full')).status).toBe(0);
+    expect(fs.readFileSync(configFile(), 'utf8')).toBe(own.replace('"mode": "lite"', '"mode": "full"'));
+    expect(fs.readFileSync(queueFile, 'utf8')).toBe(tasksBefore);
+    const next = await ravenseat('next');
+    expect(next.status, next.stderr).toBe(0);
+    expect(next.stdout).toContain('T-001');
+    expect(next.stdout).toContain('T-002');
+    const doctor = JSON.parse((await ravenseat('doctor', '--json')).stdout) as { checks: { status: string; name: string }[] };
+    expect(doctor.checks.filter((c) => ['config', 'queue'].includes(c.name)).map((c) => c.status)).toEqual(['OK', 'OK']);
+    // A task added in full mode, the full way.
+    const full = await ravenseat(
+      'add',
+      '--json',
+      '{"id":"T-010","title":"Full","domain":"d","class":"K","mission":"m","content_min":120,"value":8}',
+    );
+    expect(full.status, full.stderr).toBe(0);
+
+    // And back to lite: the config is as the owner wrote it, nothing is lost, and the ids go on after the highest one.
+    expect((await ravenseat('mode', 'lite')).status).toBe(0);
+    expect(fs.readFileSync(configFile(), 'utf8')).toBe(own);
+    expect(queue().tasks.map((o: Task) => o.id)).toEqual(['T-001', 'T-002', 'T-010']);
+    const again = await ravenseat('add', 'After the round trip');
+    expect(again.status, again.stderr).toBe(0);
+    expect(again.stdout).toContain('Added: T-011');
+    expect(queue().tasks.map((o: Task) => o.status)).toEqual(['waiting', 'waiting', 'waiting', 'waiting']);
+  });
+
   it('never switches an existing install or a config with its own mode', async () => {
     // A config with mode full: a fresh init keeps full and the example project.
     fs.writeFileSync(configFile(), '{\n  "mode": "full"\n}\n');
