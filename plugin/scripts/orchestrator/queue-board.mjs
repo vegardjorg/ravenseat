@@ -404,6 +404,42 @@ function withoutAgentNow(queue) {
   return list;
 }
 
+// ---- Tracks that wait on a permission prompt (hook-approval-wait.mjs saves the agent; lib/approvalWait.js) ---------
+/** The running tasks whose agent waits on an approval: the agent is mapped to its task by the time log. */
+function approvalNow(queue) {
+  try {
+    const AW = require('./lib/approvalWait.js');
+    const waits = AW.read(FOLDER);
+    if (!Object.keys(waits).length) return [];
+    const running = (queue.tasks ?? []).filter((o) => o.status === 'running' || o.status === 'review').map((o) => o.id);
+    if (!running.length) return [];
+    const ACT = require('./lib/trackActivity.js');
+    let rows = [];
+    try {
+      rows = TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+    } catch {
+      return [];
+    }
+    const agentTask = new Map();
+    for (const [id, x] of ACT.agentsByTask(rows, running)) for (const a of x.agents) agentTask.set(a, id);
+    const root = ACT.transcriptsRoot(MAIN_TREE);
+    return AW.waitingTasks(waits, {
+      agentTask,
+      mtimeOf: (agentId) => {
+        const p = ACT.findTranscript(root, agentId);
+        try {
+          return p ? fs.statSync(p).mtimeMs : null;
+        } catch {
+          return null;
+        }
+      },
+    });
+  } catch (e) {
+    console.error(`the approval check failed: ${e?.message ?? e}`);
+    return [];
+  }
+}
+
 function silentNow(queue) {
   const limitMin = L.silentMinFor(queue);
   const running = (queue.tasks ?? []).filter((o) => L.silentWatched(o));
@@ -620,6 +656,8 @@ function state() {
       // SILENT tracks (the badge on the card; cached 60 s).
       silent: silentNow(queue),
       withoutAgent: withoutAgentNow(queue),
+      // Tracks that stand still on a permission prompt (not cached: one small file, and the card should go at once).
+      approval: approvalNow(queue),
       baseRed: baseHealth?.status === 'red',
       dailyUsage: s?.data.keyFigures.usageToday,
       // Suitability with the same rules as queue.mjs cloud-package (queueLogic.cloudSuitable).

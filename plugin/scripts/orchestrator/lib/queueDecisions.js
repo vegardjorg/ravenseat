@@ -340,7 +340,41 @@
     };
   }
 
+  /** "14:05" in local time, or null for a time that cannot be read. */
+  function clockText(iso) {
+    const d = new Date(iso ?? '');
+    if (!Number.isFinite(d.getTime())) return null;
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  /** The track stands still on a permission prompt (lib/approvalWait.js): only the owner can answer it. */
+  function approvalItem(h) {
+    const options = [{ label: 'Seen', recommended: true, action: { type: 'keep', id: h.id } }];
+    const { tool, since } = h.awaiting_approval;
+    const at = clockText(since);
+    return {
+      key: `unstick:${h.id}`,
+      verb: 'unstick',
+      heading: 'NEEDS APPROVAL',
+      kind: 'stuck-approval',
+      kindName: 'Waits on your approval',
+      id: h.id,
+      title: h.title || h.id,
+      text: null,
+      context: [
+        `The track's agent waits for you to approve a ${tool} call${at ? ` (since ${at})` : ''}, and does nothing until you answer.`,
+        'Answer the prompt in the Claude Code session that started the agent. This card goes away once the agent moves on.',
+      ],
+      recommendation: options[0].label,
+      impact: taskImpact(0, h),
+      options,
+      free: null,
+      open: h.id,
+    };
+  }
+
   function stuckItem(h) {
+    if (h.awaiting_approval) return approvalItem(h);
     if (h.stop) return stopItem(h);
     if (h.no_agent_round) return noAgentRoundItem(h);
     if (h.without_agent) return noAgentItem(h);

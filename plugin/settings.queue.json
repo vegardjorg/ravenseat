@@ -43,6 +43,9 @@
         { "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-context.mjs"], "timeout": 10 }
       ] }
     ],
+    "Notification": [
+      { "matcher": "permission_prompt", "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-approval-wait.mjs"], "timeout": 10 }] }
+    ],
     "StopFailure": [
       { "hooks": [{ "type": "command", "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-usage-limit.mjs"], "timeout": 10 }] }
     ],
