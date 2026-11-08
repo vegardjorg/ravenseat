@@ -86,8 +86,18 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 
 Notes on some rows:
 
-- **3 and 10:** an agent dying, a killed `receive` and a killed merge are tested; a whole flow from a cold restart of
-  the orchestrator is not, which is why the level is mapped.
+- **3 and 10:** the orchestrator and the agent are killed with no handover note, and a new process works only from what is
+  on disk: the task is continued through `attempt close` and `resume`, a killed `receive` is received again, and locks
+  of dead processes are taken over while a live one still stops it. Each case is merged once and done once. For 15
+  minutes after a cold death `takeover` still says the old orchestrator may be alive, because a Claude session has no
+  pid to check; it asks you rather than guessing.
+- **5 and 13:** two real tracks change the same line: the second merge stops, names the file and the other task, and
+  its fix round is told both. A file outside a task's list gives a warning; a protected path stops the merge before
+  `git merge`.
+- **14:** git, node for the hooks, `gh` and `claude` are each removed from PATH in turn, and each gives a named stop.
+  Not covered: a node that is too old, and a gate whose program is not installed.
+- **18:** the daily budget is off by default, and the cost guard needs three finished tasks of a class in seven days
+  before it can say one costs too much, so the first runaway track of a class is not named.
 - **8:** a warning, never a stop. Receive and the review package name a test file left with no assertions; removing
   some assertions while one remains is ordinary tidying and is not named (see the limitations).
 - **9 and RT-22:** a task red in every round gets its fix rounds (two in the test, three by default), then one owner
@@ -108,7 +118,7 @@ Notes on some rows:
 
 ## What the red team found
 
-Twelve findings so far. Each one came from a test going red on the code as it was, and each fix has a test that is red
+Fourteen findings so far. Each one came from a test going red on the code as it was, and each fix has a test that is red
 without it.
 
 | # | Finding | Now |
@@ -125,6 +135,8 @@ without it.
 | 10 | A half-written `queue.json.<pid>.tmp` from a dead process was never mentioned | `doctor` names it and says it can be deleted |
 | 11 | The board showed a task's mission file through a symlink or junction, so a mission path could point at any file on the machine | The mission file gets the same path guard as the reading view (no links, the real path must match); otherwise the text itself is shown |
 | 12 | In a repo with git but no commit yet, `start` marked a task running, and the agent stopped at its first step: its worktree is made from a commit | `start` and `fill` refuse before anything is marked and say to make a first commit; the Checks tab has a card with the text to give Claude |
+| 13 | With git missing from PATH, `doctor` passed and blamed the repo ("no commits", "version unknown") | `doctor` fails first, by name, with how to fix it |
+| 14 | When an agent died with uncommitted work, `resume` did not say so, and the new agent started without it (the work was kept, but unseen) | `resume` names the changes and how to commit them to the branch first |
 
 ## Limitations
 
