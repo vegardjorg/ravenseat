@@ -780,6 +780,8 @@ if (command === 'init') {
   ask.cmdAsk();
 } else if (command === 'activeOnes') {
   view.cmdActiveOnes();
+} else if (command === 'explain') {
+  view.cmdExplain();
 } else if (command === 'next-migr') {
   merge.cmdNextMigr();
 } else if (command === 'migr') {
@@ -860,7 +862,7 @@ if (command === 'init') {
   die(
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
-      'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|activeOnes|next-migr|migr|' +
+      'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
       'capacity|compact|diagnose|doctor|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface> ...  (see the top of the file)',
     command ? 1 : 0,
   );

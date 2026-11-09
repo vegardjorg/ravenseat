@@ -404,6 +404,27 @@ export function findWithoutAgent(queue) {
   }
 }
 /**
+ * The last sign of life of ONE active task and its source ({ ms, source }; ms null when nothing is found), measured
+ * like findSilent but without a freshness cut, so the newest source wins (ravenseat explain).
+ */
+export function activityFor(queue, o) {
+  try {
+    const ACT = require('./lib/trackActivity.js');
+    const worktrees = G.readWorktrees(gitRead).filter((w) => w.branch);
+    return ACT.lastActivity({
+      branch: o.branch,
+      worktree: worktrees.find((w) => w.branch === o.branch)?.path ?? null,
+      trackDirs: trackRoots(o).map((r) => path.join(r, o.id)),
+      agents: ACT.agentsByTask(readTimeLog(), [o.id]).get(o.id) ?? null,
+      findTranscript,
+      git: gitRead,
+    });
+  } catch {
+    return { ms: null, source: null };
+  }
+}
+
+/**
  * Silent tracks (queueLogic.silentTracks): running, a worktree has the branch, but no sign of life for limits.silentMin
  * minutes. The last activity is measured by lib/trackActivity.js (commit, track folder, time log and transcript,
  * worktree mtime; it stops at the first fresh source). Read-only, like findWithoutAgent; an error never stops the command.

@@ -19,7 +19,7 @@ import {
   a, branchFor, branchInfo, CE, cut, D, die, FOLDER, FX, HERE, L, MAIN_TREE, positional, read, readCursor, require,
   uncommittedPaths, val, WIDTH,
 } from './context.mjs';
-import { costEstimateState, dailyUsageFor, findSilent, findWithoutAgent, measureLoad, nextCostUsd } from './tracks.mjs';
+import { activityFor, costEstimateState, dailyUsageFor, findSilent, findWithoutAgent, measureLoad, nextCostUsd } from './tracks.mjs';
 import { batchGroupLine } from './batch.mjs';
 import { followLines } from './orchestrator.mjs';
 import { findingsLineNow, findingsStateNow } from './finding.mjs';
@@ -316,4 +316,27 @@ export function cmdInfo() {
 /** `ravenseat activeOnes` (the usage is at the top of queue.mjs). */
 export function cmdActiveOnes() {
   for (const l of L.activeLines(read())) console.log(l);
+}
+
+/** `ravenseat explain <id> [--json]`: why one task stands where it stands (lib/logic/explain.js). Read-only. */
+export function cmdExplain() {
+  const id = positional(1, [])[0];
+  if (!id) die('explain <id> [--json]');
+  const queue = read();
+  const o = queue.tasks.find((x) => x.id === id);
+  if (!o) die(`Unknown task ${id}`);
+  const EX = require('./lib/logic/explain.js');
+  const active = o.status === 'running' || o.status === 'review';
+  const r = EX.explainTask(queue, id, {
+    L,
+    uncommitted: o.status === 'waiting' ? uncommittedPaths() : [],
+    dailyUsage: o.status === 'waiting' ? dailyUsageFor(queue) : undefined,
+    activity: active ? activityFor(queue, o) : null,
+  });
+  if (a.includes('--json')) {
+    console.log(JSON.stringify(r, null, 2));
+    return;
+  }
+  console.log(`${id} (${r.status}): ${r.verdict}`);
+  for (const l of r.lines) console.log(`  ${l}`);
 }
