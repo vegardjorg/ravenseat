@@ -313,8 +313,10 @@ export function parallelWarning() {
 export function write(queue) {
   stopIfLockLost('queue.json');
   queue.changed = new Date().toISOString();
-  SF.writeState(FILE, JSON.stringify(queue, null, 2) + '\n');
+  SF.writeState(FILE, JSON.stringify(queue, null, 2) + '\n', { snapshots: SNAPSHOT_TIERS });
 }
+// The rolling copies of queue.json at a few ages (lib/stateSnapshots.js; stateSnapshots in queue.config.json).
+const SNAPSHOT_TIERS = require('./lib/stateSnapshots.js').tiersFrom(CONFIG.stateSnapshots);
 export const edit = (fn) =>
   withLock(() => {
     const queue = read();

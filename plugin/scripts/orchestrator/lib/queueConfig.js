@@ -324,6 +324,10 @@ const STANDARD = Object.freeze({
   // The pause at the subscription's usage limit (lib/usageLimit.js): the StopFailure hook saves the reset time, and no new
   // tracks or fix rounds start until then (exit 12). pause false turns it off.
   usageLimit: { pause: true },
+  // Rolling copies of queue.json at a few ages (lib/stateSnapshots.js), in <dataFolder>/snapshots: on each write a tier
+  // whose copy is at least as old as the tier takes the next younger copy, and the youngest takes the current state.
+  // tiers: 2 to 8 ages such as "30m", "5h", "7d". enabled false turns it off.
+  stateSnapshots: { enabled: true, tiers: ['1h', '5h', '1d', '2d', '7d'] },
   // Auto-accept of agent proposals (lib/queueProposals.js): a proposal that fits the rules is approved by the queue
   // itself (in `queue.mjs add` and `orchestrator pulse`), logged and can be undone. Default off. `queue.mjs proposals
   // auto` and the board's gear write the queue's own rules (queue.json proposals.autoAccept), which win field by field.

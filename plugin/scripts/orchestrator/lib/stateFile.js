@@ -92,6 +92,8 @@ function keepPrevious(file, o = {}) {
 function writeState(file, text, o = {}) {
   const f = o.fs ?? nodeFs;
   keepPrevious(file, { fs: f });
+  // The rolling copies at a few ages (lib/stateSnapshots.js), of the state BEFORE this write; o.snapshots = the tiers.
+  if (o.snapshots?.length) require('./stateSnapshots.js').roll(file, o.snapshots, { fs: f });
   const tmp = `${file}.${process.pid}.tmp`;
   f.writeFileSync(tmp, text);
   try {

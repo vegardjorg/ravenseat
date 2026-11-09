@@ -151,7 +151,8 @@ fails once and passes on a rerun is recorded as flaky instead of freezing the ba
   local checks are green. The watch is a second net that turns a red CI run into one fix task.
 - **Merges that survive interruptions.** One merge runs at a time (`merge.lock`, a stale lock is taken over), a merge
   refuses while git has a merge or rebase in progress, and after Ctrl-C, a crash or a stop `ravenseat merge <ID> --resume`
-  finishes the remaining steps. `queue.json.prev` keeps the previous good queue state.
+  finishes the remaining steps. `queue.json.prev` keeps the previous good queue state, and `<dataFolder>/snapshots/` keeps copies at a
+  few ages (one hour up to a week, `stateSnapshots` in the config).
 - **Ask an earlier track.** `ravenseat ask <id> "why X?"` answers from the track's mission, report, commits and transcript
   tail, without resuming a large agent.
 

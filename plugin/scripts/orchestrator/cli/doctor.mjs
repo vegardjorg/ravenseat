@@ -58,7 +58,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -251,6 +251,14 @@ function readJson(file) {
   }
 }
 
+const SS = require('./lib/stateSnapshots.js');
+/** The rolling copies of queue.json that parse (lib/stateSnapshots.js), as one hint line, or null when there are none. */
+function snapshotHint() {
+  const copies = SS.list(FILE, SS.tiersFrom(CONFIG.stateSnapshots)).filter((c) => c.tasks != null);
+  if (!copies.length) return null;
+  return `Older copies: ${copies.map((c) => `${c.path} (${c.tasks} task(s), ${c.at})`).join('; ')}.`;
+}
+
 /** The state files in the data folder parse. */
 function checkState() {
   const out = [];
@@ -262,12 +270,17 @@ function checkState() {
         'queue',
         `queue.json does not parse: ${q.error}`,
         // queue.json.prev (lib/stateFile.js) is the previous good state when it parses.
-        SF.recoveryHint(FILE) ?? 'restore it from queue.json.*.tmp or a backup; never edit it while the queue runs',
+        [SF.recoveryHint(FILE) ?? 'restore it from queue.json.*.tmp or a backup; never edit it while the queue runs', snapshotHint()]
+          .filter(Boolean)
+          .join(' '),
       ),
     );
-  else if (!Array.isArray(q.value?.tasks)) out.push(fail('queue', 'queue.json has no tasks list', `restore it from a backup, or ${CLI} init in a fresh data folder`));
+  else if (!Array.isArray(q.value?.tasks))
+    out.push(fail('queue', 'queue.json has no tasks list', [`restore it from a backup, or ${CLI} init in a fresh data folder`, snapshotHint()].filter(Boolean).join(' ')));
   else {
     out.push(ok('queue', `queue.json parses (${q.value.tasks.length} task(s))`));
+    const tierProblem = SS.tierProblem(CONFIG.stateSnapshots);
+    if (tierProblem) out.push(warn('snapshots', `${tierProblem}; the default tiers are used`, 'fix stateSnapshots.tiers in queue.config.json'));
     // A dependency cycle among open tasks: add and edit refuse a new one, but a hand edit or an older queue can hold one.
     for (const c of L.dependencyCycles(q.value.tasks))
       out.push(

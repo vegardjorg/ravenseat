@@ -479,6 +479,7 @@ lost, nothing is merged twice, and nothing is marked done unless it is in the ba
 | Right after the task was marked done | The task is done, the state says what is left | `ravenseat merge <id> --resume` runs only what is left |
 | During a write of `queue.json` | A temporary file next to an intact `queue.json` | Nothing: the write is a rename, so the old state stands |
 | `queue.json` broken by other means | Every command stops and names `queue.json.prev` | Look at the copy, then copy it over. The queue never restores it by itself |
+| A bad change found hours later | `queue.json.prev` is only one write older | `ravenseat doctor` names the rolling copies in `<dataFolder>/snapshots/` (`queue.1h.json` up to `queue.7d.json`; `stateSnapshots.tiers` in queue.config.json, `enabled: false` turns them off). Copy the one you want over queue.json while the queue is stopped |
 | Two merges at the same time | One holds the lock, the other is refused and changes nothing | Run the refused one when the first is finished |
 | An agent dying in the middle of a track | The commits and uncommitted work stay in the worktree | `ravenseat resume <id> --reason context` (not a fix round). If the attempt still reads as running: `ravenseat attempt close <id> --outcome interrupted` first |
 | `ravenseat receive` killed in its checks | The task is still running, and no result was recorded | `ravenseat receive <id>` again: the package is made anew |
