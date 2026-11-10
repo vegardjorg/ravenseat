@@ -3,18 +3,19 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.8.32 (2026-11-10)
+
+**Ownership is now enforced: a file another active task owns stops the merge, shared config gets hotspots with a serial lock, the ranking prefers short tasks on contended files, and new tasks get ownership hints from what earlier tasks really changed. Tracks are warned while they write, a refused or failing tool gets its own card, and `setup --update` merges the project's doc copies.**
 
 ### Changed
 - A track that changes a file another active task owns (running, in review or picked) now stops the merge (exit 4, before the merge), with the file and its owner named. Before, it merged with only `WARNING ownership drift` and stopped only on a text conflict. `--allow-guard` overrides and is logged as `guard-overridden`. `receive` and the pulse say it early, so it is fixed while a fix round is cheap; the pulse caches the changed files per tip sha. Another task's `shared_patch` is not counted as ownership.
-
 - The ranking counts ownership contention: when other open tasks own an overlapping file, only one of them can run at a time, so a short task (60 min or less) gets +10 % per contender and a long one (above 120 min) -10 %, at most five counted. The board's Placement shows the factor.
 - `owner_db` is compared without the default schema and the argument list: `users` and `public.users`, and `fn(uuid)` and `fn`, are now a conflict. Another schema (`auth.users`) is still a different object.
 
 ### Added
 - `merge` keeps the files a task actually changed (`changed_files`, at most 300). `add` prints an OWNERSHIP HINT when earlier tasks that changed the new task's files also changed other files (in at least two of them and at least half), so they can be owned before the track starts.
 - Hotspots: `hotspots` in `queue.config.json` lists shared config many tasks touch. A hotspot can never be in `owned_files` (`add` and `edit` refuse it); a task names the hotspots it may change in `hotspot_patch`, and two active tasks holding the same hotspot are a start conflict. An unagreed hotspot change gives a write warning, a note in `receive` and the pulse, and stops the merge (exit 4, `--allow-guard` overrides and is logged). The default is `[]`, so nothing changes until a project lists its hotspots.
-- Write warnings for tracks: the write guard now tells a track, once per file and kind and without stopping the write, when the write will be stopped later: a protected path its task does not own, a new skip or focus marker in a test file, or a test file that loses all its assertions. The warning says what happens at merge or receive and tells the track to ask the owner, or to fix the code instead of the test. Reviewers, helpers and the main session get none.
+- Write warnings for tracks: the write guard now tells a track, once per file and kind and without stopping the write, when the write will be stopped later: a protected path its task does not own, a file another active task owns, a hotspot it has not agreed, a new skip or focus marker in a test file, or a test file that loses all its assertions. The warning says what happens at merge or receive and tells the track to ask the owner, or to fix the code instead of the test. Reviewers, helpers and the main session get none.
 - `ravenseat setup --update`: a three-way update of the project's copies (the docs in `docs/queue/` and `CLAUDE.queue.md`). Setup now records the plugin text it wrote as the base. A copy nobody edited follows the plugin, a copy with only your edits stays, edits on both sides in different places are merged, and a conflict leaves the copy as it is and saves the merge with markers in `scripts/.queue/setup-merge/`. `--dry` shows what it would do. A copy from before bases were kept is not touched; `--overwrite` replaces it. `queue.config.json` is never merged. `doctor` and `setup` now point to `--update` for old copies.
 - A **TOOL TROUBLE** card in "Waiting on you" when auto mode refuses a track's tool call, or when a track fails the same tool three times within half an hour. PermissionDenied and PostToolUseFailure hooks keep only the agent id, the tool name and the time in `<dataFolder>/tool-trouble.json`, never the reason, the input or the error text. A plugin install gets the hooks with the update; a project set up from settings.queue.json gets them with `ravenseat setup --settings`.
 
