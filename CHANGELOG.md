@@ -3,9 +3,12 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.8.33 (2026-11-11)
+
+**A track that is stuck in its fix rounds now asks you sooner: when a round commits nothing, or the check fails exactly as before, the queue stops and asks instead of paying for more of the same until the cap. The costs page also has the measured cost of compacting the orchestrator against starting a new chat.**
 
 ### Added
+- The costs page (`plugin/docs/costs.md`) has a measured section on compacting the orchestrator against starting a new chat: about the same cost, back to work in about 6 turns instead of 17, compaction at about 268k tokens of context. The compaction call itself is an estimate, and the page says so.
 - The fix-round plateau: before a fix round, the queue asks the owner (exit 8, question `<id>.plateau<N>`, `FIX-ROUND PLATEAU`) when the previous fix round committed nothing or the check fails exactly as before it, instead of paying for more of the same until the cap. Durations, clock times and shas in the output do not count as a change. The owner's answer allows the round; `"fixPlateau": false` turns it off.
 
 ## 0.8.32 (2026-11-10)
