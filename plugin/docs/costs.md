@@ -24,6 +24,17 @@ context size**. The system is built around that fact: many short contexts instea
 The orchestrator added about 18 turns and about 0.75 USD per task. Its target is now 10 turns or fewer per task.
 The classes are explained in [full mode](full-mode.md#agents-skip-security-and-edge-cases).
 
+## Measured: compacting the orchestrator against starting a new chat
+
+The orchestrator runs in one chat, and Claude Code compacts it automatically (`autoCompactWindow`, set to 300,000).
+In 10 orchestrator sessions with about 6,000 turns (measured 2026-11-08):
+- **Cost:** compacting cost about the same as starting a new chat by hand and reading the handover note in again. The
+  compacted chat then carries a little more context (about 16k tokens) for the rest of the cycle.
+- **Back to work:** after a compaction, the first agent started after about 6 turns, against about 17 in a new chat.
+- **When:** compaction started at about 268k tokens of context (the median of 294 compactions), not at 300k.
+- **Limit:** the compaction call itself is not in the transcript, so its cost is an estimate. It assumes the call reads
+  from the prompt cache; if it misses the cache, compacting costs clearly more than a new chat.
+
 ## Measured: where tokens were wasted, and what the plugin does about it
 
 - Turns taken while a track's context was above about 300k tokens were about 61% of track cost. So a track stops at
