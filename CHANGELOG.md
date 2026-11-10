@@ -3,6 +3,11 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+### Added
+- The fix-round plateau: before a fix round, the queue asks the owner (exit 8, question `<id>.plateau<N>`, `FIX-ROUND PLATEAU`) when the previous fix round committed nothing or the check fails exactly as before it, instead of paying for more of the same until the cap. Durations, clock times and shas in the output do not count as a change. The owner's answer allows the round; `"fixPlateau": false` turns it off.
+
 ## 0.8.32 (2026-11-10)
 
 **Ownership is now enforced: a file another active task owns stops the merge, shared config gets hotspots with a serial lock, the ranking prefers short tasks on contended files, and new tasks get ownership hints from what earlier tasks really changed. Tracks are warned while they write, a refused or failing tool gets its own card, and `setup --update` merges the project's doc copies.**

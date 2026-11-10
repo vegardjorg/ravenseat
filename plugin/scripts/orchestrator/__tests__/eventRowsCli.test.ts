@@ -34,7 +34,7 @@ afterAll(() => {
 });
 
 /** A temporary project: repo on develop with a bare remote (origin), a queue, a config and the merge runner. */
-function project({ limits = {}, timeLog }: { limits?: Record<string, unknown>; timeLog?: string } = {}) {
+function project({ limits = {}, timeLog, config = {} }: { limits?: Record<string, unknown>; timeLog?: string; config?: Record<string, unknown> } = {}) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-events-'));
   temporary.push(folder);
   const repo = path.join(folder, 'repo');
@@ -58,7 +58,7 @@ function project({ limits = {}, timeLog }: { limits?: Record<string, unknown>; t
     );
   writeQueue();
   const configFile = path.join(folder, 'queue.config.json');
-  fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'develop', remote: 'origin' }));
+  fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'develop', remote: 'origin', ...config }));
   const runner = path.join(folder, 'runner.mjs');
   fs.writeFileSync(
     runner,
@@ -181,7 +181,8 @@ describe('the event rows written by the commands', () => {
   });
 
   it('triage --verdict, resume and a merge conflict write their rows', () => {
-    const p = project();
+    // Two fix rounds back to back with no commit between them are a plateau (lib/fixPlateau.js); this test is about rows.
+    const p = project({ config: { fixPlateau: false } });
     p.waiting('T');
     expect(p.run('triage', 'T', '--verdict', 'ready', '--by', 'helper').code).toBe(0);
     expect(p.rows('triage')).toEqual([expect.objectContaining({ task: 'T', verdict: 'ready', by: 'helper' })]);

@@ -26,7 +26,8 @@ describe('RT-06 and RT-22: a task that never passes stops at the cap, and the in
   it('A is red in every round: two fix rounds, then one owner question; B waits; C, D and E start', () => {
     const p = project({
       gates: [redForA()],
-      config: { maxFixRounds: 2 },
+      // The plateau check would stop A after its first fix round (same red gate every round); this test is about the cap.
+      config: { maxFixRounds: 2, fixPlateau: false },
       tasks: [task('A'), task('B', { depends_on: ['A'] }), task('C'), task('D'), task('E')],
     });
     const queue = () => JSON.parse(fs.readFileSync(path.join(p.folder, 'queue.json'), 'utf8'));

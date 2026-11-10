@@ -89,6 +89,13 @@ the task's `waiting_on` and opens the blocker `owner-question`, prints `FIX-ROUN
 its brief; the next one asks again. A higher cap: `ravenseat edit <id> --json '{"max_fix_rounds": 5}'`; giving up:
 `ravenseat set <id> cancelled`.
 
+**The fix-round plateau.** Before a fix round the queue also asks the owner, the same way, when the previous fix round
+committed nothing (the branch tip did not move) or the check fails exactly as before it (same kind, exit and output
+tail; durations, clock times and shas do not count). The question is `<id>.plateau<N>` and the output says
+`FIX-ROUND PLATEAU` (exit 8). The cap is checked first, and a round the owner allowed past the cap is not asked again.
+Each fix round saves `tip` and `signature` in `resumed`, so the next one can compare. `"fixPlateau": false` in
+`queue.config.json` turns it off.
+
 ### The finish line is locked after the start
 
 `done_when` and `acceptance` are fixed before a task starts and checked by someone else than the track, so a track

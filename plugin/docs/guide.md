@@ -119,7 +119,8 @@ orchestration rules, and `/ravenseat:start` to open a session cheaply before you
 3. The orchestrator builds a review package, runs the reviewer agents the class needs, and starts a fresh agent for
    any fix round. A task can name a done command (`done_when`, e.g. `npm test -- src/x.test.ts`): `ravenseat receive` runs
    it in the track's worktree first, and a red one gives a fix round instead of a review. After `maxFixRounds` (default
-   3) fix rounds the task becomes a question for you instead of another round.
+   3) fix rounds, or sooner when a fix round commits nothing or fails exactly as before, the task becomes a question
+   for you instead of another round.
 4. When the review is clean, it merges the branch, runs the quick checks and fills the free slot. The base gate
    records whether the base branch itself is green after each merge: two tracks that are green alone can break it
    together, and then `ravenseat merge` refuses other tracks and adds a high-priority fix task until it is green again.

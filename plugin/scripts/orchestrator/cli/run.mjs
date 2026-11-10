@@ -664,6 +664,42 @@ export function cmdResume() {
       tail: inside ? DC.tailOf(inside, DC.doneCheckSetup(CONFIG).tailLines) : ['(the output file is gone; run the gates yourself to see it)'],
     };
   }
+  // The fix-round plateau (lib/fixPlateau.js): the previous fix round committed nothing (same branch tip), or the check
+  // fails the same way as before it. Then the owner is asked before the next round, the same way as the cap (exit 8).
+  // The cap is checked first and wins; a round the owner allowed past the cap, or past this plateau, is not asked again.
+  // The tip and the signature are saved on the new `resumed` entry below, so the next round can compare.
+  const FP = require('./lib/fixPlateau.js');
+  let plateauFields = {};
+  if (reason === 'fix' && !again) {
+    const tip = git(['rev-parse', '-q', '--verify', `refs/heads/${branch}`]) || null;
+    let findingsText = null;
+    try {
+      if (findingsFile) findingsText = fs.readFileSync(findingsFile, 'utf8');
+    } catch {
+      /* unreadable findings: no signature from them */
+    }
+    const signature = FP.failureSignature({ doneCheck, gateCheck, findingsText });
+    plateauFields = { ...(tip ? { tip } : {}), ...(signature ? { signature } : {}) };
+    const p = FP.plateauOn(CONFIG) && !DC.fixCap(o, queue, CONFIG).byOwner ? FP.plateauOf(o, { tip, signature }) : null;
+    if (p && !(queue.resolved ?? []).includes(p.questionId)) {
+      edit((q) => {
+        const x = q.tasks.find((y) => y.id === id);
+        const s = L.setQuestion(q, FP.plateauQuestion(x, p));
+        if (s.error.length) die(`Could not register the owner question: ${s.error.join('; ')}`);
+        if (!(x.waiting_on ?? []).includes(p.questionId)) x.waiting_on = [...(x.waiting_on ?? []), p.questionId];
+        L.openBlock(x, 'owner-question', { note: `fix-round plateau after round ${p.previous} (${p.questionId})` });
+      });
+      pulseCursor(`resume ${id} fix plateau`);
+      const seen = p.kind === 'tip' ? `fix round ${p.previous} committed nothing` : `the same failure as before fix round ${p.previous}`;
+      console.log(
+        `FIX-ROUND PLATEAU: ${id} looks stuck (${seen}); no new round is started by the queue.\n` +
+          `Owner question ${p.questionId} registered (ravenseat question; blocker owner-question). Ask the owner at the end of the ` +
+          `round. The owner's answer allows the round: ravenseat resolve ${p.questionId} --answer "…", then ` +
+          `ravenseat resume ${id} --reason fix again. Off for the queue: "fixPlateau": false in queue.config.json.`,
+      );
+      process.exit(8);
+    }
+  }
   // The review package: the saved one (receive), otherwise rev-<id> in one of the roots. Files beyond the package's own are
   // the reviewers'.
   const reviewFolder =
@@ -737,7 +773,7 @@ export function cmdResume() {
       const t = L.addToBonus(x, `The owner's answer: ${answer}`, new Date().toISOString());
       if (t) die(`Invalid answer: ${t}`);
     }
-    if (!again) (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}), ...answerFields });
+    if (!again) (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}), ...plateauFields, ...answerFields });
     else if (answer) Object.assign(x.resumed.at(-1), answerFields);
     return reserved;
   });

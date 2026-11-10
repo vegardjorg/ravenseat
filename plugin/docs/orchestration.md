@@ -25,7 +25,8 @@ branch (`queue/<ID>`), with a self-contained mission file.
 5. Findings: HIGH and non-mechanical MEDIUM give a fix round with a NEW track agent on the same branch
    (`prepare-track --continue`). LOW findings become follow-up proposals. A task with a done command (`done_when`)
    is checked before the review: `receive` runs it in the track's worktree, and a red one gives the fix round by
-   itself. At the fix-round cap (`maxFixRounds`, default 3) the task becomes an owner question instead (exit 8;
+   itself. At the fix-round cap (`maxFixRounds`, default 3), or when the previous fix round committed nothing or failed the same
+   way (the plateau), the task becomes an owner question instead (exit 8;
    [the done command and the cap](queue.md#the-done-command-and-the-fix-round-cap)).
 6. `ravenseat merge <ID>`: merge into the base branch with `merge-track.mjs`, run the quick gates, start the next tasks.
 7. Repeat until `ravenseat state` exits 3 (nothing to do). Owner questions are collected and asked at the end of a

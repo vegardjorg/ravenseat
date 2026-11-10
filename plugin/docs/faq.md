@@ -73,7 +73,7 @@ conflict from the running worktrees, and a real conflict goes to a fix round wit
 
 ### Will one stuck task block everything, or retry forever and burn tokens?
 
-A task that is red in every round gets the fix rounds it is allowed (`maxFixRounds`, three by default), then one question to you. Tasks
+A task that is red in every round gets the fix rounds it is allowed (`maxFixRounds`, three by default), then one question to you, or sooner when a round commits nothing or fails exactly as before. Tasks
 that wait on it wait; independent tasks start. A test that hangs is stopped at the time budget, in receive and in the
 merge. A track that costs far more than its class usually does, or than its own estimate while the class has no history
 yet, is reported to the orchestrator. These limits stop endless retries; they do not cap your token bill. The daily
