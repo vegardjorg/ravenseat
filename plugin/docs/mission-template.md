@@ -51,7 +51,9 @@ Before starting tracks:
   type configs in any folder (`vitest.config.*`, `jest.config.*`, `tsconfig*.json`, the eslint configs,
   `pyproject.toml`, `Makefile` and similar), so a track cannot get green by switching a check off. Otherwise `merge-track.mjs` stops (exit
   4, before the merge). `ravenseat merge <ID> --allow-guard` overrides after the diff has been read, and is logged as
-  `guard-overridden` in the time log. Other files outside the ownership only give a warning (ownership drift).
+  `guard-overridden` in the time log. A file that ANOTHER active task owns (running, in review or picked) stops the
+  merge the same way: leave it alone, and write in your report what you would have needed changed there. Other files
+  outside the ownership only give a warning (ownership drift).
 
 After tracks:
 - The full gate run happens once, at the orchestrator, after merging: `ravenseat gates --full`. A batch push needs it green
@@ -130,8 +132,10 @@ names the file, so the owner can add it to the task.
 
 <OWNERSHIP>
 
-- Change only what you own. Files the project lists as hotspots (navigation, layouts, central registries) are never
-  edited by a track: deliver the component and a wiring specification (file, anchor, exact line) instead.
+- Change only what you own. Files the project lists as hotspots (`hotspots` in queue.config.json: navigation, layouts,
+  central registries, i18n, feature flags) are never edited by a track unless your task has the path in
+  `hotspot_patch`: deliver the component and a wiring specification (file, anchor, exact line) instead. The merge guard
+  stops an unagreed hotspot change, and the write guard warns you when you write one.
 <!-- class: K D D+ -->
 - **Append-only shared files:** registries, factories, translation files and similar lists that many tracks touch get
   additions at the END only, one block per track, so merges stay trivial.

@@ -274,6 +274,9 @@ export function cmdAdd() {
       // validate also checks that the id does not already exist in the queue, and (when the register has projects) that an
       // explicit project exists.
       const f = L.validate(n, queue.tasks, queue.projects);
+      // No task owns a hotspot (shared config, lib/hotspots.js): an agreed change goes in hotspot_patch.
+      const H = require('./lib/hotspots.js');
+      f.push(...H.ownershipErrors(n, H.hotspotsOf(CONFIG)));
       if (f.length) error.push(`${n.id ?? '(without id)'}: ${f.join('; ')}`);
     }
     if (new Set(newOnes.map((n) => n.id)).size !== newOnes.length)
@@ -417,6 +420,12 @@ export function cmdAdd() {
       console.log(
         `WARNING: ${n.id} names the protected path ${named} without owning it. If the task is to change it, add it with --files (ravenseat edit ${n.id} --files <files>): the agent will otherwise refuse, or the merge guard stops the change.`,
       );
+  }
+  // Better ownership from the start: files earlier tasks changed together with the new task's files (lib/ownershipHints.js).
+  {
+    const OH = require('./lib/ownershipHints.js');
+    const all = read().tasks ?? [];
+    for (const n of newOnes) for (const x of OH.hintLines(n, all, { ravenseat: CLI })) console.log(x);
   }
   // A track was just told it has nothing to do about the project; these are for whoever approves.
   if (!track) for (const x of added.projectWarnings) console.log(`WARNING: ${x}`);

@@ -72,8 +72,9 @@ function staleMessage(s) {
 }
 
 const STALE_FIX =
-  'ravenseat setup --overwrite --dry lists the files, ravenseat setup --overwrite replaces them (your own edits in them are lost; ' +
-  'queue.config.json is kept), then commit them. A file you edited on purpose can stay; compare it with the plugin first.';
+  'ravenseat setup --update --dry shows what a three-way update does: it takes the plugin\'s changes and keeps your own edits, and ' +
+  'a conflict leaves the copy as it is. ravenseat setup --update does it, then commit the files. ravenseat setup --overwrite ' +
+  'replaces them instead (your edits are lost; queue.config.json is kept).';
 
 /**
  * Status lines in the project's settings that run another plugin version than this one.

@@ -44,6 +44,40 @@ function readTail(file, bytes = TAIL_BYTES) {
   }
 }
 
+/** How much of the start of a transcript is read for the mission (the agent's first prompt). */
+const HEAD_BYTES = 16 * 1024;
+
+/** The first `bytes` of a file as text, or '' when it cannot be read. */
+function readHead(file, bytes = HEAD_BYTES) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(bytes);
+    const n = fs.readSync(fd, buf, 0, bytes, 0);
+    return buf.subarray(0, n).toString('utf8');
+  } catch {
+    return '';
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+/**
+ * The task an agent works on, from the mission at the start of its transcript (`prompt-<ID>.md` or "track <ID>", the
+ * same rule as the time log). Needed because the time log's start row is often written before the transcript exists,
+ * and then carries the agent id instead of the task id (seen in the live run of 2026-11-10).
+ * @param {string} head the start of the transcript
+ * @param {string[]} ids the tasks it can belong to (running or in review)
+ * @param {{ trackFromText: Function, taskIdFor: Function }} tc lib/timeCost.js (passed in, so the hook does not load it)
+ * @returns {string|null}
+ */
+function missionTask(head, ids, { trackFromText, taskIdFor }) {
+  const track = trackFromText(head);
+  if (!track) return null;
+  const known = new Set(ids);
+  return taskIdFor(track, (x) => known.has(x));
+}
+
 /**
  * The tool call at the end of a transcript that has no result yet, or null. Reads the JSONL lines (a first line cut by
  * the tail is skipped) and pairs `tool_use` ids with `tool_result.tool_use_id`.
@@ -139,13 +173,15 @@ function write(folder, waits) {
  * The tasks that wait on an approval now: a saved wait whose agent belongs to a running task (`agentTask`, from the time
  * log) and whose transcript has not been written since the notification.
  * @param {Record<string, {at: string, tool: string}>} waits
- * @param {{ agentTask: Map<string, string>, mtimeOf: (agentId: string) => number|null, now?: number }} io
+ * @param {{ agentTask: Map<string, string>, taskOf?: (agentId: string) => string|null,
+ *   mtimeOf: (agentId: string) => number|null, now?: number }} io  taskOf: the fallback when the time log has no task
+ *   for the agent (missionTask on the transcript's start)
  * @returns {{ id: string, tool: string, since: string }[]} one row per task, the oldest wait
  */
-function waitingTasks(waits, { agentTask, mtimeOf, now = Date.now() }) {
+function waitingTasks(waits, { agentTask, taskOf = () => null, mtimeOf, now = Date.now() }) {
   const perTask = new Map();
   for (const [agentId, w] of Object.entries(waits ?? {})) {
-    const id = agentTask.get(agentId);
+    const id = agentTask.get(agentId) ?? taskOf(agentId);
     const t = Date.parse(w?.at ?? '');
     if (!id || !Number.isFinite(t) || now - t >= MAX_AGE_MS) continue;
     const m = mtimeOf(agentId);
@@ -161,6 +197,8 @@ module.exports = {
   MAX_AGE_MS,
   SLACK_MS,
   readTail,
+  readHead,
+  missionTask,
   pendingToolUse,
   subagentDir,
   waitingAgents,

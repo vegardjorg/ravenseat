@@ -449,6 +449,11 @@ checkout or with ravenseat's own `--evidence` run:
   direct write to `gate-evidence.json` anywhere, and to the data folder's `queue.json` and `base-health.json`. The
   main session is never stopped, and the hook is inert without `queue.config.json`. Both are guards against mistakes
   and casual forgery, not a security boundary: the agents run as the same OS user.
+- Write warnings for tracks: the same hook never stops a track's write, but it tells the track (once per file and kind,
+  as added context) when the write will be stopped later: a protected path the task does not own (merge stops on it),
+  a new skip or focus marker in a test file, or a test file that loses all its assertions (receive flags it as
+  weakened). The track is told to ask the owner, or to fix the code instead of the test. Reviewers, helpers and the
+  main session get no warnings (`lib/writeWarn.js`).
 
 ## A merge that survives interruptions
 

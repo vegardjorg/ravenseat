@@ -15,7 +15,9 @@ come back with the work.
   investigated, planned, ready, then in the queue, built and verified). It points to your documents instead of
   copying them. See [plan register](plan-register.md).
 - **Work queue:** concrete tasks. Each has a class (risk level), an estimate, a value, dependencies, the files it
-  owns, and any open questions for you. The queue picks the next task by value per minute.
+  owns, and any open questions for you. The queue picks the next task by value per minute. When several waiting
+  tasks own the same file, only one can run at a time, so a short one (60 min or less) is moved up and a long one
+  (above 120 min) moved down, 10 % per contender (the card's Placement shows it).
 - **Orchestrator:** one Claude Code chat that runs the loop. It starts tasks, reviews results, merges them and asks
   you what only a human can decide. It does not write the code itself.
 - **Tracks:** each task runs as a subagent in its own git worktree, on its own branch. It gets a short mission file,

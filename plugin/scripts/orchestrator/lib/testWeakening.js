@@ -330,6 +330,8 @@ function setupProblems(setup) {
 module.exports = {
   MARKERS,
   isTestFile,
+  assertionLines,
+  extraMarkers,
   parseDiff,
   assess,
   summaryLine,

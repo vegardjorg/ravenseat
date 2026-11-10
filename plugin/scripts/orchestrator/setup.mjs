@@ -4,9 +4,12 @@
 // scripts/install.mjs (vendored install), so both install paths write the same project files.
 //
 // Usage:
-//   ravenseat setup [--dry] [--overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]
+//   ravenseat setup [--dry] [--update | --overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]
 //
 // What it does (everything is "add to"; existing files are kept unless --overwrite, and queue.config.json is never replaced):
+//   --update merges the docs and CLAUDE.queue.md three ways instead (your edits kept, the plugin's changes taken, a
+//   conflict saved for you and the copy left as it is; lib/setupMerge.js). Every copy setup writes records its base in
+//   <dataFolder>/setup-base/.
 //   1. queue.config.json from <plugin>/queue.config.example.json, when missing, with the current branch and the checks
 //      the project's files show (fillConfigFromProject).
 //   2. <plugin>/docs/*.md -> docs/queue/ (the mission template there is the project's own copy and may be edited).
@@ -68,7 +71,7 @@ export const GITIGNORE_LINES = [
  * @param {(text: string) => string} [o.transformMd]  rewrites the Markdown on the way (install.mjs: ravenseat -> node form)
  */
 export function setupProject(o) {
-  const log = { copied: [], replaced: [], same: [], skipped: [], notes: [] };
+  const log = { copied: [], replaced: [], same: [], skipped: [], notes: [], updated: [], merged: [], ownEdits: [], conflicts: [], noBase: [] };
   const t = path.resolve(o.target);
   const rel = (p) => path.relative(t, p).split(path.sep).join('/');
   const write = (to, text) => {
@@ -76,27 +79,69 @@ export function setupProject(o) {
     fs.mkdirSync(path.dirname(to), { recursive: true });
     fs.writeFileSync(to, text);
   };
-  /** Copies one file; Markdown goes through transformMd. Existing files are kept unless overwrite. */
-  const copy = (from, to, overwrite = o.overwrite) => {
-    if (fs.existsSync(to)) {
-      if (!overwrite) return void log.skipped.push(rel(to));
-    }
+  // The base of each copy (lib/setupMerge.js): the plugin text setup last wrote, so --update can tell the owner's
+  // edits from the plugin's changes.
+  const SM = require('./lib/setupMerge.js');
+  const data = path.dirname(setupRecordFile(t));
+  const recordBaseOf = (to, text) => {
+    if (!o.dry) SM.writeBase(data, rel(to), text);
+  };
+  /**
+   * Copies one project copy (docs, CLAUDE.queue.md); Markdown goes through transformMd. Existing files are kept unless
+   * overwrite, or merged three ways with update.
+   */
+  const copy = (from, to, overwrite = o.overwrite, managed = true) => {
     const source = fs.readFileSync(from, 'utf8');
     const text = from.endsWith('.md') && o.transformMd ? o.transformMd(source) : source;
+    // queue.config.json (managed false) holds the project's own options: never merged, no base.
+    const recordBase = managed ? recordBaseOf : () => {};
+    if (fs.existsSync(to) && !overwrite) {
+      if (o.update && managed) return void mergeCopy(to, text);
+      // The same content needs no update; recording it as the base lets a later --update tell edits apart.
+      if (SM.threeWay({ local: fs.readFileSync(to, 'utf8'), base: null, upstream: text }).action === 'same') recordBase(to, text);
+      return void log.skipped.push(rel(to));
+    }
     if (fs.existsSync(to)) {
       // The same content (git may have changed the line endings) is not a replacement, so --dry shows what really changes.
       const lf = (s) => s.replace(/\r\n/g, '\n');
-      if (lf(fs.readFileSync(to, 'utf8')) === lf(text)) return void log.same.push(rel(to));
+      if (lf(fs.readFileSync(to, 'utf8')) === lf(text)) {
+        recordBase(to, text);
+        return void log.same.push(rel(to));
+      }
       log.replaced.push(rel(to));
     } else log.copied.push(rel(to));
     write(to, text);
+    recordBase(to, text);
+  };
+  /** --update: the three-way decision for one existing copy. */
+  const mergeCopy = (to, text) => {
+    const r = SM.threeWay({ local: fs.readFileSync(to, 'utf8'), base: SM.readBase(data, rel(to)), upstream: text });
+    const name = rel(to);
+    if (r.action === 'same') {
+      recordBaseOf(to, text);
+      return void log.same.push(name);
+    }
+    if (r.action === 'no-base') return void log.noBase.push(name);
+    if (r.action === 'own-edits') return void log.ownEdits.push(name);
+    if (r.action === 'conflict') {
+      log.conflicts.push(name);
+      if (!o.dry) {
+        const p = SM.conflictPath(data, name);
+        fs.mkdirSync(path.dirname(p), { recursive: true });
+        fs.writeFileSync(p, r.text);
+      }
+      return;
+    }
+    (r.action === 'merged' ? log.merged : log.updated).push(name);
+    write(to, r.text);
+    recordBaseOf(to, text);
   };
 
   // 1-3: files. queue.config.json holds the project's own options and is never replaced. A new one gets the project's
   // own branch and checks, so a first run does not start on the example's values.
   const configTo = path.join(t, 'queue.config.json');
   const configIsNew = !fs.existsSync(configTo);
-  copy(path.join(PLUGIN_ROOT, 'queue.config.example.json'), configTo, false);
+  copy(path.join(PLUGIN_ROOT, 'queue.config.example.json'), configTo, false, false);
   if (configIsNew) {
     const filled = fillConfigFromProject(fs.readFileSync(path.join(PLUGIN_ROOT, 'queue.config.example.json'), 'utf8'), t);
     write(configTo, filled.text);
@@ -379,10 +424,14 @@ if (isMain) {
   const args = process.argv.slice(2);
   const flags = new Set(args.filter((a) => a.startsWith('--')));
   const i = args.indexOf('--target');
-  const known = ['--dry', '--overwrite', '--claude-md', '--settings', '--ci', '--target'];
+  const known = ['--dry', '--overwrite', '--update', '--claude-md', '--settings', '--ci', '--target'];
   const unknown = [...flags].filter((f) => !known.includes(f));
   if (unknown.length) {
-    console.error(`setup: unknown option ${unknown.join(' ')}. Use: ravenseat setup [--dry] [--overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]`);
+    console.error(`setup: unknown option ${unknown.join(' ')}. Use: ravenseat setup [--dry] [--update | --overwrite] [--claude-md] [--settings] [--ci] [--target <dir>]`);
+    process.exit(2);
+  }
+  if (flags.has('--update') && flags.has('--overwrite')) {
+    console.error('setup: --update merges your copies with the plugin, --overwrite replaces them. Pick one.');
     process.exit(2);
   }
   const PR = require('./lib/projectRoot.js');
@@ -395,6 +444,7 @@ if (isMain) {
     target,
     dry: flags.has('--dry'),
     overwrite: flags.has('--overwrite'),
+    update: flags.has('--update'),
     claudeMd: flags.has('--claude-md'),
     settings: flags.has('--settings'),
     ci: flags.has('--ci'),
@@ -404,12 +454,24 @@ if (isMain) {
   if (log.replaced.length) console.log(`  ${flags.has('--dry') ? 'would replace (new content)' : 'replaced'}: ${log.replaced.join(', ')}`);
   if (log.same.length) console.log(`  already up to date: ${log.same.length} file(s)`);
   if (log.skipped.length) console.log(`  kept (already there): ${log.skipped.join(', ')}`);
+  // --update (lib/setupMerge.js): what the three-way update did with each copy.
+  const would = flags.has('--dry') ? 'would ' : '';
+  if (log.updated.length) console.log(`  ${would}${would ? 'update' : 'updated'} (you had not edited them): ${log.updated.join(', ')}`);
+  if (log.merged.length) console.log(`  ${would}${would ? 'merge' : 'merged'} (your edits and the plugin's): ${log.merged.join(', ')}`);
+  if (log.ownEdits.length) console.log(`  kept (only your edits; the plugin did not change them): ${log.ownEdits.join(', ')}`);
+  if (log.conflicts.length) {
+    const where = path.relative(target, path.join(path.dirname(setupRecordFile(target)), 'setup-merge')).split(path.sep).join('/');
+    console.log(`  CONFLICT (your edit and the plugin's in the same place; the copy is unchanged): ${log.conflicts.join(', ')}`);
+    console.log(`    The merge with markers (<<<<<<< your copy ... >>>>>>> plugin) is in ${where}/. Resolve it there, copy it over your copy, then run ravenseat setup --update again.`);
+  }
+  if (log.noBase.length)
+    console.log(`  not merged (no record of what setup wrote; the copy is older than that record): ${log.noBase.join(', ')}. Compare them with the plugin, or replace them with --overwrite; after that --update works for them.`);
   for (const n of log.notes) console.log(`  ${n}`);
   // An estimate from cores and memory, only said here; setup never sets maxConcurrent.
   const MA = require('./lib/machineAdvice.js');
   console.log(`  ${MA.setupLine(MA.readMachine())}`);
   // A kept copy may be older than the plugin: the mission every agent gets is built from it.
-  if (!flags.has('--overwrite')) {
+  if (!flags.has('--overwrite') && !flags.has('--update')) {
     const PF = require('./lib/projectFiles.js');
     const stale = PF.staleFiles(PLUGIN_ROOT, target);
     const message = PF.staleMessage(stale);

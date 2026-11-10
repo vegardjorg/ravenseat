@@ -234,6 +234,12 @@ export function cmdEdit() {
     );
     // A new waiting_on id must be a registered question (queue.mjs question <id> --text ... first).
     f.push(...L.waitingOnError(fresh, queue, { earlier: o.waiting_on ?? [] }));
+    // No task owns a hotspot (lib/hotspots.js). Checked only when the edit touches the ownership, so a task from before
+    // the hotspot was listed never blocks an unrelated edit.
+    if ('owned_files' in field || 'hotspot_patch' in field) {
+      const H = require('./lib/hotspots.js');
+      f.push(...H.ownershipErrors(fresh, H.hotspotsOf(CONFIG)));
+    }
     // A depends_on that closes a cycle leaves every task in it waiting forever. Checked only when the edit touches
     // depends_on or status, so a cycle made before this check existed never blocks an unrelated edit (doctor reports it).
     if ('depends_on' in field || 'status' in field)

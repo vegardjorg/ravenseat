@@ -19,6 +19,7 @@ const require = createRequire(import.meta.url);
 const AW = require('../lib/approvalWait.js');
 const T = require('../lib/queueBoard.js');
 const DEC = require('../lib/queueDecisions.js');
+const TC = require('../lib/timeCost.js');
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const HOOK = path.join(ROOT, 'scripts', 'orchestrator', 'hook-approval-wait.mjs');
@@ -70,6 +71,34 @@ describe('which agent waits on a tool call', () => {
     expect(rows).toEqual([{ id: 'A-1', tool: 'Write', since: at }]);
     // A day later the wait is no longer news.
     expect(AW.waitingTasks(waits, { agentTask, mtimeOf: () => t, now: t + AW.MAX_AGE_MS })).toEqual([]);
+  });
+
+  // Live run 2026-11-10: the start row in the time log had the agent id as track (the transcript was not on disk when
+  // the agent started), so the time log alone tied the waiting agent to no task and the card never showed.
+  it('an agent the time log does not tie to a task is tied by the mission at the start of its transcript', () => {
+    const at = '2026-11-08T12:00:00.000Z';
+    const t = Date.parse(at);
+    const heads: Record<string, string> = {
+      ag1: line({ type: 'user', message: { content: 'You are track LIVE-2. Use the Write tool.' } }),
+      ag2: line({ type: 'user', message: { content: 'Read the mission in C:/s/prompt-B-1.md and do it.' } }),
+      ag3: line({ type: 'user', message: { content: 'You are track Z-9.' } }),
+    };
+    const taskOf = (a: string) => AW.missionTask(heads[a] ?? '', ['LIVE-2', 'B-1'], TC);
+    const waits = { ag1: { at, tool: 'Write' }, ag2: { at, tool: 'Bash' }, ag3: { at, tool: 'Read' } };
+    const rows = AW.waitingTasks(waits, { agentTask: new Map(), taskOf, mtimeOf: () => t, now: t + 60_000 });
+    expect(rows.map((r: { id: string }) => r.id)).toEqual(['B-1', 'LIVE-2']);
+    // The time log wins when it has the task.
+    const tied = AW.waitingTasks({ ag1: waits.ag1 }, { agentTask: new Map([['ag1', 'B-1']]), taskOf, mtimeOf: () => t, now: t + 60_000 });
+    expect(tied.map((r: { id: string }) => r.id)).toEqual(['B-1']);
+  });
+
+  it('readHead gives the start of a file, and empty text for a missing one', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-approval-head-'));
+    temporary.push(dir);
+    const f = path.join(dir, 'a.jsonl');
+    fs.writeFileSync(f, 'abcdef');
+    expect(AW.readHead(f, 3)).toBe('abc');
+    expect(AW.readHead(path.join(dir, 'none.jsonl'))).toBe('');
   });
 });
 

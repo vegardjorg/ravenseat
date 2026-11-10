@@ -77,7 +77,7 @@ const {
 } = require('./logic/evidence.js');
 const { validate, validateNewField, dependencyCycles, cycleError } = require('./logic/validate.js');
 const {
-  fileOverlap, conflictPart, conflict, blockerParts, blockers, childrenMap, successors, lockUpCount,
+  fileOverlap, conflictPart, conflict, blockerParts, blockers, childrenMap, successors, lockUpCount, contenders, dbKey,
 } = require('./logic/conflicts.js');
 const {
   blockersWithPause, WITHOUT_AREA, FOCUS_REST, areaFor, parseStep, stepMatch, focusApplies, ownStep, parkedNow,
@@ -178,6 +178,8 @@ module.exports = {
   withIndex,
   successors,
   lockUpCount,
+  contenders,
+  dbKey,
   score,
   hasMigr,
   ACTIVE,

@@ -83,8 +83,10 @@ and nothing else in the same command. On Windows, or with quotes in the text, wr
 Mention the id in the report, and a HIGH security finding in its own section.
 Noticed something outside your scope? Run `ravenseat finding "<title>" [--detail "..."] [--files a,b]` instead of fixing it.
 
-- Change only what you own. Files the project lists as hotspots (navigation, layouts, central registries) are never
-  edited by a track: deliver the component and a wiring specification (file, anchor, exact line) instead.
+- Change only what you own. Files the project lists as hotspots (`hotspots` in queue.config.json: navigation, layouts,
+  central registries, i18n, feature flags) are never edited by a track unless your task has the path in
+  `hotspot_patch`: deliver the component and a wiring specification (file, anchor, exact line) instead. The merge guard
+  stops an unagreed hotspot change, and the write guard warns you when you write one.
 - **Append-only shared files:** registries, factories, translation files and similar lists that many tracks touch get
   additions at the END only, one block per track, so merges stay trivial.
 

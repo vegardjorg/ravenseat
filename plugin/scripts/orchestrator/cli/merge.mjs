@@ -556,6 +556,24 @@ export function cmdReceive() {
         });
   const weakLine = weak && TW.summaryLine(weak);
   if (weakLine) console.log(weakLine);
+  // Files another active task owns (lib/mergeGuard.js foreignOwners): the merge will stop on them, so say it now, while a
+  // fix round is still cheap. A note, never a stop here.
+  const changedNames = String(gitLarge(['diff', '--name-only', '--no-renames', scope]) ?? '').split(/\r?\n/).filter(Boolean);
+  const foreign = require('./lib/mergeGuard.js').foreignOwners(changedNames, o0, read().tasks ?? []);
+  // Shared config (hotspots, lib/hotspots.js) the task has not agreed: the merge stops on it too.
+  const HS = require('./lib/hotspots.js');
+  const hotChanged = HS.unagreed(changedNames, o0, HS.hotspotsOf(CONFIG));
+  if (hotChanged.length)
+    console.log(
+      `HOTSPOT: ${id} changes shared config it has not agreed (hotspot_patch): ${hotChanged.slice(0, 10).join(', ')}. ` +
+        "The merge stops on it. A fix round that leaves it alone and puts a wiring spec in the report, or add it to the task's hotspot_patch (--by owner).",
+    );
+  if (foreign.length)
+    console.log(
+      `OWNERSHIP: ${id} changes ${foreign.length} file(s) that another active task owns: ` +
+        `${foreign.slice(0, 10).map((f) => `${f.path} (${f.owner})`).join(', ')}${foreign.length > 10 ? ', …' : ''}. ` +
+        `The merge stops on them. A fix round that leaves them alone, or merge the owner task first (${CLI} merge --allow-guard overrides, logged).`,
+    );
   fs.writeFileSync(
     path.join(folder, '00-package.md'),
     L.reviewPackageIndex({
@@ -1271,11 +1289,21 @@ export async function cmdMerge() {
     for (const l of baseLines) console.log(l);
   };
   if (!res.ok && res.stop.step === 'merge' && mergeCode === 4) {
-    // The merge guard: nothing was merged. Say what to do instead of a raw exit code.
+    // The merge guard: nothing was merged. Say what to do instead of a raw exit code. Two causes share exit 4: protected
+    // paths the task does not own, and files another active task owns (OWNERSHIP in the excerpt).
+    const seen = (re) => re.test(mergeOut ?? '') || res.stop.excerpt.some((l) => re.test(l));
+    const foreign = seen(/OWNERSHIP:|\(owned by /);
+    const hotspot = !foreign && seen(/HOTSPOT:/);
     console.log(
-      `STOP: the merge guard stopped ${branch} before the merge. The branch changes protected paths ` +
-        `(protectedPaths in queue.config.json: hooks, settings, agents, orchestrator scripts, the queue config, ` +
-        `package.json) that ${id} does not own. Nothing was merged.`,
+      foreign
+        ? `STOP: the merge guard stopped ${branch} before the merge. The branch changes files that another active task ` +
+            `owns (running, in review or picked), so it would change them under that task. Nothing was merged.`
+        : hotspot
+        ? `STOP: the merge guard stopped ${branch} before the merge. The branch changes shared config (hotspots in ` +
+            `queue.config.json) that ${id} has not agreed in its hotspot_patch. Nothing was merged.`
+        : `STOP: the merge guard stopped ${branch} before the merge. The branch changes protected paths ` +
+            `(protectedPaths in queue.config.json: hooks, settings, agents, orchestrator scripts, the queue config, ` +
+            `package.json) that ${id} does not own. Nothing was merged.`,
     );
     if (res.stop.excerpt.length) console.log(res.stop.excerpt.map((l) => `  | ${l}`).join('\n'));
     console.log(
@@ -1285,7 +1313,7 @@ export async function cmdMerge() {
         `\`${CLI} merge ${id} --allow-guard\` (logged as "guard-overridden").`,
     );
     ML.clearState(FOLDER, id);
-    mergeBlock(id, 'merge-guard', 'protected paths the task does not own');
+    mergeBlock(id, 'merge-guard', foreign ? 'files another active task owns' : hotspot ? 'shared config not agreed (hotspot)' : 'protected paths the task does not own');
     logEvent(ER.mergeConflictRow({ task: id, branch, files: ER.conflictFiles(mergeOut), guard: true }));
     console.log(`Full log: ${logFile}`);
     process.exit(4);
@@ -1352,6 +1380,8 @@ export async function cmdMerge() {
     else ox.t_merge = new Date().toISOString();
     if (mstate.merge_commit) ox.merge_commit = mstate.merge_commit;
     if (diffLines != null) ox.diff_lines = diffLines;
+    // The files the task actually changed (lib/ownershipHints.js): `add` uses them to suggest owned_files for new tasks.
+    if (name != null) ox.changed_files = require('./lib/ownershipHints.js').changedFilesOf(name.split(/\r?\n/));
     const tReview = TK.firstReviewStart(readTimeLog(), id, {
       types: L.REVIEWER_TYPES,
       from: ox.t_receive ?? null,

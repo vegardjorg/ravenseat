@@ -244,6 +244,7 @@ function buildBoard(
     withoutAgent = [],
     baseRed = false,
     approval = [],
+    toolTrouble = [],
   } = {},
 ) {
   // SILENT tracks per id, for the small badge on the card (queueLogic.silentTracks, measured by the server).
@@ -442,7 +443,7 @@ function buildBoard(
     batchQueue,
     // What the queue would start now, and what is waiting on the owner.
     next,
-    inbox: inbox(queue, columns, { map, context: fk, now, withoutAgent, silent, baseRed, approval }),
+    inbox: inbox(queue, columns, { map, context: fk, now, withoutAgent, silent, baseRed, approval, toolTrouble }),
     // The focus line, areas and the basis for the plan view.
     focus: focusLine(queue, { now, context: fk, canStart: next.startable.map((v) => v.id) }),
     areas: L.areaOverview(queue, now).map((r) => ({
@@ -548,7 +549,7 @@ function nextUp(queue, { now = Date.now(), uncommitted = [], dailyUsage } = {}) 
 function inbox(
   queue,
   columns,
-  { map = chainMap(queue.tasks ?? []), context = null, now = Date.now(), withoutAgent = [], silent = [], baseRed = false, approval = [] } = {},
+  { map = chainMap(queue.tasks ?? []), context = null, now = Date.now(), withoutAgent = [], silent = [], baseRed = false, approval = [], toolTrouble = [] } = {},
 ) {
   const tasks = queue.tasks ?? [];
   const register = queue.projects ?? {};
@@ -671,12 +672,14 @@ function inbox(
   // A track agent that stands still on a permission prompt (lib/approvalWait.js, found by the caller): only the owner
   // can answer it, in the session that started the agent.
   const onApproval = new Map((approval ?? []).map((x) => [x.id, { tool: x.tool, since: x.since }]));
+  // A track agent that auto mode refused, or that fails the same tool again and again (lib/toolTrouble.js).
+  const onTrouble = new Map((toolTrouble ?? []).map((x) => [x.id, { denied: x.denied ?? null, failing: x.failing ?? null }]));
   // A red base stops every merge, and the owner sees that line above the list: a task in review only waits for it.
   const longInReview = (k) => k.aging && !(baseRed && k.status === 'review');
   const stuck = [...(columns.inProgress ?? []), ...(columns.review ?? [])]
     .filter(
       (k) =>
-        onApproval.has(k.id) || noAgent.has(k.id) || longSilent.has(k.id) || longInReview(k) || (k.status === 'picked' && k.old) || stopInfo(k),
+        onApproval.has(k.id) || onTrouble.has(k.id) || noAgent.has(k.id) || longSilent.has(k.id) || longInReview(k) || (k.status === 'picked' && k.old) || stopInfo(k),
     )
     .map((k) => ({
       id: k.id,
@@ -696,6 +699,7 @@ function inbox(
       no_agent_round: noAgent.get(k.id)?.prepared ? { round: noAgent.get(k.id).round, reason: noAgent.get(k.id).reason } : null,
       long_silent: longSilent.get(k.id) ?? null,
       awaiting_approval: onApproval.get(k.id) ?? null,
+      tool_trouble: onTrouble.get(k.id) ?? null,
     }));
 
   const unlogged = L.unlogged(queue).map((x) => ({ sp: x.sp, time: x.time ?? null, by: x.by ?? null }));

@@ -125,6 +125,30 @@
         ]
       }
     ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-tool-trouble.mjs"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator/hook-tool-trouble.mjs"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "StopFailure": [
       {
         "hooks": [

@@ -134,6 +134,11 @@ prompt in the Claude Code session that started the agent, and the card goes once
 hook (`hook-approval-wait.mjs`, matcher `permission_prompt`) finds the agent from the session's subagent transcripts and
 keeps only its id, the tool name and the time in `<dataFolder>/approval-waits.json`, never the prompt text. In auto mode
 the classifier answers most prompts itself, so the card is rare there.
+A track that auto mode refuses, or that fails the same tool three times within half an hour, gets a **TOOL TROUBLE**
+card with the tool's name and the count: look at what it tried in its session, then allow it, stop it or give it what it
+lacks. The PermissionDenied and PostToolUseFailure hooks (`hook-tool-trouble.mjs`) keep only the agent id, the tool name
+and the time in `<dataFolder>/tool-trouble.json`, never the reason, the tool input or the error text; an interrupt and
+the main session are left out, and events older than half an hour drop off. A NEEDS APPROVAL card on the same task wins.
 An owner question with `choices` shows one button per choice (the recommended one filled); a click answers it through
 the same `POST /api/action { type: 'resolve' }` with `{ choice: <n> }`, and the text in the open answer field goes
 along as a note. "Answer in your own words" keeps the free text answer. A line under the title says

@@ -405,26 +405,61 @@ function withoutAgentNow(queue) {
 }
 
 // ---- Tracks that wait on a permission prompt (hook-approval-wait.mjs saves the agent; lib/approvalWait.js) ---------
-/** The running tasks whose agent waits on an approval: the agent is mapped to its task by the time log. */
+/**
+ * The running tasks whose agent waits on an approval. The agent is mapped to its task by the time log, and when the log
+ * has only the agent id (its start row was written before the transcript existed), by the mission at the start of the
+ * agent's transcript.
+ */
+/**
+ * How an agent id is tied to its running task: the time log first, then the mission at the start of the agent's
+ * transcript. Null when no task is running or in review. Shared by the approval waits and the tool trouble.
+ */
+function agentMapping(queue) {
+  const running = (queue.tasks ?? []).filter((o) => o.status === 'running' || o.status === 'review').map((o) => o.id);
+  if (!running.length) return null;
+  const AW = require('./lib/approvalWait.js');
+  const ACT = require('./lib/trackActivity.js');
+  let rows = [];
+  try {
+    rows = TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+  } catch {
+    rows = []; // no time log yet: the mission in the transcript can still tie the agent to its task
+  }
+  const agentTask = new Map();
+  for (const [id, x] of ACT.agentsByTask(rows, running)) for (const a of x.agents) agentTask.set(a, id);
+  const root = ACT.transcriptsRoot(MAIN_TREE);
+  const taskOf = (agentId) => {
+    const p = ACT.findTranscript(root, agentId);
+    return p ? AW.missionTask(AW.readHead(p), running, TK) : null;
+  };
+  return { agentTask, taskOf, root, ACT };
+}
+
+/** The running tasks whose agent auto mode refused, or that fails the same tool again and again (lib/toolTrouble.js). */
+function toolTroubleNow(queue) {
+  try {
+    const TT = require('./lib/toolTrouble.js');
+    const state = TT.read(FOLDER);
+    if (!Object.keys(state).length) return [];
+    const m = agentMapping(queue);
+    return m ? TT.troubleTasks(state, { agentTask: m.agentTask, taskOf: m.taskOf }) : [];
+  } catch (e) {
+    console.error(`the tool trouble check failed: ${e?.message ?? e}`);
+    return [];
+  }
+}
+
 function approvalNow(queue) {
   try {
     const AW = require('./lib/approvalWait.js');
     const waits = AW.read(FOLDER);
     if (!Object.keys(waits).length) return [];
-    const running = (queue.tasks ?? []).filter((o) => o.status === 'running' || o.status === 'review').map((o) => o.id);
-    if (!running.length) return [];
-    const ACT = require('./lib/trackActivity.js');
-    let rows = [];
-    try {
-      rows = TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
-    } catch {
-      return [];
-    }
-    const agentTask = new Map();
-    for (const [id, x] of ACT.agentsByTask(rows, running)) for (const a of x.agents) agentTask.set(a, id);
-    const root = ACT.transcriptsRoot(MAIN_TREE);
+    const m = agentMapping(queue);
+    if (!m) return [];
+    const { agentTask, taskOf, root, ACT } = m;
     return AW.waitingTasks(waits, {
       agentTask,
+      taskOf,
       mtimeOf: (agentId) => {
         const p = ACT.findTranscript(root, agentId);
         try {
@@ -658,6 +693,8 @@ function state() {
       withoutAgent: withoutAgentNow(queue),
       // Tracks that stand still on a permission prompt (not cached: one small file, and the card should go at once).
       approval: approvalNow(queue),
+      // Tracks that auto mode refused, or that fail the same tool again and again (one small file, not cached either).
+      toolTrouble: toolTroubleNow(queue),
       baseRed: baseHealth?.status === 'red',
       dailyUsage: s?.data.keyFigures.usageToday,
       // Suitability with the same rules as queue.mjs cloud-package (queueLogic.cloudSuitable).

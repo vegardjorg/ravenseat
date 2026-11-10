@@ -117,11 +117,19 @@ function globMatch(pattern, p, o = {}) {
  * @param {string[]} [protectedPaths] default STANDARD.protectedPaths; CORE_PROTECTED always counts on top
  */
 function isProtected(p, protectedPaths = defaultProtected()) {
+  return inList(p, [...CORE_PROTECTED, ...(protectedPaths || [])]);
+}
+
+/**
+ * Does a path match an entry in a path list, with the protectedPaths rules ("folder/", "dir/file", a bare name in any
+ * folder, a glob)? No floor added. Also used for the hotspots (lib/hotspots.js).
+ */
+function inList(p, list) {
   // Compared in lower case (see the top of the file): .CLAUDE/ is .claude/ on Windows and macOS.
   const s = norm(p).toLowerCase();
   if (s.startsWith('node_modules/') || s.includes('/node_modules/')) return false;
   const name = s.split('/').pop();
-  return [...CORE_PROTECTED, ...(protectedPaths || [])].map((b) => norm(b).toLowerCase()).some((b) => {
+  return (list || []).map((b) => norm(b).toLowerCase()).some((b) => {
     if (!b) return false;
     if (/[*?]/.test(b)) return globMatch(b, s, { ignoreCase: true });
     if (b.endsWith('/')) return s.startsWith(b);
@@ -292,7 +300,68 @@ function ownerNotes(out) {
   return notes;
 }
 
+/** The statuses whose owned_files are held right now: the task is being built or waits for its merge. */
+const ACTIVE_OWNER_STATUSES = ['running', 'review', 'picked'];
+
+/**
+ * The changed paths that ANOTHER active task owns (its owned_files; a shared_patch is shared by design, so it is no
+ * ownership here). Before this, such a change merged with only "WARNING ownership drift", and stopped only when git saw
+ * a text conflict. Used by merge-track.mjs (a stop), receive and the pulse (early notes).
+ * @param {string[]} paths the changed paths
+ * @param {{ id: string, owned_files?: string[], shared_patch?: string[] } | null} task the task being checked (null:
+ *   a wave track, nothing to compare)
+ * @param {object[]} tasks every task in the queue
+ * @returns {{ path: string, owner: string }[]}
+ */
+function foreignOwners(paths, task, tasks) {
+  if (!task) return [];
+  const mine = [...(task.owned_files ?? []), ...(task.shared_patch ?? [])].map(norm).filter(Boolean);
+  const others = (tasks ?? [])
+    .filter((o) => o && o.id !== task.id && ACTIVE_OWNER_STATUSES.includes(o.status))
+    .map((o) => ({ id: o.id, owned: (o.owned_files ?? []).map(norm).filter(Boolean) }))
+    .filter((o) => o.owned.length);
+  const out = [];
+  const seen = new Set();
+  for (const raw of paths ?? []) {
+    const p = norm(raw);
+    if (!p || seen.has(p)) continue;
+    seen.add(p);
+    if (mine.some((e) => covers(e, p))) continue;
+    const owner = others.find((o) => o.owned.some((e) => covers(e, p)));
+    if (owner) out.push({ path: p, owner: owner.id });
+  }
+  return out;
+}
+
+/**
+ * The pulse lines for tracks whose branch changes files another active task owns, so it is seen before the merge.
+ * @param {{ id: string }[]} tips the track tips (lib/conflictPredict.js tipsFor)
+ * @param {object[]} tasks every task in the queue
+ * @param {(tip: object) => string[]|null} filesOf the files the tip changed since the base (null: unknown)
+ */
+function ownershipPulseLines(tips, tasks, filesOf) {
+  const byId = new Map((tasks ?? []).map((o) => [o.id, o]));
+  const lines = [];
+  for (const tip of tips ?? []) {
+    const files = filesOf(tip);
+    if (!files) continue;
+    const foreign = foreignOwners(files, byId.get(tip.id) ?? null, tasks);
+    if (!foreign.length) continue;
+    const owners = [...new Set(foreign.map((f) => f.owner))].join(', ');
+    const shown = foreign.slice(0, 5).map((f) => f.path).join(', ');
+    lines.push(
+      `OWNERSHIP: ${tip.id} changes ${foreign.length} file(s) owned by ${owners}: ${shown}${foreign.length > 5 ? ', …' : ''}. ` +
+        'The merge stops on them; tell the track to leave them, or settle the ownership first.',
+    );
+  }
+  return lines;
+}
+
 module.exports = {
+  ACTIVE_OWNER_STATUSES,
+  foreignOwners,
+  ownershipPulseLines,
+  inList,
   ownerNotes,
   isProtected,
   isMigrationPath,

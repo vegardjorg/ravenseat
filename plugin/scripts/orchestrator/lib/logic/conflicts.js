@@ -33,6 +33,21 @@ function fileOverlap(a, b) {
 }
 
 /**
+ * The comparison key for a DB object in `owner_db`: lower case, without quotes, without the default schema (`public.`)
+ * and without an argument list. `users` and `public.users` are the same table, and `fn(uuid)` and `fn` the same
+ * function name (two overloads of one function are treated as one: a false conflict only costs a wait, a missed one a
+ * broken migration). Another schema stays: `auth.users` is not `users`.
+ */
+function dbKey(s) {
+  return String(s ?? '')
+    .trim()
+    .replace(/"/g, '')
+    .toLowerCase()
+    .replace(/\s*\(.*$/, '')
+    .replace(/^public\./, '');
+}
+
+/**
  * First conflict between a candidate and an active task, with the details (the guard rules on the board need
  * who and what, not just the text), or null.
  * @returns {{ type: 'file'|'db'|'patch', name: string, with: string, text: string } | null}
@@ -58,10 +73,10 @@ function conflictPart(candidate, active) {
   // The sets are built only when the candidate has something to compare (most have empty lists).
   const dbCandidate = candidate.owner_db ?? [];
   const dbActive = dbCandidate.length
-    ? new Set((active.owner_db ?? []).map((s) => s.toLowerCase()))
+    ? new Set((active.owner_db ?? []).map(dbKey))
     : null;
   for (const d of dbCandidate) {
-    if (dbActive.has(d.toLowerCase()))
+    if (dbActive.has(dbKey(d)))
       return {
         type: 'db',
         name: d,
@@ -82,6 +97,18 @@ function conflictPart(candidate, active) {
         with: active.id,
         text: `shared patch ${d} in progress in ${active.id}`,
       };
+  }
+  // A hotspot (shared config, lib/hotspots.js) is changed by one task at a time: hotspot_patch is a serial lock.
+  for (const h of candidate.hotspot_patch ?? []) {
+    for (const k of active.hotspot_patch ?? []) {
+      if (fileOverlap(String(h).toLowerCase(), String(k).toLowerCase()))
+        return {
+          type: 'hotspot',
+          name: norm(h),
+          with: active.id,
+          text: `hotspot ${norm(h)} is being changed by ${ownerText()}`,
+        };
+    }
   }
   return null;
 }
@@ -224,6 +251,51 @@ function computeSuccessors(id, tasks, children) {
   return [...set].filter((x) => !['done', 'cancelled'].includes(perId.get(x)?.status));
 }
 
+/**
+ * The open tasks' file ownership as a lookup: exact paths → ids, and the folder entries (ending in "/") as a list.
+ * "Open" = not done or cancelled. Built once per index (withIndex), else once per call.
+ */
+function ownershipIndexFor(tasks) {
+  const ix = indexFor(tasks);
+  if (ix?.ownership) return ix.ownership;
+  const exact = new Map();
+  const folders = [];
+  for (const x of tasks) {
+    if (x.status === 'done' || x.status === 'cancelled') continue;
+    for (const f of x.owned_files ?? []) {
+      const p = norm(f);
+      if (p.endsWith('/')) folders.push({ path: p, id: x.id });
+      else {
+        if (!exact.has(p)) exact.set(p, []);
+        exact.get(p).push(x.id);
+      }
+    }
+  }
+  const out = { exact, folders };
+  if (ix) ix.ownership = out;
+  return out;
+}
+
+/**
+ * The other open tasks (not done or cancelled) that own a file overlapping this task's owned_files (fileOverlap: exact,
+ * or a folder entry either way). They cannot run at the same time as this one; the ranking uses the count to prefer a
+ * short task on a contended file (scoreParts). The ids in the order they were found, each once.
+ */
+function contenders(o, tasks) {
+  const own = (o.owned_files ?? []).map(norm);
+  if (!own.length) return [];
+  const { exact, folders } = ownershipIndexFor(tasks);
+  const found = new Set();
+  for (const p of own) {
+    for (const id of exact.get(p) ?? []) found.add(id);
+    for (const g of folders) if (fileOverlap(p, g.path)) found.add(g.id);
+    // A folder this task owns overlaps every exact path below it.
+    if (p.endsWith('/')) for (const [q, ids] of exact) if (q.startsWith(p)) for (const id of ids) found.add(id);
+  }
+  found.delete(o.id);
+  return [...found];
+}
+
 /** How many tasks (directly or indirectly) wait on this one? Gives a bonus for unlocking others. */
 function lockUpCount(id, tasks) {
   return successors(id, tasks).length;
@@ -231,6 +303,8 @@ function lockUpCount(id, tasks) {
 
 module.exports = {
   norm,
+  dbKey,
+  contenders,
   fileOverlap,
   conflictPart,
   conflict,

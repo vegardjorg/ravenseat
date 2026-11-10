@@ -125,6 +125,11 @@ const STANDARD = Object.freeze({
   // The fix-round cap per task (`resume --reason fix`, also the one receive starts after a red done command). At the cap
   // the task becomes an owner question instead of another round. The task field `max_fix_rounds` overrides it.
   maxFixRounds: 3,
+  // Shared config blocks parallel tracks break each other on (routes, registries, DI, i18n, feature flags), with the
+  // protectedPaths rules. No task owns one; an agreed change goes in the task field hotspot_patch (one task at a time),
+  // otherwise the track writes a wiring spec and the orchestrator makes the change. The merge guard stops an unagreed
+  // change (lib/hotspots.js). Empty = off.
+  hotspots: [],
   // Optional migration flow (e.g. database migrations that must be numbered and pushed after merge).
   // With folder = null everything to do with migrations is turned off (no number blocks, no push in merge).
   migrations: {

@@ -116,6 +116,11 @@ function placementFacts(k, idButton) {
   const formula = sd
     ? `${counts(sd.score)} = value ${sd.value} / ${sd.minutes} min × 100 × unlocks (1 + 0.25 × ${sd.unlocks}) × ` +
       `age (1 + 0.02 × ${counts(Math.min(sd.days, 14))} d)` +
+      // Ownership contention (logic/ranking.js scoreParts): other open tasks own the same files.
+      (sd.contended && sd.hot_factor !== 1
+        ? ` × contended files ${counts(sd.hot_factor)} (${sd.contended} other task(s) own the same files; ` +
+          `${sd.hot_factor > 1 ? 'short, frees them sooner' : 'long, holds them'})`
+        : '') +
       (sd.bonus
         ? ` ${sd.bonus > 0 ? '+' : '−'} ${Math.abs(sd.bonus)} (the task's bonus)`
         : '') +

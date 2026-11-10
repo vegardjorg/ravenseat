@@ -23,7 +23,7 @@ import { cloudPulseLines } from './cloud.mjs';
 import { deliveryWarning, findSilent, findWithoutAgent } from './tracks.mjs';
 import { findingsLineNow } from './finding.mjs';
 import { baseHealthLine } from './baseHealth.mjs';
-import { conflictLinesNow } from './conflicts.mjs';
+import { conflictLinesNow, ownershipLinesNow } from './conflicts.mjs';
 
 const UL = require('./lib/usageLimit.js');
 
@@ -294,6 +294,8 @@ export function cmdOrchestrator() {
     // Predicted merge conflicts between the track tips and the base (lib/conflictPredict.js): cached per sha pair, so
     // a round where no tip moved costs one for-each-ref and no merge-tree.
     for (const l of conflictLinesNow()) console.log(l);
+    // A track that changes files another active task owns (lib/mergeGuard.js): the merge would stop on it, so say it early.
+    for (const l of ownershipLinesNow()) console.log(l);
     // The pulse runs every loop round, so low parallelism is checked now and then even without fill and receive.
     parallelWarning();
   } else if (under === 'stop') {

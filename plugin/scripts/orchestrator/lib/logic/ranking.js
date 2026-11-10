@@ -12,7 +12,7 @@
 
 const { cfg, estimate, utcText, isExternalRow, openTask } = require('./base.js');
 const { projectFor, projectPaused } = require('./projects.js');
-const { blockers, lockUpCount } = require('./conflicts.js');
+const { blockers, lockUpCount, contenders } = require('./conflicts.js');
 
 /**
  * The blockers, with pause first when the project is paused (for `show` and `state`; `start` checks pause itself).
@@ -445,10 +445,12 @@ function score(o, tasks, now = Date.now(), register) {
 }
 /**
  * The parts the priority (score) is computed from, for "Placement" in the detail panel on the board: value, the minutes
- * used (at least 5), unlocks N (+25 % each), age in days (+2 % per day, at most 14), the task's and the project's
- * bonus, and the result. score() is just `.score` from here, so the explanation can never drift from the number.
+ * used (at least 5), unlocks N (+25 % each), age in days (+2 % per day, at most 14), ownership contention (contenders,
+ * logic/conflicts.js: ±10 % each by length), the task's and the project's bonus, and the result. score() is just
+ * `.score` from here, so the explanation can never drift from the number.
  * @returns {{ value: number, minutes: number, unlocks: number, lock_factor: number, days: number,
- *   age_factor: number, reason: number, bonus: number, project_bonus: number, score: number }}
+ *   age_factor: number, contended: number, hot_factor: number, reason: number, bonus: number,
+ *   project_bonus: number, score: number }}
  */
 function scoreParts(o, tasks, now = Date.now(), register) {
   const value = Number(o.value ?? 5);
@@ -457,7 +459,13 @@ function scoreParts(o, tasks, now = Date.now(), register) {
   const days = o.added_at ? Math.max(0, (now - Date.parse(o.added_at)) / 86_400_000) : 0;
   const lockFactor = 1 + 0.25 * lockState;
   const ageFactor = 1 + Math.min(days, 14) * 0.02;
-  const s = (value / time) * 100 * lockFactor * ageFactor;
+  // Ownership contention: other open tasks own an overlapping file, so only one of them runs at a time. The one that
+  // starts holds the file until it is done, so a short task (60 min or less) gets +10 % per contender (it frees the
+  // file sooner) and a long one (above 120 min) -10 % per contender. At most five count; the factor stays in 0.5..1.5.
+  const contended = contenders(o, tasks).length;
+  const c = Math.min(contended, 5);
+  const hotFactor = c === 0 || (time > 60 && time <= 120) ? 1 : time <= 60 ? 1 + 0.1 * c : 1 - 0.1 * c;
+  const s = (value / time) * 100 * lockFactor * ageFactor * hotFactor;
   const projectBonus = register
     ? Number(register[projectFor(o, register)]?.priority_bonus) || 0
     : 0;
@@ -469,6 +477,8 @@ function scoreParts(o, tasks, now = Date.now(), register) {
     lock_factor: lockFactor,
     days: Math.round(days * 10) / 10,
     age_factor: Math.round(ageFactor * 1000) / 1000,
+    contended,
+    hot_factor: Math.round(hotFactor * 1000) / 1000,
     reason: Math.round(s * 100) / 100,
     bonus,
     project_bonus: projectBonus,

@@ -161,12 +161,15 @@ function writeWithNewAttempt(file, text) {
   // The agent files of the custom helpers (ravenseat helpers add) are protected like .claude/, also when protectedPaths was
   // changed: a track cannot rewrite an approved helper without owning its file.
   let helperPaths = [];
+  // Every task, for the ownership check: a file another active task owns stops the merge (lib/mergeGuard.js foreignOwners).
+  let allTasks = [];
   try {
     const queue = JSON.parse(fs.readFileSync(path.join(dataFolder(), 'queue.json'), 'utf8'));
+    const tasks = queue.tasks || [];
+    allTasks = tasks;
+    task = tasks.find((o) => o.branch === branch) ?? (id ? tasks.find((o) => o.id === id) : null) ?? null;
     const HELP = require('./lib/queueHelpers.js');
     helperPaths = HELP.customPaths(HELP.helperSetup(K, queue));
-    const tasks = queue.tasks || [];
-    task = tasks.find((o) => o.branch === branch) ?? (id ? tasks.find((o) => o.id === id) : null) ?? null;
   } catch {
     // no queue here (a wave track or a test): empty ownership, so every protected path stops
   }
@@ -231,6 +234,72 @@ function writeWithNewAttempt(file, text) {
           branch,
           paths: guard.violations.map((b) => b.path),
         })}\n`,
+      );
+    } catch (e) {
+      console.error(`  (could not log guard-overridden: ${e.message})`);
+    }
+  }
+  // A file another active task owns (running, in review or picked): that task is building on it now, so the merge stops
+  // here instead of going in with a warning. Same exit code and override as the protected paths.
+  const foreign = G.foreignOwners(
+    G.readDiff(diff.stdout).flatMap((e) => (e.status === 'C' ? e.paths.slice(1) : e.paths)),
+    task,
+    allTasks,
+  );
+  if (foreign.length > 0) {
+    const list = foreign.map((f) => `  ${f.path}  (owned by ${f.owner})`).join('\n');
+    if (!ALLOW_GUARD) {
+      console.error(
+        `\nOWNERSHIP: ${branch} changes file(s) that another active task owns:\n${list}\n\n` +
+          'That task is building on them now, so this merge would change them under it. Read the diff\n' +
+          `(git diff HEAD...${branch} -- <path>). Not intended: a fix round that leaves the file alone. Intended: merge\n` +
+          'the owner task first, or move the path to this task (ravenseat edit <id> --json ... --by owner on both), or merge\n' +
+          'with --allow-guard (logged as "guard-overridden"). Nothing was merged.',
+      );
+      process.exit(4);
+    }
+    console.log(`OWNERSHIP OVERRIDDEN (--allow-guard) for ${branch}:\n${list}`);
+    try {
+      fs.appendFileSync(
+        timeLog(),
+        `${JSON.stringify({
+          time: new Date().toISOString(),
+          wave: 'queue',
+          track: taskName ?? branch,
+          event: 'guard-overridden',
+          branch,
+          foreign,
+        })}\n`,
+      );
+    } catch (e) {
+      console.error(`  (could not log guard-overridden: ${e.message})`);
+    }
+  }
+  // A hotspot (shared config: routes, registries, i18n, feature flags; `hotspots` in queue.config.json, lib/hotspots.js)
+  // changed without the task's hotspot_patch: the change was not agreed, so the merge stops. Same exit code and override.
+  const H = require('./lib/hotspots.js');
+  const hot = H.unagreed(
+    G.readDiff(diff.stdout).flatMap((e) => (e.status === 'C' ? e.paths.slice(1) : e.paths)),
+    task,
+    H.hotspotsOf(K),
+  );
+  if (hot.length > 0) {
+    const list = hot.map((p) => `  ${p}`).join('\n');
+    if (!ALLOW_GUARD) {
+      console.error(
+        `\nHOTSPOT: ${branch} changes shared config that was not agreed (hotspots in queue.config.json):\n${list}\n\n` +
+          "Parallel tracks break each other on these files. The track's report should say what to add where (a wiring\n" +
+          'spec); the orchestrator makes that change after the merge. Not intended: a fix round that leaves the file\n' +
+          "alone. Agreed for this task: add the path to its hotspot_patch (ravenseat edit <id> --json ... --by owner; one\n" +
+          'task at a time), or merge with --allow-guard (logged as "guard-overridden"). Nothing was merged.',
+      );
+      process.exit(4);
+    }
+    console.log(`HOTSPOT OVERRIDDEN (--allow-guard) for ${branch}:\n${list}`);
+    try {
+      fs.appendFileSync(
+        timeLog(),
+        `${JSON.stringify({ time: new Date().toISOString(), wave: task ? 'queue' : null, track: taskName ?? branch, event: 'guard-overridden', branch, hotspots: hot })}\n`,
       );
     } catch (e) {
       console.error(`  (could not log guard-overridden: ${e.message})`);

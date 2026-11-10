@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { assessGuard, globMatch, isProtected, migrCovered, ownerNotes, readDiff, taskIdFromBranch } from '../mergeGuard';
+import { assessGuard, foreignOwners, ownershipPulseLines, globMatch, isProtected, migrCovered, ownerNotes, readDiff, taskIdFromBranch } from '../mergeGuard';
 import { mergePlan } from '../logic/merge';
 import { STANDARD } from '../queueConfig';
 
@@ -291,6 +291,39 @@ describe('helpers', () => {
   });
 });
 
+describe("a file another active task owns (ownership 1, plans/ROADMAP.md)", () => {
+  const me = { id: 'A', status: 'review', owned_files: ['a.txt'], shared_patch: ['shared/reg.ts'] };
+  const tasks = [
+    me,
+    { id: 'B', status: 'running', owned_files: ['b.txt', 'lib/b/'] },
+    { id: 'C', status: 'done', owned_files: ['c.txt'] },
+    { id: 'D', status: 'waiting', owned_files: ['d.txt'] },
+    { id: 'E', status: 'picked', owned_files: ['e.txt'], shared_patch: ['shared/reg.ts'] },
+  ];
+  it('names the file and the owner when the owner is running, in review or picked', () => {
+    expect(foreignOwners(['a.txt', 'b.txt', 'lib/b/x.ts', 'c.txt', 'd.txt', 'e.txt', 'z.txt'], me, tasks)).toEqual([
+      { path: 'b.txt', owner: 'B' },
+      { path: 'lib/b/x.ts', owner: 'B' },
+      { path: 'e.txt', owner: 'E' },
+    ]);
+  });
+  it("another task's shared_patch is no ownership, and a path the task owns itself is never foreign", () => {
+    expect(foreignOwners(['shared/reg.ts', 'a.txt'], me, tasks)).toEqual([]);
+    expect(foreignOwners(['b.txt'], { ...me, owned_files: ['b.txt'] }, tasks)).toEqual([]);
+  });
+  it('a wave track (no task) and an empty queue give nothing; backslashes are normalised', () => {
+    expect(foreignOwners(['b.txt'], null, tasks)).toEqual([]);
+    expect(foreignOwners(['lib\\b\\y.ts'], me, tasks)).toEqual([{ path: 'lib/b/y.ts', owner: 'B' }]);
+    expect(foreignOwners(['b.txt'], me, [])).toEqual([]);
+  });
+  it('the pulse gets one line per track that changes another task\'s files, and nothing for an unknown diff', () => {
+    const files: Record<string, string[] | null> = { A: ['a.txt', 'b.txt', 'e.txt'], B: ['b.txt'], E: null };
+    const lines = ownershipPulseLines([{ id: 'A' }, { id: 'B' }, { id: 'E' }], tasks, (t: { id: string }) => files[t.id]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^OWNERSHIP: A changes 2 file\(s\) owned by B, E: b\.txt, e\.txt\. The merge stops on them/);
+  });
+});
+
 describe('merge-track.mjs in a temporary repo', () => {
   const SCRIPT = path.resolve(__dirname, '..', '..', 'merge-track.mjs');
   const setup = () => {
@@ -353,6 +386,35 @@ describe('merge-track.mjs in a temporary repo', () => {
       expect(g('rev-parse', 'HEAD')).not.toBe(head);
       const row = JSON.parse(fs.readFileSync(path.join(data, 'times.jsonl'), 'utf8').trim());
       expect(row).toMatchObject({ track: 'A', event: 'guard-overridden', paths: ['.claude/settings.json'] });
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it('a file another active task owns stops the merge with exit 4 and names the owner; --allow-guard merges and logs it', () => {
+    const { repo, g, data, run } = setup();
+    try {
+      fs.writeFileSync(
+        path.join(data, 'queue.json'),
+        JSON.stringify({
+          tasks: [
+            { id: 'A', status: 'review', branch: 'queue/A', owned_files: ['.claude/'], shared_patch: [] },
+            { id: 'B', status: 'running', branch: 'queue/B', owned_files: ['a.txt'] },
+          ],
+        }),
+      );
+      const head = g('rev-parse', 'HEAD');
+      const stop = run();
+      expect(stop.status).toBe(4);
+      expect(stop.stderr).toMatch(/OWNERSHIP: queue\/A changes file\(s\) that another active task owns/);
+      expect(stop.stderr).toMatch(/a\.txt\s+\(owned by B\)/);
+      expect(g('rev-parse', 'HEAD')).toBe(head);
+
+      const ok = run('--allow-guard');
+      expect(ok.status, ok.stderr).toBe(0);
+      expect(ok.stdout).toMatch(/OWNERSHIP OVERRIDDEN \(--allow-guard\) for queue\/A/);
+      const row = JSON.parse(fs.readFileSync(path.join(data, 'times.jsonl'), 'utf8').trim());
+      expect(row).toMatchObject({ track: 'A', event: 'guard-overridden', foreign: [{ path: 'a.txt', owner: 'B' }] });
     } finally {
       fs.rmSync(repo, { recursive: true, force: true });
     }

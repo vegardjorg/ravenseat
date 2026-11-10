@@ -373,8 +373,47 @@
     };
   }
 
+  /** Auto mode refused the track's tool calls, or it fails the same tool again and again (lib/toolTrouble.js). */
+  function toolTroubleItem(h) {
+    const options = [{ label: 'Seen', recommended: true, action: { type: 'keep', id: h.id } }];
+    const { denied, failing } = h.tool_trouble;
+    const calls = (n) => (n === 1 ? 'call' : 'calls');
+    const lines = [];
+    if (denied) {
+      const at = clockText(denied.last);
+      lines.push(
+        `Auto mode refused ${denied.count} ${denied.tool} ${calls(denied.count)}${at ? ` (last ${at})` : ''}. The track may work around ` +
+          'it or stand still; look at what it tried in its session, and allow it or change the task.',
+      );
+    }
+    if (failing) {
+      const at = clockText(failing.last);
+      lines.push(
+        `${failing.count} ${failing.tool} ${calls(failing.count)} failed in the last half hour${at ? ` (last ${at})` : ''}. The track ` +
+          'may be looping on the same error; look at its session, and stop it or give it what it lacks.',
+      );
+    }
+    return {
+      key: `unstick:${h.id}`,
+      verb: 'unstick',
+      heading: 'TOOL TROUBLE',
+      kind: 'stuck-tools',
+      kindName: 'Refused or failing tools',
+      id: h.id,
+      title: h.title || h.id,
+      text: null,
+      context: lines,
+      recommendation: options[0].label,
+      impact: taskImpact(0, h),
+      options,
+      free: null,
+      open: h.id,
+    };
+  }
+
   function stuckItem(h) {
     if (h.awaiting_approval) return approvalItem(h);
+    if (h.tool_trouble) return toolTroubleItem(h);
     if (h.stop) return stopItem(h);
     if (h.no_agent_round) return noAgentRoundItem(h);
     if (h.without_agent) return noAgentItem(h);

@@ -137,9 +137,12 @@ variables ([orchestration](orchestration.md)).
 
 **After a plugin update.** Run `ravenseat setup --settings` (it refreshes the status line path) and `ravenseat doctor`. The docs and
 the mission template in `docs/queue/` are your project's own copies, so an update leaves them as they are, and agents
-keep getting the old instructions. Doctor and setup name the ones that differ; `ravenseat setup --overwrite --dry` lists what
-would be replaced, and `ravenseat setup --overwrite` replaces them (your own edits in them are lost, `queue.config.json` is
-kept). Commit the result.
+keep getting the old instructions. Doctor and setup name the ones that differ. `ravenseat setup --update` merges them three
+ways: a copy you never edited takes the plugin's text, your own edits stay, and edits on both sides in different places are
+merged. An edit of yours and the plugin's in the same place is a conflict: the copy stays as it is, and the merge with markers
+is saved in `scripts/.queue/setup-merge/` for you. `--update --dry` shows it first. A copy from before setup recorded what it
+wrote is left alone; `ravenseat setup --overwrite` replaces it (your edits in it are lost, `queue.config.json` is kept).
+Commit the result.
 
 **Cleaning up.** `ravenseat merge` removes the worktree and the branch of what it merges. For the rest, `ravenseat doctor` lists what is
 left: `ravenseat cleanup-worktree --all` lists the worktrees of merged work, and `--execute` removes them. `ravenseat set <id> cancelled`

@@ -37,7 +37,7 @@ const EXPORTS = [
   'deliverySignal', 'diffLines', 'draggedWith', 'dropFocusEndQuestions', 'editMany', 'environmentCheck', 'equalValue', 'errorExcerpt',
   'estimate', 'estimateCost', 'estimateWall', 'evaluateFocusStep', 'evidenceCommand', 'evidenceRequired',
   'evidenceText', 'evidenceWarning', 'executeMerge', 'expectCheck', 'externalAccept', 'externalAdd',
-  'externalCollisions', 'externalDone', 'externalId', 'fileOverlap', 'fileRootMatch', 'fillExcerpt',
+  'contenders', 'dbKey', 'externalCollisions', 'externalDone', 'externalId', 'fileOverlap', 'fileRootMatch', 'fillExcerpt',
   'findTrackReport', 'firstUserMessage', 'focusApplies', 'focusCleanLines', 'focusContinues', 'focusEnd',
   'focusEndLine', 'focusEndQuestionId', 'focusEndText', 'focusRanEmpty', 'focusSpace', 'focusStatus', 'focusText',
   'focusWithoutDone', 'groups', 'hasLabel', 'hasMigr', 'hasOrchestratorTrailer', 'heldBackLines', 'highestBlockNr', 'inBatchQueue',

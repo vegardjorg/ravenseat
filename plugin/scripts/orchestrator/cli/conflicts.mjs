@@ -12,7 +12,7 @@
 
 import path from 'node:path';
 
-import { a, BASE, CLI, FOLDER, GIT_ROOT, PREFIX, read, require, val } from './context.mjs';
+import { a, BASE, CLI, CONFIG, FOLDER, GIT_ROOT, PREFIX, read, require, val } from './context.mjs';
 
 const CP = require('./lib/conflictPredict.js');
 
@@ -43,6 +43,65 @@ export function predictionNow({ budgetMs, maxChecks } = {}) {
     return r;
   } catch (e) {
     return { error: `WARNING: conflict prediction failed (${e?.message ?? e}).` };
+  }
+}
+
+const OWNERSHIP_CACHE = path.join(FOLDER, 'ownership-files.json');
+
+/**
+ * The pulse lines for tracks that change files another active task owns (lib/mergeGuard.js). The changed files per tip
+ * are cached by sha in <dataFolder>/ownership-files.json, so a round where no tip moved costs one for-each-ref.
+ * Never throws.
+ */
+export function ownershipLinesNow() {
+  try {
+    const fs = require('node:fs');
+    const G = require('./lib/mergeGuard.js');
+    const run = CP.makeRunner(GIT_ROOT);
+    const refs = CP.readRefs(run);
+    if (!refs.get(BASE)) return [];
+    const tasks = read().tasks ?? [];
+    const tips = CP.tipsFor(tasks, refs, { prefix: PREFIX });
+    if (tips.length < 1) return [];
+    let cache = {};
+    try {
+      cache = JSON.parse(fs.readFileSync(OWNERSHIP_CACHE, 'utf8')) ?? {};
+    } catch {
+      cache = {};
+    }
+    const next = {};
+    const filesOf = (tip) => {
+      const key = `${refs.get(BASE)}..${tip.sha}`;
+      if (Array.isArray(next[key])) return next[key];
+      if (Array.isArray(cache[key])) return (next[key] = cache[key]);
+      const r = run(['diff', '--name-only', '--no-renames', `${BASE}...${tip.sha}`]);
+      if (r.code !== 0) return null;
+      return (next[key] = String(r.stdout ?? '').split(/\r?\n/).filter(Boolean));
+    };
+    const lines = G.ownershipPulseLines(tips, tasks, filesOf);
+    // Shared config (hotspots, lib/hotspots.js) a track changes without hotspot_patch: the merge stops on it too.
+    const H = require('./lib/hotspots.js');
+    const hot = H.hotspotsOf(CONFIG);
+    if (hot.length) {
+      const byId = new Map(tasks.map((o) => [o.id, o]));
+      for (const tip of tips) {
+        const files = filesOf(tip);
+        const bad = files ? H.unagreed(files, byId.get(tip.id) ?? null, hot) : [];
+        if (bad.length)
+          lines.push(
+            `HOTSPOT: ${tip.id} changes shared config it has not agreed: ${bad.slice(0, 5).join(', ')}${bad.length > 5 ? ', …' : ''}. ` +
+              'The merge stops on it; tell the track to leave it and write a wiring spec, or agree it in hotspot_patch.',
+          );
+      }
+    }
+    try {
+      fs.writeFileSync(OWNERSHIP_CACHE, JSON.stringify(next));
+    } catch {
+      /* a cache: a lost write only costs time */
+    }
+    return lines;
+  } catch (e) {
+    return [`WARNING: ownership check failed (${e?.message ?? e}).`];
   }
 }
 
