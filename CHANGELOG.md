@@ -3,6 +3,24 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## 0.8.31 (2026-11-10)
+
+**A track's own choices are now in front of you before the merge, a track that waits on a permission prompt gets its own card, queue.json keeps copies at a few ages, and `ravenseat explain <ID>` says why one task stands where it stands.**
+
+### Added
+- `receive` prints the Assumptions section of a track's report next to its owner questions, and the review package carries it with a note to the reviewer: a choice the owner should have made (what the feature does for its users, a public API or file format, deleting data, a security or legal tradeoff) is a MEDIUM finding. In a round with real agents, a track made a public API choice itself and only wrote it there.
+- A **NEEDS APPROVAL** card in "Waiting on you" when a track's agent stands still on a permission prompt, with the tool's name and since when. A Notification hook (matcher `permission_prompt`) finds the waiting agent from the session's subagent transcripts and keeps only its id, the tool and the time in `<dataFolder>/approval-waits.json`, never the prompt text. The card goes once the agent moves on. A plugin install gets the hook with the update; a project set up from settings.queue.json gets it with `ravenseat setup --settings`.
+- Rolling copies of queue.json in `<dataFolder>/snapshots/` (default 1h, 5h, 1d, 2d and 7d). A copy moves up a tier once it has reached its own tier's age, so no two tiers hold the same copy, and a broken queue.json never pushes out a good one. The cost is one file check per tier on each write. `ravenseat doctor` names the copies when queue.json is broken. `stateSnapshots.tiers` in queue.config.json sets 2 to 8 ages, and `enabled: false` turns it off.
+- `ravenseat explain <ID> [--json]`: why one task stands where it stands, from the rules the queue starts by. For a waiting task: what blocks it, a stop on the whole queue, the full limits and its place among the startable ones. For a running task: when it started, the round, an open block and the last sign of life with its source, SILENT over `silentMin`.
+
+### Fixed
+- The gates run in a track worktree outside the project folder (a linked worktree of the same repository), instead of refusing it.
+- `prepare-track --continue` after `resume` counts only the track's own commits, so a freed worktree is READY again, and a detached HEAD with a stray commit is still refused.
+- `fill --ids A,B` fills both tasks; a comma-separated list was read as one unknown id.
+
+### Docs
+- The FAQ and the red team page make narrower claims after a review, the FAQ answers how to use Ravenseat in an existing project, and the red team result names the check it skips.
+
 ## 0.8.30 (2026-11-08)
 
 **Every row on the red team map is now tested, not only named: a cold restart of the orchestrator, two agents in the same file, files outside a task, missing tools and runaway cost run as real flows. The round found four more problems, and all four are fixed. A project without git, or without a first commit, gets a clear stop and a card with the text to give Claude.**
