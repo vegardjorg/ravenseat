@@ -32,6 +32,14 @@ const COLUMNS = [
   { key: 'review', name: 'Review' },
   { key: 'built', name: 'Built' },
 ];
+// The Blocked column (board.blockedColumn, off by default): the tasks with an open blocker that needs action. The server
+// moves them there (lib/queueBoard.js takeBlocked), so this is only where it stands: right after In queue.
+const BLOCKED_COLUMN = { key: 'blocked', name: 'Blocked' };
+/** The columns drawn now: COLUMNS, plus Blocked after In queue when the switch is on and the state has the column. */
+function shownColumns() {
+  const on = t.data?.boardSwitches?.blockedColumn === true && Array.isArray(t.data?.columns?.blocked);
+  return on ? [COLUMNS[0], BLOCKED_COLUMN, ...COLUMNS.slice(1)] : COLUMNS;
+}
 
 // The columns where the cards can be bulk edited (status waiting or proposed, also in the batch queue).
 const MARKABLE_COLUMNS = new Set(['queue', 'proposed', 'batch']);

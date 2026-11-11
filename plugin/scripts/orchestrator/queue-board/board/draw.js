@@ -78,6 +78,9 @@ function columnContent(col, summary, proposed, batch) {
     const readyOnes = summary.filter((k) => k.ready);
     const blocked = summary.filter((k) => !k.ready);
     const title = el('h3', { class: 'section-title' });
+    // With the Blocked column on, what only waits here (depends_on, ownership, parking) is called Waiting, so the two
+    // are not both called Blocked.
+    const waitName = shownColumns().includes(BLOCKED_COLUMN) ? 'Waiting' : 'Blocked';
     searchBound(readyOnes, (match) => (title.textContent = `Ready now (${match.length})`));
     parts.push(title, emptyText(readyOnes, 'Nothing is ready now.'));
     if (readyOnes.length) parts.push(groupedList(readyOnes, 'queue', 'ready'));
@@ -86,7 +89,7 @@ function columnContent(col, summary, proposed, batch) {
         section(
           'blocked',
           blocked,
-          (n) => `Blocked (${n})`,
+          (n) => `${waitName} (${n})`,
           () => groupedList(blocked, 'queue', 'blocked'),
         ),
       );
@@ -320,7 +323,7 @@ function columnHeader(col, summary) {
   const header = el(
     'header',
     { class: 'col-header' },
-    el('h2', { text: COLUMNS.find((k) => k.key === col).name }),
+    el('h2', { text: shownColumns().find((k) => k.key === col).name }),
     counter,
     col === 'queue' ? cloudBundleLine() : null,
   );
@@ -433,8 +436,11 @@ function draw() {
   const k = t.data.columns;
   // The filters decide what is built; the search hides afterward (useSearch). The graph uses visible() with the search itself.
   const filtered = {};
-  for (const col of ['queue', 'proposed', 'batch', 'inProgress', 'review', 'built'])
+  for (const col of ['queue', 'proposed', 'batch', 'blocked', 'inProgress', 'review', 'built'])
     filtered[col] = (k[col] ?? []).filter((x) => visibleWithoutSearch(x, col));
+  // Four or five columns (the Blocked column); the grid in board.css reads the count.
+  const columns = shownColumns();
+  main.style.setProperty('--columns', String(columns.length));
   // The graph has no card nodes: the buffer is left untouched there, so the cards are ready when Flat or lanes show again.
   const withSummary = t.view !== 'graph';
   if (withSummary) summaryBuffer.start();
@@ -456,7 +462,7 @@ function draw() {
       drawOnNew: draw,
     });
   } else if (t.view === 'flat') {
-    for (const { key } of COLUMNS) {
+    for (const { key, name } of columns) {
       const counted =
         key === 'built' && !t.showMore
           ? filtered.built.filter((x) => x.recent)
@@ -467,7 +473,7 @@ function draw() {
           {
             class: 'column',
             'data-col': key,
-            'aria-label': COLUMNS.find((x) => x.key === key).name,
+            'aria-label': name,
           },
           columnHeader(key, counted),
           el(
@@ -488,7 +494,7 @@ function draw() {
       el(
         'div',
         { class: 'lane-headers' },
-        COLUMNS.map(({ key }) => columnHeader(key, null)),
+        columns.map(({ key }) => columnHeader(key, null)),
       ),
     );
     const ol = el('ol', { class: 'laneList', 'aria-label': 'Project lanes' });
@@ -508,12 +514,13 @@ function draw() {
     for (const { p, o } of lanes) {
       const per = {};
       // The batch queue is also shown in lanes (in the queue cell, as in flat view).
-      for (const col of ['queue', 'batch', 'inProgress', 'review', 'built'])
+      for (const col of ['queue', 'batch', 'blocked', 'inProgress', 'review', 'built'])
         per[col] = filtered[col].filter((x) => x.project === p.pid);
       const visibleBuilt = t.showMore ? per.built : per.built.filter((x) => x.recent);
       const count =
         per.queue.length +
         per.batch.length +
+        per.blocked.length +
         per.inProgress.length +
         per.review.length +
         visibleBuilt.length;
@@ -532,7 +539,7 @@ function draw() {
           ),
         );
       }
-      ol.append(laneEl(p, per));
+      ol.append(laneEl(p, per, columns));
     }
     // The empty text is always there; afterSearch() shows it when no lane is visible (not even after the search).
     ol.append(el('li', { class: 'empty lane-empty', text: 'No cards with these filters.' }));

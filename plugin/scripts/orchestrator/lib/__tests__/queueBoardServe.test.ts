@@ -174,3 +174,66 @@ describe('the board server: an owner question answered with a choice button', ()
     expect(queue.resolutions['PICK-1']).toMatchObject({ answer: 'Vendor B (note: from March)', by: 'owner' });
   }, 60_000);
 });
+
+describe('the board server: the Blocked column switch (board.blockedColumn)', () => {
+  const post = async (body: object) => {
+    const r = await fetch(`${base}/api/action`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-queue-key': key },
+      body: JSON.stringify(body),
+    });
+    return { status: r.status, body: (await r.json()) as { ok: boolean; message?: string } };
+  };
+  const getState = async () => {
+    const r = await fetch(`${base}/api/state`, { headers: { 'x-queue-key': key } });
+    return ((await r.json()) as { data: any }).data;
+  };
+  const queueFile = () => path.join(root, 'q', 'queue.json');
+
+  it('refuses an unknown switch name and a non-boolean, and writes nothing', async () => {
+    for (const body of [
+      { type: 'board-switch', name: 'columns', on: true },
+      { type: 'board-switch', name: 'blockedColumn', on: 'yes' },
+      { type: 'board-switch', on: true },
+    ]) {
+      const r = await post(body);
+      expect(r.status, JSON.stringify(body)).toBe(400);
+      expect(r.body.message).toBe('invalid board switch');
+    }
+    expect(JSON.parse(fs.readFileSync(queueFile(), 'utf8')).board?.blockedColumn).toBeUndefined();
+  }, 60_000);
+
+  it('the state has the Blocked column only when the switch is on, with the stuck task taken out of In queue', async () => {
+    // Two tasks: one stuck on an owner question, one that only waits on it (depends_on).
+    const q = JSON.parse(fs.readFileSync(queueFile(), 'utf8'));
+    const from = new Date(Date.now() - 90 * 60_000).toISOString();
+    const base = { class: 'K', value: 5, content_min: 30, domain: 'ui', owned_files: [], waiting_on: [], added_at: from };
+    q.tasks = [
+      ...(q.tasks ?? []),
+      { ...base, id: 'BL-1', title: 'Stuck', status: 'waiting', depends_on: [], blocks: [{ code: 'owner-question', from }] },
+      { ...base, id: 'BL-2', title: 'Waits', status: 'waiting', depends_on: ['BL-1'] },
+    ];
+    fs.writeFileSync(queueFile(), JSON.stringify(q, null, 2));
+
+    const off = await getState();
+    expect(off.boardSwitches.blockedColumn).toBe(false);
+    expect(off.columns.blocked).toBeUndefined();
+    expect(off.columns.queue.map((k: any) => k.id)).toEqual(expect.arrayContaining(['BL-1', 'BL-2']));
+
+    const ok = await post({ type: 'board-switch', name: 'blockedColumn', on: true });
+    expect(ok.status, ok.body.message).toBe(200);
+    expect(JSON.parse(fs.readFileSync(queueFile(), 'utf8')).board.blockedColumn).toBe(true);
+
+    const on = await getState();
+    expect(on.boardSwitches.blockedColumn).toBe(true);
+    expect(on.columns.blocked.map((k: any) => [k.id, k.block.code, k.block.age, k.home])).toEqual([
+      ['BL-1', 'owner-question', '1 h 30 min', 'queue'],
+    ]);
+    const queueIds = on.columns.queue.map((k: any) => k.id);
+    expect(queueIds).toContain('BL-2');
+    expect(queueIds).not.toContain('BL-1');
+
+    expect((await post({ type: 'board-switch', name: 'blockedColumn', on: false })).status).toBe(200);
+    expect((await getState()).columns.blocked).toBeUndefined();
+  }, 60_000);
+});

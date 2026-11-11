@@ -23,8 +23,9 @@
   /**
    * The board columns whose tasks are part of the graph (proposed is not approved yet and stays outside).
    * The batch queue is included, with its own state ("batch") and its own badge, so the owner sees what in a chain is waiting on packing.
+   * The Blocked column (board.blockedColumn) is included too: its tasks are drawn as blocked (dashed).
    */
-  const COLUMNS = ['queue', 'batch', 'inProgress', 'review', 'built'];
+  const COLUMNS = ['queue', 'batch', 'blocked', 'inProgress', 'review', 'built'];
   /** The id of a question node: "?" + the question's id (a task id can never start with "?"). */
   const SP = '?';
 
@@ -62,6 +63,7 @@
   function stateFor(k, col) {
     if (k.status === 'done') return k.qa_status === 'waiting' ? 'qa' : 'done';
     if (col === 'batch') return 'batch';
+    if (col === 'blocked') return 'blocked';
     if (col === 'queue') return k.ready ? 'ready' : 'blocked';
     return 'active'; // running, picked, review, outside queue
   }

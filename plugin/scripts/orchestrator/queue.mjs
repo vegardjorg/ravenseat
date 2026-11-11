@@ -96,9 +96,11 @@
 //                                                                  command (--by owner, the same commands the board runs);
 //                                                                  --today: what was decided today. The /ravenseat:decide skill
 //                                                                  walks it; lib/queueDecisions.js, cli/decide.mjs)
-//   node scripts/orchestrator/queue.mjs board-setting [cloud on|off]   (the board's own switches: without arguments the values;
-//                                                                  cloud on|off shows or hides the Cloud tab, queue.json
-//                                                                  board.showCloud, default hidden; cli/board.mjs)
+//   node scripts/orchestrator/queue.mjs board-setting [cloud on|off | blocked on|off]   (the board's own switches: without
+//                                                                  arguments both values; cloud on|off shows or hides the
+//                                                                  Cloud tab, queue.json board.showCloud; blocked on|off
+//                                                                  shows or hides the Blocked column, queue.json
+//                                                                  board.blockedColumn, default hidden; cli/board.mjs)
 //   node scripts/orchestrator/queue.mjs wait [--debounce <s>] [--timeout <h>] [--since <log-nr>] [--check-min <n>]   (blocks until the owner
 //                                                                  acts: resolve, approve, qa ok/fail, add, or an edit by owner/
 //                                                                  theBoard after the start point; then waits --debounce (30 s)

@@ -182,11 +182,11 @@ function openHelp() {
 }
 // The help opens from the gear (the button at the top of the settings), no longer from "?" at the top.
 
-function laneEl(p, per) {
+function laneEl(p, per, columns = COLUMNS) {
   // The numbers in the lane header and whether the lane is shown follow the search (searchBound at the bottom).
   const countsEl = el('span', { class: 'counts' });
   const visibleBuilt = t.showMore ? per.built : per.built.filter((x) => x.recent);
-  const allSummary = [...per.queue, ...per.batch, ...per.inProgress, ...per.review, ...visibleBuilt];
+  const allSummary = [...per.queue, ...per.batch, ...(per.blocked ?? []), ...per.inProgress, ...per.review, ...visibleBuilt];
   const header = el(
     'header',
     {
@@ -216,11 +216,11 @@ function laneEl(p, per) {
   const row = el(
     'div',
     { class: 'lane-row' },
-    ['queue', 'inProgress', 'review', 'built'].map((col) =>
+    columns.map(({ key: col }) =>
       el(
         'div',
         { class: 'lane-cell', 'data-col': col },
-        columnContent(col, per[col], null, col === 'queue' ? per.batch : null),
+        columnContent(col, per[col] ?? [], null, col === 'queue' ? per.batch : null),
       ),
     ),
   );
@@ -236,6 +236,7 @@ function laneEl(p, per) {
     countsEl.textContent = [
       n(per.queue) ? `${n(per.queue)} in queue` : null,
       n(per.batch) ? `${n(per.batch)} in batch queue` : null,
+      n(per.blocked ?? []) ? `${n(per.blocked)} blocked` : null,
       n(per.inProgress) ? `${n(per.inProgress)} in progress` : null,
       n(per.review) ? `${n(per.review)} in review` : null,
     ]
@@ -310,9 +311,9 @@ function drawFilterMenu() {
   const focus = filterMenu.contains(document.activeElement)
     ? document.activeElement.dataset.focus
     : null;
-  // Open cards per project (In queue, In progress, Review).
+  // Open cards per project (In queue, Blocked, In progress, Review).
   const opened = new Map();
-  for (const col of ['queue', 'inProgress', 'review'])
+  for (const col of ['queue', 'blocked', 'inProgress', 'review'])
     for (const k of t.data?.columns[col] ?? [])
       opened.set(k.project, (opened.get(k.project) ?? 0) + 1);
   const parts = FILTER_SECTIONS.map((s) => {

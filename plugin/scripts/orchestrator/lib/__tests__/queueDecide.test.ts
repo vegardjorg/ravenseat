@@ -120,9 +120,33 @@ describe('ravenseat decide', () => {
 describe('the board switches (the Cloud tab comes with the module)', () => {
   it('board.showCloud is true by default; queue.json board wins over the config', () => {
     expect(KK.STANDARD.board.showCloud).toBe(true);
-    expect(KK.boardSwitches({ board: { showCloud: true } }, null)).toEqual({ showCloud: true });
-    expect(KK.boardSwitches({ board: { showCloud: true } }, { board: { showCloud: false } })).toEqual({ showCloud: false });
-    expect(KK.boardSwitches({ board: { showCloud: 'yes' } }, { board: { showCloud: 1 } })).toEqual({ showCloud: true }); // not a boolean: the default
+    expect(KK.boardSwitches({ board: { showCloud: true } }, null)).toEqual({ showCloud: true, blockedColumn: false });
+    expect(KK.boardSwitches({ board: { showCloud: true } }, { board: { showCloud: false } })).toEqual({ showCloud: false, blockedColumn: false });
+    expect(KK.boardSwitches({ board: { showCloud: 'yes' } }, { board: { showCloud: 1 } })).toEqual({ showCloud: true, blockedColumn: false }); // not a boolean: the default
+  });
+
+  it('board.blockedColumn is off by default, follows the same rules, and is a known switch', () => {
+    expect(KK.STANDARD.board.blockedColumn).toBe(false);
+    expect(Object.keys(KK.BOARD_SWITCHES)).toEqual(['showCloud', 'blockedColumn']);
+    expect(KK.boardSwitches(KK.STANDARD, null).blockedColumn).toBe(false);
+    expect(KK.boardSwitches({ board: { blockedColumn: true } }, null).blockedColumn).toBe(true);
+    expect(KK.boardSwitches({ board: { blockedColumn: true } }, { board: { blockedColumn: false } }).blockedColumn).toBe(false);
+    expect(KK.boardSwitches({}, { board: { blockedColumn: 'yes' } }).blockedColumn).toBe(false); // not a boolean: the default
+  });
+
+  it('ravenseat board-setting blocked on|off writes queue.json board.blockedColumn; without arguments both switches show', () => {
+    const list = run('board-setting');
+    expect(list).toContain('Cloud tab: shown');
+    expect(list).toContain('Blocked column: hidden (board.blockedColumn)');
+    run('board-setting', 'blocked', 'on');
+    expect(queue().board).toEqual({ blockedColumn: true });
+    expect(run('board-setting')).toContain('Blocked column: shown');
+    run('board-setting', 'cloud', 'off');
+    expect(queue().board).toEqual({ blockedColumn: true, showCloud: false });
+    run('board-setting', 'blocked', 'off');
+    expect(queue().board.blockedColumn).toBe(false);
+    expect(() => run('board-setting', 'blocked', 'maybe')).toThrow();
+    expect(() => run('board-setting', 'columns', 'on')).toThrow();
   });
 
   it('ravenseat board-setting cloud on|off writes queue.json board.showCloud', () => {

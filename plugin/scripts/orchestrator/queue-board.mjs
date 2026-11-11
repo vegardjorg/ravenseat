@@ -43,6 +43,8 @@
 //   - BOARD SWITCHES: state.boardSwitches (lib/queueConfig.js boardSwitches). The Cloud tab shows only with features.cloud
 //     AND board.showCloud (default false); POST /api/action { type: 'board-switch', name: 'showCloud', on } runs
 //     `queue.mjs board-setting cloud on|off`. A saved Cloud view still opens with the tab hidden (with a note).
+//     board.blockedColumn (default false; name 'blockedColumn', `board-setting blocked on|off`) gives state.columns.blocked:
+//     queueBoard.board moves the tasks with an open blocker that needs action there, out of their own column.
 //   - CLOUD: the cards in the queue and in cloud sessions get queueLogic.cloudSuitable (<remote>/<baseBranch> and local changes are read with git,
 //     at most every minute). "Copy cloud package" fetches /api/cloudPackage (= `queue.mjs cloud-package <id>`), and "Started in cloud",
 //     "Completed in cloud" and "Cancel cloud" go via `queue.mjs cloud start|done|cancel`.
@@ -683,6 +685,8 @@ function state() {
   }
   const data = {
     ...T.board(showQueue, {
+      // The Blocked column (board.blockedColumn): the server moves the stuck tasks there, so no card is in two columns.
+      blockedColumn: KK.boardSwitches(CONFIG, queue).blockedColumn,
       uncommitted: g.uncommitted,
       branches,
       branchPrefix: BRANCH_PREFIX,
@@ -2144,7 +2148,8 @@ async function write(filePath, b) {
         `batch pack ${ids.join(' ')} → ${newId}`,
       );
     }
-    // The gear's Board section: the same `ravenseat board-setting cloud on|off` Claude Code runs (queue.json board.showCloud).
+    // The gear's switches: the same `ravenseat board-setting cloud|blocked on|off` Claude Code runs (queue.json board.showCloud
+    // and board.blockedColumn).
     // The gear's Cloud section: the same commands Claude Code runs. cloud set checks the value.
     if (type === 'cloud-switch') {
       if (typeof b.on !== 'boolean') return no('invalid cloud switch');
@@ -2156,9 +2161,12 @@ async function write(filePath, b) {
       if (!key || !value) return no('invalid cloud setting');
       return run(['cloud', 'set', key, value], `cloud set ${key} ${value}`);
     }
+    // The board switches the gear can set, and the word `ravenseat board-setting` takes for each. Any other name is refused.
     if (type === 'board-switch') {
-      if (b.name !== 'showCloud' || typeof b.on !== 'boolean') return no('invalid board switch');
-      return run(['board-setting', 'cloud', b.on ? 'on' : 'off'], `board-setting cloud ${b.on ? 'on' : 'off'}`);
+      const word = { showCloud: 'cloud', blockedColumn: 'blocked' }[b.name];
+      if (typeof b.name !== 'string' || !Object.hasOwn(KK.BOARD_SWITCHES, b.name) || !word || typeof b.on !== 'boolean')
+        return no('invalid board switch');
+      return run(['board-setting', word, b.on ? 'on' : 'off'], `board-setting ${word} ${b.on ? 'on' : 'off'}`);
     }
     const id = idOrNull(b.id);
     if (!id) return no('invalid id');

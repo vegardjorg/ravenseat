@@ -79,7 +79,17 @@ The Queue workspace has these tabs:
   **Review** and **Built**. Each card shows class, estimate, value, blockers and owner questions. Click a card for
   its details and actions (to the top of the queue, pick, put on hold, add to the batch queue, edit, cancel task,
   and decline for a proposal). Drag cards to reorder them.
-- **Project lanes:** the same cards with one row per project; drag a lane to change the project's priority.
+- **Blocked** (off by default): with **Blocked as its own column** on in the gear (General), a column right after
+  **In queue** holds every open task with an open blocker that needs action: the blocker codes `owner-question`,
+  `merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `silent`, `no-agent`, `context`, `quota` and `other`
+  (the same `blocks` entries `ravenseat blockers` counts). The task leaves its own column, so it is never shown twice.
+  The card shows the code and how long it has stood, with the same text as `ravenseat blockers`; the ones that hold back
+  the most (unlocks) come first, then the oldest blocker. What waits as normal (`depends_on`, an ownership conflict with
+  an active task, a task on hold) stays in In queue, muted with its reason, under **Waiting**. "Waiting on you" is not
+  changed: it still shows only what needs you. Saved in queue.json as `board.blockedColumn`
+  (`ravenseat board-setting blocked on|off`).
+- **Project lanes:** the same cards with one row per project; drag a lane to change the project's priority. With the
+  Blocked column on, each lane has a Blocked cell too.
 - **Focus:** the order the queue takes work in, as Now, Next, Later and Waiting. Drag areas, projects and features
   between the columns. "Areas …" creates and names the areas. A **Forecast** box above the columns says when the
   remaining tasks in the focus are done at 50, 85 and 95 % (the same as `ravenseat forecast`; the saved focus counts).
@@ -153,7 +163,9 @@ show the documents, the legal points, the owner decisions and what stands betwee
 The gear holds the settings and the help, in two tabs. **General**: theme, mascot, the queue's limits, **Auto-accept
 proposals** (the switch, the classes K and U, max estimate and max value, saved together through `ravenseat proposals auto`
 via `/api/proposals`, and the log of what was auto-accepted with an Undo button per row, `/api/proposals-undo` =
-`ravenseat proposals undo <id>`; see [queue.md](queue.md#auto-accept-of-proposals)) and the read-only setup. **Helper agents**: one row per [helper agent](orchestration.md#helper-agents) with what it does,
+`ravenseat proposals undo <id>`; see [queue.md](queue.md#auto-accept-of-proposals)), **Columns** with the switch **Blocked as
+its own column** (off by default; `board.blockedColumn`, the same as `ravenseat board-setting blocked on|off`, see
+[What it shows](#what-it-shows)) and the read-only setup. **Helper agents**: one row per [helper agent](orchestration.md#helper-agents) with what it does,
 when it runs (classes, labels, paths in plain text), an on/off switch (a checkbox with role switch; Space toggles it)
 and what it has cost: runs, median and total minutes, tokens and USD, its share of the task cost, and H/M/L findings
 per run ("No runs yet" until it has run). General also has the Guidance switch, `ravenseat guidance quiet`: no advice about CI, gates or lockfiles, and the guards stay on. The switch is saved through `ravenseat helpers on|off <agent>` (the board posts

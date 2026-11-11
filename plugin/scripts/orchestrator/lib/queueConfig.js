@@ -425,6 +425,10 @@ const STANDARD = Object.freeze({
     // The Cloud tab: features.cloud is the switch for all of it, so the tab comes with it. false keeps the tab away with the module on.
     // queue.json board.showCloud wins (written by `ravenseat board-setting cloud on|off` and the gear). A saved Cloud view still opens.
     showCloud: true,
+    // The Blocked column: tasks with an open blocker that needs action (queueLogic.STUCK_BLOCK_CODES) get a column of
+    // their own right after In queue. Off by default. queue.json board.blockedColumn wins (written by
+    // `ravenseat board-setting blocked on|off` and the gear).
+    blockedColumn: false,
   },
   // The modules that can be switched off (FEATURES above): { "cloud": true } turns one on. Unknown keys are ignored.
   features: FEATURES,
@@ -592,9 +596,12 @@ function features(cfg = config()) {
  * from `ravenseat board-setting` or the gear, which wins). Only the known boolean switches (BOARD_SWITCHES) and real booleans count.
  * @param {object} [cfg] the configuration (default: config())
  * @param {object} [queue] queue.json (its `board` object), or null
- * @returns {{ showCloud: boolean }}
+ * @returns {{ showCloud: boolean, blockedColumn: boolean }}
  */
-const BOARD_SWITCHES = Object.freeze({ showCloud: 'the Cloud tab on the board (with features.cloud on)' });
+const BOARD_SWITCHES = Object.freeze({
+  showCloud: 'the Cloud tab on the board (with features.cloud on)',
+  blockedColumn: 'the Blocked column on the board (tasks with an open blocker that needs action)',
+});
 function boardSwitches(cfg = config(), queue = null) {
   const out = {};
   for (const k of Object.keys(BOARD_SWITCHES)) {

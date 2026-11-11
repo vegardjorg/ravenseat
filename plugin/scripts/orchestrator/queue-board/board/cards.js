@@ -124,9 +124,33 @@ function silentText(k) {
   );
 }
 
+/** Where a card in Blocked would otherwise be (its `home`), as a short text on the card. */
+const HOME_TEXT = {
+  queue: 'in queue',
+  proposed: 'proposed',
+  batch: 'in the batch queue',
+  inProgress: 'running',
+  review: 'in review',
+};
+
+/** The tooltip for a card in Blocked: the code's meaning, since when, and the note when there is one. */
+function blockText(k) {
+  const b = k.block;
+  if (!b) return null;
+  return `Blocked by ${b.code} for ${b.age}${b.note ? `: ${b.note}` : ''}. ravenseat unblock ${k.id} closes it.`;
+}
+
 function footerFor(k, col) {
   const footer = [];
-  if (col === 'queue') {
+  if (col === 'blocked') {
+    // The code and how long it has stood (the same text as ravenseat blockers), and where the task would otherwise be.
+    if (k.block)
+      footer.push(
+        el('span', { class: 'badge tone-warn block-badge', text: `${k.block.code} · ${k.block.age}`, title: blockText(k) }),
+      );
+    if (k.status === 'picked' && k.picked_by) footer.push(el('span', { text: `picked by ${k.picked_by}` }));
+    else footer.push(el('span', { text: HOME_TEXT[k.home] ?? k.status }));
+  } else if (col === 'queue') {
     if (k.ready) footer.push(el('span', { class: 'badge ready-badge', text: 'Ready now' }));
     else {
       const h = k.blockers[0] ?? '';
@@ -217,6 +241,7 @@ function summaryEl(k, col) {
   const classes = ['summary'];
   if (col === 'queue') classes.push(k.ready ? 'ready' : 'blocked');
   if (col === 'batch') classes.push('batchCard');
+  if (col === 'blocked') classes.push('stuck');
   if (k.aging) classes.push('aging');
   // Cards that can be bulk edited (waiting, proposed, batch queue) get a checkbox.
   const canBeMarked = MARKABLE_COLUMNS.has(col);
@@ -244,6 +269,7 @@ function summaryEl(k, col) {
     lockText,
     k.aging ? 'Older than usual for the class' : null,
     k.silent ? silentText(k) : null,
+    col === 'blocked' ? blockText(k) : null,
   ]
     .filter(Boolean)
     .join('. ');

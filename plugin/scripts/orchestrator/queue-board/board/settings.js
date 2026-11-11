@@ -72,6 +72,7 @@ function drawSettings() {
       helpSection(),
       guidanceSection(d),
       checksSwitchSection(d),
+      blockedColumnSection(),
       themeSection(),
       mascotSection(),
       el(
@@ -186,6 +187,60 @@ function checksSwitchSection(d) {
       id: 'checks-panel-help',
       class: 'setting-explanation',
       text: 'What your project has for checking its code, and suggestions for what to add. Also ravenseat checks on|off in Claude Code. Off changes no gates or guards. Guidance above stops other advice.',
+    }),
+    error,
+  );
+}
+
+/**
+ * The Blocked column (board.blockedColumn, off by default): `ravenseat board-setting blocked on|off`, the same command
+ * Claude Code runs. The server moves the stuck tasks there, so the board redraws from the next state.
+ */
+function blockedColumnSection() {
+  if (!t.data?.boardSwitches) return null;
+  const error = el('p', { class: 'setting-error', role: 'alert', hidden: true });
+  const box = el('input', {
+    id: 'board-blocked-column',
+    type: 'checkbox',
+    role: 'switch',
+    class: 'switch',
+    checked: boardSwitch('blockedColumn'),
+    'aria-describedby': 'board-blocked-column-help',
+  });
+  box.addEventListener('change', async () => {
+    error.hidden = true;
+    const wanted = box.checked;
+    box.disabled = true;
+    try {
+      const answer = await writeWithGuard('/api/action', { type: 'board-switch', name: 'blockedColumn', on: wanted });
+      if (!answer) {
+        box.checked = !wanted; // cancelled
+        return;
+      }
+      message(wanted ? 'The Blocked column is shown.' : 'The Blocked column is hidden.');
+      await update(true);
+      if (t.setting) drawSettings();
+      $('board-blocked-column')?.focus();
+    } catch (e) {
+      box.checked = !wanted;
+      error.textContent = e.message;
+      error.hidden = false;
+    } finally {
+      box.disabled = false;
+    }
+  });
+  return el(
+    'section',
+    { class: 'setting', 'aria-labelledby': 'setting-blocked-column' },
+    el('h3', { id: 'setting-blocked-column', class: 'setting-title', text: 'Columns' }),
+    el('div', { class: 'helper-head' }, box, el('label', { for: 'board-blocked-column', text: 'Blocked as its own column' })),
+    el('p', {
+      id: 'board-blocked-column-help',
+      class: 'setting-explanation',
+      text:
+        'Tasks with an open blocker that needs action (a merge conflict, red gates, a silent agent, an owner question and the like) ' +
+        'get a column right after In queue, the ones holding back the most first. Tasks that only wait on another task or are on ' +
+        'hold stay in In queue. Saved for everyone. Claude Code: ravenseat board-setting blocked on|off.',
     }),
     error,
   );

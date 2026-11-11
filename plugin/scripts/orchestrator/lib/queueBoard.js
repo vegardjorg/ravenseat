@@ -221,6 +221,8 @@ function aging(o, ageLimits, now = Date.now()) {
  *   (<remote>/<baseBranch>, the paths changed locally since then, the mission text) for queueLogic.cloudSuitable on the cards in the queue and in
  *   cloud sessions. Without `cloud` the cards get no suitability. `silent`: queueLogic.silentTracks (the server measures
  *   it, cached); the card gets `silent: { minutes, last_activity }` or null.
+ *   `blockedColumn` (board.blockedColumn): adds columns.blocked with the stuck tasks, taken out of their own column
+ *   (takeBlocked).
  */
 function board(queue, option = {}) {
   // The lookups for the whole queue (id map, active ones, successors, conflicts) are built once for the board, not per
@@ -245,6 +247,7 @@ function buildBoard(
     baseRed = false,
     approval = [],
     toolTrouble = [],
+    blockedColumn = false,
   } = {},
 ) {
   // SILENT tracks per id, for the small badge on the card (queueLogic.silentTracks, measured by the server).
@@ -431,6 +434,9 @@ function buildBoard(
   columns.review.sort((a, b) => time(a.delivered) - time(b.delivered) || a.id.localeCompare(b.id));
   columns.built.sort((a, b) => time(b.done) - time(a.done) || a.id.localeCompare(b.id));
   const next = nextUp(queue, { now, uncommitted, dailyUsage });
+  // "Waiting on you" reads the columns as they are without the Blocked column, so it is the same with the switch on or off.
+  const inboxNow = inbox(queue, columns, { map, context: fk, now, withoutAgent, silent, baseRed, approval, toolTrouble });
+  if (blockedColumn) columns.blocked = takeBlocked(columns, map, now);
 
   return {
     wip: wip(queue),
@@ -443,7 +449,7 @@ function buildBoard(
     batchQueue,
     // What the queue would start now, and what is waiting on the owner.
     next,
-    inbox: inbox(queue, columns, { map, context: fk, now, withoutAgent, silent, baseRed, approval, toolTrouble }),
+    inbox: inboxNow,
     // The focus line, areas and the basis for the plan view.
     focus: focusLine(queue, { now, context: fk, canStart: next.startable.map((v) => v.id) }),
     areas: L.areaOverview(queue, now).map((r) => ({
@@ -461,6 +467,47 @@ function buildBoard(
     // Tasks that are not done or cancelled. 0 = nothing open: the board shows the first-run card instead of empty columns.
     openTasks: tasks.filter((o) => o.status !== 'done' && o.status !== 'cancelled').length,
   };
+}
+
+/** The columns a stuck task can leave for Blocked (built is finished, so its open blockers no longer count). */
+const BLOCKED_FROM = ['queue', 'proposed', 'batch', 'inProgress', 'review'];
+
+/**
+ * The Blocked column (board.blockedColumn): takes the cards whose task has an open blocker that needs action
+ * (queueLogic.stuckBlockOf) out of their own column (mutates `columns`), so a task is never in two columns. Each card
+ * gets `home` (the column it came from, for the detail panel's actions) and `block` (the code, the start and the age,
+ * written with queueLogic.ageText like `ravenseat blockers`). Sorted by what the task holds back (unlocks: count, then
+ * minutes), then by how long the blocker has stood (oldest first), then id.
+ * @returns {object[]} the cards in Blocked
+ */
+function takeBlocked(columns, map, now) {
+  const out = [];
+  for (const col of BLOCKED_FROM) {
+    const keep = [];
+    for (const k of columns[col]) {
+      const b = L.stuckBlockOf(map.perId.get(k.id));
+      if (!b) {
+        keep.push(k);
+        continue;
+      }
+      const ms = Math.max(0, now - Date.parse(b.from));
+      // Whole minutes, so the state (and its version) changes at most once a minute, as the other ages on the board.
+      const minutes = Math.round(ms / 60_000);
+      out.push({
+        ...k,
+        home: col,
+        block: { code: b.code, from: b.from, note: b.note ?? null, minutes, age: L.ageText(minutes * 60_000) },
+      });
+    }
+    columns[col] = keep;
+  }
+  return out.sort(
+    (a, b) =>
+      (b.unlocks?.count ?? 0) - (a.unlocks?.count ?? 0) ||
+      (b.unlocks?.minutes ?? 0) - (a.unlocks?.minutes ?? 0) ||
+      Date.parse(a.block.from) - Date.parse(b.block.from) ||
+      a.id.localeCompare(b.id),
+  );
 }
 
 /** The last entry in the changelog that is not undone, in short (for "Undo last"), or null. */

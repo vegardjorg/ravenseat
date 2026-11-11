@@ -450,9 +450,10 @@ textarea {
   overflow: auto;
 }
 
+/* --columns is 4, or 5 with the Blocked column (board.blockedColumn; draw.js sets it on the board). */
 .board.flat {
   display: grid;
-  grid-template-columns: repeat(4, minmax(280px, 1fr));
+  grid-template-columns: repeat(var(--columns, 4), minmax(280px, 1fr));
   gap: var(--distance-md);
   padding: var(--distance-md) var(--distance-lg);
   overflow: auto hidden;
@@ -581,6 +582,11 @@ textarea {
 
 .summary.blocked .summary-title {
   color: var(--color-on-surface-variant);
+}
+
+/* In the Blocked column: a full card (it needs action, so it is not muted), with the error color on its edge. */
+.summary.stuck {
+  border-color: var(--color-error);
 }
 
 .summary.drags {
@@ -801,7 +807,7 @@ textarea {
 .lane-headers,
 .lane-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(240px, 1fr));
+  grid-template-columns: repeat(var(--columns, 4), minmax(240px, 1fr));
   gap: var(--distance-md);
 }
 

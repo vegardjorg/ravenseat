@@ -60,6 +60,8 @@ const EXPORTS = [
   'syncFocusEnd', 'takenBlocks', 'trackBlock', 'trackFileWarning', 'trackFolderRound', 'trackMessage', 'trackQuestion', 'uncommittedCollision',
   'uncommittedSkipped', 'undoEntry', 'unlogged', 'validQuestionId', 'validate', 'validateEvidence',
   'usageLimitGuard', 'validateNewField', 'waitingOnError', 'windDownGuard', 'withIndex', 'withoutAgentLines',
+  // The Blocked column on the board (board.blockedColumn).
+  'STUCK_BLOCK_CODES', 'stuckBlockOf',
 ];
 
 describe('queueLogic.js facade', () => {

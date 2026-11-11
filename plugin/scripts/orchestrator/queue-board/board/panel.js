@@ -150,7 +150,9 @@ function drawPanel(fresh) {
     /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)
   )
     return;
-  const { k, col } = found;
+  // A card in the Blocked column keeps the facts and actions of the column it came from (its `home`).
+  const { k } = found;
+  const col = found.col === 'blocked' ? (k.home ?? 'queue') : found.col;
   const p = project(k.project);
   const d = t.details.get(k.id);
   const scroll = panel.scrollTop;

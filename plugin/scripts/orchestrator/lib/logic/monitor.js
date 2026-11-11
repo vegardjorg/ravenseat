@@ -376,6 +376,33 @@ function openBlockOf(o) {
 }
 
 /**
+ * The codes that mean the task is stuck and needs action (the board's Blocked column, board.blockedColumn). The others
+ * are normal waiting: track-question waits on the owner's answer in "Waiting on you", and dependency on another task.
+ */
+const STUCK_BLOCK_CODES = Object.freeze([
+  'owner-question',
+  'merge-conflict',
+  'merge-guard',
+  'merge-stopped',
+  'gate-red',
+  'silent',
+  'no-agent',
+  'context',
+  'quota',
+  'other',
+]);
+
+/**
+ * The open block on a task that is still open (not done, not cancelled), when its code is one of STUCK_BLOCK_CODES; or
+ * null. The same `blocks` entries `ravenseat blockers` counts.
+ */
+function stuckBlockOf(o) {
+  if (!o || o.status === 'done' || o.status === 'cancelled') return null;
+  const b = openBlockOf(o);
+  return b && STUCK_BLOCK_CODES.includes(b.code) && Number.isFinite(Date.parse(b.from ?? '')) ? b : null;
+}
+
+/**
  * Opens a block on the task (mutates `o`). An open block with another code is closed at the same moment, so a task has
  * at most one open block; the same code again keeps the open one and its start (a new note replaces the old).
  * @returns {{ block: object, closed: object|null, kept: boolean } | { error: string }}
@@ -501,7 +528,9 @@ module.exports = {
   silentTracks,
   silentLines,
   BLOCK_CODES,
+  STUCK_BLOCK_CODES,
   openBlockOf,
+  stuckBlockOf,
   openBlock,
   closeBlock,
   blockerSummary,

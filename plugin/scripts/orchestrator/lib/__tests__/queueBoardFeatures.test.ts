@@ -224,3 +224,124 @@ describe('the module switches on the board', () => {
     expect($('panel-title').textContent).toBe('How to use the board');
   });
 });
+
+describe('the Blocked column (board.blockedColumn, off by default)', () => {
+  /** EX-1 is stuck on an owner question, EX-2 waits on it (depends_on), EX-3 is parked, EX-4 is in review with a merge conflict. */
+  const blockedState = (version: string, on: boolean) => {
+    const q = makeQueue(['waiting', 'waiting', 'waiting', 'review']);
+    const from = new Date(Date.now() - 200 * 60_000).toISOString();
+    Object.assign(q.tasks[0], { blocks: [{ code: 'owner-question', from: new Date(Date.now() - 30 * 60_000).toISOString() }] });
+    Object.assign(q.tasks[1], { depends_on: ['EX-1'] });
+    Object.assign(q.tasks[2], { parked: { reason: 'later', by: 'owner' } });
+    Object.assign(q.tasks[3], { started: from, delivered: from, blocks: [{ code: 'merge-conflict', from }] });
+    const cfg = KK.merge(KK.STANDARD, { board: { blockedColumn: on } });
+    return {
+      version,
+      data: {
+        ...T.board(q, { blockedColumn: on }),
+        gitError: null,
+        logo: false,
+        features: KK.features(cfg),
+        boardSwitches: KK.boardSwitches(cfg, null),
+        cloudSettings: [],
+      },
+    };
+  };
+  const columnKeys = () => [...document.querySelectorAll('section.column')].map((s) => (s as HTMLElement).dataset.col);
+  const colOf = (id: string) =>
+    [...document.querySelectorAll(`.summary[data-id="${id}"]`)].map((e) => (e as HTMLElement).dataset.col);
+
+  it('is not there while the switch is off', async () => {
+    $('show-flat').click();
+    await serve(blockedState('b-off', false));
+    expect(columnKeys()).toEqual(['queue', 'inProgress', 'review', 'built']);
+    expect(colOf('EX-1')).toEqual(['queue']);
+    expect(colOf('EX-4')).toEqual(['review']);
+  });
+
+  it('stands right after In queue when the switch is on, with the stuck tasks and their code and age', async () => {
+    await serve(blockedState('b-on', true));
+    expect(columnKeys()).toEqual(['queue', 'blocked', 'inProgress', 'review', 'built']);
+    const col = document.querySelector('section.column[data-col="blocked"]') as HTMLElement;
+    expect(col.querySelector('h2')?.textContent).toBe('Blocked');
+    expect(col.querySelector('.counter')?.textContent).toBe('2');
+    // Sorted: nothing is held back by EX-4, EX-1 holds back EX-2, so EX-1 first.
+    expect([...col.querySelectorAll('.summary')].map((e) => (e as HTMLElement).dataset.id)).toEqual(['EX-1', 'EX-4']);
+    const footer = col.querySelector('.summary[data-id="EX-4"] .summary-footer')?.textContent ?? '';
+    expect(footer).toContain('merge-conflict');
+    expect(footer).toContain('3 h 20 min');
+    expect(footer).toContain('in review');
+  });
+
+  it('never shows a task in two columns; depends_on and parking stay in In queue, muted with the reason', async () => {
+    await serve(blockedState('b-on2', true));
+    // The In queue section for what is not ready is closed from the start; its cards are built when it opens.
+    const section = document.querySelector('section.column[data-col="queue"] details[data-section="blocked"]') as HTMLDetailsElement;
+    section.open = true;
+    section.dispatchEvent(new Event('toggle'));
+    await flush();
+    for (const id of ['EX-1', 'EX-2', 'EX-3', 'EX-4']) expect(colOf(id), id).toHaveLength(1);
+    expect(colOf('EX-1')).toEqual(['blocked']);
+    expect(colOf('EX-4')).toEqual(['blocked']);
+    for (const id of ['EX-2', 'EX-3']) {
+      expect(colOf(id), id).toEqual(['queue']);
+      const card = document.querySelector(`.summary[data-id="${id}"]`) as HTMLElement;
+      expect(card.classList.contains('blocked'), id).toBe(true);
+    }
+  });
+
+  it('works in the project lanes too: a Blocked header and cell, and each card once', async () => {
+    $('show-lanes').click();
+    await serve(blockedState('b-lanes', true));
+    expect([...document.querySelectorAll('.lane-headers h2')].map((h) => h.textContent)).toEqual([
+      'In queue',
+      'Blocked',
+      'In progress',
+      'Review',
+      'Built',
+    ]);
+    const cell = document.querySelector('.lane-cell[data-col="blocked"]') as HTMLElement;
+    expect([...cell.querySelectorAll('.summary')].map((e) => (e as HTMLElement).dataset.id)).toEqual(['EX-1', 'EX-4']);
+    for (const id of ['EX-1', 'EX-2', 'EX-3', 'EX-4']) expect(colOf(id), id).toHaveLength(1);
+    await serve(blockedState('b-lanes-off', false));
+    expect(document.querySelector('.lane-cell[data-col="blocked"]')).toBeNull();
+    $('show-flat').click();
+  });
+
+  it('the gear has the switch under General, and a change goes through board-switch blockedColumn', async () => {
+    const posts: unknown[] = [];
+    const w = window as any;
+    const before = w.fetch;
+    w.fetch = async (file: string, init?: { body?: string }) => {
+      if (file === '/api/action') posts.push(JSON.parse(init?.body ?? '{}'));
+      if (file.startsWith('/api/settings'))
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ok: true,
+            field: [],
+            usageToday: 0,
+            night: { active: false },
+            setup: { rules: [], rulesSource: 'x' },
+            helpers: [],
+            autoAccept: { enabled: false, allowedClasses: ['K', 'U'], log: [] },
+          }),
+        };
+      return before(file, init);
+    };
+    await serve(blockedState('b-gear', false));
+    $('settings').click();
+    await flush();
+    const box = document.getElementById('board-blocked-column') as HTMLInputElement;
+    expect(box).not.toBeNull();
+    expect(box.checked).toBe(false);
+    expect(box.closest('#settings-panel-general')).not.toBeNull();
+    expect(document.querySelector('label[for="board-blocked-column"]')?.textContent).toBe('Blocked as its own column');
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    await flush();
+    expect(posts).toContainEqual({ type: 'board-switch', name: 'blockedColumn', on: true });
+    w.fetch = before;
+  });
+});

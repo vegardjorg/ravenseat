@@ -48,6 +48,7 @@ commands cover them.
 | Auto-accept rules | `/api/proposals` | `ravenseat proposals auto …` (same command) |
 | Undo an auto-accept | `/api/proposals-undo` | `ravenseat proposals undo <id>` (same command) |
 | Show the Cloud tab | `/api/action` `board-switch` | `ravenseat board-setting cloud on|off` (same command; queue.json `board.showCloud`) |
+| Blocked as its own column | `/api/action` `board-switch` `blockedColumn` | `ravenseat board-setting blocked on|off` (same command; queue.json `board.blockedColumn`) |
 | Cloud on or off | `/api/action` `cloud-switch` | `ravenseat cloud on|off` (same command) |
 | A cloud setting | `/api/action` `cloud-setting` | `ravenseat cloud set <setting> <value>` (same command) |
 | Theme, mascot bubbles, remembered tab and view | browser storage only | per viewer, nothing in the queue; `board.mascot` in queue.config.json sets the mascot for everyone |

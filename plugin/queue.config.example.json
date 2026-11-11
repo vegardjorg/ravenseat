@@ -111,8 +111,8 @@
   "cloud": { "maxSessions": 3, "start": "terminal", "fireUrl": null, "offerOnLeave": true, "collect": "ask", "deleteBranch": true, "bundleMax": 4 },
   "_capacity": "Weekly quota reset used by queue.mjs capacity. null = default (Tuesday 19:00 local time). resetDay 0-6, 0 = Sunday.",
   "capacity": { "resetDay": null, "resetClock": null, "timeZone": null, "planName": null },
-  "_board": "mascot: the speech bubble on the board, \"chatty\", \"events\" (only events and clicks) or \"off\" (no bubbles for anyone). queue-board.mjs --mascot overrides it. updateCheck: the board looks for a newer plugin version on GitHub at most once per 24 hours (a plain GET, nothing about you is sent); false turns it off. showCloud: show the Cloud tab (only with features.cloud on); `ravenseat board-setting cloud on|off` sets it in queue.json, which wins.",
-  "board": { "port": 2000, "title": "Queue board", "mascot": "chatty", "updateCheck": true, "showCloud": false },
+  "_board": "mascot: the speech bubble on the board, \"chatty\", \"events\" (only events and clicks) or \"off\" (no bubbles for anyone). queue-board.mjs --mascot overrides it. updateCheck: the board looks for a newer plugin version on GitHub at most once per 24 hours (a plain GET, nothing about you is sent); false turns it off. showCloud: show the Cloud tab (only with features.cloud on); `ravenseat board-setting cloud on|off` sets it in queue.json, which wins. blockedColumn: a Blocked column after In queue for tasks with an open blocker that needs action (off by default); `ravenseat board-setting blocked on|off` sets it in queue.json, which wins.",
+  "board": { "port": 2000, "title": "Queue board", "mascot": "chatty", "updateCheck": true, "showCloud": false, "blockedColumn": false },
   "_features": "Modules that can be switched off or on. cloud and follow also answer \"off\" in the CLI; plans.* only hide parts of the board (the CLI plan register always works). Unknown keys are ignored.",
   "features": {
     "plans": true,

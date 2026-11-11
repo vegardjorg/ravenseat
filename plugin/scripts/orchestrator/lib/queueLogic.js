@@ -149,7 +149,7 @@ const {
 } = require('./logic/merge.js');
 const {
   infoField, infoValueText, infoView, activeLines, NO_AGENT_GRACE_MIN, startedWithoutAgent, reportSinceStart, reservedWithoutAgent, noAgentTracks, withoutAgentLines, waitingOnCancelled, waitingOnCancelledLines, SILENT_CARD_MIN,
-  SILENT_DEFAULT_MIN, silentMinFor, silentCandidates, silentWatched, roundOpen, silentTracks, silentLines, BLOCK_CODES, openBlockOf, openBlock,
+  SILENT_DEFAULT_MIN, silentMinFor, silentCandidates, silentWatched, roundOpen, silentTracks, silentLines, BLOCK_CODES, STUCK_BLOCK_CODES, openBlockOf, stuckBlockOf, openBlock,
   closeBlock, blockerSummary, blockerLines, highestBlockNr, nextMigrGuard,
 } = require('./logic/monitor.js');
 const {
@@ -476,7 +476,9 @@ module.exports = {
   silentTracks,
   silentLines,
   BLOCK_CODES,
+  STUCK_BLOCK_CODES,
   openBlockOf,
+  stuckBlockOf,
   openBlock,
   closeBlock,
   blockerSummary,
