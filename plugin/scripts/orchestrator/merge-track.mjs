@@ -92,8 +92,11 @@ function cleanupAfterMerge() {
   }
 }
 
-const git = (...a) => execFileSync('git', a, { encoding: 'utf8', maxBuffer: 256 << 20 });
-const gitOk = (...a) => spawnSync('git', a, { encoding: 'utf8', maxBuffer: 256 << 20 });
+// core.quotepath=off: git gives a path with non-ASCII characters as it is, not quoted with octal escapes. Every path list
+// below is read as plain paths (the guard, the conflicts, the staged and changed files; review 2026-11-11, S1).
+const QUOTE_OFF = ['-c', 'core.quotepath=off'];
+const git = (...a) => execFileSync('git', [...QUOTE_OFF, ...a], { encoding: 'utf8', maxBuffer: 256 << 20 });
+const gitOk = (...a) => spawnSync('git', [...QUOTE_OFF, ...a], { encoding: 'utf8', maxBuffer: 256 << 20 });
 
 // Identity guard BEFORE merge: merge commits must have the owner's real git identity. A test identity left behind
 // in the repo config (for example from a test of this script) would otherwise end up in all merge commits.
@@ -174,7 +177,8 @@ function writeWithNewAttempt(file, text) {
     // no queue here (a wave track or a test): empty ownership, so every protected path stops
   }
   const taskName = task?.id ?? id;
-  const diff = gitOk('diff', '--name-status', '-M', `HEAD...${branch}`);
+  // -z: NUL separated and never quoted, so a path with æøå, a tab or a quote reaches the guard as it is (lib/mergeGuard.js readDiff).
+  const diff = gitOk('diff', '--name-status', '-z', '-M', `HEAD...${branch}`);
   if (diff.status !== 0) {
     console.error(`Guard check: could not get the diff HEAD...${branch}:\n${diff.stderr}`);
     process.exit(2);
@@ -369,10 +373,20 @@ if (m.status !== 0 && !conflicts.length) {
 console.log(conflicts.length ? `Conflicts in ${conflicts.length} files.` : 'No conflicts.');
 
 // ---- 2) Three-way merge per file -------------------------------------------------------
-const version = (n, file) => {
-  const r = gitOk('show', `:${n}:${file}`);
+// The stage as bytes (null when it does not exist). Read as a Buffer, never straight as utf8: a binary or non-UTF-8 stage
+// would otherwise turn into text with U+FFFD in it before anything could see that (review 2026-11-11, G1).
+const stage = (n, file) => {
+  const r = spawnSync('git', [...QUOTE_OFF, 'show', `:${n}:${file}`], { maxBuffer: 256 << 20 });
   return r.status === 0 ? r.stdout : null;
 };
+// Why a stage cannot go through the text merge, or null. A NUL byte is how git itself tells binary from text (in the first
+// 8000 bytes); text that does not survive a round trip through utf8 (Latin-1, an encrypted or filtered blob) would be
+// written back changed. Both go to the owner: the text merge would return the base and drop both sides' changes.
+function notText(buf) {
+  if (buf.subarray(0, 8000).includes(0)) return 'binary file, both sides changed it (resolve by hand)';
+  if (!Buffer.from(buf.toString('utf8'), 'utf8').equals(buf)) return 'not UTF-8 text, the text merge would change its bytes (resolve by hand)';
+  return null;
+}
 
 // Changes from base to side as hunks: { a: start line (0-based) in base, n: number of base lines, new: [lines] }.
 function hunker(base, side, name) {
@@ -388,6 +402,9 @@ function hunker(base, side, name) {
       maxBuffer: 256 << 20,
     },
   );
+  // A diff git calls binary has no hunks, and no hunks would read as "nothing changed" (G1). The stages are checked for
+  // this before the text merge; this is the last stop if git still judges the pair binary (a .gitattributes rule).
+  if (/^Binary files .* differ$/m.test(r.stdout)) throw new BinaryDiff();
   const out = [];
   let cur = null;
   for (const l of r.stdout.split('\n')) {
@@ -453,10 +470,19 @@ function commaBetween(a, b, file) {
   return a;
 }
 
+class BinaryDiff extends Error {}
+
 function mergeText(file, base, ours, theirs) {
   const bl = base.split('\n');
-  const ho = hunker(base, ours, 'o');
-  const ht = hunker(base, theirs, 't');
+  let ho;
+  let ht;
+  try {
+    ho = hunker(base, ours, 'o');
+    ht = hunker(base, theirs, 't');
+  } catch (e) {
+    if (e instanceof BinaryDiff) return { ok: false, reason: 'git diffs it as a binary file (resolve by hand)' };
+    throw e;
+  }
   const all = [...ho.map((h) => ({ ...h, s: 'o' })), ...ht.map((h) => ({ ...h, s: 't' }))].sort(
     (x, y) => x.a - y.a || (x.s === 'o' ? -1 : 1),
   );
@@ -594,13 +620,17 @@ function mergeIn18n(base, ours, theirs, current) {
 const resolved = [];
 const manual = [];
 for (const file of conflicts) {
-  const base = version(1, file);
-  const ours = version(2, file);
-  const theirs = version(3, file);
-  if (base === null || ours === null || theirs === null) {
+  const stages = [stage(1, file), stage(2, file), stage(3, file)];
+  if (stages.includes(null)) {
     manual.push(`${file}: added or deleted on one side`);
     continue;
   }
+  const why = stages.map(notText).find(Boolean);
+  if (why) {
+    manual.push(`${file}: ${why}`);
+    continue;
+  }
+  const [base, ours, theirs] = stages.map((b) => b.toString('utf8'));
   let r;
   if (/(^|\/)locales\/[A-Za-z_-]+\.json$/.test(file))
     r = mergeIn18n(base, ours, theirs, fs.readFileSync(file, 'utf8'));

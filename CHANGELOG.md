@@ -3,6 +3,16 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+### Fixed
+- The merge guard now reads paths with non-ASCII characters as they are. With git's default `core.quotepath`, a protected file such as `.claude/skills/ø/SKILL.md` or `ø/CLAUDE.md` came out quoted and went through as ownership drift (a warning) instead of stopping the merge. `merge-track` reads the diff with `-z`, and the queue's git calls set `core.quotepath=off`.
+- A conflict in a binary file, or in text that is not UTF-8, is now left for you to resolve. The automatic conflict merge read it as text, found no changes, and committed a damaged copy of the base version, losing both sides' changes.
+- A queue agent can no longer hide a push in a git command that runs a command itself: `rebase -x`, a program-valued key given with `-c` (`core.pager`, `core.sshCommand` …), `submodule foreach`, `bisect run`, filter-branch filters, `difftool -x`, `--upload-pack`/`--receive-pack`/`--exec`, and variables such as `GIT_EDITOR` or `GIT_SSH_COMMAND`. With a push in the line they are denied for agents and asked about for the main session; without one they stay free.
+
+### Changed
+- The track hooks that run on every tool call no longer load the whole queue logic: `lib/contextGuard.js` loads it only when it binds the orchestrator, which saves some 35 modules and 70 ms per call.
+
 ## 0.8.35 (2026-11-11)
 
 **Fewer ways for a green gate to mean nothing, and fewer fix rounds for nothing: new tests can be checked to fail without the change, a focus marker stops the merge, a flaky track gate is rerun once instead of sent back, and the guards close three gaps an outside review found (installs through the shared node_modules, lockfiles beyond npm, network calls hidden behind a runner). The board can show stuck tasks in their own Blocked column, and the FAQ answers what a new user asks before choosing it.**

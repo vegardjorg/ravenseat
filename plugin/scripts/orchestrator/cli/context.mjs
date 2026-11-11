@@ -109,9 +109,10 @@ export const cut = (s, n) => {
   return n <= 1 ? '' : t.length > n ? `${t.slice(0, n - 1)}…` : t;
 };
 // ---- Git (the queue branches) --------------------------------------------------------------------------------
+// core.quotepath=off: a path with non-ASCII characters comes out as it is, not quoted (review 2026-11-11, S1).
 export function git(args) {
   try {
-    return execFileSync('git', args, {
+    return execFileSync('git', ['-c', 'core.quotepath=off', ...args], {
       cwd: GIT_ROOT,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],

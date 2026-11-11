@@ -329,9 +329,10 @@ export function lastTrackReply(agents) {
   return null;
 }
 /** Git with a large buffer (the diffs in the review package); null on error. `buffer: true` gives the bytes (git show of a file). */
+// core.quotepath=off: the path lists (name-status, numstat) give non-ASCII paths as they are (review 2026-11-11, S1).
 export function gitLarge(args, { buffer = false } = {}) {
   try {
-    return execFileSync('git', args, {
+    return execFileSync('git', ['-c', 'core.quotepath=off', ...args], {
       cwd: GIT_ROOT,
       encoding: buffer ? 'buffer' : 'utf8',
       maxBuffer: 1 << 28,

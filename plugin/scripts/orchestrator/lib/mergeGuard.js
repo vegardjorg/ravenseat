@@ -181,17 +181,64 @@ function migrCovered(p, migrBlock, migrations) {
 }
 
 /**
+ * A path as git prints it with core.quotepath on (its default): "\".claude/skills/\\303\\270/SKILL.md\"", with C escapes
+ * and octal bytes, gives the path itself (".claude/skills/ø/SKILL.md"). A path without quotes is returned as it is.
+ * The guard must see the real path: a quoted one does not match `.claude/` or `CLAUDE.md` (review 2026-11-11, S1).
+ */
+function unquoteGitPath(p) {
+  const s = String(p ?? '');
+  if (s.length < 2 || !s.startsWith('"') || !s.endsWith('"')) return s;
+  const named = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, '\\': 92 };
+  const body = s.slice(1, -1);
+  const bytes = [];
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c !== '\\') {
+      bytes.push(...Buffer.from(c, 'utf8'));
+      continue;
+    }
+    const oct = /^[0-7]{3}/.exec(body.slice(i + 1));
+    if (oct) {
+      bytes.push(parseInt(oct[0], 8));
+      i += 3;
+    } else if (body[i + 1] in named) {
+      bytes.push(named[body[i + 1]]);
+      i += 1;
+    } else bytes.push(92);
+  }
+  return Buffer.from(bytes).toString('utf8');
+}
+
+/**
  * Parse the output of `git diff --name-status -M`. Each line: "M\tpath", "R100\told\tnew", "C075\tfrom\tto".
+ * With `-z` (what merge-track.mjs uses) the fields are NUL separated instead, "M\0path\0R100\0old\0new\0", and no path
+ * is quoted. Without `-z` a path git quoted (core.quotepath) is unquoted first.
  * Returns [{ status: 'M'|'A'|'D'|'R'|'C'|…, paths: [..] }].
  * @param {string} text
  */
 function readDiff(text) {
-  return String(text || '')
+  const s = String(text || '');
+  if (s.includes('\0')) {
+    const fields = s.split('\0');
+    const out = [];
+    for (let i = 0; i < fields.length; ) {
+      const code = fields[i].trim();
+      i++;
+      if (!code) continue;
+      // A rename or a copy has two paths, every other status one.
+      const n = /^[RC]/.test(code) ? 2 : 1;
+      const paths = fields.slice(i, i + n).map(norm).filter(Boolean);
+      i += n;
+      if (paths.length) out.push({ status: code.charAt(0), paths });
+    }
+    return out;
+  }
+  return s
     .split(/\r?\n/)
     .filter((l) => l.trim())
     .map((l) => {
       const [code, ...paths] = l.split('\t');
-      return { status: code.trim().charAt(0), paths: paths.map(norm).filter(Boolean) };
+      return { status: code.trim().charAt(0), paths: paths.map((p) => norm(unquoteGitPath(p))).filter(Boolean) };
     })
     .filter((e) => e.paths.length > 0);
 }

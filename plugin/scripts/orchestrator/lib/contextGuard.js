@@ -39,7 +39,9 @@
 // =============================================================
 'use strict';
 
-const { orchestratorStatus, ORCHESTRATOR_EXPIRY_MS } = require('./queueLogic.js');
+// queueLogic.js is required inside orchestratorBinding, not here: the track hooks (hook-track-context.mjs on every tool
+// call, hook-track-end.mjs) load this module but never bind, and the facade costs some 35 modules and 70 ms per node
+// start (review 2026-11-11, E1; lib/__tests__/hookWeight.test.ts).
 const { CLI_PATTERN } = require('./productNames.js');
 
 const STANDARD = Object.freeze({
@@ -133,7 +135,9 @@ function lastOrchestratorCall(text) {
  */
 function orchestratorBinding({ cursor, sessionId, lastCall, now = Date.now() }) {
   const no = { orchestrator: false, cursor, changed: false };
-  if (!cursor || !sessionId || !orchestratorStatus(cursor, now).active) return no;
+  if (!cursor || !sessionId) return no;
+  const { orchestratorStatus, ORCHESTRATOR_EXPIRY_MS } = require('./queueLogic.js');
+  if (!orchestratorStatus(cursor, now).active) return no;
   const time = cursor.session_id_time ?? Number.NEGATIVE_INFINITY;
   const freshCall = lastCall != null && now - lastCall <= ORCHESTRATOR_EXPIRY_MS;
   if (cursor.session_id === sessionId) {

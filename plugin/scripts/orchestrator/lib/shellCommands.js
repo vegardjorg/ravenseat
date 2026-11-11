@@ -16,7 +16,9 @@
 //   - a brace list outside quotes (`{git,push}`, `git {push,-f}`) is expanded by the shell, so the line counts as unread;
 //   - a command the reading cannot see into is marked `opaque` with a reason: an encoded PowerShell command, a
 //     variable as the command word (`& $g push`), Start-Process, xargs, find -exec, a pipe into a shell, inline
-//     interpreter code (node -e, python -c …) or nesting deeper than MAX_DEPTH. The push guard asks (main session)
+//     interpreter code (node -e, python -c …), a git command that runs a command itself (rebase -x, -c core.pager=…,
+//     submodule foreach, bisect run …; gitRunsCommand), or nesting deeper than MAX_DEPTH. A segment that sets a
+//     variable git runs as a program (GIT_EDITOR, GIT_SSH_COMMAND …) makes the line unread. The push guard asks (main session)
 //     or denies (queue agents) when such a command line also looks like a push or a queue CLI call.
 // gitInvocation() finds the git subcommand after the global options (-C, -c, --git-dir …) and expands inline aliases
 // (-c alias.<name>=<value>); queueCall() finds a call of the queue's own CLI (`ravenseat …`, `node …/queue.mjs …`, any of
@@ -238,6 +240,60 @@ function innerCommand(t, i0, afterPipe) {
   if (word === 'git') {
     const g = gitInvocation(t, i0);
     if (g?.shell != null) return { text: g.shell };
+    const runs = g ? gitRunsCommand(t, i0, g) : null;
+    if (runs) return { opaque: runs };
+  }
+  return null;
+}
+
+/**
+ * Does this git command run another command that the reading cannot follow (review 2026-11-11, S2)? The reason, or
+ * null. `git rebase -x "git push …"`, `git -c core.pager="git push …" log`, `git submodule foreach "…"`, `git bisect run
+ * …`, the filter-branch filters, `difftool -x`, and the program options `--upload-pack`, `--receive-pack` and `--exec`.
+ * A config key given with -c counts when lib/gitExecSurface.js says it runs a program; aliases are left out here, since
+ * gitInvocation already reads an inline alias. Opaque, not denied by itself: the push guard denies only when the line
+ * also looks like a push (or a queue CLI call), so `git rebase -x "npm test"` stays free.
+ * @param {string[]} t @param {number} i0 @param {{ sub: string, args: string[] }} g
+ */
+function gitRunsCommand(t, i0, g) {
+  const { isExecKey } = require('./gitExecSurface.js');
+  for (let i = i0 + 1; i < t.length && t[i].startsWith('-'); i += GIT_VALUE_OPTIONS.has(t[i]) ? 2 : 1) {
+    const o = t[i];
+    const kv = o === '-c' || o === '--config-env' ? t[i + 1] : o.startsWith('--config-env=') ? o.slice(13) : null;
+    const key = String(kv ?? '').split('=')[0];
+    if (key && !/^alias\./i.test(key) && isExecKey(key)) return `git ${o} ${key} runs a program`;
+  }
+  const sub = String(g.sub).toLowerCase();
+  const args = g.args;
+  const has = (re) => args.some((a) => re.test(a));
+  if (has(/^--(upload-pack|receive-pack|exec)(=|$)/)) return `git ${sub} with a program option runs a command`;
+  if (sub === 'rebase' && has(/^(-[A-Za-z]*x|--exec(=|$))/)) return 'git rebase -x runs a command per commit';
+  if (sub === 'submodule' && args.includes('foreach')) return 'git submodule foreach runs a command per submodule';
+  if (sub === 'bisect' && args.includes('run')) return 'git bisect run runs a command per step';
+  if (sub === 'filter-branch' && has(/^--(tree|index|env|parent|msg|commit|tag-name)-filter$|^--setup$/))
+    return 'git filter-branch runs its filters as shell commands';
+  if ((sub === 'difftool' || sub === 'mergetool') && has(/^(-x|--extcmd)(=|$)/)) return `git ${sub} -x runs a command`;
+  if (sub === 'clone' && has(/^-u/)) return 'git clone -u runs a program';
+  return null;
+}
+
+/**
+ * Environment variables git (or ssh under it) runs as a program, or that inject config: setting one is a command the
+ * reading cannot see. The editor and pager variables git falls back to are included.
+ */
+const GIT_EXEC_ENV =
+  /^(GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_PAGER|GIT_SSH|GIT_SSH_COMMAND|GIT_ASKPASS|SSH_ASKPASS|GIT_EXTERNAL_DIFF|GIT_PROXY_COMMAND|GIT_EXEC_PATH|GIT_CONFIG_PARAMETERS|GIT_CONFIG_COUNT|GIT_CONFIG_KEY_\d+|GIT_CONFIG_VALUE_\d+|GIT_CONFIG_GLOBAL|GIT_CONFIG_SYSTEM|EDITOR|VISUAL|PAGER)$/i;
+
+/**
+ * The reason, when a segment sets such a variable: as a prefix (`GIT_EDITOR=… git commit`), with export, env or set, or in
+ * PowerShell (`$env:GIT_EDITOR = …`). null otherwise.
+ * @param {string[]} t the segment's tokens
+ */
+function execEnvAssignment(t) {
+  for (let j = 0; j < t.length; j++) {
+    const m = /^(\$env:)?([A-Za-z_]\w*)(=|$)/i.exec(t[j]);
+    if (!m || !GIT_EXEC_ENV.test(m[2])) continue;
+    if (m[3] === '=' || (m[1] && t[j + 1] === '=')) return `${m[2]} is set, and git runs it as a program`;
   }
   return null;
 }
@@ -299,6 +355,9 @@ function commandList(command, depth = 0) {
   };
   for (const seg of segments(withoutWrittenHeredocs(command))) {
     const t = stripRedirects(tokens(seg.text));
+    // Before the command word is found: a segment that is only an assignment (`export GIT_EDITOR=…`) has none.
+    const env = execEnvAssignment(t);
+    if (env) out.unsure.push(env);
     const i0 = firstWordIndex(t);
     if (i0 >= t.length) continue;
     // $( ) and backticks inside double quotes run too (outside quotes segments() has already split them off); a
