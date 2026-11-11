@@ -38,8 +38,12 @@ included.
 
 Cost per task drifts. By the same done date, the D median went from about 5.2 USD to 6.9 (2026-10-28 to 11-03, n 139)
 and 11.9 (2026-11-04 to 11-11, n 131); in that last window K was about 3.8 (n 57), D+ 11.7 (n 24) and U 1.7 (n 7),
-with the same estimates: the diffs grew, the machine was overloaded and more gate runs were reruns. Read a class median
-as a snapshot, and run `ravenseat cost` for your own numbers and trend. `ravenseat cost` leads with USD per merged
+with the same estimates. A later look by start date found two causes, and the build agent itself cost about the same
+(about 6.6 USD per D task). From 2026-11-02 to 11-07 thinking per turn was two to five times higher for every agent type,
+the orchestrator included, with the same model, effort and prompts, and it fell back mid version: most likely a change on
+the model side, now over. From 2026-11-08 more agents ran per task: a reviewer picked for nearly every D task instead of
+one in six, reviews of fixes, and fix rounds on about a third of D tasks. So a rise in cost per task can come from outside
+the project or from how many reviewers run, not only from the work. Read a class median as a snapshot, and run `ravenseat cost` for your own numbers and trend. `ravenseat cost` leads with USD per merged
 change: all measured cost in a window divided by the tasks merged in it, fix tasks counted with the change they fix.
 That figure came later and has no number from these windows. The classes are explained in
 [full mode](full-mode.md#agents-skip-security-and-edge-cases).
