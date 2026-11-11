@@ -139,7 +139,8 @@ project fits far more. In that project, on a laptop with 8 cores and 32 GB, five
 (free memory fell to 0-2 % during full runs). The gate queue and a cap on test workers then spread the heavy runs out;
 after that, five tracks no longer broke the gates but still took free memory down to about 8 % and made tracks slow, so
 four was chosen. The default of 5 can be too many on such a machine. Only those points are measured; `ravenseat machine --measure` gives a suggestion for your project. The load guard's limits (10 % and
-40 %) are judgment-based starting points as well, not measured.
+40 %) are judgment-based starting points as well, not measured; that project runs with
+four tracks, a 15 % memory limit and at most four gate runs at a time.
 
 | Memory | Tracks (estimate) |
 | --- | --- |
