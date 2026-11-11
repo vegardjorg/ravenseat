@@ -347,7 +347,7 @@ Known gaps in the secret scan: it finds known patterns, not every secret, and li
 internal error. A scan that does not finish (a diff over 2 MB, a git call over 3 seconds) asks instead of passing. Queue agents
 cannot push at all, so these gaps only apply to your own pushes from the main session.
 
-Deleted tests, skip markers and a test file left with no assertions do not stop a merge: a skip can be intended. `ravenseat receive` prints a `WARN test
+A focus marker (`.only(`, `fit(`, `fdescribe(`) added to a test file stops the merge (`--allow-focus` overrides, logged), since the other tests never ran. Deleted tests, skip markers and a test file left with no assertions do not stop a merge: a skip can be intended. `ravenseat receive` prints a `WARN test
 weakening` line and the reviewers decide; for a class K task with no reviewer agent, read that line yourself.
 Removing some assertions while one remains is not named. What the red team tests show, and cannot show, is on the
 [red team page](redteam.md).
