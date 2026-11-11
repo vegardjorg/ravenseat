@@ -21,7 +21,8 @@ When a Claude Code project outgrows one chat, the signs are familiar:
 Ravenseat keeps one plan and one task list (the queue) for the project in files, outside the chat. You talk to one
 Claude Code chat: say what to build and answer the questions that need you. Each task goes to a fresh agent in its own
 copy of the project, your tests check the result, and what passes is merged on your machine. You can follow along and
-answer from your phone with Claude Code's Remote Control, while the work runs on your computer.
+answer from your phone with Claude Code's Remote Control, while the work runs on your computer. The result: work that
+spans days gets finished across many chats, and your time goes to the decisions.
 
 ```text
 You:  Add to the queue: export a month of entries as CSV, with a test.
@@ -33,8 +34,8 @@ You:  What's waiting on me?    (later, from your phone)
 ```
 
 **What it will not do on its own.** It asks before it starts, merges only on your machine, and pushes nothing until
-you say "push". Each delivery lists what the agent assumed (its Assumptions); read them before the merge, because
-passing tests do not show that the agent understood you.
+you say "push". **Your part.** Each delivery lists what the agent assumed (its Assumptions); read them before the
+merge, because passing tests do not show that the agent understood you.
 
 **Is it for you?** If you are building something that takes weeks, like a SaaS with several features, a backend and
 a database, the work no longer fits in one chat, and that is where Ravenseat helps most. For a small demo or a tool for
@@ -42,7 +43,8 @@ your own use, plain Claude Code is probably enough. It works best with automated
 there is little for it to verify.
 
 **Status.** Young: public since late October 2026, built over several months inside the author's own project, released
-often. The [FAQ](plugin/docs/faq.md) answers the usual worries, each with the tests behind the answer.
+often. Developed on Windows; the tests run on Linux and Windows, macOS is not tested yet. The [FAQ](plugin/docs/faq.md)
+answers the usual worries, each with the tests behind the answer.
 
 ## Quick start
 
@@ -59,7 +61,8 @@ You need Node.js 20 or newer and git.
 
 **2. Set up your project.** Ask Claude: *"Set up the queue."* (`/ravenseat:setup`, the guided setup that also finds your
 checks). Not sure yet? Ask Claude to run `ravenseat kickstart` or `ravenseat doctor` first: they show what they find
-and change nothing. A minimal setup with `ravenseat init`: [lite mode in more detail](plugin/docs/guide.md#lite-mode-in-more-detail).
+and change nothing. For a minimal setup without the guide, see [lite mode in more detail](plugin/docs/guide.md#lite-mode-in-more-detail)
+(`ravenseat init`).
 
 **3. Add some work.** Tell Claude what needs doing: *"Add to the queue: fix the login bug and add a regression
 test."*
@@ -111,8 +114,8 @@ automated merge can show that a change is correct; `ravenseat doctor` warns when
 [full mode](plugin/docs/full-mode.md#agents-cheat-on-tests), [guarantees and limits](plugin/docs/guide.md#guarantees-and-limits)
 and [orchestration](plugin/docs/orchestration.md).
 
-Each answer in the [FAQ](plugin/docs/faq.md) names the tests behind it, and every safety test has been shown to fail
-with its guard turned off. The [red team page](plugin/docs/redteam.md) lists what was found and what the tests cannot
+Each answer in the [FAQ](plugin/docs/faq.md) names the tests behind it, and the tests behind the main
+guarantees have been shown to fail with their guard turned off. The [red team page](plugin/docs/redteam.md) lists what was found and what the tests cannot
 show. Run `npm run redteam` to check it yourself.
 
 ## What does it cost?
@@ -124,6 +127,7 @@ dependencies between worktrees and never polls in a loop.
 In one project, about 1,200 measured tasks gave a median of about 2.5 USD (API-equivalent) per ordinary code task
 including its review. That is one project and one developer, not a controlled benchmark, and it does not show a
 saving over plain Claude Code or other tools. Run `ravenseat cost` to see the numbers in your own project.
+There is no spending limit by default: `ravenseat limit dailyBudget <usd>` stops new tasks when the day's spend is used.
 [The measurements in detail](plugin/docs/costs.md).
 
 ## Why I built it
