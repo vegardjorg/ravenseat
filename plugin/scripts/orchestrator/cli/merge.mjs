@@ -849,7 +849,7 @@ export async function cmdMerge() {
   const id = positional(1, ['--scratchpad', '--done-cwd'])[0];
   if (!id)
     die(
-      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--force-red-base] [--force-red-gate]',
+      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--allow-focus] [--force-red-base] [--force-red-gate]',
     );
   const resume = a.includes('--resume');
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
@@ -968,6 +968,23 @@ export async function cmdMerge() {
           : `The quick gates were red at the last receive, and the commits since then have not been checked. Run ${CLI} receive ${id}.`} ` +
           `On the owner's word only: ${CLI} merge ${id} --force-red-gate (logged as "gate-red-overridden"). Nothing was done.`,
       );
+    // A focus marker (.only, fit, fdescribe) on an added line in a test file (lib/testWeakening.js focusHits): the gates
+    // were green while most tests never ran. The one test-weakening finding that stops; testWeakening.focusStop false = off.
+    if (CONFIG.testWeakening?.enabled !== false && CONFIG.testWeakening?.focusStop !== false) {
+      const TW = require('./lib/testWeakening.js');
+      const focus = TW.focusHits(TW.assess(gitLarge(['diff', `${BASE}...${branch}`]) ?? '', CONFIG.testWeakening));
+      if (focus.length && !a.includes('--allow-focus'))
+        die(
+          `STOP: ${id} is not merged. It adds ${focus.length} focus marker(s), which make the runner skip the other tests: ` +
+            `${focus.slice(0, 5).map((f) => `${f.path} (${f.line.trim().slice(0, 60)})`).join(', ')}. ` +
+            `Remove them in a fix round: ${CLI} resume ${id} --reason fix. On the owner's word only: ${CLI} merge ${id} --allow-focus ` +
+            '(logged as "focus-overridden"). Nothing was done.',
+        );
+      if (focus.length) {
+        logTime(id, 'focus-overridden', `${focus.length} focus marker(s), tip ${String(trackTip).slice(0, 12)}`);
+        console.log(`WARNING: --allow-focus: merging ${id} with ${focus.length} focus marker(s); logged as "focus-overridden".`);
+      }
+    }
     if (stop) {
       logTime(id, 'gate-red-overridden', `tip ${String(trackTip).slice(0, 12)}, receive said red at ${String(o.gate_check.tip).slice(0, 12)}`);
       console.log(`WARNING: --force-red-gate: merging ${id} past a red quick gate; logged as "gate-red-overridden".`);

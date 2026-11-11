@@ -314,7 +314,9 @@ const STANDARD = Object.freeze({
   // test files (.skip(, .only(, xit(, @pytest.mark.skip, #[ignore], t.Skip(, @Disabled …). A warning in the receive
   // output and a "Test weakening" section in 00-package.md, never a stop. testPaths: more test file globs (same rules
   // as protectedPaths). markers: more regular expressions (JavaScript syntax) for an added line in a test file.
-  testWeakening: { enabled: true, testPaths: [], markers: [] },
+  // focusStop: a focus marker (.only, fit, fdescribe) on an added line stops `merge` (--allow-focus overrides, logged);
+  // false = only the warning.
+  testWeakening: { enabled: true, focusStop: true, testPaths: [], markers: [] },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.

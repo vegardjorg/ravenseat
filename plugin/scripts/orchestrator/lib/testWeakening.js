@@ -327,7 +327,17 @@ function setupProblems(setup) {
   return out;
 }
 
+/**
+ * The focus markers in an assess() result: the one kind that stops the merge (cli/merge.mjs). `.only`, fit and fdescribe
+ * make the runner skip the other tests, so the gates go green while most tests never ran; nobody means to merge one.
+ * Skips and todos stay a warning, since a skip can be intended. config().testWeakening.focusStop false turns it off.
+ */
+function focusHits(r) {
+  return (r?.markers ?? []).filter((x) => x.kind === 'focus');
+}
+
 module.exports = {
+  focusHits,
   MARKERS,
   isTestFile,
   assertionLines,
