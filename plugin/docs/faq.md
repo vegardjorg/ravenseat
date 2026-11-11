@@ -190,7 +190,8 @@ origin, the queue folder and the gate script's folder.
 It is built and used day to day on Windows. The full test suite runs in CI on Ubuntu and Windows (Node 20 and 22) on
 every push to `main` and every pull request; macOS is not in CI. One known difference: on macOS the load guard and the
 load-aware slots are off by default, since macOS counts the page cache as used. Set `loadGuard.minFreeMemoryPct` to turn
-them on there.
+them on there. The gate queue for heavy gates is developed and run on Windows, CI runs its tests on Linux and Windows,
+and it has not been tried on macOS.
 
 **Verified by:** nothing beyond the suite itself; the CI workflow (`.github/workflows/ci.yml` in the repository) covers Ubuntu and
 Windows only.

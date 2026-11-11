@@ -81,6 +81,34 @@ const COLS = ['queue', 'proposed', 'batch', 'blocked', 'inProgress', 'review', '
 const idsIn = (b: any, col: string) => (b.columns[col] ?? []).map((k: any) => k.id);
 const allIds = (b: any) => COLS.flatMap((col) => idsIn(b, col));
 
+describe('"Next up" and the start rules skip a task with an open blocker that needs action', () => {
+  const ids = (list: { id: string }[]) => list.map((v) => v.id);
+
+  it('the board strip leaves out EX-1 (owner-question) and EX-4 (gate-red), with the column on or off', () => {
+    // Room for every waiting task, so only the blockers decide.
+    const roomy = { ...queue, limits: { ...queue.limits, maxConcurrent: 20, maxPerDomain: 20 } };
+    for (const blockedColumn of [false, true]) {
+      const n = T.board(roomy, { now: NOW, blockedColumn }).next;
+      expect(ids(n.startable)).not.toContain('EX-1');
+      expect(ids(n.startable)).not.toContain('EX-4');
+      // A closed blocker and the codes that are normal waiting do not hold a task back.
+      expect(ids(n.startable)).toEqual(expect.arrayContaining(['EX-11', 'EX-13']));
+    }
+  });
+
+  it('selectNext (fill, next, the CLI Next up) and blockers say the same, and unblock frees the task', () => {
+    expect(ids(L.selectNext(queue, NOW))).not.toContain('EX-4');
+    const ex4 = queue.tasks.find((o: any) => o.id === 'EX-4');
+    expect(L.blockers(ex4, queue.tasks, [])).toEqual([
+      expect.stringMatching(/^blocked: gate-red .*ravenseat unblock EX-4/),
+    ]);
+    expect(L.blockers(queue.tasks.find((o: any) => o.id === 'EX-11'), queue.tasks, [])).toEqual([]);
+    const freed = structuredClone(queue);
+    L.closeBlock(freed.tasks.find((o: any) => o.id === 'EX-4'), { now: NOW });
+    expect(ids(L.selectNext(freed, NOW))).toContain('EX-4');
+  });
+});
+
 describe('the Blocked column, off by default', () => {
   it('without the switch there is no Blocked column and every card stays in its own column', () => {
     const b = T.board(queue, { now: NOW });

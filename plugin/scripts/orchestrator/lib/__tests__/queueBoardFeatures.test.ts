@@ -255,7 +255,12 @@ describe('the Blocked column (board.blockedColumn, off by default)', () => {
     $('show-flat').click();
     await serve(blockedState('b-off', false));
     expect(columnKeys()).toEqual(['queue', 'inProgress', 'review', 'built']);
-    expect(colOf('EX-1')).toEqual(['queue']);
+    // EX-1 stays in In queue, but its open blocker means it cannot start: it is in the folded Blocked part, not under
+    // Ready now (and so not in "Next up" either).
+    const ready = document.querySelector('section.column[data-col="queue"] h3.section-title')?.textContent;
+    expect(ready).toBe('Ready now (0)');
+    const fold = document.querySelector('section.column[data-col="queue"] details[data-section="blocked"] > summary');
+    expect(fold?.textContent).toMatch(/^Blocked \(3\)$/);
     expect(colOf('EX-4')).toEqual(['review']);
   });
 

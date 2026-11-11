@@ -233,7 +233,45 @@ function bonusBlock(o) {
   ].join('\n');
 }
 
+// ---- Open blocks (`blocks: [{ code, from, to?, note? }]`; the codes are monitor.js BLOCK_CODES) ----
+
+/** The open block on a task (no `to`), or null. */
+function openBlockOf(o) {
+  return (Array.isArray(o?.blocks) ? o.blocks : []).find((b) => b && !b.to) ?? null;
+}
+
+/**
+ * The codes that mean the task is stuck and needs action (the board's Blocked column, board.blockedColumn). The others
+ * are normal waiting: track-question waits on the owner's answer in "Waiting on you", and dependency on another task.
+ * A waiting task with one of them open does not start (conflicts.js blockerParts) until `ravenseat unblock`.
+ */
+const STUCK_BLOCK_CODES = Object.freeze([
+  'owner-question',
+  'merge-conflict',
+  'merge-guard',
+  'merge-stopped',
+  'gate-red',
+  'silent',
+  'no-agent',
+  'context',
+  'quota',
+  'other',
+]);
+
+/**
+ * The open block on a task that is still open (not done, not cancelled), when its code is one of STUCK_BLOCK_CODES; or
+ * null. The same `blocks` entries `ravenseat blockers` counts.
+ */
+function stuckBlockOf(o) {
+  if (!o || o.status === 'done' || o.status === 'cancelled') return null;
+  const b = openBlockOf(o);
+  return b && STUCK_BLOCK_CODES.includes(b.code) && Number.isFinite(Date.parse(b.from ?? '')) ? b : null;
+}
+
 module.exports = {
+  openBlockOf,
+  STUCK_BLOCK_CODES,
+  stuckBlockOf,
   cfg,
   resetConfig,
   baseBranch,

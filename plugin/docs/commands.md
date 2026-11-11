@@ -28,13 +28,13 @@ ravenseat kickstart                 # which checks the project has and one next 
 ravenseat kickstart gates --apply   # sets the checks your project already has as gates
 ravenseat kickstart add             # proposes the next step as a task; it starts only when you approve it
 ravenseat gate "<failure class>"    # a known bug becomes a proposed gate task; gates.fromKnownBugs: propose, auto or off
-ravenseat doctor [--all]            # read-only health check: node, hooks, config, state, worktrees, safety baseline (--all adds CI cost tips)
+ravenseat doctor [--all]            # read-only health check: node, hooks, config, state, worktrees, budget, safety baseline (--all adds CI cost tips)
 ravenseat machine [--measure]       # cores, memory, free memory and a suggested maxConcurrent (an estimate); --measure times one full check when no track runs
 ravenseat surface                   # git hooks and config that run code, against what was accepted; changes nothing
 ravenseat surface accept --by owner # accept the current state (after installing a hook tool, changing git config)
 ravenseat unlock                    # who holds the queue lock; changes nothing (--force --by owner releases it)
 ravenseat attempt list <ID>         # the task's attempts; `ravenseat attempt close <ID> --outcome <...>` closes a stuck one
-ravenseat guidance [guided|quiet]   # one switch for advice about CI, gates and lockfiles; never a guard
+ravenseat guidance [guided|quiet]   # one switch for advice about CI, gates, lockfiles and the budget; never a guard
 ravenseat helpers                   # helper agents: on/off and what they cost
 ravenseat helpers add <file.md>     # a custom helper: copied, scanned, off until approved
 ravenseat plan show                 # plan register

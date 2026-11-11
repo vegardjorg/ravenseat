@@ -10,7 +10,7 @@
 // queueNoAgent.test.ts (through queueLogic.js).
 // =============================================================
 
-const { estimate, ageText, cutText } = require('./base.js');
+const { estimate, ageText, cutText, openBlockOf, STUCK_BLOCK_CODES, stuckBlockOf } = require('./base.js');
 const { blockInterval } = require('./select.js');
 const AT = require('./attempt.js');
 const TK = require('../timeCost.js');
@@ -370,37 +370,8 @@ const BLOCK_CODES = [
 ];
 const BLOCK_NOTE_MAX = 200;
 
-/** The open block on a task (no `to`), or null. */
-function openBlockOf(o) {
-  return (Array.isArray(o?.blocks) ? o.blocks : []).find((b) => b && !b.to) ?? null;
-}
-
-/**
- * The codes that mean the task is stuck and needs action (the board's Blocked column, board.blockedColumn). The others
- * are normal waiting: track-question waits on the owner's answer in "Waiting on you", and dependency on another task.
- */
-const STUCK_BLOCK_CODES = Object.freeze([
-  'owner-question',
-  'merge-conflict',
-  'merge-guard',
-  'merge-stopped',
-  'gate-red',
-  'silent',
-  'no-agent',
-  'context',
-  'quota',
-  'other',
-]);
-
-/**
- * The open block on a task that is still open (not done, not cancelled), when its code is one of STUCK_BLOCK_CODES; or
- * null. The same `blocks` entries `ravenseat blockers` counts.
- */
-function stuckBlockOf(o) {
-  if (!o || o.status === 'done' || o.status === 'cancelled') return null;
-  const b = openBlockOf(o);
-  return b && STUCK_BLOCK_CODES.includes(b.code) && Number.isFinite(Date.parse(b.from ?? '')) ? b : null;
-}
+// openBlockOf, STUCK_BLOCK_CODES and stuckBlockOf live in base.js, so the start rules (conflicts.js blockerParts) can
+// read them without a require cycle; they are exported from here as before.
 
 /**
  * Opens a block on the task (mutates `o`). An open block with another code is closed at the same moment, so a task has

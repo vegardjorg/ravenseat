@@ -1,5 +1,6 @@
 // =============================================================
-// guidance.js: one switch for the advice Ravenseat gives about the project itself: CI, gates, kickstart, lockfiles.
+// guidance.js: one switch for the advice Ravenseat gives about the project itself: CI, gates, kickstart, lockfiles,
+// the daily budget.
 //
 // Why: an experienced user with their own flow should not have to turn the same message off in six places. "quiet" stops
 // the advice, the light review, the intake triage and the gate proposals. It never stops a guard: the secret scan, the
@@ -19,7 +20,7 @@ const MODES = ['guided', 'quiet'];
 /** The helpers that are off in quiet unless their own switch says otherwise. */
 const QUIET_HELPERS = ['reviewer-light', 'triage'];
 /** The doctor lines that are advice. Only their WARN and INFO rows go: a FAIL is a real fault and always shows. */
-const ADVICE_CHECKS = ['ci', 'ci-cost', 'gates', 'lockfile'];
+const ADVICE_CHECKS = ['ci', 'ci-cost', 'gates', 'lockfile', 'budget'];
 
 const modeOf = (queue) => (queue?.guidance === 'quiet' ? 'quiet' : 'guided');
 const isQuiet = (queue) => modeOf(queue) === 'quiet';

@@ -2,8 +2,8 @@
 // logic/conflicts.js: ownership conflicts between tasks, the blockers, and the per-list lookups.
 //
 // fileOverlap, conflictPart, conflict and conflictsWithActive (two tasks cannot own the same file, DB object or shared
-// patch), blockerParts and blockers (dependencies, owner questions, batch queue, conflicts), and the lookups built on
-// the fast index (perIdFor, activeFor, childrenMap, successors, lockUpCount).
+// patch), blockerParts and blockers (dependencies, owner questions, open blocks, batch queue, conflicts), and the
+// lookups built on the fast index (perIdFor, activeFor, childrenMap, successors, lockUpCount).
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
 // Used by queueLogic.js (the facade) and by logic/ranking.js, commits.js, batch.js, focus.js, select.js, pick.js,
@@ -11,7 +11,7 @@
 // Tested in lib/__tests__/queueBoardState.test.ts, queueLogic.test.ts and queueBoard.test.ts (through queueLogic.js).
 // =============================================================
 
-const { ACTIVE, isExternalRow, BATCHED_BLOCKER, isBatched, cfg } = require('./base.js');
+const { ACTIVE, isExternalRow, BATCHED_BLOCKER, isBatched, cfg, stuckBlockOf } = require('./base.js');
 const { indexFor } = require('./projects.js');
 
 /** Normalizes a path: slashes, no leading ./. */
@@ -168,7 +168,8 @@ function conflict(candidate, active) {
 /**
  * The blockers with details: [{ type, text, … }], where `text` is exactly what `blockers` gives. The types:
  * status (proposed, picked or another status), depends_on { id, status } (status null = unknown task),
- * question { sp }, and conflict { conflict: conflictPart }. (The limits are checked in selectNext.)
+ * question { sp }, block { code } (an open block that needs action, base.js stuckBlockOf) and conflict
+ * { conflict: conflictPart }. (The limits are checked in selectNext.)
  */
 function blockerParts(o, tasks, resolved = []) {
   if (o.status === 'proposed')
@@ -195,6 +196,18 @@ function blockerParts(o, tasks, resolved = []) {
   for (const sp of o.waiting_on ?? []) {
     if (!resolvedSet.has(sp)) h.push({ type: 'question', sp, text: `waiting on answer: ${sp}` });
   }
+  // An open block that needs action (base.js stuckBlockOf, the board's Blocked column): the task waits for
+  // `ravenseat unblock`, so fill, next and "Next up" never offer a task the board shows as Blocked. An owner-question
+  // block next to the open question it names adds nothing: the question line already says why.
+  const stuck = stuckBlockOf(o);
+  if (stuck && !(stuck.code === 'owner-question' && h.some((x) => x.type === 'question')))
+    h.push({
+      type: 'block',
+      code: stuck.code,
+      text:
+        `blocked: ${stuck.code} since ${stuck.from}${stuck.note ? ` (${stuck.note})` : ''}; ` +
+        `ravenseat unblock ${o.id}`,
+    });
   // Copy, so a caller that changes a blocker never changes the buffered answer (conflictsWithActive).
   for (const k of conflictsWithActive(o, tasks))
     h.push({ type: 'conflict', conflict: { ...k }, text: k.text });

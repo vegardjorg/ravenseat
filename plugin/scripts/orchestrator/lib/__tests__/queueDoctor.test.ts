@@ -176,6 +176,26 @@ describe('ravenseat doctor', () => {
     expect(r.code).toBe(0);
   }, 60_000);
 
+  it('budget: WARN without a daily budget (exit stays 0), OK once one is set, quiet guidance hides it', () => {
+    const p = project({ config: { baseBranch: 'main', loadGuard: { minFreeMemoryPct: null } } });
+    expect(p.run().code).toBe(0);
+    const row = p.json().checks.find((c) => c.name === 'budget');
+    expect(row?.status).toBe('WARN');
+    expect(row?.message).toMatch(/no daily spending limit/);
+    expect(row?.fix).toMatch(/ravenseat limit dailyBudget <usd>/);
+    const file = path.join(p.data, 'queue.json');
+    const q = JSON.parse(fs.readFileSync(file, 'utf8'));
+    // "off" is stored as null: still no limit.
+    fs.writeFileSync(file, JSON.stringify({ ...q, limits: { dailyBudget: null } }));
+    expect(p.json().checks.find((c) => c.name === 'budget')?.status).toBe('WARN');
+    fs.writeFileSync(file, JSON.stringify({ ...q, limits: { dailyBudget: 25 } }));
+    const set = p.json().checks.find((c) => c.name === 'budget');
+    expect(set?.status).toBe('OK');
+    expect(set?.message).toMatch(/25\.00 USD/);
+    fs.writeFileSync(file, JSON.stringify({ ...q, guidance: 'quiet' }));
+    expect(p.json().checks.some((c) => c.name === 'budget')).toBe(false);
+  }, 60_000);
+
   it('push config: valid keys pass, bad values FAIL, an unknown push key WARNs', () => {
     let p = project({
       config: { push: { mode: 'threshold', minTasks: 10, warnTasks: 50, maxAgeHours: 24 }, loadGuard: { minFreeMemoryPct: null } },

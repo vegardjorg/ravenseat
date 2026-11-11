@@ -16,6 +16,8 @@
 //   branches    queue branches of done or cancelled tasks, and merged agent branches, still there (WARN only)
 //   machine     cores and memory against maxConcurrent (lib/machineAdvice.js, an estimate): OK, or WARN when maxConcurrent
 //               is above the suggestion; never FAIL
+//   budget      WARN when no daily budget is set (`ravenseat limit dailyBudget <usd>`); never FAIL, quiet guidance
+//               hides it
 //   git         FAIL when `git` is not found on PATH at all (red team scenario 14).
 //               INFO when git is older than 2.38: no `git merge-tree --write-tree`, so the conflict prediction
 //               (lib/conflictPredict.js) falls back to file overlap (QUEUE_GIT_VERSION overrides the version, tests)
@@ -563,6 +565,26 @@ function checkMachine() {
   return [r.status === 'WARN' ? warn('machine', r.message, r.fix) : ok('machine', r.message)];
 }
 
+/**
+ * The daily budget (`limits.dailyBudget` in queue.json, logic/guards.js budgetGuard): WARN when none is set, so the
+ * queue starts tasks whatever the day costs. A recommendation, never a FAIL: no budget is a valid choice. No
+ * readable queue: nothing to say (the queue line reports it).
+ */
+function checkBudget() {
+  const q = readJson(FILE);
+  if (!q?.value || q.error || !Array.isArray(q.value.tasks)) return [];
+  const b = L.budgetGuard(q.value, 0);
+  if (b.active) return [ok('budget', `daily budget ${b.limit.toFixed(2)} USD (API equivalent, local day)`)];
+  return [
+    warn(
+      'budget',
+      'no daily spending limit set',
+      `optional: ${CLI} limit dailyBudget <usd> stops new tasks when the day's measured spend reaches it ` +
+        '(running ones finish)',
+    ),
+  ];
+}
+
 /** The temp folder: entries per prefix, without sizes, so it stays fast with tens of thousands. It changes nothing. */
 function checkTemp() {
   const T = require('./lib/gateTemp.js');
@@ -583,7 +605,7 @@ function checkCloud() {
 
 /** `ravenseat doctor [--json] [--all]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, ...REPO_CHECKS, checkCloud, checkMachine, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

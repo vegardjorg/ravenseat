@@ -34,7 +34,8 @@ dark mode; the gear lets you pick one.
 **The queue.** A kanban: **In queue** (ready now, blocked, proposed by agents, and the batch queue where small tasks
 wait to be packed into one track), **In progress** and **Review**. Each card shows the id, domain, class (the risk
 level K, D, D+ or U, see [task classes](full-mode.md#agents-skip-security-and-edge-cases)), estimate and how many tasks
-it unlocks. **Next up** shows what the orchestrator starts in the next free slot. Click a card for its mission, owned
+it unlocks. **Next up** shows what the orchestrator starts in the next free slot; a task with an open blocker that needs
+action (the Blocked column) is not in it until `ravenseat unblock`. Click a card for its mission, owned
 files, cost and the actions for its status (see [task detail](guide.md#task-detail)).
 
 <p align="center"><img src="../../assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
