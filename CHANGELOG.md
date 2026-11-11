@@ -3,7 +3,9 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.8.34 (2026-11-11)
+
+**Tracks that build on the same code no longer trip over each other unseen: a task can say which files it only reads, and waits while another task changes one of them. Tracks now ask before they make an architecture choice, and receive warns when your own Claude setup changed while a track ran.**
 
 ### Added
 - Read ownership: the task field `reads` lists files (or folders with `/`) a task builds on but does not change. A task that reads a file an active task changes waits until that task is done, and so does a task that would change a file an active task reads; two readers never block each other. `"reads": { "mode": "warn" }` lets it start with a `READS WARNING` instead. `explain` and the board say why, the mission lists the read files and says which one is being changed, batch packing keeps them, `doctor` checks the mode, and the add-to-queue skill fills `reads` from the imports and calls it finds with Grep.
