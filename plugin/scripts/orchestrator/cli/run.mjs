@@ -41,6 +41,15 @@ const CL = require('./lib/clients/index.js');
 // The attempt: start, fill and resume reserve one under the lock, and its id goes into the descriptor.
 const AT = require('./lib/logic/attempt.js');
 
+/**
+ * READS WARNING lines for a started task in reads.mode "warn" (lib/logic/conflicts.js): the read files an active task
+ * changes, and the owned files an active task reads. Empty in "wait" mode, where such a task never starts.
+ */
+function readsWarningLines(o, tasks) {
+  if (!o || L.readsMode() !== 'warn') return [];
+  return L.readsOverlaps(o, tasks).map((r) => `READS WARNING ${o.id}: ${r.text}. It started anyway (reads.mode warn); the agent reads it from the base branch and says what it assumed.`);
+}
+
 /** The adapter for a task's client, or die with the registry's error (an unknown client starts nothing). */
 function adapterFor(o) {
   try {
@@ -207,6 +216,7 @@ export function cmdStart() {
   // The agent line from the descriptor: the effort by class (K and U medium, D and D+ high) and the adapter's agent.
   const d = MD.missionDescriptor(r, { client: adapterFor(r).id, baseSha: r.head_start ?? null, attemptId: AT.current(r)?.id });
   console.log(CL.clientFor(d.client).startLine(d));
+  for (const l of readsWarningLines(r, read().tasks)) console.log(l);
   // Only the orchestrator starts tasks: the cursor says it is active.
   pulseCursor(`start ${id}`);
   writeExternalWarning(r);
@@ -393,6 +403,7 @@ export function cmdFill() {
   }
   const queue = read();
   for (const v of selected.filter((x) => x.new)) logStart(queue.tasks.find((x) => x.id === v.id));
+  for (const v of selected) for (const l of readsWarningLines(queue.tasks.find((x) => x.id === v.id), queue.tasks)) console.log(l);
   pulseCursor(`fill ${selected.map((v) => v.id).join(' ')}`);
   fs.mkdirSync(scratch, { recursive: true });
   const trackFile = path.join(scratch, 'queue-track-fill.md');

@@ -42,6 +42,10 @@ Then do step 7.
    also" (paths), numbered content, tests (red first), review needs and "Do NOT touch".
 3. **Map ownership with Grep/Glob, do not guess:** `owned_files` (exact paths, or folders ending in "/"), `owner_db`
    (functions created or redefined), `shared_patch` (shared functions patched), `migr_tens` (0 without migrations).
+   Then `reads`: the files the task builds on but does not change. Grep for the imports and calls of what the task
+   uses (the modules it imports, the functions and types it calls, the config it reads) and list those files, or a
+   folder with "/". A file in `owned_files` is never also in `reads`. Leave out what everything uses (a shared
+   utility nobody changes): `reads` makes the task wait while another task changes the file.
 4. **Project and feature (REQUIRED):** every task gets `project` (from `ravenseat projects`) and `feature` (a short
    name the owner recognises). Tasks with visible UI get `"labels": ["visual"]`. Unsure of the project:
    `ravenseat classify --file <in.json>`. No fitting project: create one first:
@@ -53,7 +57,7 @@ Then do step 7.
    { "tasks": [{ "id": "EX-1a", "title": "short title", "domain": "web",
        "project": "example", "feature": "Login page", "labels": ["visual"],
        "class": "K", "mission": "scripts/.queue/mission/EX-1a.md", "value": 7, "content_min": 90,
-       "migr_tens": 0, "depends_on": [], "waiting_on": ["Q-EX-1"], "owned_files": ["src/login/"],
+       "migr_tens": 0, "depends_on": [], "waiting_on": ["Q-EX-1"], "owned_files": ["src/login/"], "reads": ["src/api/session.ts"],
        "owner_db": [], "shared_patch": [], "requires": [], "plan": "PL-EX-1", "source": "docs/plan.md § 3",
        "added_by": "<session>" }],
      "question": { "Q-EX-1": { "type": "question", "text": "The question, clear for the owner",

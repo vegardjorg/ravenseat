@@ -29,7 +29,7 @@ function validate(o, existing = [], register) {
   if (!CLASSES.has(o.class)) error.push(`class must be one of ${[...CLASSES].join(', ')}`);
   if (!o.mission) error.push('mission missing (path to track description or text)');
   if (o.status && !STATUSES.has(o.status)) error.push(`unknown status ${o.status}`);
-  for (const field of ['depends_on', 'waiting_on', 'owned_files', 'owner_db', 'shared_patch', 'hotspot_patch']) {
+  for (const field of ['depends_on', 'waiting_on', 'owned_files', 'owner_db', 'shared_patch', 'hotspot_patch', 'reads']) {
     if (o[field] != null && !Array.isArray(o[field])) error.push(`${field} must be a list`);
   }
   if (o.value != null && !(o.value >= 1 && o.value <= 10)) error.push('value must be 1–10');

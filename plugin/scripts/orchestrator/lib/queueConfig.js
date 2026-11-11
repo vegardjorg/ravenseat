@@ -128,6 +128,10 @@ const STANDARD = Object.freeze({
   // The fix-round plateau (lib/fixPlateau.js): before a fix round, the owner is asked when the previous fix round
   // committed nothing or the check fails the same way as before it. false = off (only the cap stops the rounds).
   fixPlateau: true,
+  // Read ownership (task field reads, lib/logic/conflicts.js): a task that reads a file an active task changes, or
+  // that would change a file an active task reads. "wait" = it waits until the other is done; "warn" = it starts, and
+  // start, fill, explain and the mission name the overlap. Two readers never block each other.
+  reads: { mode: 'wait' },
   // Shared config blocks parallel tracks break each other on (routes, registries, DI, i18n, feature flags), with the
   // protectedPaths rules. No task owns one; an agreed change goes in the task field hotspot_patch (one task at a time),
   // otherwise the track writes a wiring spec and the orchestrator makes the change. The merge guard stops an unagreed

@@ -1259,7 +1259,9 @@ function assess(queue, action = {}, context = {}) {
           ? `the file ${k.name}`
           : k.type === 'db'
             ? `DB feature ${k.name}`
-            : `the shared patch ${k.name}`;
+            : k.type === 'reads'
+              ? `the file ${k.name} (one reads it, the other changes it)`
+              : `the shared patch ${k.name}`;
       add('info', `${o.id} shares ${what} with ${k.with} and starts only when ${k.with} is done.`);
     }
     // 4. The project is paused.

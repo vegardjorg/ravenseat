@@ -311,6 +311,24 @@ function missingProject(tasks, register) {
  *   `addendum`: the client's missionAddendum (lib/clients/<client>/mission.js; default Claude Code), which says how the
  *   track reports a path someone else owns (Claude: SendMessage, or "stop" in the cloud).
  */
+/** The mission lines for `reads`: the list, and each read file an active task is changing now (empty without reads). */
+function readsLines(o, queue) {
+  const reads = Array.isArray(o.reads) ? o.reads.filter(Boolean) : [];
+  if (!reads.length) return [];
+  const out = [
+    '',
+    `**Reads (not owned):** ${reads.join(', ')}. You build on these; do not change them (they are not yours). If the mission needs a change there, report it instead.`,
+  ];
+  const changing = require('./conflicts.js')
+    .readsOverlaps(o, queue?.tasks ?? [])
+    .filter((r) => r.text.startsWith('reads '));
+  for (const r of changing)
+    out.push(
+      `**Note:** ${r.name} is being changed by ${r.with} right now. Read it from the base branch again before you rely on it, and say in the report what you assumed about it.`,
+    );
+  return out;
+}
+
 function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = defaultAddendum } = {}) {
   const list = (x) => (Array.isArray(x) && x.length ? x.join(', ') : 'none');
   const reportFrom = addendum({ cloud }).reportOutside;
@@ -323,6 +341,9 @@ function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = 
     `## TRACK ${o.id} (${o.title}; source: ${o.source ?? 'see the mission'}; class ${o.class}, estimate ${estimate(o)} min)`,
     '',
     `**Ownership in the queue:** files ${list(o.owned_files)}; DB ${list(o.owner_db)}; shared patch ${list(o.shared_patch)}. Do not touch anything other tasks in the queue own; ${reportFrom}`,
+    // Read ownership (logic/conflicts.js): what the task builds on but does not change. In "warn" mode an active task
+    // can be changing one of them right now, and the track should know before it relies on the old version.
+    ...readsLines(o, queue),
     // A proposal may have no file list. Here and not in the template: a project keeps its own copy of the template.
     ...(list(o.owned_files) === 'none' && list(o.shared_patch) === 'none'
       ? [

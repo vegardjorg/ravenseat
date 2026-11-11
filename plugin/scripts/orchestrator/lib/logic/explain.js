@@ -78,6 +78,10 @@ function explainTask(queue, id, { L, now = Date.now(), uncommitted = [], dailyUs
   for (const w of why) lines.push(`Blocked: ${w}.`);
   const hit = uncommittedCollision(o, uncommitted);
   if (hit) lines.push(`Blocked: ${hit.path} is uncommitted in the main tree and the task owns ${hit.file}.`);
+  // Read ownership in "warn" mode is no blocker, but the overlap is named (in "wait" mode it is a blocker above).
+  const RC = require('./conflicts.js');
+  if (RC.readsMode() === 'warn')
+    for (const r of RC.readsOverlaps(o, tasks)) lines.push(`Reads: ${r.text} (reads.mode warn: it starts anyway).`);
   if (why.length || hit) return head('blocked');
 
   const guard = L.startGuard(queue, dailyUsage, { now });

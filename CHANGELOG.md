@@ -3,6 +3,11 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+### Added
+- Read ownership: the task field `reads` lists files (or folders with `/`) a task builds on but does not change. A task that reads a file an active task changes waits until that task is done, and so does a task that would change a file an active task reads; two readers never block each other. `"reads": { "mode": "warn" }` lets it start with a `READS WARNING` instead. `explain` and the board say why, the mission lists the read files and says which one is being changed, batch packing keeps them, `doctor` checks the mode, and the add-to-queue skill fills `reads` from the imports and calls it finds with Grep.
+
 ## 0.8.33 (2026-11-11)
 
 **A track that is stuck in its fix rounds now asks you sooner: when a round commits nothing, or the check fails exactly as before, the queue stops and asks instead of paying for more of the same until the cap. The costs page also has the measured cost of compacting the orchestrator against starting a new chat.**

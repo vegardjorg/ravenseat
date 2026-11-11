@@ -11,7 +11,7 @@
 // Tested in lib/__tests__/queueBoardState.test.ts, queueLogic.test.ts and queueBoard.test.ts (through queueLogic.js).
 // =============================================================
 
-const { ACTIVE, isExternalRow, BATCHED_BLOCKER, isBatched } = require('./base.js');
+const { ACTIVE, isExternalRow, BATCHED_BLOCKER, isBatched, cfg } = require('./base.js');
 const { indexFor } = require('./projects.js');
 
 /** Normalizes a path: slashes, no leading ./. */
@@ -48,9 +48,51 @@ function dbKey(s) {
 }
 
 /**
+ * How a read overlap is handled (config `reads.mode`): "wait" (the default) makes it a conflict like a shared file, so
+ * the reader starts after the owner is done; "warn" lets it start and names the overlap (fill, start, explain and the
+ * mission).
+ */
+function readsMode() {
+  return cfg()?.reads?.mode === 'warn' ? 'warn' : 'wait';
+}
+
+/**
+ * A read overlap between a candidate and an active task, or null. Both ways: the candidate reads a file the active task
+ * owns (and is changing), or the candidate would change a file the active task reads. Two readers never overlap, and
+ * `reads` never counts as ownership anywhere else (the merge guard, the hints and the ranking only look at owned_files).
+ * @returns {{ type: 'reads', name: string, with: string, text: string } | null}
+ */
+function readsPart(candidate, active, ownerText = () => active.id) {
+  for (const f of candidate.reads ?? []) {
+    for (const g of active.owned_files ?? []) {
+      if (fileOverlap(f, g))
+        return { type: 'reads', name: norm(f), with: active.id, text: `reads ${norm(f)}, which ${ownerText()} is changing` };
+    }
+  }
+  for (const f of active.reads ?? []) {
+    for (const g of candidate.owned_files ?? []) {
+      if (fileOverlap(f, g))
+        return { type: 'reads', name: norm(f), with: active.id, text: `${ownerText()} reads ${norm(f)}, which this task would change` };
+    }
+  }
+  return null;
+}
+
+/** The read overlaps with each active task, in either mode (the warnings in "warn" mode use them). */
+function readsOverlaps(o, tasks) {
+  const out = [];
+  for (const a of activeFor(tasks)) {
+    if (a.id === o.id) continue;
+    const r = readsPart(o, a);
+    if (r) out.push(r);
+  }
+  return out;
+}
+
+/**
  * First conflict between a candidate and an active task, with the details (the guard rules on the board need
  * who and what, not just the text), or null.
- * @returns {{ type: 'file'|'db'|'patch', name: string, with: string, text: string } | null}
+ * @returns {{ type: 'file'|'db'|'patch'|'hotspot'|'reads', name: string, with: string, text: string } | null}
  */
 function conflictPart(candidate, active) {
   // A record outside the queue (external add) is named after the session or person, so the blocker says who is working.
@@ -109,6 +151,11 @@ function conflictPart(candidate, active) {
           text: `hotspot ${norm(h)} is being changed by ${ownerText()}`,
         };
     }
+  }
+  // Read ownership (`reads`): last, so a real ownership conflict is named first. Only in "wait" mode.
+  if (readsMode() === 'wait') {
+    const r = readsPart(candidate, active, ownerText);
+    if (r) return r;
   }
   return null;
 }
@@ -303,6 +350,9 @@ function lockUpCount(id, tasks) {
 
 module.exports = {
   norm,
+  readsMode,
+  readsPart,
+  readsOverlaps,
   dbKey,
   contenders,
   fileOverlap,

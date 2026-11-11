@@ -336,6 +336,7 @@ function batchPack(queue, ids, { newId, title, mission, by, now = new Date().toI
     owned_files: unionField(parts, 'owned_files'),
     owner_db: unionField(parts, 'owner_db'),
     shared_patch: unionField(parts, 'shared_patch'),
+    ...(unionField(parts, 'reads').length ? { reads: unionField(parts, 'reads') } : {}),
     id: newId,
     title:
       String(title ?? '').trim() ||

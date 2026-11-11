@@ -51,7 +51,7 @@ const EXPORTS = [
   'parseToDate', 'pick', 'pickChoice', 'pickable', 'planMatch', 'prefixWarnings', 'projectFor', 'projectOverview', 'projectPaused',
   'promptTask', 'pushPlan', 'qaAutoOutcome', 'qaConfig', 'qaDeviation', 'qaList', 'qaOk', 'qaSplit',
   'questionOverview', 'questionRegistered', 'questionWithoutText', 'queueBranch', 'queueIdFromMerge', 'rankBlock',
-  'ranking', 'rankingContext', 'release', 'removeFocus', 'reportCapWarning', 'resetConfig', 'resolve', 'resolveWaits',
+  'ranking', 'rankingContext', 'readsMode', 'readsOverlaps', 'release', 'removeFocus', 'reportCapWarning', 'resetConfig', 'resolve', 'resolveWaits',
   'resolveWaitsLines', 'restText', 'resumeBlock', 'resumePromptAdjust', 'reviewPackageIndex', 'reviewerPrompt',
   'reviewerTypes', 'reviewersFor', 'reviewersForTask', 'saveFocusPlan', 'score', 'scoreParts', 'selectNext',
   'setArea', 'setFocus', 'setQuestion', 'setStatus', 'silentCandidates', 'silentWatched', 'roundOpen', 'fixRoundLine', 'silentLines', 'silentMinFor',
