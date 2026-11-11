@@ -135,9 +135,10 @@ times one full check and gives a suggestion for this project. Both only suggest;
 | Tracks spend their time on the whole test suite | Only changed tests in quick gates (suggestion in the Checks tab) |
 
 A starting point for `maxConcurrent`. These are **estimates from one machine and one large project**, not limits; a small
-project fits far more. In that project, on a laptop with 8 cores and 32 GB, five parallel tracks broke the gates (free
-memory fell to 0-2 % during full runs) and four was stable, so the default of 5 can be too many there. Only that one
-point is measured; `ravenseat machine --measure` gives a suggestion for your project. The load guard's limits (10 % and
+project fits far more. In that project, on a laptop with 8 cores and 32 GB, five parallel tracks first broke the gates
+(free memory fell to 0-2 % during full runs). The gate queue and a cap on test workers then spread the heavy runs out;
+after that, five tracks no longer broke the gates but still took free memory down to about 8 % and made tracks slow, so
+four was chosen. The default of 5 can be too many on such a machine. Only those points are measured; `ravenseat machine --measure` gives a suggestion for your project. The load guard's limits (10 % and
 40 %) are judgment-based starting points as well, not measured.
 
 | Memory | Tracks (estimate) |
