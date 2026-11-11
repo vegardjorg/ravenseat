@@ -7,7 +7,7 @@
 
 <h1 align="center">Ravenseat</h1>
 <p align="center"><a href="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml"><img src="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI: tests on Linux and Windows"></a></p>
-<p align="center"><b>You decide what to build. Ravenseat keeps the work moving.</b></p>
+<p align="center"><b>A work queue for Claude Code, so multi-day work doesn't depend on one chat: agents build, your tests decide, you answer what needs you.</b></p>
 <p align="center"><sub>Open source · Runs on your machine · Built for Claude Code · Board optional</sub></p>
 
 When a Claude Code project outgrows one chat, the signs are familiar:
