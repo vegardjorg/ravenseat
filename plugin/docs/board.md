@@ -3,6 +3,12 @@
 A local web board for the queue and the plan register. It reads the same JSON files as `ravenseat` and writes through
 the same functions (same lock, same validation, same undo), so the board and the chat never disagree.
 
+The orchestration runs inside Claude Code, in the terminal or the desktop app, and you can follow and answer from your
+phone with Claude Code's Remote Control. The board is a companion, not a requirement: it shows the same project state
+from a wider angle, does not run a separate engine, and every change it makes to the queue has a command behind it.
+
+<p align="center"><img src="../../assets/infographics/claude-code-and-board.webp" alt="Claude Code as the control surface plus the optional visual board, both on top of the same orchestration: task queue, agents, checks and your decisions" width="800"></p>
+
 ```
 ravenseat board            # prints the link, e.g. http://127.0.0.1:2000/#key=… (port: board.port)
 ```

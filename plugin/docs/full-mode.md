@@ -4,6 +4,21 @@ Lite is the loop. Full mode is the same loop plus answers to the problems that s
 grow. Switch with `ravenseat mode full` (`ravenseat mode lite` goes back), and run `/ravenseat:setup` to fill in your checks and areas
 ([first run in full mode](guide.md#first-run-in-full-mode)). The [README](../../README.md) has the short version.
 
+## Lite and full side by side
+
+| | Lite mode | Full mode |
+|---|---|---|
+| Persistent task queue | Yes | Yes |
+| Agents in isolated worktrees | Yes | Yes |
+| Checks and fix rounds | Yes | Yes |
+| Decisions, `/ravenseat:decide` and the board | Yes | Yes |
+| Risk classes and task sizing | No | Yes |
+| Focus and value-based priority | No | Yes |
+| Plan register | No | Yes |
+| Helper agents and deeper review | No | Yes |
+
+Lite gets work moving with minimal setup. Full adds structure for larger projects; switch when you need it.
+
 <p align="center"><img src="../../assets/infographics/architecture.webp" alt="One Claude Code conversation drives the orchestrator, which keeps persistent state, starts agents in isolated worktrees and sends their work through checks and integration" width="800"></p>
 
 ## The pieces
