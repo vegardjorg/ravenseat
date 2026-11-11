@@ -55,7 +55,7 @@ a track adding a proposal) cannot corrupt the file. `ravenseat undo` undoes the 
 | `acceptance` | Optional: a list of 1 to 10 short criteria (one line each, at most 300 characters), set with `ravenseat add ... --accept "..." --accept "..."` (one task) or `ravenseat edit <id> --accept "..."` (replaces the list). The mission copies them under "Acceptance criteria (fixed, do not change)", `ravenseat info` and the board's detail panel show them, and `reviewer-gap` answers MET / NOT MET / UNCLEAR per criterion. Locked after the start, like `done_when` (see [the lock](#the-finish-line-is-locked-after-the-start)). `null` in `edit` removes it |
 | `max_fix_rounds` | Optional: this task's fix-round cap, a whole number 0 to 20 (0 = no fix round without the owner); overrides `maxFixRounds` in `queue.config.json` (default 3). `null` in `edit` removes it |
 | `fixes` | Optional: the task id (or a list of ids) this task fixes. `add` and `edit` refuse an id that is not in the queue (or in the same add) and a task naming itself; stored as a list, and `[]` or `null` in `edit` removes it. `ravenseat info <id>` shows `fixes` and `fixed by`, and `ravenseat state` lists the open fix tasks as `fixLinks`. `qa deviation` sets it on the fix task it creates. The benchmark (`bench/`) counts it as a defect after merge |
-| `gate_check` | Written by `receive`, never by hand: ravenseat's own quick gate run on the delivered tip (`ok`, `kind`, `tip`, `at`, `ran`, and `evidence_at` when a green gate evidence entry for that exact tip was reused). The track's own `RESULT gates=` is informational only; a red `gate_check` opens the blocker `gate-red` and a fix round (see orchestration.md, The gate evidence) |
+| `gate_check` | Written by `receive`, never by hand: ravenseat's own quick gate run on the delivered tip (`ok`, `kind`, `tip`, `at`, `ran`, and `evidence_at` when a green gate evidence entry for that exact tip was reused; `flaky` and `flaky_times` when a command was green only on the rerun, see [Flaky gate commands](#flaky-gate-commands)). The track's own `RESULT gates=` is informational only; a red `gate_check` opens the blocker `gate-red` and a fix round (see orchestration.md, The gate evidence) |
 
 Status flow: `proposed` → `waiting` (approved, ready to run) → `running` → `review` → `done`, or `cancelled`. Tasks
 added by an agent start as `proposed` and need `approve`; tasks the owner or the orchestrator adds start as `waiting`.
@@ -233,7 +233,7 @@ cost, the durations, the context size and the model.
 **Flow** (`ravenseat cost`, `flow` in `--json`, the "Flow" box in the board's Statistics) counts rows that the commands append
 to the time log (`lib/eventRows.js`, one JSON line each, never failing the command): `fixRound` (ravenseat resume, also when
 receive or merge resumes), `mergeConflict` (ravenseat merge stopped in the merge step, with the conflicted file count),
-`baseGate` (every recorded base verdict, with the skip rule and the run time), `flakyGate` (a base gate command red, then green on a rerun on the same sha), `ciWatch` (each CI watch verdict), `triage` (ravenseat triage --verdict), `push`
+`baseGate` (every recorded base verdict, with the skip rule and the run time), `flakyGate` (a base gate or track gate command red, then green on a rerun on the same sha; a track's has its id as `task`), `ciWatch` (each CI watch verdict), `triage` (ravenseat triage --verdict), `push`
 and `load`. The figures: first-pass rate (the tasks done in the window, not fix tasks, with 0 fix rounds in `resumed`),
 fix rounds per merged task, merge conflicts per week, base red verdicts, flaky gate commands, pushes per week with merged tasks and commits
 per push, and the triage verdicts.
@@ -412,6 +412,26 @@ The files go where `{files}` is in the command, quoted, else at the end: `"npx v
 `"npx jest {files}"`, `"python -m pytest {files}"`. A test file is what the test-weakening check counts as one, plus
 `testWeakening.testPaths`.
 
+### Flaky gate commands
+
+One flaky red on a track's quick gate used to cost a whole fix round, with a new agent, while the code was fine. Now a
+red `ravenseat gates --quick` (or `--full`) in a track's worktree runs only its red commands once more, on the same commit:
+
+- Green on the rerun: the run is green, with `FLAKY: <command> was red, then green ...` on screen, `flaky` in the gate row
+  and the gate evidence, and a `flakyGate` row with the track's id in the time log (`ravenseat cost` counts them under Flow).
+- Red again: red as before, and `receive` gives the fix round.
+- No rerun on a tree with uncommitted tracked changes, and a rerun that moves HEAD or leaves tracked changes is red: a
+  green result must be bound to exactly the commit it checked. The tamper checks (the evidence store, git hooks and
+  config) run after the rerun, so a rerun never turns a tampered run green.
+- At most one rerun per gate run, never a loop. A run in the main checkout is not rerun here: the base gate has its own
+  flaky check (`baseGate.flakyRerun`).
+
+When `receive` runs the gate and it was flaky, it says `FLAKY <id>: <command> ...` with how often the command has been
+flaky on this track, keeps `flaky` and `flaky_times` in `gate_check`, files a finding per command (the same title as
+the base gate's, so a command that is flaky again counts on the same finding) and adds a `Flaky gate commands` section
+to `00-package.md`. A command that was flaky on the same track before still counts as green; the count says so.
+`gates.flakyRerun: false` turns the rerun off.
+
 ## Limits and safety
 
 - `maxConcurrent` (parallel tracks), `maxDPlus`, `maxPerDomain` and `maxDb` stop the queue from starting more than
@@ -556,6 +576,7 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `baseBranch`, `remote`, `branchPrefix` | `main`, `origin`, `queue/` | Integration branch, push remote, track branch names |
 | `gates.quick`, `gates.full` | `[]` | Commands `gates.mjs` runs (empty = green) |
 | `gates.redOnBase` | `null` | Red on base (see "Red on base"): a test command with `{files}`, or `{ command, timeoutSec, maxFiles }` (300 s, 10 files). `null` = off |
+| `gates.flakyRerun` | `true` | A red quick or full gate run in a track's worktree runs only its red commands once more on the same commit (never on a dirty tree, never in the main checkout); green then is green with `flaky` (a `flakyGate` row, and at `receive` a finding and a package section), red twice is red (see "Flaky gate commands"). `false` = no rerun |
 | `gates.fromKnownBugs` | `propose` | What a known bug becomes: `propose` (a task you approve), `auto` (approved at once, uses tokens without asking) or `off` |
 | `gates.precheck`, `gates.precheckBudgetSec` | `null` (the standard checks), `120` | The fail-fast precheck `ravenseat gates --precheck` runs before the full gate, stopping at the first red check: commands or `{ name, command, files, budgetSec }`, with `{changed}` (the changed files against `baseBranch`) or `{file}` (once per file); `null` = `node --check`, `tsc --noEmit`, eslint and related tests when the project has them, `[]` = off (see orchestration.md) |
 | `migrations.folder` | `null` | Optional numbered migrations; `null` turns block numbering and migration push off |

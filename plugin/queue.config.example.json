@@ -14,8 +14,10 @@
     "full": ["npm run lint", "npm test"],
     "precheck": null,
     "precheckBudgetSec": 120,
-    "redOnBase": null
+    "redOnBase": null,
+    "flakyRerun": true
   },
+  "_flakyRerun": "gates.flakyRerun (default true): a red quick or full gate run in a track's worktree runs only its red commands once more on the same commit (never on a dirty tree, never in the main checkout, which the base gate's baseGate.flakyRerun covers). Green then is green with flaky (a flakyGate time log row, and at receive a finding and a section in the review package); red twice is red. false = no rerun.",
   "_redOnBase": "gates.redOnBase: receive runs the track's new or changed test files on the tip (must pass) and with the rest of its change taken away (at least one must fail), then puts the worktree back. A warning, never a stop. A command with {files} where the quoted files go, e.g. \"npx vitest run {files}\", or { command, timeoutSec, maxFiles }. null = off.",
   "_doneCheck": "The done command (task field done_when): receive and merge run it in the track's worktree; exit != 0 gives a fix round instead of review or merge. timeoutSec = time budget per run; tailLines = the last output lines kept for the fix brief (only the tail is kept). maxFixRounds = fix rounds per task before it becomes an owner question (task field max_fix_rounds overrides). fixPlateau (default true): before a fix round the owner is asked when the previous fix round committed nothing or the check fails the same way as before it; false = only the cap.",
   "doneCheck": { "timeoutSec": 600, "tailLines": 40 },

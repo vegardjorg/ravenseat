@@ -53,8 +53,11 @@
 //
 // The file: <dataFolder>/gate-evidence.json, { version: 1, entries: [entry, ...] } (the newest last, at most MAX_ENTRIES).
 //   entry = { id, time, by: "gates.mjs", writer: "orchestrator", sha, setup_hash, kind: "quick"|"full", ok, exit, clean,
-//             gates: [commands], failed: [commands], timed_out?, tampered?, tamper_reason?, track?, branch?, main_tree,
-//             runner, shared_links?: [{ path, lock_hash?, target_lock_hash? }], untracked?: count, ignored_present?: count }
+//             gates: [commands], failed: [commands], flaky?: [commands], timed_out?, tampered?, tamper_reason?, track?,
+//             branch?, main_tree, runner, shared_links?: [{ path, lock_hash?, target_lock_hash? }], untracked?: count,
+//             ignored_present?: count }
+//   flaky = the commands that were red, then green on a rerun on the same commit (lib/trackFlaky.js); the entry is then
+//   green with `failed` empty.
 //   legacy entry = the same without id, writer, setup_hash and runner.
 // Pure except readStoreText/readStore/writeStore/append/recordRun (one small file, written atomically).
 // Tested in lib/__tests__/gateEvidence.test.ts, __tests__/queueGateEvidence.test.ts and __tests__/queueBaseGate.test.ts.
@@ -166,6 +169,8 @@ function entry(r) {
     failed: commandList(r.failed),
   });
   if (r.timedOut) e.timed_out = true;
+  // Red, then green on a rerun on the same commit (lib/trackFlaky.js): only on a green entry.
+  if (e.ok && commandList(r.flaky).length) e.flaky = commandList(r.flaky);
   if (r.tampered) e.tampered = true;
   if (r.track) e.track = String(r.track);
   if (r.branch) e.branch = String(r.branch);

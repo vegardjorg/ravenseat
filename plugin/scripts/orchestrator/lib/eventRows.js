@@ -15,8 +15,10 @@
 //   baseGate      { tip, ok, skipped, duration_s, made_red_by, fix_task?, note? }
 //                                                            every recorded base verdict (cli/baseHealth.mjs
 //                                                            recordVerdict): before a merge, after it, the skip rule
-//   flakyGate     { tip, commands, source, task? }          a base gate command that was red, then green on a rerun
-//                                                            on the same sha (cli/baseHealth.mjs, the flaky check)
+//   flakyGate     { tip, commands, source, task? }          a gate command that was red, then green on a rerun on the
+//                                                            same sha: the base gate's (cli/baseHealth.mjs, the flaky
+//                                                            check) or a track's (gates.mjs, lib/trackFlaky.js; task =
+//                                                            the track, source "track gate")
 //   ciWatch       { sha, verdict, runs, red, task?, question? }
 //                                                            the CI watch's verdict for a pushed commit (cli/ciWatch.mjs)
 //   triage       { task, verdict, by? }                    ravenseat triage <id> --verdict
@@ -90,7 +92,7 @@ function baseGateRow({ time, tip, ok, skipped = null, run = null, madeRedBy = nu
   return row;
 }
 
-/** A flaky base gate command (or several): red, then green on a rerun on the same sha. */
+/** A flaky gate command (or several), the base gate's or a track's: red, then green on a rerun on the same sha. */
 function flakyGateRow({ time, tip, commands, source = null, task = null }) {
   const row = { time: iso(time), event: 'flakyGate', tip: tip ?? null, commands: Array.isArray(commands) ? [...commands] : [], source };
   if (task) row.task = task;

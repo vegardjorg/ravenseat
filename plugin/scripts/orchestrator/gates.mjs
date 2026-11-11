@@ -65,6 +65,13 @@
 // evidence entry is never green over a drifted surface and a rerun after a planted hook stays red. A track's own run keeps
 // the comparison during the run only: an owner's new hook must not make every track red. The baseline file itself is
 // watched in both: a change to it during the run is undone and makes the run red.
+// The flaky check (lib/trackFlaky.js, config().gates.flakyRerun, default true): a red --quick/--full run in a track's
+// worktree runs ONLY its red commands once more on the same commit. Green then is green with `flaky` in the gate row and
+// the evidence entry, a FLAKY line per command and a `flakyGate` row with the track's id; red again, or HEAD moved or the
+// tree dirty after the rerun, is red as before. No rerun in the main checkout (the base gate has its own flaky check,
+// baseGate.flakyRerun) and none on a tree with uncommitted tracked changes. One rerun at most, never a loop; the tamper
+// checks below run after it, so they cover the rerun too.
+//
 //   --evidence  record evidence also outside the main checkout (the push guard denies it to queue agents).
 //   --cwd <folder>  run in that folder (ravenseat receive: the track's worktree).
 //
@@ -129,7 +136,7 @@ const cwd = option('--cwd') ? path.resolve(option('--cwd')) : inProject(process.
  * Appends this run's `gate` row to the time log (lib/timeLogRows.js). Fail open: every error is swallowed, so the log
  * can never change the gate's result or exit code.
  */
-function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSec = null, minFreeMemoryPct = null }) {
+function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSec = null, minFreeMemoryPct = null, flaky = [] }) {
   try {
     const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
     const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
@@ -145,8 +152,11 @@ function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSe
     const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
     TL.appendRows(
       file,
-      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct }),
+      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct, flaky }),
     );
+    // A green run after a flaky rerun (lib/trackFlaky.js): the flakyGate row ravenseat cost Flow counts, with the track.
+    if (exit === 0 && flaky.length && sha)
+      TL.appendRows(file, require('./lib/eventRows.js').flakyGateRow({ tip: sha, commands: flaky, source: `track gate (${kind})`, task: track }));
   } catch {
     // error-ignored: the time log is for measurement; the gate's result is what matters
   }
@@ -262,7 +272,7 @@ function evidenceBefore(want) {
  * Fail open: a write error only means no evidence, so the caller runs the gate again or asks.
  * @returns {{ recorded: boolean, tampered: boolean, reason?: string, covered?: string }}
  */
-function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, before, coverage = null, tamperReason = null }) {
+function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, before, coverage = null, tamperReason = null, flaky = [] }) {
   try {
     if (!want?.wanted) return { recorded: false, tampered: false };
     const GE = require('./lib/gateEvidence.js');
@@ -280,6 +290,7 @@ function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, befor
       gates: ran,
       failed,
       timedOut,
+      flaky,
       track,
       branch,
       mainTree: want.mainTree,
@@ -647,6 +658,68 @@ for (const command of gates) {
     fs.appendFileSync(logFile, `\n===== ${command} (exit ${r.status ?? 'unknown'}, ${Math.round(sec)} s) =====\n${out}`);
 }
 
+// ---- The flaky check on a track's gate (lib/trackFlaky.js, gates.flakyRerun) ----
+// Only the red commands, once, on the same commit; never in the main checkout (the base gate's own flaky check covers
+// that), never on a dirty tree. Before the tamper checks below, so they cover the rerun too. No loop: one rerun at most.
+const TF = require('./lib/trackFlaky.js');
+let flakyGates = [];
+const RERUN = TF.rerunPlan({
+  enabled: TF.setup(K).enabled,
+  mainTree: WANT.mainTree,
+  failed: failedGates,
+  startSha: START.sha,
+  startClean: START.clean,
+});
+// Said only where a rerun was possible but not allowed: off and the main checkout are quiet (the base gate speaks there).
+if (RERUN.reason && TF.setup(K).enabled && WANT.mainTree !== true) console.log(`No flaky rerun: ${RERUN.reason}.`);
+if (RERUN.commands.length) {
+  console.log(
+    `FLAKY CHECK: running the ${RERUN.commands.length} red gate(s) once more on the same commit ` +
+      `${String(START.sha).slice(0, 12)}: ${RERUN.commands.join(' ; ')}`,
+  );
+  const firstSec = (Date.now() - start) / 1000;
+  const t1 = Date.now();
+  // A fresh budget for the rerun, as the base gate's rerun gets (lib/baseHealth.js runBaseGate).
+  const rerunDeadline = GQ.budgetDeadline(t1, budgetSec);
+  const stillRed = [];
+  let rerunTimedOut = false;
+  for (const command of RERUN.commands) {
+    const t0 = Date.now();
+    const r = await runShell(command, { timeoutMs: rerunDeadline ? Math.max(1000, rerunDeadline - t0) : null });
+    const sec = (Date.now() - t0) / 1000;
+    if (r.timedOut) rerunTimedOut = true;
+    const out = `${r.out}${r.timedOut ? `\n(stopped after the time budget of ${budgetSec} s: --timeout-sec)` : ''}`;
+    const green = r.status === 0 && !r.timedOut;
+    if (!green) stillRed.push(command);
+    console.log(
+      resultLine(
+        { name: `${command} (rerun)`, status: green ? 'GREEN' : 'RED', sec, first: green ? '' : firstErrorLine(gateType(command), out, cwd) },
+        width,
+      ),
+    );
+    if (logFile)
+      fs.appendFileSync(logFile, `\n===== ${command} (rerun, exit ${r.status ?? 'unknown'}, ${Math.round(sec)} s) =====\n${out}`);
+  }
+  const result = TF.outcome({
+    first: { failed: failedGates, durationSec: firstSec },
+    rerun: { failed: stillRed, durationSec: (Date.now() - t1) / 1000 },
+    startSha: START.sha,
+    after: startState(),
+  });
+  if (result.ok) {
+    flakyGates = result.flaky;
+    failedGates.length = 0;
+    failedCount = 0;
+    timedOutAny = rerunTimedOut;
+    for (const c of flakyGates)
+      console.log(`FLAKY: \`${c}\` was red, then green on a rerun on the same commit ${String(START.sha).slice(0, 12)}; counted as green.`);
+  } else {
+    const text = `Not flaky: ${result.reason}. The run stays red.`;
+    console.log(text);
+    if (logFile) fs.appendFileSync(logFile, `\n${text}\n`);
+  }
+}
+
 const total = Math.round((Date.now() - start) / 1000);
 const minFreeMemoryPct = sampler ? sampler.stop() : null;
 // The commands are done: the next heavy run can start while this process does its bookkeeping.
@@ -664,6 +737,7 @@ const recorded = recordEvidence({
   before: BEFORE,
   coverage: COVERAGE,
   tamperReason: surfaceChange,
+  flaky: flakyGates,
 });
 // The store or the git surface changed while the gate commands ran: the run is red whatever the gates said.
 const exitCode = failedCount === 0 && !recorded.tampered && !surfaceChange ? 0 : 1;
@@ -676,6 +750,7 @@ logRun({
   timedOut: timedOutAny,
   waitSec,
   minFreeMemoryPct,
+  flaky: flakyGates,
 });
 // Probably load, not the code. Only a remark: the exit code above is already decided and stays as it is.
 const loadRemark = GL.loadLine({ red: failedCount > 0 || timedOutAny, minFreePct: minFreeMemoryPct, limitPct: LOAD_LIMIT });
@@ -702,7 +777,7 @@ if (surfaceChange) {
 else
   console.log(
     failedCount === 0
-      ? `ALL GREEN: ${gates.length} gate(s) --${mode} in ${total} s`
+      ? `ALL GREEN: ${gates.length} gate(s) --${mode} in ${total} s${flakyGates.length ? ` (flaky: green on a rerun of ${flakyGates.join(' ; ')})` : ''}`
       : `RED: ${failedCount} of ${gates.length} gate(s) --${mode} failed (${total} s)${logFile ? `, full log: ${logFile}` : ''}`,
   );
 process.exit(exitCode);

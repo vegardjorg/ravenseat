@@ -412,7 +412,7 @@ function dbObjectsFromDiff(diff, migrations = cfg().migrations) {
 
 /**
  * The index file in the review package (`00-package.md`): what the task is, the track's RESULT line, the diff statistics, changed
- * DB objects, the test-weakening warning and which files are in the package. The package is PLAIN FILES (a reviewer without Bash cannot read
+ * DB objects, the test-weakening warning, the flaky gate commands and which files are in the package. The package is PLAIN FILES (a reviewer without Bash cannot read
  * git objects).
  */
 function reviewPackageIndex({
@@ -429,6 +429,7 @@ function reviewPackageIndex({
   reviewers = null,
   testWeakening = null,
   redOnBase = null,
+  flaky = null,
   assumptions = null,
 }) {
   const lines = [
@@ -460,6 +461,8 @@ function reviewPackageIndex({
   if (Array.isArray(testWeakening)) lines.push(...testWeakening);
   // The red-on-base section (lib/redOnBase.js packageSection), as lines; null = the check is off.
   if (Array.isArray(redOnBase)) lines.push(...redOnBase);
+  // The flaky gate commands (lib/trackFlaky.js packageSection), as lines; [] or null = none was flaky.
+  if (Array.isArray(flaky)) lines.push(...flaky);
   if (assumptions)
     lines.push(
       '',

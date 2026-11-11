@@ -70,6 +70,10 @@ const STANDARD = Object.freeze({
     // warning, never a stop. null = off. "<command>" with {files} where the quoted files go (else at the end), e.g.
     // "npx vitest run {files}", or { command, timeoutSec (300), maxFiles (10) }.
     redOnBase: null,
+    // The flaky check on a track's gate (lib/trackFlaky.js): a red --quick/--full run in a track's worktree reruns only
+    // its red commands once on the same commit (never in the main checkout, never on a dirty tree). Green then is green
+    // with `flaky` (a flakyGate row, and at receive a finding); red twice is red. false = no rerun.
+    flakyRerun: true,
   },
   // The done command (task field `done_when`, lib/doneCheck.js): `receive` and `merge` run it in the track's worktree.
   // timeoutSec = the time budget per run (a run over it is red); tailLines = how many of the last output lines are kept

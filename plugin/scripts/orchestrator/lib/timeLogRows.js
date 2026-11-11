@@ -71,7 +71,7 @@ function gateAttempt(text, { kind, track = null, branch = null }) {
  * One gate run row (see the header).
  * @param {{ time?: string, track?: string|null, branch?: string|null, kind: string, gates?: string[],
  *   failed?: string[], durationSec: number, exit: number, timedOut?: boolean, attempt?: number, sha?: string,
- *   clean?: boolean, waitSec?: number|null, minFreeMemoryPct?: number|null }} r
+ *   clean?: boolean, waitSec?: number|null, minFreeMemoryPct?: number|null, flaky?: string[] }} r
  */
 function gateRow(r) {
   const row = {
@@ -88,6 +88,8 @@ function gateRow(r) {
     attempt: Number.isInteger(r.attempt) && r.attempt > 0 ? r.attempt : 1,
   };
   if (r.timedOut) row.timed_out = true;
+  // Red, then green on a rerun on the same commit (lib/trackFlaky.js).
+  if (Array.isArray(r.flaky) && r.flaky.length) row.flaky = [...r.flaky];
   // The commit the run checked and whether the tree had uncommitted tracked changes (for measurement: reruns per
   // commit). No decision reads them; the trusted copy is the gate evidence store (lib/gateEvidence.js).
   if (typeof r.sha === 'string' && r.sha) row.sha = r.sha;

@@ -30,7 +30,8 @@ import {
   attemptRows, reviewerFindingsLines, scratchpadFor, syncAttempts, takenForMigr, taskAgents, trackReport,
 } from './tracks.mjs';
 import {
-  BASE_SETUP, BH, flakyRecheck, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf, writeReport,
+  BASE_SETUP, BH, fileFlaky, flakyRecheck, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf,
+  writeReport,
 } from './baseHealth.mjs';
 import { logEvent } from './events.mjs';
 import { cleanupDetachedOf, cleanupWorktree } from '../cleanup-worktree.mjs';
@@ -186,6 +187,8 @@ function doneCommandRed(id, check, { scratch, what = 'done command' }) {
  * Refused (exit 1, nothing changed), as for the done command: no worktree has the branch, the worktree is not at the
  * branch tip, or it has uncommitted tracked changes (a green run would then not be bound to the tip).
  * A red run that was tampered carries `tampered` (the reason): ravenseat receive stops for the owner instead of a fix round.
+ * A green entry with `flaky` (lib/trackFlaky.js: red, then green on gates.mjs's rerun on the same commit) is green; the
+ * record gets `flaky` and `flaky_times` (withFlaky), the FLAKY lines are printed, and a fresh run files the finding.
  * @returns {{ status: 'off' } | { status: 'green'|'red', record: object, tampered?: string, check?: { run: object, file: string } }}
  */
 function receiveGates(o, { branch, scratch, reuse = true }) {
@@ -205,10 +208,14 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
   if (known?.ok === true) {
     const covered = GE.coverageLine(known);
     console.log(`Gates green at ${String(tip).slice(0, 12)} (${known.kind}, ravenseat's own run at ${known.time}${covered ? `, ${covered}` : ''}); not run again.`);
-    return {
-      status: 'green',
-      record: { ok: true, kind: known.kind, tip, at: new Date().toISOString(), ran: false, evidence_at: known.time, evidence_id: known.id },
-    };
+    // The finding was filed by the receive that ran it; the lines say it again.
+    const record = withFlaky(
+      o,
+      { ok: true, kind: known.kind, tip, at: new Date().toISOString(), ran: false, evidence_at: known.time, evidence_id: known.id },
+      known,
+      { storeFile },
+    );
+    return { status: 'green', record };
   }
   const cwd = val('--done-cwd')
     ? path.resolve(val('--done-cwd'))
@@ -268,7 +275,13 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
   // or the store could not be written) is no evidence.
   if (r.status === 0 && entry?.ok === true) {
     console.log(`Gates GREEN at ${String(tip).slice(0, 12)} (${durationSec} s), recorded as evidence for that commit${covered ? `; ${covered}` : ''}.`);
-    return { status: 'green', record: { ok: true, kind: 'quick', tip, at: entry.time, ran: true, duration_s: durationSec, evidence_id: entry.id } };
+    const record = withFlaky(
+      o,
+      { ok: true, kind: 'quick', tip, at: entry.time, ran: true, duration_s: durationSec, evidence_id: entry.id },
+      entry,
+      { storeFile, file: true },
+    );
+    return { status: 'green', record };
   }
   if (r.status === 0)
     die(
@@ -313,6 +326,39 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
     ...(tampered ? { tampered } : {}),
     check: { run: { tail, exit: r.status }, file },
   };
+}
+
+/**
+ * The flaky part of a green gate record (lib/trackFlaky.js): `flaky` from the trusted evidence entry and `flaky_times`,
+ * how often each command has been flaky on this track (this run included, it is in the store). Prints the FLAKY lines;
+ * `file: true` (a fresh run, not a reused entry) also files the finding per command (cli/baseHealth.mjs fileFlaky, the
+ * base gate's title, so it is deduplicated on the command). The record unchanged when the entry has no `flaky`.
+ */
+function withFlaky(o, record, entry, { storeFile, file = false }) {
+  const flaky = Array.isArray(entry?.flaky) ? entry.flaky : [];
+  if (!flaky.length) return record;
+  const TF = require('./lib/trackFlaky.js');
+  const GE = require('./lib/gateEvidence.js');
+  const entries = GE.readStore(storeFile).entries;
+  const out = {
+    ...record,
+    flaky,
+    flaky_times: Object.fromEntries(flaky.map((c) => [c, Math.max(1, TF.timesOnTrack(entries, { track: o.id, command: c }))])),
+  };
+  const finding = file
+    ? fileFlaky({
+        commands: flaky,
+        tip: record.tip,
+        causeId: o.id,
+        source: `track gate of ${o.id}`,
+        row: false,
+        detail:
+          `Red, then green on a rerun on the same commit ${record.tip} (the quick gates of ${o.id} at ravenseat receive). ` +
+          'Counted as green. Make the command deterministic or take it out of the gate.',
+      })
+    : null;
+  for (const l of TF.summaryLines(o.id, out, { finding })) console.log(l);
+  return out;
 }
 
 /**
@@ -660,6 +706,8 @@ export function cmdReceive() {
       reviewers: reviewerList,
       testWeakening: weak ? TW.packageSection(weak) : null,
       redOnBase: redBase ? RB.packageSection(redBase) : null,
+      // The flaky gate commands (lib/trackFlaky.js packageSection); [] when none was flaky.
+      flaky: require('./lib/trackFlaky.js').packageSection(gateCheck.record),
       assumptions,
     }),
   );

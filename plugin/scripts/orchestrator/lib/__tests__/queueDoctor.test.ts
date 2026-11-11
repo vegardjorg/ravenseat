@@ -190,6 +190,13 @@ describe('ravenseat doctor', () => {
     expect(r.out).toMatch(/^WARN {2}config {5}unknown key\(s\) ignored: push\.minTask$/m);
   }, 60_000);
 
+  it('gates.flakyRerun: a known key; a value that is not true or false is a wrong type', () => {
+    let p = project({ config: { gates: { quick: ['node -e "1"'], flakyRerun: false }, loadGuard: { minFreeMemoryPct: null } } });
+    expect(p.run().out).toMatch(/^OK {4}config {5}queue\.config\.json parses, keys and types valid$/m);
+    p = project({ config: { gates: { flakyRerun: 'yes' }, loadGuard: { minFreeMemoryPct: null } } });
+    expect(p.run().out).toMatch(/wrong type in queue\.config\.json: gates\.flakyRerun is string, expected boolean/);
+  }, 60_000);
+
   it('ci-cost: INFO without cancel-in-progress or a path filter, nothing for workflows not on push', () => {
     const p = project({ config: { loadGuard: { minFreeMemoryPct: null } } });
     // No workflows folder: no ci-cost line at all.

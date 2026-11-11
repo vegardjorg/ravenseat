@@ -159,15 +159,17 @@ function flakyLines({ tip, run, causeId, source }) {
  * Records a flaky command: one `flakyGate` row in the time log (measurement; ravenseat cost Flow counts them) and a finding
  * in the plan register per command (deduplicated on the title, so a command that is flaky again counts on the same
  * entry). The project: the merged task's, else the only registered one; without one only the row is written.
- * Never throws (a flaky record must not stop the merge flow).
+ * Also the track gate's (cli/merge.mjs receiveGates, lib/trackFlaky.js): `row: false` there, since gates.mjs wrote the
+ * row itself, and `detail` says where it happened. Never throws (a flaky record must not stop the merge flow).
  * @returns {string|null} the finding id (the first command's), or null
  */
-function fileFlaky({ commands, tip, causeId = null, source }) {
-  try {
-    TL.appendRows(TIME_LOG, ER.flakyGateRow({ tip, commands, source, task: causeId }));
-  } catch {
-    // error-ignored: measurement only
-  }
+export function fileFlaky({ commands, tip, causeId = null, source, row = true, detail = null }) {
+  if (row)
+    try {
+      TL.appendRows(TIME_LOG, ER.flakyGateRow({ tip, commands, source, task: causeId }));
+    } catch {
+      // error-ignored: measurement only
+    }
   try {
     return withLock(() => {
       const queue = readQueueForPlan();
@@ -189,8 +191,9 @@ function fileFlaky({ commands, tip, causeId = null, source }) {
           {
             title: `Flaky gate command: ${c}`.slice(0, 200),
             detail:
+              detail ??
               `Red, then green on a rerun on the same commit ${tip} (${source}, ${BASE}). Not frozen. ` +
-              'Make the command deterministic or take it out of the gate.',
+                'Make the command deterministic or take it out of the gate.',
             task: null,
             files: [],
             project,
