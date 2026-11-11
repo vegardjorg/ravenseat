@@ -49,6 +49,7 @@ const BOARD = require('./lib/queueBoard.js');
 const QL = require('./lib/queueLock.js');
 const PB = require('./lib/pushBatch.js');
 const TW = require('./lib/testWeakening.js');
+const RB = require('./lib/redOnBase.js');
 const CP = require('./lib/conflictPredict.js');
 const CW = require('./lib/ciWatch.js');
 const GB = require('./lib/gitSurfaceBaseline.js');
@@ -83,6 +84,7 @@ export function baselineProblems(own) {
       if (s[k] !== undefined && !(Number.isInteger(s[k]) && s[k] > 0)) out.push(`secretScan.${k} must be a whole number > 0`);
   const rm = own.reads?.mode;
   if (rm !== undefined && !['wait', 'warn'].includes(rm)) out.push('reads.mode must be "wait" or "warn"');
+  out.push(...RB.setupProblems(own.gates?.redOnBase));
   const mb = own.largeFileMb;
   if (mb !== undefined && !(typeof mb === 'number' && mb > 0)) out.push('largeFileMb must be a number > 0');
   return out;

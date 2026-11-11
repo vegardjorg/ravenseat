@@ -3,6 +3,11 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+### Added
+- Red on base: with `gates.redOnBase` set to a test command (`{files}` marks where the quoted files go), `receive` runs the track's new or changed test files on the delivered tip (they must pass) and, with the rest of the track's change taken away in its worktree, one at a time (at least one must fail). Tests that pass without the change get a `RED ON BASE` warning and a `Red on base` section in the review package; the worktree is put back afterwards. A warning, never a stop. Off by default; `doctor` checks the value.
+
 ## 0.8.34 (2026-11-11)
 
 **Tracks that build on the same code no longer trip over each other unseen: a task can say which files it only reads, and waits while another task changes one of them. Tracks now ask before they make an architecture choice, and receive warns when your own Claude setup changed while a track ran.**

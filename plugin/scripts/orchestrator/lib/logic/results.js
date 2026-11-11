@@ -428,6 +428,7 @@ function reviewPackageIndex({
   migrFolder = cfg().migrations?.folder ?? null,
   reviewers = null,
   testWeakening = null,
+  redOnBase = null,
   assumptions = null,
 }) {
   const lines = [
@@ -457,6 +458,8 @@ function reviewPackageIndex({
   }
   // The test-weakening section (lib/testWeakening.js packageSection), already as lines; null = the check is off.
   if (Array.isArray(testWeakening)) lines.push(...testWeakening);
+  // The red-on-base section (lib/redOnBase.js packageSection), as lines; null = the check is off.
+  if (Array.isArray(redOnBase)) lines.push(...redOnBase);
   if (assumptions)
     lines.push(
       '',

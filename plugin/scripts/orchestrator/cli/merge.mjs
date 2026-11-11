@@ -315,6 +315,63 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
   };
 }
 
+/**
+ * Red on base (lib/redOnBase.js, gates.redOnBase): the track's new or changed test files must pass on the tip and at
+ * least one must fail with the track's code change taken away. Runs in the track's worktree and puts it back. Returns
+ * null when the setting is off, else the record for the task (red_on_base). Never stops receive.
+ */
+function redOnBaseCheck(o, { branch }) {
+  const RB = require('./lib/redOnBase.js');
+  const DC = require('./lib/doneCheck.js');
+  const set = RB.setup(CONFIG.gates);
+  if (!set) return null;
+  const at = new Date().toISOString();
+  const tip = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
+  const fail = (reason) => ({ verdict: 'error', reason, command: set.command, tip, at, files: [], skipped: [] });
+  const cwd = val('--done-cwd') ? path.resolve(val('--done-cwd')) : DC.worktreeFor(git(['worktree', 'list', '--porcelain']), branch);
+  if (!cwd || !fs.existsSync(cwd)) return fail(`no worktree has ${branch} checked out`);
+  const g = (args) => spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', maxBuffer: 1 << 26 });
+  if ((g(['rev-parse', 'HEAD']).stdout ?? '').trim() !== tip) return fail(`${cwd} is not at the tip of ${branch}`);
+  if ((g(['status', '--porcelain', '--untracked-files=no']).stdout ?? '').trim()) return fail(`${cwd} has uncommitted changes`);
+  const mb = (git(['merge-base', BASE, branch]) ?? '').trim();
+  if (!mb) return fail(`no merge base between ${BASE} and ${branch}`);
+  const { tests, code, unsafe } = RB.split(gitLarge(['diff', '--name-status', '--no-renames', `${mb}..${branch}`]), CONFIG.testWeakening?.testPaths ?? []);
+  const run = (files) => DC.runDoneWhen({ command: RB.commandFor(set.command, files), cwd, timeoutSec: set.timeoutSec, tailLines: 1 });
+  const record = (extra) => ({ command: set.command, tip, at, ...extra });
+  if (!tests.length) return record({ verdict: 'no-tests', codeChanged: code.length > 0, files: [], skipped: unsafe });
+  const tipRun = run(tests);
+  if (!tipRun.ok) return record({ verdict: 'tip-red', files: tests.map((p) => ({ path: p, base: 'not run' })), skipped: unsafe });
+  if (!code.length) return record({ verdict: 'tests-only', files: tests.map((p) => ({ path: p, base: 'not run' })), skipped: unsafe });
+  const picked = tests.slice(0, set.maxFiles);
+  const base = [];
+  let reason = null;
+  try {
+    // The change taken away: what the track changed or deleted gets its merge-base version, what it added goes.
+    const back = code.filter((c) => c.status !== 'A').map((c) => c.path);
+    for (let i = 0; i < back.length; i += 50) {
+      const r = g(['checkout', mb, '--', ...back.slice(i, i + 50)]);
+      if (r.status !== 0) throw new Error(`git checkout of the base version failed: ${(r.stderr ?? '').trim().split('\n')[0]}`);
+    }
+    for (const c of code.filter((x) => x.status === 'A')) fs.rmSync(path.join(cwd, ...c.path.split('/')), { force: true });
+    for (const p of picked) base.push({ path: p, ok: run([p]).ok });
+  } catch (e) {
+    reason = e.message;
+  } finally {
+    // Back to the tip: receive checked the worktree was clean there, so this undoes only the check's own changes.
+    g(['reset', '-q', '--hard', 'HEAD']);
+  }
+  const head = (g(['rev-parse', 'HEAD']).stdout ?? '').trim();
+  const dirty = (g(['status', '--porcelain', '--untracked-files=no']).stdout ?? '').trim();
+  if (head !== tip || dirty) return fail(`${cwd} could not be put back to ${String(tip).slice(0, 12)}: look at it before anything else (git status)`);
+  if (reason) return fail(reason);
+  const verdict = RB.verdict({ tests, code, tip: tipRun, base });
+  return record({
+    verdict,
+    files: base.map((b) => ({ path: b.path, base: b.ok ? 'green' : 'red' })),
+    skipped: [...tests.slice(set.maxFiles), ...unsafe],
+  });
+}
+
 /** `ravenseat receive` (the usage is at the top of queue.mjs). */
 export function cmdReceive() {
   // ---- A track has delivered -> review + review package as plain files + reviewer prompts ----
@@ -563,6 +620,12 @@ export function cmdReceive() {
         });
   const weakLine = weak && TW.summaryLine(weak);
   if (weakLine) console.log(weakLine);
+  // Red on base (lib/redOnBase.js): do the new tests fail without the change? Off unless gates.redOnBase is set; a
+  // PARTIAL track is unfinished, so not for it. A warning, never a stop.
+  const RB = require('./lib/redOnBase.js');
+  const redBase = result?.status === 'PARTIAL' ? null : redOnBaseCheck(o0, { branch });
+  const redBaseLine = RB.summaryLine(id, redBase);
+  if (redBaseLine) console.log(redBaseLine);
   // Files another active task owns (lib/mergeGuard.js foreignOwners): the merge will stop on them, so say it now, while a
   // fix round is still cheap. A note, never a stop here.
   const changedNames = String(gitLarge(['diff', '--name-only', '--no-renames', scope]) ?? '').split(/\r?\n/).filter(Boolean);
@@ -596,6 +659,7 @@ export function cmdReceive() {
       migrFolder: MIGR.folder,
       reviewers: reviewerList,
       testWeakening: weak ? TW.packageSection(weak) : null,
+      redOnBase: redBase ? RB.packageSection(redBase) : null,
       assumptions,
     }),
   );
@@ -618,6 +682,9 @@ export function cmdReceive() {
     // The project no longer has quick gates: an old red result has nothing to say, and must not stop the merge for good.
     else if (result?.status !== 'PARTIAL') delete o.gate_check;
     if (doneCheck) o.done_check = doneCheck.record;
+    // Every receive sets it anew (a fix round's delivery replaces the old verdict).
+    if (redBase) o.red_on_base = redBase;
+    else delete o.red_on_base;
     if (evidenceRead?.evidence) o.evidence = evidenceRead.evidence;
     o.review_package = folder;
     // Adoption: the report that has been read is no longer a new delivery (pulse and deliveries skip it).

@@ -65,6 +65,11 @@ const STANDARD = Object.freeze({
     // A known bug that can happen again (lib/knownBugGate.js): 'propose' = a task the owner approves, 'auto' = approved at
     // once (it uses tokens without asking), 'off' = nothing.
     fromKnownBugs: 'propose',
+    // Red on base (lib/redOnBase.js): at receive, the track's new or changed test files run on the tip (they must pass)
+    // and, with the track's code change taken away, one at a time (at least one must fail: the FAIL_TO_PASS idea). A
+    // warning, never a stop. null = off. "<command>" with {files} where the quoted files go (else at the end), e.g.
+    // "npx vitest run {files}", or { command, timeoutSec (300), maxFiles (10) }.
+    redOnBase: null,
   },
   // The done command (task field `done_when`, lib/doneCheck.js): `receive` and `merge` run it in the track's worktree.
   // timeoutSec = the time budget per run (a run over it is red); tailLines = how many of the last output lines are kept

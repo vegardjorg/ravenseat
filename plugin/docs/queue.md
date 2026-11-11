@@ -393,6 +393,25 @@ gate task (`GATE-<n>`, label `gate`), and `gates.fromKnownBugs` decides how:
 At most three gate tasks are open at a time. The same class again adds the new place to the open task. A class you
 cancelled is not proposed again.
 
+### Red on base
+
+The mission asks a track for red first: a test that fails before the change and passes after it. Without a check that is
+only what the track says. Set `gates.redOnBase` to your test command, and `receive` checks it:
+
+1. The track's new or changed test files run on the delivered tip. They must pass.
+2. In the track's worktree, the rest of its change is taken away (changed and deleted files get their merge-base version,
+   added files go), and each test file runs on its own. At least one must fail.
+3. The worktree is put back (`git reset --hard` to the tip, which `receive` checked was clean).
+
+`Red on base A: 1 of 2 ...` means it held. `RED ON BASE A: ...` names the tests that pass without the change too, or says
+they fail on the tip or could not be checked. It is a warning in the receive output and a `Red on base` section in
+`00-package.md`, never a stop: a pure refactor under existing tests is right to have no failing test on the base. Only
+the verdict and the file names are kept (task field `red_on_base`), never the test output.
+
+The files go where `{files}` is in the command, quoted, else at the end: `"npx vitest run {files}"`,
+`"npx jest {files}"`, `"python -m pytest {files}"`. A test file is what the test-weakening check counts as one, plus
+`testWeakening.testPaths`.
+
 ## Limits and safety
 
 - `maxConcurrent` (parallel tracks), `maxDPlus`, `maxPerDomain` and `maxDb` stop the queue from starting more than
@@ -536,6 +555,7 @@ reviewer agents per class. Missing values fall back to safe defaults.
 |---|---|---|
 | `baseBranch`, `remote`, `branchPrefix` | `main`, `origin`, `queue/` | Integration branch, push remote, track branch names |
 | `gates.quick`, `gates.full` | `[]` | Commands `gates.mjs` runs (empty = green) |
+| `gates.redOnBase` | `null` | Red on base (see "Red on base"): a test command with `{files}`, or `{ command, timeoutSec, maxFiles }` (300 s, 10 files). `null` = off |
 | `gates.fromKnownBugs` | `propose` | What a known bug becomes: `propose` (a task you approve), `auto` (approved at once, uses tokens without asking) or `off` |
 | `gates.precheck`, `gates.precheckBudgetSec` | `null` (the standard checks), `120` | The fail-fast precheck `ravenseat gates --precheck` runs before the full gate, stopping at the first red check: commands or `{ name, command, files, budgetSec }`, with `{changed}` (the changed files against `baseBranch`) or `{file}` (once per file); `null` = `node --check`, `tsc --noEmit`, eslint and related tests when the project has them, `[]` = off (see orchestration.md) |
 | `migrations.folder` | `null` | Optional numbered migrations; `null` turns block numbering and migration push off |
