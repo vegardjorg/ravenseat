@@ -298,17 +298,17 @@ describe('network guard (agent_type track/track-d)', () => {
     ])
       expect(decision(k, track), k).toBeNull();
   });
-  it('asks for npm install / npx with an unknown package; known packages and bins are free', () => {
-    expect(decision('npm install left-pad', track)).toBe('ask');
-    expect(decision('npm i -D @evil/pkg@1.0.0', track)).toBe('ask');
-    expect(decision('npm install github:user/repo', track)).toBe('ask');
+  it('asks for npx with an unknown package; known packages and bins are free; installs are denied (node_modules is a link)', () => {
+    expect(decision('npm install left-pad', track)).toBe('deny');
+    expect(decision('npm i -D @evil/pkg@1.0.0', track)).toBe('deny');
+    expect(decision('npm install github:user/repo', track)).toBe('deny');
     expect(decision('npx cowsay hello', track)).toBe('ask');
     expect(decision('npx -y unknown-cli', track)).toBe('ask');
     expect(decision('npx -p unknown tsc', track)).toBe('ask');
     expect(decision('npm exec unknown', track)).toBe('ask');
     expect(decision('npx vitest run plugin/scripts', track)).toBeNull();
     expect(decision('npx tsc --noEmit', track)).toBeNull();
-    expect(decision('npm install vitest@3', track)).toBeNull();
+    expect(decision('npm install vitest@3', track)).toBe('deny');
     expect(decision('npm run gates -- --quick', track)).toBeNull();
     expect(assess('npx cowsay', { ...STD, ...track })?.reason).toMatch(/cowsay.*ask the orchestrator to fetch it/);
   });

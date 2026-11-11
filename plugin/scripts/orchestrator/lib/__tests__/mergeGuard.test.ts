@@ -456,7 +456,7 @@ describe('the test, lint and type configs (default list, globs)', () => {
       expect(isProtected(p), p).toBe(true);
   });
   it('leaves formatter configs, look-alike names and ordinary code alone', () => {
-    for (const p of ['.prettierrc', 'src/vitest.config.helper/x.ts', 'src/tsconfig.ts', 'docs/Makefile.md', 'Cargo.lock'])
+    for (const p of ['.prettierrc', 'src/vitest.config.helper/x.ts', 'src/tsconfig.ts', 'docs/Makefile.md', 'docs/Cargo.lock.md'])
       expect(isProtected(p), p).toBe(false);
   });
   it('globMatch: a bare glob on the name, a glob with a slash on the path from the root, **/ = any folders', () => {

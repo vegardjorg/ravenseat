@@ -611,12 +611,15 @@ Windows, so there are four layers:
   that the task does not own (`owned_files` or `shared_patch`). The list is `protectedPaths` in `queue.config.json`
   (default: `.claude/`, `.githooks/`, `.github/`, `.mcp.json`, `scripts/orchestrator/`, the plugin's hooks, agents,
   skills and scripts, `queue.config.json`, `CLAUDE.queue.md`, `settings.queue.json`, `package.json`,
-  `package-lock.json`, and the test, lint and type configs such as `vitest.config.*`, `tsconfig*.json`, `.eslintrc*`,
+  every common lockfile (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `poetry.lock`, `uv.lock`,
+  `Cargo.lock`, `go.sum`, `Gemfile.lock`, `composer.lock` …), and the test, lint and type configs such as `vitest.config.*`, `tsconfig*.json`, `.eslintrc*`,
   `pytest.ini`, `pyproject.toml`, `Cargo.toml` and `Makefile`, see queue.md). Read the diff; then add the path to the
   task's ownership, or run `ravenseat merge <ID> --allow-guard`, which is logged as `guard-overridden` in the time log.
   Other files outside the ownership only give a warning.
 - **Network guard.** For every queue agent, `hook-push-guard.mjs` denies `curl`, `wget`, `iwr`/`irm`,
-  `Start-BitsTransfer` and a pipe into a shell (`| sh`, `| iex` …), and asks before `npm install` or `npx` with a
+  `Start-BitsTransfer` and a pipe into a shell (`| sh`, `| iex` …), also behind `eval`, `wsl`, `timeout` and nested shells
+  (the same reading as the push guard). It denies installs and removals through npm, pnpm, yarn and bun and deleting
+  `node_modules`, since `node_modules` in a worktree is a link into the main tree, and asks before `npx` with a
   package that is not in `package.json`. The queue agents are `track`, `track-d` and every reviewer and helper agent,
   builtin or custom (the same list as the read guard, `queueAgentTypes` in `lib/trackGuard.js`, also with the plugin
   prefix such as `ravenseat:reviewer`, plus every agent file the plugin ships, `PLUGIN_AGENT_TYPES`: `ask`, `triage` and all

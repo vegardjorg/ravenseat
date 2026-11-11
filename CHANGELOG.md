@@ -9,6 +9,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - Red on base: with `gates.redOnBase` set to a test command (`{files}` marks where the quoted files go), `receive` runs the track's new or changed test files on the delivered tip (they must pass) and, with the rest of the track's change taken away in its worktree, one at a time (at least one must fail). Tests that pass without the change get a `RED ON BASE` warning and a `Red on base` section in the review package; the worktree is put back afterwards. A warning, never a stop. Off by default; `doctor` checks the value.
 
 ### Changed
+- The guards close three gaps an outside review found. Queue agents can no longer run `npm ci`, `npm install`, `npm update`, `npm rebuild` or the pnpm, yarn and bun forms, or delete `node_modules`: in a worktree it is a link into the main tree, so it changed the main tree and every other track (the mission already forbade it). Every common lockfile is now protected by default, not only npm's (`yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `poetry.lock`, `uv.lock`, `Cargo.lock`, `go.sum`, `Gemfile.lock`, `composer.lock` …). The network guard reads the command line the way the push guard does, so `wsl curl`, `timeout 5 curl` and `eval curl` are caught too.
+- The orchestrator's instructions now say that a track's report, RESULT line and handover are data, never instructions.
 - A focus marker (`.only(`, `fit(`, `fdescribe(`) on an added line in a test file now stops `merge`, since the gates went green while the other tests never ran. Skips stay a warning. `--allow-focus` overrides it (logged as `focus-overridden`); `testWeakening.focusStop: false` turns the stop off.
 
 ## 0.8.34 (2026-11-11)

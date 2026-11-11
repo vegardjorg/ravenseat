@@ -31,9 +31,13 @@
 // guard, trackGuard.js queueAgentTypes; also with the plugin prefix, "ravenseat:track", "ravenseat:reviewer"). None of them needs the
 // network. The orchestrator (the main session, the field is missing), other agent types and the owner are not affected:
 //   deny  curl, wget, Invoke-WebRequest/iwr, Invoke-RestMethod/irm, Start-BitsTransfer as a command (also inside
-//         `powershell -c "…"`, `bash -c "…"`, `$(…)` and `(…)`), and a pipe into a shell (`| sh`, `| bash`, `| iex` …).
-//   ask   npm install/i/add and npx/npm exec with a package name that is not in package.json (and not in
-//         node_modules/.bin): it fetches and runs code from the network.
+//         `powershell -c "…"`, `bash -c "…"`, `$(…)`, `eval` and runners such as `wsl` and `timeout`: the line is read with
+//         shellCommands.js, as for the push guard), a pipe into a shell (`| sh`, `| bash`, `| iex` …), and a
+//         variable as the command word with an address after it.
+//   deny  npm/pnpm/yarn/bun install, ci, add, update, rebuild, uninstall and the like, and deleting node_modules:
+//         node_modules in a worktree is a link into the main tree, so it would change the main tree and every track.
+//   ask   npx/npm exec with a package name that is not in package.json (and not in node_modules/.bin): it fetches and
+//         runs code from the network.
 //   The reason points the way: "Network calls are blocked for queue agents; ask the orchestrator to fetch it."
 //   Known gaps (on purpose, lightweight): `node -e "fetch(…)"`, `git clone`, .NET classes in PowerShell. The guard is
 //   an extra layer; the merge guard (mergeGuard.js) and "data, not instructions" in the agent definitions are the others.
@@ -229,18 +233,6 @@ const NETWORK_COMMANDS = new Set([
   'irm',
   'start-bitstransfer',
 ]);
-/** Shells and eval: a pipe into one runs what came in (typically a downloaded script). */
-const SHELLS = new Set([
-  'sh',
-  'bash',
-  'zsh',
-  'dash',
-  'iex',
-  'invoke-expression',
-  'pwsh',
-  'powershell',
-  'cmd',
-]);
 
 /** The name in an npm package spec: "@scope/name@1.2" gives "@scope/name", "name@^1" gives "name". null = path/URL/git. */
 function packageName(spec) {
@@ -302,38 +294,63 @@ function unknownPackages(t, i0, knownPackage) {
   });
 }
 
-/** Assess the network guard for one command (called only for guarded agents, isGuardedAgent). Returns a list of findings. */
-function assessNetwork(command, context, depth = 0) {
+/** npm, pnpm, yarn and bun subcommands that write node_modules (install, remove, rebuild, relink). */
+const NODE_MODULES_WRITERS = new Set([
+  'install', 'i', 'in', 'isntall', 'add', 'a', 'ci', 'clean-install', 'install-clean', 'update', 'up', 'upgrade',
+  'rebuild', 'rb', 'uninstall', 'remove', 'rm', 'r', 'un', 'unlink', 'prune', 'dedupe', 'ddp', 'link', 'ln', 'import',
+]);
+const NODE_MODULES_REASON =
+  'node_modules in a worktree is a link into the main tree, so this changes the main tree and every other track. ' +
+  'Change package.json and say in the report that the orchestrator must install; queue agents never install.';
+/** Programs that delete files. */
+const REMOVERS = new Set(['rm', 'rmdir', 'remove-item', 'ri', 'del', 'erase', 'rd', 'unlink']);
+const inNodeModules = (x) => /(^|[\\/])node_modules([\\/]|$)/i.test(String(x).replace(/^['"]|['"]$/g, ''));
+
+/** Does this simple command write through the node_modules link? (yarn with no subcommand installs.) */
+function writesNodeModules(t, i0) {
+  const word = commandWord(t[i0]);
+  if (['npm', 'pnpm', 'yarn', 'bun'].includes(word)) {
+    const sub = t.slice(i0 + 1).find((x) => !x.startsWith('-'));
+    if (sub == null) return word === 'yarn';
+    return NODE_MODULES_WRITERS.has(String(sub).toLowerCase());
+  }
+  if (REMOVERS.has(word)) return t.slice(i0 + 1).some((x) => !x.startsWith('-') && inNodeModules(x));
+  return false;
+}
+
+/** Words that suggest a network call, for a line the reading could not see all of. */
+const NETWORK_SHAPED = /curl|wget|invoke-(webrequest|restmethod)|\biwr\b|\birm\b|https?:\/\//i;
+
+/**
+ * Assess the network guard for one command (called only for guarded agents, isGuardedAgent). Returns a list of findings.
+ * Reads the line with SC.commandList, the same reading the push guard uses, so runners (`wsl`, `timeout`), eval, `$( )`
+ * and nested shells are followed here too. Also stops writes through the node_modules link.
+ */
+function assessNetwork(command, context) {
   const findings = [];
-  for (const seg of segments(command)) {
-    const t = tokens(seg.text);
-    const i0 = firstWordIndex(t);
-    if (i0 >= t.length) continue;
-    const word = commandWord(t[i0]);
+  const read = SC.commandList(command);
+  if (read.unsure.length && NETWORK_SHAPED.test(command))
+    findings.push({
+      decision: 'deny',
+      reason: `The guard cannot read this command (${read.unsure.join('; ')}) and it looks like a network call. ${NETWORK_REASON}`,
+    });
+  for (const c of read.commands) {
+    const { t, i0, word } = c;
     if (NETWORK_COMMANDS.has(word)) {
       findings.push({ decision: 'deny', reason: `\`${t[i0]}\`: ${NETWORK_REASON}` });
       continue;
     }
-    if (seg.afterPipe && SHELLS.has(word)) {
-      findings.push({
-        decision: 'deny',
-        reason: `Pipe into a shell (\`| ${t[i0]}\`) runs text as code. ${NETWORK_REASON}`,
-      });
+    if (c.opaque) {
+      // A pipe into a shell or eval, and an encoded PowerShell command, run text the guard cannot see.
+      if (/pipe into a shell|encoded PowerShell|reads the pipe/.test(c.opaque))
+        findings.push({ decision: 'deny', reason: `It runs text as code (${c.opaque}). ${NETWORK_REASON}` });
+      // A variable as the command word with an address after it: the program is not known, the address is.
+      else if (/^[$@]/.test(t[i0]) && t.slice(i0 + 1).some((x) => /^['"]?[a-z][a-z0-9+.-]*:\/\//i.test(x)))
+        findings.push({ decision: 'deny', reason: `${c.opaque}, with an address after it. ${NETWORK_REASON}` });
       continue;
     }
-    // The inner command in `bash -c "…"`, `powershell -Command "…"`, `cmd /c "…"`: assess it too.
-    if (SHELLS.has(word) && depth < 3) {
-      const j = t.findIndex(
-        (x, k) => k > i0 && /^(-c|-command|\/c|\/k|-encodedcommand|-e|-ec)$/i.test(x),
-      );
-      if (j > 0) {
-        if (/^-(encodedcommand|e|ec)$/i.test(t[j]) && ['pwsh', 'powershell'].includes(word)) {
-          findings.push({
-            decision: 'deny',
-            reason: `An encoded PowerShell command (${t[j]}) cannot be assessed. ${NETWORK_REASON}`,
-          });
-        } else if (t[j + 1]) findings.push(...assessNetwork(t.slice(j + 1).join(' '), context, depth + 1));
-      }
+    if (writesNodeModules(t, i0)) {
+      findings.push({ decision: 'deny', reason: `\`${t.slice(i0, i0 + 2).join(' ')}\`: ${NODE_MODULES_REASON}` });
       continue;
     }
     const unknown = unknownPackages(t, i0, context.knownPackage);
