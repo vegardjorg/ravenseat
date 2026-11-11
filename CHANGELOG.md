@@ -12,6 +12,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ### Changed
 - The track hooks that run on every tool call no longer load the whole queue logic: `lib/contextGuard.js` loads it only when it binds the orchestrator, which saves some 35 modules and 70 ms per call.
+- The cost docs give their sources: they describe how cost per task is measured, the class table has its date window and n per class, says it is subagents only and that cost per task drifts (with later windows), the orchestrator's cost per finished task is a measured 14-day window, the compaction sample is corrected, fix-round savings are called design rather than measured, the long main sessions are listed as a measured cost, the calibration ratios in the queue reference come from their real sample, and the `maxConcurrent` table says 3-4 for 32 GB, where five tracks broke the gates in one large project.
 
 ## 0.8.35 (2026-11-11)
 

@@ -178,9 +178,10 @@ in Statistics. The logic is `lib/queueForecast.js`.
 
 ### Cost estimates and calibration
 
-Minute estimates (`content_min` x the class weight) are poor predictors: in a project with about 2,800 tasks the
-median actual/estimate ratio was 0.33 for K, 1.62 for D, 2.33 for D+ and 0.40 for U. The median measured cost per class
-predicts cost well (median ratio about 0.97). So ravenseat estimates cost from measured cost, not from minutes:
+Minute estimates (`content_min` x the class weight) are poor predictors: in one large project, over about 830 tracks
+finished in two weeks of October, the median actual/estimate ratio of cycle time was 0.33 for K, 1.39 for D, 2.00 for
+D+ and 0.70 for U. In the same sample the median measured cost per class predicted cost well (median ratio about
+0.97). So ravenseat estimates cost from measured cost, not from minutes:
 
 1. **Class + size**: when the class and size bucket (S up to 30 content minutes, M up to 60, L above) has at least 5
    done tasks with a measured cost (`cost.usd`) in the last 28 days, the estimate is that bucket's median.

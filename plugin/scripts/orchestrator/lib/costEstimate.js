@@ -7,8 +7,8 @@
 //   - the static model queueLogic.estimateCost (fixed + content_min x factor per class, CALIBRATED),
 //   - the usage events from the time log (timeCost.usageEvents, the same numbers as the budget guard).
 //
-// WHY: minute estimates are poor predictors (in a project with about 2,800 tasks the median actual/estimate ratio was
-// K 0.33, D 1.62, D+ 2.33, U 0.40), while the median measured cost per class predicts the cost well. So the cost
+// WHY: minute estimates are poor predictors (in one large project, about 830 tracks finished in two weeks of October, the median
+// actual/estimate ratio of cycle time was K 0.33, D 1.39, D+ 2.00, U 0.70), while the median measured cost per class predicts the cost well. So the cost
 // estimate is calibrated on measured cost, not derived from the minute estimate:
 //   1. class + size bucket with at least `minSample` measured done tasks in the window: the bucket's median USD,
 //   2. otherwise the class with at least `minSample`: the static model for the task x the class's median ratio
