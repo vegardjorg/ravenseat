@@ -514,6 +514,18 @@ also your decision and never goes back to an agent as a fix round. The same two 
 it does not prevent. A change undone before the next check is not seen, a process that outlives its run can act later,
 and git commands you or a script run by hand are not stopped.
 
+### Your own Claude setup
+
+A track runs as you, so it can write outside its worktree, also in your own Claude folder (`~/.claude`, or
+`CLAUDE_CONFIG_DIR`). git never sees that folder, so no merge guard can catch a change there. `start` and `fill`
+record a hash of each entry on a short list: `settings.json`, `settings.local.json`, `CLAUDE.md`,
+`keybindings.json`, the plugin manifests (`plugins/installed_plugins.json`, `plugins/known_marketplaces.json`) and
+the folders `agents/`, `commands/`, `skills/` and `hooks/`. `receive` compares and prints
+`CLAUDE SETUP CHANGED <id>: <entries>` when one changed while the track ran, with the other tracks that ran at the same
+time. It only warns, since you may have changed the setup yourself. Only hashes are stored on the task (`claude_fp`),
+never content. Transcripts and the plugin cache are left out: they change all the time. `"claudeFingerprint": false`
+turns it off.
+
 ## Configuration
 
 Project-specific values live in `queue.config.json` at the project root (see `queue.config.example.json`): base branch,
@@ -546,6 +558,7 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `readGuard` | built-in lists | Extra agent types, auto-loaded files and large-file globs for the reading guard |
 | `protectedPaths` | hooks, settings, agents, skills, the orchestrator scripts, the queue config, `package.json`, and the test, lint and type configs | Merge guard (replacing or emptying the list never frees the queue config, `.claude/`, git hooks, `CLAUDE*.md` and the queue scripts): paths a track may only change when its task owns them (`owned_files`/`shared_patch`), else `merge` stops with exit 4. `"folder/"`, `"dir/file"`, a bare file name (any folder) or a glob with `*` or `?` (without a slash: the file name in any folder; with one: the path from the root, `**/` = any folders). The config defaults: `vitest.config.*`, `vitest.workspace.*`, `jest.config.*`, `playwright.config.*`, `cypress.config.*`, `karma.conf.*`, `.mocharc*`, `tsconfig*.json`, `.eslintrc*`, `eslint.config.*`, `biome.json*`, `pytest.ini`, `tox.ini`, `setup.cfg`, `conftest.py`, `pyproject.toml`, `mypy.ini`, `.coveragerc`, `.flake8`, `.golangci.*`, `Cargo.toml`, `Makefile`, `Justfile`/`justfile`, `.pre-commit-config.yaml`, `phpunit.xml*`, `.rspec`. Also `.husky/`, lefthook, `.npmrc`, `.yarnrc(.yml)`, `.pnpmfile.cjs`, `.vscode/`, `.gitattributes`, and `CLAUDE.md` and `.claude/` at any level. The match ignores case (`.CLAUDE/` is `.claude/` on Windows and macOS). A list in the config REPLACES the defaults (copy the entries you keep); `[]` turns the guard off |
 | `reads` | `{ "mode": "wait" }` | Read ownership (the task field `reads`): `wait` = a task waits while one reads a file the other changes; `warn` = it starts with the overlap named (`READS WARNING`, `explain`, the mission). `doctor` names any other mode |
+| `claudeFingerprint` | `true` | The fingerprint of your own Claude setup (see "Your own Claude setup"): `start` records hashes, `receive` warns with `CLAUDE SETUP CHANGED`. `false` = off |
 | `hotspots` | `[]` | Shared config many tasks need to touch (a route table, a registry, a central index), in the same pattern forms as `protectedPaths`. A hotspot can never be in a task's `owned_files`; a task that may change one names it in `hotspot_patch`, and only one active task can hold it at a time. A track that changes a hotspot it has not agreed gets a write warning, the pulse and `receive` say it, and `merge` stops with exit 4 (`--allow-guard` overrides and is logged). The track writes a wiring spec instead, and the owner or the hotspot holder applies it |
 | `dependencyFiles` | `"stop"`, in lite `"warn"` | A task that changes `package.json`, `package-lock.json`, `pyproject.toml`, `Cargo.toml`, `requirements*.txt`, `go.mod`, `Gemfile`, `pom.xml`, `build.gradle(.kts)` or `composer.json` without owning it: `"stop"` stops the merge like any protected path, `"warn"` warns and merges. Nothing else softens with it |
 | `identity.allow` | `[]` | Addresses the identity guard accepts although they look like a test identity (`ci@example.com`). Exact, not case sensitive |

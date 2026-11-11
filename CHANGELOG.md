@@ -7,6 +7,10 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ### Added
 - Read ownership: the task field `reads` lists files (or folders with `/`) a task builds on but does not change. A task that reads a file an active task changes waits until that task is done, and so does a task that would change a file an active task reads; two readers never block each other. `"reads": { "mode": "warn" }` lets it start with a `READS WARNING` instead. `explain` and the board say why, the mission lists the read files and says which one is being changed, batch packing keeps them, `doctor` checks the mode, and the add-to-queue skill fills `reads` from the imports and calls it finds with Grep.
+- The fingerprint of your own Claude setup: `start` and `fill` record hashes of the settings files, `CLAUDE.md`, keybindings, the plugin manifests and the agents, commands, skills and hooks folders in `~/.claude` (or `CLAUDE_CONFIG_DIR`). `receive` warns with `CLAUDE SETUP CHANGED` when one changed while the track ran, since git never sees that folder. Only hashes are stored. `"claudeFingerprint": false` turns it off.
+
+### Changed
+- "Decide or ask" now names architecture: a track asks before it draws a new module boundary, sets a pattern other modules will follow, or moves responsibility between layers, instead of writing it down as an assumption. The reviewer and the light reviewer flag an assumption that is really such a choice ("should have asked"), and the architecture lens of the area review looks for them.
 
 ## 0.8.33 (2026-11-11)
 

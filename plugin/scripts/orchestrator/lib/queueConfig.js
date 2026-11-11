@@ -132,6 +132,10 @@ const STANDARD = Object.freeze({
   // that would change a file an active task reads. "wait" = it waits until the other is done; "warn" = it starts, and
   // start, fill, explain and the mission name the overlap. Two readers never block each other.
   reads: { mode: 'wait' },
+  // The fingerprint of the owner's own Claude setup (lib/claudeFingerprint.js): start records hashes of ~/.claude's
+  // settings, agents, commands, skills, hooks and plugin manifests; receive warns (CLAUDE SETUP CHANGED) when one
+  // changed while the track ran. Only hashes are stored. false = off.
+  claudeFingerprint: true,
   // Shared config blocks parallel tracks break each other on (routes, registries, DI, i18n, feature flags), with the
   // protectedPaths rules. No task owns one; an agreed change goes in the task field hotspot_patch (one task at a time),
   // otherwise the track writes a wiring spec and the orchestrator makes the change. The merge guard stops an unagreed

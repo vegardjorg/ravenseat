@@ -551,6 +551,14 @@ export function markStarted(queue, o, { agent = null, head = null, scratchpad = 
   // HEAD on baseBranch at start (--wave-base for merge-track) and the scratchpad (receive finds the report there).
   if (head) o.head_start = head;
   if (scratchpad) o.scratchpad = scratchpad;
+  // The owner's own Claude setup before the track runs (lib/claudeFingerprint.js); receive compares. Only hashes.
+  if (CONFIG?.claudeFingerprint !== false) {
+    try {
+      o.claude_fp = require('./lib/claudeFingerprint.js').fingerprint();
+    } catch {
+      delete o.claude_fp;
+    }
+  }
   return o;
 }
 /** The time log row for a start (the same for start and fill). */

@@ -429,6 +429,13 @@ export function cmdReceive() {
     console.log(
       `Assumptions ${id}'s track made (read them before you merge; to change one: ${CLI} resume ${id} --reason fix --answer "<text>"):\n${assumptions}`,
     );
+  // The owner's own Claude setup: did a listed entry in ~/.claude change while the track ran (lib/claudeFingerprint.js)?
+  if (o0.claude_fp && CONFIG?.claudeFingerprint !== false) {
+    const CFP = require('./lib/claudeFingerprint.js');
+    const changes = CFP.compare(o0.claude_fp, CFP.fingerprint({ dir: o0.claude_fp.dir }));
+    const others = read().tasks.filter((x) => x.id !== id && ['running', 'review', 'picked'].includes(x.status)).map((x) => x.id);
+    for (const l of CFP.warningLines(id, changes, { dir: o0.claude_fp.dir, others })) console.log(l);
+  }
   // The quick gates bound to the delivered tip (receiveGates), BEFORE the done command and any reviewer: the track's own
   // claim is informational only. A PARTIAL track is known to be unfinished, so no gate runs for it.
   if (result?.gates != null && result.status !== 'PARTIAL')
