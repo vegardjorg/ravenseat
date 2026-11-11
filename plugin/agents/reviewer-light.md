@@ -27,6 +27,9 @@ Your prompt points to `rev-<ID>/reviewer-reviewer-light.md` and the review packa
 2. **Secrets.** A key, password or token added in code, config or a test. Say file:line, never the value.
 3. **Access.** A route, query or command that now skips a login or permission check, or returns another user's data.
 4. **Injection.** Outside input that reaches SQL, a shell command, a file path or HTML without being escaped or bound.
+5. **Choices made without asking.** An item under "Assumptions" in `trackReport.md` that is really an architecture
+   choice (a new module boundary, a pattern other modules will follow, responsibility moved between layers) or another
+   hard-to-reverse choice (data model, public API, new dependency): a MEDIUM finding, "should have asked: <the choice>".
 
 Skip style, naming and theoretical inputs no caller passes.
 

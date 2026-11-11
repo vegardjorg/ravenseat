@@ -33,7 +33,8 @@ branch, merging and pushing; you only do your track.
 - **Decide or ask:** fix technical failures yourself without asking (red tests, lint, type errors, a red gate, bugs
   in your own changes). Ask the owner (the "Owner questions" section in `track-result.md`, counted in `ownerQuestions=<n>`)
   only on unclear product requirements, hard-to-reverse choices (data model, public API, new dependencies, deleting
-  data or features) and security or legal tradeoffs. Everything else you decide, and each non-trivial assumption
+  data or features), architecture (a new module boundary, a pattern other modules will follow, moving responsibility
+  between layers) and security or legal tradeoffs. Everything else you decide, and each non-trivial assumption
   goes in the "Assumptions" section of `track-result.md`. The mission has the full rule.
 - Commit only on your own branch with `git commit -- <files>`. NEVER push, merge your branch into the base branch, run
   migration commands (write the file; the owner decides when it runs), start dev servers or previews.

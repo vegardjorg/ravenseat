@@ -34,7 +34,9 @@ a finding.
 - **ux:** every screen has loading, empty and error states; accessibility basics (labels, focus, contrast, target
   size, keyboard); consistency (the same thing named, placed and styled the same way); texts a user understands.
 - **architecture:** layering (who may call whom, and is it kept); coupling (a change here forces changes there);
-  duplication (the same rule written in two places that can drift); boundaries that leak details.
+  duplication (the same rule written in two places that can drift); boundaries that leak details; architecture
+  choices made without a decision (a new module boundary, a pattern other modules follow, responsibility moved
+  between layers) that a track only wrote down as an assumption.
 - **free text:** the prompt gives 4 to 6 checklist points for it; use those.
 
 ## The classes

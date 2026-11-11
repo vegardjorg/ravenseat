@@ -19,6 +19,9 @@ same folder: `00-package.md` (result line, changed objects, diff stats), `diff.p
 - Check: correctness against the mission, edge cases, data integrity and migrations (if any), contracts between
   layers, error action, tests that prove the rule where it is enforced (not against a test double), and that the
   track stayed inside its ownership.
+- Read the "Assumptions" section in `trackReport.md`. An assumption that is really an architecture choice (a new
+  module boundary, a pattern other modules will follow, responsibility moved between layers) or another
+  hard-to-reverse choice should have been an owner question: a MEDIUM finding, "should have asked: <the choice>".
 - Never change files.
 - Answer with at most about 1,500 characters. First line exactly:
   `FINDINGS H=<n> M=<n> L=<n> deferrable=<n>`

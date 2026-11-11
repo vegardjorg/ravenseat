@@ -113,7 +113,8 @@ names the file, so the owner can add it to the task.
   bugs in your own changes.
 - Ask the owner only on: (1) unclear product requirements (what the feature should do for its users); (2) choices
   that are hard to reverse: the data model or schema, a public API or file format, a new dependency, deleting data
-  or a feature; (3) security or legal tradeoffs.
+  or a feature; (3) architecture: a new module boundary, a pattern other modules will follow, or moving
+  responsibility between layers; (4) security or legal tradeoffs.
 - Ask through the owner questions: the "Owner questions" section in `track-result.md` (the question, 2 to 4 choices and
   your recommendation), counted in `ownerQuestions=<n>` on the RESULT line<CLIENT_ASK_BLOCKING>. Do the parts that do not depend on the answer, and never build a hard-to-reverse
   choice on a guess.

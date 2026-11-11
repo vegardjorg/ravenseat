@@ -163,7 +163,8 @@ fails once and passes on a rerun is recorded as flaky instead of freezing the ba
 **The goal is that your only contact surface is a decision list.** Once your project has checks you trust (tests,
 type check, lint, a database run before push), the routine needs no human: agents build, the gates check, the
 orchestrator merges. What is left for you is what a machine should not decide alone:
-- unclear product requirements, hard-to-reverse choices (data model, public API, new dependencies, deletions) and
+- unclear product requirements, hard-to-reverse choices (data model, public API, new dependencies, deletions),
+  architecture (a new module boundary, a pattern other modules will follow, moving responsibility between layers) and
   security or legal tradeoffs. Tracks fix technical failures themselves and ask you only about these; other
   assumptions are written down in the report;
 - approving tasks agents propose, visual QA, and work that is stuck.
