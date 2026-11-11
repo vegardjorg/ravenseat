@@ -122,7 +122,10 @@ show. Run `npm run redteam` to check it yourself.
 
 More agents do not automatically mean cheaper development. Long contexts, repeated setup and fix rounds in bloated
 agents eat tokens, so Ravenseat uses short agent contexts, keeps state outside the conversation, shares installed
-dependencies between worktrees and never polls in a loop.
+dependencies between worktrees and never polls in a loop. Each task's cost is measured from its own sessions,
+fix rounds and reviews included, and the estimates are calibrated against what was measured. Parallel agents can
+choke a PC before they use up a quota, so a load guard starts fewer agents while free memory is low, and
+`ravenseat machine` suggests how many your machine can take.
 
 In one project, about 1,200 measured tasks gave a median of about 2.5 USD (API-equivalent) per ordinary code task
 including its review. That is one project and one developer, not a controlled benchmark, and it does not show a
