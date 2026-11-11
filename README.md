@@ -36,8 +36,10 @@ You:  What's waiting on me?    (later, from your phone)
 you say "push". Each delivery lists what the agent assumed (its Assumptions); read them before the merge, because
 passing tests do not show that the agent understood you.
 
-**Is it for you?** A growing project with automated tests and more work than one chat can hold. Not needed for a small
-script, a single task, or a project without meaningful checks and no plan to add them.
+**Is it for you?** If you are building something that takes weeks, like a SaaS with several features, a backend and
+a database, the work no longer fits in one chat, and that is where Ravenseat helps most. For a small demo or a tool for
+your own use, plain Claude Code is probably enough. It works best with automated tests; without meaningful checks
+there is little for it to verify.
 
 **Status.** Young: public since late October 2026, built over several months inside the author's own project, released
 often. The [FAQ](plugin/docs/faq.md) answers the usual worries, each with the tests behind the answer.
