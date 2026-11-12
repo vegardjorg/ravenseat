@@ -6,9 +6,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- `lib/settingsRegistry.js` has one row per setting (11 categories, basic or advanced, lite or full, where it is stored, and warning texts for settings that weaken a guard). A coverage test makes sure every setting has a row. Nothing reads it yet.
 - `ravenseat doctor` has a `budget` line: a WARN when no daily budget is set, with `ravenseat limit dailyBudget <usd>` as an optional fix (new tasks stop when the day's measured spend reaches it). It never fails and does not change the exit code, and quiet guidance hides it like the other advice.
 
 ### Fixed
+- `queue.config.example.json` now matches the defaults for `board.showCloud` (true) and `indexFile` (`docs/INDEX.md`). A test keeps every example value equal to the default unless it is listed as a deliberate example value.
+- The queue reference had `protectedPaths` twice, both saying `[]` turns the guard off; one row is left, and it says `[]` drops the defaults but keeps the floor. The base gate key is `baseGate.commands`.
 - "Next up" on the board, `next`, `fill` and the focus view no longer offer a waiting task with an open blocker that needs action (the codes of the Blocked column, such as `gate-red` or `owner-question`). The start rules (`blockers`) now name the open block, `blocked: <code> since <time>; ravenseat unblock <id>`, so the board and the CLI share one rule; `ravenseat unblock` frees the task.
 - The merge guard now reads paths with non-ASCII characters as they are. With git's default `core.quotepath`, a protected file such as `.claude/skills/ø/SKILL.md` or `ø/CLAUDE.md` came out quoted and went through as ownership drift (a warning) instead of stopping the merge. `merge-track` reads the diff with `-z`, and the queue's git calls set `core.quotepath=off`.
 - A conflict in a binary file, or in text that is not UTF-8, is now left for you to resolve. The automatic conflict merge read it as text, found no changes, and committed a damaged copy of the base version, losing both sides' changes.
@@ -20,6 +23,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - `cleanup-worktree --all --execute` no longer deletes a folder under `.claude/worktrees/` that git does not list when its `.git` is a folder or points to a gitdir that exists, or when `git status` there fails or shows changes. After a moved or renamed project a real worktree with uncommitted work could look unknown and be deleted; the message now suggests `git worktree repair`.
 
 ### Changed
+- full-mode.md and guide.md now say what lite really has: the Plans room is on by default (`features.plans`), and `reviewer-light` reviews class K tasks when the project has no CI config or no gates. A test pins this against the code.
 - The docs for the queue for heavy gates and the FAQ say where it has run: developed and run on Windows, CI runs its tests on Linux and Windows, and it has not been tried on macOS.
 - The track hooks that run on every tool call no longer load the whole queue logic: `lib/contextGuard.js` loads it only when it binds the orchestrator, which saves some 35 modules and 70 ms per call.
 - The cost docs give their sources: they describe how cost per task is measured, the class table has its date window and n per class, says it is subagents only and that cost per task drifts (with later windows), the orchestrator's cost per finished task is a measured 14-day window, the compaction sample is corrected, fix-round savings are called design rather than measured, the long main sessions are listed as a measured cost, the calibration ratios in the queue reference come from their real sample, and the `maxConcurrent` table says 3-4 for 32 GB, where five tracks broke the gates in one large project.
