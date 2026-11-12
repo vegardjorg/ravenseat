@@ -138,8 +138,7 @@ function planText(p, where) {
     '',
     '## After the split',
     '',
-    '- Add one line to the root CLAUDE.md: "Before the first Write in a folder, Read an existing file there, so the rules',
-    '  for that folder load." A rule with paths: loads when Claude reads a matching file; writing a new file may not load it.',
+    '- A rule with paths: loads when Claude reads, edits or writes a matching file, also a new one, and in tracks too.',
     '- In each rule file, point to the one place a shared rule lives instead of copying it.',
     `- Run \`${CLI} instructions\` again and compare the numbers.`,
     '',
@@ -148,9 +147,8 @@ function planText(p, where) {
     `> Read the plan in ${where}. Split my instructions as it suggests, with my changes to it: keep the rules that apply`,
     '> everywhere in the root CLAUDE.md, move each area rule to the .claude/rules/ file it names with the paths: it names,',
     '> move each procedure to a skill, and remove what you can read from the code. Keep the wording of every rule you move.',
-    '> Keep one copy of each duplicate line and point to it from the others. Add the line about Read before the first',
-    `> Write. Show me the diff before you write anything, and change nothing until I say yes. Then run ${CLI} instructions`,
-    '> again and show me the numbers before and after.',
+    '> Keep one copy of each duplicate line and point to it from the others. Show me the diff before you write anything,',
+    `> and change nothing until I say yes. Then run ${CLI} instructions again and show me the numbers before and after.`,
     '',
   );
   return out.join('\n');

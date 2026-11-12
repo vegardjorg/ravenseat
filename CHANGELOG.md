@@ -16,6 +16,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - `ravenseat gates --health [--json]`: per gate command the runs, red and flaky ones, p50 and p95 seconds and the slowest, from the time log and all its archives, and a hint for every command never red in 50 or more runs. Gate rows now store the seconds per command (`durations`).
 
 ### Changed
+- The `ask` helper starts without your CLAUDE.md (`omitClaudeMd: true`), so each question costs less. It answers from the bundle and needs none of your rules; a test keeps every other agent loading them.
+- `ravenseat instructions --plan` no longer asks for a Read before the first Write in a folder. On Claude Code 2.1.319 a rule with `paths:` loads on Write of a new file too, also in a subagent.
 - The per-class cost figures in `ravenseat cost` and `--since` count tasks by their start date, not their done date, and the output says so.
 
 ### Fixed

@@ -179,7 +179,7 @@ fails once and passes on a rerun is recorded as flaky instead of freezing the ba
   finishes the remaining steps. `queue.json.prev` keeps the previous good queue state, and `<dataFolder>/snapshots/` keeps copies at a
   few ages (one hour up to a week, `stateSnapshots` in the config).
 - **Ask an earlier track.** `ravenseat ask <id> "why X?"` answers from the track's mission, report, commits and transcript
-  tail, without resuming a large agent.
+  tail, without resuming a large agent. The helper starts without your `CLAUDE.md`, since it needs none of your rules.
 
 ## You only make the decisions
 

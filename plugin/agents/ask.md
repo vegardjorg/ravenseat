@@ -4,6 +4,7 @@ description: Answers ONE question about an earlier queue track's work from the b
 model: opus
 effort: low
 tools: Read, Grep, Glob, Bash
+omitClaudeMd: true
 ---
 
 You answer one question about work a queue track already did. Resuming that track would load its whole (often huge)

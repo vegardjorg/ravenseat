@@ -40,6 +40,14 @@ describe('the agent files', () => {
     expect(s).not.toContain('—');
   });
 
+  // omitClaudeMd: true starts the agent without CLAUDE.md (probe 2026-11-12 on Claude Code 2.1.319: the project
+  // codeword was gone, a rule with paths: still loaded on a matching file). Only ask may skip the project's
+  // instructions; tracks, reviewers and triage must follow and enforce them.
+  it('only ask starts without CLAUDE.md', () => {
+    const omit = files.filter((f) => /^omitClaudeMd:\s*true\s*$/m.test(read(f)));
+    expect(omit).toEqual(['ask.md']);
+  });
+
   it.each(reviewers)('%s is read-only, answers with FINDINGS first and disproves before HIGH/MEDIUM', (f) => {
     const s = read(f);
     expect(s).toMatch(/^tools: Read, Grep, Glob, Bash\s*$/m);

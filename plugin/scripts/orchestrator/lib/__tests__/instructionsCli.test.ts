@@ -180,7 +180,10 @@ describe('ravenseat instructions', () => {
     for (const f of Object.keys(dataBefore)) expect(dataAfter[f], f).toBe(dataBefore[f]);
     const plan = dataAfter['instructions-plan.md'];
     expect(plan).toContain('## Text to give Claude in your own session');
-    expect(plan).toContain('Read an existing file there');
+    // Claude Code 2.1.319 loads a rule with paths: on Write of a new file too (probe 2026-11-12), so the plan no longer
+    // asks for a Read before the first Write.
+    expect(plan).not.toContain('Read an existing file there');
+    expect(plan).not.toContain('Read before the first');
     expect(r.out).toContain('instructions-plan.md');
   });
 
