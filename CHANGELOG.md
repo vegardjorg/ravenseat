@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+## 0.9.0 (2026-11-12)
+
+**Every setting in one place, and no guard weakened by accident: `ravenseat settings` and the board list every setting by category with basic first and Advanced folded below, and turning a guard down needs a warning and a confirmation (a slide on the board, `--i-understand --by owner` in the CLI) and is logged. Merge now rests on ravenseat's own evidence instead of what a track can write, owner rows are checked against an owner log, the guards cover every subagent, a git hook stops pushes from track worktrees, and an outside review's merge gaps are closed (non-ASCII paths, binary conflicts, a commit landing after the checks, hidden pushes).**
+
+### After you update
+- `ravenseat doctor` has a new `settings` row. If you already turned a guard off (for example `secretScan.enabled: false` or `baseGate.enabled: false`), it shows as a WARN; that is expected when you chose it.
+- If you already have a program-valued git key set (such as `core.editor`), the git surface check shows it once as a difference: run `ravenseat surface accept --by owner`.
+- The first queue write after the update records the current queue as the owner log's baseline. If `receive` or `merge` later stops on an owner row with no recorded write, check it and run `ravenseat owner-log accept <id> --by owner`.
+- `ravenseat proposals auto on`, `ravenseat mode lite` on a full project and `ravenseat cloud set collect auto` now need `--i-understand --by owner`. A new project's first `init` still gets lite with no question.
+- General-purpose, Explore and custom subagents are now under the same push, network and write guards as the queue's own agents. Reading is unchanged. `agentGuard.except` lists types to leave out (a confirmed weakening).
+- `merge` may run the quick gates or the done command once more for a task received before the update, since records in queue.json no longer count as evidence.
+
 ### Added
 - `lib/settingsRegistry.js` has one row per setting (11 categories, basic or advanced, lite or full, where it is stored, and warning texts for settings that weaken a guard). A coverage test makes sure every setting has a row. `ravenseat settings` and the board's gear read it.
 - `ravenseat settings [<category>] [--advanced] [--all] [--changed] [--json]` lists every setting by category with its value, the default and where it is saved, and names the guards weaker than the default on the first line. Advanced rows are marked; in lite the full-only rows are counted on one line per category (`--all` shows them).
