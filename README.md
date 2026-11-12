@@ -18,11 +18,11 @@ When a Claude Code project outgrows one chat, the signs are familiar:
 - The one long chat that keeps the overview gets more expensive every turn.
 - You spend more time keeping agents on track than deciding what to build.
 
-Ravenseat keeps one plan and one task list (the queue) for the project in files, outside the chat. You talk to one
-Claude Code chat: say what to build and answer the questions that need you. Each task goes to a fresh agent in its own
-copy of the project, your tests check the result, and what passes is merged on your machine. You can follow along and
-answer from your phone with Claude Code's Remote Control, while the work runs on your computer. The result: work that
-spans days gets finished across many chats, and your time goes to the decisions.
+Ravenseat keeps the project's plan and task list (the queue) in files, outside the chat. One Claude Code chat acts as
+the manager: you tell it what to build, and it hands each task to a fresh agent in its own copy of the project, runs
+your tests on the result, merges what passes on your machine, and asks you only about decisions a human should make.
+Work that spans days gets finished across many chats, and you can follow along and answer from your phone with Claude
+Code's Remote Control.
 
 > **You:** Add dark mode in settings, a weekly streak on the habit card, and a CSV export once the streak is done.
 >
