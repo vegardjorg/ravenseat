@@ -5,6 +5,10 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+## 0.10.0 (2026-11-12)
+
+**History moves out of the hot files, and every command starts faster: the time log rotates per month and old done tasks move to an archive that commands and the board still read, so `next` and `show` on a large history went from about 20 s to 2-3 s; each `ravenseat` command now runs in one process and loads only what it needs (about 300 ms faster), `cost` on a long history went from 22 s to 3 s, and the helper scan reads frontmatter keys the way YAML does.**
+
 ### After you update
 - Nothing moves at once. Done and cancelled tasks start counting the day after the update, so the first ones move from queue.json to `queue-archive.json` about 30 days later. The time log rotates on its first write in December.
 - If something reads `scripts/.queue/times.jsonl` or `queue.json` directly (a script of your own), it now sees only the current month and the tasks that are not archived. The older rows are in `times-YYYY-MM.jsonl` next to the log, and the old tasks are in `queue-archive.json`.
