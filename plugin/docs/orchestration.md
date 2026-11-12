@@ -240,6 +240,9 @@ context size. The system keeps both small:
   prefixes, `git -C` and inline aliases (`git -c alias.p=push p`). A part it cannot see into (inline `node -e` code, a
   variable as the command, a brace list, `xargs`, `Start-Process` …) in a line that looks like a push gives a question
   in the main session and a deny for a queue agent. It also covers the Monitor tool, and reads `g"i"t` and `g\it` as git.
+  On an internal error (a module that does not load, a rule that throws) the guard fails open, except for a forced
+  push, a branch delete and `--mirror`: those are denied by a coarse fallback rule with no dependencies
+  (`lib/pushGuardFallback.js`), since no deny list in the settings stands behind the guard.
   **Known limits:** the guard catches the usual ways of writing a command, not every way. It does not see inside a script
   file (`bash x.sh`) or code that builds the command at run time (`node -e`), and the agents run as the same OS user, so
   it is no security boundary. A queue agent's `ravenseat add` is judged by the branch the hook sees: a track that reached the main

@@ -384,7 +384,7 @@ Known gaps in the command guard: it does not read the contents of script files a
 as isolation.
 
 Known gaps in the secret scan: it finds known patterns, not every secret, and like every hook here it fails open on an
-internal error. A scan that does not finish (a diff over 2 MB, a git call over 3 seconds) asks instead of passing. Queue agents
+internal error (the push guard still denies a forced push, a branch delete and `--mirror` then). A scan that does not finish (a diff over 2 MB, a git call over 3 seconds) asks instead of passing. Queue agents
 cannot push at all, so these gaps only apply to your own pushes from the main session.
 
 A focus marker (`.only(`, `fit(`, `fdescribe(`) added to a test file stops the merge (`--allow-focus` overrides, logged), since the other tests never ran. Deleted tests, skip markers and a test file left with no assertions do not stop a merge: a skip can be intended. `ravenseat receive` prints a `WARN test

@@ -8,9 +8,12 @@
 // the contents of the environment file, and asks lib/pushGuard.js. The answer is "ask" (Claude Code shows a confirmation
 // dialog), "deny" (blocked, with reason) or nothing (normal flow).
 //
-// Fails OPEN: an internal error (invalid payload, git missing) gives exit 0 without a decision and a line on stderr.
-// The guard must never stop normal work because of a bug in itself. If node is missing on PATH, the hook gets exit 127,
-// which Claude Code treats as non-blocking.
+// Fails OPEN, except for the irreversible pushes: an internal error (a module that does not load, a rule that throws,
+// git missing) gives a line on stderr and exit 0 without a decision, so the guard never stops normal work because of a
+// bug in itself. A forced push, a branch delete or --mirror is still denied then (lib/pushGuardFallback.js, a coarse
+// rule with no requires): the plugin has no deny list in the settings behind the guard, so without the fallback one bug
+// meant no guard at all. An invalid payload gives no decision. If node is missing on PATH, the hook gets exit 127, which
+// Claude Code treats as non-blocking.
 //
 // For every subagent (owner decision B3, lib/agentGuard.js: the queue's own types always, any other agent_type unless
 // agentGuard.except names it) it also assesses network calls (curl, iwr, | sh, an unknown npx package); see lib/pushGuard.js.
@@ -49,9 +52,42 @@ import path from 'node:path';
 
 const require = createRequire(import.meta.url);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
-if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
-const { assess, readEnvironment, isGuardedAgent } = require('./lib/pushGuard.js');
-const { config, dataFolder } = require('./lib/queueConfig.js');
+// A module that does not load is an internal error too: it is kept and handled by failSafe below, not thrown.
+let loadError = null;
+let assess, readEnvironment, isGuardedAgent, config, dataFolder;
+try {
+  if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
+  ({ assess, readEnvironment, isGuardedAgent } = require('./lib/pushGuard.js'));
+  ({ config, dataFolder } = require('./lib/queueConfig.js'));
+} catch (e) {
+  loadError = e;
+}
+
+/**
+ * The internal-error path: a line on stderr, a deny for an irreversible push (lib/pushGuardFallback.js), otherwise no
+ * decision. Never throws: if even the fallback fails, the command goes on as before.
+ */
+function failSafe(stdin, error) {
+  process.stderr.write(`push-guard: internal error (${error?.message ?? error})\n`);
+  try {
+    const command = read(stdin)?.tool_input?.command;
+    const answer = require('./lib/pushGuardFallback.js').fallbackAnswer(command, error);
+    if (answer) {
+      process.stdout.write(
+        JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: answer.decision,
+            permissionDecisionReason: `push-guard: ${answer.reason}`,
+          },
+        }),
+      );
+    }
+  } catch {
+    // the fallback itself failed: no decision
+  }
+  process.exit(0);
+}
 
 function read(stdin) {
   try {
@@ -172,6 +208,7 @@ let input = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (d) => (input += d));
 process.stdin.on('end', () => {
+  if (loadError) failSafe(input, loadError);
   try {
     const p = read(input);
     const command = p?.tool_input?.command;
@@ -261,9 +298,6 @@ process.stdin.on('end', () => {
     );
     process.exit(0);
   } catch (e) {
-    process.stderr.write(
-      `push-guard: internal error, letting the command through (${e?.message ?? e})\n`,
-    );
-    process.exit(0);
+    failSafe(input, e);
   }
 });

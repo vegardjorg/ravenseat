@@ -5,6 +5,9 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+### Fixed
+- The push guard no longer lets everything through when it has an internal error (a module that does not load, a rule that throws). It still fails open for ordinary commands, but a forced push, a branch delete and `--mirror` are denied by a small fallback rule with no dependencies (`lib/pushGuardFallback.js`), with the error in the reason. No deny list in the settings stands behind the guard, so before this one bug meant no guard at all.
+
 ## 0.10.0 (2026-11-12)
 
 **History moves out of the hot files, and every command starts faster: the time log rotates per month and old done tasks move to an archive that commands and the board still read, so `next` and `show` on a large history went from about 20 s to 2-3 s; each `ravenseat` command now runs in one process and loads only what it needs (about 300 ms faster), `cost` on a long history went from 22 s to 3 s, and the helper scan reads frontmatter keys the way YAML does.**
