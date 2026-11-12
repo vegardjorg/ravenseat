@@ -23,6 +23,7 @@ import {
   require,
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
+import { guardWeakening, logWeakened } from './settings.mjs';
 
 /**
  * Adds the data folder and the agents' worktrees to the repo's .gitignore on a fresh init, so a new user does not have to.
@@ -98,8 +99,17 @@ export function cmdInit() {
   const flagMode = a.includes('--lite') ? 'lite' : a.includes('--full') ? 'full' : null;
   if (a.includes('--lite') && a.includes('--full')) die('init takes --lite or --full, not both');
   const ownMode = LM.readOwnMode(KK.configFile());
-  const initMode = flagMode ?? (fresh && ownMode == null ? 'lite' : LM.mode(CONFIG));
-  if (flagMode || (fresh && ownMode == null)) {
+  // A new project: no queue yet and no mode of its own. Its first mode (lite by default, or the flag) is a choice, not a
+  // switch, so it never asks. Anything else is an existing project: init --lite on one that runs in full (its own
+  // "full", or no mode key, which means full) is the same switch as `mode lite`, a confirmed weakening (owner decision
+  // 2026-11-12, cli/settings.mjs guardWeakening).
+  const newProject = fresh && ownMode == null;
+  const initMode = flagMode ?? (newProject ? 'lite' : LM.mode(CONFIG));
+  if (!newProject && flagMode === 'lite') {
+    const g = guardWeakening('mode', 'lite', { now: LM.mode(CONFIG), raw: 'lite', confirmWith: `${CLI} init --lite` });
+    if (g.weak) logWeakened(g.row, g.now, 'lite', g.by);
+  }
+  if (flagMode || newProject) {
     try {
       const w = LM.writeMode(KK.configFile(), initMode);
       if (w.changed) console.log(`Mode: ${initMode} (written to ${KK.configFile()}; switch with ${CLI} mode lite|full).`);
@@ -159,6 +169,10 @@ export function cmdMode() {
     process.exit(0);
   }
   if (!LM.MODES.includes(want)) die(`mode takes ${LM.MODES.join(' or ')} (or nothing, to show it)`);
+  // Full to lite softens gitSurface and dependencyFiles: the weakening rule of `settings set` (owner decision
+  // 2026-11-12). Without --i-understand --by owner it prints the warning and exits 1; refused from a track worktree.
+  const g = guardWeakening('mode', want, { now: LM.mode(CONFIG), raw: want, confirmWith: `${CLI} mode ${want}` });
+  if (g.weak) logWeakened(g.row, g.now, want, g.by);
   let w;
   try {
     w = LM.writeMode(KK.configFile(), want);

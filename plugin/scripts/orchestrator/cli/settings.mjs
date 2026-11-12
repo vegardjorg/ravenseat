@@ -15,8 +15,8 @@
 // the flags say, and the push guard denies `settings` to queue agents (it is not in lib/pushGuard.js
 // AGENT_QUEUE_COMMANDS, and --by owner is denied by itself). Without that refusal an agent could write the main tree's
 // queue.config.json (config() finds the main tree from a worktree too) and switch off its own guard.
-// The older commands that write a registry value (proposals auto, limit, cloud set) call the same guardWeakening and
-// logWeakened below, so a weakening needs the same flags whichever command writes it.
+// The older commands that write a registry value (proposals auto, limit, cloud set, mode, init --lite) call the same
+// guardWeakening and logWeakened below, so a weakening needs the same flags whichever command writes it.
 //
 // Used by: queue.mjs (and the board's /api/setting). Tested in: __tests__/settingsCli.test.ts.
 // =============================================================
@@ -84,7 +84,7 @@ export function logWeakened(row, from, to, by) {
 
 /**
  * The one weakening rule, for `settings set` and for every older command that writes a registry value with `weakens`
- * (proposals auto, limit, cloud set). `key` is the registry key and `value` the new value. `now` is the value before;
+ * (proposals auto, limit, cloud set, mode, init --lite). `key` is the registry key and `value` the new value. `now` is the value before;
  * left out, it is read from the configuration and `queue` (pass the queue read under the lock).
  * Returns { weak, by, row, now }: weak is true when the change weakens a guard and the owner confirmed it; the caller then
  * logs it with logWeakened(row, now, value, by) before it writes. A weakening without --i-understand --by owner prints the warning texts and

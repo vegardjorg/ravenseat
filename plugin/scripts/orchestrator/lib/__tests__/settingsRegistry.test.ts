@@ -211,6 +211,9 @@ describe('the weakening rows from the design', () => {
     ['usageLimit.pause', false],
     ['proposals.autoAccept.enabled', true],
     ['reviewers', { K: [], U: [], D: [], 'D+': ['reviewer'] }],
+    ['ownership.sharedPatchCollides', false],
+    ['mode', 'lite'],
+    ['cloud.collect', 'auto'],
   ];
 
   it.each(WEAKER)('%s = %j weakens', (key, value) => {
@@ -227,6 +230,34 @@ describe('the weakening rows from the design', () => {
     const more = { ...QC.STANDARD.reviewers, D: ['reviewer', 'reviewer-security'] };
     expect(row('reviewers').weakens?.(more, QC.STANDARD.reviewers)).toBe(false);
     expect(row('push.mode').weakens?.('owner', 'owner')).toBe(false);
+  });
+
+  it('B4: ownership.sharedPatchCollides is an advanced guard row, full mode only, with its reason', () => {
+    const r = ROWS.find((x) => x.key === 'ownership.sharedPatchCollides') as Row;
+    expect(r).toMatchObject({ category: 'guards', level: 'advanced', modes: ['full'], type: 'onoff', edit: 'set', store: 'config' });
+    expect(r.fullWhy).toMatch(/shared_patch/);
+    expect(r.weakens?.(true, true)).toBe(false);
+  });
+
+  it('owner decision 2026-11-12: mode lite and cloud.collect auto weaken; the other choices do not', () => {
+    const row = (k: string) => ROWS.find((x) => x.key === k) as Row;
+    expect(row('mode').weakens?.('full', 'full')).toBe(false);
+    expect(row('mode').weakens?.('lite', 'lite')).toBe(false);
+    for (const v of ['off', 'ask']) expect(row('cloud.collect').weakens?.(v, 'ask'), v).toBe(false);
+    expect(row('cloud.collect').weakens?.('auto', 'auto')).toBe(false);
+  });
+
+  it('owner decision 2026-11-12: guidance quiet and kickstart gates are no weakenings', () => {
+    const row = (k: string) => ROWS.find((x) => x.key === k) as Row;
+    expect(row('guidance').weakens).toBe(null);
+    // kickstart gates writes gates.quick and gates.full; neither row weakens, and kickstart never asks for the flags.
+    expect(row('gates.quick').weakens).toBe(null);
+    expect(row('gates.full').weakens).toBe(null);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('node:fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('node:path');
+    expect(fs.readFileSync(path.resolve(__dirname, '..', '..', 'cli', 'kickstart.mjs'), 'utf8')).not.toContain('guardWeakening');
   });
 
   it('lite softens gitSurface and dependencyFiles by default (defaultByMode follows config())', () => {

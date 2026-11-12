@@ -115,6 +115,28 @@ describe('ownership', () => {
     expect(K.conflict(o('b', { shared_patch: ['anonymize_user'] }), active)).toMatch(/shared patch/);
     expect(K.conflict(o('b', { owned_files: ['y.ts'] }), active)).toBeNull();
   });
+  it("B4: a path in shared_patch collides with another active task's owned_files, both ways (review G3)", () => {
+    const owner = o('A', { status: 'running', owned_files: ['lib/x.ts', 'lib/dir/'] });
+    // The candidate patches a file the active task owns (also under an owned folder).
+    expect(K.conflict(o('b', { shared_patch: ['lib/x.ts'] }), owner)).toMatch(/file lib\/x\.ts is owned by A/);
+    expect(K.conflict(o('b', { shared_patch: ['lib\\dir\\y.ts'] }), owner)).toMatch(/file lib\/dir\/y\.ts is owned by A/);
+    // The candidate owns a file the active task is patching.
+    const patcher = o('P', { status: 'running', shared_patch: ['lib/z.ts'] });
+    expect(K.conflict(o('b', { owned_files: ['lib/z.ts'] }), patcher)).toMatch(/file lib\/z\.ts is in the shared_patch of P/);
+    // A function name in shared_patch is no path of anyone's owned_files, and two patches of one path stay a patch conflict.
+    expect(K.conflict(o('b', { shared_patch: ['anonymize_user'] }), owner)).toBeNull();
+    expect(K.conflict(o('b', { shared_patch: ['lib/z.ts'] }), patcher)).toMatch(/shared patch lib\/z\.ts/);
+    // ownership.sharedPatchCollides false: as before, owned_files and shared_patch are never compared with each other.
+    const off = { sharedPatchCollides: false };
+    const C = K.conflict as unknown as (a: Task, b: Task, opts: object) => string | null;
+    expect(C(o('b', { shared_patch: ['lib/x.ts'] }), owner, off)).toBeNull();
+    expect(C(o('b', { owned_files: ['lib/z.ts'] }), patcher, off)).toBeNull();
+  });
+  it('B4: the blockers name the collision, so next and start wait for the owner', () => {
+    const all = [o('A', { status: 'running', owned_files: ['lib/x.ts'] }), o('b', { shared_patch: ['lib/x.ts'] })];
+    expect(K.blockers(all[1], all).join()).toMatch(/lib\/x\.ts/);
+    expect(ids({ tasks: all })).toEqual([]);
+  });
 });
 
 describe('blockers', () => {

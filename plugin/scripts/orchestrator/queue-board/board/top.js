@@ -239,13 +239,15 @@ function modulesSection() {
 
 /**
  * One setting in the gear's Cloud section: a switch, a list or a number. Every change is `ravenseat cloud set`, the same command
- * Claude Code runs, and the server re-reads the file for the next state.
+ * Claude Code runs, and the server re-reads the file for the next state. A value that weakens a guard (collect auto, owner
+ * decision 2026-11-12) comes back 422 from the server, and writeWithWeaken opens the warning dialog: only its completed
+ * slide sends the change again. Cancelled = null: nothing was written, and the redraw puts the old value back.
  */
 function cloudSettingRow(s) {
   const inputId = `cloud-setting-${s.key}`;
   const save = async (value) => {
     try {
-      const answer = await writeWithGuard('/api/action', { type: 'cloud-setting', key: s.key, value });
+      const answer = await writeWithWeaken('/api/action', { type: 'cloud-setting', key: s.key, value }, null);
       if (answer) message(`${s.label}: ${value}.`);
     } catch (e) {
       message(`Could not save: ${e.message}`, true);

@@ -275,13 +275,145 @@ describe('the older commands follow the same weakening rule', () => {
     expect(logRows().filter((x) => x.event === 'setting-weakened')).toEqual([]);
   });
 
-  it('limit and cloud set write no weakening value today, so they need no flag', async () => {
+  it('limit and cloud set need no flag for a value that weakens nothing', async () => {
     const l = await ravenseat(['limit', 'maxConcurrent', '2']);
     expect(l.code, l.err).toBe(0);
     expect(queue().limits.maxConcurrent).toBe(2);
     const c = await ravenseat(['cloud', 'set', 'maxSessions', '2']);
     expect(c.code, c.err).toBe(0);
     expect(JSON.parse(fs.readFileSync(configFile(), 'utf8')).cloud.maxSessions).toBe(2);
+    expect(logRows().filter((x) => x.event === 'setting-weakened')).toEqual([]);
+  });
+});
+
+/** A git tree on a track branch, for the "refused from a track worktree" checks. */
+function trackTree() {
+  const tree = path.join(root, 'tree');
+  fs.mkdirSync(tree);
+  const g = (...args: string[]) =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], { cwd: tree, stdio: 'pipe' });
+  g('init', '-q', '-b', 'queue/A-1');
+  g('commit', '-q', '--allow-empty', '-m', 'start');
+  return tree;
+}
+
+describe('mode lite is a confirmed weakening (owner decision 2026-11-12)', () => {
+  const weakened = () => logRows().filter((x) => x.event === 'setting-weakened');
+  const mode = () => JSON.parse(fs.readFileSync(configFile(), 'utf8')).mode;
+
+  it('mode lite on a full project without --i-understand --by owner prints the warning and exits 1; nothing is written', async () => {
+    const before = fs.readFileSync(configFile(), 'utf8');
+    for (const extra of [[], ['--i-understand'], ['--by', 'owner'], ['--i-understand', '--by', 'agent']]) {
+      const r = await ravenseat(['mode', 'lite', ...extra]);
+      expect(r.code, extra.join(' ')).toBe(1);
+      const text = r.out + r.err;
+      expect(text).toContain('STOP: this weakens a guard (mode lite).');
+      expect(text).toContain('Protects against:');
+      expect(text).toMatch(/gitSurface and dependencyFiles/);
+      expect(text).toContain('Confirm with: ravenseat mode lite --i-understand --by owner');
+    }
+    expect(fs.readFileSync(configFile(), 'utf8')).toBe(before);
+    expect(weakened()).toEqual([]);
+  });
+
+  it('with the owner flags it is written and logged; back to full and lite again on lite need no flag', async () => {
+    const r = await ravenseat(['mode', 'lite', '--i-understand', '--by', 'owner']);
+    expect(r.code, r.err).toBe(0);
+    expect(mode()).toBe('lite');
+    expect(weakened()).toEqual([expect.objectContaining({ key: 'mode', from: 'full', to: 'lite', by: 'owner', store: 'config' })]);
+    expect((await ravenseat(['mode', 'lite'])).code).toBe(0);
+    expect((await ravenseat(['mode', 'full'])).code).toBe(0);
+    expect(mode()).toBe('full');
+    expect(weakened()).toHaveLength(1);
+  });
+
+  it('settings set mode lite follows the same rule, and an install without a mode key counts as full', async () => {
+    fs.writeFileSync(configFile(), '{}\n');
+    const r = await ravenseat(['settings', 'set', 'mode', 'lite']);
+    expect(r.code).toBe(1);
+    expect(r.out + r.err).toContain('STOP: this weakens a guard (mode lite).');
+    expect(fs.readFileSync(configFile(), 'utf8')).toBe('{}\n');
+    expect((await ravenseat(['mode', 'lite'])).code).toBe(1);
+    expect(weakened()).toEqual([]);
+  });
+
+  it('is refused from a track worktree, also with the owner flags', async () => {
+    const before = fs.readFileSync(configFile(), 'utf8');
+    const r = await ravenseat(['mode', 'lite', '--i-understand', '--by', 'owner'], trackTree());
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/track worktree/);
+    expect(fs.readFileSync(configFile(), 'utf8')).toBe(before);
+    expect(weakened()).toEqual([]);
+  });
+
+  it('the first run is not blocked: a fresh init writes lite with no flag; init --lite on an existing full project asks', async () => {
+    // A new project: no queue yet and no mode of its own.
+    fs.rmSync(path.join(root, 'q'), { recursive: true, force: true });
+    fs.writeFileSync(configFile(), '{}\n');
+    const first = await ravenseat(['init']);
+    expect(first.code, first.err).toBe(0);
+    expect(mode()).toBe('lite');
+    // init --lite on a new project is the same first run.
+    fs.rmSync(path.join(root, 'q'), { recursive: true, force: true });
+    fs.writeFileSync(configFile(), '{}\n');
+    expect((await ravenseat(['init', '--lite'])).code).toBe(0);
+    expect(mode()).toBe('lite');
+    expect(weakened()).toEqual([]);
+    // An existing full project: init --lite is the switch, so it asks like mode lite.
+    fs.writeFileSync(configFile(), '{\n  "mode": "full"\n}\n');
+    const sw = await ravenseat(['init', '--lite']);
+    expect(sw.code).toBe(1);
+    expect(sw.out + sw.err).toContain('STOP: this weakens a guard (mode lite).');
+    expect(sw.out + sw.err).toContain('Confirm with: ravenseat init --lite --i-understand --by owner');
+    expect(mode()).toBe('full');
+    const ok = await ravenseat(['init', '--lite', '--i-understand', '--by', 'owner']);
+    expect(ok.code, ok.err).toBe(0);
+    expect(mode()).toBe('lite');
+    expect(weakened()).toEqual([expect.objectContaining({ key: 'mode', from: 'full', to: 'lite', by: 'owner' })]);
+  });
+});
+
+describe('cloud.collect auto is a confirmed weakening (owner decision 2026-11-12)', () => {
+  const weakened = () => logRows().filter((x) => x.event === 'setting-weakened');
+  const collect = () => JSON.parse(fs.readFileSync(configFile(), 'utf8')).cloud?.collect;
+
+  it('cloud set collect auto without the owner flags prints the warning and exits 1; nothing is written', async () => {
+    const before = fs.readFileSync(configFile(), 'utf8');
+    for (const args of [['cloud', 'set', 'collect', 'auto'], ['settings', 'set', 'cloud.collect', 'auto']]) {
+      const r = await ravenseat(args);
+      expect(r.code, args.join(' ')).toBe(1);
+      const text = r.out + r.err;
+      expect(text).toContain('STOP: this weakens a guard (cloud.collect auto).');
+      expect(text).toContain('Protects against:');
+    }
+    expect(fs.readFileSync(configFile(), 'utf8')).toBe(before);
+    expect(weakened()).toEqual([]);
+  });
+
+  it('with the owner flags it is written and logged; off and ask need no flag', async () => {
+    const r = await ravenseat(['cloud', 'set', 'collect', 'auto', '--i-understand', '--by', 'owner']);
+    expect(r.code, r.err).toBe(0);
+    expect(collect()).toBe('auto');
+    expect(weakened()).toEqual([expect.objectContaining({ key: 'cloud.collect', from: 'ask', to: 'auto', by: 'owner' })]);
+    expect((await ravenseat(['cloud', 'set', 'collect', 'off'])).code).toBe(0);
+    expect((await ravenseat(['cloud', 'set', 'collect', 'ask'])).code).toBe(0);
+    expect(collect()).toBe('ask');
+    expect(weakened()).toHaveLength(1);
+  });
+
+  it('is refused from a track worktree, also with the owner flags', async () => {
+    const r = await ravenseat(['cloud', 'set', 'collect', 'auto', '--i-understand', '--by', 'owner'], trackTree());
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/track worktree/);
+    expect(collect()).toBeUndefined();
+  });
+});
+
+describe('owner decision 2026-11-12: guidance quiet is no weakening', () => {
+  it('guidance quiet needs no flag and logs nothing', async () => {
+    const r = await ravenseat(['guidance', 'quiet']);
+    expect(r.code, r.err).toBe(0);
+    expect(queue().guidance).toBe('quiet');
     expect(logRows().filter((x) => x.event === 'setting-weakened')).toEqual([]);
   });
 });

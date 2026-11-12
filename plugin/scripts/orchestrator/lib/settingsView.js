@@ -201,6 +201,14 @@ function needsConfirm(row, value, { now, standard }) {
 // ---- The grouped view -----------------------------------------------------------------------------
 
 /**
+ * Rows whose `weakens` guards the switch only (owner decision 2026-11-12): the change needs the confirmation like any
+ * weakening, but the state is not listed as a weakened guard (the banner, the first line of `ravenseat settings`, doctor's
+ * WARN line). `mode`: every new project starts in lite (`ravenseat init`), and doctor's lite INFO line already names
+ * what lite softens, so a new user is not told on day one that a guard is weakened.
+ */
+const SWITCH_ONLY = Object.freeze(['mode']);
+
+/**
  * Every row with its value and marks, grouped in the categories.
  * @param {{ config: object, queue?: object, migrations?: boolean, rows?: object[] }} o
  *   rows defaults to the whole registry (a test can pass fewer); migrations false leaves out limits.maxDb.
@@ -232,7 +240,7 @@ function settingsView({ config, queue = {}, migrations = true, rows = R.SETTINGS
       standard,
       standardText: valueText(r, standard),
       changed: JSON.stringify(value) !== JSON.stringify(standard),
-      weakened: !!r.weakens && r.weakens(value, standard) === true,
+      weakened: !!r.weakens && !SWITCH_ONLY.includes(r.key) && r.weakens(value, standard) === true,
       canWeaken: !!r.weakens,
       protects: r.protects,
       whyNot: r.whyNot,

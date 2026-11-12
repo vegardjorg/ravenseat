@@ -166,6 +166,12 @@ const STANDARD = Object.freeze({
   // script the agent ran; lib/agentPushBlock.js, owner decision B1). Installed by fill, start, resume and prepare-track
   // in front of any pre-push already there (husky, lefthook, your own), and removed again when this is false.
   agentPushBlock: { enabled: true },
+  // A path in a task's shared_patch (full task format) against another active task's owned_files (owner decision B4,
+  // review G3): true = they collide like two owned_files, so the start rules (lib/logic/conflicts.js) keep the second
+  // task waiting and the merge's ownership check (lib/mergeGuard.js foreignOwners) stops a patch of a file another
+  // active task owns. false = as before: shared_patch is compared only with shared_patch, and a task's own shared_patch
+  // covers the path at merge. Turning it off is a weakened guard (doctor names it).
+  ownership: { sharedPatchCollides: true },
   // Shared config blocks parallel tracks break each other on (routes, registries, DI, i18n, feature flags), with the
   // protectedPaths rules. No task owns one; an agreed change goes in the task field hotspot_patch (one task at a time),
   // otherwise the track writes a wiring spec and the orchestrator makes the change. The merge guard stops an unagreed

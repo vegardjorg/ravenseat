@@ -326,4 +326,32 @@ describe('the board server: the settings registry and the weakening rule (plans/
     expect(off.status, off.body.message).toBe(200);
     expect(timeRows()).toHaveLength(before + 1);
   }, 60_000);
+
+  it('owner decision 2026-11-12: mode lite from full and cloud collect auto need confirm: weaken too', async () => {
+    const saved = fs.readFileSync(configFile(), 'utf8');
+    fs.writeFileSync(configFile(), `${JSON.stringify({ mode: 'full' })}\n`);
+    const before = timeRows().length;
+    const m = await post('/api/setting', { key: 'mode', value: 'lite' });
+    expect(m.status).toBe(422);
+    expect(m.body).toMatchObject({ ok: false, weaken: true, key: 'mode' });
+    const c = await post('/api/action', { type: 'cloud-setting', key: 'collect', value: 'auto' });
+    expect(c.status).toBe(422);
+    expect(c.body).toMatchObject({ ok: false, weaken: true, key: 'cloud.collect' });
+    for (const f of ['protects', 'whyNot', 'changes']) expect(String(c.body[f]).length, f).toBeGreaterThan(10);
+    expect(JSON.parse(fs.readFileSync(configFile(), 'utf8'))).toEqual({ mode: 'full' });
+    expect(timeRows()).toHaveLength(before);
+    // With the dialog's yes the CLI gets the owner flags, writes and logs.
+    const okC = await post('/api/action', { type: 'cloud-setting', key: 'collect', value: 'auto', confirm: 'weaken' });
+    expect(okC.status, okC.body.message).toBe(200);
+    const okM = await post('/api/setting', { key: 'mode', value: 'lite', confirm: 'weaken' });
+    expect(okM.status, okM.body.message).toBe(200);
+    expect(JSON.parse(fs.readFileSync(configFile(), 'utf8'))).toMatchObject({ mode: 'lite', cloud: { collect: 'auto' } });
+    expect(timeRows().slice(before)).toEqual([
+      expect.objectContaining({ key: 'cloud.collect', from: 'ask', to: 'auto', by: 'owner' }),
+      expect.objectContaining({ key: 'mode', from: 'full', to: 'lite', by: 'owner' }),
+    ]);
+    // Weaker to stronger needs nothing.
+    expect((await post('/api/action', { type: 'cloud-setting', key: 'collect', value: 'ask' })).status).toBe(200);
+    fs.writeFileSync(configFile(), saved);
+  }, 60_000);
 });

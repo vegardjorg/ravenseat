@@ -410,15 +410,24 @@ const ACTIVE_OWNER_STATUSES = ['running', 'review', 'picked'];
  * The changed paths that ANOTHER active task owns (its owned_files; a shared_patch is shared by design, so it is no
  * ownership here). Before this, such a change merged with only "WARNING ownership drift", and stopped only when git saw
  * a text conflict. Used by merge-track.mjs (a stop), receive and the pulse (early notes).
+ *
+ * B4 (review G3, config ownership.sharedPatchCollides, default on): the task's OWN shared_patch no longer covers a path
+ * another active task owns. Before, a task could list another task's file in shared_patch and merge changes to it with
+ * no stop. Such a path comes back with `via: 'shared_patch'`, so the message can say why. Turned off, the task's
+ * shared_patch covers its paths as before. A path in the task's own owned_files is never foreign.
  * @param {string[]} paths the changed paths
  * @param {{ id: string, owned_files?: string[], shared_patch?: string[] } | null} task the task being checked (null:
  *   a wave track, nothing to compare)
  * @param {object[]} tasks every task in the queue
- * @returns {{ path: string, owner: string }[]}
+ * @param {{ sharedPatchCollides?: boolean }} [opts] overrides the config value
+ * @returns {{ path: string, owner: string, via?: 'shared_patch' }[]}
  */
-function foreignOwners(paths, task, tasks) {
+function foreignOwners(paths, task, tasks, opts = {}) {
   if (!task) return [];
-  const mine = [...(task.owned_files ?? []), ...(task.shared_patch ?? [])].map(norm).filter(Boolean);
+  const collides = typeof opts.sharedPatchCollides === 'boolean' ? opts.sharedPatchCollides : sharedPatchCollidesConfig();
+  const owned = (task.owned_files ?? []).map(norm).filter(Boolean);
+  const patched = (task.shared_patch ?? []).map(norm).filter(Boolean);
+  const mine = collides ? owned : [...owned, ...patched];
   const others = (tasks ?? [])
     .filter((o) => o && o.id !== task.id && ACTIVE_OWNER_STATUSES.includes(o.status))
     .map((o) => ({ id: o.id, owned: (o.owned_files ?? []).map(norm).filter(Boolean) }))
@@ -431,9 +440,21 @@ function foreignOwners(paths, task, tasks) {
     seen.add(p);
     if (mine.some((e) => covers(e, p))) continue;
     const owner = others.find((o) => o.owned.some((e) => covers(e, p)));
-    if (owner) out.push({ path: p, owner: owner.id });
+    if (!owner) continue;
+    // Named when only the task's own shared_patch would have covered the path (before B4 it merged with no stop).
+    if (collides && patched.some((e) => covers(e, p))) out.push({ path: p, owner: owner.id, via: 'shared_patch' });
+    else out.push({ path: p, owner: owner.id });
   }
   return out;
+}
+
+/** The config value ownership.sharedPatchCollides (default on; an unreadable config keeps the default). */
+function sharedPatchCollidesConfig() {
+  try {
+    return require('./queueConfig.js').config()?.ownership?.sharedPatchCollides !== false;
+  } catch {
+    return true;
+  }
 }
 
 /**

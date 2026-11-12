@@ -279,6 +279,22 @@ describe('doctorRows: the doctor row settings', () => {
   it('add alone weakens nothing', () => {
     expect(rows({ protectedPaths: { add: ['secrets/'] } })).toEqual([expect.objectContaining({ status: 'OK' })]);
   });
+
+  it('B4: ownership.sharedPatchCollides off is a weakened guard in the WARN line', () => {
+    const warn = rows({ ownership: { sharedPatchCollides: false } }).find((x: any) => x.status === 'WARN');
+    expect(warn.message).toBe('1 guard(s) weaker than the default: ownership.sharedPatchCollides off');
+  });
+
+  it('cloud.collect auto is a weakened guard; mode lite asks when switched but is reported by the lite line only', () => {
+    expect(rows({ cloud: { collect: 'auto' } }).find((x: any) => x.status === 'WARN').message).toContain('cloud.collect auto');
+    // A lite project (every new one is) is not told it has a weakened guard: the lite INFO line names what lite softens.
+    const lite = view({ own: { mode: 'lite' } });
+    expect(lite.weakened).toEqual([]);
+    const modeRow = rowsOf(lite, 'project').find((r: any) => r.key === 'mode');
+    expect(modeRow).toMatchObject({ weakened: false, canWeaken: true, confirmFor: [] });
+    // From full, the lite option opens the warning dialog.
+    expect(rowsOf(view({ own: { mode: 'full' } }), 'project').find((r: any) => r.key === 'mode').confirmFor).toEqual(['lite']);
+  });
 });
 
 describe('protectedPaths: the object form { add, remove } (step 8)', () => {

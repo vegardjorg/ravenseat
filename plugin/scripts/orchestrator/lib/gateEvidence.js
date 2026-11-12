@@ -65,6 +65,7 @@
 //   flaky = the commands that were red, then green on a rerun on the same commit (lib/trackFlaky.js); the entry is then
 //   green with `failed` empty.
 //   legacy entry = the same without id, writer, setup_hash and runner.
+//   done entry (kind "done", doneEntry below): the done command's own evidence; the gate readers never count it.
 // Pure except readStoreText/readStore/writeStore/append/recordRun (one small file, written atomically).
 // Tested in lib/__tests__/gateEvidence.test.ts, __tests__/queueGateEvidence.test.ts and __tests__/queueBaseGate.test.ts.
 // =============================================================
@@ -529,7 +530,82 @@ function mergeStop(gateCheck, tip) {
   return gateCheck.tip === tip ? 'same-tip' : 'moved';
 }
 
+// ---- The done command's evidence (B2 follow-up) ---------------------------------------------------------------------
+//
+// The merge used to skip the done command when the task's done_check in queue.json said green on the same tip and
+// command. queue.json is a file a track can write, so a forged done_check skipped the command entirely. Under
+// gateEvidence.mode own (and external) the skip now rests on an entry ravenseat wrote itself: cli/merge.mjs appends
+// one after every done command it runs (receive and merge), and the merge skips only when the NEWEST done entry for the
+// tip and the command is green. Under off, the done_check rule stays as it was.
+//
+// A done entry has kind "done", which is not in KINDS: latest, verdict and the gate readers never see it (they filter
+// on the gate kinds), and it has no setup_hash, so gateRowsNow and the other legacy: false readers skip it too. It
+// has no `track` field either, so gatesTamperReason (which reads the newest entry with the task's track) is unchanged.
+//   done entry = { id, time, by: "merge.mjs", writer: "orchestrator", sha, kind: "done", ok, exit, clean, task,
+//                  command_hash, step: "receive"|"merge", timed_out?, tampered? }
+// The command is kept as its hash (the done_when text is in queue.json and in done-<id>.md already).
+
+/** The hash a done entry keeps of the command (sha256 hex of the trimmed text). Pure. */
+function doneCommandHash(command) {
+  return crypto.createHash('sha256').update(String(command ?? '').trim()).digest('hex');
+}
+
+/**
+ * One done entry from a done command run, or null when it cannot be evidence (no sha, no command, cleanliness unknown).
+ * `clean` = the worktree had no uncommitted tracked changes (a run that also saw them proves more than the branch has).
+ * A tampered run is red. Pure apart from the id and time.
+ * @param {{ sha: string, command: string, ok: boolean, exit?: number|null, clean: boolean, step: string, task: string,
+ *   timedOut?: boolean, tampered?: boolean, time?: string, id?: string }} r
+ */
+function doneEntry(r) {
+  if (typeof r?.sha !== 'string' || !/^[0-9a-f]{7,64}$/i.test(r.sha)) return null;
+  if (typeof r.command !== 'string' || !r.command.trim()) return null;
+  if (typeof r.clean !== 'boolean') return null;
+  const e = {
+    id: r.id ?? newId(),
+    time: r.time ?? new Date().toISOString(),
+    by: 'merge.mjs',
+    writer: WRITER,
+    sha: r.sha,
+    kind: 'done',
+    ok: r.ok === true && r.tampered !== true,
+    exit: Number.isInteger(r.exit) ? r.exit : null,
+    clean: r.clean,
+    task: String(r.task ?? ''),
+    command_hash: doneCommandHash(r.command),
+    step: String(r.step ?? ''),
+  };
+  if (r.timedOut) e.timed_out = true;
+  if (r.tampered) e.tampered = true;
+  return e;
+}
+
+/**
+ * The newest done entry for this sha and command that ravenseat wrote (writer orchestrator) on a clean worktree, or
+ * null. Green or red: the newest decides (a later red run beats an earlier green one). Pure.
+ * @param {object[]} entries
+ * @param {{ sha: string|null, command: string, task?: string|null }} q
+ */
+function latestDone(entries, { sha, command, task = null }) {
+  if (!sha || typeof command !== 'string' || !command.trim()) return null;
+  const hash = doneCommandHash(command);
+  const list = (entries ?? []).filter(
+    (e) =>
+      isObject(e) &&
+      e.kind === 'done' &&
+      e.writer === WRITER &&
+      e.sha === sha &&
+      e.clean === true &&
+      e.command_hash === hash &&
+      (task == null || e.task === task),
+  );
+  return list.length ? list[list.length - 1] : null;
+}
+
 module.exports = {
+  doneCommandHash,
+  doneEntry,
+  latestDone,
   mergeStop,
   FILE_NAME,
   MAX_ENTRIES,

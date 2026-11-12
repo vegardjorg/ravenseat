@@ -302,16 +302,26 @@ function writeWithNewAttempt(file, text) {
     G.readDiff(diff.stdout).flatMap((e) => (e.status === 'C' ? e.paths.slice(1) : e.paths)),
     task,
     allTasks,
+    { sharedPatchCollides: K.ownership?.sharedPatchCollides !== false },
   );
   if (foreign.length > 0) {
-    const list = foreign.map((f) => `  ${f.path}  (owned by ${f.owner})`).join('\n');
+    // via 'shared_patch' (B4): the path is in this task's shared_patch, which no longer covers a file another task owns.
+    const list = foreign
+      .map((f) => `  ${f.path}  (owned by ${f.owner}${f.via === 'shared_patch' ? ", in this task's shared_patch" : ''})`)
+      .join('\n');
+    const viaPatch = foreign.some((f) => f.via === 'shared_patch')
+      ? '\nA path in shared_patch does not cover a file another active task owns (ownership.sharedPatchCollides, on by\n' +
+        'default). Turning it off is a confirmed weakening: ravenseat settings set ownership.sharedPatchCollides off\n' +
+        '--i-understand --by owner.'
+      : '';
     if (!ALLOW_GUARD) {
       console.error(
         `\nOWNERSHIP: ${branch} changes file(s) that another active task owns:\n${list}\n\n` +
           'That task is building on them now, so this merge would change them under it. Read the diff\n' +
           `(git diff HEAD...${branch} -- <path>). Not intended: a fix round that leaves the file alone. Intended: merge\n` +
           'the owner task first, or move the path to this task (ravenseat edit <id> --json ... --by owner on both), or merge\n' +
-          'with --allow-guard (logged as "guard-overridden"). Nothing was merged.',
+          'with --allow-guard (logged as "guard-overridden"). Nothing was merged.' +
+          viaPatch,
       );
       process.exit(4);
     }

@@ -217,6 +217,24 @@ function runDoneCommand(o, { branch, scratch, step }) {
     duration_s: run.durationSec,
     file,
   };
+  // B2 follow-up: ravenseat's own evidence of the run, in the gate evidence store (not queue.json, which a track can
+  // write). The merge's skip reads it under gateEvidence.mode own and external (mergeDoneKnown). Clean = git status ran
+  // and showed no uncommitted tracked change; a run that also saw such changes never lets the merge skip.
+  const GE = require('./lib/gateEvidence.js');
+  GE.append(
+    GE.storeFile(FOLDER),
+    GE.doneEntry({
+      sha: tip,
+      command,
+      ok: run.ok,
+      exit: run.exit,
+      clean: dirty.status === 0 && !(dirty.stdout ?? '').trim(),
+      step,
+      task: o.id,
+      timedOut: run.timedOut,
+      tampered: !!tamperReason,
+    }),
+  );
   console.log(`Done command ${run.ok ? 'GREEN' : 'RED'} (${run.timedOut ? 'time budget' : `exit ${run.exit ?? '?'}`}, ${run.durationSec} s).`);
   if (tamperReason) console.log(`TAMPERED: ${tamperReason}. ${GX.INSPECT}.`);
   return { ok: run.ok, run, record, file, cwd };
@@ -782,7 +800,7 @@ export function cmdReceive() {
   if (foreign.length)
     console.log(
       `OWNERSHIP: ${id} changes ${foreign.length} file(s) that another active task owns: ` +
-        `${foreign.slice(0, 10).map((f) => `${f.path} (${f.owner})`).join(', ')}${foreign.length > 10 ? ', …' : ''}. ` +
+        `${foreign.slice(0, 10).map((f) => `${f.path} (${f.owner}${f.via === 'shared_patch' ? ', via shared_patch' : ''})`).join(', ')}${foreign.length > 10 ? ', …' : ''}. ` +
         `The merge stops on them. A fix round that leaves them alone, or merge the owner task first (${CLI} merge --allow-guard overrides, logged).`,
     );
   fs.writeFileSync(
@@ -1148,11 +1166,22 @@ export async function cmdMerge() {
   }
   // The done command (lib/doneCheck.js) once more before the merge, unless the last run was green on this exact tip with
   // this command (receive ran it, and no fix round has added commits since). Red: a fix round, never a merge.
+  // B2 follow-up: under gateEvidence.mode own and external the skip rests on ravenseat's own done entry in the evidence
+  // store (runDoneCommand writes it), never on done_check in queue.json, which a track can write. Under off, done_check
+  // decides as before.
   if (typeof o.done_when === 'string' && o.done_when.trim()) {
     const tipNow = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
-    const last = o.done_check;
-    if (last?.ok && last.tip === tipNow && last.command === o.done_when.trim())
-      console.log(`Done command green at ${String(tipNow).slice(0, 12)} (${last.step}, ${last.at}); not run again.`);
+    const command = o.done_when.trim();
+    let skip = null;
+    if (GE_MODE === 'off') {
+      const last = o.done_check;
+      if (last?.ok && last.tip === tipNow && last.command === command) skip = `${last.step}, ${last.at}`;
+    } else {
+      const GE = require('./lib/gateEvidence.js');
+      const known = GE.latestDone(GE.readStore(GE.storeFile(FOLDER)).entries, { sha: tipNow, command, task: id });
+      if (known?.ok === true) skip = `${known.step}, ravenseat's own run at ${known.time}`;
+    }
+    if (skip) console.log(`Done command green at ${String(tipNow).slice(0, 12)} (${skip}); not run again.`);
     else {
       const check = runDoneCommand(o, { branch, scratch, step: 'merge' });
       if (check.record.tampered)

@@ -2233,6 +2233,18 @@ async function write(filePath, b) {
       const key = cleanText(b.key, 40);
       const value = cleanText(String(b.value ?? ''), 40);
       if (!key || !value) return no('invalid cloud setting');
+      // The weakening rule, as in /api/setting: collect auto weakens a guard (owner decision 2026-11-12), so it is refused
+      // with 422 and the row's texts until the dialog's yes; then the owner's flags go to the CLI, which logs the row.
+      // A key or value the registry does not know goes to cloud set unchanged, which refuses it with its own message.
+      const row = R.rowFor(`cloud.${key}`);
+      const p = row ? SV.parseValue(row, value, {}) : null;
+      if (row && p && !('error' in p)) {
+        const queue = queueNow();
+        const w = weakenCheck(row, p.value, queue, b);
+        if (w) return w;
+        if (b.confirm === 'weaken' && needsWeakenConfirm(row, p.value, queue))
+          return run(['cloud', 'set', key, value, '--i-understand', '--by', 'owner'], `cloud set ${key} ${value} (weakened, confirmed)`);
+      }
       return run(['cloud', 'set', key, value], `cloud set ${key} ${value}`);
     }
     // The board switches the gear can set, and the word `ravenseat board-setting` takes for each. Any other name is refused.

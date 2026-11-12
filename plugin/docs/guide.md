@@ -328,6 +328,9 @@ What Ravenseat checks for you:
 - Weakening a guard is always a deliberate step: `ravenseat settings set`, `ravenseat proposals auto on` and the board
   print what the guard protects against and change nothing until you confirm (`--i-understand --by owner`, or the
   board's slide). Each confirmed change is logged as `setting-weakened`, and none of it can be done from a track.
+  Switching an existing full project to lite (`ravenseat mode lite`, `init --lite` or the board) and letting cloud
+  sessions be collected without asking (`ravenseat cloud set collect auto`) are such steps too. A new project's first
+  `init` still gets lite without a question, and `ravenseat guidance quiet` and `ravenseat kickstart gates` weaken no guard.
 - The push guard: no force push and no other branch than `baseBranch` from Claude Code; before a plain push of the
   base branch it scans what is about to be pushed for secrets (gitleaks when it is on your PATH, otherwise a few
   built-in patterns) and asks, naming file and line, never the value. A first push is scanned too, and a scan that
@@ -338,6 +341,9 @@ What Ravenseat checks for you:
 - A git `pre-push` hook stops a push from a track's worktree in git itself, also when the push guard never saw the
   command. It chains to a shell `pre-push` you already have, leaves the main checkout alone, and never counts as a
   change to the git baseline (`agentPushBlock.enabled`). `git push --no-verify` skips it, like any hook.
+- File ownership: a path in one task's `shared_patch` that another active task owns in `owned_files` counts as a
+  shared file, so the second task waits, and a merge that changes such a path stops with exit 4
+  (`ownership.sharedPatchCollides`; turning it off is a weakened guard).
 - Migrations: a queue agent writes a migration file but does not run migration commands (the usual tools and your
   `migrations.pushCommand`). An ordinary task that delivers one stops at `ravenseat merge` for you to decide, also with no
   migration flow configured.
@@ -347,6 +353,8 @@ What Ravenseat checks for you:
   answers, edits and approvals there are confirmed against the owner log, so a row a track wrote itself stops them
   until you accept it (`ravenseat owner-log accept <id> --by owner`). `gateEvidence.mode external` lets a green CI check
   on the same commit count as the full gate; `off` takes the track's word (`gateEvidence.mode`, `gateEvidence.external`).
+  The same holds for a task's done command: `merge` skips it only when ravenseat's own run on the same commit was
+  green, never because the `done_check` in the queue file says so (under `off` that record decides, as before).
 - `/ravenseat:setup` can write a GitHub Actions workflow that runs your `gates.quick` on push and pull requests (opt-in,
   never over an existing file). On GitLab, Bitbucket and others, add a job that runs the same commands.
 

@@ -293,7 +293,8 @@ function cloudSettings() {
 function cloudSet(key, text) {
   const r = CS.parseCloudSetting(key, text);
   if (r.error) die(`${r.error}. Nothing changed.`);
-  // The weakening rule of `settings set` (cli/settings.mjs): no cloud row weakens a guard today, so this passes through.
+  // The weakening rule of `settings set` (cli/settings.mjs): collect auto weakens a guard (owner decision 2026-11-12), so
+  // it needs --i-understand --by owner and is refused from a track worktree; the other values pass through.
   const g = guardWeakening(`cloud.${key}`, r.value, { raw: text, confirmWith: `${CLI} cloud set ${key} ${text}` });
   if (g.weak) logWeakened(g.row, g.now, r.value, g.by);
   const file = changeOwnConfig((own) => ({ ...own, cloud: { ...(own.cloud ?? {}), [key]: r.value } }));

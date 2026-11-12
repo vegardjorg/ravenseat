@@ -32,8 +32,10 @@
 //
 // Owner decisions B1-B5 (plans/ROADMAP.md): B1 (agentPushBlock.enabled), B2 (gateEvidence.mode, .external: gates,
 // advanced, both modes, choices own/external/off, external and off weaken) and B3 (agentGuard.enabled, .except) have
-// their rows. The rest get theirs in the same task that adds the key to STANDARD (the coverage test turns red until it does):
-//   B4  ownership.sharedPatchCollides     guards, advanced, full only (shared_patch is full format), weakens when false
+// their rows, and so does B4 (ownership.sharedPatchCollides: guards, advanced, full only because shared_patch is the full
+// task format, weakens when false). Owner decision 2026-11-12 also made `mode lite` (switching a full project) and
+// `cloud.collect auto` confirmed weakenings; `guidance quiet` and `kickstart gates` are not. The rest get their rows in
+// the same task that adds the key to STANDARD (the coverage test turns red until it does):
 //   B5  history.rotateTimeLog, .archiveDoneAfterDays  history, advanced, both modes (performance, not a guard)
 // Also later: the environment variables (QUEUE_LOAD_ADAPTIVE, QUEUE_GATE_QUEUE, CONTEXT_BLOCK_OTHERS, the context limits,
 // DISABLE_UPDATES, TZ) as read-only rows, and the per-viewer browser choices (theme, mascot) if the board lists them.
@@ -142,9 +144,22 @@ const WHY_PLANS = 'lite uses the plan register as a plain list; areas, documents
 
 const SETTINGS = Object.freeze([
   // ---- 1. Project and git ----
+  // Owner decision 2026-11-12: switching a full project to lite is a confirmed weakening (lite softens gitSurface and
+  // dependencyFiles, lib/queueConfig.js resolveOwn). A new project's first lite (`ravenseat init`) is not a switch and
+  // never asks (cli/tasks.mjs cmdInit). The lite state itself is named by doctor's lite INFO line, not as a weakened
+  // guard (lib/settingsView.js SWITCH_ONLY), so a new user is not told on day one that a guard is weakened.
   row('mode', 'project', 'choice', 'Mode',
     'Lite runs the core loop with one task type; full adds classes, focus, the batch queue and deeper review. ' +
-    'Switch with `ravenseat mode lite|full`.', { ...BASIC, choices: ['full', 'lite'] }),
+    'Switch with `ravenseat mode lite|full`.', {
+      ...BASIC,
+      choices: ['full', 'lite'],
+      weakens: rankWeakens(['full', 'lite']),
+      protects: 'A changed git hook or git setting and a changed dependency file going through with only a warning.',
+      whyNot: 'Lite softens gitSurface and dependencyFiles from stop to warn, unless queue.config.json sets them, so a hook ' +
+        'or a new library a track added no longer stops receive and merge.',
+      changes: 'gitSurface and dependencyFiles warn instead of stop (unless the file sets them), and the full task format ' +
+        'is put away. Doctor will report what lite softens.',
+    }),
   row('projectName', 'project', 'text', 'Project name', 'The name used in missions, agent messages and on the board.',
     BASIC),
   row('baseBranch', 'project', 'text', 'Base branch',
@@ -389,6 +404,16 @@ const SETTINGS = Object.freeze([
       changes: 'The hook is removed at the next fill, start or resume, and agents can push from git itself when the text ' +
         'guard does not see the command. Doctor will report it.',
     }),
+  row('ownership.sharedPatchCollides', 'guards', 'onoff', 'Shared patch collides with owned files',
+    'A path in a task\'s shared_patch collides with another active task\'s owned_files: the second task waits to start, ' +
+    'and a merge that patches a file another active task owns stops. Off: shared_patch is compared only with shared_patch.', {
+      fullWhy: 'shared_patch is a field of the full task format',
+      weakens: offWeakens,
+      protects: 'Two tasks changing the same file at once because one lists it in shared_patch and the other owns it.',
+      whyNot: 'The owner builds on the file while the other task patches it, and the merge goes in under it with no stop.',
+      changes: 'Both tasks can start, and the merge no longer stops on a shared_patch path another active task owns. ' +
+        'Doctor will report it.',
+    }),
   row('readGuard.agentTypes', 'guards', 'list', 'More guarded agent types',
     'More agent types the read guard applies to (tracks and reviewers are always included).'),
   row('readGuard.autoLoaded', 'guards', 'list', 'Auto-loaded files',
@@ -519,8 +544,16 @@ const SETTINGS = Object.freeze([
   row('cloud.offerOnLeave', 'cloud', 'onoff', 'Offer sessions when I leave',
     'The orchestrator offers cloud-go once when you say you are leaving.'),
   row('cloud.collect', 'cloud', 'choice', 'When a session has finished',
-    'off: you run the steps. ask: the orchestrator asks. auto: it fetches and runs the local gates without asking.',
-    { choices: ['off', 'ask', 'auto'] }),
+    'off: you run the steps. ask: the orchestrator asks. auto: it fetches and runs the local gates without asking.', {
+      choices: ['off', 'ask', 'auto'],
+      // Owner decision 2026-11-12: auto brings cloud work home without you looking first. off and ask never weaken.
+      weakens: (v, std) => v === 'auto' && std !== 'auto',
+      protects: 'Work from a cloud session being fetched and run on your machine before you have looked at it.',
+      whyNot: 'A cloud session ran out of your sight; its branch runs its own code here (the gates and the done command) ' +
+        'as soon as it is fetched.',
+      changes: 'The orchestrator fetches each finished session and runs the local gates on it without asking. The merge ' +
+        'still follows the usual rules. Doctor will report it.',
+    }),
   row('cloud.deleteBranch', 'cloud', 'onoff', 'Remove the branch after the merge',
     'The session\'s branch is removed from the remote after the merge.'),
   row('cloud.bundleMax', 'cloud', 'integer', 'Tasks per session', 'Tasks in one session, one after another.'),

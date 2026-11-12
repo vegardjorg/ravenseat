@@ -317,7 +317,9 @@ describe('ravenseat init, add, help and mode', () => {
     expect(full.status, full.stderr).toBe(0);
 
     // And back to lite: the config is as the owner wrote it, nothing is lost, and the ids go on after the highest one.
-    expect((await ravenseat('mode', 'lite')).status).toBe(0);
+    // Full to lite softens two guards, so it needs the owner's flags (owner decision 2026-11-12).
+    expect((await ravenseat('mode', 'lite')).status).toBe(1);
+    expect((await ravenseat('mode', 'lite', '--i-understand', '--by', 'owner')).status).toBe(0);
     expect(fs.readFileSync(configFile(), 'utf8')).toBe(own);
     expect(queue().tasks.map((o: Task) => o.id)).toEqual(['T-001', 'T-002', 'T-010']);
     const again = await ravenseat('add', 'After the round trip');
@@ -336,8 +338,11 @@ describe('ravenseat init, add, help and mode', () => {
     const again = await ravenseat('init');
     expect(again.stdout).toContain('already exists');
     expect(fs.readFileSync(configFile(), 'utf8')).toBe('{\n  "projectName": "x"\n}\n');
-    // With a flag it does switch (the user asked).
-    expect((await ravenseat('init', '--lite')).status).toBe(0);
+    // With a flag it does switch (the user asked). The project runs in full (no mode key), so lite is a confirmed
+    // weakening (owner decision 2026-11-12): without the owner's flags nothing is written.
+    expect((await ravenseat('init', '--lite')).status).toBe(1);
+    expect(fs.readFileSync(configFile(), 'utf8')).toBe('{\n  "projectName": "x"\n}\n');
+    expect((await ravenseat('init', '--lite', '--i-understand', '--by', 'owner')).status).toBe(0);
     expect(JSON.parse(fs.readFileSync(configFile(), 'utf8'))).toEqual({ mode: 'lite', projectName: 'x' });
   });
 });

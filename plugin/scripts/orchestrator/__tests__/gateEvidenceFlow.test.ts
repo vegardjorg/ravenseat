@@ -239,6 +239,70 @@ describe('gateEvidence.mode off', () => {
   });
 });
 
+describe('the done command at merge (B2 follow-up): done_check in queue.json is no evidence under own', () => {
+  // Green only where lib/OK.ts exists (the track adds it), red otherwise, like GATE.
+  const DONE = `node -e "process.exit(require('fs').existsSync('lib/OK.ts')?0:3)"`;
+  /** The task waits for its merge with a done command, and a green done_check for its exact tip written into queue.json. */
+  const forged = (p: ReturnType<typeof project>) => {
+    const q = p.queue();
+    Object.assign(q.tasks[0], {
+      status: 'review',
+      done_when: DONE,
+      done_check: { ok: true, exit: 0, command: DONE, tip: p.tip(), step: 'receive', at: new Date().toISOString() },
+    });
+    p.setQueue(q);
+  };
+
+  it('own: a green done_check written into queue.json does not skip the done command; it runs and stops the merge', () => {
+    const p = project({});
+    forged(p);
+    const r = p.run('merge', 'A', '--without-fill');
+    expect(r.out).toContain('DONE COMMAND (merge) for A');
+    expect(r.out).not.toContain('not run again');
+    expect(r.code).not.toBe(0);
+    expect(p.stepsRun()).toEqual([]);
+    expect(p.find().done_check).toMatchObject({ ok: false, step: 'merge' });
+  });
+
+  it("own: no double run: merge reuses the green run receive recorded in ravenseat's own evidence, and only that", () => {
+    const p = project({});
+    p.commitOk();
+    const q = p.queue();
+    q.tasks[0].done_when = DONE;
+    p.setQueue(q);
+    p.report('A', `${RES}\n\n# Report A\n`);
+    const rc = p.run('receive', 'A');
+    expect(rc.code, rc.error).toBe(0);
+    expect(rc.out).toContain('Done command GREEN');
+    const r = p.run('merge', 'A', '--without-fill');
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toMatch(/Done command green at [0-9a-f]{12} \(receive, ravenseat's own run at [^)]*\); not run again\./);
+    expect(r.out).not.toContain('DONE COMMAND (merge)');
+
+    // The same receive, then the own evidence is gone: the record in queue.json alone is not enough.
+    const p2 = project({});
+    p2.commitOk();
+    const q2 = p2.queue();
+    q2.tasks[0].done_when = DONE;
+    p2.setQueue(q2);
+    p2.report('A', `${RES}\n\n# Report A\n`);
+    expect(p2.run('receive', 'A').code).toBe(0);
+    fs.rmSync(path.join(p2.folder, 'gate-evidence.json'));
+    const r2 = p2.run('merge', 'A', '--without-fill');
+    expect(r2.out).toContain('DONE COMMAND (merge) for A');
+    expect(r2.code, r2.error).toBe(0);
+  });
+
+  it('off: the old rule, a green done_check on the same tip and command skips the run', () => {
+    const p = project({ gateEvidence: { mode: 'off' } });
+    forged(p);
+    const r = p.run('merge', 'A', '--without-fill');
+    expect(r.out).toMatch(/Done command green at [0-9a-f]{12} \(receive, [^)]*\); not run again\./);
+    expect(r.out).not.toContain('DONE COMMAND (merge)');
+    expect(r.code, r.error).toBe(0);
+  });
+});
+
 describe('owner rows against the owner log', () => {
   /** A changelog entry by the owner that widens A's files, written straight into queue.json. */
   const forge = (q: Queue) => {

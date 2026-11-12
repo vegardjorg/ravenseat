@@ -2,7 +2,8 @@
 // logic/conflicts.js: ownership conflicts between tasks, the blockers, and the per-list lookups.
 //
 // fileOverlap, conflictPart, conflict and conflictsWithActive (two tasks cannot own the same file, DB object or shared
-// patch), blockerParts and blockers (dependencies, owner questions, open blocks, batch queue, conflicts), and the
+// patch, and with ownership.sharedPatchCollides a path in one task's shared_patch counts as a file the other owns),
+// blockerParts and blockers (dependencies, owner questions, open blocks, batch queue, conflicts), and the
 // lookups built on the fast index (perIdFor, activeFor, childrenMap, successors, lockUpCount).
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
@@ -90,11 +91,26 @@ function readsOverlaps(o, tasks) {
 }
 
 /**
+ * Does a path in shared_patch collide with another task's owned_files (config ownership.sharedPatchCollides, default
+ * on)? `opts.sharedPatchCollides` overrides the config (the tests, and a caller that already read it).
+ */
+function sharedPatchCollides(opts = {}) {
+  if (typeof opts.sharedPatchCollides === 'boolean') return opts.sharedPatchCollides;
+  return cfg()?.ownership?.sharedPatchCollides !== false;
+}
+
+/**
  * First conflict between a candidate and an active task, with the details (the guard rules on the board need
  * who and what, not just the text), or null.
+ *
+ * B4 (review G3): owned_files used to be compared only with owned_files and shared_patch only with shared_patch, so
+ * one task could own a file while another listed the same path in shared_patch, and both ran at once. With
+ * ownership.sharedPatchCollides (the default) a shared_patch path that overlaps the other task's owned_files is a file
+ * conflict, both ways. A shared_patch entry that is a function name matches no owned path, so it changes nothing.
+ * @param {{ sharedPatchCollides?: boolean }} [opts] overrides the config value
  * @returns {{ type: 'file'|'db'|'patch'|'hotspot'|'reads', name: string, with: string, text: string } | null}
  */
-function conflictPart(candidate, active) {
+function conflictPart(candidate, active, opts = {}) {
   // A record outside the queue (external add) is named after the session or person, so the blocker says who is working.
   // The text is built only when there actually is a conflict (conflictPart is called for every pair).
   const ownerText = () =>
@@ -110,6 +126,26 @@ function conflictPart(candidate, active) {
           with: active.id,
           text: `file ${norm(f)} is owned by ${ownerText()}`,
         };
+    }
+  }
+  // B4: a shared_patch path against the other side's owned_files, both ways (only when one side has a shared_patch).
+  if ((candidate.shared_patch?.length || active.shared_patch?.length) && sharedPatchCollides(opts)) {
+    for (const f of candidate.shared_patch ?? []) {
+      for (const g of active.owned_files ?? []) {
+        if (fileOverlap(f, g))
+          return { type: 'file', name: norm(f), with: active.id, text: `file ${norm(f)} is owned by ${ownerText()}` };
+      }
+    }
+    for (const g of candidate.owned_files ?? []) {
+      for (const f of active.shared_patch ?? []) {
+        if (fileOverlap(g, f))
+          return {
+            type: 'file',
+            name: norm(g),
+            with: active.id,
+            text: `file ${norm(g)} is in the shared_patch of ${ownerText()}`,
+          };
+      }
     }
   }
   // The sets are built only when the candidate has something to compare (most have empty lists).
@@ -160,9 +196,9 @@ function conflictPart(candidate, active) {
   return null;
 }
 
-/** First conflict between a candidate and an active task (as text), or null. */
-function conflict(candidate, active) {
-  return conflictPart(candidate, active)?.text ?? null;
+/** First conflict between a candidate and an active task (as text), or null. `opts` as in conflictPart. */
+function conflict(candidate, active, opts = {}) {
+  return conflictPart(candidate, active, opts)?.text ?? null;
 }
 
 /**
@@ -369,6 +405,7 @@ module.exports = {
   dbKey,
   contenders,
   fileOverlap,
+  sharedPatchCollides,
   conflictPart,
   conflict,
   blockerParts,

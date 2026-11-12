@@ -30,6 +30,8 @@ const T = require('../queueBoard.js') as {
 const KK = require('../queueConfig.js');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PR = require('../queueProposals.js');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const RG = require('../settingsRegistry.js');
 
 const CLIENT = join(__dirname, '..', '..', 'queue-board');
 
@@ -100,7 +102,14 @@ beforeAll(async () => {
   w.setInterval = () => 0;
   w.fetch = async (filePath: string, init?: { method?: string; body?: string }) => {
     if (init?.method === 'POST') {
-      posts.push({ path: filePath, body: JSON.parse(init.body ?? '{}') });
+      const body = JSON.parse(init.body ?? '{}');
+      posts.push({ path: filePath, body });
+      // The server's weakening rule for the gear's Cloud section (queue-board.mjs cloud-setting): 422 without the yes.
+      if (body.type === 'cloud-setting' && body.value === 'auto' && body.confirm !== 'weaken') {
+        const row = RG.rowFor('cloud.collect');
+        const answer = { ok: false, weaken: true, key: row.key, title: row.title, protects: row.protects, whyNot: row.whyNot, changes: row.changes, message: 'This weakens a guard' };
+        return { ok: false, status: 422, json: async () => answer };
+      }
       return { ok: true, status: 200, json: async () => ({ ok: true, message: 'ok', info: [] }) };
     }
     if (filePath.startsWith('/api/settings')) return { ok: true, status: 200, json: async () => settingsAnswer() };
@@ -283,5 +292,41 @@ describe('the warning dialog with the slide (step 6b)', () => {
     await flush();
     expect(aa.checked).toBe(false);
     expect(settingPosts()).toEqual([]);
+  });
+
+  it('owner decision 2026-11-12: choosing lite in the Mode row of a full project opens the dialog; Cancel sends nothing', async () => {
+    await redraw({ mode: 'full' });
+    const select = document.getElementById('reg-mode') as HTMLSelectElement;
+    expect(select.value).toBe('full');
+    select.value = 'lite';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(dialogOpen()).toBe(true);
+    expect(select.value).toBe('full');
+    expect(dialog().textContent).toContain('Mode');
+    key(dialog(), 'keydown', 'Escape');
+    await flush();
+    expect(settingPosts()).toEqual([]);
+  });
+
+  it('owner decision 2026-11-12: collect auto in the Cloud section opens the dialog on the server\'s 422; Cancel sends nothing more', async () => {
+    // The Cloud section is drawn when the board switches are in the state and the cloud module is on.
+    state.data = { ...state.data, boardSwitches: {}, features: { cloud: true }, cloudSettings: [{ key: 'collect', label: 'When a session has finished', kind: 'choice', choices: ['off', 'ask', 'auto'], value: 'ask', help: 'x' }] } as typeof state.data;
+    state.version = 'v2';
+    window.dispatchEvent(new Event('focus'));
+    await flush();
+    await redraw({ mode: 'full' });
+    const select = document.getElementById('cloud-setting-collect') as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    select.value = 'auto';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(dialogOpen()).toBe(true);
+    expect(dialog().textContent).toContain('When a session has finished');
+    key(dialog(), 'keydown', 'Escape');
+    await flush();
+    expect(dialogOpen()).toBe(false);
+    const cloud = posts.filter((p) => p.body?.type === 'cloud-setting');
+    expect(cloud).toEqual([{ path: '/api/action', body: { type: 'cloud-setting', key: 'collect', value: 'auto' } }]);
   });
 });

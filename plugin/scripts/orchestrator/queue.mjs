@@ -19,8 +19,10 @@
 //         existing queue. --next-migr only when the migration flow is enabled)
 //   node scripts/orchestrator/queue.mjs init --lite|--full
 //        (also writes "mode" into queue.config.json, for an existing queue too. A fresh init without a flag writes
-//         "lite" when the config has no mode of its own; lite gets the project "tasks" (prefix T-). lib/liteMode.js)
-//   node scripts/orchestrator/queue.mjs mode [lite|full]             (show the mode, or write it into queue.config.json)
+//         "lite" when the config has no mode of its own; lite gets the project "tasks" (prefix T-). lib/liteMode.js.
+//         --lite on an existing project that runs in full is the switch below and needs --i-understand --by owner)
+//   node scripts/orchestrator/queue.mjs mode [lite|full] [--i-understand --by owner]   (show the mode, or write it into
+//        queue.config.json; full to lite weakens a guard, so it needs the owner flags, cli/settings.mjs guardWeakening)
 //   node scripts/orchestrator/queue.mjs add "<title>" [--mission "<text or path>"] [--priority 1-10] [--files a,b] [--depends a,b]
 //        [--id <id>] [--by "<who>"]   (lite mode only: one task from a title; id T-001..., class K, value 5 or
 //         --priority, 30 min, the mission = the title. No small-task guard or batch queue in lite)
@@ -423,7 +425,8 @@
 //   node scripts/orchestrator/queue.mjs cloud setup                      (what cloud tracks need, what is in place, the next step; changes nothing)
 //   node scripts/orchestrator/queue.mjs cloud on|off                     (features.cloud in queue.config.json)
 //   node scripts/orchestrator/cloud-start.mjs <id> [<id> ...] [--force] [--allow-upload]   (in a terminal: claude --cloud with the package)
-//   ravenseat cloud settings | cloud set <setting> <value>   (all the cloud settings; cloud on|off hides or shows all of it)
+//   ravenseat cloud settings | cloud set <setting> <value>   (all the cloud settings; cloud on|off hides or shows all of it;
+//        cloud set collect auto weakens a guard and needs --i-understand --by owner, cli/settings.mjs guardWeakening)
 //   ravenseat cloud collect [<id> ...] [--dry-run]   (finished sessions home: cloud done, worktree, prepare-track, receive; then merge)
 //   node scripts/orchestrator/cloud-go.mjs [<sessions>] [--single] [--dry-run] [--force] [--allow-upload]   (several sessions in one go, by priority)
 //   node scripts/orchestrator/queue.mjs cloud send <id> [<id> ...] [--force]   (without a terminal, only with cloud.start routine: fires the

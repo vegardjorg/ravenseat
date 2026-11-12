@@ -311,6 +311,18 @@ describe("a file another active task owns (ownership 1, plans/ROADMAP.md)", () =
     expect(foreignOwners(['shared/reg.ts', 'a.txt'], me, tasks)).toEqual([]);
     expect(foreignOwners(['b.txt'], { ...me, owned_files: ['b.txt'] }, tasks)).toEqual([]);
   });
+  it("B4: a path in the task's own shared_patch that another active task owns is foreign (review G3)", () => {
+    // Before: the task's own shared_patch covered the path, so it merged under the owner B with no stop.
+    const patcher = { id: 'P', status: 'review', owned_files: ['p.txt'], shared_patch: ['b.txt', 'lib/b/x.ts', 'shared/reg.ts'] };
+    expect(foreignOwners(['b.txt', 'lib/b/x.ts', 'shared/reg.ts', 'p.txt'], patcher, [...tasks, patcher])).toEqual([
+      { path: 'b.txt', owner: 'B', via: 'shared_patch' },
+      { path: 'lib/b/x.ts', owner: 'B', via: 'shared_patch' },
+    ]);
+    // ownership.sharedPatchCollides false: the shared_patch covers the path again, as before.
+    expect(foreignOwners(['b.txt', 'lib/b/x.ts'], patcher, [...tasks, patcher], { sharedPatchCollides: false })).toEqual([]);
+    // A path the task owns in owned_files is never foreign, also when it is in shared_patch too.
+    expect(foreignOwners(['b.txt'], { ...patcher, owned_files: ['b.txt'] }, [...tasks, patcher])).toEqual([]);
+  });
   it('a wave track (no task) and an empty queue give nothing; backslashes are normalised', () => {
     expect(foreignOwners(['b.txt'], null, tasks)).toEqual([]);
     expect(foreignOwners(['lib\\b\\y.ts'], me, tasks)).toEqual([{ path: 'lib/b/y.ts', owner: 'B' }]);
@@ -415,6 +427,35 @@ describe('merge-track.mjs in a temporary repo', () => {
       expect(ok.stdout).toMatch(/OWNERSHIP OVERRIDDEN \(--allow-guard\) for queue\/A/);
       const row = JSON.parse(fs.readFileSync(path.join(data, 'times.jsonl'), 'utf8').trim());
       expect(row).toMatchObject({ track: 'A', event: 'guard-overridden', foreign: [{ path: 'a.txt', owner: 'B' }] });
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it("B4: a.txt in A's shared_patch and B's owned_files stops the merge; ownership.sharedPatchCollides false lets it go as before", () => {
+    const { repo, g, data, run } = setup();
+    try {
+      fs.writeFileSync(
+        path.join(data, 'queue.json'),
+        JSON.stringify({
+          tasks: [
+            { id: 'A', status: 'review', branch: 'queue/A', owned_files: ['.claude/'], shared_patch: ['a.txt'] },
+            { id: 'B', status: 'running', branch: 'queue/B', owned_files: ['a.txt'] },
+          ],
+        }),
+      );
+      const head = g('rev-parse', 'HEAD');
+      const stop = run();
+      expect(stop.status).toBe(4);
+      expect(stop.stderr).toMatch(/a\.txt\s+\(owned by B, in this task's shared_patch\)/);
+      expect(stop.stderr).toContain('ownership.sharedPatchCollides');
+      expect(g('rev-parse', 'HEAD')).toBe(head);
+
+      fs.writeFileSync(path.join(repo, 'no-config.json'), JSON.stringify({ ownership: { sharedPatchCollides: false } }));
+      const ok = run();
+      expect(ok.status, ok.stderr).toBe(0);
+      expect(ok.stdout + ok.stderr).not.toContain('OWNERSHIP');
+      expect(g('rev-parse', 'HEAD')).not.toBe(head);
     } finally {
       fs.rmSync(repo, { recursive: true, force: true });
     }
