@@ -344,7 +344,11 @@ receive and merge the same track. Compaction is still the usual path for a long 
   `added_by` from the branch, `--approved` is refused, and a track may have 3 open proposals. The mission shows the command, and
   the proposal needs only `id`, `title` and `mission`: the rest follows the track, and the class is K unless the task sets it.
 - The worktree rule: never `npm install` inside a worktree (shared folders are links to the main tree), and clean up
-  worktrees only with `cleanup-worktree.mjs`. A whole `ravenseat merge` (also `--resume`) removes the worktree and deletes the
+  worktrees only with `cleanup-worktree.mjs`. `--all` also takes folders under `.claude/worktrees/` that git does not
+  list, but never one whose `.git` is a folder or points to a gitdir that exists (a moved or renamed project can make a
+  real worktree look unknown; the message suggests `git worktree repair`), and otherwise only after `git status
+  --porcelain` of the folder runs and shows nothing.
+  A whole `ravenseat merge` (also `--resume`) removes the worktree and deletes the
   merged queue branch with `git branch -d`; `ravenseat doctor` names merged `worktree-agent-*` branches with no worktree left.
 
 ## Gates and the precheck
@@ -445,7 +449,13 @@ checkout or with ravenseat's own `--evidence` run:
 - A batch push needs `ravenseat gates --full` run in the main checkout, on exactly the base tip, with no uncommitted tracked
   changes: `ravenseat push-check` says `BLOCKED` while `gates.full` is set up and that entry is missing or red.
 - Out of the agents' reach: the push guard denies a queue agent's shell command that names the store or passes
-  `--evidence` or `--cwd` to the gate runner, and the write guard (`hook-write-guard.mjs`, PreToolUse on
+  `--evidence` or `--cwd` to the gate runner, or that writes `queue.json`, `base-health.json` or `queue.config.json`
+  (a redirection to one, or one named with a writing command such as `cp`, `mv`, `rm`, `tee`, `sed -i`, `Set-Content`
+  or `writeFileSync`; reading them stays free). It reads the names as the shell does: in any case, without quotes or
+  backticks, and with backslashes both dropped and read as a path separator, so `GATE-EVIDENCE.json` and
+  `gate-"evidence".json` count. The Bash rule cannot tell the data folder's `queue.json` from another one, and a write
+  it cannot read (a script file, a name built at run time) goes through.
+  The write guard (`hook-write-guard.mjs`, PreToolUse on
   `Write|Edit|NotebookEdit`, `lib/writeGuard.js`) denies a queue agent (track, track-d, the reviewers and helpers) a
   direct write to `gate-evidence.json` anywhere, and to the data folder's `queue.json` and `base-health.json`. The
   main session is never stopped, and the hook is inert without `queue.config.json`. Both are guards against mistakes
@@ -601,8 +611,12 @@ Face and DigitalOcean key formats; JWTs; a GCP service account file; and, outsid
 files, a URI with a password (`scheme://user:pass@host`), a value line in a `.env` style file and a generic
 `password=`/`secret=`/`token=`/`SERVICE_ROLE_KEY=` with a long value). A hit gets the confirmation dialog with
 file:line, the rule and the commit, never the value; a false alarm is answered with "push anyway". It never denies. A
-log over `secretScan.maxBytes` falls back to the net diff. Skipped silently: a net diff larger than
-`secretScan.maxBytes`, a first push (no remote ref, it would scan the whole history), a timeout or any error.
+log over `secretScan.maxBytes` falls back to the net diff. A scan that does not finish asks too and says why: a net diff
+larger than `secretScan.maxBytes`, a timeout or any error. The whole scan has 6 s (`DEADLINE_MS` in
+`lib/secretScan.js`), below the push guard hook's own 10 s, and no git or gitleaks call gets more than is left of it
+(`secretScan.timeoutMs` is the limit per call within that), so a slow scan asks instead of being killed with the hook,
+which would let the push through without a question. A first push (no remote ref) scans the branch minus what the remote
+has on other branches.
 `secretScan.enabled: false` turns it off. With the batch question, both are asked in one dialog.
 `deployCommands` (empty by default) lists the project's deploy commands; any command that starts with one of them
 gets the confirmation dialog, from an agent or the main session. It is a reminder, not a wall: a list is never

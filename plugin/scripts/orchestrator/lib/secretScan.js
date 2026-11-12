@@ -16,7 +16,12 @@
 //     (scheme://user:pass@host), a value line in a `.env` style file (.env, .env.local, .env.production; never
 //     .env.example and the like), and the generic "name = long value" rule.
 // An incomplete scan is a question too, never a silent pass (the owner can still push): the output over
-// secretScan.maxBytes even as a net diff, git over secretScan.timeoutMs, or any error. The answer's `incomplete` says why.
+// secretScan.maxBytes even as a net diff, git over secretScan.timeoutMs or the whole scan over DEADLINE_MS, or any error.
+// The answer's `incomplete` says why.
+// Time (review 2026-11-11, S4): each git or gitleaks call has secretScan.timeoutMs, and the whole scan has one deadline,
+// DEADLINE_MS, kept well below the push guard hook's own timeout in hooks/hooks.json (10 s), so the hook always answers.
+// Before the cap, a few slow steps could add up past the hook limit; Claude Code then killed the hook and the push went
+// without a question. No step gets more time than is left, and a scan out of time is incomplete, which asks.
 // The question names file:line, the rule and the commit only, NEVER the matched text (the dialog and the transcript
 // would otherwise copy the secret around).
 //
@@ -28,6 +33,14 @@
 // =============================================================
 
 const { spawnSync } = require('node:child_process');
+
+/**
+ * The whole scan's time limit in ms (all git and gitleaks calls together). The push guard hook has 10 s (hooks.json),
+ * and node's start, the config and the other git calls of the hook need the rest. Not a setting on purpose: a larger
+ * value would let the hook be killed, and a killed hook lets the push through. __tests__/redteam/reviewGaps2.test.ts
+ * checks the margin against hooks.json.
+ */
+const DEADLINE_MS = 6000;
 
 /**
  * The built-in patterns: { id, re }. Kept small on purpose; each one is a format a provider issues, so a match is
@@ -223,6 +236,7 @@ function gitleaks(cwd, range, timeoutMs) {
  * @param {string} o.remote
  * @param {string} o.branch
  * @param {{ maxBytes?: number, timeoutMs?: number }} [o.setup]
+ * @param {number} [o.deadlineMs] a shorter overall limit than DEADLINE_MS (tests)
  */
 function scanPush(o) {
   return scanRange({
@@ -231,6 +245,7 @@ function scanPush(o) {
     to: `refs/heads/${o.branch}`,
     remote: o.remote,
     setup: o.setup,
+    deadlineMs: o.deadlineMs,
   });
 }
 
@@ -238,13 +253,33 @@ function scanPush(o) {
  * Scan the commits in `from..to` one by one (`git log -p --no-merges`), so a secret added and later removed in the
  * range is still found. Returns { hits, scanner, incomplete? }; `incomplete` says what was not scanned (the output over
  * the cap, a timeout, any error). With `remote` a missing `from` is a first push: `to` minus all the remote has.
- * @param {{ cwd: string, from: string, to: string, remote?: string, setup?: { maxBytes?: number, timeoutMs?: number } }} o
+ * The whole scan stops at DEADLINE_MS (or a shorter `deadlineMs`): no call gets more time than is left, and one that
+ * would start with none left, or that runs out, makes the scan incomplete ('the scan took too long').
+ * @param {{ cwd: string, from: string, to: string, remote?: string, setup?: { maxBytes?: number, timeoutMs?: number },
+ *   deadlineMs?: number }} o
  */
 function scanRange(o) {
   const maxBytes = Number(o.setup?.maxBytes) > 0 ? Number(o.setup.maxBytes) : 2_000_000;
   const timeoutMs = Number(o.setup?.timeoutMs) > 0 ? Number(o.setup.timeoutMs) : 3000;
-  const run = (args, extra = {}) =>
-    spawnSync('git', ['-C', o.cwd, ...args], { encoding: 'utf8', timeout: timeoutMs, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, ...extra });
+  const shorter = typeof o.deadlineMs === 'number' && o.deadlineMs >= 0 ? o.deadlineMs : DEADLINE_MS;
+  const limit = Math.min(shorter, DEADLINE_MS);
+  const end = Date.now() + limit;
+  /** The time the next call may take: its own timeoutMs, never more than is left of the deadline. */
+  const left = () => Math.min(timeoutMs, end - Date.now());
+  const outOfTime = new Error('out of time');
+  const run = (args, extra = {}) => {
+    const t = left();
+    if (t <= 0) throw outOfTime;
+    const r = spawnSync('git', ['-C', o.cwd, ...args], {
+      encoding: 'utf8',
+      timeout: t,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+      ...extra,
+    });
+    if (r.error?.code === 'ETIMEDOUT') throw outOfTime;
+    return r;
+  };
   const quote = ['-c', 'core.quotepath=off'];
   const plain = ['--no-color', '--no-ext-diff', '--no-textconv', '--unified=0'];
   const notScanned = (why) => ({ hits: [], scanner: 'none', incomplete: why });
@@ -268,14 +303,16 @@ function scanRange(o) {
       d = run([...quote, 'diff', ...plain, ...netRange], { maxBuffer: maxBytes });
     }
     if (overCap(d.error)) return notScanned('what this push sends is too large to scan');
-    if (d.error?.code === 'ETIMEDOUT') return notScanned('the scan took too long');
     if (d.error || d.status !== 0) return notScanned('git could not read the commits');
     const answer = (hits, scanner) => (partial ? { hits, scanner, incomplete: partial } : { hits, scanner });
     if (!d.stdout.trim()) return answer([], 'none');
-    const leaks = gitleaks(o.cwd, revs.join(' '), timeoutMs);
+    // gitleaks only with time left; out of time or too slow it gives null, and the built-in scan (in process) runs.
+    const leaks = left() > 0 ? gitleaks(o.cwd, revs.join(' '), left()) : null;
     if (leaks) return answer(leaks, 'gitleaks');
     return answer(scanLines(addedLines(d.stdout)), 'built-in');
-  } catch {
+  } catch (e) {
+    if (e === outOfTime)
+      return notScanned(`the scan took too long (it has ${limit / 1000} s in all, so the push guard always answers)`);
     return notScanned('the scan failed');
   }
 }
@@ -283,9 +320,12 @@ function scanRange(o) {
 /** The push guard's question for the hits or an incomplete scan, or null. Names file:line, the rule and the commit, never the value. */
 function question(result) {
   const hits = result?.hits ?? [];
+  // Only size has a setting that helps. Time has none: the whole scan's limit stays below the hook's own (DEADLINE_MS).
+  const tooLarge = /too large/.test(String(result?.incomplete ?? ''));
   const unfinished = result?.incomplete
-    ? `The secret check did not finish: ${result.incomplete}. Nothing here says this push is clean: look for keys yourself, ` +
-      'or raise secretScan.maxBytes and secretScan.timeoutMs in queue.config.json and push again. Push anyway when you have checked.'
+    ? `The secret check did not finish: ${result.incomplete}. Nothing here says this push is clean: look for keys ` +
+      `yourself (for example with gitleaks)${tooLarge ? ', or raise secretScan.maxBytes in queue.config.json and push again' : ''}. ` +
+      'Push anyway when you have checked.'
     : null;
   if (!hits.length) return unfinished;
   const shown = hits.slice(0, 5).map((h) => `${h.file}:${h.line} (${h.rule})${h.commit ? ` in ${h.commit}` : ''}`);
@@ -297,4 +337,4 @@ function question(result) {
   );
 }
 
-module.exports = { PATTERNS, addedLines, scanLines, isQuietFile, isEnvFile, scanPush, scanRange, question };
+module.exports = { DEADLINE_MS, PATTERNS, addedLines, scanLines, isQuietFile, isEnvFile, scanPush, scanRange, question };

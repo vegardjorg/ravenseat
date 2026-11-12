@@ -348,10 +348,15 @@ function fullGateVerdict({ folder, sha, cfg }) {
  */
 function tamperReason(command) {
   const c = String(command ?? '');
-  if (c.includes(FILE_NAME.replace('.json', '')))
+  // Read the names as the shell does (review 2026-11-11, S3): lower case (Windows and macOS file names), without quotes
+  // and PowerShell backticks (`gate-"evidence".json` is the same word), and with each backslash both dropped (a Bash
+  // escape, `gate\-evidence`) and read as a path separator (`scripts\.queue\queue.json`).
+  const forms = shellForms(c);
+  const names = (word) => forms.some((f) => f.includes(word));
+  if (names(FILE_NAME.replace('.json', '')))
     return `the gate evidence (${FILE_NAME}) is written only by the orchestrator's gate runs; a queue agent may not touch it`;
   // The accepted git baseline (lib/gitSurfaceBaseline.js): removing it would make the next first use accept a planted hook.
-  if (c.includes('git-surface'))
+  if (names('git-surface'))
     return "the accepted git baseline (git-surface.json) is the owner's (ravenseat surface accept --by owner); a queue agent may not touch it";
   // The gate runner itself (gates.mjs, `ravenseat gates`, `queue.mjs gates`), not any command that mentions the word.
   const gateRun = /\bgates\.mjs\b/.test(c) || new RegExp(`\\b((?:${CLI_PATTERN})(?:\\.mjs|\\.cmd)?|queue\\.mjs)["']?\\s+gates\\b`).test(c);
@@ -360,6 +365,50 @@ function tamperReason(command) {
       'a queue agent runs its gates without --evidence and --cwd (the evidence comes from ravenseat receive and ravenseat merge, ' +
       'not from the track); run `ravenseat gates --quick` or `--full` in your own worktree'
     );
+  const state = stateWrite(forms);
+  if (state)
+    return (
+      `${state} is the queue's trusted state; a queue agent changes it only through the ravenseat commands, never with a ` +
+      "shell write (queue.config.json is the owner's). Reading it is fine"
+    );
+  return null;
+}
+
+/** The command text in the forms tamperReason searches: lower case, no quotes or backticks, backslashes dropped or as "/". */
+function shellForms(command) {
+  const t = String(command ?? '').toLowerCase().replace(/["'`]/g, '');
+  return [t.replace(/\\/g, ''), t.replace(/\\/g, '/')];
+}
+
+/** The queue's state files a shell write is checked for (lib/writeGuard.js covers the file tools). */
+const STATE_NAME = '(queue|base-health|queue\\.config)\\.json';
+/** The name as a word of its own (after a space, a path separator, = : ( , or the start), not my-queue.json. */
+const STATE_WORD = new RegExp(`(?:^|[\\s/=:(,;|&<>])${STATE_NAME}`);
+/** A redirection (> or >>, also &>) whose target is one of them; 2> and => are not, and >&2 targets no file. */
+const STATE_REDIRECT = new RegExp(`(?:^|[^0-9=>-])>>?\\s*(?:\\S*[/=:(])?${STATE_NAME}`);
+/** Commands and calls that write, move, copy over or remove a file (sh, cmd, PowerShell, node, git). */
+const WRITE_WORDS = [
+  'tee', 'cp', 'mv', 'rm', 'ln', 'dd', 'truncate', 'install', 'sponge', 'del', 'erase', 'copy', 'move', 'ren', 'rename',
+  'set-content', 'add-content', 'out-file', 'clear-content', 'remove-item', 'move-item', 'copy-item', 'new-item',
+  'rename-item', 'writefile(?:sync)?', 'appendfile(?:sync)?', 'writealltext', 'rmsync', 'unlink(?:sync)?', 'renamesync',
+  'copyfile(?:sync)?',
+];
+const WRITES = new RegExp(
+  `\\b(?:${WRITE_WORDS.join('|')})\\b|\\bsed\\s+(?:-[a-z]*i|--in-place)|\\bperl\\s+-[a-z]*i|\\bgit\\s+(?:checkout|restore|rm|mv)\\b`,
+);
+
+/**
+ * The state file a shell command writes, or null: the name in a redirection target, or the name next to a writing
+ * command or call. Text only, like the rest of tamperReason: a write it cannot read (a script file, an encoded name) goes
+ * through, and a project's own file with the same name elsewhere counts too (see decision B2 in plans/review-2026-11-11.md).
+ */
+function stateWrite(forms) {
+  for (const f of forms) {
+    const r = STATE_REDIRECT.exec(f);
+    if (r) return `${r[1]}.json`;
+    const w = STATE_WORD.exec(f);
+    if (w && WRITES.test(f)) return `${w[1]}.json`;
+  }
   return null;
 }
 

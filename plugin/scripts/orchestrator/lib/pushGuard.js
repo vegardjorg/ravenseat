@@ -366,6 +366,20 @@ function assessNetwork(command, context) {
 
 // ---- Push and queue CLI rules for the queue's agents (H1, H2) -------------------------------------------------------
 
+/**
+ * The program-valued key (lib/gitExecSurface.js isExecKey) a `git config` call changes, or null. Reading forms
+ * (--get, --get-all, --get-regexp, --get-urlmatch, -l, --list, `get`, `list`) change nothing; any other form that names
+ * such a key (set, --add, --replace-all, --unset, `set`, `unset`) counts (review 2026-11-11, S5).
+ * @param {string[]} args the arguments after `config`
+ */
+function configSetsExecKey(args) {
+  const { isExecKey } = require('./gitExecSurface.js');
+  const a = args.map((x) => String(x));
+  const first = a.find((x) => !x.startsWith('-')) ?? '';
+  if (a.some((x) => /^(--get(-all|-regexp|-urlmatch)?|-l|--list)$/i.test(x)) || /^(get|list)$/i.test(first)) return null;
+  return a.find((x) => !x.startsWith('-') && x.includes('.') && isExecKey(x.split('=')[0])) ?? null;
+}
+
 const AGENT_PUSH_REASON =
   'Queue agents never push (any remote, branch, refspec or form): the orchestrator merges your branch and pushes the ' +
   'base in batches. Commit on your own branch and deliver.';
@@ -499,6 +513,13 @@ function assess(command, context = {}) {
         findings.push({
           decision: 'deny',
           reason: 'Queue agents do not define git aliases (git config alias.*): the push guard cannot see what they run.',
+        });
+      else if (sub === 'config' && configSetsExecKey(g.args))
+        findings.push({
+          decision: 'deny',
+          reason:
+            `Queue agents do not set git config keys that run a program (${configSetsExecKey(g.args)}): it would run at the ` +
+            "orchestrator's next git command. Reading them (git config --get) is fine.",
         });
       else if (!SC.GIT_SUBCOMMANDS.has(sub))
         findings.push({

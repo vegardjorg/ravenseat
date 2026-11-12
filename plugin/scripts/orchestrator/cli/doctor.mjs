@@ -445,7 +445,9 @@ function checkBranches() {
   const detachedLines = [
     ...(merged.length
       ? [warn('branches', `${merged.length} detached worktree(s) hold nothing the base lacks: ${merged.map((w) => path.basename(w.path)).join(' ')}`,
-          'ravenseat cleanup-worktree --all --execute removes them once they are 3 hours old (without --execute it only lists them)')]
+          'ravenseat cleanup-worktree --all --execute removes them once they are 3 hours old and clean (without --execute it ' +
+            'only lists them; it also removes folders git does not list, but only when they hold no repository or live ' +
+            'worktree and git status shows nothing)')]
       : []),
     ...(abandoned.length
       ? [warn('branches', `detached worktree(s) still hold the work of finished or cancelled: ${abandoned.join(' ')}`,

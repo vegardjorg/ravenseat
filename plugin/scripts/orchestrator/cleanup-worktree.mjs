@@ -25,7 +25,9 @@
 //   node scripts/orchestrator/cleanup-worktree.mjs --all [--execute] [--min-age-hours 3]
 //       A dry run is the default: lists what would be removed and why the rest stays. Merged = in baseBranch
 //       (config().baseBranch). Folders under .claude/worktrees/ that git does not know (leftovers after an earlier cleanup)
-//       are included too. --min-age-hours is the minimum age in hours.
+//       are included too, but never one whose .git is a folder or points to an existing gitdir, and only when
+//       `git status --porcelain` there runs and shows nothing (unregisteredRefusal).
+//       --min-age-hours is the minimum age in hours.
 //   node scripts/orchestrator/cleanup-worktree.mjs <branch> [--execute] [--against <ref>]     (one branch, default against baseBranch)
 //       --abandon: also when the branch is not merged (a cancelled task). The branch and its commits stay.
 //   import { cleanupWorktree } from './cleanup-worktree.mjs'                            (merge-track.mjs, against HEAD)
@@ -401,13 +403,51 @@ export function cleanupDetachedOf(branch, { start, against = 'HEAD', main = main
     .map((w) => cleanupRegistered(w, { against, minAgeHours: 0, main }));
 }
 
-/** Folders under .claude/worktrees/ that git does not know: leftovers after an earlier cleanup. */
-function cleanupUnregistered(filePath, { minAgeHours, main, execute }) {
+/** What the owner does when a folder git does not list may still be a worktree. */
+const REPAIR =
+  'if it is a worktree of this project (moved or renamed?), run git worktree repair in the main checkout; ' +
+  'otherwise check it and move it out of .claude/worktrees/ by hand';
+
+/**
+ * Why a folder git does not list must stay, or null (review 2026-11-11, G4). A moved or renamed project can make a real
+ * worktree look unknown, with uncommitted work in it, so only a folder that is clearly no live checkout is removed:
+ *   - .git is a folder: a repository of its own;
+ *   - .git is a file (or a link) pointing to a gitdir that exists: a worktree git can still find (git worktree repair);
+ *   - otherwise `git status --porcelain` of the folder must run and show nothing. A .git file that points nowhere makes
+ *     it fail (kept); without .git it reads the folder in the main checkout, where .claude/worktrees/ is normally
+ *     ignored.
+ */
+function unregisteredRefusal(filePath, main) {
+  let st = null;
+  try {
+    st = fs.statSync(path.join(filePath, '.git'));
+  } catch {
+    // no .git, or a link that points nowhere: decided by git status below
+  }
+  if (st?.isDirectory()) return 'its .git is a folder, so it is a repository of its own; check it and move it by hand';
+  if (st) {
+    const gd = gitdirFor(filePath);
+    if (!gd || fs.existsSync(gd))
+      return `its .git points to a gitdir that exists, so it may be a live worktree: ${REPAIR}`;
+  }
+  const s = git(['-C', filePath, 'status', '--porcelain', '--', '.'], main);
+  if (!s.ok) return `git status cannot read it (${s.error.split('\n')[0] || 'unknown reason'}): ${REPAIR}`;
+  if (s.out) return `git status shows changes in it: ${REPAIR}`;
+  return null;
+}
+
+/**
+ * Folders under .claude/worktrees/ that git does not know: leftovers after an earlier cleanup. Removed only when
+ * unregisteredRefusal finds nothing (also in a dry run, so the list shows what --execute would really do).
+ */
+export function cleanupUnregistered(filePath, { minAgeHours, main, execute }) {
   const name = `${path.basename(filePath)} (not registered)`;
   if (isUnder(process.cwd(), filePath) || same(process.cwd(), filePath))
     return { status: 'skipped', message: `${name}: is the current directory` };
   if (forNewTime(filePath, minAgeHours))
     return { status: 'skipped', message: `${name}: changed recently (below the minimum age)` };
+  const refusal = unregisteredRefusal(filePath, main);
+  if (refusal) return { status: 'skipped', message: `${name}: ${refusal}` };
   const real = realLinkFolderIn(filePath);
   if (real) return { status: 'skipped', message: `${name}: ${real} is not a link` };
   if (!execute)

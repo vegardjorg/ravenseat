@@ -30,12 +30,30 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-/** Config keys that run a program, exact (lower case: git prints section and variable names in lower case). */
+/**
+ * Config keys that run a program, exact (lower case: git prints section and variable names in lower case). From git's
+ * config docs (review 2026-11-11, S5): the editors, the pager, the hooks folder, fsmonitor, ssh, askpass, the proxy
+ * command, the alternate refs command, the signing program and its ssh key command, credential helpers, the external
+ * diff, the interactive diff filter, upload-pack's pack-objects hook, the git gui editor and include.path (it pulls in
+ * a file that can set any of these).
+ */
 const EXEC_KEYS = new Set([
-  'core.hookspath', 'core.fsmonitor', 'core.sshcommand', 'core.pager', 'credential.helper', 'diff.external',
+  'core.hookspath', 'core.fsmonitor', 'core.sshcommand', 'core.pager', 'core.editor', 'core.askpass', 'core.gitproxy',
+  'core.alternaterefscommand', 'sequence.editor', 'credential.helper', 'diff.external', 'gpg.program',
+  'gpg.ssh.defaultkeycommand', 'interactive.difffilter', 'uploadpack.packobjectshook', 'gui.editor', 'include.path',
 ]);
-/** The same with a free name in the key: every alias and filter, and the per-URL helper and per-driver programs. */
-const EXEC_SHAPES = [/^alias\./, /^filter\./, /^credential\..+\.helper$/, /^merge\..+\.driver$/, /^diff\..+\.command$/];
+/**
+ * The same with a free name in the key: every alias and filter, the per-URL helper, the merge and diff drivers (command
+ * and textconv), the per-format signing program, the per-command pager, a remote's upload-pack and receive-pack, the
+ * merge and diff tools (cmd and path), send-email's programs, trailer commands, a submodule's update command (`!cmd`),
+ * conditional includes, and the browser, man viewer and git gui tool commands.
+ */
+const EXEC_SHAPES = [
+  /^alias\./, /^filter\./, /^pager\./, /^credential\..+\.helper$/, /^merge\..+\.driver$/, /^diff\..+\.(command|textconv)$/,
+  /^gpg\..+\.program$/, /^remote\..+\.(uploadpack|receivepack)$/, /^(mergetool|difftool)\..+\.(cmd|path)$/,
+  /^sendemail\.(.+\.)?(sendmailcmd|tocmd|cccmd|headercmd|smtpserver)$/, /^trailer\..+\.(command|cmd)$/,
+  /^submodule\..+\.update$/, /^includeif\..+\.path$/, /^(browser|man)\..+\.(cmd|path)$/, /^guitool\..+\.cmd$/,
+];
 
 /** Hook files read at most, folder depth, and the size over which a file counts by its size alone (runtime stays small). */
 const MAX_FILES = 500;

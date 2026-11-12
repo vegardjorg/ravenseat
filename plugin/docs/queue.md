@@ -530,7 +530,16 @@ merge lock while its gate step waits for a slot, so other merges in that project
 ### Git hooks and config
 
 A git hook, and git settings such as an alias or `core.sshCommand`, run code at the next git command, with your
-credentials. Automated work in the repository runs as the same user, so it can write them. The queue therefore keeps
+credentials. The settings counted (`lib/gitExecSurface.js`): aliases, filters, `core.hooksPath`, `core.fsmonitor`,
+`core.sshCommand`, `core.pager`, `pager.*`, `core.editor`, `sequence.editor`, `core.askPass`, `core.gitProxy`,
+`core.alternateRefsCommand`, `gpg.program` and `gpg.*.program`, `gpg.ssh.defaultKeyCommand`, credential helpers,
+`diff.external`, `diff.*.command`, `diff.*.textconv`, `merge.*.driver`, `interactive.diffFilter`,
+`remote.*.uploadpack`, `remote.*.receivepack`, `uploadpack.packObjectsHook`, `mergetool.*` and `difftool.*` `cmd` and
+`path`, send-email's programs, `trailer.*.command`, `submodule.*.update`, `include.path` and `includeIf.*.path`, and the
+browser, man viewer and git gui tool commands. A queue agent may not set any of them with `git config` (reading is
+fine), and one given with `git -c` makes a line with a push in it unreadable, so it is denied.
+
+Automated work in the repository runs as the same user, so it can write them. The queue therefore keeps
 what was last accepted (`git-surface.json` in the data folder: hook hashes and setting names with hashed values, never
 the values), recorded the first time `ravenseat fill`, `start`, `resume`, `receive` or `merge` runs.
 
@@ -594,7 +603,7 @@ reviewer agents per class. Missing values fall back to safe defaults.
 | `baseGate.flakyRerun` | `true` | Before a red base check freezes the base, only the failed commands run once more on the same sha; green then is recorded as flaky (a `flakyGate` time log row, a finding, no freeze), red twice freezes. `false` = freeze at once |
 | `productionBranch` | `null` (unknown) | The branch that goes live; `ravenseat doctor` warns when it equals `baseBranch` (every batch push would go to production) |
 | `deployCommands` | `[]` | Commands that deploy, e.g. `["vercel --prod", "fly deploy"]`: the push guard asks before any command that starts with one of them, from an agent or the main session (a prefix match after env prefixes, so `npx vercel --prod` needs its own entry; a command inside `bash -c "..."`, `( )` or `cmd /c` is seen too). Empty = off |
-| `secretScan.enabled`, `maxBytes`, `timeoutMs` | `true`, `2000000`, `3000` | Secret check before a plain push of the base branch from the main session: the added lines of every commit in `<remote>/<baseBranch>..<baseBranch>` are scanned (gitleaks when on PATH, else built-in patterns, JWTs, URI passwords and `.env` files included) and a hit asks with file:line, never the value. A first push (no remote ref) scans the branch, minus what the remote has on other branches. A scan that does not finish (over `maxBytes`, over `timeoutMs` per git or gitleaks call, any error) asks too, and says why; it never stops the push by itself |
+| `secretScan.enabled`, `maxBytes`, `timeoutMs` | `true`, `2000000`, `3000` | Secret check before a plain push of the base branch from the main session: the added lines of every commit in `<remote>/<baseBranch>..<baseBranch>` are scanned (gitleaks when on PATH, else built-in patterns, JWTs, URI passwords and `.env` files included) and a hit asks with file:line, never the value. A first push (no remote ref) scans the branch, minus what the remote has on other branches. A scan that does not finish (over `maxBytes`, over `timeoutMs` per git or gitleaks call, over the 6 s the whole scan has, any error) asks too, and says why; it never stops the push by itself. The 6 s stay below the hook's own 10 s, so a larger `timeoutMs` cannot let the hook be killed |
 | `largeFileMb` | `5` | `ravenseat doctor` warns about tracked files larger than this |
 | `gitSurface` | `"stop"`, in lite `"warn"` | Git hooks and executing git config against the accepted baseline: `"stop"` stops receive, merge and the push check on a difference, `"warn"` only warns, `"off"` compares nothing (see "Git hooks and config") |
 | `architectureRules` | `[]` | Short rules copied into every mission |
