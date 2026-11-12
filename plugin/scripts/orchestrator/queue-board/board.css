@@ -1661,7 +1661,128 @@ input.switch:disabled {
   gap: var(--distance-sm);
 }
 
-/* ---- Message (at the bottom) ---- */
+/* ---- The warning before a guard is weakened, with the slide (api.js confirmWeaken) ---- */
+
+.guard.weaken {
+  position: relative;
+  max-height: calc(100vh - 2 * var(--distance-md));
+  overflow-y: auto;
+}
+
+.weaken-close {
+  position: absolute;
+  top: var(--distance-sm);
+  right: var(--distance-sm);
+}
+
+.guard.weaken h2 {
+  padding-right: var(--distance-lg);
+}
+
+.weaken-part h3 {
+  margin: var(--distance-md) 0 var(--distance-xs);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.weaken-part p {
+  margin: 0;
+}
+
+.slide-track {
+  --slide: 0%;
+  --slide-n: 0;
+  position: relative;
+  height: 48px;
+  margin: var(--distance-md) 0;
+  border-radius: 24px;
+  background: var(--color-surface-container-high);
+  border: 1px solid var(--color-outline-variant);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.slide-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--slide);
+  background: var(--color-error-container);
+}
+
+.slide-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  color: var(--color-on-surface-variant);
+  pointer-events: none;
+}
+
+.slide-handle {
+  position: absolute;
+  top: 3px;
+  left: calc(3px + (100% - 46px) * var(--slide-n) / 100);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-error);
+  cursor: grab;
+}
+
+.slide-handle:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ---- The settings registry in the gear (settings.js registrySections) ---- */
+
+.settings-weakened {
+  margin: var(--distance-md) 0 0;
+  padding: var(--distance-sm) var(--distance-md);
+  border-radius: var(--radius-lg);
+  background: var(--color-error-container);
+  color: var(--color-on-error-container);
+}
+
+.settings-weakened-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.settings-weakened ul {
+  margin: var(--distance-xs) 0 0;
+}
+
+.settings-weakened a {
+  color: inherit;
+}
+
+.registry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+}
+
+.registry-head .helper-badges {
+  margin-top: 0;
+}
+
+.registry-title {
+  font-weight: 600;
+}
+
+.settings-fold {
+  margin-top: var(--distance-sm);
+}
+
+.settings-fold > summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--color-on-surface-variant);
+}
 
 /* One stack for the message and "Undo". The stack is fixed at the bottom; the boxes sit below each other
    (the order is set by the toast queue via `order`), so they never cover each other. */

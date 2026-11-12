@@ -179,6 +179,28 @@ per run ("No runs yet" until it has run). General also has the Guidance switch, 
 to `/api/helper` behind the key and the Origin check, like every other write; it never writes files itself). The
 arrow keys move between the two tabs, and the board remembers the last one.
 
+**Every setting by category.** Under the sections above, General lists every row of the settings registry
+(`lib/settingsRegistry.js`, the same list as `ravenseat settings`) in its category: Project and git, Limits and cost,
+Machine load, Gates and checks, Agent guards, Merge and push, Review and agents, Board and advice, Cloud, Plans and
+focus, History and storage. Each category shows its basic rows first; the advanced ones are marked **Advanced** and
+folded (closed) under them. In lite mode a row that only matters in full mode is hidden behind one line per category
+("2 more apply only in full mode (why). Show them"), and a category with nothing for lite is one closed line. Each row
+shows its value, the default and where it is saved: **Saved only for you (queue.json)** or **Saved for the project
+(queue.config.json, remember to commit)**. A guard that is weaker than its default gets a **Weakened** mark and is named
+in a banner at the top. The limits keep their fields and guard rules (`/api/limit`); a row that has its own section
+(Guidance, Checks, Columns, Cloud, Auto-accept, Helper agents) says where to change it; the other rows with a switch,
+a choice or a value save through `/api/setting` (= `ravenseat settings set <key> <value>`). The board remembers which
+folds you opened, per browser.
+
+**Weakening a guard.** Choosing the weaker option of a row that guards something (for example the secret scan off, git
+hooks and config to warn, auto-accept on) does not change it. The control stays as it was, and a dialog opens with what
+the guard protects against, why turning it off is not a good idea, what changes and where it is saved. Only a
+completed slide at the bottom sends the change: drag the handle to the end, or focus it and hold the right arrow key or
+Enter for about a second (a screen reader can also step it with the arrow keys; it is a slider with "Not confirmed" or
+"Confirmed"). A single click or one key press does not complete it, and Cancel, Close, Escape or a click outside
+change nothing. The server refuses the same change without the dialog's confirmation (422), and the change writes a
+`setting-weakened` row to the time log. Going back to the stronger value needs no dialog.
+
 A [custom helper](orchestration.md#custom-helper-agents) has a **custom** badge, its scan level (red, yellow or
 green) and its review state: **Approved** (with who approved it and when, in local time), **Needs review** or
 **Changed since approval** (the file differs from the approved one, so it is turned off). Its switch is disabled,

@@ -6,7 +6,11 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
-- `lib/settingsRegistry.js` has one row per setting (11 categories, basic or advanced, lite or full, where it is stored, and warning texts for settings that weaken a guard). A coverage test makes sure every setting has a row. Nothing reads it yet.
+- `lib/settingsRegistry.js` has one row per setting (11 categories, basic or advanced, lite or full, where it is stored, and warning texts for settings that weaken a guard). A coverage test makes sure every setting has a row. `ravenseat settings` and the board's gear read it.
+- `ravenseat settings [<category>] [--advanced] [--all] [--changed] [--json]` lists every setting by category with its value, the default and where it is saved, and names the guards weaker than the default on the first line. Advanced rows are marked; in lite the full-only rows are counted on one line per category (`--all` shows them).
+- `ravenseat settings set <key> <value>` changes one setting in the file its row names; queue.config.json keeps its form. A value that weakens a guard prints the warning and exits 1 without writing anything, unless you add `--i-understand --by owner`; then a `setting-weakened` row goes to the time log. It is refused from a track worktree and denied to queue agents.
+- The board's gear lists every setting by category (basic rows first, Advanced folded under them, full-only rows behind one line in lite), shows where each is saved, and has a banner for weakened guards. `POST /api/setting` writes one row through `ravenseat settings set`.
+- Weakening a guard on the board opens a warning dialog with what the guard protects against, why not and what changes. Only a completed slide sends the change: drag it, or hold the right arrow key or Enter for about a second; a single click does not. The server refuses a weakening value without that confirmation (422).
 - `ravenseat doctor` has a `budget` line: a WARN when no daily budget is set, with `ravenseat limit dailyBudget <usd>` as an optional fix (new tasks stop when the day's measured spend reaches it). It never fails and does not change the exit code, and quiet guidance hides it like the other advice.
 
 ### Fixed
@@ -23,6 +27,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - `cleanup-worktree --all --execute` no longer deletes a folder under `.claude/worktrees/` that git does not list when its `.git` is a folder or points to a gitdir that exists, or when `git status` there fails or shows changes. After a moved or renamed project a real worktree with uncommitted work could look unknown and be deleted; the message now suggests `git worktree repair`.
 
 ### Changed
+- The gear's "The queue" section is gone: the limits are in the Limits and cost category, with the same fields and guard rules, and their titles and explanations now come from the settings registry. In lite, `maxDPlus` and `maxPerDomain` have no field (they are behind the "full mode only" line).
+- Switching auto-accept of proposals on in the gear now opens the warning dialog first, and `/api/proposals` refuses it without the dialog's confirmation (422). `ravenseat proposals auto on` in the CLI is unchanged.
 - full-mode.md and guide.md now say what lite really has: the Plans room is on by default (`features.plans`), and `reviewer-light` reviews class K tasks when the project has no CI config or no gates. A test pins this against the code.
 - The docs for the queue for heavy gates and the FAQ say where it has run: developed and run on Windows, CI runs its tests on Linux and Windows, and it has not been tried on macOS.
 - The track hooks that run on every tool call no longer load the whole queue logic: `lib/contextGuard.js` loads it only when it binds the orchestrator, which saves some 35 modules and 70 ms per call.

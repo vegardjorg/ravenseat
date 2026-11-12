@@ -1823,76 +1823,39 @@ function assessBulk(queue, action, add) {
 
 /**
  * The fields in the settings panel: all the limits `queue.mjs limit` can set (the test checks that the list equals
- * queueLogic.LIMIT_NAME), with a readable name, a one-line explanation and the saver mode recommendation where it exists.
+ * queueLogic.LIMIT_NAME), with the title, explanation and type of their row in the settings registry
+ * (lib/settingsRegistry.js, `limits.<name>`), which is the one place those texts are written.
  */
-const SETTINGS = [
-  {
-    name: 'maxConcurrent',
-    title: 'Concurrent tracks',
-    explanation: 'How many agents the queue runs concurrently. Picked tasks do not count.',
-    type: 'integer',
-  },
-  {
-    name: 'maxDPlus',
-    title: 'Concurrent D+ tracks',
-    explanation: 'The heaviest tracks (D+, two reviewers each). At most as many as concurrent tracks.',
-    type: 'integer',
-  },
-  {
-    name: 'maxPerDomain',
-    title: 'Track per domain',
-    explanation: 'At most this many concurrently in the same domain.',
-    type: 'integer',
-  },
-  {
-    name: 'maxDb',
-    title: 'Tracks with migrations',
-    explanation:
-      'Tracks with migrations concurrently, i.e. the load on the database. Picked tasks count here too.',
-    type: 'integer',
-  },
-  {
-    name: 'dailyBudget',
-    title: 'Daily quota (USD)',
-    explanation:
-      'When today\'s usage (API equivalent) reaches the quota, no new tasks are started. "off" = no quota.',
-    type: 'text',
-  },
-  {
-    name: 'nightRun',
-    title: 'Night run',
-    explanation: 'Off: no new tasks are started in the night window. What is running runs to completion.',
-    type: 'onoff',
-  },
-  {
-    name: 'nightWindow',
-    title: 'Night window (local time)',
-    explanation: 'The hours the night pause applies, like "23-06" (from 23:00 to 06:00).',
-    type: 'text',
-  },
-  {
-    name: 'autocompact',
-    title: 'Automatic compaction',
-    explanation:
-      'On: the orchestrator session is compacted by Claude Code itself at 300k (Auto-compact on, the default, and ' +
-      'autoCompactWindow 300000) and continues on its own. Off: a notice with a ready /compact line, so you stay in ' +
-      'control; then also turn off auto-compaction in Claude Code ("autoCompactEnabled": false), or it compacts anyway.',
-    type: 'onoff',
-  },
-];
+const REGISTRY = require('./settingsRegistry.js');
+const SETTINGS_VIEW = require('./settingsView.js');
+const SETTINGS = L.LIMIT_NAME.map((name) => {
+  const r = REGISTRY.rowFor(`limits.${name}`);
+  return { name, title: r.title, explanation: r.explanation, type: r.type };
+});
 
 /**
  * The settings panel: each field with current value, default and saverMode (all as text, as queue.mjs shows them).
  * `migrations: false` (no migrations.folder in queue.config.json) leaves out maxDb, which only matters for the migration flow.
+ * `mode: 'lite'` leaves out the limits the registry marks full only (maxDPlus, maxPerDomain): lite has one task type and
+ * one domain, so they mean nothing there (the grouped view still lists them behind its "full mode only" line).
  */
-function settings(queue, { migrations = true } = {}) {
+function settings(queue, { migrations = true, mode = 'full' } = {}) {
   const g = { ...L.DEFAULT_LIMITS, ...(queue.limits ?? {}) };
-  return SETTINGS.filter((f) => migrations || f.name !== 'maxDb').map((f) => ({
+  const fullOnly = (name) => mode === 'lite' && !REGISTRY.rowFor(`limits.${name}`).modes.includes('lite');
+  return SETTINGS.filter((f) => (migrations || f.name !== 'maxDb') && !fullOnly(f.name)).map((f) => ({
     ...f,
     val: L.limitText(f.name, g[f.name]),
     standard: L.limitText(f.name, L.DEFAULT_LIMITS[f.name]),
     saverMode: f.name in SAVER_MODE ? String(SAVER_MODE[f.name]) : null,
   }));
+}
+
+/**
+ * The grouped settings for the gear (lib/settingsView.js settingsView): every registry row with its value, default,
+ * storage place and marks, by category, plus the mode and the weakened guards (the banner).
+ */
+function settingsGroups(queue, { config, migrations = true } = {}) {
+  return SETTINGS_VIEW.settingsView({ config, queue, migrations });
 }
 
 /**
@@ -2320,6 +2283,7 @@ module.exports = {
   packPreview,
   bulkSummary,
   SETTINGS,
+  settingsGroups,
   settings,
   helperSwitchArgs,
   helperAddArgs,

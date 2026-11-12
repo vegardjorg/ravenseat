@@ -537,11 +537,13 @@ const V = require('../queueBoard') as {
     space: { over?: string | null; under?: string | null; top?: boolean },
     now?: number,
   ) => { changes?: Record<string, number>; error?: string };
-  SETTINGS: { name: string }[];
+  SETTINGS: { name: string; title: string; explanation: string; type: string }[];
   settings: (
     queue: Queue2,
-    option?: { migrations?: boolean },
+    option?: { migrations?: boolean; mode?: string },
   ) => { name: string; val: string; standard: string; saverMode: string | null }[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  settingsGroups: (queue: Queue2, option: { config: unknown; migrations?: boolean }) => any;
   SKILL_RULES: { text: string }[];
   QUEUE_HOOKS: { file: string; events: string[]; allMatchers?: boolean }[];
   hooksCoverage: (settings: unknown) => {
@@ -864,8 +866,21 @@ describe('assess: settings', () => {
 });
 
 describe('settings and setup', () => {
-  it('the panel has all the limits queue.mjs can set, with current value, default and saverMode', () => {
+  it('the panel has all the limits queue.mjs can set, from the registry, with current value, default and saverMode', () => {
+    // The registry (lib/settingsRegistry.js) is the source: every limit queue.mjs can set has its row there, and the
+    // board's fields take their title, explanation and type from it.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const REG = require('../settingsRegistry.js');
     expect(V.SETTINGS.map((f) => f.name)).toEqual(L2.LIMIT_NAME);
+    for (const f of V.SETTINGS) {
+      const r = REG.rowFor(`limits.${f.name}`);
+      expect(r, f.name).toBeTruthy();
+      expect({ title: f.title, explanation: f.explanation, type: f.type }, f.name).toEqual({
+        title: r.title,
+        explanation: r.explanation,
+        type: r.type,
+      });
+    }
     const field = V.settings({
       tasks: [],
       limits: { maxConcurrent: 5, nightRun: false },
@@ -886,6 +901,41 @@ describe('settings and setup', () => {
     const off = V.settings(queue, { migrations: false }).map((f) => f.name);
     expect(off).not.toContain('maxDb');
     expect(off).toEqual(L2.LIMIT_NAME.filter((n: string) => n !== 'maxDb'));
+  });
+
+  it('lite leaves the full-only limits (maxDPlus, maxPerDomain) out of the fields; full mode keeps them', () => {
+    const queue = { tasks: [], limits: {} };
+    const lite = V.settings(queue, { mode: 'lite' }).map((f) => f.name);
+    expect(lite).not.toContain('maxDPlus');
+    expect(lite).not.toContain('maxPerDomain');
+    expect(lite).toContain('maxConcurrent');
+    expect(V.settings(queue, { mode: 'full' }).map((f) => f.name)).toEqual(L2.LIMIT_NAME);
+  });
+
+  it('settingsGroups: the registry rows by category, the lite filter, the storage place and the weakened guards', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const KK = require('../queueConfig.js');
+    const queue = { tasks: [], limits: {} };
+    const lite = V.settingsGroups(queue, { config: KK.merge(KK.STANDARD, { mode: 'lite' }), migrations: false });
+    expect(lite.mode).toBe('lite');
+    const limits = lite.categories.find((c: { id: string }) => c.id === 'limits');
+    expect(limits.title).toBe('Limits and cost');
+    const visible = limits.rows.filter((r: { hidden: boolean }) => !r.hidden).map((r: { key: string }) => r.key);
+    expect(visible).not.toContain('limits.maxDPlus');
+    expect(visible).not.toContain('limits.maxDb');
+    expect(visible.slice(0, 4)).toEqual(['limits.maxConcurrent', 'limits.dailyBudget', 'limits.nightRun', 'limits.nightWindow']);
+    expect(limits.rows.find((r: { key: string }) => r.key === 'limits.maxDPlus')).toMatchObject({ hidden: true, fullOnly: true });
+    expect(limits.rows[0].storeText).toBe('Saved only for you (queue.json)');
+    expect(lite.weakened).toEqual([]);
+    const full = V.settingsGroups(queue, { config: KK.merge(KK.STANDARD, { secretScan: { enabled: false } }) });
+    expect(full.mode).toBe('full');
+    expect(full.weakened.map((w: { key: string }) => w.key)).toEqual(['secretScan.enabled']);
+    const guards = full.categories.find((c: { id: string }) => c.id === 'guards');
+    expect(guards.rows.find((r: { key: string }) => r.key === 'secretScan.enabled')).toMatchObject({
+      weakened: true,
+      protects: expect.stringMatching(/token|password/i),
+      confirmFor: [],
+    });
   });
 
   it('the working rules in the panel: the saver mode text follows SAVER_MODE', () => {

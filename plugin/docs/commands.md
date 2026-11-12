@@ -7,6 +7,8 @@ files it copies). You rarely need to type these: asking Claude in plain words ru
 ```
 ravenseat init --full               # once per project (a bare `ravenseat init` starts in lite mode)
 ravenseat mode [lite|full]          # show or switch the mode
+ravenseat settings [--advanced] [--all] [--changed] [--json]  # every setting by category, its value and where it is saved
+ravenseat settings set <key> <value> # change one; a value that weakens a guard needs --i-understand --by owner
 ravenseat show                      # short queue view
 ravenseat add --file task.json      # add tasks
 ravenseat fill --scratchpad <dir>   # start what the limits allow

@@ -25,6 +25,10 @@
 //     (migrations when they are turned on, orchestrator, model, hooks and skills) is read only.
 //     "Auto-accept proposals" (lib/queueProposals.js) saves with POST /api/proposals (= `queue.mjs proposals auto ...`) and
 //     undoes one with POST /api/proposals-undo { id } (= `queue.mjs proposals undo <id>`).
+//     GET /api/settings also sends `mode` and `registry` (every registry row by category, lib/settingsView.js), and POST
+//     /api/setting { key, value, confirm } writes one row with `queue.mjs settings set`. A value that weakens a guard (and
+//     switching auto-accept on) is refused with 422 { weaken: true, protects, whyNot, changes } unless confirm is 'weaken',
+//     which only the warning dialog's completed slide sends.
 //   - FORECAST: the state and the statistics carry `forecast` (lib/queueForecast.js, Monte Carlo over the daily throughput,
 //     a fixed seed), shown as a box in the Focus view and a line in Statistics.
 //   - GUARD RULES: every write call runs queueBoard.assess first. stop → 422, warning → 409 until the call sends
@@ -145,6 +149,8 @@ const HF = require('./lib/helperFiles.js');
 // The forecast box (Focus view, Statistics) and the "Auto-accept proposals" section in the gear.
 const FC = require('./lib/queueForecast.js');
 const PR = require('./lib/queueProposals.js');
+const R = require('./lib/settingsRegistry.js');
+const SV = require('./lib/settingsView.js');
 // The decision overview (the flag note for stuck work; the board's Decisions view uses the same file in the browser).
 const DEC = require('./lib/queueDecisions.js');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1918,6 +1924,40 @@ function guard(queue, action, context, b) {
   return { info: texts('info') };
 }
 
+/** Does this value weaken the row's guard against both the default and the value now (lib/settingsView.js needsConfirm)? */
+function needsWeakenConfirm(row, value, queue) {
+  const config = KK.config({ fresh: true }); // the CLI writes the file, so the file is what counts
+  const mode = config.mode === 'lite' ? 'lite' : 'full';
+  return SV.needsConfirm(row, value, {
+    now: SV.valueOf(row, { config, queue }),
+    standard: SV.standardOf(row, { config, mode }),
+  });
+}
+
+/**
+ * The server half of the weakening rule: a value that weakens a guard is refused with 422 and the row's warning texts
+ * (protects, whyNot, changes) unless the body carries confirm: 'weaken'. The board's dialog shows the same texts and only
+ * its completed slide sends that confirm, so a script or a stale page cannot switch a guard off with one request.
+ * Returns the refusal { status, answer } or null.
+ */
+function weakenCheck(row, value, queue, b) {
+  if (!row || !needsWeakenConfirm(row, value, queue) || b?.confirm === 'weaken') return null;
+  return {
+    status: 422,
+    answer: {
+      ok: false,
+      weaken: true,
+      key: row.key,
+      title: row.title,
+      message: `This weakens a guard (${row.key} ${SV.valueText(row, value)}). Nothing was changed.`,
+      protects: row.protects,
+      whyNot: row.whyNot,
+      changes: row.changes,
+      storeText: SV.STORE_TEXT[row.store],
+    },
+  };
+}
+
 /** Does a write action. Returns { status, answer }. */
 async function write(filePath, b) {
   const queueNow = () => JSON.parse(fs.readFileSync(FILE, 'utf8'));
@@ -1999,6 +2039,30 @@ async function write(filePath, b) {
     info = v.info;
     return run(['limit', name, val], `limit ${name} ${val}`);
   }
+  // One registry row from the gear (lib/settingsRegistry.js, edit "set"): goes through `ravenseat settings set <key> <value>`,
+  // which writes the file the row's store names and keeps its form. A value that weakens a guard is refused with 422 and
+  // the row's three warning texts unless the body carries confirm: 'weaken' (the warning dialog's completed slide); then
+  // the owner's flags are passed, and the CLI writes the setting-weakened row to the time log. A limit goes through the
+  // /api/limit path, so its guard rules (queueBoard.assess) still apply.
+  if (filePath === '/api/setting') {
+    const key = typeof b?.key === 'string' ? b.key : '';
+    const row = R.rowFor(key);
+    if (!row) return no(`unknown setting ${key}`);
+    if (row.edit !== 'set') return no(`${key} is not set from the board (${row.edit === 'file' ? 'edit the file' : 'read only'})`);
+    const raw = String(b.value ?? '').trim();
+    if (!raw || raw.length > 40 || /[ -]/.test(raw)) return no('write a value');
+    if (key.startsWith('limits.')) return write('/api/limit', { ...b, name: key.slice('limits.'.length), val: raw });
+    const queue = queueNow();
+    const p = SV.parseValue(row, raw, { limits: queue.limits });
+    if ('error' in p) return no(p.error);
+    const w = weakenCheck(row, p.value, queue, b);
+    if (w) return w;
+    const weak = b.confirm === 'weaken' && needsWeakenConfirm(row, p.value, queue);
+    return run(
+      ['settings', 'set', key, raw, ...(weak ? ['--i-understand', '--by', 'owner'] : [])],
+      `setting ${key} ${raw}${weak ? ' (weakened, confirmed)' : ''}`,
+    );
+  }
   // The guidance switch in General: goes through `ravenseat guidance` (queue.json, under the lock).
   if (filePath === '/api/guidance') {
     if (!['guided', 'quiet'].includes(b?.mode)) return no('mode must be guided or quiet');
@@ -2031,6 +2095,11 @@ async function write(filePath, b) {
   if (filePath === '/api/proposals') {
     const h = PR.boardArgs(b);
     if (h.error) return no(h.error);
+    // Switching auto-accept on from off weakens a guard (the registry row's weakens): refused without the dialog's yes.
+    if (b.enabled === true) {
+      const w = weakenCheck(R.rowFor('proposals.autoAccept.enabled'), true, queueNow(), b);
+      if (w) return w;
+    }
     return run(h.args, `proposals auto ${h.args[2]}`);
   }
   if (filePath === '/api/proposals-undo') {
@@ -2621,9 +2690,17 @@ const server = http.createServer(async (req, res) => {
       try {
         const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
         const stat = statistics().data;
+        // Fresh: `settings set` and `mode` change queue.config.json through the CLI, so the file is what counts.
+        const config = KK.config({ fresh: true });
+        const mode = config.mode === 'lite' ? 'lite' : 'full';
+        const migrations = !!config.migrations?.folder;
         return json(res, 200, {
           ok: true,
-          field: T.settings(queue, { migrations: !!CONFIG.migrations?.folder }),
+          mode,
+          field: T.settings(queue, { migrations, mode }),
+          // Every registry row by category (lib/settingsView.js): value, default, storage place, Advanced and full-only
+          // marks, and the weakened guards for the banner.
+          registry: T.settingsGroups(queue, { config, migrations }),
           guidance: require('./lib/guidance.js').modeOf(queue),
           checksPanel: require('./lib/guidance.js').checksPanelOn(queue),
           usageToday: stat.keyFigures.usageToday,

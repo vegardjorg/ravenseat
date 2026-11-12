@@ -1,5 +1,8 @@
 // =============================================================
 // settings.js: the settings (the gear) and its tabs, General and Helper agents.
+// General also draws every row of the settings registry by category (registrySections: basic rows first, the
+// Advanced ones folded under them, the full-only ones behind one line in lite, where each is saved, and a banner for
+// the weakened guards). A change that weakens a guard opens the warning dialog in api.js (confirmWeaken) first.
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md). They load in order with defer and
 // share the page's global scope, so a top-level name in one is visible in all of them, as when they were one
@@ -75,13 +78,8 @@ function drawSettings() {
       blockedColumnSection(),
       themeSection(),
       mascotSection(),
-      el(
-        'section',
-        { class: 'setting', 'aria-labelledby': 'setting-queue' },
-        el('h3', { id: 'setting-queue', class: 'setting-title', text: 'The queue' }),
-        d.field.map((f) => settingField(f, d)),
-      ),
-      autoAcceptSection(d.autoAccept),
+      registrySections(d),
+      autoAcceptSection(d.autoAccept, d),
       undoSection(),
       el(
         'section',
@@ -542,7 +540,279 @@ async function saveHelper(h, box, errorEl) {
   }
 }
 
-function settingField(f, d) {
+// ---- The settings registry by category (lib/settingsView.js settingsView, sent as d.registry) ----
+
+/** One row of the registry view by key, or null (an older server sends no registry). */
+function registryRow(d, key) {
+  for (const c of d?.registry?.categories ?? []) for (const r of c.rows) if (r.key === key) return r;
+  return null;
+}
+
+/**
+ * Rows that have their own section in the gear (with its own switch and wording): the category shows the value and
+ * where to change it, so there are never two switches for one setting.
+ */
+const OWN_SECTION = {
+  guidance: 'Guidance',
+  'checksPanel.mode': 'Checks',
+  'board.blockedColumn': 'Columns',
+  'board.mascot': 'Logo and mascot',
+  'board.showCloud': 'Cloud',
+  'features.cloud': 'Cloud',
+  helpers: 'the Helper agents tab',
+};
+function ownSection(key) {
+  if (OWN_SECTION[key]) return OWN_SECTION[key];
+  if (key.startsWith('proposals.autoAccept.')) return 'Auto-accept proposals';
+  if (key.startsWith('cloud.')) return 'Cloud';
+  return null;
+}
+
+/** Remembered per viewer (store: try/catch around localStorage): is a category's Advanced part or full-only line open? */
+const openKey = (what, id) => `queue-board-settings-${what}-${id}`;
+const isOpen = (what, id) => store.getItem(openKey(what, id)) === '1';
+const rememberOpen = (what, id, open) => store.setItem(openKey(what, id), open ? '1' : '0');
+
+function registrySections(d) {
+  const v = d.registry;
+  // An older server without the registry: the limits as before, under one heading.
+  if (!v?.categories)
+    return el(
+      'section',
+      { class: 'setting', 'aria-labelledby': 'setting-queue' },
+      el('h3', { id: 'setting-queue', class: 'setting-title', text: 'The queue' }),
+      d.field.map((f) => settingField(f, d)),
+    );
+  const lite = v.mode === 'lite';
+  return el(
+    'div',
+    { class: 'settings-registry' },
+    el('p', {
+      class: 'setting-meta settings-mode',
+      text: lite
+        ? 'Mode: lite. Settings that only matter in full mode are folded away (ravenseat mode full turns them on).'
+        : 'Mode: full.',
+    }),
+    v.weakened.length ? weakenedBanner(v.weakened) : null,
+    v.categories.map((c) => registryCategory(c, d, v.labels ?? {})),
+  );
+}
+
+/** The banner: the guards that are weaker than the default now, by name, with where to find each. */
+function weakenedBanner(list) {
+  return el(
+    'div',
+    { id: 'settings-weakened', class: 'settings-weakened', role: 'note', 'aria-labelledby': 'settings-weakened-title' },
+    el('p', {
+      id: 'settings-weakened-title',
+      class: 'settings-weakened-title',
+      text: `${list.length === 1 ? 'One guard is' : `${list.length} guards are`} weaker than the default`,
+    }),
+    el(
+      'ul',
+      null,
+      list.map((w) =>
+        el('li', null, el('a', { href: `#setting-row-${cssId(w.key)}`, text: w.title }), ` (${w.key} ${w.valueText})`),
+      ),
+    ),
+  );
+}
+
+const cssId = (key) => String(key).replace(/[^A-Za-z0-9_-]/g, '-');
+
+function registryCategory(c, d, labels) {
+  const id = `setting-cat-${c.id}`;
+  const title = el('h3', { id, class: 'setting-title', text: c.title });
+  // A category with nothing for lite: one closed line.
+  if (c.fullOnlyCategory)
+    return el(
+      'section',
+      { class: 'setting settings-category', 'aria-labelledby': id, 'data-category': c.id },
+      foldable(
+        'fullonly',
+        c.id,
+        `${c.title}: ${labels.fullOnly ?? 'Full mode only'}`,
+        c.rows.map((r) => registryField(r, d, labels)),
+        title,
+      ),
+    );
+  const shown = c.rows.filter((r) => !r.hidden);
+  const basic = shown.filter((r) => r.level === 'basic');
+  const advanced = shown.filter((r) => r.level !== 'basic');
+  const hidden = c.rows.filter((r) => r.hidden);
+  const why = [...new Set(hidden.map((r) => r.fullWhy).filter(Boolean))];
+  return el(
+    'section',
+    { class: 'setting settings-category', 'aria-labelledby': id, 'data-category': c.id },
+    title,
+    basic.map((r) => registryField(r, d, labels)),
+    advanced.length
+      ? foldable('advanced', c.id, `${labels.advanced ?? 'Advanced'} (${advanced.length})`, advanced.map((r) => registryField(r, d, labels)))
+      : null,
+    hidden.length
+      ? foldable(
+          'fullonly',
+          c.id,
+          `${hidden.length} more apply only in full mode${why.length ? ` (${why.join('; ')})` : ''}. Show them`,
+          hidden.map((r) => registryField(r, d, labels)),
+        )
+      : null,
+  );
+}
+
+/** A native details/summary (keyboard and screen reader for free), closed unless this viewer opened it before. */
+function foldable(what, id, summary, content, before = null) {
+  const box = el(
+    'details',
+    { class: `settings-fold settings-${what}`, 'data-fold': what },
+    el('summary', { text: summary }),
+    before,
+    content,
+  );
+  box.open = isOpen(what, id);
+  box.addEventListener('toggle', () => rememberOpen(what, id, box.open));
+  return box;
+}
+
+/** The marks after the title: Advanced, Full mode only (with why), Weakened. Words carry the meaning, color repeats it. */
+function registryBadges(r, labels) {
+  const marks = [
+    r.level !== 'basic' ? el('span', { class: 'badge', text: labels.advanced ?? 'Advanced' }) : null,
+    r.fullOnly ? el('span', { class: 'badge', title: r.fullWhy ?? '', text: labels.fullOnly ?? 'Full mode only' }) : null,
+    r.weakened ? el('span', { class: 'badge tone-bad', text: 'Weakened' }) : null,
+  ].filter(Boolean);
+  return marks.length ? el('span', { class: 'helper-badges settings-badges' }, marks) : null;
+}
+
+function registryField(r, d, labels) {
+  const rowId = `setting-row-${cssId(r.key)}`;
+  // A limit: the field with the guard rules (settingField, /api/limit), with the marks and the storage place.
+  if (r.key.startsWith('limits.')) {
+    const f = (d.field ?? []).find((x) => `limits.${x.name}` === r.key);
+    if (f) return settingField(f, d, { rowId, badges: registryBadges(r, labels), storeText: r.storeText });
+  }
+  const id = `reg-${cssId(r.key)}`;
+  const error = el('p', { class: 'setting-error', role: 'alert', hidden: true });
+  const where = ownSection(r.key);
+  const meta = [
+    `now: ${r.valueText}`,
+    `default: ${r.standardText}`,
+    r.storeText,
+    r.fullOnly && r.fullWhy ? `full mode only: ${r.fullWhy}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  let control;
+  if (where) control = el('p', { class: 'setting-meta', text: `Changed in ${where}.` });
+  else if (r.edit === 'set' && !r.hidden) control = registryControl(r, id, error);
+  else
+    control = el('p', {
+      class: 'setting-meta',
+      text:
+        r.edit === 'read'
+          ? 'Read only.'
+          : r.hidden
+            ? 'Applies in full mode.'
+            : r.store === 'config'
+              ? 'Edit queue.config.json to change.'
+              : 'Edit with the queue command.',
+    });
+  // A switch sits before its label (as the other switches in the gear); a list or a text field goes under the text.
+  const isSwitch = control.tagName === 'INPUT';
+  const hasInput = isSwitch || !!control.querySelector('select,input');
+  return el(
+    'div',
+    { id: rowId, class: 'setting-field registry-field', 'data-key': r.key },
+    el(
+      'div',
+      { class: 'registry-head' },
+      isSwitch ? control : null,
+      hasInput ? el('label', { for: id, text: r.title }) : el('span', { class: 'registry-title', text: r.title }),
+      registryBadges(r, labels),
+    ),
+    el('p', { id: `${id}-help`, class: 'setting-explanation', text: r.explanation }),
+    isSwitch ? null : control,
+    el('p', { class: 'setting-meta', text: meta }),
+    error,
+  );
+}
+
+/**
+ * The control of a row with edit "set" and no own section: a switch for on/off, a choice list, or a text field with Save.
+ * All go to /api/setting (= `ravenseat settings set`). A weaker option does not change anything by itself: the control is
+ * put back at once and the warning dialog opens; only a completed slide sends the change with confirm: 'weaken'.
+ */
+function registryControl(r, id, error) {
+  const described = { 'aria-describedby': `${id}-help` };
+  const send = async (value, control, back) => {
+    error.hidden = true;
+    let confirm = null;
+    if (r.confirmFor?.includes(value)) {
+      back();
+      if (!(await confirmWeaken(r, value))) return;
+      confirm = 'weaken';
+    }
+    control.disabled = true;
+    try {
+      const answer = await writeWithWeaken('/api/setting', { key: r.key, value, ...(confirm ? { confirm } : {}) }, r);
+      if (!answer) {
+        back();
+        return;
+      }
+      messageWithInfo(`${r.title}: ${value}`, answer);
+      await getSettings();
+      $(id)?.focus();
+    } catch (e) {
+      back();
+      error.textContent = e.message;
+      error.hidden = false;
+    } finally {
+      control.disabled = false;
+    }
+  };
+  if (r.type === 'onoff') {
+    const box = el('input', { id, type: 'checkbox', role: 'switch', class: 'switch', checked: r.value === true, ...described });
+    box.addEventListener('change', () => {
+      const value = box.checked ? 'on' : 'off';
+      send(value, box, () => (box.checked = r.value === true));
+    });
+    return box;
+  }
+  if (r.type === 'choice' && r.options) {
+    const now = r.valueText;
+    const select = el(
+      'select',
+      { id, ...described },
+      r.options.map((o) => el('option', { value: o, selected: o === now, text: o })),
+    );
+    select.addEventListener('change', () => send(select.value, select, () => (select.value = now)));
+    return el('div', { class: 'setting-control' }, select);
+  }
+  const input = el('input', {
+    id,
+    type: 'text',
+    value: r.value == null ? '' : String(r.value),
+    inputmode: r.type === 'integer' || r.type === 'number' ? 'numeric' : null,
+    autocomplete: 'off',
+    ...described,
+  });
+  const save = el('button', {
+    type: 'button',
+    class: 'button button-muted',
+    text: 'Save',
+    'aria-label': `Save ${r.title.toLowerCase()}`,
+    onclick: () => send(input.value.trim(), save, () => {}),
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      save.click();
+    }
+  });
+  return el('div', { class: 'setting-control' }, input, save);
+}
+
+function settingField(f, d, o = {}) {
   const id = `g-${f.name}`;
   const error = el('p', { class: 'setting-error', role: 'alert', hidden: true });
   const control =
@@ -582,13 +852,16 @@ function settingField(f, d) {
     f.saverMode ? `recommended: at most ${f.saverMode}` : null,
     f.name === 'dailyBudget' ? `used today: ${usd(d.usageToday)}` : null,
     f.name === 'nightRun' && d.night?.stop ? 'night pause now' : null,
+    o.storeText ?? null,
   ]
     .filter(Boolean)
     .join(' · ');
   return el(
     'div',
-    { class: 'setting-field' },
-    el('label', { for: id, text: f.title }),
+    { id: o.rowId ?? null, class: `setting-field${o.rowId ? ' registry-field' : ''}`, 'data-key': o.rowId ? `limits.${f.name}` : null },
+    o.badges
+      ? el('div', { class: 'registry-head' }, el('label', { for: id, text: f.title }), o.badges)
+      : el('label', { for: id, text: f.title }),
     el('p', { id: `${id}-help`, class: 'setting-explanation', text: f.explanation }),
     el('div', { class: 'setting-control' }, control, save),
     el('p', { class: 'setting-meta', text: meta }),
@@ -601,7 +874,7 @@ function settingField(f, d) {
  * /api/proposals (= `ravenseat proposals auto ...`), and the log with an Undo button per row (/api/proposals-undo =
  * `ravenseat proposals undo <id>`). The hard rules (never D or D+, owner questions, legal, protected paths) are not settings.
  */
-function autoAcceptSection(a) {
+function autoAcceptSection(a, d) {
   if (!a?.rules) return null;
   const r = a.rules;
   const error = el('p', { id: 'aa-error', class: 'setting-error', role: 'alert', hidden: true });
@@ -612,6 +885,16 @@ function autoAcceptSection(a) {
     class: 'switch',
     checked: r.enabled,
     'aria-describedby': 'aa-help',
+  });
+  // Switching auto-accept on weakens a guard (its registry row): the switch stays off, the warning dialog opens, and
+  // only a completed slide saves the rules with it on.
+  const row = registryRow(d, 'proposals.autoAccept.enabled');
+  enabled.addEventListener('change', async () => {
+    if (!enabled.checked || !row?.confirmFor?.includes('on')) return;
+    enabled.checked = false;
+    if (!(await confirmWeaken(row, 'on'))) return;
+    enabled.checked = true;
+    saveAutoAccept({ enabled, classes, maxEstimate, maxValue }, error, 'weaken');
   });
   const classes = (a.allowedClasses ?? ['K', 'U']).map((k) =>
     el('input', { id: `aa-class-${k}`, type: 'checkbox', value: k, checked: r.classes.includes(k) }),
@@ -706,7 +989,7 @@ function autoAcceptSection(a) {
   );
 }
 
-async function saveAutoAccept(c, errorEl) {
+async function saveAutoAccept(c, errorEl, confirm) {
   errorEl.hidden = true;
   // Empty = no cap (null); anything else goes as a number, and queue.mjs validates it.
   const num = (s) => {
@@ -714,13 +997,21 @@ async function saveAutoAccept(c, errorEl) {
     return v === '' ? null : Number(v);
   };
   try {
-    const answer = await writeWithGuard('/api/proposals', {
-      enabled: c.enabled.checked,
-      classes: c.classes.filter((b) => b.checked).map((b) => b.value),
-      maxEstimateMin: num(c.maxEstimate.value),
-      maxValue: num(c.maxValue.value),
-    });
-    if (!answer) return;
+    const answer = await writeWithWeaken(
+      '/api/proposals',
+      {
+        enabled: c.enabled.checked,
+        classes: c.classes.filter((b) => b.checked).map((b) => b.value),
+        maxEstimateMin: num(c.maxEstimate.value),
+        maxValue: num(c.maxValue.value),
+        ...(confirm ? { confirm } : {}),
+      },
+      registryRow(t.setting, 'proposals.autoAccept.enabled'),
+    );
+    if (!answer) {
+      if (!confirm) c.enabled.checked = registryRow(t.setting, 'proposals.autoAccept.enabled')?.value === true;
+      return;
+    }
     messageWithInfo('Auto-accept: saved', answer);
     await getSettings();
     $('aa-save')?.focus();

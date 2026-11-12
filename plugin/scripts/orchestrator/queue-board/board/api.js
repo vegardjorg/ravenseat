@@ -1,6 +1,7 @@
 // =============================================================
 // api.js: the key and the API calls, the banner after a restart, the confirmation on a warning from the
-// guard rules (409) and the fetching of the state (every 15 seconds; "unchanged" when nothing is new).
+// guard rules (409), the warning dialog with the slide before a guard is weakened (422 with `weaken`) and the
+// fetching of the state (every 15 seconds; "unchanged" when nothing is new).
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md). They load in order with defer and
 // share the page's global scope, so a top-level name in one is visible in all of them, as when they were one
@@ -168,6 +169,182 @@ function confirmGuard(guard) {
 guardBackground.addEventListener('click', (e) => {
   if (e.target === guardBackground) guardBox.querySelector('button')?.click();
 });
+
+// ---- The warning before a guard is weakened (plans/innstillinger-vurdering-2026-11-12.md 6b) ----
+// One dialog for every registry row with `weakens` (lib/settingsRegistry.js). The control that was tapped does not change:
+// the caller puts it back at once and sends the change only when this resolves true, which only a completed slide does.
+// Cancel, Close, Escape and a click outside resolve false. The server refuses the same change without confirm: 'weaken'
+// (422), so the dialog is the way in, not the guard itself.
+
+/** How long a held key (ArrowRight, Enter or Space) takes to complete the slide, and the step per tick and per press. */
+const SLIDE_HOLD_MS = 1000;
+const SLIDE_STEP = 10;
+
+/**
+ * The slide-to-confirm. A real slider for assistive technology (role slider, aria-valuenow 0-100, aria-valuetext "Not
+ * confirmed" or "Confirmed"). Ways to complete it: drag the handle to the end (95 % or more; letting go earlier puts it
+ * back), hold ArrowRight, Enter or Space for about a second (key repeats are ignored, the hold is timed), or press
+ * ArrowRight ten times (a screen reader's increment). ArrowLeft, Home and Escape-free keys step back. A single click or
+ * tap moves nothing, so it can never complete it.
+ */
+function slideToConfirm(onDone, label) {
+  let pct = 0;
+  let done = false;
+  let timer = null;
+  const fill = el('div', { class: 'slide-fill', 'aria-hidden': 'true' });
+  const handle = el('div', {
+    id: 'slide-handle',
+    class: 'slide-handle',
+    role: 'slider',
+    tabindex: '0',
+    'aria-label': label,
+    'aria-valuemin': '0',
+    'aria-valuemax': '100',
+    'aria-valuenow': '0',
+    'aria-valuetext': 'Not confirmed',
+    'aria-describedby': 'slide-help',
+  });
+  const track = el('div', { class: 'slide-track' }, fill, el('span', { class: 'slide-label', 'aria-hidden': 'true', text: label }), handle);
+  const set = (v) => {
+    pct = Math.max(0, Math.min(100, Math.round(v)));
+    handle.setAttribute('aria-valuenow', String(pct));
+    handle.setAttribute('aria-valuetext', pct >= 100 ? 'Confirmed' : 'Not confirmed');
+    track.style.setProperty('--slide', `${pct}%`);
+    track.style.setProperty('--slide-n', String(pct));
+    if (pct >= 100 && !done) {
+      done = true;
+      stop();
+      onDone();
+    }
+  };
+  const stop = () => {
+    if (timer != null) clearTimeout(timer);
+    timer = null;
+  };
+  // A held key: one step at once, then one per tick until SLIDE_HOLD_MS has passed (setTimeout, so a held key is timed
+  // and not counted by the keyboard's repeat rate).
+  const tick = () => {
+    set(pct + SLIDE_STEP);
+    if (!done) timer = setTimeout(tick, SLIDE_HOLD_MS / (100 / SLIDE_STEP));
+  };
+  handle.addEventListener('keydown', (e) => {
+    if (done) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (e.repeat || timer != null) return;
+      tick();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      set(pct - SLIDE_STEP);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      set(0);
+    }
+  });
+  handle.addEventListener('keyup', stop);
+  handle.addEventListener('blur', stop);
+  // The pointer: only a drag of the handle moves it; letting go before the end puts it back.
+  let from = null;
+  handle.addEventListener('pointerdown', (e) => {
+    if (done) return;
+    from = { x: e.clientX, pct };
+    handle.setPointerCapture?.(e.pointerId);
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!from || done) return;
+    const room = track.clientWidth - handle.offsetWidth;
+    if (room > 0) set(from.pct + ((e.clientX - from.x) / room) * 100);
+  });
+  const release = () => {
+    if (!from || done) return;
+    from = null;
+    if (pct >= 95) set(100);
+    else set(0);
+  };
+  handle.addEventListener('pointerup', release);
+  handle.addEventListener('pointercancel', release);
+  return { track, handle, stop };
+}
+
+/**
+ * The warning dialog: what the guard protects against, why turning it off is not a good idea, what changes, where it is
+ * saved, and the slide. `w` is a registry row from /api/settings (or the 422 answer): title, key, protects, whyNot,
+ * changes, storeText. Resolves true only after a completed slide.
+ */
+function confirmWeaken(w, optionText) {
+  return new Promise((resolve) => {
+    const from = document.activeElement;
+    let slide = null;
+    const answer = (val) => {
+      slide?.stop();
+      guardBackground.hidden = true;
+      guardBox.classList.remove('weaken');
+      guardBox.replaceChildren();
+      guardBox.removeEventListener('keydown', keys);
+      if (from?.isConnected) from.focus();
+      resolve(val);
+    };
+    const keys = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        answer(false);
+      } else if (e.key === 'Tab') window.QueueA11y.trapKey(e, guardBox);
+    };
+    slide = slideToConfirm(() => answer(true), 'Slide to weaken the guard');
+    const part = (title, text) =>
+      text ? el('section', { class: 'weaken-part' }, el('h3', { text: title }), el('p', { text })) : null;
+    // The close button is first: a click outside clicks the first button (the shared background handler above).
+    guardBox.replaceChildren(
+      el(
+        'button',
+        { type: 'button', class: 'button-icon weaken-close', 'aria-label': 'Close, change nothing', onclick: () => answer(false) },
+        icon('close'),
+      ),
+      el('h2', { id: 'guard-title', text: `Weaken a guard: ${w.title ?? w.key}${optionText ? ` (${optionText})` : ''}?` }),
+      el(
+        'div',
+        { id: 'guard-text', class: 'weaken-text' },
+        part('What it protects against', w.protects),
+        part('Why turning it off is not a good idea', w.whyNot),
+        part('What changes', w.changes),
+        w.storeText ? el('p', { class: 'setting-meta', text: w.storeText }) : null,
+      ),
+      el('p', {
+        id: 'slide-help',
+        class: 'setting-meta',
+        text: 'Nothing changes until the slide is completed. Drag the handle to the end, or focus it and hold the right arrow key or Enter for a second.',
+      }),
+      slide.track,
+      el(
+        'div',
+        { class: 'guard-buttons' },
+        el('button', { type: 'button', class: 'button button-filled', text: 'Cancel', onclick: () => answer(false) }),
+      ),
+    );
+    guardBox.classList.add('weaken');
+    guardBox.addEventListener('keydown', keys);
+    guardBackground.hidden = false;
+    // Cancel (the safe choice) has the focus first; Tab reaches the slide.
+    guardBox.querySelector('.guard-buttons button')?.focus();
+  });
+}
+
+/**
+ * A write that may weaken a guard: when the server answers 422 with `weaken` (the page was stale, or a text value), the
+ * dialog opens with the server's texts, and only a completed slide sends the call again with confirm: 'weaken'.
+ * Returns the answer, or null when nothing was sent (cancelled). Other errors are thrown.
+ */
+async function writeWithWeaken(filePath, body, row) {
+  try {
+    return await writeWithGuard(filePath, body);
+  } catch (e) {
+    if (e.status !== 422 || !e.answer?.weaken) throw e;
+    const yes = await confirmWeaken({ ...(row ?? {}), ...e.answer });
+    if (!yes) return null;
+    return writeWithGuard(filePath, { ...body, confirm: 'weaken' });
+  }
+}
 
 /** Message after a successful write, with the info texts from the guard rules below. */
 function messageWithInfo(ok, answer) {

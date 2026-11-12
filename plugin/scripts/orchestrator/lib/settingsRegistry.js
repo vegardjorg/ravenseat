@@ -4,8 +4,8 @@
 // Why: the settings live in five places (queue.config.json, queue.json limits and switches, environment variables,
 // browser storage) with explanations in three (code comments, the example file, queue.md), and those had drifted. The
 // design is plans/innstillinger-vurdering-2026-11-12.md (owner decision 2026-11-12: as recommended). This file is step
-// 3 of it: the rows only. Nothing reads them yet; `ravenseat settings`, the board's grouped panel, the shared writer
-// and the doctor row come later and build on this list.
+// 3 of it: the rows. lib/settingsView.js reads them for `ravenseat settings` (cli/settings.mjs, with the shared writer
+// `settings set`) and for the board's grouped panel (/api/settings, /api/setting); the doctor row comes later.
 //
 // A row:
 //   key            the path inside the file `store` names: "push.mode" in queue.config.json, "limits.maxConcurrent" or
@@ -449,7 +449,8 @@ const SETTINGS = Object.freeze([
   row('board.blockedColumn', 'board', 'onoff', 'Blocked column',
     'Tasks with an open blocker that needs action get a column after In queue.', { ...BASIC, ...QUEUE }),
   row('limits.autocompact', 'board', 'onoff', 'Automatic compaction',
-    'On: Claude Code compacts the orchestrator session itself and the queue continues. Off: a ready /compact line.',
+    'On: Claude Code compacts the orchestrator session itself and the queue continues. Off: a ready /compact line; ' +
+    'then also turn off auto-compaction in Claude Code ("autoCompactEnabled": false), or it compacts anyway.',
     { ...BASIC, ...QUEUE }),
   row('board.port', 'board', 'integer', 'Board port', 'The local port the board listens on.'),
   row('board.title', 'board', 'text', 'Board title', 'The title in the board\'s header and browser tab.'),

@@ -8,7 +8,9 @@
 //   - the board's scripts in index.html are exactly the files in queue-board/board/ (none left out, none extra),
 //   - the Content-Security-Policy and the other security headers are the same strict ones as before the split,
 //   - only allow-listed paths are served: the old /board.js and an unknown file under /board/ give 404,
-//   - an answer from a choice button (POST /api/action { type: 'resolve', choice }) goes through queue.mjs resolve --choice.
+//   - an answer from a choice button (POST /api/action { type: 'resolve', choice }) goes through queue.mjs resolve --choice,
+//   - GET /api/settings sends the registry by category, and POST /api/setting refuses a weakening value without
+//     confirm: 'weaken' (422 with the warning texts, nothing written), then writes and logs it with that confirm.
 // =============================================================
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -235,5 +237,79 @@ describe('the board server: the Blocked column switch (board.blockedColumn)', ()
 
     expect((await post({ type: 'board-switch', name: 'blockedColumn', on: false })).status).toBe(200);
     expect((await getState()).columns.blocked).toBeUndefined();
+  }, 60_000);
+});
+
+describe('the board server: the settings registry and the weakening rule (plans/innstillinger-vurdering-2026-11-12.md 6b)', () => {
+  const post = async (url: string, body: object) => {
+    const r = await fetch(`${base}${url}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-queue-key': key },
+      body: JSON.stringify(body),
+    });
+    return { status: r.status, body: (await r.json()) as Record<string, any> };
+  };
+  const configFile = () => path.join(root, 'no-config.json');
+  const timeRows = () =>
+    fs.existsSync(path.join(root, 'times.jsonl'))
+      ? fs
+          .readFileSync(path.join(root, 'times.jsonl'), 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((l) => JSON.parse(l))
+          .filter((r) => r.event === 'setting-weakened')
+      : [];
+
+  it('GET /api/settings sends the mode and the registry rows by category', async () => {
+    const r = await fetch(`${base}/api/settings`, { headers: { 'x-queue-key': key } });
+    const body = (await r.json()) as Record<string, any>;
+    expect(r.status).toBe(200);
+    // `init` wrote { "mode": "lite" } to the config file.
+    expect(body.mode).toBe('lite');
+    expect(body.registry.mode).toBe('lite');
+    expect(body.registry.categories[0]).toMatchObject({ id: 'project', title: 'Project and git' });
+    const guards = body.registry.categories.find((c: any) => c.id === 'guards');
+    expect(guards.rows.find((x: any) => x.key === 'secretScan.enabled')).toMatchObject({ value: true, weakened: false });
+  }, 60_000);
+
+  it('(a) a weakening value without confirm: weaken is refused with 422 and the warning texts; nothing is written', async () => {
+    const before = fs.readFileSync(configFile(), 'utf8');
+    const r = await post('/api/setting', { key: 'secretScan.enabled', value: 'off' });
+    expect(r.status).toBe(422);
+    expect(r.body).toMatchObject({ ok: false, weaken: true, key: 'secretScan.enabled' });
+    for (const f of ['protects', 'whyNot', 'changes']) expect(String(r.body[f]).length, f).toBeGreaterThan(10);
+    // confirm: true (the guard rules' warning yes) is not the weakening yes.
+    expect((await post('/api/setting', { key: 'secretScan.enabled', value: 'off', confirm: true })).status).toBe(422);
+    expect(fs.readFileSync(configFile(), 'utf8')).toBe(before);
+    expect(timeRows()).toEqual([]);
+    // Switching auto-accept on from off is a weakening too.
+    const auto = await post('/api/proposals', { enabled: true, classes: ['U'], maxEstimateMin: 30, maxValue: null });
+    expect(auto.status).toBe(422);
+    expect(auto.body.weaken).toBe(true);
+    expect(JSON.parse(fs.readFileSync(path.join(root, 'q', 'queue.json'), 'utf8')).proposals?.autoAccept?.enabled).not.toBe(true);
+  }, 60_000);
+
+  it('with confirm: weaken it is written and logged; going back to the stronger value needs no confirm', async () => {
+    const ok = await post('/api/setting', { key: 'secretScan.enabled', value: 'off', confirm: 'weaken' });
+    expect(ok.status, ok.body.message).toBe(200);
+    expect(JSON.parse(fs.readFileSync(configFile(), 'utf8'))).toEqual({ mode: 'lite', secretScan: { enabled: false } });
+    expect(timeRows()).toEqual([expect.objectContaining({ key: 'secretScan.enabled', from: true, to: false, by: 'owner' })]);
+    const settings = (await (await fetch(`${base}/api/settings`, { headers: { 'x-queue-key': key } })).json()) as any;
+    expect(settings.registry.weakened.map((w: any) => w.key)).toEqual(['secretScan.enabled']);
+
+    const back = await post('/api/setting', { key: 'secretScan.enabled', value: 'on' });
+    expect(back.status, back.body.message).toBe(200);
+    expect(JSON.parse(fs.readFileSync(configFile(), 'utf8')).secretScan.enabled).toBe(true);
+    expect(timeRows()).toHaveLength(1);
+  }, 60_000);
+
+  it('refuses an unknown key, a row that is not set from the board and a value that does not parse', async () => {
+    expect((await post('/api/setting', { key: 'nope', value: 'on' })).status).toBe(400);
+    expect((await post('/api/setting', { key: 'protectedPaths', value: 'x' })).status).toBe(400);
+    expect((await post('/api/setting', { key: 'secretScan.enabled', value: 'maybe' })).status).toBe(400);
+    // A limit goes the /api/limit way (its guard rules apply) and lands in queue.json.
+    const lim = await post('/api/setting', { key: 'limits.maxConcurrent', value: '2' });
+    expect(lim.status, lim.body.message).toBe(200);
+    expect(JSON.parse(fs.readFileSync(path.join(root, 'q', 'queue.json'), 'utf8')).limits.maxConcurrent).toBe(2);
   }, 60_000);
 });

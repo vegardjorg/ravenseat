@@ -88,7 +88,7 @@ const QUEUE_COMMANDS = [
   'cloud-package', 'compact', 'conflicts', 'continue', 'cost', 'decide', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'explain', 'external',
   'fill', 'finding', 'focus', 'follow', 'forecast', 'gate', 'guidance', 'handover', 'helpers', 'info', 'init', 'kickstart', 'limit', 'machine', 'merge', 'migr', 'mode', 'next', 'next-migr',
   'orchestrator', 'park', 'pick', 'pickable', 'plan', 'project', 'projects', 'proposals', 'qa', 'question', 'rank', 'receive',
-  'release', 'resolutions', 'resolve', 'resume', 'set', 'show', 'start', 'state', 'surface', 'trackFile', 'triage', 'unblock', 'undo', 'unlock', 'wait',
+  'release', 'resolutions', 'resolve', 'resume', 'set', 'settings', 'show', 'start', 'state', 'surface', 'trackFile', 'triage', 'unblock', 'undo', 'unlock', 'wait',
 ];
 
 /** Short names ravenseat.mjs maps to a script file (ravenseat board = queue-board.mjs). */

@@ -347,6 +347,15 @@
 //                                                                  accepted baseline: prints each difference; with accept
 //                                                                  takes the current state. Refused from a track worktree;
 //                                                                  the guard denies it to queue agents. lib/gitSurfaceBaseline.js)
+//   node scripts/orchestrator/queue.mjs settings [<category>] [--advanced] [--all] [--changed] [--json]   (every setting
+//                                                                  from the registry by category, basic first; lite leaves
+//                                                                  out the full-only rows and counts them. cli/settings.mjs)
+//   node scripts/orchestrator/queue.mjs settings set <key> <value> [--i-understand --by owner]   (writes one setting to
+//                                                                  its file: queue.config.json keeps its form, queue.json
+//                                                                  under the lock. A value that weakens a guard prints the
+//                                                                  warning and exits 1 without both flags; with them it is
+//                                                                  logged as setting-weakened. Refused from a track worktree;
+//                                                                  the guard denies it to queue agents)
 //   node scripts/orchestrator/queue.mjs blockers [--days 7] [--json]   (per code: count and blocked time in the period,
 //                                                                  top first)
 //
@@ -671,6 +680,7 @@ import * as tasks from './cli/tasks.mjs';
 import * as triage from './cli/triage.mjs';
 import * as unlock from './cli/unlock.mjs';
 import * as surface from './cli/surface.mjs';
+import * as settings from './cli/settings.mjs';
 import * as view from './cli/view.mjs';
 import * as wait from './cli/wait.mjs';
 
@@ -772,6 +782,8 @@ if (command === 'init') {
   unlock.cmdUnlock();
 } else if (command === 'surface') {
   surface.cmdSurface();
+} else if (command === 'settings') {
+  settings.cmdSettings();
 } else if (command === 'unblock') {
   merge.cmdUnblock();
 } else if (command === 'blockers') {
@@ -865,7 +877,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|settings> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

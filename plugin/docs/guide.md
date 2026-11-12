@@ -290,6 +290,13 @@ D+ tracks, tracks per domain, daily budget, night pause, automatic compaction). 
 value, the default and, for the track limits, the recommended ceiling that keeps the weekly quota from running out
 early.
 
+Below that, every setting is listed in its category (the same list as `ravenseat settings`), basic rows first and the
+advanced ones folded under them, each with where it is saved: only for you (queue.json) or for the project
+(queue.config.json, commit it). In lite, settings that only matter in full mode are folded away behind one line. A
+guard that is weaker than its default is named in a banner. Choosing the weaker option of a guard changes nothing at
+first: a dialog explains what the guard protects against, and only a completed slide (drag, or hold the right arrow
+key or Enter for a second) sends the change.
+
 More about every tab: [board](board.md).
 
 ## Safety baseline in full

@@ -37,6 +37,8 @@ commands cover them.
 | Focus (the plan view) | `/api/focus` | `ravenseat focus save …` (same command) |
 | Areas | `/api/area` | `ravenseat area …` (same command) |
 | Limits | `/api/limit` | `ravenseat limit <name> <value>` (same command) |
+| A setting in the gear's categories | `/api/setting` | `ravenseat settings set <key> <value>` (same command; a value that weakens a guard needs the board's slide, or `--i-understand --by owner` in the CLI) |
+| All settings by category (read) | `/api/settings` | `ravenseat settings [--advanced] [--all] [--changed] [--json]` |
 
 ## Settings, helpers and proposals
 
