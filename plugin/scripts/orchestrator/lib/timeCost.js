@@ -242,6 +242,10 @@ function apiErrorKind(r) {
  *   api_errors  { rate_limit, overloaded, other } from the API error entries (apiErrorKind); they are not model turns.
  *   active_s    duration_s minus the gaps longer than `idleGapMin` minutes between two consecutive timestamped
  *               entries; idle_gaps = the number of such gaps.
+ *   thinking_tokens  the sum of usage.output_tokens_details.thinking_tokens over the turns that report it, and
+ *               thinking_turns how many did. null (not 0) when no turn reports it: older Claude Code versions and
+ *               other clients do not, and an unknown must not pull a median toward zero (lib/costMeasures.js).
+ *   cc_version  the Claude Code version on the last entry that carries `version` (the version the agent ended on).
  * @param {string} text
  * @param {{ idleGapMin?: number }} [option]
  */
@@ -261,6 +265,7 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
   let firstChange = null;
   let callForChange = 0;
   let trackFromMission = null;
+  let ccVersion = null;
   for (const line of String(text).split('\n')) {
     if (!line.trim()) continue;
     let r;
@@ -280,6 +285,9 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
       }
       previousEntry = ts;
     }
+    // Claude Code writes its version on every entry; the last one is the version the agent ended on. Kept to tell a
+    // change on the client or model side (a jump in thinking per turn on one version) from a change in the work.
+    if (typeof r.version === 'string' && r.version) ccVersion = r.version;
     const m = r.message;
     if (!m) continue;
     const content = Array.isArray(m.content) ? m.content : [];
@@ -334,7 +342,15 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
   const models = new Map();
   let cacheExpiry = 0;
   let previousTs = null;
+  let thinking = 0;
+  let thinkingTurns = 0;
   for (const { usage: u, ts, model } of turns.values()) {
+    // Thinking is part of output_tokens; the detail is only there on newer responses (absent = unknown, not 0).
+    const think = u.output_tokens_details?.thinking_tokens;
+    if (think != null && Number.isFinite(Number(think))) {
+      thinking += Number(think);
+      thinkingTurns++;
+    }
     const written = u.cache_creation_input_tokens ?? 0;
     const read = u.cache_read_input_tokens ?? 0;
     const hour = u.cache_creation?.ephemeral_1h_input_tokens;
@@ -374,6 +390,9 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
     tools,
     api_errors: apiErrors,
     cache_expiry: cacheExpiry,
+    thinking_tokens: thinkingTurns ? thinking : null,
+    thinking_turns: thinkingTurns,
+    cc_version: ccVersion,
     cost_usd: Math.round(costSum * 100) / 100,
     context: context.length
       ? {
@@ -443,8 +462,9 @@ const agentKey = (r) => r.agent_id ?? `${r.track ?? '?'}|${r.time}`;
  * The usage split into events: one per "done" row with tokens, with the GROWTH since the previous row for the same agent
  * (the rows are cumulative). The sum over all events = last row per agent.
  * `tokens` is the growth in raw tokens (input, output, cache_read, cache_written) the same way, for
- * the weekly quota model in lib/queueCapacity.js.
- * @returns {{ agent: string, type: string, track: string, time: string, day: string, usd: number, turns: number,
+ * the weekly quota model in lib/queueCapacity.js. `round` is the fix-round number when the label is `<id>-r<N>`
+ * (roundOf), else null.
+ * @returns {{ agent: string, type: string, track: string, round: number|null, time: string, day: string, usd: number, turns: number,
  *   cache_expiry: number, assumed: boolean, tokens: { input: number, output: number, cache_read: number,
  *   cache_written: number } }[]}
  */
@@ -477,6 +497,7 @@ function usageEvents(rows, tz = TZ) {
         agent,
         type: bareAgentType(r.agent_type) ?? 'unknown',
         track: r.track ?? agent,
+        round: roundOf(r.track),
         time: r.time,
         day: dayFor(r.time, tz),
         usd: Math.max(0, now.usd - previous.usd),
@@ -581,8 +602,19 @@ function deduplicateDone(rows) {
  */
 function taskIdFor(track, exists) {
   if (exists(track)) return track;
-  const without = String(track).replace(/-(?:r|round)\d+$/i, '');
+  const without = String(track).replace(ROUND_SUFFIX, '');
   return without !== track && exists(without) ? without : null;
+}
+
+/** The fix-round suffix on a track label: `-r<N>` (ravenseat resume, logic/attempt.js labelFor) or `-round<N>`. */
+const ROUND_SUFFIX = /-(?:r|round)(\d+)$/i;
+/**
+ * The round number in a track label ("A-1-r2" -> 2), or null for a label without the suffix. The track itself is
+ * always the bare id (round 0 in labelFor), so `-r1` is the first round `ravenseat resume` started, never the track.
+ */
+function roundOf(track) {
+  const m = String(track ?? '').match(ROUND_SUFFIX);
+  return m ? Number(m[1]) : null;
 }
 
 /**
@@ -659,6 +691,7 @@ module.exports = {
   summarizeCost,
   deduplicateDone,
   taskIdFor,
+  roundOf,
   BUILD_AGENT_TYPES,
   isBuildAgent,
   firstReviewStart,

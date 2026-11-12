@@ -19,7 +19,7 @@ import {
   a, autoCleanFocus, branchFor, branchInfo, byName, checkExpect, die, edit, editLogged, focusCleanOut, FX, hasLock, L, lastEntry, LOCK, P,
   PREFIX, pulseCursor, read, readCursor, readPlans, require, undoHint, val, values, CONFIG, CLI, G, git,
 } from './context.mjs';
-import { logTime, measurementLine, measureTask, minutes, saveMeasurement } from './tracks.mjs';
+import { logTime, measurementLine, measureTask, minutes, saveMeasurement, turnWarningLines } from './tracks.mjs';
 
 // The lock on the finish line and the ownership (done_when, acceptance, owned_files, shared_patch, owner_db, migr_block;
 // lib/doneCheck.js LOCKED_FIELDS and doneLockError): edit and undo refuse a change after the start unless --by is owner
@@ -98,7 +98,11 @@ export function cmdSet() {
     if (status === 'done' || status === 'cancelled') autoCleanFocus(queue, `set ${id} ${status}`);
     return o;
   });
-  if (measurement) console.log(measurementLine(r));
+  if (measurement) {
+    console.log(measurementLine(r));
+    // Output or thinking per turn over 2x the agent type's 14-day median (lib/costMeasures.js): said, never a stop.
+    for (const l of turnWarningLines(r)) console.log(l);
+  }
   if (status === 'review' && r.started)
     logTime(id, 'delivered', `${minutes(r.started, r.delivered)} min to delivery`);
   if (status === 'done' && r.started) {

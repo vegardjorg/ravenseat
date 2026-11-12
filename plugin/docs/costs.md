@@ -48,6 +48,37 @@ change: all measured cost in a window divided by the tasks merged in it, fix tas
 That figure came later and has no number from these windows. The classes are explained in
 [full mode](full-mode.md#agents-skip-security-and-edge-cases).
 
+## Reading a change in cost
+
+The drift above was found only afterwards. `ravenseat cost` and `set <id> done` now show the numbers that tell the
+causes apart while it happens. They are measurements only: none of them stops the queue or a track.
+
+- **Per turn.** Each agent's measurement stores its turns, output per turn, thinking per turn (from
+  `output_tokens_details.thinking_tokens` in the transcript) and the Claude Code version it ran on. A transcript without
+  the thinking field gives "unknown", never 0, so older measurements do not pull a median down.
+- **The 2x warning.** `set <id> done` prints a `WARN` line when an agent's output or thinking per turn is over twice the
+  median of its agent type over the last 14 days, once at least 5 agents of that type are in that baseline. `ravenseat
+  cost` has a "Per turn" block: per agent type the last 24 hours against the 14 days before, with n, the same warning
+  and the Claude Code versions seen. The same jump for several agent types at once points outside the work: the model
+  or the client.
+- **Build, review and fix round.** The measurement splits the task's cost (`cost.phases`, and `phase` per agent):
+  - a reviewer is review;
+  - an agent labelled `<id>-r<N>` is a fix round. `ravenseat resume` makes every round, and the track itself is always
+    the bare `<id>`, so `-r1` is the first fix round. The exception is a round the task records as a `context`
+    continuation (a full context, an adopted track): that is still build;
+  - the bare track agent is build, except what it used after the task's first receive when it had already stopped
+    before it: that is the same agent sent back with SendMessage to fix the review's findings, and it counts as one fix
+    round.
+
+  Why this rule: a fix round is work the review caused. Counted inside build, a week with more fix rounds looked like
+  harder work. The receive is the line because nothing before it can be a fix of a review finding.
+- **By start date.** The per-class figures group tasks by when they started, not when they finished. A week that
+  drained a backlog no longer looks expensive, and a change from outside (on given days) lands on the days it happened.
+- **Where the cost went.** Merged, cancelled and open tasks, the orchestrator session as its own line, and the
+  "unknown" share split by why: no task id in the mission (a helper, Explore or general-purpose agent), a label that is
+  no queue task, or no agent type. Then week over week: subagent spend by usage time, the orchestrator, and the tasks
+  started each week with n and their median cost.
+
 ## Measured: compacting the orchestrator against starting a new chat
 
 The orchestrator runs in one chat, and Claude Code compacts it automatically (`autoCompactWindow`, set to 300,000).

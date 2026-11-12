@@ -147,7 +147,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `block <id> <code> [--note "…"]` / `unblock <id>` | Opens / closes a blocker reason on the task (`blocks`; one open at a time). Codes: `merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `context`, `quota`, `owner-question`, `dependency`, `no-agent`, `silent`, `other`. `merge` opens `merge-conflict` or `gate-red` when it stops in that step and closes the open one after a successful merge |
 | `blockers [--days 7] [--json]` | Per blocker code: count and blocked time in the period, top first |
 | `next-migr [<n>]` / `migr move <id> <block>` | Migration flow only: show or set the next number / move a task's block in the queue and its prompt files |
-| `cost [--since 7d] [--max 10] [--json]` | USD per merged change for the window first (see [Cost estimates and calibration](#cost-estimates-and-calibration)), then cost per task with all its runs (track, fix rounds, continuations, reviewers, fix tasks) by cost, then cost per class (n, median, sum) from the measured track sessions |
+| `cost [--since 7d] [--max 10] [--json]` | USD per merged change for the window first (see [Cost estimates and calibration](#cost-estimates-and-calibration)), then cost per task with all its runs (track, fix rounds, continuations, reviewers, fix tasks) by cost, then where the cost went (the orchestrator session as its own line, the unknown share by its source), week over week with n, per turn against the 14-day median per agent type (the 2x warning), and cost per class (n, median, sum, build/review/fix) by start date from the measured track sessions |
 | `calibrate [--days 28] [--min 5] [--json]` | Per class: how far the minute estimates and the cost model are off, and the suggested correction (read-only) |
 | `projects`, `project <pid> …` | Projects: progress, pause, prefixes |
 | `focus set <steps> [--continue-when-empty on\|off]` | Focus period: only these steps are started. When the focus has ended (every stage done, or `--to` passed), `focus.continueWhenEmpty` in queue.config.json decides (default off): off pauses the queue (fill starts nothing, `focus.finished_at` is stamped, and one owner question "set a new focus or continue the regular queue?" appears in Waiting on you; answering "Continue the regular queue" lifts the pause), on continues as without focus with one line. `--continue-when-empty` overrides it for this focus; `ravenseat focus` shows the setting. A project that never set a focus is not affected |
@@ -283,6 +283,16 @@ track, the fix rounds and continuations (`ravenseat resume`, logged as `<id>-r<N
 point to it, with USD, tokens and the number of agent runs. A task measured at `set <id> done` uses that measurement
 (it already holds its rounds and reviewers); a task without one (open, cancelled) uses its usage in the time log, and
 the row says so. `--since` keeps the tasks with activity in the window, `--max` the number of rows.
+
+**Build, review and fix round.** `set <id> done` (and `cost measure`) stores `cost.phases` `{ build, review, fix,
+fix_rounds }` and a `phase` per agent, and the measurement line ends with the split. A reviewer is review; a
+`<id>-r<N>` agent is a fix round unless `resumed` records round N as a `context` continuation; the bare track agent is
+build, except its growth after the first receive (`t_receive`) when it had stopped before it: the same agent continued
+with SendMessage, one fix round. Per agent the measurement also keeps `turns`, `output_per_turn`, `thinking_tokens` and
+`thinking_per_turn` (left out when the transcript does not report thinking) and `cc_version`. A `WARN` line follows
+when an agent's output or thinking per turn is over 2x its agent type's 14-day median (n at least 5); it never stops
+anything. The per-class lines and `--since` count tasks by their start date (`by: "started"` in `--json`). See
+[costs.md](costs.md#reading-a-change-in-cost).
 
 ### Auto-accept of proposals
 

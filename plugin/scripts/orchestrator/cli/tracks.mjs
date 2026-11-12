@@ -311,6 +311,9 @@ function measureCost(agents) {
           minutes: seconds != null ? seconds / 60 : null,
           // The reviewer's FINDINGS numbers per agent (the helper measurement, queueHelpers.helperStatistics).
           findings: L.REVIEWER_TYPES.includes(a.type) ? L.parseFindings(L.lastAnswer(a.text)) : null,
+          thinking_tokens: t.thinking_tokens,
+          thinking_turns: t.thinking_turns,
+          cc_version: t.cc_version,
           source: 'transcript',
         };
       }
@@ -322,6 +325,9 @@ function measureCost(agents) {
         byModel: a.row.byModel ?? null,
         turns: a.row.modelTurns,
         minutes: (a.row.active_s ?? a.row.duration_s) != null ? (a.row.active_s ?? a.row.duration_s) / 60 : null,
+        thinking_tokens: a.row.thinking_tokens ?? null,
+        thinking_turns: a.row.thinking_turns,
+        cc_version: a.row.cc_version ?? null,
         source: 'timeLog',
       };
     }),
@@ -629,6 +635,7 @@ export function makeTrackBlocks(queue, idList) {
 export function measureTask(o) {
   const agents = taskAgents(o);
   const cost = measureCost(agents);
+  attachPhases(o, cost, agents);
   const findingsFlag = values('--findings');
   const findings = findingsFlag.length
     ? L.batchFindings(findingsFlag.map((f) => L.parseFindings(f)))
@@ -651,6 +658,57 @@ export function reviewerFindingsLines(o) {
     .filter(Boolean)
     .map((f) => f.line);
 }
+/**
+ * Splits the cost into build, review and fix round (lib/costMeasures.js costPhases, the rule is documented there):
+ * cost.phases, and per agent `phase` (and `fix_usd` for the part after the receive). Fail open: a measurement
+ * without the split is still a measurement.
+ */
+function attachPhases(o, cost, agents) {
+  try {
+    const C = require('./lib/costMeasures.js');
+    const track = new Map(agents.map((a) => [a.agent, a.row?.track ?? null]));
+    const from = o.started ?? o.picked_at ?? o.added_at ?? null;
+    const { phases, perAgent } = C.costPhases({
+      taskId: o.id,
+      agents: cost.agents.map((a) => ({ ...a, track: track.get(a.agent) ?? null })),
+      resumed: o.resumed,
+      tReceive: o.t_receive ?? null,
+      // Only needed for the SendMessage split, so read once and only when there was a receive.
+      rows: o.t_receive ? readTimeLog({ from }) : [],
+      isReviewer: (t) => L.REVIEWER_TYPES.includes(t),
+    });
+    cost.phases = phases;
+    for (const a of cost.agents) if (perAgent[a.agent]) Object.assign(a, perAgent[a.agent]);
+  } catch {
+    // error-ignored: the split is measurement only
+  }
+}
+/**
+ * The WARN lines for `set <id> done` (lib/costMeasures.js): an agent of the task whose output or thinking per turn is
+ * over 2x its type's median over the last 14 days (the task's own agents left out of the baseline). Measurement only:
+ * never throws, never stops the command.
+ */
+export function turnWarningLines(o) {
+  try {
+    const C = require('./lib/costMeasures.js');
+    const agents = o.cost?.agents ?? [];
+    if (!agents.length) return [];
+    const from = Date.now() - C.BASELINE_DAYS * 86_400_000;
+    const exclude = new Set(agents.map((a) => a.agent));
+    const baseline = C.turnBaseline(C.agentTurnStats(readTimeLog({ from }), { from, exclude }));
+    const bare = require('./lib/projectRoot.js').bareAgentType;
+    const items = agents.map((a) => ({
+      agent: a.agent,
+      type: bare(a.type) ?? 'unknown',
+      output_per_turn: a.output_per_turn ?? null,
+      thinking_per_turn: a.thinking_per_turn ?? null,
+      version: a.cc_version ?? null,
+    }));
+    return C.turnWarningLines(C.turnWarnings(items, baseline));
+  } catch {
+    return []; // error-ignored: the warning is measurement only
+  }
+}
 export function saveMeasurement(o, m) {
   o.cost = m.cost;
   if (m.findings) o.findings = m.findings;
@@ -665,7 +723,8 @@ export function measurementLine(o) {
     (o.findings
       ? ` · findings H=${o.findings.H} M=${o.findings.M} L=${o.findings.L} (${o.findings.reports} report(s))`
       : ' · no FINDINGS line found') +
-    (o.result ? ` · RESULT ${o.result.status ?? '?'}` : '')
+    (o.result ? ` · RESULT ${o.result.status ?? '?'}` : '') +
+    require('./lib/costMeasures.js').phaseText(k.phases)
   );
 }
 /** "7d", "24h", "90m" or a date/ISO time -> ISO time; null when nothing is given. */

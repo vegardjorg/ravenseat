@@ -371,7 +371,14 @@ batch push). One line per gate with GREEN/RED and the time; `--log <file>` keeps
 branch, otherwise null. `gates` are the commands (or precheck checks) that ran and `failed` the red ones. `attempt`
 counts the runs of the same kind for the same task (or the same branch without one), so `attempt > 1` is a rerun.
 `timed_out: true` marks a precheck check that went over its budget. The row is fail open: it never changes the output
-or the exit code. A setup error (precheck exit 2) writes no row.
+or the exit code. A setup error (precheck exit 2) writes no row. `durations` holds the seconds per command.
+
+**Gate health.** `ravenseat gates --health [--json]` reads the gate rows of the time log and all its monthly archives
+and prints, per command: runs, red, flaky, p50 and p95 seconds and the slowest run, slowest by p95 first, then the
+flaky commands, then a HINT for every command never red in 50 or more runs: it may not catch anything, so try breaking
+the code it guards and see that it goes red. It runs no gate and needs no slot. It lives under `gates`, not `cost` or
+`doctor`, because it is about the gates themselves (time and whether they catch anything), not money or setup. Older
+rows have no per-command seconds; a run of one command uses its total, so `timed` can be lower than `runs`.
 
 **Precheck (fail fast).** Before the class's full gate a track runs `ravenseat gates --precheck`. It runs the cheapest checks
 first, in a fixed order, only on the files changed against `baseBranch` (committed since the fork point, staged,

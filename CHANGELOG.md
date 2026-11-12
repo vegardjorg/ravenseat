@@ -5,7 +5,17 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+### Added
+- Per-turn measurements. At `set <id> done` each agent's measurement keeps its turns, output per turn, thinking tokens and thinking per turn (from `output_tokens_details.thinking_tokens`; left out when the transcript has none, so unknown is never 0) and the Claude Code version. The time log's done rows carry `thinking_tokens`, `thinking_turns` and `cc_version` too.
+- A `WARN` line at `set <id> done` when an agent's output or thinking per turn is over 2x its agent type's median over the last 14 days (at least 5 agents in the baseline), and a "Per turn" block in `ravenseat cost`: the last 24 hours against the 14 days before, per agent type, with n and the Claude Code versions seen. A measurement only: it never stops the queue.
+- `ravenseat cost` has "Where the cost went": the orchestrator session as its own line, and the unknown share split by its source (no task id in the mission, a label that is no task, no agent type) with the agent types. Then week over week: subagent spend, the orchestrator, and the tasks started each week with n and their median cost.
+- `ravenseat gates --health [--json]`: per gate command the runs, red and flaky ones, p50 and p95 seconds and the slowest, from the time log and all its archives, and a hint for every command never red in 50 or more runs. Gate rows now store the seconds per command (`durations`).
+
+### Changed
+- The per-class cost figures in `ravenseat cost` and `--since` count tasks by their start date, not their done date, and the output says so.
+
 ### Fixed
+- Fix rounds are counted apart from build. The measurement stores `cost.phases` (build, review, fix, fix rounds) and a `phase` per agent: a `<id>-r<N>` agent is a fix round (a `context` continuation stays build), and so is the growth of the same agent continued with SendMessage after the receive. The docs already said the split was stored, but it was not. The mascot's "most fix rounds" uses it when a task has it.
 - The push guard no longer lets everything through when it has an internal error (a module that does not load, a rule that throws). It still fails open for ordinary commands, but a forced push, a branch delete and `--mirror` are denied by a small fallback rule with no dependencies (`lib/pushGuardFallback.js`), with the error in the reason. No deny list in the settings stands behind the guard, so before this one bug meant no guard at all.
 
 ## 0.10.0 (2026-11-12)

@@ -372,7 +372,11 @@
         ['picked', 'running', 'review'].includes(o.status) ||
         (o.status === 'done' && now - toMs(o.done) < 7 * DAY);
       if (!relevant) continue;
-      const n = (o.cost?.agents ?? []).filter((a) => a && BUILD_AGENT.has(a.type)).length - 1;
+      // The measured split (lib/costMeasures.js costPhases) when the task has one; older measurements: the build
+      // agents beyond the first.
+      const n = Number.isInteger(o.cost?.phases?.fix_rounds)
+        ? o.cost.phases.fix_rounds
+        : (o.cost?.agents ?? []).filter((a) => a && BUILD_AGENT.has(a.type)).length - 1;
       if (n >= 1 && (!fixRounds || n > fixRounds.n)) fixRounds = { id: o.id, n };
     }
 

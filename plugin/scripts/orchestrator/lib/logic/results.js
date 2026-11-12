@@ -261,9 +261,11 @@ function agentsForTask(rows, id, { from = null, to = null } = {}) {
  * (timeCost.analyzeTranscript) or from the last row in the time log; the price is timeCost.costOf (API-equivalent USD,
  * per model when `byModel` is given).
  * @param {{ agent: string, type: string, tokens: object, model?: string|null, byModel?: object|null, turns?: number, source?: string,
- *   minutes?: number|null, findings?: { H: number, M: number, L: number }|null }[]} agents
+ *   minutes?: number|null, findings?: { H: number, M: number, L: number }|null, thinking_tokens?: number|null,
+ *   thinking_turns?: number, cc_version?: string|null }[]} agents
  * @returns {{ usd: number, tokens: { input: number, output: number, cache_read: number, cache_written: number,
- *   sum: number }, turns: number, agents: { agent: string, type: string, usd: number, source: string }[],
+ *   sum: number }, turns: number, agents: { agent: string, type: string, usd: number, source: string, turns?: number,
+ *   output_per_turn?: number, thinking_tokens?: number, thinking_per_turn?: number, cc_version?: string }[],
  *   measured: string }}
  */
 function sumCost(agents, now = new Date().toISOString()) {
@@ -290,6 +292,22 @@ function sumCost(agents, now = new Date().toISOString()) {
     );
     if (Number.isFinite(Number(a.minutes)) && a.minutes != null) entry.minutes = Math.round(Number(a.minutes) * 10) / 10;
     if (a.findings) entry.findings = { H: a.findings.H, M: a.findings.M, L: a.findings.L };
+    // The per-turn numbers (lib/costMeasures.js): the turns, output per turn and, when the transcript reports it,
+    // thinking, plus the Claude Code version. A spike in thinking per turn on the model side shows here first. An
+    // unknown is left out rather than stored as 0, so older and newer measurements read the same way.
+    const pt = require('../costMeasures.js').perTurn({
+      turns: a.turns,
+      output: a.tokens?.output,
+      thinking_tokens: a.thinking_tokens,
+      thinking_turns: a.thinking_turns,
+    });
+    if (a.turns != null) entry.turns = pt.turns;
+    if (pt.output_per_turn != null) entry.output_per_turn = pt.output_per_turn;
+    if (pt.thinking_per_turn != null) {
+      entry.thinking_tokens = Number(a.thinking_tokens);
+      entry.thinking_per_turn = pt.thinking_per_turn;
+    }
+    if (typeof a.cc_version === 'string' && a.cc_version) entry.cc_version = a.cc_version;
     list.push(entry);
   }
   return { usd: round2(usd), tokens, turns, agents: list, measured: now };
@@ -303,15 +321,19 @@ const median = (xs) => {
 };
 
 /**
- * The statistics `queue.mjs cost` shows: finished tasks with measured cost (since `since`), per class and total, with findings
- * from the review.
- * @returns {{ rows: object[], perClass: object[], total: { n: number, usd: number } }}
+ * The statistics `queue.mjs cost` shows: finished tasks with measured cost (STARTED since `since`), per class and total,
+ * with findings from the review.
+ * BY START DATE (`by: 'started'`): a window keeps the tasks that started in it, wherever they finished. Grouped by the
+ * done date, a week that drained a backlog looked expensive, and a cost change from outside (a model or client change
+ * on given days) was smeared over the weeks the tasks happened to finish in. A task without `started` (done outside
+ * the queue) falls back to its done time.
+ * @returns {{ rows: object[], perClass: object[], total: { n: number, usd: number }, by: 'started' }}
  */
 function costStatistics(queue, { since = null } = {}) {
   // A cloud track's use is not in the local transcripts, so its measurement is not one: it would pull the medians down.
   const rows = (queue.tasks ?? [])
     .filter((o) => o.status === 'done' && !o.cloud && o.cost && Number.isFinite(Number(o.cost.usd)))
-    .filter((o) => !since || Date.parse(o.done ?? o.cost.measured) >= Date.parse(since))
+    .filter((o) => !since || Date.parse(o.started ?? o.done ?? o.cost.measured) >= Date.parse(since))
     .map((o) => ({
       id: o.id,
       class: o.class,
@@ -321,13 +343,21 @@ function costStatistics(queue, { since = null } = {}) {
       agents: (o.cost.agents ?? []).length,
       findings: o.findings ?? null,
       result: o.result?.status ?? null,
+      // The split into build, review and fix round (lib/costMeasures.js costPhases); older measurements have none.
+      phases: o.cost.phases ?? null,
     }))
     .sort((a, b) => String(b.done).localeCompare(String(a.done)));
   const perClass = Object.keys(WEIGHT)
     .map((cls) => {
       const r = rows.filter((x) => x.class === cls);
       const withFindings = r.filter((x) => x.findings);
+      const phased = r.filter((x) => x.phases);
+      const part = (k) => round2(phased.reduce((s, x) => s + (Number(x.phases[k]) || 0), 0));
       return {
+        phased: phased.length,
+        build_usd: part('build'),
+        review_usd: part('review'),
+        fix_usd: part('fix'),
         class: cls,
         n: r.length,
         usd: round2(r.reduce((s, x) => s + x.usd, 0)),
@@ -343,7 +373,8 @@ function costStatistics(queue, { since = null } = {}) {
     rows,
     perClass,
     total: { n: rows.length, usd: round2(rows.reduce((s, x) => s + x.usd, 0)) },
-    cloudNotMeasured: (queue.tasks ?? []).filter((o) => o.status === 'done' && o.cloud && (!since || Date.parse(o.done ?? '') >= Date.parse(since))).length,
+    cloudNotMeasured: (queue.tasks ?? []).filter((o) => o.status === 'done' && o.cloud && (!since || Date.parse(o.started ?? o.done ?? '') >= Date.parse(since))).length,
+    by: 'started',
   };
 }
 

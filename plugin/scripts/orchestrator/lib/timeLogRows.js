@@ -13,6 +13,7 @@
 //                 HEAD commit when the run started) and `clean` (no uncommitted tracked changes then), when known.
 //                 `wait_sec` (seconds in the gate queue, lib/gateQueue.js; only for a run that needed a slot; `duration_s`
 //                 does not include it) and `min_free_memory_pct` (the lowest free memory during the run, lib/gateLoad.js).
+//                 `durations` { <command>: seconds } per command, for the gate health view (lib/gateHealth.js).
 //                 MEASUREMENT ONLY: the time log is a file every agent appends to, so a gate row proves nothing. What
 //                 ravenseat receive, ravenseat merge and the push check rely on is the gate evidence store (lib/gateEvidence.js).
 //   compaction    { time, event: "compact", scope: "session", session_id, orchestrator }   a main session (SessionStart
@@ -89,6 +90,13 @@ function gateRow(r) {
   if (r.timedOut) row.timed_out = true;
   // Red, then green on a rerun on the same commit (lib/trackFlaky.js).
   if (Array.isArray(r.flaky) && r.flaky.length) row.flaky = [...r.flaky];
+  // Seconds per command, so the gate health view (lib/gateHealth.js) can give each command its own p50/p95 and not
+  // only the run's total. Left out when not measured (older rows, a caller that does not pass it).
+  if (r.durations && typeof r.durations === 'object') {
+    const d = {};
+    for (const [k, v] of Object.entries(r.durations)) if (Number.isFinite(Number(v))) d[k] = Math.round(Number(v) * 10) / 10;
+    if (Object.keys(d).length) row.durations = d;
+  }
   // The commit the run checked and whether the tree had uncommitted tracked changes (for measurement: reruns per
   // commit). No decision reads them; the trusted copy is the gate evidence store (lib/gateEvidence.js).
   if (typeof r.sha === 'string' && r.sha) row.sha = r.sha;

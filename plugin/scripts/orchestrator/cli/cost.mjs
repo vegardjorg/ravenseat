@@ -22,6 +22,7 @@ import { agentsBySession } from './events.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
 
 const ES = require('./lib/eventStatistics.js');
+const CM = require('./lib/costMeasures.js');
 const UL = require('./lib/usageLimit.js');
 
 /** `ravenseat forecast` (the usage is at the top of queue.mjs). */
@@ -204,7 +205,13 @@ export function cmdCost() {
     const merged = CE.perMergedChange({ queue, events, from, to });
     // The orchestration overhead (the main sessions' cost from the status line, minus their subagents) and the flow
     // figures over the SAME window, shown apart from the headline (lib/eventStatistics.js).
-    const sessionIds = ES.sessionCosts(rows, { from, to }).map((x) => x.session_id);
+    // The session ids of the window and of the last two weeks (week over week below), so the transcripts folder is
+    // listed once for both.
+    const weeksFrom = Date.now() - 14 * 86_400_000;
+    const sessionIds = [
+      ...new Set(ES.sessionCosts(rows, { from: Math.min(from, weeksFrom), to }).map((x) => x.session_id)),
+    ];
+    const bySession = agentsBySession(sessionIds);
     const orchestration = ES.orchestrationOverhead({
       rows,
       events,
@@ -212,8 +219,30 @@ export function cmdCost() {
       to,
       merged: merged.merged,
       trackUsd: merged.total_usd,
-      agentsBySession: agentsBySession(sessionIds),
+      agentsBySession: bySession,
     });
+    // Where the cost went (lib/costMeasures.js): the orchestrator as its own line, the unknown share by its source,
+    // and the cost priced at the default model's price. The same window and events as the headline.
+    const byId = new Set((queue.tasks ?? []).map((o) => o.id));
+    const inWindow = events.filter((h) => {
+      const t = Date.parse(h.time ?? '');
+      return t >= from && t < to;
+    });
+    const where = CM.breakdown({
+      merged,
+      orchestration,
+      unknown: CM.unknownSources(inWindow, { exists: (id) => byId.has(id) }),
+      assumedUsd: inWindow.filter((h) => h.assumed).reduce((x, h) => x + (Number(h.usd) || 0), 0),
+    });
+    // Week over week: spend by usage time, tasks by start date, with n.
+    const weeks = CM.weekOverWeek({
+      queue,
+      events,
+      orchestratorUsd: (wFrom, wTo) =>
+        ES.orchestrationOverhead({ rows, events, from: wFrom, to: wTo, agentsBySession: bySession }).usd,
+    });
+    // Per turn: the last 24 h against the 14 days before, per agent type (the 2x warning; measurement only).
+    const turns = CM.turnCheck(rows);
     // The plan register gives the findings' causes (post-merge defects); an unreadable one only leaves them out.
     let plans = null;
     try {
@@ -231,7 +260,19 @@ export function cmdCost() {
     if (a.includes('--json')) {
       console.log(
         JSON.stringify(
-          { perMerged: merged, orchestration, flow, perTask, perClass: s.perClass, total: s.total, metrics },
+          {
+            perMerged: merged,
+            orchestration,
+            breakdown: where,
+            weeks,
+            turns,
+            flow,
+            perTask,
+            perClass: s.perClass,
+            total: s.total,
+            by: s.by,
+            metrics,
+          },
           null,
           2,
         ),
@@ -241,17 +282,22 @@ export function cmdCost() {
     const label = since ? `since ${since.slice(0, 10)}` : `last ${CE.WINDOW_DAYS} days`;
     for (const l of CE.perMergedLines(merged, label)) console.log(l);
     for (const l of ES.overheadLines(orchestration, label)) console.log(cut(l, WIDTH));
+    for (const l of CM.breakdownLines(where, label)) console.log(cut(l, WIDTH));
+    for (const l of CM.weekLines(weeks)) console.log(cut(l, WIDTH));
+    for (const l of CM.turnCheckLines(turns)) console.log(cut(l, WIDTH));
     for (const l of ES.flowLines(flow, label)) console.log(cut(l, WIDTH));
     for (const l of TM().metricsLines(metrics)) console.log(cut(l, WIDTH));
     for (const l of CE.taskTotalLines(perTask, max)) console.log(cut(l, WIDTH));
     if (!s.rows.length)
       console.log('No finished tasks with a measured cost yet (measured at set <id> done).');
     else {
-      console.log(`Cost per task (${s.total.n} finished, $${s.total.usd} total):`);
+      console.log(`Cost per task (${s.total.n} finished, $${s.total.usd} total; by start date):`);
       for (const k of s.perClass)
         console.log(
           `  ${k.class.padEnd(2)} n=${String(k.n).padEnd(3)} median $${k.median_usd}  sum $${k.usd}` +
-            (k.reviewed ? `  findings H=${k.H} M=${k.M} L=${k.L} (${k.reviewed} reviewed)` : ''),
+            (k.reviewed ? `  findings H=${k.H} M=${k.M} L=${k.L} (${k.reviewed} reviewed)` : '') +
+            // The split (lib/costMeasures.js costPhases) for the tasks measured since it exists.
+            (k.phased ? `  build $${k.build_usd} review $${k.review_usd} fix $${k.fix_usd} (${k.phased} split)` : ''),
         );
       // What the helper agents added (lib/queueHelpers.js): the same numbers as `ravenseat helpers`.
       const helpers = HELP.helperRows(CONFIG, read());

@@ -79,6 +79,11 @@
 //
 // Use: node scripts/orchestrator/gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>] [--evidence] [--cwd <folder>]
 //      node scripts/orchestrator/gates.mjs --precheck [--json] [--base <ref>] [--track <id>] [--log <file>]
+//      node scripts/orchestrator/gates.mjs --health [--json]
+//
+//   --health  read-only: per gate command the runs, red, flaky, p50/p95 seconds and the commands never red over 50 or
+//             more runs, from the time log's gate and flakyGate rows across all monthly archives (lib/gateHealth.js).
+//             Runs no gate and exits 0. Per-command seconds come from the gate row's `durations` (newer rows).
 // See docs/orchestration.md.
 // =============================================================
 
@@ -97,10 +102,26 @@ const args = process.argv.slice(2);
 const quick = args.includes('--quick');
 const full = args.includes('--full');
 const precheck = args.includes('--precheck');
+// --health: read-only, runs no gate (lib/gateHealth.js). Before the mode check and the gate queue: it needs no slot.
+if (args.includes('--health')) {
+  const GH = require('./lib/gateHealth.js');
+  let text = '';
+  try {
+    // All the monthly archives (lib/timeLogArchive.js): "never red over 50 runs" needs the whole history.
+    text = require('./lib/timeLogArchive.js').readText(timeLog(), { from: null });
+  } catch {
+    text = ''; // no log yet
+  }
+  const h = GH.gateHealth(GH.rowsFromText(text));
+  if (args.includes('--json')) console.log(JSON.stringify(h, null, 2));
+  else for (const l of GH.healthLines(h)) console.log(l);
+  process.exit(0);
+}
 if ([quick, full, precheck].filter(Boolean).length !== 1) {
   console.error(
     'use: gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>] [--evidence] [--cwd <folder>]\n' +
-      '     gates.mjs --precheck [--json] [--base <ref>] [--track-base <sha> --track-tip <sha>] [--track <id>] [--log <file>]',
+      '     gates.mjs --precheck [--json] [--base <ref>] [--track-base <sha> --track-tip <sha>] [--track <id>] [--log <file>]\n' +
+      '     gates.mjs --health [--json]',
   );
   process.exit(2);
 }
@@ -138,7 +159,7 @@ const cwd = option('--cwd') ? path.resolve(option('--cwd')) : inProject(process.
  * Appends this run's `gate` row to the time log (lib/timeLogRows.js). Fail open: every error is swallowed, so the log
  * can never change the gate's result or exit code.
  */
-function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSec = null, minFreeMemoryPct = null, flaky = [] }) {
+function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSec = null, minFreeMemoryPct = null, flaky = [], durations = null }) {
   try {
     const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
     const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
@@ -155,7 +176,7 @@ function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSe
     const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
     TL.appendRows(
       file,
-      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct, flaky }),
+      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct, flaky, durations }),
     );
     // A green run after a flaky rerun (lib/trackFlaky.js): the flakyGate row ravenseat cost Flow counts, with the track.
     if (exit === 0 && flaky.length && sha)
@@ -510,6 +531,7 @@ async function precheckMode() {
     durationSec: totalSec,
     exit,
     timedOut: r.status === 'TIMEOUT',
+    durations: Object.fromEntries(ran.map((x) => [x.name, x.sec])),
   });
   if (json)
     console.log(
@@ -701,10 +723,13 @@ let timedOutAny = false;
 const LOAD_LIMIT = loadLimit();
 const sampler = GL.samplingOn({ limit: LOAD_LIMIT, overridden: !!process.env.QUEUE_LOAD }) ? GL.startSampler({ measure: () => LS.measure() }) : null;
 
+const durations = {};
 for (const command of gates) {
   const t0 = Date.now();
   const r = await runShell(command, { timeoutMs: deadline ? Math.max(1000, deadline - t0) : null });
   const sec = (Date.now() - t0) / 1000;
+  // The first run's time per command (a flaky rerun's time is not added: the health view compares like with like).
+  durations[command] = sec;
   const timedOut = r.timedOut;
   if (timedOut) timedOutAny = true;
   const out = `${r.out}${timedOut ? `\n(stopped after the time budget of ${budgetSec} s: ${budgetSource})` : ''}`;
@@ -821,6 +846,7 @@ logRun({
   waitSec,
   minFreeMemoryPct,
   flaky: flakyGates,
+  durations,
 });
 // Probably load, not the code. Only a remark: the exit code above is already decided and stays as it is.
 const loadRemark = GL.loadLine({ red: failedCount > 0 || timedOutAny, minFreePct: minFreeMemoryPct, limitPct: LOAD_LIMIT });

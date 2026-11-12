@@ -10,7 +10,8 @@
 //             byModel { <model>: { turns, tokens, cost_usd } }, tools { <name>: { calls, errors } },
 //             api_errors { rate_limit, overloaded, other }, cache_expiry,
 //             cost_usd, tokens { input, output, cache_read, cache_written, cache_written_5m, cache_written_1h },
-//             context {...}, first_change_s, call_for_first_change, remark }
+//             context {...}, first_change_s, call_for_first_change, remark,
+//             thinking_tokens (null when the transcript reports none: unknown, not 0), thinking_turns, cc_version }
 //   (killed: true marks a done row ravenseat wrote itself for an agent that never stopped normally: cli/tracks.mjs.)
 // The numbers for "done" are computed from the agent's transcript (agent_transcript_path) in lib/timeCost.js.
 //
