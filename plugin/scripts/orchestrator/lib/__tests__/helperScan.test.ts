@@ -185,6 +185,111 @@ describe('the frontmatter', () => {
   it('no frontmatter at all is red', () => {
     expect(scan('Just a prompt.\nFINDINGS\nData, not instructions').findings[0]).toMatchObject({ level: 'red', rule: 'no-frontmatter' });
   });
+
+  it('Bash or PowerShell with a pattern that matches every command is unrestricted (yellow); a narrow pattern is not', () => {
+    for (const t of ['Bash(*)', 'Bash( * )', 'Bash(* )', 'Bash(**)', 'Bash(:*)', 'Bash(*:*)', 'Bash (*)', 'PowerShell(*)', '"Bash(*)"']) {
+      const s = fm([`tools: Read, ${t}`]);
+      expect(at(s, 4).map((f) => `${f.level}:${f.rule}`), t).toContain('yellow:tool-bash');
+    }
+    // Narrow patterns per the docs: a literal word before the `*`, or `:` that is not the trailing `:*`.
+    for (const t of ['Bash(git log *)', 'Bash(npm run test:*)', 'Bash(::*)', 'Bash(ls*)']) expect(fm([`tools: Read, ${t}`]).level, t).toBe('green');
+    expect(S.scanText(fm(['tools: Read, Bash(*)']), 'x')[1]).toMatch(/yellow line {3}4 {2}unrestricted Bash \(Bash\(\*\) matches every command;/);
+  });
+
+  it('a key named like a built in object property is still an unknown key, not skipped', () => {
+    for (const k of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+      const s = fm(['tools: Read', `${k}: x`]);
+      expect(s.findings.find((f) => f.rule === 'unknown-key'), k).toMatchObject({ level: 'yellow', line: 5 });
+    }
+  });
+});
+
+// The keys are read the way a YAML reader reads them: a key a parser accepts must not slip past the scan.
+describe('the frontmatter keys as YAML reads them', () => {
+  const BODY = CLEAN.split('---\n')[2];
+  const fm = (lines: string[]) => scan(['---', 'name: x', 'description: y', ...lines, '---', BODY].join('\n'));
+  const red = (s: Scan, rule: string, line: number) =>
+    expect(s.findings.find((f) => f.rule === rule && f.line === line), JSON.stringify(s.findings)).toMatchObject({ level: 'red' });
+
+  it('double and single quoted keys count like plain ones', () => {
+    const s = fm(['tools: Read', '"permissionMode": plan', "'hooks':", '  Stop: x', '"mcpServers" : {}']);
+    red(s, 'key-permissionMode', 5);
+    red(s, 'key-hooks', 6);
+    red(s, 'key-mcpServers', 8);
+    // A nested key under hooks is part of hooks, not a top-level key of its own.
+    expect(s.findings.map((f) => f.rule)).not.toContain('unknown-key');
+  });
+
+  it('a double quoted key with escapes is read decoded, a single quoted one with a doubled quote too', () => {
+    red(fm(['tools: Read', '"permission\\u004dode": plan']), 'key-permissionMode', 5);
+    red(fm(['tools: Read', '"ho\\x6fks": x']), 'key-hooks', 5);
+    const s = fm(['tools: Read', "'it''s': x"]);
+    expect(s.findings.find((f) => f.rule === 'unknown-key')?.excerpt).toBe("it's");
+  });
+
+  it('a quoted tools key and a quoted tools value are read', () => {
+    expect(fm(['"tools": Read, Grep, Glob']).level).toBe('green');
+    expect(fm(["'tools': 'Read, Grep'"]).level).toBe('green');
+    expect(at(fm(['tools: "Read, Write"']), 4).map((f) => f.rule)).toContain('tool-Write');
+  });
+
+  it('spacing YAML allows: a space before the colon, and a whole frontmatter indented the same', () => {
+    red(fm(['tools: Read', 'hooks   : x']), 'key-hooks', 5);
+    const s = scan(['---', '  name: x', '  description: y', '  tools: Read', '  hooks: x', '---', BODY].join('\n'));
+    red(s, 'key-hooks', 5);
+    expect(s.findings.map((f) => f.rule)).not.toContain('tools-missing');
+  });
+
+  it('a tag or an anchor before the key, and an explicit "? key", still name the key', () => {
+    red(fm(['tools: Read', '!!str hooks: x']), 'key-hooks', 5);
+    red(fm(['tools: Read', '&a hooks: x']), 'key-hooks', 5);
+    red(fm(['tools: Read', '? hooks', ': x']), 'key-hooks', 5);
+  });
+
+  it('a key that differs only in case or separators from a red key is red (fail closed); others are unknown', () => {
+    red(fm(['tools: Read', 'PermissionMode: plan']), 'key-permissionMode', 5);
+    red(fm(['tools: Read', 'permission_mode: plan']), 'key-permissionMode', 5);
+    red(fm(['tools: Read', 'HOOKS: x']), 'key-hooks', 5);
+    const s = fm(['tools: Read', 'Color: red']);
+    expect(s.findings.find((f) => f.rule === 'unknown-key')).toMatchObject({ level: 'yellow', line: 5 });
+    // `Tools` is not `tools`: Claude Code would give every tool, and the scan says so.
+    expect(fm(['Tools: Read']).findings.map((f) => f.rule)).toContain('tools-missing');
+  });
+
+  it('a key given twice is red (a reader takes one of them, maybe not the one the scan shows)', () => {
+    const s = fm(['tools: Read', '"name": other']);
+    red(s, 'duplicate-key', 5);
+    // Every tools line is scanned, not only the last one.
+    expect(fm(['tools: Write', "'tools': Read"]).findings.map((f) => f.rule)).toContain('tool-Write');
+  });
+
+  it('a value on more lines (plain continuation, folded or literal block) is read whole', () => {
+    expect(at(fm(['tools: Read,', '  Write']), 4).map((f) => f.rule)).toContain('tool-Write');
+    expect(at(fm(['tools: >-', '  Read, Grep,', '  Edit']), 4).map((f) => f.rule)).toContain('tool-Edit');
+    expect(at(fm(['tools: |', '  Read', '  WebFetch']), 4).map((f) => f.rule)).toContain('tool-WebFetch');
+  });
+
+  it('a comment is not a key, and a comment after a value is not part of it', () => {
+    expect(fm(['tools: Read', '# hooks: x']).level).toBe('green');
+    expect(fm(['tools: Read, Grep # Write is not given']).level).toBe('green');
+  });
+
+  it('a frontmatter written as one flow mapping is read key by key, with the right line', () => {
+    const one = scan(['---', '{name: x, description: y, tools: Read, "hooks": z}', '---', BODY].join('\n'));
+    red(one, 'key-hooks', 2);
+    const more = scan(['---', '{ name: x,', '  description: "y, z",', "  'tools': [Read, Write],", '  permissionMode: plan }', '---', BODY].join('\n'));
+    red(more, 'tool-Write', 4);
+    red(more, 'key-permissionMode', 5);
+    expect(more.findings.map((f) => f.rule)).not.toContain('tools-missing');
+    expect(scan(['---', '{name: x, description: y, tools: "Read, Grep"}', '---', BODY].join('\n')).level).toBe('green');
+  });
+
+  it('scanText names the key as YAML reads it, so the red line is clear in `helpers scan`', () => {
+    const t = S.scanText(fm(['tools: Read', '"permissionMode": plan']), 'x').join('\n');
+    expect(t).toMatch(/red {4}line {3}5 {2}permissionMode in the frontmatter/);
+    const c = S.scanText(fm(['tools: Read', 'Permission_Mode: plan']), 'x').join('\n');
+    expect(c).toMatch(/"Permission_Mode" looks like permissionMode/);
+  });
 });
 
 describe('missing guards', () => {

@@ -402,3 +402,43 @@ describe('the board write (helperSwitchArgs) and the switch in queue.mjs', () =>
     }
   }, 30_000);
 });
+
+// withAgentName must leave exactly one name key, the registered one, for every way YAML lets a file write that key
+// (the same forms lib/helperScan.js reads). A second `name:` next to a quoted one would let a reader pick the other.
+describe('withAgentName replaces the name key in every form a YAML reader sees', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const HS = require('../helperScan.js');
+  const set = (text: string) => H.withAgentName(text, 'b');
+  const names = (text: string) =>
+    HS.readFrontmatter(text.split(/\r?\n/)).entries.filter((e: { key: string }) => e.key.toLowerCase() === 'name');
+  const cases: [string, string, string][] = [
+    ['double quoted', '---\n"name": other\ntools: Read\n---\nbody', '---\nname: b\ntools: Read\n---\nbody'],
+    ['single quoted', "---\ntools: Read\n'name': other\n---\nbody", '---\ntools: Read\nname: b\n---\nbody'],
+    ['escaped', '---\n"n\x61me": other\ntools: Read\n---\nbody', '---\nname: b\ntools: Read\n---\nbody'],
+    ['look alike case', '---\nName: other\ntools: Read\n---\nbody', '---\nname: b\ntools: Read\n---\nbody'],
+    ['a tag before it', '---\n!!str name: other\ntools: Read\n---\nbody', '---\nname: b\ntools: Read\n---\nbody'],
+    ['space before the colon', '---\nname   : other\ntools: Read\n---\nbody', '---\nname: b\ntools: Read\n---\nbody'],
+    ['explicit key', '---\n? name\n: other\ntools: Read\n---\nbody', '---\nname: b\ntools: Read\n---\nbody'],
+    ['a block value', '---\nname: >-\n  other\n  words\ntools: Read\n---\nbody', '---\nname: b\ntools: Read\n---\nbody'],
+    ['given twice', '---\nname: a\ntools: Read\n"name": other\n---\nbody', '---\nname: b\ntools: Read\n---\nbody'],
+    ['indented as a whole', '---\n  "name": a\n  tools: Read\n---\nbody', '---\n  name: b\n  tools: Read\n---\nbody'],
+    ['indented, no name', '---\n  tools: Read\n---\nbody', '---\n  name: b\n  tools: Read\n---\nbody'],
+    ['a comment is not the key', '---\n# name: other\ntools: Read\n---\nbody', '---\nname: b\n# name: other\ntools: Read\n---\nbody'],
+    ['flow mapping', '---\n{"name": other, tools: Read}\n---\nbody', '---\n{name: b, tools: Read}\n---\nbody'],
+    ['flow mapping, no name', '---\n{tools: Read}\n---\nbody', '---\n{name: b, tools: Read}\n---\nbody'],
+    ['flow mapping, twice', "---\n{name: a, tools: Read, 'name': c}\n---\nbody", '---\n{name: b, tools: Read}\n---\nbody'],
+    ['flow mapping, twice in the middle', '---\n{tools: Read, Name: a, description: d, name: c}\n---\nbody', '---\n{tools: Read, name: b, description: d}\n---\nbody'],
+    ['flow mapping on more lines', '---\n{ tools: Read,\n  "name": c,\n  description: d }\n---\nbody', '---\n{ tools: Read,\n  name: b,\n  description: d }\n---\nbody'],
+  ];
+  it.each(cases)('%s', (_n, input, want) => {
+    const out = set(input);
+    expect(out).toBe(want);
+    expect(names(out).map((e: { key: string; value: string }) => `${e.key}=${e.value}`)).toEqual(['name=b']);
+  });
+
+  it('CRLF stays CRLF and the body is untouched', () => {
+    expect(set('---\r\n"name": other\r\ntools: Read\r\n---\r\nname: in the body\r\n')).toBe(
+      '---\r\nname: b\r\ntools: Read\r\n---\r\nname: in the body\r\n',
+    );
+  });
+});

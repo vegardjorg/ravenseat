@@ -618,19 +618,63 @@ const agentFile = (name) => `.claude/agents/${name}.md`;
 /**
  * The agent text with `name: <name>` in the frontmatter, so Claude Code starts it under the registered name (the
  * subagent_type is the frontmatter name, not the file name). Everything else is kept byte for byte.
+ *
+ * WHY the scan's reader (lib/helperScan.js readFrontmatter) and not a regex of its own: a YAML reader also sees
+ * `"name": x`, `'name': x`, an escaped key, `!!str name: x`, `? name`, a value on more lines and a frontmatter
+ * written as one `{...}` mapping. Inserting a second `name:` next to one of those would leave two names, and the
+ * reader could start the agent under the other one. So every name key (also one that differs only in case or
+ * `_`/`-`, like the scan's look alike check) is found: the first is replaced by `name: <name>` and the rest are cut.
  * @returns {string|null} null when the text has no frontmatter
  */
 function withAgentName(text, name) {
   const src = String(text ?? '');
   const nl = src.includes('\r\n') ? '\r\n' : '\n';
   const lines = src.split(/\r?\n/);
-  if (lines[0]?.replace(/^\uFEFF/, '').trim() !== '---') return null;
-  const end = lines.findIndex((l, i) => i > 0 && l.trim() === '---');
-  if (end < 0) return null;
-  const at = lines.findIndex((l, i) => i > 0 && i < end && /^name\s*:/.test(l));
-  if (at > 0) lines[at] = `name: ${name}`;
-  else lines.splice(1, 0, `name: ${name}`);
-  return lines.join(nl);
+  // Lazy: only `helpers add` needs the reader.
+  const fm = require('./helperScan.js').readFrontmatter(lines);
+  if (!fm.found) return null;
+  const isName = (k) => String(k).toLowerCase().replace(/[\s_-]+/g, '') === 'name';
+  const names = fm.entries.filter((e) => isName(e.key));
+  const set = `name: ${name}`;
+
+  if (!fm.flow) {
+    // Block mapping: whole lines. Cut the later ones first so the line numbers of the earlier ones stay right.
+    for (const e of names.slice(1).reverse()) lines.splice(e.line - 1, e.last - e.line + 2);
+    if (names.length) lines.splice(names[0].line - 1, names[0].last - names[0].line + 2, `${' '.repeat(names[0].col)}${set}`);
+    else lines.splice(1, 0, `${' '.repeat(fm.indent)}${set}`);
+    return lines.join(nl);
+  }
+
+  // One flow mapping: edit by [line, column] places on the text joined with \n, then put the line endings back.
+  const joined = lines.join('\n');
+  const lineStart = [0];
+  for (const l of lines) lineStart.push(lineStart[lineStart.length - 1] + l.length + 1);
+  const at = ([l, c]) => lineStart[l] + c;
+  const edits = []; // [from, to, insert]
+  if (!names.length) {
+    edits.push([at(fm.flow) + 1, at(fm.flow) + 1, fm.entries.length ? `${set}, ` : set]);
+  } else {
+    edits.push([at(names[0].pos.start), at(names[0].pos.end), set]);
+    for (const e of names.slice(1)) {
+      const { start, end, sep, prev } = e.pos;
+      if (sep && joined[at(sep)] === ',') {
+        let to = at(sep) + 1;
+        while (joined[to] === ' ' || joined[to] === '\t') to++;
+        edits.push([at(start), to, '']);
+      } else edits.push([at(prev), at(end), '']);
+    }
+  }
+  // Apply from the end; two cuts that touch are merged so no text is cut twice.
+  edits.sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const e of edits) {
+    const last = merged[merged.length - 1];
+    if (last && e[0] < last[1] && !e[2] && !last[2]) last[1] = Math.max(last[1], e[1]);
+    else merged.push([...e]);
+  }
+  let outText = joined;
+  for (const [from, to, insert] of merged.reverse()) outText = outText.slice(0, from) + insert + outText.slice(to);
+  return outText.split('\n').join(nl);
 }
 
 module.exports = {

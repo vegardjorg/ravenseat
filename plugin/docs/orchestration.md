@@ -143,8 +143,12 @@ the orchestrator session with the tools its frontmatter gives it, so it is revie
 2. **Scan:** `ravenseat helpers scan <name>` (`lib/helperScan.js`, a pure function on the text) gives red, yellow or green
    with one line per finding and its line number:
    - frontmatter: `tools` missing (every tool), Write, Edit, NotebookEdit, WebFetch, WebSearch, Task/Agent and MCP
-     tools (red), unrestricted Bash or PowerShell (yellow), `permissionMode`, `mcpServers`, `hooks` (red),
-     `isolation` and unknown keys (yellow), `model` (information only);
+     tools (red), unrestricted Bash or PowerShell (yellow; also `Bash(*)`, `Bash(:*)` and other patterns that
+     match every command), `permissionMode`, `mcpServers`, `hooks` (red, also a key that differs from one of them
+     only in case or `_`/`-`), a key given twice (red), `isolation` and unknown keys (yellow), `model` (information
+     only). Keys are read as a YAML parser reads them: plain, single or double quoted (escapes decoded), with a
+     space before the colon, a tag or anchor, `? key`, a frontmatter indented as a whole or written as one flow
+     mapping (`{name: x, tools: Read}`), and values on more lines;
    - calls out of the machine: URLs (red; a short list of documentation domains gives yellow), `curl`, `wget`,
      `iwr`/`Invoke-WebRequest`, `fetch(`, `nc`, webhooks, `gh`, `git push`, `scp`, `ssh`, a pipe into a shell,
      `npx`, `npm i`, `pip install`;

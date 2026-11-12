@@ -16,7 +16,9 @@
 //
 // What is checked (one rule id per kind of finding, in RULES and the frontmatter check below):
 //   - frontmatter: `tools` missing (= every tool), write tools, web tools, MCP tools, starting agents, unrestricted
-//     Bash, keys that change how the agent runs (permissionMode, mcpServers, hooks), isolation and unknown keys, model
+//     Bash (also Bash(*) and other patterns that match every command), keys that change how the agent runs
+//     (permissionMode, mcpServers, hooks, and keys that differ from them only in case or separators), a key given
+//     twice, isolation and unknown keys, model. Keys are read as a YAML parser reads them (see readFrontmatter).
 //   - calls out of the machine: URLs (a short list of documentation domains only gives yellow), curl, wget,
 //     Invoke-WebRequest, fetch(, nc, webhooks, gh, git push, scp, ssh, a pipe into a shell, package installs
 //   - prompt injection and misuse: "ignore previous instructions", "disregard", the system prompt, changing settings,
@@ -241,57 +243,301 @@ function codePoint(ch) {
   return `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`;
 }
 
-/**
- * The frontmatter between the first two "---" lines: the keys with their values and line numbers. A small reader for
- * the shapes agent files use: `key: value`, `key: [a, b]`, and a block list (`key:` then `  - a` lines). Nested maps
- * (hooks, mcpServers) are only recorded as present.
- * @returns {{ found: boolean, end: number, keys: Record<string, { line: number, value: string, list: string[]|null }> }}
- *   end = the line index (0-based) of the closing "---", or -1
- */
-function readFrontmatter(lines) {
-  const out = { found: false, end: -1, keys: {} };
-  if (!lines.length || lines[0].replace(/^\uFEFF/, '').trim() !== '---') return out;
-  let current = null;
-  for (let i = 1; i < lines.length; i++) {
-    const l = lines[i];
-    if (l.trim() === '---') {
-      out.found = true;
-      out.end = i;
-      return out;
+// ---- The frontmatter reader ----
+// WHY a reader of its own and not a YAML library: the plugin ships with no runtime dependencies (package.json has only
+// dev dependencies), and the scan must never run anything from the file. What matters is that every KEY a YAML parser
+// would see is seen here too, so this reader follows YAML where a key can hide: plain, single quoted ('it''s') and
+// double quoted keys with escapes ("ho\x6fks"), a space before the colon, a tag or anchor before the key (!!str, &a),
+// an explicit key (? key), a frontmatter indented as a whole, a frontmatter written as one flow mapping
+// ({name: x, tools: Read}), comments, values on more lines (plain continuation, | and > blocks, block lists), and a key
+// given twice. It is lenient where YAML is strict (key:value with no space still counts): a file a parser would refuse
+// is not run by Claude Code either, and a key read too eagerly only fails closed.
+
+/** The decoded text of a double quoted YAML scalar body (the escapes YAML defines). */
+function decodeDouble(body) {
+  const named = { 0: '\0', a: '\x07', b: '\b', t: '\t', '\t': '\t', n: '\n', v: '\v', f: '\f', r: '\r', e: '\x1b', ' ': ' ' };
+  Object.assign(named, { '"': '"', '/': '/', '\\': '\\', N: '\x85', _: '\xa0', L: '\u2028', P: '\u2029' });
+  return body.replace(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[\s\S])/g, (all, e) => {
+    if (e.length > 1) {
+      const cp = parseInt(e.slice(1), 16);
+      return cp <= 0x10ffff ? String.fromCodePoint(cp) : all;
     }
-    const m = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(l);
-    if (m) {
-      const value = m[2].trim();
-      const inline = /^\[(.*)\]$/.exec(value);
-      current = {
-        line: i + 1,
-        value,
-        list: inline
-          ? inline[1]
-              .split(',')
-              .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
-              .filter(Boolean)
-          : null,
-      };
-      out.keys[m[1]] = current;
+    return Object.hasOwn(named, e) ? named[e] : all;
+  });
+}
+
+/** A scalar as YAML reads it: quotes removed and escapes decoded, a trailing comment off a plain one. */
+function scalar(raw) {
+  const s = String(raw ?? '').trim();
+  let m = /^"((?:[^"\\]|\\[\s\S])*)"/.exec(s);
+  if (m) return decodeDouble(m[1]);
+  m = /^'((?:[^']|'')*)'/.exec(s);
+  if (m) return m[1].replace(/''/g, "'");
+  return s.replace(/(?:^|\s+)#.*$/, '').trim();
+}
+
+/** Split a flow collection body ("a, 'b, c', [d, e]") on its top-level commas, outside quotes and brackets. */
+function splitFlow(body) {
+  const parts = [];
+  let depth = 0;
+  let quote = null;
+  let cur = '';
+  for (let j = 0; j < body.length; j++) {
+    const c = body[j];
+    if (quote) {
+      cur += c;
+      if (quote === '"' && c === '\\') cur += body[++j] ?? '';
+      else if (c === quote) {
+        if (quote === "'" && body[j + 1] === "'") cur += body[++j];
+        else quote = null;
+      }
       continue;
     }
-    const item = /^\s+-\s+(.*)$/.exec(l);
-    if (item && current) {
-      current.list = [...(current.list ?? []), item[1].trim().replace(/^['"]|['"]$/g, '')];
+    if (c === '"' || c === "'") quote = c;
+    else if (c === '[' || c === '{') depth++;
+    else if (c === ']' || c === '}') depth--;
+    else if (c === ',' && depth === 0) {
+      parts.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += c;
+  }
+  parts.push(cur);
+  return parts.map((p) => p.trim()).filter(Boolean);
+}
+
+/** The items of a flow sequence value ("[Read, 'Grep']"), or null when the value is not one. */
+function flowList(value) {
+  const m = /^\[([\s\S]*)\]$/.exec(String(value).trim());
+  return m ? splitFlow(m[1]).map(scalar).filter(Boolean) : null;
+}
+
+/**
+ * The key at the start of `s` (the line with its indentation removed), as YAML reads it.
+ * @returns {{ key: string, raw: string, rest: string }|null} rest = the text after the colon
+ */
+function splitKey(s) {
+  let t = s;
+  // A tag (!x, !!str, !<...>) or an anchor (&a) in front of the key does not change the key.
+  for (let p = /^(?:![^\s]*|&[^\s]+)\s+/.exec(t); p; p = /^(?:![^\s]*|&[^\s]+)\s+/.exec(t)) t = t.slice(p[0].length);
+  let m = /^("(?:[^"\\]|\\.)*")\s*:(.*)$/.exec(t);
+  if (m) return { key: decodeDouble(m[1].slice(1, -1)), raw: m[1], rest: m[2] };
+  m = /^('(?:[^']|'')*')\s*:(.*)$/.exec(t);
+  if (m) return { key: m[1].slice(1, -1).replace(/''/g, "'"), raw: m[1], rest: m[2] };
+  // A plain key: up to the first colon followed by a space or the end of the line, never a comment.
+  m = /^((?:[^\s#'"{}[\],&*!|>%@`?:-]|[?:-](?=\S))(?:[^:#]|:(?=\S)|(?<=\S)#)*?)\s*:(?:\s+(.*)|$)/.exec(t);
+  if (m) return { key: m[1].trim(), raw: m[1].trim(), rest: m[2] ?? '' };
+  // Lenient: key:value with no space (YAML reads it as one scalar, a reader may not). Fails closed.
+  m = /^([A-Za-z_][\w-]*)\s*:(.*)$/.exec(t);
+  if (m) return { key: m[1], raw: m[1], rest: m[2] };
+  return null;
+}
+
+/**
+ * Read a frontmatter written as one flow mapping ({a: 1, "b": [x, y]}), from line `start` to `end` (exclusive).
+ * Each entry gets its place as [line, column] (0-based, in `lines`): `start` and `end` of its text (end exclusive),
+ * `sep` the "," or "}" after it (null when the mapping is not closed) and `prev` the "{" or "," before it, so a caller
+ * can replace or cut one entry (queueHelpers.withAgentName).
+ */
+function readFlowMap(lines, start, end, push) {
+  let depth = 0;
+  let quote = null;
+  let cur = '';
+  let curStart = null;
+  let curEnd = null;
+  let prev = null;
+  const take = (text, i, j0, j1) => {
+    if (!cur.trim() && text.trim()) curStart = [i, j0];
+    cur += text;
+    if (text.trim()) curEnd = [i, j1];
+  };
+  const flush = (sep) => {
+    const text = cur.replace(/\s*\n\s*/g, ' ').trim();
+    if (text) {
+      const pos = { start: curStart, end: curEnd, sep, prev };
+      const k = splitKey(text);
+      if (k) push(k.key, k.raw, curStart[0], k.rest.trim(), pos);
+      else push(scalar(text), text, curStart[0], '', pos);
+    }
+    cur = '';
+    curStart = null;
+    curEnd = null;
+    prev = sep;
+  };
+  for (let i = start; i < end; i++) {
+    const l = lines[i];
+    for (let j = 0; j < l.length; j++) {
+      const c = l[j];
+      if (!quote && c === '#' && (j === 0 || /\s/.test(l[j - 1]))) break;
+      if (quote) {
+        const j0 = j;
+        let t = c;
+        if (quote === '"' && c === '\\') t += l[++j] ?? '';
+        else if (c === quote) {
+          if (quote === "'" && l[j + 1] === "'") t += l[++j];
+          else quote = null;
+        }
+        take(t, i, j0, j + 1);
+        continue;
+      }
+      if (depth === 0) {
+        if (c === '{') {
+          depth = 1;
+          prev = [i, j];
+        }
+        continue;
+      }
+      if (c === '"' || c === "'") quote = c;
+      else if (c === '[' || c === '{') depth++;
+      else if (c === ']' || c === '}') {
+        depth--;
+        if (depth === 0) {
+          flush([i, j]);
+          return;
+        }
+      } else if (c === ',' && depth === 1) {
+        flush([i, j]);
+        continue;
+      }
+      take(c, i, j, j + 1);
+    }
+    cur += '\n';
+  }
+  flush(null);
+}
+
+/**
+ * The frontmatter between the first two "---" lines: the top-level keys with their values and line numbers, read as
+ * a YAML parser reads keys (see above). Nested maps (hooks, mcpServers) are only recorded as present.
+ * @returns {{ found: boolean, end: number, indent: number, flow: [number, number]|null,
+ *   keys: Record<string, { line: number, value: string, list: string[]|null, raw: string }>,
+ *   entries: { key: string, raw: string, line: number, value: string, list: string[]|null, col: number, last: number,
+ *     pos?: object }[] }}
+ *   end = the line index (0-based) of the closing "---", or -1; keys holds the last of a key given twice, entries every
+ *   key in file order (also the ones given twice). Where each key is, so a caller can replace one: indent = the
+ *   column of the top-level keys; per entry col = its column and last = the 0-based index of its last line (its value
+ *   on more lines included). For a flow mapping, flow = [line, column] of its "{" and each entry has pos (readFlowMap).
+ */
+function readFrontmatter(lines) {
+  const out = { found: false, end: -1, indent: 0, flow: null, keys: Object.create(null), entries: [] };
+  if (!lines.length || lines[0].replace(/^\uFEFF/, '').trim() !== '---') return out;
+  const end = lines.findIndex((l, i) => i > 0 && l.trim() === '---');
+  if (end < 0) return out;
+  out.found = true;
+  out.end = end;
+
+  let current = null;
+  const push = (key, raw, i, rest, pos = null, col = 0) => {
+    const value = rest.trim();
+    current = { key, raw, line: i + 1, value: scalar(value), list: flowList(value), col, last: i, mode: null };
+    if (pos) current.pos = pos;
+    if (/^[|>][-+0-9]*\s*(?:#.*)?$/.test(value)) {
+      current.mode = 'block';
+      current.value = '';
+    } else if (!value || value.startsWith('#')) {
+      current.mode = 'empty';
+      current.value = '';
+    } else if (/^["'[{]/.test(value)) current.mode = 'done';
+    else current.mode = 'plain';
+    out.entries.push(current);
+    out.keys[key] = current;
+  };
+
+  let topIndent = null;
+  let explicit = null; // a "? key" waiting for its ": value" line
+  for (let i = 1; i < end; i++) {
+    const l = lines[i];
+    const body = l.trimStart();
+    const indent = l.length - body.length;
+    if (!body) {
+      if (current?.mode === 'block' && current.value) current.value += '\n';
+      continue;
+    }
+    // A frontmatter written as one flow mapping.
+    if (topIndent === null && body.startsWith('{')) {
+      out.flow = [i, indent];
+      readFlowMap(lines, i, end, (key, raw, li, rest, pos) => push(key, raw, li, rest, pos, pos.start[1]));
+      break;
+    }
+    const nested = topIndent !== null && indent > topIndent;
+    if (nested && current) {
+      // A line under the current key: a block list item, a block scalar line, a plain continuation, or a nested map.
+      current.last = i;
+      const item = /^-(?:\s+(.*)|$)/.exec(body);
+      if (current.mode === 'block') current.value += (current.value && !current.value.endsWith('\n') ? '\n' : '') + body;
+      else if (item && current.mode === 'empty') current.list = [...(current.list ?? []), scalar(item[1] ?? '')];
+      else if (current.mode === 'plain' && !body.startsWith('#')) current.value = `${current.value} ${scalar(body)}`.trim();
+      continue;
+    }
+    if (body.startsWith('#')) continue;
+    // A block list item at the key's own indentation (YAML allows "tools:" then "- Read" on the same column).
+    const item = /^-(?:\s+(.*)|$)/.exec(body);
+    if (item && current && current.mode === 'empty' && indent === topIndent) {
+      current.last = i;
+      current.list = [...(current.list ?? []), scalar(item[1] ?? '')];
+      continue;
+    }
+    // An explicit key: "? key" with the value on the next ": value" line.
+    const q = /^\?(?:\s+(.*)|$)/.exec(body);
+    if (q) {
+      topIndent ??= indent;
+      explicit = { key: scalar(q[1] ?? ''), raw: (q[1] ?? '').trim(), i };
+      push(explicit.key, explicit.raw, i, '', null, indent);
+      continue;
+    }
+    const v = /^:(?:\s+(.*)|$)/.exec(body);
+    if (v && explicit && current) {
+      const { key, raw, i: at } = explicit;
+      const col = current.col;
+      out.entries.pop();
+      push(key, raw, at, v[1] ?? '', null, col);
+      current.last = i;
+      explicit = null;
+      continue;
+    }
+    const k = splitKey(body);
+    if (k) {
+      topIndent ??= indent;
+      explicit = null;
+      push(k.key, k.raw, i, k.rest, null, indent);
     }
   }
+  out.indent = topIndent ?? 0;
+  for (const e of out.entries) delete e.mode;
   return out;
 }
 
-/** The tools in the frontmatter value: a comma list ("Read, Grep, Bash") or a YAML list. */
+/** The tools in the frontmatter value: a comma list ("Read, Grep, Bash"), a YAML list, or a block on more lines. */
 function toolList(entry) {
   if (!entry) return null;
   if (entry.list) return entry.list;
   return entry.value
-    .split(',')
+    .split(/[,\n]/)
     .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
     .filter(Boolean);
+}
+
+/** Keys folded for the look alike check: case and separators do not count ("Permission_Mode" = "permissionMode"). */
+const foldKey = (k) => String(k).toLowerCase().replace(/[\s_-]+/g, '');
+const RED_KEY_BY_FOLD = new Map(
+  Object.entries(KEY_KIND)
+    .filter(([, kind]) => kind === 'red')
+    .map(([k]) => [foldKey(k), k]),
+);
+
+/**
+ * Bash or PowerShell with no pattern, or with a pattern that matches every command. Claude Code's permission docs
+ * (code.claude.com/docs/en/permissions): "`Bash(*)` is equivalent to `Bash`", a `*` matches any text including
+ * spaces, and `:*` at the end is a trailing wildcard. So `*`, `**`, `:*` and `*:*` match everything. A space inside
+ * the pattern is literal (`* *` needs a space in the command), so only spaces at the ends are trimmed (the docs do
+ * not say; trimming fails closed).
+ */
+function unrestrictedShell(t, bare) {
+  if (bare !== 'Bash' && bare !== 'PowerShell') return false;
+  if (t === bare) return true;
+  const m = /^[A-Za-z]+\s*\(([\s\S]*)\)$/.exec(t);
+  return !!m && /^(?:\*+|\**:\*)$/.test(m[1].trim());
 }
 
 /** Is the host one of the documentation domains (or a subdomain)? */
@@ -316,35 +562,68 @@ function scanHelper(text) {
 
   // ---- The frontmatter ----
   const fm = readFrontmatter(lines);
-  const frontmatter = {};
+  const frontmatter = Object.create(null);
   if (!fm.found) {
     add('red', 1, 'no-frontmatter', 'frontmatter', 'no frontmatter (--- name, description, tools ---): not a valid agent file');
   } else {
-    for (const [key, entry] of Object.entries(fm.keys)) {
+    const firstLine = Object.create(null);
+    for (const entry of fm.entries) {
+      const key = entry.key;
       frontmatter[key] = entry.value;
-      const kind = KEY_KIND[key];
-      if (!kind) add('yellow', entry.line, 'unknown-key', 'frontmatter', `unknown frontmatter key "${key}"`, key);
+      // How the key is written, when that is not the key itself ("permissionMode" in quotes, an escape, a tag).
+      const written = entry.raw && entry.raw !== key ? ` (written ${entry.raw})` : '';
+      if (firstLine[key] !== undefined)
+        add(
+          'red',
+          entry.line,
+          'duplicate-key',
+          'frontmatter',
+          `"${key}" is given twice (lines ${firstLine[key]} and ${entry.line}): a YAML reader takes one of them, maybe not the one you read`,
+          key,
+        );
+      else firstLine[key] = entry.line;
+      const kind = Object.hasOwn(KEY_KIND, key) ? KEY_KIND[key] : null;
+      const lookalike = kind ? null : RED_KEY_BY_FOLD.get(foldKey(key));
+      if (lookalike)
+        add(
+          'red',
+          entry.line,
+          `key-${lookalike}`,
+          'frontmatter',
+          `"${key}" looks like ${lookalike} (red in case a reader takes it as that key: it changes how the agent runs or what it can reach)`,
+          key,
+        );
+      else if (!kind) add('yellow', entry.line, 'unknown-key', 'frontmatter', `unknown frontmatter key "${key}"${written}`, key);
       else if (kind === 'red')
-        add('red', entry.line, `key-${key}`, 'frontmatter', `${key} in the frontmatter (changes how the agent runs or what it can reach)`, key);
+        add('red', entry.line, `key-${key}`, 'frontmatter', `${key} in the frontmatter${written} (changes how the agent runs or what it can reach)`, key);
       else if (kind === 'yellow')
-        add('yellow', entry.line, `key-${key}`, 'frontmatter', `${key} in the frontmatter`, `${key}: ${entry.value}`);
+        add('yellow', entry.line, `key-${key}`, 'frontmatter', `${key} in the frontmatter${written}`, `${key}: ${entry.value}`);
       else if (kind === 'info' && key === 'model')
         add('info', entry.line, 'model', 'frontmatter', `model: ${entry.value || '(empty)'}`, entry.value);
     }
     if (!fm.keys.description)
       add('yellow', 1, 'no-description', 'frontmatter', 'no description (Claude Code needs it to know what the agent is for)');
-    const tools = toolList(fm.keys.tools);
-    if (!tools || !tools.length) {
+    // Every tools entry is checked (a key given twice is also red above): the reader may take either one.
+    const toolEntries = fm.entries.filter((e) => e.key === 'tools');
+    if (!toolEntries.some((e) => toolList(e).length)) {
       add('red', fm.keys.tools?.line ?? 1, 'tools-missing', 'frontmatter', 'tools is missing: the agent gets EVERY tool (write, web, MCP, agents)');
-    } else {
-      const line = fm.keys.tools.line;
-      for (const t of tools) {
+    }
+    for (const entry of toolEntries) {
+      const line = entry.line;
+      for (const t of toolList(entry)) {
         const bare = t.replace(/\(.*$/, '').trim();
         if (t === '*' || bare === '*') add('red', line, 'tool-all', 'frontmatter', 'tools: * (every tool)', t);
         else if (RED_TOOLS.has(bare)) add('red', line, `tool-${bare}`, 'frontmatter', `tool ${bare} (writes files, reaches the network or starts agents)`, t);
         else if (/^mcp__/i.test(bare)) add('red', line, 'tool-mcp', 'frontmatter', `MCP tool ${bare} (reaches outside the repo)`, t);
-        else if ((bare === 'Bash' || bare === 'PowerShell') && bare === t)
-          add('yellow', line, 'tool-bash', 'frontmatter', `unrestricted ${bare} (can run any command; the push guard and the read guard apply)`, t);
+        else if (unrestrictedShell(t, bare))
+          add(
+            'yellow',
+            line,
+            'tool-bash',
+            'frontmatter',
+            `unrestricted ${bare} (${t === bare ? '' : `${t} matches every command; `}it can run any command; the push guard and the read guard apply)`,
+            t,
+          );
       }
     }
   }
