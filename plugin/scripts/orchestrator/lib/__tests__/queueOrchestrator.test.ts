@@ -1304,7 +1304,8 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
     // Undo the merge, so the next run merges M again from the start.
     g(['reset', '-q', '--hard', head]);
 
-    // Allowed environment: the whole run, merge-track with --wave-base, the push command from the config, set done and fill.
+    // Allowed environment: the whole run, merge-track with the checked tip and --wave-base, the push command from the config,
+    // set done and fill.
     setEnvironment('test');
     const tipM = g(['rev-parse', 'queue/M']);
     const tipK = g(['rev-parse', 'queue/K']);
@@ -1316,7 +1317,7 @@ describe('queue.mjs merge, info, activeOnes, edit --bonus and next-migr (against
     expect(s.out.split('\n').filter(Boolean).length).toBeLessThanOrEqual(15);
     const k1 = call();
     expect(k1.map((x) => x.step)).toEqual(['merge', 'migr-push', 'gates', 'done', 'fill']);
-    expect(k1[0].args.slice(1)).toEqual(['queue/M', '--wave-base', head]);
+    expect(k1[0].args.slice(1)).toEqual(['queue/M', '--tip', tipM, '--wave-base', head]);
     expect(k1[1]).toMatchObject({ cmd: 'node migr-push.js', args: [] });
     // The gates get the branch fork point and tip, so rule 1 in "known red" works after the merge, and record trusted
     // gate evidence for the merge commit (lib/gateEvidence.js).

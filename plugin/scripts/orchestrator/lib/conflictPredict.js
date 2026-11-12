@@ -477,12 +477,15 @@ function conflictFileLines(mc) {
 }
 
 /** The lines `ravenseat merge` prints at the merge-conflict stop. */
-function mergeStopLines(mc, { id, ravenseat = 'ravenseat' }) {
+function mergeStopLines(mc, { id, ravenseat = 'ravenseat', open = false }) {
   if (!mc?.files?.length) return [];
   return [
     `CONFLICTING FILES for ${id}:`,
     ...conflictFileLines(mc).map((l) => `  ${l}`),
-    `Or leave it to an agent, and the fix round starts informed: git merge --abort here first, then ${ravenseat} resume ${id} --reason fix (the brief names these files and tasks).`,
+    // open: git left the merge in place (a git older than 2.38, without the trial merge in merge-track.mjs).
+    open
+      ? `Or leave it to an agent, and the fix round starts informed: git merge --abort here first, then ${ravenseat} resume ${id} --reason fix (the brief names these files and tasks).`
+      : `Next: ${ravenseat} resume ${id} --reason fix (the brief names these files and tasks), then ${ravenseat} receive ${id} and ${ravenseat} merge ${id}.`,
   ];
 }
 

@@ -21,8 +21,10 @@ or removing `node_modules`, which in a worktree is a link into your own tree), a
 ### What happens if it crashes, or I close the laptop, in the middle of a merge?
 
 A merge killed at each step (right after `git merge`, in the gates after it, right after the task is marked done) is
-finished by `ravenseat merge <id> --resume`: nothing is merged twice and the task is marked done once. A merge left
-in place by git (`MERGE_HEAD`) is refused until you finish it. Commits you make in between are kept. If the
+finished by `ravenseat merge <id> --resume`: nothing is merged twice and the task is marked done once. A conflict that
+needs a hand fix stops before git touches the checkout (a trial merge with `git merge-tree`), so no merge is left open;
+the fix goes on the track branch, then receive and merge again. A merge you have in progress yourself (`MERGE_HEAD`, or
+one git left open on a git older than 2.38) is refused until you finish it. Commits you make in between are kept. If the
 orchestrator session itself dies with no handover, a new one picks up from what is on disk: a dead agent's task is
 continued with `resume` (which names any work it left uncommitted), and locks of dead processes are taken over.
 Ravenseat does not restart itself, and nothing runs while the machine is off or asleep: the work continues when you

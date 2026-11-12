@@ -5,8 +5,8 @@
 // overwrites the first (work lost), half merges, or stops with nothing to go on. Two real local tracks change the same
 // line of lib/shared.ts in different ways. While they run, `ravenseat conflicts` predicts the pair with git merge-tree.
 // A merges. B's merge then conflicts for real (merge-track, real git): it stops, A's line stays on main, nothing of B is
-// committed, and the files and the other task (A) are saved on B. After the documented `git merge --abort`, the fix
-// round's brief names the file and A. The final check then says the user's things are intact.
+// committed, the checkout is not left in the middle of a merge (the trial merge stops first), and the files and the
+// other task (A) are saved on B. The fix round's brief names the file and A. The final check then says the user's things are intact.
 // =============================================================
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
@@ -52,7 +52,9 @@ describe('scenario 5: two agents change the same file', () => {
     expect(mB.out).toContain('MUST BE RESOLVED BY HAND');
     expect(mB.out).toContain('CONFLICTING FILES for B:');
     expect(mB.out).toContain(`  ${FILE} (also touched by A)`);
-    expect(mB.out).toContain('git merge --abort');
+    expect(fs.existsSync(path.join(p.repo, '.git', 'MERGE_HEAD'))).toBe(false);
+    expect(mB.out).toMatch(/Next: .*resume B --reason fix/);
+    expect(mB.out).not.toContain('git merge --abort here first');
     expect(p.taskOf('B')?.status).not.toBe('done');
     const B = p.taskOf('B') as unknown as { merge_conflict?: { files: { file: string; tasks: string[] }[] } };
     expect(B.merge_conflict?.files).toEqual([{ file: FILE, tasks: ['A'], commits: [] }]);
@@ -60,8 +62,7 @@ describe('scenario 5: two agents change the same file', () => {
     expect(p.g(['rev-parse', 'main'])).toBe(tipA);
     expect(p.g(['show', `main:${FILE}`])).toBe('from the track');
 
-    // The documented way out, then the fix round: its brief carries the conflicting file and the other task.
-    p.g(['merge', '--abort']);
+    // The fix round: its brief carries the conflicting file and the other task.
     const r = p.run('resume', 'B', '--reason', 'fix', '--scratchpad', scratchB);
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain('RESUME B-r1 (fix)');

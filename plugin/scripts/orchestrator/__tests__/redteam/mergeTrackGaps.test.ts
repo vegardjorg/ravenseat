@@ -131,7 +131,8 @@ describe('G1: a conflict in a binary or non-UTF-8 file is resolved by hand, neve
     expect(r.stdout).toMatch(/img\/logo\.png: binary/);
     expect(r.stdout).not.toMatch(/Resolved automatically/);
     expect(g('rev-parse', 'HEAD')).toBe(head);
-    expect(fs.existsSync(path.join(repo, '.git', 'MERGE_HEAD'))).toBe(true);
+    // The trial merge (V2, mergeTipLock.test.ts) stops before git merge, so the checkout is not left mid-merge.
+    expect(fs.existsSync(path.join(repo, '.git', 'MERGE_HEAD'))).toBe(false);
   });
 
   it('a text file that is not UTF-8 (Latin-1) is not rewritten with replacement characters', () => {

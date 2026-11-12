@@ -168,7 +168,9 @@ The queue keeps working when something stops. A task that waits on you is parked
 check gives a fix round with a fresh agent, and a red base gets its own fix task while other merges wait. A gate that
 fails once and passes on a rerun is recorded as flaky instead of freezing the base.
 - **Fewer surprises at merge.** `ravenseat conflicts` predicts which running tracks will conflict with each other or with
-  the base (`git merge-tree`, nothing written) and suggests a merge order.
+  the base (`git merge-tree`, nothing written) and suggests a merge order. At the merge a trial merge of the checked
+  tip runs first, so a conflict that needs a hand fix stops with nothing merged and nothing left open, and the fix goes
+  on the track branch.
 - **Optional CI watch after a push** (`push.ciWatch`, off by default). Local first is the rule: push only when the
   local checks are green. The watch is a second net that turns a red CI run into one fix task.
 - **Merges that survive interruptions.** One merge runs at a time (`merge.lock`, a stale lock is taken over), a merge

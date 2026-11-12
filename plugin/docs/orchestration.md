@@ -468,10 +468,19 @@ checkout or with ravenseat's own `--evidence` run:
 - **Done only when merged.** After the merge step and again before `done`, the track tip must be in the base
   (`git merge-base --is-ancestor`). Otherwise the task is not marked done and stays in review. The merge commit is
   stored on the task as `merge_commit`.
+- **The checked tip, and only that.** `ravenseat merge` passes the tip its checks ran on (`merge-track.mjs --tip <sha>`),
+  and that sha is what is merged. A branch that moved after the checks stops the merge (exit 6, nothing touched): the
+  new commits need `ravenseat receive <id>` again. After the merge the merge commit's second parent must be that tip;
+  otherwise the stop says NOT MERGED AS CHECKED and the task is not marked done.
+- **No conflict left open.** Before the real merge, `merge-track.mjs` runs a trial merge of the tip
+  (`git merge-tree --write-tree`, objects only) and puts each conflicting file through its text merge in memory. A file
+  that needs a hand fix stops the merge before git touches the checkout: "MUST BE RESOLVED BY HAND (trial merge with git
+  merge-tree: nothing was merged, the checkout is untouched)". Conflicts the text merge resolves are merged as before. On
+  a git older than 2.38 there is no trial merge (a NOTE line says so), and git leaves such a merge open as it used to.
 - **Resume.** Every step is recorded in `<dataFolder>/merge-state-<id>.json` as it starts. After Ctrl-C, a crash, a
-  stop after the merge (the migration push, a red gate) or a conflict resolved and committed by hand,
-  `ravenseat merge <id> --resume` runs only the steps after the merge that have not run (migration push, gates, base gate,
-  done, fill). A plain `ravenseat merge <id>` on a branch that is already in the base says so and gives that command.
+  stop after the merge (the migration push, a red gate) or, on a git older than 2.38, a conflict resolved and committed
+  by hand, `ravenseat merge <id> --resume` runs only the steps after the merge that have not run (migration push, gates,
+  base gate, done, fill). A plain `ravenseat merge <id>` on a branch that is already in the base says so and gives that command.
 
 ### What happens when it is cut off
 
@@ -489,7 +498,8 @@ lost, nothing is merged twice, and nothing is marked done unless it is in the ba
 | Two merges at the same time | One holds the lock, the other is refused and changes nothing | Run the refused one when the first is finished |
 | An agent dying in the middle of a track | The commits and uncommitted work stay in the worktree | `ravenseat resume <id> --reason context` (not a fix round). If the attempt still reads as running: `ravenseat attempt close <id> --outcome interrupted` first |
 | `ravenseat receive` killed in its checks | The task is still running, and no result was recorded | `ravenseat receive <id>` again: the package is made anew |
-| A real conflict in a merge | Git has the merge open, and every merge refuses until it is settled | Resolve and commit, then `ravenseat merge <id> --resume`. Or `git merge --abort`, and the task is as it was |
+| A real conflict in a merge | Nothing: the trial merge stopped before git touched the checkout, and the task stays in review with the files in `merge_conflict` | Resolve it on the branch: `ravenseat resume <id> --reason fix` (the fix round merges the base into the branch), or `git merge <base>` yourself in the track's worktree. Then `ravenseat receive <id>` and `ravenseat merge <id>` |
+| The same on a git older than 2.38 | Git has the merge open, and every merge refuses until it is settled | Resolve and commit, then `ravenseat merge <id> --resume`. Or `git merge --abort`, and the task is as it was |
 
 Not covered: a kill while the queue's own lock file is being written, and a disk that fails in the middle of a rename.
 

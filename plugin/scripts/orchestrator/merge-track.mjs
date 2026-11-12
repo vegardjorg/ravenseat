@@ -34,19 +34,35 @@
 // (create or replace) and that another track in the same wave has also rewritten. Then the one with the highest
 // migration number wins, and the other's change silently disappears.
 //
+// THE TIP: what is merged is one commit, never "whatever the branch points at by then". With --tip <sha> (ravenseat merge
+// passes the tip its checks ran on: the red gate at receive, the done command, the focus markers) the branch must still
+// point there, or nothing is merged (exit 6): a commit that landed after the checks has had no receive and no review.
+// Without --tip the tip is read once at the start. The guard, the trial merge and `git merge` all use that sha, and the
+// merge commit must have it as its second parent (review 2026-11-11, G2).
+//
+// THE TRIAL MERGE before the real one (git >= 2.38): `git merge-tree --write-tree HEAD <sha>` writes objects only, never
+// the index, the checkout or a ref. Each conflicting file it names goes through the same text merge as below, in memory.
+// A file that would have to be resolved by hand stops the merge BEFORE git touches the checkout, so a conflict never
+// leaves the main tree in the middle of a merge (review 2026-11-11, V2). An older git keeps the old way (with a note):
+// the merge is then left in place for such a file.
+//
 // AFTER a successful merge the track worktree is cleaned up (cleanup-worktree.mjs: the links are removed as links, then
 // `git worktree remove` without --force). The branch is kept here (`ravenseat merge` deletes a merged queue branch at the very end). The cleanup is best effort: it never turns a successful merge
 // into exit ≠ 0, and locked, dirty or unmerged worktrees are left alone.
 //
 // USE:
-//   node scripts/orchestrator/merge-track.mjs <branch> [--wave-base <sha>] [--without-commit] [--keep-worktree] [--allow-guard]
+//   node scripts/orchestrator/merge-track.mjs <branch> [--tip <sha>] [--wave-base <sha>] [--without-commit]
+//                                             [--keep-worktree] [--allow-guard]
+//     --tip <sha>        the commit of the branch that was checked; it is what is merged, and a branch that has moved
+//                        since stops the merge (exit 6)
 //     --wave-base <sha>  the base branch commit the wave started from (for the check of functions rewritten by several tracks)
 //     --without-commit       resolve and validate, but do not commit (the merge is left in place)
 //     --keep-worktree   do not clean up the track worktree after the merge
 //     --allow-guard     merge even if the branch touches protected paths it does not own (logged as "guard-overridden"
 //                       in the time log). Without it: exit 4 BEFORE the merge, with the list.
 //   Exit: 0 merged, 1 merge or validation failed, 2 usage or no diff, 3 identity guard, 4 merge guard,
-//         5 a merge, rebase, cherry-pick or revert is already in progress in the checkout (nothing was merged).
+//         5 a merge, rebase, cherry-pick or revert is already in progress in the checkout (nothing was merged),
+//         6 the branch moved after the checks (--tip; nothing was merged).
 // NB: never use String.replace with a replacement text that may contain "$" (patterns such as $& are interpreted); build with slice.
 // =============================================================
 
@@ -66,13 +82,14 @@ const K = config();
 const args = process.argv.slice(2);
 const val = (n) => (args.includes(n) ? args[args.indexOf(n) + 1] : undefined);
 const waveBase = val('--wave-base');
-const branch = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--wave-base');
+const tipArg = val('--tip');
+const branch = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--wave-base' && args[i - 1] !== '--tip');
 const WITHOUT_COMMIT = args.includes('--without-commit');
 const KEEP_WORKTREE = args.includes('--keep-worktree');
 const ALLOW_GUARD = args.includes('--allow-guard');
 if (!branch) {
   console.error(
-    `Use: ${CLI} merge-track <branch> [--wave-base <sha>] [--without-commit] [--keep-worktree] [--allow-guard]`,
+    `Use: ${CLI} merge-track <branch> [--tip <sha>] [--wave-base <sha>] [--without-commit] [--keep-worktree] [--allow-guard]`,
   );
   process.exit(2);
 }
@@ -137,6 +154,42 @@ const gitOk = (...a) => spawnSync('git', [...QUOTE_OFF, ...a], { encoding: 'utf8
   }
 }
 
+// ---- The tip: the one commit this run merges (G2) ------------------------------------------------------------------
+// Read once. Every git command below uses TIP, never the branch name, so a commit that lands on the branch while this
+// script runs is not merged either. With --tip the branch must still be there: the checks ran on that commit.
+const TIP = (() => {
+  const sha = (ref) => {
+    const r = gitOk('rev-parse', '-q', '--verify', `${ref}^{commit}`);
+    return r.status === 0 ? r.stdout.trim() : null;
+  };
+  const now = sha(branch);
+  if (!now) {
+    console.error(`Not merged: ${branch} is not a branch or commit here.`);
+    process.exit(2);
+  }
+  if (!tipArg) return now;
+  const checked = sha(tipArg);
+  if (!checked) {
+    console.error(`Not merged: --tip ${tipArg} is not a commit here.`);
+    process.exit(2);
+  }
+  if (checked === now) return checked;
+  const newer = gitOk('log', '--oneline', '--no-decorate', '-n', '10', `${checked}..${now}`).stdout.trim();
+  console.error(
+    `Not merged: ${branch} moved after the checks. They ran on ${checked.slice(0, 12)}; the branch is now at ` +
+      `${now.slice(0, 12)}.\n` +
+      (newer
+        ? `Commits that came after the checks:\n${newer.split('\n').map((l) => `  ${l}`).join('\n')}\n`
+        : 'The branch was rewritten (the checked commit is not under its tip).\n') +
+      `The new commits have had no receive and no review. Run ${CLI} receive <id> again (the gates and the review), ` +
+      'then merge. Nothing was touched.',
+  );
+  process.exit(6);
+})();
+// The subject git itself would write for `git merge <branch>` (with the default merge.suppressDest): the branch name
+// stays in it, so the queue still finds the task in the base's history (lib/logic/commits.js queueIdFromMerge).
+const mergeMessage = (into) => `Merge branch '${branch}'${['main', 'master'].includes(into) ? '' : ` into ${into}`}`;
+
 // Windows locks large files for a moment after git has written them (virus scanner or file watcher): the write gives
 // UNKNOWN/EBUSY/EPERM. Try again a few times with a short pause before giving up.
 function writeWithNewAttempt(file, text) {
@@ -178,9 +231,9 @@ function writeWithNewAttempt(file, text) {
   }
   const taskName = task?.id ?? id;
   // -z: NUL separated and never quoted, so a path with æøå, a tab or a quote reaches the guard as it is (lib/mergeGuard.js readDiff).
-  const diff = gitOk('diff', '--name-status', '-z', '-M', `HEAD...${branch}`);
+  const diff = gitOk('diff', '--name-status', '-z', '-M', `HEAD...${TIP}`);
   if (diff.status !== 0) {
-    console.error(`Guard check: could not get the diff HEAD...${branch}:\n${diff.stderr}`);
+    console.error(`Guard check: could not get the diff HEAD...${TIP.slice(0, 12)} (${branch}):\n${diff.stderr}`);
     process.exit(2);
   }
   const guard = G.assessGuard({
@@ -315,7 +368,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'merge-track-'));
 
 // ---- 1) Merge ------------------------------------------------------------------------
 const now = git('rev-parse', '--abbrev-ref', 'HEAD').trim();
-console.log(`Merging ${branch} into ${now} …`);
+console.log(`Merging ${branch} at ${TIP.slice(0, 12)} into ${now} …`);
 // Stale index after `git commit -- <files>` with a pre-commit hook: the file equals HEAD in the working tree, but
 // the index has an older version, and then merge refuses ("local changes would be overwritten"). Clean up only such files.
 for (const f of git('diff', '--cached', '--name-only').split('\n').filter(Boolean)) {
@@ -341,10 +394,10 @@ if (staged.length) {
 // a path the branch adds): git merge would refuse, after the same save and restore. Stop first, and name the files
 // (red team RT-01, __tests__/redteam/rt01-uncommitted-work.test.ts).
 {
-  const base = gitOk('merge-base', 'HEAD', branch);
+  const base = gitOk('merge-base', 'HEAD', TIP);
   const theirs =
     base.status === 0
-      ? new Set(git('diff', '--name-only', '-z', base.stdout.trim(), branch).split('\0').filter(Boolean))
+      ? new Set(git('diff', '--name-only', '-z', base.stdout.trim(), TIP).split('\0').filter(Boolean))
       : new Set();
   const mine = git('status', '--porcelain=v1', '-z', '--untracked-files=all').split('\0').filter(Boolean);
   const blocked = [];
@@ -364,13 +417,7 @@ if (staged.length) {
     process.exit(1);
   }
 }
-const m = gitOk('merge', '--no-ff', '--no-edit', branch);
-const conflicts = git('diff', '--name-only', '--diff-filter=U').split('\n').filter(Boolean);
-if (m.status !== 0 && !conflicts.length) {
-  console.error(`git merge failed without conflicts:\n${m.stdout}${m.stderr}`);
-  process.exit(1);
-}
-console.log(conflicts.length ? `Conflicts in ${conflicts.length} files.` : 'No conflicts.');
+// The merge itself runs after the text merge's helpers below (1b and 1c), so the trial merge can use them.
 
 // ---- 2) Three-way merge per file -------------------------------------------------------
 // The stage as bytes (null when it does not exist). Read as a Buffer, never straight as utf8: a binary or non-UTF-8 stage
@@ -617,25 +664,97 @@ function mergeIn18n(base, ours, theirs, current) {
   return { ok: true, text: s };
 }
 
+// One conflicting file: { ok: true, text } or { ok: false, reason }. `stages` are the three versions as bytes (null when
+// one is missing); `current()` gives the file with git's conflict markers (only the translation merge reads it). The
+// trial merge and the real one both go through here, so the trial predicts exactly what the real merge will do.
+function resolveOne(file, stages, current) {
+  if (stages.includes(null)) return { ok: false, reason: 'added or deleted on one side' };
+  const why = stages.map(notText).find(Boolean);
+  if (why) return { ok: false, reason: why };
+  const [base, ours, theirs] = stages.map((b) => b.toString('utf8'));
+  if (/(^|\/)locales\/[A-Za-z_-]+\.json$/.test(file)) {
+    const text = current();
+    return text == null ? { ok: false, reason: 'could not read the conflicted file' } : mergeIn18n(base, ours, theirs, text);
+  }
+  if (file.endsWith('.json')) return { ok: false, reason: 'JSON outside locales/ is resolved by hand' };
+  return mergeText(file, base, ours, theirs);
+}
+
+// ---- 1b) The trial merge of TIP, before git touches the checkout (V2) ---------------------------------------------
+// `git merge-tree --write-tree` (git >= 2.38) merges HEAD and TIP the way `git merge` does, but writes objects only.
+// Exit 0: clean. Exit 1: conflicts, and with -z the output is "<tree>\0" followed by "<mode> <oid> <stage>\t<path>\0"
+// per conflicting stage (--no-messages leaves out the informational part). Each file is resolved in memory; when one
+// would have to be done by hand, the merge stops here and the checkout is never in the middle of a merge. Anything
+// else (another exit code, an output this cannot read) falls back to the real merge, which handles it as before.
+{
+  const CP = require('./lib/conflictPredict.js');
+  const version = CP.gitVersion(CP.makeRunner(process.cwd()));
+  if (!CP.supportsMergeTree(version)) {
+    console.log(
+      `NOTE: git ${version ?? '(unknown version)'} is older than ${CP.MIN_GIT_TEXT} (no git merge-tree --write-tree), ` +
+        'so there is no trial merge first: a conflict that must be resolved by hand leaves the merge in place, as before.',
+    );
+  } else {
+    const t = spawnSync('git', [...QUOTE_OFF, 'merge-tree', '--write-tree', '-z', '--no-messages', 'HEAD', TIP], {
+      encoding: 'utf8',
+      maxBuffer: 256 << 20,
+    });
+    if (t.status === 1) {
+      const [tree, ...entries] = String(t.stdout ?? '').split('\0').filter(Boolean);
+      const files = new Map();
+      for (const e of entries) {
+        const x = /^(\d+) ([0-9a-f]+) ([123])\t(.+)$/s.exec(e);
+        if (!x) continue;
+        if (!files.has(x[4])) files.set(x[4], [null, null, null]);
+        files.get(x[4])[Number(x[3]) - 1] = x[2];
+      }
+      const blob = (spec) => {
+        const r = spawnSync('git', [...QUOTE_OFF, 'cat-file', 'blob', spec], { maxBuffer: 256 << 20 });
+        return r.status === 0 ? r.stdout : null;
+      };
+      const byHand = [];
+      for (const [file, oids] of files) {
+        let r;
+        try {
+          const current = () => blob(`${tree}:${file}`)?.toString('utf8') ?? null;
+          r = resolveOne(file, oids.map((o) => (o ? blob(o) : null)), current);
+        } catch (e) {
+          r = { ok: false, reason: `the text merge failed (${e.message})` };
+        }
+        if (!r.ok) byHand.push(`${file}: ${r.reason}`);
+      }
+      if (byHand.length) {
+        fs.rmSync(tmp, { recursive: true, force: true });
+        console.log(`Conflicts in ${files.size} files.`);
+        console.log(
+          `\nMUST BE RESOLVED BY HAND (trial merge with git merge-tree: nothing was merged, the checkout is untouched):`,
+        );
+        for (const x of byHand) console.log(`  ${x}`);
+        console.log(
+          `\nNothing was merged and nothing is left open. Resolve it on the branch: a fix round (${CLI} resume <id> ` +
+            `--reason fix) merges ${now} into ${branch} and resolves it there, or do that yourself in the track's ` +
+            `worktree (git merge ${now}). Then ${CLI} receive <id> and ${CLI} merge <id>.`,
+        );
+        process.exit(1);
+      }
+      console.log(`Trial merge: ${files.size} conflicting file(s), all resolved automatically in the trial.`);
+    }
+  }
+}
+
+// ---- 1c) The real merge of TIP ---------------------------------------------------------------------------------------
+const m = gitOk('merge', '--no-ff', '-m', mergeMessage(now), TIP);
+const conflicts = git('diff', '--name-only', '--diff-filter=U').split('\n').filter(Boolean);
+if (m.status !== 0 && !conflicts.length) {
+  console.error(`git merge failed without conflicts:\n${m.stdout}${m.stderr}`);
+  process.exit(1);
+}
+console.log(conflicts.length ? `Conflicts in ${conflicts.length} files.` : 'No conflicts.');
+
 const resolved = [];
 const manual = [];
 for (const file of conflicts) {
-  const stages = [stage(1, file), stage(2, file), stage(3, file)];
-  if (stages.includes(null)) {
-    manual.push(`${file}: added or deleted on one side`);
-    continue;
-  }
-  const why = stages.map(notText).find(Boolean);
-  if (why) {
-    manual.push(`${file}: ${why}`);
-    continue;
-  }
-  const [base, ours, theirs] = stages.map((b) => b.toString('utf8'));
-  let r;
-  if (/(^|\/)locales\/[A-Za-z_-]+\.json$/.test(file))
-    r = mergeIn18n(base, ours, theirs, fs.readFileSync(file, 'utf8'));
-  else if (file.endsWith('.json')) r = { ok: false, reason: 'JSON outside locales/ is resolved by hand' };
-  else r = mergeText(file, base, ours, theirs);
+  const r = resolveOne(file, [stage(1, file), stage(2, file), stage(3, file)], () => fs.readFileSync(file, 'utf8'));
   if (!r.ok) {
     manual.push(`${file}: ${r.reason}`);
     continue;
@@ -707,7 +826,7 @@ if (waveBase && migFolder) {
   const branchFiles = git(
     'diff',
     '--name-only',
-    `${waveBase}...${branch}`,
+    `${waveBase}...${TIP}`,
     '--',
     migFolder,
   )
@@ -716,7 +835,7 @@ if (waveBase && migFolder) {
   const otherFiles = git('diff', '--name-only', waveBase, 'HEAD', '--', migFolder)
     .split('\n')
     .filter((f) => f && !branchFiles.includes(f));
-  const g = fnInFiles(branch, branchFiles);
+  const g = fnInFiles(TIP, branchFiles);
   const a = fnInFiles('HEAD', otherFiles);
   for (const [fn, f] of g)
     if (a.has(fn)) overlap.push(`${fn}: ${path.basename(f)} and ${path.basename(a.get(fn))}`);
@@ -742,8 +861,19 @@ if (WITHOUT_COMMIT) {
 }
 if (resolved.length) git('add', '--', ...resolved);
 // Without conflicts git merge has already committed itself (no MERGE_HEAD). Then there is nothing to commit.
+// The merge commit must have TIP as its second parent (G2): then it holds exactly the checked commit and nothing else.
+const secondParentIsTip = () => {
+  const p2 = gitOk('rev-parse', '-q', '--verify', 'HEAD^2');
+  if (p2.status === 0 && p2.stdout.trim() === TIP) return;
+  console.error(
+    `The merge commit ${git('rev-parse', '--short=12', 'HEAD').trim()} does not have ${TIP.slice(0, 12)} (${branch}, the ` +
+      `commit that was checked) as its second parent. Check git log -3 before anything else.`,
+  );
+  process.exit(1);
+};
 const mergeInProgress = gitOk('rev-parse', '-q', '--verify', 'MERGE_HEAD').status === 0;
 if (!mergeInProgress) {
+  secondParentIsTip();
   console.log(`\nMerged and committed by git merge: ${git('log', '--oneline', '-1').trim()}`);
   cleanupAfterMerge();
   process.exit(0);
@@ -753,6 +883,7 @@ if (c.status !== 0 && !/nothing to commit/.test(`${c.stdout}${c.stderr}`)) {
   console.error(`commit failed:\n${c.stdout}${c.stderr}`);
   process.exit(1);
 }
+secondParentIsTip();
 console.log(`\nMerged and committed: ${git('log', '--oneline', '-1').trim()}`);
 cleanupAfterMerge();
 process.exit(0);

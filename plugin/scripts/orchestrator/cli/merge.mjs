@@ -1020,7 +1020,7 @@ export async function cmdMerge() {
     // were green while most tests never ran. The one test-weakening finding that stops; testWeakening.focusStop false = off.
     if (CONFIG.testWeakening?.enabled !== false && CONFIG.testWeakening?.focusStop !== false) {
       const TW = require('./lib/testWeakening.js');
-      const focus = TW.focusHits(TW.assess(gitLarge(['diff', `${BASE}...${branch}`]) ?? '', CONFIG.testWeakening));
+      const focus = TW.focusHits(TW.assess(gitLarge(['diff', `${BASE}...${trackTip}`]) ?? '', CONFIG.testWeakening));
       if (focus.length && !a.includes('--allow-focus'))
         die(
           `STOP: ${id} is not merged. It adds ${focus.length} focus marker(s), which make the runner skip the other tests: ` +
@@ -1157,6 +1157,9 @@ export async function cmdMerge() {
         [
           path.join(HERE, 'merge-track.mjs'),
           branch,
+          // The tip the checks ran on (G2): merge-track merges this sha, and stops (exit 6) if the branch has moved.
+          '--tip',
+          trackTip,
           ...(o.head_start ? ['--wave-base', o.head_start] : []),
           ...(allowGuard ? ['--allow-guard'] : []),
         ],
@@ -1207,6 +1210,8 @@ export async function cmdMerge() {
   // The exit code of merge-track.mjs: 4 = the merge guard stopped it before the merge (gets its own message below).
   let mergeCode = null;
   // The merge step's output, for the conflict count in the mergeConflict row ("Conflicts in N files.").
+  // notAsChecked: the merge commit holds more than the checked tip (G2); then --resume is not offered.
+  let notAsChecked = false;
   let mergeOut = '';
   // ---- The base gate after the merge (lib/baseHealth.js) ----
   // The verdict is recorded for the merge commit as soon as it is known: from the quick gates when they are the base
@@ -1334,7 +1339,21 @@ export async function cmdMerge() {
         // The invariant right after the merge (M6): HEAD holds the track's tip. A merge step that says "merged" while
         // the tip is not in HEAD (it committed another, unfinished merge, or nothing) is a stop, never a done task.
         const head = git(['rev-parse', '--verify', 'HEAD']);
-        if (!containsCommit(trackTip, head)) {
+        // And exactly that tip (G2): the merge commit's second parent is the checked commit. A merge of a branch that
+        // moved after the checks also contains the tip, with commits that had no receive and no review on top.
+        const second = git(['rev-parse', '-q', '--verify', `${head}^2`]);
+        if (containsCommit(trackTip, head) && second !== trackTip) {
+          notAsChecked = true;
+          r = {
+            code: 1,
+            out:
+              `${r.out}\nNOT MERGED AS CHECKED: the merge commit ${short(head)} on ${BASE} has ` +
+              `${second ? short(second) : 'no second parent'} as its second parent, not ${short(trackTip)}, the tip of ` +
+              `${branch} that the checks ran on. Commits that had no receive and no review may be in ${BASE} now. Check ` +
+              `git log -3 ${BASE}, undo the merge (git revert -m 1 ${short(head)}, or git reset --keep HEAD~1 when nothing ` +
+              `came after it and it is not pushed), then ${CLI} receive ${id} and merge again. ${id} is not marked done.`,
+          };
+        } else if (!containsCommit(trackTip, head)) {
           r = {
             code: 1,
             out:
@@ -1470,8 +1489,16 @@ export async function cmdMerge() {
       logEvent(ER.mergeConflictRow({ task: id, branch, files: ER.conflictFiles(mergeOut) }));
     console.log(`STOP in the step ${res.stop.step}: ${res.stop.message}`);
     if (res.stop.excerpt.length) console.log(res.stop.excerpt.map((l) => `  | ${l}`).join('\n'));
+    if (res.stop.step === 'merge' && mergeCode === 6)
+      console.log(
+        `${branch} moved after the checks of this merge, so nothing was merged. The new commits need receive again: ` +
+          `${CLI} receive ${id}, then ${CLI} merge ${id}.`,
+      );
     // After the merge, the rest can be continued once the cause is fixed (the environment, a flaky gate, a base reset).
-    if (containsCommit(trackTip, `refs/heads/${BASE}`)) {
+    if (notAsChecked) {
+      // Never resume on top of commits nobody checked: the merge is undone first, and receive runs again.
+      ML.clearState(FOLDER, id);
+    } else if (containsCommit(trackTip, `refs/heads/${BASE}`)) {
       const left = ML.remainingSteps(plan.step, mstate.steps_done);
       if (left.length)
         console.log(`RESUME: when the cause is fixed, ${CLI} merge ${id} --resume runs the steps that are left (${left.join(', ')}).`);
@@ -1493,7 +1520,11 @@ export async function cmdMerge() {
             const x = q.tasks.find((y) => y.id === id);
             if (x) x.merge_conflict = mc;
           });
-          for (const l of CP.mergeStopLines(mc, { id, ravenseat: CLI })) console.log(l);
+          for (const l of CP.mergeStopLines(mc, {
+            id,
+            ravenseat: CLI,
+            open: ML.gitInProgress(gitPathOf).some((x) => x.kind === 'merge'),
+          })) console.log(l);
         }
       } catch {
         /* the context helps the fix round; it is never a reason to fail the stop */
