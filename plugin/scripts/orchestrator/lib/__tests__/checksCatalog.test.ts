@@ -25,6 +25,16 @@ describe('the catalog the plugin ships', () => {
     for (const t of catalog.templates) expect(keys).toContain(t.category);
     expect(catalog.templates.length).toBeGreaterThan(10);
   });
+  it("slim-instructions is a step for Claude in the owner's session, in the category Claude's instructions", () => {
+    const cat = catalog.categories.find((c: { key: string }) => c.key === 'instructions');
+    expect(cat).toMatchObject({ title: "Claude's instructions" });
+    const t = catalog.templates.find((x: { key: string }) => x.key === 'slim-instructions');
+    expect(t).toMatchObject({ category: 'instructions', action: 'ask', when: 'instructions-large' });
+    // The owner's own session splits the files: CLAUDE.md and .claude/ are protected paths no queue agent may change.
+    expect(t.ask).toMatch(/ravenseat instructions/);
+    expect(t.ask).toMatch(/paths:/);
+    expect(t.ask).toMatch(/before you change/i);
+  });
   it('every suggestion that uses an agent has both sections', () => {
     for (const t of catalog.templates.filter((x: { action: string }) => !x.action)) {
       expect(t.investigate.length).toBeGreaterThan(20);
@@ -67,6 +77,15 @@ describe('parseTemplate', () => {
     expect(ask.ask).toBe('Make a first commit.');
     expect(C.parseTemplate(file(`${GOOD}\naction: ask`, ''), 'x').errors[0]).toContain('Ask Claude');
     expect(C.parseTemplate(file(`${GOOD}\naction: build`, ''), 'x').errors[0]).toContain('action must be');
+  });
+  it('instructions-large holds only when the instruction size says so; an unknown condition is still refused', () => {
+    expect(C.holds('instructions-large', { instructionsLarge: true })).toBe(true);
+    expect(C.holds('instructions-large', { instructionsLarge: false })).toBe(false);
+    expect(C.holds('instructions-large', {})).toBe(false);
+    expect(C.parseTemplate(file(`${GOOD}
+when: instructions-large`), 'x').errors).toEqual([]);
+    expect(C.parseTemplate(file(`${GOOD}
+when: instructions-huge`), 'x').errors[0]).toContain('unknown condition "instructions-huge"');
   });
   it('a suggestion with an action needs no sections, and off needs nothing else', () => {
     expect(C.parseTemplate(file(`${GOOD}\naction: gates`, ''), 'x').errors).toEqual([]);

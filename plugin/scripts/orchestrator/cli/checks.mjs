@@ -32,6 +32,14 @@ const NOTHING_RAN = 'Read from your files. ravenseat did not run any of it, so t
 
 const queueNow = () => (fs.existsSync(FILE) ? read() : null);
 
+/** Are Claude's instructions over a limit (the condition instructions-large)? Never with instructionSize.mode off. */
+function instructionsLarge() {
+  const IS = require('./lib/instructionSize.js');
+  const limits = IS.limitsOf(CONFIG);
+  if (limits.mode === 'off') return false;
+  return IS.assess(IS.measureDisk(MAIN_TREE, { nested: true }), limits).large;
+}
+
 /** Everything the report needs, read fresh. */
 function makeReport(queue) {
   const facts = readFacts();
@@ -52,7 +60,7 @@ function makeReport(queue) {
   };
   const found = SCAN.scan({ exists, read: readFile, list, gates: CONFIG.gates, checks: facts.checks });
   return CATALOG.buildReport({
-    facts: { ...facts, ...found },
+    facts: { ...facts, ...found, instructionsLarge: instructionsLarge() },
     catalog: CATALOG.loadCatalog({ builtin: BUILTIN, own: OWN }),
     tasks: queue?.tasks ?? [],
     dismissed: queue?.checksPanel?.dismissed ?? [],

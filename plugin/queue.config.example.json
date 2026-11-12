@@ -55,6 +55,8 @@
   "secretScan": { "enabled": true, "maxBytes": 2000000, "timeoutMs": 3000 },
   "_largeFileMb": "ravenseat doctor warns about tracked files larger than this (MB).",
   "largeFileMb": 5,
+  "_instructionSize": "Advice when the instructions Claude Code loads in every session, track and subagent grow: an always-loaded file over maxLines lines (200, the Claude Code docs) or the whole set over maxChars characters (40,000, where Claude Code itself warns). mode off turns it off; it is advice, not a guard. ravenseat instructions shows the set and proposes a split.",
+  "instructionSize": { "mode": "warn", "maxLines": 200, "maxChars": 40000 },
   "gitSurface": "stop",
   "_migrations": "Optional numbered migrations. folder = null turns the whole migration flow off.",
   "migrations": {

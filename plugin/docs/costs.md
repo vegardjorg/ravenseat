@@ -120,6 +120,29 @@ whole context to the cache again, about 15% of those sessions' cost; in the orch
 was 2.9%. Start a new session with a short handover note well before the context is full, and do not pick up a long
 session after a long break.
 
+## Claude's instructions
+
+Claude Code loads `CLAUDE.md`, `CLAUDE.local.md`, the files they import with `@`, the `.claude/rules/` files without
+`paths:` and your own `~/.claude/CLAUDE.md` at the start of every session, and every track and subagent loads them again.
+So each character there is paid on every turn of every agent, and a long file is followed less well than a short one.
+An `@` import saves nothing: the imported file loads with the one that names it.
+
+- `ravenseat doctor` has an `instructions` row: the size in tokens and characters, with the share of the project, your
+  `~/.claude`, Ravenseat (`CLAUDE.queue.md`) and the organization. It warns when a file is over 200 lines (the target in
+  the Claude Code docs) or the total is over 40,000 characters, where Claude Code itself warns. Quiet guidance hides it.
+- An `instructions-cut` row says when a file that loads on demand (a rule with `paths:`, a `CLAUDE.md` in a subfolder) is
+  over 40,000 characters: Claude sees only the start of it. That is a fact, so quiet does not hide it.
+- The first time the total passes the limit you get one message in the chat, and again only when it has grown by more
+  than a tenth. It goes to you, not into Claude's context.
+- The Checks tab has a suggestion in "Claude's instructions" with a text to give Claude in your own session.
+- `ravenseat instructions` shows what loads, where each section could go (a `.claude/rules/<topic>.md` with `paths:` for
+  one area, a skill for a procedure, nothing for what Claude reads from the code) and the lines that stand in two files.
+  `--plan` writes that as a plan in the queue's data folder. It changes none of your files: the split is yours to make.
+
+`instructionSize.mode` (`warn` or `off`), `instructionSize.maxLines` and `instructionSize.maxChars` are under Advanced in
+`ravenseat settings`. Off removes both doctor rows, the chat message and the suggestion. It is no weakening: this is advice about cost, not a
+guard, and nothing else depends on it.
+
 ## Estimated, not measured: the alternatives
 
 - *One long chat.* Each new message pays for the whole history again. The per-turn price above is measured; the cost

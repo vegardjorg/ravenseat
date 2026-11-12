@@ -568,6 +568,10 @@ describe('hook-context.mjs and queue.mjs: the wind-down step end to end', () => 
   const env = () => ({
     ...process.env,
     CONTEXT_BLOCK_OTHERS: '',
+    // The instruction notice measures only the temporary folder, never the user's own ~/.claude or the folders above.
+    RAVENSEAT_CLAUDE_DIR: join(folder, 'claude'),
+    RAVENSEAT_MANAGED_CLAUDE_MD: '',
+    RAVENSEAT_INSTRUCTIONS_TOP: folder,
     ...extraEnv,
     QUEUE_FOLDER: folder,
     QUEUE_GIT: folder,
@@ -812,5 +816,46 @@ describe('hook-context.mjs and queue.mjs: the wind-down step end to end', () => 
     expect(v.systemMessage).toContain('/compact before the break');
     // Not the orchestrator: no advice.
     expect(hook('s9', 200_000, 'pause', false)).toBeNull();
+  });
+
+  // The instruction notice (lib/instructionNotice.js): once over instructionSize.maxChars, for the owner only.
+  it('instruction notice: shown the first time over the limit, as systemMessage only', () => {
+    // The project is the temporary folder (QUEUE_ROOT), so its CLAUDE.md is the one measured.
+    extraEnv = { QUEUE_ROOT: folder };
+    writeFileSync(join(folder, 'CLAUDE.md'), 'x'.repeat(40_001));
+    const out = hook('s9', 1_000, 'hello', false);
+    expect(out.systemMessage).toContain("Claude's instructions in this project are about 10,000 tokens");
+    expect(out.hookSpecificOutput?.additionalContext ?? '').not.toContain('instructions');
+    expect(out).not.toHaveProperty('decision');
+  });
+
+  it('instruction notice: not shown again under 10 % growth, and it never goes into additionalContext', () => {
+    // The project is the temporary folder (QUEUE_ROOT), so its CLAUDE.md is the one measured.
+    extraEnv = { QUEUE_ROOT: folder };
+    writeFileSync(join(folder, 'CLAUDE.md'), 'x'.repeat(40_001));
+    expect(hook('s9', 1_000, 'hello', false).systemMessage).toContain("Claude's instructions");
+    expect(hook('s9', 1_000, 'hello', false)).toBeNull();
+    // Above the notice limit of the context guard the two are merged; the instruction text stays out of the context.
+    writeFileSync(join(folder, 'CLAUDE.md'), 'x'.repeat(50_000));
+    const v = hook('s9', 410_000, 'hello', false);
+    expect(v.systemMessage).toMatch(/no stop/);
+    expect(v.systemMessage).toContain('about 12,500 tokens');
+    expect(v.hookSpecificOutput.additionalContext).not.toContain("Claude's instructions");
+  });
+
+  it('instruction notice: not shown in quiet, nor with instructionSize.mode off', () => {
+    // The project is the temporary folder (QUEUE_ROOT), so its CLAUDE.md is the one measured.
+    extraEnv = { QUEUE_ROOT: folder };
+    writeFileSync(join(folder, 'CLAUDE.md'), 'x'.repeat(40_001));
+    const configFile = join(folder, 'queue.config.json');
+    writeFileSync(configFile, JSON.stringify({ instructionSize: { mode: 'off' } }));
+    extraEnv = { QUEUE_ROOT: folder, QUEUE_CONFIG: configFile };
+    expect(hook('s9', 1_000, 'hello', false)).toBeNull();
+    // Off reads nothing: not even the cache is written.
+    expect(existsSync(join(folder, 'instruction-size.json'))).toBe(false);
+    extraEnv = { QUEUE_ROOT: folder };
+    const q = JSON.parse(readFileSync(join(folder, 'queue.json'), 'utf8'));
+    writeFileSync(join(folder, 'queue.json'), JSON.stringify({ ...q, guidance: 'quiet' }));
+    expect(hook('s9', 1_000, 'hello', false)).toBeNull();
   });
 });

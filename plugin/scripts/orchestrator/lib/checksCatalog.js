@@ -48,6 +48,8 @@ const CONDITIONS = {
   'checks-found': (f) => (f.checks?.length ?? 0) > 0,
   'secrets-open': (f) => f.secretsOk === false,
   'known-stack': (f) => (f.stacks?.length ?? 0) > 0,
+  // Claude's instructions are over a limit (lib/instructionSize.js assess().large, off with instructionSize.mode off).
+  'instructions-large': (f) => f.instructionsLarge === true,
 };
 const KIND_CONDITIONS = {
   missing: (f, arg) => anyKind(arg, (k) => placesOf(f, k).size === 0),

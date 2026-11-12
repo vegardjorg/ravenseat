@@ -538,6 +538,17 @@ const SETTINGS = Object.freeze([
   row('features.statistics', 'board', 'onoff', 'Statistics tab', 'The Statistics tab on the board.'),
   row('features.follow', 'board', 'onoff', 'Follow-up entries',
     'The follow-up page, the follow commands and their lines in show and pulse.'),
+  // Advice about the size of Claude's instructions (lib/instructionSize.js). Not a guard, so off never weakens; owner
+  // decision 2026-11-12 puts all three under Advanced.
+  row('instructionSize.mode', 'board', 'choice', 'Instruction size advice',
+    'warn: doctor, the Checks tab and one chat message say when the instructions Claude loads in every session grow ' +
+    'past the limits below. off: none of it. Quiet guidance hides the advice either way.', { choices: ['warn', 'off'] }),
+  row('instructionSize.maxLines', 'board', 'integer', 'Lines per instruction file',
+    'Advice when a file loaded in every session (CLAUDE.md, a rule without paths:, an import) has more lines than this. ' +
+    '200 is the target in the Claude Code docs.'),
+  row('instructionSize.maxChars', 'board', 'integer', 'Instruction characters in all',
+    'Advice when everything loaded at the start of a session has more characters than this. 40,000 is where Claude ' +
+    'Code itself warns.'),
 
   // ---- 9. Cloud ----
   row('features.cloud', 'cloud', 'onoff', 'Cloud sessions',

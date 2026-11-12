@@ -28,5 +28,10 @@
     "key": "dependencies",
     "title": "Dependencies",
     "text": "The libraries your project relies on."
+  },
+  {
+    "key": "instructions",
+    "title": "Claude's instructions",
+    "text": "The instruction files Claude Code loads at the start of every session, track and subagent."
   }
 ]

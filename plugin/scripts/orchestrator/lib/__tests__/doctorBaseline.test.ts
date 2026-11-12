@@ -57,6 +57,10 @@ function project({ config = {}, files = {}, loose = {}, env: extra = {} }: { con
     // A real-looking identity by default, whatever the machine running the tests has.
     GIT_COMMITTER_NAME: 'Queue Owner',
     GIT_COMMITTER_EMAIL: 'owner@company.no',
+    // The instruction size rows read the user's Claude folder and every folder above the project: keep both inside the test.
+    RAVENSEAT_CLAUDE_DIR: path.join(data, 'claude'),
+    RAVENSEAT_MANAGED_CLAUDE_MD: '',
+    RAVENSEAT_INSTRUCTIONS_TOP: root,
     ...extra,
   };
   const run = () => {
@@ -286,5 +290,57 @@ describe('ravenseat doctor: the settings row', () => {
     const c = project({ config: { gates: { quick: [], full: [], timeoutSec: -1 } } }).lines('config');
     expect(c[0]).toMatchObject({ status: 'FAIL' });
     expect(c[0].message).toMatch(/gates\.timeoutSec must be a whole number >= 0 or null/);
+  }, 60_000);
+});
+
+// The size of Claude's instructions (lib/instructionSize.js, plans/claude-md-storrelse-utredning-2026-11-12.md task 4): one
+// advice row `instructions` (hidden in quiet), one fact row `instructions-cut` (always shown), nothing with mode off.
+describe('ravenseat doctor: the instruction size rows', () => {
+  const lines = (count: number) => Array.from({ length: count }, (_, i) => `- rule ${i}`).join('\n') + '\n';
+
+  it('a CLAUDE.md of 201 lines WARNs and names it; 200 lines and a small set are OK', () => {
+    const big = project({ files: { 'CLAUDE.md': lines(201) } });
+    const w = big.lines('instructions');
+    expect(w).toEqual([expect.objectContaining({ status: 'WARN' })]);
+    expect(w[0].message).toContain('CLAUDE.md (201 lines)');
+    expect(w[0].fix).toMatch(/ravenseat instructions/);
+    expect(w[0].fix).toMatch(/costs\.md#claudes-instructions/);
+    const fine = project({ files: { 'CLAUDE.md': lines(200) } });
+    expect(fine.lines('instructions')).toEqual([expect.objectContaining({ status: 'OK' })]);
+    expect(fine.lines('instructions-cut')).toEqual([]);
+  }, 60_000);
+
+  it('40,001 characters in all WARN with the limit Claude Code warns at; the user file counts on its own', () => {
+    const p = project({ files: { 'CLAUDE.md': 'x'.repeat(30000) + '\n' } });
+    fs.mkdirSync(path.join(p.env.QUEUE_FOLDER, 'claude'), { recursive: true });
+    fs.writeFileSync(path.join(p.env.QUEUE_FOLDER, 'claude', 'CLAUDE.md'), 'u'.repeat(10000));
+    const w = p.lines('instructions');
+    expect(w[0].status).toBe('WARN');
+    expect(w[0].message).toMatch(/^about 10,000 tokens load in every session, track and subagent \(40,001 chars in 2 files: project 30,001, your ~\/\.claude 10,000, Ravenseat 0\)/);
+    expect(w[0].message).toContain('over 40,000, where Claude Code itself warns');
+  }, 60_000);
+
+  it('Ravenseat\'s share (CLAUDE.queue.md through the import) is shown', () => {
+    const p = project({ files: { 'CLAUDE.md': 'Rules\n@CLAUDE.queue.md\n', 'CLAUDE.queue.md': 'q'.repeat(99) + '\n' } });
+    expect(p.lines('instructions')[0].message).toContain('Ravenseat 100');
+  }, 60_000);
+
+  it('quiet hides the advice row but never the fact row about a cut file', () => {
+    const p = project({ files: { 'CLAUDE.md': lines(201), 'src/CLAUDE.md': 'y'.repeat(40001) } });
+    const cut = p.lines('instructions-cut');
+    expect(cut).toEqual([expect.objectContaining({ status: 'WARN' })]);
+    expect(cut[0].message).toContain('src/CLAUDE.md (40,001 chars)');
+    fs.writeFileSync(path.join(p.env.QUEUE_FOLDER, 'queue.json'), JSON.stringify({ tasks: [], projects: {}, guidance: 'quiet' }));
+    expect(p.lines('instructions')).toEqual([]);
+    expect(p.lines('instructions-cut')).toEqual([expect.objectContaining({ status: 'WARN' })]);
+  }, 60_000);
+
+  it('mode off gives no row at all, and a bad value is named by the config row', () => {
+    const p = project({ config: { instructionSize: { mode: 'off' } }, files: { 'CLAUDE.md': lines(201), 'src/CLAUDE.md': 'y'.repeat(40001) } });
+    expect(p.run().checks.filter((c) => c.name.startsWith('instructions'))).toEqual([]);
+    const bad = project({ config: { instructionSize: { mode: 'loud', maxLines: 0 } } }).lines('config');
+    expect(bad[0].status).toBe('FAIL');
+    expect(bad[0].message).toMatch(/instructionSize\.mode must be "warn" or "off"/);
+    expect(bad[0].message).toMatch(/instructionSize\.maxLines must be a whole number > 0/);
   }, 60_000);
 });

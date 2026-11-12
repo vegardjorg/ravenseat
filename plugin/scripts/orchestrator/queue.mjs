@@ -165,6 +165,12 @@
 //                                                                  CI cost and the safety baseline (secret files, gates, CI,
 //                                                                  lockfiles, productionBranch, large files; offline);
 //                                                                  exit 1 on any FAIL; cli/doctor.mjs)
+//   node scripts/orchestrator/queue.mjs instructions [--json] [--plan]   (read-only: what Claude Code loads as instructions at
+//                                                                  the start of every session, track and subagent, per file and
+//                                                                  per scope (project, ~/.claude, Ravenseat), the files loaded on
+//                                                                  demand, a suggestion per section and duplicate lines. --plan
+//                                                                  saves it as instructions-plan.md in the data folder; it never
+//                                                                  writes CLAUDE.md or .claude/. cli/instructions.mjs)
 //   node scripts/orchestrator/queue.mjs machine [--measure]           (cores, memory, free memory now and a suggested maxConcurrent,
 //                                                                  an estimate that changes nothing. --measure, started by
 //                                                                  you, refused while a track runs: gates --full once, then the
@@ -745,6 +751,8 @@ if (command === 'init') {
   (await import('./cli/view.mjs')).cmdDiagnose();
 } else if (command === 'doctor') {
   (await import('./cli/doctor.mjs')).cmdDoctor();
+} else if (command === 'instructions') {
+  (await import('./cli/instructions.mjs')).cmdInstructions();
 } else if (command === 'machine') {
   (await import('./cli/machine.mjs')).cmdMachine();
 } else if (command === 'conflicts') {
@@ -862,7 +870,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|owner-log|settings> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|owner-log|settings> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

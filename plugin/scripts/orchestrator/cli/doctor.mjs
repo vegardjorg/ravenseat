@@ -96,6 +96,16 @@ export function baselineProblems(own) {
     out.push('gates.timeoutSec must be a whole number >= 0 or null');
   const mb = own.largeFileMb;
   if (mb !== undefined && !(typeof mb === 'number' && mb > 0)) out.push('largeFileMb must be a number > 0');
+  // instructionSize (lib/instructionSize.js): a broken value reads as its default, so it is named here.
+  const is = own.instructionSize;
+  if (is !== undefined) {
+    if (!is || typeof is !== 'object' || Array.isArray(is)) out.push('instructionSize must be an object { mode, maxLines, maxChars }');
+    else {
+      if (is.mode !== undefined && !['warn', 'off'].includes(is.mode)) out.push('instructionSize.mode must be "warn" or "off"');
+      for (const k of ['maxLines', 'maxChars'])
+        if (is[k] !== undefined && !(Number.isInteger(is[k]) && is[k] > 0)) out.push(`instructionSize.${k} must be a whole number > 0`);
+    }
+  }
   // gateEvidence (owner decision B2): an unknown mode reads as own, so it is named here rather than silently ignored.
   const gm = own.gateEvidence?.mode;
   if (gm !== undefined && !['own', 'external', 'off'].includes(gm)) out.push('gateEvidence.mode must be "own", "external" or "off"');

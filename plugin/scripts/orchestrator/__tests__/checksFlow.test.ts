@@ -50,6 +50,10 @@ function project({ queue = true, config = {} as object, files = {} as Record<str
     QUEUE_GIT: repo,
     QUEUE_TIME_LOG: path.join(folder, 'times.jsonl'),
     QUEUE_TRANSCRIPTS: path.join(folder, 'transcripts'),
+    // The instruction size reads the user's Claude folder and the folders above the project: keep both inside the test.
+    RAVENSEAT_CLAUDE_DIR: path.join(folder, 'claude'),
+    RAVENSEAT_MANAGED_CLAUDE_MD: '',
+    RAVENSEAT_INSTRUCTIONS_TOP: repo,
   } as NodeJS.ProcessEnv;
   const g = (args: string[]) => execFileSync('git', ['-C', repo, ...ID, ...args], { env, stdio: 'ignore' });
   g(['init', '-q', '-b', 'main']);
@@ -183,5 +187,26 @@ describe('the project changes the suggestions in docs/queue/checks', () => {
     expect(r.all).toContain('Catalog problem: broken: no header');
     expect(r.all).toContain('categories.json');
     expect(r.all).toContain('first-test');
+  });
+});
+
+describe('ravenseat checks: the instruction size suggestion', () => {
+  const long = Array.from({ length: 201 }, (_, i) => `- rule ${i}`).join('\n') + '\n';
+  it('a CLAUDE.md over the limit gets slim-instructions; a short one does not', () => {
+    expect(project({ files: { 'CLAUDE.md': long } }).keys()).toContain('slim-instructions');
+    expect(project({ files: { 'CLAUDE.md': 'Short.\n' } }).keys()).not.toContain('slim-instructions');
+  });
+  it('the suggestion is not shown in quiet, nor with instructionSize.mode off', () => {
+    const p = project({ files: { 'CLAUDE.md': long } });
+    p.run('guidance', 'quiet');
+    expect(p.json()).toEqual({ off: true });
+    expect(project({ config: { instructionSize: { mode: 'off' } }, files: { 'CLAUDE.md': long } }).keys()).not.toContain('slim-instructions');
+  });
+  it('show gives the text for Claude, and plan refuses: a queue agent may not change CLAUDE.md', () => {
+    const p = project({ files: { 'CLAUDE.md': long } });
+    expect(p.run('checks', 'show', 'slim-instructions').all).toContain('Ask Claude in your session');
+    const r = p.run('checks', 'plan', 'slim-instructions');
+    expect(r.code).toBe(1);
+    expect(r.all).toContain('a queue agent cannot do it');
   });
 });

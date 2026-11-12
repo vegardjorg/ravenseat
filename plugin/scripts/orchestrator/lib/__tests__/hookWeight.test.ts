@@ -45,6 +45,14 @@ describe('a hot track hook stays light', () => {
     );
   });
 
+  it('the instruction notice (hook-context.mjs, every prompt) loads no other module of ours', () => {
+    // A cache hit is only a stat per path (instructionNotice.test.ts counts the measurements); the modules stay built-ins.
+    expect(loaded(['lib/instructionNotice.js', 'lib/instructionSize.js']).sort()).toEqual([
+      'lib/instructionNotice.js',
+      'lib/instructionSize.js',
+    ]);
+  });
+
   it('orchestratorBinding still works when it loads the queue logic itself', () => {
     const KV = require(path.join(ROOT, 'lib', 'contextGuard.js'));
     // A cursor and a session: the binding reaches orchestratorStatus, which lives in queueLogic.js.

@@ -720,6 +720,7 @@ names every guard weaker than its default on its `settings` row.
 | `board.updateCheck` | `true` | Board: look for a newer ravenseat on GitHub at most once per 24 hours (see board.md, Update banner) | Advanced |
 | `board.showCloud` | `true` | Board: show the Cloud tab while `features.cloud` is on. `false` keeps the tab away with the module on (`ravenseat board-setting cloud on\|off`) | Advanced, queue.json |
 | `features.statistics`, `features.follow` | on, off | Modules that can be switched off: the Statistics tab, and the follow-up page with its commands and lines in `show` and the pulse. Off hides them on the board (tabs, buttons, routes; see board.md, Modules); `follow*` commands answer that the module is off with exit 0. Restart the board after a change | Advanced |
+| `instructionSize.mode`, `instructionSize.maxLines`, `instructionSize.maxChars` | `warn`, `200`, `40000` | Advice about the size of Claude's instructions (what loads at the start of every session, track and subagent): a doctor row, a Checks suggestion and one chat message when an always-loaded file has more than `maxLines` lines or the whole set more than `maxChars` characters. `off` turns all of it off; it is advice, not a guard, and quiet guidance hides it too. See [costs.md](costs.md#claudes-instructions) | Advanced |
 
 ### Cloud
 

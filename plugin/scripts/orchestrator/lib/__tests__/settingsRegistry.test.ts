@@ -247,6 +247,19 @@ describe('the weakening rows from the design', () => {
     expect(row('cloud.collect').weakens?.('auto', 'auto')).toBe(false);
   });
 
+  it('instructionSize.mode off is no weakening: the instruction size rows are advice, not a guard', () => {
+    const row = (k: string) => ROWS.find((x) => x.key === k) as Row;
+    for (const k of ['instructionSize.mode', 'instructionSize.maxLines', 'instructionSize.maxChars']) {
+      expect(row(k), k).toBeTruthy();
+      expect(row(k).weakens, k).toBe(null);
+      // Owner decision 2026-11-12: all three under Advanced, in Board and advice.
+      expect(row(k).level, k).toBe('advanced');
+      expect(row(k).category, k).toBe('board');
+    }
+    expect(row('instructionSize.mode').choices).toEqual(['warn', 'off']);
+    expect(QC.STANDARD.instructionSize).toEqual({ mode: 'warn', maxLines: 200, maxChars: 40000 });
+  });
+
   it('owner decision 2026-11-12: guidance quiet and kickstart gates are no weakenings', () => {
     const row = (k: string) => ROWS.find((x) => x.key === k) as Row;
     expect(row('guidance').weakens).toBe(null);

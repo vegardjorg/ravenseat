@@ -53,6 +53,13 @@
 // "pause" and so on, whole words, English and Norwegian) and the active orchestrator session is over 150k
 // (CONTEXT_PAUSE overrides), one line is added: run /compact before the break (a pause of over 1 h writes the whole
 // context to the cache again). Advice only, never block. The rules: contextGuard.pauseAdvice/isPauseMessage, with tests.
+
+//
+// INSTRUCTION NOTICE: when Claude's always-loaded instructions (CLAUDE.md, rules without paths:, their imports) first pass
+// instructionSize.maxChars, the owner gets one systemMessage that explains why that costs and points to `ravenseat
+// instructions`; again only after more than 10 % growth. Never into additionalContext (it would add to the problem), never
+// in quiet guidance or with instructionSize.mode off. A stat of the paths last looked at is all an unchanged set costs
+// (<dataFolder>/instruction-size.json). The rules and the text: lib/instructionNotice.js, with tests.
 //
 // Fails OPEN: any internal error gives no output and exit 0, so the hook never blocks normal work.
 // =============================================================
@@ -302,9 +309,24 @@ async function main() {
     orchestrator: bind.orchestrator,
     threshold: Number(process.env.CONTEXT_PAUSE) || KV.PAUSE_THRESHOLD,
   });
+  // The instruction notice goes to the owner only (systemMessage); an error in it must never take down the context guard.
+  let instructions = null;
+  try {
+    const text = require('./lib/instructionNotice.js').check({
+      folder: QUEUE_FOLDER,
+      root: MAIN_TREE,
+      config: config(),
+      quiet: () => require('./lib/guidance.js').readQuiet(QUEUE_FOLDER),
+      cli: require('./lib/projectRoot.js').cliCommand(),
+      now,
+    });
+    if (text) instructions = { systemMessage: text };
+  } catch {
+    instructions = null;
+  }
   if (n == null || n < Math.min(g.notice, g.windDown, g.compact)) {
     if (bind.changed) writeCursor(bind.cursor);
-    const out = merge(merge(null, cost), pause);
+    const out = merge(merge(merge(null, cost), pause), instructions);
     if (out) process.stdout.write(JSON.stringify(out));
     return;
   }
@@ -325,8 +347,8 @@ async function main() {
   if (bind.changed || b.setWindDown) writeCursor(cursor);
 
   const out = merge(
-    merge(KV.hookOutput(b, { n, orchestrator: bind.orchestrator, g, compactions, mode }), cost),
-    pause,
+    merge(merge(KV.hookOutput(b, { n, orchestrator: bind.orchestrator, g, compactions, mode }), cost), pause),
+    instructions,
   );
   if (out) process.stdout.write(JSON.stringify(out));
 }

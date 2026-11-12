@@ -127,6 +127,12 @@ const STANDARD = Object.freeze({
   secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000 },
   // `ravenseat doctor` warns about tracked files larger than this (MB).
   largeFileMb: 5,
+  // The size of Claude's instructions (lib/instructionSize.js): what Claude Code loads at the start of every session, track
+  // and subagent (CLAUDE.md files, rules without paths:, their imports, ~/.claude/CLAUDE.md). mode 'warn' = a doctor row,
+  // a Checks suggestion and one chat message when an always-loaded file has more than maxLines lines (200, the target in
+  // Claude Code's memory docs) or the whole set more than maxChars characters (40,000, where Claude Code's own start-up
+  // warning fires). 'off' = none of it. Advice, not a guard; quiet guidance hides the advice too.
+  instructionSize: { mode: 'warn', maxLines: 200, maxChars: 40000 },
   // Attempts (lib/logic/attempt.js): how long, in minutes, a reservation with no start row counts as live. After that it
   // reads as expired and the next start takes a new attempt. A reservation never blocks a start either way.
   attempts: { reservationTtlMin: 30 },

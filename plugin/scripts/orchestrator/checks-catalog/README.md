@@ -43,7 +43,7 @@ Use `ask` for a step a queue agent cannot take, such as the first commit (an age
 
 `when` says when the suggestion applies. Comma means all must hold, and `|` means at least one of those kinds:
 `has-git`, `no-git`, `no-commit` (no git, or git with no commit yet), `has-remote`, `has-ci`, `no-ci`, `has-gates`,
-`no-gates`, `checks-found`, `secrets-open`, `known-stack`,
+`no-gates`, `checks-found`, `secrets-open`, `known-stack`, `instructions-large`,
 `missing:<kinds>`, `found:<kinds>`, `not-in-ci:<kinds>`.
 
 The kinds are test, types, lint, build, coverage, secret-scan, audit, security, dep-updates and hooks.

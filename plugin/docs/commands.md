@@ -31,6 +31,7 @@ ravenseat kickstart gates --apply   # sets the checks your project already has a
 ravenseat kickstart add             # proposes the next step as a task; it starts only when you approve it
 ravenseat gate "<failure class>"    # a known bug becomes a proposed gate task; gates.fromKnownBugs: propose, auto or off
 ravenseat doctor [--all]            # read-only health check: node, hooks, config, state, worktrees, budget, safety baseline (--all adds CI cost tips)
+ravenseat instructions [--plan]     # what Claude loads at start, and where each section could go; changes none of your files (--json)
 ravenseat machine [--measure]       # cores, memory, free memory and a suggested maxConcurrent (an estimate); --measure times one full check when no track runs
 ravenseat surface                   # git hooks and config that run code, against what was accepted; changes nothing
 ravenseat surface accept --by owner # accept the current state (after installing a hook tool, changing git config)

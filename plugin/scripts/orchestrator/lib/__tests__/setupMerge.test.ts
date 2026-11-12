@@ -57,6 +57,14 @@ describe('setup --update in a project', () => {
   const base = () => path.join(target, 'scripts', '.queue', 'setup-base', 'CLAUDE.queue.md');
   const plugin = () => fs.readFileSync(path.join(PLUGIN_ROOT, 'CLAUDE.queue.md'), 'utf8');
 
+  // Owner decision 2026-11-12: the import stays (doctor shows Ravenseat's share of the instructions instead); once only.
+  it('--claude-md adds the @CLAUDE.queue.md import once, after the text already there', () => {
+    fs.writeFileSync(path.join(target, 'CLAUDE.md'), 'My rules');
+    setupProject({ target, claudeMd: true });
+    setupProject({ target, claudeMd: true });
+    expect(fs.readFileSync(path.join(target, 'CLAUDE.md'), 'utf8')).toBe('My rules\n\n@CLAUDE.queue.md\n');
+  });
+
   it('the first setup records the base of every copy', () => {
     setupProject({ target });
     expect(fs.readFileSync(base(), 'utf8')).toBe(plugin());

@@ -17,6 +17,11 @@
 //              tracked (WARN).
 //   prod       productionBranch equal to baseBranch: WARN (every batch push goes live). Not set: nothing.
 //   largefile  tracked files at HEAD larger than largeFileMb: WARN.
+//   instructions      the instructions Claude Code loads in every session, track and subagent (lib/instructionSize.js):
+//              OK with the size and the share per scope; WARN (advice, hidden in quiet) when a file has more than
+//              instructionSize.maxLines lines or the set more than .maxChars characters.
+//   instructions-cut  a file loaded on demand that Claude Code cuts at 40,000 characters: WARN, a fact, shown in quiet.
+//              instructionSize.mode off: neither row.
 // Every hint is one plain line. Nothing here changes anything; git runs read-only.
 //
 // Used by: cli/doctor.mjs. Tested in: lib/__tests__/doctorBaseline.test.ts.
@@ -26,7 +31,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { CONFIG, GIT_ROOT, MAIN_TREE, require } from './context.mjs';
+import { CLI, CONFIG, GIT_ROOT, MAIN_TREE, require } from './context.mjs';
 
 const GI = require('./lib/gitIdentity.js');
 
@@ -326,5 +331,64 @@ export function checkLargeFiles() {
   ];
 }
 
+/** The share per scope for a doctor line: the project, the user's ~/.claude, Ravenseat (always named), the organization. */
+export function instructionParts(byScope) {
+  const IS = require('./lib/instructionSize.js');
+  const parts = [`project ${IS.n(byScope.project)}`, `your ~/.claude ${IS.n(byScope.user)}`, `Ravenseat ${IS.n(byScope.ravenseat)}`];
+  if (byScope.organization) parts.push(`organization ${IS.n(byScope.organization)}`);
+  return parts.join(', ');
+}
+
+/** The limit texts: the source of a default, the setting's name when the owner changed it. */
+export function limitTexts({ maxLines, maxChars }) {
+  const IS = require('./lib/instructionSize.js');
+  return {
+    lines: maxLines === IS.MAX_LINES ? `${maxLines} lines (the target in the Claude Code docs)` : `${maxLines} lines (instructionSize.maxLines)`,
+    chars: maxChars === IS.MAX_CHARS ? `${IS.n(maxChars)}, where Claude Code itself warns` : `${IS.n(maxChars)} (instructionSize.maxChars)`,
+  };
+}
+
+/**
+ * Claude's instructions: what loads at the start of every session, track and subagent, against instructionSize. Reads the
+ * files once (no network, no git except one ls-files for the subfolder CLAUDE.md files).
+ */
+export function checkInstructions() {
+  const IS = require('./lib/instructionSize.js');
+  const limits = IS.limitsOf(CONFIG);
+  if (limits.mode === 'off') return [];
+  const m = IS.measureDisk(MAIN_TREE, { nested: true });
+  const a = IS.assess(m, limits);
+  const t = limitTexts(limits);
+  const size =
+    `about ${IS.n(m.total.tokens)} tokens load in every session, track and subagent (${IS.n(m.total.chars)} chars in ${m.total.files} files: ${instructionParts(m.byScope)})`;
+  const out = [];
+  if (!a.overTotal && !a.overLines.length)
+    out.push(ok('instructions', m.total.files ? `${size}, within ${limits.maxLines} lines per file and ${IS.n(limits.maxChars)} in all` : 'no CLAUDE.md or rule loads at start'));
+  else {
+    const found = [];
+    if (a.overTotal) found.push(`The total is over ${t.chars}`);
+    if (a.overLines.length)
+      found.push(`Longer than ${t.lines}: ${list(a.overLines.map((f) => `${f.rel} (${f.lines} lines)`))}`);
+    out.push(
+      warn(
+        'instructions',
+        `${size}. ${found.join('. ')}`,
+        `${CLI} instructions shows what each part could move to (.claude/rules/ with paths:, a skill) and changes nothing; why it matters: docs/costs.md#claudes-instructions`,
+      ),
+    );
+  }
+  if (a.cut.length)
+    out.push(
+      warn(
+        'instructions-cut',
+        `Claude sees only the first ${IS.n(IS.CUT_CHARS)} chars of a file it loads on demand (on a 200K window): ${list(
+          a.cut.map((f) => `${f.rel} (${IS.n(f.chars)} chars${f.files > 1 ? ` with ${f.files - 1} import(s)` : ''})`),
+        )}`,
+        `split it into smaller files, or move a procedure in it to a skill; ${CLI} instructions shows the sections`,
+      ),
+    );
+  return out;
+}
+
 /** The baseline checks in the order doctor prints them. */
-export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles];
+export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles, checkInstructions];
