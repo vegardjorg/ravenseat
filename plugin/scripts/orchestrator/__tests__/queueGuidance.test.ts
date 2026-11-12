@@ -94,8 +94,10 @@ describe('ravenseat guidance', () => {
 describe('fixes around the switches', () => {
   it('baseGate.enabled: false is valid in doctor', () => {
     const r = project({ baseGate: { enabled: false } }).ravenseat('doctor');
-    expect(r.out).not.toContain('baseGate.enabled');
+    expect(r.out).not.toMatch(/config .*baseGate\.enabled/);
     expect(r.out).not.toMatch(/FAIL\s+config/);
+    // Valid, but a weakened guard: the doctor row settings names it (step 7).
+    expect(r.out).toMatch(/WARN\s+settings\s+1 guard\(s\) weaker than the default: baseGate\.enabled off/);
   });
 
   it('a wrong type there is still a fault', () => {

@@ -125,8 +125,7 @@ export function checkSecrets() {
       ),
     );
   if (!out.length) out.push(ok('secrets', 'no secret files in git, local ones are ignored'));
-  // A fact, not advice: quiet guidance keeps it, since a switched-off guard should not be forgotten.
-  if (CONFIG.secretScan?.enabled === false) out.push(info('secrets', 'the secret check before a push is off (secretScan.enabled: false)', null));
+  // secretScan.enabled: false is named in the doctor row `settings` (cli/doctor.mjs checkSettings) with the other weakened guards.
   return out;
 }
 

@@ -233,3 +233,58 @@ describe('ravenseat doctor: the safety baseline', () => {
     expect(fc[1]).toMatchObject({ status: 'WARN', message: 'unknown key(s) ignored: focus.continueWhenEmty' });
   }, 60_000);
 });
+
+// Steps 7, 8 and 9 of plans/innstillinger-vurdering-2026-11-12.md: the doctor row `settings` (every guard weaker than its
+// default, from the settings registry's `weakens`), protectedPaths { add, remove } and gates.timeoutSec.
+describe('ravenseat doctor: the settings row', () => {
+  it('protectedPaths: [] gives a WARN naming it, and the line shows with guidance quiet too', () => {
+    const p = project({ config: { protectedPaths: [] } });
+    const s = p.lines('settings');
+    expect(s).toHaveLength(1);
+    expect(s[0].status).toBe('WARN');
+    expect(s[0].message).toContain('protectedPaths leaves out every default path');
+    // Quiet guidance hides advice, never this row (it is not in ADVICE_CHECKS).
+    fs.writeFileSync(path.join(p.env.QUEUE_FOLDER, 'queue.json'), JSON.stringify({ tasks: [], projects: {}, guidance: 'quiet' }));
+    expect(p.lines('settings')).toEqual([expect.objectContaining({ status: 'WARN' })]);
+    expect(p.text()).toMatch(/WARN {2}settings +1 guard\(s\) weaker than the default: protectedPaths/);
+  }, 60_000);
+
+  it('the secret scan off is in the settings row now (WARN), not an INFO line under secrets', () => {
+    const p = project({ config: { secretScan: { enabled: false } } });
+    expect(p.lines('secrets').filter((c) => c.status === 'INFO')).toEqual([]);
+    expect(p.lines('settings')[0]).toMatchObject({ status: 'WARN' });
+    expect(p.lines('settings')[0].message).toContain('secretScan.enabled off');
+  }, 60_000);
+
+  it('auto-accept switched on in queue.json is reported, as its warning text promises', () => {
+    const p = project();
+    fs.writeFileSync(path.join(p.env.QUEUE_FOLDER, 'queue.json'), JSON.stringify({ tasks: [], projects: {}, proposals: { autoAccept: { enabled: true } } }));
+    expect(p.lines('settings')[0].message).toContain('proposals.autoAccept.enabled on');
+  }, 60_000);
+
+  it('nothing weakened: one OK line', () => {
+    expect(project().lines('settings')).toEqual([expect.objectContaining({ status: 'OK', message: 'no guard is weaker than its default' })]);
+  }, 60_000);
+
+  it('protectedPaths { add, remove }: known to the config check, an INFO line per removed path; a bad shape FAILs', () => {
+    let p = project({ config: { protectedPaths: { add: ['secrets/'], remove: ['Makefile', 'CLAUDE.md'] } } });
+    expect(p.lines('config')).toEqual([expect.objectContaining({ status: 'OK' })]);
+    const s = p.lines('settings');
+    expect(s.map((c) => c.status)).toEqual(['WARN', 'INFO', 'INFO']);
+    expect(s[1].message).toBe('protectedPaths.remove: Makefile is no longer protected');
+    expect(s[2].message).toMatch(/CLAUDE\.md stays protected \(it is in the floor/);
+    p = project({ config: { protectedPaths: { remove: 'Makefile', drop: [] } } });
+    const c = p.lines('config');
+    expect(c[0].status).toBe('FAIL');
+    expect(c[0].message).toMatch(/protectedPaths must be a list of paths or \{ "add": \[\.\.\.\], "remove": \[\.\.\.\] \}/);
+  }, 60_000);
+
+  it('gates.timeoutSec: a whole number of seconds (0 = no budget) or null; anything else FAILs', () => {
+    expect(project({ config: { gates: { quick: [], full: [], timeoutSec: 60 } } }).lines('config')).toEqual([
+      expect.objectContaining({ status: 'OK' }),
+    ]);
+    const c = project({ config: { gates: { quick: [], full: [], timeoutSec: -1 } } }).lines('config');
+    expect(c[0]).toMatchObject({ status: 'FAIL' });
+    expect(c[0].message).toMatch(/gates\.timeoutSec must be a whole number >= 0 or null/);
+  }, 60_000);
+});

@@ -317,15 +317,96 @@ function cliLines(view, { cli = 'ravenseat', advanced = false, all = false, chan
 }
 
 /** The CLI's warning for a weakening change (exit 1, nothing written). */
-function warningLines(row, valueTextNew, { cli = 'ravenseat', raw = valueTextNew } = {}) {
+function warningLines(row, valueTextNew, { cli = 'ravenseat', raw = valueTextNew, confirmWith = null } = {}) {
+  // confirmWith: the command that confirms it, without the flags (an older command such as `proposals auto on`).
+  const command = confirmWith ?? `${cli} settings set ${row.key} ${raw}`;
   return [
     `STOP: this weakens a guard (${row.key} ${valueTextNew}).`,
     `  Protects against: ${row.protects}`,
     `  Why not: ${row.whyNot}`,
     `  What changes: ${row.changes}`,
     `  ${STORE_TEXT[row.store]}.`,
-    `Nothing was changed. Confirm with: ${cli} settings set ${row.key} ${raw} --i-understand --by owner`,
+    `Nothing was changed. Confirm with: ${command} --i-understand --by owner`,
   ];
+}
+
+// ---- The doctor row `settings` ----------------------------------------------------------------
+
+/** How a weakened protectedPaths reads: how many default paths it leaves out (the floor is never left out). */
+function protectedPathsText(value, standard) {
+  const MG = require('./mergeGuard.js');
+  const list = Array.isArray(value) ? value : MG.resolveProtectedPaths(value, standard).list;
+  const have = new Set(list.map((p) => String(p).toLowerCase()));
+  const outside = standard.filter((p) => !MG.inFloor(p));
+  const lost = outside.filter((p) => !have.has(String(p).toLowerCase()));
+  if (lost.length === outside.length) return 'protectedPaths leaves out every default path (the floor still holds)';
+  const shown = lost.slice(0, 6).join(', ') + (lost.length > 6 ? ` and ${lost.length - 6} more` : '');
+  return `protectedPaths leaves out ${lost.length} default path(s): ${shown}`;
+}
+
+/** The lite line: the rows whose lite default is weaker than the full one, still on that default (the file does not set them). */
+function liteLine(config, own) {
+  if (config?.mode !== 'lite') return null;
+  const soft = R.SETTINGS.filter((r) => {
+    if (!r.defaultByMode || !r.weakens || getPath(own ?? {}, pathOf(r.key)) !== undefined) return false;
+    const { lite, full } = r.defaultByMode;
+    return r.weakens(lite, full) === true && JSON.stringify(valueOf(r, { config, queue: {} })) === JSON.stringify(lite);
+  });
+  if (!soft.length) return null;
+  const same = soft.every((r) => r.defaultByMode.lite === 'warn' && r.defaultByMode.full === 'stop');
+  if (soft.length === 1) {
+    const r = soft[0];
+    const what = same ? 'warns instead of stopping' : `is ${r.defaultByMode.lite} instead of ${r.defaultByMode.full}`;
+    return `lite: ${r.key} ${what} (set it in queue.config.json for full strength)`;
+  }
+  const keys = soft.map((r) => r.key);
+  const names = `${keys.slice(0, -1).join(', ')} and ${keys[keys.length - 1]}`;
+  return `lite: ${names} ${same ? 'warn instead of stop' : 'are softer than in full'} (set them in queue.config.json for full strength)`;
+}
+
+/**
+ * The rows of the doctor check `settings` (plans/innstillinger-vurdering-2026-11-12.md, step 7):
+ *   - one WARN line naming every guard weaker than its default (the registry's `weakens`, the same list as the banner of
+ *     `ravenseat settings`), or one OK line when there is none;
+ *   - INFO in lite: the defaults lite softens (gitSurface, dependencyFiles), while the file does not set them;
+ *   - INFO per entry of protectedPaths.remove: taken out, kept (the floor), or not a default path.
+ * Doctor shows these with quiet guidance too: a switched-off guard should not be forgotten.
+ * @param {{ config: object, queue?: object, own?: object, cli?: string }} o config = config() (resolved), own = the file
+ */
+function doctorRows({ config, queue = {}, own = {}, cli = 'ravenseat' }) {
+  const name = 'settings';
+  const view = settingsView({ config, queue });
+  const rows = view.categories.flatMap((c) => c.rows).filter((r) => r.weakened);
+  const out = [];
+  if (rows.length) {
+    const parts = rows.map((r) => (r.key === 'protectedPaths' ? protectedPathsText(r.value, r.standard) : `${r.key} ${r.valueText}`));
+    out.push({
+      status: 'WARN',
+      name,
+      message: `${rows.length} guard(s) weaker than the default: ${parts.join('; ')}`,
+      fix: `fine when you chose it; see them with ${cli} settings --changed, and set one back with ${cli} settings set <key> <default>`,
+    });
+  } else out.push({ status: 'OK', name, message: 'no guard is weaker than its default', fix: null });
+  const lite = liteLine(config, own);
+  if (lite) out.push({ status: 'INFO', name, message: lite, fix: null });
+  const pp = own?.protectedPaths;
+  if (pp && typeof pp === 'object' && !Array.isArray(pp)) {
+    const MG = require('./mergeGuard.js');
+    const std = require('./queueConfig.js').STANDARD.protectedPaths;
+    const r = MG.resolveProtectedPaths(pp, std);
+    if (!r.invalid)
+      for (const p of pp.remove ?? []) {
+        const text = r.removed.includes(p)
+          ? 'is no longer protected'
+          : r.floorKept.includes(p)
+            ? 'stays protected (it is in the floor, which is never removed)'
+            : r.notDefault.includes(p)
+              ? 'is not a default path, so nothing was removed'
+              : null;
+        if (text) out.push({ status: 'INFO', name, message: `protectedPaths.remove: ${p} ${text}`, fix: null });
+      }
+  }
+  return out;
 }
 
 // ---- The shared writer --------------------------------------------------------------------------
@@ -417,6 +498,7 @@ function setJsonText(text, segs, value) {
 }
 
 module.exports = {
+  doctorRows,
   STORE_TEXT,
   pathOf,
   getPath,

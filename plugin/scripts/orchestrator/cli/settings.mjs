@@ -15,7 +15,8 @@
 // the flags say, and the push guard denies `settings` to queue agents (it is not in lib/pushGuard.js
 // AGENT_QUEUE_COMMANDS, and --by owner is denied by itself). Without that refusal an agent could write the main tree's
 // queue.config.json (config() finds the main tree from a worktree too) and switch off its own guard.
-// The old commands (limit, guidance, checks, board-setting, cloud set, helpers, proposals, mode) are unchanged.
+// The older commands that write a registry value (proposals auto, limit, cloud set) call the same guardWeakening and
+// logWeakened below, so a weakening needs the same flags whichever command writes it.
 //
 // Used by: queue.mjs (and the board's /api/setting). Tested in: __tests__/settingsCli.test.ts.
 // =============================================================
@@ -70,28 +71,39 @@ function showSettings() {
 }
 
 /** Appends the setting-weakened row; a failure stops the change (every weakening is logged, or none is made). */
-function logWeakened(row, from, to, by) {
+export function logWeakened(row, from, to, by) {
   try {
     fs.appendFileSync(
       TIME_LOG,
       `${JSON.stringify({ time: new Date().toISOString(), event: 'setting-weakened', key: row.key, from, to, by, store: row.store })}\n`,
     );
   } catch (e) {
-    die(`settings set: could not write the setting-weakened row to ${TIME_LOG} (${e.message}). Nothing was changed.`);
+    die(`could not write the setting-weakened row to ${TIME_LOG} (${e.message}). Nothing was changed.`);
   }
 }
 
 /**
- * Checks the change against the weakening rule. Returns true when it weakens (and the owner confirmed); exits 1 with the
- * warning when it weakens without the flags.
+ * The one weakening rule, for `settings set` and for every older command that writes a registry value with `weakens`
+ * (proposals auto, limit, cloud set). `key` is the registry key and `value` the new value. `now` is the value before;
+ * left out, it is read from the configuration and `queue` (pass the queue read under the lock).
+ * Returns { weak, by, row, now }: weak is true when the change weakens a guard and the owner confirmed it; the caller then
+ * logs it with logWeakened(row, now, value, by) before it writes. A weakening without --i-understand --by owner prints the warning texts and
+ * exits 1; a weakening from a track worktree exits 1 whatever the flags say. A key without a registry row, or without
+ * `weakens`, never weakens. `confirmWith` is the command the warning tells the owner to run (without the flags).
  */
-function confirmed(row, value, now, raw) {
+export function guardWeakening(key, value, { now, queue = {}, raw = String(value), confirmWith = null } = {}) {
+  const by = a.includes('--by') ? String(a[a.indexOf('--by') + 1] ?? '').trim() : 'ravenseat';
+  const row = R.rowFor(key);
+  if (!row?.weakens) return { weak: false, by, row, now };
+  const before = now === undefined ? SV.valueOf(row, { config: CONFIG, queue }) : now;
   const standard = SV.standardOf(row, { config: CONFIG, mode: CONFIG.mode === 'lite' ? 'lite' : 'full' });
-  if (!SV.needsConfirm(row, value, { now, standard })) return false;
-  const by = String(a[a.indexOf('--by') + 1] ?? '').trim();
-  if (a.includes('--i-understand') && a.includes('--by') && by === 'owner') return true;
-  die(SV.warningLines(row, SV.valueText(row, value), { cli: CLI, raw }).join('\n'));
-  return false;
+  if (!SV.needsConfirm(row, value, { now: before, standard })) return { weak: false, by, row, now: before };
+  const track = trackBranchHere();
+  if (track)
+    die(`this weakens a guard (${key}) and cannot be done from inside a track worktree (branch ${track}); ask the owner (ravenseat question). Nothing was changed.`);
+  if (a.includes('--i-understand') && by === 'owner') return { weak: true, by, row, now: before };
+  die(SV.warningLines(row, SV.valueText(row, value), { cli: CLI, raw, confirmWith }).join('\n'));
+  return { weak: false, by, row, now: before };
 }
 
 /** Writes a queue.json row under the lock, in the form the queue reads it. */
@@ -124,7 +136,7 @@ function setSetting() {
       const p = SV.parseValue(row, raw, { limits: queue.limits });
       if ('error' in p) die(p.error);
       const now = SV.valueOf(row, { config: CONFIG, queue });
-      if (confirmed(row, p.value, now, raw)) logWeakened(row, now, p.value, by);
+      if (guardWeakening(row.key, p.value, { now, raw }).weak) logWeakened(row, now, p.value, by);
       setQueueValue(queue, row, p.value);
       return p.value;
     });
@@ -135,7 +147,7 @@ function setSetting() {
   const p = SV.parseValue(row, raw);
   if ('error' in p) die(p.error);
   const now = SV.valueOf(row, { config: CONFIG, queue: {} });
-  const weak = confirmed(row, p.value, now, raw);
+  const weak = guardWeakening(row.key, p.value, { now, raw }).weak;
   const file = KK.configFile();
   let text = null;
   try {

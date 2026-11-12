@@ -74,6 +74,10 @@ const STANDARD = Object.freeze({
     // its red commands once on the same commit (never in the main checkout, never on a dirty tree). Green then is green
     // with `flaky` (a flakyGate row, and at receive a finding); red twice is red. false = no rerun.
     flakyRerun: true,
+    // The time budget (seconds) for the whole list when a track runs its own gates (`ravenseat gates --quick|--full` in
+    // its worktree, without --timeout-sec): a gate over it is red. null = baseGate.timeoutSec (900), 0 = no budget.
+    // receive and merge pass baseGate.timeoutSec themselves; the main checkout has no budget unless one is passed.
+    timeoutSec: null,
   },
   // The done command (task field `done_when`, lib/doneCheck.js): `receive` and `merge` run it in the track's worktree.
   // timeoutSec = the time budget per run (a run over it is red); tailLines = how many of the last output lines are kept
@@ -517,6 +521,25 @@ function readConfigFile(file) {
 }
 
 /**
+ * What config() does after merge(), on its own so the tests and `ravenseat doctor` read a file the same way:
+ *   - lite softens gitSurface and dependencyFiles to warn, unless the file sets them;
+ *   - protectedPaths in the object form { add, remove } becomes one list (lib/mergeGuard.js resolveProtectedPaths): the
+ *     defaults plus add minus remove, the floor kept. A list stays as it is; a malformed object gives the defaults.
+ * @param {object} k merge(STANDARD, own)
+ * @param {object} own the parsed queue.config.json
+ */
+function resolveOwn(k, own = {}) {
+  // Lite is for a first try: what a surprised new user meets as a hard stop is a warning there, unless the file says otherwise.
+  if (k.mode === 'lite') {
+    if (own.gitSurface === undefined) k.gitSurface = 'warn';
+    if (own.dependencyFiles === undefined) k.dependencyFiles = 'warn';
+  }
+  if (own.protectedPaths !== undefined && !Array.isArray(own.protectedPaths))
+    k.protectedPaths = require('./mergeGuard.js').resolveProtectedPaths(own.protectedPaths, STANDARD.protectedPaths).list;
+  return k;
+}
+
+/**
  * Reads queue.config.json (once per process) and merges it with STANDARD. When the file exists but does not parse,
  * the result still holds the defaults (so `ravenseat doctor` and the hooks can run), plus `configError` ({ file, message,
  * line, column }). The CLI stops on it (stopIfConfigUnreadable); the push guard asks or denies the push, migration and
@@ -528,12 +551,7 @@ function config(o = {}) {
   const root = o.root ?? findRoot();
   const file = configFile(root);
   const { own, error } = readConfigFile(file);
-  const k = merge(STANDARD, own);
-  // Lite is for a first try: what a surprised new user meets as a hard stop is a warning there, unless the file says otherwise.
-  if (k.mode === 'lite') {
-    if (own.gitSurface === undefined) k.gitSurface = 'warn';
-    if (own.dependencyFiles === undefined) k.dependencyFiles = 'warn';
-  }
+  const k = resolveOwn(merge(STANDARD, own), own);
   k.root = root;
   if (error) Object.defineProperty(k, 'configError', { value: error, enumerable: false });
   if (!o.root) buffer = k;
@@ -631,6 +649,7 @@ module.exports = {
   STANDARD,
   FEATURES,
   merge,
+  resolveOwn,
   findRoot,
   configFile,
   config,

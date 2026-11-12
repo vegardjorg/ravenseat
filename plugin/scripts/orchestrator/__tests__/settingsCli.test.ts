@@ -228,3 +228,79 @@ describe('ravenseat settings set: the weakening pattern', () => {
     }
   });
 });
+
+// Step B of the settings work: the older commands that write a setting go through the same rule (one shared check in
+// cli/settings.mjs), so `settings set` is not the only door that asks.
+describe('the older commands follow the same weakening rule', () => {
+  it('proposals auto on without --i-understand --by owner prints the warning and exits 1; nothing is written', async () => {
+    for (const extra of [[], ['--i-understand'], ['--by', 'owner']]) {
+      const r = await ravenseat(['proposals', 'auto', 'on', ...extra]);
+      expect(r.code, extra.join(' ')).toBe(1);
+      const text = r.out + r.err;
+      expect(text).toContain('STOP: this weakens a guard (proposals.autoAccept.enabled on).');
+      expect(text).toContain('Protects against: Tasks proposed by agents that start without you seeing them first.');
+      expect(text).toContain('Saved only for you (queue.json).');
+      expect(text).toContain('Confirm with: ravenseat proposals auto on --i-understand --by owner');
+    }
+    expect(queue().proposals?.autoAccept?.enabled).not.toBe(true);
+    expect(logRows().filter((x) => x.event === 'setting-weakened')).toEqual([]);
+  });
+
+  it('proposals auto on with the owner flags writes it and logs setting-weakened; off and the other rules need no flag', async () => {
+    const ok = await ravenseat(['proposals', 'auto', 'on', '--classes', 'K,U', '--i-understand', '--by', 'owner']);
+    expect(ok.code, ok.err).toBe(0);
+    expect(queue().proposals.autoAccept).toMatchObject({ enabled: true, classes: ['K', 'U'] });
+    expect(logRows().filter((x) => x.event === 'setting-weakened')).toEqual([
+      expect.objectContaining({ key: 'proposals.autoAccept.enabled', from: false, to: true, by: 'owner', store: 'queue' }),
+    ]);
+    // Already on: on again (with other rules) is no new weakening.
+    expect((await ravenseat(['proposals', 'auto', 'on', '--max-estimate', '30'])).code).toBe(0);
+    expect((await ravenseat(['proposals', 'auto', 'off'])).code).toBe(0);
+    expect(queue().proposals.autoAccept.enabled).toBe(false);
+    expect((await ravenseat(['proposals', 'auto', '--classes', 'K'])).code).toBe(0);
+    expect(logRows().filter((x) => x.event === 'setting-weakened')).toHaveLength(1);
+  });
+
+  it('proposals auto on is refused from a track worktree, also with the owner flags', async () => {
+    const tree = path.join(root, 'tree');
+    fs.mkdirSync(tree);
+    const g = (...args: string[]) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], { cwd: tree, stdio: 'pipe' });
+    g('init', '-q', '-b', 'queue/A-1');
+    g('commit', '-q', '--allow-empty', '-m', 'start');
+    const r = await ravenseat(['proposals', 'auto', 'on', '--i-understand', '--by', 'owner'], tree);
+    expect(r.code).toBe(1);
+    expect(r.err).toMatch(/track worktree/);
+    expect(queue().proposals?.autoAccept?.enabled).not.toBe(true);
+    expect(logRows().filter((x) => x.event === 'setting-weakened')).toEqual([]);
+  });
+
+  it('limit and cloud set write no weakening value today, so they need no flag', async () => {
+    const l = await ravenseat(['limit', 'maxConcurrent', '2']);
+    expect(l.code, l.err).toBe(0);
+    expect(queue().limits.maxConcurrent).toBe(2);
+    const c = await ravenseat(['cloud', 'set', 'maxSessions', '2']);
+    expect(c.code, c.err).toBe(0);
+    expect(JSON.parse(fs.readFileSync(configFile(), 'utf8')).cloud.maxSessions).toBe(2);
+    expect(logRows().filter((x) => x.event === 'setting-weakened')).toEqual([]);
+  });
+});
+
+describe('one shared weakening rule, no copy', () => {
+  // The older writers of a registry value call cli/settings.mjs guardWeakening; none has its own --i-understand check.
+  const cli = (name: string) => fs.readFileSync(path.resolve(__dirname, '..', 'cli', name), 'utf8');
+  it.each([
+    ['owner.mjs', 'proposals.autoAccept.enabled'],
+    ['cost.mjs', 'limits.'],
+    ['cloud.mjs', 'cloud.'],
+  ])('%s uses guardWeakening and logWeakened from settings.mjs for %s', (file, key) => {
+    const src = cli(file);
+    expect(src).toMatch(/import \{ guardWeakening, logWeakened \} from '\.\/settings\.mjs';/);
+    expect(src).toContain('guardWeakening(');
+    expect(src).toContain(key);
+    expect(src).not.toContain("'--i-understand'");
+  });
+  it('settings.mjs itself checks the flags in one place', () => {
+    expect(cli('settings.mjs').match(/'--i-understand'/g)).toHaveLength(1);
+  });
+});

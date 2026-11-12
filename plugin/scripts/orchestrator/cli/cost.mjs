@@ -13,12 +13,13 @@
 // =============================================================
 
 import {
-  a, BASE, CE, CH, CONFIG, cut, D, die, edit, FC, FOLDER, git, HELP, L, positional, read, readPlans, require, TK, val, WIDTH,
+  a, BASE, CE, CH, CLI, CONFIG, cut, D, die, edit, FC, FOLDER, git, HELP, L, positional, read, readPlans, require, TK, val, WIDTH,
 } from './context.mjs';
 import {
   dailyUsageFor, measureLoad, measurementLine, measureTask, readTimeLog, saveMeasurement, sinceTime,
 } from './tracks.mjs';
 import { agentsBySession } from './events.mjs';
+import { guardWeakening, logWeakened } from './settings.mjs';
 
 const ES = require('./lib/eventStatistics.js');
 const UL = require('./lib/usageLimit.js');
@@ -60,6 +61,10 @@ export function cmdLimit() {
     const t = edit((queue) => {
       const r = L.parseLimit(name, raw, { ...L.DEFAULT_LIMITS, ...(queue.limits ?? {}) });
       if ('error' in r) die(r.error);
+      // The weakening rule of `settings set` (cli/settings.mjs): no limit row weakens a guard today, so this passes
+      // through, but a limit that gets `weakens` in the registry needs --i-understand --by owner here too.
+      const g = guardWeakening(`limits.${name}`, r.val, { queue, raw, confirmWith: `${CLI} limit ${name} ${raw}` });
+      if (g.weak) logWeakened(g.row, g.now, r.val, g.by);
       queue.limits = { ...(queue.limits ?? {}), [name]: r.val };
       return r;
     });

@@ -238,7 +238,10 @@ describe('queue.mjs proposals, add and orchestrator pulse (against a temporary r
     // The board's form of the save; D is refused before anything is written.
     expect(run('proposals', 'auto', 'on', '--classes', 'K,D').code).toBe(1);
     expect(queue().proposals).toBeUndefined();
-    const on = run('proposals', 'auto', 'on', '--classes', 'K,U', '--max-estimate', '90', '--max-value', 'none');
+    // Switching it on weakens a guard (the settings registry): the owner's flags, as `settings set` needs them.
+    expect(run('proposals', 'auto', 'on', '--classes', 'K,U').code).toBe(1);
+    expect(queue().proposals).toBeUndefined();
+    const on = run('proposals', 'auto', 'on', '--classes', 'K,U', '--max-estimate', '90', '--max-value', 'none', '--i-understand', '--by', 'owner');
     expect(on.code).toBe(0);
     expect(on.out).toContain('1 proposal(s) fit the rules now: A-1');
     expect(queue().proposals.autoAccept).toEqual({ enabled: true, classes: ['K', 'U'], maxEstimateMin: 90, maxValue: null });

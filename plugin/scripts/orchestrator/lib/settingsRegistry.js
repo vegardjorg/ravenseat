@@ -85,12 +85,18 @@ const rankWeakens = (order) => (v, std) => {
   return a >= 0 && b >= 0 && a > b;
 };
 
-/** Weakens when the list leaves out an entry of the standard list (compared without case, as lib/mergeGuard.js does). */
+/**
+ * Weakens when the paths leave out an entry of the standard list that is not in the floor (lib/mergeGuard.js
+ * CORE_PROTECTED, which holds whatever the list says). The value is a list or the object form { add, remove }, read as
+ * config() reads it; a malformed object gives the defaults, so it weakens nothing. Compared without case.
+ */
 function listLosesEntries(v, std) {
-  // The object form { add, remove } is task 8 in the design; until then only a list is understood.
-  if (!Array.isArray(v) || !Array.isArray(std)) return false;
-  const have = new Set(v.map((p) => String(p).toLowerCase()));
-  return std.some((p) => !have.has(String(p).toLowerCase()));
+  if (!Array.isArray(std)) return false;
+  const MG = require('./mergeGuard.js'); // lazily: mergeGuard reads queueConfig, which this file must not load first
+  const list = Array.isArray(v) ? v : isObject(v) ? MG.resolveProtectedPaths(v, std).list : null;
+  if (!list) return false;
+  const have = new Set(list.map((p) => String(p).toLowerCase()));
+  return std.some((p) => !have.has(String(p).toLowerCase()) && !MG.inFloor(p));
 }
 
 /** Weakens when a class gets fewer of its default reviewers (a class left out keeps the default, as merge() does). */
@@ -241,6 +247,8 @@ const SETTINGS = Object.freeze([
     'The fail-fast checks before the full gate. Empty = the standard checks the project has; [] = no precheck.'),
   row('gates.precheckBudgetSec', 'gates', 'integer', 'Precheck budget (seconds)',
     'The time budget per precheck when the check sets none.'),
+  row('gates.timeoutSec', 'gates', 'integer', 'Track gate budget (seconds)',
+    'The time budget for the gate run a track starts itself; a gate over it is red. Empty = the base gate budget; 0 = no budget.'),
   row('gates.flakyRerun', 'gates', 'onoff', 'Rerun red gate commands once',
     'A red gate in a track reruns only its red commands once on the same commit. Green then counts as flaky.'),
   row('gates.redOnBase', 'gates', 'object', 'Red on base check',
@@ -296,7 +304,8 @@ const SETTINGS = Object.freeze([
 
   // ---- 5. Agent guards ----
   row('protectedPaths', 'guards', 'list', 'Protected paths',
-    'Paths a track may only change when its task owns them: hooks, settings, agents, the queue scripts and test configs.', {
+    'Paths a track may only change when its task owns them: hooks, settings, agents, the queue scripts and test configs. ' +
+      'A list replaces the defaults; { "add": [...], "remove": [...] } changes them (the floor is never removed).', {
       weakens: listLosesEntries,
       protects: 'Agents changing hooks, settings and test configs without the task owning those files.',
       whyNot: 'These files run code or give instructions with your rights in the orchestrator session.',

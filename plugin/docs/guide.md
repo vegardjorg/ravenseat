@@ -297,6 +297,9 @@ guard that is weaker than its default is named in a banner. Choosing the weaker 
 first: a dialog explains what the guard protects against, and only a completed slide (drag, or hold the right arrow
 key or Enter for a second) sends the change.
 
+Every setting with its default, by the same categories, is in the [configuration tables](queue.md#configuration).
+A row marked Advanced is folded away at first, and one marked Full mode only is not used in lite.
+
 More about every tab: [board](board.md).
 
 ## Safety baseline in full
@@ -320,7 +323,11 @@ What Ravenseat checks for you:
 - `ravenseat doctor` (offline, read-only): secret files in git or not ignored (a tracked `.env` or private key is a FAIL;
   an ignored local `.env` is fine), empty gates, no CI config, a manifest without its lockfile, `productionBranch`
   equal to `baseBranch`, tracked files over `largeFileMb`, and CI workflows that run on push without cancel or a path
-  filter.
+  filter. Its `settings` row names in one line every guard you set weaker than its default (for example the secret
+  scan switched off, protected paths left out, or auto-accept of proposals on), also with quiet guidance.
+- Weakening a guard is always a deliberate step: `ravenseat settings set`, `ravenseat proposals auto on` and the board
+  print what the guard protects against and change nothing until you confirm (`--i-understand --by owner`, or the
+  board's slide). Each confirmed change is logged as `setting-weakened`, and none of it can be done from a track.
 - The push guard: no force push and no other branch than `baseBranch` from Claude Code; before a plain push of the
   base branch it scans what is about to be pushed for secrets (gitleaks when it is on your PATH, otherwise a few
   built-in patterns) and asks, naming file and line, never the value. A first push is scanned too, and a scan that

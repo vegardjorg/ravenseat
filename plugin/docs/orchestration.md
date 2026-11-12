@@ -404,7 +404,9 @@ The base gate (`baseGate` in `queue.config.json`, `lib/baseHealth.js`) records t
   `gates.mjs --timeout-sec`). Other commands (for example the full gate) run as a `base-gate` step after the quick
   gates, with one budget for the whole list. The merge step's quick gates get the budget `baseGate.timeoutSec` in any
   case, also when the base gate is off or has its own commands, as in `ravenseat receive`: a test that hangs is red at
-  the budget and never holds the merge. Only the output tail (`baseGate.tailLines`, default `doneCheck.tailLines`)
+  the budget and never holds the merge. A track's own gate run (`ravenseat gates --quick` or `--full` in its worktree,
+  without `--timeout-sec`) gets `gates.timeoutSec`, default `null` = `baseGate.timeoutSec`, so a hanging test is red
+  there too instead of holding the track until its agent is stopped (`0` = no budget). Only the output tail (`baseGate.tailLines`, default `doneCheck.tailLines`)
   is kept, in `base-health-<sha>.md` next to the merge log, never the full output (it can hold secrets).
 - **Before a merge.** Green for the current base tip: merge. Unknown (never checked, or the tip moved since the last
   check, for example a commit by hand): the check runs first. Red: `STOP`, exit 9, nothing done. Allowed while red:

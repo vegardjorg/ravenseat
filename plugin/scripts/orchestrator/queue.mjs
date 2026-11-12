@@ -34,7 +34,8 @@
 //   node scripts/orchestrator/queue.mjs approve <id> [...] [--by "<who>"]   (proposed -> waiting; --by is kept as approved_by)
 //   node scripts/orchestrator/queue.mjs proposals [auto [on|off] [--classes K,U] [--max-estimate <min|none>]
 //        [--max-value <1-10|none>]]   (auto-accept of agent proposals by the owner's rules, default off; applied by add
-//         and orchestrator pulse; never D/D+, waiting_on, legal/owner labels, open legal points or protected paths)
+//         and orchestrator pulse; never D/D+, waiting_on, legal/owner labels, open legal points or protected paths;
+//         on from off weakens a guard: it needs --i-understand --by owner, cli/settings.mjs guardWeakening)
 //   node scripts/orchestrator/queue.mjs proposals log [--json]       (what was auto-accepted, newest first)
 //   node scripts/orchestrator/queue.mjs proposals undo <id>          (back to proposed when it has not been started)
 //   node scripts/orchestrator/queue.mjs forecast [--project <pid>] [--days 28] [--json]   (Monte Carlo: when the

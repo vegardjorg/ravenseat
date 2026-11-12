@@ -23,7 +23,9 @@
 //               (lib/conflictPredict.js) falls back to file overlap (QUEUE_GIT_VERSION overrides the version, tests)
 //   ci-cost     only with --all: .github/workflows/*.yml that run on push: INFO without concurrency cancel-in-progress or a
 //               paths/paths-ignore filter (a text scan, lib/pushBatch.js workflowCost)
-//   merge, settings, in-base (cli/doctorRepo.mjs): a lingering MERGE_HEAD in the main checkout, disableAllHooks in a
+//   settings    one WARN line naming every guard weaker than its default (the registry's weakens, lib/settingsView.js
+//               doctorRows), INFO for what lite softens and for each protectedPaths.remove entry; quiet guidance keeps it
+//   merge, hooks-off, in-base (cli/doctorRepo.mjs): a lingering MERGE_HEAD in the main checkout, disableAllHooks in a
 //               Claude Code settings file, done tasks whose merge commit or branch is not in baseBranch (all WARN)
 //   cloud rows  only with features.cloud on: what cloud tracks need (lib/cloudSetup.js), read locally; the setup itself is
 //               `ravenseat cloud setup`
@@ -55,6 +57,8 @@ const RB = require('./lib/redOnBase.js');
 const CP = require('./lib/conflictPredict.js');
 const CW = require('./lib/ciWatch.js');
 const GB = require('./lib/gitSurfaceBaseline.js');
+const MG = require('./lib/mergeGuard.js');
+const SV = require('./lib/settingsView.js');
 
 /** The lowest Node major version the scripts support (package.json "engines"). */
 const MIN_NODE = 20;
@@ -87,6 +91,9 @@ export function baselineProblems(own) {
   const rm = own.reads?.mode;
   if (rm !== undefined && !['wait', 'warn'].includes(rm)) out.push('reads.mode must be "wait" or "warn"');
   out.push(...RB.setupProblems(own.gates?.redOnBase));
+  const gt = own.gates?.timeoutSec;
+  if (gt !== undefined && gt !== null && !(Number.isInteger(gt) && gt >= 0))
+    out.push('gates.timeoutSec must be a whole number >= 0 or null');
   const mb = own.largeFileMb;
   if (mb !== undefined && !(typeof mb === 'number' && mb > 0)) out.push('largeFileMb must be a number > 0');
   return out;
@@ -213,6 +220,12 @@ function checkConfig() {
     if (skip(k)) continue;
     if (!Object.hasOwn(S, k)) {
       unknown.push(k);
+      continue;
+    }
+    // protectedPaths: a list, or { add: [...], remove: [...] } (lib/mergeGuard.js resolveProtectedPaths).
+    if (k === 'protectedPaths' && kind(v) === 'object') {
+      if (MG.resolveProtectedPaths(v, S.protectedPaths).invalid)
+        wrong.push('protectedPaths must be a list of paths or { "add": [...], "remove": [...] }');
       continue;
     }
     const want = kind(S[k]);
@@ -597,6 +610,26 @@ function checkTemp() {
 }
 
 /** What cloud tracks need, only while they are on. The rows that are not problems stay in `ravenseat cloud setup`. */
+/**
+ * Settings: the guards weaker than their default, in one line (lib/settingsView.js doctorRows). Not an advice row, so
+ * quiet guidance shows it. Reads the file itself as well, for the protectedPaths.remove lines.
+ */
+function checkSettings() {
+  let own = {};
+  try {
+    own = KK.parseConfigText(fs.readFileSync(KK.configFile(MAIN_TREE), 'utf8'));
+  } catch {
+    own = {}; // a missing or broken file is the config row's finding
+  }
+  let queue = { tasks: [] };
+  try {
+    queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+  } catch {
+    /* no queue yet: only the file's settings count */
+  }
+  return SV.doctorRows({ config: CONFIG, queue, own: kind(own) === 'object' ? own : {}, cli: CLI });
+}
+
 function checkCloud() {
   if (!KK.featureOn('cloud', CONFIG)) return [];
   const rows = require('./lib/cloudSetup.js').cloudSetupRows(cloudSetupFacts());
@@ -607,7 +640,7 @@ function checkCloud() {
 
 /** `ravenseat doctor [--json] [--all]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

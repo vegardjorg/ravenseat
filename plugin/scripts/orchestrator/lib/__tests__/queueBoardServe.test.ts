@@ -312,4 +312,18 @@ describe('the board server: the settings registry and the weakening rule (plans/
     expect(lim.status, lim.body.message).toBe(200);
     expect(JSON.parse(fs.readFileSync(path.join(root, 'q', 'queue.json'), 'utf8')).limits.maxConcurrent).toBe(2);
   }, 60_000);
+
+  it('auto-accept with confirm: weaken passes the owner flags to proposals auto on, which writes and logs it', async () => {
+    const before = timeRows().length;
+    const ok = await post('/api/proposals', { enabled: true, classes: ['K'], maxEstimateMin: 30, maxValue: null, confirm: 'weaken' });
+    expect(ok.status, ok.body.message).toBe(200);
+    expect(JSON.parse(fs.readFileSync(path.join(root, 'q', 'queue.json'), 'utf8')).proposals.autoAccept.enabled).toBe(true);
+    expect(timeRows().slice(before)).toEqual([
+      expect.objectContaining({ key: 'proposals.autoAccept.enabled', from: false, to: true, by: 'owner' }),
+    ]);
+    // Off again needs no confirm and logs nothing.
+    const off = await post('/api/proposals', { enabled: false, classes: ['K'], maxEstimateMin: 30, maxValue: null });
+    expect(off.status, off.body.message).toBe(200);
+    expect(timeRows()).toHaveLength(before + 1);
+  }, 60_000);
 });

@@ -86,3 +86,21 @@ describe('what the docs say lite has', () => {
     expect(section).toMatch(/class K/);
   });
 });
+
+describe('focus and value-based priority in lite (the full-mode.md row said No)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const LM = require('../liteMode.js');
+  it('the code: the Focus tab is on by default, a task gets value 5, and add --priority sets its value', () => {
+    expect(QC.features(lite).focus).toBe(true);
+    expect(LM.LITE_DEFAULTS.value).toBe(5);
+    expect(LM.quickTask({ title: 'x', priority: 8 }).task.value).toBe(8);
+    expect(LM.quickTask({ title: 'x', priority: 11 }).error.length).toBe(1);
+  });
+  it('the doc row says the same', () => {
+    const cell = liteCell('Focus and value-based priority');
+    expect(cell).not.toBe('No');
+    expect(cell).toContain('`features.focus`');
+    expect(cell).toMatch(/value 5/);
+    expect(cell).toContain('`--priority 1-10`');
+  });
+});

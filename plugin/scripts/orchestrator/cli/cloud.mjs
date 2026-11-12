@@ -25,6 +25,7 @@ import {
   require, uncommittedPaths, val, values, WIDTH,
 } from './context.mjs';
 import { logTime, minutes } from './tracks.mjs';
+import { guardWeakening, logWeakened } from './settings.mjs';
 
 const CF = require('./lib/cloudFire.js');
 const CS = require('./lib/cloudSetup.js');
@@ -292,6 +293,9 @@ function cloudSettings() {
 function cloudSet(key, text) {
   const r = CS.parseCloudSetting(key, text);
   if (r.error) die(`${r.error}. Nothing changed.`);
+  // The weakening rule of `settings set` (cli/settings.mjs): no cloud row weakens a guard today, so this passes through.
+  const g = guardWeakening(`cloud.${key}`, r.value, { raw: text, confirmWith: `${CLI} cloud set ${key} ${text}` });
+  if (g.weak) logWeakened(g.row, g.now, r.value, g.by);
   const file = changeOwnConfig((own) => ({ ...own, cloud: { ...(own.cloud ?? {}), [key]: r.value } }));
   console.log(`cloud.${key} is ${r.value} (${file}).`);
 }

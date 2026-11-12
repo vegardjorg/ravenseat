@@ -64,11 +64,11 @@ function project(tasks: object[]) {
 }
 
 describe('ravenseat doctor: repo state', () => {
-  it('a clean repo: merge, settings and in-base are OK', () => {
+  it('a clean repo: merge, hooks-off and in-base are OK', () => {
     const p = project([{ id: 'A-1', status: 'done', class: 'K' }]);
     const c = p.json().checks;
     expect(c.find((x) => x.name === 'merge')).toMatchObject({ status: 'OK' });
-    expect(c.find((x) => x.name === 'settings')).toMatchObject({ status: 'OK' });
+    expect(c.find((x) => x.name === 'hooks-off')).toMatchObject({ status: 'OK' });
     // A-1 has no branch and no stored merge commit: nothing to check, said plainly (graceful).
     expect(c.find((x) => x.name === 'in-base')).toMatchObject({ status: 'OK' });
   }, 60_000);
@@ -102,7 +102,7 @@ describe('ravenseat doctor: repo state', () => {
     fs.writeFileSync(path.join(p.root, '.claude', 'settings.json'), JSON.stringify({ disableAllHooks: false }));
     fs.mkdirSync(path.join(p.home, '.claude'));
     fs.writeFileSync(path.join(p.home, '.claude', 'settings.json'), JSON.stringify({ disableAllHooks: true }));
-    const s = p.named('settings');
+    const s = p.named('hooks-off');
     expect(s).toHaveLength(1);
     expect(s[0].status).toBe('WARN');
     expect(s[0].message).toContain('settings.local.json');
@@ -115,7 +115,7 @@ describe('ravenseat doctor: repo state', () => {
     const p = project([]);
     fs.mkdirSync(path.join(p.root, '.claude'));
     fs.writeFileSync(path.join(p.root, '.claude', 'settings.json'), '{ broken');
-    expect(p.named('settings')[0].status).toBe('OK');
+    expect(p.named('hooks-off')[0].status).toBe('OK');
   }, 60_000);
 
   it('done tasks whose branch or merge commit is not in base give a WARN; merged ones and cancelled ones do not', () => {

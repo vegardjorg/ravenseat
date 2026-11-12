@@ -220,3 +220,103 @@ describe('setJsonText: the shared writer keeps the form of the file', () => {
     expect(SV.pathOf('guidance')).toEqual(['guidance']);
   });
 });
+
+// ---- Step 7: the doctor row `settings` (doctorRows), and step 8: protectedPaths { add, remove } ----
+
+describe('doctorRows: the doctor row settings', () => {
+  const rows = (own: object = {}, queue: object = { tasks: [] }) =>
+    SV.doctorRows({ config: KK.resolveOwn(configFor(own), own), queue, own, cli: 'ravenseat' });
+
+  it('no weakened guard gives one OK line', () => {
+    expect(rows()).toEqual([expect.objectContaining({ status: 'OK', message: 'no guard is weaker than its default' })]);
+  });
+
+  it('one WARN line names every guard weaker than its default: protectedPaths [], secretScan off, auto-accept on', () => {
+    const r = rows({ protectedPaths: [], secretScan: { enabled: false } }, { tasks: [], proposals: { autoAccept: { enabled: true } } });
+    const warn = r.filter((x: any) => x.status === 'WARN');
+    expect(warn).toHaveLength(1);
+    expect(warn[0].message).toMatch(/^3 guard\(s\) weaker than the default: /);
+    expect(warn[0].message).toContain('protectedPaths leaves out every default path');
+    expect(warn[0].message).toContain('secretScan.enabled off');
+    expect(warn[0].message).toContain('proposals.autoAccept.enabled on');
+    expect(warn[0].fix).toContain('ravenseat settings --changed');
+    expect(r.some((x: any) => x.status === 'OK')).toBe(false);
+  });
+
+  it('a list that leaves out some default paths names how many and which', () => {
+    const list = KK.STANDARD.protectedPaths.filter((p: string) => !['.github/', 'Makefile'].includes(p));
+    const warn = rows({ protectedPaths: list }).find((x: any) => x.status === 'WARN');
+    expect(warn.message).toContain('protectedPaths leaves out 2 default path(s): .github/, Makefile');
+  });
+
+  it('lite: the softened defaults are one INFO line, not a weakened guard', () => {
+    const r = rows({ mode: 'lite' });
+    expect(r.filter((x: any) => x.status === 'WARN')).toEqual([]);
+    expect(r).toContainEqual(
+      expect.objectContaining({
+        status: 'INFO',
+        message: 'lite: dependencyFiles and gitSurface warn instead of stop (set them in queue.config.json for full strength)',
+      }),
+    );
+    // Set in the file, the lite line names only what is still softened.
+    const one = rows({ mode: 'lite', gitSurface: 'stop' }).find((x: any) => x.status === 'INFO');
+    expect(one.message).toBe('lite: dependencyFiles warns instead of stopping (set it in queue.config.json for full strength)');
+    expect(rows({ mode: 'lite', gitSurface: 'stop', dependencyFiles: 'stop' })).toEqual([expect.objectContaining({ status: 'OK' })]);
+  });
+
+  it('protectedPaths remove: one INFO line per removed path; the floor and an unknown path are named as such', () => {
+    const r = rows({ protectedPaths: { add: ['secrets/'], remove: ['.github/', 'queue.config.json', 'nope.txt'] } });
+    const info = r.filter((x: any) => x.status === 'INFO').map((x: any) => x.message);
+    expect(info).toEqual([
+      'protectedPaths.remove: .github/ is no longer protected',
+      'protectedPaths.remove: queue.config.json stays protected (it is in the floor, which is never removed)',
+      'protectedPaths.remove: nope.txt is not a default path, so nothing was removed',
+    ]);
+    // Removing a default path is a weakened guard too.
+    expect(r.find((x: any) => x.status === 'WARN').message).toContain('protectedPaths leaves out 1 default path(s): .github/');
+  });
+
+  it('add alone weakens nothing', () => {
+    expect(rows({ protectedPaths: { add: ['secrets/'] } })).toEqual([expect.objectContaining({ status: 'OK' })]);
+  });
+});
+
+describe('protectedPaths: the object form { add, remove } (step 8)', () => {
+  const resolved = (own: object) => KK.resolveOwn(configFor(own), own).protectedPaths;
+
+  it('the list form works as before: it replaces the defaults; [] leaves only the floor to mergeGuard', () => {
+    expect(resolved({ protectedPaths: ['a/'] })).toEqual(['a/']);
+    expect(resolved({ protectedPaths: [] })).toEqual([]);
+    expect(resolved({})).toEqual(KK.STANDARD.protectedPaths);
+  });
+
+  it('add extends the defaults; remove takes paths out of them, never out of the floor', () => {
+    const list = resolved({ protectedPaths: { add: ['secrets/', '.github/'], remove: ['.github/', 'Makefile', 'QUEUE.CONFIG.JSON', '.claude/'] } });
+    expect(list).toContain('secrets/');
+    expect(list).not.toContain('Makefile');
+    // add and remove of the same path: remove wins (the owner asked for it out), and the floor stays whatever remove says.
+    expect(list).not.toContain('.github/');
+    expect(list).toContain('queue.config.json');
+    expect(list).toContain('.claude/');
+    expect(list.length).toBe(KK.STANDARD.protectedPaths.length - 2 + 1);
+  });
+
+  it('a malformed object keeps the defaults (the stronger reading); doctor names it', () => {
+    expect(resolved({ protectedPaths: { remove: '.github/' } })).toEqual(KK.STANDARD.protectedPaths);
+    expect(resolved({ protectedPaths: { drop: ['.github/'] } })).toEqual(KK.STANDARD.protectedPaths);
+  });
+
+  it('removing a default path weakens the guard (settings, the banner, needsConfirm); add and a floor path do not', () => {
+    const r = R.rowFor('protectedPaths');
+    const std = KK.STANDARD.protectedPaths;
+    expect(r.weakens({ remove: ['.github/'] }, std)).toBe(true);
+    expect(r.weakens({ add: ['x/'] }, std)).toBe(false);
+    expect(r.weakens({ remove: ['queue.config.json'] }, std)).toBe(false);
+    expect(SV.needsConfirm(r, { remove: ['.github/'] }, { now: std, standard: std })).toBe(true);
+    // The view reads the object form as well as the resolved list config() makes of it.
+    expect(view({ own: { protectedPaths: { remove: ['.github/'] } } }).weakened.map((w: any) => w.key)).toEqual(['protectedPaths']);
+    expect(view({ own: { protectedPaths: { remove: ['queue.config.json'] } } }).weakened).toEqual([]);
+    // A list that leaves out only floor paths changes nothing, so it weakens nothing.
+    expect(r.weakens(std.filter((p: string) => p !== 'queue.config.json'), std)).toBe(false);
+  });
+});

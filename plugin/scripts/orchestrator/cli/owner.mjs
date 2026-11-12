@@ -17,6 +17,7 @@ import { spawnSync } from 'node:child_process';
 import {
   a, autoAcceptContext, autoAcceptRules, CLI, cut, die, edit, FOLDER, GIT_ROOT, L, positional, PR, read, require, val, WIDTH,
 } from './context.mjs';
+import { guardWeakening, logWeakened } from './settings.mjs';
 
 // The intake triage's owner questions (close, keep, rewrite) are acted on in resolve.
 const T = require('./lib/queueTriage.js');
@@ -174,7 +175,7 @@ export function cmdApprove() {
 /** `ravenseat proposals` (the usage is at the top of queue.mjs). */
 export function cmdProposals() {
   // ---- Auto-accept of agent proposals by the owner's rules (lib/queueProposals.js) ----
-  const [under, arg] = positional(1, ['--classes', '--max-estimate', '--max-value', '--max']);
+  const [under, arg] = positional(1, ['--classes', '--max-estimate', '--max-value', '--max', '--by']);
   const showRules = (queue) => {
     const rules = autoAcceptRules(queue);
     const ctx = { ...autoAcceptContext(queue), undone: PR.undoneIds(queue) };
@@ -201,7 +202,7 @@ export function cmdProposals() {
   } else if (under === 'auto') {
     const change = {};
     if (arg) {
-      if (arg !== 'on' && arg !== 'off') die('proposals auto [on|off] [--classes K,U] [--max-estimate <min|none>] [--max-value <1-10|none>]');
+      if (arg !== 'on' && arg !== 'off') die('proposals auto [on|off] [--classes K,U] [--max-estimate <min|none>] [--max-value <1-10|none>] [--i-understand --by owner]');
       change.enabled = arg === 'on';
     }
     if (a.includes('--classes')) {
@@ -219,6 +220,16 @@ export function cmdProposals() {
     const error = PR.rulesError(change);
     if (error.length) die(`Nothing changed:\n  ${error.join('\n  ')}`);
     edit((queue) => {
+      // Turning auto-accept on weakens a guard: the same rule as `settings set proposals.autoAccept.enabled on`
+      // (cli/settings.mjs guardWeakening), checked under the lock against the value now.
+      if (change.enabled !== undefined) {
+        const g = guardWeakening('proposals.autoAccept.enabled', change.enabled, {
+          now: autoAcceptRules(queue).enabled,
+          raw: arg,
+          confirmWith: `${CLI} proposals auto ${arg}`,
+        });
+        if (g.weak) logWeakened(g.row, g.now, change.enabled, g.by);
+      }
       const own = queue.proposals?.autoAccept ?? {};
       queue.proposals = { ...(queue.proposals ?? {}), autoAccept: { ...own, ...change } };
     });

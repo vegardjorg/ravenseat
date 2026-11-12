@@ -2096,9 +2096,14 @@ async function write(filePath, b) {
     const h = PR.boardArgs(b);
     if (h.error) return no(h.error);
     // Switching auto-accept on from off weakens a guard (the registry row's weakens): refused without the dialog's yes.
+    // After that yes the owner flags go to the CLI, which applies the same rule (cli/settings.mjs guardWeakening) and
+    // logs the setting-weakened row; without them `proposals auto on` refuses as well.
     if (b.enabled === true) {
-      const w = weakenCheck(R.rowFor('proposals.autoAccept.enabled'), true, queueNow(), b);
+      const row = R.rowFor('proposals.autoAccept.enabled');
+      const queue = queueNow();
+      const w = weakenCheck(row, true, queue, b);
       if (w) return w;
+      if (needsWeakenConfirm(row, true, queue)) return run([...h.args, '--i-understand', '--by', 'owner'], `proposals auto ${h.args[2]}`);
     }
     return run(h.args, `proposals auto ${h.args[2]}`);
   }

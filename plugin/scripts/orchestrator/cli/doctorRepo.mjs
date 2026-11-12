@@ -5,7 +5,7 @@
 // wrong, and the doctor must not block on a judgement call):
 //   merge     a lingering MERGE_HEAD in the main checkout: a merge (often from an interrupted `ravenseat merge`) was never
 //             finished or aborted, and the next merge fails in a confusing way. Counts the unresolved files too.
-//   settings  `disableAllHooks: true` in a Claude Code settings file (project .claude/settings.json and
+//   hooks-off `disableAllHooks: true` in a Claude Code settings file (project .claude/settings.json and
 //             settings.local.json, user ~/.claude/settings.json, the managed settings file): every queue guard (push,
 //             read, context, end gate) is off without a word. A file that does not parse is skipped (not this check's
 //             business; Claude Code reports it).
@@ -84,7 +84,7 @@ export function settingsFiles({ root = MAIN_TREE, home = os.homedir(), platform 
   ];
 }
 
-/** settings: disableAllHooks set in any Claude Code settings file. */
+/** hooks-off: disableAllHooks set in any Claude Code settings file. */
 export function checkDisableAllHooks() {
   const files = settingsFiles();
   const off = [];
@@ -97,10 +97,10 @@ export function checkDisableAllHooks() {
     }
     if (s && s.disableAllHooks === true) off.push(f);
   }
-  if (!off.length) return [ok('settings', 'no Claude Code settings file sets disableAllHooks')];
+  if (!off.length) return [ok('hooks-off', 'no Claude Code settings file sets disableAllHooks')];
   return [
     warn(
-      'settings',
+      'hooks-off',
       `disableAllHooks is true in ${off.join(', ')}: every queue guard (push, read, context, end gate) is off`,
       'remove "disableAllHooks" from that file (or set it to false), then restart Claude Code',
     ),

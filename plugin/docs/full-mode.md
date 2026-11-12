@@ -13,11 +13,12 @@ grow. Switch with `ravenseat mode full` (`ravenseat mode lite` goes back), and r
 | Checks and fix rounds | Yes | Yes |
 | Decisions, `/ravenseat:decide` and the board | Yes | Yes |
 | Risk classes and task sizing | No | Yes |
-| Focus and value-based priority | No | Yes |
+| Focus and value-based priority | The Focus tab is on by default (`features.focus`); every task gets value 5, and `--priority 1-10` on `ravenseat add` moves one up or down | Yes, with focus stages from the plan register and the value set per task |
 | Plan register | On by default (`features.plans`; set it to `false` to hide the Plans room) | Yes |
 | Helper agents and deeper review | Only `reviewer-light`, for class K tasks when the project has no CI config or no gates | Yes |
 
-Lite gets work moving with minimal setup. Full adds structure for larger projects; switch when you need it.
+Lite gets work moving with minimal setup. Full adds structure for larger projects; switch when you need it. Every
+setting, with what is full mode only and what is advanced, is in the [configuration tables](queue.md#configuration).
 
 <p align="center"><img src="../../assets/infographics/architecture.webp" alt="One Claude Code conversation drives the orchestrator, which keeps persistent state, starts agents in isolated worktrees and sends their work through checks and integration" width="800"></p>
 

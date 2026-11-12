@@ -67,6 +67,60 @@ function defaultProtected() {
   return require('./queueConfig.js').STANDARD.protectedPaths;
 }
 
+/** True for a path in the floor (CORE_PROTECTED), compared as the guard compares: normalised, without case. */
+function inFloor(p) {
+  const n = norm(p).toLowerCase();
+  return CORE_PROTECTED.some((c) => c.toLowerCase() === n);
+}
+
+/**
+ * The project's protectedPaths read into one list (plans/innstillinger-vurdering-2026-11-12.md, step 8). Two forms:
+ *   - a list: it replaces the defaults, as before (the floor still holds in isProtected);
+ *   - { add: [...], remove: [...] }: the defaults, plus add, minus remove. remove never takes a floor path out (it stays
+ *     in the list), and a path in both add and remove is removed (the owner asked for it out).
+ * Anything else (a remove that is no list, an unknown key, a value that is no list) is invalid: the defaults are used,
+ * the stronger reading, and `ravenseat doctor` names it.
+ * Returns { list, invalid, removed, floorKept, notDefault }: the paths remove took out, the floor paths it could not take
+ * out and the remove entries that are no default path (so nothing was removed). Compared without case.
+ * @param {unknown} value the protectedPaths value from queue.config.json (undefined = the defaults)
+ * @param {string[]} [defaults] STANDARD.protectedPaths
+ */
+function resolveProtectedPaths(value, defaults = defaultProtected()) {
+  const none = { removed: [], floorKept: [], notDefault: [] };
+  if (value === undefined) return { list: [...defaults], invalid: false, ...none };
+  if (Array.isArray(value)) return { list: [...value], invalid: false, ...none };
+  const isList = (v) => v === undefined || (Array.isArray(v) && v.every((p) => typeof p === 'string'));
+  const keys = value !== null && typeof value === 'object' ? Object.keys(value).filter((k) => !k.startsWith('_')) : null;
+  if (!keys || keys.some((k) => k !== 'add' && k !== 'remove') || !isList(value.add) || !isList(value.remove))
+    return { list: [...defaults], invalid: true, ...none };
+  const key = (p) => norm(p).toLowerCase();
+  const defaultKeys = new Set(defaults.map(key));
+  const removed = [];
+  const floorKept = [];
+  const notDefault = [];
+  const drop = new Set();
+  for (const p of value.remove ?? []) {
+    const k = key(p);
+    if (!k) continue;
+    if (inFloor(p)) floorKept.push(p);
+    else {
+      drop.add(k);
+      if (defaultKeys.has(k)) removed.push(p);
+      else notDefault.push(p);
+    }
+  }
+  const list = [];
+  const seen = new Set();
+  for (const p of [...defaults, ...(value.add ?? [])]) {
+    const k = key(p);
+    // Seen is exact (the defaults hold both Justfile and justfile); drop is without case, as the guard compares.
+    if (!k || drop.has(k) || seen.has(norm(p))) continue;
+    seen.add(norm(p));
+    list.push(p);
+  }
+  return { list, invalid: false, removed, floorKept, notDefault };
+}
+
 /**
  * The protected paths plus extra exact paths (the custom helpers' agent files, queueHelpers.customPaths). `base`
  * undefined = the defaults. The extra paths are protected even when the project emptied or changed the list.
@@ -420,4 +474,7 @@ module.exports = {
   taskIdFromBranch,
   assessGuard,
   withPaths,
+  CORE_PROTECTED,
+  inFloor,
+  resolveProtectedPaths,
 };

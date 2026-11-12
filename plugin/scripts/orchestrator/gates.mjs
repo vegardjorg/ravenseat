@@ -16,6 +16,8 @@
 //   --timeout-sec <n>  (--quick/--full) one time budget for the whole list; a gate over it is red (ravenseat merge passes the
 //                 base gate's budget when the quick gates are the base gate, lib/baseHealth.js). The budget starts when the
 //                 first gate command starts, not while the run waits in the gate queue.
+//                 Without it, a run in a track's worktree gets gates.timeoutSec (null = baseGate.timeoutSec, 0 = none);
+//                 the main checkout has no budget unless one is passed.
 //
 // The gate queue (lib/gateQueue.js, config().gateQueue): a --quick/--full run whose last run of the same kind took at least
 // heavyAfterSec waits for a slot shared by the whole machine. One line says who it waits for; the wait goes into the gate
@@ -623,7 +625,13 @@ const failedGates = [];
 // --timeout-sec <n>: one time budget for the whole list (ravenseat receive and merge always pass config().baseGate.timeoutSec,
 // so a hanging gate cannot hold them forever). Each gate gets what is left; a gate over
 // it is red. As for the done command, on Windows a child the shell started can live on until it ends by itself.
-const budgetSec = Number(option('--timeout-sec'));
+// Without --timeout-sec, a run outside the main checkout (a track's own `ravenseat gates --quick`) gets gates.timeoutSec
+// (null = baseGate.timeoutSec, 0 = no budget), so a hanging test cannot hold a track until its agent is stopped. The
+// main checkout keeps its old behaviour: no budget unless one is passed.
+const budgetOption = option('--timeout-sec');
+const ownBudget = K.gates?.timeoutSec ?? K.baseGate?.timeoutSec ?? 0;
+const budgetSec = budgetOption != null ? Number(budgetOption) : WANT.mainTree === true ? 0 : Number(ownBudget) || 0;
+const budgetSource = budgetOption != null ? '--timeout-sec' : K.gates?.timeoutSec != null ? 'gates.timeoutSec' : 'baseGate.timeoutSec';
 const deadline = GQ.budgetDeadline(start, budgetSec);
 let timedOutAny = false;
 
@@ -637,7 +645,7 @@ for (const command of gates) {
   const sec = (Date.now() - t0) / 1000;
   const timedOut = r.timedOut;
   if (timedOut) timedOutAny = true;
-  const out = `${r.out}${timedOut ? `\n(stopped after the time budget of ${budgetSec} s: --timeout-sec)` : ''}`;
+  const out = `${r.out}${timedOut ? `\n(stopped after the time budget of ${budgetSec} s: ${budgetSource})` : ''}`;
   const green = r.status === 0 && !timedOut;
   if (!green) {
     failedCount++;
@@ -688,7 +696,7 @@ if (RERUN.commands.length) {
     const r = await runShell(command, { timeoutMs: rerunDeadline ? Math.max(1000, rerunDeadline - t0) : null });
     const sec = (Date.now() - t0) / 1000;
     if (r.timedOut) rerunTimedOut = true;
-    const out = `${r.out}${r.timedOut ? `\n(stopped after the time budget of ${budgetSec} s: --timeout-sec)` : ''}`;
+    const out = `${r.out}${r.timedOut ? `\n(stopped after the time budget of ${budgetSec} s: ${budgetSource})` : ''}`;
     const green = r.status === 0 && !r.timedOut;
     if (!green) stillRed.push(command);
     console.log(

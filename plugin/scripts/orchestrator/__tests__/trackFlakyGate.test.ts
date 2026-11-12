@@ -9,6 +9,8 @@
 // a flaky gate gives green evidence for exactly the delivered tip with `flaky`, gate_check.flaky, a finding (deduplicated
 // on the command, its count going up when the command is flaky on the same track again), the FLAKY line and a section in
 // the review package; red twice is a fix round as before.
+// (7) the time budget (gates.timeoutSec, default baseGate.timeoutSec): a track's own run without --timeout-sec turns a
+// hanging gate red within it.
 // Runs against a temporary queue (QUEUE_FOLDER) and git repo (QUEUE_GIT) with a worktree for the track branch, as
 // queueGateEvidence.test.ts. Never the main repo or the real queue. The gate is a tiny `node gate.js <name> <mode>` that
 // counts its runs in a file and, in the flaky modes, is red the first time and green the second (a marker file).
@@ -29,13 +31,15 @@ const ID = ['-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.i
 const RES = 'RESULT status=DONE branch=queue/A commits=1 migr=- gates=OK probe=- ownerQuestions=0 edge=-';
 
 // The gate: counts each run (COUNT_FILE), then by mode: green, red, or red the first time and on the second run green
-// (flaky), green after a write to a tracked file (dirty), or green after a commit that moves HEAD (commit).
+// (flaky), green after a write to a tracked file (dirty), green after a commit that moves HEAD (commit), or two minutes
+// without a word (hang, for the time budget).
 const GATE_JS = [
   "const fs = require('fs'); const cp = require('child_process');",
   'const [name, mode] = process.argv.slice(2);',
   "if (process.env.COUNT_FILE) fs.appendFileSync(process.env.COUNT_FILE, name + '\\n');",
   "if (mode === 'green') process.exit(0);",
   "if (mode === 'red') { console.log(name + ' red'); process.exit(1); }",
+  "if (mode === 'hang') { console.log(name + ' hangs'); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120000); }",
   "const marker = process.env.MARK_DIR + '/' + name;",
   "if (!fs.existsSync(marker)) { fs.writeFileSync(marker, '1'); console.log(name + ' red the first time'); process.exit(1); }",
   "if (mode === 'dirty') fs.appendFileSync('README.md', 'changed by the gate\\n');",
@@ -300,4 +304,27 @@ describe('the flaky check at receive', () => {
     expect(p.evidence().at(-1)).not.toHaveProperty('flaky');
     expect(p.findings()).toHaveLength(0);
   }, 240_000);
+});
+
+describe('the time budget of a track gate (gates.timeoutSec)', () => {
+  const HANG = gate('hang', 'hang');
+
+  it('a hanging gate in the track worktree is red within gates.timeoutSec, without --timeout-sec', () => {
+    const p = project({ gates: { quick: [HANG], full: [], flakyRerun: false, timeoutSec: 2 } });
+    const t0 = Date.now();
+    const r = p.gates();
+    expect(r.code, r.out).toBe(1);
+    expect(r.out).toMatch(/RED/);
+    expect(r.out).toContain('time budget of 2 s');
+    expect(Date.now() - t0).toBeLessThan(30_000);
+  }, 60_000);
+
+  it('without gates.timeoutSec the budget is baseGate.timeoutSec', () => {
+    const p = project({ gates: { quick: [HANG], full: [], flakyRerun: false }, baseGate: { timeoutSec: 2 } });
+    const t0 = Date.now();
+    const r = p.gates();
+    expect(r.code, r.out).toBe(1);
+    expect(r.out).toContain('time budget of 2 s');
+    expect(Date.now() - t0).toBeLessThan(30_000);
+  }, 60_000);
 });

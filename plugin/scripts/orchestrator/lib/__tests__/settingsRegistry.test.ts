@@ -243,3 +243,51 @@ describe('lite scope in the registry follows what lite really has (finding 5)', 
     expect(row('limits.maxPerDomain').modes).toEqual(['full']);
   });
 });
+
+describe('the config table in queue.md follows the registry (step 11)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require('node:fs');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const path = require('node:path');
+  const docs = path.resolve(__dirname, '..', '..', '..', '..', 'docs');
+  const queueMd = fs.readFileSync(path.join(docs, 'queue.md'), 'utf8').replace(/\r\n/g, '\n');
+  const section = queueMd.slice(queueMd.indexOf('\n## Configuration\n'));
+  // One `### <category title>` table per registry category, in the registry's order.
+  const parts = section.split('\n### ').slice(1).map((p: string) => ({ title: p.split('\n')[0].trim(), body: p }));
+  const tableRows = (body: string) =>
+    body
+      .split('\n')
+      .filter((l: string) => l.startsWith('| `'))
+      .map((l: string) => {
+        const cells = l.split(/(?<!\\)\|/).slice(1, -1).map((c: string) => c.trim());
+        return { keys: [...cells[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]), marks: cells[cells.length - 1] };
+      });
+
+  it('the eleven categories, each its own table, in the registry order', () => {
+    expect(parts.map((p: { title: string }) => p.title)).toEqual(R.CATEGORIES.map((c: { title: string }) => c.title));
+  });
+
+  it('every registry key is in the table of its category, once, with its marks: Advanced, Full mode only, queue.json', () => {
+    const seen = new Map<string, number>();
+    R.CATEGORIES.forEach((c: { id: string }, i: number) => {
+      for (const row of tableRows(parts[i]?.body ?? '')) {
+        for (const key of row.keys) {
+          const r = ROWS.find((x) => x.key === key);
+          expect(r, `${key} in the ${c.id} table is no registry key`).toBeTruthy();
+          if (!r) continue;
+          expect(r.category, key).toBe(c.id);
+          seen.set(key, (seen.get(key) ?? 0) + 1);
+          expect(row.marks.includes('Advanced'), `${key}: Advanced`).toBe(r.level === 'advanced');
+          expect(row.marks.includes('Full mode only'), `${key}: Full mode only`).toBe(r.modes.length === 1 && r.modes[0] === 'full');
+          expect(row.marks.includes('queue.json'), `${key}: queue.json`).toBe(r.store === 'queue');
+        }
+      }
+    });
+    for (const r of ROWS) expect(seen.get(r.key), `${r.key} in the table`).toBe(1);
+  });
+
+  it('guide.md and full-mode.md link the table', () => {
+    for (const f of ['guide.md', 'full-mode.md'])
+      expect(fs.readFileSync(path.join(docs, f), 'utf8'), f).toMatch(/\]\(queue\.md#configuration\)/);
+  });
+});
