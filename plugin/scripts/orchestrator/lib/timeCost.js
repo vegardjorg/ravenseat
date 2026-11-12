@@ -391,17 +391,31 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
   };
 }
 
+// One formatter per time zone, made on first use. Building an Intl.DateTimeFormat is slow (it loads the zone and locale
+// data), and dayFor runs once per usage event: with a 150,000-row time log that was over half of `ravenseat cost`
+// (review 2026-11-11). A formatter with an explicit timeZone gives the same result every time, so caching it changes no
+// output. A zone Intl does not know throws (RangeError) as before and is not cached.
+const DAY_FORMATS = new Map();
+function dayFormat(tz) {
+  let f = DAY_FORMATS.get(tz);
+  if (!f) {
+    // en-CA formats dates as YYYY-MM-DD.
+    f = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    DAY_FORMATS.set(tz, f);
+  }
+  return f;
+}
+
 /** The date (YYYY-MM-DD) an ISO timestamp has in the time zone `tz`. */
 function dayFor(iso, tz = TZ) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  // en-CA formats dates as YYYY-MM-DD.
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
+  return dayFormat(tz).format(d);
 }
 
 /** Reads JSONL text into rows; broken lines are skipped (the file is written by several processes). */
@@ -417,6 +431,10 @@ function readRows(text) {
   }
   return out;
 }
+
+// lib/projectRoot.js, loaded on first use (as the inline require did) and kept: bareAgentType runs once per usage event.
+let projectRootLib;
+const bareAgentType = (t) => (projectRootLib ??= require('./projectRoot.js')).bareAgentType(t);
 
 /** The key a usage row is deduplicated on: agent_id, otherwise track + time (older manual rows). */
 const agentKey = (r) => r.agent_id ?? `${r.track ?? '?'}|${r.time}`;
@@ -457,7 +475,7 @@ function usageEvents(rows, tz = TZ) {
       };
       out.push({
         agent,
-        type: require('./projectRoot.js').bareAgentType(r.agent_type) ?? 'unknown',
+        type: bareAgentType(r.agent_type) ?? 'unknown',
         track: r.track ?? agent,
         time: r.time,
         day: dayFor(r.time, tz),
@@ -584,7 +602,7 @@ function firstReviewStart(rows, id, { types, from = null }) {
   const type = new Map();
   for (const r of rows ?? []) {
     if (!r?.agent_id) continue;
-    if (r.agent_type) type.set(r.agent_id, require('./projectRoot.js').bareAgentType(r.agent_type));
+    if (r.agent_type) type.set(r.agent_id, bareAgentType(r.agent_type));
     if (r.track && taskIdFor(r.track, isId) === id) belongsTo.add(r.agent_id);
     const t = Date.parse(r.time);
     if (Number.isNaN(t)) continue;

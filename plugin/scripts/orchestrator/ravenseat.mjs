@@ -94,9 +94,21 @@ const args = name ? rest : [first, ...rest];
 // command is checked by queue.mjs itself (where `doctor` is exempt); `setup` is exempt (it never replaces the file).
 if (name && name !== 'setup') createRequire(import.meta.url)('./lib/queueConfig.js').stopIfConfigUnreadable();
 
-const r = spawnSync(process.execPath, [file, ...args], { stdio: 'inherit' });
-if (r.error) {
-  console.error(`ravenseat: could not start ${path.basename(file)}: ${r.error.message}`);
-  process.exit(1);
+// A queue command runs in THIS process (review 2026-11-11, E2): a second node start cost about 100 ms or more on every
+// command, and the orchestrator runs many per round. process.argv is set to what queue.mjs had as its own process
+// ([node, queue.mjs, command, ...]), so every argv read in queue.mjs and cli/ sees the same as before. env, cwd and the
+// stdio handles were inherited by the child, so they are the same here. The exit code is queue.mjs's own (process.exit,
+// or 0 at the end), and an error that escapes it prints and exits 1, as the child did.
+// The other scripts (board, prepare-track, gates, ...) still start as their own process: each is a separate program with
+// its own exit handlers, signal handling and isMain check, and some run for a long time (the board server, gates).
+if (file === path.join(HERE, 'queue.mjs')) {
+  process.argv = [process.execPath, file, ...args];
+  await import('./queue.mjs');
+} else {
+  const r = spawnSync(process.execPath, [file, ...args], { stdio: 'inherit' });
+  if (r.error) {
+    console.error(`ravenseat: could not start ${path.basename(file)}: ${r.error.message}`);
+    process.exit(1);
+  }
+  process.exit(r.status ?? 1);
 }
-process.exit(r.status ?? 1);

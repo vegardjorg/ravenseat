@@ -660,38 +660,11 @@
 // cli/, one module per area (tasks, taskEdit, view, owner, decide, run, merge, cost, doctor, finding, helpers, orchestrator, projects, batch,
 // cloud, wait, plans with planShared, planCheck and planDoc), with the shared state in cli/context.mjs and the shared track
 // helpers in cli/tracks.mjs. The usage comment stays here: lib/cliHelp.js reads it for `ravenseat help`.
+// Each branch loads its own module with import() (review 2026-11-11, E2): a command loads context.mjs and the one module
+// it runs (and what that module imports), not all of them. __tests__/queueDispatch.test.ts reads the branches and loads
+// each module on its own, so a module that only worked after the others had loaded is caught there.
 import fs from 'node:fs';
 import { a, command, CONFIG, CLI, die, HERE, KK, require } from './cli/context.mjs';
-import * as ask from './cli/ask.mjs';
-import * as attempt from './cli/attempt.mjs';
-import * as batch from './cli/batch.mjs';
-import * as cloud from './cli/cloud.mjs';
-import * as conflicts from './cli/conflicts.mjs';
-import * as cost from './cli/cost.mjs';
-import * as decide from './cli/decide.mjs';
-import * as board from './cli/board.mjs';
-import * as doctor from './cli/doctor.mjs';
-import * as finding from './cli/finding.mjs';
-import * as helpers from './cli/helpers.mjs';
-import * as checks from './cli/checks.mjs';
-import * as kickstart from './cli/kickstart.mjs';
-import * as machine from './cli/machine.mjs';
-import * as gate from './cli/gate.mjs';
-import * as merge from './cli/merge.mjs';
-import * as orchestrator from './cli/orchestrator.mjs';
-import * as owner from './cli/owner.mjs';
-import * as plans from './cli/plans.mjs';
-import * as projects from './cli/projects.mjs';
-import * as run from './cli/run.mjs';
-import * as taskEdit from './cli/taskEdit.mjs';
-import * as tasks from './cli/tasks.mjs';
-import * as triage from './cli/triage.mjs';
-import * as unlock from './cli/unlock.mjs';
-import * as surface from './cli/surface.mjs';
-import * as ownerLog from './cli/ownerLog.mjs';
-import * as settings from './cli/settings.mjs';
-import * as view from './cli/view.mjs';
-import * as wait from './cli/wait.mjs';
 
 // ---- Switched-off modules (features in queue.config.json, lib/queueConfig.js) ------------------------------------
 // The commands of a module that is off answer that with exit 0 (not an error: the project chose it). The plan register
@@ -707,175 +680,176 @@ if (MODULE_COMMANDS[command] && !CLOUD_WHILE_OFF && !KK.featureOn(MODULE_COMMAND
 
 // ---- Commands ----------------------------------------------------------------------------------------------
 if (command === 'init') {
-  tasks.cmdInit();
+  (await import('./cli/tasks.mjs')).cmdInit();
 } else if (command === 'mode') {
-  tasks.cmdMode();
+  (await import('./cli/tasks.mjs')).cmdMode();
 } else if (command === 'add') {
-  tasks.cmdAdd();
+  (await import('./cli/tasks.mjs')).cmdAdd();
 } else if (command === 'show' && a[1] && !a[1].startsWith('-')) {
-  view.cmdInfo(); // ravenseat show <id>: the same as ravenseat info <id>, rather than a summary that ignores the id
+  // ravenseat show <id>: the same as ravenseat info <id>, rather than a summary that ignores the id
+  (await import('./cli/view.mjs')).cmdInfo();
 } else if (
   command === 'show' &&
   !['--full', '--all', '--grouped', '--project'].some((f) => a.includes(f))
 ) {
-  view.cmdShowSummary();
+  (await import('./cli/view.mjs')).cmdShowSummary();
 } else if (command === 'show') {
-  view.cmdShow();
+  (await import('./cli/view.mjs')).cmdShow();
 } else if (command === 'next') {
-  run.cmdNext();
+  (await import('./cli/run.mjs')).cmdNext();
 } else if (command === 'start') {
-  run.cmdStart();
+  (await import('./cli/run.mjs')).cmdStart();
 } else if (command === 'set') {
-  taskEdit.cmdSet();
+  (await import('./cli/taskEdit.mjs')).cmdSet();
 } else if (command === 'cancel') {
-  taskEdit.cmdCancel();
+  (await import('./cli/taskEdit.mjs')).cmdCancel();
 } else if (command === 'edit') {
-  taskEdit.cmdEdit();
+  (await import('./cli/taskEdit.mjs')).cmdEdit();
 } else if (command === 'resolve') {
-  owner.cmdResolve();
+  (await import('./cli/owner.mjs')).cmdResolve();
 } else if (command === 'resolutions') {
-  owner.cmdResolutions();
+  (await import('./cli/owner.mjs')).cmdResolutions();
 } else if (command === 'question') {
-  owner.cmdQuestion();
+  (await import('./cli/owner.mjs')).cmdQuestion();
 } else if (command === 'wait') {
-  wait.cmdWait();
+  (await import('./cli/wait.mjs')).cmdWait();
 } else if (command === 'decide') {
-  decide.cmdDecide();
+  (await import('./cli/decide.mjs')).cmdDecide();
 } else if (command === 'approve') {
-  owner.cmdApprove();
+  (await import('./cli/owner.mjs')).cmdApprove();
 } else if (command === 'forecast') {
-  cost.cmdForecast();
+  (await import('./cli/cost.mjs')).cmdForecast();
 } else if (command === 'proposals') {
-  owner.cmdProposals();
+  (await import('./cli/owner.mjs')).cmdProposals();
 } else if (command === 'limit') {
-  cost.cmdLimit();
+  (await import('./cli/cost.mjs')).cmdLimit();
 } else if (command === 'helpers') {
-  helpers.cmdHelpers();
+  (await import('./cli/helpers.mjs')).cmdHelpers();
 } else if (command === 'guidance') {
-  helpers.cmdGuidance();
+  (await import('./cli/helpers.mjs')).cmdGuidance();
 } else if (command === 'checks') {
-  checks.cmdChecks();
+  (await import('./cli/checks.mjs')).cmdChecks();
 } else if (command === 'kickstart') {
-  kickstart.cmdKickstart();
+  (await import('./cli/kickstart.mjs')).cmdKickstart();
 } else if (command === 'gate') {
-  gate.cmdGate();
+  (await import('./cli/gate.mjs')).cmdGate();
 } else if (command === 'board-setting') {
-  board.cmdBoard();
+  (await import('./cli/board.mjs')).cmdBoard();
 } else if (command === 'triage') {
-  triage.cmdTriage();
+  (await import('./cli/triage.mjs')).cmdTriage();
 } else if (command === 'compact') {
-  orchestrator.cmdCompact();
+  (await import('./cli/orchestrator.mjs')).cmdCompact();
 } else if (command === 'state') {
-  view.cmdState();
+  (await import('./cli/view.mjs')).cmdState();
 } else if (command === 'diagnose') {
-  view.cmdDiagnose();
+  (await import('./cli/view.mjs')).cmdDiagnose();
 } else if (command === 'doctor') {
-  doctor.cmdDoctor();
+  (await import('./cli/doctor.mjs')).cmdDoctor();
 } else if (command === 'machine') {
-  machine.cmdMachine();
+  (await import('./cli/machine.mjs')).cmdMachine();
 } else if (command === 'conflicts') {
-  conflicts.cmdConflicts();
+  (await import('./cli/conflicts.mjs')).cmdConflicts();
 } else if (command === 'finding') {
-  finding.cmdFinding();
+  (await import('./cli/finding.mjs')).cmdFinding();
 } else if (command === 'trackFile') {
-  run.cmdTrackFile();
+  (await import('./cli/run.mjs')).cmdTrackFile();
 } else if (command === 'fill') {
-  run.cmdFill();
+  (await import('./cli/run.mjs')).cmdFill();
 } else if (command === 'receive') {
-  merge.cmdReceive();
+  (await import('./cli/merge.mjs')).cmdReceive();
 } else if (command === 'merge') {
-  await merge.cmdMerge();
+  await (await import('./cli/merge.mjs')).cmdMerge();
 } else if (command === 'block') {
-  merge.cmdBlock();
+  (await import('./cli/merge.mjs')).cmdBlock();
 } else if (command === 'unlock') {
-  unlock.cmdUnlock();
+  (await import('./cli/unlock.mjs')).cmdUnlock();
 } else if (command === 'surface') {
-  surface.cmdSurface();
+  (await import('./cli/surface.mjs')).cmdSurface();
 } else if (command === 'owner-log') {
-  ownerLog.cmdOwnerLog();
+  (await import('./cli/ownerLog.mjs')).cmdOwnerLog();
 } else if (command === 'settings') {
-  settings.cmdSettings();
+  (await import('./cli/settings.mjs')).cmdSettings();
 } else if (command === 'unblock') {
-  merge.cmdUnblock();
+  (await import('./cli/merge.mjs')).cmdUnblock();
 } else if (command === 'blockers') {
-  merge.cmdBlockers();
+  (await import('./cli/merge.mjs')).cmdBlockers();
 } else if (command === 'info') {
-  view.cmdInfo();
+  (await import('./cli/view.mjs')).cmdInfo();
 } else if (command === 'ask') {
-  ask.cmdAsk();
+  (await import('./cli/ask.mjs')).cmdAsk();
 } else if (command === 'activeOnes') {
-  view.cmdActiveOnes();
+  (await import('./cli/view.mjs')).cmdActiveOnes();
 } else if (command === 'explain') {
-  view.cmdExplain();
+  (await import('./cli/view.mjs')).cmdExplain();
 } else if (command === 'next-migr') {
-  merge.cmdNextMigr();
+  (await import('./cli/merge.mjs')).cmdNextMigr();
 } else if (command === 'migr') {
-  merge.cmdMigr();
+  (await import('./cli/merge.mjs')).cmdMigr();
 } else if (command === 'capacity') {
-  cost.cmdCapacity();
+  (await import('./cli/cost.mjs')).cmdCapacity();
 } else if (command === 'cost') {
-  cost.cmdCost();
+  (await import('./cli/cost.mjs')).cmdCost();
 } else if (command === 'calibrate') {
-  cost.cmdCalibrate();
+  (await import('./cli/cost.mjs')).cmdCalibrate();
 } else if (command === 'projects') {
-  projects.cmdProjects();
+  (await import('./cli/projects.mjs')).cmdProjects();
 } else if (command === 'project') {
-  projects.cmdProject();
+  (await import('./cli/projects.mjs')).cmdProject();
 } else if (command === 'edit-many') {
-  taskEdit.cmdEditMany();
+  (await import('./cli/taskEdit.mjs')).cmdEditMany();
 } else if (command === 'pickable') {
-  run.cmdPickable();
+  (await import('./cli/run.mjs')).cmdPickable();
 } else if (command === 'pick') {
-  run.cmdPick();
+  (await import('./cli/run.mjs')).cmdPick();
 } else if (command === 'deliver') {
-  merge.cmdDeliver();
+  (await import('./cli/merge.mjs')).cmdDeliver();
 } else if (command === 'release') {
-  merge.cmdRelease();
+  (await import('./cli/merge.mjs')).cmdRelease();
 } else if (command === 'qa') {
-  owner.cmdQa();
+  (await import('./cli/owner.mjs')).cmdQa();
 } else if (command === 'external') {
-  cloud.cmdExternal();
+  (await import('./cli/cloud.mjs')).cmdExternal();
 } else if (command === 'orchestrator') {
-  orchestrator.cmdOrchestrator();
+  (await import('./cli/orchestrator.mjs')).cmdOrchestrator();
 } else if (command === 'deliveries') {
-  merge.cmdDeliveries();
+  (await import('./cli/merge.mjs')).cmdDeliveries();
 } else if (command === 'resume') {
-  run.cmdResume();
+  (await import('./cli/run.mjs')).cmdResume();
 } else if (command === 'attempt') {
-  attempt.cmdAttempt();
+  (await import('./cli/attempt.mjs')).cmdAttempt();
 } else if (command === 'cloud-package') {
-  cloud.cmdCloudPackage();
+  (await import('./cli/cloud.mjs')).cmdCloudPackage();
 } else if (command === 'cloud-bundles') {
-  cloud.cmdCloudBundles();
+  (await import('./cli/cloud.mjs')).cmdCloudBundles();
 } else if (command === 'cloud') {
-  cloud.cmdCloud();
+  (await import('./cli/cloud.mjs')).cmdCloud();
 } else if (command === 'batch') {
-  batch.cmdBatch();
+  (await import('./cli/batch.mjs')).cmdBatch();
 } else if (command === 'area') {
-  projects.cmdArea();
+  (await import('./cli/projects.mjs')).cmdArea();
 } else if (command === 'areas') {
-  projects.cmdAreas();
+  (await import('./cli/projects.mjs')).cmdAreas();
 } else if (command === 'focus') {
-  projects.cmdFocus();
+  (await import('./cli/projects.mjs')).cmdFocus();
 } else if (command === 'park') {
-  projects.cmdPark();
+  (await import('./cli/projects.mjs')).cmdPark();
 } else if (command === 'continue') {
-  projects.cmdContinue();
+  (await import('./cli/projects.mjs')).cmdContinue();
 } else if (command === 'rank') {
-  projects.cmdRank();
+  (await import('./cli/projects.mjs')).cmdRank();
 } else if (command === 'undo') {
-  taskEdit.cmdUndo();
+  (await import('./cli/taskEdit.mjs')).cmdUndo();
 } else if (command === 'plan') {
   // ---- The plan register (see the top of the file and lib/queuePlan.js) ----
-  plans.planCommand();
+  (await import('./cli/plans.mjs')).planCommand();
 } else if (command === 'classify') {
-  tasks.cmdClassify();
+  (await import('./cli/tasks.mjs')).cmdClassify();
 } else if (command === 'handover') {
   // ---- The ongoing handover note in two parts (rules: lib/queueHandover.js) ----
-  orchestrator.handoverCommand();
+  (await import('./cli/orchestrator.mjs')).handoverCommand();
 } else if (command === 'follow') {
   // ---- The "Follow up" entries (see the top of the file and lib/queueFollow.js) ----
-  orchestrator.followCommand();
+  (await import('./cli/orchestrator.mjs')).followCommand();
 } else if (command && command !== 'help') {
   // A mistyped command: one line with the closest known command (lib/cliHelp.js), same exit code as before.
   const scripts = fs

@@ -240,3 +240,66 @@ describe('deduplicated usage rows', () => {
     expect(T.readRows('{"a":1}\n{"half\n\n{"b":2}\n')).toEqual([{ a: 1 }, { b: 2 }]);
   });
 });
+
+describe('dayFor (pinned output, and one formatter per time zone)', () => {
+  // The day is the local calendar date. Pinned across the Oslo DST changes (last Sunday of March and of October at
+  // 01:00 UTC), month and year ends, and in other zones, so caching the formatter (review 2026-11-11, cost speed) cannot
+  // move a row to another day.
+  const CASES: [string, string, string][] = [
+    ['2026-03-29T00:59:59Z', 'Europe/Oslo', '2026-03-29'], // 01:59:59 CET, just before the spring change
+    ['2026-03-29T01:00:00Z', 'Europe/Oslo', '2026-03-29'], // 03:00 CEST
+    ['2026-03-28T22:59:59Z', 'Europe/Oslo', '2026-03-28'], // 23:59:59 CET
+    ['2026-03-28T23:00:00Z', 'Europe/Oslo', '2026-03-29'], // midnight CET
+    ['2026-10-24T21:59:59Z', 'Europe/Oslo', '2026-10-24'], // 23:59:59 CEST
+    ['2026-10-24T22:00:00Z', 'Europe/Oslo', '2026-10-25'], // midnight CEST, the night of the autumn change
+    ['2026-10-25T00:30:00Z', 'Europe/Oslo', '2026-10-25'], // 02:30 CEST, the first of the two 02:30s
+    ['2026-10-25T01:30:00Z', 'Europe/Oslo', '2026-10-25'], // 02:30 CET, the second
+    ['2026-10-25T22:59:59Z', 'Europe/Oslo', '2026-10-25'], // 23:59:59 CET
+    ['2026-10-25T23:00:00Z', 'Europe/Oslo', '2026-10-26'], // midnight CET
+    ['2026-10-31T22:59:59Z', 'Europe/Oslo', '2026-10-31'], // month end
+    ['2026-10-31T23:00:00Z', 'Europe/Oslo', '2026-11-01'],
+    ['2026-12-31T23:00:00Z', 'Europe/Oslo', '2027-01-01'], // year end
+    ['2026-03-01T04:59:59Z', 'America/New_York', '2026-02-28'], // Feb end, UTC-5
+    ['2026-03-01T05:00:00Z', 'America/New_York', '2026-03-01'],
+    ['2026-03-08T06:59:59Z', 'America/New_York', '2026-03-08'], // the US spring change (07:00 UTC)
+    ['2026-11-01T03:59:59Z', 'America/New_York', '2026-10-31'], // EDT, before the US autumn change
+    ['2026-11-01T04:00:00Z', 'America/New_York', '2026-11-01'],
+    ['2026-10-31T23:59:59Z', 'UTC', '2026-10-31'],
+    ['2026-11-01T00:00:00Z', 'UTC', '2026-11-01'],
+    ['2026-04-04T13:00:00Z', 'Pacific/Kiritimati', '2026-04-05'], // UTC+14
+    ['2026-10-31T23:00:00+01:00', 'Europe/Oslo', '2026-10-31'], // an offset in the input
+  ];
+
+  it('gives the pinned local date in every case, also when the zones are mixed call by call', () => {
+    for (const [iso, tz, day] of CASES) expect(T.dayFor(iso, tz), `${iso} ${tz}`).toBe(day);
+    // Interleaved (a cached formatter per zone must not leak into another zone).
+    for (const [iso, tz, day] of [...CASES].reverse()) expect(T.dayFor(iso, tz), `${iso} ${tz}`).toBe(day);
+  });
+
+  it('the default zone is the machine zone (TZ, Europe/Oslo in the tests), invalid input is null, an unknown zone throws', () => {
+    expect(T.dayFor('2026-10-24T22:00:00Z')).toBe('2026-10-25');
+    expect(T.dayFor('not a date')).toBeNull();
+    expect(T.dayFor('not a date', 'No/Such_Zone')).toBeNull(); // the date is checked first, as before
+    expect(() => T.dayFor('2026-10-24T22:00:00Z', 'No/Such_Zone')).toThrow(RangeError);
+    // A failed zone is not remembered as good: the next call throws again.
+    expect(() => T.dayFor('2026-10-24T22:00:00Z', 'No/Such_Zone')).toThrow(RangeError);
+  });
+
+  it('builds one Intl.DateTimeFormat per zone, not one per call (it was 12 s of a 21 s `ravenseat cost`)', () => {
+    const Real = Intl.DateTimeFormat;
+    let made = 0;
+    const Counting = function (this: unknown, ...args: ConstructorParameters<typeof Intl.DateTimeFormat>) {
+      made++;
+      return new Real(...args);
+    } as unknown as typeof Intl.DateTimeFormat;
+    Object.assign(Counting, Real);
+    Intl.DateTimeFormat = Counting;
+    try {
+      for (let i = 0; i < 1000; i++) T.dayFor(new Date(Date.UTC(2026, 0, 1) + i * 3_600_000).toISOString(), 'Asia/Tokyo');
+      for (let i = 0; i < 1000; i++) T.dayFor(new Date(Date.UTC(2026, 0, 1) + i * 3_600_000).toISOString(), 'Australia/Sydney');
+    } finally {
+      Intl.DateTimeFormat = Real;
+    }
+    expect(made).toBeLessThanOrEqual(2);
+  });
+});
