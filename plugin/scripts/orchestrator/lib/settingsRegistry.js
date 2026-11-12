@@ -30,11 +30,9 @@
 // keys that have no counterpart in STANDARD. The coverage test (lib/__tests__/settingsRegistry.test.ts) fails when a key
 // in STANDARD, a limit, a cloud setting, a board switch or a module has no row.
 //
-// TODO (owner decisions B1-B5, plans/ROADMAP.md): none of their keys exist yet, so they have no rows. Each gets its row in
-// the same task that adds the key to STANDARD (the coverage test turns red until it does):
-//   B1  agentPushBlock.enabled            guards, advanced, both modes, weakens when false
+// Owner decisions B1-B5 (plans/ROADMAP.md): B1 (agentPushBlock.enabled) and B3 (agentGuard.enabled, .except) have their
+// rows. The rest get theirs in the same task that adds the key to STANDARD (the coverage test turns red until it does):
 //   B2  gateEvidence.mode, .external      gates, advanced, both modes, choices own/external/off; external and off weaken
-//   B3  agentGuard.enabled, .except       guards, advanced, both modes, weakens when false or with exceptions
 //   B4  ownership.sharedPatchCollides     guards, advanced, full only (shared_patch is full format), weakens when false
 //   B5  history.rotateTimeLog, .archiveDoneAfterDays  history, advanced, both modes (performance, not a guard)
 // Also later: the environment variables (QUEUE_LOAD_ADAPTIVE, QUEUE_GATE_QUEUE, CONTEXT_BLOCK_OTHERS, the context limits,
@@ -348,6 +346,31 @@ const SETTINGS = Object.freeze([
       protects: 'A track changing your own Claude settings, agents, skills or hooks outside the repository.',
       whyNot: 'Git does not see ~/.claude, so a change there would go unnoticed and apply to every later session.',
       changes: 'Receive no longer compares your Claude setup before and after a track. Doctor will report it.',
+    }),
+  row('agentGuard.enabled', 'guards', 'onoff', 'Guard every agent type',
+    'The push, network, queue command and state file guards apply to every subagent, also general-purpose, Explore and ' +
+    'your own. Off: only the queue\'s own agent types, which are always guarded.', {
+      weakens: offWeakens,
+      protects: 'An agent the queue did not define (a builtin or your own subagent) pushing, fetching from the network or ' +
+        'writing the queue\'s state files.',
+      whyNot: 'Any subagent can read text that tells it to push or send something out; the guards are what stop it.',
+      changes: 'Agent types outside the queue\'s own get no push, network or write guard. Doctor will report AGENT GUARD OFF.',
+    }),
+  row('agentGuard.except', 'guards', 'list', 'Agent types not guarded',
+    'Agent types the guards leave out, without case and with or without a plugin prefix. The queue\'s own types stay guarded.', {
+      weakens: (v) => Array.isArray(v) && v.some((x) => typeof x === 'string' && x.trim() !== ''),
+      protects: 'The agent types named here pushing, fetching from the network or writing the queue\'s state files.',
+      whyNot: 'A named type runs with the main session\'s rules: it can push and reach the network whatever it was told.',
+      changes: 'The named agent types get no push, network or write guard. Doctor will list each one.',
+    }),
+  row('agentPushBlock.enabled', 'guards', 'onoff', 'Git push block in track worktrees',
+    'A git pre-push hook stops a push from a track\'s worktree, also one the text guard never saw (a script the agent ran). ' +
+    'It runs in front of any pre-push hook you have; your own pushes from the main checkout are not affected.', {
+      weakens: offWeakens,
+      protects: 'A track pushing through git itself, from a script or a command form the push guard cannot read.',
+      whyNot: 'The push guard reads command text; a push started by a script or a tool runs past it unseen.',
+      changes: 'The hook is removed at the next fill, start or resume, and agents can push from git itself when the text ' +
+        'guard does not see the command. Doctor will report it.',
     }),
   row('readGuard.agentTypes', 'guards', 'list', 'More guarded agent types',
     'More agent types the read guard applies to (tracks and reviewers are always included).'),

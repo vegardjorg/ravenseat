@@ -3,7 +3,7 @@
 // hook-write-guard.mjs: PreToolUse hook (matcher Write|Edit|NotebookEdit), the write guard for the queue's trusted
 // state files. The rules and the why live in lib/writeGuard.js; see docs/orchestration.md.
 //
-// Denies a queue agent (track, track-d, the reviewers and helpers: trackGuard.queueAgentTypes()) a direct write to the
+// Denies a queue agent (every subagent, lib/agentGuard.js: track, track-d, the reviewers and helpers always) a direct write to the
 // gate evidence store (gate-evidence.json, anywhere) and to the data folder's queue.json and base-health.json. The main
 // session (no agent_type) is never stopped. Inert without a queue project (no queue.config.json and no QUEUE_* variable).
 // A track (track, track-d) also gets a soft warning, never a denial, for a write the merge guard or receive flags later:
@@ -46,7 +46,16 @@ async function main() {
     folder = null; // the store is still guarded anywhere
   }
   const guardedTypes = require('./lib/trackGuard.js').queueAgentTypes();
-  const answer = WG.assessWrite({ agentType, filePath: abs, folder, guardedTypes });
+  // Every subagent is guarded unless agentGuard excepts its type (owner decision B3, lib/agentGuard.js); agent_id is only
+  // sent inside a subagent, so a main session started with --agent is not.
+  let policy = {};
+  try {
+    policy = require('./lib/agentGuard.js').policyOf(require('./lib/queueConfig.js').config());
+  } catch {
+    policy = {}; // an unreadable config: the default, every subagent guarded
+  }
+  const agentGuard = { ...policy, subagent: typeof input.agent_id === 'string' && input.agent_id !== '' };
+  const answer = WG.assessWrite({ agentType: input.agent_type, filePath: abs, folder, guardedTypes, agentGuard });
   if (answer) {
     process.stdout.write(
       JSON.stringify({

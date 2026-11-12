@@ -186,10 +186,12 @@ describe('H2: a queue agent runs only the allowed queue commands', () => {
     expect(verdict('ravenseat merge R --allow-guard', { agentType: 'track' })?.reason).toMatch(/`--allow-guard` is the orchestrator's/);
     expect(verdict('ravenseat plan new', { agentType: 'reviewer-gap' })?.reason).toMatch(/only reads here/);
   });
-  it('the orchestrator (no agent_type) and other agent types run every queue command', () => {
+  it('the orchestrator (no agent_type) and other agent types the agent guard leaves out run every queue command', () => {
     for (const command of ['ravenseat merge R --allow-guard', 'ravenseat set R done', 'ravenseat undo --by owner', 'node scripts/orchestrator/queue.mjs edit R --json {}']) {
       expect(decision(command, MAIN), command).toBeNull();
-      expect(decision(command, { agentType: 'general-purpose' }), command).toBeNull();
+      expect(decision(command, { agentType: 'general-purpose', agentGuard: { except: ['general-purpose'] } }), command).toBeNull();
+      // Guarded by default (owner decision B3).
+      expect(decision(command, { agentType: 'general-purpose' }), command).toBe('deny');
     }
   });
 });
@@ -305,7 +307,8 @@ describe('M2: every shipped agent is a guarded queue agent', () => {
       expect(decision('git push origin HEAD:staging', { agentType }), agentType).toBe('deny');
       expect(decision('ravenseat merge R', { agentType }), agentType).toBe('deny');
     }
-    expect(PG.isGuardedAgent('general-purpose', GUARDED)).toBe(false);
+    expect(PG.isGuardedAgent('general-purpose', GUARDED)).toBe(true); // owner decision B3: every subagent
+    expect(PG.isGuardedAgent('general-purpose', GUARDED, { enabled: false })).toBe(false);
   });
 });
 

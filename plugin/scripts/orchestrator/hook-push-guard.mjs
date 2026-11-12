@@ -12,8 +12,8 @@
 // The guard must never stop normal work because of a bug in itself. If node is missing on PATH, the hook gets exit 127,
 // which Claude Code treats as non-blocking.
 //
-// For the queue's agents (agent_type track/track-d and every reviewer and helper agent, builtin or custom, the same list
-// as the read guard) it also assesses network calls (curl, iwr, | sh, an unknown npx package); see lib/pushGuard.js.
+// For every subagent (owner decision B3, lib/agentGuard.js: the queue's own types always, any other agent_type unless
+// agentGuard.except names it) it also assesses network calls (curl, iwr, | sh, an unknown npx package); see lib/pushGuard.js.
 // The orchestrator (the main session, no agent_type) is not affected.
 //
 // The batch threshold (config().push, lib/pushBatch.js): a plain push of baseBranch by the orchestrator gets "ask" when
@@ -181,7 +181,10 @@ process.stdin.on('end', () => {
     const agentType = typeof p.agent_type === 'string' ? p.agent_type : null;
     // The guarded types are read once (config + queue.json), and only in a subagent.
     const guardedTypes = agentType ? require('./lib/trackGuard.js').queueAgentTypes() : new Set();
-    const guarded = isGuardedAgent(agentType, guardedTypes);
+    // Every subagent is guarded unless agentGuard excepts its type (owner decision B3, lib/agentGuard.js). agent_id is
+    // only sent inside a subagent: a main session started with --agent has an agent_type and no agent_id.
+    const agentGuard = { ...require('./lib/agentGuard.js').policyOf(k), subagent: typeof p.agent_id === 'string' && p.agent_id !== '' };
+    const guarded = isGuardedAgent(agentType, guardedTypes, agentGuard);
     // queue.config.json exists but does not parse (lib/configGuard.js, review H3): the project's base branch,
     // migration guard and deploy commands are unknown, so a push, migration or deploy shaped command gets ask (main
     // session) or deny (queue agent). The main session stops here: the other rules would run on defaults that are not
@@ -239,6 +242,7 @@ process.stdin.on('end', () => {
       deployCommands: k.deployCommands,
       agentType,
       guardedTypes,
+      agentGuard,
       knownPackage: guarded ? knownPackage(cwd) : undefined,
       batchQuestion: () => batchQuestion(cwd, k),
       secretQuestion: () => secretQuestion(cwd, k),

@@ -2,8 +2,8 @@
 // writeGuard.test.ts: the write guard for the queue's trusted state files (lib/writeGuard.js, hook-write-guard.mjs).
 //
 // Locks: (1) a queue agent's Write, Edit or NotebookEdit on the gate evidence store (anywhere, also its temporary file),
-// on the data folder's queue.json or base-health.json is denied; (2) the orchestrator (no agent_type), other agent
-// types and other files are let through; (3) the hook end to end denies a track's Write on the store and says nothing
+// on the data folder's queue.json or base-health.json is denied; (2) the orchestrator (no agent_type), agent types the
+// agent guard leaves out (agentGuard, owner decision B3) and other files are let through; (3) the hook end to end denies a track's Write on the store and says nothing
 // for the orchestrator; (4) outside a queue project (no queue.config.json, no QUEUE_* variable) the hook is inert.
 // =============================================================
 import { spawnSync } from 'node:child_process';
@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 /* eslint-disable @typescript-eslint/no-require-imports */
 const WG = require('../writeGuard.js') as {
   targetPath: (toolInput: object) => string | null;
-  assessWrite: (x: { agentType: string | null; filePath: string; folder: string; guardedTypes?: Set<string> }) => { reason: string } | null;
+  assessWrite: (x: { agentType: string | null; filePath: string; folder: string; guardedTypes?: Set<string>; agentGuard?: object }) => { reason: string } | null;
 };
 
 const HOOK = path.resolve(__dirname, '..', '..', 'hook-write-guard.mjs');
@@ -42,7 +42,9 @@ describe('writeGuard (pure)', () => {
     expect(WG.assessWrite({ agentType: 'track', filePath: path.join(os.tmpdir(), 'x', 'gate-evidence.json'), folder: FOLDER, guardedTypes: types })).not.toBeNull();
     // Let through: the orchestrator, an unguarded agent type, another file, a queue.json outside the data folder.
     expect(WG.assessWrite({ agentType: null, filePath: at('gate-evidence.json'), folder: FOLDER, guardedTypes: types })).toBeNull();
-    expect(WG.assessWrite({ agentType: 'general-purpose', filePath: at('queue.json'), folder: FOLDER, guardedTypes: types })).toBeNull();
+    expect(WG.assessWrite({ agentType: 'general-purpose', filePath: at('queue.json'), folder: FOLDER, guardedTypes: types, agentGuard: { except: ['general-purpose'] } })).toBeNull();
+    // Another agent type is guarded by default (owner decision B3, lib/agentGuard.js).
+    expect(WG.assessWrite({ agentType: 'general-purpose', filePath: at('queue.json'), folder: FOLDER, guardedTypes: types })).not.toBeNull();
     expect(WG.assessWrite({ agentType: 'track', filePath: at('A-1/track-result.md'), folder: FOLDER, guardedTypes: types })).toBeNull();
     expect(WG.assessWrite({ agentType: 'track', filePath: path.join(os.tmpdir(), 'app', 'queue.json'), folder: FOLDER, guardedTypes: types })).toBeNull();
   });

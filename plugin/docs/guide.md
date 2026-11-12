@@ -333,6 +333,11 @@ What Ravenseat checks for you:
   built-in patterns) and asks, naming file and line, never the value. A first push is scanned too, and a scan that
   does not finish asks instead of passing silently. It also asks before any of your `deployCommands`. It only sees
   commands run inside Claude Code, not your own terminal.
+- The push, network and write guards cover every subagent, whatever its agent type, not only the queue's own; read-only
+  helpers such as Explore keep working, and the main session is never guarded (`agentGuard.enabled`, `agentGuard.except`).
+- A git `pre-push` hook stops a push from a track's worktree in git itself, also when the push guard never saw the
+  command. It chains to a shell `pre-push` you already have, leaves the main checkout alone, and never counts as a
+  change to the git baseline (`agentPushBlock.enabled`). `git push --no-verify` skips it, like any hook.
 - Migrations: a queue agent writes a migration file but does not run migration commands (the usual tools and your
   `migrations.pushCommand`). An ordinary task that delivers one stops at `ravenseat merge` for you to decide, also with no
   migration flow configured.

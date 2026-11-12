@@ -23,7 +23,7 @@
 
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { a, CLI, CONFIG, die, edit, FILE, KK, PREFIX, read, require, TIME_LOG } from './context.mjs';
+import { a, CLI, CONFIG, die, edit, FILE, GIT_ROOT, KK, PREFIX, read, require, TIME_LOG } from './context.mjs';
 
 const R = require('./lib/settingsRegistry.js');
 const SV = require('./lib/settingsView.js');
@@ -172,6 +172,12 @@ function setSetting() {
     die(`settings set: could not write ${file} (${e.message}).`);
   }
   console.log(`${key} = ${SV.valueText(row, p.value)} (${SV.STORE_TEXT.config}).`);
+  // The agent push block follows its setting at once, not only at the next fill, start or resume (owner decision B1).
+  if (key === 'agentPushBlock.enabled') {
+    const r = require('./lib/agentPushBlock.js').ensure(GIT_ROOT, { agentPushBlock: { enabled: p.value } });
+    const said = { installed: 'installed', present: 'already installed', removed: 'removed', absent: 'not installed' }[r.result];
+    console.log(said ? `agent push block ${said}${r.dir ? ` (${r.dir})` : ''}.` : `agent push block: ${r.result}; see ${CLI} doctor.`);
+  }
 }
 
 export function cmdSettings() {

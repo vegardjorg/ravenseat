@@ -149,6 +149,15 @@ const STANDARD = Object.freeze({
   // settings, agents, commands, skills, hooks and plugin manifests; receive warns (CLAUDE SETUP CHANGED) when one
   // changed while the track ran. Only hashes are stored. false = off.
   claudeFingerprint: true,
+  // Which agent types the agent guards (push, network, queue CLI, the write guard) apply to (lib/agentGuard.js, owner
+  // decision B3): every subagent by default. except: agent types left out ("general-purpose", "myplugin:helper"; no
+  // case). enabled false: only the queue's own types, as before. The queue's own types (track, track-d, the shipped
+  // agents, the reviewers and helpers) are always guarded. Either change is a weakened guard (doctor names it).
+  agentGuard: { enabled: true, except: [] },
+  // The git pre-push hook that stops a push from a track's worktree even when the text guard never saw the command (a
+  // script the agent ran; lib/agentPushBlock.js, owner decision B1). Installed by fill, start, resume and prepare-track
+  // in front of any pre-push already there (husky, lefthook, your own), and removed again when this is false.
+  agentPushBlock: { enabled: true },
   // Shared config blocks parallel tracks break each other on (routes, registries, DI, i18n, feature flags), with the
   // protectedPaths rules. No task owns one; an agreed change goes in the task field hotspot_patch (one task at a time),
   // otherwise the track writes a wiring spec and the orchestrator makes the change. The merge guard stops an unagreed

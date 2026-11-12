@@ -364,20 +364,38 @@ function liteLine(config, own) {
   return `lite: ${names} ${same ? 'warn instead of stop' : 'are softer than in full'} (set them in queue.config.json for full strength)`;
 }
 
+/** The weakened settings doctor names on lines of their own, not in the shared WARN line (doctorRows). */
+const OWN_LINES = Object.freeze(['agentGuard.enabled', 'agentGuard.except', 'agentPushBlock.enabled']);
+
 /**
  * The rows of the doctor check `settings` (plans/innstillinger-vurdering-2026-11-12.md, step 7):
  *   - one WARN line naming every guard weaker than its default (the registry's `weakens`, the same list as the banner of
  *     `ravenseat settings`), or one OK line when there is none;
  *   - INFO in lite: the defaults lite softens (gitSurface, dependencyFiles), while the file does not set them;
- *   - INFO per entry of protectedPaths.remove: taken out, kept (the floor), or not a default path.
+ *   - INFO per entry of protectedPaths.remove: taken out, kept (the floor), or not a default path;
+ *   - the agent guards have lines of their own instead (OWN_LINES): WARN AGENT GUARD OFF and an INFO per agentGuard.except
+ *     entry (lib/agentGuard.js doctorLines, owner decision B3), and a WARN when agentPushBlock is off (B1).
  * Doctor shows these with quiet guidance too: a switched-off guard should not be forgotten.
  * @param {{ config: object, queue?: object, own?: object, cli?: string }} o config = config() (resolved), own = the file
  */
 function doctorRows({ config, queue = {}, own = {}, cli = 'ravenseat' }) {
   const name = 'settings';
   const view = settingsView({ config, queue });
-  const rows = view.categories.flatMap((c) => c.rows).filter((r) => r.weakened);
+  const weakened = view.categories.flatMap((c) => c.rows).filter((r) => r.weakened);
+  const rows = weakened.filter((r) => !OWN_LINES.includes(r.key));
   const out = [];
+  const ownLines = [
+    ...require('./agentGuard.js').doctorLines(config, cli),
+    ...(config?.agentPushBlock?.enabled === false
+      ? [{
+          status: 'WARN',
+          message:
+            'AGENT PUSH BLOCK OFF (agentPushBlock.enabled: false): agents can push from git itself when the text guard does ' +
+            'not see the command',
+          fix: `turn it back on with ${cli} settings set agentPushBlock.enabled on`,
+        }]
+      : []),
+  ].map((r) => ({ ...r, name }));
   if (rows.length) {
     const parts = rows.map((r) => (r.key === 'protectedPaths' ? protectedPathsText(r.value, r.standard) : `${r.key} ${r.valueText}`));
     out.push({
@@ -386,7 +404,8 @@ function doctorRows({ config, queue = {}, own = {}, cli = 'ravenseat' }) {
       message: `${rows.length} guard(s) weaker than the default: ${parts.join('; ')}`,
       fix: `fine when you chose it; see them with ${cli} settings --changed, and set one back with ${cli} settings set <key> <default>`,
     });
-  } else out.push({ status: 'OK', name, message: 'no guard is weaker than its default', fix: null });
+  } else if (!ownLines.length) out.push({ status: 'OK', name, message: 'no guard is weaker than its default', fix: null });
+  out.push(...ownLines);
   const lite = liteLine(config, own);
   if (lite) out.push({ status: 'INFO', name, message: lite, fix: null });
   const pp = own?.protectedPaths;

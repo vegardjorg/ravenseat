@@ -31,6 +31,9 @@ import { detectPushes, logEvent, logLoad } from './events.mjs';
 
 // The accepted git baseline: recorded silently on first use, before anything starts (lib/gitSurfaceBaseline.js).
 const GB = require('./lib/gitSurfaceBaseline.js');
+// The git pre-push hook that stops a push from a track worktree (owner decision B1): installed, or removed when
+// agentPushBlock.enabled is false, next to the baseline. The baseline never counts it (lib/agentPushBlock.js).
+const APB = require('./lib/agentPushBlock.js');
 const GI = require('./lib/gitIdentity.js');
 
 const ER = require('./lib/eventRows.js');
@@ -137,6 +140,7 @@ export function cmdStart() {
   const id = a[1];
   if (!id) die('start <id>');
   GB.ensure(FOLDER, GIT_ROOT);
+  APB.ensure(GIT_ROOT, CONFIG);
   // The usage is read before the lock (the log is large enough that this should not happen with the queue file locked). The same applies to
   // git status (uncommitted files in the main tree).
   const usage = dailyUsageFor(read());
@@ -246,6 +250,7 @@ export function cmdFill() {
   if (!scratch)
     die('fill --scratchpad <folder> (or QUEUE_SCRATCHPAD): the prompt files are written there.');
   GB.ensure(FOLDER, GIT_ROOT);
+  APB.ensure(GIT_ROOT, CONFIG);
   const max = val('--max') != null ? Number(val('--max')) : Infinity;
   if (!(max >= 0)) die('--max must be a number >= 0');
   // `--ids A B` and `--ids A,B` are the same (R5: the comma form was read as one unknown id).
@@ -575,6 +580,7 @@ export function cmdResume() {
     ? { answer, answered_at: new Date().toISOString(), ...(val('--by') ? { by: String(val('--by')).trim() } : {}) }
     : {};
   GB.ensure(FOLDER, GIT_ROOT);
+  APB.ensure(GIT_ROOT, CONFIG);
   // --from: the reviewer types whose findings caused this fix round (the reviewer hit rate, lib/eventStatistics.js).
   // Saved in `resumed` and the fixRound row; a name that is not a known reviewer type is kept, with a warning.
   const fromList = [...new Set(String(val('--from') ?? '').split(',').map((x) => x.trim()).filter(Boolean))];

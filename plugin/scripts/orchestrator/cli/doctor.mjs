@@ -65,7 +65,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -346,6 +346,12 @@ function checkSurface() {
   const reason = GB.driftDetail(FOLDER, GIT_ROOT)?.reason;
   if (!reason) return [ok('surface', 'the git hooks and config that run code match the accepted baseline')];
   return [warn('surface', reason, `${CLI} surface shows where; ${CLI} surface accept --by owner if you made the change, otherwise remove it`)];
+}
+
+/** The agent push block in the main checkout's hooks folder (lib/agentPushBlock.js, owner decision B1). Reads only. */
+function checkPushBlock() {
+  const r = require('./lib/agentPushBlock.js').doctorRow(GIT_ROOT, CONFIG, CLI);
+  return [{ status: r.status, name: 'pushblock', message: r.message, fix: r.fix }];
 }
 
 /** A lock left behind by a process that died. */
@@ -640,7 +646,7 @@ function checkCloud() {
 
 /** `ravenseat doctor [--json] [--all]` (the usage is at the top of queue.mjs). */
 export function cmdDoctor() {
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

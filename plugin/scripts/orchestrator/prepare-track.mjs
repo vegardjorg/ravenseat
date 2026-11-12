@@ -16,6 +16,9 @@
 //   3. If config().migrations.environmentFile is set and the file exists in mainTree but not in the worktree, it is copied
 //      (it is often gitignored, and the push guard needs it to see which environment is linked).
 //   4. Creates the scratchpad subfolder <scratchpad>/<TRACK>/.
+//   4b. Writes the agent push block marker into the worktree's own git dir (lib/agentPushBlock.js, owner decision B1):
+//      the pre-push block then stops any push from here. With a relative core.hooksPath (husky) it installs the block in
+//      the worktree's own hooks folder too, unless git tracks that folder.
 //   5. `git checkout -B <branch> <base>` if the worktree is not already on the branch. Refuses if that would throw away
 //      uncommitted changes or commits not on the base. If the branch already exists with commits ahead of the base
 //      (after `queue.mjs release` or a continuation), it becomes `git switch <branch>` without -B.
@@ -159,6 +162,18 @@ if (environmentFile) {
 // ---------- 4. scratchpad ----------
 fs.mkdirSync(SCRATCH, { recursive: true });
 status.push(`scratchpad ${SCRATCH}`);
+
+// ---------- 4b. agent push block (owner decision B1, lib/agentPushBlock.js) ----------
+// The marker in this worktree's own git dir makes the pre-push block stop a push from here, also one the push guard
+// never saw. A relative core.hooksPath (husky) points at a folder in this worktree: the block goes there too.
+{
+  const APB = require('./lib/agentPushBlock.js');
+  const pb = APB.prepareWorktree(WT, MAIN, K);
+  if (!pb.marker) status.push('WARNING could not mark the worktree for the agent push block');
+  else if (['unsupported', 'error', 'tracked', 'not-ignored'].includes(pb.result))
+    status.push(`WARNING agent push block not installed in ${pb.dir} (${pb.result})`);
+  else if (APB.enabledIn(K)) status.push('push block on');
+}
 
 // ---------- 5. branch ----------
 if (!git('rev-parse', '--verify', '--quiet', BASE).ok) deny(`cannot find ${BASE}`);

@@ -700,6 +700,44 @@ describe('a legitimate change is explained, not accused', () => {
   });
 });
 
+describe("Ravenseat's own pre-push block (agentPushBlock) and the baseline", () => {
+  const APB = () => require('../lib/agentPushBlock.js');
+
+  it('receive records the baseline, resume installs the block, the next receive does not stop', () => {
+    const p = project();
+    expect(p.run(['receive', 'A']).code).toBe(0);
+    expect(fs.existsSync(p.baselineFile)).toBe(true);
+    p.run(['resume', 'A', '--reason', 'context', '--scratchpad', p.scratch]);
+    expect(APB().status(p.hooksDir())).toBe('installed');
+    const r = p.run(['receive', 'A']);
+    expect(r.code, r.all).toBe(0);
+    expect(r.all).not.toContain('hook added');
+    expect(p.run(['surface']).all).not.toMatch(/hook (added|changed|removed)/);
+  });
+
+  it("the same with the user's own pre-push already there: no stop, and a later change to the user's part is seen", () => {
+    const p = project();
+    const hook = p.plant('pre-push');
+    expect(p.run(['receive', 'A']).code).toBe(0);
+    p.run(['resume', 'A', '--reason', 'context', '--scratchpad', p.scratch]);
+    expect(APB().status(p.hooksDir())).toBe('installed');
+    const r = p.run(['receive', 'A']);
+    expect(r.code, r.all).toBe(0);
+    fs.appendFileSync(hook.file, 'echo more\n');
+    const changed = p.run(['receive', 'A']);
+    expect(changed.code).toBe(1);
+    expect(changed.err).toContain('hook changed: pre-push');
+  });
+
+  it('installed first, baseline after: removing the block again (off) is not a difference either', () => {
+    const p = project();
+    APB().install(p.hooksDir());
+    expect(p.run(['receive', 'A']).code).toBe(0);
+    APB().remove(p.hooksDir());
+    expect(p.run(['receive', 'A']).code).toBe(0);
+  });
+});
+
 describe('the pure rules', () => {
   it('parseConfigOrigins keeps executing keys and their origin, never a value', () => {
     const GB = baselineLib();

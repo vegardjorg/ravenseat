@@ -10,8 +10,9 @@
 // Protected (PROTECTED):
 //   - gate-evidence.json and its temporary files (gate-evidence.json.<n>.tmp), ANYWHERE: no track needs such a file.
 //   - queue.json, base-health.json and git-surface.json in the data folder only (a project may have its own queue.json elsewhere).
-// Guarded agents: track and track-d always, plus the given types (trackGuard.queueAgentTypes(): the reviewers and
-// helpers). The orchestrator (no agent_type) and other agent types are never stopped.
+// Guarded agents: every subagent (owner decision B3, lib/agentGuard.js): track and track-d and the given types
+// (trackGuard.queueAgentTypes(): the reviewers and helpers) always, any other agent type unless agentGuard.except names it
+// or agentGuard.enabled is false. The orchestrator (no agent_type) is never stopped.
 //
 // Limits, on purpose: Bash can still write the files (the push guard and the tamper checks in gateEvidence.js cover the
 // likely paths); this is a guard against mistakes and casual forgery, not a security boundary.
@@ -47,13 +48,18 @@ function targetPath(toolInput) {
 
 /**
  * The denial for one write, or null (let through).
- * @param {{ agentType: string|null, filePath: string, folder: string, guardedTypes?: Set<string> }} x
+ * @param {{ agentType: string|null, filePath: string, folder: string, guardedTypes?: Set<string>,
+ *   agentGuard?: { enabled?: boolean, except?: string[], subagent?: boolean } }} x
+ *   agentGuard: the setting (lib/agentGuard.js policyOf) and whether the payload came from a subagent; default: every
+ *   subagent is guarded
  * @returns {{ reason: string } | null}
  */
-function assessWrite({ agentType, filePath, folder, guardedTypes = new Set() }) {
+function assessWrite({ agentType, filePath, folder, guardedTypes = new Set(), agentGuard }) {
   const type = bare(agentType);
   if (!type || !filePath) return null;
-  if (!ALWAYS.includes(type) && !guardedTypes.has(type)) return null;
+  const AG = require('./agentGuard.js');
+  const queueTypes = new Set([...ALWAYS, ...guardedTypes]);
+  if (!AG.isGuarded(agentType, { queueTypes, policy: agentGuard ?? AG.DEFAULTS, subagent: agentGuard?.subagent })) return null;
   const abs = norm(filePath);
   const name = path.basename(abs);
   const inFolder = folder ? path.dirname(abs) === norm(folder) : false;

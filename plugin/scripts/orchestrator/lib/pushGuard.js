@@ -26,10 +26,12 @@
 //   ask   a command that starts with one of config().deployCommands (after env prefixes), from an agent or the main
 //         session: a deploy is a deliberate step. A simple prefix match; empty list = off.
 //
-// Network guard for the queue's agents (hardening against prompt injection). Applies ONLY when the hook payload has an
-// agent_type that is a track (track, track-d) or a reviewer or helper agent, builtin or custom (the same list as the read
-// guard, trackGuard.js queueAgentTypes; also with the plugin prefix, "ravenseat:track", "ravenseat:reviewer"). None of them needs the
-// network. The orchestrator (the main session, the field is missing), other agent types and the owner are not affected:
+// Network guard for the queue's agents (hardening against prompt injection). Applies to every subagent, that is when the
+// hook payload has an agent_type (owner decision B3, lib/agentGuard.js): the queue's own types (track, track-d, the
+// reviewer and helper agents, builtin or custom: trackGuard.js queueAgentTypes(), also with the plugin prefix,
+// "ravenseat:track") always, and any other type (general-purpose, Explore, a user's own) unless agentGuard.except names
+// it or agentGuard.enabled is false. None of them needs the network. The orchestrator (the main session, the field is
+// missing) and the owner are not affected:
 //   deny  curl, wget, Invoke-WebRequest/iwr, Invoke-RestMethod/irm, Start-BitsTransfer as a command (also inside
 //         `powershell -c "…"`, `bash -c "…"`, `$(…)`, `eval` and runners such as `wsl` and `timeout`: the line is read with
 //         shellCommands.js, as for the push guard), a pipe into a shell (`| sh`, `| bash`, `| iex` …), and a
@@ -201,13 +203,17 @@ const bare = (agentType) => String(agentType || '').replace(/^.*:/, '');
 const isTrackAgent = (agentType) => TRACK_AGENT_TYPES.has(bare(agentType));
 
 /**
- * Is this agent type network guarded? Tracks, plus every reviewer and helper agent (builtin and custom): the same list
- * the read guard uses (trackGuard.js queueAgentTypes). None of them ever needs the network, and a custom helper with
- * Bash could otherwise reach it. The main session (the orchestrator) has no agent_type and is never guarded.
+ * Is this agent guarded (network, push, queue CLI, migrations; owner decision B3, lib/agentGuard.js)? Every non-empty
+ * agent_type is, by default: tracks, the reviewer and helper agents (builtin and custom, the same list the read guard
+ * uses, trackGuard.js queueAgentTypes()) and any other subagent (general-purpose, Explore, a user's own). The setting
+ * agentGuard (queue.config.json) can take types outside the queue's own out (except, or enabled: false); the queue's own
+ * types are always guarded. The main session (the orchestrator) has no agent_type and is never guarded; a main session
+ * started with --agent has no agent_id, which the hook passes as policy.subagent false.
  * @param {string|null|undefined} agentType  the hook payload's agent_type
- * @param {Set<string>} [types]  the guarded types; default track/track-d + queueAgentTypes() (reads the config)
+ * @param {Set<string>} [types]  the queue's own types beyond track/track-d; default queueAgentTypes() (reads the config)
+ * @param {{ enabled?: boolean, except?: string[], subagent?: boolean }} [policy]  default: every subagent is guarded
  */
-function isGuardedAgent(agentType, types) {
+function isGuardedAgent(agentType, types, policy) {
   const t = bare(agentType);
   if (!t) return false;
   if (TRACK_AGENT_TYPES.has(t)) return true;
@@ -216,10 +222,11 @@ function isGuardedAgent(agentType, types) {
     try {
       set = require('./trackGuard.js').queueAgentTypes();
     } catch {
-      set = new Set(); // fails open to the tracks only
+      set = new Set(); // the policy below still guards every other subagent
     }
   }
-  return set.has(t);
+  const AG = require('./agentGuard.js');
+  return AG.isGuarded(agentType, { queueTypes: set, policy: policy ?? AG.DEFAULTS, subagent: policy?.subagent });
 }
 
 const NETWORK_REASON = 'Network calls are blocked for queue agents; ask the orchestrator to fetch it.';
@@ -472,6 +479,8 @@ const queueShaped = (command) => QUEUE_SHAPED.test(command);
  *                                  never push, and run only the allowed queue commands,
  *   knownPackage?: (name) => bool  is the npm package known (package.json or node_modules/.bin)? Only for guarded agents,
  *   guardedTypes?: Set<string>    the guarded agent types beyond track/track-d; default trackGuard.queueAgentTypes(),
+ *   agentGuard?: { enabled?, except?, subagent? }  the agentGuard setting (lib/agentGuard.js policyOf) and whether the
+ *                                  payload came from a subagent (it has an agent_id); default: every subagent is guarded,
  *   batchQuestion?: () => string|null   the batch threshold question for a plain push of baseBranch (the hook reads
  *                                  git and base-health.json); asked only for the main session, and only when nothing
  *                                  else is found. null = no question.
@@ -488,7 +497,7 @@ const queueShaped = (command) => QUEUE_SHAPED.test(command);
  */
 function assess(command, context = {}) {
   const { baseBranch, migrations, deployCommands } = values(context);
-  const guarded = isGuardedAgent(context.agentType, context.guardedTypes);
+  const guarded = isGuardedAgent(context.agentType, context.guardedTypes, context.agentGuard);
   const findings = [];
   let basePush = false;
   const allowedPushes = [];

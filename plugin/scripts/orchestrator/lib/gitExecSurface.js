@@ -17,6 +17,8 @@
 //
 // The surface: { hooksDir, hooks: { <relative name>: <hash> }, config: { <key>: [values] } }, in memory only. The
 // reason text names files and keys, never values (a config value can hold a secret).
+// One exception in the hooks: the top-level pre-push is hashed without Ravenseat's own push block (lib/agentPushBlock.js,
+// owner decision B1), an exact known text, so installing or removing it is never a difference.
 //
 // Reading it runs `git rev-parse` and `git config` only: neither runs hooks, fsmonitor or filters, so a surface that was
 // tampered with is safe to read with the orchestrator's environment.
@@ -29,6 +31,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+// Ravenseat's own pre-push block is known text, hashed as if it were not there (owner decision B1).
+const APB = require('./agentPushBlock.js');
 
 /**
  * Config keys that run a program, exact (lower case: git prints section and variable names in lower case). From git's
@@ -97,6 +101,17 @@ function fileHash(file, stat) {
 }
 
 /**
+ * The hash of the top-level pre-push: as fileHash, but without Ravenseat's own push block (lib/agentPushBlock.js
+ * hookHash), so installing or removing that exact text is never a difference from the baseline. Only that exact, known
+ * text is taken out; anything else in the file is hashed. null when the file is only that block.
+ */
+function prePushHash(file, stat) {
+  const armed = (stat.mode & 0o111) !== 0 ? 'x' : '-';
+  if (stat.size > MAX_HASHED_BYTES) return `${armed}size:${stat.size}`;
+  return APB.hookHash(fs.readFileSync(file), armed);
+}
+
+/**
  * The files in a hooks folder with a hash each, by name relative to it (with "/"); {} when the folder is missing. A link
  * is followed; the depth and the file cap keep a cycle or a huge folder from costing anything.
  * @returns {Record<string, string>}
@@ -117,7 +132,10 @@ function hookFiles(dir) {
       const rel = `${prefix}${name}`;
       try {
         const stat = fs.statSync(file);
-        if (!stat.isDirectory()) out[rel] = fileHash(file, stat);
+        if (!stat.isDirectory()) {
+          const h = rel === APB.HOOK ? prePushHash(file, stat) : fileHash(file, stat);
+          if (h != null) out[rel] = h; // null: only Ravenseat's own block (lib/agentPushBlock.js), which counts as no file
+        }
         else if (depth < MAX_DEPTH) walk(file, `${rel}/`, depth + 1);
       } catch {
         out[rel] = 'unreadable'; // a dangling link or a locked file still counts, as what it is now

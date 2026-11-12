@@ -185,7 +185,10 @@ describe('deployCommands and the secret question', () => {
     expect(both?.reason).toBe(`${secret()} Also: ${batch()}`);
     expect(decision('git push origin main', { secretQuestion: secret })).toBe('ask');
     expect(decision('git push origin main', { secretQuestion: () => null })).toBeNull();
-    expect(decision('git push origin main', { secretQuestion: secret, agentType: 'general-purpose' })).toBeNull();
+    // Another agent type with the agent guard off (agentGuard.enabled: false, owner decision B3): no push rule for it, but
+    // the secret question is for the main session only (no agent_type).
+    expect(decision('git push origin main', { secretQuestion: secret, agentType: 'general-purpose', agentGuard: { enabled: false } })).toBeNull();
+    expect(decision('git push origin main', { secretQuestion: secret, agentType: 'general-purpose' })).toBe('deny');
     expect(decision('git push --force origin main', { secretQuestion: secret })).toBe('deny');
     let called = false;
     decision('git push origin queue/A-1', { secretQuestion: () => ((called = true), 'x') });
@@ -267,8 +270,9 @@ describe('network guard (agent_type track/track-d)', () => {
     expect(decision('curl https://x', { agentType: 'db-check', guardedTypes })).toBe('deny');
     expect(decision('iwr https://x', { agentType: 'ravenseat:db-check', guardedTypes })).toBe('deny');
     expect(decision('npx cowsay', { agentType: 'db-check', guardedTypes, knownPackage: () => false })).toBe('ask');
-    // Not in the list: not guarded.
-    expect(decision('curl https://x', { agentType: 'other-helper', guardedTypes })).toBeNull();
+    // Not in the list: guarded all the same (owner decision B3), unless agentGuard excepts it.
+    expect(decision('curl https://x', { agentType: 'other-helper', guardedTypes })).toBe('deny');
+    expect(decision('curl https://x', { agentType: 'other-helper', guardedTypes, agentGuard: { except: ['other-helper'] } })).toBeNull();
   });
   it('denies a pipe into a shell', () => {
     for (const k of [
@@ -312,8 +316,10 @@ describe('network guard (agent_type track/track-d)', () => {
     expect(decision('npm run gates -- --quick', track)).toBeNull();
     expect(assess('npx cowsay', { ...STD, ...track })?.reason).toMatch(/cowsay.*ask the orchestrator to fetch it/);
   });
-  it('the orchestrator and the owner (no or another agent_type) are not affected', () => {
-    for (const context of [{}, { agentType: null }, { agentType: 'general-purpose' }, { agentType: 'Explore' }]) {
+  it('the orchestrator and the owner (no agent_type, or another type with the agent guard off or excepted) are not affected', () => {
+    const off = { enabled: false };
+    const except = { except: ['general-purpose', 'Explore'] };
+    for (const context of [{}, { agentType: null }, { agentType: 'general-purpose', agentGuard: off }, { agentType: 'Explore', agentGuard: except }, { agentType: 'Explore', agentGuard: { subagent: false } }]) {
       expect(decision('curl https://x', context)).toBeNull();
       expect(decision('cat x | sh', context)).toBeNull();
       expect(decision('npx cowsay', context)).toBeNull();
@@ -348,7 +354,10 @@ describe('segments and helpers', () => {
     expect(isGuardedAgent('ravenseat:track-d', new Set())).toBe(true);
     expect(isGuardedAgent('ravenseat:reviewer', types)).toBe(true);
     expect(isGuardedAgent('db-check', types)).toBe(true);
-    expect(isGuardedAgent('general-purpose', types)).toBe(false);
+    expect(isGuardedAgent('general-purpose', types)).toBe(true); // owner decision B3
+    expect(isGuardedAgent('general-purpose', types, { except: ['general-purpose'] })).toBe(false);
+    expect(isGuardedAgent('general-purpose', types, { enabled: false })).toBe(false);
+    expect(isGuardedAgent('db-check', types, { enabled: false, except: ['db-check'] })).toBe(true);
     expect(isGuardedAgent(undefined, types)).toBe(false);
     expect(isGuardedAgent(null)).toBe(false);
   });
