@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  a, branchFor, branchInfo, CE, cut, D, die, FOLDER, FX, HERE, L, MAIN_TREE, positional, read, readCursor, require,
+  a, branchFor, branchInfo, CE, CLI, cut, D, die, FOLDER, FX, HERE, L, MAIN_TREE, positional, read, readCursor, require,
   uncommittedPaths, val, WIDTH,
 } from './context.mjs';
 import { activityFor, costEstimateState, dailyUsageFor, findSilent, findWithoutAgent, measureLoad, nextCostUsd } from './tracks.mjs';
@@ -290,14 +290,22 @@ export function cmdDiagnose() {
   else console.log(D.diagnoseFull(d).join('\n'));
 }
 
+const QA = require('./lib/queueArchive.js');
+/** The line that says a task is archived and where (info, explain). */
+const archivedLine = (o) =>
+  `ARCHIVED (read-only): ${o.id} is ${o.status}, moved ${o.archived_at ?? '(time unknown)'} to ${QA.archiveFile(FOLDER)} ` +
+  '(history.archiveDoneAfterDays). A new task that depends on it brings it back.';
+
 /** `ravenseat info` (the usage is at the top of queue.mjs). */
 export function cmdInfo() {
   // ---- Fixed lookups instead of `node -e` against queue.json ----
   const id = positional(1, ['--field'])[0];
   if (!id) die('info <id> [--field <name>] [--json]');
-  const infoQueue = read();
+  // An archived task (lib/queueArchive.js, history.archiveDoneAfterDays) is shown read-only, with a line that says so.
+  const infoQueue = QA.withArchive(read(), FOLDER);
   const o = infoQueue.tasks.find((x) => x.id === id);
   if (!o) die(`Unknown task ${id}`);
+  if (o.archived && !val('--field') && !a.includes('--json')) console.log(archivedLine(o));
   const field = val('--field');
   if (field) {
     const v = L.infoField(o, field);
@@ -324,7 +332,19 @@ export function cmdExplain() {
   if (!id) die('explain <id> [--json]');
   const queue = read();
   const o = queue.tasks.find((x) => x.id === id);
-  if (!o) die(`Unknown task ${id}`);
+  if (!o) {
+    // Archived (lib/queueArchive.js): finished, so nothing holds it; said plainly instead of "unknown".
+    const arch = QA.lookup(FOLDER, id);
+    if (!arch) die(`Unknown task ${id}`);
+    const verdict = `archived (read-only): ${arch.status}, moved to the archive ${arch.archived_at ?? ''}`.trim();
+    const lines = [archivedLine(arch), `${CLI} info ${id} shows the task as it was.`];
+    if (a.includes('--json')) console.log(JSON.stringify({ id, status: arch.status, archived: true, verdict, lines }, null, 2));
+    else {
+      console.log(`${id} (${arch.status}): ${verdict}`);
+      for (const l of lines) console.log(`  ${l}`);
+    }
+    return;
+  }
   const EX = require('./lib/logic/explain.js');
   const active = o.status === 'running' || o.status === 'review';
   const r = EX.explainTask(queue, id, {

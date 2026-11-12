@@ -318,11 +318,61 @@ export function parallelWarning() {
 export function write(queue) {
   stopIfLockLost('queue.json');
   queue.changed = new Date().toISOString();
+  keepArchiveConsistent(queue);
   const before = ownerKeysOnDisk();
+  // A restored task's owner rows are not new (they were recorded when they were written, and the owner log keeps them):
+  // they count as on disk, so a row put into the archive file by hand is still missing at a check.
+  if (before) for (const id of restoredNow) for (const r of OL.rowsOf(queue, id)) before.add(r.key);
+  restoredNow.clear();
   SF.writeState(FILE, JSON.stringify(queue, null, 2) + '\n', { snapshots: SNAPSHOT_TIERS });
   if (before) OL.recordWrite(FOLDER, { before, after: queue, inTrack: queueBranchId() !== null });
 }
 const OL = require('./lib/ownerLog.js');
+// The archive of done tasks (lib/queueArchive.js, history.archiveDoneAfterDays, owner decision B5). Every queue write,
+// under the lock:
+//   1. an archived task an open task now names (depends_on, fixes, qa_original: an edit, the board) comes back, so
+//      nothing waits on a task the queue cannot see;
+//   2. a task in queue.tasks whose id is also in queue.archived (a hand edit put it back) is the queue's again: the id
+//      leaves queue.archived, and the archive keeps its copy until the next pass replaces it;
+//   3. the done and cancelled tasks older than N days move to the archive (the archive is written first). Not from a
+//      track's worktree.
+// A failure never stops the write: the tasks stay in queue.json and the warning says why.
+const QA = require('./lib/queueArchive.js');
+export const ARCHIVE_DAYS = QA.daysOf(CONFIG);
+// The ids restored since the last write (restoreArchived and step 1): their owner rows are not recorded as new.
+const restoredNow = new Set();
+/**
+ * Puts archived tasks back in the queue (under the lock, before the caller validates against queue.tasks). Returns the
+ * ids that came back.
+ */
+export function restoreArchived(queue, ids) {
+  const archived = new Set(QA.archivedIds(queue));
+  const want = [...new Set((ids ?? []).filter((id) => id != null).map(String))].filter((id) => archived.has(id));
+  if (!want.length) return [];
+  const r = QA.restore(queue, FOLDER, want);
+  for (const id of r.restored) restoredNow.add(id);
+  return r.restored;
+}
+/** The ids an open or new task names: depends_on, fixes and qa_original. */
+export const namedIds = (tasks) =>
+  (tasks ?? [])
+    .filter((o) => o && typeof o === 'object' && !['done', 'cancelled'].includes(o.status))
+    .flatMap((o) => [o.depends_on, o.fixes, o.qa_original].flat())
+    .filter((id) => id != null && id !== '')
+    .map(String);
+function keepArchiveConsistent(queue) {
+  if (!Array.isArray(queue?.tasks)) return;
+  // A read-only view (withArchive marks its archived tasks archived: true) never writes them back into queue.json.
+  if (queue.tasks.some((o) => o?.archived === true)) queue.tasks = queue.tasks.filter((o) => o?.archived !== true);
+  if (QA.archivedIds(queue).length) {
+    const inQueue = new Set(queue.tasks.map((o) => String(o?.id)));
+    restoreArchived(queue, namedIds(queue.tasks).filter((id) => !inQueue.has(id)));
+    for (const id of inQueue) if (queue.archived?.[id] !== undefined) delete queue.archived[id];
+  }
+  if (ARCHIVE_DAYS == null || queueBranchId() !== null) return;
+  const r = QA.archiveDone(queue, { folder: FOLDER, days: ARCHIVE_DAYS });
+  if (r.error) console.error(`WARNING: done tasks were not archived: ${r.error}`);
+}
 /** The owner row keys in queue.json as it is on disk now (an empty set when there is no file yet), or null on an error. */
 function ownerKeysOnDisk() {
   try {
@@ -411,7 +461,9 @@ export function writePlans(reg, { bump = true } = {}) {
   SF.renameWithRetry(tmp, PLAN_FILE);
 }
 /** The queue read-only (projects, areas, tasks, owner questions); empty when it does not exist. */
-export const readQueueForPlan = () => (fs.existsSync(FILE) ? read() : {});
+// Read-only, with the archived tasks (lib/queueArchive.js) added last and marked archived: a plan's status is derived from
+// its linked tasks, so archiving one never changes it. Never written back (write() would see archived: true tasks).
+export const readQueueForPlan = () => (fs.existsSync(FILE) ? QA.withArchive(read(), FOLDER) : {});
 // ---- Auto-accept of proposals (the rules in lib/queueProposals.js) -------------------------------------------
 /** The rules in force (the config's default with the queue's own on top). */
 export const autoAcceptRules = (queue) => PR.rulesFor(CONFIG.proposals?.autoAccept, queue);

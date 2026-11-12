@@ -5,6 +5,21 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+### After you update
+- Nothing moves at once. Done and cancelled tasks start counting the day after the update, so the first ones move from queue.json to `queue-archive.json` about 30 days later. The time log rotates on its first write in December.
+- If something reads `scripts/.queue/times.jsonl` or `queue.json` directly (a script of your own), it now sees only the current month and the tasks that are not archived. The older rows are in `times-YYYY-MM.jsonl` next to the log, and the old tasks are in `queue-archive.json`.
+
+### Added
+- `history.rotateTimeLog` (`monthly` by default, or `off`; History and storage, Advanced). On the first write of a new UTC month the time log is renamed to `times-YYYY-MM.jsonl` in the same folder. A lock folder makes sure only one process renames it, and nothing is copied or cut, so no row is lost or doubled, and a crash leaves every row readable. A reader that needs a short window (today's budget, a running agent's rows) reads only the files that reach it. `ravenseat cost`, the board's statistics, the gate attempt count and the takeover read every archive, so no number changes. With a 40 MB, 150,000-row log and 3,000 done tasks, `next` went from about 21 s to 1.9 s and `show` from about 20 s to 2.8 s.
+- `history.archiveDoneAfterDays` (`30` by default, `null` = never). On a queue write, done and cancelled tasks move from queue.json to `queue-archive.json` in the data folder when all of these hold:
+  - they have been finished for that many days, and nothing changed them in that time;
+  - no open task depends on them, fixes them or is their QA fix;
+  - their QA is settled;
+  - they are not gate or kickstart tasks.
+  
+  queue.json keeps their ids in `archived`, so an id is never given out again and an explicit one is refused. `ravenseat info` and `explain` show an archived task read-only with an ARCHIVED line, and `undo` says a change to one cannot be undone. Plans, findings, `ravenseat cost` and the board's statistics still count archived tasks. The board's `/api/task` and the new `/api/archive?q=` find them. A new task (or an edit) that depends on, fixes or is the QA fix of an archived task brings it back first. In the benchmark above, queue.json went from 3.4 MB to 85 KB.
+- `ravenseat doctor` has a `history` line. Turning either setting off is an INFO line, with the size once it is large, and never counts as a weakened guard. A broken `queue-archive.json` is a WARN, and nothing moves until you fix it.
+
 ## 0.9.0 (2026-11-12)
 
 **Every setting in one place, and no guard weakened by accident: `ravenseat settings` and the board list every setting by category with basic first and Advanced folded below, and turning a guard down needs a warning and a confirmation (a slide on the board, `--i-understand --by owner` in the CLI) and is logged. Merge now rests on ravenseat's own evidence instead of what a track can write, owner rows are checked against an owner log, the guards cover every subagent, a git hook stops pushes from track worktrees, and an outside review's merge gaps are closed (non-ASCII paths, binary conflicts, a commit landing after the checks, hidden pushes).**

@@ -297,6 +297,55 @@ describe('doctorRows: the doctor row settings', () => {
   });
 });
 
+describe('history (owner decision B5): where the history lives', () => {
+  const row = (k: string) => R.rowFor(k);
+  it('rotateTimeLog takes monthly or off; archiveDoneAfterDays a whole number or none', () => {
+    expect(SV.parseValue(row('history.rotateTimeLog'), 'off')).toEqual({ value: 'off' });
+    expect(SV.parseValue(row('history.rotateTimeLog'), 'monthly')).toEqual({ value: 'monthly' });
+    expect(SV.parseValue(row('history.rotateTimeLog'), 'weekly').error).toMatch(/monthly or off/);
+    expect(SV.parseValue(row('history.archiveDoneAfterDays'), '60')).toEqual({ value: 60 });
+    expect(SV.parseValue(row('history.archiveDoneAfterDays'), 'none')).toEqual({ value: null });
+    expect(SV.parseValue(row('history.archiveDoneAfterDays'), 'x').error).toMatch(/whole number.*\(or none\)/);
+  });
+
+  it('turning either off is not a weakening: no confirmation, no WARN', () => {
+    expect(SV.needsConfirm(row('history.rotateTimeLog'), 'off', { now: 'monthly', standard: 'monthly' })).toBe(false);
+    expect(SV.needsConfirm(row('history.archiveDoneAfterDays'), null, { now: 30, standard: 30 })).toBe(false);
+    const r = SV.doctorRows({ config: configFor({ history: { rotateTimeLog: 'off', archiveDoneAfterDays: null } }), queue: { tasks: [] }, cli: 'ravenseat' });
+    expect(r.filter((x: any) => x.status === 'WARN')).toEqual([]);
+  });
+
+  it('doctor: an INFO line for each one that is off, with the size when it is large; nothing when both are on', () => {
+    const lines = (own: object, facts: object = {}) =>
+      SV.historyLines(configFor(own), { cli: 'ravenseat', ...facts }).map((x: any) => `${x.status} ${x.message}`);
+    expect(lines({})).toEqual([]);
+    const off = lines({ history: { rotateTimeLog: 'off', archiveDoneAfterDays: null } });
+    expect(off).toHaveLength(2);
+    expect(off[0]).toMatch(/^INFO TIME LOG ROTATION OFF \(history\.rotateTimeLog: off\)/);
+    expect(off[1]).toMatch(/^INFO DONE TASKS STAY IN queue\.json \(history\.archiveDoneAfterDays: none\)/);
+    expect(off.join(' ')).not.toMatch(/MB/);
+    const big = lines(
+      { history: { rotateTimeLog: 'off', archiveDoneAfterDays: null } },
+      { timeLog: { bytes: 60 * 1024 * 1024, rows: 200000 }, queue: { bytes: 4 * 1024 * 1024, finished: 3000 } },
+    );
+    expect(big[0]).toContain('60 MB, 200000 rows');
+    expect(big[1]).toContain('3000 done or cancelled tasks, 4 MB');
+    // Small sizes are not worth a word.
+    const small = lines({ history: { rotateTimeLog: 'off' } }, { timeLog: { bytes: 1024, rows: 3 } });
+    expect(small[0]).not.toMatch(/MB/);
+  });
+
+  it('doctor: a broken archive file is a WARN (nothing moves until it is fixed)', () => {
+    const r = SV.historyLines(configFor({}), { cli: 'ravenseat', archive: { state: 'broken', error: 'x does not parse' } });
+    expect(r).toEqual([expect.objectContaining({ status: 'WARN', message: expect.stringMatching(/x does not parse/) })]);
+  });
+
+  it('doctorRows passes the facts on: the history lines come after the guard line', () => {
+    const r = SV.doctorRows({ config: configFor({ history: { rotateTimeLog: 'off' } }), queue: { tasks: [] }, cli: 'ravenseat', history: {} });
+    expect(r.map((x: any) => x.status)).toEqual(['OK', 'INFO']);
+  });
+});
+
 describe('protectedPaths: the object form { add, remove } (step 8)', () => {
   const resolved = (own: object) => KK.resolveOwn(configFor(own), own).protectedPaths;
 

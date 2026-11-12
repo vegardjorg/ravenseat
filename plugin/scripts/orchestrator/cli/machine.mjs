@@ -33,7 +33,7 @@ function freeNow() {
 function fullRowSince(since) {
   let text = '';
   try {
-    text = fs.readFileSync(TIME_LOG, 'utf8');
+    text = require('./lib/timeLogArchive.js').readText(TIME_LOG, { from: since });
   } catch {
     return null;
   }

@@ -395,6 +395,12 @@ const STANDARD = Object.freeze({
   // whose copy is at least as old as the tier takes the next younger copy, and the youngest takes the current state.
   // tiers: 2 to 8 ages such as "30m", "5h", "7d". enabled false turns it off.
   stateSnapshots: { enabled: true, tiers: ['1h', '5h', '1d', '2d', '7d'] },
+  // Where the history lives (owner decision B5). rotateTimeLog: 'monthly' moves the time log to one archive per UTC month
+  // next to it on the first write of a new month (times.jsonl -> times-2026-10.jsonl, lib/timeLogArchive.js); every reader
+  // that needs older rows reads the archives too. 'off' keeps one file. archiveDoneAfterDays: done and cancelled tasks
+  // untouched for that many days move from queue.json to <dataFolder>/queue-archive.json (lib/queueArchive.js), where
+  // info, explain, undo, plans, statistics and the board still find them read-only. null = never.
+  history: { rotateTimeLog: 'monthly', archiveDoneAfterDays: 30 },
   // Auto-accept of agent proposals (lib/queueProposals.js): a proposal that fits the rules is approved by the queue
   // itself (in `queue.mjs add` and `orchestrator pulse`), logged and can be undone. Default off. `queue.mjs proposals
   // auto` and the board's gear write the queue's own rules (queue.json proposals.autoAccept), which win field by field.

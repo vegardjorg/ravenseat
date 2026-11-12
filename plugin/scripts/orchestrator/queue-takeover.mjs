@@ -118,7 +118,7 @@ const noAgent = new Map(
     reportOf: (o) => L.findTrackReport(o.id, [process.env.QUEUE_SCRATCHPAD, o.scratchpad]).report,
     rows: () => {
       try {
-        return TK.readRows(fs.readFileSync(timeLog(), 'utf8'));
+        return TK.readRows(require('./lib/timeLogArchive.js').readText(timeLog()));
       } catch {
         return [];
       }

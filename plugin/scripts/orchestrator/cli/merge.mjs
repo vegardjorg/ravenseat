@@ -1684,7 +1684,7 @@ export async function cmdMerge() {
     if (diffLines != null) ox.diff_lines = diffLines;
     // The files the task actually changed (lib/ownershipHints.js): `add` uses them to suggest owned_files for new tasks.
     if (name != null) ox.changed_files = require('./lib/ownershipHints.js').changedFilesOf(name.split(/\r?\n/));
-    const tReview = TK.firstReviewStart(readTimeLog(), id, {
+    const tReview = TK.firstReviewStart(readTimeLog({ from: ox.t_receive ?? null }), id, {
       types: L.REVIEWER_TYPES,
       from: ox.t_receive ?? null,
     });

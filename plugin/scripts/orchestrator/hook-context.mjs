@@ -210,7 +210,10 @@ function costGuard(now) {
   let rows = [];
   if (running.length) {
     try {
-      rows = TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+      // Across the monthly archives, from the earliest start of a running task (lib/timeLogArchive.js, B5).
+      const starts = running.map((o) => Date.parse(o.started ?? o.added_at ?? ''));
+      const from = starts.every(Number.isFinite) ? Math.min(...starts) : null;
+      rows = TK.readRows(require('./lib/timeLogArchive.js').readText(TIME_LOG, { from }));
     } catch {
       rows = [];
     }

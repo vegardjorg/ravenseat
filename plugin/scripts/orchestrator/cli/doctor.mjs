@@ -65,7 +65,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'gateEvidence', 'ownership'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'gateEvidence', 'ownership', 'history'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -102,6 +102,12 @@ export function baselineProblems(own) {
   const ge = own.gateEvidence?.external;
   if (ge !== undefined && !(Array.isArray(ge) && ge.every((x) => typeof x === 'string' && x.trim())))
     out.push('gateEvidence.external must be a list of check names');
+  // history (owner decision B5): an unknown value reads as the default, so it is named here.
+  const hr = own.history?.rotateTimeLog;
+  if (hr !== undefined && !['monthly', 'off'].includes(hr)) out.push('history.rotateTimeLog must be "monthly" or "off" (treated as monthly)');
+  const hd = own.history?.archiveDoneAfterDays;
+  if (hd !== undefined && hd !== null && !(Number.isInteger(hd) && hd >= 0))
+    out.push('history.archiveDoneAfterDays must be a whole number >= 0 or null (treated as null: nothing is archived)');
   return out;
 }
 
@@ -634,12 +640,25 @@ function checkSettings() {
     own = {}; // a missing or broken file is the config row's finding
   }
   let queue = { tasks: [] };
+  let queueBytes = 0;
   try {
-    queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    const text = fs.readFileSync(FILE, 'utf8');
+    queueBytes = Buffer.byteLength(text);
+    queue = JSON.parse(text);
   } catch {
     /* no queue yet: only the file's settings count */
   }
-  return SV.doctorRows({ config: CONFIG, queue, own: kind(own) === 'object' ? own : {}, cli: CLI });
+  // The facts for the history lines (owner decision B5): the sizes only matter when a setting is off.
+  const TA = require('./lib/timeLogArchive.js');
+  const history = {
+    timeLog: CONFIG.history?.rotateTimeLog === 'off' ? TA.stats(KK.timeLog()) : null,
+    queue: {
+      bytes: queueBytes,
+      finished: (queue.tasks ?? []).filter((o) => o?.status === 'done' || o?.status === 'cancelled').length,
+    },
+    archive: require('./lib/queueArchive.js').stats(FOLDER),
+  };
+  return SV.doctorRows({ config: CONFIG, queue, own: kind(own) === 'object' ? own : {}, cli: CLI, history });
 }
 
 function checkCloud() {

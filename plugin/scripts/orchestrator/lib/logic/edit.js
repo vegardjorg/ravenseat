@@ -401,7 +401,12 @@ function undoEntry(queue, { by = null, now = new Date().toISOString(), show = fa
     } else if (e.id != null) {
       measure = perId.get(e.id);
       if (!measure) {
-        error.push(`${e.id}: no longer exists in the queue`);
+        // An archived task (lib/queueArchive.js) is read-only: said as such, not as gone.
+        error.push(
+          queue?.archived?.[e.id] !== undefined
+            ? `${e.id}: archived (${queue.archived[e.id]}, read-only), so this change cannot be undone`
+            : `${e.id}: no longer exists in the queue`,
+        );
         continue;
       }
     } else if (e.pid != null) {

@@ -31,7 +31,6 @@
 'use strict';
 
 const fs = require('node:fs');
-const path = require('node:path');
 
 /** The gate kinds gates.mjs runs. */
 const GATE_KINDS = new Set(['quick', 'full', 'precheck']);
@@ -137,8 +136,9 @@ function appendRows(file, rows) {
   try {
     const list = [].concat(rows ?? []).filter(Boolean);
     if (!file || !list.length) return false;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.appendFileSync(file, list.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    // Through the rotation (lib/timeLogArchive.js, history.rotateTimeLog): the first write of a new month moves the old
+    // file to its monthly archive before the rows are appended.
+    require('./timeLogArchive.js').appendText(file, list.map((r) => JSON.stringify(r)).join('\n') + '\n');
     return true;
   } catch {
     return false; // error-ignored: the time log is for measurement only

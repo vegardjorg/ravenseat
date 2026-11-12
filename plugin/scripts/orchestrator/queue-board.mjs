@@ -170,6 +170,17 @@ const BASE_HEALTH_FILE = path.join(FOLDER, 'base-health.json');
 const SOURCE_ROOT = process.env.QUEUE_PLAN_SOURCE_ROOT ?? MAIN_TREE;
 const GIT_ROOT = process.env.QUEUE_GIT ?? MAIN_TREE;
 const TIME_LOG = KK.timeLog();
+// The time log's monthly archives (lib/timeLogArchive.js, owner decision B5): read across them, windowed where it can.
+const TA = require('./lib/timeLogArchive.js');
+// The archive of done tasks (lib/queueArchive.js, owner decision B5): statistics, plans and lookups by id read it too.
+const QARCH = require('./lib/queueArchive.js');
+const archiveMtime = () => {
+  try {
+    return fs.statSync(QARCH.archiveFile(FOLDER)).mtimeMs;
+  } catch {
+    return 0;
+  }
+};
 const QUEUE_MJS = path.join(HERE, 'queue.mjs');
 const CLIENT = path.join(HERE, 'queue-board');
 // Base branch (the integration branch) and the remote, for "commits ahead" and "changed since push".
@@ -394,7 +405,7 @@ function withoutAgentNow(queue) {
       reportOf: (o) => L.findTrackReport(o.id, o.scratchpad ? [o.scratchpad] : []).report,
       rows: () => {
         try {
-          return TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+          return TK.readRows(TA.readText(TIME_LOG, { from: TA.activeFrom(queue.tasks) }));
         } catch {
           return [];
         }
@@ -429,7 +440,7 @@ function agentMapping(queue) {
   const ACT = require('./lib/trackActivity.js');
   let rows = [];
   try {
-    rows = TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+    rows = TK.readRows(TA.readText(TIME_LOG, { from: TA.activeFrom(queue.tasks) }));
   } catch {
     rows = []; // no time log yet: the mission in the transcript can still tie the agent to its task
   }
@@ -499,7 +510,7 @@ function silentNow(queue) {
         const now = Date.now();
         let rows = [];
         try {
-          rows = TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+          rows = TK.readRows(TA.readText(TIME_LOG, { from: TA.activeFrom(candidates) }));
         } catch {
           /* no time log: the other sources still count */
         }
@@ -781,16 +792,19 @@ function state() {
 // ---- The statistics: the time log is read only when it has changed, the result is cached -------------
 let logCache = { key: null, rows: [], events: [], error: null };
 function timeLogRows() {
-  let st;
-  try {
-    st = fs.statSync(TIME_LOG);
-  } catch (e) {
-    return { key: 'missing', rows: [], events: [], error: e?.code ?? 'does not exist' };
-  }
-  const key = `${st.mtimeMs}:${st.size}`;
+  // The current file and the monthly archives (lib/timeLogArchive.js): the statistics read all of it, so a rotation
+  // changes no number; the key changes when either does.
+  const key = TA.signature(TIME_LOG);
+  if (key === 'missing') return { key: 'missing', rows: [], events: [], error: 'ENOENT' };
   if (logCache.key !== key) {
     // Only the "done" rows are needed (usage and context); the gate rows (most of them) are dropped at once.
-    const all = TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+    let text;
+    try {
+      text = TA.readText(TIME_LOG);
+    } catch (e) {
+      return { key: 'missing', rows: [], events: [], error: e?.code ?? 'does not exist' };
+    }
+    const all = TK.readRows(text);
     const rows = all.filter((r) => r?.event === 'done');
     // The flow rows apart (boardFlow), so the "done" rows stay exactly as before.
     const events = all.filter((r) => ER.EVENTS.has(r?.event));
@@ -856,9 +870,10 @@ function statistics() {
   } catch {
     plansMt = 0; // no register yet
   }
-  const key = `${log.key}|${fs.statSync(FILE).mtimeMs}|${plansMt}|${TK.dayFor(new Date().toISOString())}`;
+  const key = `${log.key}|${fs.statSync(FILE).mtimeMs}|${archiveMtime()}|${plansMt}|${TK.dayFor(new Date().toISOString())}`;
   if (statCache?.key === key) return statCache;
-  const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+  // With the archived tasks, so no figure changes when a task moves to the archive.
+  const queue = QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER);
   const data = {
     ...S.statistics(queue, log.rows),
     // "Blockers last 7 days" (queueLogic.blockerSummary, the same numbers as ravenseat blockers).
@@ -883,12 +898,13 @@ function plans() {
       return 0;
     }
   };
-  const key = `${mt(PLAN_FILE)}|${mt(FILE)}|${Math.floor(Date.now() / 60_000)}`;
+  const key = `${mt(PLAN_FILE)}|${mt(FILE)}|${archiveMtime()}|${Math.floor(Date.now() / 60_000)}`;
   if (planCache?.key === key) return planCache;
   const reg = fs.existsSync(PLAN_FILE)
     ? P.normalize(JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8')))
     : P.emptyRegister();
-  const queue = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf8')) : {};
+  // With the archived tasks: a plan's status is derived from its linked tasks, so archiving one never changes it.
+  const queue = fs.existsSync(FILE) ? QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER) : {};
   const now = new Date();
   const fk = L.rankingContext(queue, now.getTime());
   // The column and focus stage for a queue task (same rules as the cards on the board, queueBoard.board).
@@ -1824,7 +1840,7 @@ function lawyerPackageWrite(b) {
   const reg = fs.existsSync(PLAN_FILE)
     ? P.normalize(JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8')))
     : P.emptyRegister();
-  const queue = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf8')) : {};
+  const queue = fs.existsSync(FILE) ? QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER) : {};
   const pk = P.lawyerPackage(reg, queue, { now: new Date() });
   const file = path.join(SOURCE_ROOT, ...pk.path.split('/'));
   const folder = path.dirname(file);
@@ -2740,11 +2756,26 @@ const server = http.createServer(async (req, res) => {
       const id = idOrNull(url.searchParams.get('id'));
       if (!id) return json(res, 400, { ok: false, message: 'invalid id' });
       const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-      const o = (queue.tasks ?? []).find((x) => x.id === id);
+      // An archived task (lib/queueArchive.js) is found too, read-only and marked so.
+      const o = (queue.tasks ?? []).find((x) => x.id === id) ?? QARCH.lookup(FOLDER, id);
       if (!o) return json(res, 404, { ok: false, message: `unknown task ${id}` });
       const mission = missionFor(o);
       const branch = branchFor(o);
-      return json(res, 200, { ok: true, mission, branch: { name: branch, ...branchInfo(branch) } });
+      const archived = o.archived_at ? { archived: true, archived_at: o.archived_at, task: o } : {};
+      return json(res, 200, { ok: true, mission, branch: { name: branch, ...branchInfo(branch) }, ...archived });
+    }
+    // The archived tasks (lib/queueArchive.js) for the board's history and search: ?q= matches id, title, project and
+    // feature (case blind), newest first, at most 50. Read-only.
+    if (req.method === 'GET' && filePath === '/api/archive') {
+      const q = String(url.searchParams.get('q') ?? '').trim().toLowerCase().slice(0, 100);
+      const all = QARCH.load(FOLDER).tasks;
+      const hit = (o) => !q || [o.id, o.title, o.project, o.feature].some((v) => String(v ?? '').toLowerCase().includes(q));
+      const tasks = all
+        .filter(hit)
+        .sort((x, y) => String(y.done ?? y.archived_at ?? '').localeCompare(String(x.done ?? x.archived_at ?? '')))
+        .slice(0, 50)
+        .map((o) => ({ id: o.id, title: o.title ?? null, status: o.status, project: o.project ?? null, feature: o.feature ?? null, done: o.done ?? null, archived_at: o.archived_at ?? null }));
+      return json(res, 200, { ok: true, total: all.length, tasks });
     }
     // The cloud package ("Copy cloud package"), made by queue.mjs cloud-package (which refuses when the task is not suitable).
     // Several ids (?id=A&id=B) = a bundle in one cloud session; the cap (4 tasks, about 120 min) is enforced by queue.mjs.

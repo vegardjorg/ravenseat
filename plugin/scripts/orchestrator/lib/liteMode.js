@@ -87,7 +87,8 @@ function nextId(ids, prefix) {
  */
 function liteDefaults(tasks, queue = {}) {
   const { pid, prefix } = defaultProject(queue.projects);
-  const ids = (queue.tasks ?? []).map((o) => o?.id);
+  // An archived task's id (queue.archived, lib/queueArchive.js) is never given out again.
+  const ids = [...(queue.tasks ?? []).map((o) => o?.id), ...Object.keys(queue.archived ?? {})];
   for (const n of tasks) if (n && typeof n === 'object' && n.id) ids.push(n.id);
   const notes = [];
   const out = tasks.map((n) => {

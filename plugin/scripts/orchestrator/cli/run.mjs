@@ -340,7 +340,8 @@ export function cmdFill() {
       try {
         const activeOnes = queue.tasks.filter((x) => x.status === 'running').length;
         const t = CH.quotaCap(
-          CH.forecast({ queue, events: TK.usageEvents(readTimeLog()) }),
+          // The window is the quota week (since the last reset, at most 7 days): older archives are not read.
+          CH.forecast({ queue, events: TK.usageEvents(readTimeLog({ from: Date.now() - 8 * 86_400_000 })) }),
           activeOnes,
         );
         if (t.message) quotaMessage = t.message;

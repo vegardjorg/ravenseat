@@ -19,7 +19,7 @@ import path from 'node:path';
 
 import {
   a, autoAcceptContext, autoAcceptIn, byName, CONFIG, CLI, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
-  positional, PR, queueBranchId, read, readPlans, undoHint, val, values, withLock, write,
+  namedIds, positional, PR, queueBranchId, read, readPlans, restoreArchived, undoHint, val, values, withLock, write,
   require,
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
@@ -207,7 +207,9 @@ export function cmdAdd() {
     });
     if (q.error.length) die(`Nothing added: ${q.error.join('; ')}`);
     // A mistyped dependency would hold the task back for good, without a word.
-    const known = new Set(read().tasks.map((x) => x.id));
+    // An archived task (lib/queueArchive.js) is known too: it comes back to the queue in the write.
+    const now = read();
+    const known = new Set([...now.tasks.map((x) => x.id), ...Object.keys(now.archived ?? {})]);
     const unknown = (q.task.depends_on ?? []).filter((d) => !known.has(d));
     if (unknown.length) die(`Nothing added: --depends names unknown task(s): ${unknown.join(', ')}`);
     source = JSON.stringify(q.task);
@@ -257,6 +259,9 @@ export function cmdAdd() {
     let planWarnings = [];
     // Lite: fill id, class, domain, mission, project, feature, value and content_min when missing (under the lock, so
     // the generated ids are free). The given fields always win.
+    // Archived tasks (lib/queueArchive.js, history.archiveDoneAfterDays): an id there is taken, and an archived task the
+    // new ones depend on, fix or are a QA fix of comes back to the queue first, so every check below sees it as it was.
+    restoreArchived(queue, namedIds(newOnes.map((n) => ({ status: 'waiting', ...n }))));
     if (LITE) {
       const d = LM.liteDefaults(newOnes, queue);
       newOnes.splice(0, newOnes.length, ...d.tasks);
@@ -295,6 +300,9 @@ export function cmdAdd() {
     }
     if (new Set(newOnes.map((n) => n.id)).size !== newOnes.length)
       error.push('the same id twice in what is being added');
+    for (const n of newOnes)
+      if (n?.id != null && queue.archived?.[n.id] !== undefined)
+        error.push(`${n.id}: the id belongs to an archived task (${queue.archived[n.id]}; ${CLI} info ${n.id}); choose another id`);
     // Every waiting_on id must be a registered question (text and type), from before or in the same file
     // (setQuestion above has added them to queue.question; nothing is written when error is not empty). Free text is rejected.
     if (!sp.error.length)

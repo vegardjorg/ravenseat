@@ -281,7 +281,7 @@ function writeWithNewAttempt(file, text) {
     }
     console.log(`GUARD OVERRIDDEN (--allow-guard) for ${branch}:\n${list}`);
     try {
-      fs.appendFileSync(
+      require('./lib/timeLogArchive.js').appendText( // through the monthly rotation (B5)
         timeLog(),
         `${JSON.stringify({
           time: new Date().toISOString(),
@@ -327,7 +327,7 @@ function writeWithNewAttempt(file, text) {
     }
     console.log(`OWNERSHIP OVERRIDDEN (--allow-guard) for ${branch}:\n${list}`);
     try {
-      fs.appendFileSync(
+      require('./lib/timeLogArchive.js').appendText( // through the monthly rotation (B5)
         timeLog(),
         `${JSON.stringify({
           time: new Date().toISOString(),
@@ -364,7 +364,7 @@ function writeWithNewAttempt(file, text) {
     }
     console.log(`HOTSPOT OVERRIDDEN (--allow-guard) for ${branch}:\n${list}`);
     try {
-      fs.appendFileSync(
+      require('./lib/timeLogArchive.js').appendText( // through the monthly rotation (B5)
         timeLog(),
         `${JSON.stringify({ time: new Date().toISOString(), wave: task ? 'queue' : null, track: taskName ?? branch, event: 'guard-overridden', branch, hotspots: hot })}\n`,
       );

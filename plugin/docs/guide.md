@@ -53,6 +53,11 @@ Requirements: Node.js 20 or newer, git and Claude Code. No npm packages are need
 - **Init:** `ravenseat init --lite` (a fresh `ravenseat init` is lite too) writes `"mode": "lite"` to `queue.config.json` and an
   empty queue in `scripts/.queue/`. In a git repo it adds that folder and `.claude/worktrees/` to `.gitignore` unless git already ignores them, and when the
   config names no base branch and `main` does not exist, it writes the current branch as `baseBranch`.
+- **Where the history lives:** `scripts/.queue/` holds the queue (`queue.json`) and the time log (`times.jsonl`). The time
+  log starts a new file each month and keeps the old ones next to it (`times-2026-10.jsonl`), and done tasks older than
+  30 days move to `queue-archive.json`, where `ravenseat info <id>`, the plans and the statistics still find them. Both
+  only keep the files small; `history` in `queue.config.json` changes them (see the History and storage table in
+  `queue.md`).
 - **A mission:** add one when the title is not enough:
   `ravenseat add "Fix the login bug" --mission "Users with a + in the email cannot log in; add a test"`.
 - **Priority:** `--priority 1-10` moves a task up (5 is normal); otherwise tasks run in the order you added them.

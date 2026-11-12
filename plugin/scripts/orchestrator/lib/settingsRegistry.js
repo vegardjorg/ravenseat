@@ -35,8 +35,9 @@
 // their rows, and so does B4 (ownership.sharedPatchCollides: guards, advanced, full only because shared_patch is the full
 // task format, weakens when false). Owner decision 2026-11-12 also made `mode lite` (switching a full project) and
 // `cloud.collect auto` confirmed weakenings; `guidance quiet` and `kickstart gates` are not. The rest get their rows in
-// the same task that adds the key to STANDARD (the coverage test turns red until it does):
-//   B5  history.rotateTimeLog, .archiveDoneAfterDays  history, advanced, both modes (performance, not a guard)
+// the same task that adds the key to STANDARD (the coverage test turns red until it does). B5 (history.rotateTimeLog,
+// .archiveDoneAfterDays: history, advanced, both modes) has its rows too: performance, not a guard, so turning either
+// off is an INFO line in doctor (lib/settingsView.js historyLines), never a weakening.
 // Also later: the environment variables (QUEUE_LOAD_ADAPTIVE, QUEUE_GATE_QUEUE, CONTEXT_BLOCK_OTHERS, the context limits,
 // DISABLE_UPDATES, TZ) as read-only rows, and the per-viewer browser choices (theme, mascot) if the board lists them.
 //
@@ -133,6 +134,8 @@ function row(key, category, type, title, explanation, o = {}) {
     protects: o.weakens ? o.protects : null,
     whyNot: o.weakens ? o.whyNot : null,
     changes: o.weakens ? o.changes : null,
+    // A number that also takes none (null) although its default is a number (parseValue).
+    nullable: o.nullable === true,
   });
 }
 
@@ -601,6 +604,17 @@ const SETTINGS = Object.freeze([
   row('stateSnapshots.tiers', 'history', 'list', 'Snapshot ages', 'Two to eight ages such as "1h", "1d", "7d".'),
   row('metrics.idleGapMin', 'history', 'integer', 'Idle gap (minutes)',
     'A gap longer than this between two transcript entries is idle and not counted as active time.'),
+  // Owner decision B5: performance, not a guard (lib/timeLogArchive.js, lib/queueArchive.js).
+  row('history.rotateTimeLog', 'history', 'choice', 'Time log rotation',
+    'Monthly moves the time log to one archive per month next to it (times-2026-10.jsonl) on the first write of a new ' +
+    'month; every reader that needs older rows reads the archives too. Off keeps one file that only grows.', {
+      choices: ['monthly', 'off'],
+    }),
+  row('history.archiveDoneAfterDays', 'history', 'integer', 'Archive done tasks after (days)',
+    'Done and cancelled tasks untouched for this many days move from queue.json to queue-archive.json in the data ' +
+    'folder, where info, explain, plans and statistics still find them. None keeps them all in queue.json.', {
+      nullable: true,
+    }),
 ]);
 
 /** The row for a key, or null. */

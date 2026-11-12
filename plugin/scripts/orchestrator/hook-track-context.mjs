@@ -219,8 +219,8 @@ async function main() {
       track = null;
     }
     const log = timeLog();
-    fs.mkdirSync(path.dirname(log), { recursive: true });
-    fs.appendFileSync(
+    // Through the monthly rotation (lib/timeLogArchive.js, owner decision B5).
+    require('./lib/timeLogArchive.js').appendText(
       log,
       JSON.stringify({
         time: new Date().toISOString(),

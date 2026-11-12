@@ -139,7 +139,8 @@ export const minutes = (from, to) => Math.round((Date.parse(to) - Date.parse(fro
 export function dailyUsageFor(queue) {
   if (queue?.limits?.dailyBudget == null) return undefined;
   try {
-    const rows = TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+    // Only today matters: the archives that ended before the last two days (and the margin) are not read.
+    const rows = readTimeLogOrThrow({ from: Date.now() - 2 * 86_400_000 });
     return TK.dailyUsage(rows, TK.dayFor(new Date().toISOString()));
   } catch (e) {
     console.error(
@@ -208,14 +209,23 @@ function readTranscript(filePath) {
     return null;
   }
 }
-/** The rows in the time log (empty list when it cannot be read). */
-export function readTimeLog() {
+/**
+ * The rows in the time log, across its monthly archives (lib/timeLogArchive.js, owner decision B5). `from` (ms or ISO)
+ * is the start of the caller's window: archives that ended well before it are not read. Throws when there is no log.
+ */
+export function readTimeLogOrThrow({ from = null } = {}) {
+  return TK.readRows(require('./lib/timeLogArchive.js').readText(TIME_LOG, { from }));
+}
+/** The rows in the time log (empty list when it cannot be read); `from` as in readTimeLogOrThrow. */
+export function readTimeLog({ from = null } = {}) {
   try {
-    return TK.readRows(fs.readFileSync(TIME_LOG, 'utf8'));
+    return readTimeLogOrThrow({ from });
   } catch {
     return [];
   }
 }
+/** The window for the rows of active tasks' agents (lib/timeLogArchive.js activeFrom). */
+export const activeFrom = (tasks) => require('./lib/timeLogArchive.js').activeFrom(tasks);
 /**
  * The agents that belonged to the task, with the transcript when it exists: the certain ones from the time log, plus the uncertain ones (unknown
  * track label) when their mission mentions the task id (queueLogic.agentsForTask and mentionsTask).
@@ -224,7 +234,7 @@ export function taskAgents(o, to = new Date().toISOString()) {
   const from = o.started ?? o.picked_at ?? o.added_at ?? null;
   // Killed agents first (start row, no done row): their done row makes them part of the task like any other agent.
   recordKilledAgents(o, to);
-  const { secure, uncertainOnes } = L.agentsForTask(readTimeLog(), o.id, { from, to });
+  const { secure, uncertainOnes } = L.agentsForTask(readTimeLog({ from }), o.id, { from, to });
   const out = [];
   for (const a of [...secure, ...uncertainOnes.map((x) => ({ ...x, uncertain: true }))]) {
     const filePath = findTranscript(a.agent);
@@ -263,7 +273,7 @@ export function recordKilledAgents(o, to = new Date().toISOString()) {
     const from = o.started ?? o.picked_at ?? o.added_at ?? null;
     const isId = (x) => x === o.id;
     const rows = [];
-    for (const start of TLR.agentsWithoutDone(readTimeLog(), { from })) {
+    for (const start of TLR.agentsWithoutDone(readTimeLog({ from }), { from })) {
       if (to && Date.parse(start.time) > Date.parse(to)) continue;
       const filePath = findTranscript(start.agent_id);
       if (!filePath) continue;
@@ -396,7 +406,7 @@ export function findWithoutAgent(queue) {
     return L.noAgentTracks(queue, {
       worktreeBranches,
       reportOf: (o) => trackReport(o).report,
-      rows: readTimeLog,
+      rows: () => readTimeLog({ from: activeFrom(queue.tasks) }),
       lastCommitMs,
     });
   } catch (e) {
@@ -416,7 +426,7 @@ export function activityFor(queue, o) {
       branch: o.branch,
       worktree: worktrees.find((w) => w.branch === o.branch)?.path ?? null,
       trackDirs: trackRoots(o).map((r) => path.join(r, o.id)),
-      agents: ACT.agentsByTask(readTimeLog(), [o.id]).get(o.id) ?? null,
+      agents: ACT.agentsByTask(readTimeLog({ from: activeFrom([o]) }), [o.id]).get(o.id) ?? null,
       findTranscript,
       git: gitRead,
     });
@@ -442,7 +452,7 @@ export function findSilent(queue) {
     const now = Date.now();
     const freshMs = now - limitMin * 60_000;
     const agents = ACT.agentsByTask(
-      readTimeLog(),
+      readTimeLog({ from: activeFrom(candidates) }),
       candidates.map((o) => o.id),
     );
     const lastActivity = {};
@@ -504,7 +514,7 @@ export function attemptRows(tasks) {
   const open = tasks.filter((o) => AT.hasOpen(o?.attempts));
   if (!open.length) return [];
   const from = Math.min(...open.flatMap((o) => o.attempts.filter((x) => x.state !== 'ended').map((x) => Date.parse(x.reserved))));
-  return AT.relabelRows(readTimeLog(), labelFromTranscript, { from });
+  return AT.relabelRows(readTimeLog({ from }), labelFromTranscript, { from });
 }
 /** Brings a task's attempts up to date with the rows (the caller holds the lock). True when something changed. */
 export function syncAttempts(o, rows) {

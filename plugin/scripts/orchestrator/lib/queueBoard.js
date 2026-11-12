@@ -1582,7 +1582,8 @@ function bulkPlan(queue, action, ids, val = {}) {
     return { error: [], command: 'rank', space: { [space]: true } };
   }
   // batch-pack
-  const used = new Set(perId.keys());
+  // An archived task's id (queue.archived, lib/queueArchive.js) is taken too.
+  const used = new Set([...perId.keys(), ...Object.keys(queue.archived ?? {})]);
   let newId = v.new_id == null || v.new_id === '' ? null : String(v.new_id).trim();
   if (newId == null) {
     const pid = L.projectFor(perId.get(list[0]) ?? {}, queue.projects ?? {});

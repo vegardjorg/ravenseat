@@ -73,7 +73,8 @@ function showSettings() {
 /** Appends the setting-weakened row; a failure stops the change (every weakening is logged, or none is made). */
 export function logWeakened(row, from, to, by) {
   try {
-    fs.appendFileSync(
+    // Through the monthly rotation (lib/timeLogArchive.js); an append error still stops the change.
+    require('./lib/timeLogArchive.js').appendText(
       TIME_LOG,
       `${JSON.stringify({ time: new Date().toISOString(), event: 'setting-weakened', key: row.key, from, to, by, store: row.store })}\n`,
     );

@@ -178,14 +178,16 @@ function parseValue(row, raw, { limits } = {}) {
     if (i < 0) return { error: `${row.key} takes ${orList(optionsOf(row))}.` };
     return { value: row.choices[i] };
   }
-  if (none && std === null) return { value: null };
+  // A number that also takes none: its default is null, or the row says so (history.archiveDoneAfterDays).
+  const nullable = std === null || row.nullable === true;
+  if (none && nullable) return { value: null };
   if (row.type === 'integer') {
-    if (!/^\d+$/.test(s)) return { error: `${row.key} must be a whole number, 0 or more${std === null ? ' (or none)' : ''}.` };
+    if (!/^\d+$/.test(s)) return { error: `${row.key} must be a whole number, 0 or more${nullable ? ' (or none)' : ''}.` };
     return { value: Number(s) };
   }
   if (row.type === 'number') {
     const v = Number(s.replace(',', '.'));
-    if (!s || !Number.isFinite(v)) return { error: `${row.key} must be a number${std === null ? ' (or none)' : ''}.` };
+    if (!s || !Number.isFinite(v)) return { error: `${row.key} must be a number${nullable ? ' (or none)' : ''}.` };
     return { value: v };
   }
   if (!s || /[\u0000-\u001f\u007f]/.test(s)) return { error: `${row.key}: write a value.` };
@@ -418,7 +420,58 @@ function gateEvidenceLines(config, cli) {
  * Doctor shows these with quiet guidance too: a switched-off guard should not be forgotten.
  * @param {{ config: object, queue?: object, own?: object, cli?: string }} o config = config() (resolved), own = the file
  */
-function doctorRows({ config, queue = {}, own = {}, cli = 'ravenseat' }) {
+/** Sizes above these are named in the INFO lines (below them the setting makes no difference anyone notices). */
+const LARGE_LOG_BYTES = 20 * 1024 * 1024;
+const LARGE_QUEUE_FINISHED = 500;
+const mb = (bytes) => `${Math.round(bytes / (1024 * 1024))} MB`;
+
+/**
+ * The history lines for doctor (owner decision B5): one INFO line for each setting that is off (performance, not a
+ * guard), with the size when it is large, and a WARN when the archive file of done tasks is broken. Pure: the caller
+ * passes the facts.
+ * @param {object} config
+ * @param {{ cli?: string, timeLog?: { bytes: number, rows: number }|null, queue?: { bytes: number, finished: number }|null,
+ *   archive?: { state: string, error?: string }|null }} [facts]
+ */
+function historyLines(config, { cli = 'ravenseat', timeLog = null, queue = null, archive = null } = {}) {
+  const out = [];
+  const name = 'history';
+  if (config?.history?.rotateTimeLog === 'off') {
+    const size =
+      timeLog && timeLog.bytes >= LARGE_LOG_BYTES
+        ? `; it is ${mb(timeLog.bytes)}, ${timeLog.rows} rows, read whole by the budget guard, start, fill and the board`
+        : '';
+    out.push({
+      status: 'INFO',
+      name,
+      message: `TIME LOG ROTATION OFF (history.rotateTimeLog: off): the time log stays one file${size}`,
+      fix: `${cli} settings set history.rotateTimeLog monthly moves it to monthly archives on the first write of a new month`,
+    });
+  }
+  if (config?.history?.archiveDoneAfterDays === null) {
+    const size =
+      queue && queue.finished >= LARGE_QUEUE_FINISHED
+        ? `; it holds ${queue.finished} done or cancelled tasks, ${mb(queue.bytes)}, parsed by every command`
+        : '';
+    out.push({
+      status: 'INFO',
+      name,
+      message: `DONE TASKS STAY IN queue.json (history.archiveDoneAfterDays: none)${size}`,
+      fix: `${cli} settings set history.archiveDoneAfterDays 30 moves the old ones to queue-archive.json`,
+    });
+  }
+  if (archive?.state === 'broken')
+    out.push({
+      status: 'WARN',
+      name,
+      message: `the archive of done tasks is broken: ${archive.error ?? 'it does not parse'}`,
+      fix: 'restore it from queue-archive.json.prev, or move it away (its tasks are then no longer found)',
+    });
+  return out;
+}
+
+/** `history`: the facts for historyLines (doctor passes them; null leaves the lines out). */
+function doctorRows({ config, queue = {}, own = {}, cli = 'ravenseat', history = null }) {
   const name = 'settings';
   const view = settingsView({ config, queue });
   const weakened = view.categories.flatMap((c) => c.rows).filter((r) => r.weakened);
@@ -449,6 +502,7 @@ function doctorRows({ config, queue = {}, own = {}, cli = 'ravenseat' }) {
   out.push(...ownLines);
   const lite = liteLine(config, own);
   if (lite) out.push({ status: 'INFO', name, message: lite, fix: null });
+  if (history) out.push(...historyLines(config, { cli, ...history }));
   const pp = own?.protectedPaths;
   if (pp && typeof pp === 'object' && !Array.isArray(pp)) {
     const MG = require('./mergeGuard.js');
@@ -559,6 +613,7 @@ function setJsonText(text, segs, value) {
 
 module.exports = {
   doctorRows,
+  historyLines,
   STORE_TEXT,
   pathOf,
   getPath,

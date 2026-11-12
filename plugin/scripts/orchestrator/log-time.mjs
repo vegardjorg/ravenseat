@@ -31,6 +31,8 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const T = require('./lib/timeCost.js');
+// The time log's monthly rotation and the reading across its archives (owner decision B5).
+const TA = require('./lib/timeLogArchive.js');
 const { dataFolder, timeLog } = require('./lib/queueConfig.js');
 
 // The time log and the queue file in mainTree, also from a worktree (config().root is always mainTree). QUEUE_TIME_LOG and
@@ -44,7 +46,13 @@ const val = (name) => {
   const i = a.indexOf(name);
   return i >= 0 ? a[i + 1] : undefined;
 };
-const readLog = () => (fs.existsSync(LOG) ? T.readRows(fs.readFileSync(LOG, 'utf8')) : []);
+const readLog = () => {
+  try {
+    return T.readRows(TA.readText(LOG));
+  } catch {
+    return []; // no time log yet
+  }
+};
 
 if (a[0] === '--show') {
   const filter = a[1];
@@ -128,5 +136,5 @@ const v = val('--duration-s');
 if (v) row.duration_s = Number(v);
 const m = val('--remark');
 if (m) row.remark = m;
-fs.appendFileSync(LOG, JSON.stringify(row) + '\n');
+TA.appendText(LOG, JSON.stringify(row) + '\n');
 console.log('logged', JSON.stringify(row));

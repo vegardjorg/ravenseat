@@ -51,7 +51,8 @@ if (arg('--to') != null) {
 
 let text = '';
 try {
-  text = fs.readFileSync(LOG, 'utf8');
+  // Across the monthly archives (lib/timeLogArchive.js); with --from only the ones that reach the window.
+  text = require('./lib/timeLogArchive.js').readText(LOG, { from });
 } catch {
   die(`could not find the time log ${LOG}`);
 }

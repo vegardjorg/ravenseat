@@ -40,6 +40,8 @@ const require = createRequire(import.meta.url);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
 if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
 const T = require('./lib/timeCost.js');
+// The time log's monthly rotation and the reading across its archives (owner decision B5).
+const TA = require('./lib/timeLogArchive.js');
 const { config, dataFolder, timeLog } = require('./lib/queueConfig.js');
 
 const guard = setTimeout(() => process.exit(0), 20000);
@@ -107,7 +109,8 @@ async function main() {
   // wave-active may have changed while the agent ran, and then the done row would end up in the wrong wave.
   if (event === 'done' && input.agent_id) {
     try {
-      const rows = fs.readFileSync(log, 'utf8').split('\n');
+      // The last week is enough: an agent's start row is never older than that (the archives before it are skipped).
+      const rows = TA.readText(log, { from: Date.now() - 7 * 86_400_000 }).split('\n');
       for (let i = rows.length - 1; i >= 0; i--) {
         if (!rows[i].includes(input.agent_id)) continue;
         const r = JSON.parse(rows[i]);
@@ -146,7 +149,7 @@ async function main() {
       `${counts.toolCall} calls, ${counts.modelTurns} turns, cache-read ${(counts.tokens.cache_read / 1e6).toFixed(1)}M, ` +
       `${counts.cache_expiry} cache-expiry, about $${counts.cost_usd} (cumulative)`;
   }
-  fs.appendFileSync(log, JSON.stringify(row) + '\n');
+  TA.appendText(log, JSON.stringify(row) + '\n');
 }
 
 main()

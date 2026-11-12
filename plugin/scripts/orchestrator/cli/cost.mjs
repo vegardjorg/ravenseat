@@ -189,7 +189,9 @@ export function cmdCost() {
       console.log(measurementLine(r));
     }
   } else {
-    const queue = read();
+    // With the archived tasks (lib/queueArchive.js, read-only): the all-time and window figures never change when a task
+    // moves to the archive.
+    const queue = require('./lib/queueArchive.js').withArchive(read(), FOLDER);
     const since = sinceTime(val('--since'));
     const s = L.costStatistics(queue, { since });
     if (s.cloudNotMeasured && !a.includes('--json')) console.log(`Not measured: ${s.cloudNotMeasured} task(s) ran in the cloud. Their use is not on this machine, so they are left out of the figures below.\n`);

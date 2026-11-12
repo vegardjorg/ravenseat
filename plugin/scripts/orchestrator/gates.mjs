@@ -145,7 +145,8 @@ function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSe
     const file = timeLog();
     let text = null;
     try {
-      text = fs.readFileSync(file, 'utf8');
+      // Across the monthly archives (lib/timeLogArchive.js): a track's earlier runs count wherever they are.
+      text = require('./lib/timeLogArchive.js').readText(file);
     } catch {
       text = null; // no log yet: this is the first run
     }
@@ -602,7 +603,7 @@ const LS = require('./lib/loadSlots.js');
 /** The time log's text, or null when there is none yet. */
 function timeLogText() {
   try {
-    return fs.readFileSync(timeLog(), 'utf8');
+    return require('./lib/timeLogArchive.js').readText(timeLog()); // across the monthly archives
   } catch {
     return null;
   }

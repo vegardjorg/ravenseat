@@ -741,3 +741,26 @@ names every guard weaker than its default on its `settings` row.
 |---|---|---|---|
 | `stateSnapshots.enabled`, `stateSnapshots.tiers` | `true`, `["1h","5h","1d","2d","7d"]` | Rolling copies of queue.json at a few ages, kept in the data folder | Advanced |
 | `metrics.idleGapMin` | `5` | A gap longer than this between two transcript entries is idle and not counted as active time | Advanced |
+| `history.rotateTimeLog` | `"monthly"` | `monthly` moves the time log to one archive per UTC month next to it on the first write of a new month; `off` keeps one file | Advanced |
+| `history.archiveDoneAfterDays` | `30` | Done and cancelled tasks untouched for this many days move from queue.json to `queue-archive.json` in the data folder; `null` keeps them all in queue.json | Advanced |
+
+**Where the history lives.** Both settings are about speed, not safety: every command parses queue.json, and the budget
+guard, start, fill and the board read the time log, so both used to grow without end. Turning either off is an INFO line
+in `ravenseat doctor` (with the size once it is large), never a weakened guard.
+
+- The time log (`timeLog`, default `scripts/.queue/times.jsonl`) is the current month. On the first write of a new UTC
+  month the old file is renamed to `times-YYYY-MM.jsonl` (the month of its last write) in the same folder; a second
+  archive for the same month gets `.2`, and nothing is ever written over. A lock folder next to the log
+  (`times.jsonl.rotate-lock`) lets only one process rename; writers keep appending, so no row is lost or doubled, and a
+  crash leaves every row readable. A reader that needs a window (today's budget, a running agent) reads only the files
+  that reach it; `ravenseat cost`, the board's statistics, the gate attempt count and the takeover read every archive, so
+  no number changes when the log rotates.
+- Done and cancelled tasks move to `<dataFolder>/queue-archive.json` once they have been finished for N days (counted
+  from when the queue first saw them finished, so nothing moves in the first N days after an upgrade), nothing
+  changed them in that time, no open task depends on them, fixes them or is their QA fix, their QA is settled, and they
+  are not gate or kickstart tasks. queue.json keeps `archived: { <id>: <status> }`, so an id is never given out again.
+  `ravenseat info` and `explain` show an archived task read-only with an ARCHIVED line, `undo` says a change to one
+  cannot be undone, plans, the findings, `ravenseat cost` and the board's statistics count them, and the board's
+  `/api/task` and `/api/archive?q=` find them. A new task (or an edit) that depends on, fixes or is the QA fix of an
+  archived task brings it back into queue.json first. The archive is written before queue.json lets go of a task, so a
+  crash between the two leaves it in both, and the next write settles it.
