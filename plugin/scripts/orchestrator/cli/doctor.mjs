@@ -65,7 +65,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'gateEvidence'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -96,6 +96,12 @@ export function baselineProblems(own) {
     out.push('gates.timeoutSec must be a whole number >= 0 or null');
   const mb = own.largeFileMb;
   if (mb !== undefined && !(typeof mb === 'number' && mb > 0)) out.push('largeFileMb must be a number > 0');
+  // gateEvidence (owner decision B2): an unknown mode reads as own, so it is named here rather than silently ignored.
+  const gm = own.gateEvidence?.mode;
+  if (gm !== undefined && !['own', 'external', 'off'].includes(gm)) out.push('gateEvidence.mode must be "own", "external" or "off"');
+  const ge = own.gateEvidence?.external;
+  if (ge !== undefined && !(Array.isArray(ge) && ge.every((x) => typeof x === 'string' && x.trim())))
+    out.push('gateEvidence.external must be a list of check names');
   return out;
 }
 

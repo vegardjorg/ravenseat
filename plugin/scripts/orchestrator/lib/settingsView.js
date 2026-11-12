@@ -365,7 +365,38 @@ function liteLine(config, own) {
 }
 
 /** The weakened settings doctor names on lines of their own, not in the shared WARN line (doctorRows). */
-const OWN_LINES = Object.freeze(['agentGuard.enabled', 'agentGuard.except', 'agentPushBlock.enabled']);
+const OWN_LINES = Object.freeze(['agentGuard.enabled', 'agentGuard.except', 'agentPushBlock.enabled', 'gateEvidence.mode']);
+
+/**
+ * Doctor's lines for gateEvidence (owner decision B2): INFO in mode external (which checks count), with a WARN when the
+ * list is empty (then nothing counts); WARN GATE EVIDENCE OFF in mode off. Nothing in own.
+ */
+function gateEvidenceLines(config, cli) {
+  const GE = require('./gateEvidence.js');
+  const mode = GE.modeOf(config);
+  if (mode === 'off')
+    return [{
+      status: 'WARN',
+      message:
+        'GATE EVIDENCE OFF (gateEvidence.mode: off): receive and merge take the track\'s gates=OK as given and do not check ' +
+        'owner rows against the owner log',
+      fix: `set it back with ${cli} settings set gateEvidence.mode own`,
+    }];
+  if (mode !== 'external') return [];
+  const names = GE.externalNames(config);
+  const out = [{
+    status: 'INFO',
+    message: `gateEvidence.mode external: a green run of ${names.length ? names.join(', ') : 'no check'} on the same commit counts as the full gate`,
+    fix: null,
+  }];
+  if (!names.length)
+    out.push({
+      status: 'WARN',
+      message: 'gateEvidence.external is empty, so no external check counts and the full gate runs here',
+      fix: `name the checks with ${cli} settings set gateEvidence.external <name>, or set gateEvidence.mode own`,
+    });
+  return out;
+}
 
 /**
  * The rows of the doctor check `settings` (plans/innstillinger-vurdering-2026-11-12.md, step 7):
@@ -374,7 +405,8 @@ const OWN_LINES = Object.freeze(['agentGuard.enabled', 'agentGuard.except', 'age
  *   - INFO in lite: the defaults lite softens (gitSurface, dependencyFiles), while the file does not set them;
  *   - INFO per entry of protectedPaths.remove: taken out, kept (the floor), or not a default path;
  *   - the agent guards have lines of their own instead (OWN_LINES): WARN AGENT GUARD OFF and an INFO per agentGuard.except
- *     entry (lib/agentGuard.js doctorLines, owner decision B3), and a WARN when agentPushBlock is off (B1).
+ *     entry (lib/agentGuard.js doctorLines, owner decision B3), and a WARN when agentPushBlock is off (B1);
+ *   - gateEvidence.mode has its own lines too (gateEvidenceLines, B2): INFO for external, WARN for off.
  * Doctor shows these with quiet guidance too: a switched-off guard should not be forgotten.
  * @param {{ config: object, queue?: object, own?: object, cli?: string }} o config = config() (resolved), own = the file
  */
@@ -395,6 +427,7 @@ function doctorRows({ config, queue = {}, own = {}, cli = 'ravenseat' }) {
           fix: `turn it back on with ${cli} settings set agentPushBlock.enabled on`,
         }]
       : []),
+    ...gateEvidenceLines(config, cli),
   ].map((r) => ({ ...r, name }));
   if (rows.length) {
     const parts = rows.map((r) => (r.key === 'protectedPaths' ? protectedPathsText(r.value, r.standard) : `${r.key} ${r.valueText}`));

@@ -535,6 +535,67 @@ if (gates.length === 0) {
   process.exit(0);
 }
 
+// ---- gateEvidence.mode external (owner decision B2): a green CI run on exactly this commit as the full gate ----
+// Only for --full, only when this run records evidence (the orchestrator's side: --evidence or the main checkout, never
+// a track's own run), only on a clean tree. gh lists the runs for HEAD's sha; every name in gateEvidence.external must
+// have its newest run completed green on exactly that sha (lib/gateEvidence.js externalCheck). Then an external-ci entry
+// is recorded and nothing runs here. Otherwise the reason is printed and the full gate runs here as in own. An empty list
+// counts nothing, and says so. QUEUE_CI_GH: a module whose default export (args) => { code, out } replaces gh (the
+// tests, as for ravenseat push-check --watch-ci; never set it otherwise).
+if (mode === 'full' && require('./lib/gateEvidence.js').modeOf(K) === 'external' && evidenceWanted().wanted) {
+  const GE = require('./lib/gateEvidence.js');
+  const names = GE.externalNames(K);
+  let reason = null;
+  if (!names.length) reason = GE.externalCheck([], { sha: START.sha, names }).reason;
+  else if (START.clean !== true) reason = 'the tree has uncommitted tracked changes, so a CI run on the commit does not cover it';
+  else if (!START.sha) reason = 'no commit to ask about';
+  else {
+    const out = await ghRunList(START.sha);
+    if (out.error) reason = out.error;
+    else {
+      const c = GE.externalCheck(out.runs, { sha: START.sha, names });
+      if (c.ok) {
+        const file = evidenceFile();
+        const entry = GE.externalEntry({
+          sha: START.sha,
+          setupHash: GE.setupHash(K.gates),
+          gates,
+          checks: c.checks,
+          branch: (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null,
+        });
+        if (file && GE.append(file, entry)) {
+          console.log(`EXTERNAL CI GREEN: ${c.reason}; recorded as the full gate for that commit (gateEvidence.mode external). Nothing ran here.`);
+          process.exit(0);
+        }
+        reason = 'the evidence store could not be written';
+      } else reason = c.reason;
+    }
+  }
+  console.log(`EXTERNAL CI: ${reason}. The full gate runs here.`);
+}
+
+/** gh run list for a sha: { runs } or { error }. The real gh, or the QUEUE_CI_GH test module. Never throws. */
+async function ghRunList(sha) {
+  const args = ['run', 'list', '--commit', sha, '--json', 'databaseId,name,workflowName,status,conclusion,headSha', '--limit', '100'];
+  try {
+    let r;
+    if (process.env.QUEUE_CI_GH) {
+      const { pathToFileURL } = await import('node:url');
+      const mod = await import(pathToFileURL(path.resolve(process.env.QUEUE_CI_GH)).href);
+      r = await mod.default(args);
+    } else {
+      const x = spawnSync('gh', args, { encoding: 'utf8', cwd, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
+      if (x.error) return { error: 'gh (the GitHub CLI) was not found' };
+      r = { code: x.status ?? 1, out: `${x.stdout ?? ''}` };
+    }
+    if (r?.code !== 0) return { error: `gh run list failed (exit ${r?.code ?? '?'})` };
+    const runs = JSON.parse(String(r.out ?? ''));
+    return Array.isArray(runs) ? { runs } : { error: 'gh run list gave no list' };
+  } catch (e) {
+    return { error: `gh run list could not be read (${e?.message ?? e})` };
+  }
+}
+
 // ---- The gate queue and the memory sampling (lib/gateQueue.js, lib/gateLoad.js) ----
 const GL = require('./lib/gateLoad.js');
 const LS = require('./lib/loadSlots.js');

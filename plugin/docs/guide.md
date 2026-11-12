@@ -343,6 +343,10 @@ What Ravenseat checks for you:
   migration flow configured.
 - The gates (`gates.quick`, `gates.full`), with results bound to the commit and run by the orchestrator, the base
   gate that stops merges on a red base, and the batch push threshold.
+- `receive` and `merge` run the quick gates themselves and never take a green result from the queue file; your
+  answers, edits and approvals there are confirmed against the owner log, so a row a track wrote itself stops them
+  until you accept it (`ravenseat owner-log accept <id> --by owner`). `gateEvidence.mode external` lets a green CI check
+  on the same commit count as the full gate; `off` takes the track's word (`gateEvidence.mode`, `gateEvidence.external`).
 - `/ravenseat:setup` can write a GitHub Actions workflow that runs your `gates.quick` on push and pull requests (opt-in,
   never over an existing file). On GitLab, Bitbucket and others, add a job that runs the same commands.
 

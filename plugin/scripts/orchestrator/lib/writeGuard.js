@@ -9,7 +9,8 @@
 //
 // Protected (PROTECTED):
 //   - gate-evidence.json and its temporary files (gate-evidence.json.<n>.tmp), ANYWHERE: no track needs such a file.
-//   - queue.json, base-health.json and git-surface.json in the data folder only (a project may have its own queue.json elsewhere).
+//   - queue.json, base-health.json, git-surface.json and owner-log.json in the data folder only (a project may have its
+//     own queue.json elsewhere).
 // Guarded agents: every subagent (owner decision B3, lib/agentGuard.js): track and track-d and the given types
 // (trackGuard.queueAgentTypes(): the reviewers and helpers) always, any other agent type unless agentGuard.except names it
 // or agentGuard.enabled is false. The orchestrator (no agent_type) is never stopped.
@@ -28,6 +29,7 @@ const PROTECTED = Object.freeze([
   { re: /^queue\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the queue', how: 'change it with the ravenseat commands (ravenseat report, ravenseat status ...)' },
   { re: /^base-health\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the base health', how: 'only ravenseat merge and the base gate write it' },
   { re: /^git-surface\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the accepted git baseline', how: 'only the owner changes it (ravenseat surface accept --by owner)' },
+  { re: /^owner-log\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the owner log', how: 'only the queue commands record in it (ravenseat owner-log accept --by owner)' },
 ]);
 
 /** Always guarded, whatever the config says. */

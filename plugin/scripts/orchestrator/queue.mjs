@@ -348,6 +348,10 @@
 //                                                                  accepted baseline: prints each difference; with accept
 //                                                                  takes the current state. Refused from a track worktree;
 //                                                                  the guard denies it to queue agents. lib/gitSurfaceBaseline.js)
+//   node scripts/orchestrator/queue.mjs owner-log <id> | owner-log accept <id> --by owner   (the owner rows a task relies on
+//                                                                  that no ravenseat write recorded in the owner log; accept
+//                                                                  confirms them as the owner's. Refused from a track worktree;
+//                                                                  the guard denies it to queue agents. lib/ownerLog.js)
 //   node scripts/orchestrator/queue.mjs settings [<category>] [--advanced] [--all] [--changed] [--json]   (every setting
 //                                                                  from the registry by category, basic first; lite leaves
 //                                                                  out the full-only rows and counts them. cli/settings.mjs)
@@ -681,6 +685,7 @@ import * as tasks from './cli/tasks.mjs';
 import * as triage from './cli/triage.mjs';
 import * as unlock from './cli/unlock.mjs';
 import * as surface from './cli/surface.mjs';
+import * as ownerLog from './cli/ownerLog.mjs';
 import * as settings from './cli/settings.mjs';
 import * as view from './cli/view.mjs';
 import * as wait from './cli/wait.mjs';
@@ -783,6 +788,8 @@ if (command === 'init') {
   unlock.cmdUnlock();
 } else if (command === 'surface') {
   surface.cmdSurface();
+} else if (command === 'owner-log') {
+  ownerLog.cmdOwnerLog();
 } else if (command === 'settings') {
   settings.cmdSettings();
 } else if (command === 'unblock') {
@@ -878,7 +885,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|settings> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|owner-log|settings> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

@@ -206,6 +206,8 @@ describe('the weakening rows from the design', () => {
     ['push.controlsWarning', false],
     ['claudeFingerprint', false],
     ['gates.fromKnownBugs', 'auto'],
+    ['gateEvidence.mode', 'external'],
+    ['gateEvidence.mode', 'off'],
     ['usageLimit.pause', false],
     ['proposals.autoAccept.enabled', true],
     ['reviewers', { K: [], U: [], D: [], 'D+': ['reviewer'] }],

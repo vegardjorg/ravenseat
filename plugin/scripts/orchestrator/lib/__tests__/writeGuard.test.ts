@@ -36,6 +36,9 @@ describe('writeGuard (pure)', () => {
       expect(WG.assessWrite({ agentType, filePath: at('gate-evidence.json'), folder: FOLDER, guardedTypes: types })?.reason).toMatch(/gate evidence/);
       expect(WG.assessWrite({ agentType, filePath: at('queue.json'), folder: FOLDER, guardedTypes: types })).not.toBeNull();
       expect(WG.assessWrite({ agentType, filePath: at('base-health.json'), folder: FOLDER, guardedTypes: types })).not.toBeNull();
+      // The owner log (owner decision B2) and its temporary file.
+      expect(WG.assessWrite({ agentType, filePath: at('owner-log.json'), folder: FOLDER, guardedTypes: types })?.reason).toMatch(/owner log/);
+      expect(WG.assessWrite({ agentType, filePath: at('owner-log.json.42.tmp'), folder: FOLDER, guardedTypes: types })).not.toBeNull();
     }
     // The store's temporary file, and a store outside the data folder (no track needs one anywhere).
     expect(WG.assessWrite({ agentType: 'track', filePath: at('gate-evidence.json.123.tmp'), folder: FOLDER, guardedTypes: types })).not.toBeNull();

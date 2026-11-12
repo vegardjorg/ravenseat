@@ -428,7 +428,7 @@ describe('ravenseat merge respects what ravenseat receive found', () => {
     expect(merged(p)).toBe(false);
   });
 
-  it('a commit after the red result needs a new receive, and then the merge goes on', () => {
+  it('a commit after the red result: merge checks the new commit itself (gateEvidence.mode own, owner decision B2)', () => {
     const p = project({ gates: { quick: [TRACK_RED] } });
     p.g(['config', 'user.name', 'Queue Owner']);
     p.g(['config', 'user.email', 'owner@company.no']);
@@ -437,11 +437,28 @@ describe('ravenseat merge respects what ravenseat receive found', () => {
     fs.writeFileSync(path.join(p.worktree, 'lib', 'OK.ts'), 'export const ok = 1;\n');
     p.g(['add', '--', 'lib/OK.ts'], p.worktree);
     p.g(['commit', '-q', '-m', 'fix'], p.worktree);
+    const r = p.run('merge', 'A', '--without-fill');
+    expect(r.out).toContain('GATES (merge) for A');
+    expect(r.error).not.toContain('The quick gates were red');
+    expect(merged(p)).toBe(true);
+  });
+
+  it('gateEvidence.mode off: a commit after the red result needs a new receive, and then the merge goes on', () => {
+    // gates=- : under off a track's gates=OK would be taken as given, so receive runs them only without that claim.
+    const RES_NO = RES.replace('gates=OK', 'gates=-');
+    const p = project({ gates: { quick: [TRACK_RED] }, gateEvidence: { mode: 'off' } });
+    p.g(['config', 'user.name', 'Queue Owner']);
+    p.g(['config', 'user.email', 'owner@company.no']);
+    p.report('A', `${RES_NO}\n`);
+    expect(p.run('receive', 'A').code).toBe(1);
+    fs.writeFileSync(path.join(p.worktree, 'lib', 'OK.ts'), 'export const ok = 1;\n');
+    p.g(['add', '--', 'lib/OK.ts'], p.worktree);
+    p.g(['commit', '-q', '-m', 'fix'], p.worktree);
     const stopped = p.run('merge', 'A', '--without-fill');
     expect(stopped.code).toBe(1);
     expect(stopped.error).toContain('have not been checked');
     expect(merged(p)).toBe(false);
-    p.report('A-r1', `${RES}\n`);
+    p.report('A-r1', `${RES_NO}\n`);
     expect(p.run('receive', 'A').code).toBe(0);
     expect(p.find().gate_check).toMatchObject({ ok: true });
     const r = p.run('merge', 'A', '--without-fill');

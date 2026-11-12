@@ -24,6 +24,12 @@
 //     in the store as history (the store is append-only, entries are never overwritten).
 // The NEWEST entry for a sha and kind decides (a later red run beats an earlier green one).
 //
+// gateEvidence.mode (owner decision B2, modeOf): own (the default) = receive AND merge read this store for the quick gates
+// on the track tip and run them when it has nothing (merge never believes the task's gate_check in queue.json); external
+// = also an entry with runner "external-ci" (externalEntry, a green GitHub run of every gateEvidence.external name on
+// exactly the sha, written by gates.mjs --full) counts for the full gate, and only there (verdictFor); off = receive and
+// merge take the track's gates=OK and gate_check as before. The owner rows those commands rely on are in lib/ownerLog.js.
+//
 // Legacy entries (written before setup_hash and writer existed, so they have neither field): they count only where they
 // counted before, that is for the push check (fullGateVerdict) and for callers that pass no setup hash, and only while
 // the caller allows legacy (`legacy: true`, the default). `ravenseat receive` reuses only an entry with the current setup hash
@@ -79,6 +85,14 @@ const KINDS = new Set(['quick', 'full']);
 const WRITER = 'orchestrator';
 /** Where a run happens today: in a working tree on this machine, as the same user, with what that tree holds. */
 const RUNNER_LOCAL = 'local-worktree';
+/**
+ * An external CI result (gateEvidence.mode external, owner decision B2): green runs of the listed GitHub check names on
+ * exactly this sha, read with `gh` by gates.mjs --full. Evidence only for the full gate, only in mode external and only
+ * for the names it was recorded with; never for receive's quick gates.
+ */
+const RUNNER_EXTERNAL = 'external-ci';
+/** gateEvidence.mode: own (the default), external, off. */
+const MODES = ['own', 'external', 'off'];
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const commandList = (v) => (Array.isArray(v) ? v.filter((g) => typeof g === 'string' && g.trim()).map((g) => g.trim()) : []);
@@ -225,6 +239,79 @@ function recordRun({ file, before, entry: e, tamperReason = null }) {
   }
 }
 
+/**
+ * gateEvidence.mode from the config: own (the default; receive and merge run the gates themselves and confirm owner rows
+ * against the owner log), external (a green external CI check on the same sha counts as evidence for the full gate),
+ * off (receive and merge take the track's word and do not check owner rows). An unknown value reads as own. Pure.
+ */
+function modeOf(cfg) {
+  const m = cfg?.gateEvidence?.mode;
+  return MODES.includes(m) ? m : 'own';
+}
+
+/** gateEvidence.external: the check names that count in mode external, trimmed, empty ones left out. Pure. */
+function externalNames(cfg) {
+  return commandList(cfg?.gateEvidence?.external);
+}
+
+/**
+ * Does the GitHub runs list (`gh run list --commit <sha> --json databaseId,name,workflowName,status,conclusion,headSha`)
+ * show every listed check green on exactly `sha`? A run counts for a name when its workflowName or name equals it and
+ * its headSha equals the full sha. The newest run of a name (the highest databaseId) decides, and it must be completed
+ * with conclusion success (skipped and neutral are not a test run). An empty list counts nothing. Pure.
+ * @returns {{ ok: boolean, reason: string, checks: { name: string, id: number }[] }}
+ */
+function externalCheck(runs, { sha, names }) {
+  const want = commandList(names);
+  if (!want.length)
+    return { ok: false, reason: 'gateEvidence.external is empty, so no external check counts; the full gate runs here', checks: [] };
+  if (typeof sha !== 'string' || !/^[0-9a-f]{40}$/i.test(sha)) return { ok: false, reason: 'no full commit sha to ask about', checks: [] };
+  const list = (Array.isArray(runs) ? runs : []).filter(
+    (r) => isObject(r) && String(r.headSha ?? '').toLowerCase() === sha.toLowerCase(),
+  );
+  const checks = [];
+  for (const name of want) {
+    const mine = list.filter((r) => r.workflowName === name || r.name === name);
+    if (!mine.length) return { ok: false, reason: `no run of ${name} on ${sha.slice(0, 12)}`, checks: [] };
+    const newest = mine.reduce((a, b) => (Number(b.databaseId) > Number(a.databaseId) ? b : a));
+    if (newest.status !== 'completed')
+      return { ok: false, reason: `${name} on ${sha.slice(0, 12)} is not done (${newest.status})`, checks: [] };
+    if (newest.conclusion !== 'success')
+      return { ok: false, reason: `${name} on ${sha.slice(0, 12)} is ${newest.conclusion || 'without a result'}`, checks: [] };
+    checks.push({ name, id: Number(newest.databaseId) || 0 });
+  }
+  return { ok: true, reason: `${want.join(', ')} green on ${sha.slice(0, 12)}`, checks };
+}
+
+/**
+ * The evidence entry for a green external CI result (externalCheck ok). It names the full gate commands it stands for
+ * (so covers() holds), the current setup hash, the runner external-ci and the check names. Written by gates.mjs's own
+ * process, like a local run.
+ * @param {{ sha: string, setupHash: string, gates: string[], checks: { name: string, id: number }[], branch?: string|null }} r
+ */
+function externalEntry({ sha, setupHash: hash, gates, checks, branch = null }) {
+  const e = {
+    id: newId(),
+    time: new Date().toISOString(),
+    by: 'gates.mjs',
+    writer: WRITER,
+    sha,
+    setup_hash: hash,
+    kind: 'full',
+    ok: true,
+    exit: 0,
+    clean: true,
+    gates: commandList(gates),
+    failed: [],
+    main_tree: true,
+    runner: RUNNER_EXTERNAL,
+    external_checks: (checks ?? []).map((c) => String(c.name)),
+    external_runs: (checks ?? []).map((c) => Number(c.id) || 0),
+  };
+  if (branch) e.branch = String(branch);
+  return e;
+}
+
 /** Is the entry from before writer and setup_hash existed (it has neither field)? */
 function isLegacy(e) {
   return isObject(e) && !('writer' in e) && !('setup_hash' in e);
@@ -238,9 +325,16 @@ function isLegacy(e) {
  * @param {object} e
  * @param {{ setupHash?: string|null, legacy?: boolean }} [q]
  */
-function trusted(e, { setupHash: want = null, legacy = true } = {}) {
+function trusted(e, { setupHash: want = null, legacy = true, external = null } = {}) {
   if (!isObject(e)) return false;
   if ('writer' in e ? e.writer !== WRITER : !legacy) return false;
+  // An external CI entry speaks only when the caller passes the external check names (mode external, the full gate)
+  // and the entry was recorded with every one of them.
+  if (e.runner === RUNNER_EXTERNAL) {
+    const want = commandList(external);
+    const had = new Set(commandList(e.external_checks));
+    if (!want.length || !want.every((n) => had.has(n))) return false;
+  }
   if (!want) return true;
   if ('setup_hash' in e) return e.setup_hash === want;
   return legacy;
@@ -297,7 +391,7 @@ function covers(e, commands) {
  * @param {object[]} entries
  * @param {{ sha: string|null, kinds?: string[], commands?: string[], setupHash?: string|null, legacy?: boolean }} q
  */
-function latest(entries, { sha, kinds = ['quick', 'full'], commands = [], setupHash: want = null, legacy = true }) {
+function latest(entries, { sha, kinds = ['quick', 'full'], commands = [], setupHash: want = null, legacy = true, external = null }) {
   if (!sha) return null;
   const list = (entries ?? []).filter(
     (e) =>
@@ -306,7 +400,7 @@ function latest(entries, { sha, kinds = ['quick', 'full'], commands = [], setupH
       e.clean === true &&
       kinds.includes(e.kind) &&
       covers(e, commands) &&
-      trusted(e, { setupHash: want, legacy }),
+      trusted(e, { setupHash: want, legacy, external }),
   );
   return list.length ? list[list.length - 1] : null;
 }
@@ -315,9 +409,9 @@ function latest(entries, { sha, kinds = ['quick', 'full'], commands = [], setupH
  * The verdict for a commit: "green" (the newest matching entry is green), "red" (it is red) or "missing" (none).
  * "off" when there are no commands to require (no gates set up of that kind). The query is latest's.
  */
-function verdict(entries, { sha, kinds = ['quick', 'full'], commands = [], setupHash: want = null, legacy = true }) {
+function verdict(entries, { sha, kinds = ['quick', 'full'], commands = [], setupHash: want = null, legacy = true, external = null }) {
   if (!commandList(commands).length) return 'off';
-  const e = latest(entries, { sha, kinds, commands, setupHash: want, legacy });
+  const e = latest(entries, { sha, kinds, commands, setupHash: want, legacy, external });
   if (!e) return 'missing';
   return e.ok === true ? 'green' : 'red';
 }
@@ -328,17 +422,27 @@ function verdict(entries, { sha, kinds = ['quick', 'full'], commands = [], setup
  */
 function fullGateVerdict({ folder, sha, cfg }) {
   try {
-    const commands = commandList(cfg?.gates?.full);
-    if (!commands.length) return 'off';
-    return verdict(readStore(storeFile(folder)).entries, {
-      sha,
-      kinds: ['full'],
-      commands,
-      setupHash: setupHash(cfg?.gates),
-    });
+    return verdictFor(readStore(storeFile(folder)).entries, { sha, cfg });
   } catch {
     return 'missing';
   }
+}
+
+/**
+ * The full-gate verdict from entries for the config: the full commands, the current setup hash, legacy allowed, and in
+ * mode external an external CI entry with every name of gateEvidence.external counts as well (never in own or off, never
+ * with an empty list). Pure.
+ */
+function verdictFor(entries, { sha, cfg }) {
+  const commands = commandList(cfg?.gates?.full);
+  if (!commands.length) return 'off';
+  return verdict(entries, {
+    sha,
+    kinds: ['full'],
+    commands,
+    setupHash: setupHash(cfg?.gates),
+    external: modeOf(cfg) === 'external' ? externalNames(cfg) : null,
+  });
 }
 
 /**
@@ -356,6 +460,9 @@ function tamperReason(command) {
   if (names(FILE_NAME.replace('.json', '')))
     return `the gate evidence (${FILE_NAME}) is written only by the orchestrator's gate runs; a queue agent may not touch it`;
   // The accepted git baseline (lib/gitSurfaceBaseline.js): removing it would make the next first use accept a planted hook.
+  // The owner log (lib/ownerLog.js): the owner rows receive and merge confirm; writing it would let a forged row pass.
+  if (names('owner-log'))
+    return "the owner log (owner-log.json) records the owner's own queue writes; a queue agent may not touch it";
   if (names('git-surface'))
     return "the accepted git baseline (git-surface.json) is the owner's (ravenseat surface accept --by owner); a queue agent may not touch it";
   // The gate runner itself (gates.mjs, `ravenseat gates`, `queue.mjs gates`), not any command that mentions the word.
@@ -428,6 +535,13 @@ module.exports = {
   MAX_ENTRIES,
   WRITER,
   RUNNER_LOCAL,
+  RUNNER_EXTERNAL,
+  MODES,
+  modeOf,
+  externalNames,
+  externalCheck,
+  externalEntry,
+  verdictFor,
   setupHash,
   storeFile,
   parseStore,

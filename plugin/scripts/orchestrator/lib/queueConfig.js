@@ -79,6 +79,14 @@ const STANDARD = Object.freeze({
     // receive and merge pass baseGate.timeoutSec themselves; the main checkout has no budget unless one is passed.
     timeoutSec: null,
   },
+  // Whose gate evidence receive and merge rely on (lib/gateEvidence.js, lib/ownerLog.js, owner decision B2).
+  // mode: "own" = receive and merge run the gates themselves (a run already recorded on the same tip and setup is
+  // reused, never run twice) and confirm the owner rows a task relies on (owner answers, edits, approvals) against the
+  // owner log; "external" = as own, and a green run of the GitHub checks named in `external` on exactly the same commit
+  // counts as the full gate (read with gh); "off" = receive and merge take the track's word (RESULT gates=OK) and owner
+  // rows are not checked. external: the check names (workflow or job names) that count; [] = none counts.
+  // A project with empty gates.quick and gates.full runs nothing under own anyway; off then only drops the owner row check.
+  gateEvidence: { mode: 'own', external: [] },
   // The done command (task field `done_when`, lib/doneCheck.js): `receive` and `merge` run it in the track's worktree.
   // timeoutSec = the time budget per run (a run over it is red); tailLines = how many of the last output lines are kept
   // for the fix brief (only the tail, so a secret printed early in a long run is not copied around).

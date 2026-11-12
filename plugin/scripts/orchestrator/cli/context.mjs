@@ -311,10 +311,25 @@ export function parallelWarning() {
 }
 // The write keeps queue.json.prev (the previous good state) and retries the rename on Windows EPERM/EBUSY/EACCES
 // (lib/stateFile.js writeState).
+//
+// The owner log (lib/ownerLog.js, owner decision B2): the owner rows this write adds (in `queue`, not in the file on
+// disk just before, read here under the lock) are recorded, so receive and merge can tell them from a row written into
+// queue.json some other way. A write from a track worktree records nothing. Never stops the write.
 export function write(queue) {
   stopIfLockLost('queue.json');
   queue.changed = new Date().toISOString();
+  const before = ownerKeysOnDisk();
   SF.writeState(FILE, JSON.stringify(queue, null, 2) + '\n', { snapshots: SNAPSHOT_TIERS });
+  if (before) OL.recordWrite(FOLDER, { before, after: queue, inTrack: queueBranchId() !== null });
+}
+const OL = require('./lib/ownerLog.js');
+/** The owner row keys in queue.json as it is on disk now (an empty set when there is no file yet), or null on an error. */
+function ownerKeysOnDisk() {
+  try {
+    return fs.existsSync(FILE) ? OL.keySet(JSON.parse(fs.readFileSync(FILE, 'utf8'))) : new Set();
+  } catch {
+    return null; // error-ignored: nothing recorded, so a new row asks for an accept at receive and merge
+  }
 }
 // The rolling copies of queue.json at a few ages (lib/stateSnapshots.js; stateSnapshots in queue.config.json).
 const SNAPSHOT_TIERS = require('./lib/stateSnapshots.js').tiersFrom(CONFIG.stateSnapshots);

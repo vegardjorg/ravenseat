@@ -30,9 +30,9 @@
 // keys that have no counterpart in STANDARD. The coverage test (lib/__tests__/settingsRegistry.test.ts) fails when a key
 // in STANDARD, a limit, a cloud setting, a board switch or a module has no row.
 //
-// Owner decisions B1-B5 (plans/ROADMAP.md): B1 (agentPushBlock.enabled) and B3 (agentGuard.enabled, .except) have their
-// rows. The rest get theirs in the same task that adds the key to STANDARD (the coverage test turns red until it does):
-//   B2  gateEvidence.mode, .external      gates, advanced, both modes, choices own/external/off; external and off weaken
+// Owner decisions B1-B5 (plans/ROADMAP.md): B1 (agentPushBlock.enabled), B2 (gateEvidence.mode, .external: gates,
+// advanced, both modes, choices own/external/off, external and off weaken) and B3 (agentGuard.enabled, .except) have
+// their rows. The rest get theirs in the same task that adds the key to STANDARD (the coverage test turns red until it does):
 //   B4  ownership.sharedPatchCollides     guards, advanced, full only (shared_patch is full format), weakens when false
 //   B5  history.rotateTimeLog, .archiveDoneAfterDays  history, advanced, both modes (performance, not a guard)
 // Also later: the environment variables (QUEUE_LOAD_ADAPTIVE, QUEUE_GATE_QUEUE, CONTEXT_BLOCK_OTHERS, the context limits,
@@ -251,6 +251,23 @@ const SETTINGS = Object.freeze([
     'A red gate in a track reruns only its red commands once on the same commit. Green then counts as flaky.'),
   row('gates.redOnBase', 'gates', 'object', 'Red on base check',
     'At receive, the track\'s new tests must pass on the tip and at least one must fail without the change. A warning.'),
+  row('gateEvidence.mode', 'gates', 'choice', 'Gate evidence',
+    'Own: receive and merge run the gates themselves and check your answers and edits against the owner log. External: ' +
+    'a green CI check on the same commit counts as the full gate. Off: the track\'s own word counts.', {
+      choices: ['own', 'external', 'off'],
+      weakens: rankWeakens(['own', 'external', 'off']),
+      protects: 'A track that writes a green gate result or an owner row (an answer, an edit, an approval) it never got ' +
+        'into the queue file, and has it believed at receive and merge.',
+      whyNot: 'External trusts a CI run you do not see, under the check names you list. Off believes the track\'s ' +
+        'gates=OK and every owner row in the queue file. A project with empty gates.quick and gates.full runs nothing ' +
+        'under own anyway, so off saves no time there; it only removes the owner row check.',
+      changes: 'External: a green listed check on the same commit counts as the full gate; the quick gates still run ' +
+        'here and owner rows are checked. Off: receive and merge take gates=OK as given and owner rows are not checked. ' +
+        'Doctor will report it.',
+    }),
+  row('gateEvidence.external', 'gates', 'list', 'External checks that count',
+    'The GitHub check names (workflow or job) whose green run on the same commit counts as the full gate in mode ' +
+    'external. Empty = none counts, and the full gate runs here.'),
   row('gates.fromKnownBugs', 'gates', 'choice', 'Gates from known bugs',
     'A known bug that can happen again becomes a gate task: propose (you approve), auto or off.', {
       choices: ['propose', 'auto', 'off'],

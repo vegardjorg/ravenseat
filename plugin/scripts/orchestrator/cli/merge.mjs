@@ -57,6 +57,91 @@ function stopOnDrift(again, extra = () => []) {
   if (detail) die([GB.driftMessage({ ...detail, ravenseat: CLI, again }), ...extra()].join('\n'));
 }
 
+// ---- Whose gate evidence and owner rows count (gateEvidence.mode, owner decision B2) ------------------------------------
+
+/** own (the default), external or off (lib/gateEvidence.js modeOf). */
+const GE_MODE = require('./lib/gateEvidence.js').modeOf(CONFIG);
+
+/**
+ * The owner rows task `id` relies on (owner answers, edits, approvals in queue.json), confirmed against the owner log
+ * (lib/ownerLog.js): a row no ravenseat write recorded stops receive and merge (exit 1, nothing changed) until the owner
+ * accepts it or takes it out. The first use records the rows there are as the baseline. Mode off does not check.
+ */
+function stopOnOwnerRows(id, again) {
+  if (GE_MODE === 'off') return;
+  const OL = require('./lib/ownerLog.js');
+  const r = OL.check(FOLDER, read(), id);
+  if (r.baseline) console.log(`Owner log started (${OL.logFile(FOLDER)}): the owner rows in the queue now are its baseline.`);
+  if (r.missing.length) die(OL.stopMessage({ id, missing: r.missing, ravenseat: CLI, again, file: OL.logFile(FOLDER) }));
+}
+
+/**
+ * gateEvidence.mode off: the track's gates=OK taken at its word on the delivered tip. Nothing runs; the record says
+ * where it came from (`source: "track"`, `ran: false`). `{ status: 'off' }` when there are no quick gates, as in own.
+ */
+function trackWordGates(branch) {
+  if (!CONTROLS.commandsOf(CONFIG.gates?.quick).length) return { status: 'off' };
+  const tip = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
+  console.log(
+    `Gates not run at ${String(tip).slice(0, 12)}: gateEvidence.mode off, so the track's RESULT gates=OK is taken as given ` +
+      '(nothing checked it; the merge step still runs the quick gates on the merge commit).',
+  );
+  return { status: 'green', record: { ok: true, kind: 'quick', tip, at: new Date().toISOString(), ran: false, source: 'track' } };
+}
+
+/** Set by cmdMerge when mergeGateKnown found no evidence for the tip: the gates run after the base gate check. */
+let gateRunPending = false;
+
+/**
+ * merge in mode own or external, before the merge: the quick gates on the track tip come from ravenseat's own evidence
+ * (lib/gateEvidence.js), never from the task's gate_check in queue.json (a file a track can write). A green entry for
+ * this tip and setup (the one receive recorded) is used as it is, so nothing runs twice; a red one stops. Returns
+ * { stop: null | 'same-tip', run: boolean }: run = there is no evidence, so mergeGateRun runs the gates. No quick gates:
+ * nothing to check.
+ */
+function mergeGateKnown(tip) {
+  const GE = require('./lib/gateEvidence.js');
+  const commands = CONTROLS.commandsOf(CONFIG.gates?.quick);
+  if (!commands.length) return { stop: null, run: false };
+  const known = GE.latest(GE.readStore(GE.storeFile(FOLDER)).entries, {
+    sha: tip, kinds: ['quick', 'full'], commands, setupHash: GE.setupHash(CONFIG.gates), legacy: false,
+  });
+  if (!known) return { stop: null, run: true };
+  if (known.ok !== true) return { stop: 'same-tip', run: false };
+  const covered = GE.coverageLine(known);
+  console.log(`Gates green at ${String(tip).slice(0, 12)} (${known.kind}, ravenseat's own run at ${known.time}${covered ? `, ${covered}` : ''}); not run again.`);
+  return { stop: null, run: false };
+}
+
+/** The stop for a red quick gate before the merge (nothing was done). */
+function dieGateRed(id, stop, tip) {
+  die(
+    `STOP: ${id} is not merged. ${stop === 'same-tip'
+      ? `The quick gates were red on this exact commit (${String(tip).slice(0, 12)}). Fix it in a fix round: ${CLI} resume ${id}.`
+      : `The quick gates were red at the last receive, and the commits since then have not been checked. Run ${CLI} receive ${id}.`} ` +
+      `On the owner's word only: ${CLI} merge ${id} --force-red-gate (logged as "gate-red-overridden"). Nothing was done.`,
+  );
+}
+
+/**
+ * The quick gates run by merge itself on the track tip when there was no evidence for it (mergeGateKnown): in the
+ * track's worktree (receiveGates, step merge), the record stored as the task's gate_check. Returns null (green) or
+ * 'same-tip' (red), or dies for the owner when the run was tampered.
+ */
+function mergeGateRun(o, { branch, scratch }) {
+  const r = receiveGates(o, { branch, scratch, step: 'merge' });
+  if (r.tampered)
+    die(GB.tamperedMessage({ what: 'the check run at merge', reason: r.tampered, ravenseat: CLI, again: `${CLI} merge ${o.id}` }));
+  if (r.status === 'off') return null;
+  // A fresh run's record goes into the queue (red: what resume and the fix brief read); a reused green one is there already.
+  if (r.record.ran)
+    edit((queue) => {
+      const t = queue.tasks.find((x) => x.id === o.id);
+      if (t) t.gate_check = r.record;
+    });
+  return r.status === 'red' ? 'same-tip' : null;
+}
+
 /**
  * The reason a red gates.mjs run was tampered, or null: the entry it recorded for this task after `since` (also one for
  * another sha: a gate that moved HEAD), or, with no such entry, a surface that now differs from the baseline.
@@ -191,7 +276,7 @@ function doneCommandRed(id, check, { scratch, what = 'done command' }) {
  * record gets `flaky` and `flaky_times` (withFlaky), the FLAKY lines are printed, and a fresh run files the finding.
  * @returns {{ status: 'off' } | { status: 'green'|'red', record: object, tampered?: string, check?: { run: object, file: string } }}
  */
-function receiveGates(o, { branch, scratch, reuse = true }) {
+function receiveGates(o, { branch, scratch, reuse = true, step = 'receive' }) {
   const GE = require('./lib/gateEvidence.js');
   const DC = require('./lib/doneCheck.js');
   const commands = (Array.isArray(CONFIG.gates?.quick) ? CONFIG.gates.quick : [])
@@ -243,8 +328,8 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
     );
   const folder = scratch ?? FOLDER;
   fs.mkdirSync(folder, { recursive: true });
-  const logFile = path.join(folder, `gates-receive-${o.id}.log`);
-  console.log(`GATES (receive) for ${o.id} in ${cwd}: ${commands.join(' ; ')}  (the quick gates, ravenseat's own run)`);
+  const logFile = path.join(folder, `gates-${step}-${o.id}.log`);
+  console.log(`GATES (${step}) for ${o.id} in ${cwd}: ${commands.join(' ; ')}  (the quick gates, ravenseat's own run)`);
   const t0 = Date.now();
   const r = spawnSync(
     process.execPath,
@@ -304,7 +389,7 @@ function receiveGates(o, { branch, scratch, reuse = true }) {
       `# Quick gates for ${o.id} at ${String(tip).slice(0, 12)}: RED (exit ${r.status ?? '?'})`,
       '',
       `- Commands: ${commands.map((c) => `\`${c}\``).join(', ')}`,
-      `- Where: ${cwd} (ravenseat receive's own run; the track's RESULT line is not evidence)`,
+      `- Where: ${cwd} (ravenseat ${step}'s own run; the track's RESULT line is not evidence)`,
       '',
       `The last ${tail.length} line(s) of the output:`,
       '',
@@ -429,6 +514,8 @@ export function cmdReceive() {
     die(`${id} has status ${o0.status}; receive applies to running, picked or review.`);
   // Before any git command and any change: a difference in what runs at the next git command is the owner's to settle.
   stopOnDrift(`${CLI} receive ${id}`);
+  // The owner rows the task relies on, confirmed against the owner log (owner decision B2), before anything changes.
+  stopOnOwnerRows(id, `${CLI} receive ${id} again`);
   const scratch = scratchpadFor(o0.scratchpad ?? null);
   if (!scratch) die('receive needs --scratchpad <folder> (or QUEUE_SCRATCHPAD).');
   const branch = o0.branch ?? branchFor(id);
@@ -541,9 +628,17 @@ export function cmdReceive() {
   }
   // The quick gates bound to the delivered tip (receiveGates), BEFORE the done command and any reviewer: the track's own
   // claim is informational only. A PARTIAL track is known to be unfinished, so no gate runs for it.
-  if (result?.gates != null && result.status !== 'PARTIAL')
+  // gateEvidence.mode off (owner decision B2): a track that says gates=OK is taken at its word, nothing runs; without
+  // that claim receive runs them as in own.
+  const trackSaidGreen = GE_MODE === 'off' && /^ok$/i.test(String(result?.gates ?? '').trim()) && result?.status !== 'PARTIAL';
+  if (result?.gates != null && result.status !== 'PARTIAL' && !trackSaidGreen)
     console.log(`The track's RESULT gates=${result.gates} is self-reported (informational only; receive checks the tip itself).`);
-  const gateCheck = result?.status === 'PARTIAL' ? { status: 'off' } : receiveGates(o0, { branch, scratch });
+  const gateCheck =
+    result?.status === 'PARTIAL'
+      ? { status: 'off' }
+      : trackSaidGreen
+        ? trackWordGates(branch)
+        : receiveGates(o0, { branch, scratch });
   // A run that changed what runs at the next git command (or the evidence store) is the owner's decision: no red path,
   // no blocker, no fix round, no attempt closed. The rerun hits the drift stop while the hook is there, else runs again.
   if (gateCheck.tampered)
@@ -999,6 +1094,9 @@ export async function cmdMerge() {
   // gates run after the merge, so without this stop the red code is on the base branch before anyone says no. A resume
   // does not ask: the merge is in already.
   if (!resume) {
+    // The owner rows the task relies on, against the owner log (owner decision B2): a row written into queue.json some
+    // other way stops here, before any step.
+    stopOnOwnerRows(id, `${CLI} merge ${id} again`);
     if (o.delivered_partial && !a.includes('--allow-partial'))
       die(
         `STOP: ${id} is not merged. Its last receive was a PARTIAL delivery: unfinished, and no gates ran on it. Next: ${CLI} resume ${id} --reason context${L.openBlockOf(o)?.code === 'track-question' ? ' --answer "<text>"' : ''}, then ${CLI} receive ${id}. ` +
@@ -1008,14 +1106,13 @@ export async function cmdMerge() {
       logTime(id, 'partial-overridden', `tip ${String(trackTip).slice(0, 12)}`);
       console.log(`WARNING: --allow-partial: merging ${id}, which the track itself called unfinished; logged as "partial-overridden".`);
     }
-    const stop = require('./lib/gateEvidence.js').mergeStop(o.gate_check, trackTip);
-    if (stop && !a.includes('--force-red-gate'))
-      die(
-        `STOP: ${id} is not merged. ${stop === 'same-tip'
-          ? `The quick gates were red on this exact commit (${String(trackTip).slice(0, 12)}) at receive. Fix it in a fix round: ${CLI} resume ${id}.`
-          : `The quick gates were red at the last receive, and the commits since then have not been checked. Run ${CLI} receive ${id}.`} ` +
-          `On the owner's word only: ${CLI} merge ${id} --force-red-gate (logged as "gate-red-overridden"). Nothing was done.`,
-      );
+    // gateEvidence.mode own and external: ravenseat's own evidence on the tip decides (mergeGateKnown); a red one stops
+    // here, and with none the gates run after the base gate check below (mergeGateRun), so a red base gets its own stop
+    // first. off, and --force-red-gate: the record in queue.json, as before (only a recorded red stops).
+    const known = GE_MODE === 'off' || a.includes('--force-red-gate') ? null : mergeGateKnown(trackTip);
+    const stop = known ? known.stop : require('./lib/gateEvidence.js').mergeStop(o.gate_check, trackTip);
+    gateRunPending = known?.run === true;
+    if (stop && !a.includes('--force-red-gate')) dieGateRed(id, stop, trackTip);
     // A focus marker (.only, fit, fdescribe) on an added line in a test file (lib/testWeakening.js focusHits): the gates
     // were green while most tests never ran. The one test-weakening finding that stops; testWeakening.focusStop false = off.
     if (CONFIG.testWeakening?.enabled !== false && CONFIG.testWeakening?.focusStop !== false) {
@@ -1043,6 +1140,12 @@ export async function cmdMerge() {
   // `wasRed` is the red record the merge goes on despite, so the record after it keeps the merge that made it red.
   // A resume does not ask: the merge is in already, and the base gate on it is one of the steps that are left.
   const wasRed = resume ? null : guardBeforeMerge({ id, force: a.includes('--force-red-base'), folder: scratch ?? FOLDER });
+  // gateEvidence.mode own and external with no evidence for the tip (mergeGateKnown above): the quick gates run now in
+  // the track's worktree, before the merge. Red: a fix round, never a merge.
+  if (!resume && gateRunPending) {
+    const s = mergeGateRun(o, { branch, scratch });
+    if (s) dieGateRed(id, s, trackTip);
+  }
   // The done command (lib/doneCheck.js) once more before the merge, unless the last run was green on this exact tip with
   // this command (receive ran it, and no fix round has added commits since). Red: a fix round, never a merge.
   if (typeof o.done_when === 'string' && o.done_when.trim()) {

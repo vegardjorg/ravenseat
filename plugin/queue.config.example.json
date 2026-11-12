@@ -8,6 +8,8 @@
   "timeLog": "scripts/.queue/times.jsonl",
   "branchPrefix": "queue/",
   "sharedLinks": ["node_modules"],
+  "_gateEvidence": "Whose gate evidence receive and merge rely on. own (default): they run the quick gates themselves (reusing a green run on the same tip) and check your answers, edits and approvals in queue.json against the owner log. external: also a green run of the GitHub checks named in external on exactly the same commit counts as the full gate (read with gh). off: they take the track's gates=OK and do not check owner rows. external [] = no check counts. external and off weaken a guard.",
+  "gateEvidence": { "mode": "own", "external": [] },
   "_gates": "Shell commands the tracks run before delivery (gates.mjs --quick / --full). Empty lists = no gates. precheck (gates.mjs --precheck) runs first and stops at the first red check; null = the standard checks, or a list where {changed} = the changed files and {file} = once per file.",
   "gates": {
     "quick": ["npm test"],

@@ -85,7 +85,10 @@ function project(config: Record<string, unknown>, queueExtra: Record<string, unk
     );
   writeQueue();
   const configFile = path.join(folder, 'queue.config.json');
-  fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'develop', ...config }));
+  // gateEvidence.mode off: these tasks never go through receive, and the tests lock the base gate around the merge as it
+  // was. Under own (the default, owner decision B2) merge runs the quick gates on the track tip first when it has no
+  // evidence; that and its order against the base gate are in __tests__/gateEvidenceFlow.test.ts.
+  fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'develop', gateEvidence: { mode: 'off' }, ...config }));
   // The merge runner: a real merge with plain git, every other step as ravenseat merge would run it; the steps are logged.
   const runner = path.join(folder, 'runner.mjs');
   const steps = path.join(folder, 'steps.log');
@@ -513,7 +516,7 @@ describe('the base gate and the trust rules', () => {
       `require('fs').appendFileSync(${JSON.stringify(seen)}, JSON.stringify({ queue: process.env.QUEUE_FOLDER || null, token: process.env.GITHUB_TOKEN || null }) + '\\n');\n`,
     );
     const command = `node "${script.split(path.sep).join('/')}"`;
-    fs.writeFileSync(path.join(p.folder, 'queue.config.json'), JSON.stringify({ baseBranch: 'develop', gates: { quick: [CHECK] }, baseGate: { commands: [command] } }));
+    fs.writeFileSync(path.join(p.folder, 'queue.config.json'), JSON.stringify({ baseBranch: 'develop', gateEvidence: { mode: 'off' }, gates: { quick: [CHECK] }, baseGate: { commands: [command] } }));
     p.env.GITHUB_TOKEN = 'test-token-not-for-the-base-gate';
     p.track('A', { 'lib/b.js': 'exports.b = 1;\n' });
     expect(p.run('merge', 'A', '--without-fill').code).toBe(0);
