@@ -24,14 +24,17 @@ copy of the project, your tests check the result, and what passes is merged on y
 answer from your phone with Claude Code's Remote Control, while the work runs on your computer. The result: work that
 spans days gets finished across many chats, and your time goes to the decisions.
 
-```text
-You:  Add to the queue: export a month of entries as CSV, with a test.
-      (The task is added to the queue.)
-You:  Start the queue.
-      (Claude asks before it starts. Then each task goes to a fresh agent, and your tests check the result.)
-You:  What's waiting on me?    (later, from your phone)
-      (The open questions, each with a recommendation and the work it blocks. Work that does not wait on you goes on.)
-```
+> **You:** Add dark mode in settings, a weekly streak on the habit card, and a CSV export once the streak is done.
+>
+> **Claude:** Added T-001, T-002 and T-003. T-003 waits for T-002.
+
+> **You:** How did dark mode go?
+>
+> **Claude:** Merged into main. Your check passed on main before and on the result; branch and worktree are gone.
+
+> **You:** Push.
+>
+> **Claude:** 2 merged tasks, 5 commits, nothing from outside the queue. Pushed: main went from e2a029d to 3dc10b6.
 
 **What it will not do on its own.** It asks before it starts, merges only on your machine, and pushes nothing until
 you say "push". **Your part.** Each delivery lists what the agent assumed (its Assumptions); read them before the
