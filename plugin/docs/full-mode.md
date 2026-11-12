@@ -14,8 +14,8 @@ grow. Switch with `ravenseat mode full` (`ravenseat mode lite` goes back), and r
 | Decisions, `/ravenseat:decide` and the board | Yes | Yes |
 | Risk classes and task sizing | No | Yes |
 | Focus and value-based priority | No | Yes |
-| Plan register | No | Yes |
-| Helper agents and deeper review | No | Yes |
+| Plan register | On by default (`features.plans`; set it to `false` to hide the Plans room) | Yes |
+| Helper agents and deeper review | Only `reviewer-light`, for class K tasks when the project has no CI config or no gates | Yes |
 
 Lite gets work moving with minimal setup. Full adds structure for larger projects; switch when you need it.
 

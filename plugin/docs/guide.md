@@ -59,6 +59,10 @@ Requirements: Node.js 20 or newer, git and Claude Code. No npm packages are need
 - **Questions:** `ravenseat question` lists them and `ravenseat resolve <id> --answer "..."` answers one. A question can come with
   2-4 answer options (`ravenseat question <id> --text "..." --choice "Yes" --choice "No"`): pick one with
   `ravenseat resolve <id> --choice 1`, or with one click on the board.
+- **What else is on:** the plan register (`features.plans` is on by default; `"features": { "plans": false }` in
+  `queue.config.json` hides the Plans room) and one helper: `reviewer-light` gives class K tasks a short review when the
+  project has no CI config or no gates (`ravenseat helpers off reviewer-light` turns it off). Lite tasks get class K, which
+  has no fixed reviewers, and the intake triage stays off unless you switch it on.
 - **Under the hood** `/ravenseat:queue` runs `ravenseat fill` (start one agent per task in its own worktree), `ravenseat receive` (take in
   what it delivered) and `ravenseat merge`.
 
