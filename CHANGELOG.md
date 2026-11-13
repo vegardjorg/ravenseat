@@ -6,6 +6,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- A read-first list at the top of every track mission: "Read these in your first turn, all in the same turn:" with the
+  repo files the mission names (a "Read also" section first, deduplicated, at most 12, keeping a `:line`, `:a-b` or
+  `§ N` suffix; the ownership, reads and done command lines only fill what is left), so a track reads them with parallel calls in one turn instead of one per turn. Only existing files
+  inside the repo are listed; URLs, globs, absolute paths and `..` escapes in the mission text are dropped, and a
+  mission without such paths gets no block (`missionText.js` `readFirstPaths`, used by `make-mission.mjs`). The
+  `add-to-queue` skill now asks for exact paths, one per line, under "Read also".
 - A narrow helper agent, `researcher` (`plugin/agents/researcher.md`), for the orchestrator's own analysis, measurement
   and research outside a queue task. It has only `Read`, `Grep`, `Glob`, `Bash` and `Write` at effort medium, so it starts
   with far less context than a general-purpose agent, which loads every tool and MCP definition. It reads the repo,

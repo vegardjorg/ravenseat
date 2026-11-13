@@ -39,7 +39,9 @@ Then do step 7.
      `"own_track": "<reason>"`. Not for D+, for tasks others depend on, or for tasks with open owner questions.
    `content_min` = the time the content would take as a K track (estimate = content_min × weight).
 2. **Write one self-contained track description per track** to `scripts/.queue/mission/<id>.md`: what and why, "Read
-   also" (paths), numbered content, tests (red first), review needs and "Do NOT touch".
+   also" (exact repo-relative paths, one per line, with `:line`, `:a-b` or `§ N` when only part matters; no globs or
+   folders: the mission starts with these as a read-in-one-turn list), numbered content, tests (red first), review
+   needs and "Do NOT touch".
 3. **Map ownership with Grep/Glob, do not guess:** `owned_files` (exact paths, or folders ending in "/"), `owner_db`
    (functions created or redefined), `shared_patch` (shared functions patched), `migr_tens` (0 without migrations).
    Then `reads`: the files the task builds on but does not change. Grep for the imports and calls of what the task

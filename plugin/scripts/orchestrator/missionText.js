@@ -12,7 +12,9 @@
 //   filterClass(text, k)      keeps only the <!-- class: … --> … <!-- /class --> sections that apply to class k
 //   classFromBlock(body)        the class in a track block ("class D+" in the ## TRACK line, or a CLASS: line)
 //   sectionPointers(text, read)   appends "(line A–B)" after "file.md § N" and "file.md#heading"
-// No I/O here (the read function and the config are injected); test: __tests__/missionText.test.ts.
+//   readFirstPaths(text, exists)  the existing repo paths a mission names, for the block at its top (readFirstBlock)
+// No I/O here (the read and exists functions and the config are injected; repoFileExists makes the real exists);
+// tests: __tests__/missionText.test.ts and __tests__/missionReadFirst.test.ts.
 // =============================================================
 
 const CLASSES = ['K', 'D', 'D+', 'U'];
@@ -248,8 +250,165 @@ function sectionPointers(text, read) {
   });
 }
 
+// ---- The read-first list ---------------------------------------------------------------------------------------------
+//
+// Why: a track mostly makes one tool call per turn, and every turn rereads the whole context. The files a mission names
+// can be read in one turn with parallel calls, so the mission starts with them as a list. The mission text is untrusted
+// data: only a bare repo-relative path that exists comes through (checked by the injected exists function), never a
+// URL, a glob, an absolute path, a ".." escape or other text.
+
+/** The most paths in the list: enough for a normal mission, short enough to stay one quick block. */
+const READ_FIRST_MAX = 12;
+const READ_FIRST_HEADING = 'Read these in your first turn, all in the same turn:';
+
+// A word is cut at whitespace, quotes, backticks, parentheses, angle brackets, commas, semicolons, pipes, "=" and "§".
+const WORD = /[^\s`'"()<>,;|=§]+/g;
+// A bare repo-relative path (no leading "/", no backslash, no drive letter, no "~" or "%VAR%"), optionally followed
+// by ":" and the rest of the word.
+const BARE = /^([\w@+.-]+(?:\/[\w@+.-]+)*)(?::(.*))?$/;
+const GLOB = /[*?[\]{}]/;
+const LINES = /^(\d+)(?:[-\u2013](\d+))?$/;
+const SECTION_AFTER = /^\s*§\s*(\d+(?:\.\d+)*)/;
+const READ_ALSO = /^\s*(?:#{1,6}\s*|[-*]\s*)?(?:\*\*)?read also\b/i;
+
+/**
+ * One word as a list entry ("path", "path:12", "path:3-9" or "path § 2.1"), or null when it is not a safe candidate.
+ * @param {string} raw the word
+ * @param {string} after the text right after the word (for a "§ N" suffix)
+ */
+function entryFromWord(raw, after) {
+  if (raw.includes('://')) return null; // a URL
+  let w = raw.replace(/[.,;:!?]+$/, '');
+  // Markdown emphasis around a path: **docs/x.md** or *docs/x.md*.
+  const em = w.match(/^(\*\*?)([^*]+)\1$/);
+  if (em) w = em[2];
+  if (GLOB.test(w)) return null;
+  const m = w.match(BARE);
+  if (!m) return null;
+  const file = m[1].replace(/^(?:\.\/)+/, '');
+  const parts = file.split('/');
+  if (parts.some((p) => p === '' || p === '.' || p === '..' || p.toLowerCase() === '.git')) return null;
+  // It must look like a file: a folder part or an extension. Existence is checked by the caller.
+  if (parts.length < 2 && !/\.[\w-]+$/.test(file)) return null;
+  const lines = m[2] != null ? m[2].match(LINES) : null;
+  if (lines) return { file, entry: `${file}:${lines[1]}${lines[2] ? `-${lines[2]}` : ''}` };
+  const section = m[2] == null ? String(after).match(SECTION_AFTER) : null;
+  return { file, entry: section ? `${file} § ${section[1]}` : file };
+}
+
+/** The candidate entries in a text, in order. */
+function entriesIn(text) {
+  const s = String(text);
+  const out = [];
+  for (const m of s.matchAll(WORD)) {
+    const e = entryFromWord(m[0], s.slice(m.index + m[0].length, m.index + m[0].length + 40));
+    if (e) out.push(e);
+  }
+  return out;
+}
+
+/** The text of a "Read also" section: its own line and the lines under it, up to a blank line after content or a heading. */
+function readAlsoSection(text) {
+  const lines = String(text).split(/\r?\n/);
+  const start = lines.findIndex((l) => READ_ALSO.test(l));
+  if (start < 0) return '';
+  const out = [lines[start]];
+  for (let i = start + 1; i < lines.length; i++) {
+    const l = lines[i];
+    if (/^#{1,6}\s/.test(l)) break;
+    if (!l.trim()) {
+      if (out.length > 1) break;
+      continue;
+    }
+    out.push(l);
+  }
+  return out.join('\n');
+}
+
+// The lines the queue writes into a track block itself (logic/external.js trackBlock, doneCheck.js): the ## TRACK
+// heading, ownership, reads and the done command. Their paths only fill what is left under the cap after the
+// mission text, so twelve owned files never push out the files the mission asks the track to read.
+const QUEUE_LINE = /^(?:## TRACK\b|\*\*(?:Ownership in the queue|Reads \(not owned\)|Done command \(binding\)):\*\*)/;
+
+/** The text split into the mission's own lines and the queue's lines. */
+function splitQueueLines(text) {
+  const own = [];
+  const queue = [];
+  for (const l of String(text).split(/\r?\n/)) (QUEUE_LINE.test(l) ? queue : own).push(l);
+  return { own: own.join('\n'), queue: queue.join('\n') };
+}
+
+/**
+ * The paths named in a mission, for the read-first list: a "Read also" section first, then the rest of the mission
+ * text in order, then (only if there is room) the queue's own lines (ownership, reads, done command, heading).
+ * Deduplicated on the whole entry (path and suffix), capped at max, and only paths for which exists(path) is
+ * true. Never throws for odd input.
+ * @param {string} text the mission (the track block)
+ * @param {(relPath: string) => boolean} exists is this repo-relative path an existing file in the repo
+ * @param {number} [max]
+ * @returns {string[]}
+ */
+function readFirstPaths(text, exists, max = READ_FIRST_MAX) {
+  const seen = new Set();
+  const known = new Map();
+  const out = [];
+  const { own, queue } = splitQueueLines(text);
+  for (const { file, entry } of [...entriesIn(readAlsoSection(own)), ...entriesIn(own), ...entriesIn(queue)]) {
+    if (out.length >= max) break;
+    if (seen.has(entry)) continue;
+    if (!known.has(file)) {
+      let ok = false;
+      try {
+        ok = exists(file) === true;
+      } catch {
+        ok = false;
+      }
+      known.set(file, ok);
+    }
+    if (!known.get(file)) continue;
+    seen.add(entry);
+    out.push(entry);
+  }
+  return out;
+}
+
+/** The block at the top of the mission, or '' for an empty list (no block at all). */
+function readFirstBlock(list) {
+  const l = Array.isArray(list) ? list.filter((x) => typeof x === 'string' && x) : [];
+  return l.length ? [READ_FIRST_HEADING, ...l.map((p) => `- ${p}`)].join('\n') : '';
+}
+
+/**
+ * An exists function for readFirstPaths: true only for a file that, after resolving symlinks, lies inside one of the
+ * roots (this tree first, then the main tree). An absolute path or a ".." escape is false. The only I/O in this file,
+ * and only when the caller uses it (fs can be replaced in tests).
+ * @param {string[]} roots
+ * @param {typeof import('node:fs')} [f]
+ */
+function repoFileExists(roots, f = require('node:fs')) {
+  const path = require('node:path');
+  return (rel) => {
+    if (typeof rel !== 'string' || !rel || path.isAbsolute(rel) || /^[A-Za-z]:/.test(rel)) return false;
+    return roots.filter(Boolean).some((root) => {
+      try {
+        const base = f.realpathSync(root);
+        const full = f.realpathSync(path.resolve(base, rel));
+        const r = path.relative(base, full);
+        if (!r || path.isAbsolute(r) || r.split(path.sep)[0] === '..') return false;
+        return f.statSync(full).isFile();
+      } catch {
+        return false;
+      }
+    });
+  };
+}
+
 module.exports = {
   CLASSES,
+  READ_FIRST_MAX,
+  readFirstPaths,
+  readFirstBlock,
+  repoFileExists,
   gateText,
   makeQueueCommon,
   fillClient,

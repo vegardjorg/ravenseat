@@ -21,6 +21,8 @@
 //     track class is in the list. An unknown class gives the whole protocol.
 //   - Section pointers in the track content ("docs/x.md § 3", "docs/x.md#heading") get "(line A–B)" appended, computed
 //     now. Relative paths are looked up from this tree and then mainTree (gitignored documents exist only there).
+//   - The prompt starts with "Read these in your first turn, all in the same turn:" and the existing repo paths the
+//     track content names (a "Read also" section first, at most 12; missionText.js readFirstPaths). No paths, no block.
 //
 // Example:
 //   node scripts/orchestrator/make-mission.mjs --common scratch/queue-common.md --track scratch/queue-track.md --head 849a5773
@@ -51,6 +53,9 @@ function readDocument(file) {
   }
   return null;
 }
+
+// Is a repo-relative path an existing file in this tree or mainTree (missionText.js repoFileExists: no escapes).
+const existsInRepo = O.repoFileExists([ROOT, MAIN_TREE]);
 
 const arg = (name) => {
   const i = process.argv.indexOf(name);
@@ -86,13 +91,13 @@ for (let i = 0; i < parts.length; i += 2) {
   // Optional BRANCH: line; otherwise <branchPrefix><id> (default queue/<id>).
   const branch = (lines.find((l) => l.startsWith('BRANCH:')) ?? `BRANCH: ${K.branchPrefix}${id}`).slice('BRANCH:'.length).trim();
   const start = lines.findIndex((l) => l.startsWith('## '));
-  const body = O.sectionPointers(
-    lines
-      .slice(start >= 0 ? start : 0)
-      .join('\n')
-      .trim(),
-    readDocument,
-  );
+  const raw = lines
+    .slice(start >= 0 ? start : 0)
+    .join('\n')
+    .trim();
+  const body = O.sectionPointers(raw, readDocument);
+  // The files the track block names, read in one turn with parallel calls (only existing paths inside the repo).
+  const readFirst = O.sectionPointers(O.readFirstBlock(O.readFirstPaths(raw, existsInRepo)), readDocument);
   const cls = O.classFromBlock(parts[i + 1]);
   let text = O.filterClass(common, cls);
   text = swap(text, '__BRANCH__', branch);
@@ -101,7 +106,8 @@ for (let i = 0; i < parts.length; i += 2) {
   text = swap(text, '__BLOCK__', block);
   const file = path.join(out, `prompt-${id}.md`);
   const blockLine = block === '(none)' ? '' : `Migration block: ${block}\n\n`;
-  fs.writeFileSync(file, `# ${title}\n\n${blockLine}${text}\n\n${body}\n`);
+  const readLine = readFirst ? `${readFirst}\n\n` : '';
+  fs.writeFileSync(file, `# ${title}\n\n${readLine}${blockLine}${text}\n\n${body}\n`);
   console.log(
     `wrote ${file} (class ${cls ?? 'unknown, whole protocol'}, shared ${text.length} chars)`,
   );

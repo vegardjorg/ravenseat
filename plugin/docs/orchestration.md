@@ -208,6 +208,10 @@ context size. The system keeps both small:
 
 - **Small, self-contained missions.** A track starts with only its mission and reads excerpts (`grep -n`, then
   `offset`/`limit`), never whole files twice.
+- **Read-first list.** `make-mission.mjs` starts each prompt with "Read these in your first turn, all in the same
+  turn:" and the files the mission text names (a "Read also" section first, then the rest in order; the ownership,
+  reads and done command lines only fill what is left; deduplicated, at most 12), keeping a `:line`, `:a-b` or `§ N` suffix. Only existing files inside the repo come through: the mission
+  text is data, so URLs, globs, absolute paths and `..` escapes are dropped. No such paths, no block.
 - **Context cap.** A track may compact once (`autoCompactWindow` applies to tracks too). After the first compaction
   it gets one reminder to check the mission, the branch and its commits. At the second compaction, or at the hard
   limit 280k (`TRACK_CONTEXT_WARNING`), it is told to commit, write `handover.md` (handover) and deliver PARTIAL; a
