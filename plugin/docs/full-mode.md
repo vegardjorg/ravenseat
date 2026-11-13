@@ -163,6 +163,29 @@ battery can drain it. Ravenseat changes none of these.
 **Cloud sessions** move ordinary code tasks to Claude Code's cloud sessions on claude.ai instead (off by default,
 `"features": { "cloud": true }`). See [cloud sessions](guide.md#cloud-sessions).
 
+### If you build your own gates
+
+Several agents run your checks at the same time on one machine. A check that is green alone and red under load costs a
+fix round with nothing wrong in the code. What helps, roughly in order of value:
+
+- **Cap the test workers.** Test tools start about one worker per core; a fixed cap (2 or 3) lets several runs fit.
+- **Do not raise timeouts to make red go away.** A timeout under load is information. Keep the budget, look at how busy
+  the machine was (`min_free_memory_pct` and the load factor in `ravenseat gates --health`), and rerun when calm. Raise
+  a budget only when the check is slow alone too.
+- **Give each run its own state.** Temp folders, ports, database names and output files per run (each gate run already
+  gets its own temp folder). A test that takes locks or changes a schema runs alone, never next to others.
+- **Split the slow suites.** Put tests that need a whole service, take locks or run for minutes in their own command,
+  in the full gate only, so they take their turn in the gate queue. The quick gate runs what changed.
+- **Check the environment before a long run.** If a gate needs a server, a container or a test account, check that it
+  answers first and stop with one line saying what is missing, instead of letting every test fail for an hour.
+- **Run the longest suites in a quiet window.** A full suite next to five tracks measures the machine, not the code.
+  Run it when few tracks are running, and compare with the load factor on a calm machine.
+- **Tests never write to real measurement or log files.** One test that writes fake timings spoils every later
+  comparison.
+
+The Checks tab has suggestions for these: `test-workers-cap`, `changed-tests-in-quick`, `test-timeouts-under-load` and
+`env-precheck`.
+
 ## "Something breaks and the queue stops"
 
 The queue keeps working when something stops. A task that waits on you is parked, and everything else goes on. A red

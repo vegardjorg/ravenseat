@@ -35,6 +35,23 @@ describe('the catalog the plugin ships', () => {
     expect(t.ask).toMatch(/paths:/);
     expect(t.ask).toMatch(/before you change/i);
   });
+  it('ships the two load suggestions for projects that build their own gates, in tests, for a project with gates and tests', () => {
+    for (const key of ['test-timeouts-under-load', 'env-precheck']) {
+      const t = catalog.templates.find((x: { key: string }) => x.key === key);
+      expect(t, key).toMatchObject({ category: 'tests', priority: 'low', when: 'has-gates, found:test' });
+      expect(t.action).toBeFalsy();
+      expect(t.investigate.length).toBeGreaterThan(20);
+      expect(t.plan.length).toBeGreaterThan(20);
+      const facts = { git: true, hasCommit: true, hasGates: true, remote: null, stacks: [], ci: [], kinds: kinds(['test', 'script']) };
+      expect(C.buildReport({ facts, catalog, now: 'x' }).suggestions.map((s: { key: string }) => s.key)).toContain(key);
+      expect(C.buildReport({ facts: { ...facts, hasGates: false }, catalog, now: 'x' }).suggestions.map((s: { key: string }) => s.key)).not.toContain(key);
+    }
+    // A timeout under load is information: the template must not tell anyone to raise the budget to get green.
+    const timeouts = catalog.templates.find((x: { key: string }) => x.key === 'test-timeouts-under-load');
+    expect(timeouts.plan).toMatch(/Keep the time budgets/);
+    const env = catalog.templates.find((x: { key: string }) => x.key === 'env-precheck');
+    expect(env.plan).toMatch(/one line/);
+  });
   it('every suggestion that uses an agent has both sections', () => {
     for (const t of catalog.templates.filter((x: { action: string }) => !x.action)) {
       expect(t.investigate.length).toBeGreaterThan(20);
