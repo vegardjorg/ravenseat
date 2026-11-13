@@ -47,7 +47,7 @@ const DEFAULTS = Object.freeze({
 });
 
 /** The task fields whose change counts as an edit of what the track would do (the changelog). */
-const CONTENT_FIELDS = new Set(['title', 'mission', 'owned_files', 'owned_db', 'shared_patch', 'done_when', 'acceptance', 'bonus']);
+const CONTENT_FIELDS = new Set(['title', 'mission', 'owned_files', 'owner_db', 'shared_patch', 'done_when', 'acceptance', 'bonus']);
 
 const DAY_MS = 86_400_000;
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -306,7 +306,7 @@ function triagePrompt(o, { reason, base, head = null, missionText = null, missio
     '## Owned files',
     '',
     list(o.owned_files),
-    ...(Array.isArray(o.owned_db) && o.owned_db.length ? ['', '## Owned DB objects', '', list(o.owned_db)] : []),
+    ...(Array.isArray(o.owner_db) && o.owner_db.length ? ['', '## Owned DB objects', '', list(o.owner_db)] : []),
     '',
     '## Mission',
     '',

@@ -904,6 +904,13 @@ if (loadRemark) {
   if (logFile) fs.appendFileSync(logFile, `\n${loadRemark}\n`);
 }
 if (recorded.covered) console.log(`Evidence for ${String(START.sha).slice(0, 12)}: ${recorded.covered}.`);
+// A run in a linked worktree without --evidence (a track's own run) records nothing, by design (lib/gateEvidence.js):
+// said here, so a green result is not taken for one that receive or merge will reuse.
+if (!WANT.wanted && WANT.mainTree === false)
+  console.log(
+    "This run is not gate evidence: a track's own run in its worktree is informational (any run in a linked worktree " +
+      `without --evidence), so ${require('./lib/projectRoot.js').cliCommand()} receive runs the quick gates itself on the delivered tip.`,
+  );
 if (surfaceChange) {
   // Nothing happened during the run: the plain message for someone who may simply have installed a hook tool.
   const detail = GB.isDriftOnly(surfaceChange) ? GB.driftDetail(SURFACE_FOLDER, cwd) : null;

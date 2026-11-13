@@ -82,6 +82,21 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   right before it writes (`lib/stateSweep.js`): only `<id>.json` files older than 7 days, never a link, a folder or
   another name, never a parent or sibling folder, at most once a day per folder by the mtime of a `.last-sweep`
   marker (one stat on other calls), and never failing the hook.
+- A track's own green `gates --quick` run in its worktree looked like one `receive` would reuse, and the config text
+  said "reusing a green run on the same tip". By design only ravenseat's own run (`receive`, `merge`, or a run in the
+  main checkout) records gate evidence, so `receive` ran the quick gates again. The rule is unchanged; the words now
+  match it: a gate run in a linked worktree without `--evidence` prints a line saying it is not gate evidence, and
+  `receive` says why it runs the gates (no green run of its own on that tip with the current gate setup). The
+  `gateEvidence.mode` text in `queue.config.example.json` and `docs/queue.md` says the same.
+- `ravenseat add` accepted a task field no task has (`owns` for `owned_files`) without a word, so the task ran without
+  what was meant. It now prints one WARNING line per unknown field with the nearest known field, `unknown field "owns";
+  the queue does not read it (did you mean owned_files?)` (`lib/taskFields.js`), as it already did for `minutes`. The
+  task is still added (the existing rule for `minutes`), and the fields the queue writes itself give no warning, so a
+  task copied from another queue file adds quietly.
+- `docs/queue.md` (wait mode) now says that `--wait <id>` on a finished run whose output was already shown prints the
+  whole output again.
+- Triage read the DB objects a task owns from `owned_db`, a field no task has, so they never reached the triage
+  package; it reads `owner_db` now.
 
 ### After you update
 - Plugin installs get the new agent with the update. A vendored install runs `node scripts/install.mjs <project>` once

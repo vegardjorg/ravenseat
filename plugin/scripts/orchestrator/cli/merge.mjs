@@ -349,6 +349,13 @@ function receiveGates(o, { branch, scratch, reuse = true, step = 'receive' }) {
   const folder = scratch ?? FOLDER;
   fs.mkdirSync(folder, { recursive: true });
   const logFile = path.join(folder, `gates-${step}-${o.id}.log`);
+  // Why it runs: only ravenseat's own green run on exactly this tip and gate setup is reused; a track's own run in its
+  // worktree never records evidence (lib/gateEvidence.js), however green it was.
+  if (reuse)
+    console.log(
+      `No green run of ravenseat's own on ${String(tip).slice(0, 12)} with the current gate setup (a track's own run is ` +
+        `never evidence), so ${step} runs the quick gates now.`,
+    );
   console.log(`GATES (${step}) for ${o.id} in ${cwd}: ${commands.join(' ; ')}  (the quick gates, ravenseat's own run)`);
   const t0 = Date.now();
   const r = spawnSync(

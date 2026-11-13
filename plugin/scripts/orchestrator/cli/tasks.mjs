@@ -429,6 +429,10 @@ export function cmdAdd() {
   for (const n of newOnes)
     for (const [wrong, right] of Object.entries(WRONG_NAMES))
       if (Object.hasOwn(n, wrong)) console.log(`WARNING: ${n.id}: the queue does not read "${wrong}"; the field is ${right}.`);
+  // Any other field no task has (lib/taskFields.js), with the nearest known one: `owns` for owned_files (live test).
+  const TF = require('./lib/taskFields.js');
+  for (const n of newOnes)
+    for (const u of TF.unknownFields(n, Object.keys(WRONG_NAMES))) console.log(TF.unknownFieldWarning(n.id, u));
   // Owning a protected path is what lets a change there past the merge guard, so it should not happen unnoticed.
   const protectedPaths = autoAcceptContext(read()).protectedPaths;
   for (const n of newOnes) {

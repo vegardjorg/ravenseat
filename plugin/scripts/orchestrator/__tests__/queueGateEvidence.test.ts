@@ -353,6 +353,25 @@ describe('what receive says about the run, and the done command', () => {
     expect(p.evidence().at(-1)).toMatchObject({ runner: 'local-worktree', untracked: 1, ignored_present: 0, shared_links: [] });
   });
 
+  it("a track's own green run in its worktree is no evidence: it says so, and receive says why it runs the gates", () => {
+    const p = project({ gates: { quick: ['node -e "process.exit(0)"'] } });
+    // The track's own `gates --quick` in its worktree, on exactly the tip it delivers: green, but not the orchestrator's run.
+    const own = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'orchestrator', 'gates.mjs'), '--quick'], {
+      encoding: 'utf8',
+      env: p.env,
+      cwd: p.worktree,
+    });
+    expect(own.status).toBe(0);
+    expect(own.stdout).toContain('ALL GREEN');
+    expect(own.stdout).toContain("not gate evidence: a track's own run in its worktree is informational");
+    expect(p.evidence()).toHaveLength(0);
+    p.report('A', REPORT);
+    const r = p.run('receive', 'A');
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/No green run of ravenseat's own on [0-9a-f]{12} with the current gate setup \(a track's own run is never evidence\)/);
+    expect(r.out).toContain('GATES (receive) for A');
+  });
+
   it('an entry from before the coverage fields is reused without a phrase', () => {
     const p = project({ gates: { quick: ['node -e "process.exit(0)"'] } });
     p.report('A', REPORT);
