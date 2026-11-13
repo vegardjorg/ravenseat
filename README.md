@@ -131,8 +131,16 @@ choke a PC before they use up a quota, so a load guard starts fewer agents while
 `ravenseat machine` suggests how many your machine can take.
 
 In one project, about 1,200 measured tasks gave a median of about 2.5 USD (API-equivalent) per ordinary code task
-including its review. That is one project and one developer, not a controlled benchmark, and it does not show a
-saving over plain Claude Code or other tools. Run `ravenseat cost` to see the numbers in your own project.
+including its review. In the same week, with the same model and settings, I compared that project with a second one
+built in a single Claude Code session from a plain roadmap file, with no queue. Per turn and per 1,000 inserted lines
+the cost was about the same (about 0.07 USD per turn, about 12 USD per 1,000 lines), and steering the work took about
+15 % in both. The queue did not make turns more expensive: it ran more of them and delivered more. The extra cost was
+the checks. Tests and review took about 31 % of the queue project's spend against 11 %, because it has a heavier test
+suite and a reviewer on every task. What does get expensive is a large context: a turn at over 500k tokens cost about
+2.7 times a turn at 100k to 200k. With automatic compaction at 300k, one long chat is not much more costly than
+starting new chats: in 10 sessions with about 6,000 turns, a compaction cost about as much as a new chat that reads a
+handover note in again, and work was back on track after about 6 turns instead of 17. Two different projects, one
+developer: not a controlled benchmark. Run `ravenseat cost` to see the numbers in your own project.
 There is no spending limit by default: `ravenseat limit dailyBudget <usd>` stops new tasks when the day's spend is used.
 [The measurements in detail](plugin/docs/costs.md).
 
