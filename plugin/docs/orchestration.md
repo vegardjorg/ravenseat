@@ -298,7 +298,8 @@ started them. A new session adopts them without that notification:
   has its last start or done row for the task, it was not stopped (`killed`), its transcript is in the session the queue
   is bound to, a worktree still holds the branch and its context is under `fixRound.continueMaxContextK` (default 200k).
   "Active" is the newer of the done row and the transcript's last write. The round counts toward the fix-round cap and the
-  plateau as before, and no attempt is reserved (SendMessage writes no start row). If the agent does not answer, or
+  plateau as before, and no attempt is reserved. SendMessage starts the agent again, so the time log gets a new start row
+  and a new done row for the same agent; the newest done row counts, and the cost is not counted twice. If the agent does not answer, or
   answers from a fresh context, `ravenseat resume <ID> --reason fix --new-agent` gives a new agent for the same round.
   `fixRound.continueWithinMin: 0` turns continuation off.
 - **A new fix agent gets a short mission.** The prompt holds the fix list, branch, worktree, the gates to run again (the

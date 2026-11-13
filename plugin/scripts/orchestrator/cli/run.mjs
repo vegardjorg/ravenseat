@@ -731,6 +731,7 @@ export function cmdResume() {
     ) ?? null;
   const PACKAGE = new Set([
     '00-package.md',
+    'mission.md',
     'diff.patch',
     'files',
     'trackReply.md',
