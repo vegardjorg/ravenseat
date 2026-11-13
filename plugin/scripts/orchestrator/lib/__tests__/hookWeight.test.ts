@@ -35,12 +35,13 @@ describe('a hot track hook stays light', () => {
       'lib/queueConfig.js',
       'lib/timeCost.js',
       'lib/timeLogRows.js',
+      'lib/stateSweep.js',
     ]);
     expect(mods).not.toContain('lib/queueLogic.js');
   });
 
   it('hook-track-end.mjs (every track stop): the same', () => {
-    expect(loaded(['lib/projectRoot.js', 'lib/contextGuard.js', 'lib/trackGuard.js', 'lib/queueConfig.js'])).not.toContain(
+    expect(loaded(['lib/projectRoot.js', 'lib/contextGuard.js', 'lib/trackGuard.js', 'lib/queueConfig.js', 'lib/stateSweep.js'])).not.toContain(
       'lib/queueLogic.js',
     );
   });

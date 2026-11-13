@@ -84,6 +84,8 @@ function readHint(input, agentType, abs, ti, countLines) {
   });
   if (!r) return;
   if (r.key) {
+    // Old state files of earlier agents go (older than 7 days, at most once a day; lib/stateSweep.js, never throws).
+    require('./lib/stateSweep.js').sweepState(HINT_STATE);
     fs.mkdirSync(HINT_STATE, { recursive: true });
     fs.writeFileSync(
       hintFile(input.agent_id),

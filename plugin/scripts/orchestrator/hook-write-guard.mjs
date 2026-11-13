@@ -132,6 +132,8 @@ function trackWarnings(input, abs, folder) {
   const fresh = found.filter((w) => !seen.includes(`${w.kind}:${rel}`));
   if (!fresh.length) return [];
   try {
+    // Old state files of earlier agents go (older than 7 days, at most once a day; lib/stateSweep.js, never throws).
+    require('./lib/stateSweep.js').sweepState(dir);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(file, JSON.stringify([...seen, ...fresh.map((w) => `${w.kind}:${rel}`)].slice(-500)));
   } catch {

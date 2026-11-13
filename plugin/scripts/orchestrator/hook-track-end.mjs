@@ -100,6 +100,8 @@ async function main() {
   });
   if (!answer) return;
   // Remember the block BEFORE it is written: if the state cannot be saved, nothing is blocked (no loop).
+  // Old state files of earlier agents go (older than 7 days, at most once a day; lib/stateSweep.js, never throws).
+  require('./lib/stateSweep.js').sweepState(STATE);
   fs.mkdirSync(STATE, { recursive: true });
   fs.writeFileSync(
     stateFile(input.agent_id),
