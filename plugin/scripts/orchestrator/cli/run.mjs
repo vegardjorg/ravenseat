@@ -71,6 +71,9 @@ export function cmdNext() {
   // Night guard: nightRun off and inside the night window gives exit 5 for the same reason.
   // Wind-down guard: the orchestrator in windDown (hook-context, about 350k) gives exit 6.
   // Load guard: the machine is full gives exit 7.
+  // The wiring spec's open items (lib/wiringItems.js): said first, also when a guard stops new starts below.
+  const wiringLine = require('./lib/wiringItems.js').summaryLine(queue.tasks, CLI);
+  if (wiringLine) console.log(wiringLine);
   const usage = dailyUsageFor(queue);
   const load = measureLoad();
   const guard = L.startGuard(queue, usage, { cursor: readCursor(), load });

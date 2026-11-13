@@ -20,10 +20,27 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   `docs/orchestration.md` now send such helpers to `researcher` instead of general-purpose. As a shipped agent it is in
   `PLUGIN_AGENT_TYPES`, so the push, network, queue CLI, read and write guards always cover it, and `ravenseat helpers
   add` cannot take its name. A test keeps it in every list at once.
+- The wiring spec becomes open items that stop `done` (`lib/wiringItems.js`). A track that may not change a hotspot
+  writes one line per change in `track-result.md`, `WIRE <file> | <anchor and the exact line to add>` (the mission
+  template, `track` and `track-d` define the format). `ravenseat receive` records each line on the task (field `wiring`:
+  `W1`, `W2` ..., the file and the line), and `ravenseat set <id> done` and the done step of `ravenseat merge` refuse
+  while one is open, with one line per item and the commands that close it. `ravenseat wiring <id> <item> --commit <sha>`
+  closes one in a commit that is in the base branch and changes the item's file; `--reject "<reason>"` closes one as not
+  needed (a reason is required). Both are kept with the time, logged for `ravenseat undo`, and refused from a track
+  worktree. The report is treated as data: nothing in it runs, the path must be a plain repo path, the text is one
+  capped line, and a malformed line still stops `done` (it can only be rejected). The open items are shown in
+  `ravenseat show <id>`, `ravenseat state` (`wiring`), `ravenseat next`, `ravenseat show` and the board's task detail. See
+  `docs/orchestration.md` ("The wiring spec stops done").
+- The setting `wiring.stop` (default `true`, Advanced, in Merge and push): `false` lets `done` pass with open items and
+  says `WIRING STOP OFF`; it is a weakened guard in `ravenseat settings` and `ravenseat doctor`.
 
 ### After you update
 - Plugin installs get the new agent with the update. A vendored install runs `node scripts/install.mjs <project>` once
   more: it adds `.claude/agents/researcher.md` and keeps your other files.
+- `done` can now refuse: a task whose track wrote `WIRE` lines waits until each item is closed with `ravenseat wiring`.
+  When `ravenseat merge` stops at the done step for this, the merge is in; apply the items, close them, then
+  `ravenseat merge <id> --resume`. Tracks write the lines once they have the new mission template and track agents
+  (a vendored install gets them from `node scripts/install.mjs <project>`); `wiring.stop false` turns the stop off.
 
 ## 0.13.0 (2026-11-13)
 

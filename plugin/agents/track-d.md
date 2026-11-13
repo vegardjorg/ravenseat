@@ -40,3 +40,6 @@ branch, merging and pushing; you only do your track.
   migration commands (write the file; the owner decides when it runs), start dev servers or previews.
 - Your answer to the orchestrator (last answer) is at most about 1,500 characters: the RESULT line first, at most 5
   lines, then the path to `track-result.md` in the track's scratchpad folder, where everything long goes.
+- **Wiring spec:** a hotspot (or another shared file) you may not change gets one line per change in `track-result.md`,
+  exactly `WIRE <file> | <anchor and the exact line to add>` (a repo-relative path, then ` | `, then one line). Each
+  line becomes an open item on the task that `done` waits for until the orchestrator applies it; never edit the file.

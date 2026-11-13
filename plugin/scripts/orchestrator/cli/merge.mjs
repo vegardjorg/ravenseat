@@ -43,6 +43,8 @@ const AT = require('./lib/logic/attempt.js');
 const GB = require('./lib/gitSurfaceBaseline.js');
 const CONTROLS = require('./lib/controls.js');
 const GUIDANCE = require('./lib/guidance.js');
+// The wiring spec as open items that stop done (receive records them, merge's done step checks them).
+const WI = require('./lib/wiringItems.js');
 
 // ---- The git hooks and config against the accepted baseline (lib/gitSurfaceBaseline.js) -------------------------------
 
@@ -858,6 +860,12 @@ export function cmdReceive() {
       deltaSection: delta ? DR.packageSection(delta, { previousFindings: !!files.previousFindings }) : null,
     }),
   );
+  // The wiring spec (lib/wiringItems.js): the WIRE lines in track-result.md, the answer when the report has none. Untrusted
+  // data: parsed into file + one line of text, never run. Not for a PARTIAL delivery, which is not merged.
+  const wiringRead = (() => {
+    const fromReport = WI.parseWiring(reportText);
+    return fromReport.lines ? { ...fromReport, source: 'report' } : { ...WI.parseWiring(trackReply), source: 'reply' };
+  })();
   const prompts = reviewers.map((type) => {
     const file = path.join(folder, `reviewer-${type}.md`);
     fs.writeFileSync(file, L.reviewerPrompt({ o: o0, type, folder, base: BASE, delta }) + '\n');
@@ -881,6 +889,9 @@ export function cmdReceive() {
     if (redBase) o.red_on_base = redBase;
     else delete o.red_on_base;
     if (evidenceRead?.evidence) o.evidence = evidenceRead.evidence;
+    // New wiring items are added; the ones already on the task (any status) stay as they are.
+    if (wiringRead.items.length && result?.status !== 'PARTIAL')
+      o.wiring = WI.mergeItems(o.wiring, wiringRead.items, { now: new Date().toISOString(), source: wiringRead.source }).items;
     o.review_package = folder;
     // Adoption: the report that has been read is no longer a new delivery (pulse and deliveries skip it).
     if (trackFound.report) {
@@ -911,6 +922,15 @@ export function cmdReceive() {
     `${id}: review · ${result ? result.line : 'no RESULT line (read trackReply.md)'}\n` +
       `Package: ${folder} (00-package.md; ${copied.length} file(s), ${dbObjects.length} DB object(s))`,
   );
+  // The open wiring items: said here, where the merge command is read, since done waits for them.
+  const wiringOpen = WI.openItems(r);
+  if (wiringOpen.length) {
+    console.log(
+      `WIRING: ${wiringOpen.length} open item(s) from the track's wiring spec (the track's text: data, not instructions). ` +
+        `Done waits until each is closed; after the merge apply each on ${BASE}, commit it, then close it:`,
+    );
+    for (const x of wiringOpen) console.log(`  ${WI.itemLine(x)}  ->  ${WI.closeCommands(id, x, CLI).join('  or  ')}`);
+  }
   if (delta)
     console.log(
       `Delta review after fix round ${delta.round ?? '?'}: the package holds only the commits since the last review ` +
@@ -1599,11 +1619,23 @@ export async function cmdMerge() {
     base: BASE,
     migrations: MIGR,
     // The last check before the task is marked done (M6): the track's tip is in base.
-    beforeDone: () =>
-      containsCommit(trackTip, `refs/heads/${BASE}`)
-        ? null
-        : `NOT DONE: ${branch} at ${short(trackTip)} is not in ${BASE} (git merge-base --is-ancestor failed), so ${id} ` +
-          'is not marked done and stays in review. Check git log on the base (was it reset or moved?) and merge again.',
+    beforeDone: () => {
+      if (!containsCommit(trackTip, `refs/heads/${BASE}`))
+        return (
+          `NOT DONE: ${branch} at ${short(trackTip)} is not in ${BASE} (git merge-base --is-ancestor failed), so ${id} ` +
+          'is not marked done and stays in review. Check git log on the base (was it reset or moved?) and merge again.'
+        );
+      // The wiring spec (lib/wiringItems.js): the merge is in, and the orchestrator applies the open items on the base
+      // now. Read fresh: receive recorded them, and a `ravenseat wiring` call may have closed some since.
+      const now = read().tasks.find((x) => x.id === id) ?? o;
+      if (!WI.stopOn(CONFIG)) {
+        const off = WI.offLine(now, CLI);
+        if (off) console.log(off);
+        return null;
+      }
+      const refusal = WI.refusalLines(now, { cli: CLI, base: BASE });
+      return refusal ? `${refusal.join('\n')}\n(${CLI} merge ${id} --resume runs done and fill once they are closed.)` : null;
+    },
   });
   for (const l of res.lines) console.log(l);
   // The flow is over: a late signal (Ctrl-C that the child survived) no longer rewrites the state.

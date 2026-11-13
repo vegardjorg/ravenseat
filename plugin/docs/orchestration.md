@@ -386,7 +386,8 @@ receive and merge the same track. Compaction is still the usual path for a long 
 - Tracks commit only on their own branch, with `git commit -- <files>` (pathspec), and never push or merge.
 - Tracks never kill processes by pattern; other tracks run the same scripts.
 - Ownership is exclusive while a task runs. Hotspot files (navigation, central registries) are changed by the
-  orchestrator while merging, from the wiring specification in the track report.
+  orchestrator after the merge, from the wiring specification in the track report, and `done` waits for it (see
+  "The wiring spec stops done").
 - New work discovered by a track becomes a proposal (`ravenseat add` from its worktree), never scope creep. The queue sets
   `added_by` from the branch, `--approved` is refused, and a track may have 3 open proposals. The mission shows the command, and
   the proposal needs only `id`, `title` and `mission`: the rest follows the track, and the class is K unless the task sets it.
@@ -576,6 +577,47 @@ lost, nothing is merged twice, and nothing is marked done unless it is in the ba
 | The same on a git older than 2.38 | Git has the merge open, and every merge refuses until it is settled | Resolve and commit, then `ravenseat merge <id> --resume`. Or `git merge --abort`, and the task is as it was |
 
 Not covered: a kill while the queue's own lock file is being written, and a disk that fails in the middle of a rename.
+
+## The wiring spec stops done
+
+A track never edits a hotspot it has not agreed in `hotspot_patch`. It writes what to add where in `track-result.md`,
+one line per change, in a fixed format:
+
+```
+WIRE src/routes.ts | after the last import add `import { Reports } from './reports'`
+WIRE src/registry.ts | append `registry.push(Reports)` at the end of the list
+```
+
+`ravenseat receive` records each line as an open item on the task (the field `wiring`): a short id (`W1`, `W2`, ...),
+the target file and the one-line description. A second receive of the same report adds nothing; a fix round's report
+adds only the new lines, and no item is ever dropped. `receive` lists the open items with the commands that close
+them, and `ravenseat show <id>`, `ravenseat state` (`wiring`), `ravenseat next`, `ravenseat show` and the board's task
+detail ("Open wiring") show them until they are closed.
+
+`ravenseat set <id> done` and the done step of `ravenseat merge` refuse while an item is open, with one line per item.
+The merge itself is in by then; `merge` stops before `done` and keeps its state. Apply each item on the base branch,
+commit it, close it, and run `ravenseat merge <id> --resume` (done and fill):
+
+```
+ravenseat wiring <id>                                     # the items, open first, with the commands
+ravenseat wiring <id> W1 --commit <sha>                   # done in this commit
+ravenseat wiring <id> W2 --reject "<reason>"              # not needed, and why
+```
+
+`--commit` takes only a sha (4 to 40 hex characters), and the commit must exist, be in `baseBranch` and change the
+item's target file. `--reject` needs a reason that is not empty. Both are kept on the item with the time and `--by`, are
+logged in the changelog (`ravenseat undo` takes one back), and are refused from inside a track worktree: a track does
+not close its own spec.
+
+The report is a track's text, so it is treated as data. Nothing in a `WIRE` line is run. The file must be a plain
+relative path in the repo (no `..`, no drive, no spaces or shell characters), the description is one printable line
+of at most 200 characters, and at most 20 lines are read from one report. A `WIRE` line that breaks the format still
+becomes an open item, without a file, so a malformed spec stops `done` instead of being lost; it can only be closed
+with `--reject` (say what you did instead).
+
+The setting `wiring.stop` (default `true`, Advanced) turns the stop off. Then `done` passes with open items, says
+`WIRING STOP OFF` with the items, and they stay open on the task. Turning it off is a weakened guard: `ravenseat
+settings` and `ravenseat doctor` name it, as for the other guards.
 
 ## Gate from incident (a failure becomes a check)
 

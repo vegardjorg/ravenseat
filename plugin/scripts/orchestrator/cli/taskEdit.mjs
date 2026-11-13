@@ -25,6 +25,8 @@ import { logTime, measurementLine, measureTask, minutes, saveMeasurement, turnWa
 // lib/doneCheck.js LOCKED_FIELDS and doneLockError): edit and undo refuse a change after the start unless --by is owner
 // or theBoard, and always from inside a track worktree.
 const D = require('./lib/doneCheck.js');
+// The wiring spec's open items stop `set <id> done` (lib/wiringItems.js; wiring.stop false turns it off).
+const WI = require('./lib/wiringItems.js');
 let trackBranchCache;
 /**
  * The track branch the cwd is on (`<branchPrefix><id>`), or null. A track agent runs ravenseat from its worktree, so this is
@@ -77,10 +79,19 @@ export function cmdSet() {
   // Done by hand without proof (red team, plans/redteam-plan.md finding 9): allowed, since a picked or outside task is done
   // that way, but said out loud, with the tasks it frees. Never a stop.
   let unproven = null;
+  // The line when wiring.stop is off and the task goes done with open wiring items.
+  let wiringOff = null;
   const r = edit((queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
     orchestratorStep = !o.picked_by && !L.isExternalRow(o);
+    // The wiring spec (lib/wiringItems.js): done waits until each item is closed by a commit or rejected with a reason.
+    if (status === 'done' && o.status !== 'done') {
+      if (WI.stopOn(CONFIG)) {
+        const refusal = WI.refusalLines(o, { cli: CLI, base: CONFIG.baseBranch });
+        if (refusal) die(refusal.join('\n'));
+      } else wiringOff = WI.offLine(o, CLI);
+    }
     if (status === 'done' && o.status !== 'done' && !L.isExternalRow(o)) {
       const freed = queue.tasks
         .filter((x) => (x.depends_on ?? []).includes(id) && !['done', 'cancelled'].includes(x.status))
@@ -115,6 +126,7 @@ export function cmdSet() {
   console.log(
     `${id}: ${status}${qa ? ' · label visual: now in the owner QA list (ravenseat qa)' : ''}`,
   );
+  if (wiringOff) console.error(wiringOff);
   if (unproven) {
     const info = branchInfo(unproven.branch);
     const why = info.exists && info.commits

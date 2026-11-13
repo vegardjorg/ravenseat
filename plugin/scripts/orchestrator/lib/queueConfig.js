@@ -197,6 +197,11 @@ const STANDARD = Object.freeze({
   // otherwise the track writes a wiring spec and the orchestrator makes the change. The merge guard stops an unagreed
   // change (lib/hotspots.js). Empty = off.
   hotspots: [],
+  // The wiring spec as open items (lib/wiringItems.js): `receive` records each `WIRE <file> | <what>` line of the track's
+  // report on the task, and `set <id> done` and the done step of `merge` refuse while one is open (`ravenseat wiring
+  // <task> <item> --commit <sha>` or `--reject "<reason>"` closes it). stop false = done passes with open items and says
+  // so; turning it off is a weakened guard (doctor names it).
+  wiring: { stop: true },
   // Optional migration flow (e.g. database migrations that must be numbered and pushed after merge).
   // With folder = null everything to do with migrations is turned off (no number blocks, no push in merge).
   migrations: {

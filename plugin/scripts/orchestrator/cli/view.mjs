@@ -75,6 +75,9 @@ export function cmdShowSummary() {
   if (baseLine) console.log(baseLine);
   const setupLine = setupBehindLine();
   if (setupLine) console.log(setupLine);
+  // The wiring spec's open items (lib/wiringItems.js): done waits for them, so they are said near the top too.
+  const wiringLine = require('./lib/wiringItems.js').summaryLine(queue.tasks, CLI);
+  if (wiringLine) console.log(wiringLine);
   // The calibrated cost estimate (~$x) on the startable lines and the budget outlook (lib/costEstimate.js).
   const costModel = CE.costModel(queue);
   for (const l of L.summaryView(queue, {
@@ -278,6 +281,8 @@ export function cmdState() {
   t.fixLinks = FX.openFixLinks(queue.tasks);
   // Findings the tracks reported outside their scope (ravenseat finding): how many are not triaged yet, and their ids.
   t.findings = findingsStateNow();
+  // The wiring spec's open items across the queue (lib/wiringItems.js; always included, empty when none is open).
+  t.wiring = require('./lib/wiringItems.js').openState(queue.tasks);
   console.log(JSON.stringify(t, null, 2));
   if (t.empty) process.exit(3);
 }

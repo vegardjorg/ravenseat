@@ -30,6 +30,8 @@
 const L = require('./queueLogic.js');
 // The decision overview ("Decided today" in the inbox; the sorting and the writes are used by the board and ravenseat decide).
 const DEC = require('./queueDecisions.js');
+// The wiring spec's open items on the card (wiring_open, read-only in the detail panel).
+const WI = require('./wiringItems.js');
 
 /** How far past the neighbor a card or a lane lands at the top or bottom (in priority points). */
 const STEP = 10;
@@ -340,6 +342,8 @@ function buildBoard(
       // The finish line (lib/doneCheck.js), read-only in the detail panel; only when set, so other cards do not grow.
       ...(Array.isArray(o.acceptance) && o.acceptance.length ? { acceptance: o.acceptance.map(String) } : {}),
       ...(typeof o.done_when === 'string' && o.done_when.trim() ? { done_when: o.done_when.trim() } : {}),
+      // The wiring spec's open items (lib/wiringItems.js), read-only; only when there are some. Done waits for them.
+      ...(WI.openItems(o).length ? { wiring_open: WI.openItems(o).map(WI.itemLine) } : {}),
       remarks: remarksFor(o),
       source: o.source ?? null,
       added_by: o.added_by ?? null,

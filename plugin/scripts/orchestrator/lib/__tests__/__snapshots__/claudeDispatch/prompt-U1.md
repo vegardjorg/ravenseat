@@ -88,8 +88,9 @@ Noticed something outside your scope? Run `ravenseat finding "<title>" [--detail
 
 - Change only what you own. Files the project lists as hotspots (`hotspots` in queue.config.json: navigation, layouts,
   central registries, i18n, feature flags) are never edited by a track unless your task has the path in
-  `hotspot_patch`: deliver the component and a wiring specification (file, anchor, exact line) instead. The merge guard
-  stops an unagreed hotspot change, and the write guard warns you when you write one.
+  `hotspot_patch`: deliver the component and a wiring specification instead, one line per change in `track-result.md`:
+  `WIRE <file> | <anchor and the exact line to add>`. The merge guard stops an unagreed hotspot change, and the write
+  guard warns you when you write one.
 
 **Gates** (`ravenseat gates`; NEVER write your own check script; one line per gate, and `--log` writes the full
 output to that file, so read the log file of a red gate instead of running it again):
@@ -114,7 +115,7 @@ lines (owner questions with one sentence each, HIGH findings, what must be deplo
 while merging), then the path to `<folder>/track-result.md`. In `track-result.md`: status, branch and commits, the gate summary
 line, append-only files touched, deploy needs, **owner questions** in their own section, **Assumptions** in their
 own section (one line each: what, why, how to change it; "none" when there were none), and the wiring specification
-(file, anchor, exact line).
+(the `WIRE` lines; each becomes an open item that `done` waits for).
 **Known bugs:** when you fixed a bug that another change could easily repeat, add one line `GATE <failure class> @ <file:line>` to
 `track-result.md`, with the class in general words and the place of the bug you fixed (`GATE a fetch result used without checking the error @ src/api.js:42`). No bug fixed, no line. A one-off, such
 as a typo or a single wrong value, gets no line. `ravenseat receive` turns the line into a task the owner decides on.

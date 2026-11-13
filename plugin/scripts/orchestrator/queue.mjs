@@ -223,6 +223,14 @@
 //   node scripts/orchestrator/queue.mjs attempt close <id> --outcome <delivered|failed|interrupted|abandoned> [--by "..."]
 //        (a running attempt blocks a new one, so close it when its agent is gone. For Claude the guard is best effort; the
 //         cases are at the top of lib/logic/attempt.js. Refused inside a track worktree; logged, so ravenseat undo takes it back.)
+//   node scripts/orchestrator/queue.mjs wiring <id> [--json]       (the task's wiring items, lib/wiringItems.js: receive
+//                                                                  records each `WIRE <file> | <what>` line of the track's
+//                                                                  report as an open item W1, W2, ...; set done and the
+//                                                                  done step of merge refuse while one is open, unless
+//                                                                  wiring.stop is false)
+//   node scripts/orchestrator/queue.mjs wiring <id> <item> --commit <sha> | --reject "<reason>" [--by "..."]
+//        (closes one: --commit needs a commit in baseBranch that changes the item's file, --reject a non-empty reason;
+//         both kept on the item with the time. Refused inside a track worktree; logged, so ravenseat undo takes it back.)
 //   node scripts/orchestrator/queue.mjs resume <id> [--reason fix|context] [--round N] [--findings-file <file>]
 //                                                [--from <reviewer,...>] [--answer "<text>"] [--new-agent] [--scratchpad <folder>]
 //        (--answer: the owner's answer to what the track asked; first in the brief, and kept as an addition to the mission.)
@@ -875,6 +883,9 @@ if (command === 'init') {
 } else if (command === 'follow') {
   // ---- The "Follow up" entries (see the top of the file and lib/queueFollow.js) ----
   (await import('./cli/orchestrator.mjs')).followCommand();
+} else if (command === 'wiring') {
+  // ---- The wiring spec's open items (lib/wiringItems.js) ----
+  (await import('./cli/wiring.mjs')).cmdWiring();
 } else if (command && command !== 'help') {
   // A mistyped command: one line with the closest known command (lib/cliHelp.js), same exit code as before.
   const scripts = fs
@@ -887,7 +898,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|owner-log|settings> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|owner-log|settings|wiring> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

@@ -475,6 +475,14 @@ const SETTINGS = Object.freeze([
       whyNot: 'Without CI or gates, the push is the first time anyone can see the code fails.',
       changes: 'Pushes go out without the question even when there are no checks. Doctor will report it.',
     }),
+  row('wiring.stop', 'push', 'onoff', 'Done waits for the wiring spec',
+    'Each WIRE line in a track\'s report becomes an open item on the task, and done (set done, the done step of merge) ' +
+    'waits until each is closed with a commit or rejected with a reason.', {
+      weakens: offWeakens,
+      protects: 'A built component that stays unwired because the wiring spec in the report was never carried out.',
+      whyNot: 'The spec is only text in a report then, and nothing reminds anyone of it after the merge.',
+      changes: 'Done passes with open wiring items; it says so, and the items stay open on the task. Doctor will report it.',
+    }),
   row('push.ciWatch', 'push', 'choice', 'CI watch after push',
     'off, or github: after a batch push the CI runs are followed, and a failure gives a fix task.',
     { choices: ['off', 'github'] }),

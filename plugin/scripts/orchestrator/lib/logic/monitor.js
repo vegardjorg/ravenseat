@@ -82,6 +82,13 @@ function infoView(o, { fixedBy = [], costEstimate = null } = {}) {
   if (typeof o.done_when === 'string' && o.done_when.trim()) out.push(`done_when: ${o.done_when.trim()}`);
   const accept = require('../doneCheck.js').acceptanceList(o);
   if (accept.length) out.push(`acceptance: ${accept.map((c, i) => `${i + 1}) ${c}`).join(' ')}`);
+  // The wiring spec's items (lib/wiringItems.js): done waits for the open ones.
+  if (Array.isArray(o.wiring) && o.wiring.length) {
+    const WI = require('../wiringItems.js');
+    const open = WI.openItems(o).length;
+    out.push(`wiring: ${open} open of ${o.wiring.length}${open ? ` (done waits; ravenseat wiring ${o.id} closes them)` : ''}`);
+    for (const l of WI.itemLines(o)) out.push(`  ${l}`);
+  }
   if (o.result?.line) out.push(`result: ${o.result.line}`);
   if (o.cost)
     out.push(
