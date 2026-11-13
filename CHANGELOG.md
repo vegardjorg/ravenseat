@@ -5,6 +5,10 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+## 0.11.0 (2026-11-12)
+
+**Know where the cost goes, and keep Claude's instructions small: `ravenseat cost` measures thinking per turn, splits build, review and fix rounds and shows week over week; `ravenseat gates --health` finds slow, flaky and never-red gates; doctor warns when the instructions Claude loads at start grow too large and `ravenseat instructions --plan` proposes a split; the push guard now denies a forced push, a branch delete and `--mirror` even when it has an internal error; and the `ask` helper starts without your CLAUDE.md.**
+
 ### After you update
 - `ravenseat doctor` gets an `instructions` row with the size of what Claude loads at start (your project's CLAUDE.md, its imports and rules, your ~/.claude/CLAUDE.md and Ravenseat's CLAUDE.queue.md). If it warns, `ravenseat instructions --plan` proposes a split; nothing changes until you make it. `ravenseat settings set instructionSize.mode off` turns the advice off.
 
