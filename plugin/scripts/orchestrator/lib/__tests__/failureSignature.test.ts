@@ -60,6 +60,21 @@ describe('the same failure gives one signature', () => {
     expect(one[0].excerpt).not.toContain('2026-11');
   });
 
+  it('a CI matrix: the same failure on node 20 and node 22 is one failure of the run, not one per matrix job', () => {
+    // Seen in real gh run view --log-failed output: the job name carries the matrix values in parentheses.
+    const jobs = ['test (ubuntu-latest, node 20)', 'test (ubuntu-latest, node 22)'].map((name) => ({
+      name,
+      conclusion: 'failure',
+      steps: [{ name: 'Run npm test', conclusion: 'failure' }],
+    }));
+    const log = jobs
+      .map((j) => `${j.name}\tRun npm test\t2026-11-03T10:00:00.1Z ##[error]AssertionError: expected false to be true // Object.is equality`)
+      .join('\n');
+    const out = FS.ciFailures({ run: { workflowName: 'CI' }, jobs, log });
+    expect(out).toHaveLength(1);
+    expect(out[0].name).toBe('ci: CI / test / Run npm test');
+  });
+
   it('a timeout: one signature per command, whatever was printed before the budget ran out', () => {
     const a = FS.gateExcerpt({ command: 'npm test', output: 'running 1203 tests\n... 40% done', timedOut: true });
     const b = FS.gateExcerpt({ command: 'npm test', output: 'running 1204 tests\n... 87% done', timedOut: true });
@@ -89,6 +104,24 @@ describe('different failures give different signatures', () => {
     const t2 = FS.gateExcerpt({ command: 'npx vitest run', output: ' FAIL  src/b.test.ts > b > works\n' });
     expect(t1).not.toBe(t2);
     expect(FS.signatureId('npm run lint', t1)).not.toBe(FS.signatureId('npx vitest run', t1));
+  });
+
+  it('two CI test failures with the same bare assertion are told apart by the FAIL line of the test', () => {
+    // Real vitest output in CI: the ##[error] line is only the assertion, the colored FAIL line names the test.
+    // gh run view --log-failed writes the escape character as the two characters "^[", a terminal as \u001b.
+    const log = (file: string, e = '\u001b') =>
+      [
+        `test\tRun npm test\t2026-11-03T10:00:00.1Z ${e}[41m${e}[1m FAIL ${e}[22m${e}[49m ${file}${e}[2m > ${e}[22mpaths${e}[2m > ${e}[22mworks`,
+        `test\tRun npm test\t2026-11-03T10:00:00.2Z ##[error]AssertionError: expected false to be true // Object.is equality`,
+      ].join('\n');
+    const jobs = [{ name: 'test', conclusion: 'failure', steps: [{ name: 'Run npm test', conclusion: 'failure' }] }];
+    const a = FS.ciFailures({ run: { workflowName: 'CI' }, jobs, log: log('src/a.test.ts') })[0].excerpt;
+    const b = FS.ciFailures({ run: { workflowName: 'CI' }, jobs, log: log('src/b.test.ts', '^[') })[0].excerpt;
+    expect(a).not.toBe(b);
+    expect(a).toContain('FAIL src/a.test.ts > paths > works');
+    expect(b).toContain('FAIL src/b.test.ts > paths > works');
+    expect(b).not.toContain('^[');
+    expect(a).toContain('AssertionError');
   });
 });
 

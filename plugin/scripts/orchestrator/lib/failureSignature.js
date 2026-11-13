@@ -34,12 +34,15 @@ const TIMEOUT = 'timed out';
 /** Conclusions of a CI job or step that are not red. */
 const GREEN = new Set(['success', 'skipped', 'neutral', '']);
 
+/** A color code: the escape character, or the two characters "^[" that gh run view --log-failed writes for it. */
+const ANSI = /(?:\u001b|\^\[)\[[0-9;]*[A-Za-z]/g;
+
 const STOP = `\\s'"()<>\\[\\],;`;
 
 /** The normalized form of one line (see the header). Normalizing twice gives the same text. */
 function normalize(line, { roots = [] } = {}) {
   let s = redact(String(line ?? '')).text;
-  s = s.replace(/\u001b\[[0-9;]*[A-Za-z]/g, '').replace(/\\/g, '/');
+  s = s.replace(ANSI, '').replace(/\\/g, '/');
   for (const r of roots ?? []) {
     const root = String(r ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
     if (root) s = s.split(`${root}/`).join('').split(root).join('');
@@ -89,7 +92,17 @@ function logText(line) {
 function ciExcerpt(log) {
   const lines = redact(String(log ?? '')).text.split(/\r?\n/).map(logText);
   const marked = lines.find((l) => /##\[error\]/.test(l) && !/Process completed with exit code/i.test(l));
+  // A test runner's ##[error] line is often only the assertion ("expected false to be true"), the same for many tests,
+  // so the first FAIL line naming the test file goes in front of it when the log has one.
+  const plain = (l) => l.replace(ANSI, '').trim();
+  const fail = lines.map(plain).find((l) => /^FAIL\s+\S+\.(?:test|spec)\.[cm]?[jt]sx?\b/.test(l));
+  if (marked && fail) return normalize(`${fail}: ${plain(marked).replace(/^##\[error\]/, '')}`);
   return normalize(marked ?? firstErrorLine('test', lines.join('\n'), null));
+}
+
+/** A job name without its matrix values ("test (ubuntu-latest, node 20)" is "test"): the same failure is one failure. */
+function jobBase(name) {
+  return String(name ?? '').replace(/\s*\([^()]*\)\s*$/, '').trim() || String(name ?? '');
 }
 
 /**
@@ -103,14 +116,18 @@ function ciFailures({ run, jobs = null, log = '' }) {
   const failed = (Array.isArray(jobs) ? jobs : []).filter((j) => j && !GREEN.has(String(j.conclusion ?? '')));
   if (!failed.length) return [{ name: `ci: ${workflow}`, excerpt: ciExcerpt(log) }];
   const lines = String(log ?? '').split(/\r?\n/);
-  return failed.map((j) => {
+  const out = new Map();
+  for (const j of failed) {
     const step = (Array.isArray(j.steps) ? j.steps : []).find((s) => s && !GREEN.has(String(s.conclusion ?? '')));
     const own = lines.filter((l) => l.split('\t')[0] === j.name);
-    return {
-      name: `ci: ${workflow} / ${j.name}${step?.name ? ` / ${step.name}` : ''}`,
+    const f = {
+      name: `ci: ${workflow} / ${jobBase(j.name)}${step?.name ? ` / ${step.name}` : ''}`,
       excerpt: ciExcerpt((own.length ? own : lines).join('\n')),
     };
-  });
+    // Matrix jobs with the same failure give it once; a different failure on one platform stays its own.
+    out.set(`${f.name}\n${f.excerpt}`, f);
+  }
+  return [...out.values()];
 }
 
 /**
