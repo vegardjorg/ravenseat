@@ -3,7 +3,9 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.13.0 (2026-11-13)
+
+**Long calls no longer stall a session, and you can see where the turns go: gates, receive and merge return within the prompt cache window with one RUNNING line and the exact next command, and `ravenseat cost` shows calls per turn, serial reads, output per tool and the cost of turns above a context threshold. The README opens with a short explanation gif.**
 
 ### Added
 - A "Turns and tools" block in `ravenseat cost` (and `turnsAndTools` in `--json`, `lib/turnTools.js`), per agent type,
@@ -27,6 +29,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   hung run as red and timed out. See `docs/queue.md` ("Long calls: the wait mode").
 
 ### Changed
+- The README opens with a 40 second explanation gif, and the two infographics are refreshed.
 - The common track text, `CLAUDE.queue.md` and the parallel-wave skill say to run gates, receive and merge in the
   foreground with Bash timeout 600000 and to follow the RUNNING line, never `run_in_background` or a poll loop.
 
