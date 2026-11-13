@@ -7,3 +7,6 @@ demo/
 
 # Planning notes for the queue itself (local only, never committed)
 plans/
+
+# Work in progress for the README (gif and infographics), not tracked
+media/
