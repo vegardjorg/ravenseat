@@ -72,6 +72,16 @@
 //                                                                  the daily budget or the night pause stops new tasks;
 //                                                                  the field stop says which)
 //   node scripts/orchestrator/queue.mjs trackFile <id> [...] --out <file> (track blocks in make-mission.mjs format; running or picked)
+//   node scripts/orchestrator/queue.mjs pulse-check [--session "<name>"] [--scratchpad <dir>] [--include-owner]
+//        (the pulse in one read-only call, for a repeated or scheduled pulse: exactly SILENT (exit 0) when nothing needs
+//         the orchestrator, otherwise ACTION: <n> (exit 13) and one line per item with the exact next command: RECEIVE (a
+//         delivered track), NO AGENT and SILENT (the same checks and silentMin as show), START (free slots and startable
+//         tasks after the start guards), RUN (a wait-mode run that finished with nobody waiting), WIRING (open wiring
+//         items on a merged task), and what only orchestrator pulse acts on: CLOUD (a cloud track finished, stopped or
+//         with a tip not read yet), CONFLICTS (a predicted conflict not reported yet), AUTO-ACCEPT (proposals the
+//         owner's rules would take), INSPECTION (a proposal the hourly scan would add). --include-owner adds FOR THE
+//         OWNER: open questions and finished cloud tracks waiting on a yes, never ACTION. Writes only the orchestrator
+//         marker; never starts, receives, merges, accepts or collects. Exit 2 on a usage error. cli/pulseCheck.mjs)
 //
 // Owner questions:
 //   node scripts/orchestrator/queue.mjs resolve <question> [...] [--answer "..."] [--by "..."]   (the owner's answer has come: with
@@ -670,7 +680,8 @@
 //
 // Exit codes: 0 ok, 1 error, 3 empty queue (state), 4 the daily budget is used up (next, start), 5 night pause (next,
 // start), 6 the orchestrator is in windDown (next, start, fill) or the queue has changed since the preview
-// (--expect-changed), 7 the machine is full (the load guard; next, start, fill), 10 TIMEOUT (wait).
+// (--expect-changed), 7 the machine is full (the load guard; next, start, fill), 10 TIMEOUT (wait), 13 ACTION
+// (pulse-check; 2 is its usage error).
 //
 // Task fields (see queueLogic.validate): id, title, domain, class (K|D|D+|U), mission (path to a track description
 // or the text itself), value (1-10, default 5), content_min (min for a K track, default 30), migr_tens (number of
@@ -842,6 +853,8 @@ if (command === 'init') {
   (await import('./cli/owner.mjs')).cmdQa();
 } else if (command === 'external') {
   (await import('./cli/cloud.mjs')).cmdExternal();
+} else if (command === 'pulse-check') {
+  (await import('./cli/pulseCheck.mjs')).cmdPulseCheck();
 } else if (command === 'orchestrator') {
   (await import('./cli/orchestrator.mjs')).cmdOrchestrator();
 } else if (command === 'deliveries') {
@@ -898,7 +911,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|owner-log|settings|wiring> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|owner-log|settings|wiring|pulse-check> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

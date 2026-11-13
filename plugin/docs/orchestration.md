@@ -9,7 +9,8 @@ branch (`queue/<ID>`), with a self-contained mission file.
 
 ## The loop
 
-1. `ravenseat orchestrator pulse`: mark the orchestrator as alive.
+1. `ravenseat orchestrator pulse`: mark the orchestrator as alive. A repeated pulse between rounds runs
+   `ravenseat pulse-check` instead ([below](#a-repeated-pulse-ravenseat-pulse-check)).
 2. `ravenseat fill --scratchpad <dir>`: start what the limits allow. For each task it writes `prompt-<ID>.md` (shared
    protocol from `docs/queue/mission-template.md`, filtered for the task's class, plus the task block). The orchestrator
    launches one agent per prompt in the background, with worktree isolation. A task that waited a while or that an
@@ -37,6 +38,33 @@ branch (`queue/<ID>`), with a self-contained mission file.
    `TIMEOUT` (8 h, exit 10) it is started once more, then the loop stops. Every `--check-min` minutes (default 5, 0 = off) it also runs the track checks: `TRACKS NEED A LOOK: ...`, exit 11, once per finding. This only works while the Claude Code session
    is open (also via Remote Control); it costs no tokens while it waits. The board's **Waiting on you** says
    "Orchestrator listening" while the waiter's heartbeat (`<dataFolder>/wait-heartbeat.json`) is fresh.
+
+### A repeated pulse: `ravenseat pulse-check`
+
+A scheduled or looped pulse (for example a prompt that runs every 30 minutes overnight) runs ONE command per tick:
+`ravenseat pulse-check --session "<session>" --scratchpad <dir>`. It is read-only apart from the orchestrator marker
+(the same update `orchestrator pulse` makes) and never starts, receives or merges anything.
+
+- `SILENT` (one line, exit 0): nothing needs the orchestrator. Answer with one line and stop: no status text, no other
+  command. Each tick then costs one short turn.
+- `ACTION: <n>` (exit 13), then one line per item with the exact next command: `RECEIVE <id>` (a delivered track),
+  `NO AGENT <id>` and `SILENT <id>` (the same checks and `silentMin` limit as `show`), `START` (free slots and tasks that
+  can start after the start guards: budget, night pause, wind-down, load, usage limit), `RUN <id>` (a wait-mode run that
+  finished while nobody waited) and `WIRING <id>` (open wiring items on a merged task). Do the items as a normal round.
+- What only `orchestrator pulse` acts on is an item too, so a loop that runs only `pulse-check` loses nothing:
+  `CLOUD <id>` (a cloud track finished with `cloud.collect` auto or off, stopped, or with a new tip not read yet; one
+  `ls-remote`, no fetch), `CONFLICTS` (a predicted conflict the pulse has not reported yet), `AUTO-ACCEPT` (proposals
+  the owner's rules would take, tried on a copy) and `INSPECTION` (a proposal the hourly scan would add). Their Next is
+  `ravenseat orchestrator pulse` or the cloud command; that does the step once and records it, so the next tick is
+  `SILENT` again. A delivery needs no extra item for `report_seen`: `RECEIVE` lists it until it is received.
+- What waits on the owner is never ACTION, since nobody answers at night. `--include-owner` adds one last line,
+  `FOR THE OWNER: <n> open question(s), <m> finished cloud track(s) to collect on your yes (...)`, for the morning; it
+  does not change the exit code.
+- Exit 2 is a usage error (an unknown flag or a flag without its value); nothing is written then.
+
+`pulse-check` writes nothing the pulse keeps (no cloud-check gate, no conflict cache, no inspection state), so a tick
+never hides work from the next `orchestrator pulse`. The status lines that only inform (ownership, base health, follow
+up, findings, the usage-limit reset) stay in `orchestrator pulse`, which the loop still runs at the start of a round.
 
 Push happens in **batches**: `ravenseat push-check` first, then `git push`. Every push can trigger CI in your own setup,
 so many small pushes cost money quietly. By default (`push.mode` `"owner"`) only the owner's word starts a push; see

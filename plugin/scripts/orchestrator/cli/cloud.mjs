@@ -97,9 +97,13 @@ function gitRemote(args) {
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
-/** The message of the tip, fetching it first when this repo does not have it yet. */
-function tipMessage(branch, sha) {
+/** What tipMessage returns when the tip is not in this repo and it was told not to fetch. */
+const UNREAD = Symbol('unread');
+
+/** The message of the tip, fetching it first when this repo does not have it yet (with fetch: false, UNREAD instead). */
+function tipMessage(branch, sha, { fetch = true } = {}) {
   if (git(['cat-file', '-e', `${sha}^{commit}`]) == null) {
+    if (!fetch) return UNREAD;
     if (gitRemote(['fetch', '-q', REMOTE, `+refs/heads/${branch}:refs/remotes/${REMOTE}/${branch}`]) == null) return null;
   }
   return git(['log', '-1', '--format=%B', sha]);
@@ -108,9 +112,10 @@ function tipMessage(branch, sha) {
 /**
  * One read of the remote for the tasks in the cloud: which of their two branches exist, and what the tip says. The state of a
  * task is nothing (no branch yet), pushed (no finish marker yet), done or stop. Fetches a tip it needs; never changes the queue.
+ * With fetch: false nothing is fetched, and a tip that is not in this repo gives the state unread (for pulse-check).
  * @returns {{ reachable: boolean, tasks: { id: string, state: string, branch: string|null, sha: string|null, reason: string|null }[] }}
  */
-function cloudCheck(queue = read()) {
+function cloudCheck(queue = read(), { fetch = true } = {}) {
   const inCloud = queue.tasks.filter(L.isCloud);
   if (!inCloud.length) return { reachable: true, tasks: [] };
   const refs = inCloud.flatMap((o) => L.cloudBranches(o.id)).map((b) => `refs/heads/${b}`);
@@ -123,10 +128,18 @@ function cloudCheck(queue = read()) {
   }
   const tasks = inCloud.map((o) => {
     const found = L.cloudBranches(o.id).filter((b) => tips.has(b));
+    let unread = null;
     for (const branch of found) {
-      const marker = L.cloudMarker(tipMessage(branch, tips.get(branch)), o.id);
+      const message = tipMessage(branch, tips.get(branch), { fetch });
+      if (message === UNREAD) {
+        unread ??= branch;
+        continue;
+      }
+      const marker = L.cloudMarker(message, o.id);
       if (marker) return { id: o.id, state: marker.kind, branch, sha: tips.get(branch), reason: marker.reason };
     }
+    // Only without a fetch: a tip this repo has not seen may carry a finish marker, so it is a state of its own.
+    if (unread) return { id: o.id, state: 'unread', branch: unread, sha: tips.get(unread), reason: null };
     return found.length
       ? { id: o.id, state: 'pushed', branch: found[0], sha: tips.get(found[0]), reason: null }
       : { id: o.id, state: 'nothing', branch: null, sha: null, reason: null };
@@ -177,6 +190,41 @@ export function cloudPulseLines(now = Date.now()) {
   } catch {
     return [];
   }
+}
+
+/**
+ * For pulse-check (cli/pulseCheck.mjs): the cloud tracks that need the orchestrator, read-only. No fetch, no
+ * cloud-check.json (that gate is the pulse's), so a tick can never change what the pulse later sees. `action` lines are
+ * work for the orchestrator now; `owner` holds the finished tracks that wait on the owner's yes (cloud.collect ask).
+ * @returns {{ action: string[], owner: string[] }}
+ */
+export function cloudPulseItems(queue = read()) {
+  const out = { action: [], owner: [] };
+  try {
+    const inCloud = queue.tasks.filter(L.isCloud);
+    if (!inCloud.length) return out;
+    if (!KK.featureOn('cloud', CONFIG)) {
+      out.action.push(`CLOUD: cloud is off, but still out there: ${inCloud.map((o) => o.id).join(', ')}. Next: ${CLI} cloud check`);
+      return out;
+    }
+    const check = cloudCheck(queue, { fetch: false });
+    if (!check.reachable) return out; // offline: the next tick tries again, like the pulse
+    const mode = CS.cloudSettingsView(CONFIG.cloud).find((s) => s.key === 'collect').value;
+    for (const t of check.tasks) {
+      if (t.state === 'done') {
+        if (mode === 'ask') out.owner.push(t.id);
+        else
+          out.action.push(
+            `CLOUD ${t.id}: finished in the cloud (${t.branch}). Next: ` +
+              (mode === 'auto' ? `${CLI} cloud collect ${t.id}` : `${CLI} cloud done ${t.id} --branch ${t.branch}`),
+          );
+      } else if (t.state === 'stop') out.action.push(`CLOUD ${t.id}: stopped in the cloud (${t.branch}). Next: ${CLI} cloud check`);
+      else if (t.state === 'unread') out.action.push(`CLOUD ${t.id}: a new tip on ${t.branch}, not read yet. Next: ${CLI} cloud check`);
+    }
+  } catch {
+    /* never stops the check, like the pulse's cloud step */
+  }
+  return out;
 }
 
 // ---- Setup ----------------------------------------------------------------------------------------------------------

@@ -75,7 +75,9 @@ word.
    mission prompt; exit 4/5/6 = budget/night pause/wind-down). It ends with "Start these in the SAME turn:" and one line per
    agent with `subagent_type` and the finished agent message (also in `<scratch>/queue-fill.json`). Start ALL of them in
    the same turn with exactly that message. At loop start and each round without start/set:
-   `ravenseat orchestrator pulse --session "<session>"`. Check `ravenseat batch` when filling: a group marked
+   `ravenseat orchestrator pulse --session "<session>"`. **On a repeated pulse tick** (a scheduled or looped prompt) run
+   ONLY `ravenseat pulse-check --session "<session>" --scratchpad <scratch>`: on `SILENT` answer one line and stop, no
+   status text; on `ACTION: <n>` do the listed items, each with the command on its line. Check `ravenseat batch` when filling: a group marked
    "READY FOR PACKING" is packed with `ravenseat batch pack --auto` (proposal) and `--auto --execute`.
    **Intake triage:** when `fill` prints `TRIAGE <n> task(s) first`, the block also has a `triage` agent per task
    (read-only, cheap); start it like the others. It answers `TRIAGE ready|done|stale|adjust`; record that with

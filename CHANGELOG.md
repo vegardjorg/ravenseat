@@ -6,6 +6,20 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- `ravenseat pulse-check`, the pulse in one read-only call (`cli/pulseCheck.mjs`). A repeated pulse (a scheduled or
+  looped prompt overnight) used to run `orchestrator pulse`, `state` and maybe `next` per tick, each a turn with the
+  whole context. It now runs one command: exactly `SILENT` (exit 0) when nothing needs the orchestrator, otherwise
+  `ACTION: <n>` (exit 13) and one line per item with the exact next command: `RECEIVE` (a delivered track), `NO AGENT`
+  and `SILENT` (the existing checks and `silentMin` limit), `START` (free slots and startable tasks after the start
+  guards), `RUN` (a wait-mode run that finished with nobody waiting) and `WIRING` (open wiring items on a merged task).
+  What only `orchestrator pulse` acts on is surfaced too, so nothing is lost when a loop runs only this: `CLOUD` (a
+  cloud track finished, stopped, or with a tip not read yet; one `ls-remote`, no fetch), `CONFLICTS` (a predicted
+  conflict the pulse has not reported), `AUTO-ACCEPT` (proposals the owner's rules would take, tried on a copy) and
+  `INSPECTION` (a proposal the hourly scan would add); their Next is `orchestrator pulse` or the cloud command, which
+  records the step so the next tick is silent. Owner questions and finished cloud tracks under `cloud.collect` ask are
+  never ACTION; `--include-owner` adds a count for the morning. It writes only the orchestrator marker (no cache the
+  pulse keeps), never starts, receives, merges, accepts or collects, runs in-process, and exits 2 on a usage error. The `parallel-wave` skill
+  and `docs/orchestration.md` say: on a pulse tick run only this, and on `SILENT` answer one line and stop.
 - A read-first list at the top of every track mission: "Read these in your first turn, all in the same turn:" with the
   repo files the mission names (a "Read also" section first, deduplicated, at most 12, keeping a `:line`, `:a-b` or
   `§ N` suffix; the ownership, reads and done command lines only fill what is left), so a track reads them with parallel calls in one turn instead of one per turn. Only existing files

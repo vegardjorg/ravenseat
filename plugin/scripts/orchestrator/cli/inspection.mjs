@@ -140,6 +140,26 @@ export function inspectionPulseLines() {
 }
 
 /**
+ * For pulse-check (cli/pulseCheck.mjs): the entries the pulse's next scan would propose, read-only (the pure scan, no
+ * state saved, no task added), and only when the pulse's hourly gate has passed, so the two never disagree.
+ */
+export function inspectionDue() {
+  try {
+    const s = setup();
+    if (!s.enabled || !fs.existsSync(FILE)) return [];
+    const state = readState();
+    const last = Date.parse(state?.scannedAt ?? '');
+    const now = Date.now();
+    if (Number.isFinite(last) && now - last < PULSE_EVERY_MS) return [];
+    const { tasks, archived } = allTasks();
+    const occurrences = FS.occurrences(timeRows(now - s.windowDays * DAY_MS));
+    return I.scan(state, { occurrences, tasks, archived, now, setup: s }).due;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * The board's part (the Checks tab, cli/checks.mjs): the guard registry with its measures and the inspection entries
  * from the last scan. Read-only: no scan, no proposal. The time log is read only when a gate entry needs its measures.
  */

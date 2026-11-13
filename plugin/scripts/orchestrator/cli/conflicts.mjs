@@ -20,9 +20,9 @@ export const CACHE_FILE = path.join(FOLDER, 'conflict-predict.json');
 
 /**
  * The prediction now, or null when there is nothing to check (no base sha). Never throws (a status line must not stop
- * the pulse); an error is a WARNING line in `error`.
+ * the pulse); an error is a WARNING line in `error`. save: false leaves the cache alone (pulse-check is read-only).
  */
-export function predictionNow({ budgetMs, maxChecks } = {}) {
+export function predictionNow({ budgetMs, maxChecks, save = true } = {}) {
   try {
     const run = CP.makeRunner(GIT_ROOT);
     const refs = CP.readRefs(run);
@@ -39,7 +39,7 @@ export function predictionNow({ budgetMs, maxChecks } = {}) {
       ...(budgetMs != null ? { budgetMs } : {}),
       ...(maxChecks != null ? { maxChecks } : {}),
     });
-    if (!r.unchanged) CP.writeCache(CACHE_FILE, cache);
+    if (save && !r.unchanged) CP.writeCache(CACHE_FILE, cache);
     return r;
   } catch (e) {
     return { error: `WARNING: conflict prediction failed (${e?.message ?? e}).` };
@@ -111,6 +111,18 @@ export function conflictLinesNow() {
   if (!r) return [];
   if (r.error) return [r.error];
   return CP.pulseLines(r, { ravenseat: CLI });
+}
+
+/**
+ * For pulse-check (cli/pulseCheck.mjs): one line when a conflict is predicted that the pulse has not reported yet
+ * (the tips or the base moved since its last run), else none. The cache is not written: the pulse writes it when it
+ * reports, so the next tick is silent while nothing moves.
+ */
+export function conflictPulseItems() {
+  const r = predictionNow({ save: false });
+  if (!r || r.error || r.unchanged || !(r.pairs.length + r.baseConflicts.length)) return [];
+  const found = CP.pulseLines(r, { ravenseat: CLI }).filter((l) => /^(PREDICTED CONFLICT|CONFLICTS WITH BASE)/.test(l));
+  return [`CONFLICTS: ${found.join('; ')}. Next: ${CLI} orchestrator pulse`];
 }
 
 /** `ravenseat conflicts [--json] [--budget-ms <n>] [--max-checks <n>]` (the usage is at the top of queue.mjs). */
