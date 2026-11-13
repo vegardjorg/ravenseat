@@ -31,7 +31,7 @@ It copies:
 |---|---|
 | `plugin/scripts/orchestrator/` (without tests) | `scripts/orchestrator/` |
 | `plugin/skills/*` (except setup) | `.claude/skills/` (queue, add-to-queue, parallel-wave, plans, pick, start) |
-| `plugin/agents/*` | `.claude/agents/` (track, track-d, reviewer, reviewer-security) |
+| `plugin/agents/*` | `.claude/agents/` (track, track-d, the reviewers, ask, triage and researcher) |
 | `plugin/docs/*.md` | `docs/queue/` |
 | `plugin/CLAUDE.queue.md` | `CLAUDE.queue.md` |
 | `plugin/queue.config.example.json` | `queue.config.json` (only if missing) |

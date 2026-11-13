@@ -223,7 +223,7 @@ An `@` import saves nothing: the imported file loads with the one that names it.
 - A rule with `paths:` loads when Claude reads, edits or writes a matching file, a new file too, in the main session and
   in tracks (tested on Claude Code 2.1.319), so an area rule is not missed when a track creates the first file there.
 - The `ask` helper starts without `CLAUDE.md` (`omitClaudeMd: true`): it answers from the bundle about an earlier track
-  and needs none of your rules. Tracks, reviewers and triage always load them.
+  and needs none of your rules. Tracks, reviewers, triage and `researcher` always load them.
 
 `instructionSize.mode` (`warn` or `off`), `instructionSize.maxLines` and `instructionSize.maxChars` are under Advanced in
 `ravenseat settings`. Off removes both doctor rows, the chat message and the suggestion. It is no weakening: this is advice about cost, not a

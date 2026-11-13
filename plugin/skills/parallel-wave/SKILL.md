@@ -29,6 +29,10 @@ the fix-round rules still apply. Keep only the "Now" part of the handover note. 
   branch when you start tracks. `ravenseat fill`/`start` print the exact `subagent_type` a task needs: installed as a plugin
   the agents are `ravenseat:track`, `ravenseat:track-d`, `ravenseat:reviewer` and `ravenseat:reviewer-security`; in a vendored install the bare names.
   A line with `model=<m>` (config `models`) means: pass `model: "<m>"` to the Agent call as well.
+- **Free helper agents** (analysis, measurement, research outside a queue task): `subagent_type: researcher`
+  (`ravenseat:researcher` as a plugin), not general-purpose, which loads every tool and MCP definition at start. It
+  reads, measures and writes only to the scratchpad or the reports folder you name in its prompt; it never commits or
+  pushes. Give it a bounded question and the folder.
 - **The orchestrator itself runs at medium effort.** `queue-takeover.mjs` shows the level (written by `hook-effort.mjs`).
   If it is not medium, ask the owner before the loop starts.
 - **Push in batches only:** commit locally for every step; `git push` happens only when the owner says "push"

@@ -301,7 +301,7 @@ describe('M2: every shipped agent is a guarded queue agent', () => {
     expect([...TG.PLUGIN_AGENT_TYPES].sort()).toEqual(files);
   });
   it('ask and reviewer-area are guarded with the default list (network, push, queue CLI)', () => {
-    for (const agentType of ['ask', 'ravenseat:ask', 'reviewer-area', 'ravenseat:reviewer-area', 'triage']) {
+    for (const agentType of ['ask', 'ravenseat:ask', 'reviewer-area', 'ravenseat:reviewer-area', 'triage', 'researcher', 'ravenseat:researcher']) {
       expect(PG.isGuardedAgent(agentType, GUARDED), agentType).toBe(true);
       expect(decision('curl https://example.invalid/x', { agentType }), agentType).toBe('deny');
       expect(decision('git push origin HEAD:staging', { agentType }), agentType).toBe('deny');

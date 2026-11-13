@@ -188,6 +188,19 @@ Every reviewer disproves a HIGH or MEDIUM finding before writing it (reread the 
 check that the change introduced it, lower it one level when there is no ground). A security finding is lowered only
 on counter-evidence at file:line and carries an `EXPLOIT:` part. A reviewer never starts other agents.
 
+### The research helper (`researcher`)
+
+Not a reviewer and not tied to a task: the orchestrator's own helper for analysis, measurement and research outside a
+queue task (`agents/researcher.md`, `subagent_type: ravenseat:researcher`, or `researcher` in a vendored install). Use
+it instead of general-purpose, which loads every tool and MCP definition at start; this one has only `Read`, `Grep`,
+`Glob`, `Bash` and `Write`, effort medium. It reads the repo, writes only new files in the scratchpad or the reports
+folder its prompt names, never edits a tracked file, never commits, pushes or tags, and answers short with file:line.
+It loads the project's `CLAUDE.md` (the map and the rules apply to research in the repo). It is a shipped agent, so the
+push, network, queue CLI, read and write guards always cover it (`PLUGIN_AGENT_TYPES`), also with `agentGuard.enabled`
+off. The push guard denies its `git push`; no guard denies `git commit`, so the never-commit rule is the agent file's.
+Its cost is counted the way the general-purpose helper's was: per agent type, and under no task unless its prompt
+names one.
+
 ## Why it is cheap (context discipline)
 
 Every turn re-reads the whole conversation, mostly from the prompt cache. Cost therefore grows with turns times
@@ -731,8 +744,8 @@ Windows, so there are four layers:
   `node_modules`, since `node_modules` in a worktree is a link into the main tree, and asks before `npx` with a
   package that is not in `package.json`. The queue agents are `track`, `track-d` and every reviewer and helper agent,
   builtin or custom (the same list as the read guard, `queueAgentTypes` in `lib/trackGuard.js`, also with the plugin
-  prefix such as `ravenseat:reviewer`, plus every agent file the plugin ships, `PLUGIN_AGENT_TYPES`: `ask`, `triage` and all
-  `reviewer-*`). None of them needs the network. The orchestrator (the main session) is not affected
+  prefix such as `ravenseat:reviewer`, plus every agent file the plugin ships, `PLUGIN_AGENT_TYPES`: `ask`, `researcher`, `triage`
+  and all `reviewer-*`). None of them needs the network. The orchestrator (the main session) is not affected
   and fetches what an agent needs.
 - **Queue agents never push or steer the queue.** For the same queue agents the push guard denies every `git push`
   (any remote, refspec or form: `HEAD:<base>`, `--delete`, `:ref`, `--mirror`, `--all`, `--tags`, `-f`, `send-pack`,

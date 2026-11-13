@@ -43,6 +43,7 @@ const READ_TYPES = new Set(['track', 'track-d', 'reviewer', 'reviewer-security']
  */
 const PLUGIN_AGENT_TYPES = Object.freeze([
   'ask',
+  'researcher', // the orchestrator's narrow helper for analysis and research outside a task (never commits or pushes)
   'reviewer',
   'reviewer-area',
   'reviewer-challenger',
@@ -302,8 +303,8 @@ function globToRegex(glob) {
 }
 
 /**
- * The queue's own agent types: track, track-d, every agent the plugin ships (PLUGIN_AGENT_TYPES: ask, triage and all
- * reviewer-* files), the review agents in the template and every reviewer and helper agent in
+ * The queue's own agent types: track, track-d, every agent the plugin ships (PLUGIN_AGENT_TYPES: ask, researcher, triage and
+ * all reviewer-* files), the review agents in the template and every reviewer and helper agent in
  * the setup (fixed per class, the config's helpers and the custom helpers registered in queue.json with
  * `ravenseat helpers add`, lib/queueHelpers.js allReviewerTypes). Bare names, without a plugin prefix.
  * The read guard (readRules) and the network guard (pushGuard.js) use this same list. The main session (the

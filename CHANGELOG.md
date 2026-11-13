@@ -3,6 +3,22 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+### Added
+- A narrow helper agent, `researcher` (`plugin/agents/researcher.md`), for the orchestrator's own analysis, measurement
+  and research outside a queue task. It has only `Read`, `Grep`, `Glob`, `Bash` and `Write` at effort medium, so it starts
+  with far less context than a general-purpose agent, which loads every tool and MCP definition. It reads the repo,
+  writes only new files in the scratchpad or the reports folder its prompt names, never edits a tracked file, never
+  commits, pushes or tags, and answers short with file:line. `CLAUDE.queue.md`, the `parallel-wave` skill and
+  `docs/orchestration.md` now send such helpers to `researcher` instead of general-purpose. As a shipped agent it is in
+  `PLUGIN_AGENT_TYPES`, so the push, network, queue CLI, read and write guards always cover it, and `ravenseat helpers
+  add` cannot take its name. A test keeps it in every list at once.
+
+### After you update
+- Plugin installs get the new agent with the update. A vendored install runs `node scripts/install.mjs <project>` once
+  more: it adds `.claude/agents/researcher.md` and keeps your other files.
+
 ## 0.13.0 (2026-11-13)
 
 **Long calls no longer stall a session, and you can see where the turns go: gates, receive and merge return within the prompt cache window with one RUNNING line and the exact next command, and `ravenseat cost` shows calls per turn, serial reads, output per tool and the cost of turns above a context threshold. The README opens with a short explanation gif.**
