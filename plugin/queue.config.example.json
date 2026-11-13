@@ -27,6 +27,8 @@
   "doneCheck": { "timeoutSec": 600, "tailLines": 40 },
   "maxFixRounds": 3,
   "fixPlateau": true,
+  "_fixRound": "A fix round as a continuation: resume --reason fix tells the orchestrator to send the fix list to the agent that delivered (SendMessage) when it stopped at most continueWithinMin minutes ago (0 = always a new agent) and had at most continueMaxContextK thousand tokens of context (0 = no cap). Otherwise a new agent with a short fix mission.",
+  "fixRound": { "continueWithinMin": 60, "continueMaxContextK": 200 },
   "_reads": "Read ownership (task field reads: files or folders with / that the task builds on but does not change). mode wait (default): a task that reads a file an active task changes waits until that task is done, and so does a task that would change a file an active task reads. mode warn: it starts anyway, and start, fill, explain and the mission name the overlap. Two readers never block each other.",
   "reads": { "mode": "wait" },
   "_claudeFingerprint": "Fingerprint of your own Claude setup (~/.claude, or CLAUDE_CONFIG_DIR): start records hashes of the settings files, keybindings, CLAUDE.md, the plugin manifests and the agents, commands, skills and hooks folders; receive warns with CLAUDE SETUP CHANGED when one changed while the track ran (git does not see that folder). Only hashes are stored, never content. false = off.",

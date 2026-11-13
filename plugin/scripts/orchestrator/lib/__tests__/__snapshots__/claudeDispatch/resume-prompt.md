@@ -150,14 +150,16 @@ Fix the review findings: HIGH, and MEDIUM that is not small and mechanical; LOW 
 Fix at the file:line the findings point to, and only in the files the track owns. A finding you disagree with:
 give the reason in the report instead of fixing it.
 
+No quick gates or done command are set: run the tests that cover your change.
+
 Report: write track-result.md in your own folder (`<folder>`, that is K1-r1) with the RESULT line as the FIRST line;
 it covers the whole track (branch=queue/K1, commits = all on the branch ahead of main). The orchestrator finds it there
 (ravenseat deliveries and ravenseat receive K1), also without a notification. Your answer starts with the same RESULT line.
 
-## The original mission for K1 (reference; ownership, gates and "Do NOT touch" still apply)
+## The original mission for K1 (short: ownership, gates and "Do NOT touch" still apply)
+
+The full mission text: <ROOT>/scratch/mission-K1.md (read it only when a finding needs its context).
 
 ## TRACK K1 (Task K1; source: see the mission; class K, estimate 30 min)
 
 **Ownership in the queue:** files src/K1.ts; DB none; shared patch none. Do not touch anything other tasks in the queue own; if you need to, report it (SendMessage) instead of editing it.
-
-Mission text for K1: change the module and add a test.

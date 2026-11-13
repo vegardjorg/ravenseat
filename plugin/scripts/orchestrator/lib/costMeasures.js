@@ -20,7 +20,8 @@
 //          from `ravenseat resume`, so `-r1` is the first fix round, never the track;
 //        - any other agent (the bare `<id>`) is build, EXCEPT the growth after the task's first receive (`t_receive`)
 //          when the agent had already stopped before it (a done row at or before t_receive): that is the same agent
-//          sent back with SendMessage to fix what the review found, one fix round.
+//          sent back with SendMessage to fix what the review found, one fix round. `ravenseat resume` records such a
+//          continuation in `resumed` (mode continue), and then each of those entries is one fix round.
 //      Stored as cost.phases { build, review, fix, fix_rounds } and per agent `phase` (and `fix_usd` for the split).
 //   4. BY START DATE (weekOverWeek, queueLogic.costStatistics): tasks are grouped by `started`, not by when they
 //      finished; spend (the usage events) by its own time.
@@ -315,12 +316,18 @@ function costPhases({ taskId, agents, resumed = [], tReceive = null, rows = [], 
       perAgent[a.agent] = { phase: 'build' };
     }
   }
+  // A fix round `ravenseat resume` ran as a continuation (mode continue: the same agent sent the fix list, no -r<N>
+  // agent) is one round each; its cost is the growth above. Without such entries a growth after receive is one round.
+  const continuedRounds = (Array.isArray(resumed) ? resumed : [])
+    .filter((r) => r?.reason === 'fix' && r?.mode === 'continue' && Number.isFinite(r.round))
+    .map((r) => r.round);
+  const all = new Set([...rounds, ...continuedRounds]);
   return {
     phases: {
       build: round2(sum.build),
       review: round2(sum.review),
       fix: round2(sum.fix),
-      fix_rounds: rounds.size + (continued ? 1 : 0),
+      fix_rounds: all.size + (continued && !continuedRounds.length ? 1 : 0),
     },
     perAgent,
   };

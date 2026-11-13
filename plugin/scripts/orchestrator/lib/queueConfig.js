@@ -155,6 +155,11 @@ const STANDARD = Object.freeze({
   // The fix-round plateau (lib/fixPlateau.js): before a fix round, the owner is asked when the previous fix round
   // committed nothing or the check fails the same way as before it. false = off (only the cap stops the rounds).
   fixPlateau: true,
+  // A fix round as a continuation (lib/fixRound.js): `resume --reason fix` tells the orchestrator to send the fix list to
+  // the agent that delivered (SendMessage) instead of starting a new one, when that agent stopped at most
+  // continueWithinMin minutes ago (its prompt cache is still warm; 0 = always a new agent) and its context at the last
+  // stop is at most continueMaxContextK thousand tokens (0 = no cap). Otherwise a new agent with a short fix mission.
+  fixRound: { continueWithinMin: 60, continueMaxContextK: 200 },
   // Read ownership (task field reads, lib/logic/conflicts.js): a task that reads a file an active task changes, or
   // that would change a file an active task reads. "wait" = it waits until the other is done; "warn" = it starts, and
   // start, fill, explain and the mission name the overlap. Two readers never block each other.

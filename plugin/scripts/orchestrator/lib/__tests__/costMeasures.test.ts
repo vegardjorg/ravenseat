@@ -237,6 +237,55 @@ describe('3. build, review and fix round', () => {
     expect(none.phases).toEqual({ build: 6, review: 0, fix: 0, fix_rounds: 0 });
   });
 
+  it('a fix round `resume` ran as a continuation (mode continue) is the growth after t_receive, one round each', () => {
+    const rows = [
+      done({ time: at(10), agent_id: 'a0', agent_type: 'track', track: 'A-1', tokens: { output: 200_000 }, modelTurns: 5 }),
+      done({ time: at(30), agent_id: 'a0', agent_type: 'track', track: 'A-1', tokens: { output: 300_000 }, modelTurns: 8 }),
+      done({ time: at(50), agent_id: 'a0', agent_type: 'track', track: 'A-1', tokens: { output: 350_000 }, modelTurns: 10 }),
+    ];
+    const agents = [
+      { agent: 'a0', type: 'track', usd: 7, track: 'A-1' },
+      { agent: 'rv', type: 'reviewer-tests', usd: 0.5, track: 'A-1' },
+    ];
+    // One continuation: the same split as a SendMessage round without a `resumed` entry, and no -r1 agent is needed.
+    const one = C.costPhases({
+      taskId: 'A-1',
+      agents,
+      resumed: [{ round: 1, reason: 'fix', mode: 'continue', agent: 'a0' }],
+      tReceive: at(20),
+      rows,
+      isReviewer,
+    });
+    expect(one.phases).toEqual({ build: 4, review: 0.5, fix: 3, fix_rounds: 1 });
+    expect(one.perAgent.a0).toEqual({ phase: 'build', fix_usd: 3 });
+    // Two continuations of the same agent are two fix rounds (the growth after the first receive is their sum).
+    const two = C.costPhases({
+      taskId: 'A-1',
+      agents,
+      resumed: [
+        { round: 1, reason: 'fix', mode: 'continue', agent: 'a0' },
+        { round: 2, reason: 'fix', mode: 'continue', agent: 'a0' },
+      ],
+      tReceive: at(20),
+      rows,
+      isReviewer,
+    });
+    expect(two.phases).toEqual({ build: 4, review: 0.5, fix: 3, fix_rounds: 2 });
+    // A new-agent round (-r1) that was then continued as round 2: all of -r1 is fix, and both rounds count once each.
+    const mixed = C.costPhases({
+      taskId: 'A-1',
+      agents: [{ agent: 'a0', type: 'track', usd: 4, track: 'A-1' }, { agent: 'a1', type: 'track', usd: 2, track: 'A-1-r1' }],
+      resumed: [
+        { round: 1, reason: 'fix' },
+        { round: 2, reason: 'fix', mode: 'continue', agent: 'a1' },
+      ],
+      tReceive: at(20),
+      rows,
+      isReviewer,
+    });
+    expect(mixed.phases).toEqual({ build: 4, review: 0, fix: 2, fix_rounds: 2 });
+  });
+
   it('usageEvents marks the fix-round label with its round number', () => {
     const ev = T.usageEvents([
       done({ time: at(1), agent_id: 'x', agent_type: 'track', track: 'B-2-r3', tokens: { output: 1 } }),

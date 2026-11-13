@@ -462,7 +462,12 @@ function reviewPackageIndex({
   redOnBase = null,
   flaky = null,
   assumptions = null,
+  // A delta review after a fix round (lib/deltaReview.js): diff.patch and files/ hold only the commits since the last
+  // review, and deltaSection (packageSection) says so. null = the whole package, as before.
+  delta = null,
+  deltaSection = null,
 }) {
+  const range = delta ? `${String(delta.from).slice(0, 12)}..${String(delta.to).slice(0, 12)}` : null;
   const lines = [
     `# Review package ${o.id} (${o.class}): ${o.title ?? ''}`,
     '',
@@ -472,9 +477,12 @@ function reviewPackageIndex({
     '',
     '## The files in the package',
     '',
-    `- \`diff.patch\`: the whole diff (\`git diff ${base}...<branch>\`).`,
-    `- \`files/\`: ${copied.length} changed file(s) in full version from the branch (same paths as in the repo).`,
+    delta
+      ? `- \`diff.patch\`: the commits since the last review (\`git diff ${range}\`).`
+      : `- \`diff.patch\`: the whole diff (\`git diff ${base}...<branch>\`).`,
+    `- \`files/\`: ${copied.length} ${delta ? 'file(s) changed since the last review' : 'changed file(s)'} in full version from the branch (same paths as in the repo).`,
   ];
+  if (Array.isArray(deltaSection)) lines.push(...deltaSection);
   if (files.trackReply)
     lines.push("- `trackReply.md`: the track's last answer (the report to the orchestrator).");
   if (files.report)
@@ -519,7 +527,7 @@ function reviewPackageIndex({
  * The short reviewer prompt. "track <id>" in the text ties the reviewer's cost to the task. reviewer-gap also gets the
  * task's acceptance criteria and done command (doneCheck.gapCriteriaBlock), when it has any.
  */
-function reviewerPrompt({ o, type, folder }) {
+function reviewerPrompt({ o, type, folder, delta = null }) {
   const sep = String(folder).includes('\\') ? '\\' : '/';
   return [
     `You are ${type} for track ${o.id} (class ${o.class}, branch ${o.branch ?? queueBranch(o.id)}) in the work queue.`,
@@ -529,6 +537,8 @@ function reviewerPrompt({ o, type, folder }) {
     'Your answer is at most approx. 1,500 characters. First line in fixed format: FINDINGS H=<count> M=<count> L=<count>',
     'deferrable=<finding codes that can wait, comma-separated, or ->. Then one short point per H and M finding (code,',
     'file:line, fix), L findings only with code and one sentence. Do not repeat the package.',
+    // A delta review after a fix round (lib/deltaReview.js): the package holds only the commits since the last review.
+    ...(delta ? [require('../deltaReview.js').reviewerLine(delta)] : []),
     // reviewer-gap also gets the fixed criteria and the done command (lib/doneCheck.js), one verdict line per criterion.
     ...(type === 'reviewer-gap' ? [require('../doneCheck.js').gapCriteriaBlock(o)].filter(Boolean) : []),
   ].join('\n');

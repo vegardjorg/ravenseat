@@ -68,6 +68,16 @@ function trackMessage(id, promptPath) {
   );
 }
 
+/**
+ * The line `ravenseat resume` prints for a fix round that continues the agent that delivered: the SendMessage call to its
+ * agent id (the id SubagentStart and SubagentStop give, logged as agent_id; SendMessage resumes a stopped subagent of the
+ * same session by that id) and the message. Source: the Claude Code Agent tool result ("use SendMessage with to: <agentId>
+ * to continue this agent"), 2026-11.
+ */
+function continueLine({ agent, message }) {
+  return `SendMessage to=${agent} · message: ${message}`;
+}
+
 const SAME_TURN = 'Start these in the SAME turn:';
 
 /**
@@ -99,6 +109,7 @@ module.exports = {
   modelFor,
   modelPart,
   trackMessage,
+  continueLine,
   SAME_TURN,
   sameTurnBlock,
 };

@@ -88,6 +88,9 @@ function resumeLine(d) {
 
 module.exports = {
   id: 'claude',
+  // Optional: a fix round can continue the agent that delivered (lib/fixRound.js). An adapter without it always gets a
+  // new agent for a fix round.
+  continueLine: D.continueLine,
   capabilities,
   dispatch,
   fillEntry,

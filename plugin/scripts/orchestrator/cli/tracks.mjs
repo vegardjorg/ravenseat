@@ -187,7 +187,7 @@ const TRANSCRIPTS =
 // As in hook-time.mjs: huge transcripts are not analyzed (the time log's last row is used instead).
 const MAX_TRANSCRIPT = 300 * 1024 * 1024;
 /** The path to the transcript for an agent, or null. */
-function findTranscript(agentId) {
+export function findTranscript(agentId) {
   let sessions;
   try {
     sessions = fs.readdirSync(TRANSCRIPTS, { withFileTypes: true }).filter((d) => d.isDirectory());

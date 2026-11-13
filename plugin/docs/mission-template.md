@@ -63,8 +63,11 @@ After tracks:
 
 ## Fix round and continuation (new agent)
 
-A track with review findings, or a track that delivered PARTIAL (partial), is continued by a NEW `track` agent, not by
-SendMessage to the old one (it typically holds 300k to 900k of context, and its cache has expired). The mission is
+A fix round first goes to the agent that delivered, with SendMessage and only the fix brief, when `ravenseat resume
+--reason fix` prints `CONTINUE` (it was active within `fixRound.continueWithinMin` minutes and its context is small).
+Otherwise, and for a track that delivered PARTIAL (partial), a NEW `track` agent continues it (an old agent can hold
+300k to 900k of context, and its cache has expired). A fix round's mission is short: the fix list, the gates and a pointer
+to the original mission (`mission-<ID>.md`) instead of its text. The mission is
 made with `make-mission.mjs` as usual, with a track block `=====<ID>-r<N>=====`, `BRANCH: queue/<ID>` and the same `BLOCK:`,
 and with this content:
 - **First call:** `prepare-track <ID>-r<N> --branch queue/<ID> --continue …`. `--continue` requires the branch to exist,

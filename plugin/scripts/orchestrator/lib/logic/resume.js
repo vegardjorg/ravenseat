@@ -2,7 +2,7 @@
 // logic/resume.js: adoption: a new orchestrator session adopts tracks that are running.
 //
 // deliverySignal, trackFolderRound, findTrackReport, deliveryBase, assessDelivery, assessActive, deliveryLines,
-// resumeBlock and resumePromptAdjust.
+// fixWorkLines, resumeBlock and resumePromptAdjust.
 //
 // Part of the queueLogic.js split: lib/queueLogic.js re-exports every name, so callers keep requiring queueLogic.js.
 // Used by queueLogic.js (the facade) only.
@@ -230,6 +230,60 @@ function deliveryLines(deliveries, nowMs = Date.now()) {
 }
 
 /**
+ * The fix list for a fix round: a merge conflict, a red done command and red quick gates with their last output lines,
+ * then the review findings to fix (or, with no reviewer files and a red check, that check is the work). The same lines
+ * go into a new agent's mission (resumeBlock) and into a continued agent's brief (lib/fixRound.js continueBrief).
+ */
+function fixWorkLines({ o, reviewFiles = [], doneCheck = null, gateCheck = null, base = baseBranch(), branch = null }) {
+  branch ??= o.branch ?? `${branchPrefix()}${o.id}`;
+  // A red done command (lib/doneCheck.js): the command and its last output lines go into the brief itself, so the new
+  // agent sees what failed without opening another file. Only the tail was kept (no full output, see doneCheck.js).
+  const doneRed =
+    doneCheck && !doneCheck.ok
+      ? [
+          `The done command is RED (${doneCheck.timedOut ? 'over the time budget' : `exit ${doneCheck.exit ?? '?'}`}): \`${doneCheck.command}\`.`,
+          'Make it exit 0 in your worktree (run it yourself before you report). Its last output lines:',
+          '',
+          '~~~~',
+          ...(doneCheck.tail ?? []),
+          '~~~~',
+          '',
+        ]
+      : [];
+  // A merge that stopped on a real conflict (ravenseat merge saved merge_conflict): the files and the other tasks that touched
+  // them, so the fix round starts informed (lib/conflictPredict.js briefLines).
+  const conflictLines = require('../conflictPredict.js').briefLines(o.merge_conflict, { base, branch });
+  // Red quick gates at receive: as the done command. The mission below is reference, and it may be what made them red.
+  const gateRed =
+    gateCheck
+      ? [
+          `The quick gates are RED on the delivered commit (exit ${gateCheck.exit ?? '?'})${gateCheck.commands ? `: ${gateCheck.commands}` : ''}. ravenseat receive runs them again on your commit.`,
+          'Make them green in your worktree (run them yourself before you report). If the mission rules out the only way',
+          'to do that, say so under owner questions and deliver status=PARTIAL. Their last output lines:',
+          '',
+          '~~~~',
+          ...(gateCheck.tail ?? []),
+          '~~~~',
+          '',
+        ]
+      : [];
+  // A red check or a conflict is the work when no reviewer has looked yet: "fix the review findings" would point at nothing.
+  const machineOnly = (conflictLines.length || doneRed.length || gateRed.length) && !reviewFiles.length;
+  return [
+    ...conflictLines,
+    ...doneRed,
+    ...gateRed,
+    ...(machineOnly
+      ? ['There are no review findings for this round; the above is the work. Change only the files the track owns.']
+      : [
+          'Fix the review findings: HIGH, and MEDIUM that is not small and mechanical; LOW findings in the same files come along.',
+          'Fix at the file:line the findings point to, and only in the files the track owns. A finding you disagree with:',
+          'give the reason in the report instead of fixing it.',
+        ]),
+  ];
+}
+
+/**
  * The track block (make-mission.mjs format) for a NEW agent that continues a track on the same branch: a fix round after
  * review (`fix`) or a continuation after the context guard or PARTIAL (`context`). The track id is `<id>-r<round>`, so the
  * agent's folder becomes `<scratchpad>/<id>-r<round>/` (findTrackReport finds the report there). `original` is the
@@ -248,6 +302,10 @@ function resumeBlock({
   doneCheck = null,
   gateCheck = null,
   answer = null,
+  // A fix round's short mission: `original` is then the short track block (ownership, done command, answers) and
+  // missionPath the file with the whole original mission, read only when a finding needs it. gates: what to rerun.
+  missionPath = null,
+  gates = null,
 }) {
   const base = baseBranch();
   const trackId = `${o.id}-r${round}`;
@@ -272,58 +330,16 @@ function resumeBlock({
         (reviewFiles.length ? `; the reviewers' files there: ${reviewFiles.join(', ')}` : ''),
     );
   if (findingsFile) read.push(`${reviewFolder ? 5 : 4}. The findings to fix: ${findingsFile}`);
-  // A red done command (lib/doneCheck.js): the command and its last output lines go into the brief itself, so the new
-  // agent sees what failed without opening another file. Only the tail was kept (no full output, see doneCheck.js).
-  const doneRed =
-    fix && doneCheck && !doneCheck.ok
-      ? [
-          `The done command is RED (${doneCheck.timedOut ? 'over the time budget' : `exit ${doneCheck.exit ?? '?'}`}): \`${doneCheck.command}\`.`,
-          'Make it exit 0 in your worktree (run it yourself before you report). Its last output lines:',
-          '',
-          '~~~~',
-          ...(doneCheck.tail ?? []),
-          '~~~~',
-          '',
-        ]
-      : [];
-  // A merge that stopped on a real conflict (ravenseat merge saved merge_conflict): the files and the other tasks that touched
-  // them, so the fix round starts informed (lib/conflictPredict.js briefLines).
-  const conflictLines = fix ? require('../conflictPredict.js').briefLines(o.merge_conflict, { base, branch }) : [];
-  // Red quick gates at receive: as the done command. The mission below is reference, and it may be what made them red.
-  const gateRed =
-    fix && gateCheck
-      ? [
-          `The quick gates are RED on the delivered commit (exit ${gateCheck.exit ?? '?'})${gateCheck.commands ? `: ${gateCheck.commands}` : ''}. ravenseat receive runs them again on your commit.`,
-          'Make them green in your worktree (run them yourself before you report). If the mission below rules out the only way',
-          'to do that, say so under owner questions and deliver status=PARTIAL. Their last output lines:',
-          '',
-          '~~~~',
-          ...(gateCheck.tail ?? []),
-          '~~~~',
-          '',
-        ]
-      : [];
-  // A red check or a conflict is the work when no reviewer has looked yet: "fix the review findings" would point at nothing.
-  const machineOnly = (conflictLines.length || doneRed.length || gateRed.length) && !reviewFiles.length;
   const work = fix
-    ? [
-        ...conflictLines,
-        ...doneRed,
-        ...gateRed,
-        ...(machineOnly
-          ? ['There are no review findings for this round; the above is the work. Change only the files the track owns.']
-          : [
-              'Fix the review findings: HIGH, and MEDIUM that is not small and mechanical; LOW findings in the same files come along.',
-              'Fix at the file:line the findings point to, and only in the files the track owns. A finding you disagree with:',
-              'give the reason in the report instead of fixing it.',
-            ]),
-      ]
+    ? fixWorkLines({ o, reviewFiles, doneCheck, gateCheck, base, branch })
     : handoverPath
       ? [
           'Continue where the previous agent stopped (context guard): do "remaining" from the handover, with "next command"',
           'first. What is already committed is not redone.',
         ]
       : ['Continue where the previous agent stopped: its report and commits show what is left. What is already committed is not redone.'];
+  // The gates to rerun (lib/fixRound.js gateLines): only for a fix round, when the caller passes them.
+  if (fix && gates) work.push('', require('../fixRound.js').gateLines(gates));
   // What the owner answered goes first: it is why this round exists. Later rounds find it among the additions to the mission.
   if (answer) work.unshift(`**The owner answers the track's question:** ${answer}`, '');
   return [
@@ -349,7 +365,13 @@ function resumeBlock({
     `it covers the whole track (branch=${branch}, commits = all on the branch ahead of ${base}). The orchestrator finds it there`,
     `(${ravenseat} deliveries and ${ravenseat} receive ${o.id}), also without a notification. Your answer starts with the same RESULT line.`,
     '',
-    `## The original mission for ${o.id} (reference; ownership, gates and "Do NOT touch" still apply)`,
+    ...(fix && missionPath
+      ? [
+          `## The original mission for ${o.id} (short: ownership, gates and "Do NOT touch" still apply)`,
+          '',
+          `The full mission text: ${missionPath} (read it only when a finding needs its context).`,
+        ]
+      : [`## The original mission for ${o.id} (reference; ownership, gates and "Do NOT touch" still apply)`]),
     '',
     String(original ?? '').trim(),
     '',
@@ -390,6 +412,7 @@ module.exports = {
   assessDelivery,
   assessActive,
   deliveryLines,
+  fixWorkLines,
   resumeBlock,
   resumePromptAdjust,
 };

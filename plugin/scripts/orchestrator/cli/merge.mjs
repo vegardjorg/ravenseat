@@ -581,25 +581,14 @@ export function cmdReceive() {
   // The package is made again every time (a new round after a fix replaces the old one). Only files we made ourselves.
   fs.rmSync(folder, { recursive: true, force: true });
   fs.mkdirSync(path.join(folder, 'files'), { recursive: true });
+  // The whole track diff. WHICH reviewers run, the DB objects, the test-weakening check and the ownership notes always
+  // use it, also when the package itself is a delta (below).
   const stat = gitLarge(['diff', '--stat', scope]) ?? '';
   const diff = gitLarge(['diff', scope]) ?? '';
-  fs.writeFileSync(path.join(folder, 'diff.patch'), diff);
   const { copy, skipped } = L.packageFiles(
     gitLarge(['diff', '--name-status', '--no-renames', scope]),
     gitLarge(['diff', '--numstat', '--no-renames', scope]),
   );
-  const copied = [];
-  for (const filePath of copy) {
-    const content = gitLarge(['show', `${branch}:${filePath}`], { buffer: true });
-    if (content == null) {
-      skipped.push({ path: filePath, reason: 'could not be read from the branch' });
-      continue;
-    }
-    const templateFile = path.join(folder, 'files', ...filePath.split('/'));
-    fs.mkdirSync(path.dirname(templateFile), { recursive: true });
-    fs.writeFileSync(templateFile, content);
-    copied.push(filePath);
-  }
   // The track's answer (from the transcript), track-result.md and handover.md from the track folder in the scratchpad.
   const agents = taskAgents(o0);
   // The attempt (lib/logic/attempt.js): its rows are read here, before the lock and after taskAgents wrote any killed
@@ -765,6 +754,49 @@ export function cmdReceive() {
     missingControls: CONTROLS.missing(CONFIG, MAIN_TREE),
   });
   const reviewers = reviewerList.map((x) => x.type);
+  // ---- The package's diff and files (lib/deltaReview.js): after a fix round, only the commits since the last review,
+  // with the findings the fix round got and the whole diff as a context file. Otherwise the whole diff, as before.
+  const DR = require('./lib/deltaReview.js');
+  const reviewTip = git(['rev-parse', '--verify', `refs/heads/${branch}`]);
+  const reviewBase = git(['merge-base', BASE, branch]) || null;
+  const picked = DR.deltaScope({
+    o: o0,
+    tip: reviewTip,
+    mergeBase: reviewBase,
+    isAncestor: (x, y) => git(['merge-base', '--is-ancestor', x, y]) != null,
+    reviewers,
+    full: a.includes('--full-review'),
+    partial: result?.status === 'PARTIAL',
+  });
+  const delta = picked.delta;
+  const range = delta ? `${delta.from}..${delta.to}` : scope;
+  const shown = delta
+    ? L.packageFiles(
+        gitLarge(['diff', '--name-status', '--no-renames', range]),
+        gitLarge(['diff', '--numstat', '--no-renames', range]),
+      )
+    : { copy, skipped };
+  const packageStat = delta ? (gitLarge(['diff', '--stat', range]) ?? '') : stat;
+  fs.writeFileSync(path.join(folder, 'diff.patch'), delta ? (gitLarge(['diff', range]) ?? '') : diff);
+  if (delta) {
+    fs.writeFileSync(path.join(folder, 'diff-full.patch'), diff);
+    if (delta.findings && fs.existsSync(delta.findings)) {
+      fs.copyFileSync(delta.findings, path.join(folder, 'previous-findings.md'));
+      files.previousFindings = true;
+    }
+  }
+  const copied = [];
+  for (const filePath of shown.copy) {
+    const content = gitLarge(['show', `${branch}:${filePath}`], { buffer: true });
+    if (content == null) {
+      shown.skipped.push({ path: filePath, reason: 'could not be read from the branch' });
+      continue;
+    }
+    const templateFile = path.join(folder, 'files', ...filePath.split('/'));
+    fs.mkdirSync(path.dirname(templateFile), { recursive: true });
+    fs.writeFileSync(templateFile, content);
+    copied.push(filePath);
+  }
   const customReviewers = new Set(reviewerList.filter((x) => x.custom).map((x) => x.type));
   const dbObjects = L.dbObjectsFromDiff(diff, { folder: MIGR.folder });
   // Test weakening (lib/testWeakening.js): deleted test files and added skip/focus markers. A warning, never a stop.
@@ -808,10 +840,10 @@ export function cmdReceive() {
     L.reviewPackageIndex({
       o: o0,
       branch,
-      stat,
+      stat: packageStat,
       dbObjects,
       copied,
-      skipped,
+      skipped: shown.skipped,
       result,
       files,
       base: BASE,
@@ -822,11 +854,13 @@ export function cmdReceive() {
       // The flaky gate commands (lib/trackFlaky.js packageSection); [] when none was flaky.
       flaky: require('./lib/trackFlaky.js').packageSection(gateCheck.record),
       assumptions,
+      delta,
+      deltaSection: delta ? DR.packageSection(delta, { previousFindings: !!files.previousFindings }) : null,
     }),
   );
   const prompts = reviewers.map((type) => {
     const file = path.join(folder, `reviewer-${type}.md`);
-    fs.writeFileSync(file, L.reviewerPrompt({ o: o0, type, folder, base: BASE }) + '\n');
+    fs.writeFileSync(file, L.reviewerPrompt({ o: o0, type, folder, base: BASE, delta }) + '\n');
     return { type, file };
   });
   const r = edit((queue) => {
@@ -855,6 +889,13 @@ export function cmdReceive() {
     }
     // First delivery to review (a new round after a fix keeps the first time).
     o.t_receive ??= new Date().toISOString();
+    // What this package covered, so the review after the next fix round sees only what came after (lib/deltaReview.js).
+    // A PARTIAL delivery is unfinished and is not a review. No reviewer: nothing was reviewed, so the old record stays.
+    const record =
+      result?.status !== 'PARTIAL' && reviewTip
+        ? DR.reviewRecord({ tip: reviewTip, mergeBase: reviewBase, now: new Date().toISOString(), reviewers })
+        : null;
+    if (record) Object.assign(o, record);
     // The gates and the done command are green on this delivery: an earlier gate-red is over.
     if (result?.status !== 'PARTIAL' && L.openBlockOf(o)?.code === 'gate-red') L.closeBlock(o);
     // A stop that is already open says more about what blocks the task than the question does.
@@ -870,6 +911,14 @@ export function cmdReceive() {
     `${id}: review · ${result ? result.line : 'no RESULT line (read trackReply.md)'}\n` +
       `Package: ${folder} (00-package.md; ${copied.length} file(s), ${dbObjects.length} DB object(s))`,
   );
+  if (delta)
+    console.log(
+      `Delta review after fix round ${delta.round ?? '?'}: the package holds only the commits since the last review ` +
+        `(${DR.short(delta.from)}..${DR.short(delta.to)})${files.previousFindings ? ' and the previous findings' : ''}; the same reviewers. ` +
+        `${CLI} receive ${id} --full-review gives the whole package.`,
+    );
+  else if (o0.review_sha && picked.why && !/no fix round|no commits/.test(picked.why))
+    console.log(`Whole review package: ${picked.why}.`);
   // PARTIAL: receive ran no gates on it (above), so the delivery says nothing about whether it works.
   if (result?.status === 'PARTIAL')
     console.log(`${id} delivered PARTIAL: unfinished, so no gates and no done command ran on it. Do not merge it; next: ${CLI} resume ${id} --reason context${asked ? ' --answer "<text>"' : ''}.`);

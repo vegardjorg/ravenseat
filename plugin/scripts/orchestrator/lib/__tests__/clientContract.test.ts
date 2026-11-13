@@ -39,6 +39,15 @@ describe('client adapters: the shared contract', () => {
   });
 
   describe.each(adapters.map((a) => [a.id, a] as const))('%s', (id, adapter) => {
+    it('continueLine, when it has one, names the agent and carries the message as given', () => {
+      const line = (adapter as unknown as { continueLine?: (x: object) => string }).continueLine;
+      if (!line) return;
+      const out = line({ agent: 'agent-x1', message: 'Fix round 1 for A: read brief.md' });
+      expect(out).toContain('agent-x1');
+      expect(out).toContain('Fix round 1 for A: read brief.md');
+      expect(out).not.toMatch(/\n/);
+    });
+
     it('has a lowercase id that matches its folder', () => {
       expect(id).toMatch(/^[a-z][a-z0-9-]*$/);
       expect(fs.existsSync(path.join(CLIENTS, id, 'index.js'))).toBe(true);

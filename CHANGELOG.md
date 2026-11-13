@@ -5,6 +5,28 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+### After you update
+- A fix round can now print `CONTINUE <id> (fix round N)` instead of a new prompt: send the SendMessage line it gives to
+  the agent that delivered, and start no new agent. `ravenseat resume <id> --reason fix --new-agent` gives the old
+  behaviour, and `ravenseat settings set fixRound.continueWithinMin 0` turns it off.
+- The review after a fix round gets only the commits since the last review. `ravenseat receive <id> --full-review` gives
+  the whole package.
+
+### Added
+- Continuation first in fix rounds (`lib/fixRound.js`): when the track agent that delivered can still be reached and was
+  active within `fixRound.continueWithinMin` minutes (default 60) with less than `fixRound.continueMaxContextK` thousand
+  tokens of context (default 200), `ravenseat resume <id> --reason fix` writes the fix brief `fix-<id>-r<N>.md` and prints
+  a short SendMessage line. The round counts toward the cap, the plateau and the fix cost as before. `--new-agent` skips it.
+- Delta review (`lib/deltaReview.js`): receive stores `review_sha` and the reviewers that got the package, and the package after a fix round holds only the
+  commits since then (the whole package again when a reviewer runs that did not see the earlier commits), with `previous-findings.md` and `diff-full.patch`. The reviewers, their effort and every gate are
+  chosen from the whole diff as before. `--full-review` forces the whole package.
+
+### Changed
+- A new fix agent gets a short mission: the fix list, branch, worktree, the gates to run again, the conflict lines and
+  the ownership, with a pointer to `mission-<id>.md` instead of the original mission's text. `--reason context` is as
+  before. The findings are kept per round in `findings-<id>-r<N>.md`.
+- The fix-round count in `ravenseat cost` counts each continued round (`mode: "continue"` in `resumed`).
+
 ## 0.11.0 (2026-11-12)
 
 **Know where the cost goes, and keep Claude's instructions small: `ravenseat cost` measures thinking per turn, splits build, review and fix rounds and shows week over week; `ravenseat gates --health` finds slow, flaky and never-red gates; doctor warns when the instructions Claude loads at start grow too large and `ravenseat instructions --plan` proposes a split; the push guard now denies a forced push, a branch delete and `--mirror` even when it has an internal error; and the `ask` helper starts without your CLAUDE.md.**

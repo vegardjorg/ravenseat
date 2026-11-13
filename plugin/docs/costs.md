@@ -67,8 +67,9 @@ causes apart while it happens. They are measurements only: none of them stops th
     the bare `<id>`, so `-r1` is the first fix round. The exception is a round the task records as a `context`
     continuation (a full context, an adopted track): that is still build;
   - the bare track agent is build, except what it used after the task's first receive when it had already stopped
-    before it: that is the same agent sent back with SendMessage to fix the review's findings, and it counts as one fix
-    round.
+    before it: that is the same agent sent back with SendMessage to fix the review's findings, and it counts as fix.
+    The number of fix rounds counts each round the task records with `mode: "continue"` (`ravenseat resume` continued
+    the agent), so two continued rounds count as two; with no such record the growth counts as one round.
 
   Why this rule: a fix round is work the review caused. Counted inside build, a week with more fix rounds looked like
   harder work. The receive is the line because nothing before it can be a fix of a review finding.
@@ -106,8 +107,10 @@ parallel and a 5-minute subagent cache. The changes went in together, so how muc
   tracks while you work.
 - Prompt cache expiry while waiting was about 23% of all usage. So there are no sleep or polling loops, and
   subagents use a 1-hour cache.
-- Fix rounds start a new agent with a short mission, so a fix does not pay for the whole build context again. This is
-  a design choice; what it saves is not measured.
+- A fix round continues the agent that delivered while its prompt cache is warm (within an hour), so it reads the fix
+  list on a cached context. Otherwise a new agent gets a short mission (the fix list and a pointer to the original
+  mission), so a fix does not pay for the whole build context again. The review after it reads only the new commits.
+  These are design choices; what they save is not measured yet.
 - Fixed overhead per track (setup, reading, checks, report) was about 60% of a small K task and 30 to 40% of a D or
   D+ task. So task sizes are set per class, and small tasks are bundled.
 

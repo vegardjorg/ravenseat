@@ -291,6 +291,28 @@ started them. A new session adopts them without that notification:
   reads the newest report, also from a fix round folder, and saves `report_received`.
 - **`ravenseat resume <ID> --reason fix|context`** writes `prompt-<ID>-r<N>.md` for a NEW agent on the same branch
   (`prepare-track --continue`, the paths to the report, handover, review package and `--findings-file`).
+- **A fix round continues the agent first** (`lib/fixRound.js`). With `--reason fix`, when the track agent that delivered
+  can still be reached and was active within `fixRound.continueWithinMin` minutes (default 60, the prompt cache is still
+  warm), resume prints `CONTINUE <ID> (fix round N)`, writes the fix brief `fix-<ID>-r<N>.md` and gives one SendMessage
+  line with a short message that points to it. Send that line; start no new agent. "Can be reached" means: the time log
+  has its last start or done row for the task, it was not stopped (`killed`), its transcript is in the session the queue
+  is bound to, a worktree still holds the branch and its context is under `fixRound.continueMaxContextK` (default 200k).
+  "Active" is the newer of the done row and the transcript's last write. The round counts toward the fix-round cap and the
+  plateau as before, and no attempt is reserved (SendMessage writes no start row). If the agent does not answer, or
+  answers from a fresh context, `ravenseat resume <ID> --reason fix --new-agent` gives a new agent for the same round.
+  `fixRound.continueWithinMin: 0` turns continuation off.
+- **A new fix agent gets a short mission.** The prompt holds the fix list, branch, worktree, the gates to run again (the
+  quick gates and the done command), the conflict lines, the ownership and "Do NOT touch", and the path
+  `mission-<ID>.md` instead of the original mission's text. `--reason context` keeps the whole mission. The findings are
+  copied to `findings-<ID>-r<N>.md` per round, since receive replaces the review package.
+- **The review after a fix round is a delta** (`lib/deltaReview.js`). Receive stores `review_sha` (the branch tip it
+  packaged) and `review_base`. After a fix round, `diff.patch` and `files/` hold only `review_sha..tip`, with
+  `previous-findings.md` (the findings the round got) and `diff-full.patch` (the whole track diff, for context). Which
+  reviewers run, their effort, the DB objects, the test-weakening check and the ownership notes still use the whole
+  diff. It falls back to the whole package when there was no earlier review, a reviewer runs now that did not get the
+  earlier package (receive stores `review_reviewers`, and a round with no reviewer stores nothing), the base was merged
+  into the branch since, the old tip is no longer an ancestor, or the delivery is PARTIAL. `ravenseat receive <ID> --full-review` forces the
+  whole package.
 
 - **Started without agent:** `fill` and `start` only MARK a track as running; the agent starts when the orchestrator
   acts on the "Start these in the SAME turn" lines. If fill ran where nobody read the output (`ravenseat merge` in the

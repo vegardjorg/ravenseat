@@ -154,7 +154,7 @@ const {
 } = require('./logic/monitor.js');
 const {
   RESUME_REASONS, deliverySignal, trackFolderRound, findTrackReport, deliveryBase, assessDelivery, assessActive,
-  deliveryLines, resumeBlock, resumePromptAdjust,
+  deliveryLines, fixWorkLines, resumeBlock, resumePromptAdjust,
 } = require('./logic/resume.js');
 // The reviewers (fixed per class and the helper agents) are worked out in ONE place: lib/queueHelpers.js.
 const HELP = require('./queueHelpers.js');
@@ -494,6 +494,7 @@ module.exports = {
   assessDelivery,
   assessActive,
   deliveryLines,
+  fixWorkLines,
   resumeBlock,
   resumePromptAdjust,
 };

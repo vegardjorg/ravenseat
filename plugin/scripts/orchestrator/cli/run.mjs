@@ -23,7 +23,7 @@ import {
   WIDTH, writeExternalWarning,
 } from './context.mjs';
 import {
-  attemptRows, dailyUsageFor, loadSlotsLine, logStart, makeTrackBlocks, markStarted, measureLoad, readTimeLog,
+  attemptRows, dailyUsageFor, findTranscript, loadSlotsLine, logStart, makeTrackBlocks, markStarted, measureLoad, readTimeLog,
   reserveAttempt, runningAttempt, scratchpadFor, takenForMigr, trackReport, trackRoots,
 } from './tracks.mjs';
 import { askedLine, triageReason, triageState, writeTriageSteps } from './triage.mjs';
@@ -43,6 +43,8 @@ const MD = require('./lib/logic/missionDescriptor.js');
 const CL = require('./lib/clients/index.js');
 // The attempt: start, fill and resume reserve one under the lock, and its id goes into the descriptor.
 const AT = require('./lib/logic/attempt.js');
+// The quick gate commands a fix round reruns (lib/controls.js commandsOf).
+const CONTROLS = require('./lib/controls.js');
 
 /**
  * READS WARNING lines for a started task in reads.mode "warn" (lib/logic/conflicts.js): the read files an active task
@@ -571,7 +573,7 @@ export function cmdResume() {
   const id = positional(1, ['--reason', '--round', '--scratchpad', '--findings-file', '--from', '--answer', '--by'])[0];
   const reason = val('--reason') ?? 'fix';
   const use =
-    'resume <id> [--reason fix|context] [--round N] [--findings-file <file>] [--from <reviewer,...>] [--answer "<text>" [--by owner]] [--scratchpad <folder>]';
+    'resume <id> [--reason fix|context] [--round N] [--findings-file <file>] [--from <reviewer,...>] [--answer "<text>" [--by owner]] [--new-agent] [--scratchpad <folder>]';
   if (!id || !L.RESUME_REASONS.includes(reason)) die(use);
   // --answer: the owner's answer to what the track asked. First in the brief, and saved as an addition to the mission.
   const answer = a.includes('--answer') ? String(val('--answer') ?? '').trim() : null;
@@ -612,7 +614,10 @@ export function cmdResume() {
     // Only that case: a second receive or a reviewer's findings (--from) is a real next round, and the cap must see it.
     val('--round') == null && !fromList.length && last?.reason === reason && (reason === 'context' || last.from?.includes('done_when')) && found.report?.round !== last.round &&
     (o.attempts ?? []).some((x) => x.state === 'reserved' && x.round === last.round);
-  const round = val('--round') != null ? Number(val('--round')) : again ? last.round : found.nextRound;
+  // A fix round that continued the agent (mode continue) writes no prompt file, so the next free round also counts the
+  // rounds in `resumed`: a later new agent never reuses a continued round's number.
+  const recorded = Math.max(0, ...(o.resumed ?? []).map((r) => Number(r?.round)).filter(Number.isFinite));
+  const round = val('--round') != null ? Number(val('--round')) : again ? last.round : Math.max(found.nextRound, recorded + 1);
   // The same round written again keeps the answer it was made with, first in the brief (a new --answer replaces it).
   const briefAnswer = answer ?? (again ? (last.answer ?? null) : null);
   if (!Number.isInteger(round) || round < 1) die('--round must be an integer >= 1');
@@ -731,19 +736,126 @@ export function cmdResume() {
     'trackReply.md',
     'trackReport.md',
     'handover.md',
+    // A delta package's own files (lib/deltaReview.js): the whole diff and the findings of the round before.
+    'diff-full.patch',
+    'previous-findings.md',
   ]);
   const reviewFiles = reviewFolder
     ? fs.readdirSync(reviewFolder).filter((n) => !PACKAGE.has(n) && !n.startsWith('reviewer-'))
     : [];
   const packageToRead = reviewFolder && (reviewFiles.length || fs.existsSync(path.join(reviewFolder, '00-package.md'))) ? reviewFolder : null;
+  fs.mkdirSync(scratch, { recursive: true });
+  // The findings go into a file of the round's own (findings-<id>-r<N>.md): receive makes the review package again and
+  // removes the old one, and the delta review after this round reads the findings from here (lib/deltaReview.js).
+  let roundFindings = findingsFile;
+  if (reason === 'fix' && findingsFile) {
+    roundFindings = path.join(scratch, `findings-${id}-r${round}.md`);
+    if (path.resolve(roundFindings) !== path.resolve(findingsFile)) fs.copyFileSync(findingsFile, roundFindings);
+  }
+  // The worktrees: which one holds the branch (the old agent's, when it is still there). The main checkout is never it.
+  const worktrees = (git(['worktree', 'list', '--porcelain']) ?? '').split(/\r?\n\r?\n/);
+  const holder = worktrees.find((b) => b.split(/\r?\n/).includes(`branch refs/heads/${branch}`));
+  const holderPath = holder ? holder.split(/\r?\n/)[0].replace(/^worktree /, '') : null;
+  // The gates the round reruns before it reports: the quick gates and the task's done command.
+  const gates = { quick: CONTROLS.commandsOf(CONFIG.gates?.quick), done: o.done_when ? String(o.done_when) : null };
+  // ---- Continuation first (lib/fixRound.js): the agent that delivered gets only the fix list, when it is still
+  // addressable and its cache is warm. Otherwise a new agent below, with a short mission.
+  const FR = require('./lib/fixRound.js');
+  const adapter = adapterFor(o);
+  const deliverer = reason === 'fix' ? FR.lastTrackAgent(readTimeLog({ from: Date.parse(o.started ?? '') || null }), id) : null;
+  const transcriptPath = deliverer ? findTranscript(deliverer.agent) : null;
+  let transcriptMtime = null;
+  try {
+    if (transcriptPath) transcriptMtime = fs.statSync(transcriptPath).mtimeMs;
+  } catch {
+    /* gone since it was found: no transcript */
+  }
+  const mode = FR.continuation({
+    reason,
+    agent: deliverer,
+    transcript: transcriptPath && transcriptMtime != null ? { path: transcriptPath, mtimeMs: transcriptMtime } : null,
+    orchestratorSession: readCursor()?.session_id ?? null,
+    worktree: holder && holder !== worktrees[0] ? holderPath : null,
+    canContinue: typeof adapter.continueLine === 'function',
+    cloud: !!o.cloud,
+    newAgent: a.includes('--new-agent'),
+    setup: FR.fixRoundSetup(CONFIG),
+    now: Date.now(),
+  });
+  if (mode.mode === 'continue') {
+    const work = L.fixWorkLines({ o, reviewFiles, doneCheck, gateCheck, base: BASE, branch });
+    if (briefAnswer) work.unshift(`**The owner answers the track's question:** ${briefAnswer}`, '');
+    const briefFile = path.join(scratch, `fix-${id}-r${round}.md`);
+    const reportFolder = found.report?.folder ?? path.join(scratch, deliverer.track ?? id);
+    fs.writeFileSync(
+      briefFile,
+      FR.continueBrief({
+        id,
+        round,
+        branch,
+        worktree: path.resolve(holderPath),
+        reportFolder,
+        findingsFile: roundFindings,
+        reviewFolder: packageToRead,
+        reviewFiles,
+        work,
+        gates,
+      }),
+    );
+    edit((q) => {
+      const x = q.tasks.find((y) => y.id === id);
+      // The report that exists now has been dealt with; the continued agent's next report is the new delivery.
+      if (found.report) x.report_seen = Math.max(Number(x.report_seen ?? 0), found.report.mtimeMs);
+      if (L.openBlockOf(x)?.code === 'track-question') L.closeBlock(x);
+      if (answer) {
+        const t = L.addToBonus(x, `The owner's answer: ${answer}`, new Date().toISOString());
+        if (t) die(`Invalid answer: ${t}`);
+      }
+      (x.resumed ??= []).push({
+        round,
+        reason,
+        mode: 'continue',
+        agent: mode.agent,
+        time: new Date().toISOString(),
+        ...(fromList.length ? { from: fromList } : {}),
+        ...(roundFindings ? { findings: roundFindings } : {}),
+        ...plateauFields,
+        ...answerFields,
+      });
+    });
+    logEvent(ER.fixRoundRow({ task: id, reason, round, from: fromList }));
+    const unknown = fromList.filter((x) => x !== 'done_when' && !L.REVIEWER_TYPES.includes(x));
+    if (unknown.length)
+      console.log(`WARNING: --from ${unknown.join(', ')} is not a reviewer type here (${L.REVIEWER_TYPES.join(', ')}); saved as given.`);
+    pulseCursor(`resume ${id} r${round} continue`);
+    console.log(
+      `CONTINUE ${id} (fix round ${round}): send the fix list to the agent that delivered (${mode.agent}; ${mode.why}). ` +
+        `No new agent and no new mission. Fix brief: ${briefFile}`,
+    );
+    console.log(adapter.continueLine({ agent: mode.agent, message: FR.continueMessage({ id, round, briefFile }) }));
+    console.log(
+      `If the agent cannot be reached (not found, or it answers from a fresh context): ${CLI} resume ${id} --reason fix ` +
+        `--new-agent${roundFindings ? ` --findings-file "${roundFindings}"` : ''} gives a new agent for this round instead.`,
+    );
+    return;
+  }
+  if (reason === 'fix') console.log(`Fix round ${round} for ${id}: new agent: ${mode.why}.`);
   const sourcePath = missionFile(o);
-  const original = L.trackBlock(o, queue, {
+  const fullOriginal = L.trackBlock(o, queue, {
     text: sourcePath ? fs.readFileSync(sourcePath, 'utf8') : o.mission,
   });
+  // A fix round's mission is short: the fix list, the ownership and the gates, and a pointer to the whole original mission
+  // (mission-<id>.md) instead of its text. A continuation (context) keeps the whole mission: it carries on the build.
+  let original = fullOriginal;
+  let missionPath = null;
+  if (reason === 'fix') {
+    missionPath = path.join(scratch, `mission-${id}.md`);
+    fs.writeFileSync(missionPath, fullOriginal);
+    original = L.trackBlock(o, queue, { text: '' });
+  }
   const trackId = `${id}-r${round}`;
   const head = git(['rev-parse', BASE]);
   if (!head) die(`Could not find baseBranch ${BASE} in the main tree (git rev-parse ${BASE}).`);
-  fs.mkdirSync(scratch, { recursive: true });
   const trackFile = path.join(scratch, `queue-track-${trackId}.md`);
   const commonFile = path.join(scratch, 'queue-common.md');
   fs.writeFileSync(
@@ -756,11 +868,13 @@ export function cmdResume() {
       handoverPath: found.handover?.path ?? null,
       reviewFolder: packageToRead,
       reviewFiles,
-      findingsFile,
+      findingsFile: roundFindings,
       original,
       doneCheck,
       gateCheck,
       answer: briefAnswer,
+      missionPath,
+      gates: reason === 'fix' ? gates : null,
     }),
   );
   for (const [name, args] of [
@@ -791,7 +905,17 @@ export function cmdResume() {
       const t = L.addToBonus(x, `The owner's answer: ${answer}`, new Date().toISOString());
       if (t) die(`Invalid answer: ${t}`);
     }
-    if (!again) (x.resumed ??= []).push({ round, reason, time: new Date().toISOString(), ...(fromList.length ? { from: fromList } : {}), ...plateauFields, ...answerFields });
+    if (!again)
+      (x.resumed ??= []).push({
+        round,
+        reason,
+        ...(reason === 'fix' ? { mode: 'new' } : {}),
+        time: new Date().toISOString(),
+        ...(fromList.length ? { from: fromList } : {}),
+        ...(reason === 'fix' && roundFindings ? { findings: roundFindings } : {}),
+        ...plateauFields,
+        ...answerFields,
+      });
     else if (answer) Object.assign(x.resumed.at(-1), answerFields);
     return reserved;
   });
@@ -816,10 +940,8 @@ export function cmdResume() {
   const d = MD.missionDescriptor(o, { client: adapterFor(o).id, trackId, branch, promptFile: prompt, baseSha: head, attemptId: attempt.id });
   console.log(CL.clientFor(d.client).resumeLine(d));
   // If the branch is still checked out in a worktree, prepare-track --continue refuses: the old agent must be done.
-  const worktrees = (git(['worktree', 'list', '--porcelain']) ?? '').split(/\r?\n\r?\n/);
-  const holder = worktrees.find((b) => b.split(/\r?\n/).includes(`branch refs/heads/${branch}`));
   if (holder) {
-    const where = holder.split(/\r?\n/)[0].replace(/^worktree /, '');
+    const where = holderPath;
     // Only the continuation of a PARTIAL delivery: that agent has stopped and said so, and with a clean worktree nothing
     // can be lost (the branch keeps the commits and no file moves). Not a fix round: it may be fixed right there, and a
     // commit on a detached HEAD would miss the branch. Never the main checkout (the first in the list).

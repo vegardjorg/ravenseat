@@ -235,6 +235,26 @@ describe('resumeBlock and resumePromptAdjust', () => {
     expect(L.RESUME_REASONS).toEqual(['fix', 'context']);
   });
 
+  it('a fix round with missionPath points to the original mission and names the gates to rerun', () => {
+    const b = L.resumeBlock({
+      o,
+      round: 1,
+      reason: 'fix',
+      findingsFile: 's/findings-A-r1.md',
+      original: '## TRACK A (Title A)\n\n**Ownership in the queue:** files src/a.ts',
+      missionPath: 's/mission-A.md',
+      gates: { quick: ['npm test'], done: null },
+    });
+    expect(b).toContain('## The original mission for A (short: ownership, gates and "Do NOT touch" still apply)');
+    expect(b).toContain('The full mission text: s/mission-A.md (read it only when a finding needs its context).');
+    expect(b).toContain('Rerun before you report: the quick gates (`npm test`).');
+    expect(b).toContain('**Ownership in the queue:** files src/a.ts');
+    // A continuation (context) keeps the whole original mission, as before.
+    const k = L.resumeBlock({ o, round: 1, reason: 'context', original: 'The mission for A.', missionPath: 'x' });
+    expect(k).toContain('## The original mission for A (reference; ownership, gates and "Do NOT touch" still apply)');
+    expect(k).not.toContain('Rerun before you report');
+  });
+
   it('adds --continue to the setup call and swaps checkout -B for git switch, once', () => {
     const common =
       '**Setup (first call):** `ravenseat prepare-track A-r1 --branch queue/A --scratchpad\n"s"`\n' +
@@ -385,8 +405,13 @@ describe('queue.mjs: pulse, deliveries, receive and resume against a temporary q
     expect(prompt).toContain('git log --oneline develop..queue/A');
     expect(prompt).toContain(path.join(scratch, 'A', 'track-result.md'));
     expect(prompt).toContain(path.join(scratch, 'rev-A'));
-    expect(prompt).toContain(path.join(scratch, 'findings.md'));
-    expect(prompt).toContain('The mission for A.');
+    // The findings are copied to the round's own file (the next receive removes the review package they may sit in).
+    expect(prompt).toContain(path.join(scratch, 'findings-A-r1.md'));
+    expect(fs.readFileSync(path.join(scratch, 'findings-A-r1.md'), 'utf8')).toBe('FINDINGS H=1 M=0 L=0');
+    // The fix round's mission is short: the ownership and a pointer to the original mission, not its text.
+    expect(prompt).not.toContain('The mission for A.');
+    expect(prompt).toContain(path.join(scratch, 'mission-A.md'));
+    expect(fs.readFileSync(path.join(scratch, 'mission-A.md'), 'utf8')).toContain('The mission for A.');
     expect(find().resumed).toMatchObject([{ round: 1, reason: 'fix' }]);
     // The next resume gets the next round (prompt-A-r1.md exists).
     expect(run('resume', 'A', '--reason', 'context').out).toContain('RESUME A-r2 (context)');

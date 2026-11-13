@@ -56,7 +56,7 @@ Run these in parallel where possible:
    - Fix round or continuation (PARTIAL, context guard) for an adopted track: `ravenseat resume <id> --reason fix|context
      [--findings-file <file>]` writes `prompt-<id>-r<N>.md` (prepare-track `--continue`, the paths to the report,
      handover, review package and findings); start a new track agent with the message it prints. SendMessage to the
-     old agent does not work from a new session.
+     old agent does not work from a new session, so resume picks a new agent there by itself.
    - No track-result.md (the track died before it wrote one): `ravenseat receive <id> --scratchpad <scratch>` fetches the track's
      last answer from the agent transcript; otherwise rebuild the picture from `git log <baseBranch>..queue/<id>`.
 

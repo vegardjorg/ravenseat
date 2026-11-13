@@ -81,8 +81,8 @@ word.
 2. **When a track delivers:** `ravenseat receive <id>` BEFORE merging (status review, the review package as plain files in
    `<scratch>/rev-<id>/`, the track's RESULT line from the transcript, one reviewer prompt per reviewer for the
    class, and the merge command). Read the long report only when RESULT says PARTIAL, RED or ownerQuestions>0. Start the
-   reviewers `receive` prints (fixed per class plus the helper agents that hit) in the SAME turn. Fix round in a new agent on findings,
-   with `ravenseat resume <id> --from <reviewer,...>` naming the reviewer types whose findings caused it (the reviewer hit rate). When review is green:
+   reviewers `receive` prints (fixed per class plus the helper agents that hit) in the SAME turn. Fix round on findings
+   with `ravenseat resume <id> --reason fix --from <reviewer,...>` (CONTINUE: SendMessage the line it prints; else a new agent) naming the reviewer types whose findings caused it (the reviewer hit rate). When review is green:
    **`ravenseat merge <id>`** from Bash with a long timeout (merge with `--wave-base`, optional migration push if
    configured, `gates --quick`, `set <id> done` with cost and findings, `fill`). It stops at the first error with
    the step and an excerpt; full log in `<scratch>/merge-<id>.log`. PARTIAL = continuation in a new agent, not a merge.
@@ -142,11 +142,15 @@ A failure that got past the gates once can get past them again, so a repeatable 
 - Fix rounds by severity: HIGH always gives a fix round. MEDIUM you fix yourself at merge when small and mechanical,
   otherwise a fix round. LOW never triggers a round alone; "safe to defer" becomes one follow-up task.
 
-## Fix round and continuation (new agent, not SendMessage)
+## Fix round and continuation
 
-- `SendMessage` only to a track under about 150k context that has been idle under 5 min. Otherwise, and always on
-  PARTIAL: a NEW `track` agent with a narrow mission: track block `=====<ID>-r<N>=====` with `BRANCH: queue/<ID>`, the
-  findings with file:line, the paths to `track-result.md`/`handover.md` and the review files.
+- `ravenseat resume <id> --reason fix` decides. `CONTINUE <id>`: the agent that delivered is still warm (active within
+  `fixRound.continueWithinMin`, default 60 min, context under 200k); send the SendMessage line it prints, with only the
+  fix brief, and start no new agent. If that agent cannot be reached, `--new-agent` gives a new one for the same round.
+- Otherwise, and always on PARTIAL (`--reason context`): a NEW `track` agent with a narrow mission: track block
+  `=====<ID>-r<N>=====` with `BRANCH: queue/<ID>`, the findings with file:line, the gates, and a pointer to the original
+  mission (`mission-<id>.md`) instead of its text.
+- The review after a fix round gets only the new commits and the previous findings (`receive --full-review` for all).
 - The branch must be free (`git worktree list`; `git -C <old worktree> switch --detach`).
 - The new agent starts with `ravenseat prepare-track <ID>-r<N> --branch queue/<ID> --continue …`: takes the branch over with
   `git switch`, no reset. Never `prepare-track` without `--continue` for a fix round.

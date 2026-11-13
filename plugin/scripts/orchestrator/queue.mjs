@@ -194,7 +194,7 @@
 //         puts the `triage` helper in the same-turn block for the first triage.maxPerFill (3) of them. --ids refuses such
 //         a task; start --force on the owner's word overrides.)
 //   node scripts/orchestrator/queue.mjs receive <id> [--scratchpad <folder>] [--result "RESULT …"] [--force]
-//                                                 [--done-cwd <folder>]
+//                                                 [--done-cwd <folder>] [--full-review]
 //        (the track has delivered: status review, and the review package as PLAIN FILES in <folder>/rev-<id>/: 00-package.md
 //         (resultLine, changed DB objects if any, diff statistics), diff.patch, files/ (changed files in full version
 //         from the branch), trackReply.md (the track's last answer from the transcript), trackReport.md and handover.md (from
@@ -208,7 +208,10 @@
 //         and the task's scratchpad; saves report_received.
 //         Done command (task field done_when, lib/doneCheck.js): run first in the worktree that has the branch checked
 //         out (--done-cwd overrides), with config().doneCheck.timeoutSec. Red: no reviewers, the blocker gate-red, only
-//         the output tail in <folder>/done-<id>.md, and resume --reason fix is run (exit 1; exit 8 at the fix-round cap).)
+//         the output tail in <folder>/done-<id>.md, and resume --reason fix is run (exit 1; exit 8 at the fix-round cap).
+//         Delta review (lib/deltaReview.js): after a fix round, diff.patch and files/ hold only the commits since the last
+//         package (review_sha), with previous-findings.md and diff-full.patch; the reviewers are chosen from the whole
+//         diff as before. --full-review gives the whole package.)
 //   node scripts/orchestrator/queue.mjs deliveries [--json]
 //        (adoption: active tasks with a track-result.md that has not been received: first line RESULT status=DONE|PARTIAL and
 //         newer than the start, the delivery and the last receive. `orchestrator pulse` prints the new ones every round (and
@@ -221,7 +224,7 @@
 //        (a running attempt blocks a new one, so close it when its agent is gone. For Claude the guard is best effort; the
 //         cases are at the top of lib/logic/attempt.js. Refused inside a track worktree; logged, so ravenseat undo takes it back.)
 //   node scripts/orchestrator/queue.mjs resume <id> [--reason fix|context] [--round N] [--findings-file <file>]
-//                                                [--from <reviewer,...>] [--answer "<text>"] [--scratchpad <folder>]
+//                                                [--from <reviewer,...>] [--answer "<text>"] [--new-agent] [--scratchpad <folder>]
 //        (--answer: the owner's answer to what the track asked; first in the brief, and kept as an addition to the mission.)
 //        (--from: the reviewer types whose findings caused the fix round, saved in `resumed[].from` and the fixRound
 //         row; the reviewer hit rate in ravenseat cost and the board's Flow box counts them.)
@@ -230,8 +233,11 @@
 //         question allows exactly one more round. A red done command's tail goes into the fix brief.)
 //        (adoption: prompt-<id>-r<N>.md for a NEW agent on the same branch, fix round (default) or continuation after the
 //         context guard: the same template as fill, with prepare-track --continue, the paths to track-result.md, handover.md,
-//         the review package and the findings, and the original mission. N is the next free round. Not `continue`,
-//         which takes tasks off hold.)
+//         the review package and the findings, and the original mission (a fix round: the ownership and a pointer to
+//         <folder>/mission-<id>.md instead of the text). N is the next free round. Not `continue`, which takes tasks off hold.)
+//        (continuation first, lib/fixRound.js: for --reason fix, when the agent that delivered is still addressable and was
+//         last active within config().fixRound.continueWithinMin minutes, it prints CONTINUE, the fix brief
+//         <folder>/fix-<id>-r<N>.md and the SendMessage line instead, and writes no prompt. --new-agent forces a new agent.)
 //   node scripts/orchestrator/queue.mjs set <id> done [--findings "FINDINGS H=0 M=1 L=3 …"] [--result "…"] [--without-cost]
 //        (measures the cost: the agents in the time log that belong to the task (the track label, fix rounds, and reviewers without
 //         a label when their mission mentions the id), usage from the transcripts; saves cost {usd, tokens, turns,
