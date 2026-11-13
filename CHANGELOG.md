@@ -3,7 +3,9 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.12.0 (2026-11-13)
+
+**Failures that keep coming back become guards, and fix rounds get cheaper: the same gate or CI failure seen in two tasks becomes one proposal to build a guard, recorded in a guard registry shown on the board; a fix round continues the agent that delivered while it is warm, a new fix agent gets a short mission, and the review after it reads only the new commits. The README now shows what it costs next to doing the work yourself in one chat.**
 
 ### After you update
 - The inspection queue is on by default: when the same gate or CI failure goes red in two separate tasks or commits within
@@ -42,6 +44,15 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   the ownership, with a pointer to `mission-<id>.md` instead of the original mission's text. `--reason context` is as
   before. The findings are kept per round in `findings-<id>-r<N>.md`.
 - The fix-round count in `ravenseat cost` counts each continued round (`mode: "continue"` in `resumed`).
+- The README's cost section is a table against doing the work by hand in one chat, and `plugin/docs/costs.md` has the
+  measured comparison from one week, with its limits.
+
+### Fixed
+- Checked against real CI logs: the same failure in several matrix jobs (node 20 and 22) is one failure of the run, the
+  excerpt starts with the test's FAIL line so tests with the same bare assertion stay apart, and the `^[` color codes
+  `gh run view --log-failed` writes are removed.
+- Checked in a live fix round: the fix brief no longer lists the review package's own `mission.md` as a reviewer file,
+  and the docs say that SendMessage writes a new start row for the same agent.
 
 ## 0.11.0 (2026-11-12)
 
