@@ -126,7 +126,7 @@ Each answer in the [FAQ](plugin/docs/faq.md) names the tests behind it, and the 
 guarantees have been shown to fail with their guard turned off. The [red team page](plugin/docs/redteam.md) lists what was found and what the tests cannot
 show. Run `npm run redteam` to check it yourself.
 
-## What does it cost?
+## What does it cost in tokens?
 
 About the same as doing the work yourself in one Claude Code chat. What changes is how much of your time it takes.
 
