@@ -10,6 +10,8 @@
 <p align="center"><b>A work queue for Claude Code, so multi-day work doesn't depend on one chat: agents build, your tests decide, you answer what needs you.</b></p>
 <p align="center"><sub>Open source · Runs on your machine · Built for Claude Code · Board optional</sub></p>
 
+<p align="center"><img src="assets/media/explanation.gif" alt="A 40 second loop: a project spread over many chats and a long chat that costs 2.7 times more per turn, then the queue where agents build, check and merge while you step away and come back to the decisions, at about the same cost, with the board optional" width="800"></p>
+
 When a Claude Code project outgrows one chat, the signs are familiar:
 
 - Findings, research and half-built features are spread across dozens of chats.
