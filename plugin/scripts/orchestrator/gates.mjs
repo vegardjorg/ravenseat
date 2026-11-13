@@ -84,6 +84,7 @@
 //   --health  read-only: per gate command the runs, red, flaky, p50/p95 seconds and the commands never red over 50 or
 //             more runs, from the time log's gate and flakyGate rows across all monthly archives (lib/gateHealth.js).
 //             Runs no gate and exits 0. Per-command seconds come from the gate row's `durations` (newer rows).
+//             The load factor per command: the latest green time against the best one, now and on a calm machine.
 // See docs/orchestration.md.
 // =============================================================
 
@@ -133,7 +134,14 @@ if (args.includes('--health')) {
   } catch {
     text = ''; // no log yet
   }
-  const h = GH.gateHealth(GH.rowsFromText(text));
+  // A run counts as calm from the load guard's "all slots open" level (null on macOS by default: the default level).
+  let calm = null;
+  try {
+    calm = Number(config().loadGuard?.allSlotsFreeMemoryPct);
+  } catch {
+    calm = null; // no readable config: the default level
+  }
+  const h = GH.gateHealth(GH.rowsFromText(text), { calmFreePct: calm > 0 ? calm : GH.CALM_FREE_PCT });
   if (args.includes('--json')) console.log(JSON.stringify(h, null, 2));
   else {
     for (const l of GH.healthLines(h)) console.log(l);
@@ -183,7 +191,7 @@ const cwd = option('--cwd') ? path.resolve(option('--cwd')) : inProject(process.
  * Appends this run's `gate` row to the time log (lib/timeLogRows.js). Fail open: every error is swallowed, so the log
  * can never change the gate's result or exit code.
  */
-function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSec = null, minFreeMemoryPct = null, flaky = [], durations = null, errors = null }) {
+function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSec = null, minFreeMemoryPct = null, startFreeMemoryPct = null, flaky = [], durations = null, errors = null }) {
   try {
     const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
     const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
@@ -200,7 +208,7 @@ function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSe
     const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
     TL.appendRows(
       file,
-      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct, flaky, durations, errors }),
+      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct, startFreeMemoryPct, flaky, durations, errors }),
     );
     // A green run after a flaky rerun (lib/trackFlaky.js): the flakyGate row ravenseat cost Flow counts, with the track.
     if (exit === 0 && flaky.length && sha)
@@ -676,11 +684,15 @@ const QUEUE_SETUP = GQ.setupFrom(K);
 let waitSec = null;
 if (GQ.needsSlot({ setup: QUEUE_SETUP, kind: mode, lastSec: GQ.lastDurationSec(timeLogText(), mode) })) {
   const branchNow = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
+  // The place in line (lib/gateQueue.js): base runs (the main checkout: after a merge, before a push, machine --measure)
+  // go before receive runs on a track's worktree, and those before a track's own runs; then first come, first served.
+  const cls = GQ.priorityClass({ mainTree: inMainTree(), evidence: args.includes('--evidence') });
   const got = await GQ.acquireWait({
     root: QUEUE_SETUP.root,
     slots: QUEUE_SETUP.slots,
     who: { project: K.projectName ?? path.basename(K.root), kind: mode, track: option('--track') ?? TL.trackFromBranch(branchNow, K.branchPrefix) },
-    onWait: (holders) => console.log(GQ.waitLine(holders, { slots: QUEUE_SETUP.slots })),
+    order: { cls, agingMs: QUEUE_SETUP.agingMin * 60_000 },
+    onWait: (holders, info) => console.log(GQ.waitLine(holders, { slots: QUEUE_SETUP.slots, ...info })),
   });
   slot = got.slot;
   waitSec = got.waitSec;
@@ -848,6 +860,8 @@ if (RERUN.commands.length) {
 
 const total = Math.round((Date.now() - start) / 1000);
 const minFreeMemoryPct = sampler ? sampler.stop() : null;
+// The free memory when the commands started (the sampler's first sample): the gate health view's calm or busy run.
+const startFreeMemoryPct = sampler ? sampler.first() : null;
 // The commands are done: the next heavy run can start while this process does its bookkeeping.
 releaseSlot();
 // Every gate command has exited: did one of them change what runs at the next git command (lib/gitExecSurface.js)?
@@ -876,6 +890,7 @@ logRun({
   timedOut: timedOutAny,
   waitSec,
   minFreeMemoryPct,
+  startFreeMemoryPct,
   flaky: flakyGates,
   durations,
   // Only the commands still red are kept (TL.gateRow): a flaky rerun that turned green leaves none.

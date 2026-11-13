@@ -521,7 +521,13 @@ macOS.
 
 - One slot by default (`gateQueue.slots`), shared by all worktrees and projects of your user on the machine: folders under
   the system's temp folder, `ravenseat-gate-queue-<user>`. No service runs.
-- The run prints one line saying who it waits for, and looks again every 3 seconds. There is no order among waiters.
+- The run prints one line saying who it waits for and its place in line, and looks again every 3 seconds.
+- Waiters are served in order. Base runs go first: a run in the main checkout (the gate after a merge, the full gate
+  before a push, `ravenseat machine --measure`). Then receive runs (the orchestrator's gate on a track's worktree),
+  then a track's own runs. Within a class it is first come, first served. A waiter that has waited
+  `gateQueue.agingMin` minutes (default 10) counts as a base run, so a track run is never starved. Each waiter keeps a
+  ticket in `waiting/` under the queue folder and touches it every poll; a ticket whose process is gone, or that has
+  not been touched for 2 minutes, is ignored, so a crashed waiter never blocks the line.
 - `--timeout-sec` starts when the check starts, not during the wait. The wait goes into the `gate` row as `wait_sec`;
   `duration_s` does not include it.
 - A slot is free again when the run ends, also on a red run or a signal. A slot whose process is gone, or that is older than
@@ -686,7 +692,7 @@ names every guard weaker than its default on its `settings` row.
 | `loadGuard.minFreeMemoryPct` | `10` (off on macOS) | The project default for the load limit above | Advanced |
 | `loadGuard.adaptive`, `loadGuard.minSlots`, `loadGuard.allSlotsFreeMemoryPct` | `true`, `1`, `40` (off on macOS) | Load-aware slots: fewer than `maxConcurrent` slots while free memory is below `allSlotsFreeMemoryPct`, at least `minSlots`; `QUEUE_LOAD_ADAPTIVE=off` turns it off | Advanced |
 | `loadGuard.allSlotsCpuPct`, `loadGuard.minSlotsCpuPct` | `null`, `null` | Optional CPU part of the load-aware slots (both set, e.g. `60` and `95`) | Advanced |
-| `gateQueue.enabled`, `gateQueue.slots`, `gateQueue.heavyAfterSec` | `true`, `1`, `120` | [The queue for heavy gates](#the-queue-for-heavy-gates): how many heavy `--quick`/`--full` runs may run at once on the machine, and from how many seconds (the last run of the same kind) a run counts as heavy | Advanced |
+| `gateQueue.enabled`, `gateQueue.slots`, `gateQueue.heavyAfterSec`, `gateQueue.agingMin` | `true`, `1`, `120`, `10` | [The queue for heavy gates](#the-queue-for-heavy-gates): how many heavy `--quick`/`--full` runs may run at once on the machine, from how many seconds (the last run of the same kind) a run counts as heavy, and after how many minutes of waiting a run counts as a base run | Advanced |
 | `gateTemp.enabled` | `true` | [The temp folder](#the-temp-folder): each gate run gets a temp folder of its own, removed afterwards | Advanced |
 | `limits.parallelThreshold`, `limits.silentMin` | `0.7`, `20` | The share of concurrent tracks below which fill, receive and pulse write a short diagnosis; minutes without a sign of life before a running track counts as silent (`0` = off) | Advanced, queue.json |
 

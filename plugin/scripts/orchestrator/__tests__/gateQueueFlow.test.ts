@@ -287,3 +287,27 @@ describe('ravenseat machine', () => {
     expect(r.stderr).toContain('gates.full is empty');
   }, 60_000);
 });
+
+describe('the order among waiters', () => {
+  it('a run in the main checkout waits as base, ahead of a track ticket that came first, and leaves the line after', async () => {
+    const p = project({ quick: ['node -e "0"'] });
+    // The slot is held by this test's own process (a living pid that is not the run's).
+    fs.mkdirSync(path.join(p.queueRoot, 'slot-0'), { recursive: true });
+    fs.writeFileSync(holderFile(p), JSON.stringify({ pid: process.pid, kind: 'full', project: 'other', started: new Date().toISOString() }));
+    // A track run that has waited for a minute, also held by a living pid (this process) with a fresh heartbeat.
+    const waiting = path.join(p.queueRoot, 'waiting');
+    fs.mkdirSync(waiting, { recursive: true });
+    const arrived = Date.now() - 60_000;
+    fs.writeFileSync(path.join(waiting, `${process.pid}-${arrived}.json`), JSON.stringify({ pid: process.pid, class: 'track', arrived: new Date(arrived).toISOString(), project: 'demo', kind: 'quick', track: 'T1' }));
+    const run = start(p, '--quick');
+    await until('the run says it waits', () => run.output().includes('GATE QUEUE'));
+    expect(run.output()).toContain('Place 1 in line');
+    const own = fs.readdirSync(waiting).filter((n) => !n.startsWith(`${process.pid}-`));
+    expect(own).toHaveLength(1);
+    expect(JSON.parse(fs.readFileSync(path.join(waiting, own[0]), 'utf8')).class).toBe('base');
+    fs.rmSync(path.join(p.queueRoot, 'slot-0'), { recursive: true });
+    const r = await run.done;
+    expect(r.status).toBe(0);
+    expect(fs.readdirSync(waiting).filter((n) => !n.startsWith(`${process.pid}-`))).toEqual([]);
+  }, 60_000);
+});

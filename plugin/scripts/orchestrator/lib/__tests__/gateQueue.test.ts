@@ -255,3 +255,163 @@ describe('the wait line', () => {
     expect(line).toContain('time budget starts');
   });
 });
+
+// ---- The order among waiters: priority class, then arrival (FIFO), with aging ----
+/** A waiter's ticket as joinLine writes it, with its heartbeat (the file's mtime) at `seenMs`. */
+function ticket(root: string, t: { pid: number; cls: string; arrivedMs: number; seenMs?: number; track?: string }) {
+  const dir = path.join(root, 'waiting');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${t.pid}-${t.arrivedMs}.json`);
+  fs.writeFileSync(file, JSON.stringify({ pid: t.pid, class: t.cls, arrived: new Date(t.arrivedMs).toISOString(), project: 'demo', kind: 'quick', track: t.track ?? null }));
+  const seen = (t.seenMs ?? NOW) / 1000;
+  fs.utimesSync(file, seen, seen);
+  return file;
+}
+const MIN = 60_000;
+
+describe('the order among waiters', () => {
+  it('classes come from who runs the gate: the main checkout, a received track, a track itself', () => {
+    expect(GQ.priorityClass({ mainTree: true, evidence: false })).toBe('base');
+    expect(GQ.priorityClass({ mainTree: true, evidence: true })).toBe('base');
+    expect(GQ.priorityClass({ mainTree: false, evidence: true })).toBe('receive');
+    expect(GQ.priorityClass({ mainTree: false, evidence: false })).toBe('track');
+    expect(GQ.priorityClass({ mainTree: null, evidence: false })).toBe('track');
+  });
+
+  it('has an aging default of 10 minutes, and takes the config', () => {
+    expect(GQ.setupFrom({}, {}).agingMin).toBe(10);
+    expect(GQ.setupFrom({ gateQueue: { agingMin: 3 } }, {}).agingMin).toBe(3);
+    expect(GQ.setupFrom({ gateQueue: { agingMin: -1 } }, {}).agingMin).toBe(10);
+  });
+
+  it('serves a higher class first, and the same class first come, first served', () => {
+    const at = (m: number) => new Date(NOW - m * MIN).toISOString();
+    const line = GQ.orderWaiters(
+      [
+        { pid: 1, class: 'track', arrived: at(5) },
+        { pid: 2, class: 'track', arrived: at(4) },
+        { pid: 3, class: 'base', arrived: at(1) },
+        { pid: 4, class: 'receive', arrived: at(2) },
+        { pid: 5, class: 'base', arrived: at(3) },
+      ],
+      { now: NOW, agingMs: 10 * MIN },
+    );
+    expect(line.map((t: { pid: number }) => t.pid)).toEqual([5, 3, 4, 1, 2]);
+  });
+
+  it('ages a low class: after agingMs a track waiter counts as high and keeps its place by arrival', () => {
+    const at = (m: number) => new Date(NOW - m * MIN).toISOString();
+    const line = GQ.orderWaiters(
+      [
+        { pid: 1, class: 'track', arrived: at(12) }, // aged: counts as base, and came first
+        { pid: 2, class: 'base', arrived: at(1) },
+        { pid: 3, class: 'track', arrived: at(5) }, // not aged yet
+      ],
+      { now: NOW, agingMs: 10 * MIN },
+    );
+    expect(line.map((t: { pid: number }) => t.pid)).toEqual([1, 2, 3]);
+  });
+
+  it("ignores a dead waiter's ticket and one whose heartbeat stopped, and removes the dead one", () => {
+    const root = rootDir();
+    const deadFile = ticket(root, { pid: 50, cls: 'base', arrivedMs: NOW - 5 * MIN });
+    ticket(root, { pid: 51, cls: 'base', arrivedMs: NOW - 5 * MIN, seenMs: NOW - 10 * MIN }); // frozen, no heartbeat
+    ticket(root, { pid: 52, cls: 'track', arrivedMs: NOW - 1 * MIN });
+    const live = GQ.readLine(root, { now: NOW, alive: (p: number) => p !== 50 });
+    expect(live.map((t: { pid: number }) => t.pid)).toEqual([52]);
+    expect(fs.existsSync(deadFile)).toBe(false);
+  });
+
+  it('a base run that arrives after three track runs gets the next slot', async () => {
+    const root = rootDir();
+    const dir = holdSlot(root, { pid: 111, kind: 'quick', project: 'demo', track: 'T0', started: new Date(NOW).toISOString() });
+    for (const [i, pid] of [201, 202, 203].entries()) ticket(root, { pid, cls: 'track', arrivedMs: NOW - (3 - i) * MIN, track: `T${i + 1}` });
+    let now = NOW;
+    const lines: { holders: unknown[]; info: { position: number; ahead: unknown[] } }[] = [];
+    const r = await GQ.acquireWait({
+      root,
+      slots: 1,
+      who: { project: 'demo', kind: 'quick', track: null },
+      order: { cls: 'base', agingMs: 10 * MIN },
+      pid: 7,
+      alive,
+      now: () => now,
+      onWait: (holders: unknown[], info: { position: number; ahead: unknown[] }) => lines.push({ holders, info }),
+      sleep: async (ms: number) => {
+        now += ms;
+        fs.rmSync(dir, { recursive: true, force: true }); // the holder is done
+      },
+    });
+    expect(r.slot).toBeTruthy();
+    expect(r.slot.holder.pid).toBe(7);
+    expect(lines[0].info.position).toBe(1); // first in line, behind only the holder
+    // Its ticket is gone again, the three track tickets are still there.
+    expect(fs.readdirSync(path.join(root, 'waiting')).sort()).toHaveLength(3);
+  });
+
+  it('a track run leaves a free slot to a waiter ahead of it, and takes it once that one is gone', async () => {
+    const root = rootDir();
+    const ahead = ticket(root, { pid: 300, cls: 'base', arrivedMs: NOW - MIN });
+    let now = NOW;
+    const pauses: number[] = [];
+    const infos: { position: number; ahead: { pid: number }[] }[] = [];
+    const r = await GQ.acquireWait({
+      root,
+      slots: 1,
+      who,
+      order: { cls: 'track', agingMs: 10 * MIN },
+      pid: 8,
+      alive,
+      now: () => now,
+      onWait: (_h: unknown[], info: { position: number; ahead: { pid: number }[] }) => infos.push(info),
+      sleep: async (ms: number) => {
+        pauses.push(ms);
+        now += ms;
+        if (pauses.length === 2) fs.rmSync(ahead); // the base run took its turn and left the line
+      },
+    });
+    expect(r.slot).toBeTruthy();
+    expect(pauses).toHaveLength(2);
+    expect(infos).toHaveLength(1);
+    expect(infos[0].position).toBe(2);
+    expect(infos[0].ahead.map((t) => t.pid)).toEqual([300]);
+  });
+
+  it("a dead waiter's ticket does not block the slot", async () => {
+    const root = rootDir();
+    ticket(root, { pid: 400, cls: 'base', arrivedMs: NOW - MIN });
+    let pauses = 0;
+    const r = await GQ.acquireWait({
+      root,
+      slots: 1,
+      who,
+      order: { cls: 'track', agingMs: 10 * MIN },
+      pid: 9,
+      alive: (p: number) => p !== 400,
+      now: () => NOW,
+      sleep: async () => {
+        pauses++;
+      },
+    });
+    expect(r.slot).toBeTruthy();
+    expect(pauses).toBe(0);
+  });
+
+  it('without an order the wait is as before (the evidence lock)', async () => {
+    const root = rootDir();
+    ticket(root, { pid: 500, cls: 'base', arrivedMs: NOW - MIN });
+    const r = await GQ.acquireWait({ root, slots: 1, who, pid: 10, alive, now: () => NOW, sleep: async () => {} });
+    expect(r.slot).toBeTruthy();
+  });
+
+  it('the wait line shows the place in line and who is ahead', () => {
+    const line = GQ.waitLine([{ pid: 12, kind: 'full', project: 'demo', started: new Date(NOW).toISOString() }], {
+      now: NOW,
+      slots: 1,
+      position: 2,
+      ahead: [{ pid: 300, class: 'base', kind: 'quick', project: 'demo', track: null }],
+    });
+    expect(line).toContain('Place 2 in line');
+    expect(line).toContain('ahead: base quick gates of demo');
+  });
+});

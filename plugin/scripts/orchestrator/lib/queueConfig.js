@@ -411,8 +411,10 @@ const STANDARD = Object.freeze({
   // The queue for heavy gate runs (lib/gateQueue.js): a gates.mjs --quick/--full whose last run of the same kind took at
   // least heavyAfterSec waits for one of `slots` slots shared by the whole machine (a folder under the temp folder), across
   // worktrees and projects. No history counts as light, so a small project never notices it. QUEUE_GATE_QUEUE=off|on
-  // overrides `enabled`. The time budget starts after the wait.
-  gateQueue: { enabled: true, slots: 1, heavyAfterSec: 120 },
+  // overrides `enabled`. The time budget starts after the wait. Waiters are served by class (base runs in the main
+  // checkout, then receive, then a track's own runs), then first come, first served; one that has waited agingMin
+  // minutes counts as base, so no run is starved.
+  gateQueue: { enabled: true, slots: 1, heavyAfterSec: 120, agingMin: 10 },
   // A temp folder of its own for each gate run, removed afterwards (lib/gateTemp.js): what a project's tests leave goes with
   // it. enabled false gives the gate commands the normal temp folder.
   gateTemp: { enabled: true },

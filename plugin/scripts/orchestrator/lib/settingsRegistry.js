@@ -240,6 +240,8 @@ const SETTINGS = Object.freeze([
   row('gateQueue.slots', 'load', 'integer', 'Heavy gate slots', 'How many heavy gate runs the machine runs at once.'),
   row('gateQueue.heavyAfterSec', 'load', 'integer', 'Heavy after (seconds)',
     'A gate whose last run of the same kind took at least this long counts as heavy.'),
+  row('gateQueue.agingMin', 'load', 'integer', 'Wait before it counts as base (minutes)',
+    'Base runs go first in the gate queue. A run that has waited this long counts as a base run, so it is never starved.'),
   row('gateTemp.enabled', 'load', 'onoff', 'Temp folder per gate run',
     'Each gate run gets its own temp folder, removed afterwards, so what the tests leave goes with it.'),
   row('limits.parallelThreshold', 'load', 'number', 'Low parallelism threshold',

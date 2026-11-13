@@ -121,3 +121,109 @@ describe('gates.mjs --health', () => {
     expect(JSON.parse(json.stdout).runs).toBe(2);
   });
 });
+
+// ---- The load factor: the latest time against the best seen, now and on a calm machine ----
+describe('the load factor', () => {
+  it('gateRow keeps the free memory at the start of the run', () => {
+    expect(TL.gateRow({ kind: 'quick', durationSec: 3, exit: 0, startFreeMemoryPct: 37.5 }).start_free_memory_pct).toBe(37.5);
+    expect(TL.gateRow({ kind: 'quick', durationSec: 3, exit: 0 })).not.toHaveProperty('start_free_memory_pct');
+  });
+
+  it('is the latest green time over the best green time, and on a calm machine the p50 of the recent calm runs', () => {
+    const rows = [
+      gate(1, { gates: ['test'], durations: { test: 10 }, startFreeMemoryPct: 60 }), // the best, calm
+      gate(2, { gates: ['test'], durations: { test: 11 }, minFreeMemoryPct: 55 }), // calm
+      gate(3, { gates: ['test'], durations: { test: 12 }, minFreeMemoryPct: 50 }), // calm
+      gate(4, { gates: ['test'], failed: ['test'], exit: 1, durations: { test: 2 } }), // red: never a time for the factor
+      gate(5, { gates: ['test'], durations: { test: 24 }, minFreeMemoryPct: 8 }), // the latest, busy
+    ];
+    const h = G.gateHealth(rows, { calmFreePct: 40 });
+    const test = h.commands.find((c: { command: string }) => c.command === 'test');
+    expect(test).toMatchObject({ best: 10, latest: 24, loadNow: 2.4, loadCalm: 1.1 });
+    const text = G.healthLines(h).join('\n');
+    expect(text).toContain('x2.4 now, x1.1 on a calm machine');
+    expect(text).toMatch(/LOAD: test .*busy machine/);
+    expect(text).not.toMatch(/slower even on a calm machine/);
+  });
+
+  it('a gate that became slower on a calm machine says so', () => {
+    const rows = [
+      gate(1, { gates: ['test'], durations: { test: 10 }, minFreeMemoryPct: 60 }),
+      gate(2, { gates: ['test'], durations: { test: 10 }, minFreeMemoryPct: 60 }),
+      gate(3, { gates: ['test'], durations: { test: 18 }, minFreeMemoryPct: 60 }),
+      gate(4, { gates: ['test'], durations: { test: 19 }, minFreeMemoryPct: 60 }),
+      gate(5, { gates: ['test'], durations: { test: 20 }, minFreeMemoryPct: 60 }),
+    ];
+    const test = G.gateHealth(rows, { calmFreePct: 40 }).commands[0];
+    expect(test.loadNow).toBe(2);
+    expect(test.loadCalm).toBe(1.8);
+    const text = G.healthLines(G.gateHealth(rows, { calmFreePct: 40 })).join('\n');
+    expect(text).toMatch(/HINT: test is slower even on a calm machine \(x1\.8 of its best\)/);
+    expect(text).not.toMatch(/LOAD: test/);
+  });
+
+  it('has no factor with fewer than 3 green timed runs, and no calm factor without a calm run', () => {
+    const two = G.gateHealth([gate(1, { gates: ['a'], durations: { a: 5 } }), gate(2, { gates: ['a'], durations: { a: 9 } })]);
+    expect(two.commands[0]).toMatchObject({ loadNow: null, loadCalm: null });
+    expect(G.healthLines(two).join('\n')).not.toMatch(/ x\d/);
+    const busy = G.gateHealth([1, 2, 3].map((i) => gate(i, { gates: ['a'], durations: { a: 5 * i }, minFreeMemoryPct: 5 })), { calmFreePct: 40 });
+    expect(busy.commands[0]).toMatchObject({ loadNow: 3, loadCalm: null });
+    expect(G.healthLines(busy).join('\n')).toContain('x3 now, no calm run yet');
+  });
+
+  it('counts the best only over the window of recent green runs', () => {
+    const rows = [
+      gate(0, { gates: ['a'], durations: { a: 1 } }), // outside a window of 3
+      ...[1, 2, 3].map((i) => gate(i, { gates: ['a'], durations: { a: 10 } })),
+    ];
+    expect(G.gateHealth(rows, { window: 3 }).commands[0]).toMatchObject({ best: 10, loadNow: 1 });
+  });
+});
+
+// ---- Process: the start memory reaches the gate row, and --health takes the calm level from the load guard ----
+describe('gates.mjs and the load factor', () => {
+  const temporary: string[] = [];
+  afterEach(() => {
+    for (const f of temporary.splice(0)) fs.rmSync(f, { recursive: true, force: true });
+  });
+  const GATES = path.join(__dirname, '..', '..', 'gates.mjs');
+
+  it('a gate run records the free memory at its start', () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-load-start-'));
+    temporary.push(folder);
+    const repo = path.join(folder, 'repo');
+    fs.mkdirSync(repo);
+    const g = (...a: string[]) => spawnSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...a], { encoding: 'utf8' });
+    g('init', '-q', '-b', 'develop');
+    fs.writeFileSync(path.join(repo, 'README.md'), 'x\n');
+    g('add', '--', 'README.md');
+    g('commit', '-q', '-m', 'start');
+    const log = path.join(folder, 'times.jsonl');
+    const configFile = path.join(folder, 'queue.config.json');
+    fs.writeFileSync(configFile, JSON.stringify({ gates: { quick: ['node -e "0"'] }, loadGuard: { minFreeMemoryPct: 10 } }));
+    const r = spawnSync(process.execPath, [GATES, '--quick', '--cwd', repo], {
+      encoding: 'utf8',
+      env: { ...process.env, QUEUE_FOLDER: folder, QUEUE_CONFIG: configFile, QUEUE_ROOT: repo, QUEUE_GIT: repo, QUEUE_TIME_LOG: log, QUEUE_LOAD: 'free=33' },
+    });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    const row = JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n').pop() as string);
+    expect(row.start_free_memory_pct).toBe(33);
+  });
+
+  it('--health counts a run as calm from loadGuard.allSlotsFreeMemoryPct', () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-load-health-'));
+    temporary.push(folder);
+    const log = path.join(folder, 'times.jsonl');
+    fs.writeFileSync(log, [10, 10, 20].map((d, i) => JSON.stringify(gate(i, { gates: ['t'], durations: { t: d }, minFreeMemoryPct: 35 }))).join('\n') + '\n');
+    const health = (allSlots: number) => {
+      const configFile = path.join(folder, `queue-${allSlots}.config.json`);
+      fs.writeFileSync(configFile, JSON.stringify({ gates: { quick: ['node -e "process.exit(7)"'] }, loadGuard: { allSlotsFreeMemoryPct: allSlots } }));
+      return spawnSync(process.execPath, [GATES, '--health'], {
+        encoding: 'utf8',
+        env: { ...process.env, QUEUE_FOLDER: folder, QUEUE_CONFIG: configFile, QUEUE_ROOT: folder, QUEUE_TIME_LOG: log },
+      }).stdout;
+    };
+    expect(health(50)).toContain('x2 now, no calm run yet');
+    expect(health(30)).toContain('x2 now, x1 on a calm machine');
+  });
+});

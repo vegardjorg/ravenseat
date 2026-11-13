@@ -118,3 +118,19 @@ describe('the gate row', () => {
     expect(TL.gateRow(base)).not.toHaveProperty('wait_sec');
   });
 });
+
+describe('the free memory at the start of the run', () => {
+  it('first() is the first sample, whatever comes after', () => {
+    let i = 0;
+    const values = [42, 10, 5];
+    const s = GL.startSampler({ measure: () => ({ freeMemoryPct: values[i++] }), setTimer: () => ({ unref: () => {} }), clearTimer: () => {} });
+    expect(s.first()).toBe(42);
+    expect(s.stop()).toBe(10);
+    expect(s.first()).toBe(42);
+  });
+
+  it('first() is null when the first sample could not be measured', () => {
+    const s = GL.startSampler({ measure: () => ({ freeMemoryPct: null }), setTimer: () => ({ unref: () => {} }), clearTimer: () => {} });
+    expect(s.first()).toBe(null);
+  });
+});

@@ -12,7 +12,8 @@
 //                 attempt > 1 is a rerun. `timed_out: true` only when a check went over its time budget. `sha` (the
 //                 HEAD commit when the run started) and `clean` (no uncommitted tracked changes then), when known.
 //                 `wait_sec` (seconds in the gate queue, lib/gateQueue.js; only for a run that needed a slot; `duration_s`
-//                 does not include it) and `min_free_memory_pct` (the lowest free memory during the run, lib/gateLoad.js).
+//                 does not include it), `min_free_memory_pct` (the lowest free memory during the run, lib/gateLoad.js)
+//                 and `start_free_memory_pct` (the free memory when the run started, the sampler's first sample).
 //                 `durations` { <command>: seconds } per command, for the gate health view (lib/gateHealth.js).
 //                 `errors` { <command>: excerpt } for the red commands only: a short, redacted first error line
 //                 (lib/failureSignature.js), so the inspection queue (lib/inspection.js) can group repeated failures.
@@ -112,6 +113,7 @@ function gateRow(r) {
   if (typeof r.clean === 'boolean') row.clean = r.clean;
   if (Number.isFinite(r.waitSec)) row.wait_sec = r.waitSec;
   if (Number.isFinite(r.minFreeMemoryPct)) row.min_free_memory_pct = r.minFreeMemoryPct;
+  if (Number.isFinite(r.startFreeMemoryPct)) row.start_free_memory_pct = r.startFreeMemoryPct;
   return row;
 }
 

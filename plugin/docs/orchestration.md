@@ -457,6 +457,14 @@ the code it guards and see that it goes red. It runs no gate and needs no slot. 
 `doctor`, because it is about the gates themselves (time and whether they catch anything), not money or setup. Older
 rows have no per-command seconds; a run of one command uses its total, so `timed` can be lower than `runs`.
 
+Each command also gets a **load factor**, for example `load x2.4 now, x1.1 on a calm machine`. Over the last 100 green
+timed runs, `x2.4 now` is the latest time divided by the best one, and `x1.1 on a calm machine` is the median of the last
+10 runs on a calm machine divided by the best one. A run is calm when its free memory (`min_free_memory_pct`, else
+`start_free_memory_pct`, the free memory when the run started) was at least `loadGuard.allSlotsFreeMemoryPct` (40 % by
+default). Red runs are left out, and a command needs 3 green timed runs before it gets a factor. A high factor now with a
+low calm one gives a `LOAD:` line: the machine was busy, not the gate. A calm factor of 1.5 or more gives a `HINT:`: the
+gate itself became slower. `--json` has `best`, `latest`, `loadNow` and `loadCalm` per command.
+
 **Precheck (fail fast).** Before the class's full gate a track runs `ravenseat gates --precheck`. It runs the cheapest checks
 first, in a fixed order, only on the files changed against `baseBranch` (committed since the fork point, staged,
 unstaged and untracked; deleted files are left out), and stops at the first red one, so a red error shows up in a few

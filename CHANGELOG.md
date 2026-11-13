@@ -47,6 +47,24 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   `docs/orchestration.md` ("The wiring spec stops done").
 - The setting `wiring.stop` (default `true`, Advanced, in Merge and push): `false` lets `done` pass with open items and
   says `WIRING STOP OFF`; it is a weakened guard in `ravenseat settings` and `ravenseat doctor`.
+- Order in the gate queue (`lib/gateQueue.js`). Waiters used to have no order, so a base run could wait behind many
+  track runs. Now each waiter keeps a ticket in `waiting/` under the queue folder and is served by class first (base: a
+  run in the main checkout, such as the gate after a merge, the full gate before a push or `machine --measure`; then
+  receive: the orchestrator's gate on a track's worktree; then a track's own run), then first come, first served. A
+  waiter that has waited `gateQueue.agingMin` minutes (default 10, new setting) counts as base, so no run is starved. A
+  ticket whose process is gone, or that its waiter has not touched for 2 minutes, is ignored, so a crashed waiter never
+  blocks the line. No new service, and it fails open like the rest of the queue. The `GATE QUEUE` line says the place in
+  line and who is ahead. The evidence lock keeps its old behaviour.
+- A load factor per command in `ravenseat gates --health`, for example `load x2.4 now, x1.1 on a calm machine`: the
+  latest green time against the best one seen in the last 100 green runs, and the median of the last 10 runs on a calm
+  machine (free memory at least `loadGuard.allSlotsFreeMemoryPct`) against the same best. A `LOAD:` line says when a
+  slow run was probably a busy machine, a `HINT:` when the gate itself became slower even on a calm machine. Every gate
+  row now also has `start_free_memory_pct`, the free memory when the run started (the sampler's first sample, no extra
+  measurement). `--json` has `best`, `latest`, `loadNow` and `loadCalm`.
+- Two Checks suggestions for projects that build their own gates, both in Tests: `test-timeouts-under-load` (give each
+  run its own state, split out the tests that must run alone, keep the time budgets) and `env-precheck` (a short check
+  that the services a gate needs answer, which stops with one line). `docs/full-mode.md` has a new short section, "If
+  you build your own gates".
 
 ### Changed
 - `reviewer-security` has five web security checkpoints, each with what to look for and what a finding names: a URL

@@ -31,23 +31,30 @@ function samplingOn({ platform = process.platform, limit = null, overridden = fa
  * It needs a free event loop, so the gate commands must run with an async spawn (a spawnSync blocks every timer).
  * @param {{ measure: () => { freeMemoryPct: number|null }, intervalMs?: number,
  *   setTimer?: (fn: Function, ms: number) => any, clearTimer?: (t: any) => void }} x
- * @returns {{ sample: () => void, stop: () => number|null }} stop() takes a last sample and returns the lowest value.
+ * @returns {{ sample: () => void, first: () => number|null, stop: () => number|null }} stop() takes a last sample and
+ *   returns the lowest value; first() is the first sample (the free memory when the run started), or null.
  */
 function startSampler({ measure, intervalMs = SAMPLE_MS, setTimer = setInterval, clearTimer = clearInterval }) {
   let lowest = null;
+  let firstPct;
   const sample = () => {
+    let v = null;
     try {
-      const v = measure()?.freeMemoryPct;
+      v = measure()?.freeMemoryPct;
       if (Number.isFinite(v) && (lowest == null || v < lowest)) lowest = v;
     } catch {
       /* an unknown measurement never limits */
     }
+    if (firstPct === undefined) firstPct = Number.isFinite(v) ? v : null;
   };
   sample();
   const timer = setTimer(sample, intervalMs);
   timer?.unref?.();
   return {
     sample,
+    // The `start_free_memory_pct` of the gate row, so the gate health view (lib/gateHealth.js) can tell a run on a calm
+    // machine from one on a busy machine. Free: the sampler takes this sample anyway.
+    first: () => firstPct ?? null,
     stop: () => {
       clearTimer(timer);
       sample();
