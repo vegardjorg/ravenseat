@@ -87,6 +87,8 @@
   "prices": null,
   "_metrics": "Transcript metrics in the time log: idleGapMin = a gap longer than this many minutes between two transcript entries is idle and not counted in active_s (the active time).",
   "metrics": { "idleGapMin": 5 },
+  "_cost": "The Turns and tools block in ravenseat cost: contextThresholdK = the context in thousands of tokens that a turn's cost is counted above or below (the share of cost from long contexts). A measurement only, it never stops the queue.",
+  "cost": { "contextThresholdK": 200 },
   "_history": "Where the history lives (speed, not safety; off is an INFO line in doctor). rotateTimeLog: monthly (default) renames the time log to times-YYYY-MM.jsonl next to it on the first write of a new UTC month, and every reader that needs older rows reads those too; off keeps one file. archiveDoneAfterDays: done and cancelled tasks finished and untouched for this many days move from queue.json to queue-archive.json in the data folder, where info, explain, plans and statistics still find them read-only; null keeps them all in queue.json.",
   "history": { "rotateTimeLog": "monthly", "archiveDoneAfterDays": 30 },
   "helpers": {

@@ -241,6 +241,9 @@ const STANDARD = Object.freeze({
   // The transcript metrics in the time log (hook-time.mjs): idleGapMin = a gap longer than this many minutes between
   // two transcript entries is idle and not counted in active_s.
   metrics: { idleGapMin: 5 },
+  // The "Turns and tools" block in `ravenseat cost` (lib/turnTools.js): contextThresholdK = the context (thousands of
+  // tokens) a turn's cost is counted above or below. A measurement only.
+  cost: { contextThresholdK: 200 },
   // Helper agents: optional reviewers on top of the fixed ones (lib/queueHelpers.js). One runs for a task when it is
   // enabled AND at least one condition hits: classes, labels, paths (a changed file matches), mostlyPaths (more than
   // half of the changed files match), plan (the task has a plan entry), minMissionItems (numbered points in the

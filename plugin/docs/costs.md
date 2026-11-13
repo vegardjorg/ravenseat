@@ -116,6 +116,49 @@ causes apart while it happens. They are measurements only: none of them stops th
   no queue task, or no agent type. Then week over week: subagent spend by usage time, the orchestrator, and the tasks
   started each week with n and their median cost.
 
+### Turns and tools
+
+`ravenseat cost` (and `--json`, field `turnsAndTools`) has a "Turns and tools" block that says how the turns were
+spent, so a change to how agents wait, read or hand over can be measured before and after. It reads the transcripts
+of the cost window itself (the main session files and `subagents/agent-<id>.jsonl` under the project's Claude Code
+transcripts folder), with the same transcript reader as the time log hook (`lib/timeCost.js`, `lib/turnTools.js`). The
+groups are the orchestrator session (a main session the status line marks as the orchestrator), other main sessions,
+and each subagent type (from the time log, or the transcript's `.meta.json`). A turn is one model response (one
+message id); only turns with a timestamp in the window count.
+
+- **Calls per turn.** The tool calls in each turn: median and p90 over all turns (a closing text turn counts as 0),
+  and "parallel" = the share of turns with a call that make more than one.
+- **Serial single reads.** A read turn makes only read calls: Read, Grep, Glob, LS, NotebookRead, or a Bash command
+  whose every part only reads (cat, head, tail, grep, rg, ls, wc, `sed -n` without `-i`, `find` without `-delete` or
+  `-exec`, `git log/show/diff/status`, ...; no output redirection). A run is consecutive turns that each make exactly
+  one read call; runs of 3 or more are counted, with their turns as a share of all read turns. A high share means
+  reads that could have gone in one turn.
+- **Output per tool.** The characters of each tool result's text, per tool: count, total and median, top 5 by total.
+  Characters, not tokens: about 4 characters make a token, which is only an approximation. Images add nothing.
+- **Above and below the context threshold.** Each turn's context (input plus cache read plus cache write) against
+  `cost.contextThresholdK` thousand tokens (default 200, Advanced). The share of cost from turns above it. The cost of
+  a turn is its own usage at its model's list price.
+- **After notifications.** Turns whose last real prompt was a background task notification (Claude Code marks it as
+  `task-notification`; older transcripts are matched on `<task-notification>` or "Background command ... completed"),
+  the number of notifications and the turns' share of cost: what waking up after a background wait cost. A system
+  reminder is no prompt.
+- **Worked in another repo.** A main session whose tool calls mostly point outside the project is listed on its own
+  line with its cost (from the status line, otherwise from the transcript) and left out of the groups and of the
+  orchestration figures above it. The rule is conservative on purpose: only calls with a path count (a tool's
+  `file_path` or `path`, and absolute paths in a shell command; a relative path in a file tool counts as inside, a shell
+  command without an absolute path not at all); paths under the main tree or a git worktree are inside, temp folders
+  and the Claude config folder are neutral; and it takes at least 10 such calls, at least 60 % of them outside, and one
+  other folder (at the project root's depth) holding at least half of those. The session's subagents stay where the
+  time log put them.
+
+Limits: reading the transcripts takes time on a large project (about 1 GB took several minutes), so at most 256 MB is
+read per run (the newest first);
+the block says how many files were read and how many were skipped. A transcript larger than 300 MB is skipped, as the
+time log hook does. Transcripts that Claude Code has already deleted (its cleanup period) are not there to read. The
+read classification and the other-repo rule are heuristics: a script that writes, run through `cat`, is not seen, and
+a session that changed directory with `cd` and then used relative paths does not count as elsewhere. Measurement
+only: nothing in the block stops the queue.
+
 ## Measured: compacting the orchestrator against starting a new chat
 
 The orchestrator runs in one chat, and Claude Code compacts it automatically (`autoCompactWindow`, set to 300,000).

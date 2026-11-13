@@ -246,10 +246,17 @@ function apiErrorKind(r) {
  *               thinking_turns how many did. null (not 0) when no turn reports it: older Claude Code versions and
  *               other clients do not, and an unknown must not pull a median toward zero (lib/costMeasures.js).
  *   cc_version  the Claude Code version on the last entry that carries `version` (the version the agent ended on).
+ *   detail      ONLY with { detail: true } (ravenseat cost, lib/turnTools.js; the hook never asks for it, so its rows are
+ *               unchanged): { turns, resultChars, cwd }. turns = one entry per model turn in order: { ts, model, usage,
+ *               calls: [{ id, name, input }], origin: 'user'|'notification'|null, prompt: number }, where origin and
+ *               prompt are the kind and the number of the last real prompt before the turn (a system reminder, isMeta,
+ *               and a user entry with only tool results are no prompt; a background task notification is
+ *               'notification', see isNotification). resultChars = tool_use id -> the characters of its tool_result
+ *               text. cwd = the working directory the entries record most often.
  * @param {string} text
- * @param {{ idleGapMin?: number }} [option]
+ * @param {{ idleGapMin?: number, detail?: boolean }} [option]
  */
-function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
+function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } = {}) {
   const idleMs = (Number(idleGapMin) > 0 ? Number(idleGapMin) : IDLE_GAP_MIN) * 60_000;
   const turns = new Map(); // message.id -> { usage, ts, model }
   const tool = new Set();
@@ -266,6 +273,11 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
   let callForChange = 0;
   let trackFromMission = null;
   let ccVersion = null;
+  // detail only: the prompt the next turns answer, the result sizes and the working directories seen.
+  let origin = null;
+  let promptNo = 0;
+  const resultChars = {};
+  const cwds = new Map();
   for (const line of String(text).split('\n')) {
     if (!line.trim()) continue;
     let r;
@@ -288,6 +300,7 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
     // Claude Code writes its version on every entry; the last one is the version the agent ended on. Kept to tell a
     // change on the client or model side (a jump in thinking per turn on one version) from a change in the work.
     if (typeof r.version === 'string' && r.version) ccVersion = r.version;
+    if (detail && typeof r.cwd === 'string' && r.cwd) cwds.set(r.cwd, (cwds.get(r.cwd) ?? 0) + 1);
     const m = r.message;
     if (!m) continue;
     const content = Array.isArray(m.content) ? m.content : [];
@@ -296,6 +309,17 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
         const textChunks =
           typeof m.content === 'string' ? m.content : content.map((c) => c?.text ?? '').join(' ');
         trackFromMission = trackFromText(textChunks);
+      }
+      if (detail) {
+        for (const c of content)
+          if (c?.type === 'tool_result' && c.tool_use_id && !(c.tool_use_id in resultChars))
+            resultChars[c.tool_use_id] = resultText(c.content).length;
+        // A real prompt (not a system reminder, not only tool results) starts what the next turns answer.
+        const onlyResults = content.length > 0 && content.every((c) => c?.type === 'tool_result');
+        if (r.isMeta !== true && !onlyResults) {
+          promptNo++;
+          origin = isNotification(r) ? 'notification' : 'user';
+        }
       }
       for (const c of content) {
         if (c?.type !== 'tool_result' || c.is_error !== true) continue;
@@ -321,6 +345,9 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
         usage: m.usage,
         ts: earlier?.ts ?? (Number.isNaN(ts) ? null : ts),
         model: m.model ?? earlier?.model ?? null,
+        ...(detail
+          ? { calls: earlier?.calls ?? [], origin: earlier ? earlier.origin : origin, prompt: earlier ? earlier.prompt : promptNo }
+          : {}),
       });
     }
     for (const c of content) {
@@ -328,6 +355,7 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
       tool.add(c.id);
       const name = String(c.name ?? 'unknown');
       toolName.set(c.id, name);
+      if (detail && m.id) turns.get(m.id)?.calls?.push({ id: c.id, name, input: c.input ?? {} });
       tools[name] ??= { calls: 0, errors: 0 };
       tools[name].calls++;
       if (firstChange === null) {
@@ -407,7 +435,47 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN } = {}) {
         : null,
     call_for_first_change: firstChange !== null ? callForChange : null,
     track: trackFromMission,
+    ...(detail
+      ? {
+          detail: {
+            turns: [...turns.values()].map((x) => ({
+              ts: x.ts,
+              model: x.model,
+              usage: x.usage,
+              calls: x.calls ?? [],
+              origin: x.origin ?? null,
+              prompt: x.prompt ?? 0,
+            })),
+            resultChars,
+            cwd: [...cwds.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+          },
+        }
+      : {}),
   };
+}
+
+/** The text of a tool_result's content (a string, or text blocks; images and other blocks add nothing). */
+function resultText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.map((b) => (typeof b === 'string' ? b : typeof b?.text === 'string' ? b.text : '')).join('');
+}
+
+/**
+ * Is this user entry a background task notification? Claude Code marks one with origin.kind "task-notification" or
+ * turnOrigin "task_notification"; without those fields only the text tells: it starts with <task-notification>, or
+ * reads "Background command ... completed" (or failed, killed).
+ */
+function isNotification(r) {
+  if (r?.origin?.kind === 'task-notification' || r?.turnOrigin === 'task_notification') return true;
+  const m = r?.message;
+  const t =
+    typeof m?.content === 'string'
+      ? m.content
+      : Array.isArray(m?.content)
+        ? m.content.map((c) => c?.text ?? '').join(' ')
+        : '';
+  return /^\s*<task-notification>/.test(t) || /^\s*Background command\b[^\n]*\b(?:completed|failed|killed)\b/i.test(t);
 }
 
 // One formatter per time zone, made on first use. Building an Intl.DateTimeFormat is slow (it loads the zone and locale
@@ -682,8 +750,10 @@ module.exports = {
   costAssumed,
   apiErrorKind,
   emptyTokens,
+  addUsage,
   trackFromText,
   analyzeTranscript,
+  isNotification,
   dayFor,
   readRows,
   usageEvents,

@@ -217,6 +217,8 @@ const SETTINGS = Object.freeze([
     'Agent name to model (opus, sonnet, haiku, fable). Empty = the model in each agent\'s own file.'),
   row('prices', 'limits', 'object', 'Price list',
     'List prices per model for the cost measurement, in USD per million tokens. Empty = the built-in table.'),
+  row('cost.contextThresholdK', 'limits', 'integer', 'Context threshold (thousand tokens)',
+    'In ravenseat cost, the share of cost from turns whose context is above this many thousand tokens. A measurement only.'),
 
   // ---- 3. Machine load ----
   row('limits.minFreeMemoryPct', 'load', 'integer', 'Minimum free memory (%)',

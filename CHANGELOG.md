@@ -3,6 +3,22 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+### Added
+- A "Turns and tools" block in `ravenseat cost` (and `turnsAndTools` in `--json`, `lib/turnTools.js`), per agent type,
+  the orchestrator session and other main sessions over the cost window, read from the transcripts with the existing
+  transcript reader (`analyzeTranscript` with `{ detail: true }`): tool calls per turn (median, p90) and the share of
+  turns with more than one call; serial single reads (runs of 3 or more turns that each make one read call) as a share
+  of read turns; tool result size per tool in characters, top 5; the share of cost from turns above a context threshold;
+  and the turns that start from a background task notification with their cost share. Measurement only. See
+  `docs/costs.md` ("Turns and tools").
+- A main session whose tool calls mostly point outside the project (a conservative rule: at least 10 path calls, 60 %
+  outside, into one other folder) is listed as "worked in another repo" with its cost, and left out of the groups and of
+  the orchestration figures.
+- The setting `cost.contextThresholdK` (default 200, Advanced): the context, in thousands of tokens, that the block
+  splits the cost at.
+
 ## 0.12.0 (2026-11-13)
 
 **Failures that keep coming back become guards, and fix rounds get cheaper: the same gate or CI failure seen in two tasks becomes one proposal to build a guard, recorded in a guard registry shown on the board; a fix round continues the agent that delivered while it is warm, a new fix agent gets a short mission, and the review after it reads only the new commits. The README now shows what it costs next to doing the work yourself in one chat.**

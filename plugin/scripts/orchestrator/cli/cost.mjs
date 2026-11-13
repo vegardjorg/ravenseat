@@ -12,18 +12,23 @@
 // Tested in: lib/__tests__/queueForecast.test.ts, queueLoadLimit.test.ts, queueNight.test.ts, costEstimate.test.ts, queuePlan.test.ts.
 // =============================================================
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
-  a, BASE, CE, CH, CLI, CONFIG, cut, D, die, edit, FC, FOLDER, git, HELP, L, positional, read, readPlans, require, TK, val, WIDTH,
+  a, BASE, CE, CH, CLI, CONFIG, cut, D, die, edit, FC, FOLDER, git, HELP, L, MAIN_TREE, positional, read, readPlans, require, TK,
+  val, WIDTH,
 } from './context.mjs';
 import {
   dailyUsageFor, measureLoad, measurementLine, measureTask, readTimeLog, saveMeasurement, sinceTime,
 } from './tracks.mjs';
-import { agentsBySession } from './events.mjs';
+import { agentsBySession, TRANSCRIPTS } from './events.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
 
 const ES = require('./lib/eventStatistics.js');
 const CM = require('./lib/costMeasures.js');
 const UL = require('./lib/usageLimit.js');
+const TT = require('./lib/turnTools.js');
 
 /** `ravenseat forecast` (the usage is at the top of queue.mjs). */
 export function cmdForecast() {
@@ -203,17 +208,22 @@ export function cmdCost() {
     const events = TK.usageEvents(rows);
     const to = Date.now() + 1;
     const merged = CE.perMergedChange({ queue, events, from, to });
+    // Turns and tools (lib/turnTools.js), read from the transcripts of the same window. A main session that worked in
+    // another repo is listed there, and its status line cost is left out of the orchestration figures below (rowsHere).
+    const turnsTools = turnsAndToolsFor({ rows, from, to });
+    const otherIds = new Set(turnsTools.otherRepo.map((o) => o.session));
+    const rowsHere = otherIds.size ? rows.filter((r) => !(r?.event === 'session' && otherIds.has(r.session_id))) : rows;
     // The orchestration overhead (the main sessions' cost from the status line, minus their subagents) and the flow
     // figures over the SAME window, shown apart from the headline (lib/eventStatistics.js).
     // The session ids of the window and of the last two weeks (week over week below), so the transcripts folder is
     // listed once for both.
     const weeksFrom = Date.now() - 14 * 86_400_000;
     const sessionIds = [
-      ...new Set(ES.sessionCosts(rows, { from: Math.min(from, weeksFrom), to }).map((x) => x.session_id)),
+      ...new Set(ES.sessionCosts(rowsHere, { from: Math.min(from, weeksFrom), to }).map((x) => x.session_id)),
     ];
     const bySession = agentsBySession(sessionIds);
     const orchestration = ES.orchestrationOverhead({
-      rows,
+      rows: rowsHere,
       events,
       from,
       to,
@@ -239,7 +249,7 @@ export function cmdCost() {
       queue,
       events,
       orchestratorUsd: (wFrom, wTo) =>
-        ES.orchestrationOverhead({ rows, events, from: wFrom, to: wTo, agentsBySession: bySession }).usd,
+        ES.orchestrationOverhead({ rows: rowsHere, events, from: wFrom, to: wTo, agentsBySession: bySession }).usd,
     });
     // Per turn: the last 24 h against the 14 days before, per agent type (the 2x warning; measurement only).
     const turns = CM.turnCheck(rows);
@@ -266,6 +276,7 @@ export function cmdCost() {
             breakdown: where,
             weeks,
             turns,
+            turnsAndTools: turnsTools,
             flow,
             perTask,
             perClass: s.perClass,
@@ -285,6 +296,7 @@ export function cmdCost() {
     for (const l of CM.breakdownLines(where, label)) console.log(cut(l, WIDTH));
     for (const l of CM.weekLines(weeks)) console.log(cut(l, WIDTH));
     for (const l of CM.turnCheckLines(turns)) console.log(cut(l, WIDTH));
+    for (const l of TT.turnsToolsLines(turnsTools, label)) console.log(cut(l, WIDTH));
     for (const l of ES.flowLines(flow, label)) console.log(cut(l, WIDTH));
     for (const l of TM().metricsLines(metrics)) console.log(cut(l, WIDTH));
     for (const l of CE.taskTotalLines(perTask, max)) console.log(cut(l, WIDTH));
@@ -323,6 +335,118 @@ const TM = () => require('./lib/transcriptMetrics.js');
 /** The metrics summary for the done rows in the time log since `from` (epoch ms), the same window as the headline. */
 function transcriptMetricsSince(from) {
   return TM().metricsSummary(readTimeLog(), { from, to: Date.now() + 1 });
+}
+
+// ---- Turns and tools (lib/turnTools.js): the transcripts of the window, read once each ----
+/**
+ * The bytes read at most per `ravenseat cost` (newest transcripts first); the rest is counted as skipped. Measured
+ * 2026-11-13: about 1 GB of transcripts took several minutes on a loaded machine, so the budget keeps the command short.
+ */
+const TURN_READ_BUDGET = 256 * 1024 ** 2;
+/** One transcript larger than this is skipped (as hook-time.mjs does). */
+const TURN_MAX_FILE = 300 * 1024 * 1024;
+
+/** The context threshold (cost.contextThresholdK, a positive number; anything else = the default). */
+function contextThresholdK() {
+  const k = Number(CONFIG?.cost?.contextThresholdK);
+  return Number.isFinite(k) && k > 0 ? k : TT.DEFAULT_THRESHOLD_K;
+}
+
+/** The main tree and the git worktrees: a path under any of them is inside the project (turnTools.otherRepoCheck). */
+function projectRoots() {
+  const roots = [MAIN_TREE];
+  for (const l of String(git(['worktree', 'list', '--porcelain']) ?? '').split('\n'))
+    if (l.startsWith('worktree ')) roots.push(l.slice(9).trim());
+  return [...new Set(roots.filter(Boolean))];
+}
+
+/**
+ * The "Turns and tools" report over [from, to): the main session transcripts (<TRANSCRIPTS>/<session>.jsonl) and the
+ * subagent transcripts (<TRANSCRIPTS>/<session>/subagents/agent-<id>.jsonl) changed since `from`, newest first within
+ * TURN_READ_BUDGET, each read once with timeCost.analyzeTranscript({ detail: true }) (the one transcript reader). A
+ * subagent's group is its type from the time log (or its .meta.json); a main session is "orchestrator" when its status
+ * line rows say so, else "main session". Read-only; any read error leaves that file out.
+ */
+function turnsAndToolsFor({ rows, from, to }) {
+  const files = [];
+  const add = (file, x) => {
+    try {
+      const st = fs.statSync(file);
+      if (st.mtimeMs >= from) files.push({ file, size: st.size, mtime: st.mtimeMs, ...x });
+    } catch {
+      // error-ignored: a file that vanished is left out
+    }
+  };
+  let entries = [];
+  try {
+    entries = fs.readdirSync(TRANSCRIPTS, { withFileTypes: true });
+  } catch {
+    entries = []; // error-ignored: no transcripts folder, no turns
+  }
+  for (const e of entries) {
+    if (e.isFile() && e.name.endsWith('.jsonl')) add(path.join(TRANSCRIPTS, e.name), { session: e.name.slice(0, -6), main: true });
+    else if (e.isDirectory()) {
+      let subs = [];
+      try {
+        subs = fs.readdirSync(path.join(TRANSCRIPTS, e.name, 'subagents'));
+      } catch {
+        subs = []; // error-ignored: a session without subagents
+      }
+      for (const n of subs) {
+        const m = /^agent-(.+)\.jsonl$/.exec(n);
+        if (m) add(path.join(TRANSCRIPTS, e.name, 'subagents', n), { session: e.name, agent: m[1], main: false });
+      }
+    }
+  }
+  const typeOf = new Map();
+  const orchestrators = new Set();
+  for (const r of rows ?? []) {
+    if (r?.agent_id && r.agent_type) typeOf.set(r.agent_id, r.agent_type);
+    if (r?.event === 'session' && r.orchestrator === true && r.session_id) orchestrators.add(r.session_id);
+  }
+  const metaType = (f) => {
+    try {
+      return JSON.parse(fs.readFileSync(f.file.replace(/\.jsonl$/, '.meta.json'), 'utf8')).agentType ?? null;
+    } catch {
+      return null; // error-ignored: no meta file
+    }
+  };
+  files.sort((x, y) => y.mtime - x.mtime);
+  const scan = { files: 0, bytes: 0, skipped: 0 };
+  const bare = require('./lib/projectRoot.js').bareAgentType;
+  // One transcript at a time (a generator), so only one is held in memory while the report adds it up.
+  function* transcripts() {
+    for (const f of files) {
+      if (f.size > TURN_MAX_FILE || scan.bytes + f.size > TURN_READ_BUDGET) {
+        scan.skipped++;
+        continue;
+      }
+      let detail;
+      try {
+        detail = TK.analyzeTranscript(fs.readFileSync(f.file, 'utf8'), { detail: true }).detail;
+      } catch {
+        scan.skipped++;
+        continue; // error-ignored: an unreadable transcript is counted as skipped
+      }
+      scan.files++;
+      scan.bytes += f.size;
+      const group = f.main
+        ? orchestrators.has(f.session) ? 'orchestrator' : 'main session'
+        : (bare(typeOf.get(f.agent) ?? metaType(f)) ?? 'unknown');
+      yield { group, session: f.session, main: f.main, detail };
+    }
+  }
+  const sessionUsd = new Map(ES.sessionCosts(rows, { from, to }).map((x) => [x.session_id, x.usd]));
+  return TT.turnsAndTools({
+    transcripts: transcripts(),
+    roots: projectRoots(),
+    neutral: [os.tmpdir(), path.join(os.homedir(), '.claude')],
+    thresholdK: contextThresholdK(),
+    from,
+    to,
+    sessionUsd,
+    scan,
+  });
 }
 
 /** `ravenseat calibrate` (the usage is at the top of queue.mjs). */

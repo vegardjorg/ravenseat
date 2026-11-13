@@ -647,6 +647,7 @@ names every guard weaker than its default on its `settings` row.
 | `capacity.resetDay`, `capacity.resetClock`, `capacity.timeZone`, `capacity.planName` | Tuesday, `19:00`, the machine's zone, none | The weekly quota reset for `ravenseat capacity`, and the plan name in its text | Advanced |
 | `models` | `{}` (each agent file's model, opus) | Model per agent, e.g. `{ "reviewer-docs": "sonnet" }`: printed as `model=<m>` on the start lines and passed to the Agent tool (opus, sonnet, haiku, fable; an unknown value is ignored) | Advanced |
 | `prices` | `null` (the built-in list prices) | List prices per model in USD per million tokens, for the cost measurement | Advanced |
+| `cost.contextThresholdK` | `200` | In `ravenseat cost` ("Turns and tools"), the share of cost from turns whose context is above this many thousand tokens; a measurement only | Advanced |
 
 ### Machine load
 

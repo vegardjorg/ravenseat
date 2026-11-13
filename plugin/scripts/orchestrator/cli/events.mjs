@@ -112,7 +112,7 @@ export function detectPushes({ now = Date.now() } = {}) {
 }
 
 // The agent transcripts: <projects>/<session>/subagents/agent-<agent_id>.jsonl (as cli/tracks.mjs findTranscript).
-const TRANSCRIPTS =
+export const TRANSCRIPTS =
   process.env.QUEUE_TRANSCRIPTS ??
   path.join(os.homedir(), '.claude', 'projects', MAIN_TREE.replace(/[^A-Za-z0-9]/g, '-'));
 
