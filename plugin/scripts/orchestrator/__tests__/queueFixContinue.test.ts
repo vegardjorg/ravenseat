@@ -28,7 +28,8 @@ afterAll(() => {
 
 describe('queue.mjs: fix round as continuation, short mission and delta review', () => {
   it('continues the agent, then reviews only the new commits, then writes a short mission for a new agent', () => {
-    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-fixcont-'));
+    // The long form: on a CI runner os.tmpdir() is an 8.3 short path (RUNNER~1), and git prints the long one.
+    const folder = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'queue-fixcont-')));
     temporary.push(folder);
     const repo = path.join(folder, 'repo');
     const scratch = path.join(folder, 'scratch');
