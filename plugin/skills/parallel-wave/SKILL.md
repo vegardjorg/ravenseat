@@ -77,7 +77,9 @@ word.
    the same turn with exactly that message. At loop start and each round without start/set:
    `ravenseat orchestrator pulse --session "<session>"`. **On a repeated pulse tick** (a scheduled or looped prompt) run
    ONLY `ravenseat pulse-check --session "<session>" --scratchpad <scratch>`: on `SILENT` answer one line and stop, no
-   status text; on `ACTION: <n>` do the listed items, each with the command on its line. Check `ravenseat batch` when filling: a group marked
+   status text; on `ACTION: <n>` do the listed items, each with the command on its line. **No status text between
+   tool calls:** the orchestrator writes nothing between tool calls or after a background notification unless something
+   needs the owner; it goes straight on with the next call. Check `ravenseat batch` when filling: a group marked
    "READY FOR PACKING" is packed with `ravenseat batch pack --auto` (proposal) and `--auto --execute`.
    **Intake triage:** when `fill` prints `TRIAGE <n> task(s) first`, the block also has a `triage` agent per task
    (read-only, cheap); start it like the others. It answers `TRIAGE ready|done|stale|adjust`; record that with

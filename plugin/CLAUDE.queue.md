@@ -11,6 +11,8 @@ Import this file from your project's `CLAUDE.md` with a line `@CLAUDE.queue.md`.
 - When everything waits on the owner and no agent runs, the orchestrator starts `ravenseat wait` in the background: it exits
   when the owner acts on the board, which starts the next round, and with exit 11 when a track never started or went
   silent (`ravenseat show` says what to do). Only while the session is open (also via Remote Control); no tokens while it waits.
+- The orchestrator writes no status text between tool calls or after a background notification unless something needs
+  the owner; it goes on with the next call (on a pulse tick: `SILENT` gets one line, then stop).
 - Docs: `docs/queue/queue.md`, `docs/queue/plan-register.md`, `docs/queue/orchestration.md`, `docs/queue/board.md`,
   `docs/queue/mission-template.md`.
 
