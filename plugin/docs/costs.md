@@ -5,7 +5,8 @@ not free). So a turn costs more the larger the context is, and a session costs r
 context size**. The system is built around that fact: many short contexts instead of one long one.
 
 **Read these numbers with care.** They come from one large project (mine), one developer and a few months of use. They
-are not a benchmark, and there is no controlled comparison with other ways of working. Most gains below are before and
+are not a benchmark. There is one comparison with a plain chat (below), in two different projects, and it is not
+controlled. Most gains below are before and
 after comparisons in that project; several changes went in on the same days, so the effect of each one alone is not
 known.
 - The cost per task is **measured**: the subagent logs record the tokens, and the dollar amounts are what those
@@ -15,9 +16,44 @@ known.
   Opus list price per million: input 4 USD, output 20, cache read 0.20, cache write 5 (5-minute cache) or 8 (1-hour
   cache); a row without that split is priced as the 5-minute cache. When the task is set done, the queue stores its
   USD, tokens, turns, agents and the split into build, review and fix round.
-- The comparison with "one long chat" and "many small chats" below is **my estimate from experience**, not a
-  measurement.
+- The comparison with one plain chat is **measured** in one week; the comparison with "many small chats" is **my
+  estimate from experience**.
 - Your numbers depend on your codebase, your tasks, your checks and the model, and will differ.
+
+## Measured: the queue against one plain chat
+
+In the same seven days (2026-11-06 to 11-13), with the same model and settings (automatic compaction at about 270k,
+1-hour subagent cache), I compared two projects: one run through the queue, and one built in a single Claude Code
+session from a plain roadmap file, with no queue. That session also started a few helper agents of its own. Prices
+are the list prices above.
+
+| | One plain chat | With the queue |
+|---|---|---|
+| Cost per turn, main session | about 0.08 USD | about 0.07 USD |
+| Cost per turn, agents | about 0.07 USD | about 0.07 USD |
+| Context per turn, main session (median) | about 190k | about 190k |
+| Cost per 1,000 inserted lines | about 11.8 USD | about 12.3 USD |
+| Cost per commit | about 3.9 USD | about 3.5 USD |
+| Reading (Read, Grep, Glob, shell reads) | about 44 % | about 26 % |
+| Writing (Edit, Write) | about 16 % | about 15 % |
+| Tests and other runs | about 4 % | about 14 % |
+| Review | about 7 % (a few assessment agents) | about 17 % (a reviewer on nearly every task) |
+| Steering (starting and following agents, plan and status) | about 15 % | about 15 % |
+
+What it shows:
+- **The price of a turn is the same.** Compaction keeps both main sessions near 190k of context, so neither pays the
+  "longer chat, costlier turn" penalty. The queue ran about six times as many turns, almost all of them in agents, and
+  delivered correspondingly more.
+- **Checks are the extra cost, and they are a choice.** Tests and review were about 31 % against 11 %, because the
+  queue project has a heavier test suite and a reviewer on almost every task. A project with lighter checks pays less.
+- **Steering costs the same share.** In the queue it is a manager chat that builds nothing; in the plain session it is
+  spread through the same chat that builds.
+- **Fixed missions save searching.** The plain session spent about 44 % on reading against 26 %. A queue task starts
+  from a mission that names the files and the goal; this is a likely reason, not a measured one.
+
+Limits: two different projects with different tasks, one developer, not a controlled benchmark. Commits and inserted
+lines come from `git log --shortstat`; they include generated files and tests, and a line in one project is not worth
+the same as a line in the other.
 
 ## Measured: median cost per finished task, subagents only
 
@@ -152,9 +188,10 @@ guard, and nothing else depends on it.
 
 ## Estimated, not measured: the alternatives
 
-- *One long chat.* Each new message pays for the whole history again. The per-turn price above is measured; the cost
-  per finished task against the queue is not. I expect it to cost several times more per task, more the longer the
-  session runs, and quality dropped as the context filled.
+- *One long chat.* With Claude Code's default it grows toward its full window before it compacts, and each turn pays
+  for the whole history: a turn at over 500k cost about 2.7 times a turn at 100k to 200k, and quality dropped as the
+  context filled (not measured). With compaction at about 300k it costs about the same per turn and per line as the
+  queue (measured above); what it still costs is your presence, since the work moves only while you are in the chat.
 - *Many small chats by hand.* The context stays small, but every chat pays the start-up cost again (reading the
   project, finding files, running checks), and you do the coordination yourself: no shared queue, no file ownership,
   no review step, and merge conflicts when chats overlap.

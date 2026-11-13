@@ -15,14 +15,17 @@ When a Claude Code project outgrows one chat, the signs are familiar:
 - Findings, research and half-built features are spread across dozens of chats.
 - A feature that takes several days loses its thread every time a chat ends.
 - Two chats change the same files and undo each other's work.
-- The one long chat that keeps the overview gets more expensive every turn.
+- The one long chat that keeps the overview grows toward its full context window (up to 1M tokens) before Claude
+  Code compacts it, and every turn reads all of it again, so each turn costs more than the last.
 - You spend more time keeping agents on track than deciding what to build.
 
 Ravenseat keeps the project's plan and task list (the queue) in files, outside the chat. One Claude Code chat acts as
 the manager: you tell it what to build, and it hands each task to a fresh agent in its own copy of the project, runs
 your tests on the result, merges what passes on your machine, and asks you only about decisions a human should make.
 Work that spans days gets finished across many chats, and you can follow along and answer from your phone with Claude
-Code's Remote Control.
+Code's Remote Control. It costs about the same per turn and per line of code as doing the work yourself in one chat.
+The difference is that you do not have to sit there: queue the work, go do something else, and come back to the
+decisions only you can make.
 
 > **You:** Add dark mode in settings, a weekly streak on the habit card, and a CSV export once the streak is done.
 >
@@ -123,25 +126,30 @@ show. Run `npm run redteam` to check it yourself.
 
 ## What does it cost?
 
-More agents do not automatically mean cheaper development. Long contexts, repeated setup and fix rounds in bloated
-agents eat tokens, so Ravenseat uses short agent contexts, keeps state outside the conversation, shares installed
-dependencies between worktrees and never polls in a loop. Each task's cost is measured from its own sessions,
-fix rounds and reviews included, and the estimates are calibrated against what was measured. Parallel agents can
-choke a PC before they use up a quota, so a load guard starts fewer agents while free memory is low, and
-`ravenseat machine` suggests how many your machine can take.
+About the same as doing the work yourself in one Claude Code chat. What changes is how much of your time it takes.
 
-In one project, about 1,200 measured tasks gave a median of about 2.5 USD (API-equivalent) per ordinary code task
-including its review. In the same week, with the same model and settings, I compared that project with a second one
-built in a single Claude Code session from a plain roadmap file, with no queue. Per turn and per 1,000 inserted lines
-the cost was about the same (about 0.07 USD per turn, about 12 USD per 1,000 lines), and steering the work took about
-15 % in both. The queue did not make turns more expensive: it ran more of them and delivered more. The extra cost was
-the checks. Tests and review took about 31 % of the queue project's spend against 11 %, because it has a heavier test
-suite and a reviewer on every task. What does get expensive is a large context: a turn at over 500k tokens cost about
-2.7 times a turn at 100k to 200k. With automatic compaction at 300k, one long chat is not much more costly than
-starting new chats: in 10 sessions with about 6,000 turns, a compaction cost about as much as a new chat that reads a
-handover note in again, and work was back on track after about 6 turns instead of 17. Two different projects, one
-developer: not a controlled benchmark. Run `ravenseat cost` to see the numbers in your own project.
-There is no spending limit by default: `ravenseat limit dailyBudget <usd>` stops new tasks when the day's spend is used.
+| | By hand in one chat | With the queue |
+|---|---|---|
+| Cost per turn | about 0.07 USD | about 0.07 USD |
+| Cost per 1,000 inserted lines | about 12 USD | about 12 USD |
+| Spent on steering the work | about 15 % | about 15 % |
+| Spent on checks (tests and review) | about 11 % | about 31 % |
+| While you are away | the chat waits for your next message | agents keep building, checking and merging |
+| What you come back to | the chat where you left it | merged work that passed your checks, and the questions only you can answer |
+
+The queue did not make turns more expensive. It ran more of them and delivered more in the same week, and the extra
+share went to checks: a heavier test suite and a reviewer on every task. Over about 1,200 measured tasks, an ordinary
+code task cost a median of about 2.5 USD (API-equivalent), its review included.
+
+Both columns were measured with automatic compaction at about 300k. Claude Code's default lets a chat grow toward its
+full window before it compacts, and that is what gets expensive: a turn at over 500k tokens cost about 2.7 times a
+turn at 100k to 200k. So agents hand over at about 300k, the manager chat compacts automatically, state lives in files,
+worktrees share installed dependencies, and nothing polls in a loop. A load guard starts fewer agents while free memory
+is low, and `ravenseat machine` suggests how many your machine can take.
+
+Measured in the same week with the same model and settings, in two different projects by one developer: not a
+controlled benchmark. Run `ravenseat cost` to see the numbers in your own project. There is no spending limit by
+default: `ravenseat limit dailyBudget <usd>` stops new tasks when the day's spend is used.
 [The measurements in detail](plugin/docs/costs.md).
 
 ## Why I built it
