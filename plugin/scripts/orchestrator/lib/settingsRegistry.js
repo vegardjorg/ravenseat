@@ -313,6 +313,15 @@ const SETTINGS = Object.freeze([
     'The output lines kept for the fix task. Empty = the done command\'s value.'),
   row('baseGate.flakyRerun', 'gates', 'onoff', 'Rerun a red base gate once',
     'A red base gate reruns only the failed commands once on the same commit; green then is a flaky finding.'),
+  row('inspection.mode', 'gates', 'choice', 'Inspection queue',
+    'The same failure in the gates or CI, again and again, becomes one proposal to build a guard. You decide.', {
+      choices: ['on', 'off'],
+    }),
+  row('inspection.minRepeats', 'gates', 'integer', 'Repeats before a proposal',
+    'How many separate tasks, branch days or CI commits must fail the same way before it is proposed.'),
+  row('inspection.windowDays', 'gates', 'integer', 'Inspection window (days)', 'Only failures this recent count.'),
+  row('inspection.registryFile', 'gates', 'text', 'Guard registry file',
+    'The tracked list of guards and what each one guards against, relative to the project root.', { edit: 'file' }),
   row('testWeakening.enabled', 'gates', 'onoff', 'Test weakening warning',
     'Receive warns about deleted or moved test files and added skip or focus markers.', {
       weakens: offWeakens,

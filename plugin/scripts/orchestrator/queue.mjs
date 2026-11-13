@@ -345,6 +345,13 @@
 //   node scripts/orchestrator/queue.mjs checks show|plan|dismiss|restore <key>   (a suggestion's template; adds its investigation and
 //                                                                  planning to the queue, a proposal without --approved; sets it aside)
 //   node scripts/orchestrator/queue.mjs checks on|off               (the opt-out: the Checks tab, the overview, the setup suggestions)
+//   node scripts/orchestrator/queue.mjs inspection [--json]         (the inspection queue: failures that repeat in the gates or CI become
+//                                                                  one proposal to build a guard; cli/inspection.mjs, lib/inspection.js)
+//   node scripts/orchestrator/queue.mjs inspection snooze <id> [--days 14]   (holds an entry until a date and cancels its proposal)
+//   node scripts/orchestrator/queue.mjs guards [--json]             (the guard registry, a tracked file, with measures from the gate rows)
+//   node scripts/orchestrator/queue.mjs guards add [--from-task <id>] --kind gate|instruction|review|none --title "..." --explain "..."
+//        [--command "..."] [--against "<lesson>"] [--signature <id>]   (an entry in the registry file in this tree)
+//   node scripts/orchestrator/queue.mjs guards retire <id>          (marks an entry retired; it stays in the file)
 //   node scripts/orchestrator/queue.mjs kickstart [--json]          (which controls the project has and one next step, in plain words;
 //                                                                  read-only, works before init and without git)
 //   node scripts/orchestrator/queue.mjs kickstart gates [--apply]   (the project's own checks as gates; --apply writes them to
@@ -741,6 +748,10 @@ if (command === 'init') {
   (await import('./cli/helpers.mjs')).cmdGuidance();
 } else if (command === 'checks') {
   (await import('./cli/checks.mjs')).cmdChecks();
+} else if (command === 'inspection') {
+  (await import('./cli/inspection.mjs')).cmdInspection();
+} else if (command === 'guards') {
+  (await import('./cli/inspection.mjs')).cmdGuards();
 } else if (command === 'kickstart') {
   (await import('./cli/kickstart.mjs')).cmdKickstart();
 } else if (command === 'gate') {

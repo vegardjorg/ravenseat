@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import { a, CONFIG, CLI, die, edit, FILE, KK, LM, MAIN_TREE, read, require } from './context.mjs';
 import { addTask, ensureProject, PROJECT, readFacts } from './kickstart.mjs';
+import { guardsBoard } from './inspection.mjs';
 
 const SCAN = require('./lib/checksScan.js');
 const CATALOG = require('./lib/checksCatalog.js');
@@ -59,7 +60,7 @@ function makeReport(queue) {
     }
   };
   const found = SCAN.scan({ exists, read: readFile, list, gates: CONFIG.gates, checks: facts.checks });
-  return CATALOG.buildReport({
+  const report = CATALOG.buildReport({
     facts: { ...facts, ...found, instructionsLarge: instructionsLarge() },
     catalog: CATALOG.loadCatalog({ builtin: BUILTIN, own: OWN }),
     tasks: queue?.tasks ?? [],
@@ -67,6 +68,13 @@ function makeReport(queue) {
     knownBugs: queue ? KNOWN.summary(queue.tasks, KNOWN.modeOf(CONFIG)) : null,
     now: new Date().toISOString(),
   });
+  // The guard registry and the open inspection entries (cli/inspection.mjs). An error here never hides the rest.
+  try {
+    Object.assign(report, guardsBoard());
+  } catch {
+    // error-ignored: the board shows the checks without the guards
+  }
+  return report;
 }
 
 /** Saved beside the queue, so other tools can read it. Before ravenseat init there is no folder, and nothing is written. */

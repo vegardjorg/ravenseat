@@ -14,6 +14,8 @@
 //                 `wait_sec` (seconds in the gate queue, lib/gateQueue.js; only for a run that needed a slot; `duration_s`
 //                 does not include it) and `min_free_memory_pct` (the lowest free memory during the run, lib/gateLoad.js).
 //                 `durations` { <command>: seconds } per command, for the gate health view (lib/gateHealth.js).
+//                 `errors` { <command>: excerpt } for the red commands only: a short, redacted first error line
+//                 (lib/failureSignature.js), so the inspection queue (lib/inspection.js) can group repeated failures.
 //                 MEASUREMENT ONLY: the time log is a file every agent appends to, so a gate row proves nothing. What
 //                 ravenseat receive, ravenseat merge and the push check rely on is the gate evidence store (lib/gateEvidence.js).
 //   compaction    { time, event: "compact", scope: "session", session_id, orchestrator }   a main session (SessionStart
@@ -88,6 +90,13 @@ function gateRow(r) {
     attempt: Number.isInteger(r.attempt) && r.attempt > 0 ? r.attempt : 1,
   };
   if (r.timedOut) row.timed_out = true;
+  // A short, redacted excerpt per FAILED command (lib/failureSignature.js gateExcerpt), for the inspection queue
+  // (lib/inspection.js). Only the red ones and at most 200 characters each, so the time log never holds whole outputs.
+  if (r.errors && typeof r.errors === 'object' && row.failed.length) {
+    const e = {};
+    for (const cmd of row.failed) if (typeof r.errors[cmd] === 'string') e[cmd] = r.errors[cmd].slice(0, 200);
+    if (Object.keys(e).length) row.errors = e;
+  }
   // Red, then green on a rerun on the same commit (lib/trackFlaky.js).
   if (Array.isArray(r.flaky) && r.flaky.length) row.flaky = [...r.flaky];
   // Seconds per command, so the gate health view (lib/gateHealth.js) can give each command its own p50/p95 and not

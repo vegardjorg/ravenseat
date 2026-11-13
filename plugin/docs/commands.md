@@ -26,6 +26,11 @@ ravenseat checks show <key>         # what a suggestion's investigation and plan
 ravenseat checks plan <key>         # proposes its investigation and planning as a task (--approved: ready to run)
 ravenseat checks dismiss <key>      # sets a suggestion aside (restore brings it back)
 ravenseat checks off                # no Checks tab, overview or setup suggestions (on turns them back); guards are not touched
+ravenseat inspection                # failures that repeat in the gates or CI; one proposal each to build a guard
+ravenseat inspection snooze <ID>    # holds an inspection entry (default 14 days) and cancels its proposal
+ravenseat guards                    # the guard registry (a tracked file) with "caught N times since built"
+ravenseat guards add --from-task <ID> --kind gate --explain "..."   # records a guard (kinds: gate, instruction, review, none)
+ravenseat guards retire <G-ID>      # marks a guard retired; the entry stays
 ravenseat kickstart                 # which checks the project has and one next step, in plain words; changes nothing
 ravenseat kickstart gates --apply   # sets the checks your project already has as gates
 ravenseat kickstart add             # proposes the next step as a task; it starts only when you approve it

@@ -377,6 +377,21 @@ card until you bring it back.
 **Opting out:** `ravenseat checks off`, or the switch on the tab and in Settings. It removes the tab, the overview and the setup
 suggestions, and changes no gates or guards. Without its own setting it follows `ravenseat guidance`, so quiet turns it off too.
 
+**Guards and repeated failures:** the tab also shows the guard registry (`ravenseat guards`, a tracked file) with
+"caught N times since built" for each gate, and the failures that went red the same way in separate tasks or commits
+(`ravenseat inspection`). A repeated failure becomes one proposal `INSP-<n>`: approve, cancel or
+`ravenseat inspection snooze <id>`. The commands:
+
+| Command | What it does |
+| --- | --- |
+| `ravenseat inspection [--json]` | Scans the time log, proposes a guard for each failure over the threshold (`inspection.minRepeats` incidents in `inspection.windowDays` days), and lists the entries. The pulse does the same at most once an hour |
+| `ravenseat inspection snooze <id> [--days 14]` | Holds an entry (by its proposal or signature) until a date and cancels its proposal |
+| `ravenseat guards [--json]` | The guard registry with its measures |
+| `ravenseat guards add [--from-task <id>] --kind gate|instruction|review|none --title "..." --explain "..." [--command "..."] [--against "..."] [--signature <id>]` | Adds an entry to the registry file in this tree. `--from-task` fills the task, title and signature from an inspection proposal |
+| `ravenseat guards retire <id>` | Marks an entry retired; it stays in the file |
+
+See orchestration.md, "Repeated failures and the guard registry".
+
 **Changing the suggestions:** every suggestion is a template file with an "Investigate" and a "Plan and build" section, and the
 categories are one list. Nothing is written in code. To add, change or remove them for a project, use the same layout in
 `docs/queue/checks/`. A file with the same name replaces the plugin's, and `off: true` removes it. The format and the
@@ -663,6 +678,9 @@ names every guard weaker than its default on its `settings` row.
 | `gateEvidence.external` | `[]` | The GitHub check names (workflow or job) whose newest run must be green on exactly the same commit in mode `external`. `[]` = none counts, and the full gate runs here (doctor warns) | Advanced |
 | `baseGate.enabled`, `baseGate.commands`, `baseGate.timeoutSec`, `baseGate.tailLines` | `auto`, `null` (the quick gates), `900`, `null` | After a merge the base branch's new tip is checked; a red base stops further merges until it is green. The commands run after the quick gates, within the time budget; the tail lines go into the fix task | Advanced |
 | `baseGate.flakyRerun` | `true` | Before a red base check freezes the base, only the failed commands run once more on the same sha; green then is recorded as flaky (a `flakyGate` time log row, a finding, no freeze), red twice freezes. `false` = freeze at once | Advanced |
+| `inspection.mode` | `on` | The inspection queue (see orchestration.md, "Repeated failures and the guard registry"): the same failure signature in the gates or CI, in at least `inspection.minRepeats` incidents within `inspection.windowDays` days, becomes one proposal to build a guard. `off` = no scan and no proposals | Advanced |
+| `inspection.minRepeats`, `inspection.windowDays` | `2`, `30` | The threshold: incidents (separate tasks, a branch and a day without a task, or CI commits), not runs, so one track's reruns count once | Advanced |
+| `inspection.registryFile` | `.ravenseat/guards.json` | The guard registry, a tracked file in the project (`ravenseat guards`) | Advanced |
 | `testWeakening.enabled`, `testWeakening.focusStop`, `testWeakening.testPaths`, `testWeakening.markers` | `true`, `true`, `[]`, `[]` | `receive` warns, never stops, about deleted test files, test files moved out of the test paths and skip or focus markers on added lines in test files (`.skip(`, `.only(`, `xit(`, `it.todo(`, `@pytest.mark.skip`, `pytest.skip(`, `@unittest.skip`, `#[ignore]`, `t.Skip(`, `@Disabled`, `@Ignore`, `pending(`, `markTestSkipped` ...): one `WARN test weakening:` line and a `Test weakening` section in `00-package.md`. `testPaths` adds test file globs (the `protectedPaths` rules), `markers` adds regular expressions; `ravenseat doctor` names an invalid one. `focusStop`: a focus marker (`.only(`, `fit(`, `fdescribe(`) on an added line stops `merge`, since the other tests never ran; `--allow-focus` overrides (logged as `focus-overridden`), `false` = only the warning | Advanced |
 | `qa.evidenceTypes`, `qa.autoTypes`, `qa.manualTypes` | `screenshot`, `test`, `manual`; auto `test`; manual `manual` | QA evidence types a track writes as `EVIDENCE <type>[=<ref>]`; auto types are closed by `qa auto --run`, manual ones gathered in one round | Advanced |
 | `qa.autoCommand` | `null` | Shell command for auto evidence, e.g. `npx vitest run {refs}` (`{refs}`, `{id}`; or `{ "<type>": "<command>" }`); `null` = `qa auto` only lists | Advanced |

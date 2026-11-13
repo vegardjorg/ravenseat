@@ -567,6 +567,44 @@ criterion, `done_when` runs the new check when the project has a command for it,
 both runs (failing without the fix, passing with it). A separate fix task `depends_on` the gate task so the check is
 seen red on the real bug. The loop step is in `skills/parallel-wave/SKILL.md` ("Gate from incident").
 
+## Repeated failures and the guard registry
+
+A red gate or a red CI run is fixed once, alone, and the next one of the same kind is fixed once again. The inspection
+queue sees that it is the same failure. Every red gate command in the time log carries a short first error line, and
+every red CI check its failed job and step. `lib/failureSignature.js` normalizes the line (paths, line numbers, times,
+ids and shas go; secrets are redacted) and gives it a signature, so the same failure in two worktrees or on two commits
+is one signature.
+
+`ravenseat inspection` (and the pulse, at most once an hour) groups the signatures from the last
+`inspection.windowDays` days (30). It counts incidents, not runs: a task, a branch on a day without a task, or a pushed
+commit. One track's red-fix-red loop is one incident. At `inspection.minRepeats` incidents (2) the entry becomes ONE
+proposal, `INSP-<n>`, through the normal proposal flow:
+
+- `ravenseat approve <id>`: it goes to the batch queue (full mode) and an agent picks the cheapest guard that works: a
+  gate (red first), an instruction line, a review point, or nothing. Never built without your yes, and never
+  auto-accepted, whatever the auto-accept rules say.
+- `ravenseat cancel <id>`: rejected. It stays rejected until its incidents in the window double.
+- `ravenseat inspection snooze <id> [--days 14]`: held until the date, then proposed again if it still repeats.
+
+At most three proposals wait at a time. The state is `<dataFolder>/inspection.json`, rebuilt from the time log on every
+scan; queue.json is not touched. `inspection.mode off` turns it off.
+
+The guard registry (`inspection.registryFile`, default `.ravenseat/guards.json`) is a tracked file: one entry per guard
+with its title, a one-sentence explanation, the kind (gate, instruction, review or none), what it guards against (a
+signature or a lesson), the task that built it, the date and the status (active or retired). The inspection task ends
+with `ravenseat guards add --from-task <id> --kind ... --explain "..."` in its worktree, so the entry is merged with the
+guard. A built task without an entry is listed by `ravenseat inspection` and the board, with the command to add it.
+`ravenseat guards` lists the registry, and `ravenseat guards retire <id>` keeps an entry but marks it retired.
+
+Each entry has a `measures` object. For a gate with a command, Ravenseat fills it when it shows the registry, from the
+gate rows: runs since it was built, red runs, "caught N times since built" and the last red. It is never written back,
+so the file does not change on every run. Later measures fit in the same object without a new format. One idea is a
+sabotage test: break the guarded code on purpose in a throwaway worktree and record whether the guard CATCHES it,
+catches it PARTIAL(ly) or is BLIND to it. That is not built.
+
+The board's Checks tab shows both: a Guards section and the open Repeated failures. `ravenseat gates --health` ends with
+the last inspection state (read-only).
+
 ## Batch push (the push threshold)
 
 Every push of the base branch runs the whole CI. Pushing per small change burns CI minutes quietly, so pushes come in

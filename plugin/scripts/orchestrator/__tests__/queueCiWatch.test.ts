@@ -158,6 +158,11 @@ describe('push-check --watch-ci', () => {
     expect(p.health().current).toMatchObject({ tip: sha, status: 'red', fix_task: id });
     // Only the failed run's log was fetched (one --log-failed call for the one red run).
     expect(p.ghCalls().filter((c) => c.includes('--log-failed'))).toHaveLength(1);
+    // The time log row carries the failed job and a short excerpt for the inspection queue, never the secret.
+    const timeLog = fs.readFileSync(path.join(p.folder, 'times.jsonl'), 'utf8');
+    const checkRow = timeLog.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((r) => r.event === 'ciWatch' && r.verdict === 'check');
+    expect(checkRow.failures).toEqual([{ name: 'ci: CI / test / Run tests', excerpt: 'FAIL src/a.test.ts' }]);
+    expect(timeLog).not.toContain(secret);
 
     // The same sha again (a rerun, red again): no second task, no second fix task in the base health.
     const again = p.watch(sha);

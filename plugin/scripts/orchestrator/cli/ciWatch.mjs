@@ -122,7 +122,17 @@ const items = summary.red.map((run) => {
   }
   const text = log.code === 0 ? log.out : '';
   const c = CW.classify({ run, log: text, jobs });
-  return { run, kind: c.kind, reason: c.reason, tail: CW.logTail(text) };
+  // The failed jobs with a short, redacted excerpt each, for the inspection queue (lib/failureSignature.js). Only for a
+  // check failure: an infra failure says nothing about the code.
+  let failures = [];
+  if (c.kind === 'check') {
+    try {
+      failures = require('./lib/failureSignature.js').ciFailures({ run, jobs, log: text });
+    } catch {
+      failures = []; // error-ignored: measurement only
+    }
+  }
+  return { run, kind: c.kind, reason: c.reason, tail: CW.logTail(text), failures };
 });
 const verdict = CW.verdictOf(items);
 fs.mkdirSync(FOLDER, { recursive: true });
@@ -188,5 +198,5 @@ else if (!added.error?.length) {
     });
 }
 console.log(`CI RED: a check failed on ${BASE} at ${sha7} (${checks.length} run(s)). Fix task ${added.id}; ravenseat merge lets only it through. Report: ${reportFile}`);
-logRow({ verdict: 'check', runs: summary.total, red: items.length, task: added.id });
+logRow({ verdict: 'check', runs: summary.total, red: items.length, task: added.id, failures: items.flatMap((x) => x.failures ?? []) });
 process.exit(EXIT_RED);

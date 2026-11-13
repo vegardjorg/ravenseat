@@ -19,7 +19,7 @@
 //                                                            same sha: the base gate's (cli/baseHealth.mjs, the flaky
 //                                                            check) or a track's (gates.mjs, lib/trackFlaky.js; task =
 //                                                            the track, source "track gate")
-//   ciWatch       { sha, verdict, runs, red, task?, question? }
+//   ciWatch       { sha, verdict, runs, red, task?, question?, failures? }   failures = [{ name, excerpt }] (inspection)
 //                                                            the CI watch's verdict for a pushed commit (cli/ciWatch.mjs)
 //   triage       { task, verdict, by? }                    ravenseat triage <id> --verdict
 //   push          { remote, branch, from, tip, tasks, task_count, commits, base_health, verdict, detected_at }
@@ -100,10 +100,17 @@ function flakyGateRow({ time, tip, commands, source = null, task = null }) {
 }
 
 /** The CI watch's verdict for a pushed commit: green, check or infra (the red run count, the task or question). */
-function ciWatchRow({ time, sha, verdict, runs = 0, red = 0, task = null, question = null }) {
+function ciWatchRow({ time, sha, verdict, runs = 0, red = 0, task = null, question = null, failures = null }) {
   const row = { time: iso(time), event: 'ciWatch', sha: sha ?? null, verdict, runs, red };
   if (task) row.task = task;
   if (question) row.question = question;
+  // The failed jobs for the inspection queue (lib/failureSignature.js ciFailures): a name and a short, redacted excerpt.
+  // Only these two fields, capped, so the time log never holds a whole CI log.
+  const list = (Array.isArray(failures) ? failures : [])
+    .filter((f) => f && typeof f.name === 'string' && f.name)
+    .slice(0, 10)
+    .map((f) => ({ name: f.name.slice(0, 200), excerpt: String(f.excerpt ?? '').slice(0, 200) }));
+  if (list.length) row.failures = list;
   return row;
 }
 

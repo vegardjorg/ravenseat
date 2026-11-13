@@ -39,6 +39,22 @@ describe('flow and load rows', () => {
     expect(ER.triageRow({ task: 'T', verdict: 'stale' })).not.toHaveProperty('by');
   });
 
+  it('ciWatchRow keeps the failures (name and a capped excerpt) for the inspection queue, and leaves them out when there are none', () => {
+    const row = ER.ciWatchRow({
+      sha: 'abc',
+      verdict: 'check',
+      runs: 1,
+      red: 1,
+      task: 'CI-abc',
+      failures: [{ name: 'ci: CI / test / Run tests', excerpt: `FAIL ${'z'.repeat(400)}`, extra: 'dropped' }, { excerpt: 'no name' }],
+    });
+    expect(row.failures).toHaveLength(1);
+    expect(row.failures[0].name).toBe('ci: CI / test / Run tests');
+    expect(row.failures[0].excerpt.length).toBeLessThanOrEqual(200);
+    expect(row.failures[0]).not.toHaveProperty('extra');
+    expect(ER.ciWatchRow({ sha: 'abc', verdict: 'green' })).not.toHaveProperty('failures');
+  });
+
   it('loadRow: the limit only when the slots were limited, the stop reason only on a stop', () => {
     const free = ER.loadRow({
       command: 'fill',

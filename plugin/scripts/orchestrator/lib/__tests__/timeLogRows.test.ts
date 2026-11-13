@@ -89,6 +89,20 @@ describe('gateRow', () => {
     expect(green).toMatchObject({ track: null, branch: null, gates: [], failed: [], ok: true, attempt: 1 });
     expect(green).not.toHaveProperty('timed_out');
   });
+
+  it('errors: a short excerpt per FAILED command only (the inspection queue), capped and left out when there is none', () => {
+    const row = TL.gateRow({
+      kind: 'quick',
+      durationSec: 1,
+      exit: 1,
+      gates: ['a', 'b'],
+      failed: ['b'],
+      errors: { a: 'not red, dropped', b: `FAIL x ${'y'.repeat(400)}`, c: 'not run' },
+    });
+    expect(Object.keys(row.errors as object)).toEqual(['b']);
+    expect(String((row.errors as Record<string, string>).b).length).toBeLessThanOrEqual(200);
+    expect(TL.gateRow({ kind: 'quick', durationSec: 1, exit: 0, gates: ['a'], errors: { a: 'x' } })).not.toHaveProperty('errors');
+  });
 });
 
 describe('compaction rows', () => {

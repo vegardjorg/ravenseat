@@ -230,6 +230,109 @@ function checksFilter(report, open) {
   return el('label', { class: 'checks-filter', for: 'checks-category' }, 'Show ', box);
 }
 
+const GUARD_KIND = { gate: 'Gate', instruction: 'Instruction', review: 'Review point', none: 'No guard' };
+const INSPECTION_STATUS = {
+  watching: 'Watching',
+  due: 'Due for a proposal',
+  proposed: 'Proposed',
+  approved: 'Approved',
+  built: 'Built',
+  rejected: 'Rejected',
+  snoozed: 'Snoozed',
+};
+const checksPlural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** One guard from the registry (report.guards, cli/inspection.mjs guardsBoard). */
+function checksGuardCard(g) {
+  const m = g.measures ?? {};
+  const against = [g.against?.lesson, g.against?.signature ? `signature ${g.against.signature}` : null].filter(Boolean).join('; ');
+  return el(
+    'li',
+    { class: 'checks-card' },
+    el(
+      'div',
+      { class: 'checks-card-head' },
+      el('h4', { class: 'checks-card-title', text: g.title }),
+      el('span', { class: 'badge', text: GUARD_KIND[g.kind] ?? g.kind }),
+      g.status === 'retired' ? el('span', { class: 'badge', text: 'Retired' }) : null,
+    ),
+    el('p', { class: 'checks-text', text: g.explain }),
+    against ? el('p', { class: 'checks-source', text: `Against: ${against}` }) : null,
+    g.command ? el('p', { class: 'checks-text' }, el('code', { text: g.command })) : null,
+    m.runs != null
+      ? el('p', {
+          class: 'checks-source',
+          text:
+            `Caught ${checksPlural(m.caughtSince ?? 0, 'time')} since built (${checksPlural(m.runs, 'run')})` +
+            `${m.lastRed ? `, last red ${String(m.lastRed).slice(0, 10)}` : ''}.`,
+        })
+      : null,
+    el('p', { class: 'checks-source', text: `${g.id}, built ${g.built}${g.task ? ` by ${g.task}` : ''}` }),
+  );
+}
+
+/** The Guards section: the tracked guard registry. */
+function checksGuardsSection(guards) {
+  if (!guards) return [];
+  const list = guards.guards ?? [];
+  return [
+    el('h3', { class: 'decide-group-title', text: 'Guards' }),
+    el('p', { class: 'decide-hint', text: `The guards this project has built and what each one guards against (${guards.file}, tracked in git).` }),
+    guards.error ? el('p', { class: 'setting-error', text: `The guard registry has a mistake: ${guards.error}` }) : null,
+    list.length
+      ? el('ul', { class: 'checks-grid' }, ...list.map(checksGuardCard))
+      : el('p', { class: 'checks-text', text: 'No guards in the registry yet. A built inspection proposal adds one.' }),
+  ].filter(Boolean);
+}
+
+/** One repeated failure (report.inspection.entries, lib/inspection.js boardData). */
+function checksInspectionCard(e) {
+  const status = INSPECTION_STATUS[e.status] ?? e.status;
+  const label = e.proposal && ['proposed', 'approved', 'built'].includes(e.status) ? `${status}: ${e.proposal}` : status;
+  const where = (e.sources ?? []).map((x) => (x === 'ci' ? 'CI' : 'gates')).join(', ');
+  return el(
+    'li',
+    { class: 'checks-card' },
+    el(
+      'div',
+      { class: 'checks-card-head' },
+      el('h4', { class: 'checks-card-title', text: e.name }),
+      el('span', { class: 'badge', text: label }),
+    ),
+    e.excerpt ? el('p', { class: 'checks-text' }, el('code', { text: e.excerpt })) : null,
+    el('p', {
+      class: 'checks-source',
+      text:
+        `${checksPlural(e.count, 'red run')}, ${checksPlural(e.incidents, 'incident')} (${where}), ` +
+        `last ${String(e.lastSeen ?? '?').slice(0, 10)}${e.snoozedUntil ? `, snoozed until ${String(e.snoozedUntil).slice(0, 10)}` : ''}.`,
+    }),
+    e.unregistered
+      ? el('p', { class: 'checks-source' }, 'Not in the guard registry yet: ', el('code', { text: `ravenseat guards add --from-task ${e.proposal} --kind ...` }))
+      : null,
+  );
+}
+
+/** The Repeated failures section: the inspection queue's entries from the last scan (ravenseat inspection, the pulse). */
+function checksInspectionSection(insp) {
+  if (!insp) return [];
+  const title = el('h3', { class: 'decide-group-title', text: 'Repeated failures' });
+  if (insp.mode === 'off')
+    return [title, el('p', { class: 'checks-text', text: 'The inspection queue is off (inspection.mode). Settings turns it on.' })];
+  const list = (insp.entries ?? []).filter((e) => e.status !== 'watching');
+  return [
+    title,
+    el('p', {
+      class: 'decide-hint',
+      text:
+        `A failure that goes red the same way ${insp.minRepeats} or more times (separate tasks or commits) within ` +
+        `${insp.windowDays} days becomes one proposal: add a guard, or nothing. You decide.`,
+    }),
+    list.length
+      ? el('ul', { class: 'checks-grid' }, ...list.map(checksInspectionCard))
+      : el('p', { class: 'checks-text', text: 'Nothing has gone red the same way more than once.' }),
+  ];
+}
+
 /** The whole view, into main. */
 function drawChecks() {
   const r = t.checks.report;
@@ -274,6 +377,7 @@ function drawChecks() {
   const known = r.knownBugs ?? {};
   if (known.open || known.done)
     wrap.append(el('p', { class: 'checks-source', text: `Gates from known bugs: ${known.proposed} waiting for your yes, ${known.open - known.proposed} approved, ${known.done} done.` }));
+  wrap.append(...checksGuardsSection(r.guards), ...checksInspectionSection(r.inspection));
   const open = r.suggestions.filter((s) => s.state !== 'dismissed');
   const aside = r.suggestions.filter((s) => s.state === 'dismissed');
   const filter = checksFilter(r, open);

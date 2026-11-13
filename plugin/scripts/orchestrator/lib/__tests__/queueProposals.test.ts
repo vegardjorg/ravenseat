@@ -59,6 +59,8 @@ describe('autoAcceptDecision: the hard rules (no setting overrides them)', () =>
     ['a protected bare name', { owned_files: ['web/package.json'] }, /protected path web\/package\.json/],
     ['a folder that covers a protected one', { owned_files: ['plugin/'] }, /protected path plugin\//],
     ['a protected shared_patch', { shared_patch: ['scripts/orchestrator/queue.mjs'] }, /protected path/],
+    // The inspection queue asks the owner whether a guard is worth building; its proposals never pass by a rule.
+    ['a proposal from the inspection queue', { added_by: 'inspection agent' }, /inspection queue/],
   ];
   for (const [name, extra, why] of cases)
     it(`never ${name}, even with the most permissive rules`, () => {

@@ -98,6 +98,10 @@ const STANDARD = Object.freeze({
   // the whole list; tailLines = the output lines kept for the fix task (null = doneCheck.tailLines). flakyRerun: a red
   // check reruns only the failed commands once on the same sha first; green then is "flaky" (a finding, no freeze).
   baseGate: { enabled: 'auto', commands: null, timeoutSec: 900, tailLines: null, flakyRerun: true },
+  // The inspection queue (lib/inspection.js, `ravenseat inspection`): the same failure signature (lib/failureSignature.js)
+  // in at least minRepeats incidents within windowDays days becomes ONE proposal to build a guard. mode on or off.
+  // registryFile = the tracked guard registry (lib/guardRegistry.js), relative to the project root.
+  inspection: { mode: 'on', minRepeats: 2, windowDays: 30, registryFile: '.ravenseat/guards.json' },
   // The batch push threshold (lib/pushBatch.js; `ravenseat push-check`, the push guard, the board). Every push of baseBranch
   // runs the whole CI, so pushes come in batches of MERGED TASKS (merges through ravenseat merge not yet on <remote>).
   // mode: "owner" = the orchestrator never pushes on its own, only on the owner's word; "threshold" = it may push by

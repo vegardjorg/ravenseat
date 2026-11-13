@@ -102,6 +102,27 @@ const args = process.argv.slice(2);
 const quick = args.includes('--quick');
 const full = args.includes('--full');
 const precheck = args.includes('--precheck');
+/** The inspection queue's last state, read-only (no scan, no proposal): `ravenseat inspection` scans. Never stops --health. */
+function inspectionLines() {
+  try {
+    const KC = config();
+    const I = require('./lib/inspection.js');
+    const GR = require('./lib/guardRegistry.js');
+    const read = (file) => {
+      try {
+        return fs.readFileSync(file, 'utf8');
+      } catch {
+        return null;
+      }
+    };
+    const state = JSON.parse(read(path.join(require('./lib/queueConfig.js').dataFolder(), 'inspection.json')) ?? 'null');
+    const registry = GR.parse(read(path.join(KC.root, KC.inspection?.registryFile || GR.DEFAULT_FILE))).registry;
+    console.log('');
+    for (const l of I.lines(state, { setup: I.setupOf(KC), registry, cli: require('./lib/projectRoot.js').cliCommand() })) console.log(l);
+  } catch {
+    // error-ignored: the summary is extra; the gate health above is the answer
+  }
+}
 // --health: read-only, runs no gate (lib/gateHealth.js). Before the mode check and the gate queue: it needs no slot.
 if (args.includes('--health')) {
   const GH = require('./lib/gateHealth.js');
@@ -114,7 +135,10 @@ if (args.includes('--health')) {
   }
   const h = GH.gateHealth(GH.rowsFromText(text));
   if (args.includes('--json')) console.log(JSON.stringify(h, null, 2));
-  else for (const l of GH.healthLines(h)) console.log(l);
+  else {
+    for (const l of GH.healthLines(h)) console.log(l);
+    inspectionLines();
+  }
   process.exit(0);
 }
 if ([quick, full, precheck].filter(Boolean).length !== 1) {
@@ -159,7 +183,7 @@ const cwd = option('--cwd') ? path.resolve(option('--cwd')) : inProject(process.
  * Appends this run's `gate` row to the time log (lib/timeLogRows.js). Fail open: every error is swallowed, so the log
  * can never change the gate's result or exit code.
  */
-function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSec = null, minFreeMemoryPct = null, flaky = [], durations = null }) {
+function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSec = null, minFreeMemoryPct = null, flaky = [], durations = null, errors = null }) {
   try {
     const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
     const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
@@ -176,7 +200,7 @@ function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSe
     const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
     TL.appendRows(
       file,
-      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct, flaky, durations }),
+      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct, flaky, durations, errors }),
     );
     // A green run after a flaky rerun (lib/trackFlaky.js): the flakyGate row ravenseat cost Flow counts, with the track.
     if (exit === 0 && flaky.length && sha)
@@ -724,6 +748,8 @@ const LOAD_LIMIT = loadLimit();
 const sampler = GL.samplingOn({ limit: LOAD_LIMIT, overridden: !!process.env.QUEUE_LOAD }) ? GL.startSampler({ measure: () => LS.measure() }) : null;
 
 const durations = {};
+// A short, redacted first error line per red command, for the inspection queue (lib/failureSignature.js, lib/inspection.js).
+const errors = {};
 for (const command of gates) {
   const t0 = Date.now();
   const r = await runShell(command, { timeoutMs: deadline ? Math.max(1000, deadline - t0) : null });
@@ -737,6 +763,11 @@ for (const command of gates) {
   if (!green) {
     failedCount++;
     failedGates.push(command);
+    try {
+      errors[command] = require('./lib/failureSignature.js').gateExcerpt({ command, output: r.out, timedOut, roots: [cwd, K.root] });
+    } catch {
+      // error-ignored: the excerpt is for measurement only
+    }
   }
   console.log(
     resultLine(
@@ -847,6 +878,8 @@ logRun({
   minFreeMemoryPct,
   flaky: flakyGates,
   durations,
+  // Only the commands still red are kept (TL.gateRow): a flaky rerun that turned green leaves none.
+  errors,
 });
 // Probably load, not the code. Only a remark: the exit code above is already decided and stays as it is.
 const loadRemark = GL.loadLine({ red: failedCount > 0 || timedOutAny, minFreePct: minFreeMemoryPct, limitPct: LOAD_LIMIT });

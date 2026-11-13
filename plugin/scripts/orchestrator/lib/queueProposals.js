@@ -18,7 +18,9 @@
 //   - never a task with a legal or owner label (LEGAL_LABELS), or linked to a plan entry with open legal points,
 //   - never a task that owns a protected path (config().protectedPaths, the merge guard's list): owning one is what lets
 //     a track change hooks, settings or the orchestrator scripts without the merge guard stopping it,
-//   - never a task whose auto-accept the owner has undone before.
+//   - never a task whose auto-accept the owner has undone before,
+//   - never a proposal from the inspection queue (added_by "inspection agent"; lib/inspection.js): the owner decides whether
+//     a repeated failure is worth a guard.
 // Applied by `queue.mjs add` (the new proposals) and `queue.mjs orchestrator pulse` (older ones). Pure functions without I/O;
 // tested in lib/__tests__/queueProposals.test.ts.
 // =============================================================
@@ -141,6 +143,11 @@ function autoAcceptDecision(task, rules, ctx = {}) {
   const prot = ownsProtected(task, ctx.protectedPaths ?? []);
   if (prot) return no(`owns the protected path ${prot}`);
   if (ctx.undone?.has(task.id)) return no('the owner undid an earlier auto-accept');
+  // The inspection queue (lib/inspection.js) asks the owner whether a repeated failure is worth a guard: a yes by a rule
+  // would build guards nobody chose.
+  // added_by "inspection agent" (an agent label, so `add` makes it proposed); the label "inspection" alone counts too.
+  if (/^inspection\b/i.test(String(task.added_by ?? '')))
+    return no('a proposal from the inspection queue: the owner decides whether a guard is worth building');
   // ---- The owner's rules ----
   const r = rules ?? DEFAULT_RULES;
   if (!r.enabled) return no('auto-accept is off');

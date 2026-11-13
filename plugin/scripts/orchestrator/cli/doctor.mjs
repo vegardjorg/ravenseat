@@ -274,6 +274,8 @@ function checkConfig() {
   wrong.push(...CW.setupProblems(own.push).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   // The test-weakening markers must be valid regular expressions (lib/testWeakening.js setupProblems).
   wrong.push(...TW.setupProblems(own.testWeakening).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
+  // The inspection queue (lib/inspection.js setupProblems): mode on or off, whole numbers of 1 or more.
+  wrong.push(...require('./lib/inspection.js').setupProblems(own.inspection).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   wrong.push(...baselineProblems(own).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   const out = [];
   if (wrong.length) out.push(fail('config', `wrong type in ${path.basename(file)}: ${wrong.join('; ')}`, 'compare with queue.config.example.json'));

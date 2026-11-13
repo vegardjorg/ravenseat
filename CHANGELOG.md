@@ -6,6 +6,10 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### After you update
+- The inspection queue is on by default: when the same gate or CI failure goes red in two separate tasks or commits within
+  30 days, the pulse proposes one task `INSP-<n>` to build a guard for it. Nothing runs until you approve it.
+  `ravenseat cancel <id>` rejects it, `ravenseat inspection snooze <id>` holds it, and
+  `ravenseat settings set inspection.mode off` turns it off.
 - A fix round can now print `CONTINUE <id> (fix round N)` instead of a new prompt: send the SendMessage line it gives to
   the agent that delivered, and start no new agent. `ravenseat resume <id> --reason fix --new-agent` gives the old
   behaviour, and `ravenseat settings set fixRound.continueWithinMin 0` turns it off.
@@ -13,6 +17,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   the whole package.
 
 ### Added
+- Failure signatures (`lib/failureSignature.js`): the time log's gate rows keep a short, redacted first error line per red
+  command (`errors`), and the CI watch rows the failed jobs (`failures`). Paths, line numbers, times, ids and shas are
+  normalized away, so the same failure in two worktrees is one signature.
+- The inspection queue (`ravenseat inspection`, `lib/inspection.js`): a signature with `inspection.minRepeats` incidents
+  (default 2: separate tasks, branch days or CI commits) within `inspection.windowDays` (30) becomes one proposal to
+  build a guard, never auto-accepted. A rejected one comes back only when its incidents double; `ravenseat inspection
+  snooze <id>` holds one. At most three wait at a time. The state is `inspection.json` in the data folder.
+- The guard registry (`ravenseat guards`, `lib/guardRegistry.js`): a tracked file, `.ravenseat/guards.json` by default
+  (`inspection.registryFile`), with one entry per guard: title, explanation, kind, what it guards against, task, date,
+  status and `measures`. `ravenseat guards add --from-task <id>` records the guard an inspection task built. For a gate
+  the measures ("caught N times since built") come from the gate rows. The board's Checks tab shows Guards and Repeated
+  failures, and `ravenseat gates --health` ends with the last inspection state.
 - Continuation first in fix rounds (`lib/fixRound.js`): when the track agent that delivered can still be reached and was
   active within `fixRound.continueWithinMin` minutes (default 60) with less than `fixRound.continueMaxContextK` thousand
   tokens of context (default 200), `ravenseat resume <id> --reason fix` writes the fix brief `fix-<id>-r<N>.md` and prints

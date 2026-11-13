@@ -24,6 +24,7 @@ import { deliveryWarning, findSilent, findWithoutAgent } from './tracks.mjs';
 import { findingsLineNow } from './finding.mjs';
 import { baseHealthLine } from './baseHealth.mjs';
 import { conflictLinesNow, ownershipLinesNow } from './conflicts.mjs';
+import { inspectionPulseLines } from './inspection.mjs';
 
 const UL = require('./lib/usageLimit.js');
 
@@ -288,6 +289,8 @@ export function cmdOrchestrator() {
     for (const l of usageLimitLines()) console.log(l);
     // Cloud tracks that have finished or stopped: one read of the remote, at most every 5 minutes, and never a stop for the pulse.
     for (const l of cloudPulseLines()) console.log(l);
+    // The inspection queue (cli/inspection.mjs): failures that repeat become one proposal; a scan at most once an hour.
+    for (const l of inspectionPulseLines()) console.log(l);
     // The base branch's health (lib/baseHealth.js): one line every round, so a red base is never missed.
     const baseLine = baseHealthLine();
     if (baseLine) console.log(baseLine);
