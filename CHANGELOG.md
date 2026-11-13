@@ -18,6 +18,22 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   the orchestration figures.
 - The setting `cost.contextThresholdK` (default 200, Advanced): the context, in thousands of tokens, that the block
   splits the cost at.
+- One wait mode for long calls (`lib/waitMode.js`, `lib/waitRunner.js`): `ravenseat gates`, `receive` and `merge` block for
+  at most `wait.blockSec` (new setting, default 280 s, at most 590, Advanced), under the 5 minute prompt cache. A run not
+  done by then goes on in a detached process, and the call ends (exit 75) with one line
+  `RUNNING: <what> (run <id>), started <time>. Next: ravenseat <command> --wait <id> (Bash timeout <ms>)`. The next command
+  waits for the same run, shows only the output not shown yet and ends with the run's own exit code. The same command on
+  the same commit is never started twice while one runs (`ALREADY RUNNING`), and a hard cap (at least 2 hours) ends a
+  hung run as red and timed out. See `docs/queue.md` ("Long calls: the wait mode").
+
+### Changed
+- The common track text, `CLAUDE.queue.md` and the parallel-wave skill say to run gates, receive and merge in the
+  foreground with Bash timeout 600000 and to follow the RUNNING line, never `run_in_background` or a poll loop.
+
+### After you update
+- A `ravenseat gates`, `receive` or `merge` call that runs longer than 280 s now returns with a RUNNING line (exit 75)
+  instead of blocking until done; run the `Next:` command it prints. A terminal still blocks as before, and
+  `ravenseat settings set wait.blockSec 0` gives the old behaviour everywhere.
 
 ## 0.12.0 (2026-11-13)
 

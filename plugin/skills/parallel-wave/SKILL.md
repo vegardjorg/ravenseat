@@ -83,7 +83,7 @@ word.
    class, and the merge command). Read the long report only when RESULT says PARTIAL, RED or ownerQuestions>0. Start the
    reviewers `receive` prints (fixed per class plus the helper agents that hit) in the SAME turn. Fix round on findings
    with `ravenseat resume <id> --reason fix --from <reviewer,...>` (CONTINUE: SendMessage the line it prints; else a new agent) naming the reviewer types whose findings caused it (the reviewer hit rate). When review is green:
-   **`ravenseat merge <id>`** from Bash with a long timeout (merge with `--wave-base`, optional migration push if
+   **`ravenseat merge <id>`** from Bash in the foreground (merge with `--wave-base`, optional migration push if
    configured, `gates --quick`, `set <id> done` with cost and findings, `fill`). It stops at the first error with
    the step and an excerpt; full log in `<scratch>/merge-<id>.log`. PARTIAL = continuation in a new agent, not a merge.
 3. **New work** from reviewers, planners or tracks goes in with `ravenseat add` (agents' tasks get status `proposed` and

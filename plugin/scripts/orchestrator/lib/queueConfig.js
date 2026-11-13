@@ -98,6 +98,11 @@ const STANDARD = Object.freeze({
   // the whole list; tailLines = the output lines kept for the fix task (null = doneCheck.tailLines). flakyRerun: a red
   // check reruns only the failed commands once on the same sha first; green then is "flaky" (a finding, no freeze).
   baseGate: { enabled: 'auto', commands: null, timeoutSec: 900, tailLines: null, flakyRerun: true },
+  // The wait mode for long calls (lib/waitMode.js): `ravenseat gates`, `receive` and `merge` block for at most blockSec
+  // seconds (default 280, under the 5 minute prompt cache; at most 590, the Bash tool's limit is 600 s). A run not done by
+  // then goes on detached, and the call prints one RUNNING line with the next command (`<command> --wait <id>`) and the
+  // Bash timeout for it. 0 = off (the call blocks until done, as before). QUEUE_WAIT=off turns it off for one call.
+  wait: { blockSec: 280 },
   // The inspection queue (lib/inspection.js, `ravenseat inspection`): the same failure signature (lib/failureSignature.js)
   // in at least minRepeats incidents within windowDays days becomes ONE proposal to build a guard. mode on or off.
   // registryFile = the tracked guard registry (lib/guardRegistry.js), relative to the project root.

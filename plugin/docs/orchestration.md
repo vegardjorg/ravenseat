@@ -387,6 +387,14 @@ receive and merge the same track. Compaction is still the usual path for a long 
 `--quick` (tracks of class K and U, and `ravenseat merge` after merging) and `--full` (D and D+, and the orchestrator before a
 batch push). One line per gate with GREEN/RED and the time; `--log <file>` keeps the full output.
 
+**Waiting for a long run.** `ravenseat gates`, `receive` and `merge` block for at most `wait.blockSec` (default 280 s, under
+the 5 minute prompt cache). A run not done by then goes on detached, and the call ends (exit 75) with one line:
+`RUNNING: <what> (run <id>), started <time>. Next: ravenseat <command> --wait <id> (Bash timeout <ms>)`. Tracks and the
+orchestrator start these calls in the foreground with Bash timeout 600000 and, on RUNNING, run the `Next:` command; never
+`run_in_background` or a poll loop, so a long gate costs one more blocking call instead of a notification turn on the
+whole context. The same command on the same commit is never started twice while one runs. Details, the hard cap and how
+to turn it off: [queue.md, "Long calls: the wait mode"](queue.md#long-calls-the-wait-mode).
+
 **Gate rows in the time log.** Every `--quick`, `--full` and `--precheck` run appends one row to the time log:
 `{ time, event: "gate", track, branch, kind, gates, failed, duration_s, ok, exit, attempt, timed_out?, sha?, clean? }`
 (`sha` = HEAD when the run started, `clean` = no uncommitted tracked changes then; the base gate's skip rule reads them). `track` is

@@ -271,6 +271,8 @@ const SETTINGS = Object.freeze([
     'The time budget per precheck when the check sets none.'),
   row('gates.timeoutSec', 'gates', 'integer', 'Track gate budget (seconds)',
     'The time budget for the gate run a track starts itself; a gate over it is red. Empty = the base gate budget; 0 = no budget.'),
+  row('wait.blockSec', 'gates', 'integer', 'Longest blocking call (seconds)',
+    'Gates, receive and merge wait at most this long, then print RUNNING with the command that waits on. At most 590; 0 = wait until done.'),
   row('gates.flakyRerun', 'gates', 'onoff', 'Rerun red gate commands once',
     'A red gate in a track reruns only its red commands once on the same commit. Green then counts as flaky.'),
   row('gates.redOnBase', 'gates', 'object', 'Red on base check',

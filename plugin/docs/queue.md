@@ -533,6 +533,32 @@ session) used to read each other as tampering. Now the second one waits, looks a
 `--timeout-sec` starts after the wait. A holder whose process is gone is taken over; a lock folder that cannot be used
 means no lock, never a stuck gate. A gate command never waits for it: gates.mjs gives it `QUEUE_EVIDENCE_LOCK=held`.
 
+### Long calls: the wait mode
+
+Claude Code's Bash tool stops a call after 120 s unless it is given a timeout (600 s at most), and a wait over 300 s misses
+the 5 minute prompt cache. A gate run can take longer, so `ravenseat gates`, `ravenseat receive` and `ravenseat merge` block
+for at most `wait.blockSec` (default 280 s). A run that is done by then prints exactly what it printed before and keeps its
+exit code. A run that is not done goes on in a detached process, and the call ends (exit 75) with one line:
+
+```
+RUNNING: ravenseat gates --quick (run gates-mbx1k2a3f9c1), started 2026-11-13 10:00:00 UTC. Next: ravenseat gates --wait gates-mbx1k2a3f9c1 (Bash timeout 300000)
+```
+
+The next command waits for the same run, shows only the output the earlier call did not show, and blocks again for at
+most `wait.blockSec`. Run it in the foreground with the Bash timeout the line names; never `run_in_background`, never a
+poll loop. The first call goes in the foreground with Bash timeout 600000 (the tool's maximum): it ends by itself after
+`wait.blockSec`, so the larger timeout costs nothing and also covers a raised budget.
+
+- The same command with the same arguments in the same folder on the same commit is never started twice while one runs:
+  a second call prints `ALREADY RUNNING` with the run's id and waits for that run.
+- A hard cap ends a run that hangs: at least 2 hours, and four times the largest of `gates.timeoutSec`,
+  `baseGate.timeoutSec` and `doneCheck.timeoutSec`. The run is then red with `stopped after the time budget of <n> s`, as a
+  gate over its own budget is. The gate budgets themselves are unchanged.
+- The output and the result are kept in `<data folder>/runs/` for 3 days. They only relay what the command printed: the
+  queue state and the gate evidence store stay what receive, merge and the push check rely on.
+- Off: `wait.blockSec: 0`, `QUEUE_WAIT=off` for one call, and a terminal (a person at a terminal waits as before).
+  `--wait <id>` always works. Developed on Windows; its tests run in CI on Linux and Windows, not tried on macOS.
+
 ### The temp folder
 
 Tests leave things in the temp folder, and over thousands of runs it fills up. So every run of `gates.mjs` gives its gate
@@ -678,6 +704,7 @@ names every guard weaker than its default on its `settings` row.
 | `gateEvidence.mode` | `own` | Whose gate evidence `receive` and `merge` rely on. `own`: they run the quick gates themselves on the track tip (a green run already recorded on the same tip and gate setup is reused, so `merge` after `receive` runs nothing twice), never believing `gate_check` in queue.json, and they confirm the owner rows a task relies on (your answers, edits and approvals) against the owner log, `owner-log.json` (a row no ravenseat write recorded stops them; `ravenseat owner-log accept <id> --by owner` confirms it). `external`: as `own`, and a green run of the checks in `gateEvidence.external` on exactly the same commit counts as the full gate (`ravenseat gates --full` in the main checkout asks GitHub with `gh`). `off`: they take the track's `gates=OK` as given and do not check owner rows. With empty `gates.quick` and `gates.full`, `own` runs nothing anyway, so `off` saves no time; it only removes the owner row check. `ravenseat doctor` gives INFO for `external` and warns `GATE EVIDENCE OFF` for `off`; both are a weakened guard | Advanced |
 | `gateEvidence.external` | `[]` | The GitHub check names (workflow or job) whose newest run must be green on exactly the same commit in mode `external`. `[]` = none counts, and the full gate runs here (doctor warns) | Advanced |
 | `baseGate.enabled`, `baseGate.commands`, `baseGate.timeoutSec`, `baseGate.tailLines` | `auto`, `null` (the quick gates), `900`, `null` | After a merge the base branch's new tip is checked; a red base stops further merges until it is green. The commands run after the quick gates, within the time budget; the tail lines go into the fix task | Advanced |
+| `wait.blockSec` | `280` | [Long calls: the wait mode](#long-calls-the-wait-mode): `ravenseat gates`, `receive` and `merge` block for at most this many seconds (at most 590), then print one `RUNNING` line with the next command (`<command> --wait <id>`) and the Bash timeout for it. `0` = block until done, as before | Advanced |
 | `baseGate.flakyRerun` | `true` | Before a red base check freezes the base, only the failed commands run once more on the same sha; green then is recorded as flaky (a `flakyGate` time log row, a finding, no freeze), red twice freezes. `false` = freeze at once | Advanced |
 | `inspection.mode` | `on` | The inspection queue (see orchestration.md, "Repeated failures and the guard registry"): the same failure signature in the gates or CI, in at least `inspection.minRepeats` incidents within `inspection.windowDays` days, becomes one proposal to build a guard. `off` = no scan and no proposals | Advanced |
 | `inspection.minRepeats`, `inspection.windowDays` | `2`, `30` | The threshold: incidents (separate tasks, a branch and a day without a task, or CI commits), not runs, so one track's reruns count once | Advanced |

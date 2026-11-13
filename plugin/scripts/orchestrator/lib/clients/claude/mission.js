@@ -41,6 +41,8 @@ function missionAddendum(ctx = {}) {
         "- Keep Bash output short: `grep … | head`, `sed -n 'a,bp'`, never `cat` of large files. Read gate logs in excerpts.",
         '- Make independent calls in the same turn. No sleep, poll or wait loops (the prompt cache expires after 5 minutes);',
         '  if a call answers `IN_PROGRESS` (in progress), continue with the command it prints.',
+        '- `ravenseat gates` in the foreground with Bash timeout 600000, never `run_in_background`. On a `RUNNING` line, run',
+        '  its `Next:` command with the Bash timeout it names.',
       ].join('\n'),
       // The trigger for the handover (the core says what to do when it is reached).
       CONTEXT_CAP: '**Context cap about 300k** (about 120 tool calls)',

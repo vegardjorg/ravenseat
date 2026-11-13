@@ -94,6 +94,41 @@ const args = name ? rest : [first, ...rest];
 // command is checked by queue.mjs itself (where `doctor` is exempt); `setup` is exempt (it never replaces the file).
 if (name && name !== 'setup') createRequire(import.meta.url)('./lib/queueConfig.js').stopIfConfigUnreadable();
 
+// The wait mode for long calls (lib/waitMode.js): `gates`, `receive` and `merge` block for at most wait.blockSec (default
+// 280 s, under the prompt cache's 5 minutes); a run not done by then goes on in a detached runner, and the call prints one
+// RUNNING line with the exact next command (`<command> --wait <id>`) and the Bash timeout for it. Off for a terminal, with
+// wait.blockSec 0 or QUEUE_WAIT=off (the runner sets it for the command it runs). `--wait <id>` always waits.
+{
+  const command = name === 'queue' ? args[0] : name ?? args[0];
+  const commandArgs = name === 'queue' || !name ? args.slice(1) : args;
+  const require = createRequire(import.meta.url);
+  const W = require('./lib/waitMode.js');
+  if (W.COMMANDS.includes(command)) {
+    const QC = require('./lib/queueConfig.js');
+    let cfg = {};
+    let folder = null;
+    try {
+      cfg = QC.config();
+      folder = QC.dataFolder();
+    } catch {
+      // error-ignored: the defaults, and the runs in the temp folder (lib/waitMode.js runsFolder)
+    }
+    const setup = W.setupFrom(cfg, process.env);
+    if (W.wanted({ command, args: commandArgs, isTTY: !!process.stdout.isTTY, setup }))
+      process.exit(
+        await W.main({
+          command,
+          args: commandArgs,
+          childArgv: [fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+          setup,
+          cwd: process.cwd(),
+          dataFolder: folder,
+          cli: require('./lib/projectRoot.js').cliCommand(),
+        }),
+      );
+  }
+}
+
 // A queue command runs in THIS process (review 2026-11-11, E2): a second node start cost about 100 ms or more on every
 // command, and the orchestrator runs many per round. process.argv is set to what queue.mjs had as its own process
 // ([node, queue.mjs, command, ...]), so every argv read in queue.mjs and cli/ sees the same as before. env, cwd and the
