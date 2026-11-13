@@ -48,6 +48,23 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - The setting `wiring.stop` (default `true`, Advanced, in Merge and push): `false` lets `done` pass with open items and
   says `WIRING STOP OFF`; it is a weakened guard in `ravenseat settings` and `ravenseat doctor`.
 
+### Changed
+- `reviewer-security` has five web security checkpoints, each with what to look for and what a finding names: a URL
+  from data in an outgoing request (SSRF: host allowlist, fixed scheme, no internal addresses or redirects to them),
+  data in an HTML, attribute, script or style context without the escaping for that context, the scheme of a stored
+  link (`javascript:`, `data:` and the like refused), a path from the caller joined without normalization and a root
+  check (traversal, links), and a parser differential (two parsers reading the same input differently). It is still a
+  fixed reviewer for class D+; there is no signal list that picks it.
+- The `parallel-wave` skill and `CLAUDE.queue.md` say the orchestrator writes no status text between tool calls or
+  after a background notification unless something needs the owner; it goes on with the next call.
+
+### Fixed
+- The per-agent state folders of the track hooks in the OS temp folder (`queue-track-context-guard`,
+  `queue-read-hint`, `queue-track-end`, `queue-write-warn`) were never cleaned. Each hook now sweeps its own folder
+  right before it writes (`lib/stateSweep.js`): only `<id>.json` files older than 7 days, never a link, a folder or
+  another name, never a parent or sibling folder, at most once a day per folder by the mtime of a `.last-sweep`
+  marker (one stat on other calls), and never failing the hook.
+
 ### After you update
 - Plugin installs get the new agent with the update. A vendored install runs `node scripts/install.mjs <project>` once
   more: it adds `.claude/agents/researcher.md` and keeps your other files.

@@ -66,6 +66,23 @@ describe('the agent files', () => {
     expect(s).toContain('shown at file:line');
   });
 
+  it('reviewer-security has the five web security checkpoints, each with what to look for and what a finding is', () => {
+    const s = read('reviewer-security.md').replace(/\r\n/g, '\n');
+    const part = s.split('## Web security checkpoints')[1]?.split('\n## ')[0] ?? '';
+    expect(part).not.toBe('');
+    for (const h of [
+      '### 1. URL from data in an outgoing request (SSRF)',
+      '### 2. HTML context',
+      '### 3. URL scheme on stored links',
+      '### 4. Path from the caller',
+      '### 5. Parser differential',
+    ])
+      expect(part, h).toContain(h);
+    // Each checkpoint says what to look for and what a finding looks like.
+    expect(part.match(/^- Look for:/gm)?.length).toBe(5);
+    expect(part.match(/^- Finding:/gm)?.length).toBe(5);
+  });
+
   it.each(['reviewer-design.md', 'reviewer-tests.md', 'reviewer-gap.md', 'reviewer-docs.md'])(
     '%s carries the attribution line',
     (f) => {
