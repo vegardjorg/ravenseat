@@ -141,7 +141,8 @@ describe('wait mode for long calls', () => {
     const { next } = runningLine(first.out);
     const second = p.run(next, { QUEUE_WAIT_BLOCK_SEC: '20' });
     expect(second.code).toBe(1);
-    expect(second.sec).toBeLessThan(15);
+    // The gate sleeps 30 s and the cap is 3 s: anything well under 30 s proves the run was stopped (room for a loaded machine).
+    expect(second.sec).toBeLessThan(25);
     expect(`${second.out}${second.err}`).toMatch(/RED: .*stopped after the time budget of 3 s/);
     expect(p.ran('ran.txt')).toBe('start ');
   }, 60_000);
