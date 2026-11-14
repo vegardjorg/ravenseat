@@ -3,7 +3,9 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.14.0 (2026-11-13)
+
+**Fewer turns per round and nothing left unwired: a pulse tick is one call that answers SILENT or the actions with their next commands, a wiring spec becomes open items that stop done until each is carried out or rejected, missions open with the files to read in one turn, a narrow researcher agent takes the orchestrator's own analysis, and full runs get priority in the gate queue with a load factor in gate health.**
 
 ### Added
 - `ravenseat pulse-check`, the pulse in one read-only call (`cli/pulseCheck.mjs`). A repeated pulse (a scheduled or
