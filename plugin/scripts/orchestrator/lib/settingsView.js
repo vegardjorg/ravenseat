@@ -102,6 +102,7 @@ function standardOf(row, { config, mode = 'full' } = {}) {
   if (row.key.startsWith('limits.')) return limitStandard(row.key.slice('limits.'.length), config);
   if (row.key === 'guidance') return 'guided';
   if (row.key === 'checksPanel.mode') return true;
+  if (row.key === 'checksPanel.marker') return true;
   return getPath(KK.STANDARD, pathOf(row.key));
 }
 
@@ -115,6 +116,7 @@ function valueOf(row, { config, queue }) {
   }
   if (row.key === 'guidance') return GU.modeOf(q);
   if (row.key === 'checksPanel.mode') return GU.checksPanelOn(q);
+  if (row.key === 'checksPanel.marker') return q.checksPanel?.marker !== false;
   if (row.key.startsWith('board.') && Object.hasOwn(KK.BOARD_SWITCHES, row.key.slice('board.'.length)))
     return KK.boardSwitches(config, q)[row.key.slice('board.'.length)];
   if (row.key.startsWith('proposals.autoAccept.'))

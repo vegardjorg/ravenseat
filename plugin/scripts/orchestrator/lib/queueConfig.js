@@ -242,7 +242,7 @@ const STANDARD = Object.freeze({
   // Review signals (lib/reviewSignals.js): what a diff ADDS lifts a reviewer in on top of the class (built-ins auth,
   // secret, url-from-data, html-sink lift reviewer-security). Per signal: enabled, reviewer, paths and words (added to a
   // built-in). Empty = the built-ins as they are.
-  review: { signals: {} },
+  review: { signals: {}, packs: [] },
   // Model per agent: agent name (track, track-d, reviewer, reviewer-docs, a helper ...) -> "opus", "sonnet", "haiku"
   // or "fable". Empty (default) = the model in each agent's own file. A set model is printed on the start lines
   // (fill, start, resume, receive) as `model=<m>`, and the orchestrator passes it to the Agent tool, which overrides

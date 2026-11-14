@@ -60,7 +60,9 @@
 //     `queue.mjs cancel <id> --remark …` or `queue.mjs edit <id> --json {value, content_min, class}` with --by theBoard
 //     (rules in lib/queueTaskEdit.js: only waiting and proposed tasks). Both are logged, so the answer's `log` goes to /api/undo.
 //   - CHECKS (board/checks.js): what the project has and prioritized suggestions. GET /api/checks = `queue.mjs checks --json`,
-//     POST /api/checks { action, key } = `queue.mjs checks plan|dismiss|restore|on|off` (lib/checksCatalog.js, checks-catalog/).
+//     POST /api/checks { action, key } = `queue.mjs checks plan|dismiss|restore|packs --apply|on|off` (lib/checksCatalog.js,
+//     checks-catalog/). state().checksMarker = the small red dot on the tab: a high suggestion is open and checksPanel.marker
+//     is not off. It is read in the background, at most every two minutes.
 //   - PLANS (see docs/plan-register.md): the Plans workspace (queue-board/plans/). GET /api/plans reads plans.json and
 //     queue.json (read only) and sends what queuePlanView.plansData makes, with a version so unchanged data is not sent
 //     again. The same response has the document register for the Documents and agreements view. The priority map saves a draft with
@@ -644,6 +646,25 @@ async function checksReportNow(fresh) {
   }
 }
 
+/**
+ * The red marker on the Checks tab: an open suggestion with high priority, unless checksPanel.marker is off. The report is
+ * read in the background (at most every two minutes), so the state never waits for it; null until the first answer.
+ */
+let markerRunning = false;
+function checksMarkerNow(panelOn) {
+  if (!panelOn) return false;
+  if (!markerRunning && Date.now() - checksReport.time > 120_000) {
+    markerRunning = true;
+    checksReportNow(false)
+      .catch(() => null)
+      .finally(() => {
+        markerRunning = false;
+      });
+  }
+  const r = checksReport.report;
+  return r ? r.marker !== false && (r.important ?? 0) > 0 : null;
+}
+
 // ---- The state (cheap: rebuilt only when queue.json, git status or the logo has changed) -----------------------------
 // git status is read again every minute, so the state (age, night pause, "Next up") is recomputed at least that often.
 let quick = null;
@@ -664,7 +685,8 @@ function state() {
   // the status line and the first-run card have nothing to say.
   const checksPanel = checksPanelNow();
   const checks = checksPanel ? checksNow() : null;
-  const baseKey = JSON.stringify([baseHealth, pushBatch, checks, checksPanel]);
+  const checksMarker = checksMarkerNow(checksPanel);
+  const baseKey = JSON.stringify([baseHealth, pushBatch, checks, checksPanel, checksMarker]);
   // Is a `ravenseat wait` listening (its heartbeat is fresh)? Read every time, so the line flips without a queue change.
   const listening = OW.heartbeatState(FOLDER).listening;
   if (
@@ -743,6 +765,8 @@ function state() {
     checks,
     // Does the Checks tab show (`ravenseat checks on|off`)?
     checksPanel,
+    // The red dot on the Checks tab (a high suggestion is open; `ravenseat checks marker off` hides it).
+    checksMarker,
     // The module switches (lib/queueConfig.js features): the board hides the tabs, buttons and rows of those that are off.
     // The cloud switch is read fresh, so the gear can turn it on without a restart. The other modules are read at start.
     features: { ...FEATURES, cloud: KK.featureOn('cloud', fresh) },
@@ -2090,11 +2114,13 @@ async function write(filePath, b) {
     checksReport = { time: 0, report: null };
     if (b?.action === 'on' || b?.action === 'off') return run(['checks', b.action], `checks ${b.action}`);
     if (b?.action === 'gates') return run(['kickstart', 'gates', '--apply'], 'kickstart gates');
+    // The stack packs: the click on "Turn on" is the owner's yes (lib/reviewPacks.js, cli/checks.mjs packs).
+    if (b?.action === 'packs') return run(['checks', 'packs', '--apply'], 'checks packs');
     const key = typeof b?.key === 'string' && /^[a-z0-9][a-z0-9-]{0,59}$/.test(b.key) ? b.key : null;
     if (!key) return no('invalid suggestion');
     if (b.action === 'plan') return run(['checks', 'plan', key, '--approved'], `checks plan ${key}`);
     if (b.action === 'dismiss' || b.action === 'restore') return run(['checks', b.action, key], `checks ${b.action} ${key}`);
-    return no('action must be plan, dismiss, restore, gates, on or off');
+    return no('action must be plan, dismiss, restore, gates, packs, on or off');
   }
   // The "Helper agents" tab: a switch goes through `ravenseat helpers on|off <agent>` (queue.json, under the lock).
   // A custom helper that is not approved for its file as it is now is refused here (and again in queue.mjs).

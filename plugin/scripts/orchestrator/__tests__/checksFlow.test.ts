@@ -210,3 +210,73 @@ describe('ravenseat checks: the instruction size suggestion', () => {
     expect(r.all).toContain('a queue agent cannot do it');
   });
 });
+
+describe('ravenseat checks: stack packs for the review signals', () => {
+  const NEXT = { 'package.json': JSON.stringify({ dependencies: { next: '16', fastify: '5' } }) };
+  const config = (p: { folder: string }) => JSON.parse(fs.readFileSync(path.join(p.folder, 'queue.config.json'), 'utf8'));
+  const find = (p: { json: () => any }, key: string) => p.json().suggestions.find((s: { key: string }) => s.key === key);
+
+  it('finds the stack from the manifests and suggests the packs, without an agent', () => {
+    const p = project({ files: NEXT });
+    const s = find(p, 'stack-review-signals');
+    expect(s).toMatchObject({ action: 'packs', priority: 'high', state: 'open' });
+    expect(s.detail).toMatch(/Next\.js/);
+    expect(p.json().packs).toMatchObject({ detected: ['nextjs'], missing: ['core', 'nextjs'], unpacked: ['fastify'] });
+    expect(find(p, 'stack-pack-research').detail).toMatch(/fastify/);
+    const plan = p.run('checks', 'plan', 'stack-review-signals');
+    expect(plan.code).toBe(1);
+    expect(plan.all).toContain('checks packs --apply');
+  });
+
+  it('checks packs shows what they add and writes nothing; --apply writes review.packs and the suggestion goes', () => {
+    const p = project({ files: NEXT });
+    const show = p.run('checks', 'packs');
+    expect(show.code).toBe(0);
+    expect(show.all).toContain('nextjs');
+    expect(show.all).toContain('Nothing written');
+    expect(config(p).review).toBeUndefined();
+    const r = p.run('checks', 'packs', '--apply');
+    expect(r.code).toBe(0);
+    expect(config(p).review.packs).toEqual(['core', 'nextjs']);
+    expect(config(p).baseBranch).toBe('main');
+    expect(find(p, 'stack-review-signals')).toBeUndefined();
+    expect(p.run('checks', 'packs', '--apply').all).toContain('already on');
+  });
+
+  it('a project pack in docs/queue/review-packs is offered and its signals are written to review.signals', () => {
+    const WORD = String.raw`\breply\.setCookie\s*\(`;
+    const own = {
+      id: 'fastify',
+      title: 'Fastify',
+      detect: { npm: ['fastify'] },
+      signals: { auth: { words: [WORD] } },
+      examples: {
+        hit: [
+          { file: 'src/a.ts', line: "reply.setCookie('sid', v)", signal: 'auth' },
+          { file: 'src/b.ts', line: 'reply.setCookie (name, v)', signal: 'auth' },
+        ],
+        miss: [
+          { file: 'src/a.ts', line: 'reply.send(x)' },
+          { file: 'src/b.ts', line: 'const setCookieName = 1' },
+        ],
+      },
+    };
+    const p = project({ files: { ...NEXT, 'docs/queue/review-packs/fastify.json': JSON.stringify(own) } });
+    expect(p.json().catalogErrors).toEqual([]);
+    expect(p.json().packs.missing).toContain('fastify');
+    expect(find(p, 'stack-pack-research')).toBeUndefined();
+    expect(p.run('checks', 'packs', '--apply').code).toBe(0);
+    expect(config(p).review.packs).toContain('fastify');
+    expect(config(p).review.signals.auth.words).toContain(WORD);
+  });
+
+  it('the red marker can be switched off and on, and the report says how many important ones are open', () => {
+    const p = project({ files: NEXT });
+    expect(p.json().important).toBeGreaterThan(0);
+    expect(p.json().marker).toBe(true);
+    expect(p.run('checks', 'marker', 'off').all).toContain('marker: off');
+    expect(p.json().marker).toBe(false);
+    expect(p.run('checks', 'marker', 'on').code).toBe(0);
+    expect(p.json().marker).toBe(true);
+  });
+});

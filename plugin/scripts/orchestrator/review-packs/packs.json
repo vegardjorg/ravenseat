@@ -1,0 +1,3330 @@
+{
+ "_": "Stack packs for review signals (lib/reviewPacks.js). One pack per stack: how it is detected from the manifests, the signals it adds in the review.signals format, and examples that are tests (hit: the line must hit its signal; miss: no signal may hit). Turned on per project with review.packs, after the owner says yes on the Checks tab. A project adds or replaces a pack with a file in docs/queue/review-packs/<id>.json.",
+ "schema": 1,
+ "newSignals": {
+  "raw-sql": {
+   "reviewer": "reviewer-security",
+   "text": "Raw SQL built from data, or an ORM escape hatch that skips parameters (SQL injection)."
+  },
+  "access-rule": {
+   "reviewer": "reviewer-security",
+   "text": "A rule that opens access: public routes, anonymous endpoints, database or storage rules, definer functions."
+  },
+  "cors-csrf": {
+   "reviewer": "reviewer-security",
+   "text": "CORS opened up, CSRF protection switched off, or cookie flags weakened."
+  },
+  "deserialize": {
+   "reviewer": "reviewer-security",
+   "text": "Deserializing data into objects (pickle, Marshal, ObjectInputStream, BinaryFormatter, unsafe YAML)."
+  },
+  "code-exec": {
+   "reviewer": "reviewer-security",
+   "text": "A shell command or code evaluated from data (command injection, eval)."
+  },
+  "file-upload": {
+   "reviewer": "reviewer-security",
+   "text": "Receiving a file from a user (type, size, path and where it is stored)."
+  },
+  "tls-off": {
+   "reviewer": "reviewer-security",
+   "text": "Certificate checks switched off for an outgoing connection."
+  }
+ },
+ "packs": {
+  "core": {
+   "id": "core",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Core (language level, offered with any stack)",
+   "kind": "core",
+   "detect": {
+    "always": true
+   },
+   "signals": {
+    "secret": {
+     "words": [
+      "\\bsk_(?:live|test)_[A-Za-z0-9]{10,}",
+      "\\bsb_secret_[A-Za-z0-9_-]{10,}",
+      "\\beyJ[\\w-]{10,}\\.eyJ[\\w-]{10,}\\.[\\w-]{10,}",
+      "\\b(?:AKIA|ASIA)[A-Z0-9]{16}\\b",
+      "\\bgh[pousr]_[A-Za-z0-9]{30,}",
+      "\\bxox[abprs]-[\\w-]{10,}",
+      "\\bsecret\\s*:\\s*['\"][^'\"\\s]{8,}['\"]",
+      "\\bclient_?secret\\s*[:=]\\s*['\"][^'\"\\s]{6,}['\"]",
+      "\\b(?:NEXT_PUBLIC|EXPO_PUBLIC|NUXT_PUBLIC|VITE|REACT_APP|PUBLIC)_\\w*(?:SECRET|PRIVATE|PASSWORD|SERVICE_ROLE)\\w*"
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\.(?:query|execute|raw|unsafe|whereRaw|orderByRaw)\\s*\\(\\s*`[^`]*\\$\\{",
+      "\\b(?:SELECT\\s+[\\w*,\\s.]+?\\s+FROM|INSERT\\s+INTO|DELETE\\s+FROM|UPDATE\\s+\\w+\\s+SET)\\b[^\\n]*?[\"']\\s*\\+\\s*\\w",
+      "\\bf([\"'])(?:SELECT|INSERT\\s+INTO|UPDATE|DELETE\\s+FROM)\\s(?:(?!\\1).)*\\{"
+     ]
+    },
+    "code-exec": {
+     "words": [
+      "\\bchild_process\\.(?:exec|execSync|spawn|spawnSync|execFile)\\s*\\(",
+      "(?<![.\\w$])(?:exec|execSync|eval)\\s*\\(",
+      "\\bspawn(?:Sync)?\\s*\\([^)]*shell\\s*:\\s*true",
+      "\\bnew\\s+Function\\s*\\(",
+      "\\bvm\\.(?:runInNewContext|runInThisContext|runInContext|compileFunction)\\s*\\(",
+      "\\bsubprocess\\.\\w+\\s*\\([^)]*shell\\s*=\\s*True",
+      "\\bos\\.(?:system|popen)\\s*\\(",
+      "\\bshell_exec\\s*\\(|\\bpassthru\\s*\\(|\\bproc_open\\s*\\(",
+      "\\bRuntime\\.getRuntime\\s*\\(\\s*\\)\\s*\\.exec\\s*\\(",
+      "\\bnew\\s+ProcessBuilder\\s*\\(",
+      "\\bProcess\\.Start\\s*\\(",
+      "\\b(?:system|spawn|IO\\.popen)\\s*\\(\\s*\"[^\"]*#\\{",
+      "`[^`]*#\\{[^`]*`"
+     ]
+    },
+    "deserialize": {
+     "words": [
+      "\\bpickle\\.loads?\\s*\\(",
+      "\\b(?:cPickle|dill|jsonpickle)\\.(?:loads?|decode)\\s*\\(",
+      "\\byaml\\.(?:load|load_all|unsafe_load)\\s*\\((?![^)]*Loader\\s*=\\s*(?:yaml\\.)?C?SafeLoader)",
+      "\\bmarshal\\.loads?\\s*\\(",
+      "\\bshelve\\.open\\s*\\(",
+      "\\bunserialize\\s*\\("
+     ]
+    },
+    "cors-csrf": {
+     "words": [
+      "Access-Control-Allow-Origin['\"]\\s*,\\s*['\"]\\*['\"]",
+      "\\bhttpOnly\\s*[:=]\\s*false\\b",
+      "\\bsameSite\\s*[:=]\\s*['\"]?none\\b"
+     ]
+    },
+    "tls-off": {
+     "words": [
+      "\\brejectUnauthorized\\s*:\\s*false\\b",
+      "\\bNODE_TLS_REJECT_UNAUTHORIZED\\b",
+      "\\bverify\\s*=\\s*False\\b",
+      "\\bInsecureSkipVerify\\s*:\\s*true\\b",
+      "\\bServerCertificateCustomValidationCallback\\s*=",
+      "\\bDangerousAcceptAnyServerCertificateValidator\\b",
+      "\\bbadCertificateCallback\\s*=",
+      "\\bssl\\._create_unverified_context\\s*\\(",
+      "\\bverify_mode\\s*[:=]\\s*OpenSSL::SSL::VERIFY_NONE",
+      "\\bCURLOPT_SSL_VERIFYPEER\\s*,\\s*(?:false|0)\\b"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/billing.ts",
+      "line": "const stripe = new Stripe(\"sk_live_51Habcdefghijklmnop\");",
+      "signal": "secret"
+     },
+     {
+      "file": "src/session.ts",
+      "line": "app.use(session({ secret: \"keyboard-cat-2026\" }));",
+      "signal": "secret"
+     },
+     {
+      "file": "src/config.ts",
+      "line": "const key = process.env.NEXT_PUBLIC_STRIPE_PRIVATE_KEY;",
+      "signal": "secret"
+     },
+     {
+      "file": "src/repo.ts",
+      "line": "const rows = await pool.query(`SELECT * FROM users WHERE id = ${id}`);",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "src/repo.js",
+      "line": "const sql = \"SELECT * FROM users WHERE name = '\" + name + \"'\";",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "app/repo.py",
+      "line": "cur.execute(f\"SELECT * FROM users WHERE name = '{name}'\")",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "src/run.ts",
+      "line": "execSync(`git log ${branch}`);",
+      "signal": "code-exec"
+     },
+     {
+      "file": "app/run.py",
+      "line": "subprocess.run(cmd, shell=True)",
+      "signal": "code-exec"
+     },
+     {
+      "file": "app/load.py",
+      "line": "data = pickle.loads(request.body)",
+      "signal": "deserialize"
+     },
+     {
+      "file": "app/load.py",
+      "line": "cfg = yaml.load(text)",
+      "signal": "deserialize"
+     },
+     {
+      "file": "src/http.ts",
+      "line": "const agent = new https.Agent({ rejectUnauthorized: false });",
+      "signal": "tls-off"
+     },
+     {
+      "file": "app/client.py",
+      "line": "r = requests.get(API, verify=False)",
+      "signal": "tls-off"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/app.ts",
+      "line": "app.use(session({ secret: process.env.SESSION_SECRET }));"
+     },
+     {
+      "file": "src/repo.ts",
+      "line": "const rows = await pool.query(\"SELECT * FROM users WHERE id = $1\", [id]);"
+     },
+     {
+      "file": "src/parse.ts",
+      "line": "const m = /^v(\\d+)/.exec(line);"
+     },
+     {
+      "file": "app/run.py",
+      "line": "subprocess.run([\"git\", \"status\"], check=True)"
+     },
+     {
+      "file": "app/load.py",
+      "line": "cfg = yaml.safe_load(text)"
+     },
+     {
+      "file": "src/ui.ts",
+      "line": "const label = \"Please select one from the list\";"
+     }
+    ]
+   },
+   "sources": [
+    "https://owasp.org/www-community/attacks/Command_Injection",
+    "https://cheatsheetseries.owasp.org/cheatsheets/Deserialization_Cheat_Sheet.html"
+   ]
+  },
+  "spring": {
+   "id": "spring",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Spring Boot and Spring Security",
+   "kind": "framework",
+   "detect": {
+    "maven": [
+     "org.springframework.boot:spring-boot-starter-web",
+     "org.springframework.boot:spring-boot-starter-webflux",
+     "org.springframework.boot:spring-boot-starter-security",
+     "org.springframework.security:spring-security-config"
+    ],
+    "files": []
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "*SecurityConfig*",
+      "*WebSecurity*",
+      "**/security/**"
+     ],
+     "words": [
+      "\\bSecurityContextHolder\\.(?:getContext\\s*\\(\\s*\\)\\s*\\.setAuthentication|setContext|clearContext)\\s*\\(",
+      "\\bnew\\s+UsernamePasswordAuthenticationToken\\s*\\(",
+      "\\b(?:authenticationManager|authManager)\\.authenticate\\s*\\(",
+      "\\bSecurityFilterChain\\b",
+      "\\.(?:oauth2Login|oauth2ResourceServer|formLogin|httpBasic|sessionManagement|rememberMe)\\s*\\(",
+      "\\bJwts\\.builder\\s*\\(|\\bJWT\\.create\\s*\\(|\\bJwtEncoder\\b"
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\bKeys\\.hmacShaKeyFor\\s*\\(\\s*\"",
+      "\\bAlgorithm\\.HMAC(?:256|384|512)\\s*\\(\\s*\""
+     ]
+    },
+    "access-rule": {
+     "words": [
+      "\\.permitAll\\s*\\(\\s*\\)",
+      "@PreAuthorize\\s*\\(\\s*\"permitAll",
+      "\\bweb\\.ignoring\\s*\\(",
+      "\\bWebSecurityCustomizer\\b"
+     ]
+    },
+    "cors-csrf": {
+     "paths": [
+      "*CorsConfig*"
+     ],
+     "words": [
+      "\\.csrf\\s*\\(\\s*\\)\\s*\\.disable\\s*\\(",
+      "\\.csrf\\s*\\(\\s*(?:AbstractHttpConfigurer::disable|\\w+\\s*->\\s*\\w+\\.disable\\s*\\(\\s*\\))",
+      "@CrossOrigin\\b",
+      "\\.allowedOrigin(?:Pattern)?s\\s*\\(\\s*\"\\*\"",
+      "\\bsetAllowedOrigin(?:Pattern)?s\\s*\\(\\s*(?:List\\.of|Arrays\\.asList|Collections\\.singletonList)\\s*\\(\\s*\"\\*\""
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\bcreateNativeQuery\\s*\\(",
+      "@Query\\s*\\([^)]*nativeQuery\\s*=\\s*true",
+      "\\b(?:jdbcTemplate|namedParameterJdbcTemplate|jdbc)\\.(?:query\\w*|update|execute|batchUpdate)\\s*\\(\\s*\"[^\"]*\"\\s*\\+",
+      "\\.(?:executeQuery|executeUpdate|execute|addBatch)\\s*\\(\\s*\"[^\"]*\"\\s*\\+"
+     ]
+    },
+    "deserialize": {
+     "words": [
+      "\\bnew\\s+ObjectInputStream\\s*\\(",
+      "\\b(?:enableDefaultTyping|activateDefaultTyping)\\s*\\(",
+      "@JsonTypeInfo\\s*\\([^)]*JsonTypeInfo\\.Id\\.CLASS",
+      "\\bnew\\s+XStream\\s*\\(",
+      "\\bnew\\s+Yaml\\s*\\(\\s*\\)"
+     ]
+    },
+    "file-upload": {
+     "words": [
+      "\\bMultipartFile\\b",
+      "\\.transferTo\\s*\\("
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\brestTemplate\\.(?:getForObject|getForEntity|postForObject|postForEntity|exchange|execute)\\s*\\(\\s*(?!\\s*\")",
+      "\\b(?:WebClient|RestClient)\\.create\\s*\\(\\s*(?!\\s*\")",
+      "\\bredirect:\"\\s*\\+"
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\bth:utext\\b"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/main/java/app/config/AppConfig.java",
+      "line": "http.csrf(AbstractHttpConfigurer::disable);",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "src/main/java/app/config/AppConfig.java",
+      "line": ".requestMatchers(\"/admin/**\").permitAll()",
+      "signal": "access-rule"
+     },
+     {
+      "file": "src/main/java/app/web/TokenFilter.java",
+      "line": "SecurityContextHolder.getContext().setAuthentication(authToken);",
+      "signal": "auth"
+     },
+     {
+      "file": "src/main/java/app/repo/UserRepo.java",
+      "line": "List<User> u = em.createNativeQuery(\"select * from users where name = '\" + name + \"'\").getResultList();",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "src/main/java/app/web/Import.java",
+      "line": "ObjectInputStream in = new ObjectInputStream(request.getInputStream());",
+      "signal": "deserialize"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/main/java/app/web/UserController.java",
+      "line": "Authentication current = SecurityContextHolder.getContext().getAuthentication();"
+     },
+     {
+      "file": "src/main/java/app/web/UserController.java",
+      "line": "@GetMapping(\"/users/{id}\")"
+     },
+     {
+      "file": "src/main/java/app/config/AppConfig.java",
+      "line": ".requestMatchers(\"/admin/**\").hasAuthority(\"reports.read\")"
+     }
+    ],
+    "pathHit": [
+     {
+      "file": "src/main/java/app/config/SecurityConfig.java",
+      "signal": "auth"
+     }
+    ],
+    "pathMiss": [
+     "src/main/java/app/web/UserController.java"
+    ]
+   },
+   "sources": [
+    "https://docs.spring.io/spring-security/reference/servlet/configuration/java.html",
+    "https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html",
+    "https://docs.spring.io/spring-framework/reference/web/webmvc-cors.html"
+   ]
+  },
+  "fastapi": {
+   "id": "fastapi",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "FastAPI",
+   "kind": "framework",
+   "detect": {
+    "pypi": [
+     "fastapi"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "words": [
+      "\\bOAuth2PasswordBearer\\s*\\(",
+      "\\bOAuth2PasswordRequestForm\\b",
+      "\\b(?:response|resp|res)\\.(?:set_cookie|delete_cookie|set_signed_cookie)\\s*\\(",
+      "\\bjwt\\.encode\\s*\\(",
+      "\\bCryptContext\\s*\\(",
+      "\\bpwd_context\\.(?:hash|verify)\\s*\\("
+     ]
+    },
+    "cors-csrf": {
+     "words": [
+      "\\ballow_origins\\s*=\\s*\\[\\s*[\"']\\*[\"']",
+      "\\ballow_origin_regex\\s*="
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\bHTMLResponse\\s*\\(\\s*(?:content\\s*=\\s*)?f[\"']",
+      "\\bEnvironment\\s*\\([^)]*autoescape\\s*=\\s*False",
+      "\\{\\{[^}]*\\|\\s*safe\\b"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bRedirectResponse\\s*\\(\\s*(?!\\s*(?:url\\s*=\\s*)?[\"'])",
+      "\\bredirect\\s*\\(\\s*request\\.(?:args|form|values|GET|POST|query_params)\\b"
+     ]
+    },
+    "file-upload": {
+     "words": [
+      "\\bUploadFile\\b"
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\bcursor\\.(?:execute|executemany)\\s*\\(\\s*(?:f[\"']|[\"'][^\"']*[\"']\\s*(?:%|\\+|\\.format\\b))"
+     ]
+    },
+    "deserialize": {
+     "words": [
+      "\\bpickle\\.loads?\\s*\\(",
+      "\\b(?:cPickle|dill|jsonpickle)\\.(?:loads?|decode)\\s*\\(",
+      "\\byaml\\.(?:load|load_all|unsafe_load)\\s*\\((?![^)]*Loader\\s*=\\s*(?:yaml\\.)?C?SafeLoader)",
+      "\\bmarshal\\.loads?\\s*\\(",
+      "\\bshelve\\.open\\s*\\("
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "app/security.py",
+      "line": "oauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")",
+      "signal": "auth"
+     },
+     {
+      "file": "app/main.py",
+      "line": "app.add_middleware(CORSMiddleware, allow_origins=[\"*\"], allow_methods=[\"*\"])",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "app/routes.py",
+      "line": "return RedirectResponse(url=next_url)",
+      "signal": "url-from-data"
+     },
+     {
+      "file": "app/routes.py",
+      "line": "async def upload(file: UploadFile):",
+      "signal": "file-upload"
+     }
+    ],
+    "miss": [
+     {
+      "file": "app/routes.py",
+      "line": "async def read_me(user: User = Depends(get_current_user)):"
+     },
+     {
+      "file": "app/routes.py",
+      "line": "return RedirectResponse(url=\"/login\")"
+     }
+    ]
+   },
+   "sources": [
+    "https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/",
+    "https://fastapi.tiangolo.com/tutorial/cors/",
+    "https://fastapi.tiangolo.com/tutorial/request-files/"
+   ]
+  },
+  "django": {
+   "id": "django",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Django and Django REST framework",
+   "kind": "framework",
+   "detect": {
+    "pypi": [
+     "django",
+     "djangorestframework"
+    ],
+    "files": [
+     "manage.py"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "backends.py",
+      "authentication.py"
+     ],
+     "words": [
+      "\\bupdate_session_auth_hash\\s*\\(",
+      "\\.set_password\\s*\\(",
+      "\\bmake_password\\s*\\(",
+      "\\brequest\\.session\\.(?:flush|cycle_key|set_expiry)\\s*\\(",
+      "\\brequest\\.session\\[[^\\]]+\\]\\s*=(?!=)"
+     ]
+    },
+    "access-rule": {
+     "paths": [
+      "permissions.py"
+     ],
+     "words": [
+      "\\bAllowAny\\b",
+      "\\bauthentication_classes\\s*=\\s*[\\[(]\\s*[\\])]",
+      "\\bpermission_classes\\s*=\\s*[\\[(]\\s*[\\])]"
+     ]
+    },
+    "cors-csrf": {
+     "words": [
+      "@csrf_exempt\\b|\\bcsrf_exempt\\s*\\(",
+      "\\bCORS_(?:ORIGIN_ALLOW_ALL|ALLOW_ALL_ORIGINS)\\s*=\\s*True",
+      "\\b(?:CSRF|SESSION)_COOKIE_(?:SECURE|HTTPONLY)\\s*=\\s*False",
+      "\\bALLOWED_HOSTS\\s*=\\s*\\[\\s*[\"']\\*[\"']"
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\.objects\\.raw\\s*\\(",
+      "\\.extra\\s*\\(\\s*(?:where|select|tables)\\s*=",
+      "\\bRawSQL\\s*\\(",
+      "\\bcursor\\.(?:execute|executemany)\\s*\\(\\s*(?:f[\"']|[\"'][^\"']*[\"']\\s*(?:%|\\+|\\.format\\b))"
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\{\\{[^}]*\\|\\s*safe\\b",
+      "\\{%\\s*autoescape\\s+off",
+      "\\bSafeString\\s*\\("
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bHttpResponseRedirect\\s*\\(\\s*(?!\\s*[\"']|reverse\\s*\\()",
+      "\\bredirect\\s*\\(\\s*request\\.(?:args|form|values|GET|POST|query_params)\\b"
+     ]
+    },
+    "file-upload": {
+     "words": [
+      "\\brequest\\.FILES\\b",
+      "\\bFileSystemStorage\\s*\\("
+     ]
+    },
+    "deserialize": {
+     "words": [
+      "\\bpickle\\.loads?\\s*\\(",
+      "\\b(?:cPickle|dill|jsonpickle)\\.(?:loads?|decode)\\s*\\(",
+      "\\byaml\\.(?:load|load_all|unsafe_load)\\s*\\((?![^)]*Loader\\s*=\\s*(?:yaml\\.)?C?SafeLoader)",
+      "\\bmarshal\\.loads?\\s*\\(",
+      "\\bshelve\\.open\\s*\\(",
+      "\\bPickleSerializer\\b"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "app/views.py",
+      "line": "@csrf_exempt",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "app/views.py",
+      "line": "users = User.objects.raw(f\"SELECT * FROM auth_user WHERE email = '{email}'\")",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "app/views.py",
+      "line": "update_session_auth_hash(request, form.user)",
+      "signal": "auth"
+     },
+     {
+      "file": "config/settings.py",
+      "line": "CORS_ALLOW_ALL_ORIGINS = True",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "app/templates/post.html",
+      "line": "<div>{{ comment.body|safe }}</div>",
+      "signal": "html-sink"
+     }
+    ],
+    "miss": [
+     {
+      "file": "app/views.py",
+      "line": "if request.user.is_authenticated:"
+     },
+     {
+      "file": "app/views.py",
+      "line": "return redirect(\"home\")"
+     },
+     {
+      "file": "app/views.py",
+      "line": "cursor.execute(\"SELECT id FROM t WHERE x = %s\", [x])"
+     }
+    ],
+    "pathHit": [
+     {
+      "file": "app/permissions.py",
+      "signal": "access-rule"
+     }
+    ],
+    "pathMiss": [
+     "app/views.py"
+    ]
+   },
+   "sources": [
+    "https://docs.djangoproject.com/en/stable/topics/auth/default/",
+    "https://docs.djangoproject.com/en/stable/topics/security/",
+    "https://docs.djangoproject.com/en/stable/topics/db/sql/",
+    "https://www.django-rest-framework.org/api-guide/permissions/"
+   ]
+  },
+  "flask": {
+   "id": "flask",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Flask",
+   "kind": "framework",
+   "detect": {
+    "pypi": [
+     "flask",
+     "flask-login",
+     "flask-jwt-extended"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "words": [
+      "\\b(?:login_user|logout_user)\\s*\\(",
+      "(?<![.\\w])session\\[[^\\]]+\\]\\s*=(?!=)",
+      "(?<![.\\w])session\\.(?:clear|pop)\\s*\\(",
+      "\\b(?:create_access_token|create_refresh_token|set_access_cookies|unset_jwt_cookies)\\s*\\(",
+      "\\b(?:generate_password_hash|check_password_hash)\\s*\\(",
+      "\\b(?:response|resp|res)\\.(?:set_cookie|delete_cookie|set_signed_cookie)\\s*\\("
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\bapp\\.secret_key\\s*=\\s*[\"']"
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\bMarkup\\s*\\(",
+      "\\brender_template_string\\s*\\(",
+      "\\{\\{[^}]*\\|\\s*safe\\b"
+     ]
+    },
+    "cors-csrf": {
+     "words": [
+      "\\bCORS\\s*\\(\\s*app\\s*\\)",
+      "\\bWTF_CSRF_ENABLED\\s*[\"']?\\]?\\s*=\\s*False",
+      "\\bcsrf\\.exempt\\b",
+      "\\bSESSION_COOKIE_(?:SECURE|HTTPONLY)[\"']?\\]?\\s*=\\s*False"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bredirect\\s*\\(\\s*request\\.(?:args|form|values|GET|POST|query_params)\\b"
+     ]
+    },
+    "file-upload": {
+     "words": [
+      "\\brequest\\.files\\b"
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\bcursor\\.(?:execute|executemany)\\s*\\(\\s*(?:f[\"']|[\"'][^\"']*[\"']\\s*(?:%|\\+|\\.format\\b))",
+      "\\bdb\\.engine\\.execute\\s*\\(\\s*f[\"']"
+     ]
+    },
+    "deserialize": {
+     "words": [
+      "\\bpickle\\.loads?\\s*\\(",
+      "\\b(?:cPickle|dill|jsonpickle)\\.(?:loads?|decode)\\s*\\(",
+      "\\byaml\\.(?:load|load_all|unsafe_load)\\s*\\((?![^)]*Loader\\s*=\\s*(?:yaml\\.)?C?SafeLoader)",
+      "\\bmarshal\\.loads?\\s*\\(",
+      "\\bshelve\\.open\\s*\\("
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "app/views.py",
+      "line": "login_user(user, remember=True)",
+      "signal": "auth"
+     },
+     {
+      "file": "app/views.py",
+      "line": "return render_template_string(template)",
+      "signal": "html-sink"
+     },
+     {
+      "file": "app/__init__.py",
+      "line": "CORS(app)",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "app/views.py",
+      "line": "return redirect(request.args.get(\"next\"))",
+      "signal": "url-from-data"
+     }
+    ],
+    "miss": [
+     {
+      "file": "app/views.py",
+      "line": "return render_template(\"index.html\", user=current_user)"
+     },
+     {
+      "file": "app/views.py",
+      "line": "if current_user.is_authenticated:"
+     }
+    ]
+   },
+   "sources": [
+    "https://flask.palletsprojects.com/en/stable/security/",
+    "https://flask-login.readthedocs.io/en/latest/",
+    "https://flask-jwt-extended.readthedocs.io/en/stable/"
+   ]
+  },
+  "rails": {
+   "id": "rails",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Ruby on Rails (with Devise and Pundit)",
+   "kind": "framework",
+   "detect": {
+    "gem": [
+     "rails",
+     "devise",
+     "pundit",
+     "rack-cors"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "devise.rb",
+      "authentication.rb"
+     ],
+     "words": [
+      "\\b(?:bypass_)?sign_(?:in|out)(?:_and_redirect)?\\b",
+      "\\bcookies(?:\\.(?:signed|encrypted|permanent))*\\[[^\\]]+\\]\\s*=(?!=)",
+      "\\bhas_secure_password\\b",
+      "\\bauthenticate_by\\s*\\(",
+      "\\.authenticate\\s*\\(\\s*params\\b"
+     ]
+    },
+    "access-rule": {
+     "paths": [
+      "**/policies/**",
+      "ability.rb"
+     ],
+     "words": [
+      "\\bskip_before_action\\s+:(?:authenticate\\w*|require_\\w*login\\w*)",
+      "\\bskip_(?:authorization|policy_scope)\\b",
+      "\\bskip_after_action\\s+:verify_(?:authorized|policy_scoped)",
+      "\\ballow_unauthenticated_access\\b"
+     ]
+    },
+    "cors-csrf": {
+     "paths": [
+      "cors.rb"
+     ],
+     "words": [
+      "\\bskip_before_action\\s+:verify_authenticity_token",
+      "\\bprotect_from_forgery\\b[^\\n]*(?:null_session|except\\s*:|if\\s*:|unless\\s*:)",
+      "\\bskip_forgery_protection\\b",
+      "\\borigins\\s*\\(?\\s*['\"]\\*['\"]"
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "<%=\\s*raw\\b",
+      "(?<![.\\w])raw\\s*\\(",
+      "<%=="
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\bfind_by_sql\\s*\\(",
+      "\\.(?:where|order|reorder|group|having|joins|pluck|select|from)\\s*\\(\\s*\"[^\"]*#\\{",
+      "\\.(?:execute|exec_query|select_all|select_value|select_rows)\\s*\\(\\s*\"[^\"]*#\\{",
+      "\\bArel\\.sql\\s*\\(",
+      "\\.(?:order|reorder)\\s*\\(\\s*params\\["
+     ]
+    },
+    "deserialize": {
+     "words": [
+      "\\bMarshal\\.load\\s*\\(",
+      "\\bYAML\\.unsafe_load\\s*\\(",
+      "\\bOj\\.load\\s*\\([^)]*mode:\\s*:object"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bredirect_to\\s*\\(?\\s*(?:params\\[|request\\.(?:referr?er|params))",
+      "\\ballow_other_host:\\s*true",
+      "\\bURI\\.open\\s*\\(\\s*(?!\\s*[\"'])",
+      "\\b(?:HTTParty|Faraday|RestClient)\\.(?:get|post|put|patch|delete)\\s*\\(\\s*(?!\\s*[\"'])",
+      "\\bNet::HTTP\\.(?:get|get_response|post_form)\\s*\\(\\s*(?!\\s*URI\\s*\\(\\s*[\"'])"
+     ]
+    },
+    "file-upload": {
+     "words": [
+      "\\bhas_(?:one|many)_attached\\b",
+      "\\.attach\\s*\\(\\s*params\\b"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "app/controllers/webhooks_controller.rb",
+      "line": "skip_before_action :verify_authenticity_token",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "app/views/posts/show.html.erb",
+      "line": "<%= raw @post.body %>",
+      "signal": "html-sink"
+     },
+     {
+      "file": "app/models/report.rb",
+      "line": "User.find_by_sql(\"SELECT * FROM users WHERE name = '#{params[:name]}'\")",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "app/controllers/accounts_controller.rb",
+      "line": "redirect_to params[:return_to]",
+      "signal": "url-from-data"
+     },
+     {
+      "file": "app/controllers/accounts_controller.rb",
+      "line": "sign_in(user)",
+      "signal": "auth"
+     }
+    ],
+    "miss": [
+     {
+      "file": "app/controllers/reports_controller.rb",
+      "line": "before_action :authenticate_user!"
+     },
+     {
+      "file": "app/views/layouts/application.html.erb",
+      "line": "<% if user_signed_in? %>"
+     },
+     {
+      "file": "app/controllers/reports_controller.rb",
+      "line": "User.where(email: params[:email])"
+     }
+    ],
+    "pathHit": [
+     {
+      "file": "app/policies/report_policy.rb",
+      "signal": "access-rule"
+     }
+    ],
+    "pathMiss": [
+     "app/controllers/reports_controller.rb"
+    ]
+   },
+   "sources": [
+    "https://guides.rubyonrails.org/security.html",
+    "https://github.com/heartcombo/devise#controller-filters-and-helpers",
+    "https://guides.rubyonrails.org/active_record_querying.html"
+   ]
+  },
+  "laravel": {
+   "id": "laravel",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Laravel",
+   "kind": "framework",
+   "detect": {
+    "composer": [
+     "laravel/framework",
+     "laravel/sanctum",
+     "laravel/passport",
+     "laravel/fortify"
+    ],
+    "files": [
+     "artisan"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "Authenticate.php",
+      "sanctum.php",
+      "fortify.php"
+     ],
+     "words": [
+      "\\bAuth::(?:login|loginUsingId|attempt|logout|once|onceUsingId|setUser|viaRemember)\\b",
+      "\\bauth\\s*\\(\\s*\\)\\s*->\\s*(?:login|loginUsingId|attempt|logout)\\s*\\(",
+      "->\\s*createToken\\s*\\(",
+      "\\bHash::make\\s*\\(",
+      "\\bsession\\s*\\(\\s*\\)\\s*->\\s*(?:regenerate|invalidate|flush|put)\\s*\\(",
+      "->session\\s*\\(\\s*\\)\\s*->\\s*(?:regenerate|invalidate|flush|put)\\s*\\(",
+      "\\bPassword::(?:reset|sendResetLink)\\s*\\("
+     ]
+    },
+    "access-rule": {
+     "paths": [
+      "**/Policies/**",
+      "AuthServiceProvider.php"
+     ],
+     "words": [
+      "->\\s*withoutMiddleware\\s*\\(\\s*\\[?\\s*['\"](?:auth|can|verified)",
+      "\\bGate::(?:before|after|define)\\s*\\("
+     ]
+    },
+    "cors-csrf": {
+     "paths": [
+      "VerifyCsrfToken.php",
+      "cors.php"
+     ],
+     "words": [
+      "['\"]allowed_origins['\"]\\s*=>\\s*\\[\\s*['\"]\\*['\"]",
+      "->\\s*validateCsrfTokens\\s*\\(\\s*except\\s*:",
+      "withoutMiddleware\\s*\\([^)]*VerifyCsrfToken"
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\{!!"
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\bDB::(?:raw|unprepared)\\s*\\(",
+      "(?:->|::)\\s*(?:whereRaw|orWhereRaw|selectRaw|orderByRaw|havingRaw|groupByRaw|fromRaw)\\s*\\(",
+      "\\bDB::(?:select|statement|insert|update|delete)\\s*\\(\\s*(?:\"[^\"]*\\$|'[^']*'\\s*\\.)"
+     ]
+    },
+    "deserialize": {
+     "words": [
+      "\\bunserialize\\s*\\("
+     ]
+    },
+    "file-upload": {
+     "words": [
+      "\\$request->(?:file|hasFile)\\s*\\(",
+      "\\bUploadedFile\\b"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bHttp::(?:get|post|put|patch|delete|send)\\s*\\(\\s*\\$",
+      "\\bredirect\\s*\\(\\s*\\$request->(?:input|get|query)",
+      "->\\s*away\\s*\\(\\s*\\$",
+      "\\b(?:file_get_contents|curl_init|fopen)\\s*\\(\\s*\\$"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "app/Http/Controllers/LoginController.php",
+      "line": "Auth::login($user, remember: true);",
+      "signal": "auth"
+     },
+     {
+      "file": "resources/views/posts/show.blade.php",
+      "line": "<div>{!! $post->body !!}</div>",
+      "signal": "html-sink"
+     },
+     {
+      "file": "app/Repositories/UserRepo.php",
+      "line": "$rows = DB::select(\"SELECT * FROM users WHERE email = '$email'\");",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "app/Repositories/UserRepo.php",
+      "line": "$users = User::whereRaw(\"name = '\" . $name . \"'\")->get();",
+      "signal": "raw-sql"
+     }
+    ],
+    "miss": [
+     {
+      "file": "app/Http/Controllers/ReportController.php",
+      "line": "$user = Auth::user();"
+     },
+     {
+      "file": "resources/views/posts/show.blade.php",
+      "line": "<div>{{ $post->body }}</div>"
+     },
+     {
+      "file": "app/Http/Controllers/ReportController.php",
+      "line": "if (Auth::check()) {"
+     }
+    ]
+   },
+   "sources": [
+    "https://laravel.com/docs/authentication",
+    "https://laravel.com/docs/csrf",
+    "https://laravel.com/docs/queries#raw-expressions",
+    "https://laravel.com/docs/blade#displaying-unescaped-data"
+   ]
+  },
+  "express": {
+   "id": "express",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Express (with Passport and express-session)",
+   "kind": "framework",
+   "detect": {
+    "npm": [
+     "express",
+     "passport",
+     "express-session",
+     "cors",
+     "multer"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "*passport*"
+     ],
+     "words": [
+      "\\breq\\.session\\.(?:regenerate|destroy|save)\\s*\\(",
+      "\\breq\\.session\\.\\w+\\s*=(?!=)",
+      "\\breq\\.(?:login|logIn)\\s*\\(",
+      "\\bpassport\\.(?:authenticate|use|serializeUser|deserializeUser)\\s*\\(",
+      "\\bres\\.(?:cookie|clearCookie)\\s*\\(",
+      "\\bbcrypt\\.(?:hash|compare)(?:Sync)?\\s*\\("
+     ]
+    },
+    "cors-csrf": {
+     "words": [
+      "\\bcors\\s*\\(\\s*\\)",
+      "\\borigin\\s*:\\s*(?:['\"]\\*['\"]|true\\b)"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bres\\.redirect\\s*\\(\\s*(?!\\s*(?:\\d{3}\\s*,\\s*)?['\"`])"
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\bres\\.(?:send|write|end)\\s*\\(\\s*`\\s*<[^`]*\\$\\{"
+     ]
+    },
+    "file-upload": {
+     "words": [
+      "\\bmulter\\s*\\(",
+      "\\bupload\\.(?:single|array|fields|any)\\s*\\(",
+      "\\bformidable\\s*\\(",
+      "\\bfileUpload\\s*\\("
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\.(?:query|execute|raw|unsafe|whereRaw|orderByRaw)\\s*\\(\\s*`[^`]*\\$\\{",
+      "\\.(?:where|andWhere|orWhere|orderBy|having|select)\\s*\\(\\s*`[^`]*\\$\\{",
+      "\\bknex\\.raw\\s*\\("
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/app.ts",
+      "line": "app.use(cors())",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "src/routes/account.ts",
+      "line": "res.redirect(req.query.returnTo)",
+      "signal": "url-from-data"
+     },
+     {
+      "file": "src/routes/account.ts",
+      "line": "req.session.userId = user.id;",
+      "signal": "auth"
+     },
+     {
+      "file": "src/routes/files.ts",
+      "line": "const upload = multer({ dest: \"uploads/\" });",
+      "signal": "file-upload"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/routes/account.ts",
+      "line": "res.redirect(\"/login\")"
+     },
+     {
+      "file": "src/routes/health.ts",
+      "line": "app.get(\"/health\", (req, res) => res.json({ ok: true }));"
+     },
+     {
+      "file": "src/routes/account.ts",
+      "line": "const userId = req.session.userId;"
+     }
+    ]
+   },
+   "sources": [
+    "https://expressjs.com/en/advanced/best-practice-security.html",
+    "https://www.passportjs.org/concepts/authentication/sessions/",
+    "https://github.com/expressjs/session#sessionregenerate"
+   ]
+  },
+  "nestjs": {
+   "id": "nestjs",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "NestJS",
+   "kind": "framework",
+   "detect": {
+    "npm": [
+     "@nestjs/core"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "*.strategy.ts"
+     ],
+     "words": [
+      "\\b(?:this\\.)?jwtService\\.sign(?:Async)?\\s*\\(",
+      "\\bextends\\s+PassportStrategy\\s*\\(",
+      "\\bimplements\\s+CanActivate\\b",
+      "\\bAPP_GUARD\\b"
+     ]
+    },
+    "access-rule": {
+     "paths": [
+      "*.guard.ts"
+     ],
+     "words": [
+      "@Public\\s*\\(\\s*\\)",
+      "@SetMetadata\\s*\\(\\s*['\"]isPublic",
+      "\\bIS_PUBLIC_KEY\\b"
+     ]
+    },
+    "cors-csrf": {
+     "words": [
+      "\\benableCors\\s*\\(\\s*\\)",
+      "\\bcors\\s*:\\s*true\\b",
+      "\\borigin\\s*:\\s*(?:['\"]\\*['\"]|true\\b)"
+     ]
+    },
+    "file-upload": {
+     "words": [
+      "\\bFilesInterceptor\\s*\\(|\\bFileInterceptor\\s*\\(|\\bFileFieldsInterceptor\\s*\\(",
+      "@UploadedFiles?\\s*\\("
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\.(?:query|execute|raw|unsafe|whereRaw|orderByRaw)\\s*\\(\\s*`[^`]*\\$\\{",
+      "\\.(?:where|andWhere|orWhere|orderBy|having|select)\\s*\\(\\s*`[^`]*\\$\\{"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bthis\\.httpService\\.(?:get|post|put|patch|delete|request)\\s*\\(\\s*(?!\\s*['\"`])"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/reports/reports.controller.ts",
+      "line": "@Public()",
+      "signal": "access-rule"
+     },
+     {
+      "file": "src/auth/token.service.ts",
+      "line": "return this.jwtService.sign(payload);",
+      "signal": "auth"
+     },
+     {
+      "file": "src/main.ts",
+      "line": "app.enableCors();",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "src/files/files.controller.ts",
+      "line": "@UseInterceptors(FileInterceptor(\"file\"))",
+      "signal": "file-upload"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/reports/reports.controller.ts",
+      "line": "@Get(\":id\")"
+     },
+     {
+      "file": "src/reports/reports.controller.ts",
+      "line": "const report = await this.reportsService.findOne(id);"
+     }
+    ],
+    "pathHit": [
+     {
+      "file": "src/common/roles.guard.ts",
+      "signal": "access-rule"
+     }
+    ],
+    "pathMiss": [
+     "src/reports/reports.service.ts"
+    ]
+   },
+   "sources": [
+    "https://docs.nestjs.com/security/authentication",
+    "https://docs.nestjs.com/security/cors",
+    "https://docs.nestjs.com/techniques/file-upload"
+   ]
+  },
+  "nextjs": {
+   "id": "nextjs",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Next.js",
+   "kind": "framework",
+   "detect": {
+    "npm": [
+     "next"
+    ],
+    "files": [
+     "next.config.js",
+     "next.config.mjs",
+     "next.config.ts"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "proxy.ts",
+      "proxy.js"
+     ],
+     "words": [
+      "\\bcookies\\s*(?:\\(\\s*\\)\\s*)?\\.(?:set|delete)\\s*\\(",
+      "\\(\\s*await\\s+cookies\\s*\\(\\s*\\)\\s*\\)\\s*\\.(?:set|delete)\\s*\\("
+     ]
+    },
+    "access-rule": {
+     "words": [
+      "^\\s*['\"]use server['\"]"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bNextResponse\\.(?:redirect|rewrite)\\s*\\(\\s*(?!\\s*new\\s+URL\\s*\\(\\s*['\"`]|['\"`])",
+      "\\b(?:redirect|permanentRedirect)\\s*\\(\\s*(?:searchParams|params|formData|callbackUrl|returnTo|req\\.|request\\.)",
+      "\\bhostname\\s*:\\s*['\"]\\*\\*?['\"]"
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\b(?:NEXT_PUBLIC|EXPO_PUBLIC|NUXT_PUBLIC|VITE|REACT_APP|PUBLIC)_\\w*(?:SECRET|PRIVATE|PASSWORD|SERVICE_ROLE)\\w*"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "app/actions.ts",
+      "line": "\"use server\";",
+      "signal": "access-rule"
+     },
+     {
+      "file": "app/api/login/route.ts",
+      "line": "(await cookies()).set(\"theme-pref\", value);",
+      "signal": "auth"
+     },
+     {
+      "file": "app/go/route.ts",
+      "line": "return NextResponse.redirect(new URL(searchParams.get(\"next\") ?? \"/\", req.url));",
+      "signal": "url-from-data"
+     },
+     {
+      "file": "next.config.mjs",
+      "line": "images: { remotePatterns: [{ protocol: \"https\", hostname: \"**\" }] },",
+      "signal": "url-from-data"
+     }
+    ],
+    "miss": [
+     {
+      "file": "app/page.tsx",
+      "line": "return NextResponse.redirect(new URL(\"/login\", req.url));"
+     },
+     {
+      "file": "app/page.tsx",
+      "line": "const theme = (await cookies()).get(\"theme\");"
+     }
+    ],
+    "pathHit": [
+     {
+      "file": "src/proxy.ts",
+      "signal": "auth"
+     }
+    ],
+    "pathMiss": [
+     "app/page.tsx"
+    ]
+   },
+   "notes": "Next.js 16 renamed middleware.ts to proxy.ts; the built-in auth path already has middleware.ts. \"use server\" makes every exported function a public POST endpoint, so it is an access rule; measure its hit rate, it can be broad in apps with many server actions.",
+   "sources": [
+    "https://nextjs.org/docs/app/api-reference/functions/cookies",
+    "https://nextjs.org/docs/app/guides/authentication",
+    "https://nextjs.org/docs/app/api-reference/components/image#remotepatterns",
+    "https://nextjs.org/docs/app/api-reference/directives/use-server"
+   ]
+  },
+  "authjs": {
+   "id": "authjs",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Auth.js (NextAuth)",
+   "kind": "auth",
+   "detect": {
+    "npm": [
+     "next-auth",
+     "@auth/core",
+     "@auth/sveltekit",
+     "@auth/express",
+     "@auth/qwik",
+     "@auth/solid-start"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "[...nextauth].ts",
+      "[...nextauth].js"
+     ],
+     "words": [
+      "\\bNextAuth\\s*\\(",
+      "\\bSvelteKitAuth\\s*\\(|\\bExpressAuth\\s*\\(",
+      "\\basync\\s+(?:jwt|session|signIn|redirect|authorized)\\s*\\(\\s*\\{",
+      "\\b(?:CredentialsProvider|Credentials)\\s*\\(\\s*\\{",
+      "\\ballowDangerousEmailAccountLinking\\s*:\\s*true",
+      "\\btrustHost\\s*:\\s*true",
+      "\\bunstable_update\\s*\\("
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\bsecret\\s*:\\s*['\"][^'\"\\s]{8,}['\"]"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/auth-config.ts",
+      "line": "export const { handlers, auth, signIn, signOut } = NextAuth({",
+      "signal": "auth"
+     },
+     {
+      "file": "src/auth-config.ts",
+      "line": "async jwt({ token, user }) {",
+      "signal": "auth"
+     },
+     {
+      "file": "src/auth-config.ts",
+      "line": "allowDangerousEmailAccountLinking: true,",
+      "signal": "auth"
+     }
+    ],
+    "miss": [
+     {
+      "file": "app/page.tsx",
+      "line": "const session = await auth();"
+     },
+     {
+      "file": "app/page.tsx",
+      "line": "import { auth } from \"@/auth\";"
+     }
+    ]
+   },
+   "sources": [
+    "https://authjs.dev/getting-started/installation",
+    "https://authjs.dev/reference/nextjs#callbacks",
+    "https://authjs.dev/reference/core/providers#allowdangerousemailaccountlinking"
+   ]
+  },
+  "nuxt": {
+   "id": "nuxt",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Nuxt (with nuxt-auth-utils and h3)",
+   "kind": "framework",
+   "detect": {
+    "npm": [
+     "nuxt",
+     "nuxt-auth-utils",
+     "@sidebase/nuxt-auth"
+    ],
+    "files": [
+     "nuxt.config.ts",
+     "nuxt.config.js"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "**/server/middleware/**"
+     ],
+     "words": [
+      "\\b(?:setUserSession|replaceUserSession|clearUserSession)\\s*\\(",
+      "\\b(?:setCookie|deleteCookie)\\s*\\(\\s*event\\b",
+      "\\buseCookie\\s*\\(\\s*['\"][^'\"]*(?:token|session|auth|jwt)"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bsendRedirect\\s*\\(\\s*event\\s*,\\s*(?!\\s*['\"`])",
+      "\\bnavigateTo\\s*\\([^)]*external\\s*:\\s*true",
+      "\\bnavigateTo\\s*\\(\\s*(?:route\\.query|useRoute\\s*\\(\\s*\\)\\.query)"
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\binnerHTML\\s*:"
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\b(?:NEXT_PUBLIC|EXPO_PUBLIC|NUXT_PUBLIC|VITE|REACT_APP|PUBLIC)_\\w*(?:SECRET|PRIVATE|PASSWORD|SERVICE_ROLE)\\w*"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "server/api/login.post.ts",
+      "line": "await setUserSession(event, { user });",
+      "signal": "auth"
+     },
+     {
+      "file": "server/api/login.post.ts",
+      "line": "setCookie(event, \"sid\", sid, { httpOnly: true })",
+      "signal": "auth"
+     },
+     {
+      "file": "server/api/go.get.ts",
+      "line": "return sendRedirect(event, query.redirect as string)",
+      "signal": "url-from-data"
+     }
+    ],
+    "miss": [
+     {
+      "file": "pages/index.vue",
+      "line": "const { loggedIn, user } = useUserSession();"
+     },
+     {
+      "file": "server/api/go.get.ts",
+      "line": "return sendRedirect(event, \"/login\")"
+     }
+    ],
+    "pathHit": [
+     {
+      "file": "server/middleware/tenant.ts",
+      "signal": "auth"
+     }
+    ],
+    "pathMiss": [
+     "server/api/reports.get.ts"
+    ]
+   },
+   "sources": [
+    "https://nuxt.com/docs/guide/recipes/sessions-and-authentication",
+    "https://h3.dev/utils/cookie",
+    "https://nuxt.com/docs/api/utils/navigate-to"
+   ]
+  },
+  "sveltekit": {
+   "id": "sveltekit",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "SvelteKit",
+   "kind": "framework",
+   "detect": {
+    "npm": [
+     "@sveltejs/kit"
+    ],
+    "files": [
+     "svelte.config.js"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "hooks.server.ts",
+      "hooks.server.js"
+     ],
+     "words": [
+      "\\bcookies\\s*(?:\\(\\s*\\)\\s*)?\\.(?:set|delete)\\s*\\(",
+      "\\b(?:event\\.)?locals\\.(?:user|session|auth)\\s*=(?!=)"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bredirect\\s*\\(\\s*30[1-8]\\s*,\\s*(?!\\s*['\"`])"
+     ]
+    },
+    "cors-csrf": {
+     "words": [
+      "\\bcheckOrigin\\s*:\\s*false",
+      "\\btrustedOrigins\\s*:\\s*\\[\\s*['\"]\\*['\"]"
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\b(?:NEXT_PUBLIC|EXPO_PUBLIC|NUXT_PUBLIC|VITE|REACT_APP|PUBLIC)_\\w*(?:SECRET|PRIVATE|PASSWORD|SERVICE_ROLE)\\w*"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/routes/login/+page.server.ts",
+      "line": "cookies.set(\"sid\", sessionId, { path: \"/\" });",
+      "signal": "auth"
+     },
+     {
+      "file": "src/routes/go/+page.server.ts",
+      "line": "throw redirect(303, url.searchParams.get(\"redirectTo\") ?? \"/\");",
+      "signal": "url-from-data"
+     },
+     {
+      "file": "svelte.config.js",
+      "line": "kit: { csrf: { checkOrigin: false } },",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "src/lib/server/load-user.ts",
+      "line": "event.locals.user = user;",
+      "signal": "auth"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/routes/+layout.server.ts",
+      "line": "const sessionId = cookies.get(\"sid\");"
+     },
+     {
+      "file": "src/routes/+layout.server.ts",
+      "line": "throw redirect(303, \"/login\");"
+     }
+    ],
+    "pathHit": [
+     {
+      "file": "src/hooks.server.ts",
+      "signal": "auth"
+     }
+    ],
+    "pathMiss": [
+     "src/routes/+page.svelte"
+    ]
+   },
+   "sources": [
+    "https://svelte.dev/docs/kit/hooks",
+    "https://svelte.dev/docs/kit/@sveltejs-kit#Cookies",
+    "https://svelte.dev/docs/kit/configuration#csrf"
+   ]
+  },
+  "remix": {
+   "id": "remix",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Remix and React Router framework mode",
+   "kind": "framework",
+   "detect": {
+    "npm": [
+     "@remix-run/node",
+     "@remix-run/react",
+     "@remix-run/cloudflare",
+     "@react-router/node",
+     "remix-auth"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "words": [
+      "\\b(?:createCookieSessionStorage|createSessionStorage|createMemorySessionStorage|createCookie)\\s*\\(",
+      "\\b(?:commitSession|destroySession)\\s*\\(",
+      "\\bsession\\.(?:set|unset|flash)\\s*\\(\\s*['\"]",
+      "\\bauthenticator\\.authenticate\\s*\\("
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\b(?:redirect|redirectDocument|replace)\\s*\\(\\s*(?:url\\.searchParams|searchParams|formData\\.get|params\\.)"
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\bsecrets\\s*:\\s*\\[\\s*['\"]"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "app/routes/login.tsx",
+      "line": "return redirect(\"/\", { headers: { \"Set-Cookie\": await commitSession(session) } });",
+      "signal": "auth"
+     },
+     {
+      "file": "app/routes/login.tsx",
+      "line": "session.set(\"userId\", user.id);",
+      "signal": "auth"
+     },
+     {
+      "file": "app/routes/go.tsx",
+      "line": "return redirect(url.searchParams.get(\"redirectTo\") ?? \"/\");",
+      "signal": "url-from-data"
+     },
+     {
+      "file": "app/cookies.server.ts",
+      "line": "secrets: [\"s3cr3t\"],",
+      "signal": "secret"
+     }
+    ],
+    "miss": [
+     {
+      "file": "app/root.tsx",
+      "line": "const session = await getSession(request.headers.get(\"Cookie\"));"
+     },
+     {
+      "file": "app/root.tsx",
+      "line": "return redirect(\"/login\");"
+     }
+    ]
+   },
+   "sources": [
+    "https://remix.run/docs/en/main/utils/sessions",
+    "https://reactrouter.com/explanation/sessions-and-cookies"
+   ]
+  },
+  "angular": {
+   "id": "angular",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Angular",
+   "kind": "frontend",
+   "detect": {
+    "npm": [
+     "@angular/core"
+    ],
+    "files": [
+     "angular.json"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "*.guard.ts",
+      "*.interceptor.ts"
+     ],
+     "words": [
+      "\\bimplements\\s+HttpInterceptor\\b|\\bHttpInterceptorFn\\b",
+      "\\bimplements\\s+Can(?:Activate|ActivateChild|Match|Load)\\b|\\bCan(?:Activate|Match)Fn\\b"
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\bbypassSecurityTrust(?:Html|Script|Style|Url|ResourceUrl)\\s*\\(",
+      "\\[(?:innerHTML|outerHTML)\\]\\s*="
+     ]
+    },
+    "cors-csrf": {
+     "words": [
+      "\\bHttpClientXsrfModule\\.disable\\s*\\(|\\bwithNoXsrfProtection\\s*\\("
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/app/post/post.component.ts",
+      "line": "this.safe = this.sanitizer.bypassSecurityTrustHtml(html);",
+      "signal": "html-sink"
+     },
+     {
+      "file": "src/app/post/post.component.html",
+      "line": "<div [innerHTML]=\"post.body\"></div>",
+      "signal": "html-sink"
+     },
+     {
+      "file": "src/app/app.routes.ts",
+      "line": "export const adminGuard: CanActivateFn = (route, state) => {",
+      "signal": "auth"
+     },
+     {
+      "file": "src/app/app.config.ts",
+      "line": "provideHttpClient(withNoXsrfProtection())",
+      "signal": "cors-csrf"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/app/post/post.component.html",
+      "line": "<div>{{ post.body }}</div>"
+     },
+     {
+      "file": "src/app/post/post.component.ts",
+      "line": "constructor(private http: HttpClient) {}"
+     }
+    ],
+    "pathHit": [
+     {
+      "file": "src/app/core/token.interceptor.ts",
+      "signal": "auth"
+     }
+    ],
+    "pathMiss": [
+     "src/app/post/post.component.ts"
+    ]
+   },
+   "sources": [
+    "https://angular.dev/best-practices/security",
+    "https://angular.dev/guide/http/interceptors",
+    "https://angular.dev/guide/routing/common-router-tasks#preventing-unauthorized-access"
+   ]
+  },
+  "react": {
+   "id": "react",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "React (web)",
+   "kind": "frontend",
+   "detect": {
+    "npm": [
+     "react-dom"
+    ]
+   },
+   "signals": {
+    "html-sink": {
+     "words": [
+      "\\b__html\\s*:",
+      "\\bsrcDoc\\s*=",
+      "\\bcreateContextualFragment\\s*\\("
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\b(?:NEXT_PUBLIC|EXPO_PUBLIC|NUXT_PUBLIC|VITE|REACT_APP|PUBLIC)_\\w*(?:SECRET|PRIVATE|PASSWORD|SERVICE_ROLE)\\w*"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/Preview.tsx",
+      "line": "<iframe srcDoc={preview} />",
+      "signal": "html-sink"
+     },
+     {
+      "file": "src/Post.tsx",
+      "line": "__html: marked(body),",
+      "signal": "html-sink"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/Post.tsx",
+      "line": "<div className=\"card\">{post.body}</div>"
+     },
+     {
+      "file": "src/Post.tsx",
+      "line": "const [user, setUser] = useState(null);"
+     }
+    ]
+   },
+   "notes": "The built-ins already cover dangerouslySetInnerHTML and token storage in localStorage; this pack only adds what the built-ins miss when the prop is split over lines.",
+   "sources": [
+    "https://react.dev/reference/react-dom/components/common#dangerously-setting-the-inner-html"
+   ]
+  },
+  "vue": {
+   "id": "vue",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Vue",
+   "kind": "frontend",
+   "detect": {
+    "npm": [
+     "vue"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "words": [
+      "\\brouter\\.beforeEach\\s*\\("
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\binnerHTML\\s*:",
+      "(?:v-bind)?:innerHTML\\s*="
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/components/Post.vue",
+      "line": "return () => h(\"div\", { innerHTML: post.body })",
+      "signal": "html-sink"
+     },
+     {
+      "file": "src/router/index.ts",
+      "line": "router.beforeEach((to, from) => {",
+      "signal": "auth"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/components/Post.vue",
+      "line": "<div>{{ post.body }}</div>"
+     },
+     {
+      "file": "src/components/Post.vue",
+      "line": "const route = useRoute();"
+     }
+    ]
+   },
+   "sources": [
+    "https://vuejs.org/guide/best-practices/security.html",
+    "https://router.vuejs.org/guide/advanced/navigation-guards.html"
+   ]
+  },
+  "react-native": {
+   "id": "react-native",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "React Native and Expo",
+   "kind": "mobile",
+   "detect": {
+    "npm": [
+     "react-native",
+     "expo"
+    ],
+    "files": [
+     "app.json",
+     "eas.json"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "words": [
+      "\\bSecureStore\\.(?:setItemAsync|deleteItemAsync|setItem)\\s*\\(",
+      "\\b(?:useAuthRequest|useIdTokenAuthRequest|exchangeCodeAsync|refreshAsync|revokeAsync)\\s*\\(",
+      "\\bmakeRedirectUri\\s*\\(",
+      "\\bWebBrowser\\.openAuthSessionAsync\\s*\\(",
+      "\\bLocalAuthentication\\.authenticateAsync\\s*\\("
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\bsource\\s*=\\s*\\{\\s*\\{\\s*html\\s*:",
+      "\\binjectedJavaScript(?:BeforeContentLoaded)?\\s*=",
+      "\\.injectJavaScript\\s*\\(",
+      "\\boriginWhitelist\\s*=\\s*\\{\\s*\\[\\s*['\"]\\*['\"]",
+      "\\ballow(?:FileAccess(?:FromFileURLs)?|UniversalAccessFromFileURLs)\\s*=\\s*\\{\\s*true",
+      "\\bmixedContentMode\\s*=\\s*['\"]always"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bLinking\\.openURL\\s*\\(\\s*(?!\\s*['\"`])",
+      "\\bWebBrowser\\.openBrowserAsync\\s*\\(\\s*(?!\\s*['\"`])",
+      "<WebView\\b[^>]*source\\s*=\\s*\\{\\s*\\{\\s*uri\\s*:\\s*(?!\\s*['\"`])"
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\b(?:NEXT_PUBLIC|EXPO_PUBLIC|NUXT_PUBLIC|VITE|REACT_APP|PUBLIC)_\\w*(?:SECRET|PRIVATE|PASSWORD|SERVICE_ROLE)\\w*"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/lib/tokens.ts",
+      "line": "await SecureStore.setItemAsync(\"refresh\", nextValue);",
+      "signal": "auth"
+     },
+     {
+      "file": "src/screens/Article.tsx",
+      "line": "<WebView source={{ html: article.body }} />",
+      "signal": "html-sink"
+     },
+     {
+      "file": "src/lib/push.ts",
+      "line": "Linking.openURL(notification.data.url);",
+      "signal": "url-from-data"
+     },
+     {
+      "file": "src/screens/SignInScreen.tsx",
+      "line": "const [request, response, promptAsync] = useAuthRequest(config, discovery);",
+      "signal": "auth"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/screens/Profile.tsx",
+      "line": "<Image source={{ uri: user.avatarUrl }} />"
+     },
+     {
+      "file": "src/screens/Profile.tsx",
+      "line": "const value = await SecureStore.getItemAsync(\"theme\");"
+     },
+     {
+      "file": "src/screens/Help.tsx",
+      "line": "Linking.openURL(\"https://example.com/help\");"
+     }
+    ]
+   },
+   "sources": [
+    "https://docs.expo.dev/versions/latest/sdk/securestore/",
+    "https://docs.expo.dev/versions/latest/sdk/auth-session/",
+    "https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md",
+    "https://reactnative.dev/docs/security"
+   ]
+  },
+  "flutter": {
+   "id": "flutter",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Flutter and Dart",
+   "kind": "mobile",
+   "detect": {
+    "pub": [
+     "flutter",
+     "flutter_secure_storage",
+     "webview_flutter",
+     "url_launcher"
+    ],
+    "contains": [
+     {
+      "file": "pubspec.yaml",
+      "text": "sdk: flutter"
+     }
+    ]
+   },
+   "signals": {
+    "auth": {
+     "words": [
+      "\\.(?:write|delete)\\s*\\(\\s*key\\s*:",
+      "\\.setString\\s*\\(\\s*['\"][^'\"]*(?:token|session|jwt)",
+      "\\b(?:createUserWithEmailAndPassword|verifyPhoneNumber|sendPasswordResetEmail)\\s*\\(",
+      "\\bGoogleSignIn\\s*\\(",
+      "\\.authenticate\\s*\\(\\s*localizedReason\\s*:"
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\bloadHtmlString\\s*\\(",
+      "\\.runJavaScript(?:ReturningResult)?\\s*\\(",
+      "\\bsetJavaScriptMode\\s*\\(\\s*JavaScriptMode\\.unrestricted",
+      "\\baddJavaScriptChannel\\s*\\(",
+      "\\bHtmlWidget\\s*\\(|\\bHtml\\s*\\(\\s*data\\s*:"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\blaunchUrl(?:String)?\\s*\\(\\s*(?!\\s*Uri\\.parse\\s*\\(\\s*['\"]|['\"])",
+      "\\bhttp\\.(?:get|post|put|patch|delete)\\s*\\(\\s*Uri\\.parse\\s*\\(\\s*(?!\\s*['\"])",
+      "\\bdio\\.(?:get|post|put|patch|delete|request)\\s*\\(\\s*(?!\\s*['\"])",
+      "\\bloadRequest\\s*\\(\\s*Uri\\.parse\\s*\\(\\s*(?!\\s*['\"])"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "lib/data/token_store.dart",
+      "line": "await storage.write(key: \"refresh\", value: next);",
+      "signal": "auth"
+     },
+     {
+      "file": "lib/ui/article_view.dart",
+      "line": "controller.loadHtmlString(article.body);",
+      "signal": "html-sink"
+     },
+     {
+      "file": "lib/ui/message_tile.dart",
+      "line": "await launchUrl(Uri.parse(message.link));",
+      "signal": "url-from-data"
+     },
+     {
+      "file": "lib/ui/article_view.dart",
+      "line": "..setJavaScriptMode(JavaScriptMode.unrestricted)",
+      "signal": "html-sink"
+     }
+    ],
+    "miss": [
+     {
+      "file": "lib/ui/profile.dart",
+      "line": "final user = FirebaseAuth.instance.currentUser;"
+     },
+     {
+      "file": "lib/ui/help.dart",
+      "line": "await launchUrl(Uri.parse(\"https://example.com/help\"));"
+     },
+     {
+      "file": "lib/ui/profile.dart",
+      "line": "final theme = await storage.read(key: \"theme\");"
+     }
+    ]
+   },
+   "sources": [
+    "https://pub.dev/packages/flutter_secure_storage",
+    "https://pub.dev/packages/webview_flutter",
+    "https://pub.dev/packages/url_launcher",
+    "https://docs.flutter.dev/security"
+   ]
+  },
+  "aspnetcore": {
+   "id": "aspnetcore",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "ASP.NET Core (with Identity and EF Core)",
+   "kind": "framework",
+   "detect": {
+    "nuget": [
+     "Microsoft.AspNetCore.",
+     "Microsoft.EntityFrameworkCore"
+    ],
+    "csprojSdk": [
+     "Microsoft.NET.Sdk.Web",
+     "Microsoft.NET.Sdk.Razor"
+    ]
+   },
+   "codeExt": [
+    "cshtml",
+    "razor"
+   ],
+   "signals": {
+    "auth": {
+     "paths": [
+      "*Authentication*",
+      "*Authorization*"
+     ],
+     "words": [
+      "\\b(?:PasswordSignInAsync|ExternalLoginSignInAsync|TwoFactor\\w*SignInAsync|RefreshSignInAsync)\\s*\\(",
+      "\\b_?userManager\\.(?:CreateAsync|AddPasswordAsync|ChangePasswordAsync|ResetPasswordAsync|RemovePasswordAsync|AddToRoleAsync|AddClaimAsync|SetTwoFactorEnabledAsync)\\s*\\(",
+      "\\.(?:AddAuthentication|AddJwtBearer|AddCookie|AddOpenIdConnect|AddAuthorization)\\s*\\(",
+      "\\bnew\\s+JwtSecurityToken\\s*\\(|\\bSecurityTokenDescriptor\\b",
+      "\\b(?:ValidateIssuerSigningKey|ValidateLifetime|ValidateIssuer|ValidateAudience|RequireHttpsMetadata|RequireSignedTokens)\\s*=\\s*false"
+     ]
+    },
+    "access-rule": {
+     "words": [
+      "\\[\\s*AllowAnonymous\\b",
+      "\\.AllowAnonymous\\s*\\(\\s*\\)"
+     ]
+    },
+    "cors-csrf": {
+     "words": [
+      "\\.AllowAnyOrigin\\s*\\(\\s*\\)",
+      "\\.SetIsOriginAllowed\\s*\\(\\s*\\w+\\s*=>\\s*true",
+      "\\[\\s*IgnoreAntiforgeryToken\\b",
+      "\\.DisableAntiforgery\\s*\\(\\s*\\)",
+      "\\bCookieSecurePolicy\\.None\\b",
+      "\\bHttpOnly\\s*=\\s*false"
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\bHtml\\.Raw\\s*\\(",
+      "\\(MarkupString\\)|\\bnew\\s+(?:MarkupString|HtmlString)\\s*\\("
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\.(?:FromSqlRaw|ExecuteSqlRaw|ExecuteSqlRawAsync|SqlQueryRaw)\\s*\\(",
+      "\\bnew\\s+SqlCommand\\s*\\(\\s*(?:\\$\"|\"[^\"]*\"\\s*\\+)",
+      "\\bCommandText\\s*=\\s*(?:\\$\"|\"[^\"]*\"\\s*\\+)"
+     ]
+    },
+    "deserialize": {
+     "words": [
+      "\\b(?:BinaryFormatter|NetDataContractSerializer|LosFormatter|SoapFormatter|ObjectStateFormatter)\\b",
+      "\\bTypeNameHandling\\s*=\\s*TypeNameHandling\\.(?:All|Auto|Objects|Arrays)"
+     ]
+    },
+    "file-upload": {
+     "words": [
+      "\\bIFormFile(?:Collection)?\\b",
+      "\\bRequest\\.Form\\.Files\\b"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\b_?(?:httpClient|client|http)\\.(?:GetAsync|PostAsync|PutAsync|DeleteAsync|SendAsync|GetStringAsync|GetStreamAsync|GetFromJsonAsync|PostAsJsonAsync)\\s*\\(\\s*(?!\\s*[\"@$])",
+      "(?<!Local)\\bRedirect\\s*\\(\\s*(?!\\s*[\"$])\\w*url\\b"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "Controllers/WebhookController.cs",
+      "line": "[AllowAnonymous]",
+      "signal": "access-rule"
+     },
+     {
+      "file": "Program.cs",
+      "line": "policy.AllowAnyOrigin().AllowAnyHeader();",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "Data/UserRepo.cs",
+      "line": "var users = db.Users.FromSqlRaw(\"SELECT * FROM Users WHERE Name = '\" + name + \"'\");",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "Views/Posts/Show.cshtml",
+      "line": "<div>@Html.Raw(Model.Body)</div>",
+      "signal": "html-sink"
+     },
+     {
+      "file": "Controllers/AccountController.cs",
+      "line": "return Redirect(returnUrl);",
+      "signal": "url-from-data"
+     }
+    ],
+    "miss": [
+     {
+      "file": "Controllers/ReportsController.cs",
+      "line": "var name = User.Identity?.Name;"
+     },
+     {
+      "file": "Controllers/ReportsController.cs",
+      "line": "[Authorize(Policy = \"reports.read\")]"
+     },
+     {
+      "file": "Data/UserRepo.cs",
+      "line": "var users = db.Users.FromSqlInterpolated($\"SELECT * FROM Users WHERE Name = {name}\");"
+     },
+     {
+      "file": "Controllers/AccountController.cs",
+      "line": "return LocalRedirect(returnUrl);"
+     }
+    ]
+   },
+   "sources": [
+    "https://learn.microsoft.com/aspnet/core/security/authentication/",
+    "https://learn.microsoft.com/aspnet/core/security/cors",
+    "https://learn.microsoft.com/aspnet/core/security/anti-request-forgery",
+    "https://learn.microsoft.com/ef/core/querying/sql-queries",
+    "https://learn.microsoft.com/dotnet/standard/serialization/binaryformatter-security-guide",
+    "https://learn.microsoft.com/aspnet/core/security/preventing-open-redirects"
+   ]
+  },
+  "go": {
+   "id": "go",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Go (net/http, Gin, Echo)",
+   "kind": "framework",
+   "detect": {
+    "go": [
+     "github.com/gin-gonic/gin",
+     "github.com/labstack/echo",
+     "github.com/go-chi/chi",
+     "github.com/gorilla/mux",
+     "github.com/gofiber/fiber"
+    ],
+    "files": [
+     "go.mod"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "words": [
+      "\\bhttp\\.SetCookie\\s*\\(",
+      "\\bc\\.SetCookie\\s*\\(",
+      "\\bjwt\\.NewWithClaims\\s*\\(|\\.SignedString\\s*\\(",
+      "\\bjwt\\.Parse(?:WithClaims)?\\s*\\(",
+      "\\bbcrypt\\.(?:GenerateFromPassword|CompareHashAndPassword)\\s*\\(",
+      "\\bsession\\.(?:Values\\[[^\\]]+\\]\\s*=(?!=)|Options\\s*=)",
+      "\\bsession\\.(?:Set|Delete|Clear)\\s*\\(",
+      "\\b(?:echojwt|middleware)\\.(?:JWT|JWTWithConfig|WithConfig)\\s*\\("
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "\\btemplate\\.(?:HTML|JS|URL|HTMLAttr|CSS|JSStr|Srcset)\\s*\\(",
+      "\"text/template\""
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\.(?:Query|QueryRow|Exec|QueryContext|ExecContext|QueryRowContext|Raw|Where|Order|Select|Having|Joins)\\s*\\(\\s*(?:ctx\\s*,\\s*)?(?:fmt\\.Sprintf\\s*\\(|\"[^\"]*\"\\s*\\+)"
+     ]
+    },
+    "code-exec": {
+     "words": [
+      "\\bexec\\.Command(?:Context)?\\s*\\(\\s*(?:ctx\\s*,\\s*)?(?:\"(?:sh|bash|cmd|powershell)(?:\\.exe)?\"|(?!\"))"
+     ]
+    },
+    "cors-csrf": {
+     "words": [
+      "\\bAllowAllOrigins\\s*:\\s*true",
+      "\\bAllow(?:ed)?Origins\\s*:\\s*\\[\\]string\\s*\\{\\s*\"\\*\"",
+      "\\bmiddleware\\.CORS\\s*\\(\\s*\\)"
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bhttp\\.(?:Post|Head|PostForm)\\s*\\(\\s*(?!\\s*\")",
+      "\\bhttp\\.NewRequest(?:WithContext)?\\s*\\(\\s*(?:ctx\\s*,\\s*)?(?:\"[A-Z]+\"|http\\.Method\\w+)\\s*,\\s*(?!\\s*\")",
+      "\\bhttp\\.Redirect\\s*\\(\\s*w\\s*,\\s*r\\s*,\\s*(?!\\s*\")",
+      "\\bc\\.Redirect\\s*\\(\\s*(?:http\\.\\w+|\\d{3})\\s*,\\s*(?!\\s*\")"
+     ]
+    },
+    "file-upload": {
+     "words": [
+      "\\b(?:r|c)\\.(?:FormFile|MultipartForm|ParseMultipartForm|SaveUploadedFile)\\s*\\("
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "internal/store/users.go",
+      "line": "rows, err := db.Query(fmt.Sprintf(\"SELECT * FROM users WHERE name = '%s'\", name))",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "internal/web/handlers.go",
+      "line": "http.SetCookie(w, &http.Cookie{Name: \"sid\", Value: sid})",
+      "signal": "auth"
+     },
+     {
+      "file": "internal/web/render.go",
+      "line": "return template.HTML(comment.Body)",
+      "signal": "html-sink"
+     },
+     {
+      "file": "cmd/api/main.go",
+      "line": "config := cors.Config{AllowAllOrigins: true}",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "internal/web/handlers.go",
+      "line": "http.Redirect(w, r, r.URL.Query().Get(\"next\"), http.StatusFound)",
+      "signal": "url-from-data"
+     }
+    ],
+    "miss": [
+     {
+      "file": "internal/store/users.go",
+      "line": "rows, err := db.Query(\"SELECT * FROM users WHERE name = $1\", name)"
+     },
+     {
+      "file": "internal/web/handlers.go",
+      "line": "http.Redirect(w, r, \"/login\", http.StatusFound)"
+     },
+     {
+      "file": "internal/web/reports.go",
+      "line": "userID := c.GetString(\"userID\")"
+     }
+    ]
+   },
+   "sources": [
+    "https://pkg.go.dev/html/template#HTML",
+    "https://pkg.go.dev/database/sql",
+    "https://gin-gonic.com/en/docs/",
+    "https://echo.labstack.com/docs/middleware/cors",
+    "https://pkg.go.dev/github.com/golang-jwt/jwt/v5"
+   ]
+  },
+  "phoenix": {
+   "id": "phoenix",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Phoenix and Elixir",
+   "kind": "framework",
+   "detect": {
+    "hex": [
+     "phoenix",
+     "phoenix_live_view",
+     "guardian",
+     "pow"
+    ],
+    "files": [
+     "mix.exs"
+    ]
+   },
+   "codeExt": [
+    "heex",
+    "eex",
+    "leex"
+   ],
+   "signals": {
+    "auth": {
+     "words": [
+      "\\bput_session\\s*\\(",
+      "\\b(?:configure_session|clear_session|delete_session)\\s*\\(",
+      "\\bPhoenix\\.Token\\.(?:sign|encrypt)\\s*\\(",
+      "\\bput_resp_cookie\\s*\\(",
+      "\\b(?:Bcrypt|Argon2|Pbkdf2)\\.hash_pwd_salt\\s*\\(",
+      "\\bGuardian\\.(?:encode_and_sign|Plug\\.sign_in|Plug\\.sign_out)\\b"
+     ]
+    },
+    "access-rule": {
+     "words": [
+      "\\blive_session\\s+:\\w+",
+      "\\bon_mount:\\s*\\[?\\s*\\{"
+     ]
+    },
+    "cors-csrf": {
+     "paths": [
+      "endpoint.ex"
+     ],
+     "words": [
+      "\\bcheck_origin:\\s*false",
+      "\\bCORSPlug\\b[^\\n]*origin:\\s*\\[?\\s*\"\\*\""
+     ]
+    },
+    "html-sink": {
+     "words": [
+      "(?<![.\\w])raw\\s*\\(",
+      "\\bPhoenix\\.HTML\\.raw\\s*\\(",
+      "\\{:safe,"
+     ]
+    },
+    "raw-sql": {
+     "words": [
+      "\\bEcto\\.Adapters\\.SQL\\.query!?\\s*\\(",
+      "\\bRepo\\.query!?\\s*\\(",
+      "\\bfragment\\s*\\(\\s*\"[^\"]*#\\{"
+     ]
+    },
+    "deserialize": {
+     "words": [
+      "\\bbinary_to_term\\s*\\((?![^)]*:safe)"
+     ]
+    },
+    "code-exec": {
+     "words": [
+      "\\bSystem\\.(?:cmd|shell)\\s*\\(",
+      "\\bCode\\.eval_(?:string|quoted)\\s*\\(",
+      ":os\\.cmd\\s*\\("
+     ]
+    },
+    "url-from-data": {
+     "words": [
+      "\\bredirect\\s*\\([^,]+,\\s*external:\\s*(?!\\s*\")",
+      "\\b(?:HTTPoison|Req|Tesla|Finch)\\.(?:get|post|put|patch|delete|request)!?\\s*\\(\\s*(?!\\s*\")"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "lib/app_web/controllers/session_controller.ex",
+      "line": "conn |> put_session(:user_token, token) |> configure_session(renew: true)",
+      "signal": "auth"
+     },
+     {
+      "file": "lib/app_web/components/post.html.heex",
+      "line": "<div><%= raw(@post.body) %></div>",
+      "signal": "html-sink"
+     },
+     {
+      "file": "lib/app/reports.ex",
+      "line": "Repo.query!(\"SELECT * FROM users WHERE name = '#{name}'\")",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "config/runtime.exs",
+      "line": "check_origin: false",
+      "signal": "cors-csrf"
+     },
+     {
+      "file": "lib/app_web/controllers/page_controller.ex",
+      "line": "redirect(conn, external: params[\"return_to\"])",
+      "signal": "url-from-data"
+     }
+    ],
+    "miss": [
+     {
+      "file": "lib/app_web/controllers/page_controller.ex",
+      "line": "user = conn.assigns.current_user"
+     },
+     {
+      "file": "lib/app_web/controllers/page_controller.ex",
+      "line": "redirect(conn, to: ~p\"/\")"
+     },
+     {
+      "file": "lib/app/reports.ex",
+      "line": "Repo.all(from u in User, where: u.email == ^email)"
+     }
+    ]
+   },
+   "sources": [
+    "https://hexdocs.pm/phoenix/Plug.Conn.html",
+    "https://hexdocs.pm/phoenix_html/Phoenix.HTML.html#raw/1",
+    "https://hexdocs.pm/ecto_sql/Ecto.Adapters.SQL.html#query/4",
+    "https://hexdocs.pm/phoenix/Phoenix.Endpoint.html#socket/3-common-configuration"
+   ]
+  },
+  "supabase": {
+   "id": "supabase",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Supabase",
+   "kind": "baas",
+   "detect": {
+    "npm": [
+     "@supabase/supabase-js",
+     "@supabase/ssr",
+     "@supabase/auth-helpers-nextjs"
+    ],
+    "pypi": [
+     "supabase"
+    ],
+    "pub": [
+     "supabase_flutter"
+    ],
+    "files": [
+     "supabase/config.toml"
+    ]
+   },
+   "codeExt": [
+    "sql"
+   ],
+   "signals": {
+    "auth": {
+     "words": [
+      "\\bauth\\.admin\\.\\w+\\s*\\(",
+      "\\bauth\\.(?:updateUser|resetPasswordForEmail|reauthenticate|linkIdentity|unlinkIdentity)\\s*\\(",
+      "\\bcreateServerClient\\s*\\("
+     ]
+    },
+    "access-rule": {
+     "words": [
+      "\\bsecurity\\s+definer\\b",
+      "\\bdisable\\s+row\\s+level\\s+security\\b",
+      "\\bno\\s+force\\s+row\\s+level\\s+security\\b",
+      "\\bgrant\\s+[^;]*\\bto\\s+(?:anon|public)\\b",
+      "\\b(?:using|with\\s+check)\\s*\\(\\s*true\\s*\\)",
+      "\\bbypassrls\\b"
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\bsb_secret_[A-Za-z0-9_-]{10,}"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "supabase/functions/admin/index.ts",
+      "line": "const { data, error } = await supabase.auth.admin.deleteUser(userId);",
+      "signal": "auth"
+     },
+     {
+      "file": "src/screens/Password.tsx",
+      "line": "await supabase.auth.updateUser({ password: newPassword });",
+      "signal": "auth"
+     },
+     {
+      "file": "supabase/migrations/20261114_close.sql",
+      "line": "create or replace function public.close_case() returns void language plpgsql security definer as $$",
+      "signal": "access-rule"
+     },
+     {
+      "file": "supabase/migrations/20261114_rls.sql",
+      "line": "alter table public.reports disable row level security;",
+      "signal": "access-rule"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/screens/Home.tsx",
+      "line": "const { data: { user } } = await supabase.auth.getUser();"
+     },
+     {
+      "file": "src/screens/Home.tsx",
+      "line": "const { data } = await supabase.from(\"reports\").select(\"id, title\");"
+     },
+     {
+      "file": "supabase/migrations/20261114_rls.sql",
+      "line": "create policy \"own rows\" on public.reports for select using (owner_id = auth.uid());"
+     }
+    ]
+   },
+   "notes": "Words on .sql need codeExt sql. A path signal on supabase/functions/ or supabase/migrations/ was left out on purpose: it would hit on nearly every task in a database-heavy project.",
+   "sources": [
+    "https://supabase.com/docs/reference/javascript/auth-admin-api",
+    "https://supabase.com/docs/guides/database/postgres/row-level-security",
+    "https://supabase.com/docs/guides/api/api-keys",
+    "https://supabase.com/docs/guides/database/functions#security-definer-vs-invoker"
+   ]
+  },
+  "firebase": {
+   "id": "firebase",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Firebase (Auth, Firestore, Storage, Admin SDK)",
+   "kind": "baas",
+   "detect": {
+    "npm": [
+     "firebase",
+     "firebase-admin",
+     "@react-native-firebase/auth"
+    ],
+    "pypi": [
+     "firebase-admin"
+    ],
+    "pub": [
+     "firebase_auth",
+     "cloud_firestore"
+    ],
+    "maven": [
+     "com.google.firebase:firebase-admin"
+    ],
+    "files": [
+     "firebase.json",
+     "firestore.rules",
+     "storage.rules",
+     "database.rules.json"
+    ]
+   },
+   "codeExt": [
+    "rules"
+   ],
+   "codeFiles": [
+    "database.rules.json"
+   ],
+   "signals": {
+    "auth": {
+     "words": [
+      "\\b(?:createUserWithEmailAndPassword|sendPasswordResetEmail|confirmPasswordReset|updatePassword|linkWithCredential|linkWithPopup|reauthenticateWithCredential|setPersistence|sendSignInLinkToEmail)\\s*\\(",
+      "\\b(?:getAuth\\s*\\(\\s*\\)|admin\\.auth\\s*\\(\\s*\\)|auth)\\.(?:createCustomToken|setCustomUserClaims|revokeRefreshTokens|createSessionCookie|deleteUser|createUser|generate\\w*Link)\\s*\\("
+     ]
+    },
+    "access-rule": {
+     "paths": [
+      "firestore.rules",
+      "storage.rules",
+      "database.rules.json"
+     ],
+     "words": [
+      "\\ballow\\s+[\\w,\\s]+:\\s*if\\s+true\\b",
+      "\\ballow\\s+[\\w,\\s]+;",
+      "\\brequest\\.time\\s*<\\s*timestamp\\.date\\s*\\(",
+      "\"\\.(?:read|write)\"\\s*:\\s*(?:true|\"true\")"
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\bserviceAccountKey\\.json\\b|\\bfirebase-adminsdk\\b"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "firestore.rules",
+      "line": "allow read, write: if true;",
+      "signal": "access-rule"
+     },
+     {
+      "file": "functions/src/roles.ts",
+      "line": "await getAuth().setCustomUserClaims(uid, { admin: true });",
+      "signal": "auth"
+     },
+     {
+      "file": "storage.rules",
+      "line": "allow read, write: if request.time < timestamp.date(2026, 12, 31);",
+      "signal": "access-rule"
+     },
+     {
+      "file": "src/auth/register.ts",
+      "line": "const cred = await createUserWithEmailAndPassword(auth, email, password);",
+      "signal": "auth"
+     }
+    ],
+    "miss": [
+     {
+      "file": "firestore.rules",
+      "line": "allow read: if request.auth != null && request.auth.uid == userId;"
+     },
+     {
+      "file": "src/screens/Home.tsx",
+      "line": "const user = auth.currentUser;"
+     },
+     {
+      "file": "src/screens/Home.tsx",
+      "line": "onAuthStateChanged(auth, (u) => setUser(u));"
+     }
+    ],
+    "pathHit": [
+     {
+      "file": "firestore.rules",
+      "signal": "access-rule"
+     }
+    ],
+    "pathMiss": [
+     "src/screens/Home.tsx"
+    ]
+   },
+   "sources": [
+    "https://firebase.google.com/docs/rules/insecure-rules",
+    "https://firebase.google.com/docs/auth/admin/custom-claims",
+    "https://firebase.google.com/docs/auth/admin/manage-sessions",
+    "https://firebase.google.com/docs/reference/js/auth"
+   ]
+  },
+  "clerk": {
+   "id": "clerk",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Clerk",
+   "kind": "auth",
+   "detect": {
+    "npm": [
+     "@clerk/nextjs",
+     "@clerk/clerk-react",
+     "@clerk/clerk-expo",
+     "@clerk/express",
+     "@clerk/backend",
+     "@clerk/remix",
+     "@clerk/astro"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "words": [
+      "\\b(?:clerkMiddleware|authMiddleware)\\s*\\(",
+      "\\bclerkClient\\b[^\\n]*?\\.(?:users\\.(?:updateUser\\w*|deleteUser|createUser|banUser|lockUser)|sessions\\.revokeSession|signInTokens\\.create|actorTokens\\.create)\\s*\\(",
+      "\\b(?:signIn|signUp)\\.(?:create|attempt\\w*|prepare\\w*|authenticateWithRedirect)\\s*\\("
+     ]
+    },
+    "access-rule": {
+     "words": [
+      "\\bcreateRouteMatcher\\s*\\(",
+      "\\bpublicRoutes\\s*:"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/middleware.ts",
+      "line": "export default clerkMiddleware(async (auth, req) => {",
+      "signal": "auth"
+     },
+     {
+      "file": "src/routes.ts",
+      "line": "const isPublicRoute = createRouteMatcher([\"/sign-in(.*)\", \"/api/webhooks(.*)\"]);",
+      "signal": "access-rule"
+     },
+     {
+      "file": "app/api/roles/route.ts",
+      "line": "await (await clerkClient()).users.updateUserMetadata(userId, { publicMetadata: { role: \"admin\" } });",
+      "signal": "auth"
+     },
+     {
+      "file": "src/components/LoginForm.tsx",
+      "line": "await signIn.create({ identifier: email, password });",
+      "signal": "auth"
+     }
+    ],
+    "miss": [
+     {
+      "file": "app/page.tsx",
+      "line": "const { userId } = await auth();"
+     },
+     {
+      "file": "app/page.tsx",
+      "line": "const { user } = useUser();"
+     }
+    ]
+   },
+   "sources": [
+    "https://clerk.com/docs/references/nextjs/clerk-middleware",
+    "https://clerk.com/docs/references/backend/user/update-user-metadata",
+    "https://clerk.com/docs/custom-flows/email-password"
+   ]
+  },
+  "auth0": {
+   "id": "auth0",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Auth0",
+   "kind": "auth",
+   "detect": {
+    "npm": [
+     "@auth0/nextjs-auth0",
+     "@auth0/auth0-react",
+     "@auth0/auth0-spa-js",
+     "react-native-auth0",
+     "auth0",
+     "express-openid-connect"
+    ],
+    "pypi": [
+     "auth0-python"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "*auth0*"
+     ],
+     "words": [
+      "\\bloginWithPopup\\s*\\(",
+      "\\bhandle(?:Auth|Login|Callback)\\s*\\(",
+      "\\bnew\\s+Auth0Client\\s*\\(",
+      "\\bauth0\\.(?:middleware|updateSession)\\s*\\(",
+      "\\bnew\\s+ManagementClient\\s*\\(",
+      "\\bmanagement\\.(?:users|roles)\\.(?:update|create|delete|assign\\w*)\\s*\\(",
+      "\\bcacheLocation\\s*:\\s*['\"]localstorage['\"]"
+     ]
+    },
+    "access-rule": {
+     "words": [
+      "\\bauthRequired\\s*:\\s*false"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "app/api/auth0/[auth0]/route.ts",
+      "line": "export const GET = handleAuth();",
+      "signal": "auth"
+     },
+     {
+      "file": "src/providers.tsx",
+      "line": "cacheLocation: \"localstorage\",",
+      "signal": "auth"
+     },
+     {
+      "file": "src/admin/users.ts",
+      "line": "const management = new ManagementClient({ domain, clientId, clientSecret });",
+      "signal": "auth"
+     },
+     {
+      "file": "src/app.ts",
+      "line": "app.use(auth({ authRequired: false, auth0Logout: true }));",
+      "signal": "access-rule"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/screens/Home.tsx",
+      "line": "const { user, isAuthenticated } = useAuth0();"
+     },
+     {
+      "file": "app/page.tsx",
+      "line": "const current = await getSession();"
+     }
+    ]
+   },
+   "sources": [
+    "https://auth0.com/docs/libraries/auth0-single-page-app-sdk",
+    "https://github.com/auth0/nextjs-auth0",
+    "https://auth0.github.io/node-auth0/",
+    "https://auth0.com/docs/secure/security-guidance/data-security/token-storage"
+   ]
+  },
+  "keycloak-oidc": {
+   "id": "keycloak-oidc",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Keycloak and generic OIDC clients",
+   "kind": "auth",
+   "detect": {
+    "npm": [
+     "keycloak-js",
+     "keycloak-connect",
+     "@keycloak/keycloak-admin-client",
+     "openid-client",
+     "oidc-client-ts",
+     "react-oidc-context",
+     "angular-oauth2-oidc"
+    ],
+    "pypi": [
+     "python-keycloak",
+     "authlib"
+    ],
+    "maven": [
+     "org.keycloak:keycloak-admin-client",
+     "org.springframework.boot:spring-boot-starter-oauth2-client"
+    ]
+   },
+   "signals": {
+    "auth": {
+     "paths": [
+      "*keycloak*",
+      "*oidc*"
+     ],
+     "words": [
+      "\\bkeycloak\\.(?:init|login|register|updateToken|clearToken)\\s*\\(",
+      "\\b(?:authorizationCodeGrant|refreshTokenGrant|clientCredentialsGrant|buildAuthorizationUrl|tokenExchange)\\s*\\(",
+      "\\bclient\\.(?:callback|refresh|grant|authorizationUrl)\\s*\\(",
+      "\\buserManager\\.(?:signinRedirect\\w*|signoutRedirect|signinSilent|removeUser|signinPopup)\\s*\\(",
+      "\\bresponse_type\\s*:\\s*['\"](?:token|id_token)\\b",
+      "\\b\\w*admin\\w*client\\.users\\.(?:create|update|del|resetPassword|addRealmRoleMappings|addClientRoleMappings)\\s*\\("
+     ]
+    },
+    "secret": {
+     "words": [
+      "\\bclient_?secret\\s*[:=]\\s*['\"][^'\"\\s]{6,}['\"]"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/lib/kc.ts",
+      "line": "await keycloak.init({ onLoad: \"check-sso\", pkceMethod: \"S256\" });",
+      "signal": "auth"
+     },
+     {
+      "file": "src/server/callback.ts",
+      "line": "const tokens = await client.authorizationCodeGrant(config, currentUrl, { pkceCodeVerifier });",
+      "signal": "auth"
+     },
+     {
+      "file": "src/lib/settings.ts",
+      "line": "response_type: \"id_token token\",",
+      "signal": "auth"
+     },
+     {
+      "file": "src/lib/settings.ts",
+      "line": "clientSecret: \"abc123secretvalue\",",
+      "signal": "secret"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/screens/Home.tsx",
+      "line": "const roles = keycloak.tokenParsed?.realm_access?.roles ?? [];"
+     },
+     {
+      "file": "src/screens/Home.tsx",
+      "line": "const current = await userManager.getUser();"
+     }
+    ]
+   },
+   "sources": [
+    "https://www.keycloak.org/securing-apps/javascript-adapter",
+    "https://github.com/panva/openid-client",
+    "https://authts.github.io/oidc-client-ts/",
+    "https://datatracker.ietf.org/doc/html/rfc9700"
+   ]
+  },
+  "prisma": {
+   "id": "prisma",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Prisma",
+   "kind": "orm",
+   "detect": {
+    "npm": [
+     "prisma",
+     "@prisma/client"
+    ],
+    "files": [
+     "prisma/schema.prisma"
+    ]
+   },
+   "signals": {
+    "raw-sql": {
+     "words": [
+      "\\$(?:queryRawUnsafe|executeRawUnsafe)\\s*\\(",
+      "\\bPrisma\\.raw\\s*\\(",
+      "\\$(?:queryRaw|executeRaw)\\s*\\(\\s*(?!\\s*Prisma\\.sql\\b)"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/repo.ts",
+      "line": "const rows = await prisma.$queryRawUnsafe(query, email);",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "src/repo.ts",
+      "line": "await prisma.$executeRawUnsafe(sql);",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "src/repo.ts",
+      "line": "const order = Prisma.raw(sortColumn);",
+      "signal": "raw-sql"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/repo.ts",
+      "line": "const rows = await prisma.$queryRaw`SELECT * FROM \"User\" WHERE email = ${email}`;"
+     },
+     {
+      "file": "src/repo.ts",
+      "line": "const user = await prisma.user.findUnique({ where: { email } });"
+     }
+    ]
+   },
+   "sources": [
+    "https://www.prisma.io/docs/orm/prisma-client/using-raw-sql/raw-queries"
+   ]
+  },
+  "drizzle": {
+   "id": "drizzle",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Drizzle ORM",
+   "kind": "orm",
+   "detect": {
+    "npm": [
+     "drizzle-orm"
+    ],
+    "files": [
+     "drizzle.config.ts",
+     "drizzle.config.js"
+    ]
+   },
+   "signals": {
+    "raw-sql": {
+     "words": [
+      "\\bsql\\.raw\\s*\\("
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/db/reports.ts",
+      "line": "const rows = await db.execute(sql.raw(query));",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "src/db/reports.ts",
+      "line": ".orderBy(sql.raw(column))",
+      "signal": "raw-sql"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/db/reports.ts",
+      "line": "const rows = await db.select().from(users).where(eq(users.email, email));"
+     },
+     {
+      "file": "src/db/reports.ts",
+      "line": "await db.execute(sql`SELECT * FROM users WHERE id = ${id}`);"
+     }
+    ]
+   },
+   "sources": [
+    "https://orm.drizzle.team/docs/sql#sqlraw"
+   ]
+  },
+  "sqlalchemy": {
+   "id": "sqlalchemy",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "SQLAlchemy and SQLModel",
+   "kind": "orm",
+   "detect": {
+    "pypi": [
+     "sqlalchemy",
+     "flask-sqlalchemy",
+     "sqlmodel"
+    ]
+   },
+   "signals": {
+    "raw-sql": {
+     "words": [
+      "\\btext\\s*\\(\\s*f[\"']",
+      "\\btext\\s*\\(\\s*[\"'][^\"']*[\"']\\s*(?:%|\\+|\\.format\\b)",
+      "\\.execute\\s*\\(\\s*(?:f[\"']|[\"'][^\"']*[\"']\\s*(?:%|\\+|\\.format\\b))",
+      "\\bliteral_column\\s*\\(\\s*f[\"']"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "app/repo.py",
+      "line": "result = session.execute(text(f\"SELECT * FROM users WHERE name = '{name}'\"))",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "app/repo.py",
+      "line": "conn.execute(\"SELECT * FROM users WHERE id = %s\" % user_id)",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "app/repo.py",
+      "line": "stmt = text(\"SELECT * FROM t WHERE x = \" + value)",
+      "signal": "raw-sql"
+     }
+    ],
+    "miss": [
+     {
+      "file": "app/repo.py",
+      "line": "result = session.execute(text(\"SELECT * FROM users WHERE name = :name\"), {\"name\": name})"
+     },
+     {
+      "file": "app/repo.py",
+      "line": "users = session.scalars(select(User).where(User.email == email)).all()"
+     }
+    ]
+   },
+   "sources": [
+    "https://docs.sqlalchemy.org/en/20/core/sqlelement.html#sqlalchemy.sql.expression.text",
+    "https://docs.sqlalchemy.org/en/20/faq/sqlexpressions.html"
+   ]
+  },
+  "hibernate-jpa": {
+   "id": "hibernate-jpa",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "Hibernate and JPA (Spring Data JPA)",
+   "kind": "orm",
+   "detect": {
+    "maven": [
+     "org.hibernate.orm:hibernate-core",
+     "org.hibernate:hibernate-core",
+     "org.springframework.boot:spring-boot-starter-data-jpa",
+     "jakarta.persistence:jakarta.persistence-api"
+    ]
+   },
+   "signals": {
+    "raw-sql": {
+     "words": [
+      "\\.(?:createQuery|createNativeQuery|createSQLQuery|createMutationQuery|createSelectionQuery)\\s*\\(\\s*(?:\"[^\"]*\"\\s*\\+|[a-z]\\w*\\s*[,)]|String\\.format)",
+      "\\.createQuery\\s*\\(\\s*\"[^\"]*\\$\\{?\\w",
+      "@Query\\s*\\([^)]*nativeQuery\\s*=\\s*true"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/main/java/app/repo/UserDao.java",
+      "line": "List<User> users = em.createQuery(\"from User where name = '\" + name + \"'\").getResultList();",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "src/main/java/app/repo/UserRepository.java",
+      "line": "@Query(value = \"SELECT * FROM users WHERE status = ?1\", nativeQuery = true)",
+      "signal": "raw-sql"
+     },
+     {
+      "file": "src/main/java/app/repo/UserDao.java",
+      "line": "Query q = session.createNativeQuery(sql);",
+      "signal": "raw-sql"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/main/java/app/repo/UserDao.java",
+      "line": "List<User> users = em.createQuery(\"from User where name = :name\", User.class).setParameter(\"name\", name).getResultList();"
+     },
+     {
+      "file": "src/main/java/app/repo/UserRepository.java",
+      "line": "Optional<User> findByEmail(String email);"
+     }
+    ]
+   },
+   "sources": [
+    "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#query-language",
+    "https://docs.spring.io/spring-data/jpa/reference/jpa/query-methods.html#jpa.query-methods.at-query",
+    "https://cheatsheetseries.owasp.org/cheatsheets/Query_Parameterization_Cheat_Sheet.html"
+   ]
+  },
+  "graphql-apollo": {
+   "id": "graphql-apollo",
+   "version": 1,
+   "updated": "2026-11-14",
+   "title": "GraphQL (Apollo Server, Yoga, graphql-shield)",
+   "kind": "api",
+   "detect": {
+    "npm": [
+     "@apollo/server",
+     "apollo-server",
+     "apollo-server-express",
+     "graphql-yoga",
+     "graphql-shield",
+     "mercurius"
+    ]
+   },
+   "codeExt": [
+    "graphql",
+    "gql"
+   ],
+   "signals": {
+    "auth": {
+     "words": [
+      "\\bcontext\\s*:\\s*async\\s*\\(\\s*\\{\\s*req\\b"
+     ]
+    },
+    "access-rule": {
+     "paths": [
+      "*shield*"
+     ],
+     "words": [
+      "\\bintrospection\\s*:\\s*true",
+      "\\bcsrfPrevention\\s*:\\s*false",
+      "\\b(?:playground|graphiql)\\s*:\\s*true",
+      "\\bshield\\s*\\(",
+      "\\bfallbackRule\\s*:\\s*allow\\b",
+      "\\ballowExternalErrors\\s*:\\s*true",
+      "\\ballowBatchedHttpRequests\\s*:\\s*true"
+     ]
+    }
+   },
+   "examples": {
+    "hit": [
+     {
+      "file": "src/server.ts",
+      "line": "const server = new ApolloServer({ typeDefs, resolvers, introspection: true });",
+      "signal": "access-rule"
+     },
+     {
+      "file": "src/server.ts",
+      "line": "csrfPrevention: false,",
+      "signal": "access-rule"
+     },
+     {
+      "file": "src/server.ts",
+      "line": "context: async ({ req }) => ({ user: await userFromToken(req.headers.authorization) }),",
+      "signal": "auth"
+     },
+     {
+      "file": "src/rules.ts",
+      "line": "const rules = shield({ Query: { \"*\": allow } }, { fallbackRule: allow });",
+      "signal": "access-rule"
+     }
+    ],
+    "miss": [
+     {
+      "file": "src/screens/Reports.tsx",
+      "line": "const { data } = useQuery(GET_REPORTS);"
+     },
+     {
+      "file": "src/server.ts",
+      "line": "const server = new ApolloServer({ typeDefs, resolvers });"
+     }
+    ]
+   },
+   "sources": [
+    "https://www.apollographql.com/docs/apollo-server/security/cors",
+    "https://www.apollographql.com/docs/apollo-server/security/authentication",
+    "https://the-guild.dev/graphql/shield/docs"
+   ]
+  }
+ },
+ "knownWithoutPack": [
+  {
+   "id": "fastify",
+   "npm": [
+    "fastify"
+   ]
+  },
+  {
+   "id": "hono",
+   "npm": [
+    "hono"
+   ]
+  },
+  {
+   "id": "koa",
+   "npm": [
+    "koa"
+   ]
+  },
+  {
+   "id": "astro",
+   "npm": [
+    "astro"
+   ]
+  },
+  {
+   "id": "solidstart",
+   "npm": [
+    "@solidjs/start"
+   ]
+  },
+  {
+   "id": "better-auth",
+   "npm": [
+    "better-auth"
+   ]
+  },
+  {
+   "id": "lucia",
+   "npm": [
+    "lucia"
+   ]
+  },
+  {
+   "id": "supertokens",
+   "npm": [
+    "supertokens-node",
+    "supertokens-auth-react"
+   ]
+  },
+  {
+   "id": "aws-amplify-cognito",
+   "npm": [
+    "aws-amplify",
+    "@aws-sdk/client-cognito-identity-provider"
+   ]
+  },
+  {
+   "id": "appwrite",
+   "npm": [
+    "appwrite",
+    "node-appwrite"
+   ]
+  },
+  {
+   "id": "convex",
+   "npm": [
+    "convex"
+   ]
+  },
+  {
+   "id": "pocketbase",
+   "npm": [
+    "pocketbase"
+   ]
+  },
+  {
+   "id": "typeorm",
+   "npm": [
+    "typeorm"
+   ]
+  },
+  {
+   "id": "sequelize",
+   "npm": [
+    "sequelize"
+   ]
+  },
+  {
+   "id": "mongoose",
+   "npm": [
+    "mongoose"
+   ]
+  },
+  {
+   "id": "kysely",
+   "npm": [
+    "kysely"
+   ]
+  },
+  {
+   "id": "electron",
+   "npm": [
+    "electron"
+   ]
+  },
+  {
+   "id": "tauri",
+   "npm": [
+    "@tauri-apps/api"
+   ]
+  },
+  {
+   "id": "symfony",
+   "composer": [
+    "symfony/framework-bundle"
+   ]
+  },
+  {
+   "id": "quarkus",
+   "maven": [
+    "io.quarkus:quarkus-core"
+   ]
+  },
+  {
+   "id": "micronaut",
+   "maven": [
+    "io.micronaut:micronaut-http"
+   ]
+  },
+  {
+   "id": "ktor",
+   "maven": [
+    "io.ktor:ktor-server-core"
+   ]
+  },
+  {
+   "id": "gorm",
+   "go": [
+    "gorm.io/gorm"
+   ]
+  },
+  {
+   "id": "axum-actix",
+   "cargo": [
+    "axum",
+    "actix-web",
+    "rocket"
+   ]
+  },
+  {
+   "id": "sqlx-diesel",
+   "cargo": [
+    "sqlx",
+    "diesel"
+   ]
+  },
+  {
+   "id": "vapor",
+   "swiftpm": [
+    "vapor"
+   ]
+  },
+  {
+   "id": "android-native",
+   "files": [
+    "app/src/main/AndroidManifest.xml"
+   ]
+  },
+  {
+   "id": "ios-native",
+   "files": [
+    "Podfile",
+    "*.xcodeproj"
+   ]
+  }
+ ]
+}

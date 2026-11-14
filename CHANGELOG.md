@@ -10,6 +10,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   `reviewer-security` with a one-line reason. Narrow by design (added lines in code files only), and the class stays the
   floor. Projects can tune it in `review.signals`, and `ravenseat helpers` shows how often each signal fires. See
   [orchestration](plugin/docs/orchestration.md#review-signals).
+- **Hardening: review signals for your stack.** About 30 stack packs add the risky calls of a stack (raw SQL, rules
+  that open access, CORS and CSRF, unsafe deserializing, code from data, uploads, TLS off) to the review signals. The
+  stack is read from the manifests, never run, and the Checks tab suggests the packs; `review.packs` is written only
+  after your yes (`ravenseat checks packs --apply`). A known stack without a pack gets a suggestion to research one, and
+  your own packs in `docs/queue/review-packs/` are checked against their examples. The Checks tab now shows important
+  suggestions you skipped with one click back, and a small red dot while one is open (`checksPanel.marker`, on by
+  default; `ravenseat checks marker off` hides it).
 - **Cost numbers.** The README and [costs](plugin/docs/costs.md) now lead with the last measured week, the fairest
   comparison, with every week and the whole 19 days beside it. A queue turn costs no more than a turn in one chat, and
   the checks come on top. The claim of the same cost per line is dropped, and no per-day averages over idle days.

@@ -286,6 +286,23 @@ textarea {
   font-weight: 600;
 }
 
+/* The small red dot on the Checks tab: a high suggestion is open (state.checksMarker; ravenseat checks marker off hides it). */
+.toggles-button.has-marker::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: var(--distance-xs);
+  border-radius: 9999px;
+  background: var(--color-error);
+  vertical-align: super;
+}
+
+/* The summary at the top of the Checks suggestions: important open, and important set aside. */
+.checks-summary {
+  border-left: 4px solid var(--color-error);
+}
+
 /* ---- Search and the Filter menu (the logo sits in the mascot zone above) ---- */
 
 .search-filter {

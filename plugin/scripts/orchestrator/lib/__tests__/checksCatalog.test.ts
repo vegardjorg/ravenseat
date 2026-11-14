@@ -52,6 +52,33 @@ describe('the catalog the plugin ships', () => {
     const env = catalog.templates.find((x: { key: string }) => x.key === 'env-precheck');
     expect(env.plan).toMatch(/one line/);
   });
+  it('ships the stack pack suggestion (no agent, action packs) and the research for a stack with no pack', () => {
+    const packs = catalog.templates.find((x: { key: string }) => x.key === 'stack-review-signals');
+    expect(packs).toMatchObject({ category: 'security', priority: 'high', action: 'packs', when: 'packs-missing' });
+    const research = catalog.templates.find((x: { key: string }) => x.key === 'stack-pack-research');
+    expect(research).toMatchObject({ category: 'security', when: 'stack-unpacked' });
+    expect(research.action).toBeFalsy();
+    expect(research.plan).toMatch(/docs\/queue\/review-packs/);
+    const facts = { git: true, hasCommit: true, remote: null, stacks: [], ci: [], kinds: [], packs: { detected: ['nextjs'], applied: [], missing: ['core', 'nextjs'], unpacked: ['fastify'], titles: { core: 'Core', nextjs: 'Next.js' } } };
+    const r = C.buildReport({ facts, catalog, now: 'x' });
+    const keys = r.suggestions.map((s: { key: string }) => s.key);
+    expect(keys).toEqual(expect.arrayContaining(['stack-review-signals', 'stack-pack-research']));
+    expect(r.packs).toMatchObject({ missing: ['core', 'nextjs'], unpacked: ['fastify'] });
+    expect(r.suggestions.find((s: { key: string }) => s.key === 'stack-review-signals').detail).toMatch(/Next\.js/);
+    expect(r.suggestions.find((s: { key: string }) => s.key === 'stack-pack-research').detail).toMatch(/fastify/);
+    const none = C.buildReport({ facts: { ...facts, packs: { ...facts.packs, missing: [], unpacked: [] } }, catalog, now: 'x' });
+    expect(none.suggestions.map((s: { key: string }) => s.key)).not.toContain('stack-review-signals');
+    expect(none.suggestions.map((s: { key: string }) => s.key)).not.toContain('stack-pack-research');
+  });
+  it('important counts the open high suggestions only (the red marker on the tab)', () => {
+    const facts = { git: true, hasCommit: true, remote: null, stacks: [], ci: [], kinds: [], packs: { detected: [], applied: [], missing: ['core'], unpacked: [] } };
+    const open = C.buildReport({ facts, catalog, now: 'x' });
+    const highKeys = open.suggestions.filter((s: { priority: string }) => s.priority === 'high').map((s: { key: string }) => s.key);
+    expect(open.important).toBe(highKeys.length);
+    expect(highKeys.length).toBeGreaterThan(0);
+    expect(C.buildReport({ facts, catalog, dismissed: highKeys, now: 'x' }).important).toBe(0);
+    expect(C.buildReport({ facts, catalog, tasks: highKeys.map((k: string) => ({ id: `KS-PLAN-${k.toUpperCase()}`, status: 'waiting' })), now: 'x' }).important).toBe(0);
+  });
   it('every suggestion that uses an agent has both sections', () => {
     for (const t of catalog.templates.filter((x: { action: string }) => !x.action)) {
       expect(t.investigate.length).toBeGreaterThan(20);
@@ -106,6 +133,7 @@ when: instructions-huge`), 'x').errors[0]).toContain('unknown condition "instruc
   });
   it('a suggestion with an action needs no sections, and off needs nothing else', () => {
     expect(C.parseTemplate(file(`${GOOD}\naction: gates`, ''), 'x').errors).toEqual([]);
+    expect(C.parseTemplate(file(`${GOOD}\naction: packs`, ''), 'x').errors).toEqual([]);
     expect(C.parseTemplate(file('off: true', ''), 'x')).toEqual({ key: 'x', off: true, errors: [] });
   });
 });
@@ -156,8 +184,15 @@ describe('holds', () => {
     ['no-commit', false],
     ['made-up', false],
     ['made-up:test', false],
+    ['packs-missing', false],
+    ['stack-unpacked', false],
   ])('%s is %s', (when, want) => {
     expect(C.holds(when, facts)).toBe(want);
+  });
+  it('packs-missing and stack-unpacked follow the pack facts', () => {
+    expect(C.holds('packs-missing', { packs: { missing: ['core'] } })).toBe(true);
+    expect(C.holds('packs-missing', { packs: { missing: [] } })).toBe(false);
+    expect(C.holds('stack-unpacked', { packs: { unpacked: ['fastify'] } })).toBe(true);
   });
 });
 

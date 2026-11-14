@@ -112,6 +112,7 @@ function setQueueValue(queue, row, value) {
   const k = row.key;
   if (k.startsWith('limits.')) queue.limits = { ...(queue.limits ?? {}), [k.slice('limits.'.length)]: value };
   else if (k === 'checksPanel.mode') queue.checksPanel = { ...(queue.checksPanel ?? {}), mode: value ? 'on' : 'off' };
+  else if (k === 'checksPanel.marker') queue.checksPanel = { ...(queue.checksPanel ?? {}), marker: !!value };
   else if (k.startsWith('proposals.autoAccept.')) {
     const field = k.slice('proposals.autoAccept.'.length);
     const error = PR.rulesError({ [field]: value });

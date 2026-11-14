@@ -8,7 +8,8 @@
 //
 // A template: a header (title, category, priority, when, why, content_min, also_task, action) and two sections,
 // "## Investigate" and "## Plan and build". The sections become the mission of the investigation task.
-// Two kinds need no agent: `action: gates` (ravenseat kickstart gates --apply) and `action: ask`, whose one section
+// Three kinds need no agent: `action: gates` (ravenseat kickstart gates --apply), `action: packs` (ravenseat checks packs
+// --apply: the stack packs for the review signals, lib/reviewPacks.js) and `action: ask`, whose one section
 // "## Ask Claude" is the text the owner gives Claude in their own session. `ask` is for a step a queue agent cannot take,
 // such as the first commit: an agent's worktree is made from a commit.
 //
@@ -27,7 +28,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const PRIORITIES = ['high', 'medium', 'low'];
-const ACTIONS = ['gates', 'ask'];
+const ACTIONS = ['gates', 'ask', 'packs'];
 const REPORT_VERSION = 1;
 
 const anyKind = (arg, test) => arg.split('|').some((k) => test(k));
@@ -50,7 +51,22 @@ const CONDITIONS = {
   'known-stack': (f) => (f.stacks?.length ?? 0) > 0,
   // Claude's instructions are over a limit (lib/instructionSize.js assess().large, off with instructionSize.mode off).
   'instructions-large': (f) => f.instructionsLarge === true,
+  // Stack packs (lib/reviewPacks.js): a pack for the project's stack is not on in review.packs yet, or a known stack has none.
+  'packs-missing': (f) => (f.packs?.missing?.length ?? 0) > 0,
+  'stack-unpacked': (f) => (f.packs?.unpacked?.length ?? 0) > 0,
 };
+
+/** The line a suggestion adds from the facts, so the card names the stacks. Null when it has none. */
+function detailOf(key, facts) {
+  const p = facts.packs;
+  if (!p) return null;
+  const name = (id) => p.titles?.[id] ?? id;
+  if (key === 'stack-review-signals' && p.missing?.length)
+    return `Packs for your stack: ${p.missing.map(name).join(', ')}. They add the risky calls of these stacks to the review signals, so the security reviewer is asked when such code changes.`;
+  if (key === 'stack-pack-research' && p.unpacked?.length)
+    return `No pack yet for: ${p.unpacked.join(', ')}. The research writes one for docs/queue/review-packs/, with examples that test it.`;
+  return null;
+}
 const KIND_CONDITIONS = {
   missing: (f, arg) => anyKind(arg, (k) => placesOf(f, k).size === 0),
   found: (f, arg) => anyKind(arg, (k) => placesOf(f, k).size > 0),
@@ -204,6 +220,7 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
       ask: x.ask,
       investigate: x.investigate,
       plan: x.plan,
+      detail: detailOf(x.key, facts),
       ...suggestionState(x, tasks, dismissed),
     }));
   return {
@@ -214,7 +231,10 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
     hasCommit: facts.hasCommit !== false,
     found: { ci: facts.ci ?? [], kinds: facts.kinds ?? [] },
     categories: catalog.categories.map(({ key, title, text }) => ({ key, title, text: text ?? '' })),
+    packs: facts.packs ?? null,
     suggestions,
+    // Open suggestions with high priority: the red marker on the Checks tab (checksPanel.marker).
+    important: suggestions.filter((x) => x.state === 'open' && x.priority === 'high').length,
     knownBugs,
     catalogErrors: catalog.errors,
   };
@@ -243,6 +263,7 @@ function planTask(s, found, tasks) {
     mission: [
       `Investigate and plan: ${s.title}. Do not build it in this task.`,
       `Why it was suggested: ${s.why}`,
+    ...(s.detail ? [s.detail] : []),
       `What ravenseat read from the project's files (nothing was run):\n${foundLines(found)}`,
       `## Investigate\n${s.investigate}`,
       `## Plan and build\n${s.plan}`,

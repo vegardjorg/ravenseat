@@ -67,7 +67,7 @@ const CATEGORIES = Object.freeze([
 const INTERNAL = Object.freeze([]);
 
 /** queue.json keys with no counterpart in STANDARD (the limits are checked against LIMIT_NAME and LIMIT_EXTRA instead). */
-const QUEUE_ONLY = Object.freeze(['guidance', 'checksPanel.mode']);
+const QUEUE_ONLY = Object.freeze(['guidance', 'checksPanel.mode', 'checksPanel.marker']);
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -255,6 +255,8 @@ const SETTINGS = Object.freeze([
   row('gates.full', 'gates', 'list', 'Full gate', 'The full set of commands receive and merge run.', BASIC),
   row('checksPanel.mode', 'gates', 'onoff', 'Show the Checks tab',
     'The Checks tab with suggested checks. Not set, it follows the guidance switch.', { ...BASIC, ...QUEUE }),
+  row('checksPanel.marker', 'gates', 'onoff', 'Red dot on the Checks tab',
+    'A small red dot on the Checks tab while an important suggestion is open. Off hides only the dot, the suggestions stay.', { ...BASIC, ...QUEUE }),
   row('maxFixRounds', 'gates', 'integer', 'Fix rounds before an owner question',
     'At this many fix rounds a task becomes an owner question instead of another round.'),
   row('fixPlateau', 'gates', 'onoff', 'Ask when a fix round stalls',
@@ -525,6 +527,9 @@ const SETTINGS = Object.freeze([
       whyNot: 'Class K and U tasks have no fixed reviewer, so the signal is the only thing that brings the security reviewer in.',
       changes: 'Tasks that hit the signal get no extra reviewer for it. Doctor will report it.',
     }),
+  row('review.packs', 'review', 'list', 'Review signal packs for your stack',
+    'Stack packs that add the risky calls of your stack to the review signals (lib/reviewPacks.js). The Checks tab ' +
+    'suggests them from your manifests; `ravenseat checks packs --apply` writes them. The built-in ones follow plugin updates.'),
   row('triage.minAgeDays', 'review', 'integer', 'Triage tasks older than (days)',
     'A task added or last edited this long ago is checked against the current code before it starts. Empty = no age rule.',
     { fullWhy: 'the intake triage is off in lite' }),

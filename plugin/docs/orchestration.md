@@ -190,6 +190,25 @@ is a weakening, and doctor names it. `receive` records which signals hit on the 
 `ravenseat helpers` shows the hit rate per signal; one that hits on more than 30 % of at least 10 checked tasks is marked
 broad, a sign to narrow its paths or words.
 
+#### Stack packs
+
+The built-in signals are generic. A stack pack adds the risky calls of one stack, and new signals for them: `raw-sql`,
+`access-rule` (rules and policies that open access, such as row level security off), `cors-csrf`, `deserialize`,
+`code-exec`, `file-upload` and `tls-off`, all lifting in `reviewer-security`. The plugin ships about 30 packs
+(`scripts/orchestrator/review-packs/packs.json`), from Next.js, Supabase and Prisma to Django, Rails, Laravel, Spring,
+Go, Phoenix, Flutter and ASP.NET Core, plus `core` for every project.
+
+The stack is found from the manifests only (`package.json`, requirements and `pyproject.toml`, `Gemfile`,
+`composer.json`, `pom.xml`, Gradle, `go.mod`, `mix.exs`, `pubspec.yaml`, `*.csproj`), read and never run. The Checks
+tab then suggests "Review signals for your stack", and nothing is written before the owner's yes: the button, or
+`ravenseat checks packs --apply`, adds the ids to `review.packs`. A known stack without a pack gets a low suggestion
+to research one.
+
+A project can add its own packs in `docs/queue/review-packs/<id>.json` (the same shape as one entry in `packs.json`).
+Every pack carries examples, lines that must hit and lines that must not, and a pack whose examples fail, or whose word
+has the lookahead trap `\s*(?!...)` (the spaces satisfy the lookahead, so write `\s*(?!\s*...)`), is refused and named
+on the Checks tab. Since a project pack is not in the plugin, `--apply` also writes its words into `review.signals`.
+
 ### Custom helper agents
 
 A custom helper is an agent file of the project's own (or one you found) used as a helper. It runs as a subagent in

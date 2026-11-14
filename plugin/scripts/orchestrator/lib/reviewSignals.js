@@ -233,20 +233,35 @@ function compile(source) {
   }
 }
 
+const NO_PACKS = Object.freeze({ signals: {}, codeExt: new Set(), codeFiles: new Set() });
+
+/** What the turned-on stack packs add (review.packs). None turned on: nothing, and the pack data is not read. */
+function packAdditions(config, packs) {
+  const ids = list(config?.review?.packs);
+  if (!ids.length) return NO_PACKS;
+  const RP = require('./reviewPacks.js');
+  return RP.packSignals(ids, packs ?? RP.builtinData());
+}
+
 /**
- * The signals for a project: the built-ins with what review.signals adds, and the project's own. Each:
- * { name, enabled, reviewer, text, paths, words (RegExp[]), check, builtin, problems }. A signal with a problem in its
- * own definition (no reviewer, no paths and words) never hits; an invalid word is skipped and reported.
+ * The signals for a project: the built-ins, what the turned-on stack packs add (review.packs, lib/reviewPacks.js),
+ * what review.signals adds, and the project's own. Each:
+ * { name, enabled, reviewer, text, paths, words (RegExp[]), check, builtin, fromPack, problems }. A signal with a
+ * problem in its own definition (no reviewer, no paths and words) never hits; an invalid word is skipped and reported.
+ * `packs` is the pack data (tests and validation pass their own; otherwise the shipped packs).
  */
-function signalSetup(config) {
+function signalSetup(config, packs = undefined) {
   const own = isObject(config?.review?.signals) ? config.review.signals : {};
+  const fromPacks = packAdditions(config, packs).signals;
   const out = {};
-  const names = [...BUILTIN_NAMES, ...Object.keys(own).filter((n) => !BUILTIN[n])];
+  const names = [...new Set([...BUILTIN_NAMES, ...Object.keys(fromPacks), ...Object.keys(own)])];
   for (const name of names) {
-    const b = BUILTIN[name] ?? null;
+    // A pack's new signal (raw-sql, access-rule ...) is defined by the pack, with its reviewer and text.
+    const b = BUILTIN[name] ?? fromPacks[name] ?? null;
+    const p = BUILTIN[name] ? (fromPacks[name] ?? null) : null;
     const x = isObject(own[name]) ? own[name] : {};
     const problems = [];
-    const sources = [...(b?.words ?? []), ...list(x.words)];
+    const sources = [...(b?.words ?? []), ...(p?.words ?? []), ...list(x.words)];
     const words = [];
     for (const s of sources) {
       const c = compile(s);
@@ -254,7 +269,7 @@ function signalSetup(config) {
       else problems.push(c.problem);
     }
     const reviewer = typeof x.reviewer === 'string' && x.reviewer ? x.reviewer : (b?.reviewer ?? null);
-    const paths = [...(b?.paths ?? []), ...list(x.paths)];
+    const paths = [...(b?.paths ?? []), ...(p?.paths ?? []), ...list(x.paths)];
     if (!b) {
       if (!reviewer) problems.push('no reviewer: set "reviewer" to the agent the signal lifts in');
       if (!paths.length && !list(x.words).length) problems.push('no paths and no words: the signal can never hit');
@@ -267,7 +282,8 @@ function signalSetup(config) {
       paths,
       words,
       check: b?.check ?? null,
-      builtin: !!b,
+      builtin: !!BUILTIN[name],
+      fromPack: !BUILTIN[name] && !!fromPacks[name],
       problems,
       broken: !b && problems.some((p) => !p.startsWith('word ')),
     };
@@ -280,10 +296,17 @@ function signalSetup(config) {
  * code files outside tests; words only on added lines of such files that are not comment lines.
  * @param {{ config: object, changedPaths?: string[], diff?: string|null }} c
  */
-function signalHits({ config, changedPaths = [], diff = null } = {}) {
+function signalHits({ config, changedPaths = [], diff = null, packs = undefined } = {}) {
   const { matchesAny } = require('./queueHelpers.js');
-  const setup = signalSetup(config);
-  const product = (p) => isCodePath(p) && !isTestPath(p);
+  const setup = signalSetup(config, packs);
+  // A pack can make more files count as code (.sql for database rules, .rules for Firebase).
+  const extra = packAdditions(config, packs);
+  const extraCode = (p) => {
+    const f = norm(p);
+    const ext = (/\.([a-z0-9]+)$/i.exec(f)?.[1] ?? '').toLowerCase();
+    return extra.codeExt.has(ext) || extra.codeFiles.has(f.split('/').pop());
+  };
+  const product = (p) => (isCodePath(p) || extraCode(p)) && !isTestPath(p);
   const paths = list(changedPaths).map(norm).filter(product);
   const lines = addedLines(diff).filter((l) => product(l.file) && !isCommentLine(l.text));
   const out = [];

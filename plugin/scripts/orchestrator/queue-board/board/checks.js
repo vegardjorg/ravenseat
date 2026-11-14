@@ -5,6 +5,8 @@
 // The data is `ravenseat checks --json` (GET /api/checks, lib/checksCatalog.js buildReport); every write is POST /api/checks, which
 // runs `ravenseat checks ...`. The suggestions are files in checks-catalog/, so nothing about a suggestion is written here.
 // The tab is opt-out: `ravenseat checks off` or the switch here or in Settings; state.checksPanel says whether it shows.
+// state.checksMarker puts a small red dot on the tab while a high suggestion is open (`ravenseat checks marker off` or
+// Settings hides it; the suggestions stay).
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md). They load in order with defer and
 // share the page's global scope, so a top-level name in one is visible in all of them, as when they were one
@@ -24,6 +26,9 @@ function drawChecksTab() {
   if (!checksTab) return;
   const on = !!t.data?.checksPanel;
   checksTab.hidden = !on;
+  const dot = on && t.data?.checksMarker === true;
+  checksTab.classList.toggle('has-marker', dot);
+  checksTab.setAttribute('aria-label', dot ? 'Checks, an important suggestion is open' : 'Checks');
   if (!on && t.view === 'checks') {
     setView(t.decide.queueView);
     draw();
@@ -139,6 +144,15 @@ function checksButton(s) {
       title: 'A queue agent cannot do this step. Paste the text to Claude in your own session.',
       onclick: () => copyChecksAsk(s),
     });
+  if (s.action === 'packs')
+    return el('button', {
+      type: 'button',
+      class: 'button button-filled',
+      text: busy ? 'Saving …' : 'Turn on',
+      disabled: busy,
+      title: 'Writes the packs to review.packs in queue.config.json. Your review signals then also know your stack.',
+      onclick: () => checksWrite({ action: 'packs', key: s.key }, 'Review signals for your stack on'),
+    });
   if (s.action === 'gates')
     return el('button', {
       type: 'button',
@@ -186,6 +200,7 @@ function checksSuggestionCard(s, categories) {
     ),
     el('h4', { class: 'checks-card-title', text: s.title }),
     el('p', { class: 'checks-text', text: s.why }),
+    s.detail ? el('p', { class: 'checks-source', text: s.detail }) : null,
     s.action === 'ask'
       ? el(
           'div',
@@ -333,6 +348,39 @@ function checksInspectionSection(insp) {
   ];
 }
 
+/**
+ * The summary at the top: important (high) suggestions that are open, and those set aside, each with one click back.
+ * Nothing when there are none of either.
+ */
+function checksSummary(r) {
+  const high = r.suggestions.filter((s) => s.priority === 'high');
+  const open = high.filter((s) => s.state === 'open');
+  const aside = high.filter((s) => s.state === 'dismissed');
+  if (!open.length && !aside.length) return null;
+  return el(
+    'div',
+    { class: 'checks-card checks-summary' },
+    open.length ? el('h4', { class: 'checks-card-title', text: `Important: ${checksPlural(open.length, 'suggestion')} open` }) : null,
+    open.length ? el('p', { class: 'checks-text', text: open.map((s) => s.title).join(', ') }) : null,
+    aside.length ? el('h4', { class: 'checks-card-title', text: `Skipped: ${checksPlural(aside.length, 'important suggestion')}` }) : null,
+    aside.length
+      ? el(
+          'ul',
+          { class: 'checks-aside' },
+          ...aside.map((s) =>
+            el(
+              'li',
+              null,
+              `${s.title} `,
+              el('button', { type: 'button', class: 'link-button', text: 'Bring back', onclick: () => checksWrite({ action: 'restore', key: s.key }, 'Brought back') }),
+            ),
+          ),
+        )
+      : null,
+    el('p', { class: 'checks-source', text: 'The red dot on the tab follows the open ones. Settings, or ravenseat checks marker off, hides the dot.' }),
+  );
+}
+
 /** The whole view, into main. */
 function drawChecks() {
   const r = t.checks.report;
@@ -368,6 +416,8 @@ function drawChecks() {
     return;
   }
   const kinds = r.found.kinds;
+  const summary = checksSummary(r);
+  if (summary) wrap.append(summary);
   wrap.append(
     el('h3', { class: 'decide-group-title', text: 'What you have' }),
     kinds.length || r.found.ci.length

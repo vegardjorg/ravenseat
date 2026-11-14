@@ -105,7 +105,8 @@ user in at most eight lines: what you found (say that nothing was run, so it sho
 top three suggestions with their `why`, in plain words. Then ASK one question, with these answers:
 - "Not now" (recommended if they are new): stop here. The suggestions stay on the board's Checks tab.
 - One of the suggestions: run `ravenseat checks plan <key> --approved`. Say that it is about N minutes of agent work, uses tokens, and
-  ends in a plan and suggested build steps, not code. A suggestion with `action: gates` needs no agent: `ravenseat kickstart gates --apply`.
+  ends in a plan and suggested build steps, not code. A suggestion with `action: gates` needs no agent: `ravenseat kickstart gates --apply`. Nor does `action: packs` (review
+  signals for the stack): `ravenseat checks packs` shows them, and on the owner's yes `ravenseat checks packs --apply` writes `review.packs`.
 - "I do not want this": run `ravenseat checks off`. It removes the Checks tab and this overview. Gates and guards are not touched.
 
 Never add more than the user picked, and do not list the whole catalog unless they ask.
