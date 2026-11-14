@@ -38,8 +38,8 @@ function reviewersFor(cls) {
  * All the reviewers for a task: the fixed ones for its class and the helpers that are on and hit (queueHelpers.js).
  * @returns {{ type: string, fixed: boolean, reasons: string[] }[]}
  */
-function reviewersForTask(o, { queue = null, changedPaths = [], missionText = null, hashes = null, missingControls = [] } = {}) {
-  return HELP.reviewersForTask(o, { config: cfg(), queue, changedPaths, missionText, hashes, missingControls });
+function reviewersForTask(o, { queue = null, changedPaths = [], missionText = null, hashes = null, missingControls = [], diff = null } = {}) {
+  return HELP.reviewersForTask(o, { config: cfg(), queue, changedPaths, missionText, hashes, missingControls, diff });
 }
 
 /** All reviewer types (fixed and helpers, unique, in order): the agents that count toward a task. */

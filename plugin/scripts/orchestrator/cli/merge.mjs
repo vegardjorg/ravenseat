@@ -761,8 +761,18 @@ export function cmdReceive() {
     missionText,
     hashes: checked.hashes,
     missingControls: CONTROLS.missing(CONFIG, MAIN_TREE),
+    // The review signals (lib/reviewSignals.js) read what the whole track diff adds.
+    diff,
   });
   const reviewers = reviewerList.map((x) => x.type);
+  // The hit rate per signal is measured from this record (the latest receive of the task): `ravenseat helpers`.
+  const signalNames = require('./lib/reviewSignals.js')
+    .signalHits({ config: CONFIG, changedPaths: [...copy, ...skipped.map((h) => h.path)], diff })
+    .map((h) => h.name);
+  edit((queue) => {
+    const t = (queue.tasks ?? []).find((x) => x.id === id);
+    if (t) t.review_signals = { at: new Date().toISOString(), hits: signalNames };
+  });
   // ---- The package's diff and files (lib/deltaReview.js): after a fix round, only the commits since the last review,
   // with the findings the fix round got and the whole diff as a context file. Otherwise the whole diff, as before.
   const DR = require('./lib/deltaReview.js');
@@ -986,7 +996,9 @@ export function cmdReceive() {
     console.log(
       x.type === 'reviewer-light'
         ? `Light review: ${x.reasons.join(', ')}. The task becomes AUDITED, never VERIFIED. ${CLI} helpers shows what it has cost; ${CLI} helpers off reviewer-light turns it off.`
-        : `Helper agent ${x.type}: ${x.reasons.join(', ')} (ravenseat helpers off ${x.type} turns it off).`,
+        : x.signal
+          ? `Review signal: ${x.type} for ${x.reasons.join('; ')} (review.signals in queue.config.json; ${CLI} helpers shows the hit rate).`
+          : `Helper agent ${x.type}: ${x.reasons.join(', ')} (ravenseat helpers off ${x.type} turns it off).`,
     );
   if (prompts.length)
     for (const l of L.concurrentBlock(

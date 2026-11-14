@@ -516,6 +516,15 @@ const SETTINGS = Object.freeze([
       whyNot: 'D and D+ tasks are the changes that are hardest to undo once merged.',
       changes: 'The classes with fewer reviewers are merged with less review. Doctor will report it.',
     }),
+  row('review.signals', 'review', 'object', 'Review signals',
+    'What a diff adds can lift a reviewer in on top of the class: sign-in and session changes, secrets, a request URL ' +
+    'built from data, raw HTML (lib/reviewSignals.js). Add paths and words per signal, add your own, or switch one off. ' +
+    '`ravenseat helpers` shows how often each signal hits.', {
+      weakens: (v) => require('./reviewSignals.js').weakens(v),
+      protects: 'A client change to sign-in, a secret, a URL from data or raw HTML merged without a security review.',
+      whyNot: 'Class K and U tasks have no fixed reviewer, so the signal is the only thing that brings the security reviewer in.',
+      changes: 'Tasks that hit the signal get no extra reviewer for it. Doctor will report it.',
+    }),
   row('triage.minAgeDays', 'review', 'integer', 'Triage tasks older than (days)',
     'A task added or last edited this long ago is checked against the current code before it starts. Empty = no age rule.',
     { fullWhy: 'the intake triage is off in lite' }),

@@ -85,6 +85,8 @@
   ],
   "projectModuleSuggestion": { "example": "example" },
   "reviewers": { "K": [], "U": [], "D": ["reviewer"], "D+": ["reviewer", "reviewer-security"] },
+  "_review": "Review signals: what a diff ADDS (code files only, never tests, comment lines or docs) lifts a reviewer in on top of the class. The built-ins auth, secret, url-from-data and html-sink lift reviewer-security. Per signal: enabled, reviewer, paths (helper path patterns) and words (regular expressions, case ignored), added to a built-in; a name of your own is a new signal, e.g. { \"payments\": { \"reviewer\": \"reviewer\", \"words\": [\"\\\\bstripe\\\\.charges\\\\.\"] } }. Switching a built-in off is a weakening (doctor). ravenseat helpers shows the hit rate per signal.",
+  "review": { "signals": {} },
   "_models": "Model per agent (track, track-d, reviewer, reviewer-docs, a helper ...): opus, sonnet, haiku or fable. Empty = each agent file's own model (opus). A set model is printed on the start lines as model=<m> and passed to the Agent tool. Measure the effect with ravenseat cost before and after.",
   "models": {},
   "_prices": "The list prices for the cost measurement (USD per MTok). null = the built-in table per model family (scripts/orchestrator/lib/timeCost.js PRICE_TABLE: Opus, Sonnet, Haiku, Fable). Override per model id or a part of it, e.g. { \"opus-4-1\": { \"input\": 15, \"output\": 75, \"cache_read\": 1.5 } }; cache_5m and cache_1h default to 1.25x and 2x the input price.",

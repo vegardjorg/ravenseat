@@ -155,6 +155,41 @@ Helper agents tab) turns triage off entirely; in lite mode it is off unless swit
 `ravenseat helpers` show its runs and cost (the agent message names the task, so the time log ties it to it) and its
 verdicts: how many were ready, done, stale and adjust, and how many tracks it saved (done plus stale).
 
+### Review signals
+
+The class decides the fixed reviewers, and the helpers above are chosen by class, label, paths and the plan. Neither
+looks at what the diff does, so a class K task that changes the sign-in flow would get no security review. A review
+signal reads what the whole track diff ADDS at `receive` and lifts a reviewer in, with one line of reason in the package
+and on the receive output (`signal auth: src/Login.tsx, words signOut(`).
+
+| Signal | Lifts in | Hits on |
+|---|---|---|
+| `auth` | `reviewer-security` | Calls that change who is signed in (`signIn*`, `signOut`, `setSession`, `refreshSession`, `verifyOtp`, `onAuthStateChange`, `auth.mfa.`, JWT signing), `refresh_token`/`access_token`, a token or session next to `localStorage`, `AsyncStorage`, `SecureStore` or a cookie, Django and Rails sessions; and changed files such as `auth/`, `*session*`, `*login*`, `*mfa*`, `*passkey*`, `*webauthn*`, `middleware.ts` |
+| `secret` | `reviewer-security` | A service-role key, `*SECRET_KEY`, `*PRIVATE_KEY`, `*CLIENT_SECRET`, a PEM private key |
+| `url-from-data` | `reviewer-security` | A request (`fetch`, `axios`, `got`, `requests`, `urlopen` ...) whose URL is not a literal. A fixed scheme, host and `/` (or a same-site path) before the first variable part is a literal; a call that cannot be read on its line is a hit |
+| `html-sink` | `reviewer-security` | `innerHTML`/`outerHTML` assignment, `dangerouslySetInnerHTML`, `insertAdjacentHTML`, `document.write`, `v-html`, `{@html`, `mark_safe`, `html_safe` |
+
+The rules are the same for every signal: only added lines, only code files, never test files, comment lines or docs.
+Narrow on purpose: the word "auth" alone, `useAuth()` or `getUser()` in a screen is reading the signed-in user, not
+changing the flow, and is no hit. A signal that fires on everything gets ignored, and every review costs.
+
+The class is the floor. A signal only adds a reviewer; a reviewer that is already fixed for the class gets the reason
+added, and nothing is ever removed. Set it up per project in `queue.config.json`:
+
+```json
+"review": { "signals": {
+  "auth": { "paths": ["src/gate/**"], "words": ["\\bmyLogin\\("] },
+  "html-sink": { "enabled": false },
+  "payments": { "reviewer": "reviewer", "words": ["\\bstripe\\.charges\\."] }
+} }
+```
+
+Paths and words are added to a built-in; a name of your own is a new signal and needs a `reviewer` and paths or words.
+Words are regular expressions (case ignored); an invalid one is shown as a PROBLEM and skipped. Switching a built-in off
+is a weakening, and doctor names it. `receive` records which signals hit on the task (`review_signals`), and
+`ravenseat helpers` shows the hit rate per signal; one that hits on more than 30 % of at least 10 checked tasks is marked
+broad, a sign to narrow its paths or words.
+
 ### Custom helper agents
 
 A custom helper is an agent file of the project's own (or one you found) used as a helper. It runs as a subagent in

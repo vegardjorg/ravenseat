@@ -324,7 +324,7 @@ function helperReasons(h, o, { changedPaths = [], missionText = null, ignoreEnab
  *   hashes?: Record<string, string|null>|null, missingControls?: string[] }} c
  * @returns {{ type: string, fixed: boolean, reasons: string[], custom?: boolean }[]}
  */
-function reviewersForTask(o, { config, queue = null, changedPaths = [], missionText = null, hashes = null, missingControls = [] }) {
+function reviewersForTask(o, { config, queue = null, changedPaths = [], missionText = null, hashes = null, missingControls = [], diff = null }) {
   const setup = helperSetup(config, queue, { hashes });
   const blocked = (type) =>
     (setup[type]?.source === 'custom' && setup[type].review !== 'approved') || setup[type]?.phase === 'intake';
@@ -338,6 +338,17 @@ function reviewersForTask(o, { config, queue = null, changedPaths = [], missionT
     const there = out.find((x) => x.type === type);
     if (there) there.reasons.push(...reasons.filter((r) => !there.reasons.includes(r)));
     else out.push({ type, fixed: false, reasons, ...(h.source === 'custom' ? { custom: true } : {}) });
+  }
+  // The review signals (lib/reviewSignals.js): what the diff ADDS can lift a reviewer in (sign-in flow, a secret, a URL
+  // built from data, raw HTML). Only with the diff; the class stays the floor, a signal never removes a reviewer.
+  if (diff != null) {
+    for (const hit of require('./reviewSignals.js').signalHits({ config, changedPaths, diff })) {
+      if (blocked(hit.reviewer)) continue;
+      const there = out.find((x) => x.type === hit.reviewer);
+      if (there) {
+        if (!there.reasons.includes(hit.reason)) there.reasons.push(hit.reason);
+      } else out.push({ type: hit.reviewer, fixed: false, signal: true, reasons: [hit.reason] });
+    }
   }
   return out;
 }

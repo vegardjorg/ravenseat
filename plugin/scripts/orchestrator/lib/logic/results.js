@@ -517,7 +517,7 @@ function reviewPackageIndex({
     lines.push('', '## Reviewers', '');
     if (!reviewers.length) lines.push('- (none for this task)');
     for (const x of reviewers)
-      lines.push(`- \`${x.type}\`: ${x.fixed ? 'fixed for the class' : 'helper agent'}. why: ${x.reasons.join(', ')}`);
+      lines.push(`- \`${x.type}\`: ${x.fixed ? 'fixed for the class' : x.signal ? 'review signal' : 'helper agent'}. why: ${x.reasons.join(', ')}`);
   }
   lines.push('', '## Diff statistics', '', '```', String(stat ?? '').trimEnd(), '```', '');
   return lines.join('\n');

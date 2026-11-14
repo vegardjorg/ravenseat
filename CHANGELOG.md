@@ -3,6 +3,14 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+- **Hardening: review signals.** Reviewer choice now also looks at what a diff adds, not only the task class and paths.
+  Changes to sign-in and session handling, secrets, request URLs built from data and raw HTML bring in
+  `reviewer-security` with a one-line reason. Narrow by design (added lines in code files only), and the class stays the
+  floor. Projects can tune it in `review.signals`, and `ravenseat helpers` shows how often each signal fires. See
+  [orchestration](plugin/docs/orchestration.md#review-signals).
+
 ## 0.14.0 (2026-11-13)
 
 **Fewer turns per round and nothing left unwired: a pulse tick is one call that answers SILENT or the actions with their next commands, a wiring spec becomes open items that stop done until each is carried out or rejected, missions open with the files to read in one turn, a narrow researcher agent takes the orchestrator's own analysis, and full runs get priority in the gate queue with a load factor in gate health.**

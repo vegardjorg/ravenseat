@@ -237,5 +237,18 @@ export function cmdHelpers() {
         console.log(`    ${h.when}${h.fixedIn.length ? ` Also fixed for class ${h.fixedIn.join(', ')} (reviewers).` : ''}`);
         console.log(`    ${h.measurement}`);
       }
+    if (!a.includes('--json')) {
+      // The review signals (lib/reviewSignals.js): what a diff adds lifts a reviewer in. Their setup is in
+      // queue.config.json (review.signals), not switched here; the hit rate shows when one is too broad.
+      const RS = require('./lib/reviewSignals.js');
+      const setup = RS.signalSetup(CONFIG);
+      console.log('');
+      console.log('Review signals (review.signals in queue.config.json): what the diff adds lifts a reviewer in.');
+      for (const s of Object.values(setup)) {
+        console.log(`${s.enabled ? 'on ' : 'off'} ${s.name} -> ${s.reviewer ?? '(no reviewer)'}: ${s.text || '(own signal)'}`);
+        for (const p of s.problems) console.log(`    PROBLEM: ${p}`);
+      }
+      for (const l of RS.statisticsLines(RS.signalStatistics(read(), CONFIG), setup)) console.log(l);
+    }
   }
 }
