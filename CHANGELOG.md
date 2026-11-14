@@ -13,6 +13,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Cost numbers.** The README and [costs](plugin/docs/costs.md) now lead with the last measured week, the fairest
   comparison, with every week and the whole 19 days beside it. A queue turn costs no more than a turn in one chat, and
   the checks come on top. The claim of the same cost per line is dropped, and no per-day averages over idle days.
+  The checks cost what your own tests cost: the measured share came from a very heavy test suite, and the same suite
+  would cost about the same without the queue. The explanation GIF is remade with these numbers and no small print.
 
 ## 0.14.0 (2026-11-13)
 

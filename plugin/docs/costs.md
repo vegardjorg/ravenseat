@@ -22,9 +22,13 @@ known.
 
 ## Measured: the queue against one plain chat
 
-**In short:** a queue turn costs no more than a turn in one chat. The checks come on top, about a third of what the
-queue spent, and they are what keeps bugs and security holes from being merged. How much of that you pay is your
-choice: lighter gates and fewer reviewers cost less and catch less.
+**In short:** a queue turn costs no more than a turn in one chat. The checks come on top, and they cost what your
+checks cost. Here they were about a third of what the queue spent, because the measured repo has a very heavy test
+suite (over a thousand database security probes and many check scripts) and a reviewer on almost every task; most
+projects will spend less. The same suite run by hand in one chat would cost about the same: the queue does not make
+tests dearer, it adds the reviewers and makes sure every task runs the checks before it is merged. How much you pay is
+your choice: lighter gates and fewer reviewers cost less and catch less, and no checks at all is how insecure code
+gets merged.
 
 Two repos, same developer, same model and settings (automatic compaction at about 270k, 1-hour subagent cache). One is
 a large repo run with the queue, which ran on its own with a heavy test suite and a reviewer on almost every task. The
@@ -51,7 +55,8 @@ many cheap commits and lines.
 
 In that week the queue was cheaper per turn and per commit, its checks included, and equal per line. Leave its checks
 out and a commit cost about 2.3 USD (an estimate). The week is short (76 commits in this repo), so treat the size of
-the gap with care.
+the gap with care. The 16 % on tests reflects the queue repo's very heavy suite, not the queue: this repo has a light
+one, so its 6 % is not a like-for-like saving. The same suite would cost about the same with or without the queue.
 
 ### Week by week, and the whole period
 

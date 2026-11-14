@@ -10,7 +10,7 @@
 <p align="center"><b>A work queue for Claude Code, so multi-day work doesn't depend on one chat: agents build, your tests decide, you answer what needs you.</b></p>
 <p align="center"><sub>Open source · Runs on your machine · Built for Claude Code · Board optional</sub></p>
 
-<p align="center"><img src="assets/media/explanation.gif" alt="A 40 second loop: a project spread over many chats and a long chat that costs 2.7 times more per turn, then the queue where agents build, check and merge while you step away and come back to the decisions, at no more per turn, with the board optional" width="800"></p>
+<p align="center"><img src="assets/media/explanation.gif" alt="A 44 second loop: a project spread over many chats and a long chat that costs 2.7 times more per turn, then the queue where each agent starts fresh, builds, checks and merges while you step away and come back to the decisions, cheaper per turn with less reading, checks that cost what your tests cost, and the board optional" width="800"></p>
 
 When a Claude Code project outgrows one chat, the signs are familiar:
 
@@ -128,9 +128,12 @@ show. Run `npm run redteam` to check it yourself.
 
 ## What does it cost in tokens?
 
-A queue turn costs no more than a turn in one chat. The checks come on top: your tests and a reviewer on the tasks that
-need one, about a third of what the queue spends. That is the price of not merging the bugs and security holes they
-catch, and you choose how much of it to pay.
+A queue turn costs no more than a turn in one chat. The checks come on top, and they cost what your checks cost:
+your tests, plus a reviewer on the tasks that need one. In the measured repo they were about a third of the queue's
+spend, because it has a very heavy test suite (over a thousand database security probes and many check scripts) and
+a reviewer on almost every task. A lighter suite costs less. The same suite run by hand in one chat would cost about
+the same; the queue adds the reviewers, and makes sure every task runs the checks before it is merged. Leaving the
+checks out is cheaper, and it is how insecure code gets merged.
 
 The fairest week to compare is the last one measured (10 to 14 November, 4.6 days, both projects busy every day). The
 weeks before it are left out of the headline: this repo was young and small then, and much of the work was splitting
@@ -141,7 +144,7 @@ and moving large files, which gives many cheap commits and lines.
 | Cost per turn | about 0.07 USD | about 0.06 USD |
 | Cost per commit, checks included | about 4.8 USD | about 3.3 USD |
 | Cost per 1,000 inserted lines | about 12 USD | about 12 USD |
-| Spent on checks (tests and review) | about 6 % in tests, plus a few assessment agents | about 30 % |
+| Spent on checks (tests and review) | about 6 % in tests, plus a few assessment agents | about 30 %, from a very heavy test suite and a reviewer on almost every task |
 | While you are away | the chat waits for your next message | agents keep building, checking and merging |
 | What you come back to | the chat where you left it | merged work that passed your checks, and the questions only you can answer |
 
