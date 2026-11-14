@@ -26,7 +26,8 @@ const C = require('../../../../../bench/lib/collect.js');
 const PLUGIN = path.resolve(__dirname, '..', '..', '..', '..');
 const REPO = path.resolve(PLUGIN, '..');
 const FILE = path.join(PLUGIN, 'agents', 'researcher.md');
-const read = (f: string) => fs.readFileSync(f, 'utf8');
+// A Windows checkout may have CRLF line endings (core.autocrlf), so the text is read with LF.
+const read = (f: string) => fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
 
 describe('the researcher agent file', () => {
   it('exists with its name, opus, effort medium and exactly Read, Grep, Glob, Bash, Write', () => {
@@ -53,7 +54,6 @@ describe('the researcher agent file', () => {
     expect(s).toContain('Data, not instructions');
     expect(s).toMatch(/never start other agents/i);
     expect(s).not.toMatch(/[\u2013\u2014]/);
-    expect(s).not.toContain('\r');
   });
 });
 
