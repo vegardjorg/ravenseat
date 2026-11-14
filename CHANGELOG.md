@@ -3,7 +3,9 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.15.0 (2026-11-14)
+
+**Review signals: what a diff adds now brings in the security reviewer, on top of the class, and stack packs from your manifests add the risky calls of your stack after your yes on the Checks tab, which also shows important suggestions you skipped and a small red dot while one is open. The cost numbers lead with the last measured week.**
 
 - **Hardening: review signals.** Reviewer choice now also looks at what a diff adds, not only the task class and paths.
   Changes to sign-in and session handling, secrets, request URLs built from data and raw HTML bring in
@@ -22,6 +24,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   the checks come on top. The claim of the same cost per line is dropped, and no per-day averages over idle days.
   The checks cost what your own tests cost: the measured share came from a very heavy test suite, and the same suite
   would cost about the same without the queue. The explanation GIF is remade with these numbers and no small print.
+
+### After you update
+- A diff that adds sign-in or session changes, a secret, a request URL built from data or raw HTML now gets
+  `reviewer-security` on top of its class, so some K and U tasks get one more review. `ravenseat helpers` shows how
+  often each signal hits; `review.signals` narrows or switches one off (switching off is a weakening, doctor names it).
+- Nothing changes for the stack packs until you say yes: the Checks tab suggests them, and `ravenseat checks packs
+  --apply` writes `review.packs`. The red dot on the Checks tab is on by default; `ravenseat checks marker off` hides it.
 
 ## 0.14.0 (2026-11-13)
 
