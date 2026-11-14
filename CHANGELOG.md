@@ -3,6 +3,20 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+- **Setup asks about parallel tracks and a daily budget.** `/ravenseat:setup` now shows what `ravenseat machine`
+  suggests for this machine (the default of 5 is above it on 16 GB) and asks before it sets `maxConcurrent`, and asks
+  for a daily budget; a subscription user may skip it. Nothing is set without a yes, and the question comes also with
+  quiet guidance.
+- **Red team: rows 2, 6 and RT-14 are challenged.** 13 guards behind "an interrupted merge leaves the repo half
+  merged", "an agent reports green without passing" and "a broken queue file loses the queue" were removed one at a
+  time, and their tests went red. One did not: no test cut a queue.json write off half way, so writing in place instead
+  of through a temporary file would have passed. That test is added. See [the red team](plugin/docs/redteam.md).
+- **Docs.** The FAQ cost section uses the latest window, the same-file answer says the second task waits, lite mode's
+  dependency files only warn, the review signals and the Checks tab are described where reviewers and the tab are, and
+  the newer commands are in commands.md and the usage text.
+
 ## 0.15.0 (2026-11-14)
 
 **Review signals: what a diff adds now brings in the security reviewer, on top of the class, and stack packs from your manifests add the risky calls of your stack after your yes on the Checks tab, which also shows important suggestions you skipped and a small red dot while one is open. The cost numbers lead with the last measured week.**

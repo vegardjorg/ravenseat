@@ -71,6 +71,28 @@ describe('writeState and queue.json.prev', () => {
     expect(fs.readdirSync(path.dirname(file)).sort()).toEqual(['queue.json', 'queue.json.prev']);
   });
 
+  it('a write cut off half way never leaves queue.json half written: the new text goes to a temporary file first', () => {
+    // The process dies (a crash, a closed laptop) in the middle of writing the new state: half the text is on disk,
+    // then the write throws. Written in place, queue.json would be broken; through a temporary file and a rename, the
+    // old queue.json is still whole. Found by the challenge round of 2026-11-14 (RT-14): no test went red when the
+    // write went straight to queue.json.
+    const file = path.join(tmpDir(), 'queue.json');
+    writeState(file, '{"tasks":[{"id":"A"}],"n":1}\n');
+    const next = '{"tasks":[{"id":"A"},{"id":"B"}],"n":2}\n';
+    const cutOff = {
+      ...fs,
+      writeFileSync: (p: string, text: string) => {
+        if (text === next) {
+          fs.writeFileSync(p, text.slice(0, Math.floor(text.length / 2)));
+          throw Object.assign(new Error('killed while writing'), { code: 'EIO' });
+        }
+        return fs.writeFileSync(p, text);
+      },
+    };
+    expect(() => writeState(file, next, { fs: cutOff as typeof fs })).toThrow(/killed while writing/);
+    expect(JSON.parse(fs.readFileSync(file, 'utf8')).n).toBe(1);
+  });
+
   it('recoveryHint names the good copy with its task count, or null without one', () => {
     const file = path.join(tmpDir(), 'queue.json');
     expect(recoveryHint(file)).toBeNull();

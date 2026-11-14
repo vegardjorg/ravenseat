@@ -81,11 +81,11 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | # | The fear | Status | Level | Tests |
 | --- | --- | --- | --- | --- |
 | 1 | My uncommitted work is overwritten by a merge | PASS | challenged | `rt01-uncommitted-work`, `flows`, `lab`, `reviewGaps2` |
-| 2 | An interrupted merge leaves the repo half merged | PASS | verified | `queueFaultInjection`, `queueMergeResume`, `rt07-interrupted`, `mergeTipLock` |
+| 2 | An interrupted merge leaves the repo half merged | PASS | challenged | `queueFaultInjection`, `queueMergeResume`, `rt07-interrupted`, `mergeTipLock` |
 | 3 | Claude dies in the middle of a task | PASS | challenged | `rt24-cold-restart`, `queueFaultInjection`, `rt07-interrupted` |
 | 4 | Two sessions start or merge the same task | PASS | challenged | `rt03-two-sessions`, `mergeLock`, `queueLock` |
 | 5 | Two agents change the same file | PASS | challenged | `rt05-same-file`, `conflictPredict`, `queueFaultInjection`, `readsOwnership`, `mergeTrackGaps`, `mergeTipLock` |
-| 6 | An agent reports green without passing | PASS | verified | `queueGateEvidence`, `flows`, `rt03-two-sessions`, `flakyGate-cli`, `trackFlakyGate`, `mergeTipLock`, `reviewGaps2` |
+| 6 | An agent reports green without passing | PASS | challenged | `queueGateEvidence`, `flows`, `rt03-two-sessions`, `flakyGate-cli`, `trackFlakyGate`, `mergeTipLock`, `reviewGaps2` |
 | 7 | The tests are green but too weak | KNOWN LIMITATION | - | `rt17-empty-gate` |
 | 8 | The agent weakens a test to get green | PASS | challenged | `rt08-weakened-test`, `testWeakening`, `mergeGuard`, `redOnBase-cli`, `redOnBase`, `focusStop-cli` |
 | 9 | A task that always fails is retried forever | PASS | challenged | `rt06-rt22-permanent-failure`, `fixPlateau-cli`, `doneCheck` |
@@ -101,7 +101,7 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | 19 | A large queue makes the board unusable | PASS | verified | `queueBoardPerformance` |
 | 20 | A folder with spaces or æøå in its name breaks something | PASS | challenged | `rt20-odd-paths`, `shellCommands`, `fixLinks` |
 | RT-09 | An old task starts from stale assumptions | PASS | challenged | `queueTriage` |
-| RT-14 | A broken queue file loses the queue | PASS | verified | `queueStateSafety`, `queueFaultInjection`, `rt21-no-task-lost` |
+| RT-14 | A broken queue file loses the queue | PASS | challenged | `queueStateSafety`, `queueFaultInjection`, `rt21-no-task-lost` |
 | RT-16 | A changed helper agent runs without anyone approving it | PASS | challenged | `rt16-changed-helper`, `helperCustom` |
 | RT-17 | A gate that always says 0 passes for a check | PASS | challenged | `rt17-empty-gate` |
 | RT-18 | Something is pushed that must not be | PASS | challenged | `rt18-push-hook`, `pushGuard`, `agentGuardGaps`, `agentPushExec`, `reviewGaps2` |
@@ -133,6 +133,14 @@ Notes on some rows:
   also found findings 15 and 16 in Ravenseat itself, and that `fill --ids A,B` read the comma form as one unknown id
   (fixed; RT-26 has the test).
 
+- **2, 6 and RT-14** were challenged on 2026-11-14: 13 guards were removed from the source one at a time, the tests
+  named on the row were run, and the file was put back byte for byte. Row 6: evidence for another sha, an entry not
+  written by the orchestrator, a receive that runs no gate and believes the track, and a merge that ignores a red receive.
+  Row 2: an unfinished `git merge` not seen, a merge step that exits 0 without the tip in base, done set with the tip
+  not in base, a resume that runs finished steps again, and a cut-off merge not sent to `--resume`. RT-14: a broken file
+  over the good copy, a broken file read as an empty queue, a rename not retried on Windows, and the write going straight
+  to queue.json. Twelve went red at once. The last one, the write in place, did not: no test cut a write off half way.
+  That test is in `queueStateSafety` now, and it goes red without the temporary file.
 - **3 and 10:** the orchestrator and the agent are killed with no handover note, and a new process works only from what is
   on disk: the task is continued through `attempt close` and `resume`, a killed `receive` is received again, and locks
   of dead processes are taken over while a live one still stops it. Each case is merged once and done once. For 15

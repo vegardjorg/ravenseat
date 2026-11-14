@@ -161,7 +161,8 @@ installed dependencies, and nothing polls in a loop. A load guard starts fewer a
 
 One week, two different repos, one developer, same model and settings: not a controlled benchmark. Over all 19 days the
 chat came out cheaper per commit, from those early weeks. Run `ravenseat cost` to see the numbers in your own project.
-There is no spending limit by default: `ravenseat limit dailyBudget <usd>` stops new tasks when the day's spend is used.
+There is no spending limit by default: `/ravenseat:setup` asks for one, and `ravenseat limit dailyBudget <usd>` stops new
+tasks when the day's spend is used.
 [The measurements in detail](plugin/docs/costs.md).
 
 ## Why I built it

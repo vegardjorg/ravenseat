@@ -160,7 +160,7 @@ and one developer, not a benchmark, and there is no controlled comparison with p
 `ravenseat cost` shows your own.
 
 There is no spending cap by default. The fix-round cap, the plateau check and the cost guard stop endless retries and
-name a runaway track; the daily budget (`ravenseat limit dailyBudget <usd>`) is off until you set it. On API billing,
+name a runaway track; the daily budget (`ravenseat limit dailyBudget <usd>`) is off until you set it (`/ravenseat:setup` asks). On API billing,
 set it before the first long run. Agents use Opus unless you set `models` per agent. When the plan's usage limit is
 reached, new tracks and fix rounds pause until the reset. The minute estimates on the cards are rough (read them as
 relative size); the `~$x` estimates come from measured cost, and `ravenseat calibrate` shows how far both are off in
@@ -180,7 +180,8 @@ The slots are counted when tracks start; long test runs that land later take tur
 gate runs, across all your projects on the machine. A red run while memory was below the limit says it was probably
 load. CPU is left out unless you turn it on, and on macOS the memory parts are off by default, since macOS counts the
 page cache as used. `ravenseat machine` suggests a `maxConcurrent` from your memory and cores (about 1 on 16 GB, about 4
-on 32 GB with 8 cores); these are estimates from one large project.
+on 32 GB with 8 cores); these are estimates from one large project. The default is 5, so `/ravenseat:setup` shows the
+suggestion and asks before it sets `maxConcurrent`.
 
 **Verified by:** [`loadSlots`](../scripts/orchestrator/lib/__tests__/loadSlots.test.ts),
 [`queueLoadLimit`](../scripts/orchestrator/lib/__tests__/queueLoadLimit.test.ts),

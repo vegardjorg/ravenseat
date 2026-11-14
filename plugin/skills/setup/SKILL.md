@@ -98,6 +98,20 @@ ravenseat set EX-1 cancelled
 `EX-`); offer to rename it with `ravenseat project`. In lite mode the project is `tasks` (ids `T-001`, `T-002` ...). Then tell the user they can open the board with `/ravenseat:board` (Claude starts it in the background
 and gives a URL with an access key; never stop it by killing node by name).
 
+### Parallel tracks and spending (one question)
+
+Ask this also when the user chose "my own setup": limits are not advice. Run `ravenseat machine` (it reads cores and
+memory and changes nothing). Tell the user in two lines: the queue starts up to 5 tracks at once by default, this
+machine probably fits N (the suggestion, an estimate from one machine and one large project), and the daily budget is
+off. Then ASK one question with two parts:
+- "How many tracks at once?" Recommend the suggestion. On a number, run `ravenseat limit maxConcurrent <n>`. On "keep 5",
+  change nothing; `ravenseat doctor` then warns while 5 is above the suggestion. Say that `ravenseat machine --measure`,
+  run later while the queue is idle, times one full check of this project and gives a better figure.
+- "Do you pay per use (an API key), and want a daily limit?" On a sum, run `ravenseat limit dailyBudget <usd>`: no new
+  tasks start once the day's measured spend reaches it (running ones finish). On a subscription the plan's own limits
+  apply and the user may skip this; the figure is measured as API-equivalent, so a number still works as a brake.
+  On no answer, change nothing.
+
 ### What the project has, and what to add (one question)
 
 Skip this if the user chose "my own setup" above. Run `ravenseat checks`. It reads the project's files and runs nothing. Tell the
