@@ -306,7 +306,7 @@
 // Fewer orchestrator turns: `fill` and `receive` end with "Start these in the SAME turn:" and one line per agent
 // (subagent_type + message); start them in one turn. `receive` warns when the track's answer exceeds the report cap (about 1,500 chars).
 //   node scripts/orchestrator/queue.mjs merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force]
-//        [--allow-guard] [--allow-partial] [--done-cwd <folder>] [--force-red-base]
+//        [--allow-guard] [--allow-partial] [--allow-focus] [--done-cwd <folder>] [--force-red-base] [--force-red-gate]
 //        [--resume]
 //        (one merge at a time per repo: the lock <dataFolder>/merge.lock with pid, host and start time; a held lock
 //         refuses with the holder, a stale one (the pid is gone, or older than 6 h) is taken over. A merge, rebase,
@@ -362,6 +362,9 @@
 //                                                                  and prioritized suggestions; cli/checks.mjs)
 //   node scripts/orchestrator/queue.mjs checks show|plan|dismiss|restore <key>   (a suggestion's template; adds its investigation and
 //                                                                  planning to the queue, a proposal without --approved; sets it aside)
+//   node scripts/orchestrator/queue.mjs checks packs [--apply]      (review signal packs for the stack in the manifests; --apply writes
+//                                                                  review.packs in queue.config.json; lib/reviewPacks.js)
+//   node scripts/orchestrator/queue.mjs checks marker on|off        (the red dot on the Checks tab while a high suggestion is open)
 //   node scripts/orchestrator/queue.mjs checks on|off               (the opt-out: the Checks tab, the overview, the setup suggestions)
 //   node scripts/orchestrator/queue.mjs inspection [--json]         (the inspection queue: failures that repeat in the gates or CI become
 //                                                                  one proposal to build a guard; cli/inspection.mjs, lib/inspection.js)

@@ -150,11 +150,12 @@ and moving large files, which gives many cheap commits and lines.
 
 The chat column is this repo, built in one long chat that I followed closely. The queue column is a large repo where
 the queue ran on its own, with a heavy test suite and a reviewer on almost every task. Over about 1,200 measured
-tasks, an ordinary code task cost a median of about 2.5 USD (API-equivalent), its review included.
+tasks in October, an ordinary code task cost a median of about 2.5 USD (API-equivalent); code tasks were rarely
+reviewed then, and the latest window and the other classes are on the [costs](plugin/docs/costs.md) page.
 
-Both columns compact automatically at about 300k. Claude Code's default lets a chat grow toward its full window before
+Both columns are set to compact automatically at 300k (in practice at about 270k). Claude Code's default lets a chat grow toward its full window before
 it compacts, and that is what gets expensive: a turn at over 500k tokens cost about 2.7 times a turn at 100k to 200k.
-So agents hand over at about 300k, the manager chat compacts automatically, state lives in files, worktrees share
+So agents hand over after a second compaction or at 280k, the manager chat compacts automatically, state lives in files, worktrees share
 installed dependencies, and nothing polls in a loop. A load guard starts fewer agents while free memory is low, and
 `ravenseat machine` suggests how many your machine can take.
 

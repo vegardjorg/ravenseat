@@ -1400,7 +1400,7 @@ export async function cmdMerge() {
           '--log',
           gatesLog,
           // Always the base gate's time budget, as receive does: a hanging gate must not hold the merge, also when the
-          // base gate is off or has its own commands (red team RT-13, __tests__/redteam/rt13-hanging-gate.test.ts).
+          // base gate is off or has its own commands (red team RT-15, __tests__/redteam/rt15-hanging-gate.test.ts).
           '--timeout-sec',
           String(BASE_SETUP.timeoutSec),
         ],

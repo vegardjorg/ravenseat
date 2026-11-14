@@ -11,7 +11,7 @@ change, the merge stops before `git merge` runs, names the files and touches not
 findings: `git merge` itself had rewritten the user's files with CRLF on Windows before refusing.
 
 A queue agent cannot reinstall or delete your dependencies either (`npm ci`, `npm install`, the pnpm, yarn and bun forms,
-or removing `node_modules`, which in a worktree is a link into your own tree), and every common lockfile is protected.
+or removing `node_modules`, which in a worktree is a link into your own tree), and in full mode every common lockfile is protected (lite mode warns on dependency files instead, `dependencyFiles`).
 
 **Verified by:** [`rt01-uncommitted-work`](../scripts/orchestrator/__tests__/redteam/rt01-uncommitted-work.test.ts),
 [`flows`](../scripts/orchestrator/__tests__/redteam/flows.test.ts) (flow 3),
@@ -58,6 +58,8 @@ task marked running that no agent took is named `STARTED WITHOUT AGENT` (or `ROU
 comes with the command that fixes it. A task with no agent is a card under "Waiting on you" at once; a silent track
 becomes one after 60 minutes, since a short stop is the orchestrator's to handle. `ravenseat explain <id>` says why one
 task stands where it stands, from the same rules the queue starts by. Asking Claude "what is stuck?" runs the same checks.
+A step a track could not take itself (wiring a new module into a shared file, say) is written as a wiring item, and
+the task is not done until each item is carried out or rejected (`ravenseat wiring`).
 
 **Verified by:** [`queueNoAgent`](../scripts/orchestrator/lib/__tests__/queueNoAgent.test.ts),
 [`queueSilent`](../scripts/orchestrator/lib/__tests__/queueSilent.test.ts),
@@ -79,7 +81,8 @@ moment once read each other's evidence as tampering; they now take turns.
 Partly guarded. A focus marker (`.only(`, `fit(`, `fdescribe(`) added to a test file stops the merge, since the gates
 would go green while the other tests never ran (`--allow-focus` overrides, and it is logged). Receive warns, and the
 review package names the file, when a test file is deleted, gets a skip marker, or loses all its assertions; a skip can
-be intended, so the reviewers decide. Changes to test config and other protected paths stop the merge. With
+be intended, so the reviewers decide. Changes to test config and other protected paths stop the merge (dependency files such as `pyproject.toml` and
+`Cargo.toml` only warn in lite mode). With
 `gates.redOnBase` set, `receive` also checks that the track's new tests fail without its change, and warns when they do
 not. Removing some assertions while one remains is not named, because it looks like ordinary tidying.
 
@@ -88,6 +91,18 @@ not. Removing some assertions while one remains is not named, because it looks l
 [`focusStop-cli`](../scripts/orchestrator/__tests__/redteam/focusStop-cli.test.ts),
 [`redOnBase-cli`](../scripts/orchestrator/__tests__/redteam/redOnBase-cli.test.ts),
 [`mergeGuard`](../scripts/orchestrator/lib/__tests__/mergeGuard.test.ts).
+
+### Does a risky change get a security review, even in a small task?
+
+The class sets the fixed reviewers, and an ordinary code task has none. Review signals read what the whole diff adds and
+bring in the security reviewer on top, with one line of reason: changes to sign-in and sessions, a secret, a request URL
+built from data, raw HTML. Stack packs add the risky calls of your stack (raw SQL, rules that open access, uploads and
+more); the Checks tab suggests them from your manifests and turns them on only on your yes. The signals are narrow on
+purpose and only ever add a reviewer. They read words in the diff, so a risky change written in a way no word matches is
+not caught; the class stays the floor ([review signals](orchestration.md#review-signals)).
+
+**Verified by:** [`reviewSignals`](../scripts/orchestrator/lib/__tests__/reviewSignals.test.ts),
+[`reviewPacks`](../scripts/orchestrator/lib/__tests__/reviewPacks.test.ts) (every pack's examples).
 
 ### Does it merge or push without asking me?
 
@@ -111,8 +126,9 @@ and the PowerShell tool, through the hooks as Claude Code runs them.
 ### Can two sessions, or two agents, trip over each other?
 
 Two sessions that start, fill, receive or merge the same task at the same moment start it once, merge it once and mark
-it done once. One merge runs at a time. Two agents in the same file are allowed; `ravenseat conflicts` predicts the
-conflict from the running worktrees, and a real conflict goes to a fix round with its context.
+it done once. One merge runs at a time. Two tasks that own the same file (or folder, DB object or shared patch) never
+run at once: the second waits. A task may still change a file it does not own: the merge guard names it, `ravenseat
+conflicts` predicts the overlap from the running worktrees, and a real merge conflict goes to a fix round with its context.
 
 **Verified by:** [`rt03-two-sessions`](../scripts/orchestrator/__tests__/redteam/rt03-two-sessions.test.ts),
 [`mergeLock`](../scripts/orchestrator/lib/__tests__/mergeLock.test.ts),
@@ -128,17 +144,20 @@ yet, is reported to the orchestrator. These limits stop endless retries; they do
 budget (`ravenseat limit dailyBudget <usd>`) is off by default.
 
 **Verified by:** [`rt06-rt22-permanent-failure`](../scripts/orchestrator/__tests__/redteam/rt06-rt22-permanent-failure.test.ts),
-[`rt13-hanging-gate`](../scripts/orchestrator/__tests__/redteam/rt13-hanging-gate.test.ts),
+[`rt15-hanging-gate`](../scripts/orchestrator/__tests__/redteam/rt15-hanging-gate.test.ts),
 [`doneCheck`](../scripts/orchestrator/lib/__tests__/doneCheck.test.ts),
 [`costGuard`](../scripts/orchestrator/lib/__tests__/costGuard.test.ts).
 
 ### What does a task cost, and can I cap it?
 
-In the author's project, about 1,200 measured tasks gave a median of about 2.5 USD for an ordinary code task including
-its review, 5.1 for a database task, 7.5 for a high-risk one and 1.8 for an investigation, plus about 0.75 USD per task
-for the orchestrator. These are API-equivalent amounts, mostly cache reads; on a subscription you pay a flat fee. They
-come from one project and one developer, not a benchmark, and there is no controlled comparison with plain Claude Code
-or other tools. `ravenseat cost` shows your own.
+It drifts, so budget from the latest window. In the author's project, tasks done from 2026-11-04 to 11-11 had a median
+of about 3.8 USD for an ordinary code task, 11.9 for a database task, 11.7 for a high-risk one and 1.7 for an
+investigation, the track and its reviewers included. The orchestrator comes on top: about 1.6 USD and 23 turns per
+finished task. Three weeks earlier the database median was about 5.2; the rise came from a model-side change in thinking
+and from a reviewer on nearly every database task ([costs](costs.md#measured-median-cost-per-finished-task-subagents-only)).
+These are API-equivalent amounts, mostly cache reads; on a subscription you pay a flat fee. They come from one project
+and one developer, not a benchmark, and there is no controlled comparison with plain Claude Code or other tools.
+`ravenseat cost` shows your own.
 
 There is no spending cap by default. The fix-round cap, the plateau check and the cost guard stop endless retries and
 name a runaway track; the daily budget (`ravenseat limit dailyBudget <usd>`) is off until you set it. On API billing,

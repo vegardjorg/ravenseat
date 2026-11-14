@@ -65,7 +65,10 @@ The forecast above the columns says when the remaining tasks are done.
 
 **Checks.** Cards for what your project already has for checking its code, and suggestions for what to add, most
 important first. It is read from your files, so it shows what is set up, not that it works. A suggestion's button adds
-an investigation to the queue, and nothing is built before you approve it. Turn the tab off if you run your own setup.
+an investigation to the queue, and nothing is built before you approve it. Some need no agent: "Turn on" on "Review
+signals for your stack" writes the stack packs to `review.packs`. Important suggestions you set aside stay in a summary
+at the top with "Bring back", and a small red dot on the tab shows while an important one is open (`ravenseat checks
+marker off` hides the dot). Turn the tab off if you run your own setup.
 
 <p align="center"><img src="../../assets/screenshots/light-04-statistics.jpg" alt="Statistics: throughput, cycle time, estimate accuracy and cost" width="800"></p>
 
@@ -102,8 +105,9 @@ The Queue workspace has these tabs:
   remaining tasks in the focus are done at 50, 85 and 95 % (the same as `ravenseat forecast`; the saved focus counts).
 - **Dependencies:** a graph of which tasks wait on which.
 - **Checks:** what the project has for checking its code, and prioritized suggestions for what to add, as cards. A
-  suggestion's button adds its investigation and planning to the queue; building needs your approval afterwards. Read from
-  files, nothing is run. Off with the link on the tab, in Settings or with `ravenseat checks off`
+  suggestion's button adds its investigation and planning to the queue; building needs your approval afterwards. The stack
+  pack suggestion needs no agent and writes `review.packs` on your click. A red dot on the tab while an important
+  suggestion is open (`checksPanel.marker`). Read from files, nothing is run. Off with the link on the tab, in Settings or with `ravenseat checks off`
   (see [the Checks tab](queue.md#the-checks-tab-and-ravenseat-checks)).
 - **Cloud:** tasks that can run in a cloud session, and the cloud sessions (off by default, see [Modules](#modules)).
 - **Statistics:** done per day, added versus finished, time per class, cost per day (API-equivalent USD), context at
@@ -329,11 +333,11 @@ serves only the files in its allow list (`STATIC`), all with the same strict Con
 'self'`, no inline script).
 
 - `index.html`, `board.css` and `theme.css` (built by the server): the page.
-- `board/`: the board itself, 17 classic scripts that `index.html` loads in this order with `defer`:
+- `board/`: the board itself, 19 classic scripts that `index.html` loads in this order with `defer`:
   `core.js` (constants, the state, helpers, toasts), `api.js` (key, API calls, fetching, the warning dialog),
   `cards.js` (filters, search, the card), `draw.js` (the columns, the chain, the strip), `views.js` (Focus wiring,
   grouping, saved views), `menus.js` (help, project lanes, the Filter menu), `statistics.js`, `settings.js` (the
-  gear), `inbox.js` ("Waiting on you"), `panel.js` (the detail panel), `edit.js` (cancel, decline, edit, markdown),
+  gear), `inbox.js` ("Waiting on you"), `decide.js` (the Decisions tab), `checks.js` (the Checks tab), `panel.js` (the detail panel), `edit.js` (cancel, decline, edit, markdown),
   `select.js` (multi-select), `bulk.js` (bulk dialog and undo), `interact.js` (writing, drag, keyboard), `top.js`
   (theme, gear sections, modules, view tabs), `cloud.js` (the Cloud view) and `start.js` (update banner, logo and
   the start). They share the page's global scope, so a top-level name in one is visible in the others, as when they

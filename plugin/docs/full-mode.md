@@ -54,7 +54,7 @@ Task classes decide size and review:
 
 | Class | Meaning | Size of one task | Review |
 |---|---|---|---|
-| K | Ordinary code | 90 to 120 min of work | your gates; a light review agent when gates or CI are missing |
+| K | Ordinary code | 90 to 120 min of work | your gates; a light review agent when gates or CI are missing; `reviewer-security` when a review signal hits |
 | U | Investigation | about 60 min | the challenger (a helper agent) |
 | D | Database or contract change | about 40 min | one reviewer agent |
 | D+ | High-risk database or security | 25 to 30 min | two reviewer agents |

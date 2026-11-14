@@ -1,5 +1,5 @@
 // =============================================================
-// redteam/rt13-hanging-gate.test.ts: RT-13 "a test that hangs never holds my merge forever" (plans/redteam-plan.md,
+// redteam/rt15-hanging-gate.test.ts: RT-15 "a test that hangs never holds my merge forever" (plans/redteam-plan.md,
 // finding 4).
 //
 // Why: receive always gave the quick gates a time budget, but merge gave it only when the base gate was on and was the
@@ -18,7 +18,7 @@ import { project, queueSpace, tmp } from './project';
 
 /** A gate script outside the repo: hangs unless it runs in a queue worktree, or hangs everywhere. */
 function hangingGate(everywhere = false) {
-  const file = path.join(tmp('rt13-gate-'), 'gate.cjs');
+  const file = path.join(tmp('rt15-gate-'), 'gate.cjs');
   fs.writeFileSync(
     file,
     everywhere
@@ -30,7 +30,7 @@ function hangingGate(everywhere = false) {
 
 const BUDGET = { baseGate: { enabled: false, timeoutSec: 5 } };
 
-describe('RT-13: a test that hangs never holds my merge forever', () => {
+describe('RT-15: a test that hangs never holds my merge forever', () => {
   it('receive: a gate that hangs is red within the time budget', () => {
     const p = project({ gates: [hangingGate(true)], config: BUDGET });
     p.cloudDelivers('A');

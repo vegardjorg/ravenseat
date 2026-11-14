@@ -21,6 +21,8 @@ commands cover them.
 | Decline a proposal | `/api/task-edit` `decline` | `ravenseat cancel <id> --remark "declined[: reason]" --by owner`; `/ravenseat:decide` |
 | Release an old pick | `/api/action` `release` | `ravenseat release <id>` (same command); `/ravenseat:decide` |
 | Flag stuck work for the orchestrator (new) | `/api/action` `flag-stuck` | `ravenseat block <id> other --note "owner: looks stuck, please check"` (same command); `/ravenseat:decide` |
+| Put a task started without an agent back in the queue | `/api/action` `requeue` | `ravenseat set <id> waiting` (same command) |
+| Answer a track's question so it continues | `/api/action` `track-answer` | `ravenseat resume <id> --reason context --answer "<text>" --by owner` (same command) |
 | The list itself | Decisions tab, "Waiting on you" | `ravenseat decide`, `ravenseat decide --json`, `ravenseat decide --today` (new) |
 
 ## Tasks and the queue
@@ -45,6 +47,8 @@ commands cover them.
 | Board action | Endpoint | Claude Code |
 | --- | --- | --- |
 | Guidance, guided or quiet | `/api/guidance` | `ravenseat guidance guided|quiet` (same command) |
+| Checks tab: add an investigation, set aside, bring back, turn on the stack packs, tab on or off | `/api/checks` | `ravenseat checks plan <key> --approved`, `checks dismiss|restore <key>`, `checks packs --apply`, `checks on|off` (same commands); use as gates: `ravenseat kickstart gates --apply` |
+| The red dot on the Checks tab | `/api/setting` `checksPanel.marker` | `ravenseat checks marker on|off` |
 | Helper agents on or off | `/api/helper` | `ravenseat helpers on|off <agent>` (same command) |
 | Add a custom helper | `/api/helper-add` | `ravenseat helpers add <file.md>` (same command) |
 | Auto-accept rules | `/api/proposals` | `ravenseat proposals auto …` (same command) |

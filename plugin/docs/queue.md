@@ -150,7 +150,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `settings [<category>] [--advanced] [--all] [--changed] [--json]` | Every setting from the settings registry, by category: the value, the default and where it is saved (`(you)` = queue.json, only for you; `(project)` = queue.config.json, commit it). The first line names the guards weaker than the default. Basic rows only; `--advanced` adds the advanced ones, marked `[advanced]`. In lite, the full-only rows are counted on one line per category, and `--all` shows them with the reason. `--changed` lists only what differs from the default. Read-only |
 | `settings set <key> <value> [--i-understand --by owner]` | Changes one setting with edit `set` in the file its row names: queue.config.json keeps its form (key order, indentation, the rest of the text), queue.json is written under the lock. A value that weakens a guard (for example `secretScan.enabled off` or `gitSurface warn`) prints what the guard protects against, why not, and what changes, writes nothing and exits 1, unless you add `--i-understand --by owner`; then a `setting-weakened` row (key, old and new value, who) goes to the time log. A stronger value needs no flag. Refused from a track worktree, and the push guard denies it to queue agents. The older commands that write a setting follow the same rule through the same code: `proposals auto on` needs `--i-understand --by owner` too (also logged as `setting-weakened`), and so would `limit` or `cloud set` for a value whose row weakens a guard (none does today). `ravenseat doctor` names every guard that is weaker than its default on its `settings` row |
 | `limit [<name> <value>]` | Limits: `maxConcurrent`, `maxDPlus`, `maxPerDomain`, `dailyBudget`, night window, `minFreeMemoryPct`, `silentMin` (minutes before a running track is SILENT; default 20, 0 = off) |
-| `block <id> <code> [--note "…"]` / `unblock <id>` | Opens / closes a blocker reason on the task (`blocks`; one open at a time). Codes: `merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `context`, `quota`, `owner-question`, `dependency`, `no-agent`, `silent`, `other`. `merge` opens `merge-conflict` or `gate-red` when it stops in that step and closes the open one after a successful merge |
+| `block <id> <code> [--note "…"]` / `unblock <id>` | Opens / closes a blocker reason on the task (`blocks`; one open at a time). Codes: `merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `context`, `quota`, `owner-question`, `track-question`, `dependency`, `no-agent`, `silent`, `other`. `merge` opens `merge-conflict` or `gate-red` when it stops in that step and closes the open one after a successful merge |
 | `blockers [--days 7] [--json]` | Per blocker code: count and blocked time in the period, top first |
 | `next-migr [<n>]` / `migr move <id> <block>` | Migration flow only: show or set the next number / move a task's block in the queue and its prompt files |
 | `cost [--since 7d] [--max 10] [--json]` | USD per merged change for the window first (see [Cost estimates and calibration](#cost-estimates-and-calibration)), then cost per task with all its runs (track, fix rounds, continuations, reviewers, fix tasks) by cost, then where the cost went (the orchestrator session as its own line, the unknown share by its source), week over week with n, per turn against the 14-day median per agent type (the 2x warning), and cost per class (n, median, sum, build/review/fix) by start date from the measured track sessions |
@@ -368,8 +368,6 @@ A project with no gates or no CI config still runs. You are told, and you decide
 
 Tasks merged before this came have no status and no badge. `/ravenseat:setup` sets up gates and offers a CI template.
 
-### Adding checks one step at a time
-
 ### The Checks tab and `ravenseat checks`
 
 The board's Checks tab and `ravenseat checks` show two things, as cards: what the project has (CI files with triggers and jobs, and
@@ -379,7 +377,14 @@ the project's files. Nothing is run, so it shows what is set up, not that it wor
 
 Each suggestion has a button, "Add investigation to queue" (`ravenseat checks plan <key>`). That adds one class U task from the
 suggestion's template. It ends in a plan in the track result, with the build steps it recommends for you to pick from, never in code. "Set aside" removes the
-card until you bring it back.
+card until you bring it back; an important one you set aside stays in a summary at the top with "Bring back".
+
+"Review signals for your stack" needs no agent: its button, "Turn on" (`ravenseat checks packs --apply`), writes the
+stack packs found in your manifests to `review.packs` ([stack packs](orchestration.md#stack-packs)); `ravenseat checks
+packs` shows them first and writes nothing. A stack without a pack gets a low suggestion to research one.
+
+**The red dot:** while an important (high) suggestion is open, the tab shows a small red dot. `ravenseat checks marker
+off`, or `checksPanel.marker` in Settings, hides only the dot.
 
 **Opting out:** `ravenseat checks off`, or the switch on the tab and in Settings. It removes the tab, the overview and the setup
 suggestions, and changes no gates or guards. Without its own setting it follows `ravenseat guidance`, so quiet turns it off too.

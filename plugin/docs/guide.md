@@ -125,7 +125,8 @@ orchestration rules, and `/ravenseat:start` to open a session cheaply before you
    one machine-readable `RESULT` line. A fail-fast precheck (`ravenseat gates --precheck`: syntax, type check, lint and the
    related tests, only on the changed files, stopping at the first red one) runs before the full gate, so a red
    error shows up in minutes.
-3. The orchestrator builds a review package, runs the reviewer agents the class needs, and starts a fresh agent for
+3. The orchestrator builds a review package, runs the reviewer agents the class needs (plus the security reviewer when
+   a [review signal](orchestration.md#review-signals) hits on what the diff adds), and starts a fresh agent for
    any fix round. A task can name a done command (`done_when`, e.g. `npm test -- src/x.test.ts`): `ravenseat receive` runs
    it in the track's worktree first, and a red one gives a fix round instead of a review. After `maxFixRounds` (default
    3) fix rounds, or sooner when a fix round commits nothing or fails exactly as before, the task becomes a question

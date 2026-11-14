@@ -22,7 +22,8 @@ branch (`queue/<ID>`), with a self-contained mission file.
    report). The orchestrator starts the reviewers `receive` prints: the fixed ones for the class (`reviewers` in
    `queue.config.json`; by default none for K and U, `reviewer` for D, `reviewer` and `reviewer-security` for D+)
    plus the [helper agents](#helper-agents) that are on and hit (by default `reviewer-challenger` for U and the
-   `bug` label, `reviewer-design` for the `visual` label).
+   `bug` label, `reviewer-design` for the `visual` label), and `reviewer-security` when a [review signal](#review-signals)
+   hits on what the diff adds (sign-in, secrets, raw SQL and similar), whatever the class.
 5. Findings: HIGH and non-mechanical MEDIUM give a fix round with a NEW track agent on the same branch
    (`prepare-track --continue`). LOW findings become follow-up proposals. A task with a done command (`done_when`)
    is checked before the review: `receive` runs it in the track's worktree, and a red one gives the fix round by
@@ -873,7 +874,8 @@ Windows, so there are four layers:
   `Cargo.lock`, `go.sum`, `Gemfile.lock`, `composer.lock` …), and the test, lint and type configs such as `vitest.config.*`, `tsconfig*.json`, `.eslintrc*`,
   `pytest.ini`, `pyproject.toml`, `Cargo.toml` and `Makefile`, see queue.md). Read the diff; then add the path to the
   task's ownership, or run `ravenseat merge <ID> --allow-guard`, which is logged as `guard-overridden` in the time log.
-  Other files outside the ownership only give a warning.
+  Other files outside the ownership only give a warning. In lite mode the dependency files among them (`package.json`,
+  the lockfiles, `pyproject.toml`, `Cargo.toml` and similar) also only warn (`dependencyFiles`, see queue.md).
 - **Network guard.** For every queue agent, `hook-push-guard.mjs` denies `curl`, `wget`, `iwr`/`irm`,
   `Start-BitsTransfer` and a pipe into a shell (`| sh`, `| iex` …), also behind `eval`, `wsl`, `timeout` and nested shells
   (the same reading as the push guard). It denies installs and removals through npm, pnpm, yarn and bun and deleting

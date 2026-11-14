@@ -14,6 +14,10 @@ ravenseat add --file task.json      # add tasks
 ravenseat fill --scratchpad <dir>   # start what the limits allow
 ravenseat receive <ID>              # receive a finished track
 ravenseat merge <ID>                # merge it
+ravenseat wiring <ID>               # a task's wiring items; each is carried out (--commit) or rejected before done
+ravenseat explain <ID>              # why one task stands where it stands, from the rules the queue starts by
+ravenseat pulse-check               # the pulse in one read-only call: SILENT, or the actions with their next commands
+ravenseat wait                      # waits in the background at no token cost until something needs the orchestrator
 ravenseat cost                      # USD per merged change, cost per task (all runs), then per class
 ravenseat calibrate                 # how far minute and cost estimates are off, per class
 ravenseat decide                    # everything waiting on you, most impact first (/ravenseat:decide walks it)
@@ -25,6 +29,8 @@ ravenseat checks                    # what the project has for checking its code
 ravenseat checks show <key>         # what a suggestion's investigation and plan cover
 ravenseat checks plan <key>         # proposes its investigation and planning as a task (--approved: ready to run)
 ravenseat checks dismiss <key>      # sets a suggestion aside (restore brings it back)
+ravenseat checks packs [--apply]    # review signal packs for your stack, from the manifests; --apply writes review.packs
+ravenseat checks marker on|off      # the red dot on the Checks tab while an important suggestion is open
 ravenseat checks off                # no Checks tab, overview or setup suggestions (on turns them back); guards are not touched
 ravenseat inspection                # failures that repeat in the gates or CI; one proposal each to build a guard
 ravenseat inspection snooze <ID>    # holds an inspection entry (default 14 days) and cancels its proposal
@@ -56,7 +62,7 @@ ravenseat --version                 # the plugin's version
 ```
 
 Skills: `/ravenseat:queue`, `/ravenseat:decide`, `/ravenseat:board`, `/ravenseat:setup`, `/ravenseat:add-to-queue`, `/ravenseat:plans`, `/ravenseat:pick`,
-`/ravenseat:review`, `/ravenseat:ask`, `/ravenseat:parallel-wave` and `/ravenseat:start` ([daily use](guide.md#daily-use)).
+`/ravenseat:review`, `/ravenseat:ask`, `/ravenseat:parallel-wave`, `/ravenseat:kickstart`, `/ravenseat:add-helper` and `/ravenseat:start` ([daily use](guide.md#daily-use)).
 
 Every change the board makes to the queue has a command: see [CLI parity](cli-parity.md). The full command and
 configuration reference is in the [queue reference](queue.md).
