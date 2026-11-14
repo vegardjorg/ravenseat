@@ -10,6 +10,9 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   `reviewer-security` with a one-line reason. Narrow by design (added lines in code files only), and the class stays the
   floor. Projects can tune it in `review.signals`, and `ravenseat helpers` shows how often each signal fires. See
   [orchestration](plugin/docs/orchestration.md#review-signals).
+- **Cost numbers.** The README and [costs](plugin/docs/costs.md) now lead with the last measured week, the fairest
+  comparison, with every week and the whole 19 days beside it. A queue turn costs no more than a turn in one chat, and
+  the checks come on top. The claim of the same cost per line is dropped, and no per-day averages over idle days.
 
 ## 0.14.0 (2026-11-13)
 

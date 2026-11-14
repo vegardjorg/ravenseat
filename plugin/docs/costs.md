@@ -16,44 +16,71 @@ known.
   Opus list price per million: input 4 USD, output 20, cache read 0.20, cache write 5 (5-minute cache) or 8 (1-hour
   cache); a row without that split is priced as the 5-minute cache. When the task is set done, the queue stores its
   USD, tokens, turns, agents and the split into build, review and fix round.
-- The comparison with one plain chat is **measured** in one week; the comparison with "many small chats" is **my
-  estimate from experience**.
+- The comparison with one plain chat is **measured** over 19 days, with the last week as the headline; the comparison with
+  "many small chats" is **my estimate from experience**.
 - Your numbers depend on your codebase, your tasks, your checks and the model, and will differ.
 
 ## Measured: the queue against one plain chat
 
-In the same seven days (2026-11-06 to 11-13), with the same model and settings (automatic compaction at about 270k,
-1-hour subagent cache), I compared two projects: one run through the queue, and one built in a single Claude Code
-session from a plain roadmap file, with no queue. That session also started a few helper agents of its own. Prices
-are the list prices above.
+**In short:** a queue turn costs no more than a turn in one chat. The checks come on top, about a third of what the
+queue spent, and they are what keeps bugs and security holes from being merged. How much of that you pay is your
+choice: lighter gates and fewer reviewers cost less and catch less.
+
+Two repos, same developer, same model and settings (automatic compaction at about 270k, 1-hour subagent cache). One is
+a large repo run with the queue, which ran on its own with a heavy test suite and a reviewer on almost every task. The
+other is this repo, built from a plain roadmap file in one long main session without a queue, which I followed
+closely. That session started many agents of its own, so this compares steering, not parallel work against no parallel
+work. Prices are the list prices above (API-equivalent).
+
+### The last week, the fairest comparison
+
+10 to 14 November (4.6 days), both repos busy every day. The earlier weeks are shown below but left out of the
+headline: this repo was young and small then, and much of its work was splitting and moving large files, which gives
+many cheap commits and lines.
 
 | | One plain chat | With the queue |
 |---|---|---|
-| Cost per turn, main session | about 0.08 USD | about 0.07 USD |
-| Cost per turn, agents | about 0.07 USD | about 0.07 USD |
-| Context per turn, main session (median) | about 190k | about 190k |
-| Cost per 1,000 inserted lines | about 11.8 USD | about 12.3 USD |
-| Cost per commit | about 3.9 USD | about 3.5 USD |
-| Reading (Read, Grep, Glob, shell reads) | about 44 % | about 26 % |
-| Writing (Edit, Write) | about 16 % | about 15 % |
-| Tests and other runs | about 4 % | about 14 % |
-| Review | about 7 % (a few assessment agents) | about 17 % (a reviewer on nearly every task) |
-| Steering (starting and following agents, plan and status) | about 15 % | about 15 % |
+| Cost (USD) | 362 | 1,360 |
+| Commits (no merges) | 76 | 409 |
+| Cost per turn | 0.068 | 0.059 |
+| Cost per commit | 4.76 | 3.33 |
+| Cost per 1,000 inserted lines | 11.9 | 11.7 |
+| Reading (Read, Grep, Glob, shell reads) | 46 % | 27 % |
+| Tests and other runs | 6 % | 16 % |
+| Review | a few assessment agents (share not split out by week) | 14 % |
 
-What it shows:
-- **The price of a turn is the same.** Compaction keeps both main sessions near 190k of context, so neither pays the
-  "longer chat, costlier turn" penalty. The queue ran about six times as many turns, almost all of them in agents, and
-  delivered correspondingly more.
-- **Checks are the extra cost, and they are a choice.** Tests and review were about 31 % against 11 %, because the
-  queue project has a heavier test suite and a reviewer on almost every task. A project with lighter checks pays less.
-- **Steering costs the same share.** In the queue it is a manager chat that builds nothing; in the plain session it is
-  spread through the same chat that builds.
-- **Fixed missions save searching.** The plain session spent about 44 % on reading against 26 %. A queue task starts
-  from a mission that names the files and the goal; this is a likely reason, not a measured one.
+In that week the queue was cheaper per turn and per commit, its checks included, and equal per line. Leave its checks
+out and a commit cost about 2.3 USD (an estimate). The week is short (76 commits in this repo), so treat the size of
+the gap with care.
 
-Limits: two different projects with different tasks, one developer, not a controlled benchmark. Commits and inserted
-lines come from `git log --shortstat`; they include generated files and tests, and a line in one project is not worth
-the same as a line in the other.
+### Week by week, and the whole period
+
+| Week | Per commit, plain chat | Per commit, queue | Per 1,000 lines, plain chat | Per 1,000 lines, queue | Per turn, plain chat | Per turn, queue |
+|---|---|---|---|---|---|---|
+| 1 (10-27 to 11-02) | 2.43 * | 3.37 | 5.5 * | 9.8 | 0.069 | 0.047 |
+| 2 (11-03 to 11-09) | 2.59 | 3.74 | 9.7 | 14.7 | 0.106 | 0.085 |
+| 3 (11-10 to 11-14) | 4.76 | 3.33 | 11.9 | 11.7 | 0.068 | 0.059 |
+| All 19 days | 2.95 * | 3.50 | 7.9 * | 11.9 | 0.077 | 0.061 |
+
+\* Without the first 11 commits (the import of the code and a full translation, 145k lines together), made before the
+measured sessions.
+
+Over all 19 days the plain chat was about 15 % cheaper per commit and about a third cheaper per line, and the gap comes
+from weeks 1 and 2. The queue was cheaper per turn in every week. Cost per turn rose in both repos in week 2, so
+something in the environment changed (cause not checked). Both repos were nearly idle on 9 November; per-day averages
+over the whole period would count such days, so none are given here.
+
+Over all 19 days, tests and review were about 33 % of the queue's spend against about 12 % in the plain chat (counting
+its assessment agents as review). Steering was about the same size: 10 % against 15 % (14 % against 20 % with text
+turns). In the queue it is a manager chat that builds nothing; in the plain chat it is spread through the chat that
+builds, and through the owner following it. The plain chat spent more on reading in every week (39 to 46 % against
+25 to 29 %); part of that gap is the queue's share diluted by its checks, so fixed missions that name the files are a
+possible reason, not a measured one.
+
+Limits: two different repos and kinds of work (this repo is a tool with a light test suite), one developer, not a
+controlled benchmark. Commits come from `git log --no-merges --shortstat` and include generated files and tests; about
+38 commits in this repo were made outside the sessions (README edits on the web), which makes its cost per commit look
+lower. Separate test folders for this repo (121 USD over 19 days) are left out.
 
 ## Measured: median cost per finished task, subagents only
 
@@ -233,8 +260,8 @@ guard, and nothing else depends on it.
 
 - *One long chat.* With Claude Code's default it grows toward its full window before it compacts, and each turn pays
   for the whole history: a turn at over 500k cost about 2.7 times a turn at 100k to 200k, and quality dropped as the
-  context filled (not measured). With compaction at about 300k it costs about the same per turn and per line as the
-  queue (measured above); what it still costs is your presence, since the work moves only while you are in the chat.
+  context filled (not measured). With compaction at about 300k a turn costs no more than a queue turn (measured
+  above); what it still costs is your presence, since the work moves only while you are in the chat.
 - *Many small chats by hand.* The context stays small, but every chat pays the start-up cost again (reading the
   project, finding files, running checks), and you do the coordination yourself: no shared queue, no file ownership,
   no review step, and merge conflicts when chats overlap.
