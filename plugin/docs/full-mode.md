@@ -125,7 +125,7 @@ The guard only looks when a track starts. Two more things cover the time after t
   (`min_free_memory_pct`). A red run below the guard's limit says it is probably load and not the code. It stays red.
 
 `ravenseat machine` shows cores, memory, free memory now and a suggested `maxConcurrent`. `ravenseat machine --measure`
-times one full check and gives a suggestion for this project. Both only suggest; nothing changes by itself.
+times one quick and one full check and gives a suggestion for this project. Both only suggest; nothing changes by itself.
 
 | Symptom | Try |
 | --- | --- |
@@ -135,20 +135,33 @@ times one full check and gives a suggestion for this project. Both only suggest;
 | One test run eats the machine | A cap on the test workers (suggestion in the Checks tab) |
 | Tracks spend their time on the whole test suite | Only changed tests in quick gates (suggestion in the Checks tab) |
 
-A starting point for `maxConcurrent`. These are **estimates from one machine and one large project**, not limits; a small
-project fits far more. In that project, on a laptop with 8 cores and 32 GB, five parallel tracks first broke the gates
-(free memory fell to 0-2 % during full runs). The gate queue and a cap on test workers then spread the heavy runs out;
-after that, five tracks no longer broke the gates but still took free memory down to about 8 % and made tracks slow, so
-four was chosen. The default of 5 can be too many on such a machine. Only those points are measured; `ravenseat machine --measure` gives a suggestion for your project. The load guard's limits (10 % and
-40 %) are judgment-based starting points as well, not measured; that project runs with
-four tracks, a 15 % memory limit and at most four gate runs at a time.
+A starting point for `maxConcurrent`. **The checks cost memory, not the agents.** Measured on a laptop with 8 cores and
+32 GB:
 
-| Memory | Tracks (estimate) |
+- **An agent** costs under 0.1 GB: the Claude processes held the same memory with 2 tracks and with 7, since track
+  agents run inside the session process.
+- **A light quick check** (Vitest and tsc on a small TypeScript project) peaks at about 0.6 GB. Eight at once took eight
+  times as long as one, because each test run already uses all cores: overlap slows the checks down, it does not break
+  the machine.
+- **One heavy check** counts once, since the gate queue runs heavy checks one at a time.
+
+The suggestion is `(free memory - 3 GB margin - 2 GB heavy check) / 0.7 GB per track`, at most one track per core (one
+per 1.5 cores with the gate queue off). Free memory is what is free now with no track running, or memory minus 8 GB for
+the system and apps.
+
+| Memory | Tracks, light project (estimate) |
 | --- | --- |
-| Under 16 GB | 1 |
-| 16 GB | 1-2 |
-| 32 GB | 3-4 |
-| 64 GB | 6-10 |
+| 8 GB | 1 |
+| 16 GB | 2-4 |
+| 32 GB, 8 cores | 8 |
+| 64 GB, 12 cores | 12 |
+
+**A project with heavy checks fits far fewer.** One large project with a local database stack in Docker, tsc at 1.8 GB
+and ESLint at 4.3 GB broke the gates with five tracks on the same laptop (free memory fell to 0-2 % during full runs),
+and runs four with a 15 % memory limit. There, the database and the checks held the memory, not the agents. Run
+`ravenseat machine --measure` once, with the queue idle: it measures your quick and full check and gives the figure for
+your project. The load guard's limits (10 % and 40 %) are judgment-based starting points, not measured. Past about 8
+tracks other limits come first: your plan's usage limit, merges that go one at a time, and how much you can review.
 
 **Measure the peaks, not the average.** A machine can look fine on average and still have almost nothing free for the
 minute that turns a gate red, so compare the longest runs and the lowest free memory. Change one thing at a time.

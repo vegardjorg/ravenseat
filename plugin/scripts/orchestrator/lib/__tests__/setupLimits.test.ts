@@ -1,7 +1,7 @@
 // =============================================================
 // setupLimits.test.ts: /ravenseat:setup asks about parallel tracks and a daily budget, after the queue exists.
 //
-// Why: the default maxConcurrent is 5, while the machine rule (lib/machineAdvice.js) suggests 1 on 16 GB, and the daily
+// Why: the default maxConcurrent is 5, while the machine rule (lib/machineAdvice.js) can suggest fewer on a small machine, and the daily
 // budget is off by default. `ravenseat setup` printed the machine line but nothing asked, so a small machine started
 // five tracks and an API user had no spending limit unless they found `limit` themselves. The limits live in
 // queue.json, which `ravenseat init` creates, so the question must come after init.

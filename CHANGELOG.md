@@ -9,6 +9,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   suggests for this machine (the default of 5 is above it on 16 GB) and asks before it sets `maxConcurrent`, and asks
   for a daily budget; a subscription user may skip it. Nothing is set without a yes, and the question comes also with
   quiet guidance.
+- **The machine suggestion counts the checks, not the agents.** Measured: an agent costs under 0.1 GB, a light quick
+  check about 0.6 GB, and one heavy check counts once because of the gate queue. `ravenseat machine` now starts from the
+  free memory when no track runs, and caps at one track per core (one per 1.5 cores with the gate queue off). A light
+  project gets about 8 tracks on 32 GB with 8 cores instead of 4, and 2-4 on 16 GB instead of 1.
+  `ravenseat machine --measure` also runs the quick check once and counts it per track, so a project with heavy checks
+  gets its own, lower figure.
 - **Red team: rows 2, 6 and RT-14 are challenged.** 13 guards behind "an interrupted merge leaves the repo half
   merged", "an agent reports green without passing" and "a broken queue file loses the queue" were removed one at a
   time, and their tests went red. One did not: no test cut a queue.json write off half way, so writing in place instead

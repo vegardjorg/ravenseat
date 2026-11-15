@@ -247,9 +247,23 @@ describe('ravenseat machine', () => {
     expect(r.stdout).toContain('8');
     expect(r.stdout).toContain('32 GB');
     expect(r.stdout).toContain('50 %');
-    expect(r.stdout).toContain('Suggested maxConcurrent: 4');
+    // 50 % of 32 GB free and no track running: (16 - 3 - 2) / 0.7 = 15, capped by the 8 cores.
+    expect(r.stdout).toContain('Suggested maxConcurrent: 8');
+    expect(r.stdout).toContain('from the 16 GB free now');
     expect(r.stdout).toContain('Estimate');
     expect(fs.existsSync(path.join(p.data, 'queue.json'))).toBe(false);
+  }, 60_000);
+
+  it('uses memory and cores, not the free memory, while a track runs', () => {
+    const p = project({ full: ['node -e "0"'] });
+    fs.writeFileSync(path.join(p.data, 'queue.json'), JSON.stringify({ tasks: [{ id: 'A', title: 'A', domain: 'd', class: 'K', status: 'running' }] }));
+    const r = spawnSync(process.execPath, [QUEUE, 'machine'], {
+      env: { ...p.env, QUEUE_MACHINE: 'mem=16,cores=8', QUEUE_LOAD: 'free=90' } as NodeJS.ProcessEnv,
+      encoding: 'utf8',
+    });
+    // (16 - 8 - 3 - 2) / 0.7 = 4.3; the 90 % free is not used, since a track is running.
+    expect(r.stdout).toContain('Suggested maxConcurrent: 4');
+    expect(r.stdout).not.toContain('free now');
   }, 60_000);
 
   it('--measure refuses with an explanation while a track runs', () => {
@@ -267,10 +281,37 @@ describe('ravenseat machine', () => {
     const r = machine(p, '--measure');
     expect(r.status).toBe(0);
     expect(fs.readFileSync(path.join(p.repo, 'ran.txt'), 'utf8')).toBe('x');
-    expect(r.stdout).toMatch(/Time: [\d.]+ s/);
+    expect(r.stdout).toMatch(/Full check: [\d.]+ s/);
     expect(r.stdout).toContain('50 % before, 50 % at the lowest');
-    expect(r.stdout).toContain('for this project on this machine: 4');
+    expect(r.stdout).toContain('for this project on this machine: 8');
+    expect(r.stdout).toContain('No quick check is set');
     expect(r.stdout).toContain('Estimate');
+  }, 60_000);
+
+  it('--measure also runs the quick check once, first, and counts it per track', () => {
+    const p = project({
+      quick: [`node -e "require('fs').appendFileSync('ran.txt','q')"`],
+      full: [`node -e "require('fs').appendFileSync('ran.txt','f')"`],
+      lastSec: null,
+    });
+    const r = machine(p, '--measure');
+    expect(r.status).toBe(0);
+    expect(fs.readFileSync(path.join(p.repo, 'ran.txt'), 'utf8')).toBe('qf');
+    expect(r.stdout).toMatch(/Quick check: [\d.]+ s/);
+    expect(r.stdout).toMatch(/Full check: [\d.]+ s/);
+    expect(r.stdout).toContain('one track about 0.1 GB');
+  }, 60_000);
+
+  it('--measure stops before the full check when the quick check is red', () => {
+    const p = project({
+      quick: ['node -e "process.exit(1)"'],
+      full: [`node -e "require('fs').appendFileSync('ran.txt','f')"`],
+      lastSec: null,
+    });
+    const r = machine(p, '--measure');
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('RED');
+    expect(fs.existsSync(path.join(p.repo, 'ran.txt'))).toBe(false);
   }, 60_000);
 
   it('--measure keeps the exit code of a red check', () => {

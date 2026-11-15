@@ -179,8 +179,9 @@ of 10 %, linear in between. Below the hard limit it starts nothing new (`THE MAC
 The slots are counted when tracks start; long test runs that land later take turns through one shared queue for heavy
 gate runs, across all your projects on the machine. A red run while memory was below the limit says it was probably
 load. CPU is left out unless you turn it on, and on macOS the memory parts are off by default, since macOS counts the
-page cache as used. `ravenseat machine` suggests a `maxConcurrent` from your memory and cores (about 1 on 16 GB, about 4
-on 32 GB with 8 cores); these are estimates from one large project. The default is 5, so `/ravenseat:setup` shows the
+page cache as used. `ravenseat machine` suggests a `maxConcurrent` from your free memory and cores (for a light
+project about 2-4 on 16 GB and 8 on 32 GB with 8 cores); heavy checks fit fewer, and `ravenseat machine --measure` gives
+the figure for your project. The default is 5, so `/ravenseat:setup` shows the
 suggestion and asks before it sets `maxConcurrent`.
 
 **Verified by:** [`loadSlots`](../scripts/orchestrator/lib/__tests__/loadSlots.test.ts),

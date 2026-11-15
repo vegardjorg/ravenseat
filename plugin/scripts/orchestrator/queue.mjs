@@ -183,9 +183,9 @@
 //                                                                  writes CLAUDE.md or .claude/. cli/instructions.mjs)
 //   node scripts/orchestrator/queue.mjs machine [--measure]           (cores, memory, free memory now and a suggested maxConcurrent,
 //                                                                  an estimate that changes nothing. --measure, started by
-//                                                                  you, refused while a track runs: gates --full once, then the
-//                                                                  time, the lowest free memory and a suggestion for this
-//                                                                  project; cli/machine.mjs)
+//                                                                  you, refused while a track runs: gates --quick once (when
+//                                                                  set) and gates --full once, then the times, the lowest free
+//                                                                  memory and a suggestion for this project; cli/machine.mjs)
 //
 // The orchestrator's routine as a script and the cost per task (the pure logic is in lib/queueLogic.js):
 //   node scripts/orchestrator/queue.mjs fill --scratchpad <folder> [--max N] [--ids <id …>] [--over-quota] [--over-load]

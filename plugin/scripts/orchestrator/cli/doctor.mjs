@@ -606,7 +606,9 @@ function checkMachine() {
   const M = require('./lib/machineAdvice.js');
   const q = readJson(FILE);
   const maxConcurrent = L.spaceUse(q?.value && !q.error ? q.value : {}).limits.maxConcurrent;
-  const r = M.doctorAdvice({ ...M.readMachine(), maxConcurrent, ravenseat: CLI });
+  // With the gate queue off, checks run side by side, so the cap is one track per 1.5 cores instead of one per core.
+  const gateQueue = require('./lib/gateQueue.js').setupFrom(CONFIG).enabled;
+  const r = M.doctorAdvice({ ...M.readMachine(), maxConcurrent, gateQueue, ravenseat: CLI });
   return [r.status === 'WARN' ? warn('machine', r.message, r.fix) : ok('machine', r.message)];
 }
 
