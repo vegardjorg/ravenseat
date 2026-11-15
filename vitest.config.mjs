@@ -26,6 +26,9 @@ export default defineConfig({
   test: {
     include: ['plugin/scripts/orchestrator/**/__tests__/**/*.test.{ts,mjs}', 'bench/**/__tests__/**/*.test.{ts,mjs}'],
     testTimeout: 60000,
+    // The same limit for hooks: an afterAll that removes many temporary git repos can take over the default 10 s on Windows
+    // under load (fs.rmSync retries on EPERM), and then the file fails though every test in it passed.
+    hookTimeout: 60000,
     pool: 'forks',
     // Keeps a file of blocking spawnSync tests from timing out vitest's own progress calls (see the file).
     setupFiles: ['plugin/scripts/orchestrator/__tests__/yieldBetweenTests.setup.mjs'],
