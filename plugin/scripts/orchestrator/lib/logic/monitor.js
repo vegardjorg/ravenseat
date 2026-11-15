@@ -140,10 +140,22 @@ function activeLines(queue, now = Date.now()) {
  * names, `hasReport(o)` says whether the track has delivered.
  */
 const NO_AGENT_GRACE_MIN = 15;
+
+/**
+ * The grace time in minutes before NO AGENT: limits.noAgentMin (`ravenseat limit noAgentMin <n>`), otherwise
+ * NO_AGENT_GRACE_MIN. 0 turns the check off. A stricter project sets 5: a real agent runs prepare-track within minutes.
+ */
+function noAgentMinFor(queue) {
+  const raw = queue?.limits?.noAgentMin;
+  const v = Number(raw);
+  return raw != null && Number.isFinite(v) && v >= 0 ? v : NO_AGENT_GRACE_MIN;
+}
+
 function startedWithoutAgent(
   queue,
-  { worktreeBranches, hasReport = () => false, now = Date.now(), graceMin = NO_AGENT_GRACE_MIN } = {},
+  { worktreeBranches, hasReport = () => false, now = Date.now(), graceMin = noAgentMinFor(queue) } = {},
 ) {
+  if (!(graceMin > 0)) return [];
   const branches = worktreeBranches ?? new Set();
   return (queue?.tasks ?? [])
     .filter((o) => o.status === 'running' && !o.picked_by && !o.cloud && o.branch)
@@ -193,8 +205,9 @@ const silentWatched = (o) => o.status === 'running' || (o.status === 'review' &&
  */
 function reservedWithoutAgent(
   queue,
-  { rows = [], reportOf = () => null, lastCommitMs = () => null, now = Date.now(), graceMin = NO_AGENT_GRACE_MIN } = {},
+  { rows = [], reportOf = () => null, lastCommitMs = () => null, now = Date.now(), graceMin = noAgentMinFor(queue) } = {},
 ) {
+  if (!(graceMin > 0)) return [];
   const old = (queue?.tasks ?? []).filter((o) => {
     const x = AT.current(o);
     return (
@@ -490,6 +503,7 @@ module.exports = {
   infoView,
   activeLines,
   NO_AGENT_GRACE_MIN,
+  noAgentMinFor,
   startedWithoutAgent,
   reportSinceStart,
   reservedWithoutAgent,

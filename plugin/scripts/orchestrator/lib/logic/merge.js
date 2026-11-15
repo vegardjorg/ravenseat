@@ -166,6 +166,8 @@ function executeMerge({
   beforeDone = () => null,
 }) {
   const lines = [...plan.notes.map((n) => `NB: ${n}`)];
+  // What fill started (filledSummary), for the START NOW line merge prints last.
+  let filled = null;
   const stop = (step, message, out = '') => ({
     ok: false,
     lines,
@@ -248,9 +250,10 @@ function executeMerge({
       if (r.code !== 0)
         return stop(step, `fill failed (exit ${r.code}). ${o.id} is done.`, r.out);
       lines.push(...fillExcerpt(r.out));
+      filled = filledSummary(r.out);
     }
   }
-  return { ok: true, lines, stop: null };
+  return { ok: true, lines, stop: null, filled };
 }
 
 /**
@@ -270,6 +273,38 @@ function fillExcerpt(out) {
       `NOTE: the tracks above are only marked running. Start the agents now; ${FILL_NOTE}`,
     ];
   return [`fill: ${lines[lines.length - 1] ?? 'no output'}`];
+}
+
+/**
+ * What fill started, read from its output: the count and the queue-fill.json path from the FILLED line, and the task
+ * ids from the one line per track after it ("<id>  <agent>  migr ..."). null when nothing was filled.
+ */
+function filledSummary(out) {
+  const lines = String(out ?? '').split(/\r?\n/);
+  const i = lines.findIndex((l) => /^FILLED \d+ /.test(l));
+  if (i < 0) return null;
+  const count = Number(/^FILLED (\d+) /.exec(lines[i])[1]);
+  const file = /the details are in (.+?)\.?\s*$/.exec(lines[i])?.[1] ?? null;
+  const ids = [];
+  for (const l of lines.slice(i + 1)) {
+    const m = /^(\S+) {2}.* {2}migr /.exec(l);
+    if (!m) break;
+    ids.push(m[1]);
+  }
+  return { count, file, ids };
+}
+
+/**
+ * The very last line of merge when fill started tracks: a background merge read with `tail` still shows it. It names the
+ * tracks and where the agent lines are, but does not repeat them, so nobody starts the same agent twice.
+ */
+function startReminderLine(summary) {
+  if (!summary || !(summary.count > 0)) return null;
+  const which = summary.ids.length ? ` (${summary.ids.join(', ')})` : '';
+  return (
+    `START NOW: fill marked ${summary.count} track(s) running${which}, but no agent runs until you start it. The agent ` +
+    `lines are under "Start these in the SAME turn" above${summary.file ? ` and in ${summary.file}` : ''}.`
+  );
 }
 
 /** Why merge must not run where nobody reads it (a background job, a script that chains merges). */
@@ -319,6 +354,8 @@ module.exports = {
   errorExcerpt,
   executeMerge,
   fillExcerpt,
+  filledSummary,
+  startReminderLine,
   SAME_TURN,
   concurrentBlock,
   fixRoundLine,

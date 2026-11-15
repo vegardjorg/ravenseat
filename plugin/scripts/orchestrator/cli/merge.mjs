@@ -1799,6 +1799,9 @@ export async function cmdMerge() {
   console.log(`Full log: ${logFile}`);
   printBase();
   console.log(CONTROLS.verificationLine(verified, { quiet: GUIDANCE.isQuiet(read()) }));
+  // When fill started tracks, the very last line says so (a background merge read with tail still shows it).
+  const reminder = L.startReminderLine(res.filled);
+  if (reminder) console.log(reminder);
   // The merge went through, but the base gate made the base red: exit 9 (as a refused merge), so a script that chains
   // merges stops here instead of reading a 0.
   if (baseSettled && BH.verdict(BH.readState(HEALTH_FILE), mergeCommit) === 'red') process.exit(BH.EXIT_RED_BASE);

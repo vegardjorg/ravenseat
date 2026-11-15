@@ -10,7 +10,7 @@
 //   ACTION: <n>                  (exit 13), then one line per item: what, and the exact next command.
 // The items, each from the same check the other commands use (nothing is measured a second way here):
 //   RECEIVE <id>   a track delivered (track-result.md with a RESULT line, not received yet; cli/tracks.mjs findDeliveries)
-//   NO AGENT <id>  a track marked running (or a round prepared) that no agent took (findWithoutAgent, 15 min grace)
+//   NO AGENT <id>  a track marked running (or a round prepared) that no agent took (findWithoutAgent, limits.noAgentMin grace, 15 min)
 //   SILENT <id>    a running track with no sign of life for limits.silentMin minutes (findSilent; 0 = off)
 //   START <n>      free slots and tasks that can start now (selectNext, after the start guards: budget, night pause,
 //                  wind-down, load, usage limit; tasks waiting on an intake triage verdict count when its step is due)

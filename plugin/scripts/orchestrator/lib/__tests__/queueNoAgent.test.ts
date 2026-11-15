@@ -35,6 +35,10 @@ const L = require('../queueLogic') as {
   waitingOnCancelled: (queue: { tasks: Task[] }) => { id: string; dep: string }[];
   waitingOnCancelledLines: (list: { id: string; dep: string }[]) => string[];
   fillExcerpt: (out: string) => string[];
+  filledSummary: (out: string) => { count: number; file: string | null; ids: string[] } | null;
+  startReminderLine: (summary: { count: number; file: string | null; ids: string[] } | null) => string | null;
+  noAgentMinFor: (queue: { limits?: Record<string, unknown> }) => number;
+  parseLimit: (name: string, raw: string) => { val?: unknown; error?: string };
   NO_AGENT_GRACE_MIN: number;
   SILENT_CARD_MIN: number;
 };
@@ -348,5 +352,57 @@ describe('queue.mjs show, state and pulse warn (against a temporary repo)', () =
     g(['worktree', 'add', '-q', '-b', 'queue/A', path.join(folder, 'wt-A')]);
     expect(run('show').out).not.toContain('STARTED WITHOUT AGENT');
     expect((JSON.parse(run('state').out) as { withoutAgent: Hit[] }).withoutAgent).toEqual([]);
+  });
+});
+
+describe('limits.noAgentMin: the grace time before NO AGENT', () => {
+  it('limits.noAgentMin wins over the default, 0 turns it off, and limit accepts it', () => {
+    expect(L.noAgentMinFor({})).toBe(L.NO_AGENT_GRACE_MIN);
+    expect(L.noAgentMinFor({ limits: { noAgentMin: 5 } })).toBe(5);
+    expect(L.noAgentMinFor({ limits: { noAgentMin: 'x' } })).toBe(L.NO_AGENT_GRACE_MIN);
+    expect(L.parseLimit('noAgentMin', '5')).toEqual({ val: 5 });
+    expect(L.parseLimit('noAgentMin', 'x').error).toMatch(/integer/);
+  });
+
+  it('a track 6 min old is NO AGENT with noAgentMin 5, not with the default', () => {
+    const tasks = [running('A', { started: ago(6) })];
+    expect(L.startedWithoutAgent({ tasks }, { now: NOW })).toEqual([]);
+    const strict = { tasks, limits: { noAgentMin: 5 } };
+    expect(L.startedWithoutAgent(strict, { now: NOW })).toHaveLength(1);
+    expect(L.noAgentTracks(strict, { now: NOW })).toHaveLength(1);
+    // An explicit graceMin still wins (the tests and callers that pass one).
+    expect(L.startedWithoutAgent(strict, { now: NOW, graceMin: 10 })).toEqual([]);
+  });
+
+  it('noAgentMin 0 turns the check off', () => {
+    const off = { tasks: [running('A')], limits: { noAgentMin: 0 } };
+    expect(L.startedWithoutAgent(off, { now: NOW })).toEqual([]);
+    expect(L.noAgentTracks(off, { now: NOW })).toEqual([]);
+  });
+});
+
+describe('the start reminder at the very end of merge', () => {
+  const out = [
+    'something',
+    'FILLED 2 track(s) (head abcdef12); the details are in /tmp/s/queue-fill.json.',
+    'A  spor  migr -  (30 min $1.0)',
+    'B  spor  migr 3600-3609  (was already running)  (40 min $2.0)',
+    'Start these in the SAME turn:',
+    '  Agent spor: Start track A',
+  ].join('\n');
+
+  it('reads the filled tracks and the fill file from the fill output', () => {
+    expect(L.filledSummary(out)).toEqual({ count: 2, file: '/tmp/s/queue-fill.json', ids: ['A', 'B'] });
+    expect(L.filledSummary('Nothing can be started now')).toBeNull();
+  });
+
+  it('one line that names the tracks and where the agent lines are, without repeating them', () => {
+    const line = L.startReminderLine(L.filledSummary(out));
+    expect(line).toMatch(/^START NOW: /);
+    expect(line).toContain('A, B');
+    expect(line).toContain('/tmp/s/queue-fill.json');
+    expect(line).toContain('Start these in the SAME turn');
+    expect(line).not.toContain('Agent spor');
+    expect(L.startReminderLine(null)).toBeNull();
   });
 });

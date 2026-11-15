@@ -135,7 +135,8 @@
 //                                                                  maxConcurrent), dailyBudget <usd|off>,
 //                                                                  nightRun <on|off>, nightWindow <HH-HH>,
 //                                                                  autocompact <on|off>, parallelThreshold <0-1>,
-//                                                                  silentMin <minutes, 0 = off>)
+//                                                                  silentMin <minutes, 0 = off>,
+//                                                                  noAgentMin <minutes, 0 = off>)
 //   node scripts/orchestrator/queue.mjs compact [auto|manual]        (show or set the compaction mode for
 //                                                                  the orchestrator session, limits.autocompact; prints which
 //                                                                  /autocompact line the owner pastes in)

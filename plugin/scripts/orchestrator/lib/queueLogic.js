@@ -144,11 +144,11 @@ const {
   planMatch, fileRootMatch, suggestProject, classifyQueue, prefixWarnings, addProjectWarnings,
 } = require('./logic/classify.js');
 const {
-  REPORT_CAP, migrSetup, environmentCheck, migrFiles, mergePlan, errorExcerpt, executeMerge, fillExcerpt, SAME_TURN,
+  REPORT_CAP, migrSetup, environmentCheck, migrFiles, mergePlan, errorExcerpt, executeMerge, fillExcerpt, filledSummary, startReminderLine, SAME_TURN,
   concurrentBlock, reportCapWarning, fixRoundLine,
 } = require('./logic/merge.js');
 const {
-  infoField, infoValueText, infoView, activeLines, NO_AGENT_GRACE_MIN, startedWithoutAgent, reportSinceStart, reservedWithoutAgent, noAgentTracks, withoutAgentLines, waitingOnCancelled, waitingOnCancelledLines, SILENT_CARD_MIN,
+  infoField, infoValueText, infoView, activeLines, NO_AGENT_GRACE_MIN, noAgentMinFor, startedWithoutAgent, reportSinceStart, reservedWithoutAgent, noAgentTracks, withoutAgentLines, waitingOnCancelled, waitingOnCancelledLines, SILENT_CARD_MIN,
   SILENT_DEFAULT_MIN, silentMinFor, silentCandidates, silentWatched, roundOpen, silentTracks, silentLines, BLOCK_CODES, STUCK_BLOCK_CODES, openBlockOf, stuckBlockOf, openBlock,
   closeBlock, blockerSummary, blockerLines, highestBlockNr, nextMigrGuard,
 } = require('./logic/monitor.js');
@@ -449,6 +449,8 @@ module.exports = {
   errorExcerpt,
   executeMerge,
   fillExcerpt,
+  filledSummary,
+  startReminderLine,
   SAME_TURN,
   concurrentBlock,
   fixRoundLine,
@@ -468,6 +470,7 @@ module.exports = {
   waitingOnCancelledLines,
   SILENT_CARD_MIN,
   NO_AGENT_GRACE_MIN,
+  noAgentMinFor,
   SILENT_DEFAULT_MIN,
   silentMinFor,
   silentCandidates,

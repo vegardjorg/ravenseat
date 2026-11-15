@@ -54,7 +54,7 @@ and their work is checked on your machine when you collect it.
 
 The orchestrator is a model following a protocol, and it can drop a step. The queue looks for what that leaves behind. A
 task marked running that no agent took is named `STARTED WITHOUT AGENT` (or `ROUND WITHOUT AGENT` for a fix round) after
-15 minutes, and a track whose agent shows no sign of life is named `SILENT` after 20 minutes (`silentMin`). Each line
+15 minutes (`noAgentMin`), and a track whose agent shows no sign of life is named `SILENT` after 20 minutes (`silentMin`). Each line
 comes with the command that fixes it. A task with no agent is a card under "Waiting on you" at once; a silent track
 becomes one after 60 minutes, since a short stop is the orchestrator's to handle. `ravenseat explain <id>` says why one
 task stands where it stands, from the same rules the queue starts by. Asking Claude "what is stuck?" runs the same checks.

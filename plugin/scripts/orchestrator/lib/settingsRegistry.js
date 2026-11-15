@@ -248,6 +248,8 @@ const SETTINGS = Object.freeze([
     'The share of concurrent tracks below which fill, receive and pulse write a short queue diagnosis. 0 = off.', QUEUE),
   row('limits.silentMin', 'load', 'integer', 'Silent after (minutes)',
     'Minutes without a sign of life before a running track counts as silent. 0 = off.', QUEUE),
+  row('limits.noAgentMin', 'load', 'integer', 'No agent after (minutes)',
+    'Minutes before a track marked running, with no agent on its branch and no report, counts as NO AGENT. 0 = off.', QUEUE),
 
   // ---- 4. Gates and checks ----
   row('gates.quick', 'gates', 'list', 'Quick gate',

@@ -306,9 +306,10 @@ const LIMIT_NAME = [
  * Limits that `queue.mjs limit` also sets, but that are not slot limits (not in LIMIT_NAME, so
  * the settings panel on the board, queueBoard.SETTINGS, is unchanged). parallelThreshold: the share of maxConcurrent below
  * which fill, receive and pulse write a quick queue diagnosis (queueDiagnose.js); default 0.7, 0 = off. silentMin: the
- * minutes without a sign of life before a running track is SILENT (silentTracks); default 20, 0 = off.
+ * minutes without a sign of life before a running track is SILENT (silentTracks); default 20, 0 = off. noAgentMin: the
+ * minutes before a track marked running with no agent is NO AGENT (startedWithoutAgent); default 15, 0 = off.
  */
-const LIMIT_EXTRA = ['parallelThreshold', 'minFreeMemoryPct', 'silentMin'];
+const LIMIT_EXTRA = ['parallelThreshold', 'minFreeMemoryPct', 'silentMin', 'noAgentMin'];
 
 /** A limit value as text: null = "off", true/false = "on"/"off". */
 function limitText(name, v) {

@@ -420,10 +420,14 @@ started them. A new session adopts them without that notification:
   background, or a script that chains several merges), the track stays "running" with no agent and the queue stalls
   without an error. So `ravenseat show` (first in the output, so it survives the after-compact trimming), `ravenseat state`
   (`withoutAgent`) and `ravenseat orchestrator pulse` print `STARTED WITHOUT AGENT` for a running track older than 15 minutes
+  (`limits.noAgentMin`, `ravenseat limit noAgentMin <n>`, 0 = off; a real agent checks its branch out within minutes, so 5 is
+  a reasonable stricter value)
   whose branch no worktree has checked out and that has no track-result.md from this start (an older one no longer turns the warning off). Picked tasks and cloud sessions are left out.
   Fix: `ravenseat set <ID> waiting`, then `ravenseat fill --ids <ID>` and start what it lists in the same turn (fill checks the
   migration block again). Run `ravenseat merge` where you read the output; in a chain or a background job use `--without-fill`
-  and run fill yourself afterwards.
+  and run fill yourself afterwards. When fill started tracks, the very last line of `merge` is `START NOW: ...` with the
+  task ids and the path to queue-fill.json, so a background merge read with `tail` still shows it. It does not repeat the
+  agent lines, so nobody starts the same agent twice.
 - **A round under way:** a task in review whose last attempt is still open (`ravenseat resume` or a fix round) is not aged as
   "in review", and `ravenseat takeover` says `WORKING` instead of `DELIVERED (review)`. If its agent hangs, the track gets
   `SILENT`, counted from when the round was prepared. A report from an earlier round does not turn that off.

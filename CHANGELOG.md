@@ -15,6 +15,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   project gets about 8 tracks on 32 GB with 8 cores instead of 4, and 2-4 on 16 GB instead of 1.
   `ravenseat machine --measure` also runs the quick check once and counts it per track, so a project with heavy checks
   gets its own, lower figure.
+- **A merge that started tracks ends with START NOW.** When fill started tracks, the very last line of `merge` names
+  them and the queue-fill.json path, so a merge run in the background and read with `tail` no longer hides that agents
+  must be started. The agent lines are not repeated, so the same agent is not started twice. The exit code is unchanged.
+- **The grace time before NO AGENT is a limit.** `ravenseat limit noAgentMin <n>` (default 15, 0 = off) sets how long a
+  track marked running may go without an agent on its branch before show, pulse and the board warn. A project that wants
+  it stricter can set 5.
 - **Red team: rows 2, 6 and RT-14 are challenged.** 13 guards behind "an interrupted merge leaves the repo half
   merged", "an agent reports green without passing" and "a broken queue file loses the queue" were removed one at a
   time, and their tests went red. One did not: no test cut a queue.json write off half way, so writing in place instead

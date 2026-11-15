@@ -86,6 +86,9 @@ export function cmdLimit() {
   // The silence limit for running tracks (SILENT; 0 = off).
   const silentMin = L.silentMinFor(queue);
   console.log(`  ${'silentMin'.padEnd(14)} ${silentMin > 0 ? `${silentMin} min` : 'off'}`);
+  // The grace time before NO AGENT (a track marked running that no agent took; 0 = off).
+  const noAgentMin = L.noAgentMinFor(queue);
+  console.log(`  ${'noAgentMin'.padEnd(14)} ${noAgentMin > 0 ? `${noAgentMin} min` : 'off'}`);
   const lm = measureLoad();
   console.log(
     `  load now: free memory ${lm.freeMemoryPct ?? '?'} %` +
