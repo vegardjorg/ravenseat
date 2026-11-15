@@ -3,9 +3,8 @@ title: Test your database rules
 category: database
 priority: medium
 when: has-database
-important_when: has-migrations, missing:db
 content_min: 60
-why: The rules that keep one user out of another's data, the constraints and the functions that must refuse live in the database, so only a test against a real database shows that they hold. High when migrations are set up and no database probe was found.
+why: The rules that keep one user out of another's data, the constraints and the functions that must refuse live in the database, so only a test against a real database shows that they hold.
 ---
 
 ## Investigate

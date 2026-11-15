@@ -223,7 +223,8 @@ describe('the database and project cards (spor 3)', () => {
   it('the probes card is medium with a database, and high when migrations are set up and no probe was found', () => {
     expect(card(report({}), 'db-rules-probes')).toBeUndefined();
     expect(card(report({ hasDatabase: true }), 'db-rules-probes')).toMatchObject({ priority: 'medium', category: 'database' });
-    expect(card(report({ hasDatabase: true, hasMigrations: true }), 'db-rules-probes')).toMatchObject({ priority: 'high' });
+    // Medium also with migrations and no probe: a gap worth a look, not the red marker.
+    expect(card(report({ hasDatabase: true, hasMigrations: true }), 'db-rules-probes')).toMatchObject({ priority: 'medium' });
     expect(card(report({ hasDatabase: true, hasMigrations: true, kinds: kinds(['db', 'script']) }), 'db-rules-probes')).toMatchObject({ priority: 'medium' });
     const probes = card(report({ hasDatabase: true }), 'db-rules-probes') as { plan: string };
     expect(probes.plan).toMatch(/rolled back/);
