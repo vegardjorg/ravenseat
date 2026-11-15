@@ -7,7 +7,16 @@
 //              .p12/.pfx, an id_rsa-style SSH key, a credentials JSON): FAIL (a key file under a test or fixture folder:
 //              WARN). The same file on disk, untracked and NOT ignored: WARN (one `git add .` puts it in git).
 //              An ignored local .env is fine.
-//   base       the base branch does not exist: FAIL (in an empty repo: WARN).
+//   allowlist  a secret in an approved command (permissions.allow, ask, deny in .claude/settings.json and
+//              .claude/settings.local.json, main tree and .claude/worktrees/*; lib/allowlistSecrets.js): FAIL in a
+//              tracked file, WARN in an untracked one. Shown as `<file>: permissions.allow[3]`, never the rule's text.
+//   gitignore  a path Ravenseat keeps local (setup.mjs requiredIgnores, with the configured dataFolder and timeLog) that
+//              the project's own rules do not ignore: WARN, split into "only ignored on your machine (global
+//              gitignore)" and "not ignored". A tracked file in the data folder or .claude/settings.local.json: FAIL.
+//              allowlist and gitignore are opt-in (secretScan.allowlist, gitignoreCheck.enabled; lib/optInChecks.js):
+//              while off, each is one INFO line naming the setting, which may say an important gap is there (never what).
+//              allowlistFacts() and gitignoreFacts() are the same reads for the Checks tab (cli/checks.mjs).
+//   base      the base branch does not exist: FAIL (in an empty repo: WARN).
 //   gates      gates.quick and gates.full both empty: WARN (the agents run no checks before delivery). A gate naming a
 //              package.json script that does not exist: FAIL (red on every run). A gate whose program is not found on
 //              PATH (`pytest -q` without pytest), or a path in it that is not in the repo: WARN (the agents' PATH may
@@ -28,10 +37,12 @@
 // =============================================================
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import { CLI, CONFIG, GIT_ROOT, MAIN_TREE, require } from './context.mjs';
+import { requiredIgnores } from '../setup.mjs';
 
 const GI = require('./lib/gitIdentity.js');
 
@@ -131,6 +142,165 @@ export function checkSecrets() {
     );
   if (!out.length) out.push(ok('secrets', 'no secret files in git, local ones are ignored'));
   // secretScan.enabled: false is named in the doctor row `settings` (cli/doctor.mjs checkSettings) with the other weakened guards.
+  return out;
+}
+
+/** Is `inTree` tracked by git in the tree `tree` (relative to the main tree, '' for the main tree)? */
+function trackedIn(tree, inTree) {
+  try {
+    const out = execFileSync('git', ['-C', path.join(MAIN_TREE, tree || '.'), 'ls-files', '-z', '--', inTree], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+    return out.split('\0').some(Boolean);
+  } catch {
+    return false;
+  }
+}
+
+/** Is `inTree` ignored in the tree `tree` (by any rule, the global one too)? On any git error: not ignored. */
+function ignoredIn(tree, inTree) {
+  try {
+    execFileSync('git', ['-C', path.join(MAIN_TREE, tree || '.'), 'check-ignore', '-q', '--no-index', '--', inTree], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Approved commands with a secret in them (H1, lib/allowlistSecrets.js): permissions.allow, ask and deny in
+ * .claude/settings.json and .claude/settings.local.json, in the main tree and the agents' worktrees. FAIL when the file
+ * is tracked (the key is in the repo and its history), WARN when it is not (clear text on disk, and when it is not even
+ * ignored, one `git add .` away). The lines name `<file>: permissions.allow[3]` and the rule id, never the rule's text.
+ */
+export function allowlistFacts() {
+  const AS = require('./lib/allowlistSecrets.js');
+  const hits = AS.scanTrees(MAIN_TREE);
+  const tracked = [];
+  const local = [];
+  for (const h of hits) {
+    if (trackedIn(h.tree, h.inTree)) tracked.push(h);
+    else local.push({ ...h, loose: !ignoredIn(h.tree, h.inTree) });
+  }
+  return { hits, tracked, local };
+}
+
+/** The doctor row of an opt-in check that is off (lib/optInChecks.js): one INFO line, never WARN or FAIL. */
+function offRow(key, gap) {
+  const OI = require('./lib/optInChecks.js');
+  const c = OI.byKey(key);
+  return [info(c.row, OI.offLine(c, { cli: CLI, gap }), `${CLI} settings set ${c.key} on (or Turn on on the Checks tab); leave it off if you do not want it`)];
+}
+
+export function checkAllowlistSecrets() {
+  const AS = require('./lib/allowlistSecrets.js');
+  // Off by default (secretScan.allowlist). Off, it still reads quietly, so the INFO line can say an important gap
+  // (a key in a TRACKED file) is there, never which.
+  const { hits, tracked, local } = allowlistFacts();
+  if (CONFIG.secretScan?.allowlist !== true) return offRow('secretScan.allowlist', tracked.length > 0);
+  if (!hits.length) return [ok('allowlist', 'no secret in the commands Claude Code has approved (permissions in .claude/settings*.json)')];
+  const out = [];
+  if (tracked.length)
+    out.push(
+      fail(
+        'allowlist',
+        `a secret in an approved command, in a file git tracks: ${list(tracked.map(AS.where))}. Anyone with the repo can read it`,
+        'change the key first (it stays in the history), then remove the rule from the file and commit; removing it does not clean the history',
+      ),
+    );
+  if (local.length) {
+    const loose = [...new Set(local.filter((h) => h.loose).map((h) => h.file))];
+    out.push(
+      warn(
+        'allowlist',
+        `a secret in an approved command, in clear text on disk: ${list(local.map(AS.where))}` +
+          `${loose.length ? `. Not even ignored: ${list(loose)}` : ''}. Backups and screen sharing copy it too`,
+        'remove the rule, change the key if it may have been seen, and pass it as an environment variable or from a password manager instead of typing it in the command',
+      ),
+    );
+  }
+  return out;
+}
+
+/**
+ * The core.excludesFile that switches the global gitignore off: a path that does not exist, so git reads no rules from
+ * it and nothing is written (NUL and /dev/null are read differently by git on Windows and elsewhere).
+ */
+const NO_EXCLUDES = path.join(os.tmpdir(), `ravenseat-no-global-gitignore-${process.pid}-${Date.now()}`);
+
+/** A path git can test for a .gitignore line: `<dir>/` gets a file in it, a `*` a plain name. A negation: null. */
+const probeOf = (line) => (line.startsWith('!') ? null : line.endsWith('/') ? `${line}probe` : line.replace(/\*/g, 'local'));
+
+/** The probes `check-ignore --no-index` reports as ignored, by the project's rules only or (global) by every rule. */
+function ignoredProbes(probes, { global }) {
+  const args = [...(global ? [] : ['-c', `core.excludesFile=${NO_EXCLUDES}`]), 'check-ignore', '--no-index', '-z', '--stdin'];
+  const opts = { cwd: GIT_ROOT, input: `${probes.join('\0')}\0`, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true };
+  try {
+    return new Set(execFileSync('git', args, opts).split('\0').filter(Boolean));
+  } catch (e) {
+    // Exit 1 means none is ignored; stdout is still read in case git said more before it stopped.
+    return new Set(String(e?.stdout ?? '').split('\0').filter(Boolean));
+  }
+}
+
+/**
+ * The project's own .gitignore (H2): every path Ravenseat keeps local (setup.mjs requiredIgnores: GITIGNORE_LINES, the
+ * configured dataFolder and timeLog, .claude/worktrees/) must be ignored by the project's rules, with the user's global
+ * gitignore switched off. WHY: the global file only exists on this machine; a teammate's clone, CI or a fresh checkout
+ * does not have it, so what only it ignores is one `git add .` from the repo. WARN "only ignored on your machine" and
+ * WARN "not ignored", each with the lines to add. FAIL when git already tracks a file in the data folder, the time log
+ * or .claude/settings.local.json: ignoring does not untrack, `git rm --cached` does.
+ * .git/info/exclude still counts as the project's here: it is local too, but rare, and git has no switch for it.
+ */
+export function gitignoreFacts() {
+  const lines = requiredIgnores(CONFIG);
+  // Already tracked: the data folder, a time log of its own, and the personal settings (not the worktrees or .env,
+  // which checkWorktrees and checkSecrets name).
+  const local = lines.filter((l) => l !== '.claude/worktrees/' && !l.startsWith('.env') && !l.startsWith('!'));
+  const tracked = gitList(['ls-files', '-z', '--', ...local.map((l) => l.replace(/\/$/, ''))]) ?? [];
+  const roots = [...new Set(tracked.map((f) => (local.find((l) => f === l || f.startsWith(l)) ?? f).replace(/\/$/, '')))];
+  const withProbe = lines.map((line) => ({ line, probe: probeOf(line) })).filter((x) => x.probe);
+  const probes = withProbe.map((x) => x.probe);
+  const own = ignoredProbes(probes, { global: false });
+  const any = ignoredProbes(probes, { global: true });
+  const machineOnly = withProbe.filter((x) => !own.has(x.probe) && any.has(x.probe)).map((x) => x.line);
+  const none = withProbe.filter((x) => !own.has(x.probe) && !any.has(x.probe)).map((x) => x.line);
+  // The important gaps (the red dot on the Checks tab): a tracked file Ravenseat keeps local, or the personal settings
+  // not ignored by the project's own rules.
+  const important = tracked.length > 0 || [...machineOnly, ...none].includes('.claude/settings.local.json');
+  return { tracked, roots, machineOnly, none, count: withProbe.length, important };
+}
+
+export function checkGitignore() {
+  const { tracked, roots, machineOnly, none, count, important } = gitignoreFacts();
+  // Off by default (gitignoreCheck.enabled): one INFO line that may say an important gap is there.
+  if (CONFIG.gitignoreCheck?.enabled !== true) return offRow('gitignoreCheck.enabled', important);
+  const out = [];
+  if (tracked.length) {
+    out.push(
+      fail(
+        'gitignore',
+        `git tracks file(s) Ravenseat keeps local: ${list(tracked)}. Anyone with the repo can read them, also in old commits`,
+        `git rm --cached -r -- ${roots.join(' ')} (keeps them on disk), commit, and check that .gitignore holds them; a key in them must be changed`,
+      ),
+    );
+  }
+  const fix = (missing) => `run ${CLI} setup (it adds them to the project's .gitignore), or add these lines to .gitignore: ${missing.join(' ')}`;
+  if (machineOnly.length)
+    out.push(
+      warn(
+        'gitignore',
+        `only ignored on your machine (global gitignore): ${machineOnly.join(', ')}. A teammate's clone or CI does not ignore them`,
+        fix(machineOnly),
+      ),
+    );
+  if (none.length) out.push(warn('gitignore', `not ignored: ${none.join(', ')}. One \`git add .\` puts them in git`, fix(none)));
+  if (!out.length) out.push(ok('gitignore', `the project's own .gitignore holds the ${count} paths Ravenseat keeps local`));
   return out;
 }
 
@@ -391,4 +561,4 @@ export function checkInstructions() {
 }
 
 /** The baseline checks in the order doctor prints them. */
-export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles, checkInstructions];
+export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkAllowlistSecrets, checkGitignore, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles, checkInstructions];

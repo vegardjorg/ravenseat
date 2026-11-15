@@ -60,7 +60,7 @@
 //     `queue.mjs cancel <id> --remark …` or `queue.mjs edit <id> --json {value, content_min, class}` with --by theBoard
 //     (rules in lib/queueTaskEdit.js: only waiting and proposed tasks). Both are logged, so the answer's `log` goes to /api/undo.
 //   - CHECKS (board/checks.js): what the project has and prioritized suggestions. GET /api/checks = `queue.mjs checks --json`,
-//     POST /api/checks { action, key } = `queue.mjs checks plan|dismiss|restore|packs --apply|on|off` (lib/checksCatalog.js,
+//     POST /api/checks { action, key } = `queue.mjs checks plan|dismiss|restore|turn-on|packs --apply|on|off` (lib/checksCatalog.js,
 //     checks-catalog/). state().checksMarker = the small red dot on the tab: a high suggestion is open and checksPanel.marker
 //     is not off. It is read in the background, at most every two minutes.
 //   - PLANS (see docs/plan-register.md): the Plans workspace (queue-board/plans/). GET /api/plans reads plans.json and
@@ -2120,7 +2120,9 @@ async function write(filePath, b) {
     if (!key) return no('invalid suggestion');
     if (b.action === 'plan') return run(['checks', 'plan', key, '--approved'], `checks plan ${key}`);
     if (b.action === 'dismiss' || b.action === 'restore') return run(['checks', b.action, key], `checks ${b.action} ${key}`);
-    return no('action must be plan, dismiss, restore, gates, packs, on or off');
+    // An opt-in check's "Turn on" (lib/optInChecks.js): queue.mjs resolves the card's own setting, never one from the body.
+    if (b.action === 'setting') return run(['checks', 'turn-on', key], `checks turn-on ${key}`);
+    return no('action must be plan, dismiss, restore, setting, gates, packs, on or off');
   }
   // The "Helper agents" tab: a switch goes through `ravenseat helpers on|off <agent>` (queue.json, under the lock).
   // A custom helper that is not approved for its file as it is now is refused here (and again in queue.mjs).

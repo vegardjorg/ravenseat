@@ -215,6 +215,9 @@
 //         informational: receive runs the quick gates itself on the delivered tip (gates.mjs --evidence) and saves the
 //         task field gate_check (red: the blocker gate-red and a fix round). A batch push needs ravenseat gates --full run in the
 //         main checkout on the base tip with no uncommitted changes (ravenseat push-check reads that gate evidence).
+//         The secret scan (secretScan.atReceive): the track's own commits (<baseBranch>..<branch>) with the push check's
+//         patterns; a hit opens the blocker secret-found (file:line and rule, never the value) and merge refuses until a
+//         clean receive, `unblock` or `merge --allow-secret` (logged "secret-overridden"). An incomplete scan only warns.
 //         Adoption: the report is the newest in <folder>/<id>/ or a fix round <folder>/<id>-r<N>/, in the orchestrator's
 //         and the task's scratchpad; saves report_received.
 //         Done command (task field done_when, lib/doneCheck.js): run first in the worktree that has the branch checked
@@ -307,7 +310,7 @@
 // Fewer orchestrator turns: `fill` and `receive` end with "Start these in the SAME turn:" and one line per agent
 // (subagent_type + message); start them in one turn. `receive` warns when the track's answer exceeds the report cap (about 1,500 chars).
 //   node scripts/orchestrator/queue.mjs merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force]
-//        [--allow-guard] [--allow-partial] [--allow-focus] [--done-cwd <folder>] [--force-red-base] [--force-red-gate]
+//        [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--done-cwd <folder>] [--force-red-base] [--force-red-gate]
 //        [--resume]
 //        (one merge at a time per repo: the lock <dataFolder>/merge.lock with pid, host and start time; a held lock
 //         refuses with the holder, a stale one (the pid is gone, or older than 6 h) is taken over. A merge, rebase,
@@ -365,6 +368,7 @@
 //                                                                  planning to the queue, a proposal without --approved; sets it aside)
 //   node scripts/orchestrator/queue.mjs checks packs [--apply]      (review signal packs for the stack in the manifests; --apply writes
 //                                                                  review.packs in queue.config.json; lib/reviewPacks.js)
+//   node scripts/orchestrator/queue.mjs checks turn-on <key>        (a card for an opt-in check: its setting on; lib/optInChecks.js)
 //   node scripts/orchestrator/queue.mjs checks marker on|off        (the red dot on the Checks tab while a high suggestion is open)
 //   node scripts/orchestrator/queue.mjs checks on|off               (the opt-out: the Checks tab, the overview, the setup suggestions)
 //   node scripts/orchestrator/queue.mjs inspection [--json]         (the inspection queue: failures that repeat in the gates or CI become

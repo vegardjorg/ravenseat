@@ -123,6 +123,23 @@ and the PowerShell tool, through the hooks as Claude Code runs them.
 [`queueProposals`](../scripts/orchestrator/lib/__tests__/queueProposals.test.ts),
 [`queueBaseGate`](../scripts/orchestrator/__tests__/queueBaseGate.test.ts).
 
+### Can an approved command leak a key?
+
+It can, and Ravenseat cannot stop Claude Code from writing it: "Yes, and don't ask again" stores the whole command, so a
+token typed in it sits in clear text in `.claude/settings.local.json`, or in the tracked `.claude/settings.json`. What
+Ravenseat can do is find it, once you turn the check on (`ravenseat settings set secretScan.allowlist on`, or
+"Turn on" on the Checks tab). `ravenseat doctor` then reads the approved commands in both files, also in the agents'
+worktrees, and names the file and the index (never the key): FAIL when git tracks the file, WARN when it is only on
+disk. With `gitignoreCheck.enabled` on it also checks that your project's own `.gitignore`, not only your global one,
+ignores the personal settings and the queue's data, and with `secretScan.atReceive` on a key a track commits is found
+at `receive`, and the merge stops on it until the track takes it out. All three are off until you turn them on.
+Pass keys as environment variables instead of typing them in commands.
+
+**Verified by:** [`allowlistSecret-cli`](../scripts/orchestrator/__tests__/redteam/allowlistSecret-cli.test.ts),
+[`projectGitignore-cli`](../scripts/orchestrator/__tests__/redteam/projectGitignore-cli.test.ts),
+[`secretAtReceive-cli`](../scripts/orchestrator/__tests__/redteam/secretAtReceive-cli.test.ts),
+[`allowlistSecrets`](../scripts/orchestrator/lib/__tests__/allowlistSecrets.test.ts).
+
 ### Can two sessions, or two agents, trip over each other?
 
 Two sessions that start, fill, receive or merge the same task at the same moment start it once, merge it once and mark

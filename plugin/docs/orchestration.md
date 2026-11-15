@@ -857,6 +857,30 @@ larger than `secretScan.maxBytes`, a timeout or any error. The whole scan has 6 
 which would let the push through without a question. A first push (no remote ref) scans the branch minus what the remote
 has on other branches.
 `secretScan.enabled: false` turns it off. With the batch question, both are asked in one dialog.
+**The same scan at receive** (off by default: `secretScan.atReceive`). On, `receive` scans the track's own commits (`<baseBranch>..<branch>`) with the same patterns,
+exceptions and time limit, before anything is merged: once merged, a key is in the base branch's history, and the push
+check could only stop it from leaving the machine. A hit opens the blocker `secret-found` (file:line and the rule, never
+the value, also kept on the task as `secret_found`), and `merge` refuses while it is there. Every commit counts, so the
+fix round takes the key out of the branch history (it rewrites the commits that added it); the next clean receive closes
+the blocker. A false alarm: `merge --allow-secret`, which only the owner and the orchestrator may pass (the agent guard
+refuses it like `--allow-guard`), logged as `secret-overridden`. A scan that does not finish warns and blocks nothing.
+**Opt-in checks.** A new check comes off, so an update never adds a WARN or FAIL by itself: the scan at receive,
+`secretScan.allowlist` and `gitignoreCheck.enabled` below. Each is offered three quiet ways: `setup` prints one `TIP:`
+per check, once ever (`<dataFolder>/setup-tips.json`); the Checks tab has a card with "Turn on" (`ravenseat checks
+turn-on <card>`), which you may set aside for good; and `doctor` shows one INFO line naming the setting. A card is high,
+and lights the tab's red dot, while an important gap is there: a key in a tracked approved command,
+`.claude/settings.local.json` not ignored by the project's own rules, or a tracked file in the queue's data.
+**Keys in approved commands, and the project's own .gitignore.** "Yes, and don't ask again" in Claude Code stores the
+whole command in `permissions.allow`, so a key typed in it sits in clear text in `.claude/settings.local.json`, or in the
+tracked `.claude/settings.json`. With `secretScan.allowlist` on, `doctor` (row `allowlist`) runs every rule in `permissions.allow`, `ask` and `deny` of both
+files, in the main tree and in each agent worktree under `.claude/worktrees/`, through the same patterns: FAIL when git
+tracks the file (change the key, remove the rule; the history keeps it), WARN when it is only on disk (use an
+environment variable or a password manager). It names `<file>: permissions.allow[3]` and the rule id, never the rule's
+text. With `gitignoreCheck.enabled` on, the row `gitignore` checks that the project's own `.gitignore` holds what Ravenseat keeps local (the lines `setup`
+writes, the configured `dataFolder` and `timeLog`, `.claude/worktrees/`) with the global gitignore switched off: what only
+your global file ignores is "only ignored on your machine", since a teammate's clone or CI does not have it. A file git
+already tracks in the data folder, or a tracked `.claude/settings.local.json`, FAILs with `git rm --cached` as the fix.
+`setup` writes the configured `dataFolder` (and a `timeLog` outside it) to `.gitignore`, next to `scripts/.queue/`.
 `deployCommands` (empty by default) lists the project's deploy commands; any command that starts with one of them
 gets the confirmation dialog, from an agent or the main session. It is a reminder, not a wall: a list is never
 complete, so keep production credentials out of the shell Claude Code starts from.

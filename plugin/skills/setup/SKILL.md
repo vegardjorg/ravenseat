@@ -126,6 +126,13 @@ top three suggestions with their `why`, in plain words. Then ASK one question, w
 
 Never add more than the user picked, and do not list the whole catalog unless they ask.
 
+### Checks that are off (at most one question each, once)
+
+A new check comes off. For each `TIP:` line setup printed (setup prints each only once, ever), ask the user in one short
+line whether to turn it on, in plain words from the tip. Yes: run the `settings set ... on` command in the tip. No or no
+answer: change nothing and do not ask again; the Checks tab keeps a card with "Turn on" that they can set aside. No
+`TIP:` lines: skip this.
+
 ## 4. Bring in the user's own work
 
 ASK: "Do you want me to look through your own notes, TODOs and plans (for example `docs/`, `TODO.md`, `ROADMAP.md`,

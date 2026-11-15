@@ -10,6 +10,9 @@
 //   ravenseat checks packs [--apply]      the stack packs for the review signals (lib/reviewPacks.js): which stacks the
 //                                  manifests show and which packs are not on yet. --apply writes them to review.packs in
 //                                  queue.config.json (a project pack from docs/queue/review-packs/ also into review.signals).
+//   ravenseat checks turn-on <key>        a card with `action: setting`: turns its opt-in check on in queue.config.json
+//                                  (lib/optInChecks.js; only those keys, and never from a track worktree). The board's
+//                                  "Turn on" runs it.
 //   ravenseat checks marker on|off        the small red marker on the Checks tab when a high suggestion is open
 //   ravenseat checks on|off               the opt-out: the Checks tab, this overview and the setup suggestions. Never a guard.
 //
@@ -24,6 +27,8 @@ import { fileURLToPath } from 'node:url';
 import { a, CONFIG, CLI, die, edit, FILE, KK, LM, MAIN_TREE, read, require } from './context.mjs';
 import { addTask, ensureProject, PROJECT, readFacts } from './kickstart.mjs';
 import { guardsBoard } from './inspection.mjs';
+import { allowlistFacts, gitignoreFacts } from './doctorBaseline.mjs';
+import { trackBranchHere } from './settings.mjs';
 
 const SCAN = require('./lib/checksScan.js');
 const CATALOG = require('./lib/checksCatalog.js');
@@ -31,6 +36,7 @@ const GD = require('./lib/guidance.js');
 const KNOWN = require('./lib/knownBugGate.js');
 const RP = require('./lib/reviewPacks.js');
 const RS = require('./lib/reviewSignals.js');
+const OI = require('./lib/optInChecks.js');
 
 const BUILTIN = fileURLToPath(new URL('../checks-catalog', import.meta.url));
 const OWN = path.join(MAIN_TREE, 'docs', 'queue', 'checks');
@@ -46,6 +52,27 @@ function instructionsLarge() {
   const limits = IS.limitsOf(CONFIG);
   if (limits.mode === 'off') return false;
   return IS.assess(IS.measureDisk(MAIN_TREE, { nested: true }), limits).large;
+}
+
+/**
+ * The opt-in checks (lib/optInChecks.js) as facts: which are off, and the important gaps a quiet read finds while they
+ * are (cli/doctorBaseline.mjs, read only). An error leaves a gap unknown, never invented.
+ */
+function optInFacts(git) {
+  const off = OI.OPT_IN.filter((c) => !OI.isOn(CONFIG, c.key)).map((c) => c.key);
+  const out = { optInOff: off, allowlistTrackedHit: false, gitignoreGap: false };
+  if (!git) return out;
+  try {
+    if (off.includes('secretScan.allowlist')) out.allowlistTrackedHit = allowlistFacts().tracked.length > 0;
+  } catch {
+    // error-ignored: the card shows at its own priority
+  }
+  try {
+    if (off.includes('gitignoreCheck.enabled')) out.gitignoreGap = gitignoreFacts().important;
+  } catch {
+    // error-ignored: the card shows at its own priority
+  }
+  return out;
 }
 
 /** Everything the report needs, read fresh. */
@@ -69,7 +96,7 @@ function makeReport(queue) {
   const packs = packFacts({ exists, read: readFile, list });
   const found = SCAN.scan({ exists, read: readFile, list, gates: CONFIG.gates, checks: facts.checks });
   const report = CATALOG.buildReport({
-    facts: { ...facts, ...found, packs: packs.facts, instructionsLarge: instructionsLarge() },
+    facts: { ...facts, ...found, packs: packs.facts, instructionsLarge: instructionsLarge(), ...optInFacts(facts.git) },
     catalog: CATALOG.loadCatalog({ builtin: BUILTIN, own: OWN }),
     tasks: queue?.tasks ?? [],
     dismissed: queue?.checksPanel?.dismissed ?? [],
@@ -177,6 +204,7 @@ ${s.ask}
 
 ${CLI} checks dismiss ${s.key} sets it aside if you do it your own way.`);
   else if (s.action === 'packs') console.log(`${s.detail ?? ''}\n\nThis needs no agent: ${CLI} checks packs shows them, ${CLI} checks packs --apply turns them on.`);
+  else if (s.action === 'setting') console.log(`This needs no agent: ${CLI} checks turn-on ${s.key} (sets ${s.setting} on). ${CLI} checks dismiss ${s.key} sets it aside.`);
   else if (s.action) console.log(`This needs no agent: ${CLI} kickstart gates --apply.`);
   else console.log(`Investigate\n${s.investigate}\n\nPlan and build\n${s.plan}\n\nAbout ${s.contentMin} min of agent work for the investigation.`);
 }
@@ -190,6 +218,7 @@ function plan(key) {
 
 ${s.ask}`);
   if (s.action === 'packs') die(`${key} needs no agent. Run: ${CLI} checks packs --apply`);
+  if (s.action === 'setting') die(`${key} needs no agent. Run: ${CLI} checks turn-on ${key}`);
   if (s.action) die(`${key} needs no agent. Run: ${CLI} kickstart gates --apply`);
   if (s.state === 'queued' || s.state === 'planned') {
     console.log(`Not added: ${s.taskId} is already there.`);
@@ -284,6 +313,35 @@ function packs() {
   console.log(`Written to queue.config.json: review.packs ${review.packs.join(', ')}. The next review reads them. Off again: remove the ids from review.packs.`);
 }
 
+/**
+ * Turns an opt-in check on: the card's setting, written to queue.config.json like `settings set <key> on`. Only a key in
+ * lib/optInChecks.js, so a project's own card cannot switch anything else, and turning on never weakens a guard.
+ * Refused from a track worktree: an agent never changes the queue's checks.
+ */
+function turnOn(key) {
+  const track = trackBranchHere();
+  if (track) die(`${CLI} checks turn-on cannot be run from inside a track worktree (branch ${track}); ask the owner. Nothing was changed.`);
+  const s = suggestion(makeReport(queueNow()), key);
+  const c = s.action === 'setting' ? OI.byKey(s.setting) : null;
+  if (!c) die(`${key} has no setting to turn on. ${CLI} checks show ${key} says what it needs.`);
+  const SV = require('./lib/settingsView.js');
+  const file = KK.configFile();
+  let text = null;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    if (e?.code !== 'ENOENT') die(`checks turn-on: could not read ${file} (${e.message}). Nothing was changed.`);
+  }
+  let next;
+  try {
+    next = SV.setJsonText(text, SV.pathOf(c.key), true);
+  } catch (e) {
+    die(`checks turn-on: ${file} is not a JSON object (${e.message}). Nothing was changed.`);
+  }
+  if (next !== text) fs.writeFileSync(file, next);
+  console.log(`${c.key} = on (queue.config.json). The card is done. Off again: ${CLI} settings set ${c.key} off.`);
+}
+
 function setMarker(on) {
   needsQueue();
   edit((queue) => {
@@ -303,6 +361,7 @@ export function cmdChecks() {
   if (sub === 'show') return show(a[2]);
   if (sub === 'plan') return plan(a[2]);
   if (sub === 'packs') return packs();
+  if (sub === 'turn-on') return turnOn(a[2]);
   if (sub === 'marker') {
     if (a[2] !== 'on' && a[2] !== 'off') return die(`Use: ${CLI} checks marker on|off`);
     return setMarker(a[2] === 'on');
@@ -314,7 +373,7 @@ export function cmdChecks() {
     console.log(sub === 'dismiss' ? `${a[2]} is set aside. ${CLI} checks restore ${a[2]} brings it back.` : `${a[2]} is back among the suggestions.`);
     return undefined;
   }
-  if (sub && sub !== '--json') return die(`Use: ${CLI} checks [--json] | show <key> | plan <key> [--approved] | dismiss <key> | restore <key> | packs [--apply] | marker on|off | on | off`);
+  if (sub && sub !== '--json') return die(`Use: ${CLI} checks [--json] | show <key> | plan <key> [--approved] | dismiss <key> | restore <key> | packs [--apply] | turn-on <key> | marker on|off | on | off`);
   const queue = queueNow();
   if (queue && !GD.checksPanelOn(queue)) {
     if (a.includes('--json')) console.log(JSON.stringify({ off: true }));

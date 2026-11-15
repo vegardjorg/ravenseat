@@ -14,7 +14,8 @@
 //      the project's files show (fillConfigFromProject).
 //   2. <plugin>/docs/*.md -> docs/queue/ (the mission template there is the project's own copy and may be edited).
 //   3. CLAUDE.queue.md (the queue's rules for Claude), when missing.
-//   4. .gitignore: the data folder and the agents' worktrees.
+//   4. .gitignore: the data folder (the configured dataFolder and timeLog too), the agents' worktrees, the personal
+//      settings and local secret files (requiredIgnores).
 //   5. --claude-md: adds the line @CLAUDE.queue.md to CLAUDE.md (creates the file when missing).
 //   6. --settings: adds the recommended settings to .claude/settings.json (1 h prompt cache for subagents, compaction
 //      at 300k, worktrees from HEAD, the status line statusline.mjs). A plugin cannot set these itself; without the flag
@@ -25,6 +26,9 @@
 //   8. --ci: writes the GitHub Actions template <plugin>/templates/ci-github.yml to .github/workflows/ravenseat-gates.yml (it
 //      runs the project's own gates.quick, with baseBranch filled in). An existing file is NEVER replaced, also not
 //      with --overwrite. Opt-in only: /ravenseat:setup asks first.
+//   9. One TIP line per opt-in check that is off (lib/optInChecks.js: keys in approved commands, the project's own
+//      .gitignore, the secret scan at receive), each only once: <dataFolder>/setup-tips.json keeps the keys tipped.
+//      /ravenseat:setup asks the user, who may decline; nothing is turned on here.
 //   Hooks (install.mjs only, a plugin brings hooks/hooks.json): every hook in settings.queue.json is added next to the
 //   project's own, also hooks added in a later version (e.g. hook-track-end.mjs on SubagentStop). The two files must
 //   list the same scripts (__tests__/setup.test.ts checks it).
@@ -58,6 +62,39 @@ export const GITIGNORE_LINES = [
 ];
 
 /**
+ * A project-relative path in gitignore form (forward slashes, no leading ./ or trailing /), or null when it is empty,
+ * absolute or outside the project (then the project's .gitignore has no say over it).
+ * @param {unknown} p
+ */
+function projectPath(p) {
+  if (typeof p !== 'string' || !p.trim()) return null;
+  const s = p.trim().replace(/\\/g, '/');
+  if (s.startsWith('/') || /^[A-Za-z]:/.test(s)) return null;
+  const n = path.posix.normalize(s).replace(/^(\.\/)+/, '').replace(/\/+$/, '');
+  if (!n || n === '.' || n === '..' || n.startsWith('../')) return null;
+  return n;
+}
+
+/**
+ * The lines the project's .gitignore must hold: GITIGNORE_LINES, plus the configured dataFolder (as `<folder>/`) and the
+ * timeLog when no folder line covers it. WHY: dataFolder and timeLog can be moved in queue.config.json, and the fixed
+ * `scripts/.queue/` line then ignores nothing; the queue, the time log and the transcripts' extracts would be one
+ * `git add .` from the repo. The fixed line stays too, so a later move back is covered. Setup writes these lines and
+ * `ravenseat doctor` (cli/doctorBaseline.mjs checkGitignore) checks them against the project's own rules.
+ * @param {{ dataFolder?: string, timeLog?: string }} [cfg]  the project's configuration (lib/queueConfig.js config())
+ * @returns {string[]}
+ */
+export function requiredIgnores(cfg = {}) {
+  const lines = [...GITIGNORE_LINES];
+  const folders = () => lines.filter((l) => l.endsWith('/'));
+  const data = projectPath(cfg?.dataFolder);
+  if (data && !lines.includes(`${data}/`)) lines.push(`${data}/`);
+  const log = projectPath(cfg?.timeLog);
+  if (log && !lines.includes(log) && !folders().some((f) => log.startsWith(f))) lines.push(log);
+  return lines;
+}
+
+/**
  * Sets up `target`. Returns a log { copied, replaced, skipped, notes } and writes nothing when `dry`.
  * @param {object} o
  * @param {string} o.target                 the project's main tree
@@ -71,7 +108,7 @@ export const GITIGNORE_LINES = [
  * @param {(text: string) => string} [o.transformMd]  rewrites the Markdown on the way (install.mjs: ravenseat -> node form)
  */
 export function setupProject(o) {
-  const log = { copied: [], replaced: [], same: [], skipped: [], notes: [], updated: [], merged: [], ownEdits: [], conflicts: [], noBase: [] };
+  const log = { copied: [], replaced: [], same: [], skipped: [], notes: [], updated: [], merged: [], ownEdits: [], conflicts: [], noBase: [], tips: [] };
   const t = path.resolve(o.target);
   const rel = (p) => path.relative(t, p).split(path.sep).join('/');
   const write = (to, text) => {
@@ -151,10 +188,10 @@ export function setupProject(o) {
     copy(path.join(PLUGIN_ROOT, 'docs', f), path.join(t, 'docs', 'queue', f));
   copy(path.join(PLUGIN_ROOT, 'CLAUDE.queue.md'), path.join(t, 'CLAUDE.queue.md'));
 
-  // 4: .gitignore
+  // 4: .gitignore: the fixed lines and the configured dataFolder and timeLog (requiredIgnores).
   const gitignorePath = path.join(t, '.gitignore');
   const gitignore = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf8') : '';
-  const missing = GITIGNORE_LINES.filter((l) => !gitignore.split(/\r?\n/).some((x) => x.trim() === l));
+  const missing = requiredIgnores(require('./lib/queueConfig.js').config({ root: t })).filter((l) => !gitignore.split(/\r?\n/).some((x) => x.trim() === l));
   if (missing.length) {
     const pre = gitignore && !gitignore.endsWith('\n') ? '\n' : '';
     if (!o.dry)
@@ -185,7 +222,43 @@ export function setupProject(o) {
 
   // 8: --ci, the GitHub Actions template. Never over an existing workflow.
   if (o.ci) log.notes.push(writeCiTemplate(t, { dry: o.dry }));
+
+  // 9: one tip per opt-in check that is off (lib/optInChecks.js), each only once: the keys tipped are kept in
+  // setup-tips.json in the queue's data folder, so a second setup or --update does not ask again.
+  log.tips.push(...setupTips(t, { dry: o.dry }));
   return log;
+}
+
+/** The file that holds which opt-in checks setup has tipped about (in the queue's data folder, ignored by git). */
+export function setupTipsFile(target) {
+  return path.join(path.dirname(setupRecordFile(target)), 'setup-tips.json');
+}
+
+/**
+ * The tips for the opt-in checks that are off and not tipped about yet, and records them (unless dry). WHY once: the
+ * owner decided a new check is offered, never nagged; declining is an answer, and the Checks tab keeps the card.
+ * An unreadable record counts as empty; a record that cannot be written gives the tips anyway.
+ */
+export function setupTips(target, o = {}) {
+  const OI = require('./lib/optInChecks.js');
+  const file = setupTipsFile(target);
+  let asked = [];
+  try {
+    const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (Array.isArray(rec?.asked)) asked = rec.asked.filter((k) => typeof k === 'string');
+  } catch {
+    // error-ignored: no record yet, so nothing was asked
+  }
+  const give = OI.tipsToGive(require('./lib/queueConfig.js').config({ root: target }), asked);
+  if (give.length && !o.dry) {
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `${JSON.stringify({ asked: [...asked, ...give.map((c) => c.key)] }, null, 2)}\n`);
+    } catch {
+      // error-ignored: the tip is still printed; it may come once more on the next setup
+    }
+  }
+  return give.map((c) => OI.tipLine(c));
 }
 
 /**
@@ -467,6 +540,7 @@ if (isMain) {
   if (log.noBase.length)
     console.log(`  not merged (no record of what setup wrote; the copy is older than that record): ${log.noBase.join(', ')}. Compare them with the plugin, or replace them with --overwrite; after that --update works for them.`);
   for (const n of log.notes) console.log(`  ${n}`);
+  for (const n of log.tips) console.log(`  ${n}`);
   // An estimate from cores and memory, only said here; setup never sets maxConcurrent.
   const MA = require('./lib/machineAdvice.js');
   console.log(`  ${MA.setupLine(MA.readMachine())}`);

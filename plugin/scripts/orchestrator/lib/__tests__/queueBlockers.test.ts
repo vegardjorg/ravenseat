@@ -56,6 +56,7 @@ describe('blocker reasons (pure)', () => {
       'dependency',
       'no-agent',
       'silent',
+      'secret-found',
       'other',
     ]);
   });

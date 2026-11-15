@@ -344,3 +344,136 @@ describe('ravenseat doctor: the instruction size rows', () => {
     expect(bad[0].message).toMatch(/instructionSize\.maxLines must be a whole number > 0/);
   }, 60_000);
 });
+
+// H1 and H2 of the plan for secrets and gitignore (2026-11-15): a key in an approved command (lib/allowlistSecrets.js),
+// and the project's own .gitignore holding what Ravenseat keeps local, with the user's global gitignore switched off.
+// GIT_CONFIG_GLOBAL points at a file of the test's own, so the machine's real global gitignore never counts.
+describe('ravenseat doctor: approved commands and the project gitignore', () => {
+  const GH = ['gh', 'p_', 'x'.repeat(36)].join('');
+  const allow = (rules: string[]) => JSON.stringify({ permissions: { allow: rules } }, null, 2);
+  /** A global git config of the test's own, optionally with a global excludes file holding `globalIgnores`. */
+  function globalConfig(globalIgnores: string[] = []) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-baseline-global-'));
+    temporary.push(dir);
+    const excludes = path.join(dir, 'ignore');
+    fs.writeFileSync(excludes, globalIgnores.join('\n'));
+    const cfg = path.join(dir, 'gitconfig');
+    fs.writeFileSync(cfg, `[core]\n\texcludesFile = ${excludes.replace(/\\/g, '/')}\n`);
+    return { GIT_CONFIG_GLOBAL: cfg };
+  }
+  // Both rows are opt-in (lib/optInChecks.js): these tests turn them on; the last test is the default, off.
+  const ON = { secretScan: { allowlist: true }, gitignoreCheck: { enabled: true } };
+  const SETUP_IGNORES = 'scripts/.queue/\n.claude/worktrees/\n.claude/settings.local.json\n.env\n.env.*\n!.env.example\n';
+
+  it('allowlist: a key in a tracked settings.json FAILs by file and index, never the rule text or the value', () => {
+    const p = project({
+      config: ON,
+      files: { '.gitignore': SETUP_IGNORES, '.claude/settings.json': allow(['Bash(npm test)', `Bash(curl -H "Authorization: token ${GH}" https://api.example.com)`]) },
+      env: globalConfig(),
+    });
+    const r = p.run();
+    expect(r.code).toBe(1);
+    const a = r.checks.filter((c) => c.name === 'allowlist');
+    expect(a).toHaveLength(1);
+    expect(a[0].status).toBe('FAIL');
+    expect(a[0].message).toContain('.claude/settings.json: permissions.allow[1]');
+    expect(a[0].fix).toMatch(/change the key/i);
+    expect(a[0].fix).toMatch(/remove the rule/i);
+    expect(a[0].fix).toMatch(/history/i);
+    const shown = JSON.stringify(r.checks) + p.text();
+    expect(shown).not.toContain(GH);
+    expect(shown).not.toContain('curl -H');
+  }, 60_000);
+
+  it('allowlist: a key in an ignored settings.local.json (also in an agent worktree) WARNs: clear text on disk', () => {
+    const p = project({
+      config: ON,
+      files: { '.gitignore': SETUP_IGNORES },
+      loose: {
+        '.claude/settings.local.json': allow([`Bash(gh api -H "token ${GH}")`]),
+        '.claude/worktrees/agent-A/.claude/settings.local.json': allow(['Bash(ls)', `Bash(echo ${GH})`]),
+      },
+      env: globalConfig(),
+    });
+    const r = p.run();
+    const a = r.checks.filter((c) => c.name === 'allowlist');
+    expect(a.map((c) => c.status)).toEqual(['WARN']);
+    expect(a[0].message).toContain('.claude/settings.local.json: permissions.allow[0]');
+    expect(a[0].message).toContain('.claude/worktrees/agent-A/.claude/settings.local.json: permissions.allow[1]');
+    expect(a[0].fix).toMatch(/environment variable/);
+    expect(a[0].fix).toMatch(/password manager/);
+    expect(JSON.stringify(r.checks)).not.toContain(GH);
+  }, 60_000);
+
+  it('allowlist: no key in any approved command is one OK line', () => {
+    const p = project({ config: ON, files: { '.gitignore': SETUP_IGNORES, '.claude/settings.json': allow(['Bash(npm test)']) }, env: globalConfig() });
+    expect(p.lines('allowlist')).toEqual([expect.objectContaining({ status: 'OK' })]);
+  }, 60_000);
+
+  it('gitignore: what only the global gitignore holds WARNs as machine-only; what nothing holds WARNs as not ignored', () => {
+    const p = project({ config: ON, files: { '.gitignore': '.env\n' }, env: globalConfig(['.claude/settings.local.json', '.claude/worktrees/']) });
+    const g = p.lines('gitignore');
+    expect(g.map((c) => c.status)).toEqual(['WARN', 'WARN']);
+    expect(g[0].message).toMatch(/only ignored on your machine \(global gitignore\)/);
+    expect(g[0].message).toContain('.claude/settings.local.json');
+    expect(g[0].message).toContain('.claude/worktrees/');
+    expect(g[1].message).toMatch(/not ignored/);
+    expect(g[1].message).toContain('scripts/.queue/');
+    expect(g[1].message).not.toContain('.claude/settings.local.json');
+    for (const c of g) expect(c.fix).toMatch(/setup/);
+    expect(g[1].fix).toContain('scripts/.queue/');
+  }, 60_000);
+
+  it('gitignore: the configured dataFolder and a timeLog outside it are required too; all there is OK', () => {
+    const config = { ...ON, dataFolder: 'queue-data', timeLog: 'logs/times.jsonl' };
+    let p = project({ config, files: { '.gitignore': SETUP_IGNORES }, env: globalConfig() });
+    let g = p.lines('gitignore');
+    expect(g.map((c) => c.status)).toEqual(['WARN']);
+    expect(g[0].message).toContain('queue-data/');
+    expect(g[0].message).toContain('logs/times.jsonl');
+    p = project({ config, files: { '.gitignore': `${SETUP_IGNORES}queue-data/\nlogs/times.jsonl\n` }, env: globalConfig() });
+    g = p.lines('gitignore');
+    expect(g).toEqual([expect.objectContaining({ status: 'OK' })]);
+  }, 60_000);
+
+  it('gitignore: a tracked file in the data folder or a tracked settings.local.json FAILs with git rm --cached', () => {
+    const p = project({
+      config: ON,
+      files: { '.gitignore': SETUP_IGNORES, 'scripts/.queue/queue.json': '{}', '.claude/settings.local.json': allow(['Bash(ls)']) },
+      env: globalConfig(),
+    });
+    const r = p.run();
+    expect(r.code).toBe(1);
+    const g = r.checks.filter((c) => c.name === 'gitignore');
+    expect(g[0].status).toBe('FAIL');
+    expect(g[0].message).toContain('scripts/.queue/queue.json');
+    expect(g[0].message).toContain('.claude/settings.local.json');
+    expect(g[0].fix).toMatch(/git rm --cached/);
+  }, 60_000);
+
+  it('off by default: one INFO line each, naming the setting; an important gap is said, never what', () => {
+    let p = project({ files: { '.gitignore': SETUP_IGNORES, '.claude/settings.json': allow(['Bash(npm test)']) }, env: globalConfig() });
+    let r = p.run();
+    const a = r.checks.filter((c) => c.name === 'allowlist');
+    const g = r.checks.filter((c) => c.name === 'gitignore');
+    expect(a.map((c) => c.status)).toEqual(['INFO']);
+    expect(g.map((c) => c.status)).toEqual(['INFO']);
+    expect(a[0].message).toContain('settings set secretScan.allowlist on');
+    expect(g[0].message).toContain('settings set gitignoreCheck.enabled on');
+    expect(a[0].message).not.toMatch(/found something/);
+    p = project({
+      files: { '.gitignore': '.env\n', 'scripts/.queue/queue.json': '{}', '.claude/settings.json': allow([`Bash(curl -H "token ${GH}")`]) },
+      env: globalConfig(),
+    });
+    r = p.run();
+    for (const name of ['allowlist', 'gitignore']) {
+      const rows = r.checks.filter((c) => c.name === name);
+      expect(rows.map((c) => c.status)).toEqual(['INFO']);
+      expect(rows[0].message).toMatch(/found something to look at/);
+    }
+    const shown = JSON.stringify(r.checks) + p.text();
+    expect(shown).not.toContain(GH);
+    expect(shown).not.toContain('permissions.allow[0]');
+    expect(shown).not.toContain('scripts/.queue/queue.json');
+  }, 60_000);
+});

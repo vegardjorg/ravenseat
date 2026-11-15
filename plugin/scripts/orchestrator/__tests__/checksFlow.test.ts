@@ -141,6 +141,21 @@ describe('ravenseat checks plan', () => {
     expect(r.code).toBe(1);
     expect(r.all).toContain('kickstart gates --apply');
   });
+
+  it('an opt-in check that is off has a card; turn-on writes its setting, and the card goes (lib/optInChecks.js)', () => {
+    const p = project();
+    expect(p.keys()).toEqual(expect.arrayContaining(['allowlist-scan', 'gitignore-own-rules', 'secret-scan-receive']));
+    expect(p.run('checks', 'plan', 'secret-scan-receive').all).toContain('checks turn-on secret-scan-receive');
+    // Only a card with action setting turns anything on.
+    expect(p.run('checks', 'turn-on', 'first-test').code).toBe(1);
+    const r = p.run('checks', 'turn-on', 'secret-scan-receive');
+    expect(r.code, r.all).toBe(0);
+    const config = JSON.parse(fs.readFileSync(path.join(p.folder, 'queue.config.json'), 'utf8'));
+    expect(config.secretScan).toEqual({ atReceive: true });
+    expect(config.baseBranch).toBe('main');
+    expect(p.keys()).not.toContain('secret-scan-receive');
+    expect(p.keys()).toContain('allowlist-scan');
+  });
 });
 
 describe('ravenseat checks dismiss and restore', () => {

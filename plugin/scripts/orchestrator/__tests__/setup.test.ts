@@ -229,6 +229,34 @@ describe('setup.mjs records the plugin version it set up (for the setup notice o
     expect(readFileSync(join(target, '.gitignore'), 'utf8')).toBe(first);
   });
 
+  it('.gitignore: a configured dataFolder, and a timeLog outside it, are added too (not only scripts/.queue/)', () => {
+    execFileSync('git', ['init', '-q'], { cwd: target });
+    writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ dataFolder: 'queue-data', timeLog: 'logs/times.jsonl' }));
+    const log = setupProject({ target });
+    const lines = readFileSync(join(target, '.gitignore'), 'utf8').split(/\r?\n/);
+    expect(lines).toContain('queue-data/');
+    expect(lines).toContain('logs/times.jsonl');
+    expect(lines).toContain('scripts/.queue/');
+    expect(log.notes.join(' | ')).toMatch(/\.gitignore: added .*queue-data\//);
+    // A timeLog inside the data folder needs no line of its own, and a second run adds nothing.
+    writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ dataFolder: 'queue-data', timeLog: 'queue-data/t.jsonl' }));
+    const before = readFileSync(join(target, '.gitignore'), 'utf8');
+    setupProject({ target });
+    expect(readFileSync(join(target, '.gitignore'), 'utf8')).toBe(before);
+  });
+
+  it('tips about each opt-in check that is off, once: a second setup gives none, and one turned on is never tipped', () => {
+    execFileSync('git', ['init', '-q'], { cwd: target });
+    writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ gitignoreCheck: { enabled: true } }));
+    expect(setupProject({ target, dry: true }).tips).toHaveLength(2);
+    const first = setupProject({ target });
+    expect(first.tips).toHaveLength(2);
+    expect(first.tips.join('\n')).toMatch(/settings set secretScan\.allowlist on/);
+    expect(first.tips.join('\n')).toMatch(/settings set secretScan\.atReceive on/);
+    expect(first.tips.join('\n')).not.toMatch(/gitignoreCheck/);
+    expect(setupProject({ target }).tips).toEqual([]);
+  });
+
   it('nothing without --settings, with --dry, or in a vendored install (hooks)', () => {
     setupProject({ target });
     setupProject({ target, settings: true, dry: true });

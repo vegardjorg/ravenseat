@@ -25,11 +25,13 @@
 // The question names file:line, the rule and the commit only, NEVER the matched text (the dialog and the transcript
 // would otherwise copy the secret around).
 //
-// Config: secretScan { enabled, maxBytes, timeoutMs } in queue.config.json (lib/queueConfig.js).
+// Config: secretScan { enabled, maxBytes, timeoutMs, atReceive, allowlist } in queue.config.json (lib/queueConfig.js);
+// atReceive and allowlist are off by default (lib/optInChecks.js).
 // QUEUE_SECRET_SCANNER=builtin skips gitleaks (tests).
 //
-// Used by: hook-push-guard.mjs (secretQuestion -> scanPush). scanRange takes any from..to range; today only scanPush
-// calls it (a scan at receive is planned, not wired). Tested in: lib/__tests__/secretScan.test.ts.
+// Used by: hook-push-guard.mjs (secretQuestion -> scanPush), `ravenseat receive` (scanRange on the track's own commits,
+// <baseBranch>..<branch>; cli/merge.mjs receiveSecretScan, secretScan.atReceive) and the doctor row for approved commands
+// (matchLine; lib/allowlistSecrets.js). Tested in: lib/__tests__/secretScan.test.ts.
 // =============================================================
 
 const { spawnSync } = require('node:child_process');
@@ -184,27 +186,33 @@ function addedLines(diff) {
 function scanLines(lines) {
   const hits = [];
   for (const { file, line, text, commit } of lines) {
-    if (text.length > 4000) continue; // a minified bundle or a data blob: not a place a key is typed in
-    const hit = (rule) => hits.push(commit ? { file, line, rule, commit } : { file, line, rule });
-    const p = PATTERNS.find((x) => x.re.test(text));
-    if (p) {
-      hit(p.id);
-      continue;
-    }
-    if (isQuietFile(file)) continue;
-    if (uriSecret(text)) {
-      hit('uri-credentials');
-      continue;
-    }
-    if (isEnvFile(file) && envValue(text)) {
-      hit('env-file');
-      continue;
-    }
-    const m = GENERIC.exec(text);
-    const v = m?.[1] ?? '';
-    if (m && !PLACEHOLDER.test(v) && /\d/.test(v) && /[A-Za-z]/.test(v)) hit('generic-secret');
+    const rule = matchLine(text, file);
+    if (rule) hits.push(commit ? { file, line, rule, commit } : { file, line, rule });
   }
   return hits;
+}
+
+/**
+ * The rule one line of text hits, or null: the provider formats first (in any file), then, outside test, fixture,
+ * example and docs files, the URI, .env and generic rules. The one place the rules are applied, so the push check, the
+ * scan at receive and the doctor row for approved commands (lib/allowlistSecrets.js) judge a line the same way.
+ * Returns the rule's id only, never the matched text.
+ * @param {string} text  the line
+ * @param {string} [file]  the file it is in (the context rules depend on it)
+ * @returns {string|null}
+ */
+function matchLine(text, file = '') {
+  const s = String(text ?? '');
+  if (s.length > 4000) return null; // a minified bundle or a data blob: not a place a key is typed in
+  const p = PATTERNS.find((x) => x.re.test(s));
+  if (p) return p.id;
+  if (isQuietFile(file)) return null;
+  if (uriSecret(s)) return 'uri-credentials';
+  if (isEnvFile(file) && envValue(s)) return 'env-file';
+  const m = GENERIC.exec(s);
+  const v = m?.[1] ?? '';
+  if (m && !PLACEHOLDER.test(v) && /\d/.test(v) && /[A-Za-z]/.test(v)) return 'generic-secret';
+  return null;
 }
 
 /**
@@ -337,4 +345,4 @@ function question(result) {
   );
 }
 
-module.exports = { DEADLINE_MS, PATTERNS, addedLines, scanLines, isQuietFile, isEnvFile, scanPush, scanRange, question };
+module.exports = { DEADLINE_MS, PATTERNS, addedLines, scanLines, matchLine, isQuietFile, isEnvFile, scanPush, scanRange, question };

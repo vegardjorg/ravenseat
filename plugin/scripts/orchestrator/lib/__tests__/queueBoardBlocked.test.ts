@@ -150,7 +150,7 @@ describe('the Blocked column, switched on', () => {
   });
 
   it('every stuck code goes to Blocked, the others do not', () => {
-    const stuck = ['owner-question', 'merge-conflict', 'merge-guard', 'merge-stopped', 'gate-red', 'silent', 'no-agent', 'context', 'quota', 'other'];
+    const stuck = ['owner-question', 'merge-conflict', 'merge-guard', 'merge-stopped', 'gate-red', 'silent', 'no-agent', 'context', 'quota', 'secret-found', 'other'];
     const all = L.BLOCK_CODES.map((b: any) => b.code);
     const q = makeQueue(all.map((code: string, i: number) => task(`EX-${i + 1}`, 'waiting', { blocks: [block(code, 5)] })));
     const b = T.board(q, { now: NOW, blockedColumn: true });

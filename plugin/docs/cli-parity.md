@@ -47,7 +47,7 @@ commands cover them.
 | Board action | Endpoint | Claude Code |
 | --- | --- | --- |
 | Guidance, guided or quiet | `/api/guidance` | `ravenseat guidance guided|quiet` (same command) |
-| Checks tab: add an investigation, set aside, bring back, turn on the stack packs, tab on or off | `/api/checks` | `ravenseat checks plan <key> --approved`, `checks dismiss|restore <key>`, `checks packs --apply`, `checks on|off` (same commands); use as gates: `ravenseat kickstart gates --apply` |
+| Checks tab: add an investigation, set aside, bring back, turn on the stack packs or an opt-in check, tab on or off | `/api/checks` | `ravenseat checks plan <key> --approved`, `checks dismiss|restore <key>`, `checks packs --apply`, `checks turn-on <key>`, `checks on|off` (same commands); use as gates: `ravenseat kickstart gates --apply` |
 | The red dot on the Checks tab | `/api/setting` `checksPanel.marker` | `ravenseat checks marker on|off` |
 | Helper agents on or off | `/api/helper` | `ravenseat helpers on|off <agent>` (same command) |
 | Add a custom helper | `/api/helper-add` | `ravenseat helpers add <file.md>` (same command) |

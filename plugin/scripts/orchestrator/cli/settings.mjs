@@ -32,8 +32,8 @@ const PR = require('./lib/queueProposals.js');
 const USAGE = `${CLI} settings [<category>] [--advanced] [--all] [--changed] [--json] | ${CLI} settings set <key> <value> [--i-understand --by owner]`;
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** The track branch the cwd is on, or null (the same question cli/surface.mjs and cli/unlock.mjs ask). */
-function trackBranchHere() {
+/** The track branch the cwd is on, or null (the same question cli/surface.mjs and cli/unlock.mjs ask; also cli/checks.mjs turn-on). */
+export function trackBranchHere() {
   try {
     const branch = execFileSync('git', ['-C', process.cwd(), 'rev-parse', '--abbrev-ref', 'HEAD'], {
       encoding: 'utf8',

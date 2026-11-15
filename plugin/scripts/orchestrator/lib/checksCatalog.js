@@ -6,12 +6,16 @@
 //   - a new file adds a suggestion, a file with the same name replaces it, a file with `off: true` removes it;
 //   - a category with a new key is added, the same key replaces it, `"off": true` removes it and its suggestions.
 //
-// A template: a header (title, category, priority, when, why, content_min, also_task, action) and two sections,
+// A template: a header (title, category, priority, when, why, content_min, also_task, action, setting, important_when)
+// and two sections,
 // "## Investigate" and "## Plan and build". The sections become the mission of the investigation task.
 // Three kinds need no agent: `action: gates` (ravenseat kickstart gates --apply), `action: packs` (ravenseat checks packs
 // --apply: the stack packs for the review signals, lib/reviewPacks.js) and `action: ask`, whose one section
 // "## Ask Claude" is the text the owner gives Claude in their own session. `ask` is for a step a queue agent cannot take,
-// such as the first commit: an agent's worktree is made from a commit.
+// such as the first commit: an agent's worktree is made from a commit. `action: setting` (with `setting: <key>`) turns an
+// opt-in check on (lib/optInChecks.js, `ravenseat checks turn-on <key>`); its `when` is usually `off:<key>`.
+// `important_when` raises the priority to high while its conditions hold, so an important gap lights the red marker
+// until it is fixed or the card is set aside (a card set aside never comes back by itself).
 //
 //   parseTemplate(text, key)      one file as an object, with errors in words
 //   mergeCatalog(builtin, own)    the project's files over the plugin's
@@ -28,7 +32,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const PRIORITIES = ['high', 'medium', 'low'];
-const ACTIONS = ['gates', 'ask', 'packs'];
+const ACTIONS = ['gates', 'ask', 'packs', 'setting'];
 const REPORT_VERSION = 1;
 
 const anyKind = (arg, test) => arg.split('|').some((k) => test(k));
@@ -54,6 +58,9 @@ const CONDITIONS = {
   // Stack packs (lib/reviewPacks.js): a pack for the project's stack is not on in review.packs yet, or a known stack has none.
   'packs-missing': (f) => (f.packs?.missing?.length ?? 0) > 0,
   'stack-unpacked': (f) => (f.packs?.unpacked?.length ?? 0) > 0,
+  // The important gaps of the opt-in checks (cli/doctorBaseline.mjs allowlistFacts, gitignoreFacts), read while off.
+  'allowlist-tracked-hit': (f) => f.allowlistTrackedHit === true,
+  'gitignore-gap': (f) => f.gitignoreGap === true,
 };
 
 /** The line a suggestion adds from the facts, so the card names the stacks. Null when it has none. */
@@ -71,6 +78,8 @@ const KIND_CONDITIONS = {
   missing: (f, arg) => anyKind(arg, (k) => placesOf(f, k).size === 0),
   found: (f, arg) => anyKind(arg, (k) => placesOf(f, k).size > 0),
   'not-in-ci': (f, arg) => anyKind(arg, (k) => placesOf(f, k).size > 0 && !placesOf(f, k).has('ci')),
+  // An opt-in check that is off (facts.optInOff: the keys, lib/optInChecks.js). Unknown facts: not off.
+  off: (f, arg) => anyKind(arg, (k) => (f.optInOff ?? []).includes(k)),
 };
 
 const conditionsOf = (when) => String(when ?? '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -123,6 +132,8 @@ function parseTemplate(text, key) {
     contentMin: Number(head.content_min) > 0 ? Number(head.content_min) : 60,
     alsoTask: head.also_task || null,
     action: head.action || null,
+    setting: head.setting || null,
+    importantWhen: head.important_when || '',
     ask: (sections['ask claude'] ?? '').trim(),
     investigate: (sections.investigate ?? '').trim(),
     plan: (sections['plan and build'] ?? '').trim(),
@@ -134,6 +145,8 @@ function parseTemplate(text, key) {
   if (out.action && !ACTIONS.includes(out.action)) out.errors.push(`${key}: action must be ${ACTIONS.join(' or ')}`);
   // A suggestion with its own action needs no agent, so it has no mission to fill. `ask` needs the text to give Claude.
   if (out.action === 'ask' && !out.ask) out.errors.push(`${key}: action ask needs the section "## Ask Claude"`);
+  if (out.action === 'setting' && !out.setting) out.errors.push(`${key}: action setting needs "setting: <key>"`);
+  for (const c of conditionsOf(out.importantWhen)) if (!knownCondition(c)) out.errors.push(`${key}: unknown condition "${c}" in important_when`);
   if (!out.action && (!out.investigate || !out.plan)) out.errors.push(`${key}: needs the sections "## Investigate" and "## Plan and build"`);
   return out;
 }
@@ -208,6 +221,8 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
   const order = new Map(catalog.categories.map((c, i) => [c.key, i]));
   const suggestions = catalog.templates
     .filter((x) => holds(x.when, facts))
+    // important_when: an important gap makes the card high while it lasts (an empty one never does).
+    .map((x) => (x.importantWhen && holds(x.importantWhen, facts) ? { ...x, priority: 'high' } : x))
     .sort((a, b) => rank(a) - rank(b) || (order.get(a.category) ?? 99) - (order.get(b.category) ?? 99) || a.key.localeCompare(b.key))
     .map((x) => ({
       key: x.key,
@@ -217,6 +232,7 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
       why: x.why,
       contentMin: x.contentMin,
       action: x.action,
+      setting: x.setting ?? null,
       ask: x.ask,
       investigate: x.investigate,
       plan: x.plan,

@@ -255,6 +255,8 @@ const STUCK_BLOCK_CODES = Object.freeze([
   'no-agent',
   'context',
   'quota',
+  // Receive found a possible secret in the track's commits (cli/merge.mjs receiveSecretScan): the merge refuses.
+  'secret-found',
   'other',
 ]);
 

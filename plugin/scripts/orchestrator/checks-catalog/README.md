@@ -40,12 +40,17 @@ What the plan covers, and what the build steps should and should not do.
 same work, so the card shows it as under way. Three kinds need no agent: `action: gates` sets the checks found as gates,
 `action: packs` turns on the stack packs for the review signals (`ravenseat checks packs --apply`), and `action: ask` shows the text in its one section, `## Ask Claude`, for the owner to give Claude in their own session.
 Use `ask` for a step a queue agent cannot take, such as the first commit (an agent's worktree is made from a commit).
+`action: setting` with `setting: <key>` turns an opt-in check on (`ravenseat checks turn-on <suggestion>`, the card's "Turn on";
+only the keys in `lib/optInChecks.js`). `important_when` raises the card to high while its conditions hold, which lights the
+red marker until the gap is fixed or the card is set aside.
 
 `when` says when the suggestion applies. Comma means all must hold, and `|` means at least one of those kinds:
 `has-git`, `no-git`, `no-commit` (no git, or git with no commit yet), `has-remote`, `has-ci`, `no-ci`, `has-gates`,
 `no-gates`, `checks-found`, `secrets-open`, `known-stack`, `instructions-large`,
 `packs-missing` (a pack for the stack is not on in `review.packs`), `stack-unpacked` (a known stack has no pack),
-`missing:<kinds>`, `found:<kinds>`, `not-in-ci:<kinds>`.
+`missing:<kinds>`, `found:<kinds>`, `not-in-ci:<kinds>`, `off:<setting>` (an opt-in check that is off),
+`allowlist-tracked-hit` (a key in an approved command in a tracked file), `gitignore-gap` (`.claude/settings.local.json`
+not ignored by the project's own rules, or a tracked file Ravenseat keeps local).
 
 The kinds are test, types, lint, build, coverage, secret-scan, audit, security, dep-updates and hooks.
 

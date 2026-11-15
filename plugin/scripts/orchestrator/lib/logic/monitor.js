@@ -386,6 +386,7 @@ const BLOCK_CODES = [
   { code: 'dependency', text: 'waiting on another task' },
   { code: 'no-agent', text: 'marked running without an agent' },
   { code: 'silent', text: 'the agent went silent' },
+  { code: 'secret-found', text: 'receive found a possible secret in the track\'s commits' },
   { code: 'other', text: 'something else (say what in the note)' },
 ];
 const BLOCK_NOTE_MAX = 200;

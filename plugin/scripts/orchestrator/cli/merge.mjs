@@ -530,6 +530,43 @@ function redOnBaseCheck(o, { branch }) {
   });
 }
 
+// ---- The secret scan at receive (H5, lib/secretScan.js scanRange) ---------------------------------------------------
+
+/**
+ * The track's own commits (<baseBranch>..<branch>, every commit, so a key added and deleted again still counts), with
+ * the push check's patterns, exceptions and time limit. WHY here and not only at push: once merged, a key is in the base
+ * branch's history; caught now, the track can take it out of its own branch and the base stays clean.
+ * Returns null unless secretScan.atReceive is true (off by default, lib/optInChecks.js), else { hits, scanner, incomplete? } (never the matched text).
+ */
+function receiveSecretScan(branch) {
+  if (CONFIG.secretScan?.atReceive !== true) return null;
+  const SS = require('./lib/secretScan.js');
+  return SS.scanRange({ cwd: GIT_ROOT, from: `refs/heads/${BASE}`, to: `refs/heads/${branch}`, setup: CONFIG.secretScan });
+}
+
+/** One hit as file:line (rule) in <commit>: never the value. */
+const secretWhere = (h) => `${h.file}:${h.line} (${h.rule})${h.commit ? ` in ${h.commit}` : ''}`;
+
+/** The receive lines for the scan: a warning when it did not finish, the SECRET line on hits, nothing when clean or off. */
+function secretScanLines(id, scan) {
+  if (!scan) return [];
+  const out = [];
+  if (scan.incomplete)
+    out.push(
+      `WARNING: the secret scan at receive did not finish (${scan.incomplete}), so nothing is blocked on it. ` +
+        `Look at ${id}'s diff for keys yourself; the push check scans again before the push.`,
+    );
+  if (scan.hits?.length) {
+    const shown = scan.hits.slice(0, 5).map(secretWhere).join(', ');
+    out.push(
+      `SECRET: possible secret(s) in ${id}'s commits (${scan.scanner} scan): ${shown}${scan.hits.length > 5 ? ` and ${scan.hits.length - 5} more` : ''}. ` +
+        `The merge stops on it (block secret-found). Every commit counts, so a fix round takes it out of the branch's history ` +
+        `(rewrite the commits that added it), and a real key must be changed. A false alarm: ${CLI} merge ${id} --allow-secret (owner only, logged).`,
+    );
+  }
+  return out;
+}
+
 /** `ravenseat receive` (the usage is at the top of queue.mjs). */
 export function cmdReceive() {
   // ---- A track has delivered -> review + review package as plain files + reviewer prompts ----
@@ -725,6 +762,10 @@ export function cmdReceive() {
   // Nothing automatic looked at this delivery (lib/controls.js). A warning, never a stop; a PARTIAL track runs nothing anyway.
   if (result?.status !== 'PARTIAL' && !CONTROLS.commandsOf(CONFIG.gates?.quick).length && !doneCheck)
     console.log(CONTROLS.noChecksLine(id, { quiet: GUIDANCE.isQuiet(read()) }));
+  // The secret scan of the track's own commits (H5): a hit is recorded in the edit below (block secret-found), and the
+  // merge stops on it. Said here, where the receive output is read.
+  const secretScan = receiveSecretScan(branch);
+  for (const l of secretScanLines(id, secretScan)) console.log(l);
   // QA evidence: the EVIDENCE line (track-result.md first, otherwise the answer) and the warning when a task that needs it
   // (config().qa.evidenceLabels) has none. A warning, not a stop.
   const evidenceRead = L.parseEvidence(reportText) ?? L.parseEvidence(trackReply);
@@ -926,6 +967,17 @@ export function cmdReceive() {
     if (record) Object.assign(o, record);
     // The gates and the done command are green on this delivery: an earlier gate-red is over.
     if (result?.status !== 'PARTIAL' && L.openBlockOf(o)?.code === 'gate-red') L.closeBlock(o);
+    // The secret scan (H5): hits open secret-found and are kept on the task (secret_found), which the merge reads, so an
+    // agent's own `ravenseat block` (which closes the open block) does not let the merge through. A clean, complete scan
+    // closes both; an incomplete one (or atReceive off) changes nothing.
+    if (secretScan?.hits?.length) {
+      const hits = secretScan.hits.slice(0, 20).map((h) => ({ file: h.file, line: h.line, rule: h.rule, ...(h.commit ? { commit: h.commit } : {}) }));
+      o.secret_found = { at: new Date().toISOString(), tip: git(['rev-parse', '-q', '--verify', `refs/heads/${branch}`]), scanner: secretScan.scanner, count: secretScan.hits.length, hits };
+      L.openBlock(o, 'secret-found', { note: secretScan.hits.slice(0, 5).map(secretWhere).join(', ') });
+    } else if (secretScan && !secretScan.incomplete) {
+      delete o.secret_found;
+      if (L.openBlockOf(o)?.code === 'secret-found') L.closeBlock(o);
+    }
     // A stop that is already open says more about what blocks the task than the question does.
     if (asked && (!L.openBlockOf(o) || L.openBlockOf(o).code === 'track-question')) openQuestion(o, asked, trackFound.report?.path ?? null);
     recordAttempt(o);
@@ -1098,7 +1150,7 @@ export async function cmdMerge() {
   const id = positional(1, ['--scratchpad', '--done-cwd'])[0];
   if (!id)
     die(
-      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--allow-focus] [--force-red-base] [--force-red-gate]',
+      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--force-red-base] [--force-red-gate]',
     );
   const resume = a.includes('--resume');
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
@@ -1211,6 +1263,21 @@ export async function cmdMerge() {
     if (o.delivered_partial) {
       logTime(id, 'partial-overridden', `tip ${String(trackTip).slice(0, 12)}`);
       console.log(`WARNING: --allow-partial: merging ${id}, which the track itself called unfinished; logged as "partial-overridden".`);
+    }
+    // The secret scan at receive (H5): a hit stops the merge until a clean receive. The record on the task decides (an
+    // open secret-found block too, when the record was removed by hand); --allow-secret is the owner's, logged.
+    const secretOpen = L.openBlockOf(o)?.code === 'secret-found';
+    if (o.secret_found || secretOpen) {
+      const where = (o.secret_found?.hits ?? []).slice(0, 5).map(secretWhere).join(', ') || L.openBlockOf(o)?.note || 'see ravenseat blockers';
+      if (!a.includes('--allow-secret'))
+        die(
+          `STOP: ${id} is not merged. Receive found possible secret(s) in its commits: ${where}. Every commit is merged with ` +
+            `its history, so a fix round takes the key out of the branch (rewrite the commits that added it, ${CLI} resume ${id} --reason fix), ` +
+            `then ${CLI} receive ${id}; a real key must be changed. A false alarm, on the owner's word only: ${CLI} merge ${id} --allow-secret ` +
+            '(logged as "secret-overridden"). Nothing was done.',
+        );
+      logTime(id, 'secret-overridden', `tip ${String(trackTip).slice(0, 12)}: ${where}`);
+      console.log(`WARNING: --allow-secret: merging ${id} past the secret found at receive (${where}); logged as "secret-overridden".`);
     }
     // gateEvidence.mode own and external: ravenseat's own evidence on the tip decides (mergeGateKnown); a red one stops
     // here, and with none the gates run after the base gate check below (mergeGateRun), so a red base gets its own stop
@@ -1879,7 +1946,10 @@ export function cmdUnblock() {
   const closed = edit((queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
-    return L.closeBlock(o);
+    const c = L.closeBlock(o);
+    // The owner closing secret-found by hand is the owner's word on it: the merge no longer stops on the scan's record.
+    if (c?.code === 'secret-found') delete o.secret_found;
+    return c;
   });
   console.log(closed ? `${id}: ${closed.code} closed (${closed.from} to ${closed.to})` : `${id} has no open blocker.`);
 }

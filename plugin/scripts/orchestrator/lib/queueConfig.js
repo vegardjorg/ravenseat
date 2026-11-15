@@ -132,8 +132,16 @@ const STANDARD = Object.freeze({
   // The secret precheck before a plain push of baseBranch from the main session (lib/secretScan.js): the added lines of
   // what the push sends are scanned (gitleaks when it is on PATH, else built-in patterns) and a hit gets a confirmation
   // dialog naming file:line, never the value. maxBytes: a larger diff is not scanned, and the push asks. timeoutMs: per git or
-  // gitleaks call. Fails open.
-  secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000 },
+  // gitleaks call. Fails open. atReceive: `ravenseat receive` scans the track's own commits (<baseBranch>..<branch>) the same
+  // way; a hit opens the block secret-found (file:line and the rule, never the value) and `merge` refuses until a clean
+  // receive or `merge --allow-secret` (owner and orchestrator, logged). An incomplete scan only warns.
+  // allowlist: `ravenseat doctor` looks for keys in the commands Claude Code has approved (lib/allowlistSecrets.js).
+  // atReceive and allowlist are OFF by default (owner decision 2026-11-15: a new check is opt-in): setup tips about each
+  // once, the Checks tab has a "Turn on" card, and doctor shows one INFO line while it is off (lib/optInChecks.js).
+  secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000, atReceive: false, allowlist: false },
+  // enabled: `ravenseat doctor` checks that the project's OWN .gitignore (the global one switched off) ignores what
+  // Ravenseat keeps local, and that git tracks none of it. Off by default like the two above (lib/optInChecks.js).
+  gitignoreCheck: { enabled: false },
   // `ravenseat doctor` warns about tracked files larger than this (MB).
   largeFileMb: 5,
   // The size of Claude's instructions (lib/instructionSize.js): what Claude Code loads at the start of every session, track

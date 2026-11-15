@@ -5,6 +5,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Keys in approved commands, and the project's own .gitignore** (both off until you turn them on: `secretScan.allowlist`,
+  `gitignoreCheck.enabled`; setup tips once, the Checks tab has a "Turn on" card). `ravenseat doctor` then reads the commands Claude Code
+  approved (`permissions.allow`, `ask`, `deny`, also in the agents' worktrees) and names one with a key by file and
+  index, never the key: FAIL in a tracked file, WARN on disk. It checks that the project's `.gitignore`, not only your
+  global one, ignores the personal settings and the queue's data (also a moved `dataFolder`, which `setup` now adds).
+- **A key a track commits is found at receive** (off until you turn it on: `secretScan.atReceive`). `receive` scans the track's own commits with the push check's patterns;
+  a hit opens the blocker `secret-found` and `merge` refuses until a clean receive or `merge --allow-secret` (owner only,
+  logged).
 - **Setup asks about parallel tracks and a daily budget.** `/ravenseat:setup` now shows what `ravenseat machine`
   suggests for this machine (the default of 5 is above it on 16 GB) and asks before it sets `maxConcurrent`, and asks
   for a daily budget; a subscription user may skip it. Nothing is set without a yes, and the question comes also with

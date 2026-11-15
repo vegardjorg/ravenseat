@@ -392,6 +392,28 @@ const SETTINGS = Object.freeze([
       whyNot: 'A pushed secret stays in the remote\'s history and must be rotated, even after the commit is removed.',
       changes: 'Pushes go out without a secret scan. Doctor will report it.',
     }),
+  // The three opt-in checks (lib/optInChecks.js): off by default, so switching one off again never weakens the standard.
+  row('secretScan.atReceive', 'guards', 'onoff', 'Secret scan at receive',
+    'Off by default. On: receive scans the track\'s own commits for secrets; a hit blocks the merge until a clean receive or merge --allow-secret.', {
+      weakens: offWeakens,
+      protects: 'A key a track committed being merged into the base branch, where its history keeps it.',
+      whyNot: 'Once merged, the key is in the base branch\'s history; the push check only stops it from leaving the machine.',
+      changes: 'Receive no longer scans the track\'s commits, and merge does not stop on a key.',
+    }),
+  row('secretScan.allowlist', 'guards', 'onoff', 'Keys in approved commands',
+    'Off by default. On: doctor looks for keys in the commands Claude Code has approved (.claude/settings*.json, also in the agents\' worktrees).', {
+      weakens: offWeakens,
+      protects: 'A token typed in a command that "Yes, and don\'t ask again" stored in clear text, or in a tracked file.',
+      whyNot: 'A key in the tracked .claude/settings.json is in the repo and its history.',
+      changes: 'Doctor no longer reads the approved commands.',
+    }),
+  row('gitignoreCheck.enabled', 'guards', 'onoff', 'Project .gitignore check',
+    'Off by default. On: doctor checks that the project\'s own .gitignore, not only your global one, ignores what Ravenseat keeps local.', {
+      weakens: offWeakens,
+      protects: 'Your personal settings or the queue\'s data committed from a teammate\'s clone or CI, which has no global gitignore of yours.',
+      whyNot: 'What only your global gitignore ignores is one `git add .` from the repo elsewhere.',
+      changes: 'Doctor no longer checks the project\'s .gitignore.',
+    }),
   row('secretScan.maxBytes', 'guards', 'integer', 'Secret scan size limit (bytes)',
     'A larger diff is not scanned, and the push asks instead.'),
   row('secretScan.timeoutMs', 'guards', 'integer', 'Secret scan time limit (ms)',

@@ -12,8 +12,8 @@ ravenseat settings set <key> <value> # change one; a value that weakens a guard 
 ravenseat show                      # short queue view
 ravenseat add --file task.json      # add tasks
 ravenseat fill --scratchpad <dir>   # start what the limits allow
-ravenseat receive <ID>              # receive a finished track
-ravenseat merge <ID>                # merge it
+ravenseat receive <ID>              # receive a finished track (with secretScan.atReceive on, also scans its commits for secrets: a hit blocks the merge)
+ravenseat merge <ID>                # merge it (--allow-secret: past a secret found at receive, owner only, logged)
 ravenseat wiring <ID>               # a task's wiring items; each is carried out (--commit) or rejected before done
 ravenseat explain <ID>              # why one task stands where it stands, from the rules the queue starts by
 ravenseat pulse-check               # the pulse in one read-only call: SILENT, or the actions with their next commands
@@ -30,6 +30,7 @@ ravenseat checks show <key>         # what a suggestion's investigation and plan
 ravenseat checks plan <key>         # proposes its investigation and planning as a task (--approved: ready to run)
 ravenseat checks dismiss <key>      # sets a suggestion aside (restore brings it back)
 ravenseat checks packs [--apply]    # review signal packs for your stack, from the manifests; --apply writes review.packs
+ravenseat checks turn-on <key>      # a card for an opt-in check that is off: writes its setting on in queue.config.json
 ravenseat checks marker on|off      # the red dot on the Checks tab while an important suggestion is open
 ravenseat checks off                # no Checks tab, overview or setup suggestions (on turns them back); guards are not touched
 ravenseat inspection                # failures that repeat in the gates or CI; one proposal each to build a guard
@@ -41,7 +42,7 @@ ravenseat kickstart                 # which checks the project has and one next 
 ravenseat kickstart gates --apply   # sets the checks your project already has as gates
 ravenseat kickstart add             # proposes the next step as a task; it starts only when you approve it
 ravenseat gate "<failure class>"    # a known bug becomes a proposed gate task; gates.fromKnownBugs: propose, auto or off
-ravenseat doctor [--all]            # read-only health check: node, hooks, config, state, worktrees, budget, safety baseline (--all adds CI cost tips)
+ravenseat doctor [--all]            # read-only health check: node, hooks, config, state, worktrees, budget, safety baseline, keys in approved commands and the project .gitignore when turned on (--all adds CI cost tips)
 ravenseat instructions [--plan]     # what Claude loads at start, and where each section could go; changes none of your files (--json)
 ravenseat machine [--measure]       # cores, memory, free memory and a suggested maxConcurrent (an estimate); --measure times one quick and one full check when no track runs
 ravenseat surface                   # git hooks and config that run code, against what was accepted; changes nothing

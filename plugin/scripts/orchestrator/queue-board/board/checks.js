@@ -153,6 +153,15 @@ function checksButton(s) {
       title: 'Writes the packs to review.packs in queue.config.json. Your review signals then also know your stack.',
       onclick: () => checksWrite({ action: 'packs', key: s.key }, 'Review signals for your stack on'),
     });
+  if (s.action === 'setting')
+    return el('button', {
+      type: 'button',
+      class: 'button button-filled',
+      text: busy ? 'Saving …' : 'Turn on',
+      disabled: busy,
+      title: `Sets ${s.setting} on in queue.config.json. Off again in Settings.`,
+      onclick: () => checksWrite({ action: 'setting', key: s.key }, 'Turned on'),
+    });
   if (s.action === 'gates')
     return el('button', {
       type: 'button',
