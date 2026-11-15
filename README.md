@@ -45,6 +45,8 @@ decisions only you can make.
 you say "push". **Your part.** Each delivery lists what the agent assumed (its Assumptions); read them before the
 merge, because passing tests do not show that the agent understood you.
 
+<p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The queue board: in queue, in progress, review and built" width="800"></p>
+
 **Is it for you?** If you are building something that takes weeks, like a SaaS with several features, a backend and
 a database, the work no longer fits in one chat, and that is where Ravenseat helps most. For a small demo or a tool for
 your own use, plain Claude Code is probably enough. It works best with automated tests; without meaningful checks
