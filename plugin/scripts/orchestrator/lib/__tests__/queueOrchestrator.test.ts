@@ -725,7 +725,7 @@ describe('queue.mjs show, fill, receive, set done and cost (against a copy)', ()
     expect(a3.cost?.agents.map((x) => x.agent).sort()).toEqual(['revA1', 'revunknown', 'trackA1']);
     const oneUsd = TK.costUsd({ input: 100, output: 1000, cache_read: 500_000 }, 'claude-opus-5-5');
     expect(a3.cost?.usd).toBeCloseTo(3 * oneUsd, 2);
-    expect(a3.findings).toEqual({ H: 1, M: 1, L: 2, deferrable: ['L2'], reports: 2 });
+    expect(a3.findings).toEqual({ H: 1, M: 1, L: 2, deferrable: ['reviewer:L2'], reports: 2 });
 
     // cost: the statistics per class; cost measure with --findings overrides the transcripts.
     const k = run('cost');
