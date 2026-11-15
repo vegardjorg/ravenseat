@@ -16,10 +16,19 @@
 //     resolve `require('./lib/...')` from queue.mjs's folder (cli/context.mjs). An extra edge only adds tests.
 //   - name mentions: a file that names another repo file by its base name (`'merge-track.mjs'`, `hook-push-guard.mjs`,
 //     `'contextGuard.js'` in a path.join) depends on it. In source files only string literals count (a comment runs
-//     nothing); in test files, test helpers and data files (json, html, shell shims) the whole text counts.
+//     nothing), and only in a source that starts processes (spawn, exec, fork) or reads files; in test files, test
+//     helpers and shell shims the whole text counts. Three kinds of edge:
+//       exec: the file runs or loads the other one; followed transitively.
+//       read: a source that reads files but starts no process names another file; counts only when that file itself
+//         changed (its text is the input), not for what that file depends on.
+//       data: a json, html, css or yml file names a file; followed only for tests and helpers that read the data file.
+//   - docs (md, txt, images outside plugin/scripts) are never followed through sources: a docs-only change picks only
+//     the tests and helpers that name the doc or its folder, and otherwise reports "no tests affected".
 //   - the command map: queue.mjs's dispatch edges to cli/ are replaced by a map from command word to cli module (read
 //     from the dispatch block). A file that names queue.mjs, or the `ravenseat` router (ravenseat.mjs, plugin/bin), depends
-//     on queue.mjs itself and on the cli module of every command word it contains. The router also runs any top-level
+//     on queue.mjs itself and on the cli module of every command word it contains. A command word is a string literal
+//     that is exactly one word, a word right after queue.mjs or ravenseat in a string, or (in tests) the first word of
+//     a string, never a path part such as scripts/orchestrator. The router also runs any top-level
 //     script by name or alias, so a file that names it depends on each script whose name appears in it as a word.
 //   - folder readers: a test or helper that lists folders relative to itself (readdirSync, globSync, opendirSync,
 //     `git ls-files`, or a require/import with a computed path) can read any file, so it is picked for every change.
@@ -356,9 +365,26 @@ const area = (p) => (p.includes('/') ? p.split('/')[0] : '');
  * scripts/orchestrator/, cli/merge.mjs) is not a command word, so a word next to / or \ or before a file extension
  * does not count.
  */
-const wordsOf = (text) => new Set(text.match(/(?<![\w/\\.-])[A-Za-z][\w-]*(?![\w/\\-]|\.\w)/g) ?? []);
 /** File-name-like tokens in a text: name.ext, cut at / \ quotes and spaces. */
 const namesIn = (text) => new Set(text.match(/[A-Za-z0-9_][A-Za-z0-9_.-]*\.[A-Za-z0-9]+/g) ?? []);
+
+/**
+ * The command words in a file's string literals: a string that is one word ([Q, 'merge'], q('start', id)), the word
+ * after queue.mjs or ravenseat in a command line (`node ${Q} start A`, 'ravenseat merge --task A'), and, for a test (firstWord),
+ * the first word of any string (a helper's run('start A') or a template part " start A").
+ */
+export function commandWords(strings, { firstWord = false } = {}) {
+  const out = new Set();
+  for (const t of strings) {
+    if (/^[a-z][\w-]*$/.test(t)) out.add(t);
+    for (const m of t.matchAll(/(?:queue\.mjs|ravenseat(?:\.mjs|\.cmd)?)["'`]?\s+([a-z][\w-]*)/g)) out.add(m[1]);
+    if (firstWord) {
+      const m = t.match(/^[\s"'`]*([a-z][\w-]*)/);
+      if (m) out.add(m[1]);
+    }
+  }
+  return out;
+}
 
 /**
  * The command map from queue.mjs's dispatch block: command word -> cli module paths. A branch that loads a module
@@ -504,12 +530,9 @@ export function selectTests({ changed, files, maxShare = FULL_SHARE }) {
     const namesRouter = names.has('ravenseat.mjs') || names.has('ravenseat.cmd') || texts.some((t) => /bin['"`]?\s*[,/]\s*['"`]?ravenseat\b/.test(t));
     if (!namesQueue && !namesRouter) return;
     const words = new Set();
-    // A test: every word in it (a command can sit in a helper call, a template or an array). A source: only a string
-    // that is exactly a command word ([QUEUE, 'show']), since its messages are full of words like "merge" and "show".
-    for (const t of wordSource) {
-      if (!prose) for (const w of wordsOf(t)) words.add(w);
-      else if (/^[a-z][\w-]*$/.test(t)) words.add(t);
-    }
+    // The command words: from string literals only, in the forms a command is given in (commandWords). A test's
+    // titles and comments are full of words like "start", "next" and "show" that run nothing.
+    for (const w of commandWords(wordSource, { firstWord: !prose })) words.add(w);
     if (exists(QUEUE)) edge(p, QUEUE);
     for (const w of words) for (const mod of cm.map.get(w) ?? []) edge(p, mod);
     for (const mod of cm.unmapped) edge(p, mod);
@@ -531,7 +554,7 @@ export function selectTests({ changed, files, maxShare = FULL_SHARE }) {
       }
       if (inTests) {
         // tests and helpers: the whole text counts (a comment or a computed string may still name what it runs)
-        mentionEdges(p, [text], [text]);
+        mentionEdges(p, [text], strings);
         if ((LISTS_FILES.test(text) || computed.length) && LOCATES_ITSELF.test(text)) treeReaderTests.add(p);
         else if (computed.length) treeReaderTests.add(p);
       } else {
