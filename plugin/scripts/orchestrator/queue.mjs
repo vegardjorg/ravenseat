@@ -168,7 +168,9 @@
 //        (git >= 2.38; older git: changed-file overlap, with a note), cached per sha pair in <dataFolder>/conflict-predict.json,
 //        and a suggested merge order. `orchestrator pulse` prints the same PREDICTED CONFLICT / CONFLICTS WITH BASE lines.
 //        lib/conflictPredict.js)
-//   node scripts/orchestrator/queue.mjs doctor [--json]               (read-only health check, OK/WARN/FAIL with a fix hint each:
+//   node scripts/orchestrator/queue.mjs doctor [--json] [--fix]       (health check, OK/WARN/FAIL with a fix hint each, read only;
+//                                                                  --fix first writes the project's .gitignore from the
+//                                                                  settings (data folder or share pattern, private paths):
 //                                                                  node and the node the hooks find on PATH, the hooks file and
 //                                                                  its scripts, queue.config.json keys and types, the state
 //                                                                  files, a stale lock, half-deleted worktree folders and git
@@ -408,6 +410,29 @@
 //                                                                  warning and exits 1 without both flags; with them it is
 //                                                                  logged as setting-weakened. Refused from a track worktree;
 //                                                                  the guard denies it to queue agents)
+//   node scripts/orchestrator/queue.mjs share status [--json]       (whether the queue's own files are in git, the repo's
+//                                                                  visibility (cached 24 h) and what git tracks in the data
+//                                                                  folder. cli/share.mjs, lib/queueShare.js)
+//   node scripts/orchestrator/queue.mjs share on [--include <file> ...] [--public-ok] [--yes]   (off by default: puts
+//                                                                  queue.json and plans.json (or --include) in git as a
+//                                                                  backup: <dataFolder>/* and !<dataFolder>/<file> in the
+//                                                                  .gitignore. Explains first and changes nothing without
+//                                                                  --yes; a public repo or one of unknown visibility also
+//                                                                  needs --public-ok. The time log, missions, reports,
+//                                                                  answers, locks and evidence can never be shared)
+//   node scripts/orchestrator/queue.mjs share off                   (the whole data folder is private again; says which
+//                                                                  files git still tracks)
+//   node scripts/orchestrator/queue.mjs private list [--json]       (the project's private paths, privatePaths in
+//                                                                  queue.config.json. cli/private.mjs, lib/privatePaths.js)
+//   node scripts/orchestrator/queue.mjs private add <path> [--no-read]   (a folder (trailing /) or file: added to the
+//                                                                  .gitignore, and the push and merge guard refuse a commit
+//                                                                  that tracks it; --no-read: the queue's agents may not
+//                                                                  read it either (never the main session))
+//   node scripts/orchestrator/queue.mjs private remove <path>       (takes it out of the list; the .gitignore line stays)
+//   node scripts/orchestrator/queue.mjs secrets clean [--dry-run] [--yes]   (removes the approved commands in
+//                                                                  .claude/settings*.json that hold a key, after a copy in
+//                                                                  <dataFolder>/secrets-backup/; --dry-run names file and
+//                                                                  index only; never prints the rule. cli/secrets.mjs)
 //   node scripts/orchestrator/queue.mjs blockers [--days 7] [--json]   (per code: count and blocked time in the period,
 //                                                                  top first)
 //
@@ -794,7 +819,7 @@ if (command === 'init') {
 } else if (command === 'diagnose') {
   (await import('./cli/view.mjs')).cmdDiagnose();
 } else if (command === 'doctor') {
-  (await import('./cli/doctor.mjs')).cmdDoctor();
+  await (await import('./cli/doctor.mjs')).cmdDoctor();
 } else if (command === 'instructions') {
   (await import('./cli/instructions.mjs')).cmdInstructions();
 } else if (command === 'machine') {
@@ -821,6 +846,12 @@ if (command === 'init') {
   (await import('./cli/ownerLog.mjs')).cmdOwnerLog();
 } else if (command === 'settings') {
   (await import('./cli/settings.mjs')).cmdSettings();
+} else if (command === 'share') {
+  await (await import('./cli/share.mjs')).cmdShare();
+} else if (command === 'private') {
+  (await import('./cli/private.mjs')).cmdPrivate();
+} else if (command === 'secrets') {
+  (await import('./cli/secrets.mjs')).cmdSecrets();
 } else if (command === 'unblock') {
   (await import('./cli/merge.mjs')).cmdUnblock();
 } else if (command === 'blockers') {

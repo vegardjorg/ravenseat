@@ -87,8 +87,8 @@ const QUEUE_COMMANDS = [
   'activeOnes', 'add', 'approve', 'area', 'areas', 'ask', 'attempt', 'batch', 'board-setting', 'block', 'blockers', 'calibrate', 'cancel', 'capacity', 'checks', 'classify', 'cloud', 'cloud-bundles',
   'cloud-package', 'compact', 'conflicts', 'continue', 'cost', 'decide', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'explain', 'external',
   'fill', 'finding', 'focus', 'follow', 'forecast', 'gate', 'guards', 'guidance', 'handover', 'helpers', 'info', 'init', 'inspection', 'instructions', 'kickstart', 'limit', 'machine', 'merge', 'migr', 'mode', 'next', 'next-migr',
-  'orchestrator', 'owner-log', 'park', 'pick', 'pickable', 'plan', 'project', 'projects', 'proposals', 'pulse-check', 'qa', 'question', 'rank', 'receive',
-  'release', 'resolutions', 'resolve', 'resume', 'set', 'settings', 'show', 'start', 'state', 'surface', 'trackFile', 'triage', 'unblock', 'undo', 'unlock', 'wait', 'wiring',
+  'orchestrator', 'owner-log', 'park', 'pick', 'pickable', 'plan', 'private', 'project', 'projects', 'proposals', 'pulse-check', 'qa', 'question', 'rank', 'receive',
+  'release', 'resolutions', 'resolve', 'resume', 'secrets', 'set', 'settings', 'share', 'show', 'start', 'state', 'surface', 'trackFile', 'triage', 'unblock', 'undo', 'unlock', 'wait', 'wiring',
 ];
 
 /** Short names ravenseat.mjs maps to a script file (ravenseat board = queue-board.mjs). */

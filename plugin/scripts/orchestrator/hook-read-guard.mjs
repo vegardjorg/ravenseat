@@ -16,6 +16,9 @@
 //   - For track and track-d a Read that is let through gives a SOFT read hint (additionalContext, never block) when a file
 //     over about 300 lines is read whole (READ_HINT_MAX_LINES), or the same file is read whole a second time. The logic lives
 //     in readHint.js; the state in <Temp>/queue-read-hint/<agent_id>.json (READ_HINT_STATE overrides).
+//   - Denies any Read (offset and limit too) under a privatePaths entry with "read": false (lib/privatePaths.js
+//     readDenied, H4), also through an agent worktree's copy of the path, so its content never reaches a mission, a
+//     report or a transcript. The main session is never stopped (it has no agent_type).
 // Fails OPEN: any internal error gives no output and exit 0.
 // Smoke test: echo '{"agent_type":"track","tool_input":{"file_path":"CLAUDE.md"}}' | node scripts/orchestrator/hook-read-guard.mjs
 // =============================================================
@@ -110,6 +113,23 @@ async function main() {
   const filePath = typeof ti.file_path === 'string' ? ti.file_path : '';
   if (!filePath) return;
   const abs = path.isAbsolute(filePath) ? filePath : path.resolve(input.cwd || process.cwd(), filePath);
+  // A private path the owner closed to the agents (privatePaths read:false): deny before anything else.
+  const cfg = require('./lib/queueConfig.js').config();
+  const closed = require('./lib/privatePaths.js').readDenied(abs, { root: cfg.root, cfg });
+  if (closed) {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason:
+            `read-guard: ${closed.line} is private, and the owner has closed it to the queue's agents (privatePaths, "read": false). ` +
+            'Do not read it another way either; if the task needs something from it, say so in your report and the owner decides.',
+        },
+      }),
+    );
+    return;
+  }
   // The line count is needed when limit is missing (large files, the block limit and the read hint).
   const countLines = ti.limit == null ? tallyLines(abs) : null;
   const answer = V.assessReading({

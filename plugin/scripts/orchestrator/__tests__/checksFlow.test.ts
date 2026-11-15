@@ -168,6 +168,34 @@ describe('ravenseat checks dismiss and restore', () => {
     p.run('checks', 'restore', 'first-test');
     expect(state()).toBe('open');
   });
+
+  it('a no to a setup tip runs the tip\'s own "No:" command, which sets the card aside for good (also the tips of the earlier checks)', () => {
+    const p = project();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const OI = require('../lib/optInChecks.js');
+    for (const key of ['allowlist-scan', 'gitignore-own-rules', 'secret-scan-receive']) {
+      const tip = OI.tipLine(OI.bySuggestion(key));
+      const no = /No: ravenseat (.+)$/.exec(tip)?.[1].split(' ') ?? [];
+      expect(no, tip).toEqual(['checks', 'dismiss', key]);
+      expect(p.run(...no).code).toBe(0);
+    }
+    const s = p.json().suggestions.filter((x: { key: string }) => ['allowlist-scan', 'gitignore-own-rules', 'secret-scan-receive'].includes(x.key));
+    expect(s.map((x: { state: string }) => x.state)).toEqual(['dismissed', 'dismissed', 'dismissed']);
+  });
+
+  it('share-backup: a card only in a repo known to be private; Turn on is the owner\'s click and writes share and the .gitignore', () => {
+    const p = project();
+    expect(p.keys()).not.toContain('share-backup');
+    fs.writeFileSync(path.join(p.folder, 'repo-visibility.json'), JSON.stringify({ visibility: 'private', remote: 'https://github.com/x/y.git', checkedAt: new Date().toISOString() }));
+    expect(p.keys()).toContain('share-backup');
+    expect(p.json().suggestions.find((x: { key: string }) => x.key === 'share-backup').priority).not.toBe('high');
+    const r = p.run('checks', 'turn-on', 'share-backup');
+    expect(r.code, r.all).toBe(0);
+    const config = JSON.parse(fs.readFileSync(path.join(p.folder, 'queue.config.json'), 'utf8'));
+    expect(config.share).toMatchObject({ queueData: true, include: ['queue.json', 'plans.json'] });
+    expect(fs.readFileSync(path.join(p.repo, '.gitignore'), 'utf8')).toContain('!scripts/.queue/queue.json');
+    expect(p.keys()).not.toContain('share-backup');
+  });
 });
 
 describe('the project changes the suggestions in docs/queue/checks', () => {

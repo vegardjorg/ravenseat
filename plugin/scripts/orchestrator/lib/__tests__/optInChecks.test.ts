@@ -30,7 +30,9 @@ describe('the opt-in checks', () => {
       const file = path.join(BUILTIN, 'suggestions', `${c.suggestion}.md`);
       const t = CATALOG.parseTemplate(fs.readFileSync(file, 'utf8'), c.suggestion);
       expect(t.errors).toEqual([]);
-      expect(t).toMatchObject({ action: 'setting', setting: c.key, category: 'security', when: `off:${c.key}` });
+      expect(t).toMatchObject({ action: 'setting', setting: c.key, category: 'security' });
+      // The card applies while the check is off; an entry with offer() adds the fact it needs (share: repo-private).
+      expect(t.when.split(',')[0], c.key).toBe(`off:${c.key}`);
     }
   });
 
@@ -41,11 +43,15 @@ describe('the opt-in checks', () => {
   });
 
   it('setup tips about each check that is off, once: the ones already asked are not tipped again', () => {
-    const all = OI.tipsToGive({}, []);
+    const all = OI.tipsToGive({}, [], { visibility: 'private' });
     expect(all.map((c: { key: string }) => c.key)).toEqual(OI.OPT_IN.map((c: { key: string }) => c.key));
+    // The share tip only in a repo known to be private: unknown and public get none.
+    for (const visibility of [null, 'unknown', 'public'])
+      expect(OI.tipsToGive({}, [], { visibility }).map((c: { key: string }) => c.key)).not.toContain('share.queueData');
+    expect(OI.tipLine(OI.byKey('share.queueData'))).toMatch(/On: ravenseat share on --yes\. No: ravenseat checks dismiss share-backup$/);
     expect(OI.tipsToGive({}, ['secretScan.allowlist']).map((c: { key: string }) => c.key)).not.toContain('secretScan.allowlist');
     expect(OI.tipsToGive({ gitignoreCheck: { enabled: true } }, []).map((c: { key: string }) => c.key)).not.toContain('gitignoreCheck.enabled');
-    expect(OI.tipLine(all[0])).toMatch(/^TIP: turn on .*settings set secretScan\.allowlist on$/);
+    expect(OI.tipLine(all[0])).toMatch(/^TIP: turn on .*settings set secretScan\.allowlist on\. No: ravenseat checks dismiss allowlist-scan$/);
   });
 
   it('doctor\'s off line names the setting, and says a gap is there without saying what', () => {
@@ -64,7 +70,11 @@ describe('the cards on the Checks tab', () => {
 
   it('a check that is off has a medium card; one that is on has none', () => {
     const r = report(OFF);
-    for (const c of OI.OPT_IN) expect(card(r, c.suggestion), c.suggestion).toMatchObject({ priority: 'medium', action: 'setting', setting: c.key, state: 'open' });
+    for (const c of OI.OPT_IN.filter((x: { offer?: unknown }) => !x.offer))
+      expect(card(r, c.suggestion), c.suggestion).toMatchObject({ priority: 'medium', action: 'setting', setting: c.key, state: 'open' });
+    // share-backup: low (off is the safe side), and only in a repo known to be private.
+    expect(card(r, 'share-backup')).toBeUndefined();
+    expect(card(report({ ...OFF, repoPrivate: true }), 'share-backup')).toMatchObject({ priority: 'low', action: 'setting', setting: 'share.queueData', state: 'open' });
     expect(card(report({ optInOff: [] }), 'allowlist-scan')).toBeUndefined();
   });
 

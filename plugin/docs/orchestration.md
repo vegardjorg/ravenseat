@@ -865,9 +865,10 @@ fix round takes the key out of the branch history (it rewrites the commits that 
 the blocker. A false alarm: `merge --allow-secret`, which only the owner and the orchestrator may pass (the agent guard
 refuses it like `--allow-guard`), logged as `secret-overridden`. A scan that does not finish warns and blocks nothing.
 **Opt-in checks.** A new check comes off, so an update never adds a WARN or FAIL by itself: the scan at receive,
-`secretScan.allowlist` and `gitignoreCheck.enabled` below. Each is offered three quiet ways: `setup` prints one `TIP:`
+`secretScan.allowlist`, `gitignoreCheck.enabled` and `share.queueData` (offered only in a private repo) below. Each is offered three quiet ways: `setup` prints one `TIP:`
 per check, once ever (`<dataFolder>/setup-tips.json`); the Checks tab has a card with "Turn on" (`ravenseat checks
-turn-on <card>`), which you may set aside for good; and `doctor` shows one INFO line naming the setting. A card is high,
+turn-on <card>`), which you may set aside for good (a no to the setup tip runs `checks dismiss <card>`, the same
+set aside); and `doctor` shows one INFO line naming the setting. A card is high,
 and lights the tab's red dot, while an important gap is there: a key in a tracked approved command,
 `.claude/settings.local.json` not ignored by the project's own rules, or a tracked file in the queue's data.
 **Keys in approved commands, and the project's own .gitignore.** "Yes, and don't ask again" in Claude Code stores the
@@ -881,6 +882,22 @@ writes, the configured `dataFolder` and `timeLog`, `.claude/worktrees/`) with th
 your global file ignores is "only ignored on your machine", since a teammate's clone or CI does not have it. A file git
 already tracks in the data folder, or a tracked `.claude/settings.local.json`, FAILs with `git rm --cached` as the fix.
 `setup` writes the configured `dataFolder` (and a `timeLog` outside it) to `.gitignore`, next to `scripts/.queue/`.
+`ravenseat secrets clean` removes the rules that hold a key: `--dry-run` names `<file>: permissions.allow[3]`, `--yes`
+first copies each file to `<dataFolder>/secrets-backup/<time>/` and then writes it back with its own indentation and
+line endings. The rule text is never printed or logged (the time log row has counts only).
+**The queue's files in git, and private paths.** The data folder is ignored as a whole by default. `share.queueData`
+(off) keeps `share.include` (default `queue.json`, `plans.json`) in git as a backup; only `ravenseat share on`
+turns it on, after it says who can read them, with `--yes`, and with `--public-ok` as well when the repo is not known
+to be private (lib/repoVisibility.js asks `gh`, then the GitHub or GitLab API, with a short time limit; another host
+or no answer is unknown, which counts as public; the answer is cached 24 hours in `<dataFolder>/repo-visibility.json`).
+`settings set` cannot write it. A file that can never be shared (the time log, missions, reports, transcript extracts,
+answers, locks, the gate evidence, the board key) is refused with the reason. `privatePaths` lists the project's own
+private folders and files, one list for the `.gitignore` (setup, `doctor --fix`), the guards and `cloudHidden`.
+The push guard denies (never asks) a push of the base branch, or of an allowed branch, whose commits track a data
+folder file that is not shared or a file under a private path, and, while share is on, one that carries a shared file
+in a repo not known to be private unless `share.publicOk` says the owner confirmed it. It reads the cache only, never
+the network. `merge` checks the track's diff the same way, without an override flag. An entry with `"read": false`
+also makes the read guard deny the queue's agents a Read there (the main session is never stopped).
 `deployCommands` (empty by default) lists the project's deploy commands; any command that starts with one of them
 gets the confirmation dialog, from an agent or the main session. It is a reminder, not a wall: a list is never
 complete, so keep production credentials out of the shell Claude Code starts from.

@@ -65,7 +65,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'gateEvidence', 'ownership', 'history'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'gateEvidence', 'ownership', 'history', 'share'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -683,8 +683,18 @@ function checkCloud() {
     .map((r) => ({ ...r, name: `cloud ${r.name}` }));
 }
 
-/** `ravenseat doctor [--json] [--all]` (the usage is at the top of queue.mjs). */
-export function cmdDoctor() {
+/**
+ * `ravenseat doctor [--json] [--all] [--fix]` (the usage is at the top of queue.mjs).
+ * --fix: the one thing doctor repairs itself, the project's .gitignore (setup.mjs writeGitignore: the fixed lines, the
+ * data folder or its share pattern, the time log and the private paths), before the checks run. Nothing else changes.
+ */
+export async function cmdDoctor() {
+  let fixed = null;
+  if (a.includes('--fix')) {
+    const { gitignoreNote, writeGitignore } = await import('../setup.mjs');
+    fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
+    if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
+  }
   const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
@@ -698,14 +708,14 @@ export function cmdDoctor() {
     all: a.includes('--all'),
   });
   const failed = checks.some((c) => c.status === 'FAIL');
-  if (a.includes('--json')) console.log(JSON.stringify({ ok: !failed, checks, advice_hidden: hidden }, null, 2));
+  if (a.includes('--json')) console.log(JSON.stringify({ ok: !failed, checks, advice_hidden: hidden, ...(fixed ? { fixed } : {}) }, null, 2));
   else {
     for (const c of checks) {
       console.log(`${c.status.padEnd(4)}  ${c.name.padEnd(9)}  ${c.message}`);
       if (c.fix) console.log(`${' '.repeat(17)}fix: ${c.fix}`);
     }
     const n = (s) => checks.filter((c) => c.status === s).length;
-    console.log(`\n${n('OK')} OK, ${n('WARN')} WARN, ${n('INFO')} INFO, ${n('FAIL')} FAIL${failed ? ' (exit 1)' : ''}. Nothing was changed.`);
+    console.log(`\n${n('OK')} OK, ${n('WARN')} WARN, ${n('INFO')} INFO, ${n('FAIL')} FAIL${failed ? ' (exit 1)' : ''}. ${fixed ? `Changed: ${fixed}.` : 'Nothing was changed.'}`);
     if (hidden) console.log(`${hidden} advice line(s) not shown: guidance is quiet (${CLI} doctor --all shows them).`);
   }
   if (failed) process.exit(1);

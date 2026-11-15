@@ -257,6 +257,65 @@ describe('setup.mjs records the plugin version it set up (for the setup notice o
     expect(setupProject({ target }).tips).toEqual([]);
   });
 
+  it('a tip names how to say no: the same "set aside" as the Checks tab, so the card does not come back', () => {
+    execFileSync('git', ['init', '-q'], { cwd: target });
+    const tips = setupProject({ target }).tips.join('\n');
+    expect(tips).toMatch(/No: ravenseat checks dismiss allowlist-scan/);
+    expect(tips).toMatch(/No: ravenseat checks dismiss secret-scan-receive/);
+  });
+
+  it('share: offered once and only in a repo known to be private (the cached visibility); never on its own', () => {
+    execFileSync('git', ['init', '-q'], { cwd: target });
+    const folder = join(target, 'scripts', '.queue');
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(join(folder, 'repo-visibility.json'), JSON.stringify({ visibility: 'public', remote: null, checkedAt: new Date().toISOString() }));
+    expect(setupProject({ target, dry: true }).tips.join('\n')).not.toMatch(/share on/);
+    writeFileSync(join(folder, 'repo-visibility.json'), JSON.stringify({ visibility: 'private', remote: null, checkedAt: new Date().toISOString() }));
+    const first = setupProject({ target }).tips.join('\n');
+    expect(first).toMatch(/On: ravenseat share on --yes/);
+    expect(first).toMatch(/No: ravenseat checks dismiss share-backup/);
+    expect(setupProject({ target }).tips).toEqual([]);
+    // The tip never turns it on: the config setup writes (from the example) keeps share off.
+    expect(JSON.parse(readFileSync(join(target, 'queue.config.json'), 'utf8')).share?.queueData ?? false).toBe(false);
+  });
+
+  it('.gitignore with share on: <dataFolder>/* and an exception per file instead of the folder line; off takes the exceptions out', () => {
+    execFileSync('git', ['init', '-q'], { cwd: target });
+    setupProject({ target });
+    expect(readFileSync(join(target, '.gitignore'), 'utf8').split(/\r?\n/)).toContain('scripts/.queue/');
+    writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ share: { queueData: true, include: ['queue.json'] } }));
+    const log = setupProject({ target });
+    let lines = readFileSync(join(target, '.gitignore'), 'utf8').split(/\r?\n/);
+    expect(lines).toContain('scripts/.queue/*');
+    expect(lines).toContain('!scripts/.queue/queue.json');
+    expect(lines).not.toContain('scripts/.queue/');
+    expect(log.notes.join(' | ')).toMatch(/removed scripts\/\.queue\//);
+    const ignored = (file: string) => {
+      try {
+        execFileSync('git', ['-c', 'core.excludesFile=', 'check-ignore', '-q', '--no-index', file], { cwd: target, stdio: 'ignore' });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    expect(ignored('scripts/.queue/queue.json')).toBe(false);
+    expect(ignored('scripts/.queue/times.jsonl')).toBe(true);
+    writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ share: { queueData: false } }));
+    setupProject({ target });
+    lines = readFileSync(join(target, '.gitignore'), 'utf8').split(/\r?\n/);
+    expect(lines.some((l) => l.startsWith('!scripts/.queue/'))).toBe(false);
+    expect(ignored('scripts/.queue/queue.json')).toBe(true);
+  });
+
+  it('.gitignore: every private path is added, in its own form', () => {
+    execFileSync('git', ['init', '-q'], { cwd: target });
+    writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ privatePaths: ['docs/notes/', { path: 'ops/keys', read: false }] }));
+    setupProject({ target });
+    const lines = readFileSync(join(target, '.gitignore'), 'utf8').split(/\r?\n/);
+    expect(lines).toContain('docs/notes/');
+    expect(lines).toContain('ops/keys');
+  });
+
   it('nothing without --settings, with --dry, or in a vendored install (hooks)', () => {
     setupProject({ target });
     setupProject({ target, settings: true, dry: true });

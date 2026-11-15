@@ -61,6 +61,8 @@ const CONDITIONS = {
   // The important gaps of the opt-in checks (cli/doctorBaseline.mjs allowlistFacts, gitignoreFacts), read while off.
   'allowlist-tracked-hit': (f) => f.allowlistTrackedHit === true,
   'gitignore-gap': (f) => f.gitignoreGap === true,
+  // The repo is known to be private (the cached answer, lib/repoVisibility.js); unknown or public: false.
+  'repo-private': (f) => f.repoPrivate === true,
 };
 
 /** The line a suggestion adds from the facts, so the card names the stacks. Null when it has none. */

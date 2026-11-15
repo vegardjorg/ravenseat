@@ -56,10 +56,11 @@ function isCloud(o) {
 
 /**
  * The areas the cloud does not see (gitignored or untracked). The queue's dataFolder (scripts/.queue/) is always included; the folders in
- * config().cloudHidden (list of paths, e.g. 'docs/private/') are added.
+ * config().cloudHidden (list of paths, e.g. 'docs/private/') are added, and so is every privatePaths entry (lib/privatePaths.js
+ * cloudHiddenOf: the one list of private paths drives this too, so a private folder is never left out of it).
  */
 function cloudHidden() {
-  const extra = Array.isArray(cfg().cloudHidden) ? cfg().cloudHidden : [];
+  const extra = require('../privatePaths.js').cloudHiddenOf(cfg());
   return [
     ...extra
       .map((s) => String(s).replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''))

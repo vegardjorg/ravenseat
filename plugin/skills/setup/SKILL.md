@@ -129,9 +129,10 @@ Never add more than the user picked, and do not list the whole catalog unless th
 ### Checks that are off (at most one question each, once)
 
 A new check comes off. For each `TIP:` line setup printed (setup prints each only once, ever), ask the user in one short
-line whether to turn it on, in plain words from the tip. Yes: run the `settings set ... on` command in the tip. No or no
-answer: change nothing and do not ask again; the Checks tab keeps a card with "Turn on" that they can set aside. No
-`TIP:` lines: skip this.
+line whether to turn it on, in plain words from the tip. Yes: run the command after `On:` in the tip (for the share
+tip it is `share on --yes`, which explains what becomes visible first; show the user that text). No: run the command
+after `No:` (`checks dismiss <card>`), which sets the Checks card aside too, so it does not come back there. No
+answer: change nothing and do not ask again; the Checks tab keeps its card with "Turn on". No `TIP:` lines: skip this.
 
 ## 4. Bring in the user's own work
 

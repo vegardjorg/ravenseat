@@ -25,7 +25,7 @@ const rowsOf = (v: any, id: string) => v.categories.find((c: any) => c.id === id
 const keysOf = (v: any, id: string) => rowsOf(v, id).map((r: any) => r.key);
 
 describe('the grouping', () => {
-  it('all eleven categories in the registry order, basic rows first, every row once', () => {
+  it('all twelve categories in the registry order, basic rows first, every row once', () => {
     const v = view();
     expect(v.categories.map((c: any) => c.id)).toEqual(R.CATEGORIES.map((c: any) => c.id));
     for (const c of v.categories) {

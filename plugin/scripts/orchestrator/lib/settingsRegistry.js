@@ -10,7 +10,7 @@
 // A row:
 //   key            the path inside the file `store` names: "push.mode" in queue.config.json, "limits.maxConcurrent" or
 //                  "guidance" in queue.json. A key under features keeps its dot ("features.plans.legal").
-//   category       one of CATEGORIES (the eleven groups, each with its basic settings first, the advanced ones under)
+//   category       one of CATEGORIES (the twelve groups, each with its basic settings first, the advanced ones under)
 //   level          'basic' | 'advanced' (advanced shows the visible label LABELS.advanced, folded in its category)
 //   modes          ['lite', 'full'] or ['full'] (full only: lite hides it behind one line, LABELS.fullOnly)
 //   fullWhy        one line why a full-only row means nothing in lite; null otherwise
@@ -48,7 +48,7 @@
 /** The visible labels (the owner wants advanced marked, inside each category, not in a pile of its own). */
 const LABELS = Object.freeze({ advanced: 'Advanced', fullOnly: 'Full mode only' });
 
-/** The eleven categories, in the order they are shown. */
+/** The twelve categories, in the order they are shown. */
 const CATEGORIES = Object.freeze([
   { id: 'project', title: 'Project and git' },
   { id: 'limits', title: 'Limits and cost' },
@@ -56,6 +56,7 @@ const CATEGORIES = Object.freeze([
   { id: 'gates', title: 'Gates and checks' },
   { id: 'guards', title: 'Agent guards' },
   { id: 'push', title: 'Merge and push' },
+  { id: 'private', title: 'Private and sharing' },
   { id: 'review', title: 'Review and agents' },
   { id: 'board', title: 'Board and advice' },
   { id: 'cloud', title: 'Cloud' },
@@ -681,6 +682,19 @@ const SETTINGS = Object.freeze([
   row('metrics.idleGapMin', 'history', 'integer', 'Idle gap (minutes)',
     'A gap longer than this between two transcript entries is idle and not counted as active time.'),
   // Owner decision B5: performance, not a guard (lib/timeLogArchive.js, lib/queueArchive.js).
+  // Private and sharing (H3, H4: lib/queueShare.js, lib/privatePaths.js). share.queueData and share.publicOk are read
+  // only here: turning sharing on is `ravenseat share on`, which explains what becomes visible and needs --yes (and
+  // --public-ok in a repo not known to be private), or the owner's "Turn on" on the Checks card in a private repo.
+  row('share.queueData', 'private', 'onoff', 'Queue files in git',
+    'Off by default. On: queue.json and the plan register (share.include) are kept in git as a backup; the rest of the data folder stays ignored. Turn it on with ravenseat share on, which explains first.',
+    { edit: 'read' }),
+  row('share.include', 'private', 'list', 'Shared queue files',
+    'The data folder files share on puts in git (default queue.json and plans.json). The time log, missions, reports, answers, locks and evidence can never be listed.'),
+  row('share.publicOk', 'private', 'onoff', 'Sharing confirmed for a public repo',
+    'Set by share on --public-ok: the owner confirmed sharing in a repo that is public or of unknown visibility. Without it the push guard refuses a commit with the shared files once the repo is no longer known to be private.',
+    { edit: 'read' }),
+  row('privatePaths', 'private', 'list', 'Private paths',
+    'Folders (trailing /) and files of your own that stay out of git: the .gitignore, the push and merge guard and the cloud\'s hidden paths all read this list. { "path": ..., "read": false } also keeps the queue\'s agents from reading it. ravenseat private add|remove|list.'),
   row('history.rotateTimeLog', 'history', 'choice', 'Time log rotation',
     'Monthly moves the time log to one archive per month next to it (times-2026-10.jsonl) on the first write of a new ' +
     'month; every reader that needs older rows reads the archives too. Off keeps one file that only grows.', {

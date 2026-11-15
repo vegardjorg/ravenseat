@@ -10,6 +10,10 @@
 //     "Turn on" writes the setting; a card set aside stays set aside;
 //   - doctor shows one INFO line while the check is off (never WARN or FAIL), naming the setting.
 // A check counts as on only when its setting is exactly true: a missing or odd value is off, the default.
+// A no to a setup tip sets the Checks card aside (owner decision 2026-11-15): the tip names `ravenseat checks dismiss
+// <suggestion>`, the same "Set aside" as on the Checks tab, so the suggestion does not come back there either.
+// An entry may have `on` (the command that turns it on, when `settings set` cannot: share needs its confirmation) and
+// `offer(facts)` (tip only when it holds: share is offered as a backup only in a repo known to be private).
 //
 //   OPT_IN                 the checks, in the order setup and doctor name them
 //   isOn(config, key)      is the setting true?
@@ -44,6 +48,17 @@ const OPT_IN = Object.freeze([
     title: 'the secret scan at receive',
     tip: 'scan each track\'s commits for keys at receive, so a merge stops on one before it reaches the base branch',
   }),
+  // Sharing queue.json and the plan register in git (lib/queueShare.js): a backup, offered only in a private repo
+  // (lib/repoVisibility.js, the cached answer). Never important: off is the safe side.
+  Object.freeze({
+    key: 'share.queueData',
+    row: 'share',
+    suggestion: 'share-backup',
+    title: 'the queue\'s files in git as a backup',
+    tip: 'keep queue.json and the plan register in git as a backup (this repo is private; the time log, missions and answers stay out)',
+    on: 'share on --yes',
+    offer: (facts) => facts?.visibility === 'private',
+  }),
 ]);
 
 /** The value at a dotted key, or undefined. */
@@ -55,20 +70,28 @@ const isOn = (config, key) => valueAt(config ?? {}, key) === true;
 const byKey = (key) => OPT_IN.find((c) => c.key === key) ?? null;
 const bySuggestion = (key) => OPT_IN.find((c) => c.suggestion === key) ?? null;
 
-/** The checks that are off and that setup has not tipped about yet. `asked` is the list of keys already tipped. */
-function tipsToGive(config, asked = []) {
+/**
+ * The checks that are off and that setup has not tipped about yet. `asked` is the list of keys already tipped; `facts`
+ * what the entries' offer() reads ({ visibility }). An entry whose offer does not hold is not tipped, and not recorded.
+ */
+function tipsToGive(config, asked = [], facts = {}) {
   const done = new Set(Array.isArray(asked) ? asked : []);
-  return OPT_IN.filter((c) => !isOn(config, c.key) && !done.has(c.key));
+  return OPT_IN.filter((c) => !isOn(config, c.key) && !done.has(c.key) && (!c.offer || c.offer(facts)));
 }
 
-const tipLine = (c, cli = 'ravenseat') => `TIP: turn on a check that is off? It would ${c.tip}. On: ${cli} settings set ${c.key} on`;
+/** The command that turns a check on. */
+const onCommand = (c, cli = 'ravenseat') => `${cli} ${c.on ?? `settings set ${c.key} on`}`;
+
+/** The setup line: what it would do, how to turn it on, and how to say no (which sets the Checks card aside too). */
+const tipLine = (c, cli = 'ravenseat') =>
+  `TIP: turn on a check that is off? It would ${c.tip}. On: ${onCommand(c, cli)}. No: ${cli} checks dismiss ${c.suggestion}`;
 
 /** Doctor's INFO text while a check is off. `gap`: the check, run quietly, found something (never what). */
 function offLine(c, { cli = 'ravenseat', gap = false } = {}) {
   return (
     `off: ${c.title} (${c.key})${gap ? '. It found something to look at' : ''}. ` +
-    `On: ${cli} settings set ${c.key} on, or Turn on on the Checks tab`
+    `On: ${onCommand(c, cli)}, or Turn on on the Checks tab`
   );
 }
 
-module.exports = { OPT_IN, isOn, byKey, bySuggestion, tipsToGive, tipLine, offLine, valueAt };
+module.exports = { OPT_IN, isOn, byKey, bySuggestion, tipsToGive, tipLine, offLine, onCommand, valueAt };

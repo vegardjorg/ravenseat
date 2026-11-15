@@ -142,6 +142,17 @@ const STANDARD = Object.freeze({
   // enabled: `ravenseat doctor` checks that the project's OWN .gitignore (the global one switched off) ignores what
   // Ravenseat keeps local, and that git tracks none of it. Off by default like the two above (lib/optInChecks.js).
   gitignoreCheck: { enabled: false },
+  // The queue's files in git (lib/queueShare.js, H3). Off by default: the whole data folder is ignored. On (only through
+  // `ravenseat share on`, which explains what becomes visible and needs --yes): only the files in include may be tracked;
+  // setup writes <dataFolder>/* with !<dataFolder>/<file> per file. Some files can never be shared (the time log,
+  // missions, reports, transcript extracts, the owner's answers, locks, evidence, the board key, setup-tips.json).
+  // publicOk: the owner confirmed sharing in a public repo or one of unknown visibility (share on --public-ok); without
+  // it the push guard refuses while the repo is not known to be private (lib/repoVisibility.js, cached 24 h).
+  share: { queueData: false, include: ['queue.json', 'plans.json'], publicOk: false },
+  // The project's own private folders and files (lib/privatePaths.js, H4): "docs/notes/" or { "path": "...", "read": false }.
+  // One list for the .gitignore (setup), the push and merge guard (a commit that tracks something under one is refused),
+  // the read guard (read: false: the queue's agents may not read there) and cloudHidden. An empty list is off.
+  privatePaths: [],
   // `ravenseat doctor` warns about tracked files larger than this (MB).
   largeFileMb: 5,
   // The size of Claude's instructions (lib/instructionSize.js): what Claude Code loads at the start of every session, track

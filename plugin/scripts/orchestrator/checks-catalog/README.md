@@ -50,7 +50,8 @@ red marker until the gap is fixed or the card is set aside.
 `packs-missing` (a pack for the stack is not on in `review.packs`), `stack-unpacked` (a known stack has no pack),
 `missing:<kinds>`, `found:<kinds>`, `not-in-ci:<kinds>`, `off:<setting>` (an opt-in check that is off),
 `allowlist-tracked-hit` (a key in an approved command in a tracked file), `gitignore-gap` (`.claude/settings.local.json`
-not ignored by the project's own rules, or a tracked file Ravenseat keeps local).
+not ignored by the project's own rules, or a tracked file Ravenseat keeps local), `repo-private` (the repo is known to
+be private: the cached answer in `<dataFolder>/repo-visibility.json`; unknown counts as not private).
 
 The kinds are test, types, lint, build, coverage, secret-scan, audit, security, dep-updates and hooks.
 

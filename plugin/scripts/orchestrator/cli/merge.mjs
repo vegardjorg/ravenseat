@@ -1279,6 +1279,32 @@ export async function cmdMerge() {
       logTime(id, 'secret-overridden', `tip ${String(trackTip).slice(0, 12)}: ${where}`);
       console.log(`WARNING: --allow-secret: merging ${id} past the secret found at receive (${where}); logged as "secret-overridden".`);
     }
+    // What must stay out of git (H3 share, H4 privatePaths; lib/queueShare.js denyReason, the same rule as the push
+    // hook): a track that adds or changes a data folder file that is not shared, or a file under a private path, is not
+    // merged, since the base branch would then carry it to the next push. No override flag: the way out is to take the
+    // file out of the track's commits. While share is on, the repo's visibility is asked again when the cached answer
+    // is older than a day (lib/repoVisibility.js, a short time limit; no answer is unknown, which counts as public).
+    {
+      const QS = require('./lib/queueShare.js');
+      const RV = require('./lib/repoVisibility.js');
+      const changed = (git(['diff', '--name-only', '--diff-filter=ACMR', `refs/heads/${BASE}...${trackTip}`, '--']) ?? '')
+        .split(/\r?\n/)
+        .filter(Boolean);
+      let cache = null;
+      if (QS.shareOf(CONFIG).on && changed.some((f) => QS.sharedFile(f, CONFIG))) {
+        try {
+          cache = await RV.current({ folder: FOLDER, remoteUrl: RV.remoteUrlOf(GIT_ROOT, CONFIG.remote) });
+        } catch {
+          cache = RV.readCache(FOLDER, { any: true });
+        }
+      }
+      const refused = QS.denyReason({ files: changed, cfg: CONFIG, cache, cli: CLI });
+      if (refused)
+        die(
+          `STOP: ${id} is not merged. ${refused} The commits are the track's: a fix round takes the file out of its branch ` +
+            `(${CLI} resume ${id} --reason fix), then ${CLI} receive ${id}. Nothing was done.`,
+        );
+    }
     // gateEvidence.mode own and external: ravenseat's own evidence on the tip decides (mergeGateKnown); a red one stops
     // here, and with none the gates run after the base gate check below (mergeGateRun), so a red base gets its own stop
     // first. off, and --force-red-gate: the record in queue.json, as before (only a recorded red stops).

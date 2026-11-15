@@ -37,6 +37,12 @@
 // timeout, an error) asks too, and says so.
 // deployCommands: a command that starts with one of them gets "ask" (agents and the main session).
 //
+// What must stay out of git (H3 share, H4 privatePaths; lib/queueShare.js denyReason): the same push (and one of a
+// push.allowBranches branch) is DENIED when its commits track a data folder file that is not shared, a file under a
+// private path, or, while share is on, a shared file in a repo not known to be private (unless share.publicOk). The
+// files come from one git call (`git log --name-only <remote>/<branch>..<branch>`, the branch on a first push), the
+// visibility from the cache only (lib/repoVisibility.js, any age): never the network inside the hook's 10 s.
+//
 // The missing controls (lib/controls.js, push.controlsWarning): the same plain push asks when the project has no CI config
 // or no gates, with what is missing and how many commits. Also on a first push, which is what a new user does. Never a deny.
 //
@@ -130,6 +136,26 @@ function secretQuestion(cwd, k, branch = k.baseBranch) {
     if (k.secretScan?.enabled === false) return null;
     const SS = require('./lib/secretScan.js');
     return SS.question(SS.scanPush({ cwd, remote: k.remote, branch, setup: k.secretScan }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The deny for a push of `branch` whose commits track what must stay out of git (lib/queueShare.js denyReason), or null.
+ * A git error gives null (fails open like the questions); an empty list of private paths with share off still checks
+ * the data folder, which is ignored by default and so only reaches a commit by `git add -f` or a missing .gitignore.
+ */
+function trackingDeny(cwd, k, branch) {
+  try {
+    const head = `refs/heads/${branch}`;
+    const remote = `refs/remotes/${k.remote}/${branch}`;
+    const range = git(cwd, ['rev-parse', '-q', '--verify', remote]) ? `${remote}..${head}` : head;
+    const out = git(cwd, ['log', '--format=', '--name-only', '--diff-filter=ACMR', range, '--']);
+    if (out === null) return null;
+    const files = [...new Set(out.split(/\r?\n/).filter(Boolean))];
+    const cache = require('./lib/repoVisibility.js').readCache(dataFolder(), { any: true });
+    return require('./lib/queueShare.js').denyReason({ files, cfg: k, cache });
   } catch {
     return null;
   }
@@ -284,6 +310,7 @@ process.stdin.on('end', () => {
       batchQuestion: () => batchQuestion(cwd, k),
       secretQuestion: () => secretQuestion(cwd, k),
       controlsQuestion: () => controlsQuestion(cwd, k),
+      trackingDeny: (name) => trackingDeny(cwd, k, name),
     });
     if (!answer) process.exit(0);
 

@@ -113,6 +113,10 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | RT-27 | A key in a command Claude Code approved ends up in git | PASS | challenged | `allowlistSecret-cli`, `allowlistSecrets`, `doctorBaseline` |
 | RT-28 | Only my global gitignore keeps my settings and the queue data out of git | PASS | challenged | `projectGitignore-cli`, `doctorBaseline`, `setup` |
 | RT-29 | A track commits a key and the merge puts it in the base branch | PASS | challenged | `secretAtReceive-cli`, `secretScan`, `queueAgentGuard` |
+| RT-30 | The queue's own files (time log, missions, answers) end up in git without my say | PASS | challenged | `rt30-share-guard`, `shareCli`, `queueShare` |
+| RT-31 | My private folder ends up in git, pushed by me or merged from a track | PASS | challenged | `rt31-private-paths`, `privateCli`, `queueShare` |
+| RT-32 | A queue agent reads a folder I closed to the agents | PASS | challenged | `rt32-private-read`, `queueShare` |
+| RT-33 | Sharing was on for a private repo, and the repo turned public | PASS | challenged | `rt33-public-turn`, `repoVisibility`, `queueShare` |
 <!-- redteam-map:end -->
 
 Notes on some rows:
@@ -176,6 +180,16 @@ Notes on some rows:
   count as unread, so with a push in the line they are denied (`agentPushExec`). The same review found that the secret
   check could outlast the hook's own time limit, which let the push through unasked; it now has one limit below the
   hook's, and a scan out of time asks (`reviewGaps2`).
+- **RT-30 to RT-33** (2026-11-15): the push guard is run as hooks.json wires it, in a real repo with a local origin,
+  and `merge` on a cloud track's branch. A data folder file committed with `git add -f` is denied at push while share
+  is off, and so is a time log or mission while it is on; queue.json goes only with share on. A file under a private
+  path is denied at push and at merge, a sibling with the same prefix is not, and an empty list refuses nothing. A
+  read:false path is denied to a track and a reviewer, also through a worktree path and with offset and limit, never
+  to the main session. With share on, a push that carries a shared file is denied once the cached visibility says
+  public or nothing is known, unless `share.publicOk`; other work still goes. Each guard (the push hook's call, the
+  merge stop, the read rule and the visibility rule) was removed from the source once and its test went red. Not
+  covered: a file the base branch already tracks from before (`share status` and doctor name it), and a repo whose
+  visibility changes while the cache is fresh (up to a day; `share status` asks again).
 - **RT-27, RT-28 and RT-29** (2026-11-15): doctor names a key in an approved command by file and index, FAIL when git
   tracks the file and WARN when it is only on disk, also in an agent worktree; it checks the project's own
   `.gitignore` with the global one switched off (a test git config of its own); and receive scans the track's commits,

@@ -123,8 +123,8 @@ describe('coverage: every setting has a row', () => {
 describe('every row is complete', () => {
   const CATEGORY_IDS = R.CATEGORIES.map((c: { id: string }) => c.id);
 
-  it('the eleven categories, each with a title and at least one row', () => {
-    expect(R.CATEGORIES).toHaveLength(11);
+  it('the twelve categories, each with a title and at least one row', () => {
+    expect(R.CATEGORIES).toHaveLength(12);
     for (const c of R.CATEGORIES) {
       expect(c.title, c.id).toMatch(/\S/);
       expect(ROWS.some((r) => r.category === c.id), c.id).toBe(true);
@@ -309,7 +309,7 @@ describe('the config table in queue.md follows the registry (step 11)', () => {
         return { keys: [...cells[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]), marks: cells[cells.length - 1] };
       });
 
-  it('the eleven categories, each its own table, in the registry order', () => {
+  it('the twelve categories, each its own table, in the registry order', () => {
     expect(parts.map((p: { title: string }) => p.title)).toEqual(R.CATEGORIES.map((c: { title: string }) => c.title));
   });
 

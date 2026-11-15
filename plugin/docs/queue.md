@@ -666,7 +666,7 @@ branch prefix, gate commands, migration folder (optional), areas (`modules`) for
 reviewer agents per class. Missing values fall back to safe defaults. `ravenseat settings` lists every setting by
 category with its value and default, and `ravenseat settings set <key> <value>` changes one (see Everyday commands).
 
-The tables below follow the same eleven categories as `ravenseat settings` and the board's gear (one row per setting in
+The tables below follow the same twelve categories as `ravenseat settings` and the board's gear (one row per setting in
 `lib/settingsRegistry.js`; a test keeps them in step). The last column marks a row **Advanced** (shown by `ravenseat
 settings --advanced`), **Full mode only** (not used in lite; `ravenseat settings --all` says why) and **queue.json**
 (saved only for you in the queue data, not in the project's `queue.config.json`; set it with `ravenseat settings set`,
@@ -775,6 +775,15 @@ names every guard weaker than its default on its `settings` row.
 | `push.ciWatch`, `push.ciWatchIntervalSec`, `push.ciWatchTimeoutMin` | `"off"`, `60`, `90` | The optional CI watch after a batch push: `"github"` (needs `gh`) makes push-check print `ravenseat push-check --watch-ci <sha>` for the orchestrator to start in the background. A failed check gives one fix task `CI-<sha7>` and a red base (exit 9), an infrastructure failure an owner question `ci-<sha7>-infra` and no freeze, a timeout exit 10. Local gates stay the rule (see orchestration.md, Batch push) | Advanced |
 | `migrations.folder`, `migrations.filePattern`, `migrations.blockSize` | `null`, `^(\d+)_.*\.sql$`, `10` | Optional numbered migrations: the folder (`null` turns block numbering and migration push off), the pattern whose first group is the number, and how many numbers a task reserves | Advanced |
 | `migrations.pushCommand`, `migrations.environmentFile`, `migrations.allowedEnvironment` | `null`, `null`, `[]` | `merge` runs the push command after merging (skip with `--without-migr-push`), but only when the environment file names an allowed environment | Advanced |
+
+### Private and sharing
+
+| Key | Default | Used for | Marks |
+|---|---|---|---|
+| `share.queueData` | `false` | Keeps the queue's own files (`share.include`) in git as a backup. Off: the whole data folder is ignored. Turned on only by `ravenseat share on`, which explains who can read them and needs `--yes` (and `--public-ok` in a repo that is public or of unknown visibility), or by Turn on on the Checks card, offered only in a private repo; `settings set` cannot write it. On: the .gitignore gets `<dataFolder>/*` and `!<dataFolder>/<file>` per file, and the push and merge guard still refuse every other data folder file | Advanced |
+| `share.include` | `["queue.json", "plans.json"]` | The data folder files that are shared. The time log, missions and prompt files, reports, transcript extracts, the owner's answers and questions, locks, the gate evidence, the board key and setup-tips.json can never be listed; such an entry is refused with the reason | Advanced |
+| `share.publicOk` | `false` | Written by `share on --public-ok`. Without it, the push guard refuses a commit with the shared files as soon as the repo is not known to be private (also when a private repo turned public after share on). The visibility is cached for 24 hours in `<dataFolder>/repo-visibility.json`; the push guard reads only the cache | Advanced |
+| `privatePaths` | `[]` | Your own private folders (`"docs/internal/"`) and files. One list drives the .gitignore (setup, `doctor --fix`), the push and merge guard (a commit that tracks a file there is refused) and the cloud's hidden paths. `{ "path": "...", "read": false }` also denies the queue's agents (tracks, reviewers) a Read there; the main session is never stopped. `ravenseat private add <path> [--no-read]`, `remove`, `list` | Advanced |
 
 ### Review and agents
 

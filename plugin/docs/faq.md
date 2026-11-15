@@ -133,12 +133,33 @@ worktrees, and names the file and the index (never the key): FAIL when git track
 disk. With `gitignoreCheck.enabled` on it also checks that your project's own `.gitignore`, not only your global one,
 ignores the personal settings and the queue's data, and with `secretScan.atReceive` on a key a track commits is found
 at `receive`, and the merge stops on it until the track takes it out. All three are off until you turn them on.
-Pass keys as environment variables instead of typing them in commands.
+`ravenseat secrets clean --yes` removes the rules that hold a key (after a copy in the data folder; `--dry-run` only
+names them), but the key itself must still be changed. Pass keys as environment variables instead of typing them in
+commands.
 
 **Verified by:** [`allowlistSecret-cli`](../scripts/orchestrator/__tests__/redteam/allowlistSecret-cli.test.ts),
 [`projectGitignore-cli`](../scripts/orchestrator/__tests__/redteam/projectGitignore-cli.test.ts),
 [`secretAtReceive-cli`](../scripts/orchestrator/__tests__/redteam/secretAtReceive-cli.test.ts),
-[`allowlistSecrets`](../scripts/orchestrator/lib/__tests__/allowlistSecrets.test.ts).
+[`allowlistSecrets`](../scripts/orchestrator/lib/__tests__/allowlistSecrets.test.ts),
+[`secretsCleanCli`](../scripts/orchestrator/__tests__/secretsCleanCli.test.ts).
+
+### Can I keep the queue's files in git as a backup?
+
+Yes, if you say so: the whole data folder (`scripts/.queue/`) is ignored by default. `ravenseat share on` explains who
+can read the files once pushed (everyone with access to the repo, and every fork) and changes nothing without `--yes`;
+in a repo that is public or of unknown visibility it also needs `--public-ok`. It then shares `queue.json` and
+`plans.json` (or what `--include` names): the `.gitignore` gets `scripts/.queue/*` and one `!` line per file. The time
+log, missions, reports, the owner's answers, locks and the gate evidence can never be shared. The push guard and
+`merge` refuse a commit that tracks any other file in the folder, and refuse the shared files too if the repo later
+turns public (the visibility is cached for a day; the push guard never asks the network). Your own private folders
+go in `privatePaths` (`ravenseat private add docs/internal/`): the same guard keeps them out of git, and `--no-read`
+keeps the queue's agents from reading them. In a private repo, setup and the Checks tab offer sharing once.
+
+**Verified by:** [`rt30-share-guard`](../scripts/orchestrator/__tests__/redteam/rt30-share-guard.test.ts),
+[`rt31-private-paths`](../scripts/orchestrator/__tests__/redteam/rt31-private-paths.test.ts),
+[`rt32-private-read`](../scripts/orchestrator/__tests__/redteam/rt32-private-read.test.ts),
+[`rt33-public-turn`](../scripts/orchestrator/__tests__/redteam/rt33-public-turn.test.ts),
+[`shareCli`](../scripts/orchestrator/__tests__/shareCli.test.ts).
 
 ### Can two sessions, or two agents, trip over each other?
 

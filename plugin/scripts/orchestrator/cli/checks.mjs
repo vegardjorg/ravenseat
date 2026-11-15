@@ -24,11 +24,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { a, CONFIG, CLI, die, edit, FILE, KK, LM, MAIN_TREE, read, require } from './context.mjs';
+import { a, CONFIG, CLI, die, edit, FILE, FOLDER, KK, LM, MAIN_TREE, read, require } from './context.mjs';
 import { addTask, ensureProject, PROJECT, readFacts } from './kickstart.mjs';
 import { guardsBoard } from './inspection.mjs';
 import { allowlistFacts, gitignoreFacts } from './doctorBaseline.mjs';
 import { trackBranchHere } from './settings.mjs';
+import { enableShare } from './share.mjs';
 
 const SCAN = require('./lib/checksScan.js');
 const CATALOG = require('./lib/checksCatalog.js');
@@ -37,6 +38,10 @@ const KNOWN = require('./lib/knownBugGate.js');
 const RP = require('./lib/reviewPacks.js');
 const RS = require('./lib/reviewSignals.js');
 const OI = require('./lib/optInChecks.js');
+const RV = require('./lib/repoVisibility.js');
+
+/** The cached visibility (any age, never a network call here): the share card is offered only in a private repo. */
+const cachedVisibility = () => RV.readCache(FOLDER, { any: true })?.visibility ?? null;
 
 const BUILTIN = fileURLToPath(new URL('../checks-catalog', import.meta.url));
 const OWN = path.join(MAIN_TREE, 'docs', 'queue', 'checks');
@@ -60,7 +65,12 @@ function instructionsLarge() {
  */
 function optInFacts(git) {
   const off = OI.OPT_IN.filter((c) => !OI.isOn(CONFIG, c.key)).map((c) => c.key);
-  const out = { optInOff: off, allowlistTrackedHit: false, gitignoreGap: false };
+  const out = { optInOff: off, allowlistTrackedHit: false, gitignoreGap: false, repoPrivate: false };
+  try {
+    out.repoPrivate = RV.isPrivate(cachedVisibility());
+  } catch {
+    // error-ignored: unknown is not private, so no share card
+  }
   if (!git) return out;
   try {
     if (off.includes('secretScan.allowlist')) out.allowlistTrackedHit = allowlistFacts().tracked.length > 0;
@@ -324,6 +334,14 @@ function turnOn(key) {
   const s = suggestion(makeReport(queueNow()), key);
   const c = s.action === 'setting' ? OI.byKey(s.setting) : null;
   if (!c) die(`${key} has no setting to turn on. ${CLI} checks show ${key} says what it needs.`);
+  // Sharing is never a plain setting write: the owner's click on the card (offered only in a private repo) is the
+  // confirmation, and it goes through the same enableShare as `share on --yes` (config, .gitignore, audit row).
+  if (c.key === 'share.queueData') {
+    const vis = cachedVisibility();
+    if (!RV.isPrivate(vis)) die(`${key}: this repo is not known to be private, so ${CLI} share on explains and confirms first. Nothing was changed.`);
+    for (const l of enableShare({ include: require('./lib/queueShare.js').shareOf(CONFIG).include, visibility: vis, by: 'owner (checks)' })) console.log(l);
+    return;
+  }
   const SV = require('./lib/settingsView.js');
   const file = KK.configFile();
   let text = null;

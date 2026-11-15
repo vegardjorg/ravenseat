@@ -5,6 +5,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **The queue's files in git, on your word, and private paths** (sharing is off by default). `ravenseat share on`
+  explains who can read `queue.json` and `plans.json` once pushed and needs `--yes` (and `--public-ok` in a repo not
+  known to be private); the time log, missions and answers can never be shared. `privatePaths` (`ravenseat private add`)
+  keeps your own folders out of git and, with `read: false`, out of the agents' reads. The push guard and `merge` deny a
+  commit that tracks either, and the shared files once a private repo turns public. `doctor --fix` writes the `.gitignore`.
+- **`ravenseat secrets clean`** removes the approved commands that hold a key, after a copy in the data folder, and
+  never prints the rule. A no to a setup tip now sets its Checks card aside too.
 - **Keys in approved commands, and the project's own .gitignore** (both off until you turn them on: `secretScan.allowlist`,
   `gitignoreCheck.enabled`; setup tips once, the Checks tab has a "Turn on" card). `ravenseat doctor` then reads the commands Claude Code
   approved (`permissions.allow`, `ask`, `deny`, also in the agents' worktrees) and names one with a key by file and

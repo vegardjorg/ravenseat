@@ -42,7 +42,13 @@ ravenseat kickstart                 # which checks the project has and one next 
 ravenseat kickstart gates --apply   # sets the checks your project already has as gates
 ravenseat kickstart add             # proposes the next step as a task; it starts only when you approve it
 ravenseat gate "<failure class>"    # a known bug becomes a proposed gate task; gates.fromKnownBugs: propose, auto or off
-ravenseat doctor [--all]            # read-only health check: node, hooks, config, state, worktrees, budget, safety baseline, keys in approved commands and the project .gitignore when turned on (--all adds CI cost tips)
+ravenseat doctor [--all] [--fix]    # health check: node, hooks, config, state, worktrees, budget, safety baseline, keys in approved commands and the project .gitignore when turned on (--all adds CI cost tips); --fix writes the project's .gitignore from the settings first
+ravenseat share status             # whether the queue's own files are in git, the repo's visibility and what git tracks in the data folder
+ravenseat share on [--include <file> ...] --yes   # off by default: queue.json and plans.json in git as a backup; explains first, a public or unknown repo also needs --public-ok
+ravenseat share off                # the whole data folder is private again
+ravenseat private add <path> [--no-read]   # a folder or file of yours that stays out of git (and, with --no-read, out of the agents' reads)
+ravenseat private list|remove <path>       # the private paths, or take one out
+ravenseat secrets clean [--dry-run] --yes  # removes approved commands that hold a key, after a copy in the data folder; never shows the rule
 ravenseat instructions [--plan]     # what Claude loads at start, and where each section could go; changes none of your files (--json)
 ravenseat machine [--measure]       # cores, memory, free memory and a suggested maxConcurrent (an estimate); --measure times one quick and one full check when no track runs
 ravenseat surface                   # git hooks and config that run code, against what was accepted; changes nothing

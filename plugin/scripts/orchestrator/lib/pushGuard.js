@@ -486,6 +486,10 @@ const queueShaped = (command) => QUEUE_SHAPED.test(command);
  *                                  else is found. null = no question.
  *   secretQuestion?: () => string|null  the secret precheck question for the same push (lib/secretScan.js), same rules.
  *   controlsQuestion?: () => string|null  the same push with no CI config or no gates (lib/controls.js), same rules.
+ *   trackingDeny?: (branch) => string|null  a push of that branch (the base or an allowed one) by the main session
+ *                                  that carries a file that must stay out of git (lib/queueShare.js denyReason: the
+ *                                  data folder, privatePaths, a shared file in a repo not known to be private). A
+ *                                  reason is a deny, never a question: the file would leave the machine for good.
  *   deployCommands?: string[]      default config().deployCommands,
  *   branchPrefix?: string          config().branchPrefix: a queue agent's `ravenseat add` must run on such a branch,
  * }
@@ -672,6 +676,12 @@ function assess(command, context = {}) {
   }
   // The network guard applies to the queue's agents: tracks, reviewers and helper agents (never the orchestrator).
   if (guarded) findings.push(...assessNetwork(command, context));
+  // What must stay out of git (H3, H4): a deny before any question, for the base branch and the allowed ones alike.
+  if ((basePush || allowedPushes.length) && findings.length === 0 && !context.agentType && typeof context.trackingDeny === 'function') {
+    const names = [...(basePush ? [baseBranch] : []), ...allowedPushes];
+    const reasons = [...new Set(names.map((name) => context.trackingDeny(name)).filter(Boolean))];
+    if (reasons.length) findings.push({ decision: 'deny', reason: reasons.join(' Also: ') });
+  }
   // The secret precheck, the missing controls and the batch threshold: only for the orchestrator (no agent_type; tracks
   // never push) and only when nothing else hit. All the questions go in one dialog.
   if (basePush && findings.length === 0 && !context.agentType) {

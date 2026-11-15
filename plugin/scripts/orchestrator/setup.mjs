@@ -61,19 +61,8 @@ export const GITIGNORE_LINES = [
   '!.env.example',
 ];
 
-/**
- * A project-relative path in gitignore form (forward slashes, no leading ./ or trailing /), or null when it is empty,
- * absolute or outside the project (then the project's .gitignore has no say over it).
- * @param {unknown} p
- */
-function projectPath(p) {
-  if (typeof p !== 'string' || !p.trim()) return null;
-  const s = p.trim().replace(/\\/g, '/');
-  if (s.startsWith('/') || /^[A-Za-z]:/.test(s)) return null;
-  const n = path.posix.normalize(s).replace(/^(\.\/)+/, '').replace(/\/+$/, '');
-  if (!n || n === '.' || n === '..' || n.startsWith('../')) return null;
-  return n;
-}
+/** A project-relative path in gitignore form, or null (lib/privatePaths.js projectPath, shared with the guards). */
+const projectPath = (p) => require('./lib/privatePaths.js').projectPath(p);
 
 /**
  * The lines the project's .gitignore must hold: GITIGNORE_LINES, plus the configured dataFolder (as `<folder>/`) and the
@@ -81,17 +70,62 @@ function projectPath(p) {
  * `scripts/.queue/` line then ignores nothing; the queue, the time log and the transcripts' extracts would be one
  * `git add .` from the repo. The fixed line stays too, so a later move back is covered. Setup writes these lines and
  * `ravenseat doctor` (cli/doctorBaseline.mjs checkGitignore) checks them against the project's own rules.
- * @param {{ dataFolder?: string, timeLog?: string }} [cfg]  the project's configuration (lib/queueConfig.js config())
+ * With share on (lib/queueShare.js) the data folder's line is `<folder>/*` with `!<folder>/<file>` per shared file
+ * instead of `<folder>/` (git cannot re-include a file in an ignored folder). Every private path (lib/privatePaths.js)
+ * is added in its own form.
+ * @param {{ dataFolder?: string, timeLog?: string, share?: object, privatePaths?: unknown[] }} [cfg]  the project's configuration (lib/queueConfig.js config())
  * @returns {string[]}
  */
 export function requiredIgnores(cfg = {}) {
-  const lines = [...GITIGNORE_LINES];
-  const folders = () => lines.filter((l) => l.endsWith('/'));
+  const share = require('./lib/queueShare.js').ignoreLines(cfg);
   const data = projectPath(cfg?.dataFolder);
-  if (data && !lines.includes(`${data}/`)) lines.push(`${data}/`);
+  let lines = [...GITIGNORE_LINES];
+  // The plain folder line would hide the exceptions, so it goes while share is on.
+  if (share.length && data) lines = lines.filter((l) => l !== `${data}/`);
+  const folders = () => lines.filter((l) => l.endsWith('/') || l.endsWith('/*')).map((l) => l.replace(/\*$/, ''));
+  if (data && !share.length && !lines.includes(`${data}/`)) lines.push(`${data}/`);
+  lines.push(...share.filter((l) => !lines.includes(l)));
   const log = projectPath(cfg?.timeLog);
   if (log && !lines.includes(log) && !folders().some((f) => log.startsWith(f))) lines.push(log);
+  for (const e of require('./lib/privatePaths.js').entries(cfg)) if (!lines.includes(e.line)) lines.push(e.line);
   return lines;
+}
+
+/**
+ * The project's .gitignore text with what requiredIgnores says: the missing lines added, and, for the share setting,
+ * the plain data folder line removed while share is on and every exception for a file that is not shared removed.
+ * Other lines are never touched. Setup, `ravenseat share on|off`, `ravenseat private add` and `doctor --fix` all write
+ * through this, so they never disagree. Returns lib/queueShare.js editGitignore's { text, added, removed }.
+ * @param {string} text  the file now ('' when missing)
+ * @param {object} cfg   the project's configuration
+ */
+export function gitignoreEdit(text, cfg) {
+  const QS = require('./lib/queueShare.js');
+  const s = QS.shareOf(cfg);
+  const data = projectPath(cfg?.dataFolder);
+  return QS.editGitignore(text, {
+    required: requiredIgnores(cfg),
+    remove: s.on && data ? [`${data}/`, data] : [],
+    keepExceptions: s.on ? s.include : [],
+    dataFolder: data,
+  });
+}
+
+/** Writes the project's .gitignore through gitignoreEdit (unless dry). Returns the edit. */
+export function writeGitignore(target, cfg, { dry = false } = {}) {
+  const file = path.join(target, '.gitignore');
+  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const r = gitignoreEdit(text, cfg);
+  if (!dry && r.text !== text) fs.writeFileSync(file, r.text);
+  return r;
+}
+
+/** The note for a .gitignore edit: what was added and removed, or unchanged. */
+export function gitignoreNote(r) {
+  const parts = [];
+  if (r.added.length) parts.push(`added ${r.added.join(' ')}`);
+  if (r.removed.length) parts.push(`removed ${r.removed.join(' ')}`);
+  return `.gitignore: ${parts.length ? parts.join('; ') : 'unchanged'}`;
 }
 
 /**
@@ -188,16 +222,9 @@ export function setupProject(o) {
     copy(path.join(PLUGIN_ROOT, 'docs', f), path.join(t, 'docs', 'queue', f));
   copy(path.join(PLUGIN_ROOT, 'CLAUDE.queue.md'), path.join(t, 'CLAUDE.queue.md'));
 
-  // 4: .gitignore: the fixed lines and the configured dataFolder and timeLog (requiredIgnores).
-  const gitignorePath = path.join(t, '.gitignore');
-  const gitignore = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf8') : '';
-  const missing = requiredIgnores(require('./lib/queueConfig.js').config({ root: t })).filter((l) => !gitignore.split(/\r?\n/).some((x) => x.trim() === l));
-  if (missing.length) {
-    const pre = gitignore && !gitignore.endsWith('\n') ? '\n' : '';
-    if (!o.dry)
-      fs.appendFileSync(gitignorePath, `${pre}\n# Ravenseat (the queue's data, the agents' worktrees and local secrets)\n${missing.join('\n')}\n`);
-    log.notes.push(`.gitignore: added ${missing.join(' ')}`);
-  } else log.notes.push('.gitignore: unchanged');
+  // 4: .gitignore: the fixed lines, the configured dataFolder and timeLog, the share pattern and the private paths
+  // (requiredIgnores, through gitignoreEdit, which also takes out a line share on makes wrong).
+  log.notes.push(gitignoreNote(writeGitignore(t, require('./lib/queueConfig.js').config({ root: t }), { dry: o.dry })));
 
   // 5: CLAUDE.md import line
   const claudeMd = path.join(t, 'CLAUDE.md');
@@ -249,7 +276,10 @@ export function setupTips(target, o = {}) {
   } catch {
     // error-ignored: no record yet, so nothing was asked
   }
-  const give = OI.tipsToGive(require('./lib/queueConfig.js').config({ root: target }), asked);
+  // The share tip is only for a repo known to be private: the cached answer (lib/repoVisibility.js), never a network call here.
+  const RV = require('./lib/repoVisibility.js');
+  const cached = RV.readCache(path.dirname(file), { any: true });
+  const give = OI.tipsToGive(require('./lib/queueConfig.js').config({ root: target }), asked, { visibility: cached?.visibility ?? null });
   if (give.length && !o.dry) {
     try {
       fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -513,6 +543,17 @@ if (isMain) {
     process.exit(2);
   }
   const target = i >= 0 ? path.resolve(args[i + 1]) : PR.roots().main;
+  // The repo's visibility, so the share tip is given only in a private repo: asked once a day (cached in the data
+  // folder, lib/repoVisibility.js), with a short time limit; another host or no network is unknown, and no tip.
+  if (!flags.has('--dry')) {
+    try {
+      const RV = require('./lib/repoVisibility.js');
+      const k = require('./lib/queueConfig.js').config({ root: target });
+      if (k.share?.queueData !== true) await RV.current({ folder: path.dirname(setupRecordFile(target)), remoteUrl: RV.remoteUrlOf(target, k.remote) });
+    } catch {
+      // error-ignored: without an answer there is simply no share tip
+    }
+  }
   const log = setupProject({
     target,
     dry: flags.has('--dry'),

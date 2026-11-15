@@ -41,7 +41,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { CLI, CONFIG, GIT_ROOT, MAIN_TREE, require } from './context.mjs';
+import { CLI, CONFIG, FOLDER, GIT_ROOT, MAIN_TREE, require } from './context.mjs';
 import { requiredIgnores } from '../setup.mjs';
 
 const GI = require('./lib/gitIdentity.js');
@@ -194,7 +194,7 @@ export function allowlistFacts() {
 function offRow(key, gap) {
   const OI = require('./lib/optInChecks.js');
   const c = OI.byKey(key);
-  return [info(c.row, OI.offLine(c, { cli: CLI, gap }), `${CLI} settings set ${c.key} on (or Turn on on the Checks tab); leave it off if you do not want it`)];
+  return [info(c.row, OI.offLine(c, { cli: CLI, gap }), `${OI.onCommand(c, CLI)} (or Turn on on the Checks tab); leave it off if you do not want it`)];
 }
 
 export function checkAllowlistSecrets() {
@@ -261,8 +261,12 @@ export function gitignoreFacts() {
   const lines = requiredIgnores(CONFIG);
   // Already tracked: the data folder, a time log of its own, and the personal settings (not the worktrees or .env,
   // which checkWorktrees and checkSecrets name).
-  const local = lines.filter((l) => l !== '.claude/worktrees/' && !l.startsWith('.env') && !l.startsWith('!'));
-  const tracked = gitList(['ls-files', '-z', '--', ...local.map((l) => l.replace(/\/$/, ''))]) ?? [];
+  // A share line `<folder>/*` counts as the folder; a shared file (lib/queueShare.js, share on) is meant to be tracked.
+  const QS = require('./lib/queueShare.js');
+  const local = lines
+    .filter((l) => l !== '.claude/worktrees/' && !l.startsWith('.env') && !l.startsWith('!'))
+    .map((l) => l.replace(/\/\*$/, '/'));
+  const tracked = (gitList(['ls-files', '-z', '--', ...local.map((l) => l.replace(/\/$/, ''))]) ?? []).filter((f) => !QS.sharedFile(f, CONFIG));
   const roots = [...new Set(tracked.map((f) => (local.find((l) => f === l || f.startsWith(l)) ?? f).replace(/\/$/, '')))];
   const withProbe = lines.map((line) => ({ line, probe: probeOf(line) })).filter((x) => x.probe);
   const probes = withProbe.map((x) => x.probe);
@@ -290,7 +294,7 @@ export function checkGitignore() {
       ),
     );
   }
-  const fix = (missing) => `run ${CLI} setup (it adds them to the project's .gitignore), or add these lines to .gitignore: ${missing.join(' ')}`;
+  const fix = (missing) => `run ${CLI} doctor --fix (or ${CLI} setup; both add them to the project's .gitignore), or add these lines to .gitignore: ${missing.join(' ')}`;
   if (machineOnly.length)
     out.push(
       warn(
@@ -301,6 +305,37 @@ export function checkGitignore() {
     );
   if (none.length) out.push(warn('gitignore', `not ignored: ${none.join(', ')}. One \`git add .\` puts them in git`, fix(none)));
   if (!out.length) out.push(ok('gitignore', `the project's own .gitignore holds the ${count} paths Ravenseat keeps local`));
+  return out;
+}
+
+/**
+ * The queue's own files in git (H3, lib/queueShare.js). Share on: FAIL when git tracks a data folder file outside
+ * share.include (the push guard refuses it), WARN when the repo is not known to be private and the owner has not
+ * confirmed that (share.publicOk), else OK. Share off: one INFO line that offers it, only in a repo known to be private
+ * (the cached answer, never a network call here); elsewhere nothing, as off is the safe side.
+ */
+export function checkShare() {
+  const QS = require('./lib/queueShare.js');
+  const RV = require('./lib/repoVisibility.js');
+  const s = QS.shareOf(CONFIG);
+  const cache = RV.readCache(FOLDER, { any: true });
+  if (!s.on) return RV.isPrivate(cache?.visibility) ? offRow('share.queueData', false) : [];
+  const df = QS.dataFolderOf(CONFIG);
+  const tracked = df ? (gitList(['ls-files', '-z', '--', df]) ?? []) : [];
+  const out = [];
+  const wrong = QS.breaches(tracked, CONFIG).filter((b) => b.kind === 'data').map((b) => b.file);
+  if (wrong.length)
+    out.push(
+      fail(
+        'share',
+        `git tracks data folder file(s) that are not shared (not in share.include): ${list(wrong)}. The push guard refuses commits with them`,
+        `git rm --cached -- ${wrong.join(' ')} (keeps them on disk) and commit; a key in them must be changed`,
+      ),
+    );
+  for (const p of s.problems) out.push(warn('share', `share.include: ${p}`, 'take it out of share.include in queue.config.json'));
+  const pub = QS.publicReason(CONFIG, cache, CLI);
+  if (pub) out.push(warn('share', pub, `${CLI} share status checks the repo again`));
+  if (!out.length) out.push(ok('share', `share on: ${s.include.join(', ')} in git, the repo is private (checked ${cache?.checkedAt ?? 'earlier'})`));
   return out;
 }
 
@@ -561,4 +596,4 @@ export function checkInstructions() {
 }
 
 /** The baseline checks in the order doctor prints them. */
-export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkAllowlistSecrets, checkGitignore, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles, checkInstructions];
+export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkAllowlistSecrets, checkGitignore, checkShare, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles, checkInstructions];
