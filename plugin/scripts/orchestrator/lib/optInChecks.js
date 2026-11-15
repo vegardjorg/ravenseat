@@ -31,8 +31,10 @@ const OPT_IN = Object.freeze([
     key: 'secretScan.allowlist',
     row: 'allowlist',
     suggestion: 'allowlist-scan',
-    title: 'keys in the commands Claude Code has approved',
-    tip: 'look for keys in the commands Claude Code has approved ("Yes, and don\'t ask again" stores the whole command)',
+    // One setting for both of Claude Code's own config files: the approved commands (lib/allowlistSecrets.js) and the
+    // MCP servers in .mcp.json (lib/mcpSecrets.js). Same risk, same patterns, same FAIL/WARN rule, so one tip.
+    title: 'keys in the commands Claude Code has approved and in .mcp.json',
+    tip: 'look for keys in the commands Claude Code has approved ("Yes, and don\'t ask again" stores the whole command) and in the MCP servers in .mcp.json',
   }),
   Object.freeze({
     key: 'gitignoreCheck.enabled',
@@ -58,6 +60,24 @@ const OPT_IN = Object.freeze([
     tip: 'keep queue.json and the plan register in git as a backup (this repo is private; the time log, missions and answers stay out)',
     on: 'share on --yes',
     offer: (facts) => facts?.visibility === 'private',
+  }),
+  // Broad rules in the tracked .claude/settings.json (lib/broadPermissions.js). Offered only where that file exists.
+  Object.freeze({
+    key: 'permissionsCheck.enabled',
+    row: 'permissions',
+    suggestion: 'broad-permissions',
+    title: 'broad permissions in the shared .claude/settings.json',
+    tip: 'name the broad rules in the shared .claude/settings.json (any shell command, network tools, rm, git push, bypassPermissions)',
+    offer: (facts) => facts?.sharedSettings === true,
+  }),
+  // Probe gates only against a local database (lib/dbGuard.js). Offered only in a project with a database.
+  Object.freeze({
+    key: 'dbGuard.localOnly',
+    row: null,
+    suggestion: 'db-shared-guard',
+    title: 'the local-only database guard for probe gates',
+    tip: 'refuse a database probe gate whose database is not local (localhost, 127.0.0.1, ::1 or a Docker service name)',
+    offer: (facts) => facts?.hasDatabase === true,
   }),
 ]);
 

@@ -79,6 +79,17 @@ function scanSettings(text, file) {
  * @param {{ readdir?: (dir: string) => fs.Dirent[] }} [io]
  */
 function settingsFiles(mainTree, io = {}) {
+  return treeFiles(mainTree, SETTINGS, io);
+}
+
+/**
+ * The files `inTrees` (paths inside a tree) in the main tree and in every folder under .claude/worktrees/, as
+ * settingsFiles gives them. Shared with lib/mcpSecrets.js (.mcp.json), so both scans read the same trees.
+ * @param {string} mainTree  absolute path of the main tree
+ * @param {readonly string[]} inTrees  the paths inside each tree, with forward slashes
+ * @param {{ readdir?: (dir: string) => fs.Dirent[] }} [io]
+ */
+function treeFiles(mainTree, inTrees, io = {}) {
   const readdir = io.readdir ?? ((d) => fs.readdirSync(d, { withFileTypes: true }));
   const trees = [''];
   try {
@@ -92,7 +103,7 @@ function settingsFiles(mainTree, io = {}) {
   }
   const out = [];
   for (const tree of trees)
-    for (const inTree of SETTINGS) {
+    for (const inTree of inTrees) {
       const file = tree ? `${tree}/${inTree}` : inTree;
       out.push({ file, tree, inTree, abs: path.join(mainTree, ...file.split('/')) });
     }
@@ -128,4 +139,4 @@ function where(hit) {
   return `${hit.file}: permissions.${hit.list}[${hit.index}] (${hit.rule})`;
 }
 
-module.exports = { LISTS, SETTINGS, WORKTREES, rulesOf, scanSettings, settingsFiles, scanTrees, where };
+module.exports = { LISTS, SETTINGS, WORKTREES, rulesOf, scanSettings, settingsFiles, treeFiles, scanTrees, where };

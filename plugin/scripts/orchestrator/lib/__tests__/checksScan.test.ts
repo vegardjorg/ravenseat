@@ -111,6 +111,59 @@ describe('scan', () => {
   it('does not count the placeholder from npm init, and an empty project has nothing', () => {
     const placeholder = scan(fsLike({ 'package.json': JSON.stringify({ scripts: { test: 'echo "Error: no test specified" && exit 1' } }) }));
     expect(placeholder.kinds).toEqual([]);
-    expect(scan(fsLike({}))).toEqual({ ci: [], kinds: [] });
+    expect(scan(fsLike({}))).toMatchObject({ ci: [], kinds: [], hasDatabase: false, hasMigrations: false, unpinnedActions: 0, envFile: false });
+  });
+});
+
+describe('the database, the actions and the project facts (spor 3)', () => {
+  it('db is a kind of check: pg_prove, pgtap, supabase test db and sqlx test, and the usual probe folders', () => {
+    for (const c of ['pg_prove -d app supabase/tests', 'supabase test db', 'cargo sqlx test', 'psql -c "create extension pgtap"'])
+      expect(classify(c), c).toContain('db');
+    expect(classify('supabase db push')).not.toContain('db');
+    const r = scan(fsLike({ 'supabase/tests/rls.sql': 'select plan(1);', 'package.json': JSON.stringify({ scripts: { 'test:db': 'supabase test db' } }) }));
+    expect(placesOf(r, 'db').sort()).toEqual(['config', 'script']);
+  });
+
+  it('a database: migrations.folder, or supabase/, prisma/ or migrations/; migrations set up: one of their folders', () => {
+    expect(scan(fsLike({ 'supabase/config.toml': '' }))).toMatchObject({ hasDatabase: true, hasMigrations: false });
+    expect(scan(fsLike({ 'prisma/migrations/1/migration.sql': '' }))).toMatchObject({ hasDatabase: true, hasMigrations: true });
+    expect(scan({ ...fsLike({ 'db/schema/001.sql': '' }), migrationsFolder: 'db/schema' })).toMatchObject({ hasDatabase: true, hasMigrations: true });
+    expect(scan(fsLike({ 'src/index.ts': '' }))).toMatchObject({ hasDatabase: false, hasMigrations: false });
+  });
+
+  it('counts the `uses:` lines on a tag or branch, not a SHA, a local step or a docker image', () => {
+    const sha = 'a'.repeat(40);
+    const wf = `on: push
+jobs:
+  t:
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@${sha} # v4
+      - uses: ./local-action
+      - uses: docker://alpine:3
+      - uses: org/repo/sub@main
+`;
+    expect(scan(fsLike({ '.github/workflows/ci.yml': wf })).unpinnedActions).toBe(2);
+  });
+
+  it('the runtime is pinned by a version file, engines, requires-python or the go line', () => {
+    expect(scan(fsLike({ 'package.json': '{}' })).runtimePinned).toBe(false);
+    expect(scan(fsLike({ 'package.json': '{}', '.nvmrc': '20' })).runtimePinned).toBe(true);
+    expect(scan(fsLike({ 'package.json': JSON.stringify({ engines: { node: '>=20' } }) })).runtimePinned).toBe(true);
+    expect(scan(fsLike({ 'pyproject.toml': '[project]\nrequires-python = ">=3.11"\n' })).runtimePinned).toBe(true);
+    expect(scan(fsLike({ 'go.mod': 'module x\n\ngo 1.22\n' })).runtimePinned).toBe(true);
+  });
+
+  it('a formatter and an unused-code finder are found in commands, config files and dependencies', () => {
+    expect(placesOf(scan(fsLike({ '.prettierrc': '{}' })), 'format')).toEqual(['config']);
+    expect(placesOf(scan(fsLike({ 'package.json': JSON.stringify({ devDependencies: { knip: '5' } }) })), 'unused')).toEqual(['config']);
+    expect(placesOf(scan(fsLike({ 'pyproject.toml': '[tool.black]\nline-length = 100\n' })), 'format')).toEqual(['config']);
+    expect(classify('cargo fmt --check')).toContain('format');
+    expect(placesOf(scan(fsLike({ 'package.json': JSON.stringify({ scripts: { lint: 'eslint .' } }) })), 'format')).toEqual([]);
+  });
+
+  it('.env and its example', () => {
+    expect(scan(fsLike({ '.env': 'A=1' }))).toMatchObject({ envFile: true, envExample: false });
+    expect(scan(fsLike({ '.env': 'A=1', '.env.sample': 'A=' }))).toMatchObject({ envFile: true, envExample: true });
   });
 });

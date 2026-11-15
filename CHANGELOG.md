@@ -5,6 +5,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Keys in .mcp.json, broad shared permissions, and probes only against a local database** (all off until you turn
+  them on). `secretScan.allowlist` now also covers `.mcp.json` (a key in a server's env, headers, args or url, named by
+  path, never the value; FAIL when tracked). `permissionsCheck.enabled` names broad rules in the tracked
+  `.claude/settings.json`, and `dbGuard.localOnly` refuses a database probe gate whose database is not local.
+- **More Checks cards:** a Database group (probes for the database rules, migrations from an empty database in CI,
+  the probe guard), and branch protection, Actions pinned to a SHA (the `--ci` template now is), the lockfile in git, a
+  formatter, a pinned runtime, `.env.example`, unused code, and flaky tests seen in the time log.
 - **The queue's files in git, on your word, and private paths** (sharing is off by default). `ravenseat share on`
   explains who can read `queue.json` and `plans.json` once pushed and needs `--yes` (and `--public-ok` in a repo not
   known to be private); the time log, missions and answers can never be shared. `privatePaths` (`ravenseat private add`)

@@ -16,4 +16,5 @@ why: When a gate needs a server, a container or a test account that is not there
 
 - A short precheck at the start of those gate commands (or as the first command of the gate) that checks each need and stops with one line saying what is missing and how to start it.
 - The precheck takes seconds, never changes anything, and reads no secret values into its output.
+- Database probes need the database running before they start: the precheck checks that the local database answers (for example `pg_isready -h localhost`) and says how to start it.
 - Show on one real run that a stopped service gives that one line in seconds, instead of a long list of red tests.

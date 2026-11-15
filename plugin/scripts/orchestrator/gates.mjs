@@ -74,6 +74,10 @@
 // baseGate.flakyRerun) and none on a tree with uncommitted tracked changes. One rerun at most, never a loop; the tamper
 // checks below run after it, so they cover the rerun too.
 //
+// The database guard (lib/dbGuard.js, opt-in: dbGuard.localOnly): with it on, a probe gate command (pg_prove, supabase
+// test db, sqlx test, also through a package.json script) whose database URL or host is not local is not run. It is red
+// with one REFUSED line (the host, never the URL), so a probe that writes never reaches a shared database.
+//
 //   --evidence  record evidence also outside the main checkout (the push guard denies it to queue agents).
 //   --cwd <folder>  run in that folder (ravenseat receive: the track's worktree).
 //
@@ -762,9 +766,25 @@ const sampler = GL.samplingOn({ limit: LOAD_LIMIT, overridden: !!process.env.QUE
 const durations = {};
 // A short, redacted first error line per red command, for the inspection queue (lib/failureSignature.js, lib/inspection.js).
 const errors = {};
+/** The refusal line of the database guard for a command (lib/dbGuard.js), or null. Off (the default): always null. */
+const DB_GUARD = K.dbGuard?.localOnly === true;
+let PACKAGE_SCRIPTS = null;
+function dbRefusal(command) {
+  if (!DB_GUARD) return null;
+  if (PACKAGE_SCRIPTS == null) {
+    try {
+      PACKAGE_SCRIPTS = JSON.parse(fs.readFileSync(path.join(cwd, 'package.json'), 'utf8')).scripts ?? {};
+    } catch {
+      PACKAGE_SCRIPTS = {};
+    }
+  }
+  return require('./lib/dbGuard.js').refusal(command, { env: gateCommandEnv(), scripts: PACKAGE_SCRIPTS, cli: require('./lib/projectRoot.js').cliCommand() });
+}
+
 for (const command of gates) {
   const t0 = Date.now();
-  const r = await runShell(command, { timeoutMs: deadline ? Math.max(1000, deadline - t0) : null });
+  const refused = dbRefusal(command);
+  const r = refused ? { status: 1, out: refused, timedOut: false } : await runShell(command, { timeoutMs: deadline ? Math.max(1000, deadline - t0) : null });
   const sec = (Date.now() - t0) / 1000;
   // The first run's time per command (a flaky rerun's time is not added: the health view compares like with like).
   durations[command] = sec;
@@ -804,7 +824,9 @@ let flakyGates = [];
 const RERUN = TF.rerunPlan({
   enabled: TF.setup(K).enabled,
   mainTree: WANT.mainTree,
-  failed: failedGates,
+  // A command the database guard refused is not flaky: it would be refused again. Such a run is not rerun at all, so
+  // a green rerun of the other red commands can never turn the refused one green.
+  failed: failedGates.some((c) => dbRefusal(c)) ? [] : failedGates,
   startSha: START.sha,
   startClean: START.clean,
 });

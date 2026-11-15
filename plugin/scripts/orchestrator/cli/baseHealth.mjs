@@ -30,6 +30,21 @@ const GB = require('./lib/gitSurfaceBaseline.js');
 
 /** The base gate commands run the merged tracks' code: the same scrubbed environment as the gates (lib/gateEnv.js). */
 const trackCodeSpawn = () => GV.trackCodeSpawn(process.env, { storeFile: GE.storeFile(FOLDER), root: CONFIG.root });
+/**
+ * The database guard for the base gate (lib/dbGuard.js, opt-in: dbGuard.localOnly): a function that gives the refusal
+ * line for a probe gate command whose database is not local, or null when the guard is off.
+ */
+function dbGuard() {
+  if (CONFIG.dbGuard?.localOnly !== true) return null;
+  const DG = require('./lib/dbGuard.js');
+  let scripts = {};
+  try {
+    scripts = JSON.parse(fs.readFileSync(path.join(GIT_ROOT, 'package.json'), 'utf8')).scripts ?? {};
+  } catch {
+    scripts = {};
+  }
+  return (command) => DG.refusal(command, { env: process.env, scripts, cli: CLI });
+}
 
 /** The resolved setup (config().baseGate with the defaults; off without commands or with enabled: false). */
 export const BASE_SETUP = BH.baseGateSetup(CONFIG);
@@ -99,6 +114,7 @@ export function runCheckNow({ tip, folder, cause = null }) {
     timeoutSec: BASE_SETUP.timeoutSec,
     tailLines: BASE_SETUP.tailLines,
     spawn: trackCodeSpawn(),
+    guard: dbGuard(),
   });
   // The flaky check: the red command (and the ones after it, which never ran) once more on the same sha.
   if (!run.ok) {
@@ -138,7 +154,7 @@ function rerunFailed({ tip, commands }) {
   if (!BASE_SETUP.flakyRerun || !commands.length) return null;
   if (git(['rev-parse', 'HEAD']) !== tip) return null;
   console.log(`Base gate red: running the failed command(s) once more on the same sha (${short(tip)}): ${commands.join(' ; ')}`);
-  return BH.runBaseGate({ commands, cwd: GIT_ROOT, timeoutSec: BASE_SETUP.timeoutSec, tailLines: BASE_SETUP.tailLines, spawn: trackCodeSpawn() });
+  return BH.runBaseGate({ commands, cwd: GIT_ROOT, timeoutSec: BASE_SETUP.timeoutSec, tailLines: BASE_SETUP.tailLines, spawn: trackCodeSpawn(), guard: dbGuard() });
 }
 
 /** The lines after a flaky check, and on green the finding and the flakyGate row (fileFlaky). */

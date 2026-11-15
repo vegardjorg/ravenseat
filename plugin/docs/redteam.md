@@ -117,6 +117,8 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | RT-31 | My private folder ends up in git, pushed by me or merged from a track | PASS | challenged | `rt31-private-paths`, `privateCli`, `queueShare` |
 | RT-32 | A queue agent reads a folder I closed to the agents | PASS | challenged | `rt32-private-read`, `queueShare` |
 | RT-33 | Sharing was on for a private repo, and the repo turned public | PASS | challenged | `rt33-public-turn`, `repoVisibility`, `queueShare` |
+| RT-34 | A key I pasted into .mcp.json ends up in git | PASS | verified | `rt34-mcp-key`, `mcpSecrets` |
+| RT-35 | A database probe gate runs against a shared database | PASS | verified | `rt35-db-guard`, `dbGuard` |
 <!-- redteam-map:end -->
 
 Notes on some rows:
@@ -180,6 +182,13 @@ Notes on some rows:
   count as unread, so with a push in the line they are denied (`agentPushExec`). The same review found that the secret
   check could outlast the hook's own time limit, which let the push through unasked; it now has one limit below the
   hook's, and a scan out of time asks (`reviewGaps2`).
+- **RT-34 and RT-35** (2026-11-15): doctor, with `secretScan.allowlist` on, FAILs on a key in a tracked `.mcp.json`
+  (server env, headers, args or url) by file and path, WARNs on one in an agent worktree's untracked copy, passes a
+  `${NAME}` reference, and never prints the key; off, one INFO line says a gap is there. With `dbGuard.localOnly` on,
+  `gates.mjs --quick` refuses a probe gate while `DATABASE_URL` names a shared host (the command never runs, the output
+  names the host and not the password), runs it against 127.0.0.1, and off it runs either way. Not covered: a database
+  named only inside a file the probe reads (a `.env` the tool loads itself, a config file), and a remote database
+  behind a short Docker-style host name, which counts as local.
 - **RT-30 to RT-33** (2026-11-15): the push guard is run as hooks.json wires it, in a real repo with a local origin,
   and `merge` on a cloud track's branch. A data folder file committed with `git add -f` is denied at push while share
   is off, and so is a time log or mission while it is on; queue.json goes only with share on. A file under a private

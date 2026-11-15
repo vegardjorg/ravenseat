@@ -30,6 +30,11 @@
     "text": "The libraries your project relies on."
   },
   {
+    "key": "database",
+    "title": "Database",
+    "text": "The rules your database keeps, tested against a local copy that probes may change."
+  },
+  {
     "key": "instructions",
     "title": "Claude's instructions",
     "text": "The instruction files Claude Code loads at the start of every session, track and subagent."

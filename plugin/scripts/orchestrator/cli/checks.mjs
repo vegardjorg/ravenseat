@@ -22,12 +22,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { a, CONFIG, CLI, die, edit, FILE, FOLDER, KK, LM, MAIN_TREE, read, require } from './context.mjs';
 import { addTask, ensureProject, PROJECT, readFacts } from './kickstart.mjs';
 import { guardsBoard } from './inspection.mjs';
-import { allowlistFacts, gitignoreFacts } from './doctorBaseline.mjs';
+import { allowlistFacts, broadFacts, gitignoreFacts, lockfileFacts, mcpFacts } from './doctorBaseline.mjs';
 import { trackBranchHere } from './settings.mjs';
 import { enableShare } from './share.mjs';
 
@@ -73,14 +74,75 @@ function optInFacts(git) {
   }
   if (!git) return out;
   try {
-    if (off.includes('secretScan.allowlist')) out.allowlistTrackedHit = allowlistFacts().tracked.length > 0;
+    // The setting covers the approved commands and .mcp.json (lib/mcpSecrets.js): a tracked key in either is important.
+    if (off.includes('secretScan.allowlist')) out.allowlistTrackedHit = allowlistFacts().tracked.length > 0 || mcpFacts().tracked.length > 0;
   } catch {
     // error-ignored: the card shows at its own priority
+  }
+  try {
+    // The shared settings file: the broad-permissions card is offered only where it exists, high for bypassPermissions.
+    const b = broadFacts();
+    out.sharedSettings = b.tracked;
+    if (off.includes('permissionsCheck.enabled')) out.bypassTracked = require('./lib/broadPermissions.js').hasBypass(b.hits);
+  } catch {
+    // error-ignored: no card for the shared settings
   }
   try {
     if (off.includes('gitignoreCheck.enabled')) out.gitignoreGap = gitignoreFacts().important;
   } catch {
     // error-ignored: the card shows at its own priority
+  }
+  return out;
+}
+
+/** Is `file` ignored by git in the main tree (any rule)? On any error: not ignored. */
+function ignoredHere(file) {
+  try {
+    execFileSync('git', ['-C', MAIN_TREE, 'check-ignore', '-q', '--no-index', '--', file], { stdio: 'ignore', windowsHide: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The facts of the 3b cards that need git, the host or the time log (the rest come from lib/checksScan.js). Each is read
+ * on its own: an error leaves that fact unknown, and an unknown fact never shows a card that needs it.
+ */
+function projectFacts({ git, remote, found }) {
+  const out = {};
+  if (git) {
+    try {
+      const lf = lockfileFacts();
+      if (lf) out.lockfileMissing = lf.gaps.length > 0;
+    } catch {
+      // error-ignored: unknown, no card
+    }
+    try {
+      out.envWithoutExample = found.envFile === true && found.envExample === false && ignoredHere('.env');
+    } catch {
+      // error-ignored: unknown, no card
+    }
+  }
+  // Branch protection on the host (lib/branchProtection.js): only a clear on hides the card. gh, cached for a day.
+  if (remote) {
+    try {
+      const forced = process.env.QUEUE_BRANCH_PROTECTION; // the tests' answer, never a call (on, off or unknown)
+      const BPR = require('./lib/branchProtection.js');
+      const state = forced
+        ? forced
+        : BPR.current({ folder: fs.existsSync(FILE) ? KK.dataFolder() : null, remoteUrl: RV.remoteUrlOf(MAIN_TREE, CONFIG.remote ?? 'origin'), branch: CONFIG.baseBranch ?? 'main' });
+      out.branchProtected = state === 'on';
+    } catch {
+      // error-ignored: unknown shows the card
+    }
+  }
+  try {
+    const FO = require('./lib/flakyObserved.js');
+    const text = require('./lib/timeLogArchive.js').readText(KK.timeLog());
+    out.flakyObserved = FO.flakyFlips(FO.gateRows(text)).length;
+  } catch {
+    // error-ignored: no time log yet, nothing observed
   }
   return out;
 }
@@ -104,9 +166,16 @@ function makeReport(queue) {
     }
   };
   const packs = packFacts({ exists, read: readFile, list });
-  const found = SCAN.scan({ exists, read: readFile, list, gates: CONFIG.gates, checks: facts.checks });
+  const found = SCAN.scan({ exists, read: readFile, list, gates: CONFIG.gates, checks: facts.checks, migrationsFolder: CONFIG.migrations?.folder ?? null });
   const report = CATALOG.buildReport({
-    facts: { ...facts, ...found, packs: packs.facts, instructionsLarge: instructionsLarge(), ...optInFacts(facts.git) },
+    facts: {
+      ...facts,
+      ...found,
+      packs: packs.facts,
+      instructionsLarge: instructionsLarge(),
+      ...optInFacts(facts.git),
+      ...projectFacts({ git: facts.git, remote: facts.remote, found }),
+    },
     catalog: CATALOG.loadCatalog({ builtin: BUILTIN, own: OWN }),
     tasks: queue?.tasks ?? [],
     dismissed: queue?.checksPanel?.dismissed ?? [],

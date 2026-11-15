@@ -6,7 +6,20 @@
 //
 //   classify(command)         the kinds of check a command line is (a line can be several: vitest --coverage)
 //   parseWorkflow(text)       triggers, jobs and commands of a GitHub Actions file (by lines, no YAML dependency)
-//   scan(input)               { ci: [one per CI file], kinds: [one per kind of check found, with where it runs] }
+//   scan(input)               { ci: [one per CI file], kinds: [one per kind of check found, with where it runs], and the
+//                             project facts below }
+//   withScriptBody(c, scripts) a command plus the package.json script it runs (also used by lib/dbGuard.js)
+//
+// The facts scan() adds besides the kinds (each read from files only, for the Checks cards):
+//   hasDatabase      the project has a database: migrations.folder is set, or supabase/, prisma/ or migrations/ exists
+//   hasMigrations    migrations are set up: the configured folder, or supabase/migrations, prisma/migrations,
+//                    migrations/ or db/migrations exists
+//   unpinnedActions  `uses:` lines in .github/workflows that point at a tag or branch instead of a 40-character commit
+//                    SHA (a moved tag runs other code with the workflow's token); local and docker:// steps do not count
+//   runtimePinned    the runtime version is written down: .nvmrc, .node-version, .tool-versions, .python-version,
+//                    mise.toml, rust-toolchain(.toml), .ruby-version, .java-version, package.json engines,
+//                    pyproject requires-python, or the go line in go.mod
+//   envFile, envExample  a .env is on disk, and an .env.example, .env.sample or .env.template is
 //
 // Used by: cli/checks.mjs. Tested in: lib/__tests__/checksScan.test.ts.
 // =============================================================
@@ -46,6 +59,20 @@ const KINDS = [
     sees: /\b(?:(?:npm|pnpm|yarn) audit|pip-audit|cargo audit|cargo deny|govulncheck|osv-scanner|dependency-review-action|snyk)\b/i,
   },
   { key: 'security', title: 'Code scanning', sees: /\b(?:codeql|semgrep|bandit|trivy|sonar\w*)\b/i },
+  // Database probes: tests that run SQL against a real database (access rules, constraints, functions that must refuse).
+  { key: 'db', title: 'Database probes', sees: /\b(?:pg_prove|pgtap|supabase\s+test\s+db|sqlx\s+test)\b/i },
+  // Migrations run from an empty database (the CI card checks that one runs in CI).
+  {
+    key: 'migrate',
+    title: 'Migrations from empty',
+    sees: /\b(?:supabase\s+db\s+(?:reset|start)|supabase\s+start|prisma\s+migrate\s+(?:deploy|reset)|alembic\s+upgrade|knex\s+migrate|sqlx\s+migrate\s+run|flyway\s+migrate|dbmate\s+up|goose\s+up|rails\s+db:(?:create|migrate|setup|prepare)|manage\.py\s+migrate)\b/i,
+  },
+  {
+    key: 'format',
+    title: 'Formatter',
+    sees: /\b(?:prettier|biome\s+(?:format|check)|black|gofmt|go\s+fmt|rustfmt|cargo\s+fmt|ruff\s+format|dprint|clang-format|ktlint|spotless|php-cs-fixer)\b/i,
+  },
+  { key: 'unused', title: 'Unused code', sees: /\b(?:knip|vulture|ts-prune|depcheck|unimported|cargo[-\s]udeps|cargo[-\s]machete|deadcode)\b/i },
   { key: 'dep-updates', title: 'Dependency updates', sees: null },
   { key: 'hooks', title: 'Git hooks', sees: null },
 ];
@@ -60,7 +87,54 @@ const MARKER_FILES = [
   ['hooks', '.pre-commit-config.yaml'],
   ['hooks', '.husky'],
   ['hooks', 'lefthook.yml'],
+  // A probe folder in one of the usual places counts as database probes being there.
+  ['db', 'supabase/tests'],
+  ['db', 'db/tests'],
+  ['db', 'tests/sql'],
+  ['format', '.prettierrc'],
+  ['format', '.prettierrc.json'],
+  ['format', '.prettierrc.js'],
+  ['format', '.prettierrc.cjs'],
+  ['format', '.prettierrc.mjs'],
+  ['format', '.prettierrc.yaml'],
+  ['format', '.prettierrc.yml'],
+  ['format', 'prettier.config.js'],
+  ['format', 'prettier.config.mjs'],
+  ['format', 'prettier.config.cjs'],
+  ['format', 'biome.json'],
+  ['format', 'biome.jsonc'],
+  ['format', 'rustfmt.toml'],
+  ['format', '.rustfmt.toml'],
+  ['format', 'dprint.json'],
+  ['unused', 'knip.json'],
+  ['unused', '.knip.json'],
+  ['unused', 'knip.config.ts'],
+  ['unused', 'knip.config.js'],
 ];
+
+/** Where the facts below look (see the header). */
+const DATABASE_DIRS = ['supabase', 'prisma', 'migrations'];
+const MIGRATION_DIRS = ['supabase/migrations', 'prisma/migrations', 'migrations', 'db/migrations'];
+const RUNTIME_FILES = ['.nvmrc', '.node-version', '.tool-versions', '.python-version', 'mise.toml', '.mise.toml', 'rust-toolchain', 'rust-toolchain.toml', '.ruby-version', '.java-version', '.sdkmanrc'];
+const ENV_EXAMPLES = ['.env.example', '.env.sample', '.env.template'];
+/** Dependencies that are a formatter or an unused-code finder, counted as the marker files are. */
+const PACKAGE_MARKERS = [
+  ['format', 'prettier'],
+  ['format', '@biomejs/biome'],
+  ['format', 'dprint'],
+  ['unused', 'knip'],
+  ['unused', 'ts-prune'],
+  ['unused', 'depcheck'],
+];
+
+/** A `uses:` value that is not pinned to a commit SHA (local steps and docker images are not actions from a repo). */
+function unpinnedUse(uses) {
+  const u = String(uses ?? '').trim().replace(/^["']|["']$/g, '');
+  if (!u || u.startsWith('./') || u.startsWith('docker://')) return false;
+  const at = u.lastIndexOf('@');
+  if (at < 0) return true;
+  return !/^[0-9a-f]{40}$/i.test(u.slice(at + 1));
+}
 
 const classify = (command) => KINDS.filter((k) => k.sees?.test(String(command))).map((k) => k.key);
 
@@ -152,7 +226,7 @@ function withScriptBody(command, scripts) {
  *   `checks` is what lib/kickstart.js detectChecks found (the project's own commands).
  * @returns {{ ci: object[], kinds: { key: string, title: string, places: object[] }[] }}
  */
-function scan({ exists, read, list, gates = {}, checks = [] }) {
+function scan({ exists, read, list, gates = {}, checks = [], migrationsFolder = null }) {
   const pkg = parseJson(read('package.json') ?? '');
   const scripts = pkg && typeof pkg.scripts === 'object' && pkg.scripts ? pkg.scripts : {};
   const places = new Map();
@@ -162,6 +236,7 @@ function scan({ exists, read, list, gates = {}, checks = [] }) {
     places.set(kind, list2);
   };
   const ci = [];
+  let unpinnedActions = 0;
   const addCommand = (command, file, job) => {
     for (const kind of classify(withScriptBody(command, scripts))) add(kind, { where: 'ci', file, job, command: short(command) });
   };
@@ -171,6 +246,8 @@ function scan({ exists, read, list, gates = {}, checks = [] }) {
         const file = `${p}/${name}`;
         const w = parseWorkflow(read(file));
         for (const job of w.jobs) for (const c of job.commands) addCommand(c, file, job.name);
+        // parseWorkflow keeps a `uses:` value as a command; one with owner/repo@ref is an action from a repo.
+        if (p === '.github/workflows') for (const job of w.jobs) for (const c of job.commands) if (/^[\w.-]+\/[\w./-]+@/.test(c) && unpinnedUse(c)) unpinnedActions++;
         ci.push({ host, file, triggers: w.triggers, jobs: w.jobs.map((j) => j.name) });
       }
     } else if (exists(p)) {
@@ -192,11 +269,29 @@ function scan({ exists, read, list, gates = {}, checks = [] }) {
   const gateList = [...(Array.isArray(gates.quick) ? gates.quick : []), ...(Array.isArray(gates.full) ? gates.full : [])];
   for (const c of new Set(gateList.map((g) => String(g ?? '').trim()).filter(Boolean)))
     for (const kind of classify(withScriptBody(c, scripts))) add(kind, { where: 'gate', file: 'queue.config.json', job: null, command: short(c) });
-  for (const [kind, file] of MARKER_FILES) if (exists(file)) add(kind, { where: kind === 'hooks' ? 'hook' : 'config', file, job: null, command: null });
+  for (const [kind, file] of MARKER_FILES) if (exists(file) || list(file).length > 0) add(kind, { where: kind === 'hooks' ? 'hook' : 'config', file, job: null, command: null });
+  const deps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) };
+  for (const [kind, name] of PACKAGE_MARKERS) if (Object.hasOwn(deps, name)) add(kind, { where: 'config', file: 'package.json', job: null, command: name });
+  const pyproject = read('pyproject.toml') ?? '';
+  if (/^\[tool\.(?:black|ruff\.format)\]/m.test(pyproject)) add('format', { where: 'config', file: 'pyproject.toml', job: null, command: null });
+  if (/^\[tool\.vulture\]/m.test(pyproject)) add('unused', { where: 'config', file: 'pyproject.toml', job: null, command: null });
+  // A folder counts when it exists or has files in it (an injected file list knows files only, the disk knows both).
+  const hasDir = (d) => exists(d) || list(d).length > 0;
+  const folder = typeof migrationsFolder === 'string' && migrationsFolder.trim() ? migrationsFolder.trim().replace(/\\/g, '/').replace(/\/+$/, '') : null;
   return {
     ci,
     kinds: KINDS.filter((k) => places.has(k.key)).map((k) => ({ key: k.key, title: k.title, places: places.get(k.key) })),
+    hasDatabase: !!folder || DATABASE_DIRS.some(hasDir),
+    hasMigrations: (!!folder && hasDir(folder)) || MIGRATION_DIRS.some(hasDir),
+    unpinnedActions,
+    runtimePinned:
+      RUNTIME_FILES.some((f) => exists(f)) ||
+      !!(pkg && pkg.engines && typeof pkg.engines === 'object' && Object.keys(pkg.engines).length) ||
+      /^\s*requires-python\s*=/m.test(pyproject) ||
+      /^go\s+\d/m.test(read('go.mod') ?? ''),
+    envFile: exists('.env'),
+    envExample: ENV_EXAMPLES.some((f) => exists(f)),
   };
 }
 
-module.exports = { KINDS, classify, parseWorkflow, scan };
+module.exports = { KINDS, classify, parseWorkflow, scan, withScriptBody, unpinnedUse };

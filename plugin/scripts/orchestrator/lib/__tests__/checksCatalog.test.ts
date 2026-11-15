@@ -189,10 +189,94 @@ describe('holds', () => {
   ])('%s is %s', (when, want) => {
     expect(C.holds(when, facts)).toBe(want);
   });
+  it('the database, host and project facts hold only on a clear value', () => {
+    expect(C.holds('has-database', { hasDatabase: true })).toBe(true);
+    expect(C.holds('has-database', {})).toBe(false);
+    expect(C.holds('has-migrations', { hasMigrations: true })).toBe(true);
+    expect(C.holds('none-in-ci:migrate', { kinds: kinds(['migrate', 'script']) })).toBe(true);
+    expect(C.holds('none-in-ci:migrate', { kinds: kinds(['migrate', 'ci']) })).toBe(false);
+    // Branch protection: only a clear "on" hides the card; unknown shows it.
+    expect(C.holds('branch-unprotected', {})).toBe(true);
+    expect(C.holds('branch-unprotected', { branchProtected: true })).toBe(false);
+    expect(C.holds('actions-unpinned', { unpinnedActions: 2 })).toBe(true);
+    expect(C.holds('actions-unpinned', {})).toBe(false);
+    expect(C.holds('lockfile-missing', { lockfileMissing: true })).toBe(true);
+    // The runtime: unknown counts as pinned, so no card on a guess.
+    expect(C.holds('runtime-unpinned', {})).toBe(false);
+    expect(C.holds('runtime-unpinned', { runtimePinned: false })).toBe(true);
+    expect(C.holds('env-no-example', { envWithoutExample: true })).toBe(true);
+    expect(C.holds('flaky-observed', { flakyObserved: 0 })).toBe(false);
+    expect(C.holds('flaky-observed', { flakyObserved: 3 })).toBe(true);
+  });
   it('packs-missing and stack-unpacked follow the pack facts', () => {
     expect(C.holds('packs-missing', { packs: { missing: ['core'] } })).toBe(true);
     expect(C.holds('packs-missing', { packs: { missing: [] } })).toBe(false);
     expect(C.holds('stack-unpacked', { packs: { unpacked: ['fastify'] } })).toBe(true);
+  });
+});
+
+describe('the database and project cards (spor 3)', () => {
+  const report = (facts: object) =>
+    C.buildReport({ facts: { git: true, ...facts }, catalog: C.loadCatalog({ builtin: BUILTIN, own: path.join(BUILTIN, 'none') }), now: 'x' });
+  const card = (r: { suggestions: { key: string }[] }, key: string) => r.suggestions.find((s) => s.key === key);
+
+  it('the probes card is medium with a database, and high when migrations are set up and no probe was found', () => {
+    expect(card(report({}), 'db-rules-probes')).toBeUndefined();
+    expect(card(report({ hasDatabase: true }), 'db-rules-probes')).toMatchObject({ priority: 'medium', category: 'database' });
+    expect(card(report({ hasDatabase: true, hasMigrations: true }), 'db-rules-probes')).toMatchObject({ priority: 'high' });
+    expect(card(report({ hasDatabase: true, hasMigrations: true, kinds: kinds(['db', 'script']) }), 'db-rules-probes')).toMatchObject({ priority: 'medium' });
+    const probes = card(report({ hasDatabase: true }), 'db-rules-probes') as { plan: string };
+    expect(probes.plan).toMatch(/rolled back/);
+    expect(probes.plan).toMatch(/gate queue/);
+  });
+
+  it('the migrations card needs migrations and CI, and goes once a migration runs in CI', () => {
+    expect(card(report({ hasMigrations: true }), 'db-migrations-ci')).toBeUndefined();
+    expect(card(report({ hasMigrations: true, ci: [{}] }), 'db-migrations-ci')).toMatchObject({ priority: 'medium' });
+    expect(card(report({ hasMigrations: true, ci: [{}], kinds: kinds(['migrate', 'ci']) }), 'db-migrations-ci')).toBeUndefined();
+  });
+
+  it('the 3b cards show on their facts, at their priority, and none of them is high', () => {
+    const facts = {
+      remote: 'github',
+      ci: [{}],
+      unpinnedActions: 1,
+      lockfileMissing: true,
+      stacks: ['node'],
+      runtimePinned: false,
+      envWithoutExample: true,
+      hasGates: true,
+      kinds: kinds(['test', 'gate']),
+    };
+    const r = report(facts);
+    const want: [string, string, string][] = [
+      ['branch-protection', 'security', 'medium'],
+      ['pin-actions', 'security', 'medium'],
+      ['lockfile-in-git', 'dependencies', 'medium'],
+      ['formatter', 'quality', 'low'],
+      ['runtime-version', 'dependencies', 'low'],
+      ['env-example', 'security', 'low'],
+      ['unused-code', 'quality', 'low'],
+      ['flaky-tests', 'tests', 'low'],
+    ];
+    for (const [key, category, priority] of want) expect(card(r, key), key).toMatchObject({ category, priority, state: 'open' });
+    expect(card(r, 'pin-actions')).toMatchObject({ detail: expect.stringMatching(/^1 `uses:` line/) });
+    // Hidden by their facts: protected branch, a formatter found, a runtime pinned, an example file.
+    const off = report({ ...facts, branchProtected: true, runtimePinned: true, envWithoutExample: false, kinds: kinds(['test', 'gate'], ['format', 'config'], ['unused', 'config']) });
+    for (const key of ['branch-protection', 'formatter', 'runtime-version', 'env-example', 'unused-code']) expect(card(off, key), key).toBeUndefined();
+  });
+
+  it('flaky tests turn medium once observed, with the count, and never high', () => {
+    const facts = { hasGates: true, kinds: kinds(['test', 'gate']) };
+    expect(card(report(facts), 'flaky-tests')).toMatchObject({ priority: 'low', detail: null });
+    const seen = card(report({ ...facts, flakyObserved: 2 }), 'flaky-tests') as { priority: string; detail: string };
+    expect(seen.priority).toBe('medium');
+    expect(seen.detail).toMatch(/2 time\(s\)/);
+  });
+
+  it('medium_when is checked like the other conditions', () => {
+    const t = C.parseTemplate(file('title: T\ncategory: ci\npriority: low\nwhy: W\nmedium_when: nope'), 'x');
+    expect(t.errors.join(' ')).toMatch(/unknown condition "nope" in medium_when/);
   });
 });
 

@@ -279,7 +279,16 @@ export function setupTips(target, o = {}) {
   // The share tip is only for a repo known to be private: the cached answer (lib/repoVisibility.js), never a network call here.
   const RV = require('./lib/repoVisibility.js');
   const cached = RV.readCache(path.dirname(file), { any: true });
-  const give = OI.tipsToGive(require('./lib/queueConfig.js').config({ root: target }), asked, { visibility: cached?.visibility ?? null });
+  const cfg = require('./lib/queueConfig.js').config({ root: target });
+  // The facts the tips' offer() reads, from files only: a database (the probe guard) and a shared settings file
+  // (the broad permissions check). A tip whose fact does not hold waits for a later setup.
+  const has = (...p) => fs.existsSync(path.join(target, ...p));
+  const facts = {
+    visibility: cached?.visibility ?? null,
+    hasDatabase: !!cfg.migrations?.folder || has('supabase') || has('prisma') || has('migrations'),
+    sharedSettings: has('.claude', 'settings.json'),
+  };
+  const give = OI.tipsToGive(cfg, asked, facts);
   if (give.length && !o.dry) {
     try {
       fs.mkdirSync(path.dirname(file), { recursive: true });

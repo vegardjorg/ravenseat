@@ -6,8 +6,8 @@
 //   - a new file adds a suggestion, a file with the same name replaces it, a file with `off: true` removes it;
 //   - a category with a new key is added, the same key replaces it, `"off": true` removes it and its suggestions.
 //
-// A template: a header (title, category, priority, when, why, content_min, also_task, action, setting, important_when)
-// and two sections,
+// A template: a header (title, category, priority, when, why, content_min, also_task, action, setting, important_when,
+// medium_when) and two sections,
 // "## Investigate" and "## Plan and build". The sections become the mission of the investigation task.
 // Three kinds need no agent: `action: gates` (ravenseat kickstart gates --apply), `action: packs` (ravenseat checks packs
 // --apply: the stack packs for the review signals, lib/reviewPacks.js) and `action: ask`, whose one section
@@ -15,7 +15,8 @@
 // such as the first commit: an agent's worktree is made from a commit. `action: setting` (with `setting: <key>`) turns an
 // opt-in check on (lib/optInChecks.js, `ravenseat checks turn-on <key>`); its `when` is usually `off:<key>`.
 // `important_when` raises the priority to high while its conditions hold, so an important gap lights the red marker
-// until it is fixed or the card is set aside (a card set aside never comes back by itself).
+// until it is fixed or the card is set aside (a card set aside never comes back by itself). `medium_when` raises a low
+// card to medium while its conditions hold (something was observed, such as a flaky test), without the red marker.
 //
 //   parseTemplate(text, key)      one file as an object, with errors in words
 //   mergeCatalog(builtin, own)    the project's files over the plugin's
@@ -63,6 +64,24 @@ const CONDITIONS = {
   'gitignore-gap': (f) => f.gitignoreGap === true,
   // The repo is known to be private (the cached answer, lib/repoVisibility.js); unknown or public: false.
   'repo-private': (f) => f.repoPrivate === true,
+  // The database (lib/checksScan.js scan): a database at all, and migrations set up.
+  'has-database': (f) => f.hasDatabase === true,
+  'has-migrations': (f) => f.hasMigrations === true,
+  // The tracked .claude/settings.json (lib/broadPermissions.js, cli/checks.mjs): it exists, and bypassPermissions in it.
+  'shared-settings': (f) => f.sharedSettings === true,
+  'bypass-tracked': (f) => f.bypassTracked === true,
+  // The base branch on the host (lib/branchProtection.js): only a clear "on" hides the card; unknown shows it.
+  'branch-unprotected': (f) => f.branchProtected !== true,
+  // A `uses:` in .github/workflows on a tag or branch, not a commit SHA (lib/checksScan.js).
+  'actions-unpinned': (f) => (f.unpinnedActions ?? 0) > 0,
+  // A tracked manifest without a tracked lockfile (lib/lockfiles.js, the same rule as doctor's lockfile row).
+  'lockfile-missing': (f) => f.lockfileMissing === true,
+  // No runtime version written down (lib/checksScan.js runtimePinned). Unknown: pinned, so no card.
+  'runtime-unpinned': (f) => f.runtimePinned === false,
+  // An ignored .env on disk and no .env.example next to it (cli/checks.mjs).
+  'env-no-example': (f) => f.envWithoutExample === true,
+  // A gate command was red and then green on the same commit (lib/flakyObserved.js, from the time log).
+  'flaky-observed': (f) => (f.flakyObserved ?? 0) > 0,
 };
 
 /** The line a suggestion adds from the facts, so the card names the stacks. Null when it has none. */
@@ -76,10 +95,22 @@ function detailOf(key, facts) {
     return `No pack yet for: ${p.unpacked.join(', ')}. The research writes one for docs/queue/review-packs/, with examples that test it.`;
   return null;
 }
+
+/** The line the cards that count something add (flaky runs, unpinned actions). Null when there is nothing to say. */
+function countDetail(key, facts) {
+  const n = (x) => (Number.isFinite(x) ? x : 0);
+  if (key === 'flaky-tests' && n(facts.flakyObserved) > 0)
+    return `Seen in the time log: ${facts.flakyObserved} time(s) a gate command was red and then green on the same commit, with no new commit in between.`;
+  if (key === 'pin-actions' && n(facts.unpinnedActions) > 0)
+    return `${facts.unpinnedActions} \`uses:\` line(s) in .github/workflows point at a tag or a branch.`;
+  return null;
+}
 const KIND_CONDITIONS = {
   missing: (f, arg) => anyKind(arg, (k) => placesOf(f, k).size === 0),
   found: (f, arg) => anyKind(arg, (k) => placesOf(f, k).size > 0),
   'not-in-ci': (f, arg) => anyKind(arg, (k) => placesOf(f, k).size > 0 && !placesOf(f, k).has('ci')),
+  // None of the kinds runs in CI (found elsewhere or not at all): `none-in-ci:migrate`.
+  'none-in-ci': (f, arg) => !anyKind(arg, (k) => placesOf(f, k).has('ci')),
   // An opt-in check that is off (facts.optInOff: the keys, lib/optInChecks.js). Unknown facts: not off.
   off: (f, arg) => anyKind(arg, (k) => (f.optInOff ?? []).includes(k)),
 };
@@ -136,6 +167,7 @@ function parseTemplate(text, key) {
     action: head.action || null,
     setting: head.setting || null,
     importantWhen: head.important_when || '',
+    mediumWhen: head.medium_when || '',
     ask: (sections['ask claude'] ?? '').trim(),
     investigate: (sections.investigate ?? '').trim(),
     plan: (sections['plan and build'] ?? '').trim(),
@@ -149,6 +181,7 @@ function parseTemplate(text, key) {
   if (out.action === 'ask' && !out.ask) out.errors.push(`${key}: action ask needs the section "## Ask Claude"`);
   if (out.action === 'setting' && !out.setting) out.errors.push(`${key}: action setting needs "setting: <key>"`);
   for (const c of conditionsOf(out.importantWhen)) if (!knownCondition(c)) out.errors.push(`${key}: unknown condition "${c}" in important_when`);
+  for (const c of conditionsOf(out.mediumWhen)) if (!knownCondition(c)) out.errors.push(`${key}: unknown condition "${c}" in medium_when`);
   if (!out.action && (!out.investigate || !out.plan)) out.errors.push(`${key}: needs the sections "## Investigate" and "## Plan and build"`);
   return out;
 }
@@ -225,6 +258,8 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
     .filter((x) => holds(x.when, facts))
     // important_when: an important gap makes the card high while it lasts (an empty one never does).
     .map((x) => (x.importantWhen && holds(x.importantWhen, facts) ? { ...x, priority: 'high' } : x))
+    // medium_when: something observed raises a low card to medium (never to high, so no red marker).
+    .map((x) => (x.priority === 'low' && x.mediumWhen && holds(x.mediumWhen, facts) ? { ...x, priority: 'medium' } : x))
     .sort((a, b) => rank(a) - rank(b) || (order.get(a.category) ?? 99) - (order.get(b.category) ?? 99) || a.key.localeCompare(b.key))
     .map((x) => ({
       key: x.key,
@@ -238,7 +273,7 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
       ask: x.ask,
       investigate: x.investigate,
       plan: x.plan,
-      detail: detailOf(x.key, facts),
+      detail: detailOf(x.key, facts) ?? countDetail(x.key, facts),
       ...suggestionState(x, tasks, dismissed),
     }));
   return {

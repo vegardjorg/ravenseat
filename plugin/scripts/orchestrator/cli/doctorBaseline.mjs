@@ -10,6 +10,14 @@
 //   allowlist  a secret in an approved command (permissions.allow, ask, deny in .claude/settings.json and
 //              .claude/settings.local.json, main tree and .claude/worktrees/*; lib/allowlistSecrets.js): FAIL in a
 //              tracked file, WARN in an untracked one. Shown as `<file>: permissions.allow[3]`, never the rule's text.
+//   mcp        a key in .mcp.json (env, headers, args, url of each MCP server, main tree and .claude/worktrees/*;
+//              lib/mcpSecrets.js): FAIL in a tracked file, WARN in an untracked one, shown as
+//              `.mcp.json: mcpServers.github.env.GITHUB_TOKEN`, never the value. Same setting as allowlist
+//              (secretScan.allowlist); while off, the allowlist INFO line covers both.
+//   permissions  broad rules in the tracked .claude/settings.json (lib/broadPermissions.js): WARN for any shell command
+//              and defaultMode bypassPermissions or acceptEdits, INFO for network tools, rm, git push and WebFetch
+//              without a domain. Opt-in (permissionsCheck.enabled); while off one INFO line, which may say an important
+//              gap (bypassPermissions) is there.
 //   gitignore  a path Ravenseat keeps local (setup.mjs requiredIgnores, with the configured dataFolder and timeLog) that
 //              the project's own rules do not ignore: WARN, split into "only ignored on your machine (global
 //              gitignore)" and "not ignored". A tracked file in the data folder or .claude/settings.local.json: FAIL.
@@ -190,6 +198,22 @@ export function allowlistFacts() {
   return { hits, tracked, local };
 }
 
+/**
+ * Keys in .mcp.json (lib/mcpSecrets.js), main tree and the agents' worktrees, split as allowlistFacts: tracked (FAIL)
+ * and local (WARN, `loose` when not even ignored).
+ */
+export function mcpFacts() {
+  const MS = require('./lib/mcpSecrets.js');
+  const hits = MS.scanMcpTrees(MAIN_TREE);
+  const tracked = [];
+  const local = [];
+  for (const h of hits) {
+    if (trackedIn(h.tree, h.inTree)) tracked.push(h);
+    else local.push({ ...h, loose: !ignoredIn(h.tree, h.inTree) });
+  }
+  return { hits, tracked, local };
+}
+
 /** The doctor row of an opt-in check that is off (lib/optInChecks.js): one INFO line, never WARN or FAIL. */
 function offRow(key, gap) {
   const OI = require('./lib/optInChecks.js');
@@ -202,7 +226,8 @@ export function checkAllowlistSecrets() {
   // Off by default (secretScan.allowlist). Off, it still reads quietly, so the INFO line can say an important gap
   // (a key in a TRACKED file) is there, never which.
   const { hits, tracked, local } = allowlistFacts();
-  if (CONFIG.secretScan?.allowlist !== true) return offRow('secretScan.allowlist', tracked.length > 0);
+  // The setting covers .mcp.json too (checkMcpSecrets): while off, this one INFO line speaks for both.
+  if (CONFIG.secretScan?.allowlist !== true) return offRow('secretScan.allowlist', tracked.length > 0 || mcpTrackedQuietly());
   if (!hits.length) return [ok('allowlist', 'no secret in the commands Claude Code has approved (permissions in .claude/settings*.json)')];
   const out = [];
   if (tracked.length)
@@ -224,6 +249,91 @@ export function checkAllowlistSecrets() {
       ),
     );
   }
+  return out;
+}
+
+/** A key in a tracked .mcp.json, read quietly for the off line; an error counts as none. */
+function mcpTrackedQuietly() {
+  try {
+    return mcpFacts().tracked.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Keys in .mcp.json (lib/mcpSecrets.js): FAIL when tracked, WARN when only on disk. Nothing while the setting is off. */
+export function checkMcpSecrets() {
+  if (CONFIG.secretScan?.allowlist !== true) return [];
+  const MS = require('./lib/mcpSecrets.js');
+  const { hits, tracked, local } = mcpFacts();
+  if (!hits.length) return [];
+  const advice = 'write ${NAME} in .mcp.json instead of the value (Claude Code reads it from the environment), and set NAME in your shell or a password manager';
+  const out = [];
+  if (tracked.length)
+    out.push(
+      fail(
+        'mcp',
+        `a key in .mcp.json, in a file git tracks: ${list(tracked.map(MS.where))}. Anyone with the repo can read it`,
+        `change the key first (it stays in the history), then ${advice}, and commit`,
+      ),
+    );
+  if (local.length) {
+    const loose = [...new Set(local.filter((h) => h.loose).map((h) => h.file))];
+    out.push(
+      warn(
+        'mcp',
+        `a key in .mcp.json, in clear text on disk: ${list(local.map(MS.where))}${loose.length ? `. Not even ignored: ${list(loose)}` : ''}`,
+        advice,
+      ),
+    );
+  }
+  return out;
+}
+
+/**
+ * The broad rules in the tracked .claude/settings.json of the main tree (lib/broadPermissions.js). An untracked or
+ * missing file gives none: only the shared file reaches every clone.
+ */
+export function broadFacts() {
+  const BP = require('./lib/broadPermissions.js');
+  const file = '.claude/settings.json';
+  if (!trackedIn('', file)) return { file, tracked: false, hits: [] };
+  let text = null;
+  try {
+    text = fs.readFileSync(path.join(MAIN_TREE, '.claude', 'settings.json'), 'utf8');
+  } catch {
+    text = null;
+  }
+  return { file, tracked: true, hits: text == null ? [] : BP.findBroad(text) };
+}
+
+export function checkBroadPermissions() {
+  const BP = require('./lib/broadPermissions.js');
+  const { file, tracked, hits } = broadFacts();
+  // Off: one INFO line, and only where a shared settings file exists (the check has nothing to read elsewhere).
+  if (CONFIG.permissionsCheck?.enabled !== true) return tracked ? offRow('permissionsCheck.enabled', BP.hasBypass(hits)) : [];
+  if (!tracked) return [ok('permissions', 'no tracked .claude/settings.json, so no shared permissions')];
+  if (!hits.length) return [ok('permissions', `no broad rule in ${file}`)];
+  const line = (h) => `${h.at} ${h.rule} (${BP.KINDS[h.kind]})`;
+  const out = [];
+  const warns = hits.filter((h) => h.level === 'warn');
+  const infos = hits.filter((h) => h.level !== 'warn');
+  if (warns.length)
+    out.push(
+      warn(
+        'permissions',
+        `${file} (tracked) gives every clone and every agent: ${list(warns.map(line))}`,
+        'remove the rule or the defaultMode from the shared file; keep a personal one in .claude/settings.local.json if you want it yourself',
+      ),
+    );
+  if (infos.length)
+    out.push(
+      info(
+        'permissions',
+        `${file} (tracked) has broad rules: ${list(infos.map(line))}`,
+        'narrow each rule to the commands you mean (for example Bash(npm test:*) or WebFetch(domain:docs.example.com)), or move it to .claude/settings.local.json',
+      ),
+    );
   return out;
 }
 
@@ -457,27 +567,24 @@ export function checkCi() {
   ];
 }
 
-/** Manifest -> the lockfiles that pin it (any one is enough). Root only. */
-const LOCKS = [
-  ['package.json', ['package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb', 'bun.lock']],
-  ['pyproject.toml', ['uv.lock', 'poetry.lock', 'pdm.lock', 'Pipfile.lock', 'requirements.txt']],
-  ['Pipfile', ['Pipfile.lock']],
-  ['Cargo.toml', ['Cargo.lock']],
-  ['go.mod', ['go.sum']],
-  ['Gemfile', ['Gemfile.lock']],
-  ['composer.json', ['composer.lock']],
-];
+/**
+ * The manifests without a tracked lockfile (lib/lockfiles.js, the same rule as the Checks card lockfile-in-git), or
+ * null when git cannot list the files.
+ */
+export function lockfileFacts() {
+  const tracked = gitList(['ls-files', '-z']);
+  if (tracked == null) return null;
+  const LF = require('./lib/lockfiles.js');
+  const set = new Set(tracked);
+  return { gaps: LF.lockGaps(set, (l) => fs.existsSync(path.join(MAIN_TREE, l))), any: LF.hasManifest(set) };
+}
 
 /** Lockfile: a tracked manifest in the root without a tracked lockfile. */
 export function checkLockfile() {
-  const tracked = gitList(['ls-files', '-z']);
-  if (tracked == null) return [];
-  const set = new Set(tracked);
+  const facts = lockfileFacts();
+  if (facts == null) return [];
   const out = [];
-  for (const [manifest, locks] of LOCKS) {
-    if (!set.has(manifest)) continue;
-    if (locks.some((l) => set.has(l))) continue;
-    const local = locks.find((l) => fs.existsSync(path.join(MAIN_TREE, l)));
+  for (const { manifest, locks, local } of facts.gaps) {
     if (local)
       out.push(
         warn(
@@ -495,7 +602,7 @@ export function checkLockfile() {
         ),
       );
   }
-  if (!out.length && LOCKS.some(([m]) => set.has(m))) out.push(ok('lockfile', 'every dependency manifest has its lockfile in git'));
+  if (!out.length && facts.any) out.push(ok('lockfile', 'every dependency manifest has its lockfile in git'));
   return out;
 }
 
@@ -596,4 +703,4 @@ export function checkInstructions() {
 }
 
 /** The baseline checks in the order doctor prints them. */
-export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkAllowlistSecrets, checkGitignore, checkShare, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles, checkInstructions];
+export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkAllowlistSecrets, checkMcpSecrets, checkBroadPermissions, checkGitignore, checkShare, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles, checkInstructions];

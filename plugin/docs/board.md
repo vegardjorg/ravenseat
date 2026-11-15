@@ -68,7 +68,8 @@ important first. It is read from your files, so it shows what is set up, not tha
 an investigation to the queue, and nothing is built before you approve it. Some need no agent: "Turn on" on "Review
 signals for your stack" writes the stack packs to `review.packs`. Important suggestions you set aside stay in a summary
 at the top with "Bring back", and a small red dot on the tab shows while an important one is open (`ravenseat checks
-marker off` hides the dot). Turn the tab off if you run your own setup.
+marker off` hides the dot). A project with a database gets a Database group (probes for the database rules, migrations
+from an empty database in CI, probes only against a local database). Turn the tab off if you run your own setup.
 
 <p align="center"><img src="../../assets/screenshots/light-04-statistics.jpg" alt="Statistics: throughput, cycle time, estimate accuracy and cost" width="800"></p>
 

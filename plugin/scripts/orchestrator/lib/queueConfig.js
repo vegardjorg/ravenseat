@@ -142,6 +142,12 @@ const STANDARD = Object.freeze({
   // enabled: `ravenseat doctor` checks that the project's OWN .gitignore (the global one switched off) ignores what
   // Ravenseat keeps local, and that git tracks none of it. Off by default like the two above (lib/optInChecks.js).
   gitignoreCheck: { enabled: false },
+  // enabled: `ravenseat doctor` names the broad rules in the tracked .claude/settings.json (lib/broadPermissions.js).
+  // Off by default (lib/optInChecks.js).
+  permissionsCheck: { enabled: false },
+  // localOnly: a database probe gate (pg_prove, supabase test db, sqlx test) runs only against a local database
+  // (lib/dbGuard.js); otherwise gates.mjs and the base gate refuse it. Off by default (lib/optInChecks.js).
+  dbGuard: { localOnly: false },
   // The queue's files in git (lib/queueShare.js, H3). Off by default: the whole data folder is ignored. On (only through
   // `ravenseat share on`, which explains what becomes visible and needs --yes): only the files in include may be tracked;
   // setup writes <dataFolder>/* with !<dataFolder>/<file> per file. Some files can never be shared (the time log,

@@ -393,7 +393,7 @@ const SETTINGS = Object.freeze([
       whyNot: 'A pushed secret stays in the remote\'s history and must be rotated, even after the commit is removed.',
       changes: 'Pushes go out without a secret scan. Doctor will report it.',
     }),
-  // The three opt-in checks (lib/optInChecks.js): off by default, so switching one off again never weakens the standard.
+  // The opt-in checks (lib/optInChecks.js): off by default, so switching one off again never weakens the standard.
   row('secretScan.atReceive', 'guards', 'onoff', 'Secret scan at receive',
     'Off by default. On: receive scans the track\'s own commits for secrets; a hit blocks the merge until a clean receive or merge --allow-secret.', {
       weakens: offWeakens,
@@ -401,12 +401,26 @@ const SETTINGS = Object.freeze([
       whyNot: 'Once merged, the key is in the base branch\'s history; the push check only stops it from leaving the machine.',
       changes: 'Receive no longer scans the track\'s commits, and merge does not stop on a key.',
     }),
-  row('secretScan.allowlist', 'guards', 'onoff', 'Keys in approved commands',
-    'Off by default. On: doctor looks for keys in the commands Claude Code has approved (.claude/settings*.json, also in the agents\' worktrees).', {
+  row('secretScan.allowlist', 'guards', 'onoff', 'Keys in approved commands and .mcp.json',
+    'Off by default. On: doctor looks for keys in the commands Claude Code has approved (.claude/settings*.json) and in the MCP servers in .mcp.json (env, headers, args, url), also in the agents\' worktrees.', {
       weakens: offWeakens,
-      protects: 'A token typed in a command that "Yes, and don\'t ask again" stored in clear text, or in a tracked file.',
-      whyNot: 'A key in the tracked .claude/settings.json is in the repo and its history.',
-      changes: 'Doctor no longer reads the approved commands.',
+      protects: 'A token typed in a command that "Yes, and don\'t ask again" stored in clear text, or pasted into a tracked .mcp.json.',
+      whyNot: 'A key in the tracked .claude/settings.json or .mcp.json is in the repo and its history.',
+      changes: 'Doctor no longer reads the approved commands or .mcp.json.',
+    }),
+  row('permissionsCheck.enabled', 'guards', 'onoff', 'Broad permissions check',
+    'Off by default. On: doctor names the broad rules in the tracked .claude/settings.json: any shell command, network tools, rm, git push, WebFetch without a domain, and defaultMode bypassPermissions or acceptEdits.', {
+      weakens: offWeakens,
+      protects: 'A shared rule that lets every session on every clone run any command, send data over the network or push without a question.',
+      whyNot: 'A rule in the tracked settings.json applies to everyone who opens the repo and to every agent.',
+      changes: 'Doctor no longer reads the shared permissions.',
+    }),
+  row('dbGuard.localOnly', 'guards', 'onoff', 'Probe gates only against a local database',
+    'Off by default. On: a database probe gate (pg_prove, supabase test db, sqlx test) whose database URL or host is not localhost, 127.0.0.1, ::1 or a Docker service name is refused, red with one line.', {
+      weakens: offWeakens,
+      protects: 'Probes that write and test refusals running against a shared or remote database, for example a DATABASE_URL left on staging.',
+      whyNot: 'A probe that does not roll back changes data other people use.',
+      changes: 'Probe gates run against whatever database their command or environment names.',
     }),
   row('gitignoreCheck.enabled', 'guards', 'onoff', 'Project .gitignore check',
     'Off by default. On: doctor checks that the project\'s own .gitignore, not only your global one, ignores what Ravenseat keeps local.', {

@@ -42,7 +42,7 @@ ravenseat kickstart                 # which checks the project has and one next 
 ravenseat kickstart gates --apply   # sets the checks your project already has as gates
 ravenseat kickstart add             # proposes the next step as a task; it starts only when you approve it
 ravenseat gate "<failure class>"    # a known bug becomes a proposed gate task; gates.fromKnownBugs: propose, auto or off
-ravenseat doctor [--all] [--fix]    # health check: node, hooks, config, state, worktrees, budget, safety baseline, keys in approved commands and the project .gitignore when turned on (--all adds CI cost tips); --fix writes the project's .gitignore from the settings first
+ravenseat doctor [--all] [--fix]    # health check: node, hooks, config, state, worktrees, budget, safety baseline, keys in approved commands and .mcp.json, broad shared permissions and the project .gitignore when turned on (--all adds CI cost tips); --fix writes the project's .gitignore from the settings first
 ravenseat share status             # whether the queue's own files are in git, the repo's visibility and what git tracks in the data folder
 ravenseat share on [--include <file> ...] --yes   # off by default: queue.json and plans.json in git as a backup; explains first, a public or unknown repo also needs --public-ok
 ravenseat share off                # the whole data folder is private again

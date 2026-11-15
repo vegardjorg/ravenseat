@@ -123,6 +123,19 @@ and the PowerShell tool, through the hooks as Claude Code runs them.
 [`queueProposals`](../scripts/orchestrator/lib/__tests__/queueProposals.test.ts),
 [`queueBaseGate`](../scripts/orchestrator/__tests__/queueBaseGate.test.ts).
 
+### Can .mcp.json leak a key?
+
+It can. `.mcp.json` is meant to be shared, so it is usually in git, and a token pasted into a server's `env`,
+`headers`, `args` or `url` goes with it. Claude Code expands `${NAME}` in that file, so write
+`"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"` and keep the key in your environment. With the key check on
+(`ravenseat settings set secretScan.allowlist on`, the same setting as for approved commands) `ravenseat doctor` reads
+`.mcp.json` in the project and in the agents' worktrees and names the file and the path in it, such as
+`.mcp.json: mcpServers.github.env.GITHUB_PERSONAL_ACCESS_TOKEN`, never the key: FAIL when git tracks the file, WARN when
+it is only on disk. A key already pushed must be changed.
+
+**Verified by:** [`rt34-mcp-key`](../scripts/orchestrator/__tests__/redteam/rt34-mcp-key.test.ts),
+[`mcpSecrets`](../scripts/orchestrator/lib/__tests__/mcpSecrets.test.ts).
+
 ### Can an approved command leak a key?
 
 It can, and Ravenseat cannot stop Claude Code from writing it: "Yes, and don't ask again" stores the whole command, so a

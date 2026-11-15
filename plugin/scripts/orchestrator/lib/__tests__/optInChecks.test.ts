@@ -23,6 +23,7 @@ describe('the opt-in checks', () => {
   it('are all off in the standard configuration, and each has a setting row and a card', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const R = require('../settingsRegistry.js');
+    const categories = JSON.parse(fs.readFileSync(path.join(BUILTIN, 'categories.json'), 'utf8')).map((c: { key: string }) => c.key);
     for (const c of OI.OPT_IN) {
       expect(OI.valueAt(KK.STANDARD, c.key), c.key).toBe(false);
       expect(OI.isOn(KK.STANDARD, c.key)).toBe(false);
@@ -30,7 +31,9 @@ describe('the opt-in checks', () => {
       const file = path.join(BUILTIN, 'suggestions', `${c.suggestion}.md`);
       const t = CATALOG.parseTemplate(fs.readFileSync(file, 'utf8'), c.suggestion);
       expect(t.errors).toEqual([]);
-      expect(t).toMatchObject({ action: 'setting', setting: c.key, category: 'security' });
+      expect(t).toMatchObject({ action: 'setting', setting: c.key });
+      // security for the secret and permission checks, database for the probe guard: a category the catalog has.
+      expect(categories, c.key).toContain(t.category);
       // The card applies while the check is off; an entry with offer() adds the fact it needs (share: repo-private).
       expect(t.when.split(',')[0], c.key).toBe(`off:${c.key}`);
     }
@@ -43,8 +46,12 @@ describe('the opt-in checks', () => {
   });
 
   it('setup tips about each check that is off, once: the ones already asked are not tipped again', () => {
-    const all = OI.tipsToGive({}, [], { visibility: 'private' });
+    const all = OI.tipsToGive({}, [], { visibility: 'private', hasDatabase: true, sharedSettings: true });
     expect(all.map((c: { key: string }) => c.key)).toEqual(OI.OPT_IN.map((c: { key: string }) => c.key));
+    // The probe guard only in a project with a database, the permissions check only where a shared settings file is.
+    const bare = OI.tipsToGive({}, [], {}).map((c: { key: string }) => c.key);
+    expect(bare).not.toContain('dbGuard.localOnly');
+    expect(bare).not.toContain('permissionsCheck.enabled');
     // The share tip only in a repo known to be private: unknown and public get none.
     for (const visibility of [null, 'unknown', 'public'])
       expect(OI.tipsToGive({}, [], { visibility }).map((c: { key: string }) => c.key)).not.toContain('share.queueData');
@@ -72,6 +79,11 @@ describe('the cards on the Checks tab', () => {
     const r = report(OFF);
     for (const c of OI.OPT_IN.filter((x: { offer?: unknown }) => !x.offer))
       expect(card(r, c.suggestion), c.suggestion).toMatchObject({ priority: 'medium', action: 'setting', setting: c.key, state: 'open' });
+    // The probe guard: medium, only with a database. Broad permissions: low, only with a tracked settings file.
+    expect(card(r, 'db-shared-guard')).toBeUndefined();
+    expect(card(report({ ...OFF, hasDatabase: true }), 'db-shared-guard')).toMatchObject({ priority: 'medium', category: 'database', setting: 'dbGuard.localOnly' });
+    expect(card(r, 'broad-permissions')).toBeUndefined();
+    expect(card(report({ ...OFF, sharedSettings: true }), 'broad-permissions')).toMatchObject({ priority: 'low', setting: 'permissionsCheck.enabled' });
     // share-backup: low (off is the safe side), and only in a repo known to be private.
     expect(card(r, 'share-backup')).toBeUndefined();
     expect(card(report({ ...OFF, repoPrivate: true }), 'share-backup')).toMatchObject({ priority: 'low', action: 'setting', setting: 'share.queueData', state: 'open' });
@@ -88,6 +100,14 @@ describe('the cards on the Checks tab', () => {
     r = report({ ...OFF, allowlistTrackedHit: true, gitignoreGap: true }, ['allowlist-scan', 'gitignore-own-rules']);
     expect(card(r, 'allowlist-scan')).toMatchObject({ state: 'dismissed' });
     expect(r.important).toBe(before);
+  });
+
+  it('bypassPermissions in the tracked settings is the one important permissions gap', () => {
+    const base = { ...OFF, sharedSettings: true };
+    expect(card(report(base), 'broad-permissions')).toMatchObject({ priority: 'low' });
+    const r = report({ ...base, bypassTracked: true });
+    expect(card(r, 'broad-permissions')).toMatchObject({ priority: 'high' });
+    expect(r.important).toBe(report(base).important + 1);
   });
 
   it('a setting card without its setting, or an unknown important_when, is a catalog error', () => {
