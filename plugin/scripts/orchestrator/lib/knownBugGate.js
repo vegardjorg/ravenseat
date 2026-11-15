@@ -1,7 +1,8 @@
 // =============================================================
 // lib/knownBugGate.js: a known bug that can happen again becomes a gate task. Pure logic.
 //
-// A track writes one line `GATE <failure class>` in track-result.md, `ravenseat receive` reads it, and `ravenseat gate` does the same by hand.
+// A track writes one line `GATE <failure class>` in track-result.md (or the new form `GATE <class id> @ <place> | <sentence>`,
+// lib/findingLine.js), `ravenseat receive` reads it, and `ravenseat gate` does the same by hand.
 // gates.fromKnownBugs in queue.config.json decides what happens:
 //   propose (default)  a proposed task; it starts only when the owner approves it
 //   auto               an approved task; it runs when the queue gets to it, and it uses tokens without asking
@@ -39,13 +40,18 @@ function parseGateLine(text) {
   return found ? cleanTitle(found.title) : null;
 }
 
-/** The same line with its place: `GATE <failure class> @ <file:line>` gives { title, where }; where is null without one. */
-function parseGate(text) {
-  const m = /^[ \t]*(?:[-*][ \t]+)?`?GATE(?::|[ \t])[ \t]*([^\n`]*)`?[ \t]*$/m.exec(String(text ?? ''));
-  if (!m) return null;
-  const place = /^(.*\S)\s+@\s+(\S+:\d+)\s*$/.exec(m[1]);
-  const title = plainLine(place ? place[1] : m[1]);
-  return !title || /^(none|n\/a|no|-)$/i.test(title) ? null : { title, where: place ? place[2] : null };
+/**
+ * The same line with its place, read by lib/findingLine.js parseGateLine (one parser for FINDING and GATE).
+ * The old form `GATE <failure class> @ <file:line>` gives { title, where } as before; where is null without one.
+ * The new form `GATE <class id> @ <place> | <sentence>` also gives `class` (the taxonomy id, lib/failureClasses.js)
+ * and `text` (the sentence, masked); the title is then the class title, so the same class extends the open gate task.
+ */
+function parseGate(text, { classes } = {}) {
+  const g = require('./findingLine.js').parseGateLine(text, classes ? { classes } : {});
+  if (!g) return null;
+  const title = plainLine(g.title);
+  if (!title) return null;
+  return g.form === 'old' ? { title, where: g.where } : { title, where: g.where, class: g.class, text: g.text };
 }
 
 /** A gate task whose mission names no file and line: approving it means agent work on a guess (ravenseat decide says so). */

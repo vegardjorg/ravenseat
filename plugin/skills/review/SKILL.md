@@ -42,9 +42,9 @@ Start all review agents **in the same turn**, one per part: `subagent_type: rave
 - the area, the part (paths or feature) and the lens, plus the checklist points for a free-text lens;
 - "Answer in your format: the FINDINGS line first, one line per finding with file:line, severity and class."
 
-The agent reads, never writes, and answers `FINDINGS H=<n> M=<n> L=<n> deferrable=<n>` with one line per finding:
-`<H|M|L> | <one-off|repeatable|architecture> | <file:line> | <what> | <fix>`, plus `GATE:` for a repeatable finding and
-`DECISION:` for an architecture one.
+The agent reads, never writes, and answers `FINDINGS H=<n> M=<n> L=<n>` with one line per finding:
+`FINDING <code> <H|M|L> <mark> <class> @ <file:line> | <kind>: <what and the fix>` (the kind is one-off, repeatable or
+architecture), plus `GATE:` for a repeatable finding and `DECISION:` for an architecture one.
 
 ## 3. Merge and dedup
 

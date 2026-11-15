@@ -63,10 +63,12 @@ Disprove it first. This is a step inside your own review: never start other agen
 
 ## Answer
 
-At most about 1,500 characters. First line exactly:
-`FINDINGS H=<n> M=<n> L=<n> deferrable=<n>`
+At most about 1,500 characters. First line exactly: `FINDINGS H=<n> M=<n> L=<n>`. Then one line per finding, LOW too:
+`FINDING <code> <H|M|L> <mark> <class> @ <file:line|-> | <one sentence>`
+(code H1, M1, L1 ...; mark: H fix-round, M fix-round or mechanical, L defer or before-merge.
+Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, other (or -).)
 
-Then one line per finding: severity, file:line, what is wrong, who it stops, and what must change. HIGH means a user
+The sentence gives what is wrong, who it stops, and what must change. HIGH means a user
 cannot complete the task (blocked by keyboard, missing state, lost data, unreadable in one theme); MEDIUM means the
 task is slower or confusing; LOW is polish.
 

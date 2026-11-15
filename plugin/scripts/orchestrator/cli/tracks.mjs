@@ -642,7 +642,7 @@ export function measureTask(o) {
     : L.batchFindings(
         agents
           .filter((x) => L.REVIEWER_TYPES.includes(x.type) && x.text)
-          .map((x) => L.parseFindings(L.lastAnswer(x.text))),
+          .map((x) => L.parseFindings(L.lastAnswer(x.text), { reviewer: x.type })),
       );
   const resultText = val('--result') ?? (o.result ? null : lastTrackReply(agents));
   return { cost, findings, result: resultText ? L.parseResult(resultText) : null };
@@ -650,13 +650,20 @@ export function measureTask(o) {
 /**
  * The reviewers' FINDINGS lines for the task (the last answer in each reviewer transcript), for `--findings` when `merge`
  * calls `set done`. Empty list when no reviewer has a FINDINGS line (the field is then left out, without error).
+ * A report with FINDING lines (lib/findingLine.js) is handed on as one counts line built from the lines, with the
+ * deferrable codes keyed by the reviewer (`reviewer-security:L1`), since the flag carries one line per report and
+ * the reviewer's own counts line has no deferrable= any more.
  */
 export function reviewerFindingsLines(o) {
   return taskAgents(o)
     .filter((x) => L.REVIEWER_TYPES.includes(x.type) && x.text)
-    .map((x) => L.parseFindings(L.lastAnswer(x.text)))
-    .filter(Boolean)
-    .map((f) => f.line);
+    .map((x) => ({ type: x.type, r: L.reportFindings(L.lastAnswer(x.text)) }))
+    .filter((x) => x.r)
+    .map(({ type, r }) =>
+      r.lines
+        ? `FINDINGS H=${r.counts.H} M=${r.counts.M} L=${r.counts.L} deferrable=${r.deferrable.map((c) => `${type}:${c}`).join(',') || '-'}`
+        : r.line,
+    );
 }
 /**
  * Splits the cost into build, review and fix round (lib/costMeasures.js costPhases, the rule is documented there):

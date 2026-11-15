@@ -23,10 +23,12 @@ same folder: `00-package.md` (result line, changed objects, diff stats), `diff.p
   module boundary, a pattern other modules will follow, responsibility moved between layers) or another
   hard-to-reverse choice should have been an owner question: a MEDIUM finding, "should have asked: <the choice>".
 - Never change files.
-- Answer with at most about 1,500 characters. First line exactly:
-  `FINDINGS H=<n> M=<n> L=<n> deferrable=<n>`
-  then one line per finding: severity, file:line, what is wrong, and the suggested fix. Mark small mechanical MEDIUM
-  fixes "M, mechanical" and LOW findings either "L, safe to defer" or "L, needed before merge".
+- Answer with at most about 1,500 characters. First line exactly: `FINDINGS H=<n> M=<n> L=<n>`. Then one line per finding, LOW too:
+  `FINDING <code> <H|M|L> <mark> <class> @ <file:line|-> | <one sentence>`
+  (code H1, M1, L1 ...; mark: H fix-round, M fix-round or mechanical, L defer or before-merge.
+  Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, other (or -).)
+  The sentence says what is wrong and the suggested fix. Mark a small mechanical MEDIUM fix `mechanical`, and a LOW
+  finding `defer` (safe to defer) or `before-merge` (needed before merge).
 
 ## Before you write a HIGH or MEDIUM finding
 

@@ -43,3 +43,6 @@ branch, merging and pushing; you only do your track.
 - **Wiring spec:** a hotspot (or another shared file) you may not change gets one line per change in `track-result.md`,
   exactly `WIRE <file> | <anchor and the exact line to add>` (a repo-relative path, then ` | `, then one line). Each
   line becomes an open item on the task that `done` waits for until the orchestrator applies it; never edit the file.
+- **Known bug:** when you fixed a bug another change could easily repeat, add one line `GATE <failure class> @ <file:line>`
+  to `track-result.md` (the mission says when). Optionally the new form: `GATE <class> @ <file:line> | <one sentence>`,
+  with a class id from the reviewers' list (`unchecked-error`, `access-control`, ... `other`).

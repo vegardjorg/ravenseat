@@ -134,7 +134,7 @@ const {
   stateLine, summaryView,
 } = require('./logic/agents.js');
 const {
-  parseResult, parseFindings, batchFindings, lastAnswer, firstUserMessage, mentionsTask, taskAgentTypes,
+  parseResult, parseFindings, reportFindings, batchFindings, lastAnswer, firstUserMessage, mentionsTask, taskAgentTypes,
   agentsForTask, sumCost, costStatistics, packageFiles, dbObjectsFromDiff, reviewPackageIndex, reviewerPrompt,
   ownerQuestionSection,
   assumptionSection,
@@ -398,6 +398,7 @@ module.exports = {
   trackQuestion,
   parseResult,
   parseFindings,
+  reportFindings,
   batchFindings,
   lastAnswer,
   firstUserMessage,

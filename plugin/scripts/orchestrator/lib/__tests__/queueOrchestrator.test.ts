@@ -213,7 +213,8 @@ describe('agent type, reviewers and agent message', () => {
     });
     expect(TK.trackFromText(p)).toBe('E-1b2');
     expect(p).toContain('C:\\s\\rev-E-1b2\\00-package.md');
-    expect(p).toMatch(/FINDINGS H=<count> M=<count> L=<count>/);
+    // The finding format (lib/findingLine.js): the counts line without deferrable=, then FINDING lines.
+    expect(p).toContain('FINDINGS H=<n> M=<n> L=<n>');
   });
 });
 

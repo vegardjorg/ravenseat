@@ -53,7 +53,12 @@ describe('the agent files', () => {
     const s = read(f);
     expect(s).toMatch(/^tools: Read, Grep, Glob, Bash\s*$/m);
     expect(s).not.toMatch(/^tools:.*\b(Edit|Write)\b/m);
-    expect(s).toContain('FINDINGS H=<n> M=<n> L=<n> deferrable=<n>');
+    // The shared finding format (lib/findingLine.js contractLines): the counts line without deferrable= (it is
+    // derived from the defer marks now), then one FINDING line per finding with the core class ids. Same text as the
+    // reviewer prompt in lib/logic/results.js, so a reviewer gets one contract however it is started.
+    expect(s).not.toContain('deferrable=');
+    const flat = s.replace(/\r?\n\s*/g, ' ');
+    for (const line of require('../findingLine.js').contractLines()) expect(flat).toContain(line);
     expect(s).toContain('Unverified: <what>, because <why>.');
     expect(s).toContain('conflicts with <the other one>');
     if (f !== 'reviewer-challenger.md') expect(s).toContain('## Before you write a HIGH or MEDIUM finding');

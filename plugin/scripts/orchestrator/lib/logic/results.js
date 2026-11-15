@@ -117,11 +117,10 @@ function trackQuestion({ result, reportText = null, reply = null }) {
 }
 
 /**
- * The reviewer's FINDINGS line, e.g. `FINDINGS H=0 M=1 L=3 deferrable=L2,L3`. Missing line: null. A missing number
- * becomes 0 when at least one of H/M/L is there.
- * @returns {null | { line: string, H: number, M: number, L: number, deferrable: string[] }}
+ * The counts on the FINDINGS line alone, e.g. `FINDINGS H=0 M=1 L=3 deferrable=L2,L3`, with the old deferrable= list.
+ * Missing line or no number: null. A missing number becomes 0 when at least one of H/M/L is there.
  */
-function parseFindings(text) {
+function countsLine(text) {
   const f = fixedLine(text, 'FINDINGS');
   if (!f) return null;
   const kv = keyValues(f.rest);
@@ -145,17 +144,67 @@ function parseFindings(text) {
   };
 }
 
-/** The sum of the review reports' FINDINGS lines (one per reviewer and round). No lines: null. */
+/**
+ * The reviewer's findings. The FINDINGS counts line comes first (`FINDINGS H=0 M=1 L=2`), then one FINDING line per
+ * finding (lib/findingLine.js). With FINDING lines, the lines count: H/M/L are counted from them, `deferrable` is the
+ * codes marked `defer`, and `note` says when the counts line differs. Without them (an old report) the counts line and
+ * its `deferrable=` list are read as before, with exactly the old shape. No counts line and no FINDING lines: null.
+ * `reviewer` (the agent type) is kept on the result, so batchFindings keys the codes per reviewer.
+ * @returns {null | { line: string|null, H: number, M: number, L: number, deferrable: string[], note?: string, reviewer?: string }}
+ */
+function parseFindings(text, { reviewer = null, classes } = {}) {
+  const head = countsLine(text);
+  const FL = require('../findingLine.js');
+  const opts = classes ? { classes } : {};
+  if (!FL.parseFindingLines(text, opts).lines) return head ? { ...head, ...(reviewer ? { reviewer } : {}) } : null;
+  const f = FL.findingsOf(text, { counts: head, ...opts });
+  return {
+    line: head?.line ?? null,
+    ...f.counts,
+    deferrable: f.deferrable,
+    ...(f.note ? { note: f.note } : {}),
+    ...(reviewer ? { reviewer } : {}),
+  };
+}
+
+/**
+ * The findings of one review report, item by item (for the review items on the task, the next step of the finding
+ * format): the counts, the items (lib/findingLine.js; counts with no FINDING lines give one summary item), the
+ * deferrable codes and the note. null when the report has neither a counts line nor FINDING lines.
+ * @returns {null | { reviewer: string|null, round: number|null, counts: object, items: object[], deferrable: string[], note: string|null }}
+ */
+function reportFindings(text, { reviewer = null, round = null, classes } = {}) {
+  const head = countsLine(text);
+  const FL = require('../findingLine.js');
+  const f = FL.findingsOf(text, { counts: head, ...(classes ? { classes } : {}) });
+  if (!head && !f.lines) return null;
+  // An old report keeps its own deferrable= list; a new one derives it from the marks.
+  const deferrable = f.lines ? f.deferrable : (head?.deferrable ?? []);
+  // line: the reviewer's own counts line (null when it wrote only FINDING lines); lines: how many FINDING lines.
+  return { reviewer, round, line: head?.line ?? null, lines: f.lines, counts: f.counts, items: f.items, deferrable, note: f.note };
+}
+
+/**
+ * The sum of the review reports' findings (one per reviewer and round). No reports: null. Deferrable codes are keyed
+ * per reviewer: two reviewers' `L1` are two findings (`reviewer:L1`, `reviewer-security:L1`), the same reviewer's `L1`
+ * twice is one. A report without a reviewer (the --findings flag) keeps its plain codes, keyed per report.
+ */
 function batchFindings(list) {
   const validOnes = (list ?? []).filter(Boolean);
   if (!validOnes.length) return null;
   const out = { H: 0, M: 0, L: 0, deferrable: [], reports: validOnes.length };
-  for (const f of validOnes) {
+  const seen = new Set();
+  validOnes.forEach((f, i) => {
     out.H += f.H;
     out.M += f.M;
     out.L += f.L;
-    for (const x of f.deferrable) if (!out.deferrable.includes(x)) out.deferrable.push(x);
-  }
+    for (const x of f.deferrable) {
+      const key = `${f.reviewer ?? `#${i}`} ${x}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.deferrable.push(f.reviewer ? `${f.reviewer}:${x}` : x);
+    }
+  });
   return out;
 }
 
@@ -524,19 +573,35 @@ function reviewPackageIndex({
 }
 
 /**
- * The short reviewer prompt. "track <id>" in the text ties the reviewer's cost to the task. reviewer-gap also gets the
- * task's acceptance criteria and done command (doneCheck.gapCriteriaBlock), when it has any.
+ * The failure classes for the prompt: the given ones, else the project's (its warnings are for the doctor, not the
+ * reviewer), else the core list. Never throws: a prompt is never lost over the class list.
  */
-function reviewerPrompt({ o, type, folder, delta = null }) {
+function promptClasses(classes) {
+  const FC = require('../failureClasses.js');
+  if (Array.isArray(classes) && classes.length) return classes;
+  try {
+    return FC.classesFor(require('../projectRoot.js').roots().tree).classes;
+  } catch {
+    // error-ignored: the core list is the fallback
+    return FC.coreClasses();
+  }
+}
+
+/**
+ * The short reviewer prompt. "track <id>" in the text ties the reviewer's cost to the task. reviewer-gap also gets the
+ * task's acceptance criteria and done command (doneCheck.gapCriteriaBlock), when it has any. `classes`: the failure
+ * classes to list (lib/failureClasses.js); by default the project's own (docs/queue/failure-classes.json), else the core.
+ */
+function reviewerPrompt({ o, type, folder, delta = null, classes = null }) {
   const sep = String(folder).includes('\\') ? '\\' : '/';
   return [
     `You are ${type} for track ${o.id} (class ${o.class}, branch ${o.branch ?? queueBranch(o.id)}) in the work queue.`,
     `Read the review package: ${folder}${sep}00-package.md first, then diff.patch and the files under files${sep} (full version from the`,
     "branch), and the track's answer and report when they are there. Look things up in the rest of the repo only for a concrete",
     `question, with grep -n and excerpts. At most approx. ${type === 'reviewer-light' ? 15 : 40} turns; rather leave the question open in the report.`,
-    'Your answer is at most approx. 1,500 characters. First line in fixed format: FINDINGS H=<count> M=<count> L=<count>',
-    'deferrable=<finding codes that can wait, comma-separated, or ->. Then one short point per H and M finding (code,',
-    'file:line, fix), L findings only with code and one sentence. Do not repeat the package.',
+    'Your answer is at most approx. 1,500 characters. Do not repeat the package.',
+    // The finding format (lib/findingLine.js): the counts line, then one FINDING line per finding with a class id.
+    ...require('../findingLine.js').contractLines(promptClasses(classes)),
     // A delta review after a fix round (lib/deltaReview.js): the package holds only the commits since the last review.
     ...(delta ? [require('../deltaReview.js').reviewerLine(delta)] : []),
     // reviewer-gap also gets the fixed criteria and the done command (lib/doneCheck.js), one verdict line per criterion.
@@ -550,6 +615,7 @@ module.exports = {
   assumptionSection,
   trackQuestion,
   parseFindings,
+  reportFindings,
   batchFindings,
   lastAnswer,
   firstUserMessage,

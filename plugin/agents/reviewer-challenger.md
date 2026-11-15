@@ -48,10 +48,11 @@ Two findings on the same file and overlapping lines that ask for opposite action
 
 ## Answer
 
-At most about 1,500 characters. First line exactly:
-`FINDINGS H=<n> M=<n> L=<n> deferrable=<n>`
+At most about 1,500 characters. First line exactly: `FINDINGS H=<n> M=<n> L=<n>`. Then one line per finding, LOW too:
+`FINDING <code> <H|M|L> <mark> <class> @ <file:line|-> | <one sentence>`
+(code H1, M1, L1 ...; mark: H fix-round, M fix-round or mechanical, L defer or before-merge.
+Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, other (or -).)
 
-Then one line per finding: severity, file:line (or the source), the claim you tested, what you found, and what must
-change. HIGH means the conclusion or the fix is wrong, or a central claim rests on a single unchecked source. A claim
+The sentence gives the claim you tested, what you found, and what must change (no file: `@ -`). HIGH means the conclusion or the fix is wrong, or a central claim rests on a single unchecked source. A claim
 you tried hard to refute and could not is not a finding; list at most three of those under "Held up" with one line
 each on what you checked, so the orchestrator can see you tested and did not just agree.

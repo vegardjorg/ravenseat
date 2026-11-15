@@ -42,8 +42,10 @@ not check ends with `Unverified: <what>, because <why>.` Two findings that canno
 
 ## Answer
 
-At most about 800 characters. First line exactly:
-`FINDINGS H=<n> M=<n> L=<n> deferrable=<n>`
+At most about 800 characters. First line exactly: `FINDINGS H=<n> M=<n> L=<n>`. Then one line per finding, LOW too:
+`FINDING <code> <H|M|L> <mark> <class> @ <file:line|-> | <one sentence>`
+(code H1, M1, L1 ...; mark: H fix-round, M fix-round or mechanical, L defer or before-merge.
+Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, other (or -).)
 
-Then one line per finding: severity, file:line, the problem, the fix. HIGH means it breaks the task or exposes data or a
+The sentence gives the problem and the fix. HIGH means it breaks the task or exposes data or a
 secret. MEDIUM is a real bug a user can hit. LOW is one sentence. With no findings, the first line is enough.

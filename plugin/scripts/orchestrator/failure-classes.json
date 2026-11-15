@@ -1,0 +1,20 @@
+{
+  "about": "The failure classes agents write in FINDING and GATE lines (lib/failureClasses.js). The ids are the contract: never rename one. A project adds or turns off classes in docs/queue/failure-classes.json.",
+  "classes": [
+    { "id": "unchecked-error", "title": "unchecked error or result" },
+    { "id": "access-control", "title": "access control and authorization" },
+    { "id": "injection", "title": "input and injection" },
+    { "id": "secret-leak", "title": "leaked secret" },
+    { "id": "contract-drift", "title": "contract and type drift" },
+    { "id": "null-undefined", "title": "null or undefined" },
+    { "id": "concurrency-order", "title": "concurrency and ordering" },
+    { "id": "migration-schema", "title": "migration and schema" },
+    { "id": "config-env", "title": "config and environment" },
+    { "id": "dependency-build", "title": "dependency and build" },
+    { "id": "time-zone", "title": "time and time zone" },
+    { "id": "data-loss", "title": "deletion and data loss" },
+    { "id": "test-weakening", "title": "weakened or flaky test" },
+    { "id": "ui-state", "title": "UI state" },
+    { "id": "other", "title": "anything else (never gives a proposal)" }
+  ]
+}
