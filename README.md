@@ -193,6 +193,17 @@ npm install
 npm test        # vitest; runs the unit tests under plugin/scripts/orchestrator
 ```
 
+Before each commit (also on a track branch), run only the tests your change can reach:
+
+```
+npm run test:changed            # against origin/main; or: npm run test:changed -- <ref>
+npm run test:changed -- --list  # show the pick and why, run nothing
+```
+
+It follows imports, the scripts the tests start as processes (queue.mjs commands, hooks, gates.mjs) and the files the
+tests read, and runs the whole suite instead whenever it cannot tell (it prints the reason). Run the whole suite
+(`npm test`) before every push. This is a working rule, not a git hook.
+
 ## License
 
 MIT. See [LICENSE](LICENSE). The helper agents `reviewer-design`, `reviewer-tests`, `reviewer-gap` and
