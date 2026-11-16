@@ -5,6 +5,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a Claude Code format change is fixed in one place, and no new file starts depending on it.** The
+  transcript fields, transcript paths, hook and status line payloads, cache lifetimes, model ids, environment
+  variables, CLI flag and settings paths the queue reads are now dated client facts in `lib/clients/claude/facts.js`,
+  each with its source, how fragile it is and the files that read it. A new test fails when a file outside
+  `lib/clients/` starts reading a transcript or hook field directly, and when a file on its allowlist stops doing so,
+  so the list only shrinks as the reading moves into the adapter. Nothing changes for users.
 - **Hardening: a change that drifts far outside its task can get a closer look, opt-in.** Two guards build on the
   drift note at receive, both off by default. `scopeNotes.driftGap` adds the gap reviewer when at least 4 changed
   files, and over 40 % of them, lie outside the task's files and reads (`driftGapFiles`, `driftGapShare`), with one
