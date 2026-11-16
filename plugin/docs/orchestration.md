@@ -714,6 +714,51 @@ The setting `wiring.stop` (default `true`, Advanced) turns the stop off. Then `d
 `WIRING STOP OFF` with the items, and they stay open on the task. Turning it off is a weakened guard: `ravenseat
 settings` and `ravenseat doctor` name it, as for the other guards.
 
+## The review findings stop the merge and done
+
+The reviewers chosen for a class (`reviewers`, plus the ones the review signals lift in) each end their report with a
+`FINDINGS` line and one `FINDING` line per finding (see "Review to gate"). `ravenseat merge` reads the newest report
+from each of them after the review package was built, and stops when one is missing or reports `H>0`:
+
+```
+STOP: A is not merged: no FINDINGS report after the last receive from reviewer-security (receive chose them; ...).
+```
+
+Run the missing reviewer, or a fix round for the HIGH, and merge again. On the owner's word only,
+`merge <id> --allow-unreviewed` goes past it and is logged as `unreviewed-overridden` (the agent guard keeps the flag
+from the queue's agents). `review.requireFindings` (default `true`, Advanced) turns the gate off; turning it off is a
+weakened guard. A class with no reviewers (K, U) has nothing to wait for, and the light review (`reviewer-light`, for a
+K task in a project without gates) is advice: its findings become items, but the gate never waits for it.
+
+Each finding becomes an item on the task (the field `review_items`), keyed `<reviewer>#<round>:<code>`, for example
+`reviewer#1:M2`. `merge` records them, and so does `ravenseat resume <id> --reason fix`, before the fix round, so a
+finding the orchestrator leaves out of the findings file is still on the task. Recording again adds nothing. Then
+`ravenseat set <id> done` and the done step of `merge` refuse while an item is open, next to the wiring items, and
+`merge <id> --resume` runs done once they are closed. An item is closed in one of four ways:
+
+```
+ravenseat review-item <id>                                 # the items, open first, with the commands
+ravenseat review-item <id> reviewer#1:M2 --commit <sha>    # fixed in this commit (in baseBranch, changes the file)
+ravenseat review-item <id> reviewer#1:L1 --task <other>    # placed in an unfinished task
+ravenseat review-item <id> reviewer#1:L1 --batch           # placed in the review-rest batch task
+ravenseat review-item <id> reviewer#1:L2 --reject wont-fix --note "<one sentence>"
+ravenseat review-item <id> --defer-all-L                   # every open LOW that may wait, into one batch task
+```
+
+A rejection takes one of the codes `false-positive`, `pre-existing`, `duplicate` or `wont-fix`, plus one sentence. A
+finding marked `mechanical` or `before-merge` belongs to this merge, so it can only be fixed or rejected; a line that
+could not be read can only be rejected, after reading the report. `--batch` and `--defer-all-L` add to an open task
+labelled `review-rest` in the same project, or make one (`<id>-RV<n>`, class K, low value, the batch queue in Full
+mode). The finding text goes into that task as data, never as instructions.
+
+Each close writes one row in the finding log (`findings.jsonl`) with the disposition, so the log can count
+what reviewers find and what is done about it; a LOW or an `other` finding is logged but not counted. Closing is logged
+in the changelog (`ravenseat undo` takes it back) and refused from inside a track worktree: a track does not close its
+own review.
+
+The setting `reviewItems.stop` (default `true`, `false` in Lite mode, Advanced) turns the done stop off. Then done
+passes with open items, says `REVIEW ITEM STOP OFF` with the items, and they stay open on the task.
+
 ## Gate from incident (a failure becomes a check)
 
 The base gate catches a red base; it does not stop the same kind of mistake from coming back. So when a post-merge

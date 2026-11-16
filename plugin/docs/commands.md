@@ -15,6 +15,8 @@ ravenseat fill --scratchpad <dir>   # start what the limits allow
 ravenseat receive <ID>              # receive a finished track (with secretScan.atReceive on, also scans its commits for secrets: a hit blocks the merge)
 ravenseat merge <ID>                # merge it (--allow-secret: past a secret found at receive, owner only, logged)
 ravenseat wiring <ID>               # a task's wiring items; each is carried out (--commit) or rejected before done
+ravenseat review-item <ID>          # a task's review findings as items; each is fixed, placed or rejected before done
+ravenseat review-item <ID> --defer-all-L   # every open LOW that may wait into one review-rest batch task
 ravenseat explain <ID>              # why one task stands where it stands, from the rules the queue starts by
 ravenseat pulse-check               # the pulse in one read-only call: SILENT, or the actions with their next commands
 ravenseat wait                      # waits in the background at no token cost until something needs the orchestrator

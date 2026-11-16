@@ -9,6 +9,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   a change outside the mission or its files (`scope-drift`), so both can be counted per area. A test keeps every
   reviewer file naming exactly the classes in `failure-classes.json`.
 
+- **Hardening: review findings are tracked to a close.** A merge now waits for a FINDINGS report from each chosen
+  reviewer and stops on a HIGH (`--allow-unreviewed` is the owner's way past it, logged). Each finding becomes an
+  item on the task that is fixed, moved to a task or a batch, or rejected with a reason before done, and every close
+  lands in the finding log. `ravenseat review-item --defer-all-L` moves the LOWs that may wait in one call. Lite mode
+  keeps the done stop off.
+
 ## 0.16.0 (2026-11-16)
 
 **Review findings get one line form with a class and a place, also the low ones, so none is lost between rounds. New guards, all off until you turn them on, find keys in .mcp.json, broad shared permissions and probes aimed at a shared database, and the queue files can be shared in git on your word. `npm run test:changed` runs only the tests a change can reach.**
