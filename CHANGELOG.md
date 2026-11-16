@@ -5,6 +5,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a fix needs a red test first.** A fix task (one with `fixes`, a QA or base fix, a task from a finding,
+  or a GATE line in its report) whose red on base check shows no test that fails without it now gets one warning at
+  receive, and its finding log row keeps the verdict and is marked fixed without test, so a bug fixed without proof
+  weighs more when it comes back. It is a warning by default; `gates.redOnBaseStrict` (off until you turn it on) makes
+  merge stop on it, with `--allow-no-test` as the owner's logged way past, which the queue's agents cannot pass. The
+  Checks tab suggests the red on base command for your stack (vitest, jest, pytest, `go test {dirs}`), and what the
+  test-weakening check finds at receive is now its own source in the finding log, classed as a weak test. Both the fix line (`gates.fixWithoutTestWarning`) and the new log source (`testWeakening.findingLog`) are settings of their own, on by default since neither stops anything.
+
 - **Hardening: finding log rows get their class from a rule.** A red `tsc`, a TS2532, a missing module, a secret hit
   or a flaky command now lands in the finding log with its class (contract drift, null or undefined, dependency and
   build, leaked secret, weak test) instead of `other`, from a rule register that is data, so a class that keeps coming

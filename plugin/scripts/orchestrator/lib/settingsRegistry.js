@@ -284,6 +284,21 @@ const SETTINGS = Object.freeze([
     'A red gate in a track reruns only its red commands once on the same commit. Green then counts as flaky.'),
   row('gates.redOnBase', 'gates', 'object', 'Red on base check',
     'At receive, the track\'s new tests must pass on the tip and at least one must fail without the change. A warning.'),
+  row('gates.redOnBaseStrict', 'gates', 'onoff', 'A fix needs a proven red test',
+    'Off by default: a fix task without a test that fails on the base gets one warning at receive. On: merge stops on it, ' +
+    'and the owner can merge past it with --allow-no-test, which is logged. Needs gates.redOnBase.', {
+      weakens: offWeakens,
+      protects: 'A fix merged with no test that fails without it, so the same bug can come back unnoticed.',
+      whyNot: 'Fixes without a proven red test are only warned about and logged as fixed without test.',
+      changes: 'Merge no longer stops on a fix without a proven red test; receive still warns.',
+    }),
+  row('gates.fixWithoutTestWarning', 'gates', 'onoff', 'Warn about a fix without a red test',
+    'A fix task whose red on base check proves no test gets one FIX WITHOUT TEST line at receive. It stops nothing.', {
+      weakens: offWeakens,
+      protects: 'A fix that comes in with a test that would pass without it, read past as one more red on base line.',
+      whyNot: 'The fix-specific line names the task it fixes, so the owner sees the bug may come back.',
+      changes: 'Receive prints only the plain red on base line; the finding log still marks the row fixed without test.',
+    }),
   row('gateEvidence.mode', 'gates', 'choice', 'Gate evidence',
     'Own: receive and merge run the gates themselves and check your answers and edits against the owner log. External: ' +
     'a green CI check on the same commit counts as the full gate. Off: the track\'s own word counts.', {
@@ -346,6 +361,13 @@ const SETTINGS = Object.freeze([
       protects: 'A merge where only the focused tests ran.',
       whyNot: 'With .only in place the rest of the suite is skipped, so the gate says green without checking it.',
       changes: 'A focus marker gives only a warning, and the merge goes on. Doctor will report it.',
+    }),
+  row('testWeakening.findingLog', 'gates', 'onoff', 'Log test weakening as a finding',
+    'What the test weakening check finds also becomes a finding log row, classed as a weak test. Nothing is printed.', {
+      weakens: offWeakens,
+      protects: 'A weakened test that is warned about once and then not counted when the same failure comes back.',
+      whyNot: 'Without the row the repeat count cannot see that a failure followed a weakened test.',
+      changes: 'The warning and the focus stop stay; the finding log gets no test weakening rows.',
     }),
   row('testWeakening.testPaths', 'gates', 'list', 'More test paths', 'More test file patterns for the warning.'),
   row('testWeakening.markers', 'gates', 'list', 'More skip markers',

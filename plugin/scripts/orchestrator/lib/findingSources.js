@@ -2,8 +2,8 @@
 // findingSources.js: what each existing source writes to the finding log (lib/findingLog.js) when it catches a failure
 // (step 4 of the finding format contract, plans/funnformat-0i-0j-2026-11-15.md section 6).
 //
-// Why: the gates, CI, the base gate, the done command, red on base, the secret scan, the GATE line, `ravenseat finding`
-// and the fix links each kept what they caught in their own place (the time log, a task field, the plan register). A
+// Why: the gates, CI, the base gate, the done command, red on base, the secret scan, the test-weakening check, the GATE
+// line, `ravenseat finding` and the fix links each kept what they caught in their own place (the time log, a task field, the plan register). A
 // class that keeps coming back could not be seen across them. Each source now also writes one row in the same form, so
 // later steps (classification, repeats, guards) read one log.
 //
@@ -16,7 +16,8 @@
 //     never raw output or a secret's value, and findingLog.makeRow masks and caps it once more;
 //   - writing is passive: no output on success, at most one WARNING line when a write fails, and never a stop (record).
 // The severity per source is fixed here (SEVERITY), as data the later steps can read: a red base or a secret is H, a
-// flaky command or an unproven test is L (logged, not counted), the rest M.
+// flaky command or an unproven test is L (logged, not counted), the rest M. A fix without a proven red test (step 6,
+// lib/fixTests.js) is M: its row carries the verdict on test_added and the status "fixed without test".
 //
 // The builders are pure and return finding log inputs (or [] / null when there is nothing to log); record() is the only
 // part with I/O. Used by: gates.mjs, cli/ciWatch.mjs, cli/baseHealth.mjs, cli/merge.mjs, cli/finding.mjs, cli/tasks.mjs,
@@ -25,6 +26,7 @@
 'use strict';
 
 const FS = require('./failureSignature.js');
+const FT = require('./fixTests.js');
 
 /** The severity each source logs with (see the header). */
 const SEVERITY = Object.freeze({
@@ -36,6 +38,8 @@ const SEVERITY = Object.freeze({
   tampered: 'H',
   redOnBaseTipRed: 'M',
   redOnBaseUnproven: 'L',
+  fixWithoutTest: 'M',
+  testWeakening: 'M',
   secret: 'H',
   gateLine: 'M',
   finding: 'M',
@@ -152,9 +156,31 @@ function doneCheck({ id, command, run, tamperReason = null }) {
   };
 }
 
-/** The row for the red on base verdict on a task (red_on_base), or null: only `unproven` and `tip-red` are failures. */
-function redOnBase({ id, record }) {
+/**
+ * The row for the red on base verdict on a task (red_on_base), or null. Only `unproven` and `tip-red` are failures, and
+ * on a fix task (`fix`, lib/fixTests.js fixKind) also `no-tests`: a fix with nothing that shows it works is the failure
+ * step 6 logs as "fixed without test" (M, since a bug fixed without a test can come back unseen). A fix with a GATE
+ * line has its verdict on the GATE row (gateLine), so it gets no second row here. `task` is the task, for the cause.
+ */
+function redOnBase({ id, record, fix = null, task = null }) {
   const v = record?.verdict;
+  if (fix && FT.untested(v)) {
+    if (fix === 'gate-line') return null;
+    const added = FT.testAdded(record);
+    return {
+      caught_by: 'red-on-base',
+      severity: SEVERITY.fixWithoutTest,
+      class: 'other',
+      excerpt: `fix without test: red on base says ${v}, so nothing shows the fix works`,
+      files: added.files,
+      test_added: added,
+      fix,
+      task: id,
+      cause_task: FT.causeOf(task ?? {}),
+      // unproven: the new tests pass without the change (a weak test), the same rule as for any task. no-tests names none.
+      rule_hints: v === 'unproven' ? { event: 'unproven' } : {},
+    };
+  }
   if (v !== 'unproven' && v !== 'tip-red') return null;
   const files = (record.files ?? []).map((f) => f?.path).filter(Boolean);
   return {
@@ -166,7 +192,7 @@ function redOnBase({ id, record }) {
         ? 'red on base: unproven, the new tests pass without the change'
         : 'red on base: tip-red, the new tests are red on the delivered tip',
     files,
-    test_added: files[0] ?? null,
+    test_added: FT.testAdded(record),
     task: id,
     // unproven: the new tests pass without the change, so they prove nothing (a weak test). tip-red names no class.
     rule_hints: v === 'unproven' ? { event: 'unproven' } : {},
@@ -195,10 +221,15 @@ function secretFound({ id, found }) {
   };
 }
 
-/** The row for a GATE line at receive (lib/knownBugGate.js parseGate): the class the line gave, the place, the sentence. */
-function gateLine({ id, gate }) {
+/**
+ * The row for a GATE line at receive (lib/knownBugGate.js parseGate): the class the line gave, the place, the sentence.
+ * A GATE line says the track fixed a known bug, so with red on base on (`record`) the row is that fix and carries the
+ * verdict (test_added), which makes it "fixed without test" when the verdict shows nothing (step 6).
+ */
+function gateLine({ id, gate, record = null }) {
   if (!gate) return null;
   const p = place(gate.where);
+  const fix = record ? { fix: 'gate-line', test_added: FT.testAdded(record) } : {};
   return {
     caught_by: 'gate-line',
     severity: SEVERITY.gateLine,
@@ -208,6 +239,41 @@ function gateLine({ id, gate }) {
     files: p.files,
     line: p.line,
     task: id,
+    ...fix,
+  };
+}
+
+/**
+ * The row for what the test-weakening check found at receive (lib/testWeakening.js assess), or null when it found
+ * nothing. Its own source, with the event for the rule register (event-test-weakening gives the class test-weakening).
+ * Only counts and paths: a marker line is code from the diff, so it is never kept.
+ */
+function testWeakening({ id, weak }) {
+  if (!weak || typeof weak !== 'object') return null;
+  const deleted = Array.isArray(weak.deleted) ? weak.deleted : [];
+  const markers = Array.isArray(weak.markers) ? weak.markers : [];
+  const emptied = Array.isArray(weak.emptied) ? weak.emptied : [];
+  const n = (k) => markers.filter((m) => m?.kind === k).length;
+  const count = (c, word) => (c ? [`${c} ${word}${c === 1 ? '' : 's'}`] : []);
+  const gone = deleted.filter((d) => !d?.movedTo).length;
+  const parts = [
+    ...count(n('skip'), 'skip marker'),
+    ...count(n('focus'), 'focus marker'),
+    ...count(n('todo'), 'todo marker'),
+    ...count(gone, 'deleted test file'),
+    ...count(deleted.length - gone, 'test file moved out of the test paths'),
+    ...count(emptied.length, 'test file with no assertions left'),
+  ];
+  if (!parts.length) return null;
+  const files = [...new Set([...deleted, ...markers, ...emptied].map((x) => x?.path).filter((p) => typeof p === 'string' && p))];
+  return {
+    caught_by: 'test-weakening',
+    severity: SEVERITY.testWeakening,
+    class: 'other',
+    excerpt: `test weakening: ${parts.join(', ')}`,
+    files,
+    task: id,
+    rule_hints: { event: 'test-weakening' },
   };
 }
 
@@ -336,6 +402,7 @@ module.exports = {
   redOnBase,
   secretFound,
   gateLine,
+  testWeakening,
   finding,
   fixLinks,
   qaDeviation,

@@ -186,6 +186,8 @@ describe('H2: a queue agent runs only the allowed queue commands', () => {
     expect(verdict('ravenseat merge R --allow-guard', { agentType: 'track' })?.reason).toMatch(/`--allow-guard` is the orchestrator's/);
     // The override of the secret stop at receive (H5): the owner's and the orchestrator's only, as --allow-guard.
     expect(verdict('ravenseat merge R --allow-secret', { agentType: 'track' })?.reason).toMatch(/`--allow-secret` is the orchestrator's/);
+    // The override of the strict red test stop for fixes (step 6): the owner's, as --allow-unreviewed.
+    expect(verdict('ravenseat merge R --allow-no-test', { agentType: 'track' })?.reason).toMatch(/`--allow-no-test` is the orchestrator's/);
     expect(verdict('ravenseat plan new', { agentType: 'reviewer-gap' })?.reason).toMatch(/only reads here/);
   });
   it('the orchestrator (no agent_type) and other agent types the agent guard leaves out run every queue command', () => {

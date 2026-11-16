@@ -70,6 +70,16 @@ const STANDARD = Object.freeze({
     // warning, never a stop. null = off. "<command>" with {files} where the quoted files go (else at the end), e.g.
     // "npx vitest run {files}", or { command, timeoutSec (300), maxFiles (10) }.
     redOnBase: null,
+    // A fix needs a red test first (lib/fixTests.js): for a fix task (fixes, a QA or base fix, from a finding, or a GATE
+    // line), receive warns in one line when red on base says no-tests or unproven, and the finding log marks the row
+    // "fixed without test". true = the strict mode: merge also stops on a fix without a proven red test, and the owner
+    // goes past it with `merge --allow-no-test` (logged as no-test-overridden). Off by default: a warning, never a stop.
+    redOnBaseStrict: false,
+    // The one fix line at receive (lib/fixTests.js receiveLine): true = a fix task whose red on base check proves no
+    // test gets the FIX WITHOUT TEST line in place of the plain red on base line. On by default: it costs one line and
+    // stops nothing. false = only the plain red on base line. The finding log row keeps its "fixed without test" mark
+    // either way (it is data for the repeat count), and the strict mode prints its line even when this is false.
+    fixWithoutTestWarning: true,
     // The flaky check on a track's gate (lib/trackFlaky.js): a red --quick/--full run in a track's worktree reruns only
     // its red commands once on the same commit (never in the main checkout, never on a dirty tree). Green then is green
     // with `flaky` (a flakyGate row, and at receive a finding); red twice is red. false = no rerun.
@@ -423,8 +433,10 @@ const STANDARD = Object.freeze({
   // output and a "Test weakening" section in 00-package.md, never a stop. testPaths: more test file globs (same rules
   // as protectedPaths). markers: more regular expressions (JavaScript syntax) for an added line in a test file.
   // focusStop: a focus marker (.only, fit, fdescribe) on an added line stops `merge` (--allow-focus overrides, logged);
-  // false = only the warning.
-  testWeakening: { enabled: true, focusStop: true, testPaths: [], markers: [] },
+  // false = only the warning. findingLog: what the check finds also becomes a row in the finding log (source
+  // test-weakening, class test-weakening), so a weakened test counts when the same failure comes back. On by default: it
+  // prints nothing and stops nothing; false = no row.
+  testWeakening: { enabled: true, focusStop: true, findingLog: true, testPaths: [], markers: [] },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.

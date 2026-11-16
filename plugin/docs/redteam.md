@@ -87,7 +87,7 @@ in `plugin/scripts/orchestrator/lib/__tests__/` and `plugin/scripts/orchestrator
 | 5 | Two agents change the same file | PASS | challenged | `rt05-same-file`, `conflictPredict`, `queueFaultInjection`, `readsOwnership`, `mergeTrackGaps`, `mergeTipLock` |
 | 6 | An agent reports green without passing | PASS | challenged | `queueGateEvidence`, `flows`, `rt03-two-sessions`, `flakyGate-cli`, `trackFlakyGate`, `mergeTipLock`, `reviewGaps2` |
 | 7 | The tests are green but too weak | KNOWN LIMITATION | - | `rt17-empty-gate` |
-| 8 | The agent weakens a test to get green | PASS | challenged | `rt08-weakened-test`, `testWeakening`, `mergeGuard`, `redOnBase-cli`, `redOnBase`, `focusStop-cli` |
+| 8 | The agent weakens a test to get green | PASS | challenged | `rt08-weakened-test`, `testWeakening`, `mergeGuard`, `redOnBase-cli`, `redOnBase`, `focusStop-cli`, `fixTest-cli` |
 | 9 | A task that always fails is retried forever | PASS | challenged | `rt06-rt22-permanent-failure`, `fixPlateau-cli`, `doneCheck` |
 | 10 | The queue does not continue after a restart | PASS | challenged | `rt24-cold-restart`, `queueHandover`, `attempt` |
 | 11 | Circular dependencies wait forever, silently | PASS | verified | `queueCycles` |

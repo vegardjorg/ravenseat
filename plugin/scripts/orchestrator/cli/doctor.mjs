@@ -93,6 +93,10 @@ export function baselineProblems(own) {
   const rm = own.reads?.mode;
   if (rm !== undefined && !['wait', 'warn'].includes(rm)) out.push('reads.mode must be "wait" or "warn"');
   out.push(...RB.setupProblems(own.gates?.redOnBase));
+  // The strict mode for fixes (lib/fixTests.js) reads the red on base verdict. Without the command there is none, so
+  // every fix task would stop at merge: said here, where the setup is checked, not first at a merge.
+  if (own.gates?.redOnBaseStrict === true && !RB.setup(own.gates))
+    out.push('gates.redOnBaseStrict is on but gates.redOnBase is not set, so every fix task stops at merge: set gates.redOnBase to the test command');
   const gt = own.gates?.timeoutSec;
   if (gt !== undefined && gt !== null && !(Number.isInteger(gt) && gt >= 0))
     out.push('gates.timeoutSec must be a whole number >= 0 or null');

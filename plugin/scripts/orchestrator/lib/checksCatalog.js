@@ -82,10 +82,17 @@ const CONDITIONS = {
   'env-no-example': (f) => f.envWithoutExample === true,
   // A gate command was red and then green on the same commit (lib/flakyObserved.js, from the time log).
   'flaky-observed': (f) => (f.flakyObserved ?? 0) > 0,
+  // gates.redOnBase is not set (lib/redOnBase.js setup, read by cli/checks.mjs). Unknown: not off, so no card.
+  'red-on-base-off': (f) => f.redOnBaseOff === true,
 };
 
 /** The line a suggestion adds from the facts, so the card names the stacks. Null when it has none. */
 function detailOf(key, facts) {
+  // The command for the project's test runner (lib/fixTests.js suggestCommand); none is made up for an unknown stack.
+  if (key === 'red-on-base')
+    return typeof facts.redOnBaseCommand === 'string' && facts.redOnBaseCommand
+      ? `For this project: \`${facts.redOnBaseCommand}\` (read from its own files). Check that it runs only the files it is given.`
+      : null;
   const p = facts.packs;
   if (!p) return null;
   const name = (id) => p.titles?.[id] ?? id;

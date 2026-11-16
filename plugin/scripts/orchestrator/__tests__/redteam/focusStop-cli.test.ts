@@ -35,6 +35,11 @@ describe('a focus marker stops the merge', () => {
     expect(m.out).toMatch(/STOP: A is not merged\. .*focus marker/);
     expect(m.out).toContain('lib/__tests__/a.test.ts');
     expect(p.taskOf('A')?.status).toBe('review');
+    // The finding log (lib/findingSources.js testWeakening): receive wrote one row of its own source, with the class the
+    // rule register gives it, and the marker line itself is not kept.
+    const rows = fs.readFileSync(path.join(p.folder, 'findings.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    expect(rows).toMatchObject([{ caught_by: 'test-weakening', class: 'test-weakening', class_source: 'rule', task: 'A' }]);
+    expect(rows[0].excerpt).not.toContain('adds');
   }, 240_000);
 
   it('--allow-focus goes past the stop, logged', () => {
@@ -44,8 +49,11 @@ describe('a focus marker stops the merge', () => {
     expect(m.out).toContain('focus-overridden');
   }, 240_000);
 
-  it('a skip is only a warning, and focusStop false turns the stop off', () => {
+  it('a skip is only a warning, focusStop false turns the stop off, and findingLog false writes no row', () => {
     expect(delivered(SKIP).merge('A').out).not.toMatch(/focus marker/);
     expect(delivered(ONLY, { testWeakening: { focusStop: false } }).merge('A').out).not.toMatch(/STOP: A is not merged\. .*focus marker/);
+    // testWeakening.findingLog false: the warning and the stop stay, but no finding log row is written.
+    const q = delivered(ONLY, { testWeakening: { findingLog: false } });
+    expect(fs.existsSync(path.join(q.folder, 'findings.jsonl'))).toBe(false);
   }, 240_000);
 });

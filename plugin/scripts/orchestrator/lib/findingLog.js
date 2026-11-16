@@ -19,6 +19,8 @@
 //   - `id` F-<n>, sequential across the archives, given by append under a lock (makeRow takes `seq` for a known n);
 //   - `time` UTC to the second;
 //   - `counts` false for L and for the class `other`;
+//   - `status` 'fixed-without-test' when the row names a fix (`fix`, lib/fixTests.js) and its red on base verdict
+//     (`test_added: { verdict, files }`) is no-tests or unproven (step 6); the repeat count reads it, and counts it twice;
 //   - `where.area`: the module whose path prefix holds the files (a list passed in), else the common folder of the files;
 //   - `excerpt`: agent text is data, so code blocks become [code], secrets are masked (askBundle.redact, then every
 //     word and the whole line checked with secretScan.matchLine), and the text is one line of at most 200 characters.
@@ -73,6 +75,7 @@ const SOURCES = Object.freeze([
   'qa',
   'owner',
   'post-merge',
+  'test-weakening',
 ]);
 /** The sources that have a failure signature (lib/failureSignature.js): the gates and CI. */
 const SIGNATURE_SOURCES = Object.freeze(['gate', 'ci', 'base-gate']);
@@ -82,6 +85,14 @@ const CONFIDENCES = Object.freeze(['high', 'low']);
 const DISPOSITION_KINDS = Object.freeze(['fixed', 'task', 'batch', 'rejected']);
 /** The reason codes of a `rejected` disposition (section 3). */
 const REJECT_REASONS = Object.freeze(['false-positive', 'pre-existing', 'duplicate', 'wont-fix']);
+/** The red on base verdicts test_added may carry (lib/redOnBase.js verdict, plus `error` when it was not checked). */
+const TEST_VERDICTS = Object.freeze(['proven', 'unproven', 'no-tests', 'tip-red', 'tests-only', 'error']);
+/** The kinds of fix a row may name (lib/fixTests.js FIX_KINDS; kept here so this file needs no other module). */
+const FIX_KINDS = Object.freeze(['qa', 'base-fix', 'fixes', 'finding', 'gate-line']);
+/** The verdicts that make a fix "fixed without test" (lib/fixTests.js UNTESTED). */
+const UNTESTED = Object.freeze(['no-tests', 'unproven']);
+/** The status a fix without a proven red test gets: the repeat count (step 7) counts such a row twice. */
+const FIXED_WITHOUT_TEST = 'fixed-without-test';
 
 const REVIEW = /^review:([a-z0-9][a-z0-9-]{0,59})$/;
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -221,6 +232,18 @@ function oneOf(field, v, list, dflt) {
   return v;
 }
 
+/**
+ * test_added as stored: { verdict, files }, the red on base verdict and the test paths. A path or a list of paths alone
+ * (no verdict) is still read as { verdict: null, files }, so a caller from before step 6 is not refused.
+ */
+function testAddedOf(v) {
+  if (v == null) return null;
+  if (typeof v === 'string' || Array.isArray(v)) return { verdict: null, files: filesOf(v) };
+  if (typeof v !== 'object') throw fail('test_added', 'must be { verdict, files } or a path');
+  const verdict = oneOf('test_added', v.verdict, TEST_VERDICTS, null);
+  return { verdict, files: filesOf(v.files) };
+}
+
 function disposition(v) {
   if (v == null) return null;
   if (typeof v !== 'object' || !DISPOSITION_KINDS.includes(v.kind)) {
@@ -239,7 +262,7 @@ function disposition(v) {
 /**
  * Builds and validates one row (see THE ROW in the header). Throws an Error naming the field on anything invalid.
  * @param {object} input  class, caught_by, severity, excerpt (required); files, line, task, round, item, cause_task,
- *   signature, disposition, fixed_by, test_added, guard, class_source, confidence, time, id (optional)
+ *   signature, disposition, fixed_by, test_added, fix, guard, class_source, confidence, time, id (optional)
  * @param {{ now?: number, seq?: number, normalizeClass?: (id: string) => string,
  *   modules?: { id: string, paths: string[] }[] }} [o]
  */
@@ -293,6 +316,8 @@ function makeRow(input, { now = Date.now(), seq, normalizeClass, modules } = {})
   if (item && !isReview) throw fail('item', 'is filled only from review');
   const signature = x.signature == null || x.signature === '' ? null : oneLine(x.signature).slice(0, 64);
   if (signature && !SIGNATURE_SOURCES.includes(caughtBy)) throw fail('signature', 'is filled only from gate and CI');
+  const testAdded = testAddedOf(x.test_added);
+  const fix = oneOf('fix', x.fix, FIX_KINDS, null);
 
   return {
     id,
@@ -311,7 +336,11 @@ function makeRow(input, { now = Date.now(), seq, normalizeClass, modules } = {})
     excerpt,
     disposition: disposition(x.disposition),
     fixed_by: sha('fixed_by', x.fixed_by),
-    test_added: x.test_added == null ? null : (filesOf(x.test_added)[0] ?? null),
+    test_added: testAdded,
+    fix,
+    // Derived only (step 6): a fix whose red on base verdict shows nothing. Never taken from the input, so a source cannot
+    // mark a row it has no verdict for.
+    status: fix && testAdded && UNTESTED.includes(testAdded.verdict) ? FIXED_WITHOUT_TEST : null,
     guard: x.guard == null ? null : oneLine(x.guard).slice(0, 120) || null,
     // Derived only (section 5): L and `other` are logged but never count toward a repeat suggestion alone.
     counts: x.severity !== 'L' && cls !== 'other',
@@ -496,6 +525,8 @@ module.exports = {
   SOURCES,
   SIGNATURE_SOURCES,
   REJECT_REASONS,
+  TEST_VERDICTS,
+  FIXED_WITHOUT_TEST,
   normalizeClassFallback,
   cleanExcerpt,
   areaOf,

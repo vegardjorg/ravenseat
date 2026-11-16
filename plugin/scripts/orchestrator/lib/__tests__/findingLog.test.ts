@@ -64,6 +64,8 @@ describe('makeRow', () => {
       disposition: null,
       fixed_by: null,
       test_added: null,
+      fix: null,
+      status: null,
       guard: null,
       counts: true,
     });
@@ -85,7 +87,7 @@ describe('makeRow', () => {
   });
 
   it('accepts every caught_by of the fixed list', () => {
-    for (const c of ['gate', 'ci', 'base-gate', 'done-check', 'red-on-base', 'secret-scan', 'gate-line', 'finding', 'qa', 'owner', 'post-merge']) {
+    for (const c of ['gate', 'ci', 'base-gate', 'done-check', 'red-on-base', 'secret-scan', 'gate-line', 'finding', 'qa', 'owner', 'post-merge', 'test-weakening']) {
       expect(FL.makeRow({ class: '-', caught_by: c, severity: 'H', excerpt: 'x' }).caught_by).toBe(c);
     }
   });
@@ -112,6 +114,22 @@ describe('makeRow', () => {
     expect(() => FL.makeRow(review({ disposition: { kind: 'moved', ref: 'x' } }))).toThrow(/disposition/);
     expect(() => FL.makeRow(review({ fixed_by: 'not a sha' }))).toThrow(/fixed_by/);
     expect(FL.makeRow(review({ fixed_by: 'A1B2C3D' })).fixed_by).toBe('a1b2c3d');
+  });
+
+  it('keeps the red on base verdict on test_added, and marks a fix without a proven red test (step 6)', () => {
+    const fix = (o: object) => FL.makeRow({ caught_by: 'red-on-base', class: '-', severity: 'M', excerpt: 'x', task: 'F', ...o });
+    const r = fix({ fix: 'fixes', test_added: { verdict: 'unproven', files: ['src/a.test.ts', 'C:/abs.test.ts'] } });
+    expect(r.test_added).toEqual({ verdict: 'unproven', files: ['src/a.test.ts'] });
+    expect(r.fix).toBe('fixes');
+    // The mark the repeat count (step 7) reads: derived from the fix and the verdict, never taken from the input.
+    expect(r.status).toBe('fixed-without-test');
+    expect(fix({ fix: 'qa', test_added: { verdict: 'no-tests', files: [] } }).status).toBe('fixed-without-test');
+    expect(fix({ fix: 'qa', test_added: { verdict: 'proven', files: ['src/a.test.ts'] } }).status).toBeNull();
+    expect(fix({ test_added: { verdict: 'unproven', files: [] }, status: 'fixed-without-test' }).status).toBeNull();
+    // A path alone (no verdict) is still read, so an older caller is not refused.
+    expect(fix({ test_added: 'src/a.test.ts' }).test_added).toEqual({ verdict: null, files: ['src/a.test.ts'] });
+    expect(() => fix({ test_added: { verdict: 'maybe', files: [] } })).toThrow(/test_added/);
+    expect(() => fix({ fix: 'because' })).toThrow(/fix/);
   });
 
   it('gives counts false for L and for other, true otherwise', () => {

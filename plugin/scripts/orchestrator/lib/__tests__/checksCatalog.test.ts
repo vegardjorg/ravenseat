@@ -70,6 +70,20 @@ describe('the catalog the plugin ships', () => {
     expect(none.suggestions.map((s: { key: string }) => s.key)).not.toContain('stack-review-signals');
     expect(none.suggestions.map((s: { key: string }) => s.key)).not.toContain('stack-pack-research');
   });
+  it('red-on-base: a step for Claude while gates.redOnBase is off in a project with tests, naming the command for its stack', () => {
+    const t = catalog.templates.find((x: { key: string }) => x.key === 'red-on-base');
+    expect(t).toMatchObject({ category: 'tests', priority: 'low', action: 'ask', when: 'red-on-base-off, found:test' });
+    expect(t.ask).toMatch(/gates\.redOnBase/);
+    const facts = { git: true, hasCommit: true, remote: null, stacks: [], ci: [], kinds: kinds(['test', 'script']), redOnBaseOff: true, redOnBaseCommand: 'npx vitest run {files}' };
+    const card = C.buildReport({ facts, catalog, now: 'x' }).suggestions.find((s: { key: string }) => s.key === 'red-on-base');
+    expect(card.detail).toMatch(/npx vitest run \{files\}/);
+    // An unknown stack: the card still shows, with no command made up.
+    const unknown = C.buildReport({ facts: { ...facts, redOnBaseCommand: null }, catalog, now: 'x' }).suggestions.find((s: { key: string }) => s.key === 'red-on-base');
+    expect(unknown.detail).toBeNull();
+    // Set, or no tests: no card. Unknown facts never show it.
+    for (const f of [{ ...facts, redOnBaseOff: false }, { ...facts, kinds: [] }, { ...facts, redOnBaseOff: undefined }])
+      expect(C.buildReport({ facts: f, catalog, now: 'x' }).suggestions.map((s: { key: string }) => s.key)).not.toContain('red-on-base');
+  });
   it('important counts the open high suggestions only (the red marker on the tab)', () => {
     const facts = { git: true, hasCommit: true, remote: null, stacks: [], ci: [], kinds: [], packs: { detected: [], applied: [], missing: ['core'], unpacked: [] } };
     const open = C.buildReport({ facts, catalog, now: 'x' });

@@ -470,8 +470,32 @@ they fail on the tip or could not be checked. It is a warning in the receive out
 the verdict and the file names are kept (task field `red_on_base`), never the test output.
 
 The files go where `{files}` is in the command, quoted, else at the end: `"npx vitest run {files}"`,
-`"npx jest {files}"`, `"python -m pytest {files}"`. A test file is what the test-weakening check counts as one, plus
-`testWeakening.testPaths`.
+`"npx jest {files}"`, `"python -m pytest {files}"`. `{dirs}` is the folders of the files instead (once each, as
+`./<folder>`), for a runner that runs packages rather than files: `"go test {dirs}"`. A test file is what the
+test-weakening check counts as one, plus `testWeakening.testPaths`. While the setting is off, the Checks tab has a card
+(`red-on-base`) with the command read from the project's own files (vitest, jest, mocha, `node --test`, pytest with
+uv or poetry, Go); it is a suggestion for Claude in your own session, never a change to the config.
+
+#### A fix needs a red test first
+
+A fix whose test passes without the fix too, or a fix with no test at all, shows nothing about the bug it fixed, and
+the same bug can come back unseen. `receive` treats these tasks as fixes, from the fields they already have: a task
+with `fixes`, a QA fix (`qa_original`), a base or CI fix task (`added_by` "base gate" or "ci watch"), a task made from
+a finding (`plan` `PL-FINDING-<n>`), and a task whose report has a GATE line. When red on base says `no-tests` or
+`unproven` for a fix, `receive` prints one line in place of the red on base warning:
+
+```
+FIX WITHOUT TEST F: a fix task (it fixes A), and red on base says unproven: nothing shows the fix works. ...
+```
+
+The finding log gets the verdict as `test_added` (`{ verdict, files }`) and the row the status `fixed-without-test`,
+which the repeat count reads. That is all by default: a warning, never a stop. `gates.redOnBaseStrict` (off by default)
+is the strict mode: `merge` also stops on a fix without a proven red test (only `proven` passes, and with
+`gates.redOnBase` off nothing is proven, which `ravenseat doctor` points out), and `merge <id> --allow-no-test` goes
+past it on the owner's word, logged as `no-test-overridden`. The queue's agents cannot pass the flag.
+`gates.fixWithoutTestWarning` (on by default, since it costs one line and stops nothing) can turn the fix line off:
+`receive` then prints only the plain red on base line, and the row keeps its mark. The strict mode prints the line
+anyway, since it explains the stop.
 
 ### Flaky gate commands
 
@@ -738,7 +762,9 @@ names every guard weaker than its default on its `settings` row.
 | `gates.precheck`, `gates.precheckBudgetSec` | `null` (the standard checks), `120` | The fail-fast precheck `ravenseat gates --precheck` runs before the full gate, stopping at the first red check: commands or `{ name, command, files, budgetSec }`, with `{changed}` (the changed files against `baseBranch`) or `{file}` (once per file); `null` = `node --check`, `tsc --noEmit`, eslint and related tests when the project has them, `[]` = off (see orchestration.md) | Advanced |
 | `gates.timeoutSec` | `null` (= `baseGate.timeoutSec`, 900 s) | The time budget for the whole list when a track runs its own gates (`ravenseat gates --quick` or `--full` in its worktree, without `--timeout-sec`): a gate over it is red, so a hanging test cannot hold a track. `0` = no budget. `receive` and `merge` pass `baseGate.timeoutSec` themselves; the main checkout has no budget unless one is passed | Advanced |
 | `gates.flakyRerun` | `true` | A red quick or full gate run in a track's worktree runs only its red commands once more on the same commit (never on a dirty tree, never in the main checkout); green then is green with `flaky` (a `flakyGate` row, and at `receive` a finding and a package section), red twice is red (see "Flaky gate commands"). `false` = no rerun | Advanced |
-| `gates.redOnBase` | `null` | Red on base (see "Red on base"): a test command with `{files}`, or `{ command, timeoutSec, maxFiles }` (300 s, 10 files). `null` = off | Advanced |
+| `gates.redOnBase` | `null` | Red on base (see "Red on base"): a test command with `{files}` (or `{dirs}`, the folders of the files), or `{ command, timeoutSec, maxFiles }` (300 s, 10 files). `null` = off | Advanced |
+| `gates.fixWithoutTestWarning` | `true` | The one `FIX WITHOUT TEST` line at `receive` for a fix task whose red on base verdict is `no-tests` or `unproven` (see "Red on base"). It stops nothing. `false` = only the plain red on base line; the finding log row is still marked `fixed-without-test`, and the strict mode prints the line anyway | Advanced |
+| `gates.redOnBaseStrict` | `false` | A fix needs a red test first (see "Red on base"): a fix task whose red on base verdict is `no-tests` or `unproven` always gets one warning at `receive` and the finding log status `fixed-without-test`. `true` = `merge` also stops on a fix without a proven red test; `merge --allow-no-test` goes past it (owner only, logged as `no-test-overridden`) | Advanced |
 | `gates.fromKnownBugs` | `propose` | What a known bug becomes: `propose` (a task you approve), `auto` (approved at once, uses tokens without asking) or `off` | Advanced |
 | `gateEvidence.mode` | `own` | Whose gate evidence `receive` and `merge` rely on. `own`: they run the quick gates themselves on the track tip (their own green run already recorded on the same tip and gate setup is reused, so `merge` after `receive` runs nothing twice; a track's own `gates` run in its worktree records no evidence and is never reused), never believing `gate_check` in queue.json, and they confirm the owner rows a task relies on (your answers, edits and approvals) against the owner log, `owner-log.json` (a row no ravenseat write recorded stops them; `ravenseat owner-log accept <id> --by owner` confirms it). `external`: as `own`, and a green run of the checks in `gateEvidence.external` on exactly the same commit counts as the full gate (`ravenseat gates --full` in the main checkout asks GitHub with `gh`). `off`: they take the track's `gates=OK` as given and do not check owner rows. With empty `gates.quick` and `gates.full`, `own` runs nothing anyway, so `off` saves no time; it only removes the owner row check. `ravenseat doctor` gives INFO for `external` and warns `GATE EVIDENCE OFF` for `off`; both are a weakened guard | Advanced |
 | `gateEvidence.external` | `[]` | The GitHub check names (workflow or job) whose newest run must be green on exactly the same commit in mode `external`. `[]` = none counts, and the full gate runs here (doctor warns) | Advanced |
@@ -748,6 +774,7 @@ names every guard weaker than its default on its `settings` row.
 | `inspection.mode` | `on` | The inspection queue (see orchestration.md, "Repeated failures and the guard registry"): the same failure signature in the gates or CI, in at least `inspection.minRepeats` incidents within `inspection.windowDays` days, becomes one proposal to build a guard. `off` = no scan and no proposals | Advanced |
 | `inspection.minRepeats`, `inspection.windowDays` | `2`, `30` | The threshold: incidents (separate tasks, a branch and a day without a task, or CI commits), not runs, so one track's reruns count once | Advanced |
 | `inspection.registryFile` | `.ravenseat/guards.json` | The guard registry, a tracked file in the project (`ravenseat guards`) | Advanced |
+| `testWeakening.findingLog` | `true` | What the test weakening check finds at `receive` is also a finding log row (source `test-weakening`, class `test-weakening` from the rule register), so it counts when the same failure comes back. Nothing is printed and nothing stops. `false` = no row; the warning and the focus stop stay | Advanced |
 | `testWeakening.enabled`, `testWeakening.focusStop`, `testWeakening.testPaths`, `testWeakening.markers` | `true`, `true`, `[]`, `[]` | `receive` warns, never stops, about deleted test files, test files moved out of the test paths and skip or focus markers on added lines in test files (`.skip(`, `.only(`, `xit(`, `it.todo(`, `@pytest.mark.skip`, `pytest.skip(`, `@unittest.skip`, `#[ignore]`, `t.Skip(`, `@Disabled`, `@Ignore`, `pending(`, `markTestSkipped` ...): one `WARN test weakening:` line and a `Test weakening` section in `00-package.md`. `testPaths` adds test file globs (the `protectedPaths` rules), `markers` adds regular expressions; `ravenseat doctor` names an invalid one. `focusStop`: a focus marker (`.only(`, `fit(`, `fdescribe(`) on an added line stops `merge`, since the other tests never ran; `--allow-focus` overrides (logged as `focus-overridden`), `false` = only the warning | Advanced |
 | `qa.evidenceTypes`, `qa.autoTypes`, `qa.manualTypes` | `screenshot`, `test`, `manual`; auto `test`; manual `manual` | QA evidence types a track writes as `EVIDENCE <type>[=<ref>]`; auto types are closed by `qa auto --run`, manual ones gathered in one round | Advanced |
 | `qa.autoCommand` | `null` | Shell command for auto evidence, e.g. `npx vitest run {refs}` (`{refs}`, `{id}`; or `{ "<type>": "<command>" }`); `null` = `qa auto` only lists | Advanced |

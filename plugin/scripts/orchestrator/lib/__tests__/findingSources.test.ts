@@ -71,9 +71,62 @@ describe('the task sources', () => {
 
   it('red on base logs unproven and tip-red only', () => {
     const r = row(S.redOnBase({ id: 'A', record: { verdict: 'unproven', files: [{ path: 'src/a.test.ts', base: 'green' }] } }));
-    expect(r).toMatchObject({ caught_by: 'red-on-base', severity: 'L', test_added: 'src/a.test.ts', where: { files: ['src/a.test.ts'] } });
+    expect(r).toMatchObject({ caught_by: 'red-on-base', severity: 'L', test_added: { verdict: 'unproven', files: ['src/a.test.ts'] }, where: { files: ['src/a.test.ts'] } });
+    expect(r).toMatchObject({ fix: null, status: null });
     expect(S.redOnBase({ id: 'A', record: { verdict: 'tip-red', files: [] } }).severity).toBe('M');
     for (const verdict of ['proven', 'no-tests', 'tests-only', 'error']) expect(S.redOnBase({ id: 'A', record: { verdict } })).toBeNull();
+  });
+
+  it('a fix without a proven red test is a row marked fixed without test (step 6), also for no-tests', () => {
+    const none = row(S.redOnBase({ id: 'F', record: { verdict: 'no-tests', files: [] }, task: { id: 'F', fixes: ['A'] }, fix: 'fixes' }));
+    expect(none).toMatchObject({ caught_by: 'red-on-base', severity: 'M', task: 'F', cause_task: 'A', fix: 'fixes', status: 'fixed-without-test' });
+    expect(none.test_added).toEqual({ verdict: 'no-tests', files: [] });
+    const qa = row(S.redOnBase({ id: 'A-QA1', record: { verdict: 'unproven', files: [{ path: 'src/a.test.ts', base: 'green' }] }, task: { id: 'A-QA1', qa_original: 'A', fixes: ['A'] }, fix: 'qa' }));
+    expect(qa).toMatchObject({ severity: 'M', cause_task: 'A', fix: 'qa', status: 'fixed-without-test', test_added: { verdict: 'unproven', files: ['src/a.test.ts'] } });
+    // A proven fix is no failure: no row.
+    expect(S.redOnBase({ id: 'F', record: { verdict: 'proven', files: [] }, task: { id: 'F', fixes: ['A'] }, fix: 'fixes' })).toBeNull();
+    // A GATE-line fix carries the verdict on its own GATE row, so red on base adds none of its own.
+    expect(S.redOnBase({ id: 'G', record: { verdict: 'no-tests', files: [] }, task: { id: 'G' }, fix: 'gate-line' })).toBeNull();
+  });
+
+  it('the GATE row carries the red on base verdict when there is one', () => {
+    const gate = { title: 'unchecked error or result', where: 'src/a.ts:12', class: 'unchecked-error', text: 'the save result was ignored' };
+    const r = row(S.gateLine({ id: 'G', gate, record: { verdict: 'unproven', files: [{ path: 'src/a.test.ts', base: 'green' }] } }));
+    expect(r).toMatchObject({ caught_by: 'gate-line', class: 'unchecked-error', fix: 'gate-line', status: 'fixed-without-test' });
+    expect(r.test_added).toEqual({ verdict: 'unproven', files: ['src/a.test.ts'] });
+    expect(row(S.gateLine({ id: 'G', gate, record: { verdict: 'proven', files: [] } }))).toMatchObject({ fix: 'gate-line', status: null });
+    expect(row(S.gateLine({ id: 'G', gate }))).toMatchObject({ test_added: null, status: null });
+  });
+
+  it('test weakening is its own source, with the event for the rule and never a marker line', () => {
+    const weak = {
+      deleted: [{ path: 'src/old.test.ts', movedTo: null }],
+      markers: [{ path: 'src/a.test.ts', family: 'jest', kind: 'skip', line: "it.skip('secret stuff', () => {})" }],
+      emptied: [],
+      testsRemoved: 1,
+      testsAdded: 0,
+    };
+    const x = S.testWeakening({ id: 'A', weak });
+    expect(x.rule_hints).toEqual({ event: 'test-weakening' });
+    const r = row(x);
+    expect(r).toMatchObject({ caught_by: 'test-weakening', severity: 'M', task: 'A', where: { files: ['src/old.test.ts', 'src/a.test.ts'] } });
+    expect(r.excerpt).toMatch(/1 skip marker/);
+    expect(r.excerpt).toMatch(/1 deleted test file/);
+    expect(r.excerpt).not.toMatch(/secret stuff/);
+    expect(S.testWeakening({ id: 'A', weak: { deleted: [], markers: [], emptied: [], testsRemoved: 0, testsAdded: 0 } })).toBeNull();
+    expect(S.testWeakening({ id: 'A', weak: null })).toBeNull();
+  });
+
+  it('the test weakening row gets the class test-weakening from the rule register when it is written', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-tw-'));
+    try {
+      const weak = { deleted: [], markers: [{ path: 'src/a.test.ts', family: 'jest', kind: 'focus', line: 'x' }], emptied: [], testsRemoved: 0, testsAdded: 0 };
+      const out = S.record(S.testWeakening({ id: 'A', weak }), { root: dir, warn: () => {} });
+      expect(out).toEqual({ written: 1, failed: 0 });
+      expect(FL.read(dir).rows).toMatchObject([{ caught_by: 'test-weakening', class: 'test-weakening', class_source: 'rule' }]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
   });
 
   it('the secret row has the paths and the rule names, never a value', () => {

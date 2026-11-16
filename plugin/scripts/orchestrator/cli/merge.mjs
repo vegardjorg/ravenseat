@@ -883,7 +883,17 @@ export function cmdReceive() {
   // PARTIAL track is unfinished, so not for it. A warning, never a stop.
   const RB = require('./lib/redOnBase.js');
   const redBase = result?.status === 'PARTIAL' ? null : redOnBaseCheck(o0, { branch });
-  const redBaseLine = RB.summaryLine(id, redBase);
+  // A fix needs a red test first (lib/fixTests.js): is this task a fix (its fields, or a GATE line in the report)? The
+  // kind goes on the red on base record, so merge's strict mode knows a GATE-line fix without reading the report again.
+  const FT = require('./lib/fixTests.js');
+  const KBG = require('./lib/knownBugGate.js');
+  const fixKind = FT.fixKind(o0, { gateLine: !!(KBG.parseGate(reportText) ?? KBG.parseGate(trackReply)) });
+  if (redBase && fixKind) redBase.fix = fixKind;
+  // One line, not two: for a fix without a proven red test, the fix line says what the red on base line would, and more.
+  // gates.fixWithoutTestWarning false leaves only the plain red on base line (FT.fixLineOn).
+  const fixLine =
+    result?.status === 'PARTIAL' || !FT.fixLineOn(CONFIG) ? null : FT.receiveLine(id, { fix: fixKind, task: o0, record: redBase, strict: FT.strictOn(CONFIG), cli: CLI });
+  const redBaseLine = fixLine ?? RB.summaryLine(id, redBase);
   if (redBaseLine) console.log(redBaseLine);
   // Files another active task owns (lib/mergeGuard.js foreignOwners): the merge will stop on them, so say it now, while a
   // fix round is still cheap. A note, never a stop here.
@@ -992,9 +1002,18 @@ export function cmdReceive() {
     autoCleanFocus(queue, `receive ${id}`);
     return o;
   });
-  // The finding log (lib/findingSources.js): red on base and the secret hits, from the records just stored (no extra
-  // run). `once`: a second receive of the same delivery reads the same facts again and adds no row.
-  FSRC.record(() => [FSRC.redOnBase({ id, record: redBase }), FSRC.secretFound({ id, found: r.secret_found })], { once: true });
+  // The finding log (lib/findingSources.js): red on base (as a fix without a proven red test when the task is a fix),
+  // the secret hits and the test-weakening check, from the records just made (no extra run). `once`: a second receive of
+  // the same delivery reads the same facts again and adds no row.
+  FSRC.record(
+    () => [
+      FSRC.redOnBase({ id, record: redBase, fix: fixKind, task: o0 }),
+      FSRC.secretFound({ id, found: r.secret_found }),
+      // testWeakening.findingLog false: the warning and the focus stop stay, with no row.
+      CONFIG.testWeakening?.findingLog === false ? null : FSRC.testWeakening({ id, weak }),
+    ],
+    { once: true },
+  );
   if (o0.status !== 'review' && r.started)
     logTime(id, 'delivered', `${minutes(r.started, r.delivered)} min to delivery`);
   if (!r.picked_by) pulseCursor(`receive ${id}`);
@@ -1047,7 +1066,8 @@ export function cmdReceive() {
   const knownBug = KB.parseGate(reportText) ?? KB.parseGate(trackReply);
   // The finding log (lib/findingSources.js): the GATE line is a finding whatever the gate setting says (the setting is
   // about proposing a task). `once`: the same report read at a second receive adds no row.
-  if (knownBug) FSRC.record(() => FSRC.gateLine({ id, gate: knownBug }), { once: true });
+  // With red on base on, the GATE row is the fix and carries the verdict (step 6, "fixed without test").
+  if (knownBug) FSRC.record(() => FSRC.gateLine({ id, gate: knownBug, record: redBase }), { once: true });
   if (knownBug) {
     try {
       const line = GUIDANCE.isQuiet(read()) ? null : proposeGate({ title: knownBug.title, where: knownBug.where, from: id });
@@ -1164,7 +1184,7 @@ export async function cmdMerge() {
   const id = positional(1, ['--scratchpad', '--done-cwd'])[0];
   if (!id)
     die(
-      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--allow-unreviewed] [--force-red-base] [--force-red-gate]',
+      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--allow-unreviewed] [--allow-no-test] [--force-red-base] [--force-red-gate]',
     );
   const resume = a.includes('--resume');
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
@@ -1342,6 +1362,14 @@ export async function cmdMerge() {
         logTime(id, 'focus-overridden', `${focus.length} focus marker(s), tip ${String(trackTip).slice(0, 12)}`);
         console.log(`WARNING: --allow-focus: merging ${id} with ${focus.length} focus marker(s); logged as "focus-overridden".`);
       }
+    }
+    // A fix without a proven red test (lib/fixTests.js): a stop only in the strict mode (gates.redOnBaseStrict, off by
+    // default); the default is the warning receive printed. --allow-no-test is the owner's, logged.
+    const noTest = require('./lib/fixTests.js').mergeStop(o, { config: CONFIG, cli: CLI });
+    if (noTest && !a.includes('--allow-no-test')) die(noTest);
+    if (noTest) {
+      logTime(id, 'no-test-overridden', `tip ${String(trackTip).slice(0, 12)}, red on base ${o.red_on_base?.verdict ?? 'off'}`);
+      console.log(`WARNING: --allow-no-test: merging ${id}, a fix without a proven red test; logged as "no-test-overridden".`);
     }
     if (stop) {
       logTime(id, 'gate-red-overridden', `tip ${String(trackTip).slice(0, 12)}, receive said red at ${String(o.gate_check.tip).slice(0, 12)}`);

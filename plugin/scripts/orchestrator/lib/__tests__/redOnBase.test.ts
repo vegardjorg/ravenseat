@@ -67,6 +67,12 @@ describe('commandFor', () => {
     expect(RB.commandFor('node --test {files}', ['a b.test.mjs', 'c.test.mjs'])).toBe('node --test "a b.test.mjs" "c.test.mjs"');
     expect(RB.commandFor('npm test --', ['c.test.mjs'])).toBe('npm test -- "c.test.mjs"');
   });
+
+  it('{dirs} becomes the quoted folders of the files, once each (go test runs packages, not files)', () => {
+    expect(RB.commandFor('go test {dirs}', ['pkg/a/a_test.go', 'pkg/a/b_test.go', 'c_test.go'])).toBe('go test "./pkg/a" "."');
+    // With {dirs} and no {files}, the files are not added at the end: the command already names what to run.
+    expect(RB.commandFor('go test {dirs} -run X', ['pkg/a/a_test.go'])).toBe('go test "./pkg/a" -run X');
+  });
 });
 
 describe('verdict', () => {

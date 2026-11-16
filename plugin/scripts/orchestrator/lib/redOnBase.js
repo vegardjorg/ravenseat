@@ -19,8 +19,10 @@
 // failing test on the base. The receive line and the "Red on base" section in 00-package.md tell the reviewers.
 // Only the verdict and the file names are kept (task field red_on_base), never the test output.
 //
-// Off by default. queue.config.json: gates.redOnBase = "<command>" (the files go where {files} is, else at the end), or
-// { command, timeoutSec, maxFiles }. Ravenseat does not know a project's test runner, so the owner names it.
+// Off by default. queue.config.json: gates.redOnBase = "<command>" (the files go where {files} is, their folders where
+// {dirs} is, else the files at the end), or
+// { command, timeoutSec, maxFiles }. Ravenseat never runs a guessed test runner, so the owner names it; the Checks card
+// red-on-base suggests the command from the project's own files (lib/fixTests.js suggestCommand).
 //
 // Pure, no I/O; cli/merge.mjs runs the commands. Tested in lib/__tests__/redOnBase.test.ts and
 // __tests__/redteam/redOnBase-cli.test.ts.
@@ -83,10 +85,18 @@ function split(nameStatus, extraTestPaths = []) {
   return { tests, code, unsafe };
 }
 
-/** The command line: the quoted files where {files} is, or at the end. */
+/**
+ * The command line: the quoted files where {files} is, the quoted folders of the files where {dirs} is (once each, as
+ * ./<folder>, or . for the root), or the files at the end when the template has neither. {dirs} is for a runner that
+ * runs packages, not files (go test): the suggestion for Go (lib/fixTests.js suggestCommand) uses it.
+ */
 function commandFor(template, files) {
   const list = files.map((f) => `"${f}"`).join(' ');
-  return template.includes('{files}') ? template.split('{files}').join(list) : `${template} ${list}`;
+  const dirs = [...new Set(files.map((f) => (f.includes('/') ? `./${f.slice(0, f.lastIndexOf('/'))}` : '.')))].map((d) => `"${d}"`).join(' ');
+  let out = template;
+  if (out.includes('{dirs}')) out = out.split('{dirs}').join(dirs);
+  if (out.includes('{files}')) return out.split('{files}').join(list);
+  return template.includes('{dirs}') ? out : `${out} ${list}`;
 }
 
 /**

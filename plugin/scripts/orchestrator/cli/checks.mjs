@@ -137,6 +137,14 @@ function projectFacts({ git, remote, found }) {
       // error-ignored: unknown shows the card
     }
   }
+  // Red on base (lib/redOnBase.js): is the command set, and which one the project's own files suggest (lib/fixTests.js).
+  // Only a suggestion on the card: the config is never changed here.
+  try {
+    out.redOnBaseOff = !require('./lib/redOnBase.js').setup(CONFIG.gates);
+    out.redOnBaseCommand = out.redOnBaseOff ? require('./lib/fixTests.js').suggestCommand(projectFs()) : null;
+  } catch {
+    // error-ignored: unknown, no card
+  }
   try {
     const FO = require('./lib/flakyObserved.js');
     const text = require('./lib/timeLogArchive.js').readText(KK.timeLog());

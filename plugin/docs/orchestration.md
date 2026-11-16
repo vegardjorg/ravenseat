@@ -730,6 +730,11 @@ from the queue's agents). `review.requireFindings` (default `true`, Advanced) tu
 weakened guard. A class with no reviewers (K, U) has nothing to wait for, and the light review (`reviewer-light`, for a
 K task in a project without gates) is advice: its findings become items, but the gate never waits for it.
 
+A fix without a proven red test is a warning at `receive` by default (`gates.fixWithoutTestWarning`, on, can leave only
+the plain red on base line). With `gates.redOnBaseStrict` on (opt-in),
+`merge` also stops on it, and `merge <id> --allow-no-test` goes past it on the owner's word, logged as
+`no-test-overridden`; the agent guard keeps that flag from the queue's agents too.
+
 Each finding becomes an item on the task (the field `review_items`), keyed `<reviewer>#<round>:<code>`, for example
 `reviewer#1:M2`. `merge` records them, and so does `ravenseat resume <id> --reason fix`, before the fix round, so a
 finding the orchestrator leaves out of the findings file is still on the task. Recording again adds nothing. Then
@@ -760,9 +765,14 @@ The other sources write to the same log when they catch something, one row each,
 red track gate (one row per red command, with the inspection queue's signature; a red `--precheck` is none, the gate
 catches the same) and a flaky one (LOW), a failed CI
 check (`push-check --watch-ci`, one row per failed job; an infrastructure failure is none), a new base fix task (HIGH),
-a red done command (a tampered one is HIGH), red on base `unproven` (LOW) or `tip-red`, the secret scan's hits at
+a red done command (a tampered one is HIGH), red on base `unproven` (LOW) or `tip-red`, the test-weakening check at
+receive (its own source `test-weakening`: counts and paths, never a marker line; `testWeakening.findingLog` false
+turns it off), the secret scan's hits at
 receive (HIGH: paths, line and rule names, never the value), a GATE line, `ravenseat finding`, a new `fixes` link in
-`add` or `edit`, and `qa deviation`. The excerpt is short, without code, and masked; the QA and fix-link rows hold only
+`add` or `edit`, and `qa deviation`. A fix task (`fixes`, a QA or base fix, a task from a finding, a GATE line) whose
+red on base verdict is `no-tests` or `unproven` is one MEDIUM row with the verdict on `test_added` and the status
+`fixed-without-test`, which the repeat count counts twice; a GATE-line fix carries it on its GATE row (see "A fix
+needs a red test first" in queue.md). The excerpt is short, without code, and masked; the QA and fix-link rows hold only
 ids. Logging is passive: nothing is printed, and a row that cannot be written gives one WARNING and never stops the
 command. Reading the same report or delivery again (a second receive, a second CI watch of a sha) adds no row.
 
@@ -777,7 +787,7 @@ rules are tried in this order, and the first that matches wins:
 
 | Match | Reads | Examples |
 |---|---|---|
-| `event` | what the source itself saw | a secret hit gives `secret-leak`; a flaky command and red on base `unproven` give `test-weakening` |
+| `event` | what the source itself saw | a secret hit gives `secret-leak`; a flaky command, red on base `unproven` and the test-weakening check give `test-weakening` |
 | `code` | the excerpt of a red gate, CI job, base gate or done command | `TS2532` gives `null-undefined`, `TS2307` and `ModuleNotFoundError` give `dependency-build`, any other TS code gives `contract-drift`, "offset-naive and offset-aware" gives `time-zone`, `relation "x" does not exist` gives `migration-schema` |
 | `signal` | the review signal that hit on the task and lifted this reviewer in | `raw-sql`, `html-sink` and `url-from-data` give `injection`; `access-rule` and `auth` give `access-control` |
 | `kind` | the kind of the red command (as the Checks tab reads it) | `tsc` gives `contract-drift`; a build or a dependency audit gives `dependency-build`; a migration run gives `migration-schema` |
