@@ -655,6 +655,22 @@ const SETTINGS = Object.freeze([
     'More names the helper note never reports (main, run, setup and a few others are skipped already).'),
   row('scopeNotes.folderDepth', 'review', 'integer', 'New folder depth',
     'How deep the new folder note looks: 1 = only new top folders, 2 (default) or 3.'),
+  // The opt-in scope drift guards (bolk B7, V6 and V7). Off by default: V6 costs a reviewer run, V7 may make a track
+  // stop and ask when owned_files was a rough guess. Full mode only: a lite task names no files, so nothing drifts.
+  // Off is the default, so it is no weakening.
+  row('scopeNotes.driftGap', 'review', 'onoff', 'Gap review on large drift',
+    'At receive, the gap reviewer is added when at least scopeNotes.driftGapFiles changed files, and over ' +
+    'scopeNotes.driftGapShare percent of them, lie outside the task\'s files and reads. One reason line; costs one ' +
+    'reviewer run when it fires.', { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
+  row('scopeNotes.driftGapFiles', 'review', 'integer', 'Gap review: files outside',
+    'How many changed files must lie outside the task\'s files before the gap reviewer is added (1 to 100, default 4).',
+    { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
+  row('scopeNotes.driftGapShare', 'review', 'integer', 'Gap review: share outside (%)',
+    'The share of the changed files outside the task\'s files that must be passed (1 to 99, default 40).',
+    { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
+  row('scopeNotes.driftWarn', 'review', 'onoff', 'Write warning for drift',
+    'While a track writes a file outside its files and reads, it gets one note per file (never a denial) saying it ' +
+    'need not stop for it, and to name the file in its report.', { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
   // The project catalog (lib/catalog.js, docs/queue/catalog/). Both are on in both modes: each states a fact, stops
   // nothing and does nothing without the folder. Off is no weakening: the owner lock on accepted and the protected path
   // (protectedPaths) are not these switches.

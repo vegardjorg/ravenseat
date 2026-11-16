@@ -89,6 +89,25 @@ const OPT_IN = Object.freeze([
     title: 'guard proposals from the finding log',
     tip: 'propose a gate task (you approve it) when the same kind of failure keeps coming back in one part of the code, sharing one cap of three proposals with the inspection queue',
   }),
+  // The scope drift guards (lib/scopeNotes.js, bolk B7, V6 and V7). Full mode only: a lite task names no files. No doctor
+  // row, as for the proposals: off is the normal state. Their cards turn important when the finding log shows scope
+  // drift three times in one area within 30 days (important_when: ledger-recent:scope-drift).
+  Object.freeze({
+    key: 'scopeNotes.driftGap',
+    row: null,
+    suggestion: 'drift-gap-review',
+    title: 'the gap review on large drift',
+    tip: 'add the gap reviewer at receive when most of a change lies outside the task\'s files (at least 4 files and over 40 %), at the cost of one reviewer run when it fires',
+    offer: (facts) => facts?.lite !== true,
+  }),
+  Object.freeze({
+    key: 'scopeNotes.driftWarn',
+    row: null,
+    suggestion: 'drift-write-warn',
+    title: 'the write warning for drift',
+    tip: 'note to a track, while it writes, that a file lies outside its files and reads, once per file and never a denial',
+    offer: (facts) => facts?.lite !== true,
+  }),
 ]);
 
 /** The value at a dotted key, or undefined. */

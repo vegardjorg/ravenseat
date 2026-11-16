@@ -196,6 +196,8 @@ function makeReport(queue) {
       ...projectFacts({ git: facts.git, remote: facts.remote, found }),
       // The project catalog (lib/catalog.js): the card for it shows until the folder exists.
       catalogMissing: !exists('docs/queue/catalog'),
+      // Lite mode (lib/liteMode.js): no scope drift card there, and none lights the red marker (condition not-lite).
+      lite: LM.isLite(CONFIG),
     },
     catalog: CATALOG.loadCatalog({ builtin: BUILTIN, own: OWN }),
     tasks: queue?.tasks ?? [],

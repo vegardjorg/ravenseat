@@ -35,6 +35,8 @@ const path = require('node:path');
 const PRIORITIES = ['high', 'medium', 'low'];
 const ACTIONS = ['gates', 'ask', 'packs', 'setting'];
 const REPORT_VERSION = 1;
+/** Incidents of a class in one area within 30 days (lib/findingRepeats.js facts.recent) that make ledger-recent hold. */
+const RECENT_MIN = 3;
 
 const anyKind = (arg, test) => arg.split('|').some((k) => test(k));
 /** Where a kind of check was found: Set of ci, gate, script, hook, config. */
@@ -92,6 +94,8 @@ const CONDITIONS = {
   'ledger-due': (f) => (f.ledger?.due?.length ?? 0) > 0,
   'ledger-guard-failed': (f) => (f.ledger?.guardFailed?.length ?? 0) > 0,
   'ledger-marker': (f) => f.ledger?.marker === true,
+  // The project is not in lite mode (cli/checks.mjs facts.lite). Unknown: not lite, so the card shows.
+  'not-lite': (f) => f.lite !== true,
 };
 
 /** The classes of the finding log entries in `list` (facts.ledger.due or .guardFailed). */
@@ -136,6 +140,10 @@ function countDetail(key, facts) {
   const n = (x) => (Number.isFinite(x) ? x : 0);
   if (key === 'flaky-tests' && n(facts.flakyObserved) > 0)
     return `Seen in the time log: ${facts.flakyObserved} time(s) a gate command was red and then green on the same commit, with no new commit in between.`;
+  // The scope drift guards' cards (V6, V7): what the finding log saw when it made them important.
+  const drift = n(facts.ledger?.recent?.['scope-drift']);
+  if ((key === 'drift-gap-review' || key === 'drift-write-warn') && drift >= RECENT_MIN && facts.lite !== true)
+    return `Seen in the finding log: scope drift ${drift} time(s) in one area within 30 days.`;
   if (key === 'pin-actions' && n(facts.unpinnedActions) > 0)
     return `${facts.unpinnedActions} \`uses:\` line(s) in .github/workflows point at a tag or a branch.`;
   return null;
@@ -151,9 +159,10 @@ const KIND_CONDITIONS = {
   // The finding log per class: `ledger-due:migration-schema|access-control` (a proposal is due for one of them),
   // `ledger-guard-failed:<classes>`, and `ledger-recent:duplication|scope-drift`, which holds at 3 incidents of one of
   // the classes in one area within 30 days (the scope drift cards' important_when, plans/scope-drift-dry-katalog).
+  // Never in lite mode: no scope drift or catalog card lights the red marker there (the plan's section 4).
   'ledger-due': (f, arg) => anyKind(arg, (k) => ledgerClasses(f.ledger?.due).has(k)),
   'ledger-guard-failed': (f, arg) => anyKind(arg, (k) => ledgerClasses(f.ledger?.guardFailed).has(k)),
-  'ledger-recent': (f, arg) => anyKind(arg, (k) => (f.ledger?.recent?.[k] ?? 0) >= 3),
+  'ledger-recent': (f, arg) => f.lite !== true && anyKind(arg, (k) => (f.ledger?.recent?.[k] ?? 0) >= RECENT_MIN),
 };
 
 const conditionsOf = (when) => String(when ?? '').split(',').map((x) => x.trim()).filter(Boolean);

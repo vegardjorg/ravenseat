@@ -287,6 +287,8 @@ export function setupTips(target, o = {}) {
     visibility: cached?.visibility ?? null,
     hasDatabase: !!cfg.migrations?.folder || has('supabase') || has('prisma') || has('migrations'),
     sharedSettings: has('.claude', 'settings.json'),
+    // The scope drift guards are offered in full mode only: a lite task names no files (lib/optInChecks.js).
+    lite: require('./lib/liteMode.js').isLite(cfg),
   };
   const give = OI.tipsToGive(cfg, asked, facts);
   if (give.length && !o.dry) {

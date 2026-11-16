@@ -453,8 +453,22 @@ const STANDARD = Object.freeze({
   // 1..folderDepth the base does not have. dependencies: a new package whose purpose (dependency-purposes.json) the
   // manifest already covers. drift: how many changed files lie outside owned_files, shared_patch and reads, and where.
   // ignoreNames: more names reuse skips (on top of main, run, setup ...). On by default, also in lite (owner decision
-  // 16.11): they are facts, like the ownership notes.
-  scopeNotes: { reuse: true, newFolders: true, dependencies: true, drift: true, ignoreNames: [], folderDepth: 2 },
+  // 16.11): they are facts, like the ownership notes. The two opt-in guards on top of drift (bolk B7) are OFF: driftGap
+  // (V6) lifts reviewer-gap in when at least driftGapFiles files and over driftGapShare % of the change lie outside the
+  // task's files and reads, which costs a reviewer run; driftWarn (V7) warns while a track writes such a file, which can
+  // make a track stop and ask when owned_files was a rough guess.
+  scopeNotes: {
+    reuse: true,
+    newFolders: true,
+    dependencies: true,
+    drift: true,
+    ignoreNames: [],
+    folderDepth: 2,
+    driftGap: false,
+    driftGapFiles: 4,
+    driftGapShare: 40,
+    driftWarn: false,
+  },
   // The project catalog in docs/queue/catalog/ (lib/catalog.js, bolk B3 of the scope drift plan). doctor: a WARN row
   // when `ravenseat catalog check` finds an error (a design choice set to accepted without the owner, a broken file).
   // planLinks: a plan entry's `decisions` link to an id the catalog does not have is a warning on plan new and edit.

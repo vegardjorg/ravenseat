@@ -10,7 +10,8 @@
 // It only WARNS (additionalContext to the agent), never denies: the same judgment stays at merge and receive, with the
 // diff in front of the owner and the reviewers. Same rules as there, reused, never an own copy: mergeGuard.isProtected
 // (with the floor CORE_PROTECTED), the task's owned_files, shared_patch and migration block, testWeakening's markers,
-// test file rule and assertion count.
+// test file rule and assertion count. With scopeNotes.driftWarn on (V7, opt-in) a file outside the task's files and reads
+// gets a note too, by the same rule as the drift line at receive (lib/scopeNotes.js writeOutside).
 // Pure apart from repoRelative (a few fs.existsSync calls). Tested in lib/__tests__/writeWarn.test.ts.
 // =============================================================
 'use strict';
@@ -74,7 +75,8 @@ function newLines(before, after) {
  *   migrations?: object|null, dependencyFiles?: string, testSetup?: { testPaths?: string[], markers?: string[] } }} x
  *   rel: the path from the repository root; before: the file text now (null for a new file); after: the text the write
  *   leaves (null when it cannot be known, e.g. a notebook)
- * @returns {{ kind: 'protected'|'marker'|'emptied', text: string }[]}
+ *   driftWarn: scopeNotes.driftWarn (V7, off by default): also note a file outside the task's files and reads
+ * @returns {{ kind: 'hotspot'|'foreign'|'protected'|'drift'|'marker'|'emptied', text: string }[]}
  */
 function assessTrackWrite({
   rel,
@@ -87,6 +89,7 @@ function assessTrackWrite({
   testSetup = {},
   hotspots = [],
   tasks = [],
+  driftWarn = false,
 }) {
   const p = norm(rel);
   if (!p) return [];
@@ -126,6 +129,18 @@ function assessTrackWrite({
           'put it as an owner question in your report instead of building on it.',
       });
   }
+
+  // V7 (opt-in scopeNotes.driftWarn, off by default): a file outside the task's files and reads. Only a fact: the task's
+  // owned_files is often a rough guess, so the text says not to stop for it. Not for a file one of the warnings above
+  // already names (they say more), and never for a task that names no files (lib/scopeNotes.js writeOutside).
+  if (driftWarn && task && !out.length && require('./scopeNotes.js').writeOutside(p, task, { migrations }))
+    out.push({
+      kind: 'drift',
+      text:
+        `Write guard (note): ${p} is outside the files and reads of task ${task.id}. receive counts it as drift (NOTE drift). ` +
+        'There is no need to stop for this alone when the mission needs the change: go on, and name the file and why in your ' +
+        'report. If the change belongs to another task, leave it and write that in the report instead.',
+    });
 
   const extra = testSetup?.testPaths ?? [];
   if (after != null && TW.isTestFile(p, extra)) {

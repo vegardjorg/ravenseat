@@ -5,6 +5,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a change that drifts far outside its task can get a closer look, opt-in.** Two guards build on the
+  drift note at receive, both off by default. `scopeNotes.driftGap` adds the gap reviewer when at least 4 changed
+  files, and over 40 % of them, lie outside the task's files and reads (`driftGapFiles`, `driftGapShare`), with one
+  reason line. `scopeNotes.driftWarn` gives a track one note per file while it writes outside its files, never a
+  denial, and says not to stop for it alone. A task that names no files never fires either. Each has a Checks card that
+  turns important when the finding log shows scope drift three times in one area within 30 days; in lite mode no scope
+  drift card lights the red marker. With both off, reviewers and write warnings are exactly as before.
 - **Hardening: a design choice the owner accepted can no longer be broken silently.** A choice in
   `docs/queue/catalog/decisions/` can carry a `check` rule (`forbid`, plus `hit` and `miss` examples that
   `catalog check` runs, so a broken rule is an error before it is used). Receive runs it against the delivery's added

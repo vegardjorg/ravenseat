@@ -581,6 +581,17 @@ Each part has its own setting, and all are on by default in both modes, since ea
 | Dependency | Only when a manifest changes | On: two libraries for one job are cheap to stop now and costly later |
 | Drift | One line per receive when files lie outside the task's own | On: the merge's drift warning, but with numbers and earlier. It is a number, not a stop, since `owned_files` is often a rough guess |
 | Ignore names, folder depth | None; they only narrow | Empty list and depth 2 |
+| Gap review on large drift (V6) | One more reviewer run, only for a delivery where at least `driftGapFiles` changed files and over `driftGapShare` % of them lie outside the task's files and reads; the reviewer list gives the reason line | `scopeNotes.driftGap`, off: it costs a reviewer run, and `owned_files` is often a rough guess. Full mode only |
+| Write warning for drift (V7) | One note per file while a track writes outside its files and reads, never a denial; a track may still stop and ask, which costs time when the files were a guess | `scopeNotes.driftWarn`, off: it can slow a track down. Full mode only |
+
+Two guards build on the drift fact, and both are opt-in. With `scopeNotes.driftGap` on, receive adds the gap reviewer
+(`reviewer-gap`, which compares the delivery with the mission point by point) when a change drifts far: at least
+`scopeNotes.driftGapFiles` (4) changed files outside the task's files and reads, and over `scopeNotes.driftGapShare`
+(40) percent of them. With `scopeNotes.driftWarn` on, the write guard gives a track one note per file while it writes
+outside its files and reads; the note says not to stop for it alone and to name the file in the report. Neither fires
+for a task that names no files (usual in lite). The Checks tab offers each as a card, and a card turns important (the
+red marker) when the finding log shows scope drift three times in one area within 30 days, never in lite. How often the
+gap reviewer pays off shows in `ravenseat helpers` (its runs and findings per run).
 
 The notes say what a delivery did. What the project already has, which helpers to reuse and which design choices
 hold is written down once, in the project catalog `docs/queue/catalog/` (`ravenseat catalog init|show|check`, and
@@ -913,6 +924,8 @@ names every guard weaker than its default on its `settings` row.
 | `review.packs` | `[]` | Stack packs for the review signals: ids such as `core`, `nextjs`, `prisma`. A built-in pack is read from the plugin at run time, so it follows updates; an unknown id is ignored. The Checks tab suggests them from the manifests, and `ravenseat checks packs --apply` writes them ([orchestration](orchestration.md#stack-packs)) | Advanced |
 | `scopeNotes.reuse`, `scopeNotes.newFolders`, `scopeNotes.dependencies`, `scopeNotes.drift` | `true`, `true`, `true`, `true` | [Reuse and scope notes](#reuse-and-scope-notes) at `receive`: a name the base already defines in another file, a new folder, a second package for the same job, and drift in numbers. One `NOTE` line each and a `Reuse and scope` section in `00-package.md`; nothing stops and no tokens are used. `false` turns that part off; it weakens no guard | Advanced |
 | `scopeNotes.ignoreNames`, `scopeNotes.folderDepth` | `[]`, `2` | Names the reuse note never reports (on top of `main`, `run`, `setup` and a few others), and how deep the new folder note looks (1 to 3) | Advanced |
+| `scopeNotes.driftGap`, `scopeNotes.driftGapFiles`, `scopeNotes.driftGapShare` | `false`, `4`, `40` | Opt-in (V6): receive adds the gap reviewer when at least `driftGapFiles` (1 to 100) changed files and over `driftGapShare` % (1 to 99) of them lie outside the task's files and reads. Costs one reviewer run when it fires; never for a task that names no files | Advanced, Full mode only |
+| `scopeNotes.driftWarn` | `false` | Opt-in (V7): one note per file to a track while it writes outside its files and reads, never a denial | Advanced, Full mode only |
 | `catalog.doctor` | `true` | `ravenseat doctor` gives one WARN row `catalog` when `ravenseat catalog check` finds an error in [the project catalog](catalog.md) (a bad shape, an unknown status, a choice set to `accepted` that the owner has not accepted). Only a warning; `false` turns the row off and weakens no guard | Advanced |
 | `catalog.missionExcerpt`, `catalog.reviewExcerpt`, `catalog.excerptTokens` | `true`, `true`, `1500` | [The catalog excerpt](catalog.md#the-excerpt-in-the-mission-and-the-review-package): the part of the project catalog that meets the task's files goes into its mission and its review package, at most this many tokens (200 to 6000), with the size and what was cut in its heading. Nothing without a catalog; `false` leaves that excerpt out and weakens no guard | Advanced |
 | `catalog.index` | `false` | [The code index](catalog.md#the-code-index-and-catalog-find): an index of the code's exports (JS/TS), built at receive and for each mission and cached by file sha in the data folder. The excerpt then gets the helpers tagged `@shared` in the task's folders, and the review package the new names close to an existing export (V1b). `ravenseat catalog find` works without it. Off by default; it stops nothing either way | Advanced |

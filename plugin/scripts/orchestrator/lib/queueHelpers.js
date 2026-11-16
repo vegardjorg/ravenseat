@@ -349,6 +349,19 @@ function reviewersForTask(o, { config, queue = null, changedPaths = [], missionT
         if (!there.reasons.includes(hit.reason)) there.reasons.push(hit.reason);
       } else out.push({ type: hit.reviewer, fixed: false, signal: true, reasons: [hit.reason] });
     }
+    // V6 (lib/scopeNotes.js driftGapReason, opt-in scopeNotes.driftGap, off by default): far more of the change outside
+    // the task's files than in them lifts reviewer-gap in, which compares the delivery with the mission point by point.
+    const SN = require('./scopeNotes.js');
+    const setupSN = SN.setupOf(config);
+    const reason = setupSN.driftGap
+      ? SN.driftGapReason(SN.driftFacts(changedPaths, o, { migrations: config?.migrations ?? null }), setupSN)
+      : null;
+    if (reason && !blocked('reviewer-gap')) {
+      const there = out.find((x) => x.type === 'reviewer-gap');
+      if (there) {
+        if (!there.reasons.includes(reason)) there.reasons.push(reason);
+      } else out.push({ type: 'reviewer-gap', fixed: false, drift: true, reasons: [reason] });
+    }
   }
   return out;
 }

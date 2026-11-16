@@ -8,7 +8,8 @@
 // session (no agent_type) is never stopped. Inert without a queue project (no queue.config.json and no QUEUE_* variable).
 // A track (track, track-d) also gets a soft warning, never a denial, for a write the merge guard or receive flags later:
 // a protected path the task does not own, a new skip or focus marker in a test file, a test file that loses its last
-// assertion (lib/writeWarn.js). Once per agent, file and kind.
+// assertion (lib/writeWarn.js), and with scopeNotes.driftWarn on (off by default) a file outside the task's files and
+// reads. Once per agent, file and kind.
 // Fails OPEN: any internal error gives no output and exit 0.
 // Smoke test: echo '{"agent_type":"track","tool_input":{"file_path":"gate-evidence.json"}}' | node scripts/orchestrator/hook-write-guard.mjs
 // =============================================================
@@ -118,6 +119,8 @@ function trackWarnings(input, abs, folder) {
     testSetup: K.testWeakening ?? {},
     hotspots: require('./lib/hotspots.js').hotspotsOf(K),
     tasks,
+    // V7, opt-in (lib/scopeNotes.js): a file outside the task's files and reads.
+    driftWarn: require('./lib/scopeNotes.js').setupOf(K).driftWarn,
   });
   if (!found.length) return [];
   // Once per agent, file and kind: a track that edits the same file ten times reads the warning once.

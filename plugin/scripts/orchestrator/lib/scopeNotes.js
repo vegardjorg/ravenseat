@@ -26,6 +26,15 @@
 //                 task's migr_block counts as owned), and the folders among them the task does not name. A task with no
 //                 ownership at all (usual in lite) gets the number of folders it touches instead, from two folders.
 //
+// Two opt-in guards build on the drift facts (bolk B7, V6 and V7). Both are OFF by default: they cost a reviewer run or
+// may make a track stop and ask, which is friction when owned_files was only a rough guess.
+//   driftGap      V6. At receive, reviewer-gap is lifted in (lib/queueHelpers.js reviewersForTask) when at least
+//                 driftGapFiles (4) changed files lie outside the task's files and reads AND their share is over
+//                 driftGapShare (40 %). One reason line, as a review signal gives. Only for a task that names its files:
+//                 without ownership every file is "outside", which says nothing (driftGapReason).
+//   driftWarn     V7. While a track writes, a file outside its files and reads gets one soft warning, once per file
+//                 (lib/writeWarn.js kind `drift`, hook-write-guard.mjs), never a denial.
+//
 // Pure logic without I/O: the caller (cli/merge.mjs, receive) passes the diff, the changed paths and three look-ups
 // (io.findDefinitions, io.dirExists, io.readFile). A look-up that throws skips its part with a line in `errors`; this
 // module never throws at receive. Test: lib/__tests__/scopeNotes.test.ts.
@@ -36,8 +45,23 @@ const { globMatch, migrCovered } = require('./mergeGuard.js');
 const { isTestFile } = require('./testWeakening.js');
 
 /** The defaults (lib/queueConfig.js STANDARD.scopeNotes holds the same values). */
-const DEFAULTS = Object.freeze({ reuse: true, newFolders: true, dependencies: true, drift: true, ignoreNames: [], folderDepth: 2 });
-const ONOFF = ['reuse', 'newFolders', 'dependencies', 'drift'];
+const DEFAULTS = Object.freeze({
+  reuse: true,
+  newFolders: true,
+  dependencies: true,
+  drift: true,
+  ignoreNames: [],
+  folderDepth: 2,
+  // The opt-in guards (V6, V7): off, see the header.
+  driftGap: false,
+  driftGapFiles: 4,
+  driftGapShare: 40,
+  driftWarn: false,
+});
+const ONOFF = ['reuse', 'newFolders', 'dependencies', 'drift', 'driftGap', 'driftWarn'];
+/** The numbers of V6 and their range: files outside (1 to 100) and the share in percent that must be passed (1 to 99). */
+const RANGES = Object.freeze({ driftGapFiles: [1, 100], driftGapShare: [1, 99] });
+const inRange = (k, v) => Number.isInteger(v) && v >= RANGES[k][0] && v <= RANGES[k][1];
 
 /** Names so common in separate scripts that a second one says nothing (scopeNotes.ignoreNames adds to these). */
 const BUILTIN_IGNORE = Object.freeze(['main', 'run', 'usage', 'help', 'handler', 'init', 'setup', 'start', 'render', 'test', 'App']);
@@ -72,6 +96,7 @@ function setupOf(cfg) {
   for (const k of ONOFF) out[k] = typeof own[k] === 'boolean' ? own[k] : DEFAULTS[k];
   out.ignoreNames = Array.isArray(own.ignoreNames) ? own.ignoreNames.filter((n) => typeof n === 'string' && n.trim()) : [];
   out.folderDepth = [1, 2, 3].includes(own.folderDepth) ? own.folderDepth : DEFAULTS.folderDepth;
+  for (const k of Object.keys(RANGES)) out[k] = inRange(k, own[k]) ? own[k] : DEFAULTS[k];
   return out;
 }
 
@@ -84,6 +109,8 @@ function setupProblems(own) {
   if (own.ignoreNames !== undefined && !(Array.isArray(own.ignoreNames) && own.ignoreNames.every((n) => typeof n === 'string')))
     out.push('scopeNotes.ignoreNames must be a list of names');
   if (own.folderDepth !== undefined && ![1, 2, 3].includes(own.folderDepth)) out.push('scopeNotes.folderDepth must be 1, 2 or 3');
+  for (const k of Object.keys(RANGES))
+    if (own[k] !== undefined && !inRange(k, own[k])) out.push(`scopeNotes.${k} must be a whole number from ${RANGES[k][0]} to ${RANGES[k][1]}`);
   return out;
 }
 
@@ -434,6 +461,23 @@ function driftFacts(changedPaths, task, { migrations = null } = {}) {
   return { changed: changed.length, outside: outside.length, hasOwnership, folders, unnamed: hasOwnership ? folders.filter((f) => !isNamed(f)) : [] };
 }
 
+/**
+ * V6: the reason line that lifts reviewer-gap in, or null. Only with scopeNotes.driftGap on, for a task that names its
+ * files, with at least driftGapFiles files outside them and a share over driftGapShare percent.
+ * @param {{ changed: number, outside: number, hasOwnership: boolean }|null} d driftFacts
+ */
+function driftGapReason(d, setup = DEFAULTS) {
+  if (!setup?.driftGap || !d?.hasOwnership || !d.changed) return null;
+  if (d.outside < setup.driftGapFiles || d.outside * 100 <= d.changed * setup.driftGapShare) return null;
+  return `drift: ${d.outside} of ${plural(d.changed, 'changed file')} outside the task's files and reads`;
+}
+
+/** V7: does a write to `rel` lie outside the task's files and reads? Never for a task that names no files. */
+function writeOutside(rel, task, { migrations = null } = {}) {
+  const d = driftFacts([rel], task, { migrations });
+  return d.hasOwnership && d.outside === 1;
+}
+
 // ---- all four, the lines and the package section --------------------------------------------------------------------
 
 /**
@@ -548,6 +592,8 @@ module.exports = {
   dependencyFacts,
   exampleProblems,
   driftFacts,
+  driftGapReason,
+  writeOutside,
   assess,
   noteLines,
   packageSection,

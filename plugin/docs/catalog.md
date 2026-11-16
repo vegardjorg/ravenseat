@@ -301,6 +301,12 @@ prefer lines, a few reuse rows and at most five design choices as `proposed`, an
 choice to accepted. The card turns important only when the finding log shows duplication or scope drift three times in
 one area within 30 days, and it goes away once the folder exists.
 
+Two more cards offer the opt-in scope drift guards (see [Reuse and scope notes](queue.md#reuse-and-scope-notes)): "Add
+the gap review when a change drifts far" (`scopeNotes.driftGap`, V6) and "Warn a track when it writes outside its
+files" (`scopeNotes.driftWarn`, V7). Both are low while off and turn important by the same rule: scope drift three
+times in one area within 30 days in the finding log, with the count on the card. In lite mode none of these cards turns
+important, and the two guard cards are not shown, since a lite task names no files.
+
 ## Friction
 
 Anything that can stop work is off by default, with one deliberate exception: the protected path, by owner decision.
@@ -329,5 +335,8 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Tree hit warning | One warning in `catalog check` when a rule already matches lines in the tree (it reads at most 3000 tracked files, skipping large and binary ones) | No setting: a warning only |
 | Gate proposal from repeats | At most one proposed task per rule, inside the shared proposal cap; the owner approves or cancels | `catalog.gateAfter`, 3 (2 to 20); only with `learning.proposals` on (off by default) |
 | Reviewer point (V9) | No new reviewer and no new turn: one point in `reviewer.md` and `reviewer-gap.md` that acts only on the package section | Follows `catalog.reviewExcerpt`: without the section the point has nothing to check |
+| Gap review on large drift (V6) | One more reviewer run when at least 4 changed files, and over 40 % of them, lie outside the task's files and reads | `scopeNotes.driftGap`, off: it costs a reviewer run; the thresholds are `scopeNotes.driftGapFiles` and `driftGapShare` |
+| Write warning for drift (V7) | One note per file while a track writes outside its files and reads, never a denial; a track may still stop and ask | `scopeNotes.driftWarn`, off: it can slow a track down when the task's files were a rough guess |
+| Red marker from the finding log | The scope drift cards turn important at three incidents of a class in one area within 30 days; never in lite; a card set aside stays aside | No setting: follows `learning.repeats` (no counting, no marker) |
 
 Turning any of the catalog settings off weakens no guard, so `ravenseat settings` does not flag it.

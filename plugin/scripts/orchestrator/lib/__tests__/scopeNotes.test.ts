@@ -50,8 +50,11 @@ const changedFile = (file: string, body: string[], header = '') => {
 
 describe('the setup', () => {
   it('every part is on by default, and STANDARD holds the same', () => {
-    expect(SN.setupOf({})).toEqual({ reuse: true, newFolders: true, dependencies: true, drift: true, ignoreNames: [], folderDepth: 2 });
-    expect(QC.STANDARD.scopeNotes).toEqual({ reuse: true, newFolders: true, dependencies: true, drift: true, ignoreNames: [], folderDepth: 2 });
+    // The four facts on; the opt-in guards on top of drift (V6 driftGap, V7 driftWarn, bolk B7) off.
+    const standard = { reuse: true, newFolders: true, dependencies: true, drift: true, ignoreNames: [], folderDepth: 2,
+      driftGap: false, driftGapFiles: 4, driftGapShare: 40, driftWarn: false };
+    expect(SN.setupOf({})).toEqual(standard);
+    expect(QC.STANDARD.scopeNotes).toEqual(standard);
   });
   it('each part has its own switch; a wrong type is the default', () => {
     const s = SN.setupOf({ scopeNotes: { reuse: false, drift: 'no', folderDepth: 0, ignoreNames: ['norm', 3] } });
