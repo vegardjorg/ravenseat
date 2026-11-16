@@ -444,6 +444,14 @@ const STANDARD = Object.freeze({
   // test-weakening, class test-weakening), so a weakened test counts when the same failure comes back. On by default: it
   // prints nothing and stops nothing; false = no row.
   testWeakening: { enabled: true, focusStop: true, findingLog: true, testPaths: [], markers: [] },
+  // The reuse and scope facts at receive (lib/scopeNotes.js, bolk B1 of the scope drift plan): one NOTE line each and a
+  // "Reuse and scope" section in 00-package.md, never a stop, no tokens. reuse: a name the diff defines (JS/TS) that the
+  // base already defines in another file (git grep -w on the merge base). newFolders: an added file in a folder at depth
+  // 1..folderDepth the base does not have. dependencies: a new package whose purpose (dependency-purposes.json) the
+  // manifest already covers. drift: how many changed files lie outside owned_files, shared_patch and reads, and where.
+  // ignoreNames: more names reuse skips (on top of main, run, setup ...). On by default, also in lite (owner decision
+  // 16.11): they are facts, like the ownership notes.
+  scopeNotes: { reuse: true, newFolders: true, dependencies: true, drift: true, ignoreNames: [], folderDepth: 2 },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.

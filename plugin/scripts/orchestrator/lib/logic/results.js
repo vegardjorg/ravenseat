@@ -510,6 +510,8 @@ function reviewPackageIndex({
   testWeakening = null,
   redOnBase = null,
   flaky = null,
+  // The reuse and scope facts (lib/scopeNotes.js packageSection), as lines; null = every part is off.
+  scopeNotes = null,
   assumptions = null,
   // A delta review after a fix round (lib/deltaReview.js): diff.patch and files/ hold only the commits since the last
   // review, and deltaSection (packageSection) says so. null = the whole package, as before.
@@ -551,6 +553,7 @@ function reviewPackageIndex({
   if (Array.isArray(redOnBase)) lines.push(...redOnBase);
   // The flaky gate commands (lib/trackFlaky.js packageSection), as lines; [] or null = none was flaky.
   if (Array.isArray(flaky)) lines.push(...flaky);
+  if (Array.isArray(scopeNotes)) lines.push(...scopeNotes);
   if (assumptions)
     lines.push(
       '',

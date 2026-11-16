@@ -1,0 +1,103 @@
+{
+  "about": "Packages that do the same job, for the scope note at receive (lib/scopeNotes.js, V3): a new dependency whose group already has another package in the same manifest gives one NOTE line. A package is in one group only. Each group has examples: hit = [already there, added] gives a note, miss gives none; a test runs them.",
+  "purposes": [
+    {
+      "id": "date",
+      "title": "dates and times",
+      "ecosystem": "npm",
+      "packages": ["moment", "dayjs", "date-fns", "luxon", "moment-timezone", "date-fns-tz"],
+      "examples": { "hit": [["moment", "dayjs"], ["date-fns", "luxon"]], "miss": [["dayjs", "zod"]] }
+    },
+    {
+      "id": "http",
+      "title": "HTTP client",
+      "ecosystem": "npm",
+      "packages": ["axios", "got", "ky", "node-fetch", "superagent", "cross-fetch", "isomorphic-fetch", "request"],
+      "examples": { "hit": [["axios", "got"], ["node-fetch", "ky"]], "miss": [["axios", "express"]] }
+    },
+    {
+      "id": "validation",
+      "title": "schema validation",
+      "ecosystem": "npm",
+      "packages": ["zod", "yup", "joi", "valibot", "superstruct", "io-ts", "ajv", "class-validator"],
+      "examples": { "hit": [["zod", "yup"], ["joi", "valibot"]], "miss": [["zod", "lodash"]] }
+    },
+    {
+      "id": "utility",
+      "title": "general helpers",
+      "ecosystem": "npm",
+      "packages": ["lodash", "lodash-es", "underscore", "ramda", "remeda", "radash"],
+      "examples": { "hit": [["lodash", "ramda"], ["underscore", "lodash-es"]], "miss": [["lodash", "dayjs"]] }
+    },
+    {
+      "id": "test-runner",
+      "title": "test runner",
+      "ecosystem": "npm",
+      "packages": ["jest", "vitest", "mocha", "ava", "jasmine", "tap", "uvu"],
+      "examples": { "hit": [["jest", "vitest"], ["mocha", "ava"]], "miss": [["vitest", "jsdom"]] }
+    },
+    {
+      "id": "logging",
+      "title": "logging",
+      "ecosystem": "npm",
+      "packages": ["winston", "pino", "bunyan", "loglevel", "log4js", "signale"],
+      "examples": { "hit": [["winston", "pino"]], "miss": [["pino", "chalk"]] }
+    },
+    {
+      "id": "ids",
+      "title": "unique ids",
+      "ecosystem": "npm",
+      "packages": ["uuid", "nanoid", "cuid", "@paralleldrive/cuid2", "shortid", "ulid"],
+      "examples": { "hit": [["uuid", "nanoid"]], "miss": [["uuid", "axios"]] }
+    },
+    {
+      "id": "class-names",
+      "title": "class name joining",
+      "ecosystem": "npm",
+      "packages": ["classnames", "clsx"],
+      "examples": { "hit": [["classnames", "clsx"]], "miss": [["clsx", "tailwind-merge"]] }
+    },
+    {
+      "id": "state",
+      "title": "client state",
+      "ecosystem": "npm",
+      "packages": ["redux", "@reduxjs/toolkit", "zustand", "mobx", "jotai", "recoil", "valtio"],
+      "examples": { "hit": [["redux", "zustand"], ["@reduxjs/toolkit", "jotai"]], "miss": [["zustand", "react"]] }
+    },
+    {
+      "id": "cli-args",
+      "title": "command line arguments",
+      "ecosystem": "npm",
+      "packages": ["yargs", "commander", "minimist", "meow", "cac", "arg"],
+      "examples": { "hit": [["commander", "yargs"]], "miss": [["commander", "chalk"]] }
+    },
+    {
+      "id": "python-http",
+      "title": "HTTP client",
+      "ecosystem": "python",
+      "packages": ["requests", "httpx", "aiohttp", "urllib3"],
+      "examples": { "hit": [["requests", "httpx"]], "miss": [["requests", "pydantic"]] }
+    },
+    {
+      "id": "python-date",
+      "title": "dates and times",
+      "ecosystem": "python",
+      "packages": ["arrow", "pendulum", "python-dateutil", "maya"],
+      "examples": { "hit": [["arrow", "pendulum"]], "miss": [["arrow", "requests"]] }
+    },
+    {
+      "id": "python-validation",
+      "title": "schema validation",
+      "ecosystem": "python",
+      "packages": ["pydantic", "marshmallow", "cerberus", "voluptuous", "attrs"],
+      "examples": { "hit": [["pydantic", "marshmallow"]], "miss": [["pydantic", "httpx"]] }
+    },
+    {
+      "id": "python-test",
+      "title": "test runner",
+      "ecosystem": "python",
+      "packages": ["pytest", "nose2", "ward"],
+      "examples": { "hit": [["pytest", "nose2"]], "miss": [["pytest", "coverage"]] }
+    }
+  ]
+}

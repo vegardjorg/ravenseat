@@ -636,6 +636,25 @@ const SETTINGS = Object.freeze([
   row('review.packs', 'review', 'list', 'Review signal packs for your stack',
     'Stack packs that add the risky calls of your stack to the review signals (lib/reviewPacks.js). The Checks tab ' +
     'suggests them from your manifests; `ravenseat checks packs --apply` writes them. The built-in ones follow plugin updates.'),
+  // The reuse and scope facts at receive (lib/scopeNotes.js). On by default in both modes (owner decision 16.11): each
+  // is one NOTE line and a line in the package, costs no tokens and stops nothing. Off is no weakening, as for
+  // guidance quiet: a fact goes, no guard does.
+  row('scopeNotes.reuse', 'review', 'onoff', 'Note a helper written again',
+    'A name the delivery defines (JS/TS) that the base already defines in another file gets one NOTE line at receive ' +
+    'with both places, and a line in the review package. It stops nothing.'),
+  row('scopeNotes.newFolders', 'review', 'onoff', 'Note a new folder',
+    'A file added in a folder the base does not have (the first levels, scopeNotes.folderDepth) gets one NOTE line: a ' +
+    'new module boundary is an architecture choice. It stops nothing.'),
+  row('scopeNotes.dependencies', 'review', 'onoff', 'Note a second library for the same job',
+    'A new package in package.json or requirements.txt whose job the manifest already has a package for (dates, HTTP, ' +
+    'validation, helpers, test runner ...) gets one NOTE line. It stops nothing.'),
+  row('scopeNotes.drift', 'review', 'onoff', 'Note drift in numbers',
+    'How many changed files lie outside the task\'s files and reads, and in which folders; a task with no files named ' +
+    'gets the number of folders it touches. One NOTE line, it stops nothing.'),
+  row('scopeNotes.ignoreNames', 'review', 'list', 'Names a helper note skips',
+    'More names the helper note never reports (main, run, setup and a few others are skipped already).'),
+  row('scopeNotes.folderDepth', 'review', 'integer', 'New folder depth',
+    'How deep the new folder note looks: 1 = only new top folders, 2 (default) or 3.'),
   row('triage.minAgeDays', 'review', 'integer', 'Triage tasks older than (days)',
     'A task added or last edited this long ago is checked against the current code before it starts. Empty = no age rule.',
     { fullWhy: 'the intake triage is off in lite' }),

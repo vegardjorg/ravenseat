@@ -538,6 +538,46 @@ the base gate's, so a command that is flaky again counts on the same finding) an
 to `00-package.md`. A command that was flaky on the same track before still counts as green; the count says so.
 `gates.flakyRerun: false` turns the rerun off.
 
+### Reuse and scope notes
+
+Parallel tracks tend to write the same helper again, open a folder nobody asked for, add a second library for a job
+the project already has one for, or wander outside the files the task named. None of that is wrong for sure, so
+`receive` only states the facts: one `NOTE` line each, and a `Reuse and scope` section in `00-package.md` that the
+reviewer weighs (`duplication` and `scope-drift` are the finding classes for it). Nothing stops, nothing gets a red
+marker, and no agent or token is used: it is `git grep`, `git ls-tree` and `git show` on the merge base.
+
+```
+NOTE reuse (A): isObject (new in lib/b.js) is already defined in lib/a.js:3, lib/c.js:12. Reuse it, or say in the report why it differs.
+NOTE new folder (A): newmod/ (2 files) is not on the base. A new module boundary is an architecture choice: was it an owner question?
+NOTE dependency (A): dayjs in package.json, and the project already has moment for dates and times.
+NOTE drift (A): 7 of 9 changed files are outside owned_files, shared_patch and reads, in 3 folders the task does not name (cli, docs, lib/x).
+```
+
+- **Reuse** (`scopeNotes.reuse`): a name the delivery defines on an added line in a JS or TS file (a top-level
+  function, a `const` holding a function, a class, `exports.x =`, an entry of `module.exports = { ... }`) that the base
+  already defines in another file. A use of the name does not count, nor a test file, a name the same change removes
+  (a move), a name under three letters, or `main`, `run`, `setup` and a few other names every script has;
+  `scopeNotes.ignoreNames` adds your own. At most 30 names are looked up per receive.
+- **New folder** (`scopeNotes.newFolders`): a file added in a folder the base does not have, at depth 1 or 2
+  (`scopeNotes.folderDepth`, 1 to 3). Only the shallowest new folder of a path is named.
+- **Dependency** (`scopeNotes.dependencies`): a new package in `package.json` or `requirements*.txt` whose job the same
+  manifest already has a package for. The groups (dates, HTTP, validation, helpers, test runner, logging, ids and
+  more) are data in `dependency-purposes.json`, each with examples a test runs. It also sees a manifest the task owns,
+  which the dependency file guard does not.
+- **Drift** (`scopeNotes.drift`): how many changed files lie outside `owned_files`, `shared_patch` and `reads`, and the
+  folders among them the task does not name. A task that names no files (usual in lite) gets the number of folders it
+  touches instead, from two folders.
+
+Each part has its own setting, and all are on by default in both modes, since each is only a fact:
+
+| Part | Friction | Default and why |
+|---|---|---|
+| Reuse | One line per name, only when the base defines the same name in another file; a common name can be a false match | On: the most common duplication, caught with no index and no agent. A name that keeps matching goes in `ignoreNames` |
+| New folder | Rare; one line | On: an architecture choice nobody asked about shows before the merge |
+| Dependency | Only when a manifest changes | On: two libraries for one job are cheap to stop now and costly later |
+| Drift | One line per receive when files lie outside the task's own | On: the merge's drift warning, but with numbers and earlier. It is a number, not a stop, since `owned_files` is often a rough guess |
+| Ignore names, folder depth | None; they only narrow | Empty list and depth 2 |
+
 ## Limits and safety
 
 - `maxConcurrent` (parallel tracks), `maxDPlus`, `maxPerDomain` and `maxDb` stop the queue from starting more than
@@ -861,6 +901,8 @@ names every guard weaker than its default on its `settings` row.
 | `reviewers` | D: `reviewer`, D+: `reviewer` + `reviewer-security` | Fixed reviewer agents per class after `receive` | Advanced, Full mode only |
 | `review.signals` | `{}` (the built-ins `auth`, `secret`, `url-from-data`, `html-sink`) | Review signals: what the diff adds (code files only, never tests, comments or docs) lifts a reviewer in on top of the class, with one line of reason in the package. Per signal `enabled`, `reviewer`, `paths` and `words` (regular expressions, added to a built-in); a name of your own is a new signal. Switching a built-in off is a weakening. `ravenseat helpers` shows the hit rate per signal | Advanced |
 | `review.packs` | `[]` | Stack packs for the review signals: ids such as `core`, `nextjs`, `prisma`. A built-in pack is read from the plugin at run time, so it follows updates; an unknown id is ignored. The Checks tab suggests them from the manifests, and `ravenseat checks packs --apply` writes them ([orchestration](orchestration.md#stack-packs)) | Advanced |
+| `scopeNotes.reuse`, `scopeNotes.newFolders`, `scopeNotes.dependencies`, `scopeNotes.drift` | `true`, `true`, `true`, `true` | [Reuse and scope notes](#reuse-and-scope-notes) at `receive`: a name the base already defines in another file, a new folder, a second package for the same job, and drift in numbers. One `NOTE` line each and a `Reuse and scope` section in `00-package.md`; nothing stops and no tokens are used. `false` turns that part off; it weakens no guard | Advanced |
+| `scopeNotes.ignoreNames`, `scopeNotes.folderDepth` | `[]`, `2` | Names the reuse note never reports (on top of `main`, `run`, `setup` and a few others), and how deep the new folder note looks (1 to 3) | Advanced |
 | `triage.minAgeDays`, `triage.agentAdded`, `triage.maxPerFill`, `triage.askAgainMin` | `3`, `true`, `3`, `60` | Intake triage before a task starts: tasks added or last edited this many days ago (`null` = off) and agent-added tasks get a `triage` verdict first (`ravenseat triage`); at most this many steps per fill, not asked again within this many minutes. Off with `ravenseat helpers off triage` and in lite mode (see orchestration.md) | Advanced, Full mode only |
 | `proposals.autoAccept.enabled`, `proposals.autoAccept.classes`, `proposals.autoAccept.maxEstimateMin`, `proposals.autoAccept.maxValue` | `false`, `["K"]`, `60`, `null` | Auto-accept of agent proposals by the owner's rules (`ravenseat proposals`); the queue's own rules win; never D/D+, `waiting_on`, legal/owner labels, open legal points or protected paths. Switching it on weakens a guard: `ravenseat proposals auto on --i-understand --by owner` | Advanced, queue.json |
 | `architectureRules` | `[]` | Short rules copied into every mission | Advanced |

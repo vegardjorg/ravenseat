@@ -3,6 +3,17 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+- **Hardening: receive names a helper written again and a change that drifts.** A delivery that defines a name the
+  base already defines in another file (JS and TS, a use never counts), adds a file in a folder the base does not
+  have, adds a second package for a job its manifest already has one for (dates, HTTP, validation, test runner and
+  more, a table that is data with tested examples), or changes files outside its own and its reads now gets one NOTE
+  line for each at receive, with the numbers and both places, and a "Reuse and scope" section in the review package
+  for the reviewer to weigh as duplication or scope drift. Test files, moved names, common names such as `main` and a
+  task that names no files in one folder stay quiet. They are facts only: nothing stops, nothing uses tokens, and all
+  four are on by default, also in lite, each with its own setting under `scopeNotes`.
+
 ## 0.17.0 (2026-11-16)
 
 **Review findings are tracked to a close, and every check that catches a failure writes it to one local finding log, classed by a rule. A fix needs a red test first, and a failure class that comes back where a guard was in place lights the red dot until it holds again. The new stops are off until you turn them on, except the merge wait for the chosen reviewers' findings.**

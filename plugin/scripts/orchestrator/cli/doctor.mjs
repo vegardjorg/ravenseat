@@ -284,6 +284,8 @@ function checkConfig() {
   wrong.push(...require('./lib/inspection.js').setupProblems(own.inspection).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   // The repeat count on class and area (lib/findingRepeats.js setupProblems): on/off as true or false, whole numbers.
   wrong.push(...require('./lib/findingRepeats.js').setupProblems(own.learning).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
+  // The reuse and scope facts (lib/scopeNotes.js setupProblems): on/off as true or false, names, a depth of 1 to 3.
+  wrong.push(...require('./lib/scopeNotes.js').setupProblems(own.scopeNotes).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   wrong.push(...baselineProblems(own).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   const out = [];
   if (wrong.length) out.push(fail('config', `wrong type in ${path.basename(file)}: ${wrong.join('; ')}`, 'compare with queue.config.example.json'));

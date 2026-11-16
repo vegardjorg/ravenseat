@@ -575,6 +575,51 @@ function secretScanLines(id, scan) {
   return out;
 }
 
+/** The code files V1 looks up on the base (lib/scopeNotes.js reads JS/TS only). */
+const SCOPE_CODE = ['*.js', '*.cjs', '*.mjs', '*.jsx', '*.ts', '*.cts', '*.mts', '*.tsx'];
+
+/**
+ * The reuse and scope facts for a delivery (lib/scopeNotes.js): { lines, section }. The look-ups run here against the
+ * merge base (`base`) and the branch: `git grep -n -w` for a name, `git ls-tree -d` for the folders, `git show` for a
+ * manifest. Everything is read, nothing runs from the track. A failure gives one NOTE line and no section; receive
+ * goes on.
+ */
+function scopeNotesFor(o, { branch, base, diff, changedNames }) {
+  const SN = require('./lib/scopeNotes.js');
+  const setup = SN.setupOf(CONFIG);
+  try {
+    let dirs = null;
+    const io = {
+      // One git grep for all names (an -e per name): a process per name took seconds on Windows.
+      findDefinitions: (names) => {
+        if (!base || !names.length) return [];
+        const out = gitLarge(['grep', '-n', '-w', '-I', '-F', ...names.flatMap((n) => ['-e', n]), base, '--', ...SCOPE_CODE]);
+        const rows = [];
+        for (const l of String(out ?? '').split(/\r?\n/)) {
+          const m = (l.startsWith(`${base}:`) ? l.slice(base.length + 1) : l).match(/^(.*?):(\d+):(.*)$/);
+          if (m) rows.push({ file: m[1], line: Number(m[2]), text: m[3] });
+        }
+        return rows;
+      },
+      dirExists: (d) => {
+        if (!base) return true;
+        dirs ??= new Set(String(gitLarge(['ls-tree', '-r', '-d', '--name-only', base]) ?? '').split(/\r?\n/).filter(Boolean));
+        return dirs.has(d);
+      },
+      readFile: (side, p) => {
+        const rev = side === 'base' ? base : branch;
+        if (!rev) return null;
+        const t = gitLarge(['show', `${rev}:${p}`]);
+        return t == null ? null : String(t);
+      },
+    };
+    const r = SN.assess({ diff, changedPaths: changedNames, task: o, setup, io, migrations: CONFIG.migrations ?? null });
+    return { lines: SN.noteLines(r, { id: o.id }), section: SN.packageSection(r) };
+  } catch (e) {
+    return { lines: [`NOTE scope notes (${o.id}): could not be made (${e?.message ?? e}); nothing is blocked on it.`], section: null };
+  }
+}
+
 /** `ravenseat receive` (the usage is at the top of queue.mjs). */
 export function cmdReceive() {
   // ---- A track has delivered -> review + review package as plain files + reviewer prompts ----
@@ -913,6 +958,10 @@ export function cmdReceive() {
         `${foreign.slice(0, 10).map((f) => `${f.path} (${f.owner}${f.via === 'shared_patch' ? ', via shared_patch' : ''})`).join(', ')}${foreign.length > 10 ? ', …' : ''}. ` +
         `The merge stops on them. A fix round that leaves them alone, or merge the owner task first (${CLI} merge --allow-guard overrides, logged).`,
     );
+  // The reuse and scope facts (lib/scopeNotes.js, bolk B1 of the scope drift plan): a name the base already defines, a
+  // new folder, a second library for the same job, drift in numbers. NOTE lines and a package section, never a stop.
+  const scopeFacts = scopeNotesFor(o0, { branch, base: weakBase, diff, changedNames });
+  for (const l of scopeFacts.lines) console.log(l);
   fs.writeFileSync(
     path.join(folder, '00-package.md'),
     L.reviewPackageIndex({
@@ -931,6 +980,7 @@ export function cmdReceive() {
       redOnBase: redBase ? RB.packageSection(redBase) : null,
       // The flaky gate commands (lib/trackFlaky.js packageSection); [] when none was flaky.
       flaky: require('./lib/trackFlaky.js').packageSection(gateCheck.record),
+      scopeNotes: scopeFacts.section,
       assumptions,
       delta,
       deltaSection: delta ? DR.packageSection(delta, { previousFindings: !!files.previousFindings }) : null,
