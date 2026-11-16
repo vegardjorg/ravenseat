@@ -21,7 +21,8 @@ When a Claude Code project outgrows one chat, the signs are familiar:
   Code compacts it, and every turn reads all of it again, so each turn costs more than the last.
 - You spend more time keeping agents on track than deciding what to build.
 
-Ravenseat keeps the project's plan and task list (the queue) in files, outside the chat. One Claude Code chat acts as
+Ravenseat keeps the project's plan and task list (the queue) in plain files outside the chat, so it survives a crash,
+a compaction and two chats at once. One Claude Code chat acts as
 the manager: you tell it what to build, and it hands each task to a fresh agent in its own copy of the project, runs
 your tests on the result, merges what passes on your machine, and asks you only about decisions a human should make.
 Work that spans days gets finished across many chats, and you can follow along and answer from your phone with Claude
@@ -49,8 +50,9 @@ merge, because passing tests do not show that the agent understood you.
 
 **Is it for you?** If you are building something that takes weeks, like a SaaS with several features, a backend and
 a database, the work no longer fits in one chat, and that is where Ravenseat helps most. For a small demo or a tool for
-your own use, plain Claude Code is probably enough. It works best with automated tests; without meaningful checks
-there is little for it to verify.
+your own use, plain Claude Code is probably enough. It suits one person or a small team using Claude Code on Windows
+or Linux. It works best with automated tests; without meaningful checks there is little for it to verify. If you
+would rather not read what an agent assumed before its work is merged, it will feel like overhead.
 
 **Status.** Young: public since late October 2026, built over several months inside the author's own project, released
 often. Developed on Windows; the tests run on Linux and Windows, macOS is not tested yet. The [FAQ](plugin/docs/faq.md)
@@ -108,8 +110,8 @@ opened with `/ravenseat:board` ([a tour of the board](plugin/docs/board.md#a-tou
 
 ## Agents don't grade their own homework
 
-An agent that writes the code and then reports that it works is not proof that a change is ready. Ravenseat keeps
-those two jobs apart.
+An agent that writes the code and then reports that it works is not proof that a change is ready. Ravenseat treats
+every agent as an untrusted worker and keeps those two jobs apart.
 
 - **Checks belong to the delivered commit.** The checks are run and recorded on exactly the delivered commit, not
   reported by the agent.
@@ -117,15 +119,18 @@ those two jobs apart.
   reviewer checks the work against them.
 - **Protected files get extra scrutiny.** Changes to test config, hooks, queue settings and other guarded paths stop
   the merge unless you allow them, and deleted tests and new skip markers are flagged.
+- **Only you push or weaken a guard.** An agent in a task cannot push, and switching a guard off or weaker takes
+  your explicit confirmation, logged; none of it can be done from a task.
 
 These are guard rails, not a sandbox: agents run with your user account, so keep production credentials off the
-machine and use Claude Code's permissions or sandbox when you need a real boundary. Without meaningful checks, no
-automated merge can show that a change is correct; `ravenseat doctor` warns when your project has none. More in
+machine and use Claude Code's permissions or sandbox when you need a real boundary. Ravenseat amplifies a strong
+test suite; it cannot make up for a missing one. Without meaningful checks, no automated merge can show that a change
+is correct, and `ravenseat doctor` warns when your project has none. More in
 [full mode](plugin/docs/full-mode.md#agents-cheat-on-tests), [guarantees and limits](plugin/docs/guide.md#guarantees-and-limits)
 and [orchestration](plugin/docs/orchestration.md).
 
-Each answer in the [FAQ](plugin/docs/faq.md) names the tests behind it, and the tests behind the main
-guarantees have been shown to fail with their guard turned off. The [red team page](plugin/docs/redteam.md) lists what was found and what the tests cannot
+Each answer in the [FAQ](plugin/docs/faq.md) names the tests behind it. The tests run on real git repositories and
+real processes, and for the main guarantees each guard was removed in turn to show that its test then fails. The [red team page](plugin/docs/redteam.md) lists what was found and what the tests cannot
 show. Run `npm run redteam` to check it yourself.
 
 ## What does it cost in tokens?
