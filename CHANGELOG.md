@@ -3,7 +3,9 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.17.0 (2026-11-16)
+
+**Review findings are tracked to a close, and every check that catches a failure writes it to one local finding log, classed by a rule. A fix needs a red test first, and a failure class that comes back where a guard was in place lights the red dot until it holds again. The new stops are off until you turn them on, except the merge wait for the chosen reviewers' findings.**
 
 - **Hardening: a guard that does not hold is no longer trusted quietly.** The finding log is now counted per failure
   class and part of the code: the same kind of mistake in two separate tasks in one area within 90 days, or three
@@ -14,7 +16,6 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   you turn them on (one tip, one card), and then share one cap of three waiting proposals with the inspection queue and
   the gate lines, so the three kinds can no longer add up to nine; a proposal you cancel is not made again for that
   class and place. Each part has its own setting under `learning`.
-- Tidied up the FAQ.
 
 - **Hardening: a fix needs a red test first.** A fix task (one with `fixes`, a QA or base fix, a task from a finding,
   or a GATE line in its report) whose red on base check shows no test that fails without it now gets one warning at
@@ -50,6 +51,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   be seen across all of them. Logging is silent and local: rows hold short masked excerpts (never a secret's value or
   the owner's QA text), nothing extra runs for them, and a write that fails gives one warning and never stops the
   command.
+
+- Tidied up the FAQ.
+
+### After you update
+- A merge now waits for a FINDINGS report from each reviewer the task class chose, and stops on a HIGH. `--allow-unreviewed` is the owner's logged way past; the queue's agents cannot use it. Each finding becomes a review item to close before done (`ravenseat review-item`); lite mode keeps that done stop off.
+- A fix task without a proven red test gets a warning at receive. Turn on `gates.redOnBaseStrict` if you want merge to stop on it.
+- Guard proposals from the finding log are off until you turn on `learning.proposals`. Inspection, GATE lines and those proposals now share one cap of three waiting, so you may see fewer waiting proposals than before.
+- The finding log lives in the data folder and is never shared. A project can add or turn off classification rules in `docs/queue/failure-rules.json`; without the file the core rules apply.
 
 ## 0.16.0 (2026-11-16)
 
