@@ -434,7 +434,7 @@ function agentAddReason(call, { branch, branchPrefix, moved }) {
 function agentQueueReason(call, where = {}) {
   const name = String(call.name);
   const shown = name ? `${NAMES.CLI_NAME} ${name}` : NAMES.CLI_NAME;
-  const flag = call.args.find((x) => x === '--allow-guard' || x === '--allow-secret' || /^--force/.test(x));
+  const flag = call.args.find((x) => x === '--allow-guard' || x === '--allow-secret' || x === '--allow-unreviewed' || /^--force/.test(x));
   if (flag)
     return `\`${flag}\` is the orchestrator's and the owner's override; a queue agent never passes it (\`${shown}\`).`;
   const by = call.args.findIndex((x) => x === '--by' || x.startsWith('--by='));

@@ -28,6 +28,7 @@ import {
 } from './tracks.mjs';
 import { askedLine, triageReason, triageState, writeTriageSteps } from './triage.mjs';
 import { detectPushes, logEvent, logLoad } from './events.mjs';
+import { registerQuietly } from './reviewItem.mjs';
 
 // The accepted git baseline: recorded silently on first use, before anything starts (lib/gitSurfaceBaseline.js).
 const GB = require('./lib/gitSurfaceBaseline.js');
@@ -597,6 +598,9 @@ export function cmdResume() {
   if (!o) die(`Unknown task ${id}`);
   if (!['running', 'review'].includes(o.status))
     die(`${id} has status ${o.status}; resume applies to running and review (a new start is fill or start).`);
+  // The reviewers' findings become items on the task now, before the fix round (lib/reviewItems.js): what the
+  // orchestrator leaves out of the findings file is then still on the task, and done waits for it. Never a stop.
+  if (reason === 'fix') registerQuietly(o);
   // At the usage limit a new agent would only fail, and a fix round would be used up for nothing (exit 12).
   const usageStop = L.usageLimitGuard();
   if (usageStop) die(usageStop.message, usageStop.code);

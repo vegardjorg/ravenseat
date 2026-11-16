@@ -36,6 +36,7 @@ import {
 import { logEvent } from './events.mjs';
 import { cleanupDetachedOf, cleanupWorktree } from '../cleanup-worktree.mjs';
 import { proposeGate } from './gate.mjs';
+import { registerQuietly, registerReviewItems, reviewReports } from './reviewItem.mjs';
 
 const ER = require('./lib/eventRows.js');
 const CP = require('./lib/conflictPredict.js');
@@ -45,6 +46,8 @@ const CONTROLS = require('./lib/controls.js');
 const GUIDANCE = require('./lib/guidance.js');
 // The wiring spec as open items that stop done (receive records them, merge's done step checks them).
 const WI = require('./lib/wiringItems.js');
+// The reviewers' findings as items that stop done, and the merge gate on the chosen reviewers (lib/reviewItems.js).
+const RI = require('./lib/reviewItems.js');
 
 // ---- The git hooks and config against the accepted baseline (lib/gitSurfaceBaseline.js) -------------------------------
 
@@ -1150,7 +1153,7 @@ export async function cmdMerge() {
   const id = positional(1, ['--scratchpad', '--done-cwd'])[0];
   if (!id)
     die(
-      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--force-red-base] [--force-red-gate]',
+      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--allow-unreviewed] [--force-red-base] [--force-red-gate]',
     );
   const resume = a.includes('--resume');
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
@@ -1333,7 +1336,23 @@ export async function cmdMerge() {
       logTime(id, 'gate-red-overridden', `tip ${String(trackTip).slice(0, 12)}, receive said red at ${String(o.gate_check.tip).slice(0, 12)}`);
       console.log(`WARNING: --force-red-gate: merging ${id} past a red quick gate; logged as "gate-red-overridden".`);
     }
-  }
+    // The review (lib/reviewItems.js): every FINDING line becomes an item on the task (passive; done names them), and
+    // the gate wants a FINDINGS report after the last receive from each reviewer receive chose, with no HIGH in the
+    // newest one. Without it the choice of reviewers is only advice: a D+ task could be merged with no security review,
+    // or with its HIGH still open. --allow-unreviewed is the owner's, logged.
+    const reports = reviewReports(o);
+    registerReviewItems(id, reports);
+    if (RI.requireOn(CONFIG)) {
+      const gate = RI.reviewGate({ required: o.review_reviewers, since: o.review_at ?? o.t_receive ?? null, reports });
+      const lines = RI.gateLines(id, gate, { cli: CLI });
+      if (lines && !a.includes('--allow-unreviewed')) die(lines.join('\n'));
+      if (lines) {
+        const what = [...gate.missing.map((t) => `${t} missing`), ...gate.high.map((h) => `${h.type} H=${h.H}`)].join(', ');
+        logTime(id, 'unreviewed-overridden', `tip ${String(trackTip).slice(0, 12)}: ${what}`);
+        console.log(`WARNING: --allow-unreviewed: merging ${id} past the review gate (${what}); logged as "unreviewed-overridden".`);
+      }
+    }
+  } else registerQuietly(o); // a resume: the merge is in, but done still needs the items
   // The base gate (lib/baseHealth.js) BEFORE anything else runs: a red base refuses the merge (exit 9) unless this is the
   // base fix task or --force-red-base (logged); an unknown verdict (the tip moved since the last check) is checked first.
   // `wasRed` is the red record the merge goes on despite, so the record after it keeps the merge that made it red.
@@ -1740,13 +1759,19 @@ export async function cmdMerge() {
       // The wiring spec (lib/wiringItems.js): the merge is in, and the orchestrator applies the open items on the base
       // now. Read fresh: receive recorded them, and a `ravenseat wiring` call may have closed some since.
       const now = read().tasks.find((x) => x.id === id) ?? o;
+      const refusals = [];
       if (!WI.stopOn(CONFIG)) {
         const off = WI.offLine(now, CLI);
         if (off) console.log(off);
-        return null;
-      }
-      const refusal = WI.refusalLines(now, { cli: CLI, base: BASE });
-      return refusal ? `${refusal.join('\n')}\n(${CLI} merge ${id} --resume runs done and fill once they are closed.)` : null;
+      } else refusals.push(...(WI.refusalLines(now, { cli: CLI, base: BASE }) ?? []));
+      // The review items (lib/reviewItems.js): each finding is fixed, placed or rejected before done.
+      if (!RI.stopOn(CONFIG)) {
+        const off = RI.offLine(now, CLI);
+        if (off) console.log(off);
+      } else refusals.push(...(RI.refusalLines(now, { cli: CLI }) ?? []));
+      return refusals.length
+        ? `${refusals.join('\n')}\n(${CLI} merge ${id} --resume runs done and fill once they are closed.)`
+        : null;
     },
   });
   for (const l of res.lines) console.log(l);

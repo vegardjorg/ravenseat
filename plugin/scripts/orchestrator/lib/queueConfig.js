@@ -227,6 +227,11 @@ const STANDARD = Object.freeze({
   // <task> <item> --commit <sha>` or `--reject "<reason>"` closes it). stop false = done passes with open items and says
   // so; turning it off is a weakened guard (doctor names it).
   wiring: { stop: true },
+  // The reviewers' findings as items on the task (lib/reviewItems.js): merge and `resume --reason fix` record each
+  // finding of a FINDINGS line as `<reviewer>#<round>:<code>`, and done (set done, the done step of merge) refuses while
+  // one is open (`ravenseat review-item <task> <item> --commit|--task|--batch|--reject`). stop false = done passes and
+  // says so. Lite turns it off unless the file sets it, since a first try should not meet a new hard stop.
+  reviewItems: { stop: true },
   // Optional migration flow (e.g. database migrations that must be numbered and pushed after merge).
   // With folder = null everything to do with migrations is turned off (no number blocks, no push in merge).
   migrations: {
@@ -267,7 +272,9 @@ const STANDARD = Object.freeze({
   // Review signals (lib/reviewSignals.js): what a diff ADDS lifts a reviewer in on top of the class (built-ins auth,
   // secret, url-from-data, html-sink lift reviewer-security). Per signal: enabled, reviewer, paths and words (added to a
   // built-in). Empty = the built-ins as they are.
-  review: { signals: {}, packs: [] },
+  // requireFindings: merge stops when a chosen reviewer for the class has no FINDINGS line after the review package,
+  // or when one reports H>0. The owner overrides with `merge --allow-unreviewed` (logged as unreviewed-overridden).
+  review: { signals: {}, packs: [], requireFindings: true },
   // Model per agent: agent name (track, track-d, reviewer, reviewer-docs, a helper ...) -> "opus", "sonnet", "haiku"
   // or "fable". Empty (default) = the model in each agent's own file. A set model is printed on the start lines
   // (fill, start, resume, receive) as `model=<m>`, and the orchestrator passes it to the Agent tool, which overrides
@@ -621,6 +628,7 @@ function resolveOwn(k, own = {}) {
   if (k.mode === 'lite') {
     if (own.gitSurface === undefined) k.gitSurface = 'warn';
     if (own.dependencyFiles === undefined) k.dependencyFiles = 'warn';
+    if (own.reviewItems?.stop === undefined) k.reviewItems = { ...k.reviewItems, stop: false };
   }
   if (own.protectedPaths !== undefined && !Array.isArray(own.protectedPaths))
     k.protectedPaths = require('./mergeGuard.js').resolveProtectedPaths(own.protectedPaths, STANDARD.protectedPaths).list;

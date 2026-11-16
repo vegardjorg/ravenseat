@@ -526,6 +526,23 @@ const SETTINGS = Object.freeze([
       whyNot: 'The spec is only text in a report then, and nothing reminds anyone of it after the merge.',
       changes: 'Done passes with open wiring items; it says so, and the items stay open on the task. Doctor will report it.',
     }),
+  row('reviewItems.stop', 'push', 'onoff', 'Done waits for the review findings',
+    "Each finding on a reviewer's FINDINGS line becomes an item on the task, and done (set done, the done step of " +
+    'merge) waits until each is fixed, moved to a task or a batch, or rejected with a reason.', {
+      weakens: offWeakens,
+      protects: 'A reviewer finding that is read once and then forgotten after the merge.',
+      whyNot: 'The findings are only text in a transcript then, and nothing reminds anyone of them.',
+      changes: 'Done passes with open review items; it says so, and the items stay open on the task.',
+      defaultByMode: { lite: false, full: true },
+    }),
+  row('review.requireFindings', 'push', 'onoff', 'Merge needs the chosen reviews',
+    'Merge stops when a reviewer chosen for the class has not reported FINDINGS after the review package, or reports H>0. ' +
+    'The owner can merge past it with --allow-unreviewed, which is logged.', {
+      weakens: offWeakens,
+      protects: 'A merge of a D or D+ task that no reviewer looked at, or one with a high finding still open.',
+      whyNot: 'The review becomes optional, and a forgotten reviewer is not noticed.',
+      changes: 'Merge goes on without checking for the reviews; the findings that exist are still recorded.',
+    }),
   row('push.ciWatch', 'push', 'choice', 'CI watch after push',
     'off, or github: after a batch push the CI runs are followed, and a failure gives a fix task.',
     { choices: ['off', 'github'] }),

@@ -161,6 +161,16 @@ describe('the merge gate', () => {
     expect(g).toEqual({ missing: [], high: [] });
   });
 
+  it('the light review is advice: reviewer-light missing or with H does not stop the merge, a class reviewer does', () => {
+    const g = R.reviewGate({
+      required: ['reviewer-light', 'reviewer'],
+      since: '2026-11-16T09:00:00.000Z',
+      reports: [{ type: 'reviewer-light', time: '2026-11-16T09:10:00.000Z', report: report('FINDINGS H=1 M=0 L=0') }],
+    });
+    expect(g).toEqual({ missing: ['reviewer'], high: [] });
+    expect(R.reviewGate({ required: ['reviewer-light'], since: null, reports: [] })).toEqual({ missing: [], high: [] });
+  });
+
   it('no chosen reviewers is no requirement; requireFindings false turns the gate off', () => {
     expect(R.reviewGate({ required: [], since: null, reports: [] })).toEqual({ missing: [], high: [] });
     expect(R.requireOn({})).toBe(true);

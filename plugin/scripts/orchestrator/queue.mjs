@@ -247,6 +247,17 @@
 //   node scripts/orchestrator/queue.mjs wiring <id> <item> --commit <sha> | --reject "<reason>" [--by "..."]
 //        (closes one: --commit needs a commit in baseBranch that changes the item's file, --reject a non-empty reason;
 //         both kept on the item with the time. Refused inside a track worktree; logged, so ravenseat undo takes it back.)
+//   node scripts/orchestrator/queue.mjs review-item <id> [--json]  (the task's review items, lib/reviewItems.js: merge and
+//                                                                  resume --reason fix record each FINDING line of the
+//                                                                  reviewers as an item <reviewer>#<round>:<code>; set done
+//                                                                  and the done step of merge refuse while one is open,
+//                                                                  unless reviewItems.stop is false; off in lite mode)
+//   node scripts/orchestrator/queue.mjs review-item <id> <item> --commit <sha> | --task <id> | --batch
+//        | --reject <false-positive|pre-existing|duplicate|wont-fix> --note "<one sentence>" [--by "..."]
+//        (closes one: fixed in a commit in baseBranch that changes the item's file, placed in an unfinished task or in the
+//         review-rest batch task, or rejected. mechanical and before-merge take only --commit or --reject. Each close
+//         writes a finding log row with the disposition. Refused inside a track worktree; logged, so undo takes it back.)
+//   node scripts/orchestrator/queue.mjs review-item <id> --defer-all-L   (every open deferrable LOW into one batch task)
 //   node scripts/orchestrator/queue.mjs resume <id> [--reason fix|context] [--round N] [--findings-file <file>]
 //                                                [--from <reviewer,...>] [--answer "<text>"] [--new-agent] [--scratchpad <folder>]
 //        (--answer: the owner's answer to what the track asked; first in the brief, and kept as an addition to the mission.)
@@ -312,7 +323,7 @@
 // Fewer orchestrator turns: `fill` and `receive` end with "Start these in the SAME turn:" and one line per agent
 // (subagent_type + message); start them in one turn. `receive` warns when the track's answer exceeds the report cap (about 1,500 chars).
 //   node scripts/orchestrator/queue.mjs merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force]
-//        [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--done-cwd <folder>] [--force-red-base] [--force-red-gate]
+//        [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--allow-unreviewed] [--done-cwd <folder>] [--force-red-base] [--force-red-gate]
 //        [--resume]
 //        (one merge at a time per repo: the lock <dataFolder>/merge.lock with pid, host and start time; a held lock
 //         refuses with the holder, a stale one (the pid is gone, or older than 6 h) is taken over. A merge, rebase,
@@ -938,6 +949,9 @@ if (command === 'init') {
 } else if (command === 'wiring') {
   // ---- The wiring spec's open items (lib/wiringItems.js) ----
   (await import('./cli/wiring.mjs')).cmdWiring();
+} else if (command === 'review-item') {
+  // ---- The reviewers' findings as items on the task (lib/reviewItems.js) ----
+  (await import('./cli/reviewItem.mjs')).cmdReviewItem();
 } else if (command && command !== 'help') {
   // A mistyped command: one line with the closest known command (lib/cliHelp.js), same exit code as before.
   const scripts = fs
@@ -950,7 +964,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|owner-log|settings|wiring|pulse-check> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|owner-log|settings|wiring|review-item|pulse-check> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

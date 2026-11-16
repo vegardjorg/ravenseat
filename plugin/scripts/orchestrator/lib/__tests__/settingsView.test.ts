@@ -255,13 +255,16 @@ describe('doctorRows: the doctor row settings', () => {
     expect(r).toContainEqual(
       expect.objectContaining({
         status: 'INFO',
-        message: 'lite: dependencyFiles and gitSurface warn instead of stop (set them in queue.config.json for full strength)',
+        message:
+          'lite: dependencyFiles, gitSurface and reviewItems.stop are softer than in full (set them in queue.config.json for full strength)',
       }),
     );
     // Set in the file, the lite line names only what is still softened.
-    const one = rows({ mode: 'lite', gitSurface: 'stop' }).find((x: any) => x.status === 'INFO');
+    const one = rows({ mode: 'lite', gitSurface: 'stop', reviewItems: { stop: true } }).find((x: any) => x.status === 'INFO');
     expect(one.message).toBe('lite: dependencyFiles warns instead of stopping (set it in queue.config.json for full strength)');
-    expect(rows({ mode: 'lite', gitSurface: 'stop', dependencyFiles: 'stop' })).toEqual([expect.objectContaining({ status: 'OK' })]);
+    expect(rows({ mode: 'lite', gitSurface: 'stop', dependencyFiles: 'stop', reviewItems: { stop: true } })).toEqual([
+      expect.objectContaining({ status: 'OK' }),
+    ]);
   });
 
   it('protectedPaths remove: one INFO line per removed path; the floor and an unknown path are named as such', () => {

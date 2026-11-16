@@ -33,7 +33,7 @@ const WRITTEN = [
   'added_at', 'added_by', 'approved', 'approved_by', 'proposal', 'started', 'branch', 'scratchpad', 'picked_at',
   'picked_by', 'attempts', 'resumed', 'fix_rounds', 'blocks', 'delivered', 'delivered_partial', 'delivered_sha',
   'report_seen', 'report_received', 'result', 'done', 'done_check', 'done_outside_queue', 'gate_check', 'wiring',
-  'review_package', 'review_sha', 'review_base', 'review_at', 'review_reviewers', 'verification', 'merge_commit',
+  'review_package', 'review_sha', 'review_base', 'review_at', 'review_reviewers', 'review_items', 'verification', 'merge_commit',
   'merge_sha', 'merge_conflict', 'merged_from', 'red_on_base', 'findings', 'qa_note', 'qa_ok', 'qa_ok_by',
   'qa_original', 'parked', 'snoozed', 'cloud', 'agent', 'agent_boost', 'head_start', 'silent', 'snapshots', 'cost',
   'claude_fp', 'triage_asked', 'triage_log', 'now_category', 'wind', 'drop_reason', 'undone', 'closed', 'track',

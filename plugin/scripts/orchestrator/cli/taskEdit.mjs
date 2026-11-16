@@ -27,6 +27,8 @@ import { logTime, measurementLine, measureTask, minutes, saveMeasurement, turnWa
 const D = require('./lib/doneCheck.js');
 // The wiring spec's open items stop `set <id> done` (lib/wiringItems.js; wiring.stop false turns it off).
 const WI = require('./lib/wiringItems.js');
+// The reviewers' findings stop it the same way (lib/reviewItems.js; reviewItems.stop false or lite mode turns it off).
+const RI = require('./lib/reviewItems.js');
 let trackBranchCache;
 /**
  * The track branch the cwd is on (`<branchPrefix><id>`), or null. A track agent runs ravenseat from its worktree, so this is
@@ -81,6 +83,8 @@ export function cmdSet() {
   let unproven = null;
   // The line when wiring.stop is off and the task goes done with open wiring items.
   let wiringOff = null;
+  // The same when reviewItems.stop is off (or lite mode) and the task goes done with open review items.
+  let reviewOff = null;
   const r = edit((queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
@@ -91,6 +95,10 @@ export function cmdSet() {
         const refusal = WI.refusalLines(o, { cli: CLI, base: CONFIG.baseBranch });
         if (refusal) die(refusal.join('\n'));
       } else wiringOff = WI.offLine(o, CLI);
+      if (RI.stopOn(CONFIG)) {
+        const refusal = RI.refusalLines(o, { cli: CLI });
+        if (refusal) die(refusal.join('\n'));
+      } else reviewOff = RI.offLine(o, CLI);
     }
     if (status === 'done' && o.status !== 'done' && !L.isExternalRow(o)) {
       const freed = queue.tasks
@@ -127,6 +135,7 @@ export function cmdSet() {
     `${id}: ${status}${qa ? ' · label visual: now in the owner QA list (ravenseat qa)' : ''}`,
   );
   if (wiringOff) console.error(wiringOff);
+  if (reviewOff) console.error(reviewOff);
   if (unproven) {
     const info = branchInfo(unproven.branch);
     const why = info.exists && info.commits

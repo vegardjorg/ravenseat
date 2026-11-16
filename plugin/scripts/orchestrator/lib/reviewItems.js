@@ -251,16 +251,22 @@ function roundOf(resumed, time) {
   return fixes.length + 1;
 }
 
+/** Reviewers the merge gate never waits for: the light review is a helper for missing checks, not a class reviewer. */
+const ADVISORY_REVIEWERS = ['reviewer-light'];
+
 /**
  * The merge gate. required: the reviewers the last receive chose. since: that receive's time. reports: { type, time,
  * report } per reviewer transcript (report = logic/results.js reportFindings, null when none). A reviewer is missing
  * when no report of its type ended after `since`; the newest such report decides its H.
+ * reviewer-light is never required (ADVISORY_REVIEWERS): its findings still become items, but it stands in for the
+ * checks a K project lacks, so a stop on it would block every K task in a project without gates.
  * @returns {{ missing: string[], high: { type: string, H: number }[] }}
  */
 function reviewGate({ required, since, reports }) {
   const from = Date.parse(since ?? '');
   const out = { missing: [], high: [] };
-  for (const type of Array.isArray(required) ? required : []) {
+  const types = (Array.isArray(required) ? required : []).filter((t) => !ADVISORY_REVIEWERS.includes(t));
+  for (const type of types) {
     const mine = (reports ?? [])
       .filter((r) => r?.type === type && r.report && (!Number.isFinite(from) || Date.parse(r.time ?? '') > from))
       .sort((p, q) => Date.parse(p.time) - Date.parse(q.time));
