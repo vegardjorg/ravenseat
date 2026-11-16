@@ -11,7 +11,7 @@
 // =============================================================
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'child_process';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, appendFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -299,6 +299,31 @@ describe('the track hooks as processes (echoed payload)', () => {
     ).toBe('');
     expect(run('hook-track-end.mjs', input('b3', 'T-DONE'), env)).toBe(''); // one own commit
     expect(run('hook-track-end.mjs', { ...input('b4', 'T-EMPTY'), agent_type: 'Explore' }, env)).toBe('');
+    // F2 (0w W2c): since Claude Code 2.1.271 a track delivers its report as the SubagentHandback call's message, and
+    // last_assistant_message is only the closing text (or missing). The gate reads the call from the transcript tail,
+    // in the shape Claude Code writes it: a thinking row, the call, then its tool_result.
+    const handback = (id: string, report: string, last?: string) => {
+      const tp = transcript(id, 'T-EMPTY');
+      const rows = [
+        { type: 'assistant', message: { content: [{ type: 'thinking', thinking: '' }] } },
+        { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'h1', name: 'SubagentHandback', input: { message: report } }] } },
+        { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'h1', content: 'delivered' }] } },
+      ];
+      appendFileSync(tp, rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+      return {
+        hook_event_name: 'SubagentStop',
+        agent_type: 'track',
+        agent_id: id,
+        agent_transcript_path: tp,
+        ...(last === undefined ? {} : { last_assistant_message: last }),
+      };
+    };
+    expect(run('hook-track-end.mjs', handback('b6', 'RESULT status=REFUSE branch=queue/T-EMPTY commits=0', ''), env)).toBe('');
+    expect(run('hook-track-end.mjs', handback('b7', 'RESULT status=DONE branch=queue/T-EMPTY commits=0'), env)).toBe('');
+    expect(JSON.parse(run('hook-track-end.mjs', handback('b8', 'All done, nothing to add.', 'Done.'), env))).toEqual({
+      decision: 'block',
+      reason: KV.END_REASON,
+    });
     // Fails open: an unknown base branch makes git fail, so nothing is blocked.
     writeFileSync(join(folder, 'queue.config.json'), JSON.stringify({ baseBranch: 'no-such-branch' }));
     expect(run('hook-track-end.mjs', input('b5', 'T-EMPTY'), env)).toBe('');

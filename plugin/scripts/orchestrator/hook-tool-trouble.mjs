@@ -38,7 +38,8 @@ function readStdin() {
 
 async function main() {
   const input = JSON.parse((await readStdin()) || '{}');
-  if (!input.agent_id) return;
+  // The payload in the core's names (lib/clients/claude/hookInput.js); record takes it as sent and reads it the same way.
+  if (!require('./lib/clients/index.js').clientFor().hooks.read(input).agent.id) return;
   const TT = require('./lib/toolTrouble.js');
   const { dataFolder } = require('./lib/queueConfig.js');
   const folder = dataFolder();

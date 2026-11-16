@@ -52,7 +52,10 @@ const COUPLING: Record<string, RegExp> = {
  */
 const ALLOWED: string[] = [
   // W2a (done 2026-11-16): the transcript paths and file finding moved to lib/clients/claude/transcript.js; the core
-  // asks clientFor().transcripts. hook-context.mjs still reads hook fields and sits under W2c.
+  // asks clientFor().transcripts.
+  // W2c (done 2026-11-16): the hook and status line payloads (stdin fields and hookSpecificOutput) moved to
+  // lib/clients/claude/hookInput.js; the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble ask
+  // clientFor().hooks.
   // W2b: transcript entries and usage (message.usage, content blocks, compact_boundary, API errors)
   'lib/approvalWait.js',
   'lib/askBundle.js',
@@ -62,21 +65,6 @@ const ALLOWED: string[] = [
   'lib/trackGuard.js',
   'lib/turnTools.js',
   'lib/usageLimit.js',
-  // W2c: hook and status line payloads (stdin fields and hookSpecificOutput)
-  'hook-after-compact.mjs',
-  'hook-approval-wait.mjs',
-  'hook-context.mjs',
-  'hook-push-guard.mjs',
-  'hook-read-guard.mjs',
-  'hook-time.mjs',
-  'hook-track-context.mjs',
-  'hook-track-end.mjs',
-  'hook-usage-limit.mjs',
-  'hook-write-guard.mjs',
-  'lib/eventRows.js',
-  'lib/rateLimits.js',
-  'lib/toolTrouble.js',
-  'statusline.mjs',
 ];
 
 /** Is a line a comment (//, /*, * continuation)? Comments may name the fields. */
@@ -149,7 +137,8 @@ describe('client coupling gate', () => {
 
   it('no file outside lib/clients/ reads a Claude Code format unless it is on the allowlist', () => {
     const hits = hitsByFile();
-    expect(hits.size).toBeGreaterThan(10); // the scan sees the files at all
+    // The scan sees the files at all (counted on the files, since the hits shrink to 0 as W2 moves them).
+    expect(coreFiles(ORCH).length).toBeGreaterThan(20);
     const fresh = [...hits.keys()].filter((f) => !ALLOWED.includes(f)).map((f) => hits.get(f));
     expect(
       fresh,

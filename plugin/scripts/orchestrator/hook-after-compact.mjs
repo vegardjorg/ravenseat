@@ -154,9 +154,11 @@ function logSessionCost({ sessionId, orchestrator }) {
 }
 
 async function main() {
-  const input = await readIn();
-  const sessionId = input.session_id ?? null;
-  if (input.hook_event_name === 'PreCompact') {
+  // The payload in the core's names (lib/clients/claude/hookInput.js, through the adapter).
+  const HK = require('./lib/clients/index.js').clientFor().hooks;
+  const input = HK.read(await readIn());
+  const sessionId = input.session ?? null;
+  if (input.event === 'PreCompact') {
     // Focus for the summary, only for the bound orchestrator session. Never blocks (always exit 0).
     if (KV.afterCompactBound({ cursor: readJson(CURSOR), sessionId }))
       process.stdout.write(KV.forCompactInstruction());
@@ -193,17 +195,13 @@ async function main() {
     question,
     unpushed: unpushed(),
     base: K.baseBranch,
-    compactions: compactions(input.transcript_path),
+    compactions: compactions(input.transcript),
     windDownRevoked: revoke.changed,
     mode: KV.compactMode(queue),
     g: KV.limits(process.env),
     now: handoverNow(),
   });
-  process.stdout.write(
-    JSON.stringify({
-      hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: text },
-    }),
-  );
+  process.stdout.write(JSON.stringify(HK.context('SessionStart', text)));
 }
 
 main().catch(() => process.exit(0));

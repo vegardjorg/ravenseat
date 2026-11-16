@@ -139,7 +139,8 @@ describe.each(ALL_NAMES)('the plugin name %s', (name) => {
 describe('the context hook', () => {
   it('asks productNames for the track, and has no name of its own', () => {
     const source = fs.readFileSync(HOOK_CONTEXT, 'utf8');
-    expect(source).toContain('bareAgentType(firstInput');
+    // 0w W2c: the agent type is read through the adapter's hook reader (clientFor().hooks.read).
+    expect(source).toContain("productNames.js').bareAgentType(HK.read(firstInput)");
   });
   it.each(['track', 'track-d', ...ALL_NAMES.map((n) => `${n}:track`), ...ALL_NAMES.map((n) => `${n}:track-d`)])(
     '%s passes the first check',

@@ -24,11 +24,13 @@ try {
   } catch {
     /* invalid JSON: use the env var */
   }
-  const level = data?.effort?.level ?? process.env.CLAUDE_EFFORT ?? null;
+  // The payload in the core's names (lib/clients/claude/hookInput.js, through the adapter).
+  const h = require('./lib/clients/index.js').clientFor().hooks.read(data);
+  const level = h?.effort?.level ?? process.env.CLAUDE_EFFORT ?? null;
   // The data folder in mainTree (config().root is mainTree, also from a worktree; QUEUE_FOLDER overrides).
   const folder = require('./lib/queueConfig.js').dataFolder();
   if (level && fs.existsSync(path.join(folder, 'queue.json'))) {
-    const out = { level, time: new Date().toISOString(), session: data?.session_id ?? null };
+    const out = { level, time: new Date().toISOString(), session: h?.session ?? null };
     const tmp = path.join(folder, `effort.json.${process.pid}.tmp`);
     fs.writeFileSync(tmp, JSON.stringify(out, null, 2));
     fs.renameSync(tmp, path.join(folder, 'effort.json'));

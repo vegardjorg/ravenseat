@@ -6,15 +6,19 @@
 // The output is byte-identical to the Claude flow before the adapter split (locked by claudeDispatchCompat.test.ts).
 // The Claude facts themselves (agent names, model list, message text) live in ./dispatch.js and the mission text
 // pieces in ./mission.js, each with source and date. The transcript paths (folder, slug, agent files) live in
-// ./transcript.js, exposed as transcripts.
+// ./transcript.js, exposed as transcripts, and the hook and status line payloads in ./hookInput.js, exposed as hooks.
+//
+// Each part is loaded the first time it is used (W2c): the hooks that run on every tool call ask the registry for
+// hooks, and must not pay for dispatch.js and lib/logic/base.js, which they never call (lib/__tests__/hookWeight.test.ts).
 //
 // Used by lib/clients/index.js (the registry). Tested in lib/__tests__/clientContract.test.ts and
 // claudeDispatchCompat.test.ts.
 // =============================================================
 'use strict';
 
-const D = require('./dispatch.js');
-const { fillRecord } = require('../../logic/missionDescriptor.js');
+/** ./dispatch.js, loaded on first use. */
+let dispatchFacts = null;
+const D = () => (dispatchFacts ??= require('./dispatch.js'));
 
 /**
  * What Claude Code gives the queue, as data (the core asks these, never the client name).
@@ -41,19 +45,19 @@ const capabilities = Object.freeze({
  * @param {ReturnType<typeof import('../../logic/missionDescriptor.js').missionDescriptor>} d
  */
 function dispatch(d) {
-  const agent = D.agentForEffort(d.effort);
-  const own = typeof d.model === 'string' && D.AGENT_MODELS.includes(d.model) ? d.model : null;
+  const agent = D().agentForEffort(d.effort);
+  const own = typeof d.model === 'string' && D().AGENT_MODELS.includes(d.model) ? d.model : null;
   return {
     subagent_type: require('../../projectRoot.js').agentRef(agent),
-    model: own ?? D.modelFor(agent),
+    model: own ?? D().modelFor(agent),
     prompt: d.prompt_file,
-    message: D.trackMessage(d.track_id, d.prompt_file),
+    message: D().trackMessage(d.track_id, d.prompt_file),
   };
 }
 
 /** The queue-fill.json entry: the neutral fields with the Claude ones in between, in the order skills have read. */
 function fillEntry(d) {
-  const r = fillRecord(d);
+  const r = require('../../logic/missionDescriptor.js').fillRecord(d);
   const x = dispatch(d);
   return {
     id: r.id,
@@ -91,7 +95,9 @@ module.exports = {
   id: 'claude',
   // Optional: a fix round can continue the agent that delivered (lib/fixRound.js). An adapter without it always gets a
   // new agent for a fix round.
-  continueLine: D.continueLine,
+  get continueLine() {
+    return D().continueLine;
+  },
   capabilities,
   dispatch,
   fillEntry,
@@ -99,9 +105,19 @@ module.exports = {
   startLine,
   resumeLine,
   // The agents for one orchestrator turn: tracks from dispatch and the Claude helpers (reviewers, triage).
-  sameTurnBlock: D.sameTurnBlock,
+  get sameTurnBlock() {
+    return D().sameTurnBlock;
+  },
   // The Claude pieces of the mission text (tool names, how to report, context advice): ./mission.js.
-  missionAddendum: require('./mission.js').missionAddendum,
+  get missionAddendum() {
+    return require('./mission.js').missionAddendum;
+  },
   // Where the transcripts live and how the core finds and reads them (folder, slug, agent files, tail): ./transcript.js.
-  transcripts: require('./transcript.js'),
+  get transcripts() {
+    return require('./transcript.js');
+  },
+  // The hook and status line payloads in the core's names, and the hook answers: ./hookInput.js.
+  get hooks() {
+    return require('./hookInput.js');
+  },
 };

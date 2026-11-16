@@ -39,11 +39,12 @@ function readStdin() {
 }
 
 async function main() {
-  const input = JSON.parse((await readStdin()) || '{}');
+  // The payload in the core's names (lib/clients/claude/hookInput.js, through the adapter).
+  const input = require('./lib/clients/index.js').clientFor().hooks.read(JSON.parse((await readStdin()) || '{}'));
   // The matcher already narrows it; a hooks setup without the matcher still only acts on a permission prompt.
-  if (input.notification_type && input.notification_type !== 'permission_prompt') return;
+  if (input.notification && input.notification !== 'permission_prompt') return;
   const AW = require('./lib/approvalWait.js');
-  const dir = AW.subagentDir(input.transcript_path);
+  const dir = AW.subagentDir(input.transcript);
   if (!dir) return;
   // A prompt in the main session itself has no subagent waiting: the owner is looking at that session already.
   const found = AW.waitingAgents(dir);

@@ -54,6 +54,17 @@ describe('a hot track hook stays light', () => {
     ]);
   });
 
+  it('the hook payload reader (every hook asks clientFor().hooks) loads only the registry, the adapter and hookInput.js', () => {
+    // 0w W2c: the adapter loads dispatch.js (and lib/logic/base.js) on first use, so a hook does not pay for them.
+    const code =
+      `require(require('node:path').join(${JSON.stringify(ROOT)}, 'lib/clients/index.js')).clientFor().hooks.read({});` +
+      `process.stdout.write(JSON.stringify(Object.keys(require.cache)));`;
+    const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8' });
+    expect(r.status, r.stderr).toBe(0);
+    const mods = (JSON.parse(r.stdout) as string[]).map((f) => path.relative(ROOT, f).replace(/\\/g, '/')).sort();
+    expect(mods).toEqual(['lib/clients/claude/hookInput.js', 'lib/clients/claude/index.js', 'lib/clients/index.js']);
+  });
+
   it('orchestratorBinding still works when it loads the queue logic itself', () => {
     const KV = require(path.join(ROOT, 'lib', 'contextGuard.js'));
     // A cursor and a session: the binding reaches orchestratorStatus, which lives in queueLogic.js.

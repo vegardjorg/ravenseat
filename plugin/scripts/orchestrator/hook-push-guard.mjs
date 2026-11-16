@@ -60,11 +60,13 @@ const require = createRequire(import.meta.url);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
 // A module that does not load is an internal error too: it is kept and handled by failSafe below, not thrown.
 let loadError = null;
-let assess, readEnvironment, isGuardedAgent, config, dataFolder;
+let assess, readEnvironment, isGuardedAgent, config, dataFolder, HK;
 try {
   if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
   ({ assess, readEnvironment, isGuardedAgent } = require('./lib/pushGuard.js'));
   ({ config, dataFolder } = require('./lib/queueConfig.js'));
+  // The hook payload in the core's names and the hook answers (lib/clients/claude/hookInput.js).
+  HK = require('./lib/clients/index.js').clientFor().hooks;
 } catch (e) {
   loadError = e;
 }
@@ -76,19 +78,12 @@ try {
 function failSafe(stdin, error) {
   process.stderr.write(`push-guard: internal error (${error?.message ?? error})\n`);
   try {
-    const command = read(stdin)?.tool_input?.command;
+    // The adapter's hooks (lib/clients/claude/hookInput.js) has no requires of its own, so it loads even when the
+    // module that broke is one of the guard's.
+    const HK = require('./lib/clients/index.js').clientFor().hooks;
+    const command = HK.read(read(stdin))?.tool.input?.command;
     const answer = require('./lib/pushGuardFallback.js').fallbackAnswer(command, error);
-    if (answer) {
-      process.stdout.write(
-        JSON.stringify({
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: answer.decision,
-            permissionDecisionReason: `push-guard: ${answer.reason}`,
-          },
-        }),
-      );
-    }
+    if (answer) process.stdout.write(JSON.stringify(HK.decision('PreToolUse', answer.decision, `push-guard: ${answer.reason}`)));
   } catch {
     // the fallback itself failed: no decision
   }
@@ -236,17 +231,17 @@ process.stdin.on('data', (d) => (input += d));
 process.stdin.on('end', () => {
   if (loadError) failSafe(input, loadError);
   try {
-    const p = read(input);
-    const command = p?.tool_input?.command;
+    const p = HK.read(read(input));
+    const command = p?.tool.input?.command;
     if (!p || typeof command !== 'string') process.exit(0);
     const k = config();
     // agent_type exists only when the hook fires in a subagent (tracks, reviewers and helpers get the network guard).
-    const agentType = typeof p.agent_type === 'string' ? p.agent_type : null;
+    const agentType = typeof p.agent.type === 'string' ? p.agent.type : null;
     // The guarded types are read once (config + queue.json), and only in a subagent.
     const guardedTypes = agentType ? require('./lib/trackGuard.js').queueAgentTypes() : new Set();
     // Every subagent is guarded unless agentGuard excepts its type (owner decision B3, lib/agentGuard.js). agent_id is
     // only sent inside a subagent: a main session started with --agent has an agent_type and no agent_id.
-    const agentGuard = { ...require('./lib/agentGuard.js').policyOf(k), subagent: typeof p.agent_id === 'string' && p.agent_id !== '' };
+    const agentGuard = { ...require('./lib/agentGuard.js').policyOf(k), subagent: typeof p.agent.id === 'string' && p.agent.id !== '' };
     const guarded = isGuardedAgent(agentType, guardedTypes, agentGuard);
     // queue.config.json exists but does not parse (lib/configGuard.js, review H3): the project's base branch,
     // migration guard and deploy commands are unknown, so a push, migration or deploy shaped command gets ask (main
@@ -256,15 +251,7 @@ process.stdin.on('end', () => {
     if (k.configError) {
       const answer = require('./lib/configGuard.js').answerForHook(command, k.configError, guarded);
       if (answer) {
-        process.stdout.write(
-          JSON.stringify({
-            hookSpecificOutput: {
-              hookEventName: 'PreToolUse',
-              permissionDecision: answer.decision,
-              permissionDecisionReason: `push-guard: ${answer.reason}`,
-            },
-          }),
-        );
+        process.stdout.write(JSON.stringify(HK.decision('PreToolUse', answer.decision, `push-guard: ${answer.reason}`)));
         process.exit(0);
       }
       if (!guarded) process.exit(0);
@@ -274,15 +261,7 @@ process.stdin.on('end', () => {
     // Gate evidence (lib/gateEvidence.js): a queue agent may not record or touch it (deny; the orchestrator is free).
     const tamper = guarded ? require('./lib/gateEvidence.js').tamperReason(command) : null;
     if (tamper) {
-      process.stdout.write(
-        JSON.stringify({
-          hookSpecificOutput: {
-            hookEventName: 'PreToolUse',
-            permissionDecision: 'deny',
-            permissionDecisionReason: `push-guard: ${tamper}`,
-          },
-        }),
-      );
+      process.stdout.write(JSON.stringify(HK.deny('PreToolUse', `push-guard: ${tamper}`)));
       process.exit(0);
     }
 
@@ -314,15 +293,7 @@ process.stdin.on('end', () => {
     });
     if (!answer) process.exit(0);
 
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          permissionDecision: answer.decision,
-          permissionDecisionReason: `push-guard: ${answer.reason}`,
-        },
-      }),
-    );
+    process.stdout.write(JSON.stringify(HK.decision('PreToolUse', answer.decision, `push-guard: ${answer.reason}`)));
     process.exit(0);
   } catch (e) {
     failSafe(input, e);

@@ -47,9 +47,9 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 // Fast exit: this hook runs on EVERY tool call in every session, and only queue tracks need it. The input is read
-// first and the hook stops before any require (and before queueActive, which looks for the project root) unless
+// first and the hook stops before the queue's own modules (and before queueActive, which looks for the project root) unless
 // agent_type is a track (track/track-d, or ravenseat:track/ravenseat:track-d in a plugin install; trackGuard.CONTEXT_TYPES). A main
-// session then pays only for the Node start.
+// session then pays only for the Node start (and the client registry with its hook payload reader, about 2 ms).
 let rawInput = '';
 for await (const chunk of process.stdin) rawInput += chunk;
 let firstInput;
@@ -59,7 +59,10 @@ try {
   process.exit(0); // unreadable input: fail open
 }
 const require = createRequire(import.meta.url);
-if (!/^track(?:-d)?$/.test(String(require('./lib/productNames.js').bareAgentType(firstInput?.agent_type) ?? ''))) process.exit(0);
+// The payload in the core's names and the hook answers (lib/clients/claude/hookInput.js; the registry and the adapter
+// load nothing else for it, so the fast exit stays cheap).
+const HK = require('./lib/clients/index.js').clientFor().hooks;
+if (!/^track(?:-d)?$/.test(String(require('./lib/productNames.js').bareAgentType(HK.read(firstInput)?.agent.type) ?? ''))) process.exit(0);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
 if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
 const V = require('./lib/trackGuard.js');
@@ -81,7 +84,7 @@ const STATE =
 
 /** The hook input, already read and parsed at the top (the fast exit). */
 async function readIn() {
-  return firstInput;
+  return HK.read(firstInput);
 }
 
 const stateFile = (id) => path.join(STATE, `${String(id).replace(/[^\w.-]/g, '_')}.json`);
@@ -110,18 +113,18 @@ function countCompactions(tp, compact) {
 
 async function main() {
   const input = await readIn();
-  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent_type); // "ravenseat:track" (plugin) -> "track"
-  if (!agentType || !V.CONTEXT_TYPES.has(agentType) || !input.agent_id) return; // main session: no effect
-  const state = readState(input.agent_id);
+  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent.type); // "ravenseat:track" (plugin) -> "track"
+  if (!agentType || !V.CONTEXT_TYPES.has(agentType) || !input.agent.id) return; // main session: no effect
+  const state = readState(input.agent.id);
   const triggered = state.triggered;
   let compact = state.compact;
   const reportSaid = triggered.includes(REPORT_KEY);
   // Output hint for large Bash/PowerShell results (readHint.js). Reads only the hook input.
   const bashHint = H.assessBashHint({
     agentType,
-    tool: input.tool_name,
-    command: input.tool_input?.command,
-    length: H.outputLength(input.tool_response),
+    tool: input.tool.name,
+    command: input.tool.input?.command,
+    length: H.outputLength(input.tool.response),
     given: triggered.filter((x) => x === BASH_KEY).length,
     threshold: BASH_THRESHOLD,
   });
@@ -131,7 +134,7 @@ async function main() {
   let tp = null;
   // Everything about the context has been said (PARTIAL and the report reminder): skip reading the transcript.
   if (!(KV.partialSaid(triggered) && reportSaid)) {
-    tp = V.subagentTranscript(input);
+    tp = V.subagentTranscript(input.raw);
     if (tp) {
       context = V.lastContext(V.readTail(tp));
       if (!KV.partialSaid(triggered)) {
@@ -169,8 +172,8 @@ async function main() {
   require('./lib/stateSweep.js').sweepState(STATE);
   fs.mkdirSync(STATE, { recursive: true });
   fs.writeFileSync(
-    stateFile(input.agent_id),
-    JSON.stringify({ agent_id: input.agent_id, triggered: newTriggered, compact }),
+    stateFile(input.agent.id),
+    JSON.stringify({ agent_id: input.agent.id, triggered: newTriggered, compact }),
   );
   // One time log row per new compaction (the state above is written first, so a row is never repeated).
   if (compact.n > state.compact.n) {
@@ -184,7 +187,7 @@ async function main() {
       const TL = require('./lib/timeLogRows.js');
       TL.appendRows(
         timeLog(),
-        TL.trackCompactRows({ agentId: input.agent_id, agentType, track, before: state.compact.n, after: compact.n }),
+        TL.trackCompactRows({ agentId: input.agent.id, agentType, track, before: state.compact.n, after: compact.n }),
       );
     } catch {
       // error-ignored: the log is for measurement only; the guard goes on
@@ -195,11 +198,7 @@ async function main() {
   // The reminder after the first compaction is not logged; only the PARTIAL message is a contextGuard event.
   if (!answer || answer.key !== KV.KEY_PARTIAL) {
     const text = [hint, answer?.message].filter(Boolean).join('\n');
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: text },
-      }),
-    );
+    process.stdout.write(JSON.stringify(HK.context('PostToolUse', text)));
     return;
   }
 
@@ -227,9 +226,9 @@ async function main() {
       JSON.stringify({
         time: new Date().toISOString(),
         wave,
-        track: track ?? String(input.agent_id).slice(0, 12),
+        track: track ?? String(input.agent.id).slice(0, 12),
         event: 'contextGuard',
-        agent_id: input.agent_id,
+        agent_id: input.agent.id,
         agent_type: agentType,
         context,
         compactions: answer.compactions,
@@ -246,14 +245,7 @@ async function main() {
     // error-ignored: the log is only for measurement; the message to the agent is what matters
   }
 
-  process.stdout.write(
-    JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: 'PostToolUse',
-        additionalContext: hint ? `${hint}\n${answer.message}` : answer.message,
-      },
-    }),
-  );
+  process.stdout.write(JSON.stringify(HK.context('PostToolUse', hint ? `${hint}\n${answer.message}` : answer.message)));
 }
 
 main()

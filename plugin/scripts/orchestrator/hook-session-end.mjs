@@ -24,8 +24,9 @@ if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
 async function main() {
   let s = '';
   for await (const chunk of process.stdin) s += chunk;
-  const input = JSON.parse(s || '{}');
-  const sessionId = input.session_id ?? null;
+  // The payload in the core's names (lib/clients/claude/hookInput.js, through the adapter).
+  const input = require('./lib/clients/index.js').clientFor().hooks.read(JSON.parse(s || '{}'));
+  const sessionId = input.session ?? null;
   if (!sessionId) return;
   const { dataFolder, timeLog } = require('./lib/queueConfig.js');
   const ER = require('./lib/eventRows.js');

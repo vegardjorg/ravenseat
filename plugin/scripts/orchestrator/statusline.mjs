@@ -41,6 +41,8 @@ const MISSING = '-';
 
 const number = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 const percent = (x) => (number(x) === null ? MISSING : `${Math.round(x)}%`);
+/** The payload in the core's names (lib/clients/claude/hookInput.js status, through the adapter), or null. */
+const statusOf = (input) => require('./lib/clients/index.js').clientFor().hooks.status(input);
 
 /** "ctx 142k 71%", or "ctx -" when the field is missing (before the first answer). */
 export function contextPart(cw) {
@@ -68,7 +70,8 @@ export function tracksPart(t) {
 
 /** The whole line (pure apart from the count, which is passed in). */
 export function makeLine(input, count) {
-  return [contextPart(input?.context_window), costPart(input?.cost), quotaPart(input?.rate_limits), tracksPart(count)]
+  const s = statusOf(input);
+  return [contextPart(s?.context), costPart(s?.cost), quotaPart(s?.limits), tracksPart(count)]
     .filter(Boolean)
     .join(' | ');
 }
@@ -76,7 +79,8 @@ export function makeLine(input, count) {
 /** The queue's data folder for the session's project, or null when the project does not use the queue. */
 function queueFolder(input) {
   const PR = require('./lib/projectRoot.js');
-  const cwd = input?.workspace?.project_dir || input?.workspace?.current_dir || input?.cwd || process.cwd();
+  const s = statusOf(input);
+  const cwd = s?.workspace?.project_dir || s?.workspace?.current_dir || s?.cwd || process.cwd();
   const { main } = PR.resolveRoots({ cwd });
   if (!PR.queueActive({ main })) return null;
   const k = require('./lib/queueConfig.js').config({ root: main });

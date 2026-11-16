@@ -5,6 +5,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: when Claude Code renames a hook or status line field, one file needs the fix instead of seventeen.**
+  The hooks, the status line and the cost, quota and tool trouble readers now read the stdin payload, and build the
+  deny, ask and additionalContext answers, through one reader behind the client adapter
+  (`lib/clients/claude/hookInput.js`). New tests lock the guard and context answers byte for byte before and after the move, and
+  the coupling allowlist shrinks from 22 to 8 files. The adapter now loads its parts on first use, so the hooks that run
+  on every tool call pay about 2 ms for it instead of about 30. The end gate was checked against a track that delivers
+  its report with SubagentHandback while the closing text has no RESULT line: it already reads the call from the
+  transcript, and a test now holds that. Nothing changes for users.
 - **Hardening: when Claude Code moves its transcript files, one file needs the fix instead of eight.** Where the
   transcripts live (the projects folder and its slug rule) and how an agent's file is found, listed and tailed now sit
   in one place behind the client adapter (`lib/clients/claude/transcript.js`), instead of five copies of the folder

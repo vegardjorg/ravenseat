@@ -33,11 +33,13 @@ async function readIn() {
 }
 
 async function main() {
-  const input = await readIn();
-  const agentType = PR.bareAgentType(input.agent_type);
+  // The hook payload in the core's names and the hook answers (lib/clients/claude/hookInput.js).
+  const HK = require('./lib/clients/index.js').clientFor().hooks;
+  const input = HK.read(await readIn());
+  const agentType = PR.bareAgentType(input.agent.type);
   if (!agentType) return; // main session: no effect
   const WG = require('./lib/writeGuard.js');
-  const file = WG.targetPath(input.tool_input);
+  const file = WG.targetPath(input.tool.input);
   if (!file) return;
   const abs = path.isAbsolute(file) ? file : path.resolve(input.cwd || process.cwd(), file);
   let folder = null;
@@ -55,14 +57,10 @@ async function main() {
   } catch {
     policy = {}; // an unreadable config: the default, every subagent guarded
   }
-  const agentGuard = { ...policy, subagent: typeof input.agent_id === 'string' && input.agent_id !== '' };
-  const answer = WG.assessWrite({ agentType: input.agent_type, filePath: abs, folder, guardedTypes, agentGuard });
+  const agentGuard = { ...policy, subagent: typeof input.agent.id === 'string' && input.agent.id !== '' };
+  const answer = WG.assessWrite({ agentType: input.agent.type, filePath: abs, folder, guardedTypes, agentGuard });
   if (answer) {
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: answer.reason },
-      }),
-    );
+    process.stdout.write(JSON.stringify(HK.deny('PreToolUse', answer.reason)));
     return;
   }
   // Not denied: a track (only track and track-d, not the reviewers) gets a soft warning for a write the merge guard or
@@ -70,9 +68,7 @@ async function main() {
   if (agentType !== 'track' && agentType !== 'track-d') return;
   const warnings = trackWarnings(input, abs, folder);
   if (!warnings.length) return;
-  process.stdout.write(
-    JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: warnings.join('\n') } }),
-  );
+  process.stdout.write(JSON.stringify(HK.context('PreToolUse', warnings.join('\n'))));
 }
 
 /** The warnings not yet given to this agent for this file and kind (state per agent in WRITE_WARN_STATE). */
@@ -92,20 +88,20 @@ function trackWarnings(input, abs, folder) {
     // The custom helpers' agent files are protected like .claude/, as in merge-track.mjs.
     const HELP = require('./lib/queueHelpers.js');
     helperPaths = HELP.customPaths(HELP.helperSetup(K, queue));
-    const tp = TG.subagentTranscript(input);
+    const tp = TG.subagentTranscript(input.raw);
     const id = tp ? require('./lib/timeCost.js').trackFromText(TG.readHeader(tp)) : null;
     if (id) task = (queue.tasks ?? []).find((o) => o.id === id || o.id === id.replace(/-(?:r|round)\d+$/i, '')) ?? null;
   } catch {
     task = null; // only the test warnings, which need no task
   }
-  const ti = input.tool_input ?? {};
+  const ti = input.tool.input ?? {};
   let before = null;
   try {
     before = fs.readFileSync(abs, 'utf8');
   } catch {
     before = null; // a new file
   }
-  const tool = String(input.tool_name ?? '');
+  const tool = String(input.tool.name ?? '');
   const after =
     typeof ti.content === 'string' ? ti.content : tool === 'Edit' || typeof ti.old_string === 'string' ? WW.afterEdit(before, ti) : null;
   const found = WW.assessTrackWrite({
@@ -125,7 +121,7 @@ function trackWarnings(input, abs, folder) {
   if (!found.length) return [];
   // Once per agent, file and kind: a track that edits the same file ten times reads the warning once.
   const dir = process.env.WRITE_WARN_STATE || path.join(os.tmpdir(), 'queue-write-warn');
-  const file = path.join(dir, `${String(input.agent_id ?? 'unknown').replace(/[^\w.-]/g, '_')}.json`);
+  const file = path.join(dir, `${String(input.agent.id ?? 'unknown').replace(/[^\w.-]/g, '_')}.json`);
   let seen = [];
   try {
     seen = JSON.parse(fs.readFileSync(file, 'utf8'));

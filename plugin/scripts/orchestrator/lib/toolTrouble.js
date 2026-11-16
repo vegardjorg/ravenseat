@@ -39,14 +39,16 @@ const recent = (list, now) =>
 /**
  * The state with one hook event added. Anything that is not a subagent's refusal or failure leaves it as it is.
  * @param {Record<string, {denied?: {at:string,tool:string}[], failed?: {at:string,tool:string}[]}>} state
- * @param {object} input the hook's stdin
+ * @param {object} input the hook's stdin as sent (read through the adapter's hooks.read)
  */
 function record(state, input, now = Date.now()) {
-  const agent = typeof input?.agent_id === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(input.agent_id) ? input.agent_id : null;
-  const kind =
-    input?.hook_event_name === 'PermissionDenied' ? 'denied' : input?.hook_event_name === 'PostToolUseFailure' ? 'failed' : null;
-  if (!agent || !kind || (kind === 'failed' && input.is_interrupt === true)) return state ?? {};
-  const tool = String(input.tool_name ?? '?').slice(0, 80);
+  // The payload in the core's names (lib/clients/claude/hookInput.js, through the adapter).
+  const h = require('./clients/index.js').clientFor().hooks.read(input);
+  const id = h?.agent.id;
+  const agent = typeof id === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(id) ? id : null;
+  const kind = h?.event === 'PermissionDenied' ? 'denied' : h?.event === 'PostToolUseFailure' ? 'failed' : null;
+  if (!agent || !kind || (kind === 'failed' && h.tool.interrupted === true)) return state ?? {};
+  const tool = String(h.tool.name ?? '?').slice(0, 80);
   const out = {};
   for (const [id, x] of Object.entries(state ?? {})) {
     const d = recent(x?.denied, now);

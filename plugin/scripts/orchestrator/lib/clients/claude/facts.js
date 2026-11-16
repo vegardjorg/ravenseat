@@ -139,21 +139,9 @@ const FACTS = Object.freeze(
       fragility: 'M',
       move: 'W2',
       source: 'hooks',
-      readers: [
-        'hook-after-compact.mjs',
-        'hook-context.mjs',
-        'hook-effort.mjs',
-        'hook-time.mjs',
-        'hook-read-guard.mjs',
-        'hook-write-guard.mjs',
-        'hook-push-guard.mjs',
-        'hook-track-context.mjs',
-        'hook-track-end.mjs',
-        'hook-usage-limit.mjs',
-        'hook-approval-wait.mjs',
-        'hook-tool-trouble.mjs',
-        'hook-session-end.mjs',
-      ],
+      // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
+      // lib/clients/claude/hookInput.js (clientFor().hooks).
+      readers: ['lib/clients/claude/hookInput.js'],
     },
     {
       id: 'hook.toolInput',
@@ -163,13 +151,9 @@ const FACTS = Object.freeze(
       fragility: 'M',
       move: 'W2',
       source: 'hooks',
-      readers: [
-        'hook-push-guard.mjs',
-        'hook-read-guard.mjs',
-        'hook-write-guard.mjs',
-        'hook-track-context.mjs',
-        'lib/toolTrouble.js',
-      ],
+      // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
+      // lib/clients/claude/hookInput.js (clientFor().hooks).
+      readers: ['lib/clients/claude/hookInput.js'],
     },
     {
       id: 'hook.subagentStop',
@@ -179,7 +163,10 @@ const FACTS = Object.freeze(
       fragility: 'M',
       move: 'W2',
       source: 'hooks',
-      readers: ['hook-time.mjs', 'hook-track-end.mjs', 'lib/trackGuard.js'],
+      // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
+      // lib/clients/claude/hookInput.js (clientFor().hooks).
+      // trackGuard.subagentTranscript still takes the raw payload (the transcript paths) and moves in W2b.
+      readers: ['lib/clients/claude/hookInput.js', 'lib/trackGuard.js'],
     },
     {
       id: 'hook.otherInput',
@@ -189,13 +176,10 @@ const FACTS = Object.freeze(
       fragility: 'M',
       move: 'W2',
       source: 'hooks',
-      readers: [
-        'hook-approval-wait.mjs',
-        'hook-after-compact.mjs',
-        'hook-session-end.mjs',
-        'hook-usage-limit.mjs',
-        'hook-context.mjs',
-      ],
+      // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
+      // lib/clients/claude/hookInput.js (clientFor().hooks).
+      // usageLimit.decide still takes the raw payload (StopFailure error) and moves in W2b.
+      readers: ['lib/clients/claude/hookInput.js', 'lib/usageLimit.js'],
     },
     {
       id: 'hook.output',
@@ -205,15 +189,10 @@ const FACTS = Object.freeze(
       fragility: 'L',
       move: 'W2',
       source: 'hooks',
-      readers: [
-        'hook-push-guard.mjs',
-        'hook-read-guard.mjs',
-        'hook-write-guard.mjs',
-        'hook-track-context.mjs',
-        'hook-after-compact.mjs',
-        'hook-context.mjs',
-        'lib/contextGuard.js',
-      ],
+      // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
+      // lib/clients/claude/hookInput.js (clientFor().hooks).
+      // contextGuard.hookOutput still builds the UserPromptSubmit answer itself and moves in W2b.
+      readers: ['lib/clients/claude/hookInput.js', 'lib/contextGuard.js'],
     },
     // ---- Status line (documented) ----
     {
@@ -224,7 +203,9 @@ const FACTS = Object.freeze(
       fragility: 'M',
       move: 'W2',
       source: 'statusline',
-      readers: ['statusline.mjs', 'lib/eventRows.js', 'lib/rateLimits.js'],
+      // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
+      // lib/clients/claude/hookInput.js (clientFor().hooks).
+      readers: ['lib/clients/claude/hookInput.js'],
     },
     // ---- Cache and models ----
     {

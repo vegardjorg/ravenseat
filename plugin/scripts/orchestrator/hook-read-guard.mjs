@@ -32,6 +32,8 @@ const require = createRequire(import.meta.url);
 if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
 const V = require('./lib/trackGuard.js');
 const H = require('./readHint.js');
+// The hook payload in the core's names and the hook answers (lib/clients/claude/hookInput.js).
+const HK = require('./lib/clients/index.js').clientFor().hooks;
 
 const guard = setTimeout(() => process.exit(0), 5000);
 guard.unref();
@@ -68,10 +70,10 @@ const hintFile = (id) => path.join(HINT_STATE, `${String(id).replace(/[^\w.-]/g,
  * second time. The files the agent has read whole are remembered in <Temp>/queue-read-hint/<agent_id>.json.
  */
 function readHint(input, agentType, abs, ti, countLines) {
-  if (!input.agent_id || !H.TRACK_TYPES.has(agentType)) return;
+  if (!input.agent.id || !H.TRACK_TYPES.has(agentType)) return;
   let readWhole = [];
   try {
-    const o = JSON.parse(fs.readFileSync(hintFile(input.agent_id), 'utf8'));
+    const o = JSON.parse(fs.readFileSync(hintFile(input.agent.id), 'utf8'));
     if (Array.isArray(o.readWhole)) readWhole = o.readWhole;
   } catch {
     // no state yet
@@ -91,25 +93,21 @@ function readHint(input, agentType, abs, ti, countLines) {
     require('./lib/stateSweep.js').sweepState(HINT_STATE);
     fs.mkdirSync(HINT_STATE, { recursive: true });
     fs.writeFileSync(
-      hintFile(input.agent_id),
-      JSON.stringify({ agent_id: input.agent_id, readWhole: [...readWhole, r.key] }),
+      hintFile(input.agent.id),
+      JSON.stringify({ agent_id: input.agent.id, readWhole: [...readWhole, r.key] }),
     );
   }
   if (!r.hint) return;
-  process.stdout.write(
-    JSON.stringify({
-      hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: r.hint },
-    }),
-  );
+  process.stdout.write(JSON.stringify(HK.context('PreToolUse', r.hint)));
 }
 
 async function main() {
-  const input = await readIn();
-  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent_type); // "ravenseat:track" (plugin) -> "track"
+  const input = HK.read(await readIn());
+  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent.type); // "ravenseat:track" (plugin) -> "track"
   if (!agentType) return; // main session: no effect
   const rules = V.readRules();
   if (!rules.types.has(agentType)) return;
-  const ti = input.tool_input || {};
+  const ti = input.tool.input || {};
   const filePath = typeof ti.file_path === 'string' ? ti.file_path : '';
   if (!filePath) return;
   const abs = path.isAbsolute(filePath) ? filePath : path.resolve(input.cwd || process.cwd(), filePath);
@@ -118,15 +116,13 @@ async function main() {
   const closed = require('./lib/privatePaths.js').readDenied(abs, { root: cfg.root, cfg });
   if (closed) {
     process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          permissionDecision: 'deny',
-          permissionDecisionReason:
-            `read-guard: ${closed.line} is private, and the owner has closed it to the queue's agents (privatePaths, "read": false). ` +
+      JSON.stringify(
+        HK.deny(
+          'PreToolUse',
+          `read-guard: ${closed.line} is private, and the owner has closed it to the queue's agents (privatePaths, "read": false). ` +
             'Do not read it another way either; if the task needs something from it, say so in your report and the owner decides.',
-        },
-      }),
+        ),
+      ),
     );
     return;
   }
@@ -145,15 +141,7 @@ async function main() {
     readHint(input, agentType, abs, ti, countLines);
     return;
   }
-  process.stdout.write(
-    JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'deny',
-        permissionDecisionReason: answer.reason,
-      },
-    }),
-  );
+  process.stdout.write(JSON.stringify(HK.deny('PreToolUse', answer.reason)));
 }
 
 main()

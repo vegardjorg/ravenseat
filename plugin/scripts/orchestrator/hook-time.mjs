@@ -85,13 +85,9 @@ async function main() {
     console.log(JSON.stringify(analyser(fs.readFileSync(process.argv[i + 1], 'utf8')), null, 1));
     return;
   }
-  const input = JSON.parse((await readStdin()) || '{}');
-  const event =
-    input.hook_event_name === 'SubagentStart'
-      ? 'start'
-      : input.hook_event_name === 'SubagentStop'
-        ? 'done'
-        : null;
+  // The payload in the core's names (lib/clients/claude/hookInput.js, through the adapter).
+  const input = require('./lib/clients/index.js').clientFor().hooks.read(JSON.parse((await readStdin()) || '{}'));
+  const event = input.event === 'SubagentStart' ? 'start' : input.event === 'SubagentStop' ? 'done' : null;
   if (!event) return;
   // QUEUE_TIME_LOG overrides the log file (tests), as in log-time.mjs and queue.mjs (timeLog() reads it).
   const log = timeLog();
@@ -108,14 +104,14 @@ async function main() {
   }
   // On "done": use the wave the agent STARTED in (from the start row with the same agent_id). With a continuous queue
   // wave-active may have changed while the agent ran, and then the done row would end up in the wrong wave.
-  if (event === 'done' && input.agent_id) {
+  if (event === 'done' && input.agent.id) {
     try {
       // The last week is enough: an agent's start row is never older than that (the archives before it are skipped).
       const rows = TA.readText(log, { from: Date.now() - 7 * 86_400_000 }).split('\n');
       for (let i = rows.length - 1; i >= 0; i--) {
-        if (!rows[i].includes(input.agent_id)) continue;
+        if (!rows[i].includes(input.agent.id)) continue;
         const r = JSON.parse(rows[i]);
-        if (r.agent_id === input.agent_id && r.event === 'start' && r.wave) {
+        if (r.agent_id === input.agent.id && r.event === 'start' && r.wave) {
           wave = r.wave;
           break;
         }
@@ -125,7 +121,7 @@ async function main() {
     }
   }
   let stat = null;
-  const tp = input.agent_transcript_path;
+  const tp = input.agent.transcript;
   try {
     if (tp && fs.existsSync(tp) && fs.statSync(tp).size <= MAX_TRANSCRIPT) {
       stat = analyser(fs.readFileSync(tp, 'utf8'));
@@ -133,14 +129,14 @@ async function main() {
   } catch {
     stat = null;
   }
-  const summaryId = String(input.agent_id ?? '').slice(0, 12) || 'unknown';
+  const summaryId = String(input.agent.id ?? '').slice(0, 12) || 'unknown';
   const row = {
     time: new Date().toISOString(),
     wave,
     track: stat?.track ?? summaryId,
     event,
-    agent_id: input.agent_id ?? null,
-    agent_type: require('./lib/projectRoot.js').bareAgentType(input.agent_type) ?? null, // bare name: "ravenseat:track" is logged as "track"
+    agent_id: input.agent.id ?? null,
+    agent_type: require('./lib/projectRoot.js').bareAgentType(input.agent.type) ?? null, // bare name: "ravenseat:track" is logged as "track"
   };
   if (event === 'done' && stat) {
     const { track: _track, ...counts } = stat;

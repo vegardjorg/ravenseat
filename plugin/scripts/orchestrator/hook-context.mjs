@@ -95,6 +95,8 @@ const TIME_LOG = timeLog();
 // The transcripts folder and the agent files, from the default client's adapter (lib/clients/claude/transcript.js:
 // the folder, the slug rule and the file names live there). QUEUE_TRANSCRIPTS overrides (tests).
 const TR = require('./lib/clients/index.js').clientFor().transcripts;
+// The hook payload in the core's names and the hook answers (lib/clients/claude/hookInput.js).
+const HK = require('./lib/clients/index.js').clientFor().hooks;
 const TRANSCRIPTS = TR.transcriptsDir(MAIN_TREE);
 const MAX_TRANSCRIPT = 300 * 1024 * 1024;
 
@@ -256,24 +258,22 @@ function merge(out, cost) {
   if (!cost) return out;
   if (out?.decision === 'block') return out;
   const sys = [out?.systemMessage, cost.systemMessage].filter(Boolean).join('\n');
-  const ctx = [out?.hookSpecificOutput?.additionalContext, cost.additionalContext]
-    .filter(Boolean)
-    .join('\n');
+  const ctx = [HK.contextOf(out), cost.additionalContext].filter(Boolean).join('\n');
   return {
     ...(out ?? {}),
     systemMessage: sys,
-    hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: ctx },
+    ...HK.context('UserPromptSubmit', ctx),
   };
 }
 
 async function main() {
-  const input = await readIn();
-  if (!input.transcript_path) return;
-  const tail = readTail(input.transcript_path);
+  const input = HK.read(await readIn());
+  if (!input.transcript) return;
+  const tail = readTail(input.transcript);
   const n = lastContext(tail);
   const g = KV.limits(process.env);
   const now = Date.now();
-  const sessionId = input.session_id ?? null;
+  const sessionId = input.session ?? null;
   // The binding is checked on every message (also below the notice limit): a new orchestrator session with a small context
   // must take the cursor and reset the previous session's wind-down as soon as it has run an orchestrator call.
   const bind = KV.orchestratorBinding({
@@ -323,7 +323,7 @@ async function main() {
   // Compactions are counted in the WHOLE transcript (the tail is not enough), and only for the orchestrator above COMPACT.
   // Counted incrementally (only the bytes since the last message are read). The count is only shown in the message.
   const compactions =
-    bind.orchestrator && n >= Math.min(g.compact, g.windDown) ? compactionsIn(input.transcript_path) : 0;
+    bind.orchestrator && n >= Math.min(g.compact, g.windDown) ? compactionsIn(input.transcript) : 0;
   const mode = bind.orchestrator ? KV.compactMode(readJson(QUEUE_FILE)) : 'manual';
   const b = KV.assess({
     n,

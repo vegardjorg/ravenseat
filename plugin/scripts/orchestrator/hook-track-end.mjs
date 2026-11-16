@@ -76,19 +76,21 @@ function ownCommits(track) {
 }
 
 async function main() {
-  const input = await readIn();
-  if (input.hook_event_name && input.hook_event_name !== 'SubagentStop') return;
-  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent_type); // "ravenseat:track" -> "track"
-  if (!agentType || !KV.TRACK_AGENT_TYPES.has(agentType) || !input.agent_id) return;
-  const alreadyBlocked = fs.existsSync(stateFile(input.agent_id));
-  if (alreadyBlocked || input.stop_hook_active) return;
-  const tp = V.subagentTranscript(input);
+  // The payload in the core's names (lib/clients/claude/hookInput.js, through the adapter).
+  const input = require('./lib/clients/index.js').clientFor().hooks.read(await readIn());
+  if (input.event && input.event !== 'SubagentStop') return;
+  const agentType = require('./lib/projectRoot.js').bareAgentType(input.agent.type); // "ravenseat:track" -> "track"
+  if (!agentType || !KV.TRACK_AGENT_TYPES.has(agentType) || !input.agent.id) return;
+  const alreadyBlocked = fs.existsSync(stateFile(input.agent.id));
+  if (alreadyBlocked || input.stopActive) return;
+  const tp = V.subagentTranscript(input.raw);
   if (!tp) return;
   const track = require('./lib/timeCost.js').trackFromText(V.readHeader(tp));
   if (!track) return;
   const commits = ownCommits(track);
+  // The closing text and the transcript tail, where a SubagentHandback call carries the report (F2, 0w W2c).
   const ended = KV.hasEndLine({
-    lastMessage: typeof input.last_assistant_message === 'string' ? input.last_assistant_message : null,
+    lastMessage: typeof input.lastMessage === 'string' ? input.lastMessage : null,
     text: V.readTail(tp, 512 * 1024),
   });
   const answer = KV.assessEndGate({
@@ -96,7 +98,7 @@ async function main() {
     commits,
     hasEndLine: ended,
     alreadyBlocked,
-    stopHookActive: Boolean(input.stop_hook_active),
+    stopHookActive: Boolean(input.stopActive),
   });
   if (!answer) return;
   // Remember the block BEFORE it is written: if the state cannot be saved, nothing is blocked (no loop).
@@ -104,8 +106,8 @@ async function main() {
   require('./lib/stateSweep.js').sweepState(STATE);
   fs.mkdirSync(STATE, { recursive: true });
   fs.writeFileSync(
-    stateFile(input.agent_id),
-    JSON.stringify({ agent_id: input.agent_id, track, time: new Date().toISOString() }),
+    stateFile(input.agent.id),
+    JSON.stringify({ agent_id: input.agent.id, track, time: new Date().toISOString() }),
   );
   process.stdout.write(JSON.stringify(answer));
 }

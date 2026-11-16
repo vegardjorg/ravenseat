@@ -166,18 +166,20 @@ const SESSION_KEEP = 40;
 
 /** The reading from the status line input, or null when it has no session id or no cost. */
 function sessionReading(input, now = Date.now()) {
-  const id = typeof input?.session_id === 'string' && input.session_id ? input.session_id : null;
-  const usd = num(input?.cost?.total_cost_usd);
+  // The payload in the core's names (lib/clients/claude/hookInput.js status, through the adapter).
+  const s = require('./clients/index.js').clientFor().hooks.status(input);
+  const id = typeof s?.session === 'string' && s.session ? s.session : null;
+  const usd = num(s?.cost?.total_cost_usd);
   if (!id || usd == null) return null;
-  const ms = num(input?.cost?.total_duration_ms);
-  const api = num(input?.cost?.total_api_duration_ms);
+  const ms = num(s?.cost?.total_duration_ms);
+  const api = num(s?.cost?.total_api_duration_ms);
   return {
     session_id: id,
     usd: round2(usd),
     duration_s: ms == null ? null : Math.round(ms / 1000),
     api_duration_s: api == null ? null : Math.round(api / 1000),
-    context_tokens: num(input?.context_window?.total_input_tokens),
-    model: input?.model?.id ?? null,
+    context_tokens: num(s?.context?.total_input_tokens),
+    model: s?.model?.id ?? null,
     time: new Date(now).toISOString(),
   };
 }

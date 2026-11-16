@@ -38,8 +38,10 @@ function windowFrom(w) {
  * @param {number} [now]
  */
 function fromStatusInput(input, now = Date.now()) {
-  const fiveHour = windowFrom(input?.rate_limits?.five_hour);
-  const sevenDay = windowFrom(input?.rate_limits?.seven_day);
+  // The payload in the core's names (lib/clients/claude/hookInput.js status, through the adapter; no queueLogic.js).
+  const limits = require('./clients/index.js').clientFor().hooks.status(input)?.limits;
+  const fiveHour = windowFrom(limits?.five_hour);
+  const sevenDay = windowFrom(limits?.seven_day);
   if (!fiveHour && !sevenDay) return null;
   return { time: new Date(now).toISOString(), five_hour: fiveHour, seven_day: sevenDay };
 }
