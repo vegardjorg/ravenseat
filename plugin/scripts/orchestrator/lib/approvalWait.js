@@ -11,11 +11,16 @@
 // agent's transcript has not been written since (an approval or a refusal writes the tool result), and drops one older
 // than MAX_AGE_MS. Nothing here blocks or changes the agent.
 //
+// The transcript rows and the subagent file names are read through the client adapter (clientFor().entries and
+// .transcripts, 0w W2b1), never directly.
 // Kept apart from queueLogic.js, so the hook loads next to nothing. Used by: hook-approval-wait.mjs, queue-board.mjs.
 // =============================================================
 
 const fs = require('node:fs');
 const path = require('node:path');
+
+/** The client adapter (0w W2b1): the transcript rows and the subagent file names are its format, read on first use. */
+const client = () => require('./clients/index.js').clientFor();
 
 const FILE = 'approval-waits.json';
 /** How much of the end of a transcript is read: the last tool call and its result are always near the end. */
@@ -84,20 +89,18 @@ function missionTask(head, ids, { trackFromText, taskIdFor }) {
  * @returns {{ tool: string, id: string } | null}
  */
 function pendingToolUse(text) {
+  const E = client().entries;
   const open = new Map();
   for (const line of String(text ?? '').split(/\r?\n/)) {
     if (!line.trim()) continue;
-    let j;
-    try {
-      j = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const content = j?.message?.content;
-    if (!Array.isArray(content)) continue;
-    for (const c of content) {
-      if (c?.type === 'tool_use' && c.id) open.set(c.id, String(c.name ?? '?'));
-      else if (c?.type === 'tool_result' && c.tool_use_id) open.delete(c.tool_use_id);
+    const j = E.parse(line);
+    if (j === undefined) continue;
+    // Any row with a content list (the call is the assistant's, the result the user's), in the adapter's parts.
+    const { parts } = E.entry(j);
+    if (!parts) continue;
+    for (const p of parts) {
+      if (p.kind === 'tool' && p.id) open.set(p.id, String(p.name ?? '?'));
+      else if (p.kind === 'result' && p.id) open.delete(p.id);
     }
   }
   const last = [...open.entries()].at(-1);
@@ -107,7 +110,16 @@ function pendingToolUse(text) {
 /** The session's subagent transcript folder from the main transcript path (<root>/<session>.jsonl → <root>/<session>/subagents). */
 function subagentDir(transcriptPath) {
   if (!transcriptPath) return null;
-  return path.join(String(transcriptPath).replace(/\.jsonl$/i, ''), 'subagents');
+  return client().transcripts.subagentsDirOf(transcriptPath);
+}
+
+/** An agent id as the board keeps it: letters, digits, _ and - only (another file name is not an agent of ours). */
+const AGENT_ID = /^[A-Za-z0-9_-]+$/;
+
+/** The agent id of a file in the subagents folder, or null. */
+function agentOfFile(name) {
+  const id = client().transcripts.agentOfFile(name);
+  return id !== null && AGENT_ID.test(id) ? id : null;
 }
 
 /**
@@ -117,7 +129,7 @@ function subagentDir(transcriptPath) {
 function waitingAgents(dir, { readTail: tail = readTail } = {}) {
   let names;
   try {
-    names = fs.readdirSync(dir).filter((n) => /^agent-[A-Za-z0-9_-]+\.jsonl$/.test(n));
+    names = fs.readdirSync(dir).filter((n) => agentOfFile(n) !== null);
   } catch {
     return [];
   }
@@ -135,7 +147,7 @@ function waitingAgents(dir, { readTail: tail = readTail } = {}) {
   const out = [];
   for (const { n } of withTime) {
     const p = pendingToolUse(tail(path.join(dir, n)));
-    if (p) out.push({ agent_id: n.slice('agent-'.length, -'.jsonl'.length), tool: p.tool });
+    if (p) out.push({ agent_id: agentOfFile(n), tool: p.tool });
   }
   return out;
 }

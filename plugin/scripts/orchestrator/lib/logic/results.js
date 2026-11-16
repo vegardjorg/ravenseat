@@ -229,13 +229,15 @@ function transcriptRows(text) {
  * is delivered that way when the agent has that tool). Null when the transcript has no answer.
  */
 function lastAnswer(text) {
+  // The rows in the adapter's terms (0w W2b1): an assistant row's parts in order, the handback already picked out.
+  const E = require('../clients/index.js').clientFor().entries;
   let last = null;
   for (const r of transcriptRows(text)) {
-    if (r.type !== 'assistant' || !Array.isArray(r.message?.content)) continue;
-    for (const c of r.message.content) {
-      if (c?.type === 'text' && String(c.text ?? '').trim()) last = c.text;
-      else if (c?.type === 'tool_use' && c.name === 'SubagentHandback' && c.input?.message)
-        last = c.input.message;
+    const e = E.entry(r);
+    if (e.kind !== 'assistant' || !e.parts) continue;
+    for (const p of e.parts) {
+      if (p.kind === 'text' && String(p.text ?? '').trim()) last = p.text;
+      else if (p.kind === 'tool' && p.handback) last = p.handback;
     }
   }
   return last;

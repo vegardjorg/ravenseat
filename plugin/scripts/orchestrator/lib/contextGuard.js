@@ -44,6 +44,10 @@
 // start (review 2026-11-11, E1; lib/__tests__/hookWeight.test.ts).
 const { CLI_PATTERN } = require('./productNames.js');
 
+// The client adapter (0w W2b1): the transcript rows (clientFor().entries) and the hook answers (clientFor().hooks) are
+// its format. Asked on first use; the registry loads only the part asked for (hookWeight.test.ts).
+const client = () => require('./clients/index.js').clientFor();
+
 const STANDARD = Object.freeze({
   notice: 250_000,
   stop: 400_000,
@@ -106,23 +110,18 @@ const MENTIONS_CLI = new RegExp(`\\b(?:${CLI_PATTERN})\\b`);
  * A call is a tool_use from the assistant with an `input.command` that matches ORCHESTRATOR_CALLS.
  */
 function lastOrchestratorCall(text) {
+  const E = client().entries;
   const lines = String(text ?? '').split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const l = lines[i];
-    if (!(l.includes('queue.mjs') || MENTIONS_CLI.test(l)) || !l.includes('tool_use')) continue;
-    let o;
-    try {
-      o = JSON.parse(l);
-    } catch {
-      continue; // the first line of the tail may be cut
-    }
-    if (o?.type !== 'assistant' || !Array.isArray(o?.message?.content)) continue;
-    const match = o.message.content.some(
-      (c) => c?.type === 'tool_use' && ORCHESTRATOR_CALLS.test(String(c?.input?.command ?? '')),
-    );
+    if (!(l.includes('queue.mjs') || MENTIONS_CLI.test(l)) || !l.includes(E.MARK.toolUse)) continue;
+    const o = E.parse(l);
+    if (o === undefined) continue; // the first line of the tail may be cut
+    const e = E.entry(o);
+    if (e.kind !== 'assistant' || !e.parts) continue;
+    const match = e.tools.some((c) => ORCHESTRATOR_CALLS.test(String(c?.input?.command ?? '')));
     if (!match) continue;
-    const t = Date.parse(o.timestamp);
-    if (Number.isFinite(t)) return t;
+    if (e.at !== null) return e.at;
   }
   return null;
 }
@@ -164,15 +163,13 @@ function inWindDown(cursor, sessionId) {
  * mission in a user message, where the quotes are escaped) is not counted.
  */
 function countCompactions(text) {
+  const E = client().entries;
   let count = 0;
   for (const l of String(text ?? '').split('\n')) {
-    if (!l.includes('compact_boundary')) continue;
-    try {
-      const o = JSON.parse(l);
-      if (o?.type === 'system' && o?.subtype === 'compact_boundary') count++;
-    } catch {
-      // cut or broken line: not counted
-    }
+    if (!l.includes(E.MARK.compaction)) continue;
+    const o = E.parse(l);
+    // A cut or broken line is not counted.
+    if (o !== undefined && E.entry(o).compaction) count++;
   }
   return count;
 }
@@ -272,6 +269,9 @@ function withWindDown(cursor, { sessionId, n, now = Date.now() }) {
 
 const k = (n) => `${Math.round(n / 1000)}k`;
 
+/** The UserPromptSubmit answer's context part, built by the client adapter (clientFor().hooks.context). */
+const promptContext = (text) => client().hooks.context('UserPromptSubmit', text);
+
 /**
  * Hook output (the object written as JSON to stdout), or null for no output.
  * @param {{ action: string, setWindDown: boolean, limit?: number }} b from assess()
@@ -297,9 +297,8 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
         : `Context about ${k(n)} tokens: time to compact the orchestrator session (compaction no. ${nr} in the session; ` +
           `mode: ${modeText(mode)}). When the model has finished the step it is on, paste:\n` +
           `${COMPACT_COMMAND}\nRunning agents are kept. Emergency brake (wind-down) at ${k(g.windDown)}.`,
-      hookSpecificOutput: {
-        hookEventName: 'UserPromptSubmit',
-        additionalContext: auto
+      ...promptContext(
+        auto
           ? `[hook-context] COMPACT (about ${k(n)} tokens, mode automatic): Claude Code compacts the session by ` +
             `itself. Update the handover note ${note} now (active tracks, review packages, open owner questions, ` +
             'owner decisions, scratchpad path, next command), so resuming afterwards is cheap. Continue normal ' +
@@ -309,7 +308,7 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
             `${note} now, finish the step you are on (receive, merge, set done) and do not start long new ` +
             'operations midway. After the compaction hook-after-compact.mjs adds the queue state and a ' +
             'resume instruction. No wind-down; running agents still report to this session.',
-      },
+      ),
     };
   }
   if (b.action === 'stop') {
@@ -333,9 +332,8 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
         `at ${k(g.stopOrchestrator)}; mode: ${modeText(mode)}). No new tasks are started; started ones are finished. ` +
         `Compact now: when the model has finished the step it is on, paste:\n${COMPACT_COMMAND}\n` +
         `The wind-down is lifted by itself after the compaction. ${lastResort}`,
-      hookSpecificOutput: {
-        hookEventName: 'UserPromptSubmit',
-        additionalContext: fresh
+      ...promptContext(
+        fresh
           ? `[hook-context] WIND_DOWN (about ${k(n)} tokens). From now on: start NO new tasks (ravenseat next/start/fill ` +
             'refuses with exit 6). Allowed: receive delivered tracks (receive), review, fix rounds for already started ' +
             'tasks, merge, db push/deploy for what is merged, set done, resolve. Update the ' +
@@ -345,7 +343,7 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
           : `[hook-context] Wind-down in progress (about ${k(n)} tokens, hard stop at ${k(g.stopOrchestrator)}): no new ones ` +
             `start; finish receive, review and merge, keep ${note} updated, keep answers short. ` +
             'The wind-down is lifted once the owner has compacted.',
-      },
+      ),
     };
   }
   return {
@@ -356,14 +354,12 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
           `mode: ${modeText(mode)}). Avoid long pauses in this session.`
         : `${g.blockOthers ? `stop at ${k(g.stop)}` : 'no stop'}). Compact the chat or start a new session with a ` +
           'handover note soon; avoid long pauses in this session.'),
-    hookSpecificOutput: {
-      hookEventName: 'UserPromptSubmit',
-      additionalContext:
-        `[hook-context] The conversation is at about ${k(n)} tokens. Keep answers short` +
+    ...promptContext(
+      `[hook-context] The conversation is at about ${k(n)} tokens. Keep answers short` +
         (orchestrator
           ? `, and keep the handover note ${note} updated after each merge and each decision from the owner.`
           : ', and suggest a handover note and a new session when it fits (not in the middle of a receive).'),
-    },
+    ),
   };
 }
 
@@ -631,26 +627,19 @@ const END_LINE = /\bRESULT\s+status=|\bPARTIAL\b|\bREFUSE[DS]?\b/;
  */
 function hasEndLine({ lastMessage = null, text = null, maxRows = 3 } = {}) {
   if (lastMessage && END_LINE.test(String(lastMessage))) return true;
+  const E = client().entries;
   const lines = String(text ?? '').split('\n');
   let seen = 0;
   for (let i = lines.length - 1; i >= 0 && seen < maxRows; i--) {
     const l = lines[i];
-    if (!l.includes('"assistant"')) continue;
-    let o;
-    try {
-      o = JSON.parse(l);
-    } catch {
-      continue; // the first line of the tail may be cut
-    }
-    if (o?.type !== 'assistant' || !Array.isArray(o?.message?.content)) continue;
+    if (!l.includes(E.MARK.assistant)) continue;
+    const o = E.parse(l);
+    if (o === undefined) continue; // the first line of the tail may be cut
+    const e = E.entry(o);
+    if (e.kind !== 'assistant' || !e.parts) continue;
     seen++;
-    for (const c of o.message.content) {
-      const parts =
-        c?.type === 'text'
-          ? [c.text]
-          : c?.type === 'tool_use'
-            ? [c?.input?.message, c?.input?.content]
-            : [];
+    for (const p of e.parts) {
+      const parts = p.kind === 'text' ? [p.text] : p.kind === 'tool' ? [p.input?.message, p.input?.content] : [];
       if (parts.some((b) => typeof b === 'string' && END_LINE.test(b))) return true;
     }
   }

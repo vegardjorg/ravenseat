@@ -189,6 +189,30 @@ describe('analyzeTranscript: per model, tools, API errors and active time', () =
     expect(t.api_errors).toEqual({ rate_limit: 2, overloaded: 1, other: 1 });
   });
 
+  it('F1: the 2.1.317+ form of an API error (a system api_error row) is counted too, by status, code or text', () => {
+    // Invented rows in the new form: { type: 'system', subtype: 'api_error', error, retryInMs, retryAttempt, maxRetries }.
+    // What error holds is not confirmed (W3 fixtures), so a code, a status object and a nested error type are tried.
+    const sys = (s: number, error: unknown) =>
+      JSON.stringify({ type: 'system', subtype: 'api_error', timestamp: at(s), error, retryInMs: 1000, retryAttempt: 1, maxRetries: 10 });
+    const t = T.analyzeTranscript(
+      [
+        sys(1, 'rate_limit'),
+        sys(2, { status: 429 }),
+        sys(3, { status: 529, error: { type: 'overloaded_error', message: 'Overloaded' } }),
+        sys(4, 'overloaded'),
+        sys(5, { status: 500 }),
+        // Other system rows and unknown row types are not API errors.
+        JSON.stringify({ type: 'system', subtype: 'compact_boundary', timestamp: at(6) }),
+        JSON.stringify({ type: 'api-request', timestamp: at(7) }),
+        apiError(8, { isApiErrorMessage: true, apiErrorStatus: 429, error: 'rate_limit' }, 'API Error: 429'),
+      ].join('\n'),
+    );
+    expect(t.api_errors).toEqual({ rate_limit: 3, overloaded: 2, other: 1 });
+    expect(t.modelTurns).toBe(0);
+    expect(T.apiErrorKind({ type: 'system', subtype: 'api_error', error: 'rate_limit' })).toBe('rate_limit');
+    expect(T.apiErrorKind({ type: 'system', subtype: 'compact_boundary' })).toBeNull();
+  });
+
   it('active time leaves out gaps longer than the idle threshold; duration_s stays the wall time', () => {
     const t = T.analyzeTranscript(text);
     expect(t.duration_s).toBe(80 + 20 * 60);

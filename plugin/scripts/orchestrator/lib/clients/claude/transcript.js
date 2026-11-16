@@ -9,7 +9,7 @@
 // overrides the folder (tests). CLAUDE_CONFIG_DIR is not read here: the core never read it for transcripts, and
 // changing that is a decision of its own, not part of the move.
 //
-// slug, transcriptsDir, agentTranscriptPath and sessionOfTranscript are pure; findAgentTranscript,
+// slug, transcriptsDir, agentFileName, agentOfFile, agentTranscriptPath, subagentsDirOf and sessionOfTranscript are pure; findAgentTranscript,
 // readAgentTranscript, listSubagents, listTranscripts, readSlice and readTail read the disk and never throw (a read
 // error gives null or an empty list, as the callers did before the move).
 //
@@ -44,9 +44,25 @@ function transcriptsDir(mainTree, { env = process.env, home = os.homedir() } = {
   return env.QUEUE_TRANSCRIPTS ?? path.join(home, '.claude', 'projects', slug(mainTree));
 }
 
+/** The file name of an agent's transcript: agent-<id>.jsonl. */
+function agentFileName(agentId) {
+  return `agent-${agentId}.jsonl`;
+}
+
+/** The agent id in a transcript file name (agent-<id>.jsonl), or null for another file. */
+function agentOfFile(name) {
+  const m = AGENT_FILE.exec(String(name ?? ''));
+  return m ? m[1] : null;
+}
+
 /** <dir>/<session>/subagents/agent-<id>.jsonl */
 function agentTranscriptPath(dir, session, agentId) {
-  return path.join(dir, session, SUBAGENTS, `agent-${agentId}.jsonl`);
+  return path.join(dir, session, SUBAGENTS, agentFileName(agentId));
+}
+
+/** The subagents folder of a main session transcript: <root>/<session>.jsonl (any case) gives <root>/<session>/subagents. */
+function subagentsDirOf(mainTranscript) {
+  return path.join(String(mainTranscript).replace(/\.jsonl$/i, ''), SUBAGENTS);
 }
 
 /** The path to an agent's transcript: the first session folder (readdir order) that has it, or null. */
@@ -148,7 +164,10 @@ function readTail(filePath, bytes) {
 module.exports = {
   slug,
   transcriptsDir,
+  agentFileName,
+  agentOfFile,
   agentTranscriptPath,
+  subagentsDirOf,
   findAgentTranscript,
   readAgentTranscript,
   listSubagents,

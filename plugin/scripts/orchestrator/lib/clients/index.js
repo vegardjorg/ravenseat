@@ -13,6 +13,8 @@
 // when a fix round can continue the agent that delivered (lib/fixRound.js). lib/__tests__/clientContract.test.ts checks each one.
 // The default client also exports transcripts (lib/clients/claude/transcript.js): where its transcripts live and how
 // the core finds and reads them; the core asks clientFor().transcripts instead of building a Claude path itself.
+// It also exports hooks (lib/clients/claude/hookInput.js), the hook and status line payloads, and entries
+// (lib/clients/claude/entries.js), one transcript row as a normalized event; the core reads rows through entries.
 // Used by cli/run.mjs and lib/logic/merge.js (concurrentBlock).
 // =============================================================
 'use strict';

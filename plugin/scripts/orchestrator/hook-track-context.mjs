@@ -134,7 +134,7 @@ async function main() {
   let tp = null;
   // Everything about the context has been said (PARTIAL and the report reminder): skip reading the transcript.
   if (!(KV.partialSaid(triggered) && reportSaid)) {
-    tp = V.subagentTranscript(input.raw);
+    tp = V.subagentTranscript(input);
     if (tp) {
       context = V.lastContext(V.readTail(tp));
       if (!KV.partialSaid(triggered)) {

@@ -83,7 +83,7 @@ async function main() {
   if (!agentType || !KV.TRACK_AGENT_TYPES.has(agentType) || !input.agent.id) return;
   const alreadyBlocked = fs.existsSync(stateFile(input.agent.id));
   if (alreadyBlocked || input.stopActive) return;
-  const tp = V.subagentTranscript(input.raw);
+  const tp = V.subagentTranscript(input);
   if (!tp) return;
   const track = require('./lib/timeCost.js').trackFromText(V.readHeader(tp));
   if (!track) return;

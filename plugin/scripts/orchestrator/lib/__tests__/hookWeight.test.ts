@@ -65,6 +65,16 @@ describe('a hot track hook stays light', () => {
     expect(mods).toEqual(['lib/clients/claude/hookInput.js', 'lib/clients/claude/index.js', 'lib/clients/index.js']);
   });
 
+  it('the transcript row reader (clientFor().entries, 0w W2b1) loads only the registry, the adapter and entries.js', () => {
+    const code =
+      `require(require('node:path').join(${JSON.stringify(ROOT)}, 'lib/clients/index.js')).clientFor().entries.entry({});` +
+      `process.stdout.write(JSON.stringify(Object.keys(require.cache)));`;
+    const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8' });
+    expect(r.status, r.stderr).toBe(0);
+    const mods = (JSON.parse(r.stdout) as string[]).map((f) => path.relative(ROOT, f).replace(/\\/g, '/')).sort();
+    expect(mods).toEqual(['lib/clients/claude/entries.js', 'lib/clients/claude/index.js', 'lib/clients/index.js']);
+  });
+
   it('orchestratorBinding still works when it loads the queue logic itself', () => {
     const KV = require(path.join(ROOT, 'lib', 'contextGuard.js'));
     // A cursor and a session: the binding reaches orchestratorStatus, which lives in queueLogic.js.

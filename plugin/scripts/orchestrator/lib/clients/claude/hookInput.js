@@ -13,7 +13,8 @@
 // The values are passed on exactly as Claude Code sent them: no trimming, no type checks, a missing field stays
 // undefined, so the hooks decide as they did before the move (a type check stays with the hook that needs it). A raw
 // value of null or undefined gives null, so a hook that read a field of it still fails the way it did. raw is the
-// original payload for the readers that still take it whole (lib/trackGuard.js subagentTranscript, W2b).
+// original payload; since W2b1 no core reader takes it whole (trackGuard.subagentTranscript and usageLimit.decide read
+// the fields named here).
 //
 // Pure, no requires: the hooks that run on every tool call load it (with the registry) and nothing else.
 // Used through the adapter (lib/clients/claude/index.js hooks; the core asks clientFor().hooks). Tested in

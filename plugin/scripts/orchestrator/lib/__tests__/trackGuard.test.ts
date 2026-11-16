@@ -82,27 +82,30 @@ describe('the context guard', () => {
 
 describe('subagentTranscript', () => {
   const exists = (allowed: string[]) => (p: string) => allowed.includes(p);
+  // The guard takes the payload as clientFor().hooks.read gives it (0w W2b1), as the hooks pass it.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { read } = require('../clients/index.js').clientFor().hooks;
   it('finds the subagent file below the session folder, never the main session transcript', () => {
     const tp = path.join('/p', 'session1.jsonl');
     const sub = path.join('/p', 'session1', 'subagents', 'agent-abc.jsonl');
     expect(
       subagentTranscript(
-        { agent_id: 'abc', session_id: 'session1', transcript_path: tp },
+        read({ agent_id: 'abc', session_id: 'session1', transcript_path: tp }),
         exists([sub]),
       ),
     ).toBe(sub);
     expect(
       subagentTranscript(
-        { agent_id: 'abc', session_id: 'session1', transcript_path: tp },
+        read({ agent_id: 'abc', session_id: 'session1', transcript_path: tp }),
         exists([tp]),
       ),
     ).toBeNull();
-    expect(subagentTranscript({ transcript_path: tp }, exists([tp]))).toBeNull();
+    expect(subagentTranscript(read({ transcript_path: tp }), exists([tp]))).toBeNull();
   });
   it('uses agent_transcript_path when it exists', () => {
     expect(
       subagentTranscript(
-        { agent_id: 'abc', agent_transcript_path: '/x/a.jsonl' },
+        read({ agent_id: 'abc', agent_transcript_path: '/x/a.jsonl' }),
         exists(['/x/a.jsonl']),
       ),
     ).toBe('/x/a.jsonl');

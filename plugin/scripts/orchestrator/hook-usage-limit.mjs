@@ -46,7 +46,7 @@ async function main() {
   if (config().usageLimit?.pause === false) return;
   const UL = require('./lib/usageLimit.js');
   const { readObserved } = require('./lib/rateLimits.js');
-  // The payload in the core's names (lib/clients/claude/hookInput.js, through the adapter); decide takes it as sent.
+  // The payload in the core's names (lib/clients/claude/hookInput.js, through the adapter); decide reads its error.
   const input = require('./lib/clients/index.js').clientFor().hooks.read(JSON.parse(await readStdin()));
   const folder = dataFolder();
   // Only a rate_limit stop is worth waiting for; any other stop reads the transcript once.
@@ -55,7 +55,7 @@ async function main() {
   for (let i = 1; i <= attempts && !rec; i++) {
     if (i > 1) await new Promise((r) => setTimeout(r, WAIT_MS));
     const tail = UL.readTail(input.transcript);
-    if (UL.fromTranscriptTail(tail) || i === attempts) rec = UL.decide(input.raw, { tail, observed: readObserved(folder) });
+    if (UL.fromTranscriptTail(tail) || i === attempts) rec = UL.decide(input, { tail, observed: readObserved(folder) });
   }
   if (rec) UL.write(folder, UL.merge(UL.read(folder), rec));
 }

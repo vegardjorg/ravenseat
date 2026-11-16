@@ -16,6 +16,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   section in queue.md is now a short introduction with links; board.md and catalog.md keep their short notes. Fixed on
   the way: queue.md said the database probes card turns important, which it never does, and the catalog README listed
   only part of the conditions and kinds. Nothing changes in how the tab works.
+- **Hardening: API errors in the newer transcript form are now recognized, and transcript rows are read in one place.**
+  Claude Code 2.1.317 and later can record a failed API call as a system row instead of an assistant entry. The cost
+  rows counted such rows as no error at all, and the usage limit check skipped them and could let an older limit
+  entry decide. Both forms are now read, so the rate limit and overload counts can go up from 0 to the real number,
+  and a usage limit or a plain 429 in the new form is judged on the row that actually ended the turn. The readers
+  of transcript rows (the approval wait, the ask bundle, the context and end guards, the results, the track guard,
+  the turn statistics and the usage limit) now go through one row reader behind the client adapter, which also
+  gives a row type it does not know a safe "unknown" instead of guessing. No new setting.
 - **Hardening: when Claude Code renames a hook or status line field, one file needs the fix instead of seventeen.**
   The hooks, the status line and the cost, quota and tool trouble readers now read the stdin payload, and build the
   deny, ask and additionalContext answers, through one reader behind the client adapter

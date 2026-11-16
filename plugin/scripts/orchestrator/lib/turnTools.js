@@ -111,7 +111,16 @@ function turnUsd(t) {
   TK.addUsage(tokens, t.usage ?? {});
   return TK.costUsd(tokens, t.model ?? TK.DEFAULT_MODEL);
 }
-const contextOf = (u) => (u?.input_tokens ?? 0) + (u?.cache_read_input_tokens ?? 0) + (u?.cache_creation_input_tokens ?? 0);
+/**
+ * The context of one turn: input plus cache read plus cache written. The usage is the transcript's own (from
+ * timeCost.analyzeTranscript detail), read in the adapter's names (clientFor().entries.usage, 0w W2b1).
+ */
+let entriesOf = null; // the adapter's entries, looked up once (contextOf runs per turn)
+function contextOf(raw) {
+  entriesOf ??= require('./clients/index.js').clientFor().entries;
+  const u = entriesOf.usage(raw);
+  return (u?.input ?? 0) + (u?.cacheRead ?? 0) + (u?.cacheWritten ?? 0);
+}
 
 /** An empty accumulator (mergeStats adds two). */
 function emptyStats() {

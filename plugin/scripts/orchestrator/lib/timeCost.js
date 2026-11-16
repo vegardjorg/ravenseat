@@ -213,23 +213,22 @@ function addUsage(tokens, u) {
 }
 
 /**
- * The kind of an API error entry in a transcript, or null when the entry is not one. Claude Code writes a failed API
- * call as an assistant entry with `isApiErrorMessage: true`, `apiErrorStatus` (the HTTP status, e.g. 529), `error`
- * (a short code such as "rate_limit" or "server_error") and model "<synthetic>", with the text "API Error: 529
- * Overloaded ..." as content. Other versions may lack some of these fields, so the status, the code AND the text are
- * matched: 429 or rate limit -> rate_limit, 529 or overloaded -> overloaded, anything else -> other.
+ * The kind of an API error row in a transcript, or null when the row is not one. Claude Code wrote a failed API call
+ * as an assistant entry (isApiErrorMessage, the HTTP status, a short code, model "<synthetic>" and "API Error: 529
+ * Overloaded ..." as text), and since 2.1.317 also as a system api_error row (F1). Both forms are read by the client
+ * adapter (clientFor().entries, lib/clients/claude/entries.js, 0w W2b1): 429 or rate limit -> rate_limit, 529 or
+ * overloaded -> overloaded, anything else -> other.
  * @returns {'rate_limit'|'overloaded'|'other'|null}
  */
 function apiErrorKind(r) {
-  const m = r?.message;
-  if (!r?.isApiErrorMessage && !(m?.model === SYNTHETIC_MODEL && r?.error)) return null;
-  const content = Array.isArray(m?.content) ? m.content : [];
-  const text = [typeof m?.content === 'string' ? m.content : '', ...content.map((c) => c?.text ?? '')].join(' ');
-  const status = Number(r.apiErrorStatus);
-  const code = String(r.error ?? '');
-  if (status === 429 || code === 'rate_limit' || /\b429\b|rate[ _-]?limit/i.test(text)) return 'rate_limit';
-  if (status === 529 || code === 'overloaded' || /\b529\b|overloaded/i.test(text)) return 'overloaded';
-  return 'other';
+  return apiErrorOf(r)?.kind ?? null;
+}
+
+let entriesOf = null; // the adapter's entries, looked up once (analyzeTranscript asks per row)
+/** The API error of a row in the adapter's terms ({ kind, form, status, code }), or null. */
+function apiErrorOf(r) {
+  entriesOf ??= require('./clients/index.js').clientFor().entries;
+  return entriesOf.entry(r).apiError;
 }
 
 /**
@@ -302,7 +301,12 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
     if (typeof r.version === 'string' && r.version) ccVersion = r.version;
     if (detail && typeof r.cwd === 'string' && r.cwd) cwds.set(r.cwd, (cwds.get(r.cwd) ?? 0) + 1);
     const m = r.message;
-    if (!m) continue;
+    if (!m) {
+      // A row without a message can still be an API error: the 2.1.317+ system api_error row (F1). Not a model turn.
+      const err = apiErrorOf(r);
+      if (err?.form === 'system') apiErrors[err.kind]++;
+      continue;
+    }
     const content = Array.isArray(m.content) ? m.content : [];
     if (r.type === 'user') {
       if (!trackFromMission) {

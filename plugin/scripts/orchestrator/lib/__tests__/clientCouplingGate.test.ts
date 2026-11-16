@@ -47,8 +47,8 @@ const COUPLING: Record<string, RegExp> = {
 };
 
 /**
- * The files that read a Claude Code format directly today (2026-11-16, W1). W2 moves them behind lib/clients/claude
- * and removes each entry here in the same commit; the bolk in the comment is the plan, not a rule.
+ * The files that read a Claude Code format directly today (2026-11-16, W1; 2 left after W2b1). W2 moves them behind
+ * lib/clients/claude and removes each entry here in the same commit; the bolk in the comment is the plan, not a rule.
  */
 const ALLOWED: string[] = [
   // W2a (done 2026-11-16): the transcript paths and file finding moved to lib/clients/claude/transcript.js; the core
@@ -59,15 +59,11 @@ const ALLOWED: string[] = [
   // A deliberate exception, not a W2 move: the push guard's failSafe reads tool_input.command and builds the deny
   // itself when even the hook reader does not load, so the guard never gets weaker when the adapter breaks.
   'hook-push-guard.mjs',
-  // W2b: transcript entries and usage (message.usage, content blocks, compact_boundary, API errors)
-  'lib/approvalWait.js',
-  'lib/askBundle.js',
-  'lib/contextGuard.js',
-  'lib/logic/results.js',
+  // W2b1 (done 2026-11-17): the transcript rows (content blocks, handback, usage, compact_boundary, both forms of an
+  // API error) moved to lib/clients/claude/entries.js; approvalWait, askBundle, contextGuard (with hookOutput),
+  // logic/results, trackGuard (with subagentTranscript), turnTools and usageLimit (with decide) ask clientFor().entries.
+  // W2b2: timeCost's usage and tool reading, after the W3 fixtures (its apiErrorKind already asks the adapter, F1).
   'lib/timeCost.js',
-  'lib/trackGuard.js',
-  'lib/turnTools.js',
-  'lib/usageLimit.js',
 ];
 
 /** Is a line a comment (//, /*, * continuation)? Comments may name the fields. */

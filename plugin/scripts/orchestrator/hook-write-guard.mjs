@@ -88,7 +88,7 @@ function trackWarnings(input, abs, folder) {
     // The custom helpers' agent files are protected like .claude/, as in merge-track.mjs.
     const HELP = require('./lib/queueHelpers.js');
     helperPaths = HELP.customPaths(HELP.helperSetup(K, queue));
-    const tp = TG.subagentTranscript(input.raw);
+    const tp = TG.subagentTranscript(input);
     const id = tp ? require('./lib/timeCost.js').trackFromText(TG.readHeader(tp)) : null;
     if (id) task = (queue.tasks ?? []).find((o) => o.id === id || o.id === id.replace(/-(?:r|round)\d+$/i, '')) ?? null;
   } catch {

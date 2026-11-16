@@ -6,7 +6,9 @@
 // The output is byte-identical to the Claude flow before the adapter split (locked by claudeDispatchCompat.test.ts).
 // The Claude facts themselves (agent names, model list, message text) live in ./dispatch.js and the mission text
 // pieces in ./mission.js, each with source and date. The transcript paths (folder, slug, agent files) live in
-// ./transcript.js, exposed as transcripts, and the hook and status line payloads in ./hookInput.js, exposed as hooks.
+// ./transcript.js, exposed as transcripts, the hook and status line payloads in ./hookInput.js, exposed as hooks, and
+// one transcript row as the event the core reads (usage, content blocks, handback, compaction, API error) in
+// ./entries.js, exposed as entries (W2b1).
 //
 // Each part is loaded the first time it is used (W2c): the hooks that run on every tool call ask the registry for
 // hooks, and must not pay for dispatch.js and lib/logic/base.js, which they never call (lib/__tests__/hookWeight.test.ts).
@@ -119,5 +121,9 @@ module.exports = {
   // The hook and status line payloads in the core's names, and the hook answers: ./hookInput.js.
   get hooks() {
     return require('./hookInput.js');
+  },
+  // One transcript row as the event the core reads (usage, content blocks, handback, compaction, API error): ./entries.js.
+  get entries() {
+    return require('./entries.js');
   },
 };

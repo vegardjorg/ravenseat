@@ -84,6 +84,35 @@ describe('what counts as a usage limit', () => {
     expect(UL.decide({ error: 'rate_limit' }, { tail: t, now: NOW })?.source).toBe('transcript');
   });
 
+  // F1: Claude Code 2.1.317+ writes an API error as a system row. The rows here are invented; where the new form carries
+  // the quota is not confirmed (W3 fixtures), so the same fields as the old entry are read on it.
+  const sysError = (over: Record<string, unknown> = {}) => ({
+    type: 'system',
+    subtype: 'api_error',
+    error: 'rate_limit',
+    retryInMs: 0,
+    retryAttempt: 10,
+    maxRetries: 10,
+    ...over,
+  });
+
+  it('F1: a rejected quota on a system api_error row pauses, like the old entry', () => {
+    const q = { quotaLimits: { status: 'rejected', resetsAt: RESET, rateLimitType: 'five_hour' } };
+    expect(UL.decide({ error: 'rate_limit' }, { tail: tail(sysError(q)), now: NOW })).toMatchObject({
+      until: new Date(RESET * 1000).toISOString(),
+      type: 'five_hour',
+      source: 'transcript',
+    });
+    // The usage limit code on the new row counts too (default pause, no reset known).
+    expect(UL.decide({ error: 'rate_limit' }, { tail: tail(sysError({ error: 'usage_limit_reached' })), now: NOW })?.source).toBe('default');
+  });
+
+  it('F1: a plain 429 in the new form after an old limit is what stopped the turn, so it does not pause', () => {
+    expect(UL.decide({ error: 'rate_limit' }, { tail: tail(limitEntry(), sysError()), now: NOW })).toBeNull();
+    // Other system rows still do not decide.
+    expect(UL.decide({ error: 'rate_limit' }, { tail: tail(limitEntry(), { type: 'system', subtype: 'compact_boundary' }), now: NOW })?.source).toBe('transcript');
+  });
+
   it('with no entry yet, a rate_limit stop and a status line window at 100 % count', () => {
     const observed = {
       five_hour: { used_percentage: 100, resets_at: RESET },

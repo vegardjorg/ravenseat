@@ -6,9 +6,11 @@
 //
 // THE SIGNAL: Claude Code's StopFailure hook fires when a turn ends on an API error (hook-usage-limit.mjs). Its input
 // has no reset time, and a stop with `rate_limit` can also be a plain 429 (the API busy for a moment), which must not
-// pause anything. So the session's transcript decides: the last assistant entry says `quotaLimits.status: "rejected"`
-// or `apiError: "usage_limit_reached"`, with the reset. The text of the message is never parsed, and nothing but these
-// fields is kept. If the entry is not written yet, a rate_limit stop with a status line window at 100 % also counts.
+// pause anything. So the session's transcript decides: the last assistant entry or API error row says
+// `quotaLimits.status: "rejected"` or `apiError: "usage_limit_reached"`, with the reset. Since Claude Code 2.1.317 an
+// API error can be a system api_error row instead (F1, 0w W2b1); the rows are read through clientFor().entries. The text
+// of the message is never parsed, and nothing but these fields is kept. If the entry is not written yet, a rate_limit
+// stop with a status line window at 100 % also counts.
 // A limit without a usable reset time gets a short default pause.
 //
 // WHAT THIS CANNOT DO: wake a stopped session. Claude Code itself waits and continues an interactive session after the
@@ -23,6 +25,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { renameWithRetry } = require('./stateFile.js');
+
+/** The client adapter (0w W2b1): the transcript rows are its format (clientFor().entries), asked on first use. */
+const client = () => require('./clients/index.js').clientFor();
 
 /** The file name in the data folder. */
 const FILE = 'usage-limit.json';
@@ -42,27 +47,33 @@ const number = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 function fromEntry(entry) {
   const q = entry?.quotaLimits;
   const info = entry?.apiErrorParams?.rate_limit_info;
-  const rejected = q?.status === 'rejected' || info?.status === 'rejected' || entry?.apiError === 'usage_limit_reached';
+  // The 2.1.317+ system row (F1) may carry the code as its error instead of apiError (clientFor().entries reads both).
+  const err = client().entries.entry(entry).apiError;
+  const rejected =
+    q?.status === 'rejected' ||
+    info?.status === 'rejected' ||
+    entry?.apiError === 'usage_limit_reached' ||
+    (err?.form === 'system' && err.code === 'usage_limit_reached');
   if (!rejected) return null;
   const type = q?.rateLimitType ?? info?.rateLimitType;
   return { resetsAt: number(q?.resetsAt) ?? number(info?.resetsAt), type: typeof type === 'string' ? type : null };
 }
 
 /**
- * The limit at the end of a transcript, or null. The LAST assistant entry decides: a normal answer or a plain 429 after
- * an old limit means the limit is not what stopped this turn. Other rows and a half-written last line are skipped.
+ * The limit at the end of a transcript, or null. The LAST assistant entry or API error row decides: a normal answer or a
+ * plain 429 after an old limit means the limit is not what stopped this turn. Other rows and a half-written last line
+ * are skipped. An API error row is either form (clientFor().entries): the assistant entry, or since Claude Code 2.1.317
+ * the system api_error row (F1, 0w W2b1; before that the new row was skipped and an older entry decided).
  */
 function fromTranscriptTail(text) {
+  const E = client().entries;
   const lines = String(text ?? '').split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     if (!lines[i].trim()) continue;
-    let entry;
-    try {
-      entry = JSON.parse(lines[i]);
-    } catch {
-      continue;
-    }
-    if (entry?.type === 'assistant') return fromEntry(entry);
+    const entry = E.parse(lines[i]);
+    if (entry === undefined) continue;
+    const e = E.entry(entry);
+    if (e.kind === 'assistant' || e.apiError?.form === 'system') return fromEntry(entry);
   }
   return null;
 }
@@ -93,7 +104,7 @@ function readTail(file) {
 
 /**
  * Does this StopFailure mean the usage limit? Returns the record to save, or null.
- * @param {{ error?: string }} input the hook's stdin JSON
+ * @param {{ error?: string }|null} input the hook payload as clientFor().hooks.read gives it (error: rate_limit ...)
  * @param {{ tail?: string, observed?: object|null, now?: number }} [o] the transcript's end and the status line reading
  * @returns {{ until: string, at: string, type: string|null, source: 'transcript'|'statusline'|'default' } | null}
  */

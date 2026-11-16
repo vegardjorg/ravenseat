@@ -47,7 +47,9 @@ const FACTS = Object.freeze(
       fragility: 'H',
       move: 'W2',
       source: 'observed',
-      readers: ['lib/timeCost.js', 'lib/trackGuard.js', 'lib/turnTools.js'],
+      // W2b1 (2026-11-17): lib/clients/claude/entries.js reads it (usage(), the core's names, values as written);
+      // trackGuard and turnTools ask clientFor().entries. timeCost moves in W2b2, after the W3 fixtures.
+      readers: ['lib/clients/claude/entries.js', 'lib/timeCost.js'],
     },
     {
       id: 'transcript.entryTypes',
@@ -57,14 +59,10 @@ const FACTS = Object.freeze(
       fragility: 'H',
       move: 'W2',
       source: 'observed',
-      readers: [
-        'lib/timeCost.js',
-        'lib/contextGuard.js',
-        'lib/askBundle.js',
-        'lib/logic/results.js',
-        'lib/approvalWait.js',
-        'lib/usageLimit.js',
-      ],
+      // W2b1 (2026-11-17): lib/clients/claude/entries.js reads it (entry(): kind, parts, tools; a row type the queue
+      // does not know is 'unknown'); contextGuard, askBundle, logic/results, approvalWait and usageLimit ask
+      // clientFor().entries. timeCost moves in W2b2.
+      readers: ['lib/clients/claude/entries.js', 'lib/timeCost.js'],
     },
     {
       id: 'transcript.handback',
@@ -74,7 +72,8 @@ const FACTS = Object.freeze(
       fragility: 'H',
       move: 'W2',
       source: 'hooks',
-      readers: ['lib/logic/results.js', 'lib/askBundle.js'],
+      // W2b1 (2026-11-17): entry().handback and the tool part's handback; logic/results and askBundle ask the adapter.
+      readers: ['lib/clients/claude/entries.js'],
     },
     {
       id: 'transcript.compactBoundary',
@@ -84,7 +83,9 @@ const FACTS = Object.freeze(
       fragility: 'H',
       move: 'W2',
       source: 'observed',
-      readers: ['lib/contextGuard.js', 'lib/trackGuard.js'],
+      // W2b1 (2026-11-17): entry().compaction and the line pre-check MARK.compaction; contextGuard and trackGuard ask
+      // the adapter.
+      readers: ['lib/clients/claude/entries.js'],
     },
     {
       id: 'transcript.apiError',
@@ -94,7 +95,11 @@ const FACTS = Object.freeze(
       fragility: 'H',
       move: 'W2',
       source: 'observed',
-      readers: ['lib/timeCost.js', 'lib/usageLimit.js'],
+      // W2b1 (2026-11-17, F1): entry().apiError reads both forms (form 'entry' and 'system'); what the new row's error
+      // holds is not confirmed (only field names were seen), so a code, a status and a nested type are all read, and
+      // W3 must confirm it with a fixture. timeCost.apiErrorKind and usageLimit ask the adapter; before W2b1 the new
+      // form was not counted (timeCost) and was skipped when deciding a limit (usageLimit).
+      readers: ['lib/clients/claude/entries.js'],
     },
     {
       id: 'transcript.sidechain',
@@ -117,8 +122,9 @@ const FACTS = Object.freeze(
       source: 'hooks',
       // W2a (2026-11-16): the folder, the slug rule and the agent files live in lib/clients/claude/transcript.js; the
       // core files that built the paths themselves (cli/ask, cost, events, tracks, hook-context, eventStatistics,
-      // fixRound, trackActivity) ask the adapter now. trackGuard and approvalWait still read paths and move in W2b.
-      readers: ['lib/clients/claude/transcript.js', 'lib/trackGuard.js', 'lib/approvalWait.js'],
+      // fixRound, trackActivity) ask the adapter now. W2b1 (2026-11-17): trackGuard and approvalWait too
+      // (agentFileName, agentOfFile, subagentsDirOf).
+      readers: ['lib/clients/claude/transcript.js'],
     },
     // ---- Hooks (documented) ----
     {
@@ -167,8 +173,8 @@ const FACTS = Object.freeze(
       source: 'hooks',
       // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
       // lib/clients/claude/hookInput.js (clientFor().hooks).
-      // trackGuard.subagentTranscript still takes the raw payload (the transcript paths) and moves in W2b.
-      readers: ['lib/clients/claude/hookInput.js', 'lib/trackGuard.js'],
+      // W2b1 (2026-11-17): trackGuard.subagentTranscript takes the payload from clientFor().hooks.read too.
+      readers: ['lib/clients/claude/hookInput.js'],
     },
     {
       id: 'hook.otherInput',
@@ -180,8 +186,8 @@ const FACTS = Object.freeze(
       source: 'hooks',
       // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
       // lib/clients/claude/hookInput.js (clientFor().hooks).
-      // usageLimit.decide still takes the raw payload (StopFailure error) and moves in W2b.
-      readers: ['lib/clients/claude/hookInput.js', 'lib/usageLimit.js'],
+      // W2b1 (2026-11-17): usageLimit.decide takes the payload from clientFor().hooks.read too.
+      readers: ['lib/clients/claude/hookInput.js'],
     },
     {
       id: 'hook.output',
@@ -193,7 +199,9 @@ const FACTS = Object.freeze(
       source: 'hooks',
       // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
       // lib/clients/claude/hookInput.js (clientFor().hooks).
-      // contextGuard.hookOutput still builds the UserPromptSubmit answer itself and moves in W2b.
+      // W2b1 (2026-11-17): contextGuard.hookOutput builds its additionalContext with clientFor().hooks.context. It
+      // still writes systemMessage and decision 'block' with reason itself, as assessEndGate does (not caught by the
+      // coupling gate); a builder for those is left to W3/W4.
       // hook-push-guard.mjs failSafe keeps a raw last-resort read and deny on purpose, so the push guard still denies
       // when the adapter itself does not load (never through the registry).
       readers: ['lib/clients/claude/hookInput.js', 'lib/contextGuard.js', 'hook-push-guard.mjs'],

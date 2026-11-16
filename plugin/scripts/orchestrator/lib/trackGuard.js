@@ -31,6 +31,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+/**
+ * The client adapter (0w W2b1): the transcript rows (clientFor().entries) and the subagent file names
+ * (clientFor().transcripts) are its format. Asked on first use, so the read guard pays only for what it calls.
+ */
+const client = () => require('./clients/index.js').clientFor();
+
 /** Agent types the context guard applies to (the queue's track agents). */
 const CONTEXT_TYPES = new Set(['track', 'track-d']);
 /** Agent types readGuard applies to by default (track + the review agents in the template). */
@@ -79,23 +85,19 @@ const TAIL_BYTES = 4 * 1024 * 1024; // the last usage count is at the end of the
  * return null (no action). The next assistant answer has the correct, small value.
  */
 function lastContext(text) {
+  const E = client().entries;
   const lines = String(text || '').split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const l = lines[i];
-    if (l.includes('"compact_boundary"')) return null;
-    if (!l.includes('"usage"')) continue;
-    try {
-      const o = JSON.parse(l);
-      const u = o?.message?.usage;
-      if (o?.type !== 'assistant' || !u) continue;
-      return (
-        (u.input_tokens || 0) +
-        (u.cache_read_input_tokens || 0) +
-        (u.cache_creation_input_tokens || 0)
-      );
-    } catch {
-      // the first line in the tail may be cut in the middle; skip it
-    }
+    // A plain text check on the quoted field, as before: an escaped quote in a message's text does not match.
+    if (l.includes(E.MARK.compactionQuoted)) return null;
+    if (!l.includes(E.MARK.usage)) continue;
+    const o = E.parse(l);
+    if (o === undefined) continue; // the first line in the tail may be cut in the middle; skip it
+    const e = E.entry(o);
+    const u = e.usage;
+    if (e.kind !== 'assistant' || !u) continue;
+    return (u.input || 0) + (u.cacheRead || 0) + (u.cacheWritten || 0);
   }
   return null;
 }
@@ -129,25 +131,26 @@ function readHeader(filePath, bytes = 64 * 1024) {
 }
 
 /**
- * Path to the SUBAGENT's own transcript. `transcript_path` in the hook input is the main session's transcript even when the hook
- * fires inside a subagent; the subagent's lives in `<session-folder>/<session_id>/subagents/agent-<agent_id>.jsonl`
- * (the same file SubagentStop gives as `agent_transcript_path`). Returns null when it does not exist, so the guard
+ * Path to the SUBAGENT's own transcript. The session transcript in the hook input is the main session's even when the hook
+ * fires inside a subagent; the subagent's lives in `<session-folder>/<session id>/subagents/agent-<agent id>.jsonl`
+ * (the same file SubagentStop gives as the agent's transcript). Returns null when it does not exist, so the guard
  * never measures the main session's context by mistake.
- * @param {object} input hook input
+ * @param {object|null} input the hook payload as clientFor().hooks.read gives it (0w W2b1; was the raw payload)
  * @param {(p: string) => boolean} [exists]
  */
 function subagentTranscript(input, exists = fs.existsSync) {
-  if (!input || !input.agent_id) return null;
-  const id = String(input.agent_id);
+  if (!input || !input.agent?.id) return null;
+  const TR = client().transcripts;
+  const id = String(input.agent.id);
   const candidates = [];
-  if (input.agent_transcript_path) candidates.push(String(input.agent_transcript_path));
-  const tp = input.transcript_path ? String(input.transcript_path) : '';
+  if (input.agent.transcript) candidates.push(String(input.agent.transcript));
+  const tp = input.transcript ? String(input.transcript) : '';
   if (tp) {
-    // transcript_path may already point to the subagent's file
-    if (path.basename(tp) === `agent-${id}.jsonl`) candidates.push(tp);
+    // the session transcript may already point to the subagent's file
+    if (path.basename(tp) === TR.agentFileName(id)) candidates.push(tp);
     const folder = path.dirname(tp);
-    const session = input.session_id ? String(input.session_id) : path.basename(tp, '.jsonl');
-    candidates.push(path.join(folder, session, 'subagents', `agent-${id}.jsonl`));
+    const session = input.session ? String(input.session) : path.basename(tp, '.jsonl');
+    candidates.push(TR.agentTranscriptPath(folder, session, id));
   }
   for (const k of candidates) {
     try {

@@ -138,22 +138,20 @@ function toolLine(c) {
 function transcriptTail(text, { fromStart = false } = {}) {
   const lines = String(text ?? '').split('\n');
   if (!fromStart) lines.shift();
+  // The rows in the adapter's terms (0w W2b1): an assistant row's parts in order, the handback already picked out.
+  const E = require('./clients/index.js').clientFor().entries;
   const out = [];
   for (const l of lines) {
     if (!l.trim()) continue;
-    let r;
-    try {
-      r = JSON.parse(l);
-    } catch {
-      continue; // a half line (written concurrently, or the cut)
-    }
-    if (r?.type !== 'assistant' || !Array.isArray(r.message?.content)) continue;
-    const at = typeof r.timestamp === 'string' ? ` (${r.timestamp.slice(0, 16).replace('T', ' ')})` : '';
-    for (const c of r.message.content) {
-      if (c?.type === 'text' && String(c.text ?? '').trim()) out.push(`assistant${at}: ${String(c.text).trim()}`);
-      else if (c?.type === 'tool_use' && c.name === 'SubagentHandback' && c.input?.message)
-        out.push(`handback${at}: ${String(c.input.message).trim()}`);
-      else if (c?.type === 'tool_use') out.push(toolLine(c));
+    const r = E.parse(l);
+    if (r === undefined) continue; // a half line (written concurrently, or the cut)
+    const e = E.entry(r);
+    if (e.kind !== 'assistant' || !e.parts) continue;
+    const at = typeof e.timestamp === 'string' ? ` (${e.timestamp.slice(0, 16).replace('T', ' ')})` : '';
+    for (const p of e.parts) {
+      if (p.kind === 'text' && String(p.text ?? '').trim()) out.push(`assistant${at}: ${String(p.text).trim()}`);
+      else if (p.kind === 'tool' && p.handback) out.push(`handback${at}: ${String(p.handback).trim()}`);
+      else if (p.kind === 'tool') out.push(toolLine(p));
     }
   }
   return out.join('\n');
