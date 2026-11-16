@@ -74,6 +74,8 @@ const FIELD = [
   'drop_reason',
   'merged_from',
   'remark',
+  // Links to design choices in docs/queue/catalog/decisions (lib/catalog.js, ids D-0001); a choice links back with plan:.
+  'decisions',
   // Set by the tool:
   'created',
   'agent_boost',
@@ -270,9 +272,11 @@ function sourcePathError(filePath) {
 /**
  * Validates a whole planEntry as it will be saved.
  * @param {object} entry
- * @param {{ projects?: object, entries?: object[], question?: object, existsPath?: (path: string) => boolean }} ctx
+ * @param {{ projects?: object, entries?: object[], question?: object, existsPath?: (path: string) => boolean,
+ *   decisionIds?: Set<string> }} ctx
  *   projects: queue.json `projects`; entries: the other entries in the register (for depends_on); question: queue.json
- *   `question` (the owner questions); existsPath: checks that a sourcePath exists (omitted = not checked).
+ *   `question` (the owner questions); existsPath: checks that a sourcePath exists (omitted = not checked); decisionIds:
+ *   the design choice ids in docs/queue/catalog (omitted = a `decisions` link is checked for its shape only).
  * @returns {{ error: string[], warnings: string[] }}
  */
 function validateEntry(entry, ctx = {}) {
@@ -383,6 +387,15 @@ function validateEntry(entry, ctx = {}) {
   for (const d of Array.isArray(entry.depends_on) ? entry.depends_on : []) {
     if (d === entry.id) f('depends_on on itself');
     else if (ctx.entries && !others.has(d)) f(`depends_on on unknown planEntry ${d}`);
+  }
+  // Design choice links (lib/catalog.js): the shape is an error; an id the catalog does not have is a warning, and only
+  // when the caller passes the catalog's ids (ctx.decisionIds, catalog.planLinks on), so the register never needs the folder.
+  if (entry.decisions != null) {
+    if (!Array.isArray(entry.decisions) || entry.decisions.some((x) => typeof x !== 'string' || !/^D-\d{4}$/.test(x)))
+      f('decisions must be a list of design choice ids (D-0001)');
+    else if (ctx.decisionIds)
+      for (const d of entry.decisions)
+        if (!ctx.decisionIds.has(d)) adv(`decision ${d} is not in docs/queue/catalog/decisions (ravenseat catalog show)`);
   }
   for (const s of Array.isArray(entry.ownerQuestions) ? entry.ownerQuestions : [])
     if (ctx.question && !Object.hasOwn(ctx.question, s))
@@ -564,6 +577,7 @@ function newEntry(reg, input, ctx = {}) {
     entries: reg.entries,
     question: ctx.question,
     existsPath: ctx.existsPath,
+    decisionIds: ctx.decisionIds,
   });
   error.push(...v.error);
   warnings.push(...v.warnings);
@@ -645,6 +659,7 @@ function editEntry(reg, id, field, ctx = {}) {
     entries: reg.entries.filter((p) => p.id !== id),
     question: ctx.question,
     existsPath: ctx.existsPath,
+    decisionIds: ctx.decisionIds,
   });
   error.push(...v.error);
   warnings.push(...v.warnings);

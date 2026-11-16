@@ -21,6 +21,10 @@ import {
 } from './planShared.mjs';
 import { planActive, planBackup, planCheck, planModules } from './planCheck.mjs';
 import { planDoc } from './planDoc.mjs';
+import { catalogSetup, decisionIds } from './catalog.mjs';
+
+/** The design choice ids for the plan link warning (catalog.planLinks), or undefined: then only the shape is checked. */
+const linkIds = () => (catalogSetup().planLinks ? (decisionIds() ?? undefined) : undefined);
 
 export function planCommand() {
   const under = a[1];
@@ -107,6 +111,7 @@ export function planCommand() {
           `  owner question ${s.id}${s.resolved ? ' (resolved)' : ''}${s.text ? `: ${cut(s.text, WIDTH - 20)}` : ''}`,
         );
       if (p.depends_on?.length) console.log(`  depends on: ${p.depends_on.join(', ')}`);
+      if (p.decisions?.length) console.log(`  design choices: ${p.decisions.join(', ')} (ravenseat catalog show <id>)`);
       if (p.blocks.length) console.log(`  blocks: ${p.blocks.join(', ')}`);
       if (p.verified)
         console.log(
@@ -120,6 +125,7 @@ export function planCommand() {
     const content = JSON.parse(fs.readFileSync(file, 'utf8'));
     const list = Array.isArray(content) ? content : [content];
     const role = planRole();
+    const ids = linkIds();
     const r = editPlans('plan new', (reg, queue) => {
       const error = [];
       const warnings = [];
@@ -130,6 +136,7 @@ export function planCommand() {
           projects: queue.projects ?? {},
           question: queue.question ?? {},
           existsPath: existsSource,
+          decisionIds: ids,
         });
         error.push(...s.error);
         warnings.push(...s.warnings);
@@ -156,6 +163,7 @@ export function planCommand() {
     }
     if (!Object.keys(field).length) die("no field to edit (--field name=val or --set '{...}')");
     const role = planRole();
+    const ids = linkIds();
     const r = editPlans('plan edit', (reg, queue) =>
       P.editEntry(reg, id, field, {
         role,
@@ -163,6 +171,7 @@ export function planCommand() {
         projects: queue.projects ?? {},
         question: queue.question ?? {},
         existsPath: existsSource,
+        decisionIds: ids,
       }),
     );
     planAnswer(

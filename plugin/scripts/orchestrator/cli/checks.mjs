@@ -194,6 +194,8 @@ function makeReport(queue) {
       instructionsLarge: instructionsLarge(),
       ...optInFacts(facts.git),
       ...projectFacts({ git: facts.git, remote: facts.remote, found }),
+      // The project catalog (lib/catalog.js): the card for it shows until the folder exists.
+      catalogMissing: !exists('docs/queue/catalog'),
     },
     catalog: CATALOG.loadCatalog({ builtin: BUILTIN, own: OWN }),
     tasks: queue?.tasks ?? [],

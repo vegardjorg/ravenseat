@@ -379,6 +379,9 @@ const STANDARD = Object.freeze({
     'queue.config.json',
     'CLAUDE.queue.md',
     'settings.queue.json',
+    // The project catalog (lib/catalog.js): the design choices a track works under; a track that could edit one could
+    // loosen the rule it breaks (owner decision 16.11, the scope drift plan question 7).
+    'docs/queue/catalog/',
     'package.json',
     'package-lock.json',
     // Every common lockfile: a changed lockfile changes what the main tree installs.
@@ -452,6 +455,11 @@ const STANDARD = Object.freeze({
   // ignoreNames: more names reuse skips (on top of main, run, setup ...). On by default, also in lite (owner decision
   // 16.11): they are facts, like the ownership notes.
   scopeNotes: { reuse: true, newFolders: true, dependencies: true, drift: true, ignoreNames: [], folderDepth: 2 },
+  // The project catalog in docs/queue/catalog/ (lib/catalog.js, bolk B3 of the scope drift plan). doctor: a WARN row
+  // when `ravenseat catalog check` finds an error (a design choice set to accepted without the owner, a broken file).
+  // planLinks: a plan entry's `decisions` link to an id the catalog does not have is a warning on plan new and edit.
+  // Both only state facts and stop nothing, so they are on; neither does anything without the folder.
+  catalog: { doctor: true, planLinks: true },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.

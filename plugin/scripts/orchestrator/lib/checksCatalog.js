@@ -64,6 +64,8 @@ const CONDITIONS = {
   'gitignore-gap': (f) => f.gitignoreGap === true,
   // The repo is known to be private (the cached answer, lib/repoVisibility.js); unknown or public: false.
   'repo-private': (f) => f.repoPrivate === true,
+  // The project has no catalog in docs/queue/catalog/ yet (lib/catalog.js, cli/checks.mjs). Unknown: not missing, no card.
+  'catalog-missing': (f) => f.catalogMissing === true,
   // The database (lib/checksScan.js scan): a database at all, and migrations set up.
   'has-database': (f) => f.hasDatabase === true,
   'has-migrations': (f) => f.hasMigrations === true,

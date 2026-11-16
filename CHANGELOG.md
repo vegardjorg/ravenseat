@@ -5,6 +5,15 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a track no longer has to guess the stack, the helpers or the design choices.** The new project catalog
+  in `docs/queue/catalog/` holds what a track should know before it writes code: the stack with one "Prefer" line per
+  job, the building blocks meant for reuse, and the design choices, each with one invariant that can be checked.
+  `ravenseat catalog init` drafts it from the manifests and never writes over a file, `show` lists it and `check`
+  names a bad shape, a reused id, a stale reuse row or paths that match nothing. Only the owner accepts a choice
+  (`accept --by owner`, refused from a track worktree), and a choice set to accepted by hand, or changed after the
+  accept, reads as unconfirmed until the owner accepts it again. The folder is a protected path, plan entries can link
+  to choices with `decisions`, and the Checks tab suggests the catalog for a known stack. The doctor row and the plan
+  link warning have their own settings; neither stops work.
 - **Hardening: copied code under a new name no longer has to slip past.** The reuse note at receive sees a name the
   base already has, not a body copied under another name. The Checks tab now suggests a copy detector in CI for a
   known stack whose CI has none (jscpd for JS and TS and most other languages, pylint's duplicate-code for Python,

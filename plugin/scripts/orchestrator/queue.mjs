@@ -408,6 +408,10 @@
 //                                                                  accepted baseline: prints each difference; with accept
 //                                                                  takes the current state. Refused from a track worktree;
 //                                                                  the guard denies it to queue agents. lib/gitSurfaceBaseline.js)
+//   node scripts/orchestrator/queue.mjs catalog init | show [<D-id>] | check | accept <D-id> --by owner   (the project catalog
+//                                                                  in docs/queue/catalog/: stack, reuse and design choices.
+//                                                                  init writes a draft, check exits 1 on an error, accept is
+//                                                                  the owner's and refused from a track worktree. lib/catalog.js)
 //   node scripts/orchestrator/queue.mjs owner-log <id> | owner-log accept <id> --by owner   (the owner rows a task relies on
 //                                                                  that no ravenseat write recorded in the owner log; accept
 //                                                                  confirms them as the owner's. Refused from a track worktree;
@@ -853,6 +857,8 @@ if (command === 'init') {
   (await import('./cli/unlock.mjs')).cmdUnlock();
 } else if (command === 'surface') {
   (await import('./cli/surface.mjs')).cmdSurface();
+} else if (command === 'catalog') {
+  (await import('./cli/catalog.mjs')).cmdCatalog();
 } else if (command === 'owner-log') {
   (await import('./cli/ownerLog.mjs')).cmdOwnerLog();
 } else if (command === 'settings') {
@@ -964,7 +970,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|owner-log|settings|wiring|review-item|pulse-check> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|pulse-check> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

@@ -1,0 +1,260 @@
+// =============================================================
+// catalogFlow.test.ts: `ravenseat catalog init|show|check|accept` through the real CLI, in a temporary project
+// (lib/catalog.js, cli/catalog.mjs, bolk B3 of the scope drift plan).
+//
+// Locks: (1) init writes stack.md with the generated block from the manifests, reuse.md and decisions/README.md, never
+// over a file that is there, and refreshes only the block; (2) show lists the parts and one choice in full, with the
+// plan entries that link to it; (3) check exits 1 on an error, 0 on warnings only, and a project without a catalog is
+// fine; (4) the owner lock: accept needs --by owner, is refused from a track worktree whatever --by says, records the
+// owner's accept in the data folder, and a status set to accepted by hand is unconfirmed until the owner accepts it;
+// the push guard lets a queue agent read the catalog and nothing else, and the write guard keeps it off the record;
+// (5) the Checks tab offers the catalog card for a known stack until the folder exists; (6) doctor names a catalog
+// error as WARN while catalog.doctor is on, and not when it is off; (7) plan new warns about a link to a choice the
+// catalog does not have while catalog.planLinks is on.
+// Runs queue.mjs against a temporary repo and queue folder. Never the main repo or the real queue.
+// =============================================================
+import { afterAll, describe, expect, it } from 'vitest';
+import { execFileSync, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const QUEUE = path.resolve(__dirname, '..', 'queue.mjs');
+const ID = ['-c', 'user.name=queue-test', '-c', 'user.email=queue-test@example.invalid'];
+const CAT = 'docs/queue/catalog';
+
+const temporary: string[] = [];
+afterAll(() => {
+  for (const m of temporary) {
+    try {
+      fs.rmSync(m, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+    } catch {
+      /* left for the OS */
+    }
+  }
+});
+
+const DECISION = [
+  '---',
+  'id: D-0001',
+  'title: Dates through one library',
+  'status: proposed',
+  'paths: ["lib/**"]',
+  'invariant: Code under lib/ handles dates with dayjs only.',
+  'plan: PL-DATES',
+  '---',
+  'Why: one library for one job.',
+  '',
+].join('\n');
+
+function project(config: Record<string, unknown> = {}) {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-catalog-flow-'));
+  temporary.push(folder);
+  const repo = path.join(folder, 'repo');
+  const worktree = path.join(folder, 'wt-A');
+  fs.mkdirSync(repo);
+  const globalConfig = path.join(folder, 'global-gitconfig');
+  fs.writeFileSync(globalConfig, '');
+  const configFile = path.join(folder, 'queue.config.json');
+  const setConfig = (c: Record<string, unknown>) =>
+    fs.writeFileSync(configFile, JSON.stringify({ baseBranch: 'main', mode: 'lite', ...c }));
+  setConfig(config);
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: globalConfig,
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CEILING_DIRECTORIES: folder,
+    QUEUE_FOLDER: folder,
+    QUEUE_CONFIG: configFile,
+    QUEUE_ROOT: repo,
+    QUEUE_GIT: repo,
+    QUEUE_TIME_LOG: path.join(folder, 'times.jsonl'),
+    QUEUE_TRANSCRIPTS: path.join(folder, 'transcripts'),
+    RAVENSEAT_CLAUDE_DIR: path.join(folder, 'claude'),
+    RAVENSEAT_MANAGED_CLAUDE_MD: '',
+    RAVENSEAT_INSTRUCTIONS_TOP: repo,
+  } as NodeJS.ProcessEnv;
+  delete env.QUEUE_SCRATCHPAD;
+  delete env.QUEUE_SESSION;
+  const write = (f: string, text: string, root = repo) => {
+    fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true });
+    fs.writeFileSync(path.join(root, f), text);
+  };
+  const g = (args: string[], cwd = repo) => execFileSync('git', ['-C', cwd, ...ID, ...args], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  write('package.json', JSON.stringify({ scripts: { test: 'vitest run' }, dependencies: { dayjs: '1.11.0' } }));
+  write('lib/a.js', 'function norm(p) { return p; }\nmodule.exports = { norm };\n');
+  g(['init', '-q', '-b', 'main']);
+  g(['add', '--', 'package.json', 'lib/a.js']);
+  g(['commit', '-q', '-m', 'start']);
+  g(['branch', 'queue/A']);
+  g(['worktree', 'add', '-q', worktree, 'queue/A']);
+  fs.writeFileSync(
+    path.join(folder, 'queue.json'),
+    JSON.stringify({ limits: {}, resolved: [], projects: { p: { title: 'P' } }, tasks: [] }),
+  );
+  const run = (args: string[], cwd = repo) => {
+    const r = spawnSync(process.execPath, [QUEUE, ...args], { encoding: 'utf8', env, cwd });
+    return { code: r.status, out: r.stdout ?? '', err: r.stderr ?? '', all: `${r.stdout ?? ''}${r.stderr ?? ''}` };
+  };
+  const read = (f: string) => fs.readFileSync(path.join(repo, f), 'utf8');
+  const ledger = path.join(folder, 'catalog-accepted.json');
+  return { folder, repo, worktree, run, write, read, ledger, setConfig };
+}
+
+describe('ravenseat catalog init, show and check', () => {
+  it('init writes the three parts with the generated block, never over a file, and refreshes only the block', () => {
+    const p = project();
+    const r = p.run(['catalog', 'init']);
+    expect(r.code, r.all).toBe(0);
+    const stack = p.read(`${CAT}/stack.md`);
+    expect(stack).toMatch(/ravenseat:generated begin/);
+    expect(stack).toMatch(/Node/);
+    expect(stack).toMatch(/dates and times: dayjs/);
+    expect(stack).toMatch(/test: `npm test`/);
+    expect(stack).toMatch(/## Prefer/);
+    expect(p.read(`${CAT}/reuse.md`)).toMatch(/\| Purpose \| Symbol \| File \|/);
+    expect(p.read(`${CAT}/decisions/README.md`)).toMatch(/D-0001-<slug>\.md/);
+    expect(stack).not.toMatch(/\r/);
+    // The owner's own lines stay; only the block follows the manifests.
+    p.write(`${CAT}/stack.md`, `${stack}- dates: use dayjs, not moment\n`);
+    p.write(`${CAT}/reuse.md`, 'my own reuse file\n');
+    p.write('pyproject.toml', '[project]\nname = "x"\n');
+    const again = p.run(['catalog', 'init']);
+    expect(again.code, again.all).toBe(0);
+    expect(p.read(`${CAT}/reuse.md`)).toBe('my own reuse file\n');
+    expect(p.read(`${CAT}/stack.md`)).toMatch(/Python/);
+    expect(p.read(`${CAT}/stack.md`)).toMatch(/- dates: use dayjs, not moment/);
+    expect(again.out).toMatch(/kept reuse\.md/);
+  });
+
+  it('check is fine without a catalog, exits 1 on an error and 0 on warnings only', () => {
+    const p = project();
+    const none = p.run(['catalog', 'check']);
+    expect(none.code).toBe(0);
+    expect(none.out).toMatch(/no catalog/i);
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION.replace('status: proposed', 'status: maybe'));
+    const bad = p.run(['catalog', 'check']);
+    expect(bad.code).toBe(1);
+    expect(bad.all).toMatch(/status must be one of/);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION.replace('["lib/**"]', '["nowhere/**"]'));
+    const warnOnly = p.run(['catalog', 'check']);
+    expect(warnOnly.code, warnOnly.all).toBe(0);
+    expect(warnOnly.all).toMatch(/match no tracked file/);
+    expect(JSON.parse(p.run(['catalog', 'check', '--json']).out)).toMatchObject({ ok: true, exists: true });
+  });
+
+  it('show lists the parts and one choice in full, with the plan entries that link to it', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION);
+    fs.writeFileSync(
+      path.join(p.folder, 'plans.json'),
+      JSON.stringify({ entries: [{ id: 'PL-DATES', title: 'Dates', project: 'p', priority: 'later', priority_set_by: 'owner', maturity: 'idea', decisions: ['D-0001'] }] }),
+    );
+    const list = p.run(['catalog', 'show']);
+    expect(list.code, list.all).toBe(0);
+    expect(list.out).toMatch(/D-0001\s+proposed\s+Dates through one library/);
+    const one = p.run(['catalog', 'show', 'D-0001']);
+    expect(one.out).toMatch(/invariant: Code under lib\/ handles dates with dayjs only\./);
+    expect(one.out).toMatch(/linked from plan entries: PL-DATES/);
+    expect(p.run(['catalog', 'show', 'D-0099']).code).toBe(1);
+  });
+});
+
+describe('the owner lock on accepted', () => {
+  it('accept needs --by owner, is refused from a track worktree, and records the owner accept', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION);
+    for (const args of [['accept', 'D-0001'], ['accept', 'D-0001', '--by', 'agent'], ['accept', 'D-0001', '--by']]) {
+      const r = p.run(['catalog', ...args]);
+      expect(r.code, args.join(' ')).toBe(1);
+      expect(r.err).toMatch(/--by owner/);
+    }
+    // From the track's own worktree, with the same file there: refused whatever --by says.
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION, p.worktree);
+    const inTrack = p.run(['catalog', 'accept', 'D-0001', '--by', 'owner'], p.worktree);
+    expect(inTrack.code).toBe(1);
+    expect(inTrack.err).toMatch(/track worktree/);
+    expect(fs.readFileSync(path.join(p.worktree, CAT, 'decisions', 'D-0001-dates.md'), 'utf8')).toBe(DECISION);
+    expect(fs.existsSync(p.ledger)).toBe(false);
+    expect(p.read(`${CAT}/decisions/D-0001-dates.md`)).toBe(DECISION);
+
+    const ok = p.run(['catalog', 'accept', 'D-0001', '--by', 'owner']);
+    expect(ok.code, ok.all).toBe(0);
+    expect(p.read(`${CAT}/decisions/D-0001-dates.md`)).toMatch(/status: accepted\naccepted_by: owner\naccepted: \d{4}-\d{2}-\d{2}\n/);
+    expect(JSON.parse(fs.readFileSync(p.ledger, 'utf8')).decisions['D-0001']).toMatchObject({ by: 'owner' });
+    expect(p.run(['catalog', 'check']).code).toBe(0);
+    expect(p.run(['catalog', 'show']).out).toMatch(/D-0001\s+accepted/);
+  });
+
+  it('a status set to accepted by hand, or an invariant changed after the accept, is unconfirmed until the owner accepts it', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION.replace('status: proposed', 'status: accepted'));
+    const forged = p.run(['catalog', 'check']);
+    expect(forged.code).toBe(1);
+    expect(forged.all).toMatch(/D-0001 says accepted, but the owner did not accept this version/);
+    expect(p.run(['catalog', 'show']).out).toMatch(/D-0001\s+unconfirmed/);
+    expect(p.run(['catalog', 'accept', 'D-0001', '--by', 'owner']).code).toBe(0);
+    expect(p.run(['catalog', 'check']).code).toBe(0);
+    const text = p.read(`${CAT}/decisions/D-0001-dates.md`);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, text.replace('dayjs only', 'dayjs or moment'));
+    expect(p.run(['catalog', 'check']).code).toBe(1);
+  });
+
+  it('the push guard lets a queue agent read the catalog, never accept; the write guard keeps it off the record', () => {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const PG = require('../lib/pushGuard.js');
+    const WG = require('../lib/writeGuard.js');
+    const GE = require('../lib/gateEvidence.js');
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    const ctx = { agentType: 'track', branch: 'queue/A', environment: null };
+    for (const command of ['ravenseat catalog show', 'ravenseat catalog check', 'ravenseat catalog show D-0001'])
+      expect(PG.assess(command, ctx)?.decision ?? 'allow', command).not.toBe('deny');
+    for (const command of ['ravenseat catalog accept D-0001 --by owner', 'ravenseat catalog init', 'ravenseat catalog accept D-0001'])
+      expect(PG.assess(command, ctx)?.decision, command).toBe('deny');
+    expect(WG.assessWrite({ agentType: 'track', filePath: path.join('C:\\data', 'catalog-accepted.json'), folder: 'C:\\data', guardedTypes: [] })).not.toBeNull();
+    expect(GE.tamperReason('rm .queue/catalog-accepted.json')).toBeTruthy();
+  });
+});
+
+describe('the Checks card, doctor and plan links', () => {
+  it('the Checks tab offers the catalog card for a known stack until the folder exists', () => {
+    const p = project();
+    const keys = () => JSON.parse(p.run(['checks', '--json']).out).suggestions.map((s: { key: string }) => s.key);
+    expect(keys()).toContain('project-catalog');
+    p.run(['catalog', 'init']);
+    expect(keys()).not.toContain('project-catalog');
+  });
+
+  it('doctor names a catalog error as WARN while catalog.doctor is on, and not when it is off', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION.replace('status: proposed', 'status: accepted'));
+    const rows = () => JSON.parse(p.run(['doctor', '--json', '--all']).out).checks.filter((c: { name: string }) => c.name === 'catalog');
+    expect(rows()).toEqual([expect.objectContaining({ status: 'WARN', message: expect.stringMatching(/D-0001 says accepted/) })]);
+    p.setConfig({ catalog: { doctor: false } });
+    expect(rows()).toEqual([]);
+  });
+
+  it('plan new warns about a link to a choice the catalog does not have while catalog.planLinks is on', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION);
+    const entry = (id: string, decisions: string[]) => {
+      const f = path.join(p.folder, `${id}.json`);
+      fs.writeFileSync(f, JSON.stringify({ id, title: id, project: 'p', priority: 'later', priority_reason: 'Later: no deadline.', maturity: 'idea', decisions }));
+      return p.run(['plan', 'new', '--file', f]);
+    };
+    const known = entry('PL-ONE', ['D-0001']);
+    expect(known.code, known.all).toBe(0);
+    expect(known.all).not.toMatch(/is not in docs\/queue\/catalog/);
+    const unknown = entry('PL-TWO', ['D-0042']);
+    expect(unknown.code, unknown.all).toBe(0);
+    expect(unknown.all).toMatch(/decision D-0042 is not in docs\/queue\/catalog/);
+    p.setConfig({ catalog: { planLinks: false } });
+    expect(entry('PL-THREE', ['D-0043']).all).not.toMatch(/is not in docs\/queue\/catalog/);
+  });
+});

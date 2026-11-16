@@ -466,6 +466,9 @@ function tamperReason(command) {
     return "the owner log (owner-log.json) records the owner's own queue writes; a queue agent may not touch it";
   if (names('git-surface'))
     return "the accepted git baseline (git-surface.json) is the owner's (ravenseat surface accept --by owner); a queue agent may not touch it";
+  // The owner's record of the accepted design choices (lib/catalog.js): writing it would make a track's own choice count.
+  if (names('catalog-accepted'))
+    return "the record of accepted design choices (catalog-accepted.json) is the owner's (ravenseat catalog accept --by owner); a queue agent may not touch it";
   // The gate runner itself (gates.mjs, `ravenseat gates`, `queue.mjs gates`), not any command that mentions the word.
   const gateRun = /\bgates\.mjs\b/.test(c) || new RegExp(`\\b((?:${CLI_PATTERN})(?:\\.mjs|\\.cmd)?|queue\\.mjs)["']?\\s+gates\\b`).test(c);
   if (gateRun && /(^|\s)--(evidence|cwd)\b/.test(c))

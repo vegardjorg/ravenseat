@@ -655,6 +655,15 @@ const SETTINGS = Object.freeze([
     'More names the helper note never reports (main, run, setup and a few others are skipped already).'),
   row('scopeNotes.folderDepth', 'review', 'integer', 'New folder depth',
     'How deep the new folder note looks: 1 = only new top folders, 2 (default) or 3.'),
+  // The project catalog (lib/catalog.js, docs/queue/catalog/). Both are on in both modes: each states a fact, stops
+  // nothing and does nothing without the folder. Off is no weakening: the owner lock on accepted and the protected path
+  // (protectedPaths) are not these switches.
+  row('catalog.doctor', 'review', 'onoff', 'Catalog problems in doctor',
+    'Doctor shows one WARN row when `ravenseat catalog check` finds an error in docs/queue/catalog/, such as a design ' +
+    'choice set to accepted without the owner. It stops nothing.'),
+  row('catalog.planLinks', 'plans', 'onoff', 'Check plan links to design choices',
+    'A plan entry\'s `decisions` link to an id that is not in docs/queue/catalog/decisions is a warning on plan new and ' +
+    'plan edit. The shape of the link is always checked. It stops nothing.'),
   row('triage.minAgeDays', 'review', 'integer', 'Triage tasks older than (days)',
     'A task added or last edited this long ago is checked against the current code before it starts. Empty = no age rule.',
     { fullWhy: 'the intake triage is off in lite' }),

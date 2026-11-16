@@ -46,7 +46,8 @@ red marker until the gap is fixed or the card is set aside.
 
 `when` says when the suggestion applies. Comma means all must hold, and `|` means at least one of those kinds:
 `has-git`, `no-git`, `no-commit` (no git, or git with no commit yet), `has-remote`, `has-ci`, `no-ci`, `has-gates`,
-`no-gates`, `checks-found`, `secrets-open`, `known-stack`, `instructions-large`,
+`no-gates`, `checks-found`, `secrets-open`, `known-stack`, `instructions-large`, `catalog-missing` (the project has no
+`docs/queue/catalog/`),
 `packs-missing` (a pack for the stack is not on in `review.packs`), `stack-unpacked` (a known stack has no pack),
 `missing:<kinds>`, `found:<kinds>`, `not-in-ci:<kinds>`, `off:<setting>` (an opt-in check that is off),
 `allowlist-tracked-hit` (a key in an approved command in a tracked file), `gitignore-gap` (`.claude/settings.local.json`

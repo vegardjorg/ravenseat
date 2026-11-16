@@ -29,6 +29,10 @@ undo.
 - `sources`: list of `{ path, anchor?, role? }` pointing to the documents. The entry points to them, it never copies
   them.
 - `priority_reason`: one sentence (which priority rule, and why). Required when an agent sets the priority.
+- `decisions` (optional): list of design choice ids from the [project catalog](catalog.md), such as
+  `["D-0001"]`, for the choices the plan builds on or changes. The shape is always checked; while
+  `catalog.planLinks` is on, an id the catalog does not have gives a warning. `plan get` prints them, and `ravenseat
+  catalog show D-0001` lists the plan entries that link to a choice.
 
 ## Commands
 

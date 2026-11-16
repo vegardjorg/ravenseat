@@ -50,6 +50,7 @@ import { a, branchFor, CONFIG, CLI, FILE, FOLDER, FOLLOW_FILE, git, GIT_ROOT, HE
 import { cloudSetupFacts } from './cloud.mjs';
 import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 import { REPO_CHECKS } from './doctorRepo.mjs';
+import { checkTree } from './catalog.mjs';
 
 const BOARD = require('./lib/queueBoard.js');
 const QL = require('./lib/queueLock.js');
@@ -286,6 +287,8 @@ function checkConfig() {
   wrong.push(...require('./lib/findingRepeats.js').setupProblems(own.learning).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   // The reuse and scope facts (lib/scopeNotes.js setupProblems): on/off as true or false, names, a depth of 1 to 3.
   wrong.push(...require('./lib/scopeNotes.js').setupProblems(own.scopeNotes).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
+  // The project catalog's switches (lib/catalog.js setupProblems): doctor and planLinks, true or false.
+  wrong.push(...require('./lib/catalog.js').setupProblems(own.catalog).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   wrong.push(...baselineProblems(own).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   const out = [];
   if (wrong.length) out.push(fail('config', `wrong type in ${path.basename(file)}: ${wrong.join('; ')}`, 'compare with queue.config.example.json'));
@@ -662,6 +665,19 @@ function checkTaxonomy() {
   return [warn('taxonomy', warnings.join('; '), 'fix the file; until then the core rules apply to what it got wrong')];
 }
 
+/**
+ * The project catalog (docs/queue/catalog/, lib/catalog.js): one WARN row when `ravenseat catalog check` finds an error,
+ * such as a design choice set to accepted without the owner. Nothing without the folder or without an error, and nothing
+ * with catalog.doctor off. Never FAIL: the catalog guides the tracks, it does not stop them.
+ */
+function checkCatalog() {
+  if (!require('./lib/catalog.js').setupOf(CONFIG).doctor) return [];
+  const r = checkTree(MAIN_TREE);
+  if (!r.cat.exists || !r.errors.length) return [];
+  const more = r.errors.length > 2 ? ` And ${r.errors.length - 2} more.` : '';
+  return [warn('catalog', `${r.errors.length} error(s) in docs/queue/catalog/: ${r.errors.slice(0, 2).join(' ')}${more}`, `${CLI} catalog check`)];
+}
+
 /** What cloud tracks need, only while they are on. The rows that are not problems stay in `ravenseat cloud setup`. */
 /**
  * Settings: the guards weaker than their default, in one line (lib/settingsView.js doctorRows). Not an advice row, so
@@ -716,7 +732,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

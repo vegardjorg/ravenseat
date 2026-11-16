@@ -544,6 +544,7 @@ module.exports = {
   reuseFacts,
   newFolderFacts,
   isManifest,
+  depsOf,
   dependencyFacts,
   exampleProblems,
   driftFacts,
