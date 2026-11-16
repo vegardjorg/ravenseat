@@ -15,6 +15,8 @@
     { "id": "data-loss", "title": "deletion and data loss" },
     { "id": "test-weakening", "title": "weakened or flaky test" },
     { "id": "ui-state", "title": "UI state" },
+    { "id": "duplication", "title": "a rule or helper written again" },
+    { "id": "scope-drift", "title": "a change outside the mission or its files" },
     { "id": "other", "title": "anything else (never gives a proposal)" }
   ]
 }

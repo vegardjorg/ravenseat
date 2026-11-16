@@ -72,7 +72,7 @@ Disprove it first. This is a step inside your own review: never start other agen
 At most about 1,500 characters. First line exactly: `FINDINGS H=<n> M=<n> L=<n>`. Then one line per finding, LOW too:
 `FINDING <code> <H|M|L> <mark> <class> @ <file:line|-> | <one sentence>`
 (code H1, M1, L1 ...; mark: H fix-round, M fix-round or mechanical, L defer or before-merge.
-Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, other (or -).)
+Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, duplication, scope-drift, other (or -).)
 
 The sentence gives the mission point (its number and a few words), the status, the evidence (or where you looked),
 and what must be added or removed. HIGH means a required point is missing or divergent; MEDIUM is a

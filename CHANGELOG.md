@@ -3,6 +3,12 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+- **Hardening: two more finding classes.** Reviewers can now mark a rule or helper written again (`duplication`) and
+  a change outside the mission or its files (`scope-drift`), so both can be counted per area. A test keeps every
+  reviewer file naming exactly the classes in `failure-classes.json`.
+
 ## 0.16.0 (2026-11-16)
 
 **Review findings get one line form with a class and a place, also the low ones, so none is lost between rounds. New guards, all off until you turn them on, find keys in .mcp.json, broad shared permissions and probes aimed at a shared database, and the queue files can be shared in git on your word. `npm run test:changed` runs only the tests a change can reach.**

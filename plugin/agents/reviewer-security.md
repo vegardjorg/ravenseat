@@ -24,7 +24,7 @@ same folder: `00-package.md` (result line, changed objects, diff stats), `diff.p
 - Answer with at most about 1,500 characters. First line exactly: `FINDINGS H=<n> M=<n> L=<n>`. Then one line per finding, LOW too:
   `FINDING <code> <H|M|L> <mark> <class> @ <file:line|-> | <one sentence>`
   (code H1, M1, L1 ...; mark: H fix-round, M fix-round or mechanical, L defer or before-merge.
-  Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, other (or -).)
+  Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, duplication, scope-drift, other (or -).)
   The sentence says what is wrong and the suggested fix. Mark a small mechanical MEDIUM fix `mechanical`, and a LOW
   finding `defer` (safe to defer) or `before-merge` (needed before merge).
 

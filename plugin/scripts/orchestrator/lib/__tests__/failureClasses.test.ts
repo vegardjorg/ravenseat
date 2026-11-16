@@ -24,9 +24,12 @@ function project(content?: unknown) {
 }
 
 describe('coreClasses', () => {
-  it('has the 15 ids of the contract, other last, each with a title', () => {
+  it('has the 17 ids of the contract, other last, each with a title', () => {
     const ids = FC.coreClasses().map((c: { id: string }) => c.id);
-    expect(ids).toHaveLength(15);
+    expect(ids).toHaveLength(17);
+    // Repeated work and work outside the mission are counted per area, so they get their own classes.
+    expect(ids).toContain('duplication');
+    expect(ids).toContain('scope-drift');
     expect(ids).toContain('unchecked-error');
     expect(ids).toContain('ui-state');
     expect(ids[ids.length - 1]).toBe('other');
@@ -54,6 +57,17 @@ describe('normalizeClass', () => {
 });
 
 describe('promptLine', () => {
+  it('every reviewer file names exactly the core classes, so the agents cannot drift from the JSON', () => {
+    const dir = path.join(__dirname, '..', '..', '..', '..', 'agents');
+    const want = FC.promptLine(FC.coreClasses()).replace(/\.$/, '');
+    const files = fs.readdirSync(dir).filter((f: string) => /^reviewer.*\.md$/.test(f));
+    expect(files.length).toBeGreaterThanOrEqual(9);
+    for (const f of files) {
+      const line = fs.readFileSync(path.join(dir, f), 'utf8').split(/\r?\n/).find((l: string) => l.trim().startsWith('Classes: '));
+      expect(line, f).toBeDefined();
+      expect(line!.trim().replace(/\)$/, '').replace(/\.$/, ''), f).toBe(want);
+    }
+  });
   it('is one short line with every id', () => {
     const line = FC.promptLine(FC.coreClasses());
     expect(line).not.toContain('\n');
@@ -102,7 +116,7 @@ describe('classesFor', () => {
   it('a broken file never throws: the core list and one warning', () => {
     for (const bad of ['{ not json', '"a string"', '[1,2]', '{"classes": 7}']) {
       const r = FC.classesFor(project(bad));
-      expect(r.classes).toHaveLength(15);
+      expect(r.classes).toHaveLength(17);
       expect(r.warnings.length).toBeGreaterThanOrEqual(1);
     }
   });

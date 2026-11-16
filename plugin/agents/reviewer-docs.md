@@ -59,7 +59,7 @@ Disprove it first. This is a step inside your own review: never start other agen
 At most about 1,500 characters. First line exactly: `FINDINGS H=<n> M=<n> L=<n>`. Then one line per finding, LOW too:
 `FINDING <code> <H|M|L> <mark> <class> @ <file:line|-> | <one sentence>`
 (code H1, M1, L1 ...; mark: H fix-round, M fix-round or mechanical, L defer or before-merge.
-Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, other (or -).)
+Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, duplication, scope-drift, other (or -).)
 
 The sentence gives the fact or problem (with the heading when there is no line), the evidence, and the fix (for a
 lost fact: the wording to put back). HIGH means a true, needed fact is lost or the doc now contradicts the code;

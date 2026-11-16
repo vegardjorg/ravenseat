@@ -58,7 +58,7 @@ Every finding gets exactly one class. The class decides what the owner is offere
 At most about 3,000 characters and about 15 findings, the most severe first. First line exactly: `FINDINGS H=<n> M=<n> L=<n>`. Then one line per finding, LOW too:
 `FINDING <code> <H|M|L> <mark> <class> @ <file:line|-> | <one sentence>`
 (code H1, M1, L1 ...; mark: H fix-round, M fix-round or mechanical, L defer or before-merge.
-Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, other (or -).)
+Classes: unchecked-error, access-control, injection, secret-leak, contract-drift, null-undefined, concurrency-order, migration-schema, config-env, dependency-build, time-zone, data-loss, test-weakening, ui-state, duplication, scope-drift, other (or -).)
 The sentence starts with the kind (`one-off:`, `repeatable:` or `architecture:`), then what is wrong and the fix.
 Mark a LOW finding `defer` when it is safe to defer. After a repeatable one, `GATE: <failure class> | check: <what it looks for, where it runs> | red on: <file:line>`,
 for an architecture one, `DECISION: <question> | choices: <a> / <b> [/ <c>]`.
