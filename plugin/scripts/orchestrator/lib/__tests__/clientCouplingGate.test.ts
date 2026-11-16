@@ -56,6 +56,9 @@ const ALLOWED: string[] = [
   // W2c (done 2026-11-16): the hook and status line payloads (stdin fields and hookSpecificOutput) moved to
   // lib/clients/claude/hookInput.js; the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble ask
   // clientFor().hooks.
+  // A deliberate exception, not a W2 move: the push guard's failSafe reads tool_input.command and builds the deny
+  // itself when even the hook reader does not load, so the guard never gets weaker when the adapter breaks.
+  'hook-push-guard.mjs',
   // W2b: transcript entries and usage (message.usage, content blocks, compact_boundary, API errors)
   'lib/approvalWait.js',
   'lib/askBundle.js',

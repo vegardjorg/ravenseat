@@ -153,7 +153,9 @@ const FACTS = Object.freeze(
       source: 'hooks',
       // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
       // lib/clients/claude/hookInput.js (clientFor().hooks).
-      readers: ['lib/clients/claude/hookInput.js'],
+      // hook-push-guard.mjs failSafe keeps a raw last-resort read and deny on purpose, so the push guard still denies
+      // when the adapter itself does not load (never through the registry).
+      readers: ['lib/clients/claude/hookInput.js', 'hook-push-guard.mjs'],
     },
     {
       id: 'hook.subagentStop',
@@ -192,7 +194,9 @@ const FACTS = Object.freeze(
       // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
       // lib/clients/claude/hookInput.js (clientFor().hooks).
       // contextGuard.hookOutput still builds the UserPromptSubmit answer itself and moves in W2b.
-      readers: ['lib/clients/claude/hookInput.js', 'lib/contextGuard.js'],
+      // hook-push-guard.mjs failSafe keeps a raw last-resort read and deny on purpose, so the push guard still denies
+      // when the adapter itself does not load (never through the registry).
+      readers: ['lib/clients/claude/hookInput.js', 'lib/contextGuard.js', 'hook-push-guard.mjs'],
     },
     // ---- Status line (documented) ----
     {

@@ -78,12 +78,25 @@ try {
 function failSafe(stdin, error) {
   process.stderr.write(`push-guard: internal error (${error?.message ?? error})\n`);
   try {
-    // The adapter's hooks (lib/clients/claude/hookInput.js) has no requires of its own, so it loads even when the
-    // module that broke is one of the guard's.
-    const HK = require('./lib/clients/index.js').clientFor().hooks;
-    const command = HK.read(read(stdin))?.tool.input?.command;
+    // Never through the client registry (lib/clients/index.js): the registry may be what broke, and a push guard must
+    // not get weaker for it. The hook reader (lib/clients/claude/hookInput.js) has no requires of its own, so it is
+    // loaded directly; if even that fails, the payload is read and the answer built here, as before 0w W2c.
+    let HK = null;
+    try {
+      HK = require('./lib/clients/claude/hookInput.js');
+    } catch {
+      // no reader: the raw fallback below
+    }
+    const payload = read(stdin);
+    const command = HK ? HK.read(payload)?.tool.input?.command : payload?.tool_input?.command;
     const answer = require('./lib/pushGuardFallback.js').fallbackAnswer(command, error);
-    if (answer) process.stdout.write(JSON.stringify(HK.decision('PreToolUse', answer.decision, `push-guard: ${answer.reason}`)));
+    if (answer) {
+      const reason = `push-guard: ${answer.reason}`;
+      const out = HK
+        ? HK.decision('PreToolUse', answer.decision, reason)
+        : { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: answer.decision, permissionDecisionReason: reason } };
+      process.stdout.write(JSON.stringify(out));
+    }
   } catch {
     // the fallback itself failed: no decision
   }
