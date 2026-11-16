@@ -664,6 +664,19 @@ const SETTINGS = Object.freeze([
   row('catalog.planLinks', 'plans', 'onoff', 'Check plan links to design choices',
     'A plan entry\'s `decisions` link to an id that is not in docs/queue/catalog/decisions is a warning on plan new and ' +
     'plan edit. The shape of the link is always checked. It stops nothing.'),
+  // The catalog excerpt (lib/catalogExcerpt.js, bolk B4). On in both modes by owner decision 16.11: it is only text,
+  // nothing without a catalog, capped, and its heading says what it cost. Off is no weakening: no guard reads it, and
+  // the owner lock and the protected path stay.
+  row('catalog.missionExcerpt', 'review', 'onoff', 'Catalog excerpt in the mission',
+    'A track\'s mission gets the part of docs/queue/catalog/ that meets its files: the design choices that hold, the ' +
+    'proposed ones as suggestions, the prefer lines and the reuse rows in its folders, under catalog.excerptTokens. ' +
+    'Nothing without a catalog.'),
+  row('catalog.reviewExcerpt', 'review', 'onoff', 'Catalog excerpt in the review package',
+    'The review package gets the same excerpt, so the reviewer checks the delivery against the choices that hold and ' +
+    'the reuse rows (findings duplication and scope-drift). Nothing without a catalog.'),
+  row('catalog.excerptTokens', 'review', 'integer', 'Catalog excerpt cap (tokens)',
+    'The most tokens the excerpt may use, 200 to 6000 (default 1500, a token counted as 4 characters). The reuse rows ' +
+    'are cut first; the heading says what was cut.'),
   row('triage.minAgeDays', 'review', 'integer', 'Triage tasks older than (days)',
     'A task added or last edited this long ago is checked against the current code before it starts. Empty = no age rule.',
     { fullWhy: 'the intake triage is off in lite' }),

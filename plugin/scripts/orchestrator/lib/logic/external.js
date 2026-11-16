@@ -310,6 +310,8 @@ function missingProject(tasks, register) {
  *   addendum?: (ctx: { cloud: boolean }) => { reportOutside: string } }} v `cloud`: the track runs as a cloud session.
  *   `addendum`: the client's missionAddendum (lib/clients/<client>/mission.js; default Claude Code), which says how the
  *   track reports a path someone else owns (Claude: SendMessage, or "stop" in the cloud).
+ *   `catalog`: the excerpt of the project catalog as lines (lib/catalogExcerpt.js); left out, it is read from the main
+ *   tree's docs/queue/catalog/ (catalog.missionExcerpt); null or [] = none (a fix round's short mission).
  */
 /** The mission lines for `reads`: the list, and each read file an active task is changing now (empty without reads). */
 function readsLines(o, queue) {
@@ -329,8 +331,11 @@ function readsLines(o, queue) {
   return out;
 }
 
-function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = defaultAddendum } = {}) {
+function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = defaultAddendum, catalog } = {}) {
   const list = (x) => (Array.isArray(x) && x.length ? x.join(', ') : 'none');
+  // The part of the project catalog that meets the task's files (bolk B4 of the scope drift plan): empty and free
+  // without a catalog, capped with a catalog, and the same text for every client.
+  const excerpt = catalog === undefined ? (require('../catalogExcerpt.js').forTask(o, { which: 'mission' })?.lines ?? []) : catalog || [];
   const reportFrom = addendum({ cloud }).reportOutside;
   const answer = answerBlock(o, queue);
   // The done command (lib/doneCheck.js): the track runs it itself before it reports, the orchestrator runs it again.
@@ -351,6 +356,7 @@ function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = 
           '**No files are listed for this task**, so "what you own" means what the mission names: change only that, and list the files you changed in the report. Protected paths (hooks, settings, scripts, dependency and check configs) and migrations still stop the merge: report a need for one instead of changing it.',
         ]
       : []),
+    ...(excerpt.length ? ['', ...excerpt] : []),
     '',
     ...(done ? [done, ''] : []),
     ...(accept ? [accept, ''] : []),

@@ -35,6 +35,11 @@ For each mission point, find the evidence in the delivery (file:line, test name,
 - **Outside the mission:** the delivery changes something no point asked for (scope creep, or files the task does
   not own).
 
+When `00-package.md` has a "From the project catalog" section, the mission had it too: its accepted design choices
+(under "Design choices that hold") are part of the mission. A delivery that breaks the invariant of an accepted choice
+is class `scope-drift`, MEDIUM at least; a helper written again where a reuse row shows one that exists is class
+`duplication`. A proposed choice binds nothing, so not following it is no finding.
+
 Match by what things do, not by their names: search for coverage under another name before you call a point missing.
 The track's own report is a claim, not evidence; check it against the diff. A point the mission leaves open is not a
 gap; list it as an open question instead. Do not judge code quality or rank the business value; others do that.

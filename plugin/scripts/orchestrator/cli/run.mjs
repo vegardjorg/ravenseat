@@ -484,6 +484,26 @@ export function cmdFill() {
         `${d.warning ? '  NB: files it owns changed since it was added (the track is told to read the diff)' : ''}` +
         `  (${fillEstimate(d.task_id)})`,
     );
+  // The catalog excerpt's size per track, from the heading in each mission (lib/catalogExcerpt.js, bolk B4 of the scope
+  // drift plan), so its cost can be measured. No line without a catalog.
+  {
+    const CX = require('./lib/catalogExcerpt.js');
+    const sizes = descriptors
+      .map((d) => {
+        let m = null;
+        try {
+          m = CX.tokensInMission(fs.readFileSync(path.join(scratch, `prompt-${d.task_id}.md`), 'utf8'));
+        } catch {
+          // error-ignored: a missing prompt file is reported elsewhere; this line is measurement only
+        }
+        return m ? { id: d.task_id, ...m } : null;
+      })
+      .filter(Boolean);
+    if (sizes.length)
+      console.log(
+        `Catalog excerpt in the mission (tokens, cap ${sizes[0].cap}): ${sizes.map((s) => `${s.id} ${s.tokens}`).join(', ')}.`,
+      );
+  }
   for (const l of triageOut.lines) console.log(l);
   if (waitLine) console.log(waitLine);
   resolveWarning();
@@ -859,7 +879,8 @@ export function cmdResume() {
   if (reason === 'fix') {
     missionPath = path.join(scratch, `mission-${id}.md`);
     fs.writeFileSync(missionPath, fullOriginal);
-    original = L.trackBlock(o, queue, { text: '' });
+    // The short fix-round mission leaves the catalog excerpt out: it is in mission-<id>.md, which the round points to.
+    original = L.trackBlock(o, queue, { text: '', catalog: null });
   }
   const trackId = `${id}-r${round}`;
   const head = git(['rev-parse', BASE]);

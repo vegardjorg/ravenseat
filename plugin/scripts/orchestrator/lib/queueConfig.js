@@ -459,7 +459,10 @@ const STANDARD = Object.freeze({
   // when `ravenseat catalog check` finds an error (a design choice set to accepted without the owner, a broken file).
   // planLinks: a plan entry's `decisions` link to an id the catalog does not have is a warning on plan new and edit.
   // Both only state facts and stop nothing, so they are on; neither does anything without the folder.
-  catalog: { doctor: true, planLinks: true },
+  // missionExcerpt and reviewExcerpt (lib/catalogExcerpt.js, bolk B4): the part of the catalog that meets the task's
+  // files goes into its mission and its review package, capped at excerptTokens (200 to 6000). On by owner decision
+  // 16.11: it is only text, costs nothing without a catalog, and its heading says how many tokens it used.
+  catalog: { doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500 },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.

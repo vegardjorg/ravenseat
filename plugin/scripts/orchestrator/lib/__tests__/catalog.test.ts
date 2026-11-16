@@ -248,11 +248,14 @@ describe('the owner lock', () => {
 
 describe('settings, protected path and plan links', () => {
   it('catalog.doctor and catalog.planLinks are on by default and checked for shape', () => {
-    expect(QC.STANDARD.catalog).toEqual({ doctor: true, planLinks: true });
+    // The excerpt settings of bolk B4 are locked in catalogExcerpt.test.ts.
+    expect(QC.STANDARD.catalog).toMatchObject({ doctor: true, planLinks: true });
     expect(C.setupProblems(undefined)).toEqual([]);
     expect(C.setupProblems({ doctor: 'yes' })).toEqual(['catalog.doctor must be true or false']);
     expect(C.setupProblems([])).toEqual(['catalog must be an object']);
-    expect(C.setupProblems({ other: true })).toEqual(['catalog.other is not a catalog setting (doctor, planLinks)']);
+    expect(C.setupProblems({ other: true })).toEqual([
+      'catalog.other is not a catalog setting (doctor, planLinks, missionExcerpt, reviewExcerpt, excerptTokens)',
+    ]);
   });
 
   it('docs/queue/catalog/ is a protected path by default', () => {

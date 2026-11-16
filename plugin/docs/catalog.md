@@ -37,7 +37,8 @@ Under `## Prefer`, one line per job says what to use and, if you like, what not 
 - validation: zod
 ```
 
-Keep it to at most 10 lines. A later step puts these lines in the mission, so a track reads them before it writes code.
+Keep it to at most 10 lines. They go into every mission's [catalog excerpt](#the-excerpt-in-the-mission-and-the-review-package),
+so a track reads them before it writes code.
 
 ### reuse.md
 
@@ -115,6 +116,51 @@ without a new accept.
 
 The lock is not a setting: turning it off would let a track decide an architecture choice.
 
+## The excerpt in the mission and the review package
+
+A track gets only the part of the catalog that meets its task, never the whole folder, and never through the
+instructions file (which every session loads, task or not). The queue picks it when it writes the mission, from the
+task's `owned_files`, `shared_patch` and `reads`:
+
+- **Design choices** whose `paths` meet those files: a file a glob matches, or a folder a glob can reach into. At
+  most five, the binding ones first, by id. Only a choice the owner accepted (with the record, see the owner lock) is
+  under "Design choices that hold" and binding. A proposed choice, and one that says accepted without the owner's
+  record (unconfirmed, so marked), is under "Proposed design choices" as a suggestion. A superseded choice never comes.
+- **Prefer lines** from `stack.md`, at most ten: they hold for the whole project.
+- **Reuse rows** from `reuse.md` in the task's folders (the folder of an owned or read file, or inside an owned
+  folder), at most 15.
+- One line on how to look for a helper before writing one, and `catalog show <D-id>` for a choice in full.
+
+A task that names no files gets every choice that holds and no proposed one (nothing says which proposals concern it),
+the prefer lines and the first reuse rows. Nothing that meets the task, or no catalog, gives no block at all.
+
+**The cap and the measurement.** The excerpt stays within `catalog.excerptTokens` (default 1500, a token counted as four
+characters). Items go in in the order binding choices, prefer lines, proposed choices, reuse rows while the whole text
+still fits, so the reuse rows are cut first. The heading says what it used and what was cut:
+
+```
+**From the project catalog** (`docs/queue/catalog/`, chosen for this task's files; about 209 of at most 1500 tokens; nothing cut):
+- **Design choices that hold** (accepted by the owner, binding: a change that would break one is an owner question, never your call):
+  - D-0001 (plugin/scripts/orchestrator/lib/**): A lib module never starts a process or writes a file; the I/O lives in cli/ and the scripts.
+- **Prefer** (stack.md: a second library for one of these jobs is an owner question):
+  - tests: vitest
+- **Building blocks for reuse in these folders** (reuse.md: use them before you write a new helper):
+  - Match a path against a glob: `globMatch` in `plugin/scripts/orchestrator/lib/mergeGuard.js`
+- Before you write a new helper, look for one (`git grep -n -w <name>`); `ravenseat catalog show <D-id>` prints a choice in full.
+```
+
+`fill` prints the size per track (`Catalog excerpt in the mission (tokens, cap 1500): K-7 209`), and `ravenseat cost` shows
+what the tracks cost, so the price of the excerpt can be measured on the first tracks. A fix round's short mission
+leaves the excerpt out; the whole mission it points to has it.
+
+**The review package.** `receive` puts the same excerpt in `00-package.md` under "From the project catalog", read from
+the main tree, right after "Reuse and scope". The reviewer and the gap reviewer check the delivery against it: a helper
+or rule written again where a reuse row, a prefer line or a reuse note shows one is a `duplication` finding, and a
+change that breaks the invariant of a choice that holds is a `scope-drift` finding, MEDIUM at least, since it was an
+owner question. A proposed choice binds nothing, so not following it is no finding.
+
+The text names no client and no client's tools, so a cloud session and any other client get the same excerpt.
+
 ## Protected path
 
 `docs/queue/catalog/` is in the default `protectedPaths`. A track may change it only when its task owns the files
@@ -157,5 +203,9 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Plan link warning | A warning at `plan new` and `plan edit` only | `catalog.planLinks`, on |
 | Checks card | Low priority, can be set aside | No setting: it only proposes |
 | Agent access | `catalog show` and `catalog check` allowed for queue agents | No setting |
+| Excerpt in the mission | Text only: up to `catalog.excerptTokens` more context in every turn of the track (1500 tokens over about 100 turns is about 150,000 cached input tokens). It stops nothing, and a project without a catalog pays nothing | `catalog.missionExcerpt`, on by owner decision: the track needs it to reuse, and the heading measures its cost |
+| Excerpt in the review package | Text only, read once per reviewer; it can lead to a `duplication` or `scope-drift` finding, which is the point | `catalog.reviewExcerpt`, on: the reviewer judges against what the track was given |
+| Excerpt cap | None; it only narrows. Too low cuts the reuse rows first, and the heading says so | `catalog.excerptTokens`, 1500 (200 to 6000) |
+| Reviewer point (V9) | No new reviewer and no new turn: one point in `reviewer.md` and `reviewer-gap.md` that acts only on the package section | Follows `catalog.reviewExcerpt`: without the section the point has nothing to check |
 
-Turning `catalog.doctor` or `catalog.planLinks` off weakens no guard, so `ravenseat settings` does not flag it.
+Turning any of the catalog settings off weakens no guard, so `ravenseat settings` does not flag it.

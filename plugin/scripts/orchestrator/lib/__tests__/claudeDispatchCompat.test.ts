@@ -142,6 +142,41 @@ describe('Claude dispatch output (locked before the adapter refactor)', () => {
     }
   }, 120_000);
 
+  // Bolk B4 of the scope drift plan: with a project catalog, the mission gets the excerpt in the track block and fill
+  // prints its size. Without a catalog (the case above) every byte stays as before.
+  it('fill with a project catalog: the excerpt in the mission and its size in the output', async () => {
+    const { folder, scratch, run, norm } = setup();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const C = require('../catalog.js');
+    const dir = path.join(folder, 'docs', 'queue', 'catalog');
+    fs.mkdirSync(path.join(dir, 'decisions'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'stack.md'), '# Stack\n\n## Prefer\n\n- tests: vitest, never jest\n');
+    fs.writeFileSync(
+      path.join(dir, 'reuse.md'),
+      '# Reuse\n\n| Purpose | Symbol | File |\n|---|---|---|\n| Parse a duration | parseDuration | src/time.ts |\n',
+    );
+    const choice = (id: string, status: string, paths: string[], invariant: string) =>
+      `---\nid: ${id}\ntitle: Choice ${id}\nstatus: ${status}\npaths: ${JSON.stringify(paths)}\ninvariant: ${invariant}\n---\nContext.\n`;
+    const d1 = choice('D-0001', 'accepted', ['src/**'], 'Modules under src/ export functions, never classes.');
+    fs.writeFileSync(path.join(dir, 'decisions', 'D-0001-functions.md'), d1);
+    fs.writeFileSync(
+      path.join(dir, 'decisions', 'D-0002-errors.md'),
+      choice('D-0002', 'proposed', ['src/K1.ts'], 'Errors are returned as values, never thrown.'),
+    );
+    const ledger = C.recordAccept(C.emptyLedger(), C.parseDecision('D-0001-functions.md', d1).decision, {
+      by: 'owner',
+      now: '2026-11-16T00:00:00.000Z',
+    });
+    fs.writeFileSync(path.join(folder, C.LEDGER_FILE), JSON.stringify(ledger));
+    const r = run(['fill', '--scratchpad', scratch]);
+    expect(r.error).toBe('');
+    expect(r.code).toBe(0);
+    await expect(norm(r.out)).toMatchFileSnapshot(snap('fill-catalog.stdout.txt'));
+    const prompt = norm(fs.readFileSync(path.join(scratch, 'prompt-K1.md'), 'utf8'));
+    await expect(prompt).toMatchFileSnapshot(snap('prompt-K1-catalog.md'));
+    expect(prompt).toContain('**From the project catalog**');
+  }, 120_000);
+
   it('start: the agent line for a waiting task', async () => {
     const { run, norm } = setup();
     const r = run(['start', 'S1']);

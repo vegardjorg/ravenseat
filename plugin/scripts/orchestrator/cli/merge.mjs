@@ -981,6 +981,9 @@ export function cmdReceive() {
       // The flaky gate commands (lib/trackFlaky.js packageSection); [] when none was flaky.
       flaky: require('./lib/trackFlaky.js').packageSection(gateCheck.record),
       scopeNotes: scopeFacts.section,
+      // The part of the project catalog that meets the task's files (lib/catalogExcerpt.js, bolk B4), read from the main
+      // tree as the mission had it: the reviewer checks the delivery against it (reviewer.md, reviewer-gap.md).
+      catalog: require('./lib/catalogExcerpt.js').forTask(o0, { which: 'review', root: MAIN_TREE })?.lines ?? null,
       assumptions,
       delta,
       deltaSection: delta ? DR.packageSection(delta, { previousFindings: !!files.previousFindings }) : null,

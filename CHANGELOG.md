@@ -5,6 +5,15 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: the catalog now reaches the track and the reviewer, and only the part that matters.** A task's mission
+  gets the part of the project catalog that meets its owned files and reads: the design choices that hold, the
+  proposed ones marked as suggestions, the prefer lines and the reuse rows in its folders. Only a choice the owner
+  accepted counts as binding; one set to accepted by hand stays a suggestion, and a superseded one never comes. The
+  excerpt has a cap (1500 tokens by default) that cuts the reuse rows first, and its heading says what it used and what
+  was cut, so `fill` can print the size per track. The review package gets the same excerpt, and the reviewer and the
+  gap reviewer check the delivery against it, as `duplication` for a helper written again and `scope-drift` for a
+  broken invariant. A task that names no files gets only the choices that hold, a fix round's short mission leaves it
+  out, and a project without a catalog gets not one byte more. Both parts and the cap have their own setting.
 - **Hardening: a track no longer has to guess the stack, the helpers or the design choices.** The new project catalog
   in `docs/queue/catalog/` holds what a track should know before it writes code: the stack with one "Prefer" line per
   job, the building blocks meant for reuse, and the design choices, each with one invariant that can be checked.

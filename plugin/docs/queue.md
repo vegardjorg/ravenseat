@@ -584,7 +584,9 @@ Each part has its own setting, and all are on by default in both modes, since ea
 
 The notes say what a delivery did. What the project already has, which helpers to reuse and which design choices
 hold is written down once, in the project catalog `docs/queue/catalog/` (`ravenseat catalog init|show|check`, and
-only the owner accepts a choice): see [The project catalog](catalog.md).
+only the owner accepts a choice): see [The project catalog](catalog.md). The part of it that meets a task's files goes
+into the task's mission and its review package, next to these notes, so the track knows before it writes and the
+reviewer checks against the same text ([the excerpt](catalog.md#the-excerpt-in-the-mission-and-the-review-package)).
 
 ## Limits and safety
 
@@ -912,6 +914,7 @@ names every guard weaker than its default on its `settings` row.
 | `scopeNotes.reuse`, `scopeNotes.newFolders`, `scopeNotes.dependencies`, `scopeNotes.drift` | `true`, `true`, `true`, `true` | [Reuse and scope notes](#reuse-and-scope-notes) at `receive`: a name the base already defines in another file, a new folder, a second package for the same job, and drift in numbers. One `NOTE` line each and a `Reuse and scope` section in `00-package.md`; nothing stops and no tokens are used. `false` turns that part off; it weakens no guard | Advanced |
 | `scopeNotes.ignoreNames`, `scopeNotes.folderDepth` | `[]`, `2` | Names the reuse note never reports (on top of `main`, `run`, `setup` and a few others), and how deep the new folder note looks (1 to 3) | Advanced |
 | `catalog.doctor` | `true` | `ravenseat doctor` gives one WARN row `catalog` when `ravenseat catalog check` finds an error in [the project catalog](catalog.md) (a bad shape, an unknown status, a choice set to `accepted` that the owner has not accepted). Only a warning; `false` turns the row off and weakens no guard | Advanced |
+| `catalog.missionExcerpt`, `catalog.reviewExcerpt`, `catalog.excerptTokens` | `true`, `true`, `1500` | [The catalog excerpt](catalog.md#the-excerpt-in-the-mission-and-the-review-package): the part of the project catalog that meets the task's files goes into its mission and its review package, at most this many tokens (200 to 6000), with the size and what was cut in its heading. Nothing without a catalog; `false` leaves that excerpt out and weakens no guard | Advanced |
 | `triage.minAgeDays`, `triage.agentAdded`, `triage.maxPerFill`, `triage.askAgainMin` | `3`, `true`, `3`, `60` | Intake triage before a task starts: tasks added or last edited this many days ago (`null` = off) and agent-added tasks get a `triage` verdict first (`ravenseat triage`); at most this many steps per fill, not asked again within this many minutes. Off with `ravenseat helpers off triage` and in lite mode (see orchestration.md) | Advanced, Full mode only |
 | `proposals.autoAccept.enabled`, `proposals.autoAccept.classes`, `proposals.autoAccept.maxEstimateMin`, `proposals.autoAccept.maxValue` | `false`, `["K"]`, `60`, `null` | Auto-accept of agent proposals by the owner's rules (`ravenseat proposals`); the queue's own rules win; never D/D+, `waiting_on`, legal/owner labels, open legal points or protected paths. Switching it on weakens a guard: `ravenseat proposals auto on --i-understand --by owner` | Advanced, queue.json |
 | `architectureRules` | `[]` | Short rules copied into every mission | Advanced |

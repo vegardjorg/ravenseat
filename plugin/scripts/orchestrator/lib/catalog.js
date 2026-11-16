@@ -56,8 +56,15 @@ const OWNER_BY = new Set(['owner', 'theBoard']);
 const BLOCK_BEGIN = '<!-- ravenseat:generated begin (ravenseat catalog init writes this block from the manifests; write your own text below it) -->';
 const BLOCK_END = '<!-- ravenseat:generated end -->';
 const LEDGER_FILE = 'catalog-accepted.json';
-/** The defaults for config().catalog (lib/queueConfig.js STANDARD.catalog holds the same values). */
-const DEFAULTS = Object.freeze({ doctor: true, planLinks: true });
+/**
+ * The defaults for config().catalog (lib/queueConfig.js STANDARD.catalog holds the same values). missionExcerpt and
+ * reviewExcerpt: the excerpt in the mission and in the review package (lib/catalogExcerpt.js, bolk B4); excerptTokens:
+ * its cap, a whole number from EXCERPT_TOKENS.min to EXCERPT_TOKENS.max.
+ */
+const DEFAULTS = Object.freeze({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500 });
+/** The range of catalog.excerptTokens: under 200 not even one design choice fits, over 6000 it is no excerpt. */
+const EXCERPT_TOKENS = Object.freeze({ min: 200, max: 6000 });
+const isTokens = (v) => Number.isInteger(v) && v >= EXCERPT_TOKENS.min && v <= EXCERPT_TOKENS.max;
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v) => typeof v === 'string' && v.trim().length > 0;
@@ -72,7 +79,9 @@ function setupProblems(own) {
   const out = [];
   for (const [k, v] of Object.entries(own)) {
     if (!Object.hasOwn(DEFAULTS, k)) out.push(`catalog.${k} is not a catalog setting (${Object.keys(DEFAULTS).join(', ')})`);
-    else if (typeof v !== 'boolean') out.push(`catalog.${k} must be true or false`);
+    else if (k === 'excerptTokens') {
+      if (!isTokens(v)) out.push(`catalog.excerptTokens must be a whole number from ${EXCERPT_TOKENS.min} to ${EXCERPT_TOKENS.max}`);
+    } else if (typeof v !== 'boolean') out.push(`catalog.${k} must be true or false`);
   }
   return out;
 }
@@ -81,7 +90,8 @@ function setupProblems(own) {
 function setupOf(config) {
   const own = isObject(config?.catalog) ? config.catalog : {};
   const out = {};
-  for (const [k, d] of Object.entries(DEFAULTS)) out[k] = typeof own[k] === 'boolean' ? own[k] : d;
+  for (const [k, d] of Object.entries(DEFAULTS))
+    out[k] = k === 'excerptTokens' ? (isTokens(own[k]) ? own[k] : d) : typeof own[k] === 'boolean' ? own[k] : d;
   return out;
 }
 
@@ -598,6 +608,7 @@ module.exports = {
   BLOCK_END,
   LEDGER_FILE,
   DEFAULTS,
+  EXCERPT_TOKENS,
   OWNER_BY,
   REUSE_TEMPLATE,
   DECISIONS_README,

@@ -108,7 +108,10 @@ for (let i = 0; i < parts.length; i += 2) {
   const blockLine = block === '(none)' ? '' : `Migration block: ${block}\n\n`;
   const readLine = readFirst ? `${readFirst}\n\n` : '';
   fs.writeFileSync(file, `# ${title}\n\n${readLine}${blockLine}${text}\n\n${body}\n`);
+  // The catalog excerpt's size from its own heading (lib/catalogExcerpt.js), so its cost shows per track.
+  const excerpt = require('./lib/catalogExcerpt.js').tokensInMission(body);
   console.log(
-    `wrote ${file} (class ${cls ?? 'unknown, whole protocol'}, shared ${text.length} chars)`,
+    `wrote ${file} (class ${cls ?? 'unknown, whole protocol'}, shared ${text.length} chars` +
+      `${excerpt ? `, catalog excerpt about ${excerpt.tokens} of ${excerpt.cap} tokens` : ''})`,
   );
 }

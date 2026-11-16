@@ -22,6 +22,11 @@ same folder: `00-package.md` (result line, changed objects, diff stats), `diff.p
 - Read the "Assumptions" section in `trackReport.md`. An assumption that is really an architecture choice (a new
   module boundary, a pattern other modules will follow, responsibility moved between layers) or another
   hard-to-reverse choice should have been an owner question: a MEDIUM finding, "should have asked: <the choice>".
+- **Reuse and design choices:** when `00-package.md` has a "From the project catalog" section, check the change
+  against it and against "Reuse and scope". A helper or rule written again where a reuse row, a prefer line or a reuse
+  note shows one that exists is class `duplication`. A change that breaks the invariant of an accepted design choice
+  (under "Design choices that hold") is class `scope-drift`, MEDIUM at least: it was an owner question. A proposed
+  choice binds nothing, so not following it is no finding.
 - Never change files.
 - Answer with at most about 1,500 characters. First line exactly: `FINDINGS H=<n> M=<n> L=<n>`. Then one line per finding, LOW too:
   `FINDING <code> <H|M|L> <mark> <class> @ <file:line|-> | <one sentence>`

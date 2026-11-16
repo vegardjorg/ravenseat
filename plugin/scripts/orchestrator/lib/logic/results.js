@@ -512,6 +512,9 @@ function reviewPackageIndex({
   flaky = null,
   // The reuse and scope facts (lib/scopeNotes.js packageSection), as lines; null = every part is off.
   scopeNotes = null,
+  // The excerpt of the project catalog the track's mission had (lib/catalogExcerpt.js, form review), as lines; null =
+  // no catalog, nothing for the task, or catalog.reviewExcerpt off.
+  catalog = null,
   assumptions = null,
   // A delta review after a fix round (lib/deltaReview.js): diff.patch and files/ hold only the commits since the last
   // review, and deltaSection (packageSection) says so. null = the whole package, as before.
@@ -554,6 +557,7 @@ function reviewPackageIndex({
   // The flaky gate commands (lib/trackFlaky.js packageSection), as lines; [] or null = none was flaky.
   if (Array.isArray(flaky)) lines.push(...flaky);
   if (Array.isArray(scopeNotes)) lines.push(...scopeNotes);
+  if (Array.isArray(catalog)) lines.push(...catalog);
   if (assumptions)
     lines.push(
       '',
