@@ -39,6 +39,8 @@ const DECISION = [
   'invariant: Files under app/ and components/ never import the database client directly.',
   'check:',
   '  forbid: "from [\'\\"]@db/client[\'\\"]"',
+  '  hit: ["import x from \'@db/client\'"]',
+  '  miss: ["import x from \'@services/factory\'"]',
   '  mode: warn',
   'supersedes: null',
   'plan: PL-ARCH-2',
@@ -254,7 +256,7 @@ describe('settings, protected path and plan links', () => {
     expect(C.setupProblems({ doctor: 'yes' })).toEqual(['catalog.doctor must be true or false']);
     expect(C.setupProblems([])).toEqual(['catalog must be an object']);
     expect(C.setupProblems({ other: true })).toEqual([
-      'catalog.other is not a catalog setting (doctor, planLinks, missionExcerpt, reviewExcerpt, excerptTokens, index)',
+      'catalog.other is not a catalog setting (doctor, planLinks, missionExcerpt, reviewExcerpt, excerptTokens, index, checks, checkStop, gateAfter)',
     ]);
   });
 

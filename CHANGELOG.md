@@ -5,6 +5,15 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a design choice the owner accepted can no longer be broken silently.** A choice in
+  `docs/queue/catalog/decisions/` can carry a `check` rule (`forbid`, plus `hit` and `miss` examples that
+  `catalog check` runs, so a broken rule is an error before it is used). Receive runs it against the delivery's added
+  lines in the choice's paths, test files and comments left out. An accepted choice gives a `CATALOG` line, a line in
+  the review package and a record on the task; a proposed one only a note that binds nothing. `mode: stop` stops the
+  merge only with `catalog.checkStop` on (off by default), with `merge --allow-catalog` as a logged override. The rules
+  are always read from the main tree, so a track cannot turn its own rule off. The same rule broken in
+  `catalog.gateAfter` tasks proposes a GATE task to make it a real lint, inside the shared proposal cap and only with
+  `learning.proposals` on. A project without check rules gets byte-identical output.
 - **Hardening: a helper that is only in the code can now be found before it is written again.** A `@shared <purpose>`
   line in a helper's JSDoc marks it for reuse, where it moves and goes with the code. `ravenseat catalog find <word>`
   searches an index of the code's top-level exports (JS/TS), the reuse rows, the design choices and the prefer lines,

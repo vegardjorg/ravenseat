@@ -37,6 +37,7 @@ import { logEvent } from './events.mjs';
 import { cleanupDetachedOf, cleanupWorktree } from '../cleanup-worktree.mjs';
 import { proposeGate } from './gate.mjs';
 import { registerQuietly, registerReviewItems, reviewReports } from './reviewItem.mjs';
+import { catalogRules, proposeRuleGates } from './catalog.mjs';
 
 const ER = require('./lib/eventRows.js');
 const CP = require('./lib/conflictPredict.js');
@@ -620,6 +621,18 @@ function scopeNotesFor(o, { branch, base, diff, changedNames }) {
   }
 }
 
+/**
+ * The check rules of the design choices on a diff (lib/catalogChecks.js through cli/catalog.mjs catalogRules), or null
+ * when there is nothing to try. A read error gives one NOTE line in `lines` and no result: receive and merge go on.
+ */
+function catalogRulesFor(id, diff) {
+  try {
+    return { result: catalogRules(diff), lines: [] };
+  } catch (e) {
+    return { result: null, lines: [`NOTE catalog rules (${id}): could not be tried (${e?.message ?? e}); nothing is blocked on it.`] };
+  }
+}
+
 /** The names the delivery's added lines define (lib/scopeNotes.js newNames), for the near names (V1b); [] on any error. */
 function reviewNewNames(diff) {
   try {
@@ -972,6 +985,12 @@ export function cmdReceive() {
   // new folder, a second library for the same job, drift in numbers. NOTE lines and a package section, never a stop.
   const scopeFacts = scopeNotesFor(o0, { branch, base: weakBase, diff, changedNames });
   for (const l of scopeFacts.lines) console.log(l);
+  // The check rules of the design choices (lib/catalogChecks.js, bolk B6): a CATALOG line for an accepted choice an added
+  // line breaks, a NOTE for a proposed one, and the rules in the package after the scope facts. Never a stop here.
+  const CC = require('./lib/catalogChecks.js');
+  const catalogCheck = catalogRulesFor(id, diff);
+  for (const l of [...catalogCheck.lines, ...CC.receiveLines(catalogCheck.result, { id, cli: CLI })]) console.log(l);
+  const ruleSection = CC.packageSection(catalogCheck.result);
   fs.writeFileSync(
     path.join(folder, '00-package.md'),
     L.reviewPackageIndex({
@@ -990,7 +1009,8 @@ export function cmdReceive() {
       redOnBase: redBase ? RB.packageSection(redBase) : null,
       // The flaky gate commands (lib/trackFlaky.js packageSection); [] when none was flaky.
       flaky: require('./lib/trackFlaky.js').packageSection(gateCheck.record),
-      scopeNotes: scopeFacts.section,
+      // No rule hit: the section is exactly as before (the package stays byte for byte without a catalog).
+      scopeNotes: ruleSection ? [...(scopeFacts.section ?? []), ...ruleSection] : scopeFacts.section,
       // The part of the project catalog that meets the task's files (lib/catalogExcerpt.js, bolk B4), read from the main
       // tree as the mission had it: the reviewer checks the delivery against it (reviewer.md, reviewer-gap.md). With
       // catalog.index on (bolk B5) the code index is refreshed here and the names the delivery defines go along, for the
@@ -1035,6 +1055,12 @@ export function cmdReceive() {
     if (redBase) o.red_on_base = redBase;
     else delete o.red_on_base;
     if (evidenceRead?.evidence) o.evidence = evidenceRead.evidence;
+    // The check rules' record (lib/catalogChecks.js record): the latest hits and every rule that ever enforced on the
+    // task, for the repeat count. Not for a PARTIAL delivery (unfinished), and untouched when no rule was tried.
+    if (catalogCheck.result && result?.status !== 'PARTIAL') {
+      const rec = CC.record(catalogCheck.result, o.catalog_checks, new Date().toISOString());
+      if (rec) o.catalog_checks = rec;
+    }
     // New wiring items are added; the ones already on the task (any status) stay as they are.
     if (wiringRead.items.length && result?.status !== 'PARTIAL')
       o.wiring = WI.mergeItems(o.wiring, wiringRead.items, { now: new Date().toISOString(), source: wiringRead.source }).items;
@@ -1084,6 +1110,9 @@ export function cmdReceive() {
     ],
     { once: true },
   );
+  // A rule broken in catalog.gateAfter separate tasks becomes a proposed gate task for the project's own lint
+  // (learning.proposals on, the shared cap). After the record above, so this delivery counts.
+  if (catalogCheck.result && result?.status !== 'PARTIAL') for (const l of proposeRuleGates(catalogCheck.result, { from: id })) console.log(l);
   if (o0.status !== 'review' && r.started)
     logTime(id, 'delivered', `${minutes(r.started, r.delivered)} min to delivery`);
   if (!r.picked_by) pulseCursor(`receive ${id}`);
@@ -1254,7 +1283,7 @@ export async function cmdMerge() {
   const id = positional(1, ['--scratchpad', '--done-cwd'])[0];
   if (!id)
     die(
-      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--allow-unreviewed] [--allow-no-test] [--force-red-base] [--force-red-gate]',
+      'merge <id> [--resume] [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force] [--allow-guard] [--allow-partial] [--allow-focus] [--allow-catalog] [--allow-secret] [--allow-unreviewed] [--allow-no-test] [--force-red-base] [--force-red-gate]',
     );
   const resume = a.includes('--resume');
   // The merge guard's override (see lib/mergeGuard.js): passed on to merge-track.mjs, which logs it.
@@ -1431,6 +1460,20 @@ export async function cmdMerge() {
       if (focus.length) {
         logTime(id, 'focus-overridden', `${focus.length} focus marker(s), tip ${String(trackTip).slice(0, 12)}`);
         console.log(`WARNING: --allow-focus: merging ${id} with ${focus.length} focus marker(s); logged as "focus-overridden".`);
+      }
+    }
+    // A check rule in mode stop of a design choice the owner accepted (lib/catalogChecks.js, bolk B6): tried again here on
+    // the merge's own diff, so commits after receive cannot slip past it. Only with catalog.checkStop on (off by default);
+    // --allow-catalog is the owner's, logged.
+    if (require('./lib/catalog.js').setupOf(CONFIG).checkStop) {
+      const rules = catalogRulesFor(id, gitLarge(['diff', `${BASE}...${trackTip}`]) ?? '');
+      for (const l of rules.lines) console.log(l);
+      const catalogStop = require('./lib/catalogChecks.js').mergeStop(rules.result, { id, cli: CLI });
+      if (catalogStop && !a.includes('--allow-catalog')) die(catalogStop);
+      if (catalogStop) {
+        const ids = rules.result.rules.filter((x) => x.level === 'stop').map((x) => x.id);
+        logTime(id, 'catalog-overridden', `${ids.join(', ')}, tip ${String(trackTip).slice(0, 12)}`);
+        console.log(`WARNING: --allow-catalog: merging ${id} past the stop rule(s) of ${ids.join(', ')}; logged as "catalog-overridden".`);
       }
     }
     // A fix without a proven red test (lib/fixTests.js): a stop only in the strict mode (gates.redOnBaseStrict, off by

@@ -36,10 +36,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { a, CLI, CONFIG, die, FOLDER, MAIN_TREE, queueBranchId, readPlans, require, ROOT, SF } from './context.mjs';
+import { a, CLI, CONFIG, die, edit, FILE, FOLDER, LM, MAIN_TREE, queueBranchId, read, readPlans, require, ROOT, SF } from './context.mjs';
+import { addTask, ensureProject } from './kickstart.mjs';
 import { trackBranchHere } from './settings.mjs';
 
 const C = require('./lib/catalog.js');
+const CC = require('./lib/catalogChecks.js');
 const CI = require('./lib/catalogIndex.js');
 const K = require('./lib/kickstart.js');
 const RP = require('./lib/reviewPacks.js');
@@ -352,3 +354,79 @@ export function cmdCatalog() {
 
 // The settings this command reads (config().catalog through lib/catalog.js setupOf): doctor and the plan commands use them.
 export const catalogSetup = () => C.setupOf(CONFIG);
+
+// ---- The check rules at receive and merge (lib/catalogChecks.js, bolk B6) ------------------------------------------
+
+/**
+ * The check rules of the main tree's catalog tried on a diff, or null when there is nothing to try (catalog.checks off,
+ * no catalog, no choice with a check). Read from the main tree like the excerpt, never from the track's branch: a track
+ * cannot loosen the rule it is measured against (the folder is also a protected path). Throws on a read error; the
+ * callers say so in one line and go on.
+ */
+export function catalogRules(diff) {
+  const setup = C.setupOf(CONFIG);
+  if (!setup.checks) return null;
+  const cat = C.readCatalog(catalogDir(MAIN_TREE));
+  if (!cat.exists) return null;
+  const decisions = cat.decisions.map((x) => x.decision).filter((d) => d && d.check != null);
+  if (!decisions.length) return null;
+  return CC.assess({ decisions, ledger: readLedger(), diff, setup });
+}
+
+/**
+ * The gate proposals for the rules this delivery broke that were broken in catalog.gateAfter separate tasks (counted
+ * from catalog_checks on the tasks and the archive). Only with learning.proposals on; through lib/knownBugGate.js decide,
+ * so the same rule again extends its open task, a cancelled one stays declined, and the cap shared with the inspection
+ * queue and the GATE lines holds. Always proposed, never approved. Returns the lines to print; never throws.
+ */
+export function proposeRuleGates(result, { from = null } = {}) {
+  const out = [];
+  try {
+    if (!require('./lib/findingRepeats.js').setupOf(CONFIG).proposals || !fs.existsSync(FILE)) return out;
+    const KBG = require('./lib/knownBugGate.js');
+    const archived = require('./lib/queueArchive.js').load(FOLDER).tasks;
+    const due = CC.dueRules(result, [...(read().tasks ?? []), ...archived], { gateAfter: C.setupOf(CONFIG).gateAfter });
+    for (const x of due) {
+      const queue = read();
+      const known = [...(queue.tasks ?? []), ...archived];
+      const d = KBG.decide({ title: CC.gateTitle(x.rule), tasks: known, mode: 'propose' });
+      if (d.action === 'extend') {
+        const h = x.rule.hits[0];
+        const seen = { from, where: h ? `${h.file}:${h.line}` : null, detail: `the check rule of ${x.rule.id} was broken again` };
+        const changed = edit((q) => {
+          const o = q.tasks.find((t) => t.id === d.task.id);
+          if (!o || o.status === 'picked') return false; // a running track has already read its mission
+          const mission = KBG.extendedMission(o, seen);
+          if (!mission) return false;
+          o.mission = mission;
+          return true;
+        });
+        if (changed) out.push(`CATALOG: ${d.task.id} already proposes a lint rule for ${x.rule.id}; the new place was added to it.`);
+        continue;
+      }
+      if (d.action === 'full') {
+        out.push(
+          `CATALOG: the rule of ${x.rule.id} was broken in ${x.tasks.length} separate tasks, but ${KBG.SHARED_MAX} proposals already wait ` +
+            `for you, so no lint rule is proposed yet (${CLI} gate list, ${CLI} inspection).`,
+        );
+        continue;
+      }
+      if (d.action !== 'add') continue; // exists or declined: nothing new
+      if (!LM.isLite(CONFIG)) ensureProject();
+      const id = KBG.nextId(known);
+      const task = { ...CC.proposalTask(x, { id, from }), ...(queue.projects?.cicd ? { project: 'cicd' } : {}) };
+      const r = addTask(task);
+      if (!r.ok) {
+        out.push(`CATALOG: the lint proposal for ${x.rule.id} could not be added (${r.output}); nothing is blocked on it.`);
+        continue;
+      }
+      out.push(
+        `CATALOG: proposed ${id}: the rule of ${x.rule.id} was broken in ${x.tasks.length} separate tasks (${x.tasks.slice(0, 5).join(', ')}), ` +
+          `so it belongs in the project's own lint. ${CLI} approve ${id} lets it be built, ${CLI} cancel ${id} declines it.`,
+      );
+    }
+  } catch (e) {
+    out.push(`CATALOG: the lint proposal failed (${e?.message ?? e}); nothing is blocked on it.`);
+  }
+  return out;
+}

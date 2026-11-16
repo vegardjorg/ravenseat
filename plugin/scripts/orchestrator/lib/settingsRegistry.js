@@ -684,6 +684,23 @@ const SETTINGS = Object.freeze([
     'Builds an index of the code\'s exports (JS/TS) at receive and for each mission, cached by file sha in the data ' +
     'folder. The excerpt then gets the helpers tagged `@shared` in the task\'s folders, and the review package the new ' +
     'names that are close to an existing export (V1b). `ravenseat catalog find` works without it.'),
+  // The check rules of the design choices (lib/catalogChecks.js, bolk B6). checks is on: a rule exists only when the
+  // owner writes one, and a hit is one line at receive. Off weakens: an accepted choice's rule is then not checked.
+  // checkStop is off: it is the one part that can stop work. gateAfter only matters with learning.proposals on.
+  row('catalog.checks', 'review', 'onoff', 'Check rules of the design choices',
+    'Receive tries the `check:` rule of each design choice on the delivery\'s added lines in the choice\'s paths. An ' +
+    'accepted choice gives a CATALOG line, a proposed one a NOTE. It stops nothing unless catalog.checkStop is on.', {
+      weakens: offWeakens,
+      protects: 'A delivery that breaks a design choice the owner accepted, where the rule says so line by line.',
+      whyNot: 'The rule is the owner\'s own, written narrow with examples; without the check only the reviewer can see it.',
+      changes: 'The rules are not tried at receive or merge, and no gate is proposed from them. Doctor will report it.',
+    }),
+  row('catalog.checkStop', 'review', 'onoff', 'Stop the merge on a rule in mode stop',
+    'A rule with `mode: stop` of a choice the owner accepted stops the merge when an added line breaks it ' +
+    '(`merge --allow-catalog` overrides, logged). Off by default: the rule is then a warning.'),
+  row('catalog.gateAfter', 'review', 'integer', 'Separate tasks before a lint proposal',
+    'A rule broken in this many separate tasks (2 to 20, default 3) becomes one proposed gate task to put it in the ' +
+    'project\'s own lint. Only with learning.proposals on; it shares the cap of three open proposals.'),
   row('triage.minAgeDays', 'review', 'integer', 'Triage tasks older than (days)',
     'A task added or last edited this long ago is checked against the current code before it starts. Empty = no age rule.',
     { fullWhy: 'the intake triage is off in lite' }),

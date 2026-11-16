@@ -464,7 +464,21 @@ const STANDARD = Object.freeze({
   // 16.11: it is only text, costs nothing without a catalog, and its heading says how many tokens it used.
   // index (lib/catalogIndex.js, bolk B5): the generated index of the code's exports and @shared blocks, built at receive
   // and for the missions, feeds the excerpt and the near names (V1b). Off: the plan puts it on the opt-in list.
-  catalog: { doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500, index: false },
+  // checks, checkStop, gateAfter (lib/catalogChecks.js, bolk B6): a design choice's `check:` rule is tried on the added
+  // lines at receive (on: a line, never a stop, and a rule exists only when the owner writes one); mode stop stops the
+  // merge only with checkStop on (off: what can stop work is opt-in); a rule broken in gateAfter (2 to 20) separate tasks
+  // becomes a gate proposal for the project's own lint, only with learning.proposals on.
+  catalog: {
+    doctor: true,
+    planLinks: true,
+    missionExcerpt: true,
+    reviewExcerpt: true,
+    excerptTokens: 1500,
+    index: false,
+    checks: true,
+    checkStop: false,
+    gateAfter: 3,
+  },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.

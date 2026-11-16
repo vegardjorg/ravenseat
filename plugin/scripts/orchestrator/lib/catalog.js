@@ -7,7 +7,9 @@
 // blocks meant for reuse, and the design choices, each with one invariant that can be checked. Bolk B3 of the scope
 // drift plan (plans/scope-drift-dry-katalog-2026-11-15.md, owner decision 16.11: hand-written and tracked here, only the
 // owner accepts a design choice, the folder is a protected path). The generated index of the code is bolk B5 and lives
-// in the data folder, not here; the excerpt in the mission is bolk B4; the check rules (`check:`) are bolk B6.
+// in the data folder, not here; the excerpt in the mission is bolk B4; the check rules (`check:`) are bolk B6, read and
+// run by lib/catalogChecks.js (this file checks their shape and examples in parseDecision, and in checkCatalog whether
+// a rule already hits lines in the tree).
 //
 // The folder (all hand-written, tracked in git, a protected path: lib/queueConfig.js STANDARD.protectedPaths):
 //   stack.md                 a generated block between BLOCK_BEGIN and BLOCK_END (languages, packs, checks, the libraries
@@ -63,11 +65,33 @@ const LEDGER_FILE = 'catalog-accepted.json';
  * exports and @shared blocks (lib/catalogIndex.js, bolk B5) is built at receive and when a mission is made, and the
  * excerpt gets the tagged blocks and, for the reviewer, the near names. Off by default (the plan's opt-in list: it
  * builds and stores a file, and its worth depends on the project's size); `catalog find` works either way.
+ * checks, checkStop, gateAfter (bolk B6, lib/catalogChecks.js): the check rules are tried on the added lines at receive
+ * (checks, on: only the owner writes a rule, and a hit is a line, never a stop); a rule in mode stop of an accepted
+ * choice stops the merge only with checkStop on (off: what can stop work is opt-in); a rule broken in gateAfter
+ * separate tasks becomes a gate proposal, only with learning.proposals on.
  */
-const DEFAULTS = Object.freeze({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500, index: false });
+const DEFAULTS = Object.freeze({
+  doctor: true,
+  planLinks: true,
+  missionExcerpt: true,
+  reviewExcerpt: true,
+  excerptTokens: 1500,
+  index: false,
+  checks: true,
+  checkStop: false,
+  gateAfter: 3,
+});
 /** The range of catalog.excerptTokens: under 200 not even one design choice fits, over 6000 it is no excerpt. */
 const EXCERPT_TOKENS = Object.freeze({ min: 200, max: 6000 });
 const isTokens = (v) => Number.isInteger(v) && v >= EXCERPT_TOKENS.min && v <= EXCERPT_TOKENS.max;
+/** The range of catalog.gateAfter: one task is no repeat; more than 20 never proposes in practice. */
+const GATE_AFTER = Object.freeze({ min: 2, max: 20 });
+const isGateAfter = (v) => Number.isInteger(v) && v >= GATE_AFTER.min && v <= GATE_AFTER.max;
+/** The whole-number settings and their test. */
+const WHOLE = Object.freeze({
+  excerptTokens: { ok: isTokens, range: EXCERPT_TOKENS },
+  gateAfter: { ok: isGateAfter, range: GATE_AFTER },
+});
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v) => typeof v === 'string' && v.trim().length > 0;
@@ -82,8 +106,8 @@ function setupProblems(own) {
   const out = [];
   for (const [k, v] of Object.entries(own)) {
     if (!Object.hasOwn(DEFAULTS, k)) out.push(`catalog.${k} is not a catalog setting (${Object.keys(DEFAULTS).join(', ')})`);
-    else if (k === 'excerptTokens') {
-      if (!isTokens(v)) out.push(`catalog.excerptTokens must be a whole number from ${EXCERPT_TOKENS.min} to ${EXCERPT_TOKENS.max}`);
+    else if (WHOLE[k]) {
+      if (!WHOLE[k].ok(v)) out.push(`catalog.${k} must be a whole number from ${WHOLE[k].range.min} to ${WHOLE[k].range.max}`);
     } else if (typeof v !== 'boolean') out.push(`catalog.${k} must be true or false`);
   }
   return out;
@@ -94,7 +118,7 @@ function setupOf(config) {
   const own = isObject(config?.catalog) ? config.catalog : {};
   const out = {};
   for (const [k, d] of Object.entries(DEFAULTS))
-    out[k] = k === 'excerptTokens' ? (isTokens(own[k]) ? own[k] : d) : typeof own[k] === 'boolean' ? own[k] : d;
+    out[k] = WHOLE[k] ? (WHOLE[k].ok(own[k]) ? own[k] : d) : typeof own[k] === 'boolean' ? own[k] : d;
   return out;
 }
 
@@ -212,7 +236,8 @@ function parseDecision(name, source) {
   if (!text(d.invariant)) e('invariant missing (one sentence that can be checked)');
   else if (/[\u0000-\u001f]/.test(d.invariant)) e('invariant must be one line');
   else if (d.invariant.length > INVARIANT_MAX) e(`invariant is over ${INVARIANT_MAX} characters; keep it to one sentence`);
-  if (d.check != null && !isObject(d.check)) e('check must be fields under check: (the rules are read by a later step)');
+  // The check rule (bolk B6): its shape, and its examples run through the same line test a delivery gets.
+  if (d.check != null) for (const t of require('./catalogChecks.js').ruleOf(d.check).errors) e(t);
   if (d.supersedes != null && !(typeof d.supersedes === 'string' && ID_PATTERN.test(d.supersedes)))
     e('supersedes must be a design choice id (D-0001) or null');
   if (d.plan != null && !(typeof d.plan === 'string' && PLAN_PATTERN.test(d.plan))) e('plan must be a plan entry id (PL-...) or null');
@@ -449,6 +474,35 @@ function acceptText(source, { by, now = new Date().toISOString() } = {}) {
 
 // ---- check ----------------------------------------------------------------------------------------------------------
 
+/** At most this many files of a choice's paths are read for treeHits, and none over TREE_FILE_BYTES. */
+const TREE_FILES = 3000;
+const TREE_FILE_BYTES = 512 * 1024;
+
+/**
+ * The lines in the tree a choice's check rule already hits (files in its paths, never tests or comment lines), or
+ * null: { count, first: "file:line" }. A superseded choice and a rule with errors are not tried.
+ */
+function treeHits(d, { files, readFile, glob }) {
+  if (d.check == null || d.status === 'superseded') return null;
+  const CC = require('./catalogChecks.js');
+  const RS = require('./reviewSignals.js');
+  const { rule, errors } = CC.ruleOf(d.check);
+  if (!rule || errors.length) return null;
+  let count = 0;
+  let first = null;
+  const mine = files.filter((f) => !RS.isTestPath(f) && d.paths.some((p) => glob(p, f))).slice(0, TREE_FILES);
+  for (const f of mine) {
+    const body = readFile(f);
+    if (typeof body !== 'string' || body.length > TREE_FILE_BYTES || body.includes('\u0000')) continue;
+    lines(body).forEach((l, i) => {
+      if (!CC.lineHits(rule, l)) return;
+      count++;
+      first ??= `${f}:${i + 1}`;
+    });
+  }
+  return count ? { count, first } : null;
+}
+
 /**
  * Everything `catalog check` reports, on top of the read's own errors.
  * @param {object} cat readCatalog's result
@@ -487,6 +541,12 @@ function checkCatalog(cat, ctx = {}) {
     if (d.status === 'superseded' && !ds.some((x) => x.supersedes === d.id))
       warnings.push(`${d.id} is superseded, but no design choice names it in supersedes`);
     if (d.plan && ctx.planIds && !ctx.planIds.has(d.plan)) warnings.push(`${d.id}: plan ${d.plan} is not in the plan register`);
+    const already = files && ctx.readFile ? treeHits(d, { files, readFile: ctx.readFile, glob }) : null;
+    if (already)
+      warnings.push(
+        `${d.id}: its check already hits ${already.count} line(s) in the tree (first ${already.first}). Receive tries only ` +
+          'added lines, so these stay until a task takes them out; a rule that hits much of the tree is too broad.',
+      );
   }
   for (const r of cat.reuse?.rows ?? []) {
     const body = ctx.readFile ? ctx.readFile(r.file) : undefined;
@@ -591,6 +651,20 @@ const DECISIONS_README = [
   '---',
   'Context, the choice and what follows from it, in at most 30 lines.',
   '```',
+  '',
+  'When the invariant can be checked line by line, add a rule under `check:` (receive tries it on the added lines):',
+  '',
+  '```markdown',
+  'check:',
+  '  forbid: "from [\'\\"]@db/client[\'\\"]"',
+  '  hit: ["import { db } from \'@db/client\'"]',
+  '  miss: ["import { save } from \'@/services/factory\'"]',
+  '  mode: warn',
+  '```',
+  '',
+  '- `forbid` is a regular expression (case matters); `hit` and `miss` are example lines it must and must not hit.',
+  '  `mode` is `warn` (the default) or `stop` (stops the merge only with `catalog.checkStop` on). Only an accepted',
+  '  choice enforces; a proposed one gives a note.',
   '',
   '- `status`: `proposed`, `accepted` or `superseded`. Anyone may propose. Only the owner accepts:',
   '  `ravenseat catalog accept D-0001 --by owner`. A status set to accepted by hand is unconfirmed: `catalog check`',

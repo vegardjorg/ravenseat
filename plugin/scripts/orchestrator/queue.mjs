@@ -323,7 +323,7 @@
 // Fewer orchestrator turns: `fill` and `receive` end with "Start these in the SAME turn:" and one line per agent
 // (subagent_type + message); start them in one turn. `receive` warns when the track's answer exceeds the report cap (about 1,500 chars).
 //   node scripts/orchestrator/queue.mjs merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force]
-//        [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--allow-unreviewed] [--done-cwd <folder>] [--force-red-base] [--force-red-gate]
+//        [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--allow-unreviewed] [--allow-catalog] [--done-cwd <folder>] [--force-red-base] [--force-red-gate]
 //        [--resume]
 //        (one merge at a time per repo: the lock <dataFolder>/merge.lock with pid, host and start time; a held lock
 //         refuses with the holder, a stale one (the pid is gone, or older than 6 h) is taken over. A merge, rebase,

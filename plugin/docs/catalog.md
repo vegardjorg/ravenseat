@@ -81,7 +81,8 @@ Context, the choice and what follows from it, in at most 30 lines.
 - `supersedes`: the id of the choice this one replaces. To change an accepted choice, write a new one with
   `supersedes: D-0001` and set the old one to `superseded`.
 - `plan`: the plan entry with the long version, if there is one.
-- `check`: rules a later step will run against a delivery. For now only its shape is checked.
+- `check`: an optional rule that receive runs against the delivery's added lines, with examples that prove it:
+  see [Check rules](#check-rules).
 - `accepted_by` and `accepted`: written by `catalog accept`, never by hand.
 
 A body over 30 lines gives a warning: the plan register holds the long text.
@@ -220,6 +221,58 @@ cache, and:
 
 A project without `catalog.index`, or without any `@shared` tag, gets the excerpt byte for byte as before.
 
+## Check rules
+
+A design choice can carry one plain rule that the queue checks mechanically, so a broken invariant is seen at
+receive and not only when a reviewer happens to notice it:
+
+```markdown
+check:
+  forbid: "from ['\"]@db/client['\"]"
+  hit: ["import { db } from '@db/client'"]
+  miss: ["import { db } from '@services/factory'"]
+  mode: warn
+```
+
+- `forbid`: a regular expression (JSON string) that an added line must not match. It is matched case-sensitively,
+  one line at a time, against at most the first 2000 characters of a line. The same lookahead check as the review
+  packs applies.
+- `hit` and `miss`: at least one line each that the rule must and must not match. `catalog check` runs them, so a
+  rule that is broken (a typo, too wide, too narrow) is an error before it ever reaches a delivery. They can also be
+  written as `examples: { "hit": [...], "miss": [...] }`.
+- `mode`: `warn` (the default) or `stop`.
+
+What the rule looks at: the lines a delivery adds, in files that match the choice's `paths`, test files and comment
+lines left out (the same engine as the review signals). `catalog check` also warns when the rule already matches
+lines in the tree: receive only looks at added lines, so old hits are not counted against a track.
+
+Who can enforce: only a choice the owner accepted (the owner lock, so `check` is part of the fingerprint and a changed
+rule needs a new `catalog accept`). A proposed or unconfirmed choice gives one `NOTE` line and a package line marked
+"binds nothing", never more.
+
+| Level | When | What happens |
+|---|---|---|
+| info | The choice is proposed or unconfirmed | `NOTE catalog` line at receive, a package line; nothing is counted |
+| warn | The choice is accepted (and `mode: warn`, or `mode: stop` with `catalog.checkStop` off) | `CATALOG` line at receive with the places, the invariant and the way forward (a fix round, or the owner changes the choice); a line in the review package; the hit is recorded on the task (`catalog_checks`) |
+| stop | The choice is accepted, `mode: stop` and `catalog.checkStop` on | As warn, and `merge` stops (exit 1). Only on the owner's word: `merge <id> --allow-catalog`, logged as `catalog-overridden` |
+
+### Where the rules run (receive, merge or both)
+
+At receive, always while `catalog.checks` is on: that is where the delivery's diff is read anyway, where a fix round
+is cheap, and where the reviewer gets the package line. At merge only the stop is checked again, and only when
+`catalog.checkStop` is on, on the merge's own diff (base to the track's tip), so a commit after receive cannot slip
+past a stop. A warn rule is not run twice: the second run would add only noise. The catalog is always read from the
+main tree, never from the track's branch, so a track cannot turn its own rule off.
+
+### A rule broken again and again
+
+Each task keeps the ids of the accepted rules it ever broke (`catalog_checks.ever`). When the same rule has been broken
+in `catalog.gateAfter` separate tasks (3 by default) and `learning.proposals` is on, receive proposes a GATE task:
+make the rule a real lint or check in the project's own tooling (for an import ban, for example, ESLint
+`no-restricted-imports`). It goes through the shared proposal cap of the known-bug gates, so it never adds a fourth
+open proposal and never a second one for the same rule (a later hit extends the open one). The task is `proposed`:
+the owner approves or cancels it. With `learning.proposals` off nothing is proposed.
+
 ## Protected path
 
 `docs/queue/catalog/` is in the default `protectedPaths`. A track may change it only when its task owns the files
@@ -270,6 +323,11 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Excerpt in the mission | Text only: up to `catalog.excerptTokens` more context in every turn of the track (1500 tokens over about 100 turns is about 150,000 cached input tokens). It stops nothing, and a project without a catalog pays nothing | `catalog.missionExcerpt`, on by owner decision: the track needs it to reuse, and the heading measures its cost |
 | Excerpt in the review package | Text only, read once per reviewer; it can lead to a `duplication` or `scope-drift` finding, which is the point | `catalog.reviewExcerpt`, on: the reviewer judges against what the track was given |
 | Excerpt cap | None; it only narrows. Too low cuts the reuse rows first, and the heading says so | `catalog.excerptTokens`, 1500 (200 to 6000) |
+| Check rules at receive | One line per broken rule (accepted: `CATALOG`, proposed: `NOTE`), a package line and a small record on the task. Stops nothing. A project without `check` fields pays nothing: the output is byte for byte the same | `catalog.checks`, on: it only shows what an accepted choice already says, and off weakens the protection |
+| Rule at merge (`mode: stop`) | Stops `merge` (exit 1) when an accepted choice's stop rule matches the merge's diff; `--allow-catalog` on the owner's word, logged | `catalog.checkStop`, off: it can stop work, so the owner turns it on |
+| Rule examples | `catalog check` exits 1 when a `hit` example does not match or a `miss` example does, or when examples are missing. Only when someone runs it or a project makes it a gate | No setting: a rule without proven examples is never run |
+| Tree hit warning | One warning in `catalog check` when a rule already matches lines in the tree (it reads at most 3000 tracked files, skipping large and binary ones) | No setting: a warning only |
+| Gate proposal from repeats | At most one proposed task per rule, inside the shared proposal cap; the owner approves or cancels | `catalog.gateAfter`, 3 (2 to 20); only with `learning.proposals` on (off by default) |
 | Reviewer point (V9) | No new reviewer and no new turn: one point in `reviewer.md` and `reviewer-gap.md` that acts only on the package section | Follows `catalog.reviewExcerpt`: without the section the point has nothing to check |
 
 Turning any of the catalog settings off weakens no guard, so `ravenseat settings` does not flag it.
