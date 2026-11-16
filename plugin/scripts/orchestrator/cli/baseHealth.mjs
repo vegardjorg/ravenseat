@@ -23,6 +23,7 @@ const BH = require('./lib/baseHealth.js');
 const FI = require('./lib/queueFindings.js');
 const TL = require('./lib/timeLogRows.js');
 const ER = require('./lib/eventRows.js');
+const FSRC = require('./lib/findingSources.js');
 const GE = require('./lib/gateEvidence.js');
 const GV = require('./lib/gateEnv.js');
 const GX = require('./lib/gitExecSurface.js');
@@ -180,12 +181,17 @@ function flakyLines({ tip, run, causeId, source }) {
  * @returns {string|null} the finding id (the first command's), or null
  */
 export function fileFlaky({ commands, tip, causeId = null, source, row = true, detail = null }) {
-  if (row)
+  if (row) {
+    let flakyRow = null;
     try {
-      TL.appendRows(TIME_LOG, ER.flakyGateRow({ tip, commands, source, task: causeId }));
+      flakyRow = ER.flakyGateRow({ tip, commands, source, task: causeId });
+      TL.appendRows(TIME_LOG, flakyRow);
     } catch {
       // error-ignored: measurement only
     }
+    // The finding log (lib/findingSources.js), next to the row: with `row: false` gates.mjs wrote both itself.
+    if (flakyRow) FSRC.record(() => FSRC.fromTimeRow(flakyRow));
+  }
   try {
     return withLock(() => {
       const queue = readQueueForPlan();
@@ -338,6 +344,9 @@ export function recordVerdict({
   };
   BH.writeState(HEALTH_FILE, BH.record(state, entry));
   logBaseGate({ entry, run });
+  // The finding log (lib/findingSources.js): a new base fix task is one finding. A reused fix task is the same red
+  // still open, and the CI watch's own task (fixTask) is already logged by the CI watch, so neither adds a row.
+  if (fix && !fix.reused && !fixTask) FSRC.record(() => FSRC.baseFix({ run, causeId, madeRedBy }));
   return { entry, previous, fix, openFix: null };
 }
 

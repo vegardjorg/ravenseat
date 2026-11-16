@@ -756,6 +756,17 @@ what reviewers find and what is done about it; a LOW or an `other` finding is lo
 in the changelog (`ravenseat undo` takes it back) and refused from inside a track worktree: a track does not close its
 own review.
 
+The other sources write to the same log when they catch something, one row each, with nothing extra run for it: a
+red track gate (one row per red command, with the inspection queue's signature; a red `--precheck` is none, the gate
+catches the same) and a flaky one (LOW), a failed CI
+check (`push-check --watch-ci`, one row per failed job; an infrastructure failure is none), a new base fix task (HIGH),
+a red done command (a tampered one is HIGH), red on base `unproven` (LOW) or `tip-red`, the secret scan's hits at
+receive (HIGH: paths, line and rule names, never the value), a GATE line, `ravenseat finding`, a new `fixes` link in
+`add` or `edit`, and `qa deviation`. The class is the one the GATE line gives, else `other`, so none of these counts
+toward a suggestion yet. The excerpt is short, without code, and masked; the QA and fix-link rows hold only ids.
+Logging is passive: nothing is printed, and a row that cannot be written gives one WARNING and never stops the
+command. Reading the same report or delivery again (a second receive, a second CI watch of a sha) adds no row.
+
 The setting `reviewItems.stop` (default `true`, `false` in Lite mode, Advanced) turns the done stop off. Then done
 passes with open items, says `REVIEW ITEM STOP OFF` with the items, and they stay open on the task.
 

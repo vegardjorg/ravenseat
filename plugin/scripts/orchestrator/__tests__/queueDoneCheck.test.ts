@@ -148,6 +148,15 @@ describe('queue.mjs receive, resume and merge with a done command', () => {
       resumed: [{ round: 1, reason: 'fix' }],
     });
     expect((find().blocks as { code: string; to?: string }[]).find((b) => !b.to)?.code).toBe('gate-red');
+    // The finding log (lib/findingSources.js): one done-check row for the red run, with the task and a short excerpt
+    // from the tail, never the output's early lines.
+    const findingsFile = path.join(folder, 'findings.jsonl');
+    const findingRows = () =>
+      fs.existsSync(findingsFile)
+        ? fs.readFileSync(findingsFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Record<string, unknown>)
+        : [];
+    expect(findingRows()).toMatchObject([{ caught_by: 'done-check', severity: 'M', task: 'A', class: 'other', counts: false }]);
+    expect(fs.readFileSync(findingsFile, 'utf8')).not.toContain('SECRET-EARLY');
     const tailFile = path.join(scratch, 'done-A.md');
     expect(fs.readFileSync(tailFile, 'utf8')).toContain('fail line 59');
     expect(fs.readFileSync(tailFile, 'utf8')).not.toContain('SECRET-EARLY');
@@ -208,6 +217,8 @@ describe('queue.mjs receive, resume and merge with a done command', () => {
     expect(mg2.code).toBe(0);
     expect(mg2.out).toContain('DONE COMMAND (merge)');
     expect(find().done_check).toMatchObject({ ok: true, step: 'merge' });
+    // Two red runs (receive and the fix round's receive) gave two rows; the green runs gave none.
+    expect(findingRows().map((r) => r.caught_by)).toEqual(['done-check', 'done-check']);
 
     // ---- 5. null removes the field ----
     expect(run('edit', 'A', '--json', JSON.stringify({ done_when: null, max_fix_rounds: null }), '--by', 'owner').code).toBe(0);

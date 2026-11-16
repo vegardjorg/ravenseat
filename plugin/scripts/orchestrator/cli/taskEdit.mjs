@@ -29,6 +29,8 @@ const D = require('./lib/doneCheck.js');
 const WI = require('./lib/wiringItems.js');
 // The reviewers' findings stop it the same way (lib/reviewItems.js; reviewItems.stop false or lite mode turns it off).
 const RI = require('./lib/reviewItems.js');
+// A new `fixes` link is a defect after merge: a row in the finding log (lib/findingSources.js).
+const FSRC = require('./lib/findingSources.js');
 let trackBranchCache;
 /**
  * The track branch the cwd is on (`<branchPrefix><id>`), or null. A track agent runs ravenseat from its worktree, so this is
@@ -237,9 +239,12 @@ export function cmdEdit() {
   if (!Object.keys(field).length && bonus == null && !read().tasks.some((x) => x.id === id)) die(`Unknown task ${id}`);
   if (!Object.keys(field).length && bonus == null)
     die(`Nothing changed: ${unknownFlags.length ? `edit does not know ${unknownFlags.join(', ')}. ` : ''}edit ${id} needs --json '{...}', --files a,b, --accept "<criterion>" or --bonus "<text>". Status: ${CLI} set ${id} <status>.`);
+  // The ids a `fixes` edit adds (not the ones already there): each is a new defect after merge for the finding log.
+  let newFixes = [];
   editLogged('edit', (queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
+    const fixesBefore = FX.fixesList(o.fixes) ?? [];
     // The finish line is fixed once the task has started (only the owner moves it, never a track).
     const locked = lockError(o, field);
     if (locked) die(`Not changed: ${locked}`);
@@ -279,6 +284,7 @@ export function cmdEdit() {
       const list = FX.fixesList(field.fixes);
       if (list.length) o.fixes = list;
       else delete o.fixes;
+      newFixes = list.filter((x) => !fixesBefore.includes(x));
     }
     // `batched: false` takes the task out of the batch queue; the field is removed so the queue file looks as before.
     if (o.batched === false) delete o.batched;
@@ -289,6 +295,8 @@ export function cmdEdit() {
       if (t) die(`Invalid bonus: ${t}`);
     }
   });
+  // The finding log (lib/findingSources.js), after the write: one row per newly fixed task, at most a warning.
+  if (newFixes.length) FSRC.record(() => FSRC.fixLinks({ id, fixes: newFixes }));
   const changedField = [...Object.keys(field), ...(bonus != null ? ['bonus', 'remarks'] : [])];
   // --answer-json (the board): one JSON line with the changelog no., so "Undo" rolls back exactly this edit.
   if (a.includes('--answer-json'))

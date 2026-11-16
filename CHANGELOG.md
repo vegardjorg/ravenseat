@@ -15,6 +15,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   lands in the finding log. `ravenseat review-item --defer-all-L` moves the LOWs that may wait in one call. Lite mode
   keeps the done stop off.
 
+- **Hardening: every check that catches a failure records it in the finding log.** Red track gates, flaky
+  commands, failed CI checks, new base fix tasks, red done commands, red on base, secret hits at receive, GATE lines,
+  `ravenseat finding`, fix links and QA deviations now each add one row, so a failure class that keeps coming back can
+  be seen across all of them. Logging is silent and local: rows hold short masked excerpts (never a secret's value or
+  the owner's QA text), nothing extra runs for them, and a write that fails gives one warning and never stops the
+  command.
+
 ## 0.16.0 (2026-11-16)
 
 **Review findings get one line form with a class and a place, also the low ones, so none is lost between rounds. New guards, all off until you turn them on, find keys in .mcp.json, broad shared permissions and probes aimed at a shared database, and the queue files can be shared in git on your word. `npm run test:changed` runs only the tests a change can reach.**

@@ -48,6 +48,8 @@ const GUIDANCE = require('./lib/guidance.js');
 const WI = require('./lib/wiringItems.js');
 // The reviewers' findings as items that stop done, and the merge gate on the chosen reviewers (lib/reviewItems.js).
 const RI = require('./lib/reviewItems.js');
+// What receive and merge catch, as rows in the finding log (passive: at most a warning when a write fails).
+const FSRC = require('./lib/findingSources.js');
 
 // ---- The git hooks and config against the accepted baseline (lib/gitSurfaceBaseline.js) -------------------------------
 
@@ -242,6 +244,9 @@ function runDoneCommand(o, { branch, scratch, step }) {
   );
   console.log(`Done command ${run.ok ? 'GREEN' : 'RED'} (${run.timedOut ? 'time budget' : `exit ${run.exit ?? '?'}`}, ${run.durationSec} s).`);
   if (tamperReason) console.log(`TAMPERED: ${tamperReason}. ${GX.INSPECT}.`);
+  // The finding log (lib/findingSources.js): a red run is one row, built from the tail already kept (each run is a
+  // new run, so no `once`). Green gives nothing.
+  if (!run.ok) FSRC.record(() => FSRC.doneCheck({ id: o.id, command, run, tamperReason }));
   return { ok: run.ok, run, record, file, cwd };
 }
 
@@ -987,6 +992,9 @@ export function cmdReceive() {
     autoCleanFocus(queue, `receive ${id}`);
     return o;
   });
+  // The finding log (lib/findingSources.js): red on base and the secret hits, from the records just stored (no extra
+  // run). `once`: a second receive of the same delivery reads the same facts again and adds no row.
+  FSRC.record(() => [FSRC.redOnBase({ id, record: redBase }), FSRC.secretFound({ id, found: r.secret_found })], { once: true });
   if (o0.status !== 'review' && r.started)
     logTime(id, 'delivered', `${minutes(r.started, r.delivered)} min to delivery`);
   if (!r.picked_by) pulseCursor(`receive ${id}`);
@@ -1037,6 +1045,9 @@ export function cmdReceive() {
   // The answer is the fallback, as for RESULT and EVIDENCE: a report file can be refused by the client.
   const KB = require('./lib/knownBugGate.js');
   const knownBug = KB.parseGate(reportText) ?? KB.parseGate(trackReply);
+  // The finding log (lib/findingSources.js): the GATE line is a finding whatever the gate setting says (the setting is
+  // about proposing a task). `once`: the same report read at a second receive adds no row.
+  if (knownBug) FSRC.record(() => FSRC.gateLine({ id, gate: knownBug }), { once: true });
   if (knownBug) {
     try {
       const line = GUIDANCE.isQuiet(read()) ? null : proposeGate({ title: knownBug.title, where: knownBug.where, from: id });

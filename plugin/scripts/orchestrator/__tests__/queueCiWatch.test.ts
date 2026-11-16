@@ -170,6 +170,13 @@ describe('push-check --watch-ci', () => {
     expect(again.out).toContain(`${id} already exists`);
     expect(p.queue().tasks.filter((t) => t.id.startsWith('CI-') || t.id.startsWith('BASE-'))).toHaveLength(1);
     expect(p.health().current).toMatchObject({ status: 'red', fix_task: id });
+    // The finding log (lib/findingSources.js): one ci row for the failed job, with the CI task and the inspection
+    // signature; the red base reuses the CI task, so no base-gate row; never the secret.
+    const findings = fs.readFileSync(path.join(p.folder, 'findings.jsonl'), 'utf8');
+    expect(findings).not.toContain(secret);
+    const rows = findings.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    expect(rows).toMatchObject([{ caught_by: 'ci', severity: 'M', task: id, excerpt: 'ci: CI / test / Run tests: FAIL src/a.test.ts' }]);
+    expect(rows[0].signature).toMatch(/^[0-9a-f]{12}$/);
   });
 
   it('an infrastructure failure asks the owner once and freezes nothing', () => {
@@ -188,6 +195,8 @@ describe('push-check --watch-ci', () => {
     expect(p.watch(sha).out).toContain(`${qid} is already asked`);
     expect(Object.keys(p.queue().question ?? {})).toEqual([qid]);
     expect(p.queue().question?.[qid]?.added_at).toBe(added);
+    // An infrastructure failure is no defect in the code: nothing in the finding log.
+    expect(fs.existsSync(path.join(p.folder, 'findings.jsonl'))).toBe(false);
   });
 
   it('polls pending runs until they are done; green exits 0', () => {

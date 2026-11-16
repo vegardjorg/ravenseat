@@ -210,13 +210,21 @@ function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSe
     const attempt = TL.gateAttempt(text, { kind, track, branch });
     // A commit made during the run means the run checked neither commit exactly: no sha then.
     const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
-    TL.appendRows(
-      file,
-      TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct, startFreeMemoryPct, flaky, durations, errors }),
-    );
+    const row = TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct, startFreeMemoryPct, flaky, durations, errors });
+    TL.appendRows(file, row);
+    // The finding log (lib/findingSources.js): one row per red command, from the row just built (no extra run). A
+    // failed write is one warning on stderr, so the gate's own output and exit code stay as they are. The precheck is
+    // left out: it is a quick local check before the gate, the gate itself catches the same failure, and its run must
+    // not leave a file in the tree it checks (the data folder may sit inside it).
+    const FSRC = require('./lib/findingSources.js');
+    const warn = (l) => console.error(l);
+    if (row.failed.length && kind !== 'precheck') FSRC.record(() => FSRC.fromTimeRow(row), { warn });
     // A green run after a flaky rerun (lib/trackFlaky.js): the flakyGate row ravenseat cost Flow counts, with the track.
-    if (exit === 0 && flaky.length && sha)
-      TL.appendRows(file, require('./lib/eventRows.js').flakyGateRow({ tip: sha, commands: flaky, source: `track gate (${kind})`, task: track }));
+    if (exit === 0 && flaky.length && sha) {
+      const flakyRow = require('./lib/eventRows.js').flakyGateRow({ tip: sha, commands: flaky, source: `track gate (${kind})`, task: track });
+      TL.appendRows(file, flakyRow);
+      FSRC.record(() => FSRC.fromTimeRow(flakyRow), { warn });
+    }
   } catch {
     // error-ignored: the time log is for measurement; the gate's result is what matters
   }

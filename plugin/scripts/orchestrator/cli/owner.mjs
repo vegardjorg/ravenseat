@@ -21,6 +21,8 @@ import { guardWeakening, logWeakened } from './settings.mjs';
 
 // The intake triage's owner questions (close, keep, rewrite) are acted on in resolve.
 const T = require('./lib/queueTriage.js');
+// A QA deviation is a defect after merge: a row in the finding log (lib/findingSources.js).
+const FSRC = require('./lib/findingSources.js');
 
 /** The values of a repeated flag (`--choice A --choice B`): the argument right after each occurrence. */
 const repeated = (flag) => a.flatMap((x, i) => (x === flag ? [a[i + 1] ?? ''] : []));
@@ -368,6 +370,8 @@ export function cmdQa() {
       if (s.error) die(s.error);
       return s;
     });
+    // The ids only: the owner's text can name people or customers, and the fix task's mission already holds it.
+    FSRC.record(() => FSRC.qaDeviation({ id, fixId: r.fix.id }));
     console.log(
       `${id}: QA deviation. Fix task ${r.fix.id} is added to the queue (${r.fix.status}, class K, ${r.fix.project ?? L.WITHOUT_PROJECT}${r.fix.feature ? ` / ${r.fix.feature}` : ''}).`,
     );

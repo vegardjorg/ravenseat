@@ -180,7 +180,13 @@ function project(config: Record<string, unknown>) {
     return (JSON.parse(fs.readFileSync(file, 'utf8')).entries as { title: string; finding?: { count: number } }[]).filter((e) => e.finding);
   };
   const tip = () => g(['rev-parse', 'queue/A']);
-  return { folder, repo, worktree, scratch, g, run, gates, find, report, evidence, rows, counts, resetCounts, unmark, findings, tip, env };
+  /** The finding log's rows (lib/findingLog.js), in the data folder. */
+  const findingRows = () => {
+    const file = path.join(folder, 'findings.jsonl');
+    if (!fs.existsSync(file)) return [];
+    return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Record<string, unknown>);
+  };
+  return { folder, repo, worktree, scratch, g, run, gates, find, report, evidence, rows, counts, resetCounts, unmark, findings, findingRows, tip, env };
 }
 
 describe('the flaky check on a track gate (gates.mjs)', () => {
@@ -198,6 +204,8 @@ describe('the flaky check on a track gate (gates.mjs)', () => {
     expect(flaky).toHaveLength(1);
     expect(flaky[0]).toMatchObject({ event: 'flakyGate', tip: p.tip(), commands: [TEST], task: 'A' });
     expect(String(flaky[0].source)).toContain('track gate');
+    // The finding log (lib/findingSources.js): the flaky command is one L row for the track, the green run none.
+    expect(p.findingRows()).toMatchObject([{ caught_by: 'gate', severity: 'L', task: 'A', counts: false }]);
   }, 120_000);
 
   it('red twice is red, and the rerun happens once only', () => {
@@ -210,6 +218,10 @@ describe('the flaky check on a track gate (gates.mjs)', () => {
     expect(p.rows('gate').at(-1)).toMatchObject({ ok: false, failed: [gate('test', 'red')] });
     expect(p.rows('gate').at(-1)).not.toHaveProperty('flaky');
     expect(p.rows('flakyGate')).toHaveLength(0);
+    // The finding log: the red command is one gate row with the same signature the inspection queue counts.
+    const rows = p.findingRows();
+    expect(rows).toMatchObject([{ caught_by: 'gate', severity: 'M', task: 'A' }]);
+    expect(rows[0].signature).toMatch(/^[0-9a-f]{12}$/);
   }, 120_000);
 
   it('gates.flakyRerun false: no rerun', () => {

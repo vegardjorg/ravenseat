@@ -19,6 +19,8 @@
 import { a, CLI, cut, die, editLogged, L, queueBranchId, readPlans, readQueueForPlan, require, val, WIDTH } from './context.mjs';
 import { editPlans, planAnswer } from './planShared.mjs';
 
+const FSRC = require('./lib/findingSources.js');
+
 const FI = require('./lib/queueFindings.js');
 
 // Where a finding lands while the project has no projects registered yet.
@@ -112,6 +114,10 @@ export function cmdFinding() {
       { projects: none ? { ...q.projects, [FIRST_PROJECT]: FIRST_PROJECT_FIELDS } : (q.projects ?? {}), question: q.question ?? {} },
     ),
   );
+  // The finding log (lib/findingSources.js): every report that changed the register is a row (a repeat from another
+  // task counts too: it is how a class shows it comes back). --dry and "nothing changed" write none.
+  if (!r.dry && !(r.duplicate && r.finding === false))
+    FSRC.record(() => FSRC.finding({ title, task, files: parsed.files, causes }));
   if (a.includes('--json')) return planAnswer(r, '');
   if (r.duplicate && r.finding === false) {
     console.log(`Already in the plan register as ${r.duplicate} ("${r.entry.title}"); nothing changed.`);

@@ -48,6 +48,12 @@ describe('a key in a track\'s commits is found at receive, and the merge stops o
     expect(b?.code).toBe('secret-found');
     expect(b?.note).toContain('lib/client.ts:1 (github-token)');
     expect(JSON.stringify(d.task0())).not.toContain(GH);
+    // The finding log: one H row with the path, the line and the rule, never the value.
+    const log = fs.readFileSync(path.join(d.p.folder, 'findings.jsonl'), 'utf8');
+    expect(log).not.toContain(GH);
+    expect(log.split('\n').filter(Boolean).map((l) => JSON.parse(l))).toMatchObject([
+      { caught_by: 'secret-scan', severity: 'H', task: 'A', where: { files: ['lib/client.ts'], line: 1 }, excerpt: '1 secret hit(s) at receive (rules: github-token)' },
+    ]);
     const m = d.p.merge('A');
     expect(m.code).not.toBe(0);
     expect(m.out).toMatch(/STOP: A is not merged\. .*secret/);

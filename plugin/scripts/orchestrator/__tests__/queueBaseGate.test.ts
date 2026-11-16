@@ -210,6 +210,16 @@ describe('queue.mjs merge with the base gate', () => {
     expect(fs.readFileSync(h2.tail_file, 'utf8')).toContain('name is not a function');
     // On screen: the error line of the stack trace, not only its last lines.
     expect(m2.out).toMatch(/\| .*name is not a function/);
+    // The finding log (lib/findingSources.js): the new base fix task is one H base-gate row naming B as the cause.
+    const baseRows = () =>
+      fs
+        .readFileSync(path.join(p.folder, 'findings.jsonl'), 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l))
+        .filter((r) => r.caught_by === 'base-gate');
+    expect(baseRows()).toMatchObject([{ severity: 'H', task: 'B', cause_task: 'B' }]);
+    expect(baseRows()[0].signature).toMatch(/^[0-9a-f]{12}$/);
     const fix = p.find('B-BASE1');
     expect(fix).toMatchObject({ status: 'waiting', value: 10, fixes: ['B'], done_when: CHECK, added_by: 'base gate' });
     expect(String(fix?.mission)).toContain(mergeCommit);
@@ -275,6 +285,8 @@ describe('queue.mjs merge with the base gate', () => {
     const log = fs.readFileSync(path.join(p.folder, 'times.jsonl'), 'utf8');
     expect(log).toContain('"event":"base-red-overridden"');
     expect(log).toContain('"track":"E"');
+    // Two base fix tasks were added (B-BASE1 and the hand commit's); the reused one in step 6 gave no third row.
+    expect(baseRows().map((r) => r.cause_task)).toEqual(['B', null]);
   }, 240_000);
 
   // Test round 4 (P10): a hand commit made the base green, and the next fill started an agent on the fix task.

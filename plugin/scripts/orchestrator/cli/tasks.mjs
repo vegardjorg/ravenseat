@@ -25,6 +25,8 @@ import {
 import { highestMigr } from './tracks.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
 
+const FSRC = require('./lib/findingSources.js');
+
 /**
  * Adds the data folder and the agents' worktrees to the repo's .gitignore on a fresh init, so a new user does not have to.
  * Does nothing outside a git repo, and skips what git already ignores or a data folder outside the repo. Never fails init:
@@ -399,6 +401,9 @@ export function cmdAdd() {
       phaseEnded,
     };
   });
+  // The finding log (lib/findingSources.js), after the write: a new task that fixes another is a defect after merge,
+  // one row per fixed task (the ids only). At most a warning.
+  FSRC.record(() => newOnes.flatMap((n) => FSRC.fixLinks({ id: n.id, fixes: FX.fixesList(n.fixes) ?? [] })));
   const waiting = added.result.filter((r) => r.status === 'waiting').map((r) => r.id);
   const proposed = added.result.filter((r) => r.status === 'proposed').map((r) => r.id);
   if (waiting.length) console.log(`Added: ${waiting.join(', ')}`);

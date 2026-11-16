@@ -55,6 +55,9 @@ describe('red on base at receive', () => {
     expect(r.out).toMatch(/RED ON BASE A: .*lib\/__tests__\/sum\.test\.mjs.*pass without/);
     expect((p.taskOf('A') as { red_on_base?: { verdict: string } }).red_on_base?.verdict).toBe('unproven');
     expect(p.g(['status', '--porcelain', '--untracked-files=no'], wt)).toBe('');
+    // The finding log: one red-on-base row naming the test file, L (a warning, not counted).
+    const rows = fs.readFileSync(path.join(p.folder, 'findings.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    expect(rows).toMatchObject([{ caught_by: 'red-on-base', severity: 'L', task: 'A', test_added: 'lib/__tests__/sum.test.mjs' }]);
   }, 240_000);
 
   it('off by default: nothing said and nothing recorded', () => {

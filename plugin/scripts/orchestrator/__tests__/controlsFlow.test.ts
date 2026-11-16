@@ -223,6 +223,13 @@ describe('receive and a known bug', () => {
     expect(gateTasks(p)[0].mission).toContain('task A');
     expect(p.run('receive', 'A').code).toBe(0);
     expect(gateTasks(p)).toHaveLength(1);
+    // The finding log (lib/findingSources.js): one gate-line row, also after the second receive of the same report.
+    const rows = fs
+      .readFileSync(path.join(p.folder, 'findings.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l));
+    expect(rows).toMatchObject([{ caught_by: 'gate-line', task: 'A', class: 'other', excerpt: 'a fetch result used without its error' }]);
   });
   it('with the setting off the line does nothing, and the delivery goes on', () => {
     const p = project({ gates: { fromKnownBugs: 'off' } });

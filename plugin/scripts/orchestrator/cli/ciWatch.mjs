@@ -27,6 +27,7 @@ import { BASE_SETUP, baseTip, readHealth, recordVerdict } from './baseHealth.mjs
 const CW = require('./lib/ciWatch.js');
 const BH = require('./lib/baseHealth.js');
 const TL = require('./lib/timeLogRows.js');
+const FSRC = require('./lib/findingSources.js');
 const ER = require('./lib/eventRows.js');
 
 const EXIT_RED = BH.EXIT_RED_BASE ?? 9;
@@ -69,11 +70,17 @@ const noRunsMs = Math.min(SETUP.noRunsMin * 60_000, timeoutMs);
 
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const logRow = (row) => {
+  let built = null;
   try {
-    TL.appendRows(TIME_LOG, ER.ciWatchRow({ time: new Date().toISOString(), sha, ...row }));
+    built = ER.ciWatchRow({ time: new Date().toISOString(), sha, ...row });
+    TL.appendRows(TIME_LOG, built);
   } catch {
     // error-ignored: measurement only
   }
+  // The finding log (lib/findingSources.js): one row per failed job of a failed check, from the same row (no extra gh
+  // call). Green, timeout and infrastructure rows give nothing; a failed write is at most one warning. `once`: a second
+  // watch of the same sha sees the same failed runs (as the CI task, it adds nothing).
+  if (built) FSRC.record(() => FSRC.fromTimeRow(built), { once: true });
 };
 
 console.log(`CI WATCH: ${BASE} at ${sha7}, polling every ${intervalMs / 1000}s for at most ${timeoutMs / 60_000} min.`);

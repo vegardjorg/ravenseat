@@ -5,7 +5,8 @@
 // Why: what review, the gates, CI and the secret scan catch was spread over task fields, reports and the time log, and
 // a finding that was deferred was easy to lose for good. Counting what comes back (the same class in the same area) and
 // how many deferred findings are actually fixed needs one place with one row form, whatever the source. This file is
-// that place as a library only: no command, no output to the user, nothing wired into merge yet (step 3 does that).
+// that place as a library only: no command and no output to the user. The writers are review-item (step 3) and the
+// other sources through lib/findingSources.js (step 4).
 //
 // THE FILE: <dataFolder>/findings.jsonl (the contract calls it feillogg.jsonl; the code uses an English name). The data
 // folder is ignored by git by default (setup), so the log never lands in a tracked place. One JSON object per line.
