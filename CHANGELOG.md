@@ -3,8 +3,17 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.16.0 (2026-11-16)
 
+**Review findings get one line form with a class and a place, also the low ones, so none is lost between rounds. New guards, all off until you turn them on, find keys in .mcp.json, broad shared permissions and probes aimed at a shared database, and the queue files can be shared in git on your word. `npm run test:changed` runs only the tests a change can reach.**
+
+- **Hardening: every review finding is one FINDING line.** Every finding, also LOW, now comes as one line with a
+  severity, a mark, a class and a place, and a line that cannot be read still becomes a finding instead of being
+  dropped. The classes are data a project can extend, and equal codes from different reviewers are counted separately.
+  Tracks keep their GATE line, with the same tail.
+- **Hardening: `npm run test:changed`** (for working on Ravenseat itself) picks the tests a change can reach (imports,
+  spawned scripts, the command map) and falls back to the full suite with a stated reason whenever it cannot tell.
+  Docs-only changes no longer trigger unrelated tests, but tests that read those docs still run.
 - **Keys in .mcp.json, broad shared permissions, and probes only against a local database** (all off until you turn
   them on). `secretScan.allowlist` now also covers `.mcp.json` (a key in a server's env, headers, args or url, named by
   path, never the value; FAIL when tracked). `permissionsCheck.enabled` names broad rules in the tracked
@@ -50,6 +59,11 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Docs.** The FAQ cost section uses the latest window, the same-file answer says the second task waits, lite mode's
   dependency files only warn, the review signals and the Checks tab are described where reviewers and the tab are, and
   the newer commands are in commands.md and the usage text.
+
+### After you update
+- Reviewers now report with FINDING lines (`FINDING <code> <H|M|L> <mark> <class> @ <place> | <sentence>`). Your own reviewer prompts outside the plugin should use the same form; an unreadable line is still counted, as a finding of class `other`.
+- If sharing is off and a file from the data folder is tracked in git, the push guard and `merge` now deny the commit. `ravenseat doctor --fix` writes the `.gitignore`, and `ravenseat share on` is the way to share on purpose.
+- The new guards (`secretScan.allowlist` for `.mcp.json`, `permissionsCheck.enabled`, `dbGuard.localOnly`) are off until you turn them on; the Checks tab has a card for each.
 
 ## 0.15.0 (2026-11-14)
 
