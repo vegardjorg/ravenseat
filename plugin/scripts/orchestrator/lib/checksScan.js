@@ -73,6 +73,8 @@ const KINDS = [
     sees: /\b(?:prettier|biome\s+(?:format|check)|black|gofmt|go\s+fmt|rustfmt|cargo\s+fmt|ruff\s+format|dprint|clang-format|ktlint|spotless|php-cs-fixer)\b/i,
   },
   { key: 'unused', title: 'Unused code', sees: /\b(?:knip|vulture|ts-prune|depcheck|unimported|cargo[-\s]udeps|cargo[-\s]machete|deadcode)\b/i },
+  // A copy detector, for the duplication-tool card (0k B2): jscpd, pylint's duplicate-code check, PMD CPD, dupl, flay.
+  { key: 'duplication', title: 'Copy detector', sees: /\b(?:jscpd|duplicate-code|pmd\s+cpd|cpd-check|dupl|flay)\b/i },
   { key: 'dep-updates', title: 'Dependency updates', sees: null },
   { key: 'hooks', title: 'Git hooks', sees: null },
 ];
@@ -110,6 +112,7 @@ const MARKER_FILES = [
   ['unused', '.knip.json'],
   ['unused', 'knip.config.ts'],
   ['unused', 'knip.config.js'],
+  ['duplication', '.jscpd.json'],
 ];
 
 /** Where the facts below look (see the header). */
@@ -117,7 +120,7 @@ const DATABASE_DIRS = ['supabase', 'prisma', 'migrations'];
 const MIGRATION_DIRS = ['supabase/migrations', 'prisma/migrations', 'migrations', 'db/migrations'];
 const RUNTIME_FILES = ['.nvmrc', '.node-version', '.tool-versions', '.python-version', 'mise.toml', '.mise.toml', 'rust-toolchain', 'rust-toolchain.toml', '.ruby-version', '.java-version', '.sdkmanrc'];
 const ENV_EXAMPLES = ['.env.example', '.env.sample', '.env.template'];
-/** Dependencies that are a formatter or an unused-code finder, counted as the marker files are. */
+/** Dependencies that are a formatter, an unused-code finder or a copy detector, counted as the marker files are. */
 const PACKAGE_MARKERS = [
   ['format', 'prettier'],
   ['format', '@biomejs/biome'],
@@ -125,6 +128,7 @@ const PACKAGE_MARKERS = [
   ['unused', 'knip'],
   ['unused', 'ts-prune'],
   ['unused', 'depcheck'],
+  ['duplication', 'jscpd'],
 ];
 
 /** A `uses:` value that is not pinned to a commit SHA (local steps and docker images are not actions from a repo). */

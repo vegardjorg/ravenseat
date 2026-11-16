@@ -295,6 +295,46 @@ describe('the database and project cards (spor 3)', () => {
   });
 });
 
+describe('the copy detector card (0k B2)', () => {
+  const catalog = C.loadCatalog({ builtin: BUILTIN, own: path.join(BUILTIN, 'none') });
+  const report = (facts: object) => C.buildReport({ facts: { git: true, ...facts }, catalog, now: 'x' });
+  const card = (r: { suggestions: { key: string }[] }, key: string) => r.suggestions.find((s) => s.key === key) as Record<string, unknown> | undefined;
+  const base = { stacks: ['node'], ci: [{}], kinds: kinds(['test', 'ci']) };
+
+  it('is a low investigation in code quality, shown for a known stack with CI and no copy detector there', () => {
+    const t = catalog.templates.find((x: { key: string }) => x.key === 'duplication-tool');
+    expect(t).toMatchObject({ category: 'quality', priority: 'low', when: 'known-stack, has-ci, none-in-ci:duplication' });
+    // Only a suggestion: an investigation task the owner adds, no setting to turn on and no tool the card runs.
+    expect(t.action).toBeFalsy();
+    expect(t.setting).toBeFalsy();
+    expect(card(report(base), 'duplication-tool')).toMatchObject({ priority: 'low', state: 'open', category: 'quality' });
+  });
+
+  it('names a tool and a command per stack, the tie to the reuse note, and a start that does not go red', () => {
+    const t = catalog.templates.find((x: { key: string }) => x.key === 'duplication-tool');
+    const text = `${t.why}\n${t.investigate}\n${t.plan}`;
+    for (const tool of [/jscpd/, /duplicate-code/, /pmd cpd/i, /dupl\b/]) expect(text).toMatch(tool);
+    expect(text).toMatch(/NOTE reuse/);
+    expect(t.plan).toMatch(/threshold|today's level/i);
+    // Nothing installed or run by the card itself.
+    expect(t.plan).toMatch(/Do not/);
+  });
+
+  it('goes once a copy detector runs in CI, stays while it runs only as a gate, and needs a stack and CI', () => {
+    expect(card(report({ ...base, kinds: kinds(['test', 'ci'], ['duplication', 'ci']) }), 'duplication-tool')).toBeUndefined();
+    expect(card(report({ ...base, kinds: kinds(['test', 'ci'], ['duplication', 'gate']) }), 'duplication-tool')).toBeDefined();
+    expect(card(report({ ...base, stacks: [] }), 'duplication-tool')).toBeUndefined();
+    expect(card(report({ ...base, ci: [] }), 'duplication-tool')).toBeUndefined();
+  });
+
+  it('turns high with the red dot only when the finding log shows duplication again and again', () => {
+    expect(card(report({ ...base, ledger: { due: [], guardFailed: [], marker: true, recent: { duplication: 2 } } }), 'duplication-tool')).toMatchObject({ priority: 'low' });
+    const r = report({ ...base, ledger: { due: [], guardFailed: [], marker: true, recent: { duplication: 3 } } });
+    expect(card(r, 'duplication-tool')).toMatchObject({ priority: 'high' });
+    expect(r.important).toBe(report(base).important + 1);
+  });
+});
+
 describe('the finding log cards (step 7 of the finding format)', () => {
   const catalog = C.loadCatalog({ builtin: BUILTIN, own: path.join(BUILTIN, 'none') });
   const report = (facts: object, more: object = {}) => C.buildReport({ facts: { git: true, ...facts }, catalog, now: 'x', ...more });

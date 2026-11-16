@@ -5,6 +5,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: copied code under a new name no longer has to slip past.** The reuse note at receive sees a name the
+  base already has, not a body copied under another name. The Checks tab now suggests a copy detector in CI for a
+  known stack whose CI has none (jscpd for JS and TS and most other languages, pylint's duplicate-code for Python,
+  PMD CPD for Java and C#, dupl for Go, flay for Ruby), with the command for each and a threshold at today's level so
+  CI does not start red. The card only adds an investigation when you ask for it, so it needs no setting, and it turns
+  important only when the finding log shows duplication three times in one area within 30 days.
 - **Hardening: receive names a helper written again and a change that drifts.** A delivery that defines a name the
   base already defines in another file (JS and TS, a use never counts), adds a file in a folder the base does not
   have, adds a second package for a job its manifest already has one for (dates, HTTP, validation, test runner and

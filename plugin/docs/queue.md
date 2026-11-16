@@ -400,6 +400,10 @@ in CI, and never run probes against a shared database (the `dbGuard.localOnly` c
 important: branch protection (read with `gh` once a day, hidden when the base branch is protected), Actions pinned to a
 commit SHA, the lockfile in git, a formatter, a pinned runtime version, a `.env.example` beside a `.env`, a check for
 unused code, and flaky tests (low, medium once the time log shows a gate red and then green on the same commit).
+"Find copied code in CI" (low) shows for a known stack with CI and no copy detector there yet (jscpd, pylint's
+duplicate-code, PMD CPD, dupl or flay). It only proposes an investigation, so it needs no setting, and it is the code
+side of the [reuse note](#reuse-and-scope-notes), which sees a name, not a copied body. It turns important only when
+the finding log shows `duplication` three times in one area within 30 days.
 
 **The red dot:** while an important (high) suggestion is open, the tab shows a small red dot. `ravenseat checks marker
 off`, or `checksPanel.marker` in Settings, hides only the dot.

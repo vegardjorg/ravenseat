@@ -162,6 +162,17 @@ jobs:
     expect(placesOf(scan(fsLike({ 'package.json': JSON.stringify({ scripts: { lint: 'eslint .' } }) })), 'format')).toEqual([]);
   });
 
+  it('a copy detector is found in commands, its config file and dependencies, and a lookalike word is not one', () => {
+    // 0k B2: the duplication-tool card shows only while no copy detector runs in CI, so the scan must see one.
+    for (const c of ['npx jscpd --threshold 5 src', 'pylint --disable=all --enable=duplicate-code app', 'pmd cpd --minimum-tokens 100 --dir src', 'dupl -t 100 .'])
+      expect(classify(c), c).toContain('duplication');
+    expect(placesOf(scan(fsLike({ '.jscpd.json': '{}' })), 'duplication')).toEqual(['config']);
+    expect(placesOf(scan(fsLike({ 'package.json': JSON.stringify({ devDependencies: { jscpd: '4' } }) })), 'duplication')).toEqual(['config']);
+    const wf = 'on: push\njobs:\n  dup:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npx jscpd src\n';
+    expect(placesOf(scan(fsLike({ '.github/workflows/ci.yml': wf })), 'duplication')).toEqual(['ci']);
+    for (const c of ['node scripts/duplicate.js', 'echo duplicates', 'npm run dedupe']) expect(classify(c), c).not.toContain('duplication');
+  });
+
   it('.env and its example', () => {
     expect(scan(fsLike({ '.env': 'A=1' }))).toMatchObject({ envFile: true, envExample: false });
     expect(scan(fsLike({ '.env': 'A=1', '.env.sample': 'A=' }))).toMatchObject({ envFile: true, envExample: true });
