@@ -157,7 +157,7 @@ describe('doneLockError (pure)', () => {
     expect(gap).toContain('- D: the done command `npm test`');
     expect(gap).toContain('MET|NOT MET|UNCLEAR');
     expect(gap).toContain('Every NOT MET is a HIGH finding');
-    expect(gap).toContain('First line in fixed format: FINDINGS H=<count>');
+    expect(gap).toContain('First line exactly: `FINDINGS H=<n> M=<n> L=<n>`');
     expect(L.reviewerPrompt({ o, type: 'reviewer', folder: '/tmp/rev-R' })).not.toContain('A1:');
     expect(L.reviewerPrompt({ o: { id: 'X', class: 'K' }, type: 'reviewer-gap', folder: '/tmp' })).not.toContain(
       'Fixed acceptance criteria',

@@ -148,7 +148,9 @@ line, append-only files touched, deploy needs, **owner questions** in their own 
 own section (one line each: what, why, how to change it; "none" when there were none), and the wiring specification
 (the `WIRE` lines; each becomes an open item that `done` waits for).
 **Known bugs:** when you fixed a bug that another change could easily repeat, add one line `GATE <failure class> @ <file:line>` to
-`track-result.md`, with the class in general words and the place of the bug you fixed (`GATE a fetch result used without checking the error @ src/api.js:42`). No bug fixed, no line. A one-off, such
+`track-result.md`, with the class in general words and the place of the bug you fixed (`GATE a fetch result used without checking the error @ src/api.js:42`).
+Optionally use a class id and a sentence instead: `GATE <class> @ <file:line> | <one sentence>`, with a class from the
+reviewers' list (`unchecked-error`, `access-control`, `injection`, ... `other`). No bug fixed, no line. A one-off, such
 as a typo or a single wrong value, gets no line. `ravenseat receive` turns the line into a task the owner decides on.
 **Gate tasks (label `gate`, title `Gate: <failure class>`):** red first. Show the new check failing on the original
 bug or a minimal reproduction (the commit before the fix, or a fixture kept next to the check) and passing on the

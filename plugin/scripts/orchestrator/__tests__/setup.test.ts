@@ -352,8 +352,10 @@ describe('setup.mjs --ci: the GitHub Actions template (opt-in, never over an exi
     expect(text).toMatch(/branches: \[develop\]/);
     expect(text).not.toContain('__BASE_BRANCH__');
     expect(text).toMatch(/jq -r '\(\.gates\.quick \/\/ \[\]\)\[\]' queue\.config\.json/);
-    expect(text).toMatch(/# - uses: actions\/setup-node@v4/);
-    expect(text).toMatch(/# - uses: gitleaks\/gitleaks-action@v2/);
+    // Every action is pinned to a full commit SHA, with the version as a comment.
+    expect(text).toMatch(/# - uses: actions\/setup-node@[0-9a-f]{40} # v4/);
+    expect(text).toMatch(/# - uses: gitleaks\/gitleaks-action@[0-9a-f]{40} # v2/);
+    for (const m of text.matchAll(/uses: ([^\s#]+)/g)) expect(m[1]).toMatch(/@[0-9a-f]{40}$/);
     expect(PB.workflowCost(text)).toEqual({ push: true, concurrency: true, pathFilter: true });
   });
 
