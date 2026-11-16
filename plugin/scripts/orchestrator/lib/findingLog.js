@@ -25,6 +25,11 @@
 // The class arrives as an id and is normalized by a function passed in (the taxonomy, lib/failureClasses.js), or by
 // that module when it is there, else by normalizeClassFallback: kebab-case is kept, anything else is `other`.
 //
+// THE RULE CLASS (step 5): append first asks lib/failureRules.js for a class from the rule register (a red tsc is
+// contract-drift, a secret hit secret-leak), with class_source `rule`, unless the agent gave a class of its own. The
+// source's hints for it (`rule_hints`: an event, the command, the review signals) are read there and never stored.
+// makeRow stays pure and does not classify.
+//
 // CONCURRENT WRITERS: append takes a lock folder next to the file (<file>.lock, lib/queueLock.js), reads the highest id,
 // and appends one whole line with O_APPEND (timeLogArchive.appendText, which also rotates). The lock makes the ids
 // unique; the single write per row keeps lines whole.
@@ -418,13 +423,26 @@ function withLock(file, fn, waitMs = LOCK_WAIT_MS) {
  * Throws on an invalid row (nothing is written) or a write error.
  * @param {string} [root]  the project root (see fileOf)
  * @param {object} input  the row's fields (makeRow)
- * @param {{ now?: number, normalizeClass?: Function, modules?: object[], waitMs?: number }} [o]
+ * @param {{ now?: number, normalizeClass?: Function, modules?: object[], waitMs?: number, rules?: boolean }} [o]
  * @returns {object} the row as written
  */
 function append(root, input, o = {}) {
   const file = fileOf(root);
+  // The rule class (lib/failureRules.js) when the row is made: this is the one place every source writes through, so the
+  // register applies to all of them alike. It never throws; `rules: false` skips it. The project's classes come back with
+  // it, so a project's own class from its own rule is not cut to `other` by the core list.
+  let x = input;
+  let opts = o;
+  if (o.rules !== false) {
+    const ruled = require('./failureRules.js').applyRules(root, input);
+    x = ruled.input;
+    if (!o.normalizeClass && ruled.classes) {
+      const FC = require('./failureClasses.js');
+      opts = { ...o, normalizeClass: (id) => FC.normalizeClass(id, ruled.classes) };
+    }
+  }
   // Validate before the lock: an invalid row neither waits nor writes. The id is the only field set under the lock.
-  const row = makeRow({ ...input, id: undefined }, o);
+  const row = makeRow({ ...x, id: undefined }, opts);
   return withLock(
     file,
     () => {

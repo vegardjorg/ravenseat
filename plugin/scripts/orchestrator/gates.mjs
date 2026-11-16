@@ -216,14 +216,19 @@ function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSe
     // failed write is one warning on stderr, so the gate's own output and exit code stay as they are. The precheck is
     // left out: it is a quick local check before the gate, the gate itself catches the same failure, and its run must
     // not leave a file in the tree it checks (the data folder may sit inside it).
+    // Only the orchestrator's evidence runs write there (--evidence from receive and merge, or the main checkout): a
+    // track's own runs in its worktree are trials while it works, red on purpose before a fix, and logging each of them
+    // drowned the one red the delivery actually had (owner decision 16.11, as recommended; reversible). The time log
+    // row above stays for every run: cost and gate health count those.
     const FSRC = require('./lib/findingSources.js');
     const warn = (l) => console.error(l);
-    if (row.failed.length && kind !== 'precheck') FSRC.record(() => FSRC.fromTimeRow(row), { warn });
+    const logFindings = kind !== 'precheck' && evidenceWanted().wanted;
+    if (row.failed.length && logFindings) FSRC.record(() => FSRC.fromTimeRow(row), { warn });
     // A green run after a flaky rerun (lib/trackFlaky.js): the flakyGate row ravenseat cost Flow counts, with the track.
     if (exit === 0 && flaky.length && sha) {
       const flakyRow = require('./lib/eventRows.js').flakyGateRow({ tip: sha, commands: flaky, source: `track gate (${kind})`, task: track });
       TL.appendRows(file, flakyRow);
-      FSRC.record(() => FSRC.fromTimeRow(flakyRow), { warn });
+      if (logFindings) FSRC.record(() => FSRC.fromTimeRow(flakyRow), { warn });
     }
   } catch {
     // error-ignored: the time log is for measurement; the gate's result is what matters

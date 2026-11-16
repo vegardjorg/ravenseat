@@ -297,9 +297,17 @@ function gateLines(id, gate, { cli = 'ravenseat' } = {}) {
 /**
  * The finding log input for a closed item (lib/findingLog.js append). Review is the source, so item and round are set;
  * `counts` is derived there (false for L and for other).
+ * The rule hints (lib/failureRules.js) name the review signals that hit on the task (review_signals, written by receive)
+ * AND lift this item's reviewer in (`signalReviewers`: signal name -> reviewer, from lib/reviewSignals.js signalSetup).
+ * Only those: a raw-sql hit says nothing about what the plain reviewer found. Without the map, none, so a rule never
+ * guesses; the reviewer's own class wins over the signal anyway.
  */
-function logInput(o, x) {
+function logInput(o, x, { signalReviewers = null } = {}) {
+  const hits = Array.isArray(o?.review_signals?.hits) ? o.review_signals.hits : [];
+  const map = signalReviewers && typeof signalReviewers === 'object' ? signalReviewers : {};
+  const signals = hits.filter((s) => typeof s === 'string' && map[s] === x.reviewer);
   return {
+    rule_hints: { signals },
     caught_by: `review:${x.reviewer}`,
     severity: x.severity,
     class: x.class ?? 'other',

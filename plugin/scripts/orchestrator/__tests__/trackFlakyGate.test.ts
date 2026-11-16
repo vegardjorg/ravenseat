@@ -204,8 +204,15 @@ describe('the flaky check on a track gate (gates.mjs)', () => {
     expect(flaky).toHaveLength(1);
     expect(flaky[0]).toMatchObject({ event: 'flakyGate', tip: p.tip(), commands: [TEST], task: 'A' });
     expect(String(flaky[0].source)).toContain('track gate');
-    // The finding log (lib/findingSources.js): the flaky command is one L row for the track, the green run none.
-    expect(p.findingRows()).toMatchObject([{ caught_by: 'gate', severity: 'L', task: 'A', counts: false }]);
+    // The finding log (lib/findingSources.js): a track's own run in its worktree is a trial, so it writes nothing there
+    // (gates.mjs logRun). The orchestrator's evidence run (receive passes --evidence) does: the flaky command is one L row
+    // for the track, test-weakening by rule (lib/failureRules.js), the green run none.
+    expect(p.findingRows()).toEqual([]);
+    p.unmark('test');
+    expect(p.gates(p.worktree, '--evidence').out).toContain(`FLAKY: \`${TEST}\``);
+    expect(p.findingRows()).toMatchObject([
+      { caught_by: 'gate', severity: 'L', task: 'A', counts: false, class: 'test-weakening', class_source: 'rule' },
+    ]);
   }, 120_000);
 
   it('red twice is red, and the rerun happens once only', () => {
@@ -218,7 +225,10 @@ describe('the flaky check on a track gate (gates.mjs)', () => {
     expect(p.rows('gate').at(-1)).toMatchObject({ ok: false, failed: [gate('test', 'red')] });
     expect(p.rows('gate').at(-1)).not.toHaveProperty('flaky');
     expect(p.rows('flakyGate')).toHaveLength(0);
-    // The finding log: the red command is one gate row with the same signature the inspection queue counts.
+    // The finding log: nothing from the track's own run; the evidence run's red command is one gate row with the same
+    // signature the inspection queue counts.
+    expect(p.findingRows()).toEqual([]);
+    expect(p.gates(p.worktree, '--evidence').code).toBe(1);
     const rows = p.findingRows();
     expect(rows).toMatchObject([{ caught_by: 'gate', severity: 'M', task: 'A' }]);
     expect(rows[0].signature).toMatch(/^[0-9a-f]{12}$/);
@@ -264,6 +274,8 @@ describe('the flaky check on a track gate (gates.mjs)', () => {
     expect(r.code).toBe(1);
     expect(r.out).not.toContain('FLAKY');
     expect(p.counts()).toEqual({ test: 1 });
+    // The main checkout is the orchestrator's: its red run is logged without --evidence.
+    expect(p.findingRows()).toMatchObject([{ caught_by: 'gate', severity: 'M' }]);
   }, 120_000);
 });
 

@@ -99,6 +99,31 @@ describe('the task sources', () => {
   });
 });
 
+describe('the rule hints (lib/failureRules.js)', () => {
+  /* eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
+  const FR = require('../failureRules.js') as any;
+  const ruled = (x: object) => FR.applyRules(null, x).input;
+
+  it('each source passes what it saw, so a rule gives the class when the row is made', () => {
+    const gate = { event: 'gate', time: '2026-11-16T09:00:00Z', track: 'A', failed: ['npx tsc --noEmit'], errors: { 'npx tsc --noEmit': 'src/a.ts(3,1): error TS2532: Object is possibly undefined.' } };
+    expect(ruled(S.fromGateRow(gate)[0])).toMatchObject({ class: 'null-undefined', class_source: 'rule' });
+    const flaky = { event: 'flakyGate', commands: ['npm test'], source: 'track gate (quick)', task: 'A' };
+    expect(ruled(S.fromFlakyRow(flaky)[0])).toMatchObject({ class: 'test-weakening', class_source: 'rule' });
+    expect(ruled(S.baseFix({ run: { failed: 'npm run build', tail: ['exit 1'] } }))).toMatchObject({ class: 'dependency-build' });
+    expect(ruled(S.doneCheck({ id: 'A', command: 'npx tsc', run: { ok: false, tail: ['Found 2 errors.'] } }))).toMatchObject({ class: 'contract-drift' });
+    expect(ruled(S.redOnBase({ id: 'A', record: { verdict: 'unproven', files: [] } }))).toMatchObject({ class: 'test-weakening' });
+    // tip-red says the new tests fail on the tip: that names no class.
+    expect(ruled(S.redOnBase({ id: 'A', record: { verdict: 'tip-red', files: [] } })).class).toBe('other');
+    const found = { count: 1, hits: [{ file: 'src/k.ts', line: 3, rule: 'aws-access-key' }] };
+    expect(ruled(S.secretFound({ id: 'A', found }))).toMatchObject({ class: 'secret-leak', class_source: 'rule' });
+  });
+
+  it("the GATE line's own class stands over a rule", () => {
+    const gate = { title: 'x', where: 'src/a.ts:12', class: 'unchecked-error', text: 'the save result was ignored' };
+    expect(ruled(S.gateLine({ id: 'A', gate }))).toMatchObject({ class: 'unchecked-error', class_source: 'agent' });
+  });
+});
+
 describe('record', () => {
   it('writes each input and says nothing on success', () => {
     const seen: object[] = [];

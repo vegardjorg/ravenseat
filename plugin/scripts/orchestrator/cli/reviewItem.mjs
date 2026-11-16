@@ -112,9 +112,19 @@ export function registerQuietly(o) {
 
 /** One finding log row per closed item; a failure is said, never a stop (the item on the task is the record). */
 function logClosed(o, items) {
+  // Which reviewer each review signal lifts in (the project's setup and packs), so a rule reads only the signals that
+  // brought this item's reviewer (lib/failureRules.js). No map is no signal, never a stop.
+  let signalReviewers = null;
+  try {
+    signalReviewers = Object.fromEntries(
+      Object.values(require('./lib/reviewSignals.js').signalSetup(CONFIG)).map((s) => [s.name, s.reviewer]),
+    );
+  } catch {
+    // error-ignored: the row is still written, only without a signal class
+  }
   for (const x of items) {
     try {
-      FLOG.append(null, RI.logInput(o, x));
+      FLOG.append(null, RI.logInput(o, x, { signalReviewers }));
     } catch (e) {
       console.log(`WARNING: ${x.key} is closed, but its finding log row was not written (${e?.message ?? e}).`);
     }

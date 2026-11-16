@@ -5,6 +5,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: finding log rows get their class from a rule.** A red `tsc`, a TS2532, a missing module, a secret hit
+  or a flaky command now lands in the finding log with its class (contract drift, null or undefined, dependency and
+  build, leaked secret, weak test) instead of `other`, from a rule register that is data, so a class that keeps coming
+  back can be counted. The class a reviewer or track wrote still wins, an unsure match is marked low and never
+  suggests anything, and a project can add or turn off rules in `docs/queue/failure-rules.json` (a broken file gives
+  one doctor warning and the core rules). Track gates are now logged only from the orchestrator's evidence runs, so a
+  track's own trial runs no longer fill the log.
+
 - **Hardening: two more finding classes.** Reviewers can now mark a rule or helper written again (`duplication`) and
   a change outside the mission or its files (`scope-drift`), so both can be counted per area. A test keeps every
   reviewer file naming exactly the classes in `failure-classes.json`.

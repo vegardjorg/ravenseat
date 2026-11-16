@@ -9,8 +9,9 @@
 //
 // The rules every source follows:
 //   - one row per failure the source already detected; no source runs anything extra for the log (no git, no network);
-//   - `class` is the class the line gave (the GATE line), else `other`: rule classification is a later step, and `other`
-//     never counts toward a proposal, so nothing here can suggest anything yet;
+//   - `class` is the class the line gave (the GATE line), else `other`; the rule class (lib/failureRules.js, step 5) is
+//     set by findingLog.append from `rule_hints`: what the source already saw (an event, the red command), never a new
+//     run. The hints are read there and never stored;
 //   - the excerpt is built from what the source already kept (the normalized first error line, a verdict, rule names),
 //     never raw output or a secret's value, and findingLog.makeRow masks and caps it once more;
 //   - writing is passive: no output on success, at most one WARNING line when a write fails, and never a stop (record).
@@ -64,6 +65,7 @@ function fromGateRow(row) {
     signature: o.id,
     excerpt: o.excerpt ? `${o.name}: ${o.excerpt}` : `${o.name}: red`,
     task: o.task,
+    rule_hints: { command: o.name },
   }));
 }
 
@@ -79,6 +81,7 @@ function fromFlakyRow(row) {
       class: 'other',
       excerpt: `flaky: ${str(c)} was red, then green on a rerun on the same commit`,
       task: row.task ?? null,
+      rule_hints: { event: 'flaky', command: str(c) },
     }));
 }
 
@@ -95,6 +98,8 @@ function fromCiRow(row) {
     signature: o.id,
     excerpt: o.excerpt ? `${o.name}: ${o.excerpt}` : `${o.name}: red`,
     task: row.task ?? null,
+    // The job name ("ci: <workflow> / <job> / <step>") is what CI says about the command; its kind is read from it.
+    rule_hints: { command: o.name },
   }));
 }
 
@@ -122,6 +127,7 @@ function baseFix({ run, causeId = null, madeRedBy = null }) {
     excerpt: excerpt ? `${command}: ${excerpt}` : `${command}: red`,
     task: causeId ?? madeRedBy?.task ?? null,
     cause_task: madeRedBy?.task ?? null,
+    rule_hints: { command },
   };
 }
 
@@ -142,6 +148,7 @@ function doneCheck({ id, command, run, tamperReason = null }) {
     class: 'other',
     excerpt: excerpt ? `done command: ${excerpt}` : 'done command: red',
     task: id,
+    rule_hints: { command },
   };
 }
 
@@ -161,6 +168,8 @@ function redOnBase({ id, record }) {
     files,
     test_added: files[0] ?? null,
     task: id,
+    // unproven: the new tests pass without the change, so they prove nothing (a weak test). tip-red names no class.
+    rule_hints: v === 'unproven' ? { event: 'unproven' } : {},
   };
 }
 
@@ -178,11 +187,11 @@ function secretFound({ id, found }) {
     caught_by: 'secret-scan',
     severity: SEVERITY.secret,
     class: 'other',
-    class_source: 'rule',
     excerpt: `${count} secret hit(s) at receive${rules.length ? ` (rules: ${rules.join(', ')})` : ''}`,
     files,
     line: hits.length === 1 && Number.isInteger(hits[0].line) && hits[0].line > 0 ? hits[0].line : null,
     task: id,
+    rule_hints: { event: 'secret' },
   };
 }
 

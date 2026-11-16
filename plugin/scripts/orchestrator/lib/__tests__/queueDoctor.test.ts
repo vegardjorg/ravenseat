@@ -217,6 +217,17 @@ describe('ravenseat doctor', () => {
     expect(p.run().out).toMatch(/wrong type in queue\.config\.json: gates\.flakyRerun is string, expected boolean/);
   }, 60_000);
 
+  it('taxonomy: nothing while the project files are fine, one WARN naming a broken one', () => {
+    const p = project({ config: { loadGuard: { minFreeMemoryPct: null } } });
+    expect(p.run().out).not.toMatch(/taxonomy/);
+    fs.mkdirSync(path.join(p.root, 'docs', 'queue'), { recursive: true });
+    fs.writeFileSync(path.join(p.root, 'docs', 'queue', 'failure-rules.json'), '{ not json');
+    const r = p.run();
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/^WARN {2}taxonomy {3}docs.queue.failure-rules\.json: not valid JSON/m);
+    expect(r.out).toMatch(/the core rules apply/);
+  }, 60_000);
+
   it('ci-cost: INFO without cancel-in-progress or a path filter, nothing for workflows not on push', () => {
     const p = project({ config: { loadGuard: { minFreeMemoryPct: null } } });
     // No workflows folder: no ci-cost line at all.

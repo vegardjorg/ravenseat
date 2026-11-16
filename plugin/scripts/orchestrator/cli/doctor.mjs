@@ -27,6 +27,8 @@
 //               doctorRows), INFO for what lite softens and for each protectedPaths.remove entry; quiet guidance keeps it
 //   merge, hooks-off, in-base (cli/doctorRepo.mjs): a lingering MERGE_HEAD in the main checkout, disableAllHooks in a
 //               Claude Code settings file, done tasks whose merge commit or branch is not in baseBranch (all WARN)
+//   taxonomy    only when something is wrong: one WARN naming what a project's docs/queue/failure-classes.json or
+//               failure-rules.json has that was ignored (lib/failureRules.js projectWarnings); the core list applies
 //   cloud rows  only with features.cloud on: what cloud tracks need (lib/cloudSetup.js), read locally; the setup itself is
 //               `ravenseat cloud setup`
 //   the safety baseline (cli/doctorBaseline.mjs, offline): secrets (a tracked .env or private key is FAIL), gates,
@@ -641,6 +643,17 @@ function checkTemp() {
   return [line.status === 'INFO' ? info('temp', line.message, line.fix) : ok('temp', line.message)];
 }
 
+/**
+ * The project's failure classes and rules (docs/queue/failure-classes.json, failure-rules.json): nothing while they are
+ * fine or absent, so a healthy doctor run prints no new line. A broken or invalid entry never stops a row (the core list
+ * applies), so without this line nobody would learn that the project's own rules are not used.
+ */
+function checkTaxonomy() {
+  const warnings = require('./lib/failureRules.js').projectWarnings(MAIN_TREE);
+  if (!warnings.length) return [];
+  return [warn('taxonomy', warnings.join('; '), 'fix the file; until then the core rules apply to what it got wrong')];
+}
+
 /** What cloud tracks need, only while they are on. The rows that are not problems stay in `ravenseat cloud setup`. */
 /**
  * Settings: the guards weaker than their default, in one line (lib/settingsView.js doctorRows). Not an advice row, so
@@ -695,7 +708,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

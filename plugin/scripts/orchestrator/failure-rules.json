@@ -1,0 +1,37 @@
+{
+  "about": "The rules that give a finding log row its class when the row is made (lib/failureRules.js), before any agent or reviewer is asked. A rule matches on one thing: `event` (what the source itself saw: flaky, unproven, secret, test-weakening), `code` (a regular expression on the excerpt of a red command), `signal` (a review signal that lifted the reviewer in), or `kind` (the checksScan kind of the red command). That is also the order they are tried in; within one, the file order. The class an agent gave on its own line (GATE, FINDING) always wins. A project adds rules or turns one off in docs/queue/failure-rules.json: { \"rules\": [ { \"id\": \"my-rule\", \"code\": \"\\\\bE1234\\\\b\", \"class\": \"config-env\" }, { \"id\": \"kind-build\", \"off\": true } ] }.",
+  "rules": [
+    { "id": "event-secret", "event": "secret", "class": "secret-leak" },
+    { "id": "event-flaky", "event": "flaky", "class": "test-weakening" },
+    { "id": "event-unproven", "event": "unproven", "class": "test-weakening" },
+    { "id": "event-test-weakening", "event": "test-weakening", "class": "test-weakening" },
+
+    { "id": "code-ts-null", "code": "\\bTS(?:2531|2532|2533|2722|18047|18048|18049)\\b", "class": "null-undefined" },
+    { "id": "code-ts-module", "code": "\\bTS(?:2307|2792)\\b", "class": "dependency-build" },
+    { "id": "code-ts", "code": "\\bTS(?!(?:2531|2532|2533|2722|18047|18048|18049|2307|2792)\\b)\\d{4,5}\\b", "class": "contract-drift" },
+    { "id": "code-js-null", "code": "Cannot read propert(?:y|ies) of (?:undefined|null)|'NoneType' object", "class": "null-undefined" },
+    { "id": "code-module", "code": "\\b(?:ModuleNotFoundError|ERR_MODULE_NOT_FOUND)\\b|Cannot find module|\\bImportError\\b", "class": "dependency-build" },
+    { "id": "code-tz", "code": "offset-naive and offset-aware", "class": "time-zone" },
+    { "id": "code-pytest-flaky", "code": "\\bXPASS\\(strict\\)|\\bRERUN\\b", "class": "test-weakening" },
+    { "id": "code-db-schema", "code": "\\b(?:UndefinedTable|UndefinedColumn)\\b|relation \"[^\"]+\" does not exist|column \"[^\"]+\" (?:of relation \"[^\"]+\" )?does not exist", "class": "migration-schema" },
+    { "id": "code-db-access", "code": "violates row-level security|permission denied for (?:table|schema|function|relation)", "class": "access-control" },
+
+    { "id": "signal-raw-sql", "signal": "raw-sql", "class": "injection" },
+    { "id": "signal-html-sink", "signal": "html-sink", "class": "injection" },
+    { "id": "signal-url-from-data", "signal": "url-from-data", "class": "injection" },
+    { "id": "signal-code-exec", "signal": "code-exec", "class": "injection" },
+    { "id": "signal-deserialize", "signal": "deserialize", "class": "injection" },
+    { "id": "signal-file-upload", "signal": "file-upload", "class": "injection" },
+    { "id": "signal-access-rule", "signal": "access-rule", "class": "access-control" },
+    { "id": "signal-auth", "signal": "auth", "class": "access-control" },
+    { "id": "signal-cors-csrf", "signal": "cors-csrf", "class": "access-control" },
+    { "id": "signal-secret", "signal": "secret", "class": "secret-leak" },
+    { "id": "signal-tls-off", "signal": "tls-off", "class": "config-env" },
+
+    { "id": "kind-types", "kind": "types", "class": "contract-drift" },
+    { "id": "kind-build", "kind": "build", "class": "dependency-build" },
+    { "id": "kind-audit", "kind": "audit", "class": "dependency-build" },
+    { "id": "kind-secret-scan", "kind": "secret-scan", "class": "secret-leak" },
+    { "id": "kind-migrate", "kind": "migrate", "class": "migration-schema" }
+  ]
+}

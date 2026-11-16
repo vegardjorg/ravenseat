@@ -207,6 +207,15 @@ describe('the round and the finding log row', () => {
       disposition: { kind: 'batch', ref: 'A-RV1' },
     });
   });
+
+  it('the hints name only the signals that lifted this reviewer in (lib/failureRules.js)', () => {
+    const o = { id: 'A', review_signals: { at: NOW, hits: ['raw-sql', 'mine'] }, review_items: R.mergeItems([], itemsOf(REPORT, 'reviewer-security', 2), { now: NOW }).items };
+    const x = o.review_items[1];
+    const signalReviewers = { 'raw-sql': 'reviewer-security', mine: 'reviewer' };
+    expect(R.logInput(o, x, { signalReviewers }).rule_hints).toEqual({ signals: ['raw-sql'] });
+    // Without the map no signal is named: a guess would give a class the reviewer never meant.
+    expect(R.logInput(o, x).rule_hints).toEqual({ signals: [] });
+  });
 });
 
 describe('the batch mission', () => {

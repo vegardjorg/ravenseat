@@ -762,10 +762,45 @@ catches the same) and a flaky one (LOW), a failed CI
 check (`push-check --watch-ci`, one row per failed job; an infrastructure failure is none), a new base fix task (HIGH),
 a red done command (a tampered one is HIGH), red on base `unproven` (LOW) or `tip-red`, the secret scan's hits at
 receive (HIGH: paths, line and rule names, never the value), a GATE line, `ravenseat finding`, a new `fixes` link in
-`add` or `edit`, and `qa deviation`. The class is the one the GATE line gives, else `other`, so none of these counts
-toward a suggestion yet. The excerpt is short, without code, and masked; the QA and fix-link rows hold only ids.
-Logging is passive: nothing is printed, and a row that cannot be written gives one WARNING and never stops the
+`add` or `edit`, and `qa deviation`. The excerpt is short, without code, and masked; the QA and fix-link rows hold only
+ids. Logging is passive: nothing is printed, and a row that cannot be written gives one WARNING and never stops the
 command. Reading the same report or delivery again (a second receive, a second CI watch of a sha) adds no row.
+
+Track gates are logged only from the orchestrator's evidence runs: `receive` and `merge` (they pass `--evidence`)
+and runs in the main checkout. A track's own runs of `ravenseat gates` in its worktree are trials while it works (red on
+purpose before a fix, red while half done), so they add no row; the time log still counts every run. This was decided
+as recommended to keep the log quiet, and can be reversed.
+
+**The class comes from a rule first.** When a row is made, a rule register (`failure-rules.json` in the plugin) gives
+it a class from what the source already saw, with `class_source: rule`. No agent and no extra run is involved. The
+rules are tried in this order, and the first that matches wins:
+
+| Match | Reads | Examples |
+|---|---|---|
+| `event` | what the source itself saw | a secret hit gives `secret-leak`; a flaky command and red on base `unproven` give `test-weakening` |
+| `code` | the excerpt of a red gate, CI job, base gate or done command | `TS2532` gives `null-undefined`, `TS2307` and `ModuleNotFoundError` give `dependency-build`, any other TS code gives `contract-drift`, "offset-naive and offset-aware" gives `time-zone`, `relation "x" does not exist` gives `migration-schema` |
+| `signal` | the review signal that hit on the task and lifted this reviewer in | `raw-sql`, `html-sink` and `url-from-data` give `injection`; `access-rule` and `auth` give `access-control` |
+| `kind` | the kind of the red command (as the Checks tab reads it) | `tsc` gives `contract-drift`; a build or a dependency audit gives `dependency-build`; a migration run gives `migration-schema` |
+
+A plain red test, a lint error and red on base `tip-red` name no class, so they stay `other`. The class an agent wrote
+on its own line (GATE, FINDING) always wins; a rule only fills in where the agent wrote `other` or `-`. When two rules in
+the same tier give different classes (a command that is both a build and `tsc`), the first is kept with
+`confidence: low`, and a low row never gives a suggestion. A rule that fails gives `other`, never a stop.
+
+A project adds rules or turns core ones off in `docs/queue/failure-rules.json`, the same way as its classes in
+`docs/queue/failure-classes.json`:
+
+```json
+{ "rules": [
+  { "id": "audit-missing", "code": "audit row missing", "class": "audit-trail" },
+  { "id": "kind-build", "off": true }
+] }
+```
+
+A project's rules are tried before the core ones in the same tier, and may give the project's own classes. An id must
+be kebab-case and not a core id, the class one the project has, and a `code` pattern a valid regular expression of at
+most 300 characters. An entry that is not valid is skipped, a broken file gives the core rules, and `ravenseat doctor`
+shows one `taxonomy` WARN naming what was ignored (nothing while the files are fine).
 
 The setting `reviewItems.stop` (default `true`, `false` in Lite mode, Advanced) turns the done stop off. Then done
 passes with open items, says `REVIEW ITEM STOP OFF` with the items, and they stay open on the task.
