@@ -5,6 +5,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- Tidied up the FAQ.
+
 - **Hardening: a fix needs a red test first.** A fix task (one with `fixes`, a QA or base fix, a task from a finding,
   or a GATE line in its report) whose red on base check shows no test that fails without it now gets one warning at
   receive, and its finding log row keeps the verdict and is marked fixed without test, so a bug fixed without proof

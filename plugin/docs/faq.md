@@ -1,7 +1,9 @@
-# FAQ: what people worry about before they let agents merge
+# FAQ
 
-Ordered by what people fear most. Each answer names the tests that back it, so you can read them or run them
-(`npm run redteam`). How the tests are built, their status and the full map are on the [red team page](redteam.md).
+Each answer names the tests that back it, so you can read them or run them (`npm run redteam`). How the tests are
+built, their status and the full map are on the [red team page](redteam.md). If you work on Ravenseat itself,
+`npm run test:changed` runs only the tests your change can reach, and the whole suite runs before a push (see the
+README).
 
 ### Can Ravenseat break my repo or lose my uncommitted work?
 
@@ -54,12 +56,13 @@ and their work is checked on your machine when you collect it.
 
 The orchestrator is a model following a protocol, and it can drop a step. The queue looks for what that leaves behind. A
 task marked running that no agent took is named `STARTED WITHOUT AGENT` (or `ROUND WITHOUT AGENT` for a fix round) after
-15 minutes (`noAgentMin`), and a track whose agent shows no sign of life is named `SILENT` after 20 minutes (`silentMin`). Each line
-comes with the command that fixes it. A task with no agent is a card under "Waiting on you" at once; a silent track
-becomes one after 60 minutes, since a short stop is the orchestrator's to handle. `ravenseat explain <id>` says why one
-task stands where it stands, from the same rules the queue starts by. Asking Claude "what is stuck?" runs the same checks.
-A step a track could not take itself (wiring a new module into a shared file, say) is written as a wiring item, and
-the task is not done until each item is carried out or rejected (`ravenseat wiring`).
+15 minutes (`noAgentMin`), and a track whose agent shows no sign of life is named `SILENT` after 20 minutes
+(`silentMin`). Each line comes with the command that fixes it. A task with no agent is a card on the board's Decisions
+tab at once; a silent track becomes one after 60 minutes, since a short stop is the orchestrator's to handle.
+`ravenseat explain <id>` says why one task stands where it stands, from the same rules the queue starts by. Asking
+Claude "what is stuck?" runs the same checks. A step a track could not take itself (wiring a new module into a shared
+file, say) is written as a wiring item, and the task is not done until each item is carried out or rejected
+(`ravenseat wiring`).
 
 **Verified by:** [`queueNoAgent`](../scripts/orchestrator/lib/__tests__/queueNoAgent.test.ts),
 [`queueSilent`](../scripts/orchestrator/lib/__tests__/queueSilent.test.ts),
@@ -81,16 +84,20 @@ moment once read each other's evidence as tampering; they now take turns.
 Partly guarded. A focus marker (`.only(`, `fit(`, `fdescribe(`) added to a test file stops the merge, since the gates
 would go green while the other tests never ran (`--allow-focus` overrides, and it is logged). Receive warns, and the
 review package names the file, when a test file is deleted, gets a skip marker, or loses all its assertions; a skip can
-be intended, so the reviewers decide. Changes to test config and other protected paths stop the merge (dependency files such as `pyproject.toml` and
-`Cargo.toml` only warn in lite mode). With
-`gates.redOnBase` set, `receive` also checks that the track's new tests fail without its change, and warns when they do
-not. Removing some assertions while one remains is not named, because it looks like ordinary tidying.
+be intended, so the reviewers decide. Changes to test config and other protected paths stop the merge (dependency
+files such as `pyproject.toml` and `Cargo.toml` only warn in lite mode). With `gates.redOnBase` set, `receive` also
+checks that the track's new tests fail without its change, and warns when they do not. A fix task with no such test
+gets a `FIX WITHOUT TEST` warning; with `gates.redOnBaseStrict` on, the merge stops on it until you pass
+`--allow-no-test`, which is logged and which the queue's agents cannot pass
+([a fix needs a red test first](queue.md#a-fix-needs-a-red-test-first)). Removing some assertions while one remains is
+not named, because it looks like ordinary tidying.
 
 **Verified by:** [`rt08-weakened-test`](../scripts/orchestrator/__tests__/redteam/rt08-weakened-test.test.ts),
 [`testWeakening`](../scripts/orchestrator/lib/__tests__/testWeakening.test.ts),
 [`focusStop-cli`](../scripts/orchestrator/__tests__/redteam/focusStop-cli.test.ts),
 [`redOnBase-cli`](../scripts/orchestrator/__tests__/redteam/redOnBase-cli.test.ts),
-[`mergeGuard`](../scripts/orchestrator/lib/__tests__/mergeGuard.test.ts).
+[`mergeGuard`](../scripts/orchestrator/lib/__tests__/mergeGuard.test.ts),
+[`fixTest-cli`](../scripts/orchestrator/__tests__/redteam/fixTest-cli.test.ts).
 
 ### Does a risky change get a security review, even in a small task?
 
@@ -101,16 +108,23 @@ more); the Checks tab suggests them from your manifests and turns them on only o
 purpose and only ever add a reviewer. They read words in the diff, so a risky change written in a way no word matches is
 not caught; the class stays the floor ([review signals](orchestration.md#review-signals)).
 
+Each reviewer reports every finding, also the low ones, as one `FINDING` line with a severity, a class and a place.
+The merge waits for a report from each reviewer chosen and stops on a HIGH, and each finding becomes an item on the task
+that is fixed, moved to another task or rejected with a reason before the task is done (`ravenseat review-item`; lite
+mode keeps that done stop off). See [the review findings](orchestration.md#the-review-findings-stop-the-merge-and-done).
+
 **Verified by:** [`reviewSignals`](../scripts/orchestrator/lib/__tests__/reviewSignals.test.ts),
-[`reviewPacks`](../scripts/orchestrator/lib/__tests__/reviewPacks.test.ts) (every pack's examples).
+[`reviewPacks`](../scripts/orchestrator/lib/__tests__/reviewPacks.test.ts) (every pack's examples),
+[`findingLine`](../scripts/orchestrator/lib/__tests__/findingLine.test.ts),
+[`reviewItemsFlow`](../scripts/orchestrator/__tests__/reviewItemsFlow.test.ts).
 
 ### Does it merge or push without asking me?
 
 It merges locally by itself, and that is the point: a track is merged when the gates the orchestrator ran itself are
-green, the review the class needs is clean and the base branch is green. It asks before it starts the queue. Tasks that
-agents propose wait for your approval, and database and high-risk tasks (D, D+) are never approved automatically,
-whatever the rules say. Nothing is pushed until you say "push" (`push.mode` is `owner` by default), and then in one batch.
-A merge that turns out wrong is undone with `git revert -m 1 <merge>`.
+green, each reviewer the class needs has reported with no HIGH finding, and the base branch is green. It asks before it
+starts the queue. Tasks that agents propose wait for your approval, and database and high-risk tasks (D, D+) are never
+approved automatically, whatever the rules say. Nothing is pushed until you say "push" (`push.mode` is `owner` by
+default), and then in one batch. A merge that turns out wrong is undone with `git revert -m 1 <merge>`.
 
 A queue agent is refused every push, not even `main`, through the hooks on Claude Code's Bash and PowerShell tools. That
 is a hook-level guard, not a limit set by the operating system (see the last question). From your own session, a forced
@@ -145,7 +159,9 @@ Ravenseat can do is find it, once you turn the check on (`ravenseat settings set
 worktrees, and names the file and the index (never the key): FAIL when git tracks the file, WARN when it is only on
 disk. With `gitignoreCheck.enabled` on it also checks that your project's own `.gitignore`, not only your global one,
 ignores the personal settings and the queue's data, and with `secretScan.atReceive` on a key a track commits is found
-at `receive`, and the merge stops on it until the track takes it out. All three are off until you turn them on.
+at `receive`, and the merge stops on it until the track takes it out. With `permissionsCheck.enabled` on, doctor also
+names broad rules in the tracked `.claude/settings.json` (any shell command, `git push`, `bypassPermissions` and the
+like). All four are off until you turn them on.
 `ravenseat secrets clean --yes` removes the rules that hold a key (after a copy in the data folder; `--dry-run` only
 names them), but the key itself must still be changed. Pass keys as environment variables instead of typing them in
 commands.
@@ -198,6 +214,22 @@ budget (`ravenseat limit dailyBudget <usd>`) is off by default.
 [`rt15-hanging-gate`](../scripts/orchestrator/__tests__/redteam/rt15-hanging-gate.test.ts),
 [`doneCheck`](../scripts/orchestrator/lib/__tests__/doneCheck.test.ts),
 [`costGuard`](../scripts/orchestrator/lib/__tests__/costGuard.test.ts).
+
+### Does the same failure keep coming back?
+
+It is counted, so you can see it. Every check that catches a failure (a red gate, a failed CI job, a red done command,
+a secret hit at receive, a reviewer's finding and how it was closed) writes one row in the finding log,
+`findings.jsonl` in the data folder, with a class from a rule register such as contract drift or a weak test. A fix
+merged without a test that fails without it is marked as such and weighs more if the bug returns. When the same gate or
+CI failure goes red in two separate tasks or commits within 30 days, the pulse proposes one `INSP-<n>` task to build a
+guard for it, never built without your yes, and the Checks tab lists the guards built so far, with how often each gate
+has caught something ([repeated failures](orchestration.md#repeated-failures-and-the-guard-registry)). The log stays on
+your machine and holds short masked excerpts, never a secret's value.
+
+**Verified by:** [`findingLog`](../scripts/orchestrator/lib/__tests__/findingLog.test.ts),
+[`findingSourcesFlow`](../scripts/orchestrator/__tests__/findingSourcesFlow.test.ts),
+[`inspectionFlow`](../scripts/orchestrator/__tests__/inspectionFlow.test.ts),
+[`guardRegistry`](../scripts/orchestrator/lib/__tests__/guardRegistry.test.ts).
 
 ### What does a task cost, and can I cap it?
 
@@ -274,9 +306,9 @@ Windows only.
 
 Each hook starts node and exits at once in a project without `queue.config.json`, so outside the queue the cost is a
 process start per hook and nothing else. In a project with the queue, one hook runs after every tool call and returns at
-once unless the agent is a track; the push, read and write guards run before Bash, Read and Write calls. The hooks run
-node directly, without a shell, so Windows does not start Git Bash for each one. Other plugins weigh more than before: a
-plugin's start hook runs once per agent session, so four tracks and an orchestrator run it five times.
+once unless the agent is a track; the push, read and write guards run before shell, Read and Write or Edit calls. The
+hooks run node directly, without a shell, so Windows does not start Git Bash for each one. Other plugins weigh more than
+before: a plugin's start hook runs once per agent session, so four tracks and an orchestrator run it five times.
 
 **Verified by:** [`projectRoot`](../scripts/orchestrator/lib/__tests__/projectRoot.test.ts),
 [`writeGuard`](../scripts/orchestrator/lib/__tests__/writeGuard.test.ts) (inert outside a queue project).
@@ -295,12 +327,15 @@ gates or no CI config, an ordinary code task also gets a short agent review, and
 (reviewed, no check ran) or unverified, never verified. Verified only means that your gates passed: if your gates are
 lint alone, that is all it says. Without tests, nothing automatic stands between an agent's change and the merge except
 the review, so the value grows with your checks. `ravenseat kickstart` and the Checks tab show what you have and one
-next step, and only read your files.
+next step, and only read your files. In a project with a database the tab also suggests probes for the database
+rules, migrations from an empty database in CI, and `dbGuard.localOnly`, which refuses a probe gate aimed at a database
+that is not local.
 
 **Verified by:** [`controlsFlow`](../scripts/orchestrator/__tests__/controlsFlow.test.ts),
 [`kickstart`](../scripts/orchestrator/lib/__tests__/kickstart.test.ts),
 [`checksCatalog`](../scripts/orchestrator/lib/__tests__/checksCatalog.test.ts),
-[`rt17-empty-gate`](../scripts/orchestrator/__tests__/redteam/rt17-empty-gate.test.ts).
+[`rt17-empty-gate`](../scripts/orchestrator/__tests__/redteam/rt17-empty-gate.test.ts),
+[`dbGuard`](../scripts/orchestrator/lib/__tests__/dbGuard.test.ts).
 
 ### Can a web page I visit control my board?
 
