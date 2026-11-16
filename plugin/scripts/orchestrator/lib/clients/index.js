@@ -11,6 +11,8 @@
 // dispatch(descriptor), fillEntry(descriptor), agentLabel(descriptor), startLine(descriptor),
 // resumeLine(descriptor), sameTurnBlock(agents), missionAddendum(ctx) }, and optionally continueLine({ agent, message })
 // when a fix round can continue the agent that delivered (lib/fixRound.js). lib/__tests__/clientContract.test.ts checks each one.
+// The default client also exports transcripts (lib/clients/claude/transcript.js): where its transcripts live and how
+// the core finds and reads them; the core asks clientFor().transcripts instead of building a Claude path itself.
 // Used by cli/run.mjs and lib/logic/merge.js (concurrentBlock).
 // =============================================================
 'use strict';

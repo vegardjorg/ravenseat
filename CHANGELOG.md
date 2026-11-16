@@ -5,6 +5,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: when Claude Code moves its transcript files, one file needs the fix instead of eight.** Where the
+  transcripts live (the projects folder and its slug rule) and how an agent's file is found, listed and tailed now sit
+  in one place behind the client adapter (`lib/clients/claude/transcript.js`), instead of five copies of the folder
+  rule and four of the file search spread over `ravenseat ask`, `cost`, the event and track commands, the context hook, the silent track check and
+  the fix round. Tests lock the old behaviour before and after the move, including the default folder and the
+  `QUEUE_TRANSCRIPTS` override, and the coupling allowlist shrinks from 29 to 22 files. Nothing changes for users.
 - **Hardening: a Claude Code format change is fixed in one place, and no new file starts depending on it.** The
   transcript fields, transcript paths, hook and status line payloads, cache lifetimes, model ids, environment
   variables, CLI flag and settings paths the queue reads are now dated client facts in `lib/clients/claude/facts.js`,

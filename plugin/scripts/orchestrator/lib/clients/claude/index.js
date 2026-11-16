@@ -5,7 +5,8 @@
 //
 // The output is byte-identical to the Claude flow before the adapter split (locked by claudeDispatchCompat.test.ts).
 // The Claude facts themselves (agent names, model list, message text) live in ./dispatch.js and the mission text
-// pieces in ./mission.js, each with source and date.
+// pieces in ./mission.js, each with source and date. The transcript paths (folder, slug, agent files) live in
+// ./transcript.js, exposed as transcripts.
 //
 // Used by lib/clients/index.js (the registry). Tested in lib/__tests__/clientContract.test.ts and
 // claudeDispatchCompat.test.ts.
@@ -101,4 +102,6 @@ module.exports = {
   sameTurnBlock: D.sameTurnBlock,
   // The Claude pieces of the mission text (tool names, how to report, context advice): ./mission.js.
   missionAddendum: require('./mission.js').missionAddendum,
+  // Where the transcripts live and how the core finds and reads them (folder, slug, agent files, tail): ./transcript.js.
+  transcripts: require('./transcript.js'),
 };

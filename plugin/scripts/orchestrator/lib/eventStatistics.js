@@ -5,7 +5,7 @@
 // was limited by the load.
 //
 // Pure functions on the time log rows (timeCost.readRows), the usage events (timeCost.usageEvents) and the queue,
-// apart from readAgentsBySession (one readdir per session). Used by cli/cost.mjs (ravenseat cost, ravenseat limit) and
+// apart from readAgentsBySession (one readdir per session, through the client adapter's transcripts). Used by cli/cost.mjs (ravenseat cost, ravenseat limit) and
 // queue-board.mjs (the Statistics tab).
 //
 // THE ORCHESTRATION OVERHEAD (orchestrationOverhead): the main sessions' cost comes from the status line payload
@@ -56,9 +56,6 @@
 // Tested in lib/__tests__/eventStatistics.test.ts.
 // =============================================================
 'use strict';
-
-const fs = require('node:fs');
-const path = require('node:path');
 
 const { isAgentSource } = require('./logic/questions.js');
 
@@ -140,19 +137,10 @@ function sessionCosts(rows, { from = -Infinity, to = Infinity } = {}) {
 
 /** The subagents per session from the transcript folders: Map session id -> Set of agent ids (empty when none). */
 function readAgentsBySession(transcriptsDir, sessionIds) {
+  // The file rule is the default client's (lib/clients/claude/transcript.js); no folder gives an empty set.
+  const T = require('./clients/index.js').clientFor().transcripts;
   const out = new Map();
-  for (const id of sessionIds ?? []) {
-    const set = new Set();
-    try {
-      for (const n of fs.readdirSync(path.join(transcriptsDir, id, 'subagents'))) {
-        const m = /^agent-(.+)\.jsonl$/.exec(n);
-        if (m) set.add(m[1]);
-      }
-    } catch {
-      // no folder: no subagents known for the session
-    }
-    out.set(id, set);
-  }
+  for (const id of sessionIds ?? []) out.set(id, new Set(T.listSubagents(transcriptsDir, id).map((x) => x.agent)));
   return out;
 }
 

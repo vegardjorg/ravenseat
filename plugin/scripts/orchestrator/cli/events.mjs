@@ -11,7 +11,6 @@
 // =============================================================
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { BASE, CONFIG, FOLDER, L, MAIN_TREE, REMOTE, require, TIME_LOG, gitRead } from './context.mjs';
@@ -111,10 +110,10 @@ export function detectPushes({ now = Date.now() } = {}) {
   }
 }
 
-// The agent transcripts: <projects>/<session>/subagents/agent-<agent_id>.jsonl (as cli/tracks.mjs findTranscript).
-export const TRANSCRIPTS =
-  process.env.QUEUE_TRANSCRIPTS ??
-  path.join(os.homedir(), '.claude', 'projects', MAIN_TREE.replace(/[^A-Za-z0-9]/g, '-'));
+// The transcripts folder, from the default client's adapter (lib/clients/claude/transcript.js; QUEUE_TRANSCRIPTS
+// overrides, tests). cli/cost.mjs lists it for the turns report.
+export const TR = require('./lib/clients/index.js').clientFor().transcripts;
+export const TRANSCRIPTS = TR.transcriptsDir(MAIN_TREE);
 
 /** The subagents each session started (lib/eventStatistics.js readAgentsBySession on the transcript folders). */
 export function agentsBySession(sessionIds) {

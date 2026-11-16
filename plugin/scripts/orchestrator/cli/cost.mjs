@@ -22,7 +22,7 @@ import {
 import {
   dailyUsageFor, measureLoad, measurementLine, measureTask, readTimeLog, saveMeasurement, sinceTime,
 } from './tracks.mjs';
-import { agentsBySession, TRANSCRIPTS } from './events.mjs';
+import { agentsBySession, TR, TRANSCRIPTS } from './events.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
 
 const ES = require('./lib/eventStatistics.js');
@@ -380,27 +380,8 @@ function turnsAndToolsFor({ rows, from, to }) {
       // error-ignored: a file that vanished is left out
     }
   };
-  let entries = [];
-  try {
-    entries = fs.readdirSync(TRANSCRIPTS, { withFileTypes: true });
-  } catch {
-    entries = []; // error-ignored: no transcripts folder, no turns
-  }
-  for (const e of entries) {
-    if (e.isFile() && e.name.endsWith('.jsonl')) add(path.join(TRANSCRIPTS, e.name), { session: e.name.slice(0, -6), main: true });
-    else if (e.isDirectory()) {
-      let subs = [];
-      try {
-        subs = fs.readdirSync(path.join(TRANSCRIPTS, e.name, 'subagents'));
-      } catch {
-        subs = []; // error-ignored: a session without subagents
-      }
-      for (const n of subs) {
-        const m = /^agent-(.+)\.jsonl$/.exec(n);
-        if (m) add(path.join(TRANSCRIPTS, e.name, 'subagents', n), { session: e.name, agent: m[1], main: false });
-      }
-    }
-  }
+  // The main sessions and their subagents, in folder order (the adapter's listing; no folder, no turns).
+  for (const { file, ...x } of TR.listTranscripts(TRANSCRIPTS)) add(file, x);
   const typeOf = new Map();
   const orchestrators = new Set();
   for (const r of rows ?? []) {

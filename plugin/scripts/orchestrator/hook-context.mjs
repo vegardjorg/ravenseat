@@ -64,7 +64,6 @@
 // Fails OPEN: any internal error gives no output and exit 0, so the hook never blocks normal work.
 // =============================================================
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
@@ -93,11 +92,10 @@ const COMPACT_COUNT = path.join(QUEUE_FOLDER, 'compact-count.json');
 const COST_GUARD_LOG = path.join(QUEUE_FOLDER, 'cost-guard-log.jsonl');
 // Same sources as queue.mjs (the time log and the agent transcripts); the env vars override in tests.
 const TIME_LOG = timeLog();
-// Claude Code saves the transcripts in ~/.claude/projects/<slug>, where slug is the root path with all characters
-// except A-Z, a-z and 0-9 replaced by "-". QUEUE_TRANSCRIPTS overrides (tests).
-const TRANSCRIPTS =
-  process.env.QUEUE_TRANSCRIPTS ??
-  path.join(os.homedir(), '.claude', 'projects', MAIN_TREE.replace(/[^A-Za-z0-9]/g, '-'));
+// The transcripts folder and the agent files, from the default client's adapter (lib/clients/claude/transcript.js:
+// the folder, the slug rule and the file names live there). QUEUE_TRANSCRIPTS overrides (tests).
+const TR = require('./lib/clients/index.js').clientFor().transcripts;
+const TRANSCRIPTS = TR.transcriptsDir(MAIN_TREE);
 const MAX_TRANSCRIPT = 300 * 1024 * 1024;
 
 /** Read stdin (hook input as JSON). */
@@ -149,17 +147,8 @@ function readJson(filePath) {
 
 /** The transcript text of an agent (like queue.mjs findTranscript/readTranscript), or null. */
 function agentTranscript(agentId) {
-  try {
-    for (const d of fs.readdirSync(TRANSCRIPTS, { withFileTypes: true })) {
-      if (!d.isDirectory()) continue;
-      const filePath = path.join(TRANSCRIPTS, d.name, 'subagents', `agent-${agentId}.jsonl`);
-      if (!fs.existsSync(filePath)) continue;
-      return fs.statSync(filePath).size > MAX_TRANSCRIPT ? null : fs.readFileSync(filePath, 'utf8');
-    }
-  } catch {
-    // error-ignored: without a transcript the time log's last row is used
-  }
-  return null;
+  // Null when missing, unreadable or too large: without a transcript the time log's last row is used.
+  return TR.readAgentTranscript(TRANSCRIPTS, agentId, { maxBytes: MAX_TRANSCRIPT });
 }
 
 /** The class from the mission file (path in o.mission, or the text itself), otherwise o.class. */

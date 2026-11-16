@@ -115,18 +115,10 @@ const FACTS = Object.freeze(
       fragility: 'H',
       move: 'W2',
       source: 'hooks',
-      readers: [
-        'cli/ask.mjs',
-        'cli/cost.mjs',
-        'cli/events.mjs',
-        'cli/tracks.mjs',
-        'hook-context.mjs',
-        'lib/trackActivity.js',
-        'lib/trackGuard.js',
-        'lib/eventStatistics.js',
-        'lib/approvalWait.js',
-        'lib/fixRound.js',
-      ],
+      // W2a (2026-11-16): the folder, the slug rule and the agent files live in lib/clients/claude/transcript.js; the
+      // core files that built the paths themselves (cli/ask, cost, events, tracks, hook-context, eventStatistics,
+      // fixRound, trackActivity) ask the adapter now. trackGuard and approvalWait still read paths and move in W2b.
+      readers: ['lib/clients/claude/transcript.js', 'lib/trackGuard.js', 'lib/approvalWait.js'],
     },
     // ---- Hooks (documented) ----
     {

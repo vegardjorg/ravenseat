@@ -16,7 +16,6 @@
 // =============================================================
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -179,26 +178,15 @@ export function costEstimateState(queue, uncommitted, usage) {
   };
 }
 // ---- The orchestrator's routine as a script and cost per task ---------------------------------------------
-// The agent transcripts: ~/.claude/projects/<repo-slug>/<session>/subagents/agent-<agent_id>.jsonl (the same source as
+// The agent transcripts, from the default client's adapter (lib/clients/claude/transcript.js, the same source as
 // hook-time.mjs). QUEUE_TRANSCRIPTS overrides (tests).
-const TRANSCRIPTS =
-  process.env.QUEUE_TRANSCRIPTS ??
-  path.join(os.homedir(), '.claude', 'projects', MAIN_TREE.replace(/[^A-Za-z0-9]/g, '-'));
+const TR = CL.clientFor().transcripts;
+const TRANSCRIPTS = TR.transcriptsDir(MAIN_TREE);
 // As in hook-time.mjs: huge transcripts are not analyzed (the time log's last row is used instead).
 const MAX_TRANSCRIPT = 300 * 1024 * 1024;
 /** The path to the transcript for an agent, or null. */
 export function findTranscript(agentId) {
-  let sessions;
-  try {
-    sessions = fs.readdirSync(TRANSCRIPTS, { withFileTypes: true }).filter((d) => d.isDirectory());
-  } catch {
-    return null;
-  }
-  for (const d of sessions) {
-    const filePath = path.join(TRANSCRIPTS, d.name, 'subagents', `agent-${agentId}.jsonl`);
-    if (fs.existsSync(filePath)) return filePath;
-  }
-  return null;
+  return TR.findAgentTranscript(TRANSCRIPTS, agentId);
 }
 /** The transcript text, or null when the file is missing or too large. */
 function readTranscript(filePath) {

@@ -90,27 +90,17 @@ function agentsByTask(rows, ids) {
   return out;
 }
 
-/** The transcripts folder (~/.claude/projects/<repo-slug>, as in queue.mjs; QUEUE_TRANSCRIPTS overrides). */
+/** The default client's transcript paths (lib/clients/claude/transcript.js). */
+const transcripts = () => require('./clients/index.js').clientFor().transcripts;
+
+/** The transcripts folder (as in queue.mjs; QUEUE_TRANSCRIPTS overrides). */
 function transcriptsRoot(mainTree) {
-  return (
-    process.env.QUEUE_TRANSCRIPTS ??
-    path.join(require('node:os').homedir(), '.claude', 'projects', String(mainTree).replace(/[^A-Za-z0-9]/g, '-'))
-  );
+  return transcripts().transcriptsDir(mainTree);
 }
 
-/** The path to an agent's transcript (<root>/<session>/subagents/agent-<id>.jsonl), or null. */
+/** The path to an agent's transcript in that folder, or null. */
 function findTranscript(root, agentId) {
-  let sessions;
-  try {
-    sessions = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory());
-  } catch {
-    return null;
-  }
-  for (const d of sessions) {
-    const p = path.join(root, d.name, 'subagents', `agent-${agentId}.jsonl`);
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
+  return transcripts().findAgentTranscript(root, agentId);
 }
 
 const mtimeOf = (p) => {

@@ -75,12 +75,8 @@ function lastTrackAgent(rows, taskId) {
   return best;
 }
 
-/** The session a subagent transcript belongs to: <root>/<session>/subagents/agent-<id>.jsonl gives <session>. */
-function sessionOfTranscript(p) {
-  const parts = String(p ?? '').split(/[\\/]+/);
-  const i = parts.lastIndexOf('subagents');
-  return i > 0 ? parts[i - 1] : null;
-}
+/** The session a subagent transcript belongs to (the default client's path rule, lib/clients/claude/transcript.js). */
+const sessionOfTranscript = (p) => require('./clients/index.js').clientFor().transcripts.sessionOfTranscript(p);
 
 /**
  * Continue the agent that delivered, or start a new one? See the rule at the top.

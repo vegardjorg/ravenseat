@@ -51,15 +51,8 @@ const COUPLING: Record<string, RegExp> = {
  * and removes each entry here in the same commit; the bolk in the comment is the plan, not a rule.
  */
 const ALLOWED: string[] = [
-  // W2a: transcript paths and file finding (projects/<slug>/<session>/subagents/agent-<id>.jsonl)
-  'cli/ask.mjs',
-  'cli/cost.mjs',
-  'cli/events.mjs',
-  'cli/tracks.mjs',
-  'hook-context.mjs',
-  'lib/eventStatistics.js',
-  'lib/fixRound.js',
-  'lib/trackActivity.js',
+  // W2a (done 2026-11-16): the transcript paths and file finding moved to lib/clients/claude/transcript.js; the core
+  // asks clientFor().transcripts. hook-context.mjs still reads hook fields and sits under W2c.
   // W2b: transcript entries and usage (message.usage, content blocks, compact_boundary, API errors)
   'lib/approvalWait.js',
   'lib/askBundle.js',
@@ -72,6 +65,7 @@ const ALLOWED: string[] = [
   // W2c: hook and status line payloads (stdin fields and hookSpecificOutput)
   'hook-after-compact.mjs',
   'hook-approval-wait.mjs',
+  'hook-context.mjs',
   'hook-push-guard.mjs',
   'hook-read-guard.mjs',
   'hook-time.mjs',

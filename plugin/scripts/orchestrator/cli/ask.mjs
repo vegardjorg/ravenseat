@@ -27,7 +27,6 @@
 // =============================================================
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { a, BASE, branchFor, FOLDER, L, MAIN_TREE, positional, read, readMission, TK, val } from './context.mjs';
@@ -36,55 +35,22 @@ import { createRequire } from 'node:module';
 
 const AB = createRequire(new URL('../queue.mjs', import.meta.url))('./lib/askBundle.js');
 
-// The transcripts folder, as in cli/tracks.mjs (QUEUE_TRANSCRIPTS overrides, tests).
-const TRANSCRIPTS =
-  process.env.QUEUE_TRANSCRIPTS ??
-  path.join(os.homedir(), '.claude', 'projects', MAIN_TREE.replace(/[^A-Za-z0-9]/g, '-'));
+// The transcripts folder and its files, from the default client's adapter (lib/clients/claude/transcript.js;
+// QUEUE_TRANSCRIPTS overrides, tests).
+const TR = createRequire(new URL('../queue.mjs', import.meta.url))('./lib/clients/index.js').clientFor().transcripts;
+const TRANSCRIPTS = TR.transcriptsDir(MAIN_TREE);
 
 /** The flags that take a value (so their value is not read as the question). */
 const WITH_VALUE = ['--max-chars', '--out', '--scratchpad', '--session'];
 
-/** The path to an agent's transcript (<projects>/<session>/subagents/agent-<id>.jsonl), or null. */
-function findTranscript(agentId) {
-  let sessions;
-  try {
-    sessions = fs.readdirSync(TRANSCRIPTS, { withFileTypes: true }).filter((d) => d.isDirectory());
-  } catch {
-    return null;
-  }
-  for (const d of sessions) {
-    const filePath = path.join(TRANSCRIPTS, d.name, 'subagents', `agent-${agentId}.jsonl`);
-    if (fs.existsSync(filePath)) return filePath;
-  }
-  return null;
-}
+/** The path to an agent's transcript, or null (the adapter's file rule). */
+const findTranscript = (agentId) => TR.findAgentTranscript(TRANSCRIPTS, agentId);
 
-/** `length` bytes of a file from `start` as UTF-8 (a cut multibyte character only spoils one line), or null. */
-function readSlice(filePath, start, length) {
-  let fd;
-  try {
-    fd = fs.openSync(filePath, 'r');
-    const buf = Buffer.alloc(length);
-    const n = fs.readSync(fd, buf, 0, length, start);
-    return buf.subarray(0, n).toString('utf8');
-  } catch {
-    return null;
-  } finally {
-    if (fd != null) fs.closeSync(fd);
-  }
-}
+/** `length` bytes of a file from `start` as UTF-8, or null. */
+const readSlice = TR.readSlice;
 
-/** The tail of a transcript: { text, fromStart, size } or null. */
-function readTail(filePath) {
-  try {
-    const size = fs.statSync(filePath).size;
-    const start = Math.max(0, size - AB.TAIL_BYTES);
-    const text = readSlice(filePath, start, size - start);
-    return text == null ? null : { text, fromStart: start === 0, size };
-  } catch {
-    return null;
-  }
-}
+/** The tail of a transcript (the last AB.TAIL_BYTES): { text, fromStart, size } or null. */
+const readTail = (filePath) => TR.readTail(filePath, AB.TAIL_BYTES);
 
 /**
  * The agents of the task from the time log, newest first: the certain ones (track label = the task or a fix round),
