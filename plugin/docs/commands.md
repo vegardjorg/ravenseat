@@ -28,7 +28,7 @@ ravenseat proposals                 # the proposals waiting, and the auto-accept
 ravenseat approve <ID>              # lets a proposal start (`ravenseat set <ID> cancelled` declines it)
 ravenseat conflicts                 # predicted merge conflicts between running tracks and the base
 ravenseat ask <ID> "<question>"     # ask about an earlier track without resuming it (/ravenseat:ask)
-ravenseat checks                    # what the project has for checking its code (read from files, nothing runs) and suggestions
+ravenseat checks [--json]           # what the project has for checking its code (read from files, nothing runs) and suggestions (docs/checks.md)
 ravenseat checks show <key>         # what a suggestion's investigation and plan cover
 ravenseat checks plan <key>         # proposes its investigation and planning as a task (--approved: ready to run)
 ravenseat checks dismiss <key>      # sets a suggestion aside (restore brings it back)
@@ -36,6 +36,7 @@ ravenseat checks packs [--apply]    # review signal packs for your stack, from t
 ravenseat checks turn-on <key>      # a card for an opt-in check that is off: writes its setting on in queue.config.json
 ravenseat checks marker on|off      # the red dot on the Checks tab while an important suggestion is open
 ravenseat checks off                # no Checks tab, overview or setup suggestions (on turns them back); guards are not touched
+ravenseat checks restore <key>      # brings a card that was set aside back
 ravenseat inspection                # failures that repeat in the gates or CI; one proposal each to build a guard
 ravenseat inspection snooze <ID>    # holds an inspection entry (default 14 days) and cancels its proposal
 ravenseat guards                    # the guard registry (a tracked file) with "caught N times since built"

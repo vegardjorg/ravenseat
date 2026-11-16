@@ -866,8 +866,8 @@ so the file does not change on every run. Later measures fit in the same object 
 sabotage test: break the guarded code on purpose in a throwaway worktree and record whether the guard CATCHES it,
 catches it PARTIAL(ly) or is BLIND to it. That is not built.
 
-The board's Checks tab shows both: a Guards section and the open Repeated failures. `ravenseat gates --health` ends with
-the last inspection state (read-only).
+The board's Checks tab shows both: a Guards section and the open Repeated failures ([the Checks tab](checks.md#the-guard-registry-and-repeated-failures)).
+`ravenseat gates --health` ends with the last inspection state (read-only).
 
 ### Repeats on class and area, and a guard that did not hold
 

@@ -44,16 +44,11 @@ Use `ask` for a step a queue agent cannot take, such as the first commit (an age
 only the keys in `lib/optInChecks.js`). `important_when` raises the card to high while its conditions hold, which lights the
 red marker until the gap is fixed or the card is set aside.
 
-`when` says when the suggestion applies. Comma means all must hold, and `|` means at least one of those kinds:
-`has-git`, `no-git`, `no-commit` (no git, or git with no commit yet), `has-remote`, `has-ci`, `no-ci`, `has-gates`,
-`no-gates`, `checks-found`, `secrets-open`, `known-stack`, `instructions-large`, `catalog-missing` (the project has no
-`docs/queue/catalog/`),
-`packs-missing` (a pack for the stack is not on in `review.packs`), `stack-unpacked` (a known stack has no pack),
-`missing:<kinds>`, `found:<kinds>`, `not-in-ci:<kinds>`, `off:<setting>` (an opt-in check that is off),
-`allowlist-tracked-hit` (a key in an approved command in a tracked file), `gitignore-gap` (`.claude/settings.local.json`
-not ignored by the project's own rules, or a tracked file Ravenseat keeps local), `repo-private` (the repo is known to
-be private: the cached answer in `<dataFolder>/repo-visibility.json`; unknown counts as not private).
-
-The kinds are test, types, lint, build, coverage, secret-scan, audit, security, dep-updates and hooks.
+`when` says when the suggestion applies. Comma means all must hold, and `|` means at least one of those kinds.
+`medium_when` raises a low card to medium while it holds, without the red marker. Every condition, with what it reads,
+and every kind of check (`missing:`, `found:`, `not-in-ci:`, `none-in-ci:`) are listed in
+[plugin/docs/checks.md](../../../docs/checks.md#conditions), generated from the code with `npm run docs:checks`. The
+same page has a table of every card here: run `npm run docs:checks` after adding or changing one, or the test
+`scripts/__tests__/checksDocTable.test.mjs` fails.
 
 A file with a mistake is left out, and `ravenseat checks` and the tab say what is wrong with it.

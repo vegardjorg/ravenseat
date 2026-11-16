@@ -184,6 +184,8 @@ Ravenseat is the reusable part of a queue I built inside a real Claude Code proj
 - [Full mode](plugin/docs/full-mode.md): lite and full side by side, risk classes, helper agents, focus, guards, load
   guard and recovery.
 - [The board](plugin/docs/board.md) and [commands](plugin/docs/commands.md), with [CLI parity](plugin/docs/cli-parity.md).
+- [The Checks tab](plugin/docs/checks.md): what the project has for checking its code, every suggestion card, the red
+  dot, the thresholds for repeats and how to write your own cards.
 - [Orchestration and agent safeguards](plugin/docs/orchestration.md), [queue configuration and reference](plugin/docs/queue.md),
   [plan register](plugin/docs/plan-register.md), [mission template](plugin/docs/mission-template.md).
 - [Red team](plugin/docs/redteam.md) and the [FAQ](plugin/docs/faq.md): what can go wrong, the tests that check it, and the

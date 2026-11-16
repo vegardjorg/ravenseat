@@ -305,7 +305,8 @@ Two more cards offer the opt-in scope drift guards (see [Reuse and scope notes](
 the gap review when a change drifts far" (`scopeNotes.driftGap`, V6) and "Warn a track when it writes outside its
 files" (`scopeNotes.driftWarn`, V7). Both are low while off and turn important by the same rule: scope drift three
 times in one area within 30 days in the finding log, with the count on the card. In lite mode none of these cards turns
-important, and the two guard cards are not shown, since a lite task names no files.
+important, and the two guard cards are not shown, since a lite task names no files. Every card, and the rule
+behind "three times in one area within 30 days": [The Checks tab](checks.md#three-thresholds-for-repeats).
 
 ## Friction
 

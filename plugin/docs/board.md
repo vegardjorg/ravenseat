@@ -65,15 +65,10 @@ The forecast above the columns says when the remaining tasks are done.
 
 **Checks.** Cards for what your project already has for checking its code, and suggestions for what to add, most
 important first. It is read from your files, so it shows what is set up, not that it works. A suggestion's button adds
-an investigation to the queue, and nothing is built before you approve it. Some need no agent: "Turn on" on "Review
-signals for your stack" writes the stack packs to `review.packs`. Important suggestions you set aside stay in a summary
-at the top with "Bring back", and a small red dot on the tab shows while an important one is open (`ravenseat checks
-marker off` hides the dot). A project with a database gets a Database group (probes for the database rules, migrations
-from an empty database in CI, probes only against a local database). From the finding log come two cards: "A guard
-did not hold" when a kind of failure came back where a guard for it was already in place (the one gap that always
-lights the red dot; `learning.guardFailedMarker` off keeps the card without it), and, while the guard proposals are
-off, one low card that turns them on when a kind of failure keeps coming back in one place. Turn the tab off if you
-run your own setup.
+an investigation to the queue, and nothing is built before you approve it; some need no agent and turn a check on with
+one click. A small red dot on the tab shows while an important suggestion is open, and "Set aside" keeps a card away
+until you bring it back. The guard registry and the failures that repeat are on the same tab. Every card and rule:
+[The Checks tab](checks.md).
 
 <p align="center"><img src="../../assets/screenshots/light-04-statistics.jpg" alt="Statistics: throughput, cycle time, estimate accuracy and cost" width="800"></p>
 
@@ -113,7 +108,7 @@ The Queue workspace has these tabs:
   suggestion's button adds its investigation and planning to the queue; building needs your approval afterwards. The stack
   pack suggestion needs no agent and writes `review.packs` on your click. A red dot on the tab while an important
   suggestion is open (`checksPanel.marker`). Read from files, nothing is run. Off with the link on the tab, in Settings or with `ravenseat checks off`
-  (see [the Checks tab](queue.md#the-checks-tab-and-ravenseat-checks)).
+  (see [the Checks tab](checks.md)).
 - **Cloud:** tasks that can run in a cloud session, and the cloud sessions (off by default, see [Modules](#modules)).
 - **Statistics:** done per day, added versus finished, time per class, cost per day (API-equivalent USD), context at
   the end of tracks, key figures (first **Cost per merged change**: all measured cost in the last 14 days divided by

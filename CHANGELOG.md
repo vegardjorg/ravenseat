@@ -5,6 +5,17 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **The Checks tab has its own page, and its card table cannot go stale.** `plugin/docs/checks.md` explains the tab
+  from the top down: what it reads and never runs, the four card states, exactly when the red dot lights, what each
+  button runs, set aside and bring back, lite mode, turning it off, your own cards in `docs/queue/checks/`, the
+  commands and a short FAQ. One table lists all 46 cards with when each shows, its priority and what raises it, its
+  button and its setting, and one section puts the three thresholds for repeats side by side (the cards' 3 in one area
+  within 30 days, the finding log's 2 in an area or 3 in the project within 90, the inspection queue's 2 within 30)
+  with why they differ. The card table and the list of conditions are generated from the card files and the code
+  (`npm run docs:checks`), and a test fails when a card is missing from the table or its row is out of date. The
+  section in queue.md is now a short introduction with links; board.md and catalog.md keep their short notes. Fixed on
+  the way: queue.md said the database probes card turns important, which it never does, and the catalog README listed
+  only part of the conditions and kinds. Nothing changes in how the tab works.
 - **Hardening: when Claude Code renames a hook or status line field, one file needs the fix instead of seventeen.**
   The hooks, the status line and the cost, quota and tool trouble readers now read the stdin payload, and build the
   deny, ask and additionalContext answers, through one reader behind the client adapter

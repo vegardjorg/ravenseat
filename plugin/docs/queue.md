@@ -367,69 +367,25 @@ A project with no gates or no CI config still runs. You are told, and you decide
 | audited | An agent reviewed the change, but no check ran | **Audited** |
 | unverified | No gates, no done command and no agent review ran | **Merged, not verified** |
 
-Tasks merged before this came have no status and no badge. `/ravenseat:setup` sets up gates and offers a CI template.
+Tasks merged before this came have no status and no badge. `/ravenseat:setup` sets up gates and offers a CI template,
+and the [Checks tab](checks.md) shows what the project has and what to add.
 
 ### The Checks tab and `ravenseat checks`
 
-The board's Checks tab and `ravenseat checks` show two things, as cards: what the project has (CI files with triggers and jobs, and
-each kind of check with where it runs: CI, gate, script or git hook), and prioritized suggestions for what to add. It only reads
-the project's files. Nothing is run, so it shows what is set up, not that it works. The picture is saved as
-`checks-report.json` in the queue folder.
+The board's Checks tab and `ravenseat checks` show, as cards, what the project has for checking its code (CI files, and
+each kind of check with where it runs) and prioritized suggestions for what to add. It only reads the project's files and
+runs nothing, so it shows what is set up, not that it works. A suggestion's button adds an investigation that ends in a
+plan, never code (`ravenseat checks plan <key>`), or does a step that needs no agent: turn on an opt-in check
+(`checks turn-on <key>`), turn on the stack packs (`checks packs --apply`), use the checks found as gates, or copy a
+text to give Claude. Nothing changes your gates or guards without you. "Set aside" keeps a card away until you bring it
+back, and a small red dot on the tab shows while a high suggestion is open. The tab also shows the guard registry and
+the failures that went red the same way more than once.
 
-Each suggestion has a button, "Add investigation to queue" (`ravenseat checks plan <key>`). That adds one class U task from the
-suggestion's template. It ends in a plan in the track result, with the build steps it recommends for you to pick from, never in code. "Set aside" removes the
-card until you bring it back; an important one you set aside stays in a summary at the top with "Bring back".
-
-"Review signals for your stack" needs no agent: its button, "Turn on" (`ravenseat checks packs --apply`), writes the
-stack packs found in your manifests to `review.packs` ([stack packs](orchestration.md#stack-packs)); `ravenseat checks
-packs` shows them first and writes nothing. A stack without a pack gets a low suggestion to research one.
-
-A check that is off by default (keys in approved commands and `.mcp.json`, the project's own `.gitignore`, the secret
-scan at receive, broad permissions, the local-only guard for database probes) has a card too. Its "Turn on"
-(`ravenseat checks turn-on <key>`) writes that one setting in `queue.config.json`, and the card goes; "Set aside" keeps
-it away for good. The card is important, with the red dot, while a quiet look finds a gap that matters: a key in a
-tracked approved command or a tracked `.mcp.json`, `.claude/settings.local.json` not ignored by the project's own
-rules, a tracked file in the queue's data, or `defaultMode: bypassPermissions` in the tracked `.claude/settings.json`.
-The broad permissions card is offered only where a shared settings file is, the probe guard only in a project with a
-database.
-
-**Database** cards show in a project with a database (`migrations.folder` set, or a `supabase/`, `prisma/` or `migrations/` folder):
-test your database rules with probes (important when migrations are set up and no probe check is found; probes roll
-back, run against a local database, and wait their turn in the gate queue), run the migrations from an empty database
-in CI, and never run probes against a shared database (the `dbGuard.localOnly` card). Other project cards, none of them
-important: branch protection (read with `gh` once a day, hidden when the base branch is protected), Actions pinned to a
-commit SHA, the lockfile in git, a formatter, a pinned runtime version, a `.env.example` beside a `.env`, a check for
-unused code, and flaky tests (low, medium once the time log shows a gate red and then green on the same commit).
-"Find copied code in CI" (low) shows for a known stack with CI and no copy detector there yet (jscpd, pylint's
-duplicate-code, PMD CPD, dupl or flay). It only proposes an investigation, so it needs no setting, and it is the code
-side of the [reuse note](#reuse-and-scope-notes), which sees a name, not a copied body. It turns important only when
-the finding log shows `duplication` three times in one area within 30 days.
-
-**The red dot:** while an important (high) suggestion is open, the tab shows a small red dot. `ravenseat checks marker
-off`, or `checksPanel.marker` in Settings, hides only the dot.
-
-**Opting out:** `ravenseat checks off`, or the switch on the tab and in Settings. It removes the tab, the overview and the setup
-suggestions, and changes no gates or guards. Without its own setting it follows `ravenseat guidance`, so quiet turns it off too.
-
-**Guards and repeated failures:** the tab also shows the guard registry (`ravenseat guards`, a tracked file) with
-"caught N times since built" for each gate, and the failures that went red the same way in separate tasks or commits
-(`ravenseat inspection`). A repeated failure becomes one proposal `INSP-<n>`: approve, cancel or
-`ravenseat inspection snooze <id>`. The commands:
-
-| Command | What it does |
-| --- | --- |
-| `ravenseat inspection [--json]` | Scans the time log, proposes a guard for each failure over the threshold (`inspection.minRepeats` incidents in `inspection.windowDays` days), and lists the entries. The pulse does the same at most once an hour |
-| `ravenseat inspection snooze <id> [--days 14]` | Holds an entry (by its proposal or signature) until a date and cancels its proposal |
-| `ravenseat guards [--json]` | The guard registry with its measures |
-| `ravenseat guards add [--from-task <id>] --kind gate|instruction|review|none --title "..." --explain "..." [--command "..."] [--against "..."] [--signature <id>]` | Adds an entry to the registry file in this tree. `--from-task` fills the task, title and signature from an inspection proposal |
-| `ravenseat guards retire <id>` | Marks an entry retired; it stays in the file |
-
-See orchestration.md, "Repeated failures and the guard registry".
-
-**Changing the suggestions:** every suggestion is a template file with an "Investigate" and a "Plan and build" section, and the
-categories are one list. Nothing is written in code. To add, change or remove them for a project, use the same layout in
-`docs/queue/checks/`. A file with the same name replaces the plugin's, and `off: true` removes it. The format and the
-conditions are in `scripts/orchestrator/checks-catalog/README.md` in the plugin.
+Everything about it is on its own page, [The Checks tab](checks.md): how to read it, exactly when the red dot lights,
+[every card](checks.md#every-card) with when it shows and what makes it important, the
+[three thresholds for repeats](checks.md#three-thresholds-for-repeats), the
+[guard registry and repeated failures](checks.md#the-guard-registry-and-repeated-failures), lite mode, turning it off,
+[your own cards](checks.md#your-own-cards) and [the commands](checks.md#commands).
 
 ### Kickstart
 

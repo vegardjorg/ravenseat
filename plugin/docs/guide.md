@@ -306,7 +306,7 @@ key or Enter for a second) sends the change.
 Every setting with its default, by the same categories, is in the [configuration tables](queue.md#configuration).
 A row marked Advanced is folded away at first, and one marked Full mode only is not used in lite.
 
-More about every tab: [board](board.md).
+More about every tab: [board](board.md). The Checks tab has its own page: [checks](checks.md).
 
 ## Safety baseline in full
 
