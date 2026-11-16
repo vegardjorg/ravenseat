@@ -39,6 +39,10 @@ describe('the opt-in checks', () => {
     }
   });
 
+  it('the guard proposals from the finding log are one of them (0i section 3.9: off, one tip, one card)', () => {
+    expect(OI.byKey('learning.proposals')).toMatchObject({ suggestion: 'learning-proposals', row: null });
+  });
+
   it('a check is on only when its setting is exactly true', () => {
     expect(OI.isOn({ secretScan: { atReceive: true } }, 'secretScan.atReceive')).toBe(true);
     for (const v of [false, 'true', 1, null, undefined]) expect(OI.isOn({ secretScan: { atReceive: v } }, 'secretScan.atReceive')).toBe(false);
@@ -77,8 +81,13 @@ describe('the cards on the Checks tab', () => {
 
   it('a check that is off has a medium card; one that is on has none', () => {
     const r = report(OFF);
-    for (const c of OI.OPT_IN.filter((x: { offer?: unknown }) => !x.offer))
+    // The guard proposals from the finding log have their own rule below: they need something due first.
+    for (const c of OI.OPT_IN.filter((x: { offer?: unknown; key: string }) => !x.offer && x.key !== 'learning.proposals'))
       expect(card(r, c.suggestion), c.suggestion).toMatchObject({ priority: 'medium', action: 'setting', setting: c.key, state: 'open' });
+    // Guard proposals: low, and only while the finding log has a class that is due (nothing to propose otherwise).
+    expect(card(r, 'learning-proposals')).toBeUndefined();
+    const due = { ledger: { due: [{ class: 'x', title: 'x', area: 'a', scope: 'area', incidents: 2, tasks: [] }], guardFailed: [], marker: true, recent: {} } };
+    expect(card(report({ ...OFF, ...due }), 'learning-proposals')).toMatchObject({ priority: 'low', action: 'setting', setting: 'learning.proposals', state: 'open' });
     // The probe guard: medium, only with a database. Broad permissions: low, only with a tracked settings file.
     expect(card(r, 'db-shared-guard')).toBeUndefined();
     expect(card(report({ ...OFF, hasDatabase: true }), 'db-shared-guard')).toMatchObject({ priority: 'medium', category: 'database', setting: 'dbGuard.localOnly' });

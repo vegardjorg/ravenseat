@@ -150,6 +150,15 @@ describe('the threshold and the proposal', () => {
     expect(r.due.map((e: { name: string }) => e.name)).toEqual(['check-d', 'check-c']);
   });
 
+  it('the cap is shared: gate proposals waiting for the owner take slots too (0i section 3.9)', () => {
+    const rows = ['a', 'b', 'c'].flatMap((x) => [red(`${x.toUpperCase()}-1`, 2, `check-${x}`), red(`${x.toUpperCase()}-2`, 1, `check-${x}`)]);
+    const gate = (id: string, status: string) => ({ id, status, labels: ['gate'], title: `Gate: ${id}` });
+    expect(scan(null, rows, [gate('GATE-1', 'proposed')]).due).toHaveLength(2);
+    expect(scan(null, rows, [gate('GATE-1', 'proposed'), gate('GATE-2', 'proposed'), gate('GATE-3', 'proposed')]).due).toEqual([]);
+    // An approved or closed gate task no longer waits for the owner, so it takes no slot.
+    expect(scan(null, rows, [gate('GATE-1', 'waiting'), gate('GATE-2', 'done'), gate('GATE-3', 'cancelled')]).due).toHaveLength(3);
+  });
+
   it('minRepeats and windowDays come from the setup', () => {
     const rows = [red('A-1', 5), red('B-2', 4)];
     expect(scan(null, rows, [], { setup: I.setupOf({ inspection: { minRepeats: 3 } }) }).due).toEqual([]);

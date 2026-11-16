@@ -9,6 +9,9 @@
 //   off                nothing
 // At most MAX_OPEN gate tasks are open at a time, so a project is not buried in proposals. A class the owner cancelled
 // stays declined, and the same class again extends the open task instead of adding a second one.
+// The cap is also shared (0i section 3.9, owner decision 3): at most SHARED_MAX proposals wait for the owner at a time,
+// from the inspection queue (INSP-<n>), the GATE lines and the finding log (lib/findingRepeats.js) together, so three
+// kinds of proposal never add up to nine. Only proposals count there: an approved task no longer asks anything.
 //
 // The criteria in the mission are the ones in skills/review/SKILL.md ("The gate criteria").
 // Used by: cli/gate.mjs. Tested in: lib/__tests__/knownBugGate.test.ts and __tests__/gateFlow.test.ts.
@@ -21,6 +24,14 @@ const RED_FIRST = 'The new check fails on the original bug or a minimal reproduc
 
 const isGate = (o) => Array.isArray(o?.labels) && o.labels.includes('gate');
 const isClosed = (o) => o.status === 'done' || o.status === 'cancelled';
+
+/** The shared cap: proposals of all three kinds that wait for the owner (see the header). */
+const SHARED_MAX = 3;
+const INSP_ID = /^INSP-\d+$/;
+
+/** The proposals that wait for the owner: inspection proposals and gate tasks (from GATE lines or the finding log). */
+const sharedProposals = (tasks = []) =>
+  (Array.isArray(tasks) ? tasks : []).filter((o) => o?.status === 'proposed' && (INSP_ID.test(String(o.id ?? '')) || isGate(o))).length;
 
 /** The setting; anything else counts as the default. */
 const modeOf = (config) => (MODES.includes(config?.gates?.fromKnownBugs) ? config.gates.fromKnownBugs : 'propose');
@@ -73,7 +84,8 @@ function decide({ title, tasks = [], mode = 'propose' }) {
   if (done) return { action: 'exists', task: done };
   const cancelled = same.find((o) => o.status === 'cancelled');
   if (cancelled) return { action: 'declined', task: cancelled };
-  return { action: gates.filter((o) => !isClosed(o)).length >= MAX_OPEN ? 'full' : 'add' };
+  const full = gates.filter((o) => !isClosed(o)).length >= MAX_OPEN || sharedProposals(tasks) >= SHARED_MAX;
+  return { action: full ? 'full' : 'add' };
 }
 
 /** The next free GATE-<n>. */
@@ -135,4 +147,4 @@ function summary(tasks = [], mode = 'propose') {
   };
 }
 
-module.exports = { MODES, MAX_OPEN, modeOf, classKey, cleanTitle, plainLine, parseGateLine, parseGate, gateWithoutPlace, decide, nextId, gateTask, extendedMission, summary };
+module.exports = { MODES, MAX_OPEN, SHARED_MAX, sharedProposals, isGate, modeOf, classKey, cleanTitle, plainLine, parseGateLine, parseGate, gateWithoutPlace, decide, nextId, gateTask, extendedMission, summary };

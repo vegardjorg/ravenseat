@@ -497,6 +497,27 @@ past it on the owner's word, logged as `no-test-overridden`. The queue's agents 
 `receive` then prints only the plain red on base line, and the row keeps its mark. The strict mode prints the line
 anyway, since it explains the stop.
 
+### Repeats on class and area
+
+The finding log is counted per failure class and area (`lib/findingRepeats.js`, plain JS, no tokens, no output of its
+own). A class is due when it came back in 2 separate tasks in one area within 90 days, or in 3 across the project when
+no single area is. Only rows with `counts: true` count; `confidence: low` and the class `other` never do. An incident
+whose row is `fixed-without-test` weighs twice (the verdict is read from `test_added` again; an old row whose
+`test_added` is a path or a list reads as verdict null and counts once), but a repeat always needs two incidents.
+
+**Guard failed** is the one important gap: the class back in an area where a guard for it was already in place (an
+active registry entry with `against.class`, a done gate task proposed from the log, a row that names its guard), after a
+fix there with a proven red test, or after an untested fix when either one is H. It gives the card "A guard did not
+hold" on the Checks tab and the red marker, until a newer guard or a fix with a proven red test is in place there.
+`learning.guardFailedMarker` off keeps the card without the marker.
+
+**Proposals** (`learning.proposals`, off by default, one setup tip and one Checks card) turn a due class and area into
+one gate task, `Gate: <class> in <area>`, always proposed, never approved here (also with `gates.fromKnownBugs` auto).
+The inspection scan makes them (`ravenseat inspection` and the pulse, hourly; they ride on `inspection.mode on`). They
+share one cap with the inspection queue and the GATE lines: at most 3 proposals of the three kinds wait for the owner at
+a time. The same class and area again extends the open task, a done one is a guard from then on, and a cancelled one is
+not proposed again.
+
 ### Flaky gate commands
 
 One flaky red on a track's quick gate used to cost a whole fix round, with a new agent, while the code was fine. Now a
@@ -774,6 +795,10 @@ names every guard weaker than its default on its `settings` row.
 | `inspection.mode` | `on` | The inspection queue (see orchestration.md, "Repeated failures and the guard registry"): the same failure signature in the gates or CI, in at least `inspection.minRepeats` incidents within `inspection.windowDays` days, becomes one proposal to build a guard. `off` = no scan and no proposals | Advanced |
 | `inspection.minRepeats`, `inspection.windowDays` | `2`, `30` | The threshold: incidents (separate tasks, a branch and a day without a task, or CI commits), not runs, so one track's reruns count once | Advanced |
 | `inspection.registryFile` | `.ravenseat/guards.json` | The guard registry, a tracked file in the project (`ravenseat guards`) | Advanced |
+| `learning.repeats` | `true` | [Repeats on class and area](#repeats-on-class-and-area): the finding log is counted per class and area. It prints nothing and stops nothing; the Checks tab and the proposals read it. `false` = no count, no guard failed card and no proposals from the log (doctor reports it as a weakened guard) | Advanced |
+| `learning.windowDays`, `learning.areaRepeats`, `learning.projectRepeats` | `90`, `2`, `3` | The threshold: incidents (separate tasks) of a class within the window, in one area or across the project. A fix without a proven red test weighs twice | Advanced |
+| `learning.guardFailedMarker` | `true` | A class back where a guard for it was in place lights the red marker on the Checks tab. `false` = the card stays at medium, without the marker | Advanced |
+| `learning.proposals` | `false` | A due class and area becomes one proposed gate task, under the cap of 3 shared with the inspection queue and the GATE lines. Off by default, with one setup tip and one Checks card | Advanced |
 | `testWeakening.findingLog` | `true` | What the test weakening check finds at `receive` is also a finding log row (source `test-weakening`, class `test-weakening` from the rule register), so it counts when the same failure comes back. Nothing is printed and nothing stops. `false` = no row; the warning and the focus stop stay | Advanced |
 | `testWeakening.enabled`, `testWeakening.focusStop`, `testWeakening.testPaths`, `testWeakening.markers` | `true`, `true`, `[]`, `[]` | `receive` warns, never stops, about deleted test files, test files moved out of the test paths and skip or focus markers on added lines in test files (`.skip(`, `.only(`, `xit(`, `it.todo(`, `@pytest.mark.skip`, `pytest.skip(`, `@unittest.skip`, `#[ignore]`, `t.Skip(`, `@Disabled`, `@Ignore`, `pending(`, `markTestSkipped` ...): one `WARN test weakening:` line and a `Test weakening` section in `00-package.md`. `testPaths` adds test file globs (the `protectedPaths` rules), `markers` adds regular expressions; `ravenseat doctor` names an invalid one. `focusStop`: a focus marker (`.only(`, `fit(`, `fdescribe(`) on an added line stops `merge`, since the other tests never ran; `--allow-focus` overrides (logged as `focus-overridden`), `false` = only the warning | Advanced |
 | `qa.evidenceTypes`, `qa.autoTypes`, `qa.manualTypes` | `screenshot`, `test`, `manual`; auto `test`; manual `manual` | QA evidence types a track writes as `EVIDENCE <type>[=<ref>]`; auto types are closed by `qa auto --run`, manual ones gathered in one round | Advanced |

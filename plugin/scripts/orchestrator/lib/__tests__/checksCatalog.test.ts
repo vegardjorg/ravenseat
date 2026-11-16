@@ -295,6 +295,52 @@ describe('the database and project cards (spor 3)', () => {
   });
 });
 
+describe('the finding log cards (step 7 of the finding format)', () => {
+  const catalog = C.loadCatalog({ builtin: BUILTIN, own: path.join(BUILTIN, 'none') });
+  const report = (facts: object, more: object = {}) => C.buildReport({ facts: { git: true, ...facts }, catalog, now: 'x', ...more });
+  const card = (r: { suggestions: { key: string }[] }, key: string) => r.suggestions.find((s) => s.key === key) as Record<string, unknown> | undefined;
+  const failed = { class: 'unchecked-error', title: 'unchecked error or result', area: 'src/api', scope: 'area', incidents: 2, tasks: ['B-2', 'A-1'], guardFailed: { reason: 'guard', ref: 'G-1' } };
+  const due = { class: 'null-undefined', title: 'null or undefined', area: 'src/ui', scope: 'area', incidents: 2, tasks: ['C-3', 'D-4'], guardFailed: null };
+
+  it('guard failed lights the red marker while the marker setting is on, and names the class, the area and the guard', () => {
+    expect(card(report({}), 'guard-failed')).toBeUndefined();
+    const r = report({ ledger: { due: [], guardFailed: [failed], marker: true, recent: {} } });
+    expect(card(r, 'guard-failed')).toMatchObject({ priority: 'high', state: 'open', action: 'ask', category: 'tests' });
+    expect(card(r, 'guard-failed')?.detail).toMatch(/unchecked error or result in src\/api/);
+    expect(card(r, 'guard-failed')?.detail).toMatch(/G-1/);
+    // One more than the same project without it (a bare project has high cards of its own).
+    const base = report({}).important;
+    expect(r.important).toBe(base + 1);
+    // The marker setting off: the card stays, at medium, without the red marker.
+    const quiet = report({ ledger: { due: [], guardFailed: [failed], marker: false, recent: {} } });
+    expect(card(quiet, 'guard-failed')).toMatchObject({ priority: 'medium' });
+    expect(quiet.important).toBe(base);
+  });
+
+  it('a class that keeps coming back offers the proposals as a setting card while they are off, never red', () => {
+    const facts = { ledger: { due: [due], guardFailed: [], marker: true, recent: {} }, optInOff: ['learning.proposals'] };
+    const r = report(facts);
+    expect(card(r, 'learning-proposals')).toMatchObject({ priority: 'low', action: 'setting', setting: 'learning.proposals' });
+    expect(card(r, 'learning-proposals')?.detail).toMatch(/null or undefined in src\/ui/);
+    expect(r.important).toBe(report({}).important);
+    // On, or nothing due: no card.
+    expect(card(report({ ...facts, optInOff: [] }), 'learning-proposals')).toBeUndefined();
+    expect(card(report({ ...facts, ledger: { ...facts.ledger, due: [] } }), 'learning-proposals')).toBeUndefined();
+  });
+
+  it('the ledger conditions: due and guard failed per class, and recent for the scope drift cards', () => {
+    const f = { ledger: { due: [due], guardFailed: [failed], marker: true, recent: { duplication: 3, 'scope-drift': 2 } } };
+    expect(C.holds('ledger-due', f)).toBe(true);
+    expect(C.holds('ledger-due:null-undefined', f)).toBe(true);
+    expect(C.holds('ledger-due:unchecked-error', f)).toBe(false);
+    expect(C.holds('ledger-guard-failed:unchecked-error|secret-leak', f)).toBe(true);
+    expect(C.holds('ledger-recent:duplication', f)).toBe(true);
+    expect(C.holds('ledger-recent:scope-drift', f)).toBe(false);
+    // Unknown facts (no log, counting off) never hold.
+    for (const c of ['ledger-due', 'ledger-guard-failed', 'ledger-marker', 'ledger-due:x', 'ledger-recent:duplication']) expect(C.holds(c, {}), c).toBe(false);
+  });
+});
+
 describe('buildReport', () => {
   const t = (key: string, priority: string, category: string, extra = '') => C.parseTemplate(file(`title: ${key}\ncategory: ${category}\npriority: ${priority}\nwhy: W${extra}`), key);
   const catalog = {

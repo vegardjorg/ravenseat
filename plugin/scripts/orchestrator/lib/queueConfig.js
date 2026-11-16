@@ -117,6 +117,13 @@ const STANDARD = Object.freeze({
   // in at least minRepeats incidents within windowDays days becomes ONE proposal to build a guard. mode on or off.
   // registryFile = the tracked guard registry (lib/guardRegistry.js), relative to the project root.
   inspection: { mode: 'on', minRepeats: 2, windowDays: 30, registryFile: '.ravenseat/guards.json' },
+  // The repeat count on class and area over the finding log (lib/findingRepeats.js, step 7 of the finding format).
+  // repeats: the count itself (plain JS, no output of its own). windowDays, areaRepeats, projectRepeats: due at 2
+  // incidents in one area or 3 across the project within 90 days (an untested fix weighs twice). guardFailedMarker:
+  // a class back where a guard for it was in place lights the red marker on the Checks tab (owner decision 8: always).
+  // proposals: a due class and area becomes a proposed gate task, under the cap shared with the inspection queue and
+  // the gate lines (lib/knownBugGate.js sharedProposals). Off by default (lib/optInChecks.js): it asks for the owner's time.
+  learning: { repeats: true, windowDays: 90, areaRepeats: 2, projectRepeats: 3, guardFailedMarker: true, proposals: false },
   // The batch push threshold (lib/pushBatch.js; `ravenseat push-check`, the push guard, the board). Every push of baseBranch
   // runs the whole CI, so pushes come in batches of MERGED TASKS (merges through ravenseat merge not yet on <remote>).
   // mode: "owner" = the orchestrator never pushes on its own, only on the owner's word; "threshold" = it may push by

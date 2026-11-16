@@ -5,6 +5,15 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a guard that does not hold is no longer trusted quietly.** The finding log is now counted per failure
+  class and part of the code: the same kind of mistake in two separate tasks in one area within 90 days, or three
+  across the project, is a repeat, and a fix without a proven red test weighs twice. Low-confidence rows and the class
+  `other` never count, and old rows from before the red-test-first rule count once. When a class comes back where a
+  guard for it, or a fix with a proven test, was already in place, the Checks tab shows "A guard did not hold" with the
+  red dot until a new guard or a tested fix is in place; it stops nothing. Guard proposals from the log are off until
+  you turn them on (one tip, one card), and then share one cap of three waiting proposals with the inspection queue and
+  the gate lines, so the three kinds can no longer add up to nine; a proposal you cancel is not made again for that
+  class and place. Each part has its own setting under `learning`.
 - Tidied up the FAQ.
 
 - **Hardening: a fix needs a red test first.** A fix task (one with `fixes`, a QA or base fix, a task from a finding,

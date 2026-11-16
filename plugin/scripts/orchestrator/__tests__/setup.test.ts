@@ -248,9 +248,11 @@ describe('setup.mjs records the plugin version it set up (for the setup notice o
   it('tips about each opt-in check that is off, once: a second setup gives none, and one turned on is never tipped', () => {
     execFileSync('git', ['init', '-q'], { cwd: target });
     writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ gitignoreCheck: { enabled: true } }));
-    expect(setupProject({ target, dry: true }).tips).toHaveLength(2);
+    // Three: the two secret scans and the finding-log guard proposals (step 7), each off by default.
+    expect(setupProject({ target, dry: true }).tips).toHaveLength(3);
     const first = setupProject({ target });
-    expect(first.tips).toHaveLength(2);
+    expect(first.tips).toHaveLength(3);
+    expect(first.tips.join('\n')).toMatch(/settings set learning\.proposals on/);
     expect(first.tips.join('\n')).toMatch(/settings set secretScan\.allowlist on/);
     expect(first.tips.join('\n')).toMatch(/settings set secretScan\.atReceive on/);
     expect(first.tips.join('\n')).not.toMatch(/gitignoreCheck/);

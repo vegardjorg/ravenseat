@@ -69,7 +69,11 @@ an investigation to the queue, and nothing is built before you approve it. Some 
 signals for your stack" writes the stack packs to `review.packs`. Important suggestions you set aside stay in a summary
 at the top with "Bring back", and a small red dot on the tab shows while an important one is open (`ravenseat checks
 marker off` hides the dot). A project with a database gets a Database group (probes for the database rules, migrations
-from an empty database in CI, probes only against a local database). Turn the tab off if you run your own setup.
+from an empty database in CI, probes only against a local database). From the finding log come two cards: "A guard
+did not hold" when a kind of failure came back where a guard for it was already in place (the one gap that always
+lights the red dot; `learning.guardFailedMarker` off keeps the card without it), and, while the guard proposals are
+off, one low card that turns them on when a kind of failure keeps coming back in one place. Turn the tab off if you
+run your own setup.
 
 <p align="center"><img src="../../assets/screenshots/light-04-statistics.jpg" alt="Statistics: throughput, cycle time, estimate accuracy and cost" width="800"></p>
 

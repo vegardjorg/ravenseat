@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 import { a, CONFIG, CLI, die, edit, FILE, FOLDER, KK, LM, MAIN_TREE, read, require } from './context.mjs';
 import { addTask, ensureProject, PROJECT, readFacts } from './kickstart.mjs';
-import { guardsBoard } from './inspection.mjs';
+import { guardsBoard, ledgerScan } from './inspection.mjs';
 import { allowlistFacts, broadFacts, gitignoreFacts, lockfileFacts, mcpFacts } from './doctorBaseline.mjs';
 import { trackBranchHere } from './settings.mjs';
 import { enableShare } from './share.mjs';
@@ -151,6 +151,17 @@ function projectFacts({ git, remote, found }) {
     out.flakyObserved = FO.flakyFlips(FO.gateRows(text)).length;
   } catch {
     // error-ignored: no time log yet, nothing observed
+  }
+  // The finding log (lib/findingRepeats.js): what came back in one area, and a guard that did not hold (the red marker).
+  // Read only, no proposal here: those come from the inspection scan. An error leaves the facts unknown, so no card.
+  if (fs.existsSync(FILE)) {
+    try {
+      const now = Date.now();
+      const { setup, rows, result, classes } = ledgerScan({ now });
+      out.ledger = require('./lib/findingRepeats.js').facts(result, { rows, now, setup, classes });
+    } catch {
+      // error-ignored: unknown, no card
+    }
   }
   return out;
 }

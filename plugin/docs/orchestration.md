@@ -869,6 +869,34 @@ catches it PARTIAL(ly) or is BLIND to it. That is not built.
 The board's Checks tab shows both: a Guards section and the open Repeated failures. `ravenseat gates --health` ends with
 the last inspection state (read-only).
 
+### Repeats on class and area, and a guard that did not hold
+
+A signature only matches the same red command with the same first line. The same kind of mistake in the same part of
+the code, found by review one week and by a gate the next, has none in common. The finding log has the class and the
+area of every finding, and `lib/findingRepeats.js` counts them in plain JS during the inspection scan and when the
+Checks tab is read (no tokens, no output of its own; `learning.repeats`, on):
+
+- **Due:** 2 incidents (separate tasks) of a class in one area within `learning.windowDays` (90), or 3 across the
+  project when no single area is (`learning.areaRepeats`, `learning.projectRepeats`). Only rows with `counts: true`
+  count, and `confidence: low` and `other` never do. A `fixed-without-test` incident weighs twice, so an untested fix
+  and one more is enough across the project; one untested fix alone is never a repeat. An old row whose `test_added`
+  is a path or a list (from before the red-test-first rule) reads as verdict null and counts once.
+- **Guard failed:** the class back in an area after a guard for it was in place there (an active registry entry with
+  `against.class`, a done gate task proposed from the log, or a row that names its guard), after a fix there with a
+  proven red test, or after an untested fix when either one is H. A plain repeat after a review fix is not one. It is
+  the one important gap: the card "A guard did not hold" on the Checks tab, with the red marker
+  (`learning.guardFailedMarker`, on), until a newer guard or a fix with a proven red test is in place there. It stops
+  nothing.
+- **Proposals** (`learning.proposals`, off by default, with one setup tip and one Checks card): each due class and area
+  becomes one gate task, `Gate: <class> in <area>`, through the same rules as a GATE line. It is always proposed, never
+  approved here, also with `gates.fromKnownBugs auto`. The proposals ride on the inspection scan, so they need
+  `inspection.mode on` (the default).
+
+**One cap for all proposals** (0i, owner decision 3): at most three proposals wait for the owner at a time, from the
+inspection queue, the GATE lines and the finding log together (`lib/knownBugGate.js sharedProposals`). A full cap
+leaves a due entry waiting for the next scan; nothing is dropped. The same class and area again extends the open
+task, a done one counts as a guard, and a cancelled one is never proposed again for that class and area.
+
 ## Batch push (the push threshold)
 
 Every push of the base branch runs the whole CI. Pushing per small change burns CI minutes quietly, so pushes come in

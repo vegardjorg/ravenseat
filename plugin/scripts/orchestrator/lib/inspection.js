@@ -17,7 +17,9 @@
 // rejected (the owner cancelled it), snoozed (cancelled with `ravenseat inspection snooze`, until a date).
 // The rules:
 //   - due when incidents >= inspection.minRepeats (2) within inspection.windowDays (30);
-//   - at most MAX_OPEN proposals at a time, the most incidents first, so the owner is not buried;
+//   - at most MAX_OPEN proposals at a time, the most incidents first, so the owner is not buried; the cap is shared with
+//     the gate proposals (lib/knownBugGate.js sharedProposals: GATE lines and the finding log), so a gate task that waits
+//     for the owner takes a slot too;
 //   - a rejected entry stays rejected until its incidents in the window reach twice what they were when it was rejected;
 //   - a snoozed entry is due again after its date, when it is still over the threshold;
 //   - never approved, never built and never a gate by itself: the proposal is a `proposed` task (added_by "inspection agent",
@@ -156,7 +158,10 @@ function scan(state, { occurrences, tasks = [], archived = null, now = Date.now(
     entries[id] = e;
   }
   const list = Object.values(entries);
-  const free = Math.max(0, MAX_OPEN - list.filter((e) => e.status === 'proposed').length);
+  // The INSP proposals are counted from the entries (the state knows them even before the queue is read again); the gate
+  // proposals from the tasks. Together they share one cap (0i section 3.9).
+  const gateProposals = (tasks ?? []).filter((o) => o?.status === 'proposed' && require('./knownBugGate.js').isGate(o)).length;
+  const free = Math.max(0, MAX_OPEN - list.filter((e) => e.status === 'proposed').length - gateProposals);
   const due = list
     .filter((e) => e.status === 'due')
     .sort((a, b) => b.incidents - a.incidents || (ms(b.lastSeen) ?? 0) - (ms(a.lastSeen) ?? 0) || a.id.localeCompare(b.id))

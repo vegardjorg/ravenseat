@@ -348,6 +348,34 @@ const SETTINGS = Object.freeze([
   row('inspection.windowDays', 'gates', 'integer', 'Inspection window (days)', 'Only failures this recent count.'),
   row('inspection.registryFile', 'gates', 'text', 'Guard registry file',
     'The tracked list of guards and what each one guards against, relative to the project root.', { edit: 'file' }),
+  // The repeat count on class and area (lib/findingRepeats.js). The count and the guard failed marker are on: they cost
+  // no tokens, print nothing and stop nothing. The proposals are off: each one asks for the owner's time.
+  row('learning.repeats', 'gates', 'onoff', 'Count repeats in the finding log',
+    'The same class of failure in the same part of the code, in separate tasks, is counted from the finding log. ' +
+    'It prints nothing and stops nothing; the Checks tab reads it.', {
+      weakens: offWeakens,
+      protects: 'A kind of failure that keeps coming back in one place, or past a guard, going unseen because each one ' +
+        'was fixed alone.',
+      whyNot: 'Without the count the Checks tab cannot say that a guard did not hold, and no guard is proposed.',
+      changes: 'The guard failed card, its red marker and the guard proposals from the finding log are gone.',
+    }),
+  row('learning.windowDays', 'gates', 'integer', 'Repeat window (days)',
+    'Only findings this recent count toward a repeat. A guard can be older.'),
+  row('learning.areaRepeats', 'gates', 'integer', 'Repeats in one area',
+    'How many incidents of a class in one area (separate tasks) make it due. A fix without a proven test counts twice.'),
+  row('learning.projectRepeats', 'gates', 'integer', 'Repeats across the project',
+    'How many incidents of a class in the whole project make it due when no single area is. An untested fix counts twice.'),
+  row('learning.guardFailedMarker', 'gates', 'onoff', 'Red marker when a guard did not hold',
+    'A failure class back where a guard for it was in place lights the red marker on the Checks tab, until a new ' +
+    'guard or a fix with a proven test is in place there. It stops nothing.', {
+      weakens: offWeakens,
+      protects: 'A guard everyone trusts that no longer catches its own class.',
+      whyNot: 'It is the one gap that always gets the red marker, and it is rare, so it does not nag.',
+      changes: 'The guard failed card stays on the Checks tab at medium priority, without the red marker.',
+    }),
+  row('learning.proposals', 'gates', 'onoff', 'Propose guards from the finding log',
+    'A class that keeps coming back in one area becomes one proposed gate task (you approve it). It shares one cap ' +
+    'of three open proposals with the inspection queue and the gate lines. Off by default.'),
   row('testWeakening.enabled', 'gates', 'onoff', 'Test weakening warning',
     'Receive warns about deleted or moved test files and added skip or focus markers.', {
       weakens: offWeakens,

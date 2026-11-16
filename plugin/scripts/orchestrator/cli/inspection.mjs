@@ -31,6 +31,8 @@ const I = require('./lib/inspection.js');
 const GR = require('./lib/guardRegistry.js');
 const FS = require('./lib/failureSignature.js');
 const QA = require('./lib/queueArchive.js');
+const FR = require('./lib/findingRepeats.js');
+const KBG = require('./lib/knownBugGate.js');
 
 const STATE_FILE = path.join(FOLDER, 'inspection.json');
 const QUEUE_PATH = path.join(HERE, 'queue.mjs');
@@ -119,8 +121,71 @@ function scanAndPropose({ now = Date.now() } = {}) {
     }
   }
   saveState(state);
-  return { state, added, errors };
+  // The finding log's proposals after the inspection's own, so both see the same cap: INSP first, as before.
+  const ledger = ledgerPropose({ now });
+  return { state, added, errors: [...errors, ...ledger.errors], ledger: ledger.added };
 }
+
+/** How far back the finding log is read: the window, but at least half a year, so an older guard or fix is seen. */
+const LEDGER_HISTORY_DAYS = 180;
+
+/**
+ * The repeat count on class and area from the finding log (lib/findingRepeats.js), read-only: the rows, the guards from
+ * the registry and the done gate tasks, and the result. With learning.repeats off nothing is read.
+ * @returns {{ setup: object, rows: object[], result: { entries: object[], due: object[], guardFailed: object[] }, classes: object[] }}
+ */
+export function ledgerScan({ now = Date.now() } = {}) {
+  const s = FR.setupOf(CONFIG);
+  const classes = require('./lib/failureClasses.js').classesFor(MAIN_TREE).classes;
+  const empty = { entries: [], due: [], guardFailed: [] };
+  if (!s.repeats) return { setup: s, rows: [], result: empty, classes };
+  const since = now - Math.max(s.windowDays, LEDGER_HISTORY_DAYS) * DAY_MS;
+  const { rows } = require('./lib/findingLog.js').read(undefined, { since, includeArchive: true });
+  const { tasks, archived } = allTasks();
+  const guards = FR.guardsFrom({ registry: readRegistry(MAIN_TREE).registry, tasks: [...tasks, ...Object.values(archived)] });
+  return { setup: s, rows, result: FR.scan(rows, { now, setup: s, guards }), classes };
+}
+
+/**
+ * The guard proposals from the finding log (learning.proposals, off by default): one gate task per due class and area,
+ * through the same rules as a GATE line (lib/knownBugGate.js decide: the same one again extends it, a cancelled one stays
+ * declined, and the cap is shared). Always proposed, never approved here, whatever gates.fromKnownBugs says: the owner
+ * opted in to proposals, not to agent work starting by itself. Never throws.
+ * @returns {{ added: { id: string, entry: object }[], errors: string[] }}
+ */
+function ledgerPropose({ now = Date.now() } = {}) {
+  const out = { added: [], errors: [] };
+  try {
+    if (!FR.setupOf(CONFIG).proposals || !fs.existsSync(FILE)) return out;
+    const { result, classes } = ledgerScan({ now });
+    if (!result.due.length) return out;
+    if (!LM.isLite(CONFIG)) ensureProject();
+    for (const entry of result.due) {
+      const queue = read();
+      const known = [...(queue.tasks ?? []), ...Object.values(allTasks().archived)];
+      const title = FR.gateTitle(entry, classes);
+      const d = KBG.decide({ title, tasks: known, mode: 'propose' });
+      // full: wait for a free slot (the next scan tries again); extend, exists, declined: nothing new to add.
+      if (d.action !== 'add') continue;
+      const id = KBG.nextId(known);
+      const task = { ...FR.proposalTask(entry, { id, classes }), ...(queue.projects?.cicd ? { project: 'cicd' } : {}) };
+      const r = addTask(task);
+      if (!r.ok) {
+        out.errors.push(`${entry.key}: ${r.output}`);
+        continue;
+      }
+      out.added.push({ id, entry });
+    }
+  } catch (e) {
+    out.errors.push(`finding log: ${e?.message ?? e}`);
+  }
+  return out;
+}
+
+const ledgerLine = ({ id, entry }) =>
+  `INSPECTION: proposed ${id}: ${entry.class} came back ${entry.incidents} times ` +
+  `${entry.scope === 'project' ? 'across the project' : `in ${entry.area}`} (finding log). ` +
+  `${CLI} approve ${id} lets it be built, ${CLI} cancel ${id} declines it for that class and place.`;
 
 const proposedLine = ({ id, entry }) =>
   `INSPECTION: proposed ${id}: ${entry.name} went red the same way in ${entry.incidents} separate tasks or commits. ` +
@@ -133,7 +198,7 @@ export function inspectionPulseLines() {
     const last = Date.parse(readState()?.scannedAt ?? '');
     if (Number.isFinite(last) && Date.now() - last < PULSE_EVERY_MS) return [];
     const r = scanAndPropose();
-    return [...r.added.map(proposedLine), ...r.errors.map((e) => `INSPECTION: a proposal could not be added (${e}).`)];
+    return [...r.added.map(proposedLine), ...r.ledger.map(ledgerLine), ...r.errors.map((e) => `INSPECTION: a proposal could not be added (${e}).`)];
   } catch (e) {
     return [`(The inspection scan failed: ${e?.message ?? e}. Run ${CLI} inspection.)`];
   }
@@ -205,10 +270,11 @@ export function cmdInspection() {
   const r = scanAndPropose();
   const registry = readRegistry(MAIN_TREE).registry;
   if (json) {
-    console.log(JSON.stringify({ setup: s, proposed: r.added.map((x) => x.id), errors: r.errors, ...I.boardData(r.state, { registry }) }, null, 2));
+    console.log(JSON.stringify({ setup: s, proposed: [...r.added, ...r.ledger].map((x) => x.id), errors: r.errors, ...I.boardData(r.state, { registry }) }, null, 2));
     return;
   }
   for (const x of r.added) console.log(proposedLine(x));
+  for (const x of r.ledger) console.log(ledgerLine(x));
   for (const e of r.errors) console.log(`A proposal could not be added: ${e}`);
   for (const l of I.lines(r.state, { setup: s, registry, cli: CLI })) console.log(l);
 }

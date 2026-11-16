@@ -79,6 +79,16 @@ const OPT_IN = Object.freeze([
     tip: 'refuse a database probe gate whose database is not local (localhost, 127.0.0.1, ::1 or a Docker service name)',
     offer: (facts) => facts?.hasDatabase === true,
   }),
+  // Guard proposals from the finding log (lib/findingRepeats.js, 0i section 3.9): the counting itself is on and quiet,
+  // the proposals ask for the owner's time, so they are opt-in with one tip and one card. No doctor row: being off is
+  // the normal state, and an INFO line about it on every doctor run would be the nagging the plan rules out.
+  Object.freeze({
+    key: 'learning.proposals',
+    row: null,
+    suggestion: 'learning-proposals',
+    title: 'guard proposals from the finding log',
+    tip: 'propose a gate task (you approve it) when the same kind of failure keeps coming back in one part of the code, sharing one cap of three proposals with the inspection queue',
+  }),
 ]);
 
 /** The value at a dotted key, or undefined. */

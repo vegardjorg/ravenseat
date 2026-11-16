@@ -28,7 +28,7 @@ export function proposeGate({ title: raw, from, where, detail }) {
   if (d.action === 'exists') return `Gate: ${d.task.id} already covers "${title}". A bug in that class again means the check needs a look.`;
   if (d.action === 'declined') return `Gate: ${d.task.id} for "${title}" was cancelled, so it is not proposed again.`;
   if (d.action === 'full')
-    return `Gate: not proposed, because ${G.MAX_OPEN} gate tasks are already open. Approve or cancel one first (${CLI} gate list). The bug was: ${title}.`;
+    return `Gate: not proposed, because ${G.MAX_OPEN} gate tasks are already open or ${G.SHARED_MAX} proposals (gate and inspection) wait for you. Approve or cancel one first (${CLI} gate list, ${CLI} inspection). The bug was: ${title}.`;
   if (d.action === 'extend') {
     const changed = edit((q) => {
       const o = q.tasks.find((x) => x.id === d.task.id);

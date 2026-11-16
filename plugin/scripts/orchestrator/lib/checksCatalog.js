@@ -84,7 +84,31 @@ const CONDITIONS = {
   'flaky-observed': (f) => (f.flakyObserved ?? 0) > 0,
   // gates.redOnBase is not set (lib/redOnBase.js setup, read by cli/checks.mjs). Unknown: not off, so no card.
   'red-on-base-off': (f) => f.redOnBaseOff === true,
+  // The finding log (lib/findingRepeats.js facts, read by cli/checks.mjs into facts.ledger): a class came back in an
+  // area often enough for a proposal, a guard did not hold, and whether learning.guardFailedMarker is on. No log, or
+  // learning.repeats off: no facts, so none of these holds.
+  'ledger-due': (f) => (f.ledger?.due?.length ?? 0) > 0,
+  'ledger-guard-failed': (f) => (f.ledger?.guardFailed?.length ?? 0) > 0,
+  'ledger-marker': (f) => f.ledger?.marker === true,
 };
+
+/** The classes of the finding log entries in `list` (facts.ledger.due or .guardFailed). */
+const ledgerClasses = (list) => new Set((Array.isArray(list) ? list : []).map((e) => e?.class));
+
+/** The finding log entries as one short line for a card: the class, the area and the guard that did not hold. */
+function ledgerLine(list, { guard = false } = {}) {
+  const items = (Array.isArray(list) ? list : []).slice(0, 3).map((e) => {
+    const where = e.scope === 'project' ? 'across the project' : `in ${e.area}`;
+    const seen = e.tasks?.length ? `, seen in ${e.tasks.slice(0, 3).join(', ')}` : '';
+    const held = guard && e.guardFailed ? ` after ${e.guardFailed.ref} (${GUARD_REASON[e.guardFailed.reason] ?? e.guardFailed.reason})` : '';
+    return `${e.title ?? e.class} ${where}: ${e.incidents} incident(s)${seen}${held}`;
+  });
+  const more = (list?.length ?? 0) > 3 ? ` And ${list.length - 3} more.` : '';
+  return items.length ? `${items.join('; ')}.${more}` : null;
+}
+
+/** What held before the class came back (lib/findingRepeats.js guardFailed.reason), in plain words. */
+const GUARD_REASON = { guard: 'a guard for it', fix: 'a fix with a test that failed without it', 'untested-h': 'a fix without a test, high severity' };
 
 /** The line a suggestion adds from the facts, so the card names the stacks. Null when it has none. */
 function detailOf(key, facts) {
@@ -93,6 +117,8 @@ function detailOf(key, facts) {
     return typeof facts.redOnBaseCommand === 'string' && facts.redOnBaseCommand
       ? `For this project: \`${facts.redOnBaseCommand}\` (read from its own files). Check that it runs only the files it is given.`
       : null;
+  if (key === 'guard-failed') return ledgerLine(facts.ledger?.guardFailed, { guard: true });
+  if (key === 'learning-proposals') return ledgerLine(facts.ledger?.due);
   const p = facts.packs;
   if (!p) return null;
   const name = (id) => p.titles?.[id] ?? id;
@@ -120,6 +146,12 @@ const KIND_CONDITIONS = {
   'none-in-ci': (f, arg) => !anyKind(arg, (k) => placesOf(f, k).has('ci')),
   // An opt-in check that is off (facts.optInOff: the keys, lib/optInChecks.js). Unknown facts: not off.
   off: (f, arg) => anyKind(arg, (k) => (f.optInOff ?? []).includes(k)),
+  // The finding log per class: `ledger-due:migration-schema|access-control` (a proposal is due for one of them),
+  // `ledger-guard-failed:<classes>`, and `ledger-recent:duplication|scope-drift`, which holds at 3 incidents of one of
+  // the classes in one area within 30 days (the scope drift cards' important_when, plans/scope-drift-dry-katalog).
+  'ledger-due': (f, arg) => anyKind(arg, (k) => ledgerClasses(f.ledger?.due).has(k)),
+  'ledger-guard-failed': (f, arg) => anyKind(arg, (k) => ledgerClasses(f.ledger?.guardFailed).has(k)),
+  'ledger-recent': (f, arg) => anyKind(arg, (k) => (f.ledger?.recent?.[k] ?? 0) >= 3),
 };
 
 const conditionsOf = (when) => String(when ?? '').split(',').map((x) => x.trim()).filter(Boolean);
