@@ -620,6 +620,16 @@ function scopeNotesFor(o, { branch, base, diff, changedNames }) {
   }
 }
 
+/** The names the delivery's added lines define (lib/scopeNotes.js newNames), for the near names (V1b); [] on any error. */
+function reviewNewNames(diff) {
+  try {
+    const SN = require('./lib/scopeNotes.js');
+    return SN.newNames(SN.parseDiff(diff), { ignoreNames: SN.setupOf(CONFIG).ignoreNames });
+  } catch {
+    return []; // error-ignored: the near names are context for the reviewer, nothing waits on them
+  }
+}
+
 /** `ravenseat receive` (the usage is at the top of queue.mjs). */
 export function cmdReceive() {
   // ---- A track has delivered -> review + review package as plain files + reviewer prompts ----
@@ -982,8 +992,15 @@ export function cmdReceive() {
       flaky: require('./lib/trackFlaky.js').packageSection(gateCheck.record),
       scopeNotes: scopeFacts.section,
       // The part of the project catalog that meets the task's files (lib/catalogExcerpt.js, bolk B4), read from the main
-      // tree as the mission had it: the reviewer checks the delivery against it (reviewer.md, reviewer-gap.md).
-      catalog: require('./lib/catalogExcerpt.js').forTask(o0, { which: 'review', root: MAIN_TREE })?.lines ?? null,
+      // tree as the mission had it: the reviewer checks the delivery against it (reviewer.md, reviewer-gap.md). With
+      // catalog.index on (bolk B5) the code index is refreshed here and the names the delivery defines go along, for the
+      // near names (V1b); off, the diff is not read again.
+      catalog:
+        require('./lib/catalogExcerpt.js').forTask(o0, {
+          which: 'review',
+          root: MAIN_TREE,
+          newNames: require('./lib/catalog.js').setupOf(CONFIG).index ? reviewNewNames(diff) : null,
+        })?.lines ?? null,
       assumptions,
       delta,
       deltaSection: delta ? DR.packageSection(delta, { previousFindings: !!files.previousFindings }) : null,

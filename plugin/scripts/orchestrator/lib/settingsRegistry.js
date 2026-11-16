@@ -677,6 +677,13 @@ const SETTINGS = Object.freeze([
   row('catalog.excerptTokens', 'review', 'integer', 'Catalog excerpt cap (tokens)',
     'The most tokens the excerpt may use, 200 to 6000 (default 1500, a token counted as 4 characters). The reuse rows ' +
     'are cut first; the heading says what was cut.'),
+  // The generated index (lib/catalogIndex.js, bolk B5). Off by default: the plan's opt-in list (it builds and stores a
+  // file in the data folder, and its worth grows with the project). It stops nothing either way, and off weakens no
+  // guard: `catalog find` still works on request.
+  row('catalog.index', 'review', 'onoff', 'Code index for the catalog excerpt',
+    'Builds an index of the code\'s exports (JS/TS) at receive and for each mission, cached by file sha in the data ' +
+    'folder. The excerpt then gets the helpers tagged `@shared` in the task\'s folders, and the review package the new ' +
+    'names that are close to an existing export (V1b). `ravenseat catalog find` works without it.'),
   row('triage.minAgeDays', 'review', 'integer', 'Triage tasks older than (days)',
     'A task added or last edited this long ago is checked against the current code before it starts. Empty = no age rule.',
     { fullWhy: 'the intake triage is off in lite' }),

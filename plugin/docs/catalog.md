@@ -42,8 +42,9 @@ so a track reads them before it writes code.
 
 ### reuse.md
 
-A table of building blocks a track would not find by itself. Keep it to at most 40 rows; a generated index of the
-code comes in a later step and holds the rest.
+A table of building blocks a track would not find by itself. Keep it to at most 40 rows; the
+[code index](#the-code-index-and-catalog-find) holds the rest, and a `@shared` tag in the code is often the better
+place for a helper's row.
 
 ```markdown
 | Purpose | Symbol | File |
@@ -93,9 +94,11 @@ A body over 30 lines gives a warning: the plan register holds the long text.
 | `catalog show [<D-id>] [--json]` | The prefer lines, the reuse rows and the design choices with the status that counts. With an id: that choice in full, and the plan entries that link to it |
 | `catalog check [--json]` | Shape, ids, status, the owner lock, `supersedes`, the paths, the reuse rows and the generated block. Exit 1 on an error, 0 on warnings only, 0 without a catalog. Read only |
 | `catalog accept <D-id> --by owner` | The owner accepts a design choice: `status: accepted`, `accepted_by` and `accepted` in the file, and the owner's record in the data folder. Refused from a track worktree whatever `--by` says |
+| `catalog find <word...> [--json]` | Searches the code index, the reuse rows, the design choices and the prefer lines. Every word must match; at most ten short lines. Builds the code index first (from the cache) |
+| `catalog index [--json]` | Builds or refreshes the code index and says how many files it read and how many came from the cache. Names a `@shared` tag that is not on an export |
 
-A queue agent may run `catalog show` and `catalog check` (the push guard allows them), and nothing else. `show` and
-`check` read the tree the command runs in, so a track sees its own branch's catalog.
+A queue agent may run `catalog show`, `catalog check` and `catalog find` (the push guard allows them), and nothing
+else. All four read commands read the tree the command runs in, so a track sees its own branch's catalog and code.
 
 `catalog check` is not a gate by default. A project that wants it can add `ravenseat catalog check` to its `gates`.
 
@@ -146,7 +149,7 @@ still fits, so the reuse rows are cut first. The heading says what it used and w
   - tests: vitest
 - **Building blocks for reuse in these folders** (reuse.md: use them before you write a new helper):
   - Match a path against a glob: `globMatch` in `plugin/scripts/orchestrator/lib/mergeGuard.js`
-- Before you write a new helper, look for one (`git grep -n -w <name>`); `ravenseat catalog show <D-id>` prints a choice in full.
+- Before you write a new helper, look for one: `ravenseat catalog find <word>` searches the catalog and the code's exports (or `git grep -n -w <name>`); `ravenseat catalog show <D-id>` prints a choice in full.
 ```
 
 `fill` prints the size per track (`Catalog excerpt in the mission (tokens, cap 1500): K-7 209`), and `ravenseat cost` shows
@@ -160,6 +163,62 @@ change that breaks the invariant of a choice that holds is a `scope-drift` findi
 owner question. A proposed choice binds nothing, so not following it is no finding.
 
 The text names no client and no client's tools, so a cloud session and any other client get the same excerpt.
+
+## The code index and catalog find
+
+Most helpers are only in the code. Tag the ones meant for reuse where they are, in the JSDoc right above the
+definition, and the queue collects them:
+
+```js
+/**
+ * Match a repo path against a glob.
+ * @shared match a path against a glob pattern
+ */
+function globMatch(pattern, file) { ... }
+module.exports = { globMatch };
+```
+
+The text after `@shared` is the purpose; with none, the first line of the doc is used. The tag travels with the
+function when the file moves and goes when the function goes, which a hand-written row cannot do.
+
+**What is indexed.** JS and TS files (`.js`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.jsx` and the like) the tree tracks or has
+as new files, never node_modules, tests, declaration files or minified files, nor a file over 512 KB. The scan is a
+light tokenizer, no parser: it follows strings, template literals, comments and regex literals and reads only the top
+level of a file: `export function`, `export const`, `export class`, `export { a as b }`, `exports.x =`, and the
+entries of a `module.exports = { ... }` block. A re-export (`export { x } from`) is left out (the helper lives in the
+other file), and so is a form it does not know. It would rather miss an export than invent one. A `@shared` tag on a
+name that is not exported, or not right above a definition, is named by `catalog index`, never indexed.
+
+**The cache.** The index is in `<dataFolder>/catalog-index.json` (gitignored). Per file it holds git's blob sha and what
+the scan found, so a file whose sha did not change is not read again, also after a move. The file list always comes
+from git, so the index follows the tree it was built for, and a track's tree and the main tree share the cache without
+mixing. The queue writes the file; the write guard and the push guard keep queue agents off it, since a forged entry
+would reach other missions.
+
+**`catalog find`.** `ravenseat catalog find date` searches the index (exports and tagged blocks), the reuse rows, the
+design choices and the prefer lines. A hit in a name ranks above a hit in a text; a tagged block or a reuse row ranks
+above a plain export. At most ten lines:
+
+```
+catalog find date: 3 hits (index: 212 code files, 9 tagged @shared):
+  shared   parseDate       lib/dates.js:5  parse a date from user input
+  prefer   dates: dayjs, never moment
+  decision D-0001 (accepted)  Dates through one library: Code under lib/ handles dates with dayjs only.
+```
+
+**With `catalog.index` on** (off by default), the index is built at `receive` and when the missions are made, from the
+cache, and:
+
+- the excerpt in the mission and the review package gets the blocks tagged `@shared` in the task's folders (the same
+  folder rule as the reuse rows; a reuse row for the same symbol wins), at most 15, under "Tagged for reuse in these
+  folders". They are cut first under the cap.
+- the review package's excerpt gets the **near names** (V1b): a name the delivery defines that is close to one the
+  code exports in another file. Close means the same words in another order or style (`normPath`, `pathNorm`), or one
+  small edit in one word with the same first word (`readFile`, `readFiles`). A different first word never counts, so
+  `getUser` and `setUser` are no hit. The same name is the reuse note's job at receive, so it is not repeated. At most
+  five, and only for the reviewer: a near name is context to weigh, never a finding by itself.
+
+A project without `catalog.index`, or without any `@shared` tag, gets the excerpt byte for byte as before.
 
 ## Protected path
 
@@ -202,7 +261,12 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Doctor row | One WARN row, only when `catalog check` finds an error | `catalog.doctor`, on |
 | Plan link warning | A warning at `plan new` and `plan edit` only | `catalog.planLinks`, on |
 | Checks card | Low priority, can be set aside | No setting: it only proposes |
-| Agent access | `catalog show` and `catalog check` allowed for queue agents | No setting |
+| Agent access | `catalog show`, `catalog check` and `catalog find` allowed for queue agents | No setting |
+| Code index at receive and in the missions | One git listing per tree and a read of each changed file (the first build of about 300 files took under half a second here); a file in the data folder; more lines in the excerpt, inside the same cap. It stops nothing | `catalog.index`, off: the plan puts it on the opt-in list, since it builds and stores a file and its worth grows with the project |
+| `catalog find` | Only when someone runs it; it builds the index from the cache first | No setting: it is a read on request, and works with `catalog.index` off |
+| Near names (V1b) | Up to five lines for the reviewer, which may lead to a `duplication` finding after the reviewer weighs the code. Never to the owner alone, never a stop | Follows `catalog.index` and `catalog.reviewExcerpt` |
+| `@shared` problems | Printed by `catalog index` only; no gate, no doctor row | No setting |
+| Index cache guard | A queue agent cannot write `catalog-index.json` (write guard) or name it in a shell command (push guard) | No setting, on purpose: a forged entry would reach other missions |
 | Excerpt in the mission | Text only: up to `catalog.excerptTokens` more context in every turn of the track (1500 tokens over about 100 turns is about 150,000 cached input tokens). It stops nothing, and a project without a catalog pays nothing | `catalog.missionExcerpt`, on by owner decision: the track needs it to reuse, and the heading measures its cost |
 | Excerpt in the review package | Text only, read once per reviewer; it can lead to a `duplication` or `scope-drift` finding, which is the point | `catalog.reviewExcerpt`, on: the reviewer judges against what the track was given |
 | Excerpt cap | None; it only narrows. Too low cuts the reuse rows first, and the heading says so | `catalog.excerptTokens`, 1500 (200 to 6000) |

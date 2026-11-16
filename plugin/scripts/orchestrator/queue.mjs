@@ -412,6 +412,10 @@
 //                                                                  in docs/queue/catalog/: stack, reuse and design choices.
 //                                                                  init writes a draft, check exits 1 on an error, accept is
 //                                                                  the owner's and refused from a track worktree. lib/catalog.js)
+//   node scripts/orchestrator/queue.mjs catalog find <word...> | index   (find: search the code index, the reuse rows, the
+//                                                                  design choices and the prefer lines, at most 10 lines;
+//                                                                  index: build the code index of exports and @shared
+//                                                                  blocks, cached by blob sha. lib/catalogIndex.js)
 //   node scripts/orchestrator/queue.mjs owner-log <id> | owner-log accept <id> --by owner   (the owner rows a task relies on
 //                                                                  that no ravenseat write recorded in the owner log; accept
 //                                                                  confirms them as the owner's. Refused from a track worktree;

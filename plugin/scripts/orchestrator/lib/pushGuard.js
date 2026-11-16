@@ -410,11 +410,12 @@ const AGENT_QUEUE_COMMANDS = Object.freeze({
   block: true,
   deliver: true,
   plan: ['show', 'get'],
-  // The project catalog (lib/catalog.js): read it before writing a helper or picking a library; init and accept are the owner's.
-  catalog: ['show', 'check'],
+  // The project catalog (lib/catalog.js): read it and search it (find, lib/catalogIndex.js) before writing a helper or
+  // picking a library; init, accept and index are the owner's.
+  catalog: ['show', 'check', 'find'],
 });
 /** For the reasons: the allowed commands as text. */
-const AGENT_QUEUE_LIST = 'prepare-track, gates, show, info, help, blockers, finding, question, block, deliver, plan show|get, catalog show|check, add (on its own, from your own track branch, with no cd)';
+const AGENT_QUEUE_LIST = 'prepare-track, gates, show, info, help, blockers, finding, question, block, deliver, plan show|get, catalog show|check|find, add (on its own, from your own track branch, with no cd)';
 
 /**
  * The deny reason for a queue agent's ravenseat add, or null. It is only allowed from the agent's own track branch, because

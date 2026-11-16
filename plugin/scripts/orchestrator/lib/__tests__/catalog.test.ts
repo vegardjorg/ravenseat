@@ -254,7 +254,7 @@ describe('settings, protected path and plan links', () => {
     expect(C.setupProblems({ doctor: 'yes' })).toEqual(['catalog.doctor must be true or false']);
     expect(C.setupProblems([])).toEqual(['catalog must be an object']);
     expect(C.setupProblems({ other: true })).toEqual([
-      'catalog.other is not a catalog setting (doctor, planLinks, missionExcerpt, reviewExcerpt, excerptTokens)',
+      'catalog.other is not a catalog setting (doctor, planLinks, missionExcerpt, reviewExcerpt, excerptTokens, index)',
     ]);
   });
 

@@ -13,6 +13,7 @@
 // Pure, except the temporary folder forTask reads.
 // =============================================================
 import { afterAll, describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -178,7 +179,7 @@ describe('the cap and the measurement line', () => {
     expect(r.tokens).toBe(Math.round(t.length / 4));
     expect(r.lines[0]).toContain(`about ${r.tokens} of at most 1500 tokens`);
     expect(r.lines[0]).toContain('nothing cut');
-    expect(r.cut).toEqual({ binding: 0, proposed: 0, prefer: 0, reuse: 0 });
+    expect(r.cut).toEqual({ binding: 0, proposed: 0, prefer: 0, reuse: 0, near: 0, shared: 0 });
   });
 
   it('over the cap, the reuse rows go before the binding choices, and the heading names what was cut', () => {
@@ -219,8 +220,8 @@ describe('the cap and the measurement line', () => {
 
 describe('the settings', () => {
   it('catalog.missionExcerpt and catalog.reviewExcerpt are on and the cap is 1500 tokens by default', () => {
-    expect(QC.STANDARD.catalog).toEqual({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500 });
-    expect(C.setupOf({})).toEqual({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500 });
+    expect(QC.STANDARD.catalog).toEqual({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500, index: false });
+    expect(C.setupOf({})).toEqual({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500, index: false });
     expect(C.setupOf({ catalog: { excerptTokens: 800, missionExcerpt: false } })).toMatchObject({ excerptTokens: 800, missionExcerpt: false });
     // A broken value reads as its default.
     expect(C.setupOf({ catalog: { excerptTokens: 'many' } }).excerptTokens).toBe(1500);
@@ -251,6 +252,92 @@ describe('the settings', () => {
     expect(noRecord.lines.join('\n')).not.toContain('Design choices that hold');
     // No catalog folder: nothing, and never a throw.
     expect(X.forTask(task(), { which: 'mission', root: path.join(root, 'none'), dataFolder: data, config: {} })).toBeNull();
+  });
+});
+
+// Bolk B5: the generated index (lib/catalogIndex.js) adds the @shared building blocks in the task's folders, and in the
+// review form the near names (V1b), inside the same cap. Without an index every byte stays as before.
+describe('the generated index in the excerpt (bolk B5)', () => {
+  /* eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
+  const CI = require('../catalogIndex.js') as any;
+  const INDEX = CI.build({
+    entries: [
+      { path: 'lib/io/read.js', sha: '1' },
+      { path: 'lib/paths.js', sha: '2' },
+      { path: 'cli/print.mjs', sha: '3' },
+    ],
+    read: (p: string) =>
+      ({
+        'lib/io/read.js': '/** @shared read a text file, null when it is missing */\nexport function readText() {}\n',
+        // The same symbol as a reuse.md row: it is shown once, as the reuse row.
+        'lib/paths.js': '/** @shared normalize a repo path */\nexport function norm() {}\n',
+        'cli/print.mjs': '/** @shared print a table */\nexport function printTable() {}\n',
+      })[p] ?? null,
+    cache: null,
+  }).index;
+
+  it('no index gives the same text as before, byte for byte', () => {
+    const before = X.excerpt(CAT, task(), { ledger: LEDGER });
+    const after = X.excerpt(CAT, task(), { ledger: LEDGER, index: null, near: [] });
+    expect(text(after)).toBe(text(before));
+    expect(text(before)).not.toContain('Tagged for reuse');
+  });
+
+  it('the @shared blocks in the task folders, never twice and never from another folder', () => {
+    const t = text(X.excerpt(CAT, task(), { ledger: LEDGER, index: INDEX }));
+    expect(t).toContain('**Tagged for reuse in these folders**');
+    expect(t).toContain('read a text file, null when it is missing: `readText` in `lib/io/read.js`');
+    expect(t.match(/`norm`/g)).toHaveLength(1);
+    expect(t).not.toContain('printTable');
+  });
+
+  it('an index alone gives an excerpt, even without a catalog folder', () => {
+    const r = X.excerpt({ exists: false, decisions: [] }, task(), { ledger: LEDGER, index: INDEX });
+    expect(text(r)).toContain('`readText`');
+  });
+
+  it('the near names go into the review form only, before the prefer lines', () => {
+    const near = [{ name: 'readTexts', file: 'lib/io/new.js', other: 'readText', otherFile: 'lib/io/read.js', line: 2, why: 'one edit' }];
+    const review = X.excerpt(CAT, task(), { ledger: LEDGER, index: INDEX, near, form: 'review' });
+    const t = text(review);
+    expect(t).toContain('**Near names** (V1b');
+    expect(t).toContain('`readTexts` (new in `lib/io/new.js`) is close to `readText` in `lib/io/read.js:2`');
+    expect(t.indexOf('Near names')).toBeLessThan(t.indexOf('**Prefer**'));
+    expect(text(X.excerpt(CAT, task(), { ledger: LEDGER, index: INDEX, near }))).not.toContain('Near names');
+  });
+
+  it('under a tight cap the tagged blocks are cut first, and the heading counts them', () => {
+    const r = X.excerpt(CAT, task(), { ledger: LEDGER, index: INDEX, capTokens: 200 });
+    expect(r.tokens).toBeLessThanOrEqual(200);
+    expect(r.cut.shared).toBe(1);
+    expect(r.lines[0]).toMatch(/1 tagged block/);
+  });
+
+  it('forTask builds the index only while catalog.index is on, and keeps the cache in the data folder', () => {
+    const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'catalog-index-')));
+    temporary.push(root);
+    fs.mkdirSync(path.join(root, 'lib', 'io'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'lib', 'io', 'read.js'), '/** @shared read a text file */\nexport function readText() {}\n');
+    fs.writeFileSync(path.join(root, 'lib', 'io', 'json.js'), 'export function readJson() {}\n');
+    const git = (args: string[]) =>
+      execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], { stdio: 'ignore' });
+    git(['init', '-q']);
+    git(['add', '--', 'lib']);
+    const data = path.join(root, 'data');
+    fs.mkdirSync(data);
+    expect(X.forTask(task(), { which: 'mission', root, dataFolder: data, config: {} })).toBeNull();
+    expect(fs.existsSync(path.join(data, CI.FILE))).toBe(false);
+    const on = X.forTask(task(), { which: 'mission', root, dataFolder: data, config: { catalog: { index: true } } });
+    expect(on.lines.join('\n')).toContain('`readText` in `lib/io/read.js`');
+    expect(fs.existsSync(path.join(data, CI.FILE))).toBe(true);
+    const near = X.forTask(task(), {
+      which: 'review',
+      root,
+      dataFolder: data,
+      config: { catalog: { index: true } },
+      newNames: [{ name: 'readTexts', file: 'lib/io/new.js' }],
+    });
+    expect(near.lines.join('\n')).toContain('`readTexts` (new in `lib/io/new.js`) is close to `readText`');
   });
 });
 

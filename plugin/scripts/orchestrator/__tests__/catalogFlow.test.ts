@@ -220,6 +220,72 @@ describe('the owner lock on accepted', () => {
   });
 });
 
+// Bolk B5: the generated index (lib/catalogIndex.js) and `catalog find`.
+describe('ravenseat catalog index and find', () => {
+  const TAGGED = [
+    '/**',
+    ' * Turn text into a dayjs date.',
+    ' * @shared parse a date from user input',
+    ' */',
+    'function parseDate(s) { return s; }',
+    'function norm(p) { return p; }',
+    'module.exports = { parseDate, norm };',
+    '',
+  ].join('\n');
+
+  it('index builds the cache once and reads only changed files after that', () => {
+    const p = project();
+    p.write('lib/dates.js', TAGGED);
+    const first = p.run(['catalog', 'index']);
+    expect(first.code, first.all).toBe(0);
+    expect(first.out).toMatch(/2 files, 2 read, 0 from the cache; 1 tagged @shared/);
+    expect(fs.existsSync(path.join(p.folder, 'catalog-index.json'))).toBe(true);
+    const again = p.run(['catalog', 'index', '--json']);
+    expect(JSON.parse(again.out).stats).toMatchObject({ files: 2, scanned: 0, reused: 2 });
+    p.write('lib/dates.js', `${TAGGED}// changed\n`);
+    expect(JSON.parse(p.run(['catalog', 'index', '--json']).out).stats).toMatchObject({ scanned: 1, reused: 1 });
+  });
+
+  it('a @shared tag on a name that is not exported is named by index', () => {
+    const p = project();
+    p.write('lib/x.js', '/** @shared hidden helper */\nfunction hidden() {}\nmodule.exports = {};\n');
+    expect(p.run(['catalog', 'index']).out).toMatch(/lib\/x\.js: @shared on hidden \(line 2\), but hidden is not exported/);
+  });
+
+  it('find searches the code index and the catalog, in short lines, and says when nothing matches', () => {
+    const p = project();
+    p.write('lib/dates.js', TAGGED);
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION);
+    const r = p.run(['catalog', 'find', 'date']);
+    expect(r.code, r.all).toBe(0);
+    const lines = r.out.trim().split('\n');
+    expect(lines[1]).toMatch(/^ {2}shared +parseDate +lib\/dates\.js:5 +parse a date from user input$/);
+    expect(r.out).toMatch(/D-0001/);
+    expect(r.out).toMatch(/prefer|dates and times|dayjs/);
+    expect(lines.length).toBeLessThanOrEqual(12);
+    const none = p.run(['catalog', 'find', 'zzzqqq']);
+    expect(none.code).toBe(0);
+    expect(none.out).toMatch(/nothing matches zzzqqq/i);
+    expect(p.run(['catalog', 'find']).code).not.toBe(0);
+    const j = JSON.parse(p.run(['catalog', 'find', 'parse', '--json']).out);
+    expect(j.rows[0]).toMatchObject({ kind: 'shared', name: 'parseDate', file: 'lib/dates.js' });
+  });
+
+  it('a queue agent may run find, never index; the cache is kept off its writes', () => {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const PG = require('../lib/pushGuard.js');
+    const WG = require('../lib/writeGuard.js');
+    const GE = require('../lib/gateEvidence.js');
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    const ctx = { agentType: 'track', branch: 'queue/A', environment: null };
+    expect(PG.assess('ravenseat catalog find date', ctx)?.decision ?? 'allow').not.toBe('deny');
+    expect(PG.assess('ravenseat catalog index', ctx)?.decision).toBe('deny');
+    expect(WG.assessWrite({ agentType: 'track', filePath: path.join('C:\\data', 'catalog-index.json'), folder: 'C:\\data', guardedTypes: [] })).not.toBeNull();
+    expect(GE.tamperReason('rm .queue/catalog-index.json')).toBeTruthy();
+  });
+});
+
 describe('the Checks card, doctor and plan links', () => {
   it('the Checks tab offers the catalog card for a known stack until the folder exists', () => {
     const p = project();

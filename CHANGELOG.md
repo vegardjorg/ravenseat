@@ -5,6 +5,16 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a helper that is only in the code can now be found before it is written again.** A `@shared <purpose>`
+  line in a helper's JSDoc marks it for reuse, where it moves and goes with the code. `ravenseat catalog find <word>`
+  searches an index of the code's top-level exports (JS/TS), the reuse rows, the design choices and the prefer lines,
+  in at most ten lines, and queue agents may run it. The index is cached by git blob sha in the data folder, so an
+  unchanged file is never read twice, also after a move, and queue agents cannot write the cache. The scan follows
+  strings, template literals, comments and regex literals and reads only the top level, so a name in a string or an
+  inner function is never taken for an export; a tag on a name that is not exported is named, not indexed. With
+  `catalog.index` on (off by default), the excerpt gets the tagged helpers in the task's folders and the review package
+  gets the new names that are close to an existing export (V1b), inside the same cap. A project without it gets the
+  excerpt byte for byte as before.
 - **Hardening: the catalog now reaches the track and the reviewer, and only the part that matters.** A task's mission
   gets the part of the project catalog that meets its owned files and reads: the design choices that hold, the
   proposed ones marked as suggestions, the prefer lines and the reuse rows in its folders. Only a choice the owner

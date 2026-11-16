@@ -13,6 +13,15 @@
 //                                                 it as a gate when it wants to (it is none by default)
 //   ravenseat catalog accept <D-id> --by owner    the owner accepts a design choice: status accepted in the file and
 //                                                 the owner's record in <dataFolder>/catalog-accepted.json
+//   ravenseat catalog find <word...> [--json]     searches the code index (exports and @shared blocks), the reuse
+//                                                 rows, the design choices and the prefer lines; at most 10 short lines
+//   ravenseat catalog index [--json]              builds or refreshes the code index (lib/catalogIndex.js, bolk B5) in
+//                                                 <dataFolder>/catalog-index.json and names a @shared tag that is not on
+//                                                 an export
+//
+// find and index read the tree the command runs in, like show and check; the cache is keyed by blob sha, so a track's
+// tree and the main tree share it without mixing up. find builds the index on request whatever catalog.index says
+// (that setting is about the automatic parts: receive, the missions and V1b).
 //
 // The owner lock: accept needs --by owner (or theBoard) and is refused from inside a track worktree whatever --by says,
 // as `ravenseat surface accept` and `ravenseat owner-log accept` are. init and accept write the MAIN tree's catalog and
@@ -31,10 +40,11 @@ import { a, CLI, CONFIG, die, FOLDER, MAIN_TREE, queueBranchId, readPlans, requi
 import { trackBranchHere } from './settings.mjs';
 
 const C = require('./lib/catalog.js');
+const CI = require('./lib/catalogIndex.js');
 const K = require('./lib/kickstart.js');
 const RP = require('./lib/reviewPacks.js');
 
-const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner`;
+const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | find <word...> [--json] | index [--json]`;
 const json = a.includes('--json');
 
 /** The catalog folder in a tree (the main tree for a write, the current one for a read). */
@@ -290,12 +300,53 @@ function accept() {
   );
 }
 
+/** The code index of the tree the command runs in, refreshed from the cache; dies when git cannot list the tree. */
+function indexHere() {
+  const r = CI.refresh(ROOT, { dataFolder: FOLDER, fresh: true });
+  if (!r) die(`${CLI} catalog: git cannot list the files of ${ROOT}, so there is no code index.`);
+  return r;
+}
+
+function index() {
+  const { index: idx, stats } = indexHere();
+  const problems = Object.entries(idx.files).flatMap(([f, e]) => e.problems.map((p) => `${f}: ${p}`));
+  if (json) {
+    console.log(JSON.stringify({ ok: true, file: CI.FILE, stats, problems }, null, 2));
+    return;
+  }
+  console.log(
+    `Code index: ${stats.files} files, ${stats.scanned} read, ${stats.reused} from the cache; ` +
+      `${stats.shared} tagged @shared, ${stats.exports} exports (${CI.FILE} in the data folder).`,
+  );
+  for (const p of problems.slice(0, 20)) console.log(`  ${p}`);
+  if (problems.length > 20) console.log(`  and ${problems.length - 20} more`);
+}
+
+function find() {
+  const query = a
+    .slice(2)
+    .filter((x) => !x.startsWith('--'))
+    .join(' ')
+    .trim();
+  if (!query) die(`${CLI} catalog find <word...>: say what to look for, e.g. ${CLI} catalog find date`);
+  const { index: idx } = indexHere();
+  const cat = C.readCatalog(catalogDir(ROOT));
+  const r = CI.search({ index: idx, catalog: cat, query, ledger: readLedger() });
+  if (json) {
+    console.log(JSON.stringify({ ok: true, query, total: r.total, rows: r.rows }, null, 2));
+    return;
+  }
+  for (const l of CI.findLines(r, { query, index: idx })) console.log(l);
+}
+
 export function cmdCatalog() {
   const sub = a[1];
   if (sub === 'init') return init();
   if (sub === 'show') return show();
   if (sub === 'check') return check();
   if (sub === 'accept') return accept();
+  if (sub === 'find') return find();
+  if (sub === 'index') return index();
   die(USAGE);
 }
 

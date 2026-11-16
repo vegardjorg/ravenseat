@@ -9,8 +9,8 @@
 //
 // Protected (PROTECTED):
 //   - gate-evidence.json and its temporary files (gate-evidence.json.<n>.tmp), ANYWHERE: no track needs such a file.
-//   - queue.json, base-health.json, git-surface.json, owner-log.json and catalog-accepted.json in the data folder only (a
-//     project may have its own queue.json elsewhere).
+//   - queue.json, base-health.json, git-surface.json, owner-log.json, catalog-accepted.json and catalog-index.json in the
+//     data folder only (a project may have its own queue.json elsewhere).
 // Guarded agents: every subagent (owner decision B3, lib/agentGuard.js): track and track-d and the given types
 // (trackGuard.queueAgentTypes(): the reviewers and helpers) always, any other agent type unless agentGuard.except names it
 // or agentGuard.enabled is false. The orchestrator (no agent_type) is never stopped.
@@ -31,6 +31,8 @@ const PROTECTED = Object.freeze([
   { re: /^git-surface\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the accepted git baseline', how: 'only the owner changes it (ravenseat surface accept --by owner)' },
   { re: /^owner-log\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the owner log', how: 'only the queue commands record in it (ravenseat owner-log accept --by owner)' },
   { re: /^catalog-accepted\.json(?:\..*\.tmp)?$/i, anywhere: false, what: "the owner's record of the accepted design choices", how: 'only the owner accepts one (ravenseat catalog accept <id> --by owner)' },
+  // The code index cache (lib/catalogIndex.js): a forged entry would put rows in other missions and review packages.
+  { re: /^catalog-index\.json(?:\..*\.tmp)?$/i, anywhere: false, what: 'the code index of the catalog', how: 'the queue builds it (ravenseat catalog find or index)' },
 ]);
 
 /** Always guarded, whatever the config says. */

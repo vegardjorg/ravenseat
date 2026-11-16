@@ -143,7 +143,7 @@ the evidence and warns when the line is missing.
 
 **Ownership in the queue:** files src/K1.ts; DB none; shared patch none. Do not touch anything other tasks in the queue own; if you need to, report it (SendMessage) instead of editing it.
 
-**From the project catalog** (`docs/queue/catalog/`, chosen for this task's files; about 241 of at most 1500 tokens; nothing cut):
+**From the project catalog** (`docs/queue/catalog/`, chosen for this task's files; about 261 of at most 1500 tokens; nothing cut):
 - **Design choices that hold** (accepted by the owner, binding: a change that would break one is an owner question, never your call):
   - D-0001 (src/**): Modules under src/ export functions, never classes.
 - **Proposed design choices** (suggestions, not binding yet: follow one unless the mission says otherwise, and say so under Assumptions when you do not):
@@ -152,6 +152,6 @@ the evidence and warns when the line is missing.
   - tests: vitest, never jest
 - **Building blocks for reuse in these folders** (reuse.md: use them before you write a new helper):
   - Parse a duration: `parseDuration` in `src/time.ts`
-- Before you write a new helper, look for one (`git grep -n -w <name>`); `ravenseat catalog show <D-id>` prints a choice in full.
+- Before you write a new helper, look for one: `ravenseat catalog find <word>` searches the catalog and the code's exports (or `git grep -n -w <name>`); `ravenseat catalog show <D-id>` prints a choice in full.
 
 Mission text for K1: change the module and add a test.

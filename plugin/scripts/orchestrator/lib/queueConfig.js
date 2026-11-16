@@ -462,7 +462,9 @@ const STANDARD = Object.freeze({
   // missionExcerpt and reviewExcerpt (lib/catalogExcerpt.js, bolk B4): the part of the catalog that meets the task's
   // files goes into its mission and its review package, capped at excerptTokens (200 to 6000). On by owner decision
   // 16.11: it is only text, costs nothing without a catalog, and its heading says how many tokens it used.
-  catalog: { doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500 },
+  // index (lib/catalogIndex.js, bolk B5): the generated index of the code's exports and @shared blocks, built at receive
+  // and for the missions, feeds the excerpt and the near names (V1b). Off: the plan puts it on the opt-in list.
+  catalog: { doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500, index: false },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.

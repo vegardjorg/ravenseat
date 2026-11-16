@@ -59,9 +59,12 @@ const LEDGER_FILE = 'catalog-accepted.json';
 /**
  * The defaults for config().catalog (lib/queueConfig.js STANDARD.catalog holds the same values). missionExcerpt and
  * reviewExcerpt: the excerpt in the mission and in the review package (lib/catalogExcerpt.js, bolk B4); excerptTokens:
- * its cap, a whole number from EXCERPT_TOKENS.min to EXCERPT_TOKENS.max.
+ * its cap, a whole number from EXCERPT_TOKENS.min to EXCERPT_TOKENS.max. index: the generated index of the code's
+ * exports and @shared blocks (lib/catalogIndex.js, bolk B5) is built at receive and when a mission is made, and the
+ * excerpt gets the tagged blocks and, for the reviewer, the near names. Off by default (the plan's opt-in list: it
+ * builds and stores a file, and its worth depends on the project's size); `catalog find` works either way.
  */
-const DEFAULTS = Object.freeze({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500 });
+const DEFAULTS = Object.freeze({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500, index: false });
 /** The range of catalog.excerptTokens: under 200 not even one design choice fits, over 6000 it is no excerpt. */
 const EXCERPT_TOKENS = Object.freeze({ min: 200, max: 6000 });
 const isTokens = (v) => Number.isInteger(v) && v >= EXCERPT_TOKENS.min && v <= EXCERPT_TOKENS.max;

@@ -17,9 +17,14 @@
 //   - the prefer lines of stack.md, at most MAX.prefer (they apply to the whole project).
 //   - the reuse.md rows in the task's folders (the folder of an owned or read file, or inside an owned folder), at most
 //     MAX.reuse; a task that names no files gets the first rows.
+//   - with the generated index (lib/catalogIndex.js, bolk B5, catalog.index on): the building blocks tagged `@shared`
+//     in the task's folders (the same folder rule as the reuse rows, a reuse row for the same symbol wins), at most
+//     MAX.shared; and in the review form only, the near names (V1b): a name the delivery defines that is close to one
+//     the code exports elsewhere, at most MAX.near.
 // The cap (excerptTokens, default 1500; a token is counted as 4 characters, as lib/instructionSize.js does): the items
-// are added in the order binding choices, prefer lines, suggestions, reuse rows while they fit, so the reuse rows are
-// cut first. The heading says how many tokens the block used, the cap, and how many items of each kind were cut.
+// are added in the order binding choices, near names, prefer lines, suggestions, reuse rows, tagged blocks while they
+// fit, so the tagged blocks and the reuse rows are cut first. The heading says how many tokens the block used, the cap,
+// and how many items of each kind were cut. Without an index the text is byte for byte what it was before B5.
 //
 // Two forms of the same choice: `mission` (a bold heading in the track block, lib/logic/external.js trackBlock) and
 // `review` (a "## From the project catalog" section in 00-package.md, lib/logic/results.js reviewPackageIndex, with the
@@ -35,7 +40,7 @@ const path = require('node:path');
 const C = require('./catalog.js');
 
 /** How many items of each kind at most, before the token cap: the plan's numbers (§ 2.5). */
-const MAX = Object.freeze({ decisions: 5, prefer: 10, reuse: 15 });
+const MAX = Object.freeze({ decisions: 5, prefer: 10, reuse: 15, shared: 15, near: 5 });
 /** Characters per token, as lib/instructionSize.js estimates. */
 const CHARS_PER_TOKEN = 4;
 /** How many of a choice's path patterns are shown (the rest is in the file). */
@@ -84,10 +89,11 @@ function rowInScope(file, scope) {
 
 /**
  * What the excerpt can hold for the task, before the token cap: the items per kind, and what the per-kind maxima cut.
- * @returns {{ binding: object[], proposed: object[], prefer: object[], reuse: object[], noFiles: boolean,
- *   cut: { binding: number, proposed: number, prefer: number, reuse: number } }}
+ * index: the generated index (lib/catalogIndex.js) or null; near: the near names (V1b) or [].
+ * @returns {{ binding: object[], proposed: object[], prefer: object[], reuse: object[], shared: object[], near: object[],
+ *   noFiles: boolean, cut: { binding: number, proposed: number, prefer: number, reuse: number, near: number, shared: number } }}
  */
-function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGuard.js').globMatch } = {}) {
+function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGuard.js').globMatch, index = null, near = [] } = {}) {
   const scope = scopeOf(task);
   const noFiles = scope.length === 0;
   const binding = [];
@@ -103,7 +109,7 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
     if (!noFiles && !d.paths.some((p) => scope.some((e) => meets(p, e, glob)))) continue;
     (status === 'accepted' ? binding : proposed).push({ d, status });
   }
-  const cut = { binding: 0, proposed: 0, prefer: 0, reuse: 0 };
+  const cut = { binding: 0, proposed: 0, prefer: 0, reuse: 0, near: 0, shared: 0 };
   // At most MAX.decisions choices, the binding ones first.
   const keepBinding = binding.slice(0, MAX.decisions);
   cut.binding = binding.length - keepBinding.length;
@@ -113,11 +119,23 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
   cut.prefer = Math.max(0, prefer.length - MAX.prefer);
   const rows = (cat?.reuse?.rows ?? []).filter((r) => noFiles || rowInScope(r.file, scope));
   cut.reuse = Math.max(0, rows.length - MAX.reuse);
+  // The tagged blocks from the generated index, in the same folders; a reuse row for the same symbol and file wins.
+  const listed = new Set((cat?.reuse?.rows ?? []).map((r) => `${r.symbol}|${normPath(r.file)}`));
+  const shared = index
+    ? require('./catalogIndex.js')
+        .sharedRows(index)
+        .filter((r) => (noFiles || rowInScope(r.file, scope)) && !listed.has(`${r.symbol}|${r.file}`))
+    : [];
+  cut.shared = Math.max(0, shared.length - MAX.shared);
+  const nearList = Array.isArray(near) ? near : [];
+  cut.near = Math.max(0, nearList.length - MAX.near);
   return {
     binding: keepBinding,
     proposed: keepProposed,
     prefer: prefer.slice(0, MAX.prefer),
     reuse: rows.slice(0, MAX.reuse),
+    shared: shared.slice(0, MAX.shared),
+    near: nearList.slice(0, MAX.near),
     noFiles,
     cut,
   };
@@ -132,6 +150,11 @@ const SECTIONS = Object.freeze({
     '- **Proposed design choices** (suggestions, not binding yet: follow one unless the mission says otherwise, and say so under Assumptions when you do not):',
   prefer: '- **Prefer** (stack.md: a second library for one of these jobs is an owner question):',
   reuse: '- **Building blocks for reuse in these folders** (reuse.md: use them before you write a new helper):',
+  shared:
+    '- **Tagged for reuse in these folders** (`@shared` in the code, from the generated index: use them before you write a new helper):',
+  near:
+    '- **Near names** (V1b: a name the delivery defines is close to one the code exports elsewhere. Maybe the same helper ' +
+    'written again, maybe a deliberate variant: weigh it with the code, it is no finding by itself):',
 });
 
 function decisionLine({ d, status }) {
@@ -145,7 +168,12 @@ const ITEM = {
   proposed: decisionLine,
   prefer: (p) => `  - ${p.purpose}: ${p.use}`,
   reuse: (r) => `  - ${r.purpose}: \`${r.symbol}\` in \`${r.file}\``,
+  shared: (r) => `  - ${r.purpose}: \`${r.symbol}\` in \`${r.file}\``,
+  near: (n) => `  - \`${n.name}\` (new in \`${n.file}\`) is close to \`${n.other}\` in \`${n.otherFile}:${n.line}\` (${n.why})`,
 };
+/** The order the parts are shown in, and the order they get room under the cap (the last ones are cut first). */
+const SHOWN = ['binding', 'near', 'proposed', 'prefer', 'reuse', 'shared'];
+const ROOM = ['binding', 'near', 'prefer', 'proposed', 'reuse', 'shared'];
 
 /** "nothing cut", or "cut: 2 binding choices, 4 reuse rows; `ravenseat catalog show` lists them all". */
 function cutText(cut, cli) {
@@ -154,6 +182,8 @@ function cutText(cut, cli) {
     cut.proposed && plural(cut.proposed, 'proposed choice'),
     cut.prefer && plural(cut.prefer, 'prefer line'),
     cut.reuse && plural(cut.reuse, 'reuse row'),
+    cut.near && plural(cut.near, 'near name'),
+    cut.shared && plural(cut.shared, 'tagged block'),
   ].filter(Boolean);
   return parts.length ? `cut: ${parts.join(', ')}; \`${cli} catalog show\` lists them all` : 'nothing cut';
 }
@@ -167,8 +197,7 @@ function measure(tokens, cap, cut, cli, noFiles) {
 function render(form, items, { tokens, cap, cut, cli, noFiles }) {
   const m = measure(tokens, cap, cut, cli, noFiles);
   const body = [];
-  for (const kind of ['binding', 'proposed', 'prefer', 'reuse'])
-    if (items[kind].length) body.push(SECTIONS[kind], ...items[kind].map(ITEM[kind]));
+  for (const kind of SHOWN) if (items[kind]?.length) body.push(SECTIONS[kind], ...items[kind].map(ITEM[kind]));
   if (form === 'review')
     return [
       '',
@@ -184,7 +213,8 @@ function render(form, items, { tokens, cap, cut, cli, noFiles }) {
   return [
     `**From the project catalog** (\`${C.DIR}/\`, ${m}):`,
     ...body,
-    `- Before you write a new helper, look for one (\`git grep -n -w <name>\`); \`${cli} catalog show <D-id>\` prints a choice in full.`,
+    `- Before you write a new helper, look for one: \`${cli} catalog find <word>\` searches the catalog and the code's ` +
+      `exports (or \`git grep -n -w <name>\`); \`${cli} catalog show <D-id>\` prints a choice in full.`,
   ];
 }
 
@@ -205,22 +235,31 @@ function settle(form, items, o) {
  * The excerpt for a task, or null when the catalog has nothing for it (or there is no catalog).
  * @param {object|null} cat readCatalog's result
  * @param {object} task the queue task (owned_files, shared_patch, reads)
- * @param {{ ledger?: object, capTokens?: number, form?: 'mission'|'review', cli?: string, glob?: Function }} [o]
+ * @param {{ ledger?: object, capTokens?: number, form?: 'mission'|'review', cli?: string, glob?: Function,
+ *   index?: object|null, near?: object[] }} [o] index: the generated index (bolk B5), null = none; near: the near names
+ *   (V1b, lib/catalogIndex.js nearNames), shown in the review form only
  * @returns {{ lines: string[], tokens: number, cap: number, cut: { binding: number, proposed: number, prefer: number,
- *   reuse: number }, counts: { binding: number, proposed: number, prefer: number, reuse: number } } | null}
+ *   reuse: number, near: number, shared: number }, counts: object } | null}
  */
-function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form = 'mission', cli = 'ravenseat', glob } = {}) {
-  if (!cat?.exists) return null;
-  const chosen = choose(cat, task, { ledger, glob });
-  const all = { binding: chosen.binding, proposed: chosen.proposed, prefer: chosen.prefer, reuse: chosen.reuse };
+function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form = 'mission', cli = 'ravenseat', glob, index = null, near = [] } = {}) {
+  if (!cat?.exists && !index) return null;
+  const chosen = choose(cat, task, { ledger, glob, index, near: form === 'review' ? near : [] });
+  const all = {
+    binding: chosen.binding,
+    proposed: chosen.proposed,
+    prefer: chosen.prefer,
+    reuse: chosen.reuse,
+    near: chosen.near,
+    shared: chosen.shared,
+  };
   if (!Object.values(all).some((l) => l.length)) return null;
   const cap = capTokens;
   const cut = { ...chosen.cut };
-  const items = { binding: [], proposed: [], prefer: [], reuse: [] };
+  const items = { binding: [], proposed: [], prefer: [], reuse: [], near: [], shared: [] };
   const o = { cap, cut, cli, noFiles: chosen.noFiles };
   // Greedy in priority order: an item goes in when the whole text still fits; one that does not is counted as cut,
   // and a shorter one after it may still fit.
-  for (const kind of ['binding', 'prefer', 'proposed', 'reuse'])
+  for (const kind of ROOM)
     for (const item of all[kind]) {
       items[kind].push(item);
       if (settle(form, items, o).tokens > cap) {
@@ -238,28 +277,39 @@ function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form
  * has nothing for the task, or anything fails (a mission is never lost over the excerpt).
  * @param {object} task
  * @param {{ which?: 'mission'|'review', root?: string, dataFolder?: string, config?: object, cli?: string,
- *   fsLike?: typeof import('node:fs') }} [o] root: the tree whose docs/queue/catalog/ is read (default the main tree);
- *   dataFolder: where catalog-accepted.json is (default the queue's data folder); config: queue.config.json as read
+ *   fsLike?: typeof import('node:fs'), newNames?: { name: string, file: string }[]|null }} [o] root: the tree whose
+ *   docs/queue/catalog/ is read (default the main tree); dataFolder: where catalog-accepted.json and the index cache
+ *   are (default the queue's data folder); config: queue.config.json as read; newNames: the names the delivery defines
+ *   (lib/scopeNotes.js newNames), for the near names in the review form
  */
-function forTask(task, { which = 'mission', root, dataFolder, config, cli, fsLike = fs } = {}) {
+function forTask(task, { which = 'mission', root, dataFolder, config, cli, fsLike = fs, newNames = null } = {}) {
   try {
     const QC = require('./queueConfig.js');
     const k = config ?? QC.config();
     const setup = C.setupOf(k);
     if (which === 'review' ? !setup.reviewExcerpt : !setup.missionExcerpt) return null;
-    const cat = C.readCatalog(path.join(root ?? k.root ?? QC.config().root, ...C.DIR.split('/')), fsLike);
-    if (!cat.exists) return null;
+    const tree = root ?? k.root ?? QC.config().root;
+    const cat = C.readCatalog(path.join(tree, ...C.DIR.split('/')), fsLike);
+    // Without a catalog and without the index setting nothing is read or built: the mission stays byte for byte.
+    if (!cat.exists && !setup.index) return null;
+    const data = dataFolder ?? QC.dataFolder();
     let ledger = C.emptyLedger();
     try {
-      ledger = C.parseLedger(fsLike.readFileSync(path.join(dataFolder ?? QC.dataFolder(), C.LEDGER_FILE), 'utf8'));
+      ledger = C.parseLedger(fsLike.readFileSync(path.join(data, C.LEDGER_FILE), 'utf8'));
     } catch {
       // error-ignored: no record means nothing is accepted, never everything
     }
+    // The generated index (bolk B5), built or refreshed from the cache; null when it is off or cannot be built.
+    const CI = require('./catalogIndex.js');
+    const index = setup.index ? (CI.refresh(tree, { dataFolder: data, fsLike })?.index ?? null) : null;
+    const near = index && which === 'review' && Array.isArray(newNames) ? CI.nearNames(newNames, index) : [];
     return excerpt(cat, task, {
       ledger,
       capTokens: setup.excerptTokens,
       form: which === 'review' ? 'review' : 'mission',
       cli: cli ?? require('./projectRoot.js').cliCommand(),
+      index,
+      near,
     });
   } catch {
     // error-ignored: the excerpt is guidance; the mission and the package are made without it
