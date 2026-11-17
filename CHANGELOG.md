@@ -3,7 +3,10 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.18.0 (2026-11-17)
+
+**A project catalog of helpers and accepted design choices now reaches the track and the reviewer, so code is not written twice and a choice is not broken silently. Claude Code formats are read in one place behind a client adapter, so a renamed field or a moved transcript is one fix. The Checks tab gets its own page, and three of its edge cases are closed. A check that hangs past its time budget no longer leaves processes behind. The new stops are off until you turn them on.**
+
 
 - **Hardening: a check that runs over its time budget is now ended together with everything it started.** The base
   gate, a task's done command (`done_when`) and the check for tests that fail on the base ran through a shell whose
@@ -120,6 +123,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   for the reviewer to weigh as duplication or scope drift. Test files, moved names, common names such as `main` and a
   task that names no files in one folder stay quiet. They are facts only: nothing stops, nothing uses tokens, and all
   four are on by default, also in lite, each with its own setting under `scopeNotes`.
+
+### After you update
+- The catalog's `check:` rules in design choices run at receive and warn (`catalog.checks`, on). Turn on `catalog.checkStop` if a broken rule should stop the merge; `--allow-catalog` is the logged way past. The catalog index (`catalog.index`) and the drift cards (`scopeNotes.driftGap`, `scopeNotes.driftWarn`) are off until you turn them on.
+- API errors in the newer transcript form are now counted, so the rate limit and overload figures can go up from 0. A rejected quota in that form now gives the usage limit pause, and a plain 429 no longer gives a stale one.
+- On the Checks tab, a card you set aside stays in Set aside even when it no longer applies, so you can bring it back. The database rules card no longer shows when the project already has database probes.
+- No setting changes its value on update.
 
 ## 0.17.0 (2026-11-16)
 
