@@ -62,12 +62,13 @@ function row(id: number, o: Record<string, unknown> = {}) {
   };
 }
 
-function project({ config = {} as object, rows = [] as object[], tasks = [] as object[] } = {}) {
+function project({ config = {} as object, rows = [] as object[], tasks = [] as object[], files = {} as Record<string, string> } = {}) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'finding-repeats-'));
   temporary.push(folder);
   const repo = path.join(folder, 'repo');
   const data = path.join(folder, 'data');
   for (const d of [repo, data]) fs.mkdirSync(d);
+  for (const [f, text] of Object.entries(files)) fs.writeFileSync(path.join(repo, f), text);
   const globalConfig = path.join(folder, 'global-gitconfig');
   fs.writeFileSync(globalConfig, '');
   const configFile = path.join(folder, 'queue.config.json');
@@ -220,5 +221,75 @@ describe('Build as gate (0i step 7): the button on the card ledger-recipes', () 
     expect(r4.code).not.toBe(0);
     expect(r4.out).toMatch(/declined/i);
     expect(p.gates()).toHaveLength(1);
+  });
+});
+
+describe('recipe precision (0i step 9): accepted and declined per recipe, damping, and the owner choice', () => {
+  const NODE = { 'package.json': JSON.stringify({ name: 'x', scripts: { test: 'vitest' } }) };
+  /** Five decided proposals from the recipe for Node, in other areas: one accepted, four declined (20 percent). */
+  const decided = (accepted: number, declined: number) =>
+    [...Array.from({ length: accepted }, () => 'done'), ...Array.from({ length: declined }, () => 'cancelled')].map((status, i) => ({
+      id: `GATE-${50 + i}`,
+      title: `Gate: Unchecked error or result in src/old${i}`,
+      status,
+      class: 'K',
+      labels: ['gate', 'finding-log'],
+      source: `finding-log unchecked-error@src/old${i}`,
+      recipe: { id: 'unchecked-error-node', db: false },
+    }));
+  type Item = { recipe: { id: string } | null; damped?: { id: string }[] };
+  const item = (p: ReturnType<typeof project>) => (p.card('ledger-recipes')?.ledger as { items: Item[] }).items[0];
+  const precision = (p: ReturnType<typeof project>) =>
+    (p.checks() as unknown as { recipePrecision: { recipes: Record<string, unknown>[] } }).recipePrecision;
+
+  it('Build as gate stores the recipe id on the task, and the measure counts it', () => {
+    const p = project({ rows: REPEATED, files: NODE });
+    expect(item(p).recipe?.id).toBe('unchecked-error-node');
+    expect(p.q('checks', 'build-gate', 'unchecked-error@src/api').code).toBe(0);
+    expect((p.gates()[0] as unknown as { recipe: unknown }).recipe).toEqual({ id: 'unchecked-error-node', db: false });
+    expect(precision(p).recipes).toEqual([expect.objectContaining({ id: 'unchecked-error-node', proposals: 1, pending: 1, rate: null, damped: false })]);
+  });
+
+  it('a recipe below 30 percent after five is damped: listed with its numbers, not offered on the card', () => {
+    const p = project({ rows: REPEATED, files: NODE, tasks: decided(1, 4) });
+    expect(item(p).recipe).toBeNull();
+    expect(item(p).damped).toEqual([expect.objectContaining({ id: 'unchecked-error-node' })]);
+    expect(precision(p).recipes).toEqual([expect.objectContaining({ id: 'unchecked-error-node', proposals: 5, accepted: 1, declined: 4, rate: 20, damped: true, by: 'auto' })]);
+    const r = p.q('checks');
+    expect(r.out).toMatch(/Recipe precision/);
+    expect(r.out).toMatch(/unchecked-error-node: 5 proposals, 1 accepted \(20%\), damped/);
+    // Build as gate now adds the gate without the damped recipe.
+    expect(p.q('checks', 'build-gate', 'unchecked-error@src/api').code).toBe(0);
+    expect(p.gates().find((t) => t.id === 'GATE-55')).not.toHaveProperty('recipe');
+  });
+
+  it('the owner can show a damped recipe again, damp one by hand, and go back to automatic', () => {
+    const p = project({ rows: REPEATED, files: NODE, tasks: decided(1, 4) });
+    const r = p.q('checks', 'recipe', 'unchecked-error-node', 'show');
+    expect(r.code, r.out).toBe(0);
+    expect(item(p).recipe?.id).toBe('unchecked-error-node');
+    expect(precision(p).recipes[0]).toMatchObject({ damped: false, by: 'owner', override: 'show' });
+    expect(p.q('checks', 'recipe', 'unchecked-error-node', 'auto').code).toBe(0);
+    expect(precision(p).recipes[0]).toMatchObject({ damped: true, by: 'auto', override: null });
+    const fresh = project({ rows: REPEATED, files: NODE });
+    expect(fresh.q('checks', 'recipe', 'unchecked-error-node', 'damp').code).toBe(0);
+    expect(item(fresh).recipe).toBeNull();
+    const bad = fresh.q('checks', 'recipe', 'no-such-recipe', 'show');
+    expect(bad.code).not.toBe(0);
+    expect(bad.out).toMatch(/no recipe/i);
+    expect(fresh.q('checks', 'recipe', 'unchecked-error-node', 'maybe').code).not.toBe(0);
+  });
+
+  it('learning.recipeDamping off keeps the recipe on the card whatever its numbers', () => {
+    const p = project({ rows: REPEATED, files: NODE, tasks: decided(1, 4), config: { learning: { recipeDamping: false } } });
+    expect(item(p).recipe?.id).toBe('unchecked-error-node');
+    expect(precision(p).recipes[0]).toMatchObject({ rate: 20, damped: false });
+  });
+
+  it("the finding log's own proposal carries the recipe the last Checks read showed", () => {
+    const p = project({ rows: REPEATED, files: NODE, config: { learning: { proposals: true } } });
+    expect(p.q('checks', '--json').code).toBe(0);
+    expect(p.q('inspection').code).toBe(0);
+    expect((p.gates()[0] as unknown as { recipe: unknown }).recipe).toEqual({ id: 'unchecked-error-node', db: false });
   });
 });

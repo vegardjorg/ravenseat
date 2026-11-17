@@ -384,6 +384,18 @@ const SETTINGS = Object.freeze([
     'Off by default. On: for access control and migration failures that keep coming back, the Checks tab shows a ' +
     'recipe for database probes (pgTAP, supabase test db, testcontainers), only when a local or throwaway database is ' +
     'found. A gate built from it must check that its database host is local before it writes, and roll back.'),
+  // Recipe precision (0i step 9, lib/recipePrecision.js). On by default, as the plan says (damped automatically): it only
+  // moves a recipe the owner keeps declining from the card to the list, never stops work or hides a class, and the owner
+  // can show one recipe again (ravenseat checks recipe <id> show). Off, every recipe whose `when` holds is offered.
+  row('learning.recipeDamping', 'gates', 'onoff', 'Damp recipes that are seldom accepted',
+    'A recipe whose gate proposals are seldom accepted is listed on the Checks tab with its numbers, but no longer ' +
+    'offered on the card. It stops nothing. ravenseat checks recipe <id> show offers one again.'),
+  row('learning.recipeMinProposals', 'gates', 'integer', 'Decided proposals before damping',
+    'How many of a recipe\'s proposals must be accepted or declined before it can be damped. Waiting ones do not count.'),
+  row('learning.recipeMinProposalsDb', 'gates', 'integer', 'Decided proposals before damping a database recipe',
+    'The same for a database probe recipe. Higher, since they are few and often declined for their cost.'),
+  row('learning.recipeMinAccepted', 'gates', 'integer', 'Accepted share that keeps a recipe (percent)',
+    'A recipe below this share of accepted proposals, after enough are decided, is damped. 1 to 100.'),
   row('testWeakening.enabled', 'gates', 'onoff', 'Test weakening warning',
     'Receive warns about deleted or moved test files and added skip or focus markers.', {
       weakens: offWeakens,

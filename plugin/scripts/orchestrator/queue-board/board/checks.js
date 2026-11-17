@@ -214,12 +214,21 @@ function checksLedgerList(ledger) {
     const stack = ` Stack: ${i.stacks?.length ? i.stacks.join(', ') : 'not known'}.`;
     const cards = i.recipe?.cards?.length ? ` See: ${i.recipe.cards.map((c) => c.title).join(', ')}.` : '';
     // A database class with the database probe recipes off says how to turn them on (lib/checksCatalog.js DB_HINT).
-    const recipe = i.recipe ? ` Recipe: ${i.recipe.text}${cards}` : typeof i.hint === 'string' && i.hint ? ` ${i.hint}` : ' No recipe yet for this class in this stack.';
+    const damped = Array.isArray(i.damped) && i.damped.length ? i.damped.map((d) => d.id).join(', ') : '';
+    const recipe = i.recipe
+      ? ` Recipe: ${i.recipe.text}${cards}`
+      : typeof i.hint === 'string' && i.hint
+        ? ` ${i.hint}`
+        : damped
+          ? ''
+          : ' No recipe yet for this class in this stack.';
+    // A recipe damped by its precision is named, never offered (lib/recipePrecision.js); the list below has its numbers.
+    const note = damped ? ` Damped recipe, listed under Recipe precision and not offered here: ${damped}.` : '';
     return el(
       'li',
       {},
       el('span', { class: 'checks-where', text: `${i.title} ${where}: ${i.incidents} incident(s).` }),
-      el('span', { text: `${proposed}${places}${stack}${recipe}` }),
+      el('span', { text: `${proposed}${places}${stack}${recipe}${note}` }),
       checksBuildGate(i),
     );
   });
@@ -355,6 +364,36 @@ function checksGuardsSection(guards) {
       ? el('ul', { class: 'checks-grid' }, ...list.map(checksGuardCard))
       : el('p', { class: 'checks-text', text: 'No guards in the registry yet. A built inspection proposal adds one.' }),
   ].filter(Boolean);
+}
+
+/**
+ * Recipe precision (report.recipePrecision, lib/recipePrecision.js): per recipe its gate proposals, how many were
+ * accepted out of the decided ones, and whether it is damped. Text only. Shown only once a recipe has a proposal or an
+ * owner's choice; the choice itself is `ravenseat checks recipe <id> show|damp|auto`.
+ */
+function checksPrecisionSection(precision) {
+  const list = precision?.recipes ?? [];
+  if (!list.length) return [];
+  const row = (r) => {
+    const rate = r.rate == null ? 'none decided yet' : `${r.accepted} accepted (${r.rate}%)`;
+    const state = r.damped ? (r.by === 'owner' ? 'damped by you' : 'damped') : r.by === 'owner' ? 'shown by you' : 'shown';
+    const pending = r.pending ? `, ${r.pending} waiting` : '';
+    return el(
+      'li',
+      {},
+      el('span', { class: 'checks-where', text: `${r.title}${r.db ? ' (database)' : ''}: ` }),
+      el('span', { text: `${r.proposals} proposals, ${rate}${pending}, ${state}.` }),
+      el('span', { class: 'checks-source', text: ` ${r.id}` }),
+    );
+  };
+  const rule = precision.on
+    ? `A recipe below ${precision.floor}% accepted after ${precision.min} decided proposals (${precision.minDb} for a database recipe) is damped: listed here, not offered on the card.`
+    : 'Damping is off (learning.recipeDamping): every recipe is offered whatever its numbers.';
+  return [
+    el('h3', { class: 'decide-group-title', text: 'Recipe precision' }),
+    el('p', { class: 'decide-hint', text: `Gate proposals from the finding log per recipe. ${rule} ravenseat checks recipe <id> show|damp|auto changes one.` }),
+    el('ul', { class: 'checks-places checks-precision' }, ...list.map(row)),
+  ];
 }
 
 /** One repeated failure (report.inspection.entries, lib/inspection.js boardData). */
@@ -526,6 +565,8 @@ function drawChecks() {
     });
     wrap.append(box);
   }
+  // The recipes' numbers under the suggestions: a damped recipe is listed here, not offered on its card.
+  wrap.append(...checksPrecisionSection(r.recipePrecision));
   for (const e of r.catalogErrors ?? []) wrap.append(el('p', { class: 'setting-error', text: `A suggestion file has a mistake: ${e}` }));
   main.append(wrap);
 }

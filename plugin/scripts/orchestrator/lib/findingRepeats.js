@@ -60,9 +60,27 @@ const FC = require('./failureClasses.js');
 // dbProbes: the database probe recipes for access-control and migration-schema (checks-catalog/recipes.json, db: true)
 // are shown only with it on and a local database found (0i section 3.8). Off by default: a probe gate is heavy, needs a
 // running database, and is the one kind of gate that can harm data elsewhere when it is pointed at the wrong host.
-const DEFAULTS = Object.freeze({ repeats: true, windowDays: 90, areaRepeats: 2, projectRepeats: 3, guardFailedMarker: true, proposals: false, dbProbes: false });
-const ONOFF = ['repeats', 'guardFailedMarker', 'proposals', 'dbProbes'];
-const NUMBERS = ['windowDays', 'areaRepeats', 'projectRepeats'];
+// recipeDamping and its numbers: a recipe below recipeMinAccepted percent accepted after recipeMinProposals decided
+// proposals (recipeMinProposalsDb for a database recipe) is listed but no longer offered (lib/recipePrecision.js, 0i
+// step 9). On by default: it only hides a suggestion, never stops work, and the owner can show the recipe again.
+const DEFAULTS = Object.freeze({
+  repeats: true,
+  windowDays: 90,
+  areaRepeats: 2,
+  projectRepeats: 3,
+  guardFailedMarker: true,
+  proposals: false,
+  dbProbes: false,
+  recipeDamping: true,
+  recipeMinProposals: 5,
+  recipeMinProposalsDb: 10,
+  recipeMinAccepted: 30,
+});
+const ONOFF = ['repeats', 'guardFailedMarker', 'proposals', 'dbProbes', 'recipeDamping'];
+const NUMBERS = ['windowDays', 'areaRepeats', 'projectRepeats', 'recipeMinProposals', 'recipeMinProposalsDb'];
+/** Whole percents, 1 to 100. */
+const PERCENTS = ['recipeMinAccepted'];
+const percent = (v, standard) => (Number.isInteger(v) && v >= 1 && v <= 100 ? v : standard);
 /** The scope drift cards' rule (plans/scope-drift-dry-katalog-2026-11-15.md): 3 in one area within 30 days. */
 const RECENT_DAYS = 30;
 /** The verdicts of an untested fix (lib/fixTests.js UNTESTED). */
@@ -91,6 +109,7 @@ function setupOf(cfg = {}) {
   const out = {};
   for (const k of ONOFF) out[k] = typeof own[k] === 'boolean' ? own[k] : DEFAULTS[k];
   for (const k of NUMBERS) out[k] = whole(own[k], DEFAULTS[k]);
+  for (const k of PERCENTS) out[k] = percent(own[k], DEFAULTS[k]);
   return out;
 }
 
@@ -102,6 +121,8 @@ function setupProblems(own) {
   for (const k of ONOFF) if (own[k] !== undefined && typeof own[k] !== 'boolean') out.push(`learning.${k} must be true or false`);
   for (const k of NUMBERS)
     if (own[k] !== undefined && !(Number.isInteger(own[k]) && own[k] >= 1)) out.push(`learning.${k} must be a whole number of 1 or more`);
+  for (const k of PERCENTS)
+    if (own[k] !== undefined && percent(own[k], null) == null) out.push(`learning.${k} must be a whole number from 1 to 100`);
   return out;
 }
 
@@ -325,10 +346,12 @@ function gateTitle(e, classes) {
 /**
  * The gate task for a due entry, ready for `ravenseat add` (added_by makes it proposed; it is never added approved).
  * @param {object} e  a due entry from scan
- * @param {{ id: string, classes?: object[], record?: { cli: string, registryFile: string } }} o  with `record` the
- *   mission ends with `guards add` (lib/knownBugGate.js gateTask)
+ * @param {{ id: string, classes?: object[], record?: { cli: string, registryFile: string }, recipe?: object|null }} o  with
+ *   `record` the mission ends with `guards add` (lib/knownBugGate.js gateTask). With `recipe` the task keeps its id and
+ *   db mark in its own field `recipe` (lib/recipePrecision.js recipeRef), so accepted and declined can be counted per
+ *   recipe; the source stays `finding-log <class>@<area>`, which guardsFrom and the precision read.
  */
-function proposalTask(e, { id, classes, record = null } = {}) {
+function proposalTask(e, { id, classes, record = null, recipe = null } = {}) {
   const title = gateTitle(e, classes);
   const where = e.files?.length ? `${oneLine(e.files[0])}${e.line ? `:${e.line}` : ''}` : null;
   const tasks = Array.isArray(e.tasks) ? e.tasks : [];
@@ -344,7 +367,8 @@ function proposalTask(e, { id, classes, record = null } = {}) {
     detail,
     record: record ? { ...record, against: `${title} (class ${e.class})` } : null,
   });
-  return { ...task, labels: [...task.labels, LABEL], source: `finding-log ${e.key}` };
+  const ref = require('./recipePrecision.js').recipeRef(recipe);
+  return { ...task, labels: [...task.labels, LABEL], source: `finding-log ${e.key}`, ...(ref ? { recipe: ref } : {}) };
 }
 
 /** A path or a command as one plain line: the first line only, no control characters, at most 200 characters. */
@@ -410,7 +434,7 @@ const DB_GUARD_OFF =
  * dbGuard.localOnly does here without asking the agent to change it.
  */
 function buildTask(e, { id, classes, record = null, project = {}, recipe = null } = {}) {
-  const base = proposalTask(e, { id, classes, record });
+  const base = proposalTask(e, { id, classes, record, recipe });
   const places = [...new Set((Array.isArray(e.places) && e.places.length ? e.places : e.files ?? []).map(oneLine).filter(Boolean))].slice(0, MAX_PLACES);
   const [head, ...tail] = base.mission.split('\n\nThe gate criteria:');
   const build = [

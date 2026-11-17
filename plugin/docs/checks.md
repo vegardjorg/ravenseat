@@ -328,6 +328,7 @@ Three cards come from the same finding log:
   criteria: the new check red on a reproduction and green on the fixed code, both runs shown; without a red
   reproduction the report says "no gate" and the guard registry gets the decision `none` with its reason. Nothing
   runs before you approve it. While the cap is full the line says it waits; an open one is named instead.
+  A recipe that is [damped by its precision](#recipe-precision) is named on the line, not offered.
 
 A class is due, here and in `ledger-due`, only while it is open: a declined class and area, or one with a gate, no
 longer counts. The class `other` and findings with low confidence never count at all.
@@ -464,6 +465,29 @@ rules", "Run the migrations from an empty database in CI" and "Never run probes 
 - A recipe of your own marked `"db": true` must have `db-probes-on` and `has-local-database` or `local-db:<engine>` in
   its `when`, or it is left out and the tab says why.
 
+#### Recipe precision
+
+Ravenseat counts what became of each recipe's gate proposals, so a recipe you keep declining steps back by itself.
+Nothing new is stored for it: the gate tasks already say it. A proposal is a gate task from the finding log ("Build as
+gate", or the log's own proposal with `learning.proposals` on), and it keeps the recipe's id in its own field
+`recipe`. The log's own proposal takes the recipe the last Checks read showed for that class and area; without one it
+counts for its class only, and so does a class with a hint but no recipe.
+
+- **Accepted** is approved or later (built included), **declined** is cancelled, and a proposal still waiting for you
+  counts for nothing yet. The share is accepted out of the decided ones.
+- **Damped**: a recipe below 30 percent accepted after at least 5 decided proposals is listed under "Recipe
+  precision" on the tab (and in `ravenseat checks`), with its numbers, but no longer offered on the card. The card
+  then shows the next recipe for the class whose `when` holds, or names the damped one. It stops nothing: the class
+  still shows, Build as gate still works, and the proposals from the log still come.
+- **A database recipe** (`"db": true`) is counted on its own rows and needs 10 decided proposals before it can be
+  damped: it is shown only with `learning.dbProbes` on and a local database, so it gets few, and a probe gate is often
+  declined for its cost rather than for being the wrong guard.
+- **Your choice wins**: `ravenseat checks recipe <id> show` offers a recipe whatever its numbers, `damp` keeps it off
+  the card, and `auto` lets its numbers decide again (stored in `queue.json`, like the cards set aside).
+- The settings are `learning.recipeDamping` (on by default, since it only hides a suggestion), `learning.recipeMinProposals`
+  (5), `learning.recipeMinProposalsDb` (10) and `learning.recipeMinAccepted` (30, a percent). Only recipe ids, class
+  ids and counts are read, never a mission or a finding's text.
+
 ### Conditions
 
 A condition in `when`, `important_when` or `medium_when` is one of these. In `name:a|b`, the `|` means one of them is
@@ -537,6 +561,8 @@ The kinds for `missing`, `found`, `not-in-ci` and `none-in-ci`: `test` (tests), 
 | `ravenseat checks turn-on <key>` | Turns on the opt-in check of an `action: setting` card. Never from a track's worktree | No |
 | `ravenseat checks packs` | Which stacks the manifests show and which packs are not on yet. Writes nothing | No |
 | `ravenseat checks packs --apply` | Writes the missing packs to `review.packs` | No |
+| `ravenseat checks build-gate <class>@<area>` | Build as gate: one proposed gate task for a class and area the finding log keeps seeing | Yes |
+| `ravenseat checks recipe <id> show\|damp\|auto` | Your choice for one recipe: offered whatever its numbers, kept off the card, or back to its [precision](#recipe-precision). Never from a track's worktree | Yes |
 | `ravenseat checks marker on\|off` | The red dot on the tab | Yes |
 | `ravenseat checks on\|off` | The tab, the overview and the setup suggestions | Yes |
 | `ravenseat kickstart gates --apply` | The "Use as gates" button: the checks found become gates | No |
@@ -610,6 +636,7 @@ Yes: `ravenseat checks off`. Nothing else changes: the guards and gates run as b
 | --- | --- |
 | The cards, categories and recipes | `plugin/scripts/orchestrator/checks-catalog/` |
 | The finding log's repeats behind the ledger cards | `lib/findingRepeats.js` (read by `cli/inspection.mjs` `ledgerScan`) |
+| Recipe precision and damping | `lib/recipePrecision.js` (read by `cli/checks.mjs`) |
 | Reading the cards, the conditions, priority, state and the report | `lib/checksCatalog.js` |
 | What the project has, read from its files | `lib/checksScan.js` |
 | The opt-in checks and how each is offered | `lib/optInChecks.js` |

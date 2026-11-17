@@ -24,7 +24,8 @@
 // Recipes block below.
 //
 //   parseTemplate(text, key)      one file as an object, with errors in words
-//   recipeFor(cls, facts, list)   the recipe for a class in this project, or null
+//   recipeFor(cls, facts, list)   the recipe for a class in this project, or null (a damped one is skipped)
+//   dampedFor(cls, facts, list)   the recipes for a class damped by their precision (lib/recipePrecision.js, 0i step 9)
 //   recipeExampleProblems(r)      a recipe's examples that do not behave
 //   mergeCatalog(builtin, own)    the project's files over the plugin's
 //   loadCatalog({ builtin, own }) reads the two folders
@@ -393,10 +394,27 @@ function mergeRecipes(builtin = [], own = [], { allKeys, liveKeys }) {
   return { recipes, errors };
 }
 
-/** The recipe for a class in this project: the first whose `when` holds for the facts, or null. Never one for other. */
+/** The recipes damped by their precision (facts.recipeDamped, lib/recipePrecision.js), as a set of ids. */
+const dampedIds = (facts) => new Set(Array.isArray(facts?.recipeDamped) ? facts.recipeDamped : []);
+
+/**
+ * The damped recipes for a class whose `when` holds (lib/recipePrecision.js): listed on the card by id and title, never
+ * offered. Empty when none is damped.
+ */
+function dampedFor(cls, facts, recipes = []) {
+  const damped = dampedIds(facts);
+  if (!damped.size || cls === 'other') return [];
+  return (Array.isArray(recipes) ? recipes : []).filter((r) => r.class === cls && damped.has(r.id) && holds(r.when, facts ?? {})).map((r) => ({ id: r.id, title: r.title }));
+}
+
+/**
+ * The recipe for a class in this project: the first whose `when` holds for the facts and that is not damped
+ * (facts.recipeDamped: seldom accepted, or damped by the owner), or null. Never one for other.
+ */
 function recipeFor(cls, facts, recipes = []) {
   if (!cls || cls === 'other') return null;
-  return (Array.isArray(recipes) ? recipes : []).find((r) => r.class === cls && holds(r.when, facts ?? {})) ?? null;
+  const damped = dampedIds(facts);
+  return (Array.isArray(recipes) ? recipes : []).find((r) => r.class === cls && !damped.has(r.id) && holds(r.when, facts ?? {})) ?? null;
 }
 
 /** The project's categories and templates over the plugin's. */
@@ -500,6 +518,8 @@ function ledgerItems(facts, catalog, suggestions) {
       proposal: e.proposal ? { state: e.proposal.state, task: e.proposal.task ?? null } : null,
       // A database class with a local database and the recipes off: one line on how to turn them on (no recipe).
       hint: !r && DB_CLASSES.has(e.class) && isPlainObject(facts.localDatabase) && facts.dbProbesOn !== true ? DB_HINT : null,
+      // Recipes for the class that are damped by their precision: named, never offered (lib/recipePrecision.js).
+      damped: dampedFor(e.class, facts, catalog.recipes),
       recipe: r
         ? {
             id: r.id,
@@ -526,14 +546,21 @@ function ledgerRecipeLine({ items, more, capFull }) {
     const proposed = i.proposal?.state === 'extend' && i.proposal.task ? ` (proposed as ${i.proposal.task})` : '';
     const stack = ` Stack: ${i.stacks.length ? i.stacks.join(', ') : 'not known'}.`;
     const cards = i.recipe?.cards.length ? ` See the card${i.recipe.cards.length > 1 ? 's' : ''} ${i.recipe.cards.map((c) => `"${c.title}"`).join(' and ')}.` : '';
-    const recipe = i.recipe ? ` Recipe: ${i.recipe.title}. ${i.recipe.text}${cards}` : i.hint ? ` ${i.hint}` : ' No recipe yet for this class in this stack.';
-    return `${capital(i.title)} ${where}: ${i.incidents} incident(s)${at}${proposed}.${stack}${recipe}`;
+    const recipe = i.recipe ? ` Recipe: ${i.recipe.title}. ${i.recipe.text}${cards}` : i.hint ? ` ${i.hint}` : i.damped?.length ? '' : ' No recipe yet for this class in this stack.';
+    return `${capital(i.title)} ${where}: ${i.incidents} incident(s)${at}${proposed}.${stack}${recipe}${dampedNote(i.damped)}`;
   });
   if (more) parts.push(`And ${more} more.`);
   if (capFull) parts.push('The cap of three open proposals is full, so a new gate proposal waits for a free slot.');
   return parts.join(' ');
 }
 const capital = (s) => (s ? `${String(s)[0].toUpperCase()}${String(s).slice(1)}` : s);
+
+/** The card's note for damped recipes: their ids, and how to show one again. Empty without any. */
+function dampedNote(damped) {
+  if (!Array.isArray(damped) || !damped.length) return '';
+  const ids = damped.map((d) => d.id).join(', ');
+  return ` Damped recipe, listed under Recipe precision and not offered here: ${ids} (ravenseat checks recipe <id> show offers it again).`;
+}
 
 /**
  * The whole picture. It is a plain snapshot: the same object is the file, the --json answer and what the board draws.
@@ -591,6 +618,8 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
     // apply is always set aside, so it never counts here.
     important: suggestions.filter((x) => x.applies && x.state === 'open' && x.priority === 'high').length,
     knownBugs,
+    // Accepted and declined per recipe and per class, and which recipes are damped (lib/recipePrecision.js facts).
+    recipePrecision: isPlainObject(facts.recipePrecision) ? facts.recipePrecision : null,
     catalogErrors: catalog.errors,
   };
 }
@@ -629,4 +658,4 @@ function planTask(s, found, tasks) {
   };
 }
 
-module.exports = { PRIORITIES, ACTIONS, CONDITIONS, holds, parseTemplate, mergeCatalog, loadCatalog, buildReport, planTask, planTasks, recipeFor, recipeExampleProblems };
+module.exports = { PRIORITIES, ACTIONS, CONDITIONS, holds, parseTemplate, mergeCatalog, loadCatalog, buildReport, planTask, planTasks, recipeFor, dampedFor, recipeExampleProblems };

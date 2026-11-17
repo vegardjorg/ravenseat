@@ -37,7 +37,7 @@ const WRITTEN = [
   'merge_sha', 'merge_conflict', 'merged_from', 'red_on_base', 'findings', 'qa_note', 'qa_ok', 'qa_ok_by',
   'qa_original', 'parked', 'snoozed', 'cloud', 'agent', 'agent_boost', 'head_start', 'silent', 'snapshots', 'cost',
   'claude_fp', 'triage_asked', 'triage_log', 'now_category', 'wind', 'drop_reason', 'undone', 'closed', 'track',
-  'focus', 't_receive', 't_merge', 'diff_lines', 'changed_files', 'archived_at',
+  'focus', 't_receive', 't_merge', 'diff_lines', 'changed_files', 'archived_at', 'recipe',
 ];
 
 const KNOWN = Object.freeze([...new Set([...AUTHOR, ...WRITTEN])]);

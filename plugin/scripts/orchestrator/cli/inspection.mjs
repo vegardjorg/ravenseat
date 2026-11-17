@@ -175,7 +175,8 @@ function ledgerPropose({ now = Date.now() } = {}) {
       // full: wait for a free slot (the next scan tries again); extend, exists, declined: nothing new to add.
       if (d.action !== 'add') continue;
       const id = KBG.nextId(known);
-      const task = { ...FR.proposalTask(entry, { id, classes, record: guardRecord() }), ...(queue.projects?.cicd ? { project: 'cicd' } : {}) };
+      const recipe = lastRecipeFor(entry.key);
+      const task = { ...FR.proposalTask(entry, { id, classes, record: guardRecord(), recipe }), ...(queue.projects?.cicd ? { project: 'cicd' } : {}) };
       const r = addTask(task);
       if (!r.ok) {
         out.errors.push(`${entry.key}: ${r.output}`);
@@ -187,6 +188,22 @@ function ledgerPropose({ now = Date.now() } = {}) {
     out.errors.push(`finding log: ${e?.message ?? e}`);
   }
   return out;
+}
+
+/**
+ * The recipe the last Checks read offered for a class and area (checks-report.json in the data folder, written by
+ * `ravenseat checks`), so the log's own proposal is counted for that recipe too (lib/recipePrecision.js). Only its id and
+ * db mark are kept. A damped recipe is never offered there, so it is never attached. No report or no recipe: null, and
+ * the proposal counts for its class only.
+ */
+function lastRecipeFor(key) {
+  try {
+    const report = JSON.parse(fs.readFileSync(path.join(FOLDER, 'checks-report.json'), 'utf8'));
+    const item = report?.suggestions?.find((s) => s?.key === 'ledger-recipes')?.ledger?.items?.find((i) => i?.key === key);
+    return require('./lib/recipePrecision.js').recipeRef(item?.recipe);
+  } catch {
+    return null; // error-ignored: no Checks read yet; the proposal counts for its class only
+  }
 }
 
 const ledgerLine = ({ id, entry }) =>

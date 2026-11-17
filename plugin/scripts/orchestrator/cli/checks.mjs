@@ -20,6 +20,9 @@
 //                                  the finding log, with the project's gate commands, CI files, test runner, the recipe
 //                                  and the places in its mission (lib/findingRepeats.js buildTask). Needs inspection.mode
 //                                  on; never from a track worktree. The board's button runs it.
+//   ravenseat checks recipe <id> show|damp|auto   the owner's choice for one recipe (lib/recipePrecision.js): show
+//                                  offers it although few of its proposals were accepted, damp keeps it off the card,
+//                                  auto lets its numbers decide again (queue.json checksPanel.recipes)
 //   ravenseat checks marker on|off        the small red marker on the Checks tab when a high suggestion is open
 //   ravenseat checks on|off               the opt-out: the Checks tab, this overview and the setup suggestions. Never a guard.
 //
@@ -216,6 +219,8 @@ function makeReport(queue) {
     }
   };
   const packs = packFacts({ exists, read: readFile, list });
+  const catalog = CATALOG.loadCatalog({ builtin: BUILTIN, own: OWN });
+  const precision = precisionFacts(queue, catalog);
   const found = SCAN.scan({ exists, read: readFile, list, gates: CONFIG.gates, checks: facts.checks, migrationsFolder: CONFIG.migrations?.folder ?? null });
   const report = CATALOG.buildReport({
     facts: {
@@ -235,8 +240,11 @@ function makeReport(queue) {
       dbProbesOn: require('./lib/findingRepeats.js').setupOf(CONFIG).dbProbes === true,
       // The client format canary (lib/clientCanary.js): the card while the newest transcript has rows read differently.
       clientCanary: canaryFacts(),
+      // Accepted and declined per recipe; a damped recipe is listed, never offered on the card (lib/recipePrecision.js).
+      recipePrecision: precision,
+      recipeDamped: precision?.damped ?? [],
     },
-    catalog: CATALOG.loadCatalog({ builtin: BUILTIN, own: OWN }),
+    catalog,
     tasks: queue?.tasks ?? [],
     dismissed: queue?.checksPanel?.dismissed ?? [],
     knownBugs: queue ? KNOWN.summary(queue.tasks, KNOWN.modeOf(CONFIG)) : null,
@@ -251,6 +259,26 @@ function makeReport(queue) {
     // error-ignored: the board shows the checks without the guards
   }
   return report;
+}
+
+/**
+ * The recipe precision (lib/recipePrecision.js) from the queue's tasks and the archived ones, the learning settings and
+ * the owner's choices per recipe. Before ravenseat init, or on an error, null: nothing is damped then.
+ */
+function precisionFacts(queue, catalog) {
+  if (!queue) return null;
+  try {
+    const RPR = require('./lib/recipePrecision.js');
+    const archived = require('./lib/queueArchive.js').load(FOLDER).tasks ?? [];
+    return RPR.facts({
+      tasks: [...(queue.tasks ?? []), ...archived],
+      setup: require('./lib/findingRepeats.js').setupOf(CONFIG),
+      overrides: RPR.overridesOf(queue),
+      recipes: catalog.recipes,
+    });
+  } catch {
+    return null; // error-ignored: unknown precision damps nothing
+  }
 }
 
 /**
@@ -316,6 +344,13 @@ function printOverview(report) {
   }
   const aside = report.suggestions.length - open.length;
   if (aside) console.log(`  (${aside} set aside; ${CLI} checks --json lists them)`);
+  const measured = report.recipePrecision?.recipes ?? [];
+  if (measured.length) {
+    const RPR = require('./lib/recipePrecision.js');
+    console.log('\nRecipe precision (gate proposals from the finding log, accepted out of decided)');
+    for (const r of measured) console.log(`  ${RPR.line(r)}`);
+    console.log(`  A damped recipe is listed here, not offered on the card. ${CLI} checks recipe <id> show|damp|auto changes that.`);
+  }
   for (const e of report.catalogErrors) console.log(`\nCatalog problem: ${e}`);
   console.log(`\n${NOTHING_RAN}`);
   if (open.length) console.log(`${CLI} checks show <key> says what a suggestion covers. ${CLI} checks plan <key> adds the investigation and planning to the queue. Nothing is built before you approve it.`);
@@ -562,6 +597,33 @@ function buildGate(raw) {
   );
 }
 
+/**
+ * `checks recipe <id> show|damp|auto`: the owner's choice for one recipe (lib/recipePrecision.js). show offers it on the
+ * card whatever its numbers, damp keeps it off the card, auto removes the choice. Only a recipe of the catalog; never
+ * from a track worktree. It hides or shows a suggestion only, so it needs no confirmation.
+ */
+function setRecipe(id, choice) {
+  needsQueue();
+  const track = trackBranchHere();
+  if (track) die(`${CLI} checks recipe cannot be run from inside a track worktree (branch ${track}); ask the owner.`);
+  if (!['show', 'damp', 'auto'].includes(choice)) die(`Use: ${CLI} checks recipe <id> show|damp|auto`);
+  const recipes = CATALOG.loadCatalog({ builtin: BUILTIN, own: OWN }).recipes;
+  const recipe = recipes.find((r) => r.id === id);
+  if (!recipe) die(`There is no recipe ${String(id ?? '').slice(0, 60)}. ${CLI} checks lists the measured ones; the catalog is checks-catalog/recipes.json and docs/queue/checks/recipes.json.`);
+  edit((queue) => {
+    const own = { ...(queue.checksPanel?.recipes ?? {}) };
+    if (choice === 'auto') delete own[id];
+    else own[id] = choice;
+    queue.checksPanel = { ...queue.checksPanel, recipes: own };
+  });
+  const said = {
+    show: `${id} is offered on the card again, whatever its numbers.`,
+    damp: `${id} is damped: listed on the Checks tab, not offered on the card.`,
+    auto: `${id} follows its numbers again (learning.recipeDamping).`,
+  };
+  console.log(`${said[choice]} ${CLI} checks recipe ${id} auto undoes it.`);
+}
+
 function setMarker(on) {
   needsQueue();
   edit((queue) => {
@@ -583,6 +645,7 @@ export function cmdChecks() {
   if (sub === 'packs') return packs();
   if (sub === 'turn-on') return turnOn(a[2]);
   if (sub === 'build-gate') return buildGate(a[2]);
+  if (sub === 'recipe') return setRecipe(a[2], a[3]);
   if (sub === 'marker') {
     if (a[2] !== 'on' && a[2] !== 'off') return die(`Use: ${CLI} checks marker on|off`);
     return setMarker(a[2] === 'on');
@@ -596,7 +659,7 @@ export function cmdChecks() {
     console.log(sub === 'dismiss' ? `${a[2]} is set aside. ${CLI} checks restore ${a[2]} brings it back.` : back);
     return undefined;
   }
-  if (sub && sub !== '--json') return die(`Use: ${CLI} checks [--json] | show <key> | plan <key> [--approved] | dismiss <key> | restore <key> | packs [--apply] | turn-on <key> | build-gate <class>@<area> | marker on|off | on | off`);
+  if (sub && sub !== '--json') return die(`Use: ${CLI} checks [--json] | show <key> | plan <key> [--approved] | dismiss <key> | restore <key> | packs [--apply] | turn-on <key> | build-gate <class>@<area> | recipe <id> show|damp|auto | marker on|off | on | off`);
   const queue = queueNow();
   if (queue && !GD.checksPanelOn(queue)) {
     if (a.includes('--json')) console.log(JSON.stringify({ off: true }));

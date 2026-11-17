@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a recipe you keep declining no longer keeps coming back as a suggestion, and one you trust stays.**
+  Ravenseat now counts what became of each recipe's gate proposals from the finding log, from the tasks themselves (no
+  new file): approved or built is accepted, cancelled is declined, and one still waiting counts for nothing yet. A gate
+  task from "Build as gate" or from the log's own proposal keeps the recipe's id and database mark in its own field
+  `recipe`; a class with only a hint, or no recipe, counts for its class alone. A recipe below 30 percent accepted
+  after at least 5 decided proposals is damped: listed under "Recipe precision" on the Checks tab and in
+  `ravenseat checks` with its proposals, accepted share and state, but no longer offered on the card, which then shows
+  the next recipe whose `when` holds or names the damped one. It stops nothing. Database probe recipes are counted on
+  their own rows and need 10 decided proposals, so a few declines of a heavy probe do not silence them. The owner's
+  choice per recipe wins both ways (`ravenseat checks recipe <id> show|damp|auto`). New settings
+  `learning.recipeDamping` (on), `learning.recipeMinProposals` (5), `learning.recipeMinProposalsDb` (10) and
+  `learning.recipeMinAccepted` (30, checked from 1 to 100). Only recipe ids, class ids and counts are read.
 - **Hardening: access control and migration failures that keep coming back can get a database probe as their guard,
   and a probe never runs against a shared database by mistake.** The recipes now cover the classes access control and
   migration: pgTAP probes with `supabase test db` for Supabase, with `pg_prove` for another Postgres, and tests in the

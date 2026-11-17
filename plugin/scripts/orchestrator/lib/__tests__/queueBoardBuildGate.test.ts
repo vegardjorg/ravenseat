@@ -65,6 +65,18 @@ const report = {
   categories: [{ key: 'tests', title: 'Tests', text: '' }],
   catalogErrors: [],
   knownBugs: null,
+  recipePrecision: {
+    on: true,
+    floor: 30,
+    min: 5,
+    minDb: 10,
+    recipes: [
+      { id: 'contract-drift-type-check', title: 'Type check', class: 'contract-drift', db: false, proposals: 5, accepted: 1, declined: 4, pending: 0, rate: 20, damped: true, by: 'auto', override: null },
+      { id: 'access-control-supabase', title: 'Probes', class: 'access-control', db: true, proposals: 1, accepted: 0, declined: 0, pending: 1, rate: null, damped: false, by: null, override: null },
+    ],
+    classes: [],
+    damped: ['contract-drift-type-check'],
+  },
   suggestions: [
     {
       key: 'ledger-recipes',
@@ -83,6 +95,8 @@ const report = {
           item('unchecked-error@src/api', 'src/api', { state: 'add', task: null }),
           item('null-undefined@src/ui', 'src/ui', { state: 'full', task: null }),
           item('race-condition@src/jobs', 'src/jobs', { state: 'extend', task: 'GATE-4' }),
+          // A class whose only recipe is damped by its precision (0i step 9): named, not offered.
+          { ...item('contract-drift@src/lib', 'src/lib', { state: 'extend', task: 'GATE-5' }), recipe: null, damped: [{ id: 'contract-drift-type-check', title: 'Type check' }] },
         ],
         more: 0,
         capFull: false,
@@ -144,5 +158,19 @@ describe('the Build as gate button', () => {
     expect(text).toMatch(/waits for a free slot/i);
     expect(text).toContain('Proposed as GATE-4');
     expect(buttons()).toHaveLength(1);
+  });
+});
+
+describe('recipe precision on the Checks tab (0i step 9)', () => {
+  it('lists each measured recipe with its proposals, the accepted share and whether it is damped', () => {
+    const text = document.querySelector('.checks-precision')?.textContent ?? '';
+    expect(text).toContain('Type check: 5 proposals, 1 accepted (20%), damped.');
+    expect(text).toContain('Probes (database): 1 proposals, none decided yet, 1 waiting, shown.');
+  });
+
+  it('a damped recipe is named on the card, not offered as its recipe', () => {
+    const card = [...document.querySelectorAll('.checks-places')].find((u) => !u.classList.contains('checks-precision'))?.textContent ?? '';
+    expect(card).toContain('Damped recipe, listed under Recipe precision and not offered here: contract-drift-type-check.');
+    expect(card).not.toMatch(/Contract drift[^.]*No recipe yet/);
   });
 });
