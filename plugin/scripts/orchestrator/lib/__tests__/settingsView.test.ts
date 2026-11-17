@@ -25,7 +25,7 @@ const rowsOf = (v: any, id: string) => v.categories.find((c: any) => c.id === id
 const keysOf = (v: any, id: string) => rowsOf(v, id).map((r: any) => r.key);
 
 describe('the grouping', () => {
-  it('all twelve categories in the registry order, basic rows first, every row once', () => {
+  it('all fifteen categories in the registry order, basic rows first, every row once', () => {
     const v = view();
     expect(v.categories.map((c: any) => c.id)).toEqual(R.CATEGORIES.map((c: any) => c.id));
     for (const c of v.categories) {
@@ -105,8 +105,24 @@ describe('the lite filter', () => {
 
   it('a category filter keeps one category', () => {
     const text = SV.cliLines(view(), { cli: 'ravenseat', category: 'gates' }).join('\n');
-    expect(text).toContain('Gates and checks');
+    expect(text.split('\n')).toContain('Gates');
     expect(text).not.toContain('Limits and cost');
+    expect(text).not.toContain('Tests and evidence');
+    // A new group is found by its id or the start of its title.
+    expect(SV.cliLines(view(), { cli: 'ravenseat', category: 'scope' }).join('\n')).toContain('Scope and catalog');
+    expect(SV.cliLines(view(), { cli: 'ravenseat', category: 'checks' }).join('\n')).toContain('Checks tab and learning');
+  });
+
+  it("a group's note is passed on and printed once under its title", () => {
+    const v = view();
+    const learning = v.categories.find((c: any) => c.id === 'learning');
+    expect(learning.note).toBe(R.CATEGORIES.find((c: any) => c.id === 'learning').note);
+    const lines = SV.cliLines(v, { cli: 'ravenseat', category: 'learning' });
+    const at = lines.indexOf('Checks tab and learning');
+    expect(lines[at + 1]).toBe(`  ${learning.note}`);
+    // A group without a note gets no extra line.
+    const limits = SV.cliLines(v, { cli: 'ravenseat', category: 'limits' });
+    expect(limits[limits.indexOf('Limits and cost') + 1]).toMatch(/^ {2}limits\./);
   });
 });
 

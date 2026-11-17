@@ -88,7 +88,8 @@ describe('ravenseat settings (read)', () => {
   it('a category, --changed and --json', async () => {
     fs.writeFileSync(configFile(), '{\n  "mode": "full",\n  "gitSurface": "off"\n}\n');
     const gates = await ravenseat(['settings', 'gates']);
-    expect(gates.out).toContain('Gates and checks');
+    expect(gates.out.split('\n')).toContain('Gates');
+    expect(gates.out).not.toContain('Tests and evidence');
     expect(gates.out).not.toContain('Limits and cost');
     const changed = await ravenseat(['settings', '--changed']);
     expect(changed.out).toMatch(/gitSurface +off .*\[weakened\]/);

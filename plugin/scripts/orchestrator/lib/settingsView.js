@@ -3,7 +3,7 @@
 //
 // The design is plans/innstillinger-vurdering-2026-11-12.md, steps 4 to 6b:
 //   settingsView  every row with its value now, its default for the mode, where it is stored and whether it weakens a
-//                 guard, grouped in the twelve categories (basic rows first, advanced after). In lite, a full-only row
+//                 guard, grouped in the fifteen categories (basic rows first, advanced after). In lite, a full-only row
 //                 is marked `hidden` (one count line per category shows it is there); a category with nothing for lite
 //                 is `fullOnlyCategory` (one closed line). The board's /api/settings and `ravenseat settings` both use it.
 //   cliLines      `ravenseat settings` as text (--advanced, --all, --changed, a category).
@@ -265,6 +265,8 @@ function settingsView({ config, queue = {}, migrations = true, rows = R.SETTINGS
     return {
       id: c.id,
       title: c.title,
+      // One line under the title for what the group's rows share (lib/settingsRegistry.js CATEGORIES); null for most.
+      note: c.note ?? null,
       fullOnlyCategory: mode === 'lite' && ordered.length > 0 && ordered.every((r) => r.fullOnly),
       rows: ordered,
     };
@@ -306,6 +308,7 @@ function cliLines(view, { cli = 'ravenseat', advanced = false, all = false, chan
     const moreFull = c.rows.filter((r) => r.hidden && !all && (!changed || r.changed)).length;
     if (changed && !shown.length) continue;
     out.push(c.title);
+    if (c.note) out.push(`  ${c.note}`);
     const kw = Math.max(0, ...shown.map((r) => r.key.length));
     const vw = Math.min(24, Math.max(0, ...shown.map((r) => r.valueText.length)));
     for (const r of shown) {

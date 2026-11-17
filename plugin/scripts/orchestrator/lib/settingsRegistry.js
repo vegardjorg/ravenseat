@@ -10,7 +10,7 @@
 // A row:
 //   key            the path inside the file `store` names: "push.mode" in queue.config.json, "limits.maxConcurrent" or
 //                  "guidance" in queue.json. A key under features keeps its dot ("features.plans.legal").
-//   category       one of CATEGORIES (the twelve groups, each with its basic settings first, the advanced ones under)
+//   category       one of CATEGORIES (the fifteen groups, each with its basic settings first, the advanced ones under)
 //   level          'basic' | 'advanced' (advanced shows the visible label LABELS.advanced, folded in its category)
 //   modes          ['lite', 'full'] or ['full'] (full only: lite hides it behind one line, LABELS.fullOnly)
 //   fullWhy        one line why a full-only row means nothing in lite; null otherwise
@@ -48,16 +48,35 @@
 /** The visible labels (the owner wants advanced marked, inside each category, not in a pile of its own). */
 const LABELS = Object.freeze({ advanced: 'Advanced', fullOnly: 'Full mode only' });
 
-/** The twelve categories, in the order they are shown. */
+/**
+ * The fifteen categories, in the order they are shown. `note` (optional) is one line shown under the title, on the board
+ * and in `ravenseat settings`, for what the rows of a group share and no single row can say.
+ *
+ * Owner decision 2026-11-17 (plans/gjennomgang-friksjon-innstillinger-2026-11-17.md, H2, L1, M7): "Gates and checks"
+ * held 55 rows and "Review and agents" 32, so they were split into Gates, Tests and evidence, Checks tab and learning,
+ * and Scope and catalog. No key changed (learning.* stays the name space of the learning loop); only the group a row is
+ * shown in. The three sources of guard proposals share the learning group and its note, and keep their defaults.
+ */
 const CATEGORIES = Object.freeze([
   { id: 'project', title: 'Project and git' },
   { id: 'limits', title: 'Limits and cost' },
   { id: 'load', title: 'Machine load' },
-  { id: 'gates', title: 'Gates and checks' },
+  { id: 'gates', title: 'Gates' },
+  { id: 'tests', title: 'Tests and evidence' },
+  {
+    id: 'learning',
+    title: 'Checks tab and learning',
+    note:
+      'Three sources can propose a task that builds a new guard: a failure that keeps repeating (inspection.mode, on), ' +
+      'a known bug (gates.fromKnownBugs, propose) and the finding log (learning.proposals, off). Together they keep at ' +
+      'most three proposals open, and each one waits for your approval, so none of them starts work by itself. The ' +
+      'finding log source is off because it asks the most of your time.',
+  },
   { id: 'guards', title: 'Agent guards' },
   { id: 'push', title: 'Merge and push' },
   { id: 'private', title: 'Private and sharing' },
   { id: 'review', title: 'Review and agents' },
+  { id: 'scope', title: 'Scope and catalog' },
   { id: 'board', title: 'Board and advice' },
   { id: 'cloud', title: 'Cloud' },
   { id: 'plans', title: 'Plans and focus' },
@@ -252,14 +271,10 @@ const SETTINGS = Object.freeze([
   row('limits.noAgentMin', 'load', 'integer', 'No agent after (minutes)',
     'Minutes before a track marked running, with no agent on its branch and no report, counts as NO AGENT. 0 = off.', QUEUE),
 
-  // ---- 4. Gates and checks ----
+  // ---- 4. Gates ----
   row('gates.quick', 'gates', 'list', 'Quick gate',
     'The commands a track runs before delivery. Set them up with `ravenseat kickstart gates --apply`.', BASIC),
   row('gates.full', 'gates', 'list', 'Full gate', 'The full set of commands receive and merge run.', BASIC),
-  row('checksPanel.mode', 'gates', 'onoff', 'Show the Checks tab',
-    'The Checks tab with suggested checks. Not set, it follows the guidance switch.', { ...BASIC, ...QUEUE }),
-  row('checksPanel.marker', 'gates', 'onoff', 'Red dot on the Checks tab',
-    'A small red dot on the Checks tab while an important suggestion is open. Off hides only the dot, the suggestions stay.', { ...BASIC, ...QUEUE }),
   row('maxFixRounds', 'gates', 'integer', 'Fix rounds before an owner question',
     'At this many fix rounds a task becomes an owner question instead of another round.'),
   row('fixPlateau', 'gates', 'onoff', 'Ask when a fix round stalls',
@@ -282,23 +297,6 @@ const SETTINGS = Object.freeze([
     'Gates, receive and merge wait at most this long, then print RUNNING with the command that waits on. At most 590; 0 = wait until done.'),
   row('gates.flakyRerun', 'gates', 'onoff', 'Rerun red gate commands once',
     'A red gate in a track reruns only its red commands once on the same commit. Green then counts as flaky.'),
-  row('gates.redOnBase', 'gates', 'object', 'Red on base check',
-    'At receive, the track\'s new tests must pass on the tip and at least one must fail without the change. A warning.'),
-  row('gates.redOnBaseStrict', 'gates', 'onoff', 'A fix needs a proven red test',
-    'Off by default: a fix task without a test that fails on the base gets one warning at receive. On: merge stops on it, ' +
-    'and the owner can merge past it with --allow-no-test, which is logged. Needs gates.redOnBase.', {
-      weakens: offWeakens,
-      protects: 'A fix merged with no test that fails without it, so the same bug can come back unnoticed.',
-      whyNot: 'Fixes without a proven red test are only warned about and logged as fixed without test.',
-      changes: 'Merge no longer stops on a fix without a proven red test; receive still warns.',
-    }),
-  row('gates.fixWithoutTestWarning', 'gates', 'onoff', 'Warn about a fix without a red test',
-    'A fix task whose red on base check proves no test gets one FIX WITHOUT TEST line at receive. It stops nothing.', {
-      weakens: offWeakens,
-      protects: 'A fix that comes in with a test that would pass without it, read past as one more red on base line.',
-      whyNot: 'The fix-specific line names the task it fixes, so the owner sees the bug may come back.',
-      changes: 'Receive prints only the plain red on base line; the finding log still marks the row fixed without test.',
-    }),
   row('gateEvidence.mode', 'gates', 'choice', 'Gate evidence',
     'Own: receive and merge run the gates themselves and check your answers and edits against the owner log. External: ' +
     'a green CI check on the same commit counts as the full gate. Off: the track\'s own word counts.', {
@@ -316,14 +314,6 @@ const SETTINGS = Object.freeze([
   row('gateEvidence.external', 'gates', 'list', 'External checks that count',
     'The GitHub check names (workflow or job) whose green run on the same commit counts as the full gate in mode ' +
     'external. Empty = none counts, and the full gate runs here.'),
-  row('gates.fromKnownBugs', 'gates', 'choice', 'Gates from known bugs',
-    'A known bug that can happen again becomes a gate task: propose (you approve), auto or off.', {
-      choices: ['propose', 'auto', 'off'],
-      weakens: (v, std) => v === 'auto' && std !== 'auto',
-      protects: 'Tasks, and the tokens they use, that start without your approval.',
-      whyNot: 'Auto approves every proposed gate task at once; each one runs an agent and uses tokens without asking.',
-      changes: 'Gate tasks from known bugs are approved by the queue itself. Doctor will report it.',
-    }),
   row('baseGate.enabled', 'gates', 'choice', 'Base gate after merge',
     'After a merge the base branch\'s new tip is checked; a red base stops further merges until it is green again.', {
       choices: ['auto', true, false],
@@ -339,19 +329,88 @@ const SETTINGS = Object.freeze([
     'The output lines kept for the fix task. Empty = the done command\'s value.'),
   row('baseGate.flakyRerun', 'gates', 'onoff', 'Rerun a red base gate once',
     'A red base gate reruns only the failed commands once on the same commit; green then is a flaky finding.'),
-  row('inspection.mode', 'gates', 'choice', 'Inspection queue',
+
+  // ---- 5. Tests and evidence ----
+  // What makes a green gate worth something: the tests a track adds or removes, red on base and the QA evidence. Split
+  // out of Gates by the owner decision of 2026-11-17 (H2); the keys stayed. The two test weakening switches are basic.
+  row('gates.redOnBase', 'tests', 'object', 'Red on base check',
+    'At receive, the track\'s new tests must pass on the tip and at least one must fail without the change. A warning.'),
+  row('gates.redOnBaseStrict', 'tests', 'onoff', 'A fix needs a proven red test',
+    'Off by default: a fix task without a test that fails on the base gets one warning at receive. On: merge stops on it, ' +
+    'and the owner can merge past it with --allow-no-test, which is logged. Needs gates.redOnBase.', {
+      weakens: offWeakens,
+      protects: 'A fix merged with no test that fails without it, so the same bug can come back unnoticed.',
+      whyNot: 'Fixes without a proven red test are only warned about and logged as fixed without test.',
+      changes: 'Merge no longer stops on a fix without a proven red test; receive still warns.',
+    }),
+  row('gates.fixWithoutTestWarning', 'tests', 'onoff', 'Warn about a fix without a red test',
+    'A fix task whose red on base check proves no test gets one FIX WITHOUT TEST line at receive. It stops nothing.', {
+      weakens: offWeakens,
+      protects: 'A fix that comes in with a test that would pass without it, read past as one more red on base line.',
+      whyNot: 'The fix-specific line names the task it fixes, so the owner sees the bug may come back.',
+      changes: 'Receive prints only the plain red on base line; the finding log still marks the row fixed without test.',
+    }),
+  row('testWeakening.enabled', 'tests', 'onoff', 'Test weakening warning',
+    'Receive warns about deleted or moved test files and added skip or focus markers.', {
+      ...BASIC,
+      weakens: offWeakens,
+      protects: 'A track that gets green by deleting, moving or skipping tests.',
+      whyNot: 'A green gate means little when the tests that would fail were taken away in the same change.',
+      changes: 'Receive no longer reports deleted tests or added skip markers. Doctor will report it.',
+    }),
+  row('testWeakening.focusStop', 'tests', 'onoff', 'Stop on a focus marker',
+    'A focus marker (.only, fit, fdescribe) on an added line stops the merge, since the other tests never ran.', {
+      ...BASIC,
+      weakens: offWeakens,
+      protects: 'A merge where only the focused tests ran.',
+      whyNot: 'With .only in place the rest of the suite is skipped, so the gate says green without checking it.',
+      changes: 'A focus marker gives only a warning, and the merge goes on. Doctor will report it.',
+    }),
+  // A log row only: the warning and the focus stop are their own rows, so off weakens no guard (owner decision 2026-11-17).
+  row('testWeakening.findingLog', 'tests', 'onoff', 'Log test weakening as a finding',
+    'What the test weakening check finds also becomes a finding log row, classed as a weak test. Nothing is printed. ' +
+    'Off: no such row; the warning and the focus stop stay, so no guard is weaker.'),
+  row('testWeakening.testPaths', 'tests', 'list', 'More test paths', 'More test file patterns for the warning.'),
+  row('testWeakening.markers', 'tests', 'list', 'More skip markers',
+    'More regular expressions for an added line in a test file.'),
+  row('qa.evidenceTypes', 'tests', 'list', 'Evidence types', 'The kinds of QA evidence a track may write.'),
+  row('qa.autoTypes', 'tests', 'list', 'Automatic evidence types',
+    'Evidence types closed by `ravenseat qa auto --run` when the auto command is green.'),
+  row('qa.manualTypes', 'tests', 'list', 'Manual evidence types', 'Evidence types gathered in one manual round.'),
+  row('qa.autoCommand', 'tests', 'object', 'Automatic evidence command',
+    'The command `qa auto --run` runs, with {refs} and {id}. Empty = qa auto only lists.'),
+  row('qa.evidenceLabels', 'tests', 'list', 'Labels that need evidence',
+    'Receive warns when a task with one of these labels delivers without evidence.'),
+
+  // ---- 6. Checks tab and learning ----
+  // The Checks tab and everything that suggests a guard: the inspection queue, known bugs and the learning loop over the
+  // finding log (learning.* stays the key space). The category's note explains the shared cap of three proposals (M7).
+  row('checksPanel.mode', 'learning', 'onoff', 'Show the Checks tab',
+    'The Checks tab with suggested checks. Not set, it follows the guidance switch.', { ...BASIC, ...QUEUE }),
+  row('checksPanel.marker', 'learning', 'onoff', 'Red dot on the Checks tab',
+    'A small red dot on the Checks tab while an important suggestion is open. Off hides only the dot, the suggestions stay.', { ...BASIC, ...QUEUE }),
+  row('gates.fromKnownBugs', 'learning', 'choice', 'Gates from known bugs',
+    'A known bug that can happen again becomes a gate task: propose (you approve), auto or off.', {
+      choices: ['propose', 'auto', 'off'],
+      weakens: (v, std) => v === 'auto' && std !== 'auto',
+      protects: 'Tasks, and the tokens they use, that start without your approval.',
+      whyNot: 'Auto approves every proposed gate task at once; each one runs an agent and uses tokens without asking.',
+      changes: 'Gate tasks from known bugs are approved by the queue itself. Doctor will report it.',
+    }),
+  row('inspection.mode', 'learning', 'choice', 'Inspection queue',
     'The same failure in the gates or CI, again and again, becomes one proposal to build a guard. You decide. ' +
     'Off also hides the Checks card with recipes for failure classes that keep coming back, and its Build as gate button.', {
+      ...BASIC,
       choices: ['on', 'off'],
     }),
-  row('inspection.minRepeats', 'gates', 'integer', 'Repeats before a proposal',
+  row('inspection.minRepeats', 'learning', 'integer', 'Repeats before a proposal',
     'How many separate tasks, branch days or CI commits must fail the same way before it is proposed.'),
-  row('inspection.windowDays', 'gates', 'integer', 'Inspection window (days)', 'Only failures this recent count.'),
-  row('inspection.registryFile', 'gates', 'text', 'Guard registry file',
+  row('inspection.windowDays', 'learning', 'integer', 'Inspection window (days)', 'Only failures this recent count.'),
+  row('inspection.registryFile', 'learning', 'text', 'Guard registry file',
     'The tracked list of guards and what each one guards against, relative to the project root.', { edit: 'file' }),
   // The repeat count on class and area (lib/findingRepeats.js). The count and the guard failed marker are on: they cost
   // no tokens, print nothing and stop nothing. The proposals are off: each one asks for the owner's time.
-  row('learning.repeats', 'gates', 'onoff', 'Count repeats in the finding log',
+  row('learning.repeats', 'learning', 'onoff', 'Count repeats in the finding log',
     'The same class of failure in the same part of the code, in separate tasks, is counted from the finding log. ' +
     'It prints nothing and stops nothing; the Checks tab reads it.', {
       weakens: offWeakens,
@@ -360,13 +419,13 @@ const SETTINGS = Object.freeze([
       whyNot: 'Without the count the Checks tab cannot say that a guard did not hold, and no guard is proposed.',
       changes: 'The guard failed card, its red marker and the guard proposals from the finding log are gone.',
     }),
-  row('learning.windowDays', 'gates', 'integer', 'Repeat window (days)',
+  row('learning.windowDays', 'learning', 'integer', 'Repeat window (days)',
     'Only findings this recent count toward a repeat. A guard can be older.'),
-  row('learning.areaRepeats', 'gates', 'integer', 'Repeats in one area',
+  row('learning.areaRepeats', 'learning', 'integer', 'Repeats in one area',
     'How many incidents of a class in one area (separate tasks) make it due. A fix without a proven test counts twice.'),
-  row('learning.projectRepeats', 'gates', 'integer', 'Repeats across the project',
+  row('learning.projectRepeats', 'learning', 'integer', 'Repeats across the project',
     'How many incidents of a class in the whole project make it due when no single area is. An untested fix counts twice.'),
-  row('learning.guardFailedMarker', 'gates', 'onoff', 'Red marker when a guard did not hold',
+  row('learning.guardFailedMarker', 'learning', 'onoff', 'Red marker when a guard did not hold',
     'A failure class back where a guard for it was in place lights the red marker on the Checks tab, until a new ' +
     'guard or a fix with a proven test is in place there. It stops nothing.', {
       weakens: offWeakens,
@@ -374,77 +433,48 @@ const SETTINGS = Object.freeze([
       whyNot: 'It is the one gap that always gets the red marker, and it is rare, so it does not nag.',
       changes: 'The guard failed card stays on the Checks tab at medium priority, without the red marker.',
     }),
-  row('learning.proposals', 'gates', 'onoff', 'Propose guards from the finding log',
+  row('learning.proposals', 'learning', 'onoff', 'Propose guards from the finding log',
     'A class that keeps coming back in one area becomes one proposed gate task (you approve it). It shares one cap ' +
     'of three open proposals with the inspection queue and the gate lines. Off by default.'),
   // The database probe recipes (0i section 3.8). Off by default: a probe gate is heavy, needs a running database, and
   // is the one kind of gate that can change data elsewhere when it points at the wrong host. On, it only shows a recipe;
   // building one still takes the owner's click and approve, and the mission demands the host check and the rollback.
-  row('learning.dbProbes', 'gates', 'onoff', 'Database probe recipes',
+  row('learning.dbProbes', 'learning', 'onoff', 'Database probe recipes',
     'Off by default. On: for access control and migration failures that keep coming back, the Checks tab shows a ' +
     'recipe for database probes (pgTAP, supabase test db, testcontainers), only when a local or throwaway database is ' +
     'found. A gate built from it must check that its database host is local before it writes, and roll back.'),
   // Recipe precision (0i step 9, lib/recipePrecision.js). On by default, as the plan says (damped automatically): it only
   // moves a recipe the owner keeps declining from the card to the list, never stops work or hides a class, and the owner
   // can show one recipe again (ravenseat checks recipe <id> show). Off, every recipe whose `when` holds is offered.
-  row('learning.recipeDamping', 'gates', 'onoff', 'Damp recipes that are seldom accepted',
+  row('learning.recipeDamping', 'learning', 'onoff', 'Damp recipes that are seldom accepted',
     'A recipe whose gate proposals are seldom accepted is listed on the Checks tab with its numbers, but no longer ' +
     'offered on the card. It stops nothing. ravenseat checks recipe <id> show offers one again.'),
-  row('learning.recipeMinProposals', 'gates', 'integer', 'Decided proposals before damping',
+  row('learning.recipeMinProposals', 'learning', 'integer', 'Decided proposals before damping',
     'How many of a recipe\'s proposals must be accepted or declined before it can be damped. Waiting ones do not count.'),
-  row('learning.recipeMinProposalsDb', 'gates', 'integer', 'Decided proposals before damping a database recipe',
+  row('learning.recipeMinProposalsDb', 'learning', 'integer', 'Decided proposals before damping a database recipe',
     'The same for a database probe recipe. Higher, since they are few and often declined for their cost.'),
-  row('learning.recipeMinAccepted', 'gates', 'integer', 'Accepted share that keeps a recipe (percent)',
+  row('learning.recipeMinAccepted', 'learning', 'integer', 'Accepted share that keeps a recipe (percent)',
     'A recipe below this share of accepted proposals, after enough are decided, is damped. 1 to 100.'),
   // CI parity for a built gate guard (0i step 9b, lib/quickGate.js). All on: the card only offers, and its write takes
   // the owner's click, only ADDS a command to gates.quick and is refused from a track worktree; the lift only orders the
   // CI cards (never the red marker, section 3.9); the idle line is INFO. None of them stops work or runs a command, so
   // off is less advice, not a weaker guard: no weakens (owner decision 2026-11-17), like scopeNotes.* and client.canary.
-  row('learning.quickGateCard', 'gates', 'onoff', 'Offer to add a guard\'s command to gates.quick',
+  row('learning.quickGateCard', 'learning', 'onoff', 'Offer to add a guard\'s command to gates.quick',
     'A gate guard in the registry whose command is not in gates.quick gets a card on the Checks tab: one click (or ' +
     'ravenseat checks quick-add <G-n>) adds that command at the end of gates.quick. Nothing runs from the card, and the ' +
     'write can only add a command, never remove or replace one. Off: no card, and no guard is weaker.'),
-  row('learning.ciParityLift', 'gates', 'onoff', 'Put the CI cards first when a guard is not in CI',
+  row('learning.ciParityLift', 'learning', 'onoff', 'Put the CI cards first when a guard is not in CI',
     'When a gate guard\'s kind of check (tests, types, lint) is not run in CI, the cards tests-in-ci and quality-in-ci ' +
     'are put first in their priority and name the guard. They are never raised to the red marker. Off: the usual ' +
     'order, and no guard is weaker.'),
-  row('learning.idleGuardInfo', 'gates', 'onoff', 'INFO for a gate guard that has not run',
+  row('learning.idleGuardInfo', 'learning', 'onoff', 'INFO for a gate guard that has not run',
     'ravenseat guards and ravenseat doctor give one INFO line for a gate guard with 0 runs since it was built, after ' +
     'the set number of days. It is INFO only and never stops anything. Off: no line (the registry still shows 0 ' +
     'runs), and no guard is weaker.'),
-  row('learning.idleGuardDays', 'gates', 'integer', 'Days before a gate guard counts as not run',
+  row('learning.idleGuardDays', 'learning', 'integer', 'Days before a gate guard counts as not run',
     'How many days after it was built a gate guard with 0 runs gets the INFO line. 7 by default, as the plan says.'),
-  row('testWeakening.enabled', 'gates', 'onoff', 'Test weakening warning',
-    'Receive warns about deleted or moved test files and added skip or focus markers.', {
-      weakens: offWeakens,
-      protects: 'A track that gets green by deleting, moving or skipping tests.',
-      whyNot: 'A green gate means little when the tests that would fail were taken away in the same change.',
-      changes: 'Receive no longer reports deleted tests or added skip markers. Doctor will report it.',
-    }),
-  row('testWeakening.focusStop', 'gates', 'onoff', 'Stop on a focus marker',
-    'A focus marker (.only, fit, fdescribe) on an added line stops the merge, since the other tests never ran.', {
-      weakens: offWeakens,
-      protects: 'A merge where only the focused tests ran.',
-      whyNot: 'With .only in place the rest of the suite is skipped, so the gate says green without checking it.',
-      changes: 'A focus marker gives only a warning, and the merge goes on. Doctor will report it.',
-    }),
-  // A log row only: the warning and the focus stop are their own rows, so off weakens no guard (owner decision 2026-11-17).
-  row('testWeakening.findingLog', 'gates', 'onoff', 'Log test weakening as a finding',
-    'What the test weakening check finds also becomes a finding log row, classed as a weak test. Nothing is printed. ' +
-    'Off: no such row; the warning and the focus stop stay, so no guard is weaker.'),
-  row('testWeakening.testPaths', 'gates', 'list', 'More test paths', 'More test file patterns for the warning.'),
-  row('testWeakening.markers', 'gates', 'list', 'More skip markers',
-    'More regular expressions for an added line in a test file.'),
-  row('qa.evidenceTypes', 'gates', 'list', 'Evidence types', 'The kinds of QA evidence a track may write.'),
-  row('qa.autoTypes', 'gates', 'list', 'Automatic evidence types',
-    'Evidence types closed by `ravenseat qa auto --run` when the auto command is green.'),
-  row('qa.manualTypes', 'gates', 'list', 'Manual evidence types', 'Evidence types gathered in one manual round.'),
-  row('qa.autoCommand', 'gates', 'object', 'Automatic evidence command',
-    'The command `qa auto --run` runs, with {refs} and {id}. Empty = qa auto only lists.'),
-  row('qa.evidenceLabels', 'gates', 'list', 'Labels that need evidence',
-    'Receive warns when a task with one of these labels delivers without evidence.'),
 
-  // ---- 5. Agent guards ----
+  // ---- 7. Agent guards ----
   row('protectedPaths', 'guards', 'list', 'Protected paths',
     'Paths a track may only change when its task owns them: hooks, settings, agents, the queue scripts and test configs. ' +
       'A list replaces the defaults; { "add": [...], "remove": [...] } changes them (the floor is never removed).', {
@@ -621,7 +651,7 @@ const SETTINGS = Object.freeze([
   row('contextGuard.blockOtherChats', 'guards', 'onoff', 'Stop other chats at 400k',
     'Chats that are not the orchestrator are stopped at 400k context instead of only getting the notice.'),
 
-  // ---- 6. Merge and push ----
+  // ---- 8. Merge and push ----
   row('push.mode', 'push', 'choice', 'Who pushes',
     'owner: only on your word. threshold: the orchestrator may push when the batch is ready.', {
       ...BASIC,
@@ -700,7 +730,7 @@ const SETTINGS = Object.freeze([
   row('migrations.allowedEnvironment', 'push', 'list', 'Allowed environments',
     'The environments a migration push may go to.'),
 
-  // ---- 7. Review and agents ----
+  // ---- 10. Review and agents ----
   row('helpers', 'review', 'object', 'Helper agents',
     'Optional reviewers on top of the fixed ones, switched with `ravenseat helpers on|off` (their conditions are in ' +
     'queue.config.json). In lite, reviewer-light reviews class K tasks when CI or gates are missing.',
@@ -725,87 +755,6 @@ const SETTINGS = Object.freeze([
   row('review.packs', 'review', 'list', 'Review signal packs for your stack',
     'Stack packs that add the risky calls of your stack to the review signals (lib/reviewPacks.js). The Checks tab ' +
     'suggests them from your manifests; `ravenseat checks packs --apply` writes them. The built-in ones follow plugin updates.'),
-  // The reuse and scope facts at receive (lib/scopeNotes.js). On by default in both modes (owner decision 16.11): each
-  // is one NOTE line and a line in the package, costs no tokens and stops nothing. Off is no weakening, as for
-  // guidance quiet: a fact goes, no guard does.
-  row('scopeNotes.reuse', 'review', 'onoff', 'Note a helper written again',
-    'A name the delivery defines (JS/TS) that the base already defines in another file gets one NOTE line at receive ' +
-    'with both places, and a line in the review package. It stops nothing.'),
-  row('scopeNotes.newFolders', 'review', 'onoff', 'Note a new folder',
-    'A file added in a folder the base does not have (the first levels, scopeNotes.folderDepth) gets one NOTE line: a ' +
-    'new module boundary is an architecture choice. It stops nothing.'),
-  row('scopeNotes.dependencies', 'review', 'onoff', 'Note a second library for the same job',
-    'A new package in package.json or requirements.txt whose job the manifest already has a package for (dates, HTTP, ' +
-    'validation, helpers, test runner ...) gets one NOTE line. It stops nothing.'),
-  row('scopeNotes.drift', 'review', 'onoff', 'Note drift in numbers',
-    'How many changed files lie outside the task\'s files and reads, and in which folders; a task with no files named ' +
-    'gets the number of folders it touches. One NOTE line, it stops nothing.'),
-  row('scopeNotes.ignoreNames', 'review', 'list', 'Names a helper note skips',
-    'More names the helper note never reports (main, run, setup and a few others are skipped already).'),
-  row('scopeNotes.folderDepth', 'review', 'integer', 'New folder depth',
-    'How deep the new folder note looks: 1 = only new top folders, 2 (default) or 3.'),
-  // The opt-in scope drift guards (bolk B7, V6 and V7). Off by default: V6 costs a reviewer run, V7 may make a track
-  // stop and ask when owned_files was a rough guess. Full mode only: a lite task names no files, so nothing drifts.
-  // Off is the default, so it is no weakening.
-  row('scopeNotes.driftGap', 'review', 'onoff', 'Gap review on large drift',
-    'At receive, the gap reviewer is added when at least scopeNotes.driftGapFiles changed files, and over ' +
-    'scopeNotes.driftGapShare percent of them, lie outside the task\'s files and reads. One reason line; costs one ' +
-    'reviewer run when it fires.', { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
-  row('scopeNotes.driftGapFiles', 'review', 'integer', 'Gap review: files outside',
-    'How many changed files must lie outside the task\'s files before the gap reviewer is added (1 to 100, default 4).',
-    { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
-  row('scopeNotes.driftGapShare', 'review', 'integer', 'Gap review: share outside (%)',
-    'The share of the changed files outside the task\'s files that must be passed (1 to 99, default 40).',
-    { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
-  row('scopeNotes.driftWarn', 'review', 'onoff', 'Write warning for drift',
-    'While a track writes a file outside its files and reads, it gets one note per file (never a denial) saying it ' +
-    'need not stop for it, and to name the file in its report.', { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
-  // The project catalog (lib/catalog.js, docs/queue/catalog/). Both are on in both modes: each states a fact, stops
-  // nothing and does nothing without the folder. Off is no weakening: the owner lock on accepted and the protected path
-  // (protectedPaths) are not these switches.
-  row('catalog.doctor', 'review', 'onoff', 'Catalog problems in doctor',
-    'Doctor shows one WARN row when `ravenseat catalog check` finds an error in docs/queue/catalog/, such as a design ' +
-    'choice set to accepted without the owner. It stops nothing.'),
-  row('catalog.planLinks', 'plans', 'onoff', 'Check plan links to design choices',
-    'A plan entry\'s `decisions` link to an id that is not in docs/queue/catalog/decisions is a warning on plan new and ' +
-    'plan edit. The shape of the link is always checked. It stops nothing.'),
-  // The catalog excerpt (lib/catalogExcerpt.js, bolk B4). On in both modes by owner decision 16.11: it is only text,
-  // nothing without a catalog, capped, and its heading says what it cost. Off is no weakening: no guard reads it, and
-  // the owner lock and the protected path stay.
-  row('catalog.missionExcerpt', 'review', 'onoff', 'Catalog excerpt in the mission',
-    'A track\'s mission gets the part of docs/queue/catalog/ that meets its files: the design choices that hold, the ' +
-    'proposed ones as suggestions, the prefer lines and the reuse rows in its folders, under catalog.excerptTokens. ' +
-    'Nothing without a catalog.'),
-  row('catalog.reviewExcerpt', 'review', 'onoff', 'Catalog excerpt in the review package',
-    'The review package gets the same excerpt, so the reviewer checks the delivery against the choices that hold and ' +
-    'the reuse rows (findings duplication and scope-drift). Nothing without a catalog.'),
-  row('catalog.excerptTokens', 'review', 'integer', 'Catalog excerpt cap (tokens)',
-    'The most tokens the excerpt may use, 200 to 6000 (default 1500, a token counted as 4 characters). The reuse rows ' +
-    'are cut first; the heading says what was cut.'),
-  // The generated index (lib/catalogIndex.js, bolk B5). Off by default: the plan's opt-in list (it builds and stores a
-  // file in the data folder, and its worth grows with the project). It stops nothing either way, and off weakens no
-  // guard: `catalog find` still works on request.
-  row('catalog.index', 'review', 'onoff', 'Code index for the catalog excerpt',
-    'Builds an index of the code\'s exports (JS/TS) at receive and for each mission, cached by file sha in the data ' +
-    'folder. The excerpt then gets the helpers tagged `@shared` in the task\'s folders, and the review package the new ' +
-    'names that are close to an existing export (V1b). `ravenseat catalog find` works without it.'),
-  // The check rules of the design choices (lib/catalogChecks.js, bolk B6). checks is on: a rule exists only when the
-  // owner writes one, and a hit is one line at receive. Off weakens: an accepted choice's rule is then not checked.
-  // checkStop is off: it is the one part that can stop work. gateAfter only matters with learning.proposals on.
-  row('catalog.checks', 'review', 'onoff', 'Check rules of the design choices',
-    'Receive tries the `check:` rule of each design choice on the delivery\'s added lines in the choice\'s paths. An ' +
-    'accepted choice gives a CATALOG line, a proposed one a NOTE. It stops nothing unless catalog.checkStop is on.', {
-      weakens: offWeakens,
-      protects: 'A delivery that breaks a design choice the owner accepted, where the rule says so line by line.',
-      whyNot: 'The rule is the owner\'s own, written narrow with examples; without the check only the reviewer can see it.',
-      changes: 'The rules are not tried at receive or merge, and no gate is proposed from them. Doctor will report it.',
-    }),
-  row('catalog.checkStop', 'review', 'onoff', 'Stop the merge on a rule in mode stop',
-    'A rule with `mode: stop` of a choice the owner accepted stops the merge when an added line breaks it ' +
-    '(`merge --allow-catalog` overrides, logged). Off by default: the rule is then a warning.'),
-  row('catalog.gateAfter', 'review', 'integer', 'Separate tasks before a lint proposal',
-    'A rule broken in this many separate tasks (2 to 20, default 3) becomes one proposed gate task to put it in the ' +
-    'project\'s own lint. Only with learning.proposals on; it shares the cap of three open proposals.'),
   row('triage.minAgeDays', 'review', 'integer', 'Triage tasks older than (days)',
     'A task added or last edited this long ago is checked against the current code before it starts. Empty = no age rule.',
     { fullWhy: 'the intake triage is off in lite' }),
@@ -834,7 +783,92 @@ const SETTINGS = Object.freeze([
   row('attempts.reservationTtlMin', 'review', 'integer', 'Reservation expires after (minutes)',
     'A reservation with no start for this long counts as expired, and the next start takes a new attempt.'),
 
-  // ---- 8. Board and advice ----
+  // ---- 11. Scope and catalog ----
+  // What a delivery adds beside its task (the scope notes) and the project catalog of design choices. Split out of Review
+  // and agents by the owner decision of 2026-11-17 (H2, L1: catalog.planLinks came from Plans); the keys stayed.
+  // The reuse and scope facts at receive (lib/scopeNotes.js). On by default in both modes (owner decision 16.11): each
+  // is one NOTE line and a line in the package, costs no tokens and stops nothing. Off is no weakening, as for
+  // guidance quiet: a fact goes, no guard does.
+  row('scopeNotes.reuse', 'scope', 'onoff', 'Note a helper written again',
+    'A name the delivery defines (JS/TS) that the base already defines in another file gets one NOTE line at receive ' +
+    'with both places, and a line in the review package. It stops nothing.', BASIC),
+  row('scopeNotes.newFolders', 'scope', 'onoff', 'Note a new folder',
+    'A file added in a folder the base does not have (the first levels, scopeNotes.folderDepth) gets one NOTE line: a ' +
+    'new module boundary is an architecture choice. It stops nothing.', BASIC),
+  row('scopeNotes.dependencies', 'scope', 'onoff', 'Note a second library for the same job',
+    'A new package in package.json or requirements.txt whose job the manifest already has a package for (dates, HTTP, ' +
+    'validation, helpers, test runner ...) gets one NOTE line. It stops nothing.', BASIC),
+  row('scopeNotes.drift', 'scope', 'onoff', 'Note drift in numbers',
+    'How many changed files lie outside the task\'s files and reads, and in which folders; a task with no files named ' +
+    'gets the number of folders it touches. One NOTE line, it stops nothing.', BASIC),
+  row('scopeNotes.ignoreNames', 'scope', 'list', 'Names a helper note skips',
+    'More names the helper note never reports (main, run, setup and a few others are skipped already).'),
+  row('scopeNotes.folderDepth', 'scope', 'integer', 'New folder depth',
+    'How deep the new folder note looks: 1 = only new top folders, 2 (default) or 3.'),
+  // The opt-in scope drift guards (bolk B7, V6 and V7). Off by default: V6 costs a reviewer run, V7 may make a track
+  // stop and ask when owned_files was a rough guess. Full mode only: a lite task names no files, so nothing drifts.
+  // Off is the default, so it is no weakening.
+  row('scopeNotes.driftGap', 'scope', 'onoff', 'Gap review on large drift',
+    'At receive, the gap reviewer is added when at least scopeNotes.driftGapFiles changed files, and over ' +
+    'scopeNotes.driftGapShare percent of them, lie outside the task\'s files and reads. One reason line; costs one ' +
+    'reviewer run when it fires.', { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
+  row('scopeNotes.driftGapFiles', 'scope', 'integer', 'Gap review: files outside',
+    'How many changed files must lie outside the task\'s files before the gap reviewer is added (1 to 100, default 4).',
+    { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
+  row('scopeNotes.driftGapShare', 'scope', 'integer', 'Gap review: share outside (%)',
+    'The share of the changed files outside the task\'s files that must be passed (1 to 99, default 40).',
+    { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
+  row('scopeNotes.driftWarn', 'scope', 'onoff', 'Write warning for drift',
+    'While a track writes a file outside its files and reads, it gets one note per file (never a denial) saying it ' +
+    'need not stop for it, and to name the file in its report.', { fullWhy: 'a lite task names no files, so there is no drift to measure' }),
+  // The project catalog (lib/catalog.js, docs/queue/catalog/). Both are on in both modes: each states a fact, stops
+  // nothing and does nothing without the folder. Off is no weakening: the owner lock on accepted and the protected path
+  // (protectedPaths) are not these switches.
+  row('catalog.doctor', 'scope', 'onoff', 'Catalog problems in doctor',
+    'Doctor shows one WARN row when `ravenseat catalog check` finds an error in docs/queue/catalog/, such as a design ' +
+    'choice set to accepted without the owner. It stops nothing.'),
+  row('catalog.planLinks', 'scope', 'onoff', 'Check plan links to design choices',
+    'A plan entry\'s `decisions` link to an id that is not in docs/queue/catalog/decisions is a warning on plan new and ' +
+    'plan edit. The shape of the link is always checked. It stops nothing.'),
+  // The catalog excerpt (lib/catalogExcerpt.js, bolk B4). On in both modes by owner decision 16.11: it is only text,
+  // nothing without a catalog, capped, and its heading says what it cost. Off is no weakening: no guard reads it, and
+  // the owner lock and the protected path stay.
+  row('catalog.missionExcerpt', 'scope', 'onoff', 'Catalog excerpt in the mission',
+    'A track\'s mission gets the part of docs/queue/catalog/ that meets its files: the design choices that hold, the ' +
+    'proposed ones as suggestions, the prefer lines and the reuse rows in its folders, under catalog.excerptTokens. ' +
+    'Nothing without a catalog.'),
+  row('catalog.reviewExcerpt', 'scope', 'onoff', 'Catalog excerpt in the review package',
+    'The review package gets the same excerpt, so the reviewer checks the delivery against the choices that hold and ' +
+    'the reuse rows (findings duplication and scope-drift). Nothing without a catalog.'),
+  row('catalog.excerptTokens', 'scope', 'integer', 'Catalog excerpt cap (tokens)',
+    'The most tokens the excerpt may use, 200 to 6000 (default 1500, a token counted as 4 characters). The reuse rows ' +
+    'are cut first; the heading says what was cut.'),
+  // The generated index (lib/catalogIndex.js, bolk B5). Off by default: the plan's opt-in list (it builds and stores a
+  // file in the data folder, and its worth grows with the project). It stops nothing either way, and off weakens no
+  // guard: `catalog find` still works on request.
+  row('catalog.index', 'scope', 'onoff', 'Code index for the catalog excerpt',
+    'Builds an index of the code\'s exports (JS/TS) at receive and for each mission, cached by file sha in the data ' +
+    'folder. The excerpt then gets the helpers tagged `@shared` in the task\'s folders, and the review package the new ' +
+    'names that are close to an existing export (V1b). `ravenseat catalog find` works without it.'),
+  // The check rules of the design choices (lib/catalogChecks.js, bolk B6). checks is on: a rule exists only when the
+  // owner writes one, and a hit is one line at receive. Off weakens: an accepted choice's rule is then not checked.
+  // checkStop is off: it is the one part that can stop work. gateAfter only matters with learning.proposals on.
+  row('catalog.checks', 'scope', 'onoff', 'Check rules of the design choices',
+    'Receive tries the `check:` rule of each design choice on the delivery\'s added lines in the choice\'s paths. An ' +
+    'accepted choice gives a CATALOG line, a proposed one a NOTE. It stops nothing unless catalog.checkStop is on.', {
+      weakens: offWeakens,
+      protects: 'A delivery that breaks a design choice the owner accepted, where the rule says so line by line.',
+      whyNot: 'The rule is the owner\'s own, written narrow with examples; without the check only the reviewer can see it.',
+      changes: 'The rules are not tried at receive or merge, and no gate is proposed from them. Doctor will report it.',
+    }),
+  row('catalog.checkStop', 'scope', 'onoff', 'Stop the merge on a rule in mode stop',
+    'A rule with `mode: stop` of a choice the owner accepted stops the merge when an added line breaks it ' +
+    '(`merge --allow-catalog` overrides, logged). Off by default: the rule is then a warning.'),
+  row('catalog.gateAfter', 'scope', 'integer', 'Separate tasks before a lint proposal',
+    'A rule broken in this many separate tasks (2 to 20, default 3) becomes one proposed gate task to put it in the ' +
+    'project\'s own lint. Only with learning.proposals on; it shares the cap of three open proposals.'),
+
+  // ---- 12. Board and advice ----
   row('guidance', 'board', 'choice', 'Guidance',
     'guided: advice about CI, gates and checks. quiet: no advice; guards and facts stay. Only for you.',
     { ...BASIC, ...QUEUE, choices: ['guided', 'quiet'] }),
@@ -877,7 +911,7 @@ const SETTINGS = Object.freeze([
     '`ravenseat checks` writes the shape of each new API error form (keys and value types, short codes, no text) to ' +
     'client-shapes.jsonl in the data folder, so the form can be confirmed and reported. Off by default.'),
 
-  // ---- 9. Cloud ----
+  // ---- 13. Cloud ----
   row('features.cloud', 'cloud', 'onoff', 'Cloud sessions',
     'Tracks in cloud sessions: the Cloud tab, the cloud filter and the cloud commands.', BASIC),
   row('cloud.maxSessions', 'cloud', 'integer', 'Sessions at once',
@@ -907,7 +941,7 @@ const SETTINGS = Object.freeze([
   row('cloudHidden', 'cloud', 'list', 'Paths hidden from the cloud',
     'Paths a cloud session cannot see (for example gitignored folders); a mission that points there is stopped.'),
 
-  // ---- 10. Plans and focus ----
+  // ---- 14. Plans and focus ----
   row('features.plans', 'plans', 'onoff', 'Plans room',
     'The Plans room on the board. On by default in both modes; the CLI plan register always works.', BASIC),
   row('features.focus', 'plans', 'onoff', 'Focus tab', 'The Focus tab on the board.', BASIC),
@@ -936,7 +970,7 @@ const SETTINGS = Object.freeze([
   row('planBackup', 'plans', 'text', 'Plan backup script',
     'A script that backs up the plan register (`plan backup`).', { edit: 'file', fullWhy: WHY_PLANS }),
 
-  // ---- 11. History and storage ----
+  // ---- 15. History and storage (private and sharing, 9, are in it) ----
   row('stateSnapshots.enabled', 'history', 'onoff', 'Snapshots of the queue',
     'Rolling copies of queue.json at a few ages, kept in the data folder.'),
   row('stateSnapshots.tiers', 'history', 'list', 'Snapshot ages', 'Two to eight ages such as "1h", "1d", "7d".'),

@@ -6,7 +6,7 @@
 // counts only for exactly the same sha, only when every listed check name has its newest run green, and never with an
 // empty list (which says so); (3) an external entry is evidence for the full gate only in mode external and only for the
 // check names it was recorded with, never for receive's quick gates and never in own or off; (4) the registry rows
-// (Gates and checks, advanced, both modes) weaken for external and off, and the warning text says that a project
+// (Gates, advanced, both modes) weaken for external and off, and the warning text says that a project
 // without gates saves no time with off; (5) doctor: INFO for external, WARN for off, an extra line when the list is
 // empty; (6) the push guard treats the owner log as it treats the evidence store.
 // =============================================================
@@ -92,7 +92,7 @@ describe('an external entry as evidence', () => {
 });
 
 describe('the registry rows and the warning', () => {
-  it('Gates and checks, advanced, both modes; external and off weaken, own never', () => {
+  it('Gates, advanced, both modes; external and off weaken, own never', () => {
     const mode = R.rowFor('gateEvidence.mode');
     const ext = R.rowFor('gateEvidence.external');
     for (const r of [mode, ext]) {

@@ -123,12 +123,57 @@ describe('coverage: every setting has a row', () => {
 describe('every row is complete', () => {
   const CATEGORY_IDS = R.CATEGORIES.map((c: { id: string }) => c.id);
 
-  it('the twelve categories, each with a title and at least one row', () => {
-    expect(R.CATEGORIES).toHaveLength(12);
+  it('the fifteen categories, each with a title and at least one row', () => {
+    expect(R.CATEGORIES).toHaveLength(15);
     for (const c of R.CATEGORIES) {
       expect(c.title, c.id).toMatch(/\S/);
       expect(ROWS.some((r) => r.category === c.id), c.id).toBe(true);
     }
+  });
+
+  // The grouping review of 2026-11-17 (H2, L1, M7): "Gates and checks" held 55 rows and "Review and agents" 32, so the
+  // owner split them. No key changed; only the group a row is shown in.
+  it('the split groups: gates, tests and evidence, the Checks tab and learning, scope and catalog', () => {
+    expect(R.CATEGORIES.map((c: { id: string }) => c.id)).toEqual([
+      'project', 'limits', 'load', 'gates', 'tests', 'learning', 'guards', 'push', 'private', 'review', 'scope',
+      'board', 'cloud', 'plans', 'history',
+    ]);
+    const title = (id: string) => R.CATEGORIES.find((c: { id: string }) => c.id === id).title;
+    expect(title('gates')).toBe('Gates');
+    expect(title('tests')).toBe('Tests and evidence');
+    expect(title('learning')).toBe('Checks tab and learning');
+    expect(title('scope')).toBe('Scope and catalog');
+    const cat = (k: string) => (ROWS.find((x) => x.key === k) as Row).category;
+    for (const k of ['gates.redOnBase', 'gates.redOnBaseStrict', 'gates.fixWithoutTestWarning', 'testWeakening.enabled', 'qa.autoCommand'])
+      expect(cat(k), k).toBe('tests');
+    for (const k of ['checksPanel.mode', 'checksPanel.marker', 'gates.fromKnownBugs', 'inspection.mode', 'learning.proposals', 'learning.idleGuardDays'])
+      expect(cat(k), k).toBe('learning');
+    for (const k of ['scopeNotes.reuse', 'scopeNotes.driftWarn', 'catalog.doctor', 'catalog.planLinks', 'catalog.gateAfter'])
+      expect(cat(k), k).toBe('scope');
+    for (const k of ['gates.quick', 'baseGate.enabled', 'gateEvidence.mode', 'fixPlateau', 'wait.blockSec']) expect(cat(k), k).toBe('gates');
+    for (const k of ['helpers', 'reviewers', 'triage.agentAdded', 'proposals.autoAccept.enabled']) expect(cat(k), k).toBe('review');
+    // Every key of these families in its group: nothing left behind.
+    for (const r of ROWS) {
+      if (r.key.startsWith('learning.') || r.key.startsWith('inspection.')) expect(r.category, r.key).toBe('learning');
+      if (r.key.startsWith('scopeNotes.') || r.key.startsWith('catalog.')) expect(r.category, r.key).toBe('scope');
+      if (r.key.startsWith('testWeakening.') || r.key.startsWith('qa.')) expect(r.category, r.key).toBe('tests');
+    }
+  });
+
+  it('the split groups are not nearly all Advanced: each has a basic row, and none holds more than 25 rows', () => {
+    // Agent guards (29 rows, all Advanced) was not part of the split; see the owner question in the review report.
+    for (const id of ['gates', 'tests', 'learning', 'review', 'scope']) {
+      const mine = ROWS.filter((r) => r.category === id);
+      expect(mine.length, id).toBeLessThanOrEqual(25);
+      expect(mine.some((r) => r.level === 'basic'), id).toBe(true);
+    }
+  });
+
+  it('the three sources of guard proposals share one group and one note about the cap of three', () => {
+    const learning = R.CATEGORIES.find((c: { id: string }) => c.id === 'learning');
+    expect(learning.note).toMatch(/three/);
+    for (const k of ['inspection.mode', 'gates.fromKnownBugs', 'learning.proposals']) expect(learning.note, k).toContain(k);
+    for (const c of R.CATEGORIES) if (c.note != null) expect(typeof c.note, c.id).toBe('string');
   });
 
   it('the visible labels are in English', () => {
@@ -330,7 +375,7 @@ describe('the config table in queue.md follows the registry (step 11)', () => {
         return { keys: [...cells[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]), marks: cells[cells.length - 1] };
       });
 
-  it('the twelve categories, each its own table, in the registry order', () => {
+  it('the fifteen categories, each its own table, in the registry order', () => {
     expect(parts.map((p: { title: string }) => p.title)).toEqual(R.CATEGORIES.map((c: { title: string }) => c.title));
   });
 

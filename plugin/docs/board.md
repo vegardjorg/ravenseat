@@ -185,8 +185,10 @@ arrow keys move between the two tabs, and the board remembers the last one.
 
 **Every setting by category.** Under the sections above, General lists every row of the settings registry
 (`lib/settingsRegistry.js`, the same list as `ravenseat settings`) in its category: Project and git, Limits and cost,
-Machine load, Gates and checks, Agent guards, Merge and push, Review and agents, Board and advice, Cloud, Plans and
-focus, History and storage. Each category shows its basic rows first; the advanced ones are marked **Advanced** and
+Machine load, Gates, Tests and evidence, Checks tab and learning, Agent guards, Merge and push, Private and sharing,
+Review and agents, Scope and catalog, Board and advice, Cloud, Plans and focus, History and storage. A category can have
+one line under its title for what its rows share (Checks tab and learning explains the shared cap of three guard
+proposals). Each category shows its basic rows first; the advanced ones are marked **Advanced** and
 folded (closed) under them. In lite mode a row that only matters in full mode is hidden behind one line per category
 ("2 more apply only in full mode (why). Show them"), and a category with nothing for lite is one closed line. Each row
 shows its value, the default and where it is saved: **Saved only for you (queue.json)** or **Saved for the project

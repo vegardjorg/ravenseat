@@ -151,6 +151,21 @@ describe('the settings registry in the gear (step 6)', () => {
     for (const f of advanced.querySelectorAll('[data-key]')) expect(f.textContent).toContain('Advanced');
   });
 
+  it('the split groups (review 2026-11-17): tests, learning and scope have their own section, learning with its note', async () => {
+    await redraw({ mode: 'full' });
+    const ids = [...panel().querySelectorAll('[data-category]')].map((c) => c.getAttribute('data-category'));
+    expect(ids).toEqual(expect.arrayContaining(['gates', 'tests', 'learning', 'scope', 'review']));
+    expect(ids.indexOf('tests')).toBe(ids.indexOf('gates') + 1);
+    expect(category('gates').querySelector('h3')?.textContent).toBe('Gates');
+    expect(category('tests').querySelector('[data-key="testWeakening.enabled"]')).not.toBeNull();
+    expect(category('scope').querySelector('[data-key="catalog.planLinks"]')).not.toBeNull();
+    expect(category('plans').querySelector('[data-key="catalog.planLinks"]')).toBeNull();
+    // One note under the learning heading, before the rows; the other groups have none.
+    const note = category('learning').querySelector('.settings-category-note');
+    expect(note?.textContent).toMatch(/inspection\.mode.*gates\.fromKnownBugs.*learning\.proposals/);
+    expect(category('limits').querySelector('.settings-category-note')).toBeNull();
+  });
+
   it('says where each row is saved', async () => {
     await redraw({ mode: 'full' });
     expect(row('limits.maxConcurrent').textContent).toContain('Saved only for you (queue.json)');

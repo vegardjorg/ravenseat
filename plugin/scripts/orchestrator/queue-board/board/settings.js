@@ -645,6 +645,8 @@ function registryCategory(c, d, labels) {
     'section',
     { class: 'setting settings-category', 'aria-labelledby': id, 'data-category': c.id },
     title,
+    // One line for what the group's rows share (the registry's category note), before the rows.
+    c.note ? el('p', { class: 'setting-meta settings-category-note', text: c.note }) : null,
     basic.map((r) => registryField(r, d, labels)),
     advanced.length
       ? foldable('advanced', c.id, `${labels.advanced ?? 'Advanced'} (${advanced.length})`, advanced.map((r) => registryField(r, d, labels)))
