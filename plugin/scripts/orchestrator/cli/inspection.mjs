@@ -11,9 +11,13 @@
 //                                                 gate rows
 //   ravenseat guards add [--from-task <id>] --kind gate|instruction|review|none --title "..." --explain "..."
 //        [--command "<gate command>"] [--against "<lesson>"] [--signature <id>] [--task <id>]
+//        [--class <failure class> [--area <path>]]
 //                                                 adds an entry to the registry file in THIS tree (a track's worktree:
 //                                                 the entry is merged with the change). --from-task fills the task, the
-//                                                 title and what it guards against from an inspection proposal.
+//                                                 title and what it guards against from an inspection proposal, or the
+//                                                 class and area from a gate task proposed from the finding log.
+//                                                 --class is checked against this tree's failure classes (the core ones
+//                                                 and docs/queue/failure-classes.json); --area '*' is the whole project.
 //   ravenseat guards retire <id>                  marks an entry retired (it stays in the file)
 //
 // The pulse (cli/orchestrator.mjs) runs the same scan at most once an hour (inspectionPulseLines). Nothing here builds,
@@ -317,6 +321,15 @@ function cmdGuardsAdd() {
   }
   const lesson = val('--against');
   const signature = val('--signature');
+  // The failure class and area (ROADMAP 0t). A --class of its own replaces the task's; the task's area then stays only
+  // when the class is the same one, so an area is never paired with a class it was not seen for.
+  const cls = val('--class');
+  const area = val('--area');
+  const from = input.against ?? {};
+  const classPart = {
+    ...(cls != null ? { class: cls, area: from.class === cls ? from.area : null } : {}),
+    ...(area != null ? { area } : {}),
+  };
   input = {
     ...input,
     kind: val('--kind'),
@@ -324,9 +337,11 @@ function cmdGuardsAdd() {
     command: val('--command'),
     ...(val('--title') != null ? { title: val('--title') } : {}),
     ...(val('--task') != null ? { task: val('--task') } : {}),
-    against: { ...input.against, ...(lesson != null ? { lesson } : {}), ...(signature != null ? { signature } : {}) },
+    against: { ...from, ...(lesson != null ? { lesson } : {}), ...(signature != null ? { signature } : {}), ...classPart },
   };
-  const r = GR.addGuard(registry, input);
+  // The classes of THIS tree (a track's worktree has the same tracked docs/queue/failure-classes.json as the main tree).
+  const { classes } = require('./lib/failureClasses.js').classesFor(ROOT);
+  const r = GR.addGuard(registry, input, { classes });
   if (r.error.length) die(`Not added:\n${r.error.map((e) => `  - ${e}`).join('\n')}`);
   writeAtomic(file, GR.serialize(registry));
   console.log(`Added ${r.guard.id} [${r.guard.kind}] ${r.guard.title} to ${path.relative(ROOT, file).replace(/\\/g, '/')}. Commit the file with the change.`);

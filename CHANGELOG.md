@@ -5,6 +5,15 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a guard can now name the failure class and area it guards against, so a class that comes back past
+  it is seen.** `ravenseat guards add` takes `--class <failure class>` and `--area <path>` (`--area '*'` or none is the
+  whole project), and the repeat count reads them as the guard for that class and area ("guard failed" after it). The
+  class must be one of the project's (the core ones and its own in `docs/queue/failure-classes.json`); `other`, an unknown
+  class, an area without a class and an area that is not one plain path are refused, and nothing is written. The gate
+  tasks from the finding log and "Build as gate", and a GATE line in the new form with a class, now record their guard
+  with `--class` and `--area` instead of naming the class as text in `--against`; `--from-task` on such a task fills the
+  class and area from its source even when the flags are left out. The registry is tracked, so an entry holds the
+  class, the area and its one sentence, never an excerpt. An entry without a class keeps the shape it had.
 - **Hardening: a recipe you keep declining no longer keeps coming back as a suggestion, and one you trust stays.**
   Ravenseat now counts what became of each recipe's gate proposals from the finding log, from the tasks themselves (no
   new file): approved or built is accepted, cancelled is declined, and one still waiting counts for nothing yet. A gate

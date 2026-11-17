@@ -43,6 +43,7 @@ ravenseat inspection                # failures that repeat in the gates or CI; o
 ravenseat inspection snooze <ID>    # holds an inspection entry (default 14 days) and cancels its proposal
 ravenseat guards                    # the guard registry (a tracked file) with "caught N times since built"
 ravenseat guards add --from-task <ID> --kind gate --explain "..."   # records a guard (kinds: gate, instruction, review, none)
+ravenseat guards add --kind gate --title "..." --explain "..." --class <failure class> --area <path>   # a guard against a failure class in one area (--area '*': the whole project)
 ravenseat guards retire <G-ID>      # marks a guard retired; the entry stays
 ravenseat kickstart                 # which checks the project has and one next step, in plain words; changes nothing
 ravenseat kickstart gates --apply   # sets the checks your project already has as gates

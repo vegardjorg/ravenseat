@@ -855,9 +855,12 @@ scan; queue.json is not touched. `inspection.mode off` turns it off.
 
 The guard registry (`inspection.registryFile`, default `.ravenseat/guards.json`) is a tracked file: one entry per guard
 with its title, a one-sentence explanation, the kind (gate, instruction, review or none), what it guards against (a
-signature or a lesson), the task that built it, the date and the status (active or retired). The inspection task ends
+signature, a lesson, or a failure class with the area it covers), the task that built it, the date and the status (active or retired). The inspection task ends
 with `ravenseat guards add --from-task <id> --kind ... --explain "..."` in its worktree, so the entry is merged with the
-guard. A built task without an entry is listed by `ravenseat inspection` and the board, with the command to add it.
+guard. A gate task from the finding log (or a GATE line with a class) records its guard with
+`--class <failure class> --area <path>` instead of naming the class as text, so the repeat count sees when the guard
+did not hold; the class must be one of the project's (the core ones and `docs/queue/failure-classes.json`), and the
+entry holds the class, the area and its one sentence, never an excerpt. A built task without an entry is listed by `ravenseat inspection` and the board, with the command to add it.
 `ravenseat guards` lists the registry, and `ravenseat guards retire <id>` keeps an entry but marks it retired.
 
 Each entry has a `measures` object. For a gate with a command, Ravenseat fills it when it shows the registry, from the

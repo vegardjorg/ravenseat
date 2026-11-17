@@ -1169,7 +1169,7 @@ export function cmdReceive() {
   if (knownBug) FSRC.record(() => FSRC.gateLine({ id, gate: knownBug, record: redBase }), { once: true });
   if (knownBug) {
     try {
-      const line = GUIDANCE.isQuiet(read()) ? null : proposeGate({ title: knownBug.title, where: knownBug.where, from: id });
+      const line = GUIDANCE.isQuiet(read()) ? null : proposeGate({ title: knownBug.title, where: knownBug.where, from: id, class: knownBug.class ?? null });
       if (line) console.log(line);
     } catch (e) {
       console.log(`Gate: could not propose "${knownBug.title}" (${e.message}).`);

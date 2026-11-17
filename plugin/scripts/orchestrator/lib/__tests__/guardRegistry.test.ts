@@ -63,6 +63,64 @@ describe('adding and validating', () => {
   });
 });
 
+describe('a guard against a failure class and area (guards add --class --area, ROADMAP 0t)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const FC = require('../failureClasses');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const FR = require('../findingRepeats');
+  const classes = [...FC.coreClasses(), { id: 'audit-trail', title: 'Audit trail missing' }];
+  const gate = { title: 'A lint rule for unchecked results', explain: 'Stops a result used without its error check.', kind: 'gate', command: 'npm run lint' };
+
+  it('stores the class and the area, and the class alone is enough to say what it guards against', () => {
+    const reg = GR.empty();
+    const r = GR.addGuard(reg, { ...gate, against: { class: 'unchecked-error', area: 'src/api' } }, { now: NOW, classes });
+    expect(r.error).toEqual([]);
+    expect(reg.guards[0].against).toEqual({ signature: null, lesson: null, class: 'unchecked-error', area: 'src/api' });
+    // The project's own class counts too.
+    expect(GR.addGuard(reg, { ...gate, against: { class: 'audit-trail' } }, { now: NOW, classes }).guard.against).toEqual({ signature: null, lesson: null, class: 'audit-trail', area: null });
+    // An entry without a class keeps the shape it had.
+    expect(GR.addGuard(reg, { ...gate, against: { lesson: 'a lesson' } }, { now: NOW, classes }).guard.against).toEqual({ signature: null, lesson: 'a lesson' });
+  });
+
+  it('refuses an unknown class, the class other, an area without a class and an area that is not one plain line', () => {
+    const add = (against: Record<string, unknown>) => GR.addGuard(GR.empty(), { ...gate, against }, { now: NOW, classes }).error.join(' ');
+    expect(add({ class: 'no-such-class' })).toContain('no-such-class');
+    expect(add({ class: 'Unchecked-Error' })).toContain('class');
+    expect(add({ class: 'other' })).toContain('other');
+    expect(add({ area: 'src/api', lesson: 'x' })).toContain('--class');
+    expect(add({ class: 'unchecked-error', area: 'src/a\nsrc/b' })).toContain('one line');
+    expect(add({ class: 'unchecked-error', area: '-x' })).toContain('area');
+    expect(add({ class: 'unchecked-error', area: 'x'.repeat(201) })).toContain('area');
+  });
+
+  it('the area * is the whole project (stored as no area, so it covers every area)', () => {
+    const reg = GR.empty();
+    GR.addGuard(reg, { ...gate, against: { class: 'unchecked-error', area: '*' } }, { now: NOW, classes });
+    expect(reg.guards[0].against.area).toBe(null);
+  });
+
+  it('the repeat count reads it as a guard for that class and area (findingRepeats.guardsFrom)', () => {
+    const reg = GR.empty();
+    GR.addGuard(reg, { ...gate, against: { class: 'unchecked-error', area: 'src/api' } }, { now: NOW, classes });
+    expect(FR.guardsFrom({ registry: reg })).toEqual([{ id: 'G-1', class: 'unchecked-error', area: 'src/api', since: Date.parse('2026-11-13') }]);
+  });
+
+  it('from a gate task proposed from the finding log: the class and area come from its source', () => {
+    const task = { id: 'GATE-2', title: 'Gate: Unchecked error or result in src/api', source: 'finding-log unchecked-error@src/api', labels: ['gate', 'finding-log'] };
+    expect(GR.fromTask({ task, entry: null })).toMatchObject({ task: 'GATE-2', against: { class: 'unchecked-error', area: 'src/api' } });
+    const wide = { ...task, source: 'finding-log unchecked-error@*' };
+    expect(GR.fromTask({ task: wide, entry: null }).against).toMatchObject({ class: 'unchecked-error', area: null });
+    // No source, no class (an inspection task keeps its signature).
+    expect(GR.fromTask({ task: { id: 'INSP-1', title: 'Guard: x' }, entry: null }).against.class).toBeUndefined();
+  });
+
+  it('the lines name the class and the area, never more than the one sentence', () => {
+    const reg = GR.empty();
+    GR.addGuard(reg, { ...gate, against: { class: 'unchecked-error', area: 'src/api' } }, { now: NOW, classes });
+    expect(GR.lines(reg, [], { cli: 'ravenseat' }).join('\n')).toContain('class unchecked-error in src/api');
+  });
+});
+
 describe('the file', () => {
   it('parses and writes stable text; unknown fields survive; a broken file is an error, not an empty list', () => {
     const reg = GR.empty();

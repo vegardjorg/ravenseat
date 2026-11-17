@@ -365,7 +365,8 @@ function proposalTask(e, { id, classes, record = null, recipe = null } = {}) {
     from: tasks[0] ?? null,
     where,
     detail,
-    record: record ? { ...record, against: `${title} (class ${e.class})` } : null,
+    // The guard is recorded with its class and area (guards add --class --area), never the class as text (ROADMAP 0t).
+    record: record ? { ...record, class: e.class, area: e.scope === 'project' || e.area === PROJECT ? null : e.area } : null,
   });
   const ref = require('./recipePrecision.js').recipeRef(recipe);
   return { ...task, labels: [...task.labels, LABEL], source: `finding-log ${e.key}`, ...(ref ? { recipe: ref } : {}) };

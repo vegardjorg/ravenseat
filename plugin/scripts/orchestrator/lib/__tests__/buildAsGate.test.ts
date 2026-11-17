@@ -115,6 +115,31 @@ describe('every gate task can end with guards add (section 3.7 point 5)', () => 
     const t = R.proposalTask(entry(), { id: 'GATE-2', record: RECORD });
     expect(t.mission).toContain('guards add --from-task GATE-2');
   });
+
+  it('a gate task with a known class records it with --class and --area, not as text in --against', () => {
+    for (const t of [R.proposalTask(entry(), { id: 'GATE-2', record: RECORD }), R.buildTask(entry(), { id: 'GATE-2', record: RECORD, project: PROJECT, recipe: RECIPE })]) {
+      expect(t.mission).toContain('--class unchecked-error --area "src/api"');
+      expect(t.mission).not.toContain('--against');
+      expect(t.mission).toMatch(/--kind none .*--class unchecked-error --area "src\/api"/);
+    }
+    // Project wide: the class alone, so the guard covers every area.
+    const wide = R.proposalTask(entry({ key: 'unchecked-error@*', area: '*', scope: 'project' }), { id: 'GATE-3', record: RECORD });
+    expect(wide.mission).toContain('--class unchecked-error.');
+    expect(wide.mission).not.toContain('--area');
+    // An area that is not a plain path is left to --from-task, which reads it from the task's source.
+    const odd = R.proposalTask(entry({ key: 'unchecked-error@src/a"b', area: 'src/a"b' }), { id: 'GATE-4', record: RECORD });
+    expect(odd.mission).toContain('--class unchecked-error');
+    expect(odd.mission).not.toContain('--area');
+  });
+
+  it('a GATE line without a class keeps --against with the failure class as before', () => {
+    const t = G.gateTask({ id: 'GATE-1', title: 'A missing check', from: 'T-1', where: 'a.js:3', record: RECORD });
+    expect(t.mission).toContain('--against "A missing check"');
+    expect(t.mission).not.toContain('--class');
+    const c = G.gateTask({ id: 'GATE-5', title: 'Unchecked error or result', from: 'T-1', where: 'a.js:3', record: { ...RECORD, class: 'unchecked-error' } });
+    expect(c.mission).toContain('--class unchecked-error');
+    expect(c.mission).not.toContain('--against');
+  });
 });
 
 describe('the item key the board sends', () => {

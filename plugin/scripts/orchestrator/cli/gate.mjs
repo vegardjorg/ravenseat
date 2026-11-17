@@ -18,9 +18,10 @@ const G = require('./lib/knownBugGate.js');
 
 /**
  * Applies the setting and the rules to one failure class. Returns the line to show, or null when the setting is off.
- * @param {{ title: string, from?: string, where?: string, detail?: string }} bug
+ * @param {{ title: string, from?: string, where?: string, detail?: string, class?: string }} bug  `class`: the taxonomy
+ *   id of a GATE line in the new form (lib/findingLine.js), so the mission records the guard with --class (ROADMAP 0t)
  */
-export function proposeGate({ title: raw, from, where, detail }) {
+export function proposeGate({ title: raw, from, where, detail, class: cls = null }) {
   const title = G.cleanTitle(raw);
   const mode = G.modeOf(CONFIG);
   const queue = read();
@@ -42,7 +43,7 @@ export function proposeGate({ title: raw, from, where, detail }) {
     return `Gate: ${d.task.id} already covers "${title}"${changed ? ', and the new place was added to it' : ''}.`;
   }
   ensureProject();
-  const task = { ...G.gateTask({ id: G.nextId([...queue.tasks, ...Object.keys(queue.archived ?? {}).map((id) => ({ id }))]), title, whole: G.plainLine(raw), from, where, detail, record: guardRecord() }), ...projectField() };
+  const task = { ...G.gateTask({ id: G.nextId([...queue.tasks, ...Object.keys(queue.archived ?? {}).map((id) => ({ id }))]), title, whole: G.plainLine(raw), from, where, detail, record: { ...guardRecord(), class: cls } }), ...projectField() };
   const r = addTask(task, { approved: mode === 'auto' });
   if (!r.ok) return `Gate: could not add the task: ${r.output}`;
   return mode === 'auto'

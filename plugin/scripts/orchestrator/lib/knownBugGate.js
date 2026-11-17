@@ -103,22 +103,35 @@ const seenLine = ({ from, where, detail }) =>
 /**
  * The lines that end a gate mission with `guards add` (0i section 3.7 point 5): the guard is recorded in the registry,
  * also when the answer is no gate (kind none with the reason). Empty without `record`, so a caller that does not pass
- * it gets the mission as before. `against` is the lesson the entry names; the class itself (against.class) needs
- * `guards add --class`, which is its own step (ROADMAP 0t).
- * @param {{ cli: string, registryFile: string, against?: string }|null|undefined} record
+ * it gets the mission as before. With `class` (a failure class id, lib/failureClasses.js) the entry names it with
+ * `--class <id>` and `area` with `--area "<area>"` (ROADMAP 0t), so the repeat count can tell when the guard did not hold;
+ * the class is never written into --against as text then. A project wide area (`*`) or none gives the class alone (the
+ * guard covers every area), and an area that is not a plain path is left out of the command line: --from-task reads it
+ * from the task's source (lib/guardRegistry.js fromTask). Without a class, `against` (or the title) is the lesson.
+ * @param {{ cli: string, registryFile: string, against?: string, class?: string|null, area?: string|null }|null|undefined} record
  */
 function recordLines(id, title, record) {
   if (!record?.cli || !record?.registryFile) return [];
-  const against = plainLine(record.against ?? title).replace(/"/g, "'").slice(0, MAX_TITLE);
+  // `other` is never a class to guard against (guards add refuses it): the lesson then names the failure as before.
+  const cls = typeof record.class === 'string' && CLASS_ID.test(record.class) && record.class !== 'other' ? record.class : null;
+  const area = cls && typeof record.area === 'string' && record.area !== '*' && PLAIN_AREA.test(record.area) ? record.area : null;
+  const what = cls
+    ? `--class ${cls}${area ? ` --area "${area}"` : ''}`
+    : `--against "${plainLine(record.against ?? title).replace(/"/g, "'").slice(0, MAX_TITLE)}"`;
   return [
     '',
     `Then record it in the guard registry: ${record.cli} guards add --from-task ${id} --kind gate --title "<short name>" ` +
-      `--explain "<one plain sentence>" --against "${against}" --command "<the gate command>". It writes ${record.registryFile} ` +
+      `--explain "<one plain sentence>" ${what} --command "<the gate command>". It writes ${record.registryFile} ` +
       'in your worktree, so the entry is merged with the change.',
     'No red reproduction means no gate: say "no gate" in track-result.md with the reason, and record that decision with ' +
-      `${record.cli} guards add --from-task ${id} --kind none --title "<short name>" --explain "<the reason>" --against "${against}".`,
+      `${record.cli} guards add --from-task ${id} --kind none --title "<short name>" --explain "<the reason>" ${what}.`,
   ];
 }
+
+/** A failure class id (lib/failureClasses.js KEBAB): safe on a command line as it is. */
+const CLASS_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+/** An area safe inside double quotes on a command line: a path of plain characters, not starting with a dash. */
+const PLAIN_AREA = /^(?!-)[\w./@+-]{1,200}$/;
 
 /**
  * The gate task, ready for `ravenseat add`. added_by makes it proposed unless it is added with --approved.
