@@ -232,7 +232,7 @@ hides what is off:
 |---|---|---|
 | `plans` | on | The Plans button (and the room; a `?room=plans` link falls back to Queue) |
 | `plans.legal`, `plans.launch`, `plans.documents` | off | The Legal, Launch and Documents and agreements surfaces in Plans, with their counters (an old link shows the Overview) |
-| `focus` | on | The Focus tab |
+| `focus` | on (off in Lite mode) | The Focus tab |
 | `statistics` | on | The Statistics tab |
 | `cloud` | off | The Cloud tab, the "Suitable for cloud" filter and the Cloud row in the task detail |
 | `follow` | off | The `/follow` page and its link in the terminal |

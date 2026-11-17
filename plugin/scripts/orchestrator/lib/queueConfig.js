@@ -731,7 +731,8 @@ function readConfigFile(file) {
 
 /**
  * What config() does after merge(), on its own so the tests and `ravenseat doctor` read a file the same way:
- *   - lite softens gitSurface and dependencyFiles to warn, unless the file sets them;
+ *   - lite softens gitSurface and dependencyFiles to warn and turns reviewItems.stop, wiring.stop, scopeNotes.drift
+ *     and features.focus off, unless the file sets them (the registry rows carry the same defaultByMode);
  *   - protectedPaths in the object form { add, remove } becomes one list (lib/mergeGuard.js resolveProtectedPaths): the
  *     defaults plus add minus remove, the floor kept. A list stays as it is; a malformed object gives the defaults.
  * @param {object} k merge(STANDARD, own)
@@ -743,6 +744,11 @@ function resolveOwn(k, own = {}) {
     if (own.gitSurface === undefined) k.gitSurface = 'warn';
     if (own.dependencyFiles === undefined) k.dependencyFiles = 'warn';
     if (own.reviewItems?.stop === undefined) k.reviewItems = { ...k.reviewItems, stop: false };
+    if (own.wiring?.stop === undefined) k.wiring = { ...k.wiring, stop: false };
+    // A lite task names no files, so the drift count would call every changed file outside the task.
+    if (own.scopeNotes?.drift === undefined) k.scopeNotes = { ...k.scopeNotes, drift: false };
+    // Lite has no focus stages, so the Focus tab would stay empty.
+    if (own.features?.focus === undefined) k.features = { ...k.features, focus: false };
   }
   if (own.protectedPaths !== undefined && !Array.isArray(own.protectedPaths))
     k.protectedPaths = require('./mergeGuard.js').resolveProtectedPaths(own.protectedPaths, STANDARD.protectedPaths).list;

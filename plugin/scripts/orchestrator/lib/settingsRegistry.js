@@ -727,8 +727,10 @@ const SETTINGS = Object.freeze([
     }),
   row('wiring.stop', 'push', 'onoff', 'Done waits for the wiring spec',
     'Each WIRE line in a track\'s report becomes an open item on the task, and done (set done, the done step of merge) ' +
-    'waits until each is closed with a commit or rejected with a reason.', {
+    'waits until each is closed with a commit or rejected with a reason. On in full mode. Off in lite, the same as ' +
+    'reviewItems.stop, since a first try should not meet a hard stop; done then still names the open items.', {
       weakens: offWeakens,
+      defaultByMode: { lite: false, full: true },
       protects: 'A built component that stays unwired because the wiring spec in the report was never carried out.',
       whyNot: 'The spec is only text in a report then, and nothing reminds anyone of it after the merge.',
       changes: 'Done passes with open wiring items; it says so, and the items stay open on the task. Doctor will report it.',
@@ -844,7 +846,8 @@ const SETTINGS = Object.freeze([
     'validation, helpers, test runner ...) gets one NOTE line. It stops nothing.', BASIC),
   row('scopeNotes.drift', 'scope', 'onoff', 'Count changed files outside the task',
     'How many changed files lie outside the task\'s files and reads, and in which folders; a task with no files named ' +
-    'gets the number of folders it touches. One NOTE line, it stops nothing.', BASIC),
+    'gets the number of folders it touches. One NOTE line, it stops nothing. On in full mode. Off in lite, where a ' +
+    'task names no files, so every changed file would count as outside it.', { ...BASIC, defaultByMode: { lite: false, full: true } }),
   row('scopeNotes.ignoreNames', 'scope', 'list', 'Names a helper note skips',
     'More names the helper note never reports (main, run, setup and a few others are skipped already).'),
   row('scopeNotes.folderDepth', 'scope', 'integer', 'New folder depth',
@@ -993,7 +996,10 @@ const SETTINGS = Object.freeze([
   // ---- 14. Plans and focus ----
   row('features.plans', 'plans', 'onoff', 'Plans room',
     'The Plans room on the board. On by default in both modes; the CLI plan register always works.', BASIC),
-  row('features.focus', 'plans', 'onoff', 'Focus tab', 'The Focus tab on the board.', BASIC),
+  row('features.focus', 'plans', 'onoff', 'Focus tab',
+    'The Focus tab on the board, with the focus stages and their tasks. On in full mode. Off in lite, which has no ' +
+    'focus stages, so the tab would stay empty. The ravenseat focus command works either way.',
+    { ...BASIC, defaultByMode: { lite: false, full: true } }),
   row('features.plans.legal', 'plans', 'onoff', 'Legal surface',
     'The Legal surface in Plans, with the legal points of the plan register. Off by default: turn it on when the ' +
     'project keeps legal points. It shows only while features.plans is on.', { fullWhy: WHY_PLANS }),

@@ -86,8 +86,12 @@ describe('done, closing and the setting', () => {
     expect(W.closeItem(o, 'W9', { reason: 'x', now: NOW }).error).toMatch(/no wiring item W9/);
     expect(W.openItems(o)).toEqual([]);
   });
-  it('the stop is on unless wiring.stop is false; off gives a line that names the items', () => {
+  it('the stop is on unless wiring.stop is false or the queue is in lite mode; off gives a line that names the items', () => {
     expect(W.stopOn({})).toBe(true);
+    expect(W.stopOn({ mode: 'full' })).toBe(true);
+    expect(W.stopOn({ mode: 'lite' })).toBe(false);
+    expect(W.stopOn({ mode: 'lite', wiring: { stop: true } })).toBe(true);
+    expect(W.stopOn({ mode: 'full', wiring: { stop: false } })).toBe(false);
     expect(W.stopOn({ wiring: { stop: true } })).toBe(true);
     expect(W.stopOn({ wiring: { stop: false } })).toBe(false);
     expect(W.offLine(task())).toMatch(/^WIRING STOP OFF .*W1 a\.ts, W2 \(no file\)/);

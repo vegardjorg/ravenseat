@@ -272,13 +272,13 @@ describe('doctorRows: the doctor row settings', () => {
       expect.objectContaining({
         status: 'INFO',
         message:
-          'lite: dependencyFiles, gitSurface and reviewItems.stop are softer than in full (set them in queue.config.json for full strength)',
+          'lite: dependencyFiles, gitSurface, wiring.stop and reviewItems.stop are softer than in full (set them in queue.config.json for full strength)',
       }),
     );
     // Set in the file, the lite line names only what is still softened.
-    const one = rows({ mode: 'lite', gitSurface: 'stop', reviewItems: { stop: true } }).find((x: any) => x.status === 'INFO');
+    const one = rows({ mode: 'lite', gitSurface: 'stop', wiring: { stop: true }, reviewItems: { stop: true } }).find((x: any) => x.status === 'INFO');
     expect(one.message).toBe('lite: dependencyFiles warns instead of stopping (set it in queue.config.json for full strength)');
-    expect(rows({ mode: 'lite', gitSurface: 'stop', dependencyFiles: 'stop', reviewItems: { stop: true } })).toEqual([
+    expect(rows({ mode: 'lite', gitSurface: 'stop', dependencyFiles: 'stop', wiring: { stop: true }, reviewItems: { stop: true } })).toEqual([
       expect.objectContaining({ status: 'OK' }),
     ]);
   });

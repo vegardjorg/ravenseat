@@ -710,7 +710,7 @@ of at most 200 characters, and at most 20 lines are read from one report. A `WIR
 becomes an open item, without a file, so a malformed spec stops `done` instead of being lost; it can only be closed
 with `--reject` (say what you did instead).
 
-The setting `wiring.stop` (default `true`, Advanced) turns the stop off. Then `done` passes with open items, says
+The setting `wiring.stop` (default `true`, `false` in Lite mode, Advanced) turns the stop off. Then `done` passes with open items, says
 `WIRING STOP OFF` with the items, and they stay open on the task. Turning it off is a weakened guard: `ravenseat
 settings` and `ravenseat doctor` name it, as for the other guards.
 

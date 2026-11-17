@@ -5,6 +5,17 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Better overview of the settings, and three calmer defaults in lite.** The settings come in fifteen groups instead
+  of twelve: Gates is split into Gates, Tests and evidence, and Checks tab and learning, and the scope notes and the
+  catalog get their own group, Scope and catalog, so no group holds most of the rows and each has its main switches
+  under Basic. The Checks tab and learning group says in one note that the three sources that can propose a new guard
+  share a limit of three open proposals and each waits for your approval. Many titles and explanations are plainer and
+  say what the setting guards, why the default is what it is and what happens when it is off. In lite mode
+  `wiring.stop`, `scopeNotes.drift` and `features.focus` are now off by default (still on in full mode): done passes
+  with open wiring items and names them, the same as `reviewItems.stop`; a lite task names no files, so the drift count
+  had nothing to measure against; and lite has no focus stages, so the Focus tab stayed empty (`ravenseat focus` works
+  either way). A value you set in queue.config.json wins in both modes, and doctor's lite line names `wiring.stop`
+  with the other softer defaults. No setting key changed.
 - **The weakened-guards banner counts only guards.** `learning.quickGateCard`, `learning.ciParityLift`,
   `learning.idleGuardInfo` and `testWeakening.findingLog` only show a card, order cards, give an INFO line or write a
   log row, so turning one off is no longer treated as weakening a guard: no slide to confirm, no row in "guards are

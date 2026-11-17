@@ -137,8 +137,15 @@ function mergeItems(existing, parsed, { now, source = 'report' } = {}) {
 /** The open items of a task. */
 const openItems = (o) => (Array.isArray(o?.wiring) ? o.wiring : []).filter((x) => x?.status === 'open');
 
-/** Is the stop on (wiring.stop, default true)? Only an explicit false turns it off. */
-const stopOn = (config) => config?.wiring?.stop !== false;
+/**
+ * Is the stop on? A wiring.stop the config sets wins; otherwise it is on in full mode and off in lite, the same as
+ * reviewItems.stop (lib/reviewItems.js stopOn). config() already puts the lite value in; this reads a bare object the same way.
+ */
+function stopOn(config) {
+  const set = config?.wiring?.stop;
+  if (typeof set === 'boolean') return set;
+  return config?.mode !== 'lite';
+}
 
 /** One item as a short line: id, file (or why it has none) and the description. */
 function itemLine(x) {
