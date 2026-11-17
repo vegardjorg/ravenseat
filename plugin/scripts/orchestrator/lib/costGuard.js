@@ -184,7 +184,7 @@ function hookText(notices) {
       : `${v.id} (${v.class}) $${v.usd} > ${FACTOR}x average $${v.average} (limit $${v.limit}; baseline: the class average, n=${v.n} last 7d)`,
   );
   return {
-    systemMessage: `Cost guard: ${lines.join('; ')}.`,
+    ...require('./clients/index.js').clientFor().hooks.message(`Cost guard: ${lines.join('; ')}.`),
     additionalContext:
       `[costGuard] ${notices.length} track(s) have passed ${FACTOR}x their baseline (the average cost for their class, or the task's own estimate while the class has too little history): ${lines.join('; ')}. ` +
       'No automatic stop. Send each track this message with SendMessage (agent id from start/the time log): ' +

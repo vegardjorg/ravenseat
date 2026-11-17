@@ -191,6 +191,31 @@ describe('contextGuard transcript readers', () => {
   });
 });
 
+describe('the hook answers the core builds, byte for byte (0w W3: systemMessage and block move to the adapter)', () => {
+  // Written and run green BEFORE contextGuard and costGuard built these through clientFor().hooks (characterization).
+  it('assessEndGate: the block answer', () => {
+    const empty = { agentType: 'track', commits: 0, hasEndLine: false, alreadyBlocked: false };
+    expect(J(KV.assessEndGate(empty))).toBe(
+      '{"decision":"block","reason":"Finish: commit the work and write the RESULT line (or PARTIAL/REFUSE with the reason) before you stop."}',
+    );
+  });
+
+  it('pauseAdvice: the owner message and the context text', () => {
+    expect(J(KV.pauseAdvice({ prompt: 'pause', n: 151_000, orchestrator: true }))).toBe(
+      `{"systemMessage":${J(KV.PAUSE_TIP)},"additionalContext":${J(KV.PAUSE_TIP)}}`,
+    );
+  });
+
+  it('costGuard.hookText: the owner message first, then the context text', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const CG = require('../costGuard.js');
+    const v = CG.assess({ measurements: [{ id: 'A', class: 'K', usd: 45 }], average: { K: { average: 10, n: 4 } } }).notices;
+    const out = CG.hookText(v);
+    expect(Object.keys(out)).toEqual(['systemMessage', 'additionalContext']);
+    expect(J(out)).toMatchSnapshot();
+  });
+});
+
 describe('trackGuard transcript readers', () => {
   const usageRow = (u: unknown, type = 'assistant') => ({ type, message: { usage: u } });
   it('lastContext: the last assistant usage, null after a compaction, other rows skipped', () => {

@@ -124,7 +124,26 @@ describe('prices per model family', () => {
     expect(T.costUsd({ cache_written: MILL, cache_written_5m: 0, cache_written_1h: MILL }, 'claude-sonnet-5')).toBeCloseTo(4);
     // A suffix or a provider prefix still hits the family.
     expect(T.priceFor('claude-opus-5-5[1m]').family).toBe('opus-5-5');
-    expect(T.priceFor('us.anthropic.claude-sonnet-5-5').family).toBe('sonnet-5');
+    expect(T.priceFor('us.anthropic.claude-sonnet-5-5').family).toBe('sonnet-5-5');
+  });
+
+  it('F3: Fable 5.2, Mythos 5.2 and Sonnet 5.5 have their own rows (cache reads below the family rate)', () => {
+    T.setPriceOverrides(null);
+    // Fable 5.2 and Mythos 5.2: $8 / $40, cache reads $0.20 (0.025x), not Fable 5's $10 / $50 and $1.
+    for (const id of ['claude-fable-5-2', 'claude-mythos-5-2']) {
+      expect(T.priceFor(id).family, id).toBe('fable-5-2');
+      expect(T.costUsd({ input: MILL, output: MILL }, id), id).toBeCloseTo(48);
+      expect(T.costUsd({ cache_read: MILL }, id), id).toBeCloseTo(0.2);
+      expect(T.costUsd({ cache_written: MILL, cache_written_5m: MILL, cache_written_1h: 0 }, id), id).toBeCloseTo(10);
+      expect(T.costUsd({ cache_written: MILL, cache_written_5m: 0, cache_written_1h: MILL }, id), id).toBeCloseTo(16);
+    }
+    // Sonnet 5.5: the same $2 / $10 as Sonnet 5, cache reads $0.10 (0.05x) instead of $0.20.
+    expect(T.priceFor('claude-sonnet-5-5').family).toBe('sonnet-5-5');
+    expect(T.costUsd({ cache_read: MILL }, 'claude-sonnet-5-5')).toBeCloseTo(0.1);
+    expect(T.costUsd({ cache_read: MILL }, 'claude-sonnet-5')).toBeCloseTo(0.2);
+    // The rows that were right stay: Fable 5.1 / Mythos 5.1 $0.25, Fable 5 / Mythos 5 $1.
+    expect(T.costUsd({ cache_read: MILL }, 'claude-mythos-5-1')).toBeCloseTo(0.25);
+    expect(T.costUsd({ cache_read: MILL }, 'claude-mythos-5')).toBeCloseTo(1);
   });
 
   it('prices an unknown model as Opus 5.5 and marks it assumed', () => {

@@ -193,18 +193,20 @@ const FACTS = Object.freeze(
       id: 'hook.output',
       area: 'hook',
       what: 'what a hook answers',
-      value: "hookSpecificOutput { hookEventName, permissionDecision 'allow'|'deny'|'ask'|'defer', permissionDecisionReason, additionalContext (10,000 characters per string) }; decision 'block' with reason",
+      value: "hookSpecificOutput { hookEventName, permissionDecision 'allow'|'deny'|'ask'|'defer', permissionDecisionReason, additionalContext (10,000 characters per string) }; decision 'block' with reason; systemMessage to the user",
       fragility: 'L',
       move: 'W2',
       source: 'hooks',
       // W2c (2026-11-16): the hooks, statusline.mjs, eventRows, rateLimits and toolTrouble read the payload through
       // lib/clients/claude/hookInput.js (clientFor().hooks).
-      // W2b1 (2026-11-17): contextGuard.hookOutput builds its additionalContext with clientFor().hooks.context. It
-      // still writes systemMessage and decision 'block' with reason itself, as assessEndGate does (not caught by the
-      // coupling gate); a builder for those is left to W3/W4.
+      // W2b1 (2026-11-17): contextGuard.hookOutput builds its additionalContext with clientFor().hooks.context.
+      // 0w W3 (2026-11-17): systemMessage and decision 'block' with reason are built by clientFor().hooks.message and
+      // .block (contextGuard.hookOutput, pauseAdvice and assessEndGate, costGuard.hookText, hook-context.mjs merge),
+      // byte for byte as before (lib/__tests__/transcriptReadersCompat.test.ts); the coupling gate catches a new
+      // direct build.
       // hook-push-guard.mjs failSafe keeps a raw last-resort read and deny on purpose, so the push guard still denies
       // when the adapter itself does not load (never through the registry).
-      readers: ['lib/clients/claude/hookInput.js', 'lib/contextGuard.js', 'hook-push-guard.mjs'],
+      readers: ['lib/clients/claude/hookInput.js', 'hook-push-guard.mjs'],
     },
     // ---- Status line (documented) ----
     {

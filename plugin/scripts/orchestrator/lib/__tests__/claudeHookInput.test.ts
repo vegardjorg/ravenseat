@@ -114,4 +114,13 @@ describe('the hook answers', () => {
     expect(H.contextOf({ systemMessage: 'y' })).toBeUndefined();
     expect(H.contextOf(null)).toBeUndefined();
   });
+
+  it('message and block are the top-level answers, byte for byte (0w W3)', () => {
+    expect(JSON.stringify(H.message('m'))).toBe('{"systemMessage":"m"}');
+    expect(JSON.stringify(H.block('r'))).toBe('{"decision":"block","reason":"r"}');
+    // Spread first, the owner message keeps its place before hookSpecificOutput.
+    expect(JSON.stringify({ ...H.message('m'), ...H.context('UserPromptSubmit', 'c') })).toBe(
+      '{"systemMessage":"m","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"c"}}',
+    );
+  });
 });

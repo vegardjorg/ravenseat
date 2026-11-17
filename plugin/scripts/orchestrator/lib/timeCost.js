@@ -24,18 +24,23 @@
  * The list prices per model family, USD per million tokens (MTok). ONE place for prices; users override them with
  * `prices` in queue.config.json (see priceFor).
  * SOURCE: Anthropic's first-party Claude API list prices (the "Current Models" table and the prompt-caching economics in
- * the Claude API reference, cached 2026-10-06, read 2026-11-02). Cache writes cost 1.25x the input price (5 min TTL) and
+ * the Claude API reference, cached 2026-11-03, read 2026-11-17). Cache writes cost 1.25x the input price (5 min TTL) and
  * 2x (1 h TTL); cache reads have their own price per model. Not modelled: the Haiku 5.5 long-prompt tier (above 100K
  * prompt tokens $0.50 / $2.50), fast mode, batch discounts, and older models not listed here (for example Opus 4.1 and
  * earlier at $15 / $75 fall under "opus"): set `prices` for those.
  * The first entry whose `match` hits the model id (lowercase, so "claude-opus-5-5[1m]" and "us.anthropic.claude-..."
  * hit too) applies, so the specific versions come before their family.
+ * F3 (0w W3, 2026-11-17): Fable 5.2 / Mythos 5.2 ($8 / $40, cache reads $0.20) and Sonnet 5.5 (cache reads $0.10) fell
+ * under their family rows before and were priced at Fable 5's $10 / $50 with $1 cache reads and Sonnet 5's $0.20, so
+ * their cost was overstated. Fable 5 / Mythos 5 keep $1 (the family row), Fable 5.1 / Mythos 5.1 keep $0.25.
  */
 const PRICE_TABLE = [
+  { family: 'fable-5-2', match: /(?:fable|mythos)-5-2/, input: 8, output: 40, cache_read: 0.2 },
   { family: 'fable-5-1', match: /(?:fable|mythos)-5-1/, input: 10, output: 50, cache_read: 0.25 },
   { family: 'fable', match: /fable|mythos/, input: 10, output: 50, cache_read: 1 },
   { family: 'opus-5-5', match: /opus-5-5/, input: 4, output: 20, cache_read: 0.2 },
   { family: 'opus', match: /opus/, input: 5, output: 25, cache_read: 0.5 },
+  { family: 'sonnet-5-5', match: /sonnet-5-5/, input: 2, output: 10, cache_read: 0.1 },
   { family: 'sonnet-5', match: /sonnet-5/, input: 2, output: 10, cache_read: 0.2 },
   { family: 'sonnet', match: /sonnet/, input: 3, output: 15, cache_read: 0.3 },
   { family: 'haiku-5', match: /haiku-5/, input: 0.1, output: 0.5, cache_read: 0.01 },

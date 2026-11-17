@@ -271,6 +271,9 @@ const k = (n) => `${Math.round(n / 1000)}k`;
 
 /** The UserPromptSubmit answer's context part, built by the client adapter (clientFor().hooks.context). */
 const promptContext = (text) => client().hooks.context('UserPromptSubmit', text);
+/** The owner message and the block of an answer, built by the client adapter (clientFor().hooks, 0w W3). */
+const ownerMessage = (text) => client().hooks.message(text);
+const block = (reason) => client().hooks.block(reason);
 
 /**
  * Hook output (the object written as JSON to stdout), or null for no output.
@@ -290,13 +293,15 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
   if (b.action === 'compact') {
     const nr = compactions + 1;
     return {
-      systemMessage: auto
-        ? `Context about ${k(n)} tokens. Mode: ${modeText(mode)}. Claude Code compacts the orchestrator session by ` +
-          `itself (compaction no. ${nr} in the session), and the queue resumes automatically afterwards. If it has not happened by ` +
-          `about ${k(g.windDown)}, paste:\n${COMPACT_COMMAND}`
-        : `Context about ${k(n)} tokens: time to compact the orchestrator session (compaction no. ${nr} in the session; ` +
-          `mode: ${modeText(mode)}). When the model has finished the step it is on, paste:\n` +
-          `${COMPACT_COMMAND}\nRunning agents are kept. Emergency brake (wind-down) at ${k(g.windDown)}.`,
+      ...ownerMessage(
+        auto
+          ? `Context about ${k(n)} tokens. Mode: ${modeText(mode)}. Claude Code compacts the orchestrator session by ` +
+            `itself (compaction no. ${nr} in the session), and the queue resumes automatically afterwards. If it has not happened by ` +
+            `about ${k(g.windDown)}, paste:\n${COMPACT_COMMAND}`
+          : `Context about ${k(n)} tokens: time to compact the orchestrator session (compaction no. ${nr} in the session; ` +
+            `mode: ${modeText(mode)}). When the model has finished the step it is on, paste:\n` +
+            `${COMPACT_COMMAND}\nRunning agents are kept. Emergency brake (wind-down) at ${k(g.windDown)}.`,
+      ),
       ...promptContext(
         auto
           ? `[hook-context] COMPACT (about ${k(n)} tokens, mode automatic): Claude Code compacts the session by ` +
@@ -312,9 +317,8 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
     };
   }
   if (b.action === 'stop') {
-    return {
-      decision: 'block',
-      reason: orchestrator
+    return block(
+      orchestrator
         ? `The conversation is at about ${k(n)} tokens (stop at ${k(b.limit ?? g.stopOrchestrator)}). Each message now costs ` +
           'almost three times as much as after a compaction. Compact the orchestrator session now with the line below ' +
           `(it keeps the running agents). ${lastResort} To send the message anyway, for example to ask for ` +
@@ -322,16 +326,17 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
         : `The conversation is at about ${k(n)} tokens (stop at ${k(b.limit ?? g.stop)}). Each message now costs ` +
           'almost three times as much as in a new session. Start a new session. To send the message anyway, for ' +
           'example to ask for a handover note, start it with "continue:".',
-    };
+    );
   }
   if (b.action === 'windDown') {
     const fresh = b.setWindDown;
     return {
-      systemMessage:
+      ...ownerMessage(
         `Context about ${k(n)} tokens: the orchestrator is in WIND_DOWN (emergency brake from ${k(g.windDown)}, hard stop ` +
-        `at ${k(g.stopOrchestrator)}; mode: ${modeText(mode)}). No new tasks are started; started ones are finished. ` +
-        `Compact now: when the model has finished the step it is on, paste:\n${COMPACT_COMMAND}\n` +
-        `The wind-down is lifted by itself after the compaction. ${lastResort}`,
+          `at ${k(g.stopOrchestrator)}; mode: ${modeText(mode)}). No new tasks are started; started ones are finished. ` +
+          `Compact now: when the model has finished the step it is on, paste:\n${COMPACT_COMMAND}\n` +
+          `The wind-down is lifted by itself after the compaction. ${lastResort}`,
+      ),
       ...promptContext(
         fresh
           ? `[hook-context] WIND_DOWN (about ${k(n)} tokens). From now on: start NO new tasks (ravenseat next/start/fill ` +
@@ -347,13 +352,14 @@ function hookOutput(b, { n, orchestrator, g = limits(), compactions = 0, mode = 
     };
   }
   return {
-    systemMessage:
+    ...ownerMessage(
       `Context about ${k(n)} tokens (notice from ${k(g.notice)}, ` +
-      (orchestrator
-        ? `compaction at ${k(g.compact)}, wind-down at ${k(g.windDown)}, stop at ${k(g.stopOrchestrator)}; ` +
-          `mode: ${modeText(mode)}). Avoid long pauses in this session.`
-        : `${g.blockOthers ? `stop at ${k(g.stop)}` : 'no stop'}). Compact the chat or start a new session with a ` +
-          'handover note soon; avoid long pauses in this session.'),
+        (orchestrator
+          ? `compaction at ${k(g.compact)}, wind-down at ${k(g.windDown)}, stop at ${k(g.stopOrchestrator)}; ` +
+            `mode: ${modeText(mode)}). Avoid long pauses in this session.`
+          : `${g.blockOthers ? `stop at ${k(g.stop)}` : 'no stop'}). Compact the chat or start a new session with a ` +
+            'handover note soon; avoid long pauses in this session.'),
+    ),
     ...promptContext(
       `[hook-context] The conversation is at about ${k(n)} tokens. Keep answers short` +
         (orchestrator
@@ -609,7 +615,7 @@ function pauseAdvice({ prompt, n, orchestrator, threshold = PAUSE_THRESHOLD }) {
   if (!orchestrator) return null;
   if (typeof n !== 'number' || !Number.isFinite(n) || n <= threshold) return null;
   if (!isPauseMessage(prompt)) return null;
-  return { systemMessage: PAUSE_TIP, additionalContext: PAUSE_TIP };
+  return { ...ownerMessage(PAUSE_TIP), additionalContext: PAUSE_TIP };
 }
 
 // ----- SubagentStop gate (hook-track-end.mjs) -----
@@ -658,7 +664,7 @@ function assessEndGate({ agentType, commits, hasEndLine: ended, alreadyBlocked, 
   if (alreadyBlocked || stopHookActive) return null; // once per agent: no loop
   if (typeof commits !== 'number' || !Number.isFinite(commits)) return null;
   if (commits > 0 || ended) return null;
-  return { decision: 'block', reason: END_REASON };
+  return block(END_REASON);
 }
 
 module.exports = {

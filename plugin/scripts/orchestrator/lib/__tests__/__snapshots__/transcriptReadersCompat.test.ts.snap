@@ -54,6 +54,8 @@ exports[`contextGuard transcript readers > hookOutput answers byte for byte for 
 }
 `;
 
+exports[`the hook answers the core builds, byte for byte (0w W3: systemMessage and block move to the adapter) > costGuard.hookText: the owner message first, then the context text 1`] = `"{"systemMessage":"Cost guard: A (K) $45 > 3x average $10 (limit $30; baseline: the class average, n=4 last 7d).","additionalContext":"[costGuard] 1 track(s) have passed 3x their baseline (the average cost for their class, or the task's own estimate while the class has too little history): A (K) $45 > 3x average $10 (limit $30; baseline: the class average, n=4 last 7d). No automatic stop. Send each track this message with SendMessage (agent id from start/the time log): \\"COST_GUARD A: usage is $45, over 3x the average for class K ($10). Wrap up: finish what you are doing, commit, and deliver. If the task is not done, deliver PARTIAL with what remains in the report. Do not start new parts.\\" Judge for yourself whether the track should be stopped or split."}"`;
+
 exports[`turnTools: the context of a turn from its usage > the context of each turn is input plus cache read plus cache written (missing fields are 0) 1`] = `
 {
   "above": {

@@ -363,6 +363,8 @@ describe('hook-context.mjs: the cost guard end to end', () => {
     run('queue.mjs', ['orchestrator', 'pulse', '--session', 'queue A']);
     const out = hook('s1');
     expect(out).not.toHaveProperty('decision');
+    // The merged answer keeps its key order (0w W3 moved the systemMessage build to clientFor().hooks.message).
+    expect(Object.keys(out)).toEqual(['systemMessage', 'hookSpecificOutput']);
     expect(out.systemMessage).toMatch(/Cost guard: X \(K\)/);
     expect(out.hookSpecificOutput.additionalContext).toMatch(/COST_GUARD X/);
     const state = JSON.parse(readFileSync(join(folder, 'costGuard.json'), 'utf8'));

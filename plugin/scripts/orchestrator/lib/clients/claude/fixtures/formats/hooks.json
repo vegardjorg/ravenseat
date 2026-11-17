@@ -1,0 +1,86 @@
+{
+  "_about": "Hook and status line payloads as Claude Code sends them on stdin, one per event the plugin hooks on. Scrubbed: no real paths, ids or text. See README.md for the source of each field.",
+  "payloads": {
+    "PreToolUse": {
+      "session_id": "s-hook",
+      "transcript_path": "/fixture/home/.claude/projects/-fixture-work/s-hook.jsonl",
+      "cwd": "/fixture/work",
+      "permission_mode": "default",
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Bash",
+      "tool_input": { "command": "git status", "description": "Show working tree status" },
+      "tool_use_id": "toolu_hook_1"
+    },
+    "PostToolUse": {
+      "session_id": "s-hook",
+      "transcript_path": "/fixture/home/.claude/projects/-fixture-work/s-hook.jsonl",
+      "cwd": "/fixture/work",
+      "hook_event_name": "PostToolUse",
+      "tool_name": "Read",
+      "tool_input": { "file_path": "/fixture/work/a.txt" },
+      "tool_response": { "type": "text", "file": { "filePath": "/fixture/work/a.txt", "content": "a" } },
+      "tool_use_id": "toolu_hook_2"
+    },
+    "UserPromptSubmit": {
+      "session_id": "s-hook",
+      "transcript_path": "/fixture/home/.claude/projects/-fixture-work/s-hook.jsonl",
+      "cwd": "/fixture/work",
+      "hook_event_name": "UserPromptSubmit",
+      "prompt": "continue: fixture prompt"
+    },
+    "SubagentStop": {
+      "session_id": "s-hook",
+      "transcript_path": "/fixture/home/.claude/projects/-fixture-work/s-hook.jsonl",
+      "cwd": "/fixture/work",
+      "hook_event_name": "SubagentStop",
+      "stop_hook_active": false,
+      "agent_id": "fx1",
+      "agent_type": "ravenseat:track",
+      "agent_transcript_path": "/fixture/home/.claude/projects/-fixture-work/s-hook/subagents/agent-fx1.jsonl",
+      "last_assistant_message": "Handed back."
+    },
+    "StopFailure": {
+      "session_id": "s-hook",
+      "transcript_path": "/fixture/home/.claude/projects/-fixture-work/s-hook.jsonl",
+      "cwd": "/fixture/work",
+      "hook_event_name": "StopFailure",
+      "error": "rate_limit"
+    },
+    "SessionStart": {
+      "session_id": "s-hook",
+      "transcript_path": "/fixture/home/.claude/projects/-fixture-work/s-hook.jsonl",
+      "cwd": "/fixture/work",
+      "hook_event_name": "SessionStart",
+      "source": "compact"
+    },
+    "SessionEnd": {
+      "session_id": "s-hook",
+      "transcript_path": "/fixture/home/.claude/projects/-fixture-work/s-hook.jsonl",
+      "cwd": "/fixture/work",
+      "hook_event_name": "SessionEnd",
+      "reason": "clear"
+    },
+    "Notification": {
+      "session_id": "s-hook",
+      "transcript_path": "/fixture/home/.claude/projects/-fixture-work/s-hook.jsonl",
+      "cwd": "/fixture/work",
+      "hook_event_name": "Notification",
+      "message": "Claude needs your permission (fixture)",
+      "notification_type": "permission_prompt"
+    }
+  },
+  "statusline": {
+    "session_id": "s-hook",
+    "transcript_path": "/fixture/home/.claude/projects/-fixture-work/s-hook.jsonl",
+    "cwd": "/fixture/work",
+    "model": { "id": "claude-opus-5-5", "display_name": "Opus 5.5" },
+    "workspace": { "current_dir": "/fixture/work", "project_dir": "/fixture/work" },
+    "version": "2.1.317",
+    "cost": { "total_cost_usd": 1.25, "total_duration_ms": 60000, "total_api_duration_ms": 30000 },
+    "context_window": { "total_input_tokens": 120000, "context_window_size": 1000000, "used_percentage": 12 },
+    "rate_limits": {
+      "five_hour": { "used_percentage": 100, "resets_at": 1900000000 },
+      "seven_day": { "used_percentage": 40, "resets_at": 1900500000 }
+    }
+  }
+}

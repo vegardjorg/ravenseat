@@ -261,7 +261,7 @@ function merge(out, cost) {
   const ctx = [HK.contextOf(out), cost.additionalContext].filter(Boolean).join('\n');
   return {
     ...(out ?? {}),
-    systemMessage: sys,
+    ...HK.message(sys),
     ...HK.context('UserPromptSubmit', ctx),
   };
 }
@@ -309,7 +309,7 @@ async function main() {
       cli: require('./lib/projectRoot.js').cliCommand(),
       now,
     });
-    if (text) instructions = { systemMessage: text };
+    if (text) instructions = HK.message(text);
   } catch {
     instructions = null;
   }

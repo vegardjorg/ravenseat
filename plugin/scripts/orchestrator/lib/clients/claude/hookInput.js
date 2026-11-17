@@ -9,6 +9,10 @@
 // status(raw)  the status line payload: { session, cwd, workspace, model, context, cost, limits, raw }
 // decision(event, decision, reason), deny(event, reason), context(event, text), contextOf(answer)
 //              the hookSpecificOutput answers (PreToolUse allow/deny/ask with a reason, additionalContext).
+// message(text), block(reason)
+//              the top-level answers (systemMessage to the owner; decision 'block' with its reason). Since 0w W3 the core
+//              builds them only here (lib/contextGuard.js, lib/costGuard.js, hook-context.mjs); the coupling gate
+//              catches a new direct build.
 //
 // The values are passed on exactly as Claude Code sent them: no trimming, no type checks, a missing field stays
 // undefined, so the hooks decide as they did before the move (a type check stays with the hook that needs it). A raw
@@ -82,4 +86,17 @@ function contextOf(answer) {
   return answer?.hookSpecificOutput?.additionalContext;
 }
 
-module.exports = { read, status, decision, deny, context, contextOf };
+/**
+ * A message to the owner (systemMessage: shown to the user, not read by the model). Spread it into an answer so the
+ * key keeps its place: { ...message(text), ...context(event, more) }.
+ */
+function message(text) {
+  return { systemMessage: text };
+}
+
+/** A block with its reason (decision 'block'): Stop and SubagentStop keep the agent going, UserPromptSubmit drops the prompt. */
+function block(reason) {
+  return { decision: 'block', reason };
+}
+
+module.exports = { read, status, decision, deny, context, contextOf, message, block };

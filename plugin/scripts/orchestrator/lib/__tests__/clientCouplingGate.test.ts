@@ -42,6 +42,9 @@ const COUPLING: Record<string, RegExp> = {
       String.raw`\b(?:hook_event_name|tool_input|tool_response|stop_hook_active|last_assistant_message|notification_type|custom_instructions)\b`,
       String.raw`\b(?:hookSpecificOutput|hookEventName|permissionDecision)\b`,
       String.raw`\b(?:context_window|rate_limits)\b`,
+      // The top-level answers (0w W3): build them with clientFor().hooks.message(text) and .block(reason).
+      String.raw`\bsystemMessage\s*:`,
+      String.raw`\bdecision\s*:\s*['"]block['"]`,
     ].join('|'),
   ),
 };
@@ -121,6 +124,9 @@ describe('client coupling gate', () => {
       'if (input.stop_hook_active) return;',
       "JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse' } })",
       'const cw = input?.context_window;',
+      'return { systemMessage: PAUSE_TIP, additionalContext: PAUSE_TIP };',
+      "return { decision: 'block', reason: END_REASON };",
+      'JSON.stringify({ decision: "block", reason })',
     ])
       expect(kindsOf(bad), bad).not.toEqual([]);
     for (const ok of [
@@ -130,6 +136,11 @@ describe('client coupling gate', () => {
       'if (r.agent_type) types.set(r.agent_id, r.agent_type);',
       'const total = cw?.total_input_tokens;',
       "const subagent = 'track';",
+      // Reading an answer, the queue's own block command and the builders are not a direct build.
+      "if (out?.decision === 'block') return out;",
+      'const sys = [out?.systemMessage, cost.systemMessage].join(sep);',
+      "return ['block', a.id, 'other'];",
+      '...HK.message(sys),',
     ])
       expect(kindsOf(ok), ok).toEqual([]);
   });

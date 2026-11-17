@@ -3,6 +3,20 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+- **Hardening: the cost estimate for Fable 5.2, Mythos 5.2 and Sonnet 5.5 is corrected, and the Claude Code formats
+  the queue reads are now locked by fixtures per version.** Fable 5.2 and Mythos 5.2 were priced at the older Fable
+  row ($10 and $50 per million tokens, cache reads at $1) and Sonnet 5.5 at the Sonnet 5 row (cache reads at $0.20),
+  so their time log and cost guard estimates came out too high; each now has its own row ($8 and $40 with cache reads
+  at $0.20, and cache reads at $0.10). New fixtures hold one scrubbed transcript per Claude Code version family (text,
+  thinking, tool calls and failed tool results, the cache fields with and without the 5 minute and 1 hour split,
+  compaction, the handback, a REPL call, unknown row types and API errors in both forms: rate limit, overload, usage
+  limit and a plain 429) plus the hook and status line payloads, and contract tests run them through the adapter, the
+  time and cost analysis, the usage limit pause and the end gate, naming the version and the row when one breaks. The
+  owner message and the block a hook answers are now built in one place, byte for byte as before, and the coupling
+  gate catches a new direct build.
+
 ## 0.18.0 (2026-11-17)
 
 **A project catalog of helpers and accepted design choices now reaches the track and the reviewer, so code is not written twice and a choice is not broken silently. Claude Code formats are read in one place behind a client adapter, so a renamed field or a moved transcript is one fix. The Checks tab gets its own page, and three of its edge cases are closed. A check that hangs past its time budget no longer leaves processes behind. The new stops are off until you turn them on.**
