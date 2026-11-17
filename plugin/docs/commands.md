@@ -34,6 +34,7 @@ ravenseat checks plan <key>         # proposes its investigation and planning as
 ravenseat checks dismiss <key>      # sets a suggestion aside (restore brings it back)
 ravenseat checks packs [--apply]    # review signal packs for your stack, from the manifests; --apply writes review.packs
 ravenseat checks turn-on <key>      # a card for an opt-in check that is off: writes its setting on in queue.config.json
+ravenseat checks build-gate <class>@<area>  # Build as gate: one proposed gate task for a class the finding log keeps seeing
 ravenseat checks marker on|off      # the red dot on the Checks tab while an important suggestion is open
 ravenseat checks off                # no Checks tab, overview or setup suggestions (on turns them back); guards are not touched
 ravenseat checks restore <key>      # brings a card that was set aside back

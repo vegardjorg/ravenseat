@@ -169,3 +169,56 @@ describe('the repeat count on class and area', () => {
     expect(quiet.card('guard-failed')).toMatchObject({ priority: 'medium' });
   });
 });
+
+describe('Build as gate (0i step 7): the button on the card ledger-recipes', () => {
+  const BUILD = { gates: { quick: ['npm run lint'], full: ['npm test'] } };
+
+  it('adds ONE proposed gate task in the GATE series with the gate commands, the places and the criteria; not twice', () => {
+    const p = project({ rows: REPEATED, config: BUILD });
+    const r = p.q('checks', 'build-gate', 'unchecked-error@src/api');
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain('GATE-1');
+    const [t] = p.gates();
+    expect(p.gates()).toHaveLength(1);
+    expect(t).toMatchObject({ id: 'GATE-1', status: 'proposed', added_by: 'gate agent', title: 'Gate: Unchecked error or result in src/api' });
+    expect(t.labels).toContain('finding-log');
+    for (const s of ['npm run lint', 'npm test', 'src/api/save.ts', 'guards add --from-task GATE-1', '--kind none']) expect(t.mission).toContain(s);
+    expect(t.mission).not.toContain('a result used without its error');
+    // The card now shows it as proposed, and a second click adds nothing.
+    expect((p.card('ledger-recipes')?.ledger as { items: { proposal: { state: string; task: string } }[] }).items[0].proposal).toEqual({ state: 'extend', task: 'GATE-1' });
+    const again = p.q('checks', 'build-gate', 'unchecked-error@src/api');
+    expect(again.code, again.out).toBe(0);
+    expect(again.out).toMatch(/already proposed as GATE-1/i);
+    expect(p.gates()).toHaveLength(1);
+  });
+
+  it('shares the cap of three: with three proposals waiting it adds nothing and says it waits', () => {
+    const insp = [1, 2, 3].map((n) => ({ id: `INSP-${n}`, title: `Guard ${n}`, status: 'proposed', class: 'K', labels: ['guard', 'inspection'] }));
+    const p = project({ rows: REPEATED, tasks: insp, config: BUILD });
+    const r = p.q('checks', 'build-gate', 'unchecked-error@src/api');
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/cap of three/i);
+    expect(p.gates()).toEqual([]);
+  });
+
+  it('needs the inspection queue on, a due class and area, and a valid key; a declined one stays declined', () => {
+    const off = project({ rows: REPEATED, config: { ...BUILD, inspection: { mode: 'off' } } });
+    const r1 = off.q('checks', 'build-gate', 'unchecked-error@src/api');
+    expect(r1.code).not.toBe(0);
+    expect(r1.out).toContain('inspection.mode');
+    expect(off.gates()).toEqual([]);
+    const p = project({ rows: REPEATED, config: BUILD });
+    const r2 = p.q('checks', 'build-gate', 'null-undefined@src/ui');
+    expect(r2.code).not.toBe(0);
+    expect(r2.out).toMatch(/not due/i);
+    const r3 = p.q('checks', 'build-gate', '--json');
+    expect(r3.code).not.toBe(0);
+    expect(p.gates()).toEqual([]);
+    expect(p.q('checks', 'build-gate', 'unchecked-error@src/api').code).toBe(0);
+    expect(p.q('cancel', 'GATE-1').code).toBe(0);
+    const r4 = p.q('checks', 'build-gate', 'unchecked-error@src/api');
+    expect(r4.code).not.toBe(0);
+    expect(r4.out).toMatch(/declined/i);
+    expect(p.gates()).toHaveLength(1);
+  });
+});

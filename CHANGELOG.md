@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a failure class that keeps coming back can now become a gate in one click, and a gate without a red
+  reproduction is not built.** The card "A kind of failure keeps coming back: what would guard it" has a Build as gate
+  button per class and area with nothing proposed yet (`ravenseat checks build-gate <class>@<area>`). It adds one
+  proposed gate task in the same `GATE-<n>` series and the same cap of three as the inspection and gate proposals, so
+  the same class and area is never proposed twice, a declined one stays declined, and a full cap makes it wait (the
+  card says so). Its mission names the project's gate commands, the CI file, the test runner, the recipe and the places
+  (paths only, never code or an error text), and the criteria: red on the reproduction and green on the fixed code,
+  both runs shown; without a red reproduction the report says "no gate" and the guard registry gets the decision
+  `none` with its reason. Every gate task (GATE lines, the finding log's proposals and this button) now ends with
+  `guards add`, so the guard registry learns what was built. The board checks the item before it reaches the command
+  line, and the command refuses it from a track worktree, with the inspection queue off, or for a class that is not
+  due. No new setting: it only proposes, needs `inspection.mode` on like the card, and the card can be set aside.
 - **Hardening: a failure class that keeps coming back now comes with a concrete guard for your stack, and a declined one
   stays declined.** The finding log already counted the same class of failure in the same part of the code, but the
   Checks tab only said that it was due. A new card, "A kind of failure keeps coming back: what would guard it", names

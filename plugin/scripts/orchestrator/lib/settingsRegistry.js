@@ -341,7 +341,7 @@ const SETTINGS = Object.freeze([
     'A red base gate reruns only the failed commands once on the same commit; green then is a flaky finding.'),
   row('inspection.mode', 'gates', 'choice', 'Inspection queue',
     'The same failure in the gates or CI, again and again, becomes one proposal to build a guard. You decide. ' +
-    'Off also hides the Checks card with recipes for failure classes that keep coming back.', {
+    'Off also hides the Checks card with recipes for failure classes that keep coming back, and its Build as gate button.', {
       choices: ['on', 'off'],
     }),
   row('inspection.minRepeats', 'gates', 'integer', 'Repeats before a proposal',

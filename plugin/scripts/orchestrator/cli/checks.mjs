@@ -15,6 +15,11 @@
 //   ravenseat checks turn-on <key>        a card with `action: setting`: turns its opt-in check on in queue.config.json
 //                                  (lib/optInChecks.js; only those keys, and never from a track worktree). The board's
 //                                  "Turn on" runs it.
+//   ravenseat checks build-gate <class>@<area>   "Build as gate" on the card ledger-recipes: ONE proposed gate task
+//                                  (GATE-<n>, the shared cap of three with INSP and GATE) for a due class and area of
+//                                  the finding log, with the project's gate commands, CI files, test runner, the recipe
+//                                  and the places in its mission (lib/findingRepeats.js buildTask). Needs inspection.mode
+//                                  on; never from a track worktree. The board's button runs it.
 //   ravenseat checks marker on|off        the small red marker on the Checks tab when a high suggestion is open
 //   ravenseat checks on|off               the opt-out: the Checks tab, this overview and the setup suggestions. Never a guard.
 //
@@ -29,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 
 import { a, CONFIG, CLI, die, edit, FILE, FOLDER, KK, LM, MAIN_TREE, read, require } from './context.mjs';
 import { addTask, ensureProject, PROJECT, readFacts } from './kickstart.mjs';
-import { guardsBoard, ledgerScan } from './inspection.mjs';
+import { guardRecord, guardsBoard, ledgerScan } from './inspection.mjs';
 import { allowlistFacts, broadFacts, gitignoreFacts, lockfileFacts, mcpFacts } from './doctorBaseline.mjs';
 import { trackBranchHere } from './settings.mjs';
 import { enableShare } from './share.mjs';
@@ -490,6 +495,69 @@ function turnOn(key) {
   console.log(`${c.key} = on (queue.config.json). The card is done. Off again: ${CLI} settings set ${c.key} off.`);
 }
 
+/** The test runner for the mission: the first test command the scan found (a gate first), else the one the files suggest. */
+function testRunnerOf(found) {
+  const kind = (found?.kinds ?? []).find((k) => k.key === 'test');
+  const places = kind?.places ?? [];
+  const hit = places.find((p) => p.where === 'gate' && p.command) ?? places.find((p) => p.command);
+  if (hit) return hit.command;
+  try {
+    return require('./lib/fixTests.js').suggestCommand(projectFs()) ?? null;
+  } catch {
+    return null; // error-ignored: the mission says the runner is not known
+  }
+}
+
+/**
+ * `checks build-gate <class>@<area>`: "Build as gate" (0i section 3.7 point 3). The entry is read again from the finding
+ * log here (the board only names it), and the same rules as every gate proposal decide (lib/knownBugGate.js decide):
+ * one open already is named, a declined or built one is not proposed again, and the shared cap of three makes it wait.
+ * Always proposed: the click asks for the gate, the owner's approve lets an agent spend tokens on it.
+ */
+function buildGate(raw) {
+  needsQueue();
+  const track = trackBranchHere();
+  if (track) die(`${CLI} checks build-gate cannot be run from inside a track worktree (branch ${track}); ask the owner. Nothing was added.`);
+  const FR = require('./lib/findingRepeats.js');
+  const key = FR.itemKey(raw);
+  if (!key) die(`Name a class and area as <class>@<area>, as the card ledger-recipes shows them (${CLI} checks --json). Nothing was added.`);
+  if (!require('./lib/inspection.js').setupOf(CONFIG).enabled)
+    die(`Proposals from the finding log need the inspection queue on: ${CLI} settings set inspection.mode on. Nothing was added.`);
+  // The queue's tasks with the archived ones (ledgerScan reads both), so a built or declined one is seen.
+  const { result, classes, tasks: known } = ledgerScan();
+  const entry = result.due.find((e) => e.key === key);
+  if (!entry) die(`${key} is not due in the finding log now (it needs repeats in separate tasks), so nothing was added. ${CLI} checks --json shows the card ledger-recipes.`);
+  const queue = read();
+  const d = KNOWN.decide({ title: FR.gateTitle(entry, classes), tasks: known, mode: 'propose' });
+  if (d.action === 'extend') {
+    console.log(`Not added: ${key} is already proposed as ${d.task.id} (${d.task.status}). ${CLI} approve ${d.task.id} lets it run.`);
+    return;
+  }
+  if (d.action === 'exists') die(`Not added: ${d.task.id} already built a gate for ${key}. A new incident there means that gate needs a look.`);
+  if (d.action === 'declined') die(`Not added: ${d.task.id} for ${key} was declined, and a no is remembered per class and area.`);
+  if (d.action === 'full')
+    die(`Not added: the cap of three open proposals (inspection and gate) is full, or ${KNOWN.MAX_OPEN} gate tasks are open. It waits for a free slot: approve or cancel one first (${CLI} gate list, ${CLI} inspection).`);
+  const report = makeReport(queue);
+  const item = report.suggestions.find((s) => s.key === 'ledger-recipes')?.ledger?.items?.find((i) => i.key === key) ?? null;
+  const recipe = item?.recipe ? { id: item.recipe.id, title: item.recipe.title, text: item.recipe.text } : null;
+  const gates = CONFIG.gates ?? {};
+  const project = {
+    quick: Array.isArray(gates.quick) ? gates.quick : [],
+    full: Array.isArray(gates.full) ? gates.full : [],
+    ci: [...new Set((report.found?.ci ?? []).map((c) => c.file).filter(Boolean))],
+    testRunner: testRunnerOf(report.found),
+  };
+  if (!LM.isLite(CONFIG)) ensureProject();
+  const id = KNOWN.nextId(known);
+  const task = { ...FR.buildTask(entry, { id, classes, record: guardRecord(), project, recipe }), ...(queue.projects?.cicd ? { project: 'cicd' } : {}) };
+  const r = addTask(task);
+  if (!r.ok) die(r.output);
+  console.log(
+    `${id} proposed: ${task.title}. About ${task.content_min} min of agent work once approved, and it uses tokens. ` +
+      `${CLI} approve ${id} (or Approve on the board) lets it run; ${CLI} cancel ${id} declines it for that class and place.`,
+  );
+}
+
 function setMarker(on) {
   needsQueue();
   edit((queue) => {
@@ -510,6 +578,7 @@ export function cmdChecks() {
   if (sub === 'plan') return plan(a[2]);
   if (sub === 'packs') return packs();
   if (sub === 'turn-on') return turnOn(a[2]);
+  if (sub === 'build-gate') return buildGate(a[2]);
   if (sub === 'marker') {
     if (a[2] !== 'on' && a[2] !== 'off') return die(`Use: ${CLI} checks marker on|off`);
     return setMarker(a[2] === 'on');
@@ -523,7 +592,7 @@ export function cmdChecks() {
     console.log(sub === 'dismiss' ? `${a[2]} is set aside. ${CLI} checks restore ${a[2]} brings it back.` : back);
     return undefined;
   }
-  if (sub && sub !== '--json') return die(`Use: ${CLI} checks [--json] | show <key> | plan <key> [--approved] | dismiss <key> | restore <key> | packs [--apply] | turn-on <key> | marker on|off | on | off`);
+  if (sub && sub !== '--json') return die(`Use: ${CLI} checks [--json] | show <key> | plan <key> [--approved] | dismiss <key> | restore <key> | packs [--apply] | turn-on <key> | build-gate <class>@<area> | marker on|off | on | off`);
   const queue = queueNow();
   if (queue && !GD.checksPanelOn(queue)) {
     if (a.includes('--json')) console.log(JSON.stringify({ off: true }));

@@ -13,8 +13,10 @@
 // from the inspection queue (INSP-<n>), the GATE lines and the finding log (lib/findingRepeats.js) together, so three
 // kinds of proposal never add up to nine. Only proposals count there: an approved task no longer asks anything.
 //
-// The criteria in the mission are the ones in skills/review/SKILL.md ("The gate criteria").
-// Used by: cli/gate.mjs. Tested in: lib/__tests__/knownBugGate.test.ts and __tests__/gateFlow.test.ts.
+// The criteria in the mission are the ones in skills/review/SKILL.md ("The gate criteria"). With `record` the mission
+// ends with `guards add`, so every gate task (GATE lines, the finding log, "Build as gate") is recorded in the guard
+// registry, also when the answer is no gate (0i section 3.7 point 5).
+// Used by: cli/gate.mjs, cli/inspection.mjs, cli/checks.mjs. Tested in: lib/__tests__/knownBugGate.test.ts and __tests__/gateFlow.test.ts.
 // =============================================================
 
 const MODES = ['propose', 'auto', 'off'];
@@ -98,9 +100,33 @@ function nextId(tasks = []) {
 const seenLine = ({ from, where, detail }) =>
   [from && `task ${from}`, where, detail].map((x) => (x ? String(x).replace(/\s+/g, ' ').trim() : '')).filter(Boolean).join(': ');
 
-/** The gate task, ready for `ravenseat add`. added_by makes it proposed unless it is added with --approved. */
-function gateTask({ id, title, whole = title, from, where, detail }) {
+/**
+ * The lines that end a gate mission with `guards add` (0i section 3.7 point 5): the guard is recorded in the registry,
+ * also when the answer is no gate (kind none with the reason). Empty without `record`, so a caller that does not pass
+ * it gets the mission as before. `against` is the lesson the entry names; the class itself (against.class) needs
+ * `guards add --class`, which is its own step (ROADMAP 0t).
+ * @param {{ cli: string, registryFile: string, against?: string }|null|undefined} record
+ */
+function recordLines(id, title, record) {
+  if (!record?.cli || !record?.registryFile) return [];
+  const against = plainLine(record.against ?? title).replace(/"/g, "'").slice(0, MAX_TITLE);
+  return [
+    '',
+    `Then record it in the guard registry: ${record.cli} guards add --from-task ${id} --kind gate --title "<short name>" ` +
+      `--explain "<one plain sentence>" --against "${against}" --command "<the gate command>". It writes ${record.registryFile} ` +
+      'in your worktree, so the entry is merged with the change.',
+    'No red reproduction means no gate: say "no gate" in track-result.md with the reason, and record that decision with ' +
+      `${record.cli} guards add --from-task ${id} --kind none --title "<short name>" --explain "<the reason>" --against "${against}".`,
+  ];
+}
+
+/**
+ * The gate task, ready for `ravenseat add`. added_by makes it proposed unless it is added with --approved.
+ * With `record` ({ cli, registryFile, against? }) the mission ends with `guards add` and the task owns the registry file.
+ */
+function gateTask({ id, title, whole = title, from, where, detail, record = null }) {
   const seen = seenLine({ from, where, detail });
+  const recorded = recordLines(id, title, record);
   return {
     id,
     title: `Gate: ${title}`,
@@ -125,7 +151,9 @@ function gateTask({ id, title, whole = title, from, where, detail }) {
       "5. In the project's own gates: a test, lint rule or script that the project's existing check commands already run. If they would not run it, say in track-result.md which command to add to gates.quick; do not edit queue.config.json.",
       '',
       'If a good check would cost more than it saves, stop and say so in track-result.md. Never push, deploy or change settings on the git host.',
+      ...recorded,
     ].join('\n'),
+    ...(recorded.length ? { owned_files: [record.registryFile] } : {}),
   };
 }
 

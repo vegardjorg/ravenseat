@@ -382,6 +382,8 @@
 //   node scripts/orchestrator/queue.mjs checks packs [--apply]      (review signal packs for the stack in the manifests; --apply writes
 //                                                                  review.packs in queue.config.json; lib/reviewPacks.js)
 //   node scripts/orchestrator/queue.mjs checks turn-on <key>        (a card for an opt-in check: its setting on; lib/optInChecks.js)
+//   node scripts/orchestrator/queue.mjs checks build-gate <class>@<area>   (Build as gate: one proposed GATE task for a due class and
+//                                                                  area of the finding log; lib/findingRepeats.js buildTask)
 //   node scripts/orchestrator/queue.mjs checks marker on|off        (the red dot on the Checks tab while a high suggestion is open)
 //   node scripts/orchestrator/queue.mjs checks on|off               (the opt-out: the Checks tab, the overview, the setup suggestions)
 //   node scripts/orchestrator/queue.mjs inspection [--json]         (the inspection queue: failures that repeat in the gates or CI become

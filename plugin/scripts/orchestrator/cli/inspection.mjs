@@ -42,6 +42,11 @@ const PULSE_EVERY_MS = 60 * 60_000;
 
 const setup = () => I.setupOf(CONFIG);
 const registryRel = () => String(CONFIG.inspection?.registryFile || GR.DEFAULT_FILE);
+/**
+ * How a gate task ends with `guards add` (lib/knownBugGate.js gateTask record): the command and the registry file the
+ * track writes in its worktree, so every gate task is recorded in the registry (0i section 3.7 point 5).
+ */
+export const guardRecord = () => ({ cli: CLI, registryFile: registryRel() });
 const registryIn = (tree) => path.join(tree, registryRel());
 
 function readJson(file) {
@@ -170,7 +175,7 @@ function ledgerPropose({ now = Date.now() } = {}) {
       // full: wait for a free slot (the next scan tries again); extend, exists, declined: nothing new to add.
       if (d.action !== 'add') continue;
       const id = KBG.nextId(known);
-      const task = { ...FR.proposalTask(entry, { id, classes }), ...(queue.projects?.cicd ? { project: 'cicd' } : {}) };
+      const task = { ...FR.proposalTask(entry, { id, classes, record: guardRecord() }), ...(queue.projects?.cicd ? { project: 'cicd' } : {}) };
       const r = addTask(task);
       if (!r.ok) {
         out.errors.push(`${entry.key}: ${r.output}`);

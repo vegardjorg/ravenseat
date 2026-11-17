@@ -182,6 +182,27 @@ function checksButton(s) {
 }
 
 /**
+ * "Build as gate" for one due class and area (0i section 3.7 point 3): a button while nothing is proposed for it (state
+ * add), a short note while the shared cap of three is full (state full), nothing otherwise (an open one is named on the
+ * line). The click posts { action: 'build-gate', item } through the same keyed write as the other buttons; the server
+ * checks the key and `ravenseat checks build-gate` adds ONE proposed gate task, which waits for Approve like any proposal.
+ */
+function checksBuildGate(i) {
+  const state = i.proposal?.state;
+  if (state === 'full') return el('span', { class: 'checks-source', text: ' Build as gate waits for a free slot.' });
+  if (state !== 'add') return null;
+  const busy = t.checks.busy === 'build-gate';
+  return el('button', {
+    type: 'button',
+    class: 'button button-outline',
+    text: busy ? 'Adding …' : 'Build as gate',
+    disabled: busy,
+    title: 'Adds one proposed gate task with your gate commands, CI file, test runner, the recipe and the places. Nothing runs before you approve it.',
+    onclick: () => checksWrite({ action: 'build-gate', item: i.key }, 'Gate proposed'),
+  });
+}
+
+/**
  * The due classes on the card ledger-recipes (lib/checksCatalog.js ledgerItems), one line each: where, how often, the
  * places (paths only), the stack and the recipe. Text only, never HTML from the report.
  */
@@ -198,6 +219,7 @@ function checksLedgerList(ledger) {
       {},
       el('span', { class: 'checks-where', text: `${i.title} ${where}: ${i.incidents} incident(s).` }),
       el('span', { text: `${proposed}${places}${stack}${recipe}` }),
+      checksBuildGate(i),
     );
   });
   const tail = [];

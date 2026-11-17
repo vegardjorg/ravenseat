@@ -12,6 +12,7 @@ import fs from 'node:fs';
 
 import { a, CONFIG, CLI, die, edit, FILE, read, require, val } from './context.mjs';
 import { addTask, ensureProject } from './kickstart.mjs';
+import { guardRecord } from './inspection.mjs';
 
 const G = require('./lib/knownBugGate.js');
 
@@ -41,7 +42,7 @@ export function proposeGate({ title: raw, from, where, detail }) {
     return `Gate: ${d.task.id} already covers "${title}"${changed ? ', and the new place was added to it' : ''}.`;
   }
   ensureProject();
-  const task = { ...G.gateTask({ id: G.nextId([...queue.tasks, ...Object.keys(queue.archived ?? {}).map((id) => ({ id }))]), title, whole: G.plainLine(raw), from, where, detail }), ...projectField() };
+  const task = { ...G.gateTask({ id: G.nextId([...queue.tasks, ...Object.keys(queue.archived ?? {}).map((id) => ({ id }))]), title, whole: G.plainLine(raw), from, where, detail, record: guardRecord() }), ...projectField() };
   const r = addTask(task, { approved: mode === 'auto' });
   if (!r.ok) return `Gate: could not add the task: ${r.output}`;
   return mode === 'auto'

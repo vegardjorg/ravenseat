@@ -322,6 +322,12 @@ Three cards come from the same finding log:
   already does that work. It is medium and never lights the red dot. A class and area you declined as a gate proposal
   (`ravenseat cancel GATE-<n>`), or one that already has a gate, is left out, and an open proposal is named. When the
   three open proposals are full, the card says so. Its button gives you the text to look into it with Claude.
+  Each class with nothing proposed yet has a **Build as gate** button (`ravenseat checks build-gate <class>@<area>`):
+  it adds one proposed gate task (`GATE-<n>`, in the shared cap of three with the inspection and gate proposals) whose
+  mission names your gate commands, the CI file, the test runner, the recipe and the places (paths only). The
+  criteria: the new check red on a reproduction and green on the fixed code, both runs shown; without a red
+  reproduction the report says "no gate" and the guard registry gets the decision `none` with its reason. Nothing
+  runs before you approve it. While the cap is full the line says it waits; an open one is named instead.
 
 A class is due, here and in `ledger-due`, only while it is open: a declined class and area, or one with a gate, no
 longer counts. The class `other` and findings with low confidence never count at all.

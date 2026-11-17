@@ -355,3 +355,29 @@ describe('the board server: the settings registry and the weakening rule (plans/
     fs.writeFileSync(configFile(), saved);
   }, 60_000);
 });
+
+describe('the board server: Build as gate on the Checks tab (0i step 7)', () => {
+  const post = async (body: object, withKey = true) => {
+    const r = await fetch(`${base}/api/checks`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(withKey ? { 'x-queue-key': key } : {}) },
+      body: JSON.stringify(body),
+    });
+    return { status: r.status, body: (await r.json()) as { ok: boolean; message?: string } };
+  };
+  const tasks = () => (JSON.parse(fs.readFileSync(path.join(root, 'q', 'queue.json'), 'utf8')).tasks ?? []) as { id: string }[];
+
+  it('refuses a missing or malformed item before anything runs, needs the key, and passes a valid one to checks build-gate', async () => {
+    for (const item of [undefined, '', '--json', 'a@b\nc', 'Upper@src']) {
+      const r = await post({ action: 'build-gate', item });
+      expect(r.status, String(item)).toBe(400);
+      expect(r.body.message).toBe('invalid item');
+    }
+    expect((await post({ action: 'build-gate', item: 'unchecked-error@src/api' }, false)).status).toBe(401);
+    // Valid, but nothing is due in this queue: the command refuses it, and no task is added.
+    const r = await post({ action: 'build-gate', item: 'unchecked-error@src/api' });
+    expect(r.status).toBe(409);
+    expect(r.body.message).toMatch(/not due/i);
+    expect(tasks().filter((t) => t.id.startsWith('GATE-'))).toEqual([]);
+  }, 60_000);
+});
