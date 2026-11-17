@@ -5,6 +5,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a check that runs over its time budget is now ended together with everything it started.** The base
+  gate, a task's done command (`done_when`) and the check for tests that fail on the base ran through a shell whose
+  timeout ended only the shell, so on Windows the real command it had started (node, npm, a test runner) lived on with
+  a dead parent, and a hanging one never ended: it held its folder, its memory and its pipes for days. Those runs now
+  go through a small supervisor that ends the whole process tree at the budget (taskkill /T on Windows, the process
+  group on POSIX), the way the quick and full gates already did. What you notice: no leftover `node` processes after
+  a red "time budget" result, and the run's folder can be removed. The red team scenarios now fail when a process of
+  their own run outlives them, and their hanging fixtures end by themselves after two minutes. No new setting.
 - **Hardening: three edge cases on the Checks tab.** A card you set aside whose condition later stops holding stayed
   out of sight, so it could not be brought back; it is now listed under "Set aside" as "does not apply now", with the
   same "Bring back" (also `ravenseat checks restore <key>`), and it never counts for the red dot or the summary. The

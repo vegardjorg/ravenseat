@@ -23,7 +23,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { expectUserThingsIntact, snapshot, userMess } from './lab';
-import { project, SCRIPTS, task, tmp } from './project';
+import { FIXTURE_CAP_MS, ownTree, project, SCRIPTS, task, tmp } from './project';
 
 type P = ReturnType<typeof project>;
 /** The text with LF line ends: a checkout with core.autocrlf=true writes CRLF. */
@@ -45,9 +45,13 @@ async function waitFor(file: string, ms = 60_000) {
   }
 }
 
-/** A process of its own (its own group on POSIX, so killTree reaches what it starts). */
+/**
+ * A process of its own (its own group on POSIX, so killTree reaches what it starts). Also ended with its tree after the
+ * file (ownTree), so a scenario that fails before its own kill leaves nothing running.
+ */
 function background(p: P, args: string[], cwd = p.repo, env = p.env) {
   const child = spawn(process.execPath, args, { cwd, env, detached: process.platform !== 'win32', stdio: 'ignore' });
+  ownTree(child.pid);
   const exited = new Promise((r) => child.on('exit', r));
   return { pid: child.pid!, exited };
 }
@@ -129,7 +133,7 @@ function agentScript(body: string) {
     file,
     `const { execFileSync } = require('child_process'); const fs = require('fs');\n` +
       `const git = (...a) => execFileSync('git', a, { stdio: 'ignore' });\n` +
-      `${body}\nfs.writeFileSync(${JSON.stringify(marker)}, 'x');\nsetInterval(() => {}, 1000);\n`,
+      `${body}\nfs.writeFileSync(${JSON.stringify(marker)}, 'x');\nsetInterval(() => {}, 1000);\nsetTimeout(() => process.exit(1), ${FIXTURE_CAP_MS});\n`,
   );
   return { file, marker };
 }
@@ -250,7 +254,7 @@ describe('RT-24: the orchestrator dies cold in the middle, and a new one finishe
     const gate = path.join(dir, 'gate.cjs');
     fs.writeFileSync(
       gate,
-      `const fs = require('fs');\nif (fs.existsSync(${JSON.stringify(hold)})) { fs.writeFileSync(${JSON.stringify(started)}, 'x'); setInterval(() => {}, 1000); }\n`,
+      `const fs = require('fs');\nif (fs.existsSync(${JSON.stringify(hold)})) { fs.writeFileSync(${JSON.stringify(started)}, 'x'); setInterval(() => {}, 1000); setTimeout(() => process.exit(1), ${FIXTURE_CAP_MS}); }\n`,
     );
     const p = lab({ gates: [`node "${gate}"`] });
     const before = snapshot(p.repo, p.folder);
@@ -318,7 +322,7 @@ describe('RT-24: the orchestrator dies cold in the middle, and a new one finishe
         file,
         `const QL = require(${JSON.stringify(path.join(SCRIPTS, 'lib', 'queueLock.js'))});\n` +
           `QL.acquire(${JSON.stringify(path.join(p.folder, '.lockState'))});\n` +
-          `require('fs').writeFileSync(${JSON.stringify(marker)}, 'x');\nsetInterval(() => {}, 1000);\n`,
+          `require('fs').writeFileSync(${JSON.stringify(marker)}, 'x');\nsetInterval(() => {}, 1000);\nsetTimeout(() => process.exit(1), ${FIXTURE_CAP_MS});\n`,
       );
       return { proc: background(p, [file]), marker };
     };

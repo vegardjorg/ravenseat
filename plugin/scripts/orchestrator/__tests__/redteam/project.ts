@@ -4,8 +4,16 @@
 // A temporary repo with a bare origin, a queue folder with tasks, and the CLI run as a real process. Only the agent is
 // fake: a cloud session is simulated with a pushed branch and its finish marker. Git is never mocked. The repo's identity
 // is the owner's, so the merge's identity guard lets the merge through.
+//
+// No process outlives the file (the leftover guard): every temporary folder of this test file is under one folder whose
+// name is unique to this run (RUN_MARK), so the gate scripts, fake agents and CLI runs a scenario starts all carry it in
+// their command line. After the file, the processes a scenario registered with ownTree are ended with their trees,
+// then any process that still has RUN_MARK in its command line is a leak: it is ended too, and the file fails with
+// what it was. Another run at the same time has its own mark, so it is never counted. The folder is then removed with
+// retries, since Windows can still hold a file of a process that has just ended (EPERM, EBUSY).
 // =============================================================
 import { execFileSync, spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,14 +21,93 @@ import { afterAll } from 'vitest';
 
 export const SCRIPTS = path.resolve(__dirname, '..', '..');
 const ID = ['-c', 'user.email=t@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false'];
-const temporary: string[] = [];
-afterAll(() => {
-  for (const m of temporary) fs.rmSync(m, { recursive: true, force: true });
-});
+
+/** Unique to this test file's run: the name of the folder every temporary folder of it is made in. */
+export const RUN_MARK = `rs-rt-${crypto.randomBytes(6).toString('hex')}`;
+const RUN_ROOT = path.join(os.tmpdir(), RUN_MARK);
+/** What a hanging fixture waits at most before it ends by itself, so a red run never leaves it for days. */
+export const FIXTURE_CAP_MS = 120_000;
+
+/** Kills a process and everything it started, without warning: no signal handler and no exit handler runs. */
+export function killTree(pid: number) {
+  try {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+    else process.kill(-pid, 'SIGKILL');
+  } catch {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+  }
+}
+
+const owned: number[] = [];
+/** A process a scenario started: ended with its tree after the file, also when the scenario failed before its own kill. */
+export function ownTree(pid: number | undefined) {
+  if (pid) owned.push(pid);
+}
+
+/**
+ * The live processes whose command line has `mark` in it (git's own background processes left out). The mark goes to
+ * the listing through the environment, so the listing itself never matches.
+ */
+export function leftovers(mark = RUN_MARK): { pid: number; name: string; command: string }[] {
+  const env = { ...process.env, RS_RT_MARK: mark };
+  let out = '';
+  if (process.platform === 'win32') {
+    const script =
+      "Get-CimInstance Win32_Process -Filter (\"CommandLine like '%\" + $env:RS_RT_MARK + \"%'\") | " +
+      'ForEach-Object { "$($_.ProcessId)`t$($_.Name)`t$($_.CommandLine)" }';
+    out = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { env, encoding: 'utf8', windowsHide: true }).stdout ?? '';
+  } else {
+    out = (spawnSync('ps', ['-eo', 'pid=,comm=,args='], { env, encoding: 'utf8' }).stdout ?? '')
+      .split('\n')
+      .map((l) => l.trim().replace(/^(\d+)\s+(\S+)\s+/, '$1\t$2\t'))
+      .join('\n');
+  }
+  return out
+    .split(/\r?\n/)
+    .map((l) => l.split('\t'))
+    .filter((c) => c.length >= 3 && c.slice(2).join('\t').includes(mark))
+    .map(([pid, name, ...rest]) => ({ pid: Number(pid), name, command: rest.join('\t') }))
+    .filter((p) => p.pid !== process.pid && !/^git/i.test(p.name));
+}
+
+/** leftovers(mark), listed again up to twice a second apart while any are found: a kill can take a moment to land. */
+export async function stillAlive(mark: string) {
+  let left = leftovers(mark);
+  for (let i = 0; i < 2 && left.length; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    left = leftovers(mark);
+  }
+  return left;
+}
+
+afterAll(async () => {
+  // A file that never made a temporary folder or started a process has nothing to check (and skips the listing's cost).
+  if (!owned.length && !fs.existsSync(RUN_ROOT)) return;
+  for (const pid of owned) killTree(pid);
+  // A moment for processes that are ending anyway, then whatever still runs is a leak (a listing takes seconds on Windows).
+  const left = await stillAlive(RUN_MARK);
+  for (const p of left) killTree(p.pid);
+  try {
+    fs.rmSync(RUN_ROOT, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+  } catch (e) {
+    // error-ignored: a file still held after the retries (a virus scanner, the indexer) is the system's temp folder's to
+    // clear; the leak check above is what this hook is for
+    console.warn(`could not remove ${RUN_ROOT}: ${(e as Error).message}`);
+  }
+  if (left.length)
+    throw new Error(
+      `${left.length} process(es) of this run outlived it (ended now): ` +
+        left.map((p) => `${p.pid} ${p.command.split(RUN_MARK).join('<run>').slice(0, 200)}`).join(' | '),
+    );
+}, 90_000);
+
 export const tmp = (prefix: string) => {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  temporary.push(d);
-  return d;
+  fs.mkdirSync(RUN_ROOT, { recursive: true });
+  return fs.mkdtempSync(path.join(RUN_ROOT, prefix));
 };
 
 /** A task add would accept: its own file under lib/, big enough for the small-task guard. */

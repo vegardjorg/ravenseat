@@ -187,24 +187,23 @@ function tailOf(text, n = DEFAULT_TAIL_LINES) {
 /**
  * Runs the done command in `cwd` (the track's worktree) through the shell, with a time budget. Only the tail of the
  * output is returned (see Secrets in the header); stdout comes first, then stderr, since spawnSync cannot interleave them.
- * On Windows the shell is cmd.exe: a timeout kills it, but a child it started can live on until it ends by itself.
+ * At the budget the whole tree is ended, the shell and everything it started (lib/treeRun.js): spawnSync's own timeout
+ * killed only the shell, and on Windows a hanging command it started lived on with a dead parent.
+ * `spawn` is a spawnSync, called as spawn(file, args, options) (lib/gateEnv.js trackCodeSpawn gives one).
  * @returns {{ ok: boolean, exit: number|null, timedOut: boolean, durationSec: number, tail: string[] }}
  */
 function runDoneWhen({ command, cwd, timeoutSec = DEFAULT_TIMEOUT_SEC, tailLines = DEFAULT_TAIL_LINES, spawn = null }) {
-  const run = spawn ?? require('node:child_process').spawnSync;
   const t0 = Date.now();
-  const s = run(command, {
+  const s = require('./treeRun.js').runBounded(command, {
     cwd,
-    shell: true,
-    encoding: 'utf8',
+    timeoutMs: timeoutSec * 1000,
     // A large buffer: an overflow kills the command, which would read as a red run that is not the code's fault.
     maxBuffer: 1 << 28,
-    timeout: timeoutSec * 1000,
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    ...(spawn ? { spawn } : {}),
   });
-  const timedOut = s?.error?.code === 'ETIMEDOUT';
-  const exit = typeof s?.status === 'number' ? s.status : null;
+  const timedOut = s.timedOut;
+  // A run ended at the budget has no exit code of its own (the supervisor's is not the command's).
+  const exit = !timedOut && typeof s?.status === 'number' ? s.status : null;
   const text = [s?.stdout ?? '', s?.stderr ?? '', s?.error && !timedOut ? s.error.message : '']
     .map((x) => String(x).replace(/\s+$/, ''))
     .filter(Boolean)

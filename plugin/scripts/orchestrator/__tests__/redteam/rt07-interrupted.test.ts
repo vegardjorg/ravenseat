@@ -12,11 +12,12 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { expectUserThingsIntact, snapshot, userMess } from './lab';
-import { project, SCRIPTS, tmp } from './project';
+import { FIXTURE_CAP_MS, ownTree, project, SCRIPTS, tmp } from './project';
 
 /**
  * A gate that, while the hold file exists, says it has started and then waits for ever; otherwise green. With `afterMerge`
  * it holds only where the track's file already is (the main checkout after the merge), not in the base check before it.
+ * "For ever" ends after FIXTURE_CAP_MS (red), long after the kill, so a run that fails before its kill leaves nothing.
  */
 function holdingGate({ afterMerge = true } = {}) {
   const dir = tmp('rt07-gate-');
@@ -26,7 +27,7 @@ function holdingGate({ afterMerge = true } = {}) {
   fs.writeFileSync(
     file,
     `const fs = require('fs');\n` +
-      `if (fs.existsSync(${JSON.stringify(hold)})${afterMerge ? " && fs.existsSync('lib/A.ts')" : ''}) { fs.writeFileSync(${JSON.stringify(started)}, 'x'); setInterval(() => {}, 1000); }\n`,
+      `if (fs.existsSync(${JSON.stringify(hold)})${afterMerge ? " && fs.existsSync('lib/A.ts')" : ''}) { fs.writeFileSync(${JSON.stringify(started)}, 'x'); setInterval(() => {}, 1000); setTimeout(() => process.exit(1), ${FIXTURE_CAP_MS}); }\n`,
   );
   fs.writeFileSync(hold, 'x');
   return { command: `node "${file}"`, hold, started };
@@ -66,9 +67,14 @@ async function killedMerge(afterMerge: boolean) {
     detached: process.platform !== 'win32',
     stdio: 'ignore',
   });
+  ownTree(child.pid);
   const exited = new Promise((r) => child.on('exit', r));
-  await waitFor(gate.started);
-  killTree(child.pid!);
+  try {
+    await waitFor(gate.started);
+  } finally {
+    // Also when the gate never started: the merge and its gates must not outlive the test.
+    killTree(child.pid!);
+  }
   await exited;
   fs.rmSync(gate.hold);
   expect(p.taskOf('A')?.status).not.toBe('done');

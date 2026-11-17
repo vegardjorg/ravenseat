@@ -129,13 +129,17 @@ function trackCodeEnv(env, { storeFile = null, root = null, platform = process.p
 
 /**
  * A spawnSync for commands that run track code, with trackCodeEnv as their environment: what lib/doneCheck.js
- * runDoneWhen and lib/baseHealth.js runBaseGate take as `spawn`.
+ * runDoneWhen and lib/baseHealth.js runBaseGate take as `spawn`. Called as spawnSync is: (command, options) or
+ * (file, args, options); runDoneWhen uses the second (lib/treeRun.js runs a supervisor with the command as argument).
  * @param {Record<string, string|undefined>} env
  * @param {{ storeFile?: string|null, root?: string|null, platform?: string, spawn?: Function }} [o]
  */
 function trackCodeSpawn(env, { spawn = require('node:child_process').spawnSync, ...where } = {}) {
   const scrubbed = trackCodeEnv(env, where).env;
-  return (command, options) => spawn(command, { ...options, env: scrubbed });
+  return (command, argsOrOptions, maybeOptions) =>
+    Array.isArray(argsOrOptions)
+      ? spawn(command, argsOrOptions, { ...maybeOptions, env: scrubbed })
+      : spawn(command, { ...argsOrOptions, env: scrubbed });
 }
 
 module.exports = { KEEP, SECRET_NAMES, SECRET_PREFIXES, dropReason, gateEnv, trackCodeEnv, trackCodeSpawn };

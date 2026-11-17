@@ -2,7 +2,8 @@
 // doneCheck.test.ts: the done command (task field done_when) and the fix-round cap (max_fix_rounds, maxFixRounds).
 //
 // Locks: (1) add and edit validate done_when and max_fix_rounds (through queueLogic.validate); (2) the command runs
-// through the shell in the given folder, exit 0 is green and anything else red, and only the tail of the output is kept;
+// through the shell in the given folder, exit 0 is green and anything else red, only the tail of the output is kept, and
+// a command over the budget is ended with everything it started (lib/treeRun.js);
 // (3) the cap counts fix rounds only, and beyond it each round needs the owner's resolved question; (4) the mission and
 // the fix brief carry the command; (5) auto-accept never takes a proposal with a done command. The pure parts of
 // lib/doneCheck.js; receive, merge and resume against a temporary queue are in __tests__/queueDoneCheck.test.ts.
@@ -101,13 +102,42 @@ describe('runDoneWhen: the command in the worktree, green on exit 0', () => {
   });
 
   it('a command over the time budget is red, and says so', () => {
-    // cwd is the system temp folder, not one we delete: on Windows the timeout stops cmd.exe, and the node it started
-    // can live on until its own end and hold its working folder.
-    const r = DC.runDoneWhen({ command: `node -e "setTimeout(()=>{},2000)"`, cwd: os.tmpdir(), timeoutSec: 1 });
+    const r = DC.runDoneWhen({ command: `node -e "setTimeout(()=>{},2000)"`, cwd: tmp(), timeoutSec: 1 });
     expect(r.ok).toBe(false);
     expect(r.timedOut).toBe(true);
     expect(r.tail.at(-1)).toMatch(/time budget of 1 s/);
   });
+
+  it('a command over the time budget is ended with everything it started: no process of it lives on', async () => {
+    // The shell starts node as its own child (`&&` keeps a POSIX shell from replacing itself with node), and that node
+    // would hang for ever. The fixture still ends itself after a cap, so a failing run of this test leaks nothing for long.
+    const dir = tmp();
+    const pidFile = path.join(dir, 'pid');
+    const script = path.join(dir, 'hang.cjs');
+    fs.writeFileSync(
+      script,
+      `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));\n` +
+        'setInterval(() => {}, 1000);\nsetTimeout(() => process.exit(0), 60000);\n',
+    );
+    const r = DC.runDoneWhen({ command: `node "${script}" && node -e "0"`, cwd: dir, timeoutSec: 3 });
+    expect(r.timedOut).toBe(true);
+    expect(fs.existsSync(pidFile), 'the hanging node had started').toBe(true);
+    const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+    const alive = () => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    // A moment for the kill to land, then the started node must be gone.
+    const until = Date.now() + 5000;
+    while (alive() && Date.now() < until) await new Promise((res) => setTimeout(res, 100));
+    const leaked = alive();
+    if (leaked) process.kill(pid, 'SIGKILL'); // clean up after a red run
+    expect(leaked, 'the node the command started outlived the time budget').toBe(false);
+  }, 30_000);
 
   it('tailOf: the last lines, CRLF folded, trailing blank lines dropped, long lines cut', () => {
     expect(DC.tailOf('a\r\nb\r\nc\r\n\r\n', 2)).toEqual(['b', 'c']);
