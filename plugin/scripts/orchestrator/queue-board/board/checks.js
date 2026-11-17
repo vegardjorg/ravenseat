@@ -213,7 +213,8 @@ function checksLedgerList(ledger) {
     const places = i.files?.length ? ` At ${i.files.join(', ')}.` : '';
     const stack = ` Stack: ${i.stacks?.length ? i.stacks.join(', ') : 'not known'}.`;
     const cards = i.recipe?.cards?.length ? ` See: ${i.recipe.cards.map((c) => c.title).join(', ')}.` : '';
-    const recipe = i.recipe ? ` Recipe: ${i.recipe.text}${cards}` : ' No recipe yet for this class in this stack.';
+    // A database class with the database probe recipes off says how to turn them on (lib/checksCatalog.js DB_HINT).
+    const recipe = i.recipe ? ` Recipe: ${i.recipe.text}${cards}` : typeof i.hint === 'string' && i.hint ? ` ${i.hint}` : ' No recipe yet for this class in this stack.';
     return el(
       'li',
       {},

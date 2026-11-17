@@ -56,6 +56,8 @@ export const PHRASES = {
   'catalog-missing': 'there is no `docs/queue/catalog/` folder',
   'has-database': 'the project has a database',
   'has-migrations': 'migrations are set up',
+  'has-local-database': 'a local or throwaway database is found (`supabase/config.toml`, a database image in a compose file, or testcontainers); a database only named by a URL is not local',
+  'db-probes-on': 'the database probe recipes are on (`learning.dbProbes`)',
   'shared-settings': 'a tracked `.claude/settings.json` exists',
   'bypass-tracked': 'the tracked `.claude/settings.json` has `bypassPermissions`',
   'branch-unprotected': 'the base branch is not known to be protected on the host',
@@ -89,6 +91,7 @@ export const KIND_PHRASES = {
   'ledger-guard-failed': (any) => `the finding log shows ${any} back where a guard was in place`,
   'ledger-recent': (any) => `the finding log shows ${any} 3 times in one area within 30 days (never in lite mode)`,
   stack: (any) => `the project's stack is ${any} (a word of a stack found, such as typescript in Node/TypeScript, or a stack pack found)`,
+  'local-db': (any) => `the local database found runs ${any}`,
 };
 /** What each argument names: kinds of check, settings, or failure classes. */
 const ARG_KIND = { missing: 'kind', found: 'kind', 'not-in-ci': 'kind', 'none-in-ci': 'kind', off: 'setting' };

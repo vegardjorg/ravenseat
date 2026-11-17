@@ -1,5 +1,5 @@
 {
-  "about": "Recipes: for a failure class that keeps coming back (the finding log, lib/findingRepeats.js), what would guard it in this stack. One recipe per class and stack; the first whose `when` holds is shown on the card ledger-recipes. `when` uses the conditions of the cards (lib/checksCatalog.js, plugin/docs/checks.md), `cards` names cards that already do the work, and `examples` are facts the recipe must hold for (hit) and must not hold for (miss); a test checks them. A project adds, replaces (same id) or removes (`off: true`) a recipe in docs/queue/checks/recipes.json. The database recipes (access control, migration and schema) come with the database probes.",
+  "about": "Recipes: for a failure class that keeps coming back (the finding log, lib/findingRepeats.js), what would guard it in this stack. One recipe per class and stack; the first whose `when` holds is shown on the card ledger-recipes. `when` uses the conditions of the cards (lib/checksCatalog.js, plugin/docs/checks.md), `cards` names cards that already do the work, and `examples` are facts the recipe must hold for (hit) and must not hold for (miss); a test checks them. A project adds, replaces (same id) or removes (`off: true`) a recipe in docs/queue/checks/recipes.json. A database recipe (`db: true`, access control and migration) needs db-probes-on (learning.dbProbes, off by default) and a local database (has-local-database or local-db:<engine>) in its `when`, and its text names the host check and the rollback; Build as gate adds the shared database guard to the mission.",
   "recipes": [
     {
       "id": "unchecked-error-typescript",
@@ -113,6 +113,84 @@
       "examples": {
         "hit": [{ "stacks": ["Python"], "kinds": [{ "key": "test", "places": [{ "where": "gate" }] }] }],
         "miss": [{ "stacks": ["Python"], "kinds": [] }, { "stacks": ["Node"], "kinds": [{ "key": "test", "places": [{ "where": "gate" }] }] }]
+      }
+    },
+    {
+      "id": "access-control-supabase",
+      "class": "access-control",
+      "db": true,
+      "when": "db-probes-on, has-local-database, stack:supabase",
+      "title": "pgTAP probes for the access rules, with supabase test db",
+      "text": "pgTAP probes in supabase/tests, run with supabase test db against the local stack (supabase start): per test user set the role and JWT claims, then show that another user's rows stay hidden and a forbidden write is refused (throws_ok). Each file is BEGIN; ... ROLLBACK;, and the gate first checks that the host is localhost, 127.0.0.1 or ::1 and stops otherwise. Never --linked.",
+      "cards": ["db-rules-probes", "db-shared-guard"],
+      "examples": {
+        "hit": [{ "dbProbesOn": true, "packs": { "detected": ["supabase"] }, "localDatabase": { "engines": ["postgres"], "from": ["supabase/config.toml"] } }],
+        "miss": [{ "packs": { "detected": ["supabase"] }, "localDatabase": { "engines": ["postgres"], "from": ["supabase/config.toml"] } }, { "dbProbesOn": true, "packs": { "detected": ["supabase"] }, "hasDatabase": true }]
+      }
+    },
+    {
+      "id": "access-control-postgres",
+      "class": "access-control",
+      "db": true,
+      "when": "db-probes-on, local-db:postgres",
+      "title": "pgTAP probes for the access rules, with pg_prove",
+      "text": "pgTAP probes run with pg_prove against the local or container database (docker compose, testcontainers): SET ROLE to each test user, then show that another user's rows stay hidden and a forbidden write is refused (throws_ok). Each file is BEGIN; ... ROLLBACK;, and the gate first checks that the host is localhost, 127.0.0.1, ::1 or the container it started, and stops otherwise.",
+      "cards": ["db-rules-probes", "db-shared-guard"],
+      "examples": {
+        "hit": [{ "dbProbesOn": true, "localDatabase": { "engines": ["postgres"], "from": ["docker-compose.yml"] } }],
+        "miss": [{ "localDatabase": { "engines": ["postgres"], "from": ["docker-compose.yml"] } }, { "dbProbesOn": true, "localDatabase": { "engines": ["mysql"], "from": ["compose.yaml"] } }]
+      }
+    },
+    {
+      "id": "access-control-local-db",
+      "class": "access-control",
+      "db": true,
+      "when": "db-probes-on, has-local-database",
+      "title": "Access rule tests against a throwaway database",
+      "text": "A test in the project's own test runner against a throwaway database (testcontainers, or the compose service): one test per rule that must refuse (another user's rows, a forbidden write), each in a transaction rolled back at the end. Before it writes, the test checks that the host is localhost, 127.0.0.1, ::1 or the container it started, and stops otherwise.",
+      "cards": ["db-rules-probes", "db-shared-guard"],
+      "examples": {
+        "hit": [{ "dbProbesOn": true, "localDatabase": { "engines": ["mysql"], "from": ["compose.yaml"] } }],
+        "miss": [{ "localDatabase": { "engines": ["mysql"], "from": ["compose.yaml"] } }, { "dbProbesOn": true, "hasDatabase": true }]
+      }
+    },
+    {
+      "id": "migration-schema-supabase",
+      "class": "migration-schema",
+      "db": true,
+      "when": "db-probes-on, has-local-database, stack:supabase",
+      "title": "Migrations from empty and schema probes, with supabase db reset",
+      "text": "supabase db reset on the local stack builds the database from every migration, then supabase test db runs pgTAP schema probes (has_table, col_type_is, policies_are) for what the migration made; the same two in CI from empty. Probes are BEGIN; ... ROLLBACK;, and the gate first checks that the host is localhost, 127.0.0.1 or ::1 and stops otherwise. Never --linked.",
+      "cards": ["db-migrations-ci", "db-rules-probes", "db-shared-guard"],
+      "examples": {
+        "hit": [{ "dbProbesOn": true, "packs": { "detected": ["supabase"] }, "localDatabase": { "engines": ["postgres"], "from": ["supabase/config.toml"] } }],
+        "miss": [{ "packs": { "detected": ["supabase"] }, "localDatabase": { "engines": ["postgres"], "from": ["supabase/config.toml"] } }, { "dbProbesOn": true, "packs": { "detected": ["supabase"] }, "hasDatabase": true }]
+      }
+    },
+    {
+      "id": "migration-schema-postgres",
+      "class": "migration-schema",
+      "db": true,
+      "when": "db-probes-on, local-db:postgres",
+      "title": "Migrations from empty and schema probes, with pg_prove",
+      "text": "Every migration from an empty local or container database with the project's migrate tool, then pgTAP schema probes with pg_prove (has_table, col_type_is) for what the migration made; the same in CI on a service container. Probes are BEGIN; ... ROLLBACK;, and the gate first checks that the host is localhost, 127.0.0.1, ::1 or the container it started, and stops otherwise.",
+      "cards": ["db-migrations-ci", "db-rules-probes", "db-shared-guard"],
+      "examples": {
+        "hit": [{ "dbProbesOn": true, "localDatabase": { "engines": ["postgres"], "from": ["docker-compose.yml"] } }],
+        "miss": [{ "localDatabase": { "engines": ["postgres"], "from": ["docker-compose.yml"] } }, { "dbProbesOn": true, "localDatabase": { "engines": ["mysql"], "from": ["compose.yaml"] } }]
+      }
+    },
+    {
+      "id": "migration-schema-local-db",
+      "class": "migration-schema",
+      "db": true,
+      "when": "db-probes-on, has-local-database",
+      "title": "Migrations from empty on a throwaway database",
+      "text": "Every migration from an empty throwaway database (testcontainers, or the compose service), then a test in the project's own test runner that checks the schema the migration made; the same in CI. Tests that write roll back, and the run first checks that the host is localhost, 127.0.0.1, ::1 or the container it started, and stops otherwise.",
+      "cards": ["db-migrations-ci", "db-rules-probes", "db-shared-guard"],
+      "examples": {
+        "hit": [{ "dbProbesOn": true, "localDatabase": { "engines": ["mysql"], "from": ["compose.yaml"] } }],
+        "miss": [{ "localDatabase": { "engines": ["mysql"], "from": ["compose.yaml"] } }, { "dbProbesOn": true, "hasDatabase": true }]
       }
     }
   ]

@@ -11,7 +11,13 @@
 //   withScriptBody(c, scripts) a command plus the package.json script it runs (also used by lib/dbGuard.js)
 //
 // The facts scan() adds besides the kinds (each read from files only, for the Checks cards):
-//   hasDatabase      the project has a database: migrations.folder is set, or supabase/, prisma/ or migrations/ exists
+//   hasDatabase      the project has a database: migrations.folder is set, supabase/, prisma/ or migrations/ exists, or a
+//                    local database is found (below)
+//   localDatabase    a database the project starts on this machine or throws away after a run, or null: the local
+//                    Supabase stack (supabase/config.toml), a database image in a compose file (docker-compose.yml/.yaml,
+//                    compose.yml/.yaml), or testcontainers in package.json, pyproject.toml or a requirements file. Read
+//                    from the files, never by connecting: { engines: ['postgres'|'mysql'|'mongo'], from: [files] }. It is
+//                    what tells a local database from a remote one (0i section 3.8): a DATABASE_URL alone is not local.
 //   hasMigrations    migrations are set up: the configured folder, or supabase/migrations, prisma/migrations,
 //                    migrations/ or db/migrations exists
 //   unpinnedActions  `uses:` lines in .github/workflows that point at a tag or branch instead of a 40-character commit
@@ -118,6 +124,50 @@ const MARKER_FILES = [
 /** Where the facts below look (see the header). */
 const DATABASE_DIRS = ['supabase', 'prisma', 'migrations'];
 const MIGRATION_DIRS = ['supabase/migrations', 'prisma/migrations', 'migrations', 'db/migrations'];
+/** Where a local database shows (localDatabase). */
+const COMPOSE_FILES = ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml'];
+const PY_MANIFESTS = ['pyproject.toml', 'requirements.txt', 'requirements-dev.txt', 'requirements-test.txt', 'dev-requirements.txt'];
+/** The last part of an image name (no registry, no tag) or a testcontainers module, as the engine it runs. */
+const ENGINES = [
+  ['postgres', /^(?:postgres|postgresql|postgis|timescaledb(?:-ha)?|pgvector)$/],
+  ['mysql', /^(?:mysql|mariadb|percona|percona-server)$/],
+  ['mongo', /^(?:mongo|mongodb|mongodb-community-server)$/],
+];
+const engineOf = (name) => ENGINES.find(([, re]) => re.test(String(name ?? '').toLowerCase()))?.[0] ?? null;
+/** `image: docker.io/library/postgres:16-alpine` gives postgres; a commented line is no image. */
+const IMAGE_LINE = /^\s*image:\s*["']?([^\s"'#]+)/;
+const imageEngine = (image) => engineOf(image.replace(/@.*$/, '').split('/').pop().replace(/:.*$/, ''));
+
+/**
+ * The local or throwaway database the files show (see localDatabase in the header), or null. Pure: reads through
+ * `exists` and `read`, and `deps` is package.json's dependencies and devDependencies.
+ */
+function localDatabaseOf({ exists, read, deps }) {
+  const engines = [];
+  const from = [];
+  const found = (file, list) => {
+    for (const e of list) if (e && !engines.includes(e)) engines.push(e);
+    if (!from.includes(file)) from.push(file);
+  };
+  if (exists('supabase/config.toml')) found('supabase/config.toml', ['postgres']);
+  for (const file of COMPOSE_FILES) {
+    const hits = String(read(file) ?? '')
+      .split(/\r?\n/)
+      .map((l) => IMAGE_LINE.exec(l)?.[1])
+      .filter(Boolean)
+      .map(imageEngine)
+      .filter(Boolean);
+    if (hits.length) found(file, hits);
+  }
+  const names = Object.keys(deps ?? {});
+  if (names.some((n) => n === 'testcontainers' || n.startsWith('@testcontainers/')))
+    found('package.json', names.filter((n) => n.startsWith('@testcontainers/')).map((n) => engineOf(n.slice('@testcontainers/'.length))));
+  for (const file of PY_MANIFESTS) {
+    const m = /\btestcontainers(?:\[([^\]]*)\])?/i.exec(String(read(file) ?? ''));
+    if (m) found(file, String(m[1] ?? '').split(',').map((x) => engineOf(x.trim())));
+  }
+  return from.length ? { engines, from } : null;
+}
 const RUNTIME_FILES = ['.nvmrc', '.node-version', '.tool-versions', '.python-version', 'mise.toml', '.mise.toml', 'rust-toolchain', 'rust-toolchain.toml', '.ruby-version', '.java-version', '.sdkmanrc'];
 const ENV_EXAMPLES = ['.env.example', '.env.sample', '.env.template'];
 /** Dependencies that are a formatter, an unused-code finder or a copy detector, counted as the marker files are. */
@@ -282,10 +332,12 @@ function scan({ exists, read, list, gates = {}, checks = [], migrationsFolder = 
   // A folder counts when it exists or has files in it (an injected file list knows files only, the disk knows both).
   const hasDir = (d) => exists(d) || list(d).length > 0;
   const folder = typeof migrationsFolder === 'string' && migrationsFolder.trim() ? migrationsFolder.trim().replace(/\\/g, '/').replace(/\/+$/, '') : null;
+  const localDatabase = localDatabaseOf({ exists, read, deps });
   return {
     ci,
     kinds: KINDS.filter((k) => places.has(k.key)).map((k) => ({ key: k.key, title: k.title, places: places.get(k.key) })),
-    hasDatabase: !!folder || DATABASE_DIRS.some(hasDir),
+    hasDatabase: !!folder || DATABASE_DIRS.some(hasDir) || localDatabase !== null,
+    localDatabase,
     hasMigrations: (!!folder && hasDir(folder)) || MIGRATION_DIRS.some(hasDir),
     unpinnedActions,
     runtimePinned:
@@ -298,4 +350,4 @@ function scan({ exists, read, list, gates = {}, checks = [], migrationsFolder = 
   };
 }
 
-module.exports = { KINDS, classify, parseWorkflow, scan, withScriptBody, unpinnedUse };
+module.exports = { KINDS, classify, parseWorkflow, scan, withScriptBody, unpinnedUse, localDatabaseOf };

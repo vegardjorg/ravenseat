@@ -46,6 +46,7 @@ const REPORT_VERSION = 1;
 const RECENT_MIN = 3;
 
 const anyKind = (arg, test) => arg.split('|').some((k) => test(k));
+const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 /** Where a kind of check was found: Set of ci, gate, script, hook, config. */
 const placesOf = (facts, kind) => new Set((facts.kinds?.find((k) => k.key === kind)?.places ?? []).map((p) => p.where));
 
@@ -78,6 +79,11 @@ const CONDITIONS = {
   // The database (lib/checksScan.js scan): a database at all, and migrations set up.
   'has-database': (f) => f.hasDatabase === true,
   'has-migrations': (f) => f.hasMigrations === true,
+  // A local or throwaway database is found in the files (lib/checksScan.js localDatabase: supabase/config.toml, a
+  // database image in a compose file, testcontainers). A database only named by a URL is not local (0i section 3.8).
+  'has-local-database': (f) => isPlainObject(f.localDatabase),
+  // The database probe recipes are on (learning.dbProbes, off by default; lib/findingRepeats.js setupOf, cli/checks.mjs).
+  'db-probes-on': (f) => f.dbProbesOn === true,
   // The tracked .claude/settings.json (lib/broadPermissions.js, cli/checks.mjs): it exists, and bypassPermissions in it.
   'shared-settings': (f) => f.sharedSettings === true,
   'bypass-tracked': (f) => f.bypassTracked === true,
@@ -202,6 +208,8 @@ const KIND_CONDITIONS = {
   // The project's stack: `stack:typescript|python`. A word of a stack the manifests show (facts.stacks, so
   // "Node/TypeScript" is node and typescript) or a stack pack found (facts.packs.detected, such as supabase).
   stack: (f, arg) => anyKind(arg, (k) => stackWords(f).has(k.toLowerCase())),
+  // The engine of the local database found: `local-db:postgres|mysql` (lib/checksScan.js localDatabase.engines).
+  'local-db': (f, arg) => anyKind(arg, (k) => isPlainObject(f.localDatabase) && Array.isArray(f.localDatabase.engines) && f.localDatabase.engines.includes(k)),
 };
 
 const conditionsOf = (when) => String(when ?? '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -282,7 +290,11 @@ function parseTemplate(text, key) {
 // (same id replaces, `off: true` removes, a new id comes before the plugin's). `when` is a card condition, so a stack and
 // what the project has are said once, in one language (holds). `cards` names cards that already do the work, never a
 // copy. `examples` are facts the recipe must hold for (hit) and must not (miss): recipeExampleProblems, a test.
-//   { id, class, when, title, text, cards: [card keys], examples: { hit: [facts], miss: [facts] } }
+// `db: true` marks a database probe recipe (0i section 3.8): its `when` must say db-probes-on (learning.dbProbes, off by
+// default) and has-local-database or local-db:<engine>, so it is shown only when the owner turned the recipes on and a
+// local or throwaway database is found, and "Build as gate" adds the shared database guard to the mission
+// (lib/findingRepeats.js buildTask). A db recipe without those conditions is an error and left out, also a project's.
+//   { id, class, when, title, text, cards: [card keys], db?: boolean, examples: { hit: [facts], miss: [facts] } }
 
 const RECIPE_ID = /^[a-z0-9][a-z0-9-]{0,59}$/;
 const CLASS_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
@@ -312,6 +324,7 @@ function parseRecipe(raw, label) {
     title: typeof raw.title === 'string' ? raw.title.trim() : '',
     text: typeof raw.text === 'string' ? raw.text.replace(/\s+/g, ' ').trim() : '',
     cards: Array.isArray(raw.cards) ? raw.cards.filter((k) => typeof k === 'string' && k) : [],
+    db: raw.db === true,
     examples: { hit: Array.isArray(raw.examples?.hit) ? raw.examples.hit : [], miss: Array.isArray(raw.examples?.miss) ? raw.examples.miss : [] },
     errors: [],
   };
@@ -324,6 +337,12 @@ function parseRecipe(raw, label) {
   if (!r.text) err('"text" is missing');
   else if (r.text.length > RECIPE_TEXT_MAX) err(`"text" is over ${RECIPE_TEXT_MAX} characters`);
   if (r.cards.length > RECIPE_CARDS_MAX) err(`at most ${RECIPE_CARDS_MAX} cards`);
+  if (raw.db !== undefined && typeof raw.db !== 'boolean') err('"db" must be true or false');
+  if (r.db) {
+    const cs = conditionsOf(r.when);
+    if (!cs.includes('db-probes-on') || !cs.some((c) => c === 'has-local-database' || c.startsWith('local-db:')))
+      err('a database recipe (db: true) needs db-probes-on and has-local-database or local-db:<engine> in when, so it is off by default and only for a local database');
+  }
   if (!r.examples.hit.length) err('needs at least one hit example (facts it holds for)');
   if (conditionsOf(r.when).length && !r.examples.miss.length) err('needs at least one miss example (facts it does not hold for)');
   if (!r.errors.length) for (const p of recipeExampleProblems(r)) r.errors.push(`${label}/recipes.json: ${p}`);
@@ -449,6 +468,10 @@ function suggestionState(t, tasks, dismissed) {
 const LEDGER_CARD = 'ledger-recipes';
 const LEDGER_MAX = 3;
 const PLACES_MAX = 5;
+/** The failure classes the database probe recipes are for (0i section 3.8), and the card's line while they are off. */
+const DB_CLASSES = new Set(['access-control', 'migration-schema']);
+const DB_HINT =
+  'A local database is found, and the database probe recipes are off: ravenseat settings set learning.dbProbes on shows one (probes only against a local database, rolled back).';
 
 /**
  * The due classes for the card ledger-recipes: per open entry the class, the count, the places (paths only, never an
@@ -475,11 +498,14 @@ function ledgerItems(facts, catalog, suggestions) {
       files: (Array.isArray(e.files) ? e.files : []).filter((f) => typeof f === 'string' && f).slice(0, PLACES_MAX),
       stacks,
       proposal: e.proposal ? { state: e.proposal.state, task: e.proposal.task ?? null } : null,
+      // A database class with a local database and the recipes off: one line on how to turn them on (no recipe).
+      hint: !r && DB_CLASSES.has(e.class) && isPlainObject(facts.localDatabase) && facts.dbProbesOn !== true ? DB_HINT : null,
       recipe: r
         ? {
             id: r.id,
             title: r.title,
             text: r.text,
+            db: r.db === true,
             cards: r.cards.map((k) => {
               const s = shown.get(k);
               return s && s.applies ? { key: k, title: s.title, applies: true, state: s.state } : { key: k, title: titles.get(k) ?? k, applies: false, state: null };
@@ -500,7 +526,7 @@ function ledgerRecipeLine({ items, more, capFull }) {
     const proposed = i.proposal?.state === 'extend' && i.proposal.task ? ` (proposed as ${i.proposal.task})` : '';
     const stack = ` Stack: ${i.stacks.length ? i.stacks.join(', ') : 'not known'}.`;
     const cards = i.recipe?.cards.length ? ` See the card${i.recipe.cards.length > 1 ? 's' : ''} ${i.recipe.cards.map((c) => `"${c.title}"`).join(' and ')}.` : '';
-    const recipe = i.recipe ? ` Recipe: ${i.recipe.title}. ${i.recipe.text}${cards}` : ' No recipe yet for this class in this stack.';
+    const recipe = i.recipe ? ` Recipe: ${i.recipe.title}. ${i.recipe.text}${cards}` : i.hint ? ` ${i.hint}` : ' No recipe yet for this class in this stack.';
     return `${capital(i.title)} ${where}: ${i.incidents} incident(s)${at}${proposed}.${stack}${recipe}`;
   });
   if (more) parts.push(`And ${more} more.`);
@@ -556,7 +582,8 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
     stacks: facts.stacks ?? [],
     git: !!facts.git,
     hasCommit: facts.hasCommit !== false,
-    found: { ci: facts.ci ?? [], kinds: facts.kinds ?? [] },
+    // hasDatabase and localDatabase: what "Build as gate" needs for the shared database guard (cli/checks.mjs buildGate).
+    found: { ci: facts.ci ?? [], kinds: facts.kinds ?? [], hasDatabase: facts.hasDatabase === true, localDatabase: isPlainObject(facts.localDatabase) ? facts.localDatabase : null },
     categories: catalog.categories.map(({ key, title, text }) => ({ key, title, text: text ?? '' })),
     packs: facts.packs ?? null,
     suggestions,

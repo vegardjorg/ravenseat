@@ -162,8 +162,8 @@ describe('guard failed', () => {
 });
 
 describe('the setup', () => {
-  it('the defaults: counting and the marker on, proposals off, 90 days, 2 in an area, 3 in the project', () => {
-    expect(R.setupOf({})).toEqual({ repeats: true, windowDays: 90, areaRepeats: 2, projectRepeats: 3, guardFailedMarker: true, proposals: false });
+  it('the defaults: counting and the marker on, proposals and database probe recipes off, 90 days, 2 in an area, 3 in the project', () => {
+    expect(R.setupOf({})).toEqual({ repeats: true, windowDays: 90, areaRepeats: 2, projectRepeats: 3, guardFailedMarker: true, proposals: false, dbProbes: false });
     expect(R.setupOf({ learning: { windowDays: 0, areaRepeats: 'x', proposals: 'yes' } })).toMatchObject({ windowDays: 90, areaRepeats: 2, proposals: false });
   });
 

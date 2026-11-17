@@ -45,6 +45,9 @@
 // recipe and the places (paths only) in the mission, and the criteria red on the reproduction, green on the fixed code,
 // both runs shown; without a red reproduction the report says "no gate" and the registry gets the decision none.
 // It is proposed too, and it needs the inspection queue on (inspection.mode), not learning.proposals: the owner asked.
+// A database gate (a recipe marked db, or access-control or migration-schema in a project with a database) also gets
+// the shared database guard: the host check before anything writes, the stop on any other host, the rollback, and
+// what dbGuard.localOnly does (0i section 3.8, DB_CRITERIA).
 //
 // Tested in lib/__tests__/findingRepeats.test.ts and __tests__/findingRepeatsFlow.test.ts.
 // =============================================================
@@ -54,8 +57,11 @@ const G = require('./knownBugGate.js');
 const FC = require('./failureClasses.js');
 
 /** The settings' defaults (lib/queueConfig.js STANDARD.learning holds the same values). */
-const DEFAULTS = Object.freeze({ repeats: true, windowDays: 90, areaRepeats: 2, projectRepeats: 3, guardFailedMarker: true, proposals: false });
-const ONOFF = ['repeats', 'guardFailedMarker', 'proposals'];
+// dbProbes: the database probe recipes for access-control and migration-schema (checks-catalog/recipes.json, db: true)
+// are shown only with it on and a local database found (0i section 3.8). Off by default: a probe gate is heavy, needs a
+// running database, and is the one kind of gate that can harm data elsewhere when it is pointed at the wrong host.
+const DEFAULTS = Object.freeze({ repeats: true, windowDays: 90, areaRepeats: 2, projectRepeats: 3, guardFailedMarker: true, proposals: false, dbProbes: false });
+const ONOFF = ['repeats', 'guardFailedMarker', 'proposals', 'dbProbes'];
 const NUMBERS = ['windowDays', 'areaRepeats', 'projectRepeats'];
 /** The scope drift cards' rule (plans/scope-drift-dry-katalog-2026-11-15.md): 3 in one area within 30 days. */
 const RECENT_DAYS = 30;
@@ -371,6 +377,23 @@ function projectLines(project = {}, recipe = null) {
   ];
 }
 
+/** The failure classes whose gate is a database probe in a project with a database (0i section 3.8). */
+const DB_CLASSES = new Set(['access-control', 'migration-schema']);
+
+/** Is this gate a database probe: a recipe marked db, or a database class in a project with a database? */
+const dbGate = (e, project, recipe) => recipe?.db === true || (DB_CLASSES.has(e?.class) && project?.database?.has === true);
+
+/** The shared database guard in a database gate's mission (criteria e to g). */
+const DB_CRITERIA = [
+  'e. Only a local or throwaway database: before anything that writes, the probe (or the gate script that runs it) checks the host it connects to: localhost, 127.0.0.1, ::1, or a container or throwaway instance the run started itself. On any other host it stops with one line naming the host (never the URL, it may hold a password) and writes nothing. Show that stop once with a made-up remote host name: the check stops before it connects, so no real database is contacted.',
+  'f. Every probe that writes runs in a transaction that is rolled back at the end (BEGIN; ... ROLLBACK;), or on a database that is thrown away after the run. Never run it against a shared, staging or production database, and never with --linked.',
+  'g. A probe gate is heavy: make it its own gate command (the gate queue gives it a slot), and say how long one run takes.',
+];
+const DB_GUARD_ON =
+  'dbGuard.localOnly is on: Ravenseat also refuses a probe gate whose command or environment names a database that is not local, but it does not read a URL inside a file, so the probe\'s own host check is still needed.';
+const DB_GUARD_OFF =
+  'dbGuard.localOnly is off: recommend in track-result.md that the owner turns it on (ravenseat settings set dbGuard.localOnly on); do not change it yourself.';
+
 /**
  * The task "Build as gate" on the card ledger-recipes adds (0i section 3.7 point 3): the same gate task per class and
  * area as proposalTask (title, labels, source, added_by), so knownBugGate.decide, the shared cap and the GATE id series
@@ -378,8 +401,13 @@ function projectLines(project = {}, recipe = null) {
  * criteria in the mission. Nothing from a row beyond its class, place and task id reaches it (section 3.11).
  * @param {object} e  a due entry from scan
  * @param {{ id: string, classes?: object[], record?: { cli: string, registryFile: string },
- *   project?: { quick?: string[], full?: string[], ci?: string[], testRunner?: string|null },
- *   recipe?: { id: string, title: string, text: string }|null }} o
+ *   project?: { quick?: string[], full?: string[], ci?: string[], testRunner?: string|null,
+ *     database?: { has?: boolean, guardOn?: boolean } },
+ *   recipe?: { id: string, title: string, text: string, db?: boolean }|null }} o
+ * A database gate (dbGate: a recipe marked db, or a database class in a project with a database, also without a
+ * recipe) gets the shared database guard as criteria e to g (0i section 3.8): the probe checks its host before anything
+ * writes and stops on any host that is not local, writing probes roll back, and the mission says what
+ * dbGuard.localOnly does here without asking the agent to change it.
  */
 function buildTask(e, { id, classes, record = null, project = {}, recipe = null } = {}) {
   const base = proposalTask(e, { id, classes, record });
@@ -398,9 +426,15 @@ function buildTask(e, { id, classes, record = null, project = {}, recipe = null 
     'c. Both runs (command and result line) in track-result.md.',
     'd. No red reproduction, no gate: say "no gate" in track-result.md with the reason, build nothing, and record the decision none with that reason (below).',
   ];
+  const db = dbGate(e, project, recipe);
+  if (db) build.push(...DB_CRITERIA, project.database?.guardOn === true ? DB_GUARD_ON : DB_GUARD_OFF);
   return {
     ...base,
-    acceptance: [...(base.acceptance ?? []), 'Without a red reproduction the report says "no gate" and the registry gets the decision none with its reason.'],
+    acceptance: [
+      ...(base.acceptance ?? []),
+      'Without a red reproduction the report says "no gate" and the registry gets the decision none with its reason.',
+      ...(db ? ['A database probe checks its host before it writes and stops on any host that is not local; every probe that writes rolls back.'] : []),
+    ],
     mission: [head, ...build, tail.length ? `\nThe gate criteria:${tail.join('\n\nThe gate criteria:')}` : ''].join('\n'),
   };
 }

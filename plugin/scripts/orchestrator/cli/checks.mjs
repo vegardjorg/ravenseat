@@ -231,6 +231,8 @@ function makeReport(queue) {
       lite: LM.isLite(CONFIG),
       // The inspection queue (inspection.mode): the recipe card for the finding log needs it (condition inspection-on).
       inspectionOn: require('./lib/inspection.js').setupOf(CONFIG).enabled === true,
+      // The database probe recipes (learning.dbProbes, off by default): condition db-probes-on (0i section 3.8).
+      dbProbesOn: require('./lib/findingRepeats.js').setupOf(CONFIG).dbProbes === true,
       // The client format canary (lib/clientCanary.js): the card while the newest transcript has rows read differently.
       clientCanary: canaryFacts(),
     },
@@ -539,13 +541,15 @@ function buildGate(raw) {
     die(`Not added: the cap of three open proposals (inspection and gate) is full, or ${KNOWN.MAX_OPEN} gate tasks are open. It waits for a free slot: approve or cancel one first (${CLI} gate list, ${CLI} inspection).`);
   const report = makeReport(queue);
   const item = report.suggestions.find((s) => s.key === 'ledger-recipes')?.ledger?.items?.find((i) => i.key === key) ?? null;
-  const recipe = item?.recipe ? { id: item.recipe.id, title: item.recipe.title, text: item.recipe.text } : null;
+  const recipe = item?.recipe ? { id: item.recipe.id, title: item.recipe.title, text: item.recipe.text, db: item.recipe.db === true } : null;
   const gates = CONFIG.gates ?? {};
   const project = {
     quick: Array.isArray(gates.quick) ? gates.quick : [],
     full: Array.isArray(gates.full) ? gates.full : [],
     ci: [...new Set((report.found?.ci ?? []).map((c) => c.file).filter(Boolean))],
     testRunner: testRunnerOf(report.found),
+    // The shared database guard in the mission (lib/findingRepeats.js buildTask, 0i section 3.8).
+    database: { has: report.found?.hasDatabase === true, guardOn: OI.isOn(CONFIG, 'dbGuard.localOnly') },
   };
   if (!LM.isLite(CONFIG)) ensureProject();
   const id = KNOWN.nextId(known);

@@ -51,9 +51,10 @@ describe('the recipes the plugin ships', () => {
     expect(new Set(recipes.map((r) => r.id)).size).toBe(recipes.length);
   });
 
-  it('never a recipe for other, nor yet for the database classes (they come with the database probes)', () => {
+  it('never a recipe for other; the database classes only as database recipes (dbProbeRecipes.test.ts)', () => {
     const classes = new Set(recipes.map((r) => r.class));
-    for (const c of ['other', 'access-control', 'migration-schema']) expect(classes.has(c), c).toBe(false);
+    expect(classes.has('other')).toBe(false);
+    for (const r of recipes.filter((x) => ['access-control', 'migration-schema'].includes(x.class))) expect((r as Recipe & { db?: boolean }).db, r.id).toBe(true);
   });
 
   it('reuses the cards that exist for the examples in the plan, never a copy of them', () => {

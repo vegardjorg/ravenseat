@@ -123,7 +123,8 @@ const STANDARD = Object.freeze({
   // a class back where a guard for it was in place lights the red marker on the Checks tab (owner decision 8: always).
   // proposals: a due class and area becomes a proposed gate task, under the cap shared with the inspection queue and
   // the gate lines (lib/knownBugGate.js sharedProposals). Off by default (lib/optInChecks.js): it asks for the owner's time.
-  learning: { repeats: true, windowDays: 90, areaRepeats: 2, projectRepeats: 3, guardFailedMarker: true, proposals: false },
+  // dbProbes: the database probe recipes on the Checks tab (only with a local database found). Off by default.
+  learning: { repeats: true, windowDays: 90, areaRepeats: 2, projectRepeats: 3, guardFailedMarker: true, proposals: false, dbProbes: false },
   // The batch push threshold (lib/pushBatch.js; `ravenseat push-check`, the push guard, the board). Every push of baseBranch
   // runs the whole CI, so pushes come in batches of MERGED TASKS (merges through ravenseat merge not yet on <remote>).
   // mode: "owner" = the orchestrator never pushes on its own, only on the owner's word; "threshold" = it may push by

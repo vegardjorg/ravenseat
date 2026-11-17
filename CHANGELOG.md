@@ -5,6 +5,20 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: access control and migration failures that keep coming back can get a database probe as their guard,
+  and a probe never runs against a shared database by mistake.** The recipes now cover the classes access control and
+  migration: pgTAP probes with `supabase test db` for Supabase, with `pg_prove` for another Postgres, and tests in the
+  project's own runner against a throwaway database for the rest, each pointing to the existing database cards. They are
+  off by default (new setting `learning.dbProbes`) and shown only when the scan finds a local or throwaway database
+  (`supabase/config.toml`, a database image in a compose file, or testcontainers in the manifests; a `DATABASE_URL`
+  alone is not local), with the new card conditions `has-local-database`, `local-db:<engine>` and `db-probes-on`. With
+  them off and a local database found, the card says how to turn them on. Every database recipe names the host check
+  and the rollback in its own text, and "Build as gate" for a database class in a project with a database adds the
+  shared database guard to the mission: check that the host is localhost, 127.0.0.1, ::1 or the container the run
+  started before anything writes, stop with one line naming the host otherwise (never the URL), show that stop once on
+  a made-up host, roll back every write, and say whether `dbGuard.localOnly` is on (recommended, never changed by the
+  agent). A project recipe marked `db` without the setting and a local database in its `when` is left out and named.
+  A compose file or testcontainers now also counts as a database for the existing database cards.
 - **Hardening: a failure class that keeps coming back can now become a gate in one click, and a gate without a red
   reproduction is not built.** The card "A kind of failure keeps coming back: what would guard it" has a Build as gate
   button per class and area with nothing proposed yet (`ravenseat checks build-gate <class>@<area>`). It adds one

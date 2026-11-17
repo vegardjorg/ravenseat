@@ -377,6 +377,13 @@ const SETTINGS = Object.freeze([
   row('learning.proposals', 'gates', 'onoff', 'Propose guards from the finding log',
     'A class that keeps coming back in one area becomes one proposed gate task (you approve it). It shares one cap ' +
     'of three open proposals with the inspection queue and the gate lines. Off by default.'),
+  // The database probe recipes (0i section 3.8). Off by default: a probe gate is heavy, needs a running database, and
+  // is the one kind of gate that can change data elsewhere when it points at the wrong host. On, it only shows a recipe;
+  // building one still takes the owner's click and approve, and the mission demands the host check and the rollback.
+  row('learning.dbProbes', 'gates', 'onoff', 'Database probe recipes',
+    'Off by default. On: for access control and migration failures that keep coming back, the Checks tab shows a ' +
+    'recipe for database probes (pgTAP, supabase test db, testcontainers), only when a local or throwaway database is ' +
+    'found. A gate built from it must check that its database host is local before it writes, and roll back.'),
   row('testWeakening.enabled', 'gates', 'onoff', 'Test weakening warning',
     'Receive warns about deleted or moved test files and added skip or focus markers.', {
       weakens: offWeakens,
