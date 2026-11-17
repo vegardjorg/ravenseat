@@ -126,13 +126,15 @@ top three suggestions with their `why`, in plain words. Then ASK one question, w
 
 Never add more than the user picked, and do not list the whole catalog unless they ask.
 
-### Checks that are off (at most one question each, once)
+### Checks that are off (one question for all, once)
 
-A new check comes off. For each `TIP:` line setup printed (setup prints each only once, ever), ask the user in one short
-line whether to turn it on, in plain words from the tip. Yes: run the command after `On:` in the tip (for the share
-tip it is `share on --yes`, which explains what becomes visible first; show the user that text). No: run the command
-after `No:` (`checks dismiss <card>`), which sets the Checks card aside too, so it does not come back there. No
-answer: change nothing and do not ask again; the Checks tab keeps its card with "Turn on". No `TIP:` lines: skip this.
+A new check comes off. Setup prints at most one `TIP:` line, followed by one `- <setting>: ...` line per check that is
+off (each check only once, ever). ASK ONE question for all of them: list the checks in plain words from their lines and
+let the user pick any, all or none. For each one picked: run the command after `On:` on its line (for the share check
+it is `share on --yes`, which explains what becomes visible first; show the user that text). For each one the user
+says no to (a "none" is a no to all): run the command after `No:` (`checks dismiss <card>`), which sets the Checks card
+aside too, so it does not come back there, and doctor stops naming it. No answer: change nothing and do not ask again;
+the Checks tab keeps its card with "Turn on". No `TIP:` line: skip this.
 
 ## 4. Bring in the user's own work
 

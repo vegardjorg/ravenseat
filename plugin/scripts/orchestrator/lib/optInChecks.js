@@ -4,11 +4,15 @@
 // Why: the owner decided (2026-11-15) that every NEW check is off by default, each with its own setting, so an existing
 // project sees no new WARN or FAIL after an update. Instead of nagging, each check is offered in three quiet ways, all
 // from this one list so they never disagree:
-//   - setup prints one short "turn on X?" tip per check that is off, once per check (the asked keys are kept in the
-//     queue's data folder, setup-tips.json), and the setup skill asks the user, who may decline;
+//   - setup prints one TIP line for all the checks that are off, then one line per check (tipLines), once per check
+//     (the asked keys are kept in the queue's data folder, setup-tips.json); the setup skill asks the user ONE question
+//     for all of them, and the user may pick any or none;
 //   - the Checks tab has a card per check (checks-catalog/suggestions/<suggestion>.md, action: setting) whose
-//     "Turn on" writes the setting; a card set aside stays set aside;
-//   - doctor shows one INFO line while the check is off (never WARN or FAIL), naming the setting.
+//     "Turn on" writes the setting; a card set aside stays set aside. A card that applies in every project is low and
+//     rises only through its important_when (owner decision 2026-11-17: off by choice is no advice by itself);
+//   - doctor shows one INFO line while the check is off (never WARN or FAIL), naming the setting, but only when a quiet
+//     look found an important gap and the card is not set aside (offShown); otherwise only `doctor --all` shows it.
+//     Off is the normal state, so a line about it on every run would be nagging (owner decision 2026-11-17).
 // A check counts as on only when its setting is exactly true: a missing or odd value is off, the default.
 // A no to a setup tip sets the Checks card aside (owner decision 2026-11-15): the tip names `ravenseat checks dismiss
 // <suggestion>`, the same "Set aside" as on the Checks tab, so the suggestion does not come back there either.
@@ -19,7 +23,9 @@
 //   isOn(config, key)      is the setting true?
 //   byKey(key), bySuggestion(key)
 //   tipsToGive(config, asked)   the checks setup still has to tip about
-//   tipLine(check)         the line setup prints
+//   tipLine(check)         one check as a line (its On and its No)
+//   tipLines(checks)       what setup prints: one TIP line, then one tipLine per check; [] for none
+//   offShown(check, { gap, dismissed })   does plain doctor show the off line? (else only --all)
 //   offLine(check, gap)    doctor's INFO text while the check is off
 //
 // Used by: setup.mjs, cli/doctorBaseline.mjs, cli/checks.mjs. Tested in: lib/__tests__/optInChecks.test.ts.
@@ -131,9 +137,32 @@ function tipsToGive(config, asked = [], facts = {}) {
 /** The command that turns a check on. */
 const onCommand = (c, cli = 'ravenseat') => `${cli} ${c.on ?? `settings set ${c.key} on`}`;
 
-/** The setup line: what it would do, how to turn it on, and how to say no (which sets the Checks card aside too). */
+/** One check for setup: what it would do, how to turn it on, and how to say no (which sets the Checks card aside too). */
 const tipLine = (c, cli = 'ravenseat') =>
-  `TIP: turn on a check that is off? It would ${c.tip}. On: ${onCommand(c, cli)}. No: ${cli} checks dismiss ${c.suggestion}`;
+  `${c.key}: it would ${c.tip}. On: ${onCommand(c, cli)}. No: ${cli} checks dismiss ${c.suggestion}`;
+
+/**
+ * What setup prints: ONE question for all the checks that are off (owner decision 2026-11-17, it asked up to seven
+ * times before), as one TIP line and then one line per check. Nothing to tip: no lines.
+ */
+function tipLines(checks, cli = 'ravenseat') {
+  const list = Array.isArray(checks) ? checks : [];
+  if (!list.length) return [];
+  return [
+    `TIP: ${list.length} checks are off. Turn any of them on? Ask once for all (any, all or none); for each one the user says no to, run its No`,
+    ...list.map((c) => `- ${tipLine(c, cli)}`),
+  ];
+}
+
+/**
+ * Does plain doctor show the off line of a check? Only for an important gap (the same reason that makes its card high),
+ * and not when the card is set aside (`dismissed`, queue.checksPanel.dismissed; a no in setup is the same dismiss), as
+ * the card itself stays aside then. Otherwise the line is shown only by `doctor --all`.
+ */
+function offShown(c, { gap = false, dismissed = [] } = {}) {
+  if (!gap) return false;
+  return !(Array.isArray(dismissed) && dismissed.includes(c.suggestion));
+}
 
 /** Doctor's INFO text while a check is off. `gap`: the check, run quietly, found something (never what). */
 function offLine(c, { cli = 'ravenseat', gap = false } = {}) {
@@ -143,4 +172,4 @@ function offLine(c, { cli = 'ravenseat', gap = false } = {}) {
   );
 }
 
-module.exports = { OPT_IN, isOn, byKey, bySuggestion, tipsToGive, tipLine, offLine, onCommand, valueAt };
+module.exports = { OPT_IN, isOn, byKey, bySuggestion, tipsToGive, tipLine, tipLines, offShown, offLine, onCommand, valueAt };

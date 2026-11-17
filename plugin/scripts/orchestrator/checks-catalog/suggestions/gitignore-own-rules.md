@@ -1,7 +1,7 @@
 ---
 title: Check the project's own .gitignore
 category: security
-priority: medium
+priority: low
 when: off:gitignoreCheck.enabled
 important_when: gitignore-gap
 content_min: 1

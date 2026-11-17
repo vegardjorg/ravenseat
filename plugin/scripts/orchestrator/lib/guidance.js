@@ -52,11 +52,12 @@ const ON_REQUEST_CHECKS = ['ci-cost'];
 
 /**
  * The doctor rows split into what shows and how many advice rows quiet took. A line shown only on request is not counted:
- * it is off, not hidden. --all shows every row.
+ * it is off, not hidden. That is a row of ON_REQUEST_CHECKS, or a row marked `onRequest` (the off line of an opt-in check
+ * without an important gap, cli/doctorBaseline.mjs offRow). --all shows every row.
  */
 function filterDoctor(rows, quiet, { all = false } = {}) {
   if (all) return { rows, hidden: 0 };
-  const asked = rows.filter((c) => !(ON_REQUEST_CHECKS.includes(c.name) && c.status !== 'FAIL'));
+  const asked = rows.filter((c) => !((ON_REQUEST_CHECKS.includes(c.name) || c.onRequest === true) && c.status !== 'FAIL'));
   if (!quiet) return { rows: asked, hidden: 0 };
   const shown = asked.filter((c) => !(ADVICE_CHECKS.includes(c.name) && (c.status === 'WARN' || c.status === 'INFO')));
   return { rows: shown, hidden: asked.length - shown.length };

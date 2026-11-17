@@ -998,11 +998,14 @@ the blocker. A false alarm: `merge --allow-secret`, which only the owner and the
 refuses it like `--allow-guard`), logged as `secret-overridden`. A scan that does not finish warns and blocks nothing.
 **Opt-in checks.** A new check comes off, so an update never adds a WARN or FAIL by itself: the scan at receive,
 `secretScan.allowlist`, `gitignoreCheck.enabled` and `share.queueData` (offered only in a private repo) below. Each is offered three quiet ways: `setup` prints one `TIP:`
-per check, once ever (`<dataFolder>/setup-tips.json`); the Checks tab has a card with "Turn on" (`ravenseat checks
-turn-on <card>`), which you may set aside for good (a no to the setup tip runs `checks dismiss <card>`, the same
-set aside); and `doctor` shows one INFO line naming the setting. A card is high,
+for all the checks that are off, with one line per check, so you get one question; each check is in it once ever
+(`<dataFolder>/setup-tips.json`); the Checks tab has a low card with "Turn on" (`ravenseat checks
+turn-on <card>`), which you may set aside for good (a no in setup runs `checks dismiss <card>`, the same
+set aside); and `doctor` shows one INFO line naming the setting, but only while an important gap is there and the card
+is not set aside (`doctor --all` shows them all). A card is high,
 and lights the tab's red dot, while an important gap is there: a key in a tracked approved command,
-`.claude/settings.local.json` not ignored by the project's own rules, or a tracked file in the queue's data.
+`.claude/settings.local.json` not ignored by the project's own rules, a tracked file in the queue's data, or (for the
+scan at receive) a secret file already in git.
 **Keys in approved commands, and the project's own .gitignore.** "Yes, and don't ask again" in Claude Code stores the
 whole command in `permissions.allow`, so a key typed in it sits in clear text in `.claude/settings.local.json`, or in the
 tracked `.claude/settings.json`. With `secretScan.allowlist` on, `doctor` (row `allowlist`) runs every rule in `permissions.allow`, `ask` and `deny` of both

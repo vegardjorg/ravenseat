@@ -124,14 +124,20 @@ describe('ravenseat share', () => {
     expect(s[0].message).toMatch(/public/);
   }, 90_000);
 
-  it('doctor: share off in a private repo is one INFO line that offers it; elsewhere no share line', () => {
+  it('doctor --all: share off in a private repo is one INFO line that offers it; elsewhere, and in plain doctor, no share line', () => {
     const p = shareProject();
-    const rows = () => {
+    // Off is the safe side and the normal state, so plain doctor never names it (the Checks tab keeps the card).
+    const plain = () => {
       const r = p.run('doctor', '--json');
+      return (JSON.parse(r.out.slice(r.out.indexOf('{'), r.out.lastIndexOf('}') + 1)).checks as { name: string }[]).filter((c) => c.name === 'share');
+    };
+    const rows = () => {
+      const r = p.run('doctor', '--json', '--all');
       return (JSON.parse(r.out.slice(r.out.indexOf('{'), r.out.lastIndexOf('}') + 1)).checks as { name: string; status: string; message: string; fix?: string }[]).filter((c) => c.name === 'share');
     };
     expect(rows()).toEqual([]);
     p.visibility('private');
+    expect(plain()).toEqual([]);
     const s = rows();
     expect(s.map((c) => c.status)).toEqual(['INFO']);
     expect(`${s[0].message} ${s[0].fix}`).toContain('share on --yes');

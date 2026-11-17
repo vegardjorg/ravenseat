@@ -63,8 +63,8 @@ function project({ config = {}, files = {}, loose = {}, env: extra = {} }: { con
     RAVENSEAT_INSTRUCTIONS_TOP: root,
     ...extra,
   };
-  const run = () => {
-    const r = spawnSync(process.execPath, [QUEUE, 'doctor', '--json'], { encoding: 'utf8', env, cwd: root });
+  const run = (...more: string[]) => {
+    const r = spawnSync(process.execPath, [QUEUE, 'doctor', '--json', ...more], { encoding: 'utf8', env, cwd: root });
     return { code: r.status, checks: (JSON.parse(r.stdout).checks as Check[]) };
   };
   const text = () => spawnSync(process.execPath, [QUEUE, 'doctor'], { encoding: 'utf8', env, cwd: root }).stdout;
@@ -451,9 +451,12 @@ describe('ravenseat doctor: approved commands and the project gitignore', () => 
     expect(g[0].fix).toMatch(/git rm --cached/);
   }, 60_000);
 
-  it('off by default: one INFO line each, naming the setting; an important gap is said, never what', () => {
+  it('off by default: no line without a gap (only --all shows one INFO line each, naming the setting); an important gap is said, never what', () => {
     let p = project({ files: { '.gitignore': SETUP_IGNORES, '.claude/settings.json': allow(['Bash(npm test)']) }, env: globalConfig() });
-    let r = p.run();
+    // Off is the normal state: plain doctor says nothing about it (the Checks tab keeps the card).
+    expect(p.run().checks.filter((c) => c.name === 'allowlist' || c.name === 'gitignore')).toEqual([]);
+    expect(p.text()).not.toMatch(/gitignoreCheck|secretScan\.allowlist/);
+    let r = p.run('--all');
     const a = r.checks.filter((c) => c.name === 'allowlist');
     const g = r.checks.filter((c) => c.name === 'gitignore');
     expect(a.map((c) => c.status)).toEqual(['INFO']);
@@ -475,5 +478,11 @@ describe('ravenseat doctor: approved commands and the project gitignore', () => 
     expect(shown).not.toContain(GH);
     expect(shown).not.toContain('permissions.allow[0]');
     expect(shown).not.toContain('scripts/.queue/queue.json');
+    // Set aside on the Checks tab (or a no in setup, the same dismiss): the gap line goes as the card does; --all keeps it.
+    fs.writeFileSync(path.join(p.env.QUEUE_FOLDER, 'queue.json'), JSON.stringify({ tasks: [], projects: {}, checksPanel: { dismissed: ['allowlist-scan'] } }));
+    r = p.run();
+    expect(r.checks.filter((c) => c.name === 'allowlist')).toEqual([]);
+    expect(r.checks.filter((c) => c.name === 'gitignore').map((c) => c.status)).toEqual(['INFO']);
+    expect(p.run('--all').checks.filter((c) => c.name === 'allowlist').map((c) => c.status)).toEqual(['INFO']);
   }, 60_000);
 });

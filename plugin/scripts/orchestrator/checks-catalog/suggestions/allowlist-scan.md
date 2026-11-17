@@ -1,7 +1,7 @@
 ---
 title: Look for keys in the commands Claude Code approved and in .mcp.json
 category: security
-priority: medium
+priority: low
 when: off:secretScan.allowlist
 important_when: allowlist-tracked-hit
 content_min: 1

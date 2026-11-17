@@ -43,6 +43,28 @@ describe('the opt-in checks', () => {
     expect(OI.byKey('learning.proposals')).toMatchObject({ suggestion: 'learning-proposals', row: null });
   });
 
+  it('setup asks once: one TIP line for all the checks that are off, then one line per check with its On and No', () => {
+    const all = OI.tipsToGive({}, [], { visibility: 'private', hasDatabase: true, sharedSettings: true });
+    const lines = OI.tipLines(all);
+    expect(lines.filter((l: string) => l.startsWith('TIP:'))).toHaveLength(1);
+    expect(lines[0]).toMatch(new RegExp(`^TIP: ${all.length} checks are off`));
+    expect(lines).toHaveLength(all.length + 1);
+    for (const [i, c] of all.entries()) {
+      expect(lines[i + 1]).toContain(`On: ${OI.onCommand(c)}`);
+      expect(lines[i + 1]).toMatch(new RegExp(`No: ravenseat checks dismiss ${c.suggestion}$`));
+    }
+    expect(OI.tipLines([])).toEqual([]);
+  });
+
+  it('doctor shows an off check only for an important gap on a card not set aside; else only with --all', () => {
+    const c = OI.byKey('gitignoreCheck.enabled');
+    expect(OI.offShown(c, { gap: false, dismissed: [] })).toBe(false);
+    expect(OI.offShown(c, { gap: true, dismissed: [] })).toBe(true);
+    // Set aside on the Checks tab, or a no in setup (the same dismiss): the line goes too, as the card does.
+    expect(OI.offShown(c, { gap: true, dismissed: ['gitignore-own-rules'] })).toBe(false);
+    expect(OI.offShown(c, { gap: true })).toBe(true);
+  });
+
   it('a check is on only when its setting is exactly true', () => {
     expect(OI.isOn({ secretScan: { atReceive: true } }, 'secretScan.atReceive')).toBe(true);
     for (const v of [false, 'true', 1, null, undefined]) expect(OI.isOn({ secretScan: { atReceive: v } }, 'secretScan.atReceive')).toBe(false);
@@ -62,7 +84,7 @@ describe('the opt-in checks', () => {
     expect(OI.tipLine(OI.byKey('share.queueData'))).toMatch(/On: ravenseat share on --yes\. No: ravenseat checks dismiss share-backup$/);
     expect(OI.tipsToGive({}, ['secretScan.allowlist']).map((c: { key: string }) => c.key)).not.toContain('secretScan.allowlist');
     expect(OI.tipsToGive({ gitignoreCheck: { enabled: true } }, []).map((c: { key: string }) => c.key)).not.toContain('gitignoreCheck.enabled');
-    expect(OI.tipLine(all[0])).toMatch(/^TIP: turn on .*settings set secretScan\.allowlist on\. No: ravenseat checks dismiss allowlist-scan$/);
+    expect(OI.tipLine(all[0])).toMatch(/^secretScan\.allowlist: it would .*settings set secretScan\.allowlist on\. No: ravenseat checks dismiss allowlist-scan$/);
   });
 
   it('doctor\'s off line names the setting, and says a gap is there without saying what', () => {
@@ -79,11 +101,13 @@ describe('the cards on the Checks tab', () => {
   const card = (r: { suggestions: { key: string }[] }, key: string) => r.suggestions.find((s) => s.key === key);
   const OFF = { optInOff: OI.OPT_IN.map((c: { key: string }) => c.key) };
 
-  it('a check that is off has a medium card; one that is on has none', () => {
+  it('a check that is off has a low card (raised only by a reason); one that is on has none', () => {
     const r = report(OFF);
+    // The cards that apply in every project are low: a check that is off by choice is no medium advice by itself.
+    // Their important_when raises them when a quiet look found a reason (below).
     // The guard proposals from the finding log have their own rule below: they need something due first.
     for (const c of OI.OPT_IN.filter((x: { offer?: unknown; key: string }) => !x.offer && x.key !== 'learning.proposals'))
-      expect(card(r, c.suggestion), c.suggestion).toMatchObject({ priority: 'medium', action: 'setting', setting: c.key, state: 'open' });
+      expect(card(r, c.suggestion), c.suggestion).toMatchObject({ priority: 'low', action: 'setting', setting: c.key, state: 'open' });
     // Guard proposals: low, and only while the finding log has a class that is due (nothing to propose otherwise).
     expect(card(r, 'learning-proposals')).toBeUndefined();
     const due = { ledger: { due: [{ class: 'x', title: 'x', area: 'a', scope: 'area', incidents: 2, tasks: [] }], guardFailed: [], marker: true, recent: {} } };
@@ -104,8 +128,10 @@ describe('the cards on the Checks tab', () => {
     let r = report({ ...OFF, allowlistTrackedHit: true, gitignoreGap: true });
     expect(card(r, 'allowlist-scan')).toMatchObject({ priority: 'high' });
     expect(card(r, 'gitignore-own-rules')).toMatchObject({ priority: 'high' });
-    expect(card(r, 'secret-scan-receive')).toMatchObject({ priority: 'medium' });
+    expect(card(r, 'secret-scan-receive')).toMatchObject({ priority: 'low' });
     expect(r.important).toBe(before + 2);
+    // The receive scan: high when a secret file is already in git (doctor's secrets FAIL), the reason to stop the next.
+    expect(card(report({ ...OFF, secretsOk: false }), 'secret-scan-receive')).toMatchObject({ priority: 'high' });
     r = report({ ...OFF, allowlistTrackedHit: true, gitignoreGap: true }, ['allowlist-scan', 'gitignore-own-rules']);
     expect(card(r, 'allowlist-scan')).toMatchObject({ state: 'dismissed' });
     expect(r.important).toBe(before);

@@ -26,8 +26,9 @@
 //   8. --ci: writes the GitHub Actions template <plugin>/templates/ci-github.yml to .github/workflows/ravenseat-gates.yml (it
 //      runs the project's own gates.quick, with baseBranch filled in). An existing file is NEVER replaced, also not
 //      with --overwrite. Opt-in only: /ravenseat:setup asks first.
-//   9. One TIP line per opt-in check that is off (lib/optInChecks.js: keys in approved commands, the project's own
-//      .gitignore, the secret scan at receive), each only once: <dataFolder>/setup-tips.json keeps the keys tipped.
+//   9. One TIP line for the opt-in checks that are off, then one line per check (lib/optInChecks.js tipLines: keys in
+//      approved commands, the project's own .gitignore, the secret scan at receive and the rest), so the setup skill
+//      asks one question for all; each check only once: <dataFolder>/setup-tips.json keeps the keys tipped.
 //      /ravenseat:setup asks the user, who may decline; nothing is turned on here.
 //   Hooks (install.mjs only, a plugin brings hooks/hooks.json): every hook in settings.queue.json is added next to the
 //   project's own, also hooks added in a later version (e.g. hook-track-end.mjs on SubagentStop). The two files must
@@ -250,7 +251,7 @@ export function setupProject(o) {
   // 8: --ci, the GitHub Actions template. Never over an existing workflow.
   if (o.ci) log.notes.push(writeCiTemplate(t, { dry: o.dry }));
 
-  // 9: one tip per opt-in check that is off (lib/optInChecks.js), each only once: the keys tipped are kept in
+  // 9: one tip for the opt-in checks that are off (lib/optInChecks.js), each check only once: the keys tipped are kept in
   // setup-tips.json in the queue's data folder, so a second setup or --update does not ask again.
   log.tips.push(...setupTips(t, { dry: o.dry }));
   return log;
@@ -299,7 +300,8 @@ export function setupTips(target, o = {}) {
       // error-ignored: the tip is still printed; it may come once more on the next setup
     }
   }
-  return give.map((c) => OI.tipLine(c));
+  // One question for all of them (owner decision 2026-11-17): one TIP line, then one line per check.
+  return OI.tipLines(give);
 }
 
 /**

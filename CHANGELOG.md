@@ -5,6 +5,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Less noise from the checks that are off by choice.** An opt-in check that is off no longer reminds you on every
+  run. `ravenseat doctor` names it only while a quiet look finds an important gap (a key in a tracked approved command
+  or `.mcp.json`, the personal settings not ignored by the project, `bypassPermissions` in the shared settings), and not
+  when its Checks card is set aside; `doctor --all` still lists every one. A no in setup is the same set aside, so the
+  line goes too. The three cards that applied in every project (`allowlist-scan`, `gitignore-own-rules`,
+  `secret-scan-receive`) are low now and rise to high only on such a gap; the receive scan rises when a secret file is
+  already in git. Setup asks one question for all the checks that are off instead of one per check (up to seven
+  before). No setting changed, and nothing is turned on or off.
 - **Hardening: the main session's overrides and an owner-mode push now ask the owner in the permission dialog.** A
   queue agent was already denied the overrides; the orchestrator could still be talked into one by a line in a report
   or a document. With `approvals.ask` (on) the push guard answers `ask` on the main session's `merge` with `--allow-*`

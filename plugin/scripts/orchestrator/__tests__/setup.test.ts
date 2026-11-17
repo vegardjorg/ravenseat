@@ -249,10 +249,11 @@ describe('setup.mjs records the plugin version it set up (for the setup notice o
     execFileSync('git', ['init', '-q'], { cwd: target });
     writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ gitignoreCheck: { enabled: true } }));
     // Five: the two secret scans, the finding-log guard proposals (step 7) and the two scope drift guards (V6, V7, a
-    // full mode project), each off by default.
-    expect(setupProject({ target, dry: true }).tips).toHaveLength(5);
+    // full mode project), each off by default. One question for all five: one TIP line, then one line per check.
+    expect(setupProject({ target, dry: true }).tips).toHaveLength(6);
     const first = setupProject({ target });
-    expect(first.tips).toHaveLength(5);
+    expect(first.tips).toHaveLength(6);
+    expect(first.tips.filter((t: string) => t.startsWith('TIP:'))).toEqual([expect.stringMatching(/^TIP: 5 checks are off/)]);
     expect(first.tips.join('\n')).toMatch(/settings set scopeNotes\.driftGap on/);
     expect(first.tips.join('\n')).toMatch(/settings set scopeNotes\.driftWarn on/);
     expect(first.tips.join('\n')).toMatch(/settings set learning\.proposals on/);

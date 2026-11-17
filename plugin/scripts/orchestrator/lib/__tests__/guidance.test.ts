@@ -45,6 +45,20 @@ describe('guidance', () => {
     expect(filterDoctor(rows, false)).toEqual({ rows: rows.filter((c) => c.name !== 'ci-cost'), hidden: 0 });
   });
 
+  it('a row marked onRequest (an opt-in check that is off, without a gap) shows only with --all, and is not counted as hidden', () => {
+    const rows = [
+      { name: 'gitignore', status: 'INFO', onRequest: true },
+      { name: 'allowlist', status: 'INFO' },
+      { name: 'config', status: 'OK' },
+    ];
+    for (const quiet of [false, true]) {
+      const r = filterDoctor(rows, quiet);
+      expect(r.rows.map((c) => c.name)).toEqual(['allowlist', 'config']);
+      expect(r.hidden).toBe(0);
+    }
+    expect(filterDoctor(rows, false, { all: true }).rows).toHaveLength(3);
+  });
+
   it('keeps the fact and drops the pointer in the merge and receive lines', () => {
     const none = { status: 'unverified', checks: [] } as const;
     expect(verificationLine(none)).toContain('/ravenseat:kickstart');
