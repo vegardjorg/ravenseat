@@ -18,12 +18,12 @@
 // Only the agents are fake (scripts that commit and write their RESULT line); git, the CLI, prepare-track and the time
 // hook (hook-time.mjs, fed the payload Claude Code sends) are the real ones.
 // =============================================================
-import { afterEach, describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { expectUserThingsIntact, snapshot, userMess } from './lab';
-import { endCrashedFixtures, FIXTURE_CAP_MS, ownTree, project, SCRIPTS, task, tmp } from './project';
+import { FIXTURE_CAP_MS, ownTree, project, SCRIPTS, task, tmp } from './project';
 
 type P = ReturnType<typeof project>;
 /** The text with LF line ends: a checkout with core.autocrlf=true writes CRLF. */
@@ -139,8 +139,6 @@ function agentScript(body: string) {
 }
 
 describe('RT-24: the orchestrator dies cold in the middle, and a new one finishes the work from the disk', () => {
-  // The orchestrator and its merge are killed without warning on purpose; their gates may outlive them on POSIX.
-  afterEach(() => endCrashedFixtures('rt24-gate-'));
   it('agent killed mid-work with the orchestrator: the new one closes the attempt, continues the branch, and merges once', async () => {
     const p = lab();
     const before = snapshot(p.repo, p.folder);

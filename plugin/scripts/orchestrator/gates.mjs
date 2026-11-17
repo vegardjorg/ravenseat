@@ -101,6 +101,7 @@ const require = createRequire(import.meta.url);
 const { config } = require('./lib/queueConfig.js');
 const { firstErrorLine, gateType, resultLine } = require('./lib/orchestratorHelp.js');
 const TL = require('./lib/timeLogRows.js');
+const TR = require('./lib/treeRun.js');
 const { timeLog } = require('./lib/queueConfig.js');
 
 const args = process.argv.slice(2);
@@ -476,19 +477,12 @@ function changedFiles() {
   return { base: ref, files: files.filter((f) => fs.existsSync(path.join(cwd, f))).sort() };
 }
 
-/** Ends a process and its children (a shell starts the real tool as a child; on Windows taskkill /T takes the tree). */
+/**
+ * Ends a gate command and everything it started: its guard (lib/treeRun.js) and the command share one process group on
+ * POSIX, and on Windows taskkill /T takes the tree.
+ */
 function killTree(child) {
-  try {
-    if (process.platform === 'win32')
-      spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-    else process.kill(-child.pid, 'SIGKILL');
-  } catch {
-    try {
-      child.kill('SIGKILL');
-    } catch {
-      // already gone
-    }
-  }
+  TR.killTree(child.pid);
 }
 
 /**
@@ -503,10 +497,13 @@ function runShell(command, { timeoutMs = null } = {}) {
     let grace = null;
     let timer = null;
     let settled = false;
-    const child = spawn(command, {
+    // Under a guard (lib/treeRun.js): it runs the command through the shell in its own process group and ends that whole
+    // tree when this process dies without warning (a crash, SIGKILL, a closed terminal), since this budget dies with it.
+    // Detached: its own group on POSIX (so killTree ends the guard and the command together), and outside this process's
+    // job object on Windows (which would end the guard with this process, but never what the shell started).
+    const child = spawn(process.execPath, TR.guardShellArgs(command), {
       cwd,
-      shell: true,
-      detached: process.platform !== 'win32', // its own process group, so the whole tree can be ended
+      detached: true,
       env: gateCommandEnv(), // scrubbed (lib/gateEnv.js): the check runs the track's code. With its own temp folder (lib/gateTemp.js)
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'], // no stdin: a command that reads it gets end of file instead of hanging

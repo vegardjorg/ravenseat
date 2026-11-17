@@ -9,12 +9,21 @@
 //
 // The gate is a small script that hangs in the main checkout and is green in the track's worktree, so receive passes
 // and only the gates after the merge hang. baseGate.timeoutSec is 5 s here; the scenario must end well inside a minute.
+//
+// The same promise when the runner itself dies: the process that started a gate command can die without warning (a crash,
+// SIGKILL, taskkill without /T, a closed terminal), and the command's time budget dies with it. A hanging command then
+// lived on for ever: on POSIX it ran in its own process group (a kill of the parent's group never reached it), and on
+// Windows a child outlives a parent that is ended alone. Each runner now starts its command through a guard
+// (lib/treeRun.js) that ends the command's whole tree once the runner is gone. One scenario per runner: gates.mjs, the
+// treeRun supervisor (lib/doneCheck.js runDoneWhen: the base gate, done_when, red-on-base) and lib/waitRunner.js. Only
+// the runner is killed (no tree), and on POSIX also its process group, as a crashed merge's tree would be.
 // =============================================================
 import { describe, it, expect } from 'vitest';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { expectUserThingsIntact, snapshot, userMess } from './lab';
-import { FIXTURE_CAP_MS, project, queueSpace, stillAlive, tmp } from './project';
+import { FIXTURE_CAP_MS, killTree, leftovers, ownTree, project, queueSpace, SCRIPTS, stillAlive, tmp } from './project';
 
 /**
  * A gate script outside the repo: hangs unless it runs in a queue worktree, or hangs everywhere. A hanging one still
@@ -80,4 +89,105 @@ describe('RT-15: a test that hangs never holds my merge forever', () => {
     expectUserThingsIntact(before, { ...queueSpace(), files: ['lib/A.ts'] });
     expect(await gateLeftovers(gate), 'a process of the hanging gate outlived the budget').toEqual([]);
   }, 180_000);
+});
+
+const posix = process.platform !== 'win32';
+
+/** A command that writes its marker file and then hangs (up to FIXTURE_CAP_MS). Its folder name marks its processes. */
+function hangingCommand() {
+  const dir = tmp('og-gate-');
+  const started = path.join(dir, 'started');
+  const file = path.join(dir, 'gate.cjs');
+  fs.writeFileSync(
+    file,
+    `require('fs').writeFileSync(${JSON.stringify(started)}, 'x');\n` +
+      `setInterval(() => {}, 1000);\nsetTimeout(() => process.exit(1), ${FIXTURE_CAP_MS});\n`,
+  );
+  return { file, command: `node "${file}"`, started, mark: path.basename(dir) };
+}
+
+async function waitFor(file: string, ms = 60_000) {
+  const until = Date.now() + ms;
+  while (!fs.existsSync(file)) {
+    if (Date.now() > until) throw new Error(`waited ${ms} ms for ${file}`);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+/** The processes with `mark` in their command line, once none are left or `ms` has passed. */
+async function aliveAfter(mark: string, ms: number) {
+  const until = Date.now() + ms;
+  let left = leftovers(mark);
+  while (left.length && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 500));
+    left = leftovers(mark);
+  }
+  return left;
+}
+
+/** Kills the parent without warning: only it, or (POSIX, `group`) its whole process group. No handler runs. */
+function killParent(pid: number, group: boolean) {
+  if (group) process.kill(-pid, 'SIGKILL');
+  else process.kill(pid, 'SIGKILL');
+}
+
+/** Starts `args` under node as the parent, waits until the hanging command runs, kills the parent, and lists what lives. */
+async function crash(args: string[], gate: ReturnType<typeof hangingCommand>, { group = false, env = process.env, cwd = process.cwd() } = {}) {
+  const parent = spawn(process.execPath, args, { cwd, env, detached: posix, stdio: 'ignore' });
+  ownTree(parent.pid);
+  const exited = new Promise((r) => parent.on('exit', r));
+  try {
+    await waitFor(gate.started);
+  } catch (e) {
+    killTree(parent.pid!);
+    throw e;
+  }
+  killParent(parent.pid!, group);
+  await exited;
+  // The guard looks every second; a tree kill and the process listing take a moment more on Windows.
+  const left = await aliveAfter(gate.mark, 15_000);
+  for (const p of left) killTree(p.pid); // a red run: the leftover guard would end them anyway
+  return left.map((p) => p.command);
+}
+
+const kills = posix ? [false, true] : [false];
+const how = (group: boolean) => (group ? 'its process group is killed' : 'it alone is killed');
+
+describe('RT-15: a runner that dies without warning takes its hanging command along', () => {
+  for (const group of kills) {
+    it(`gates.mjs: ${how(group)} while a gate hangs, and the gate does not live on`, async () => {
+      const gate = hangingCommand();
+      const p = project({ gates: [gate.command] });
+      const left = await crash([path.join(SCRIPTS, 'gates.mjs'), '--quick', '--timeout-sec', '600', '--cwd', p.repo], gate, {
+        group,
+        env: p.env,
+        cwd: p.repo,
+      });
+      expect(left, 'the gate outlived gates.mjs').toEqual([]);
+    }, 120_000);
+
+    it(`treeRun runBounded (runDoneWhen): ${how(group)} while the command hangs, and the command does not live on`, async () => {
+      const gate = hangingCommand();
+      const caller = path.join(tmp('og-caller-'), 'caller.cjs');
+      fs.writeFileSync(
+        caller,
+        `require(${JSON.stringify(path.join(SCRIPTS, 'lib', 'treeRun.js'))}).runBounded(${JSON.stringify(gate.command)}, { cwd: process.cwd(), timeoutMs: 600000 });\n`,
+      );
+      const left = await crash([caller], gate, { group });
+      expect(left, 'the command outlived the caller of runBounded').toEqual([]);
+    }, 120_000);
+
+    it(`waitRunner: ${how(group)} while its command hangs, and the command does not live on`, async () => {
+      const gate = hangingCommand();
+      const dir = tmp('og-wait-');
+      const f = (n: string) => path.join(dir, n);
+      fs.writeFileSync(f('lock'), 'run-1');
+      const left = await crash(
+        [path.join(SCRIPTS, 'lib', 'waitRunner.js'), f('done'), f('pid'), '600', f('lock'), 'run-1', '--', gate.file],
+        gate,
+        { group },
+      );
+      expect(left, 'the command outlived the wait runner').toEqual([]);
+    }, 120_000);
+  }
 });

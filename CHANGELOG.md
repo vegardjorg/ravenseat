@@ -5,6 +5,15 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a gate whose merge dies without warning no longer runs on for ever.** When `ravenseat merge`, the gate
+  runner or the wait mode's runner was killed in the middle (a crash, SIGKILL, taskkill without /T, a closed terminal),
+  the command it had started lived on, and a hanging one never ended, since its time budget died with its parent. On
+  POSIX the command ran in its own process group, out of reach of a kill of the merge's group; on Windows what the shell
+  started outlived a parent that was ended alone. Every gate command, done command, base gate and wait mode run now
+  starts under a small guard that looks every second whether its runner still lives and ends the command's whole tree
+  once it does not (the process group on POSIX, taskkill /T on Windows). While the runner lives, nothing changes: the
+  same output, exit codes and time budgets. No new setting: ending an orphaned command never stops work that could
+  still finish, since nobody is left to read its result.
 - **Hardening: when a newer Claude Code writes its transcripts in a form Ravenseat does not know yet, you now get one
   line in `ravenseat doctor` and one card on the Checks tab instead of quietly short counts.** A format canary reads
   only the tail of the project's newest transcript and compares it with the formats the fixtures cover: a newer

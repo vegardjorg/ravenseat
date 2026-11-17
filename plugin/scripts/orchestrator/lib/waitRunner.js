@@ -8,7 +8,8 @@
 // started it) and the environment it got (QUEUE_WAIT=off, so the command never uses the wait mode itself). When the
 // command exits it writes the done file ({ exit, endedAt }) through a rename and frees the run's lock. Over the hard cap it
 // ends the command's whole process tree, prints a RED line as gates.mjs does for a gate over its budget, and writes
-// { exit: 1, timedOut: true }. The environment is never written to a file: tokens stay in memory.
+// { exit: 1, timedOut: true }. The environment is never written to a file: tokens stay in memory. The command runs under
+// a guard (lib/treeRun.js), so a runner killed without warning (no cap, no done file) takes the command's tree along.
 // =============================================================
 'use strict';
 
@@ -47,11 +48,14 @@ try {
 }
 
 const isPosix = process.platform !== 'win32';
-const child = spawn(process.execPath, childArgv, {
+// Under a guard (lib/treeRun.js): `node <arguments>` in the guard's own process group, and the whole tree ended when this
+// runner dies without warning (SIGKILL, taskkill without /T), since the hard cap dies with it. Detached: its own group on
+// POSIX (so the group signals below reach the guard and the command), outside this process's job object on Windows.
+const child = spawn(process.execPath, require('./treeRun.js').guardExecArgs(childArgv), {
   stdio: ['ignore', 'inherit', 'inherit'],
   env: process.env,
   windowsHide: true,
-  detached: isPosix, // POSIX: its own process group, so the whole tree can be ended at the cap
+  detached: true,
 });
 
 let timedOut = false;

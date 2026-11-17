@@ -74,16 +74,6 @@ export function leftovers(mark = RUN_MARK): { pid: number; name: string; command
     .filter((p) => p.pid !== process.pid && !/^git/i.test(p.name));
 }
 
-/**
- * Ends the processes of this run whose command line names a fixture of `kind` (for example `rt07-gate-`). Only for a
- * scenario that kills the merge without warning on purpose: on POSIX the gate it started runs in its own process group,
- * so killing the merge's group does not reach it (on Windows taskkill /T does). That gap in the product is tracked on
- * its own; this keeps the crash scenarios from leaving their gates behind, while the guard below still catches the rest.
- */
-export function endCrashedFixtures(kind: string) {
-  for (const p of leftovers(RUN_MARK)) if (p.command.includes(kind)) killTree(p.pid);
-}
-
 /** leftovers(mark), listed again up to twice a second apart while any are found: a kill can take a moment to land. */
 export async function stillAlive(mark: string) {
   let left = leftovers(mark);
