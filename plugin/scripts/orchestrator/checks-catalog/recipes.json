@@ -1,0 +1,119 @@
+{
+  "about": "Recipes: for a failure class that keeps coming back (the finding log, lib/findingRepeats.js), what would guard it in this stack. One recipe per class and stack; the first whose `when` holds is shown on the card ledger-recipes. `when` uses the conditions of the cards (lib/checksCatalog.js, plugin/docs/checks.md), `cards` names cards that already do the work, and `examples` are facts the recipe must hold for (hit) and must not hold for (miss); a test checks them. A project adds, replaces (same id) or removes (`off: true`) a recipe in docs/queue/checks/recipes.json. The database recipes (access control, migration and schema) come with the database probes.",
+  "recipes": [
+    {
+      "id": "unchecked-error-typescript",
+      "class": "unchecked-error",
+      "when": "stack:typescript",
+      "title": "A lint rule for results nobody checks",
+      "text": "Turn on @typescript-eslint/no-floating-promises (and no-misused-promises) in the project's eslint setup, or a no-restricted-syntax rule for the exact call that was left unchecked, and run lint in gates.quick.",
+      "cards": ["lint"],
+      "examples": {
+        "hit": [{ "stacks": ["Node/TypeScript"] }],
+        "miss": [{ "stacks": ["Node"] }, { "stacks": ["Python"] }]
+      }
+    },
+    {
+      "id": "unchecked-error-node",
+      "class": "unchecked-error",
+      "when": "stack:node",
+      "title": "A lint rule and a test on the error path",
+      "text": "A no-restricted-syntax rule in the project's eslint setup for the call whose result was left unchecked (or eslint-plugin-promise catch-or-return), and a test that makes that call fail and expects the error to reach the caller.",
+      "cards": ["lint"],
+      "examples": {
+        "hit": [{ "stacks": ["Node"] }],
+        "miss": [{ "stacks": ["Python"] }, { "stacks": [] }]
+      }
+    },
+    {
+      "id": "unchecked-error-python",
+      "class": "unchecked-error",
+      "when": "stack:python",
+      "title": "Ruff rules for swallowed errors, or a test on the error path",
+      "text": "Ruff rules for swallowed errors (BLE001 blind except, S110 try-except-pass, E722 bare except) in the project's ruff setup, or a pytest test that makes the failing call raise and expects the error to reach the caller.",
+      "cards": ["lint"],
+      "examples": {
+        "hit": [{ "stacks": ["Python"] }],
+        "miss": [{ "stacks": ["Node/TypeScript"] }, { "stacks": [] }]
+      }
+    },
+    {
+      "id": "contract-drift-type-check",
+      "class": "contract-drift",
+      "when": "stack:typescript|python, missing:types",
+      "title": "A type check in the gates and CI",
+      "text": "A type check in gates.quick and CI: tsc --noEmit for TypeScript, mypy or pyright for Python, with a mild setting and a baseline for the errors there are today.",
+      "cards": ["type-check"],
+      "examples": {
+        "hit": [{ "stacks": ["Node/TypeScript"], "kinds": [] }, { "stacks": ["Python"], "kinds": [] }],
+        "miss": [
+          { "stacks": ["Node/TypeScript"], "kinds": [{ "key": "types", "places": [{ "where": "gate" }] }] },
+          { "stacks": ["Node"], "kinds": [] }
+        ]
+      }
+    },
+    {
+      "id": "contract-drift-in-ci",
+      "class": "contract-drift",
+      "when": "stack:typescript|python, not-in-ci:types",
+      "title": "The type check in CI too",
+      "text": "The type check runs, but not in CI: add it to the CI workflow, so a change that skips the local gates is caught too.",
+      "cards": ["quality-in-ci"],
+      "examples": {
+        "hit": [{ "stacks": ["Node/TypeScript"], "kinds": [{ "key": "types", "places": [{ "where": "gate" }] }] }],
+        "miss": [
+          { "stacks": ["Node/TypeScript"], "kinds": [{ "key": "types", "places": [{ "where": "ci" }] }] },
+          { "stacks": ["Node/TypeScript"], "kinds": [] }
+        ]
+      }
+    },
+    {
+      "id": "secret-leak-ci",
+      "class": "secret-leak",
+      "when": "none-in-ci:secret-scan",
+      "title": "A secret scan in CI",
+      "text": "gitleaks (or trufflehog) in CI on every push, with an allow list where each entry says why it is safe.",
+      "cards": ["secret-scan-ci"],
+      "examples": {
+        "hit": [{ "kinds": [] }, { "kinds": [{ "key": "secret-scan", "places": [{ "where": "hook" }] }] }],
+        "miss": [{ "kinds": [{ "key": "secret-scan", "places": [{ "where": "ci" }] }] }]
+      }
+    },
+    {
+      "id": "secret-leak-allowlist",
+      "class": "secret-leak",
+      "when": "found:secret-scan",
+      "title": "A narrower allow list for the scan",
+      "text": "The scan runs in CI but this one got past it: check the allow list (every entry needs a reason), and add the file kind or folder it missed to the scan's paths.",
+      "cards": [],
+      "examples": {
+        "hit": [{ "kinds": [{ "key": "secret-scan", "places": [{ "where": "ci" }] }] }],
+        "miss": [{ "kinds": [] }]
+      }
+    },
+    {
+      "id": "test-weakening-node",
+      "class": "test-weakening",
+      "when": "found:test, stack:node",
+      "title": "Time limits and a worker cap for the tests",
+      "text": "A time limit per test above the default and a cap on the workers (vitest or jest --maxWorkers) in the gate command, so parallel tracks on one machine do not starve each other. A weakened test: restore it, and keep testWeakening.enabled on.",
+      "cards": ["test-timeouts-under-load", "test-workers-cap"],
+      "examples": {
+        "hit": [{ "stacks": ["Node/TypeScript"], "kinds": [{ "key": "test", "places": [{ "where": "gate" }] }] }],
+        "miss": [{ "stacks": ["Node"], "kinds": [] }, { "stacks": ["Python"], "kinds": [{ "key": "test", "places": [{ "where": "gate" }] }] }]
+      }
+    },
+    {
+      "id": "test-weakening-python",
+      "class": "test-weakening",
+      "when": "found:test, stack:python",
+      "title": "Time limits and a worker cap for pytest",
+      "text": "pytest-timeout with a time limit per test, and a cap on pytest-xdist workers (-n 2 rather than -n auto) in the gate command. A weakened test: restore it, and keep testWeakening.enabled on.",
+      "cards": ["test-timeouts-under-load", "test-workers-cap"],
+      "examples": {
+        "hit": [{ "stacks": ["Python"], "kinds": [{ "key": "test", "places": [{ "where": "gate" }] }] }],
+        "miss": [{ "stacks": ["Python"], "kinds": [] }, { "stacks": ["Node"], "kinds": [{ "key": "test", "places": [{ "where": "gate" }] }] }]
+      }
+    }
+  ]
+}

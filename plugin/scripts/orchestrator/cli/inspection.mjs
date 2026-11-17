@@ -131,19 +131,21 @@ const LEDGER_HISTORY_DAYS = 180;
 
 /**
  * The repeat count on class and area from the finding log (lib/findingRepeats.js), read-only: the rows, the guards from
- * the registry and the done gate tasks, and the result. With learning.repeats off nothing is read.
- * @returns {{ setup: object, rows: object[], result: { entries: object[], due: object[], guardFailed: object[] }, classes: object[] }}
+ * the registry and the done gate tasks, and the result. With learning.repeats off nothing is read. `tasks` are the
+ * queue's tasks with the archived ones, so the Checks tab can say what became of each due class as a proposal.
+ * @returns {{ setup: object, rows: object[], result: { entries: object[], due: object[], guardFailed: object[] }, classes: object[], tasks: object[] }}
  */
 export function ledgerScan({ now = Date.now() } = {}) {
   const s = FR.setupOf(CONFIG);
   const classes = require('./lib/failureClasses.js').classesFor(MAIN_TREE).classes;
   const empty = { entries: [], due: [], guardFailed: [] };
-  if (!s.repeats) return { setup: s, rows: [], result: empty, classes };
+  if (!s.repeats) return { setup: s, rows: [], result: empty, classes, tasks: [] };
   const since = now - Math.max(s.windowDays, LEDGER_HISTORY_DAYS) * DAY_MS;
   const { rows } = require('./lib/findingLog.js').read(undefined, { since, includeArchive: true });
   const { tasks, archived } = allTasks();
-  const guards = FR.guardsFrom({ registry: readRegistry(MAIN_TREE).registry, tasks: [...tasks, ...Object.values(archived)] });
-  return { setup: s, rows, result: FR.scan(rows, { now, setup: s, guards }), classes };
+  const known = [...tasks, ...Object.values(archived)];
+  const guards = FR.guardsFrom({ registry: readRegistry(MAIN_TREE).registry, tasks: known });
+  return { setup: s, rows, result: FR.scan(rows, { now, setup: s, guards }), classes, tasks: known };
 }
 
 /**

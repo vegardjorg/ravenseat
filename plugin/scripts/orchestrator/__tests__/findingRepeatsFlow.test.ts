@@ -142,6 +142,23 @@ describe('the repeat count on class and area', () => {
     expect(p.gates()).toEqual([]);
   });
 
+  it('the recipe card: the class, the count, the places and a recipe, never the excerpt; off with the inspection queue; gone after a cancel', () => {
+    const p = project({ rows: REPEATED, config: { learning: { proposals: true } } });
+    const c = p.card('ledger-recipes');
+    expect(c).toMatchObject({ priority: 'medium', action: 'ask', state: 'open' });
+    const item = (c?.ledger as { items: Record<string, unknown>[] }).items[0];
+    expect(item).toMatchObject({ class: 'unchecked-error', area: 'src/api', incidents: 2, files: ['src/api/save.ts'] });
+    expect(String(c?.detail)).toMatch(/src\/api\/save\.ts/);
+    expect(JSON.stringify(c)).not.toContain('a result used without its error');
+    expect(p.checks().important).toBe(project({}).checks().important);
+    expect(project({ rows: REPEATED, config: { inspection: { mode: 'off' } } }).card('ledger-recipes')).toBeUndefined();
+    // Proposed, then declined: the no is remembered for that class and area, so the card goes.
+    expect(p.q('inspection').code).toBe(0);
+    expect((p.card('ledger-recipes')?.ledger as { items: { proposal: { state: string } }[] }).items[0].proposal.state).toBe('extend');
+    expect(p.q('cancel', 'GATE-1').code).toBe(0);
+    expect(p.card('ledger-recipes')).toBeUndefined();
+  });
+
   it('guard failed: the red marker on the Checks tab, and the marker setting off keeps the card without it', () => {
     const rows = [row(1, { daysAgo: 3, guard: 'G-1' })];
     const p = project({ rows });

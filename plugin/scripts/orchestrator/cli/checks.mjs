@@ -159,8 +159,8 @@ function projectFacts({ git, remote, found }) {
   if (fs.existsSync(FILE)) {
     try {
       const now = Date.now();
-      const { setup, rows, result, classes } = ledgerScan({ now });
-      out.ledger = require('./lib/findingRepeats.js').facts(result, { rows, now, setup, classes });
+      const { setup, rows, result, classes, tasks } = ledgerScan({ now });
+      out.ledger = require('./lib/findingRepeats.js').facts(result, { rows, now, setup, classes, tasks });
     } catch {
       // error-ignored: unknown, no card
     }
@@ -224,6 +224,8 @@ function makeReport(queue) {
       catalogMissing: !exists('docs/queue/catalog'),
       // Lite mode (lib/liteMode.js): no scope drift card there, and none lights the red marker (condition not-lite).
       lite: LM.isLite(CONFIG),
+      // The inspection queue (inspection.mode): the recipe card for the finding log needs it (condition inspection-on).
+      inspectionOn: require('./lib/inspection.js').setupOf(CONFIG).enabled === true,
       // The client format canary (lib/clientCanary.js): the card while the newest transcript has rows read differently.
       clientCanary: canaryFacts(),
     },

@@ -199,6 +199,36 @@ describe('the facts for the Checks tab', () => {
     const old = [10, 35, 40].map((d) => row({ class: 'duplication', daysAgo: d }));
     expect(R.facts(scan(old), { rows: old, now: NOW, setup: R.setupOf({}) }).recent).toEqual({ duplication: 1 });
   });
+
+  it('a due entry names its key and its places across the incidents (paths only, at most five), never an excerpt', () => {
+    const rows = [
+      row({ daysAgo: 40, files: ['src/api/a.ts'], excerpt: 'TypeError: token abc' }),
+      row({ daysAgo: 20, files: ['src/api/b.ts', 'src/api/a.ts'] }),
+      ...[3, 4, 5, 6].map((d) => row({ daysAgo: d, files: [`src/api/f${d}.ts`] })),
+    ];
+    const f = R.facts(scan(rows), { rows, now: NOW, setup: R.setupOf({}) });
+    expect(f.due[0]).toMatchObject({ key: 'unchecked-error@src/api' });
+    expect(f.due[0].files).toHaveLength(5);
+    expect(new Set(f.due[0].files).size).toBe(5);
+    for (const p of f.due[0].files) expect(p).toMatch(/^src\/api\/[a-z0-9]+\.ts$/);
+    expect(JSON.stringify(f)).not.toMatch(/token abc/);
+  });
+
+  it('with the tasks: what became of each class and area as a proposal, and the shared cap', () => {
+    const rows = [row({ daysAgo: 40 }), row({ daysAgo: 2 })];
+    const r = scan(rows);
+    const title = `Gate: ${R.gateTitle(r.due[0])}`;
+    const facts = (tasks: object[]) => R.facts(r, { rows, now: NOW, setup: R.setupOf({}), tasks });
+    expect(facts([]).due[0].proposal).toEqual({ state: 'add', task: null });
+    expect(facts([{ id: 'GATE-1', title, status: 'cancelled', labels: ['gate'] }]).due[0].proposal).toEqual({ state: 'declined', task: 'GATE-1' });
+    expect(facts([{ id: 'GATE-1', title, status: 'done', labels: ['gate'] }]).due[0].proposal).toEqual({ state: 'exists', task: 'GATE-1' });
+    expect(facts([{ id: 'GATE-1', title, status: 'proposed', labels: ['gate'] }]).due[0].proposal).toEqual({ state: 'extend', task: 'GATE-1' });
+    const three = [1, 2, 3].map((i) => ({ id: `INSP-${i}`, status: 'proposed' }));
+    expect(facts(three).due[0].proposal).toEqual({ state: 'full', task: null });
+    expect(facts(three).cap).toEqual({ open: 3, max: 3, full: true });
+    // Without the tasks the state is unknown, and nothing is left out for it.
+    expect(R.facts(r, { rows, now: NOW, setup: R.setupOf({}) }).due[0].proposal).toBeNull();
+  });
 });
 
 describe('the gate proposal and the shared cap', () => {

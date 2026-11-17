@@ -5,6 +5,17 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a failure class that keeps coming back now comes with a concrete guard for your stack, and a declined one
+  stays declined.** The finding log already counted the same class of failure in the same part of the code, but the
+  Checks tab only said that it was due. A new card, "A kind of failure keeps coming back: what would guard it", names
+  for at most three classes how often, where (paths only, never code or an error text), the stack, and a recipe that
+  points to the card that already does the work (lint, type check, secret scan in CI, test time limits and a worker
+  cap) instead of a copy of it. The recipes are data in `checks-catalog/recipes.json` (unchecked errors, type drift,
+  leaked secrets and flaky or weakened tests for Node, TypeScript and Python), with examples a test checks, and a
+  project adds, replaces or removes them in `docs/queue/checks/recipes.json`. A new card condition `stack:` reads the
+  stacks and packs found. A class and area whose gate proposal you cancelled, or that already has a gate, no longer
+  counts as due, also for `ledger-due` and the proposals card. No new setting: the card is medium, stops nothing, never
+  lights the red dot, needs the inspection queue on (`inspection.mode`) like the proposals, and can be set aside.
 - **Hardening: a gate whose merge dies without warning no longer runs on for ever.** When `ravenseat merge`, the gate
   runner or the wait mode's runner was killed in the middle (a crash, SIGKILL, taskkill without /T, a closed terminal),
   the command it had started lived on, and a hanging one never ended, since its time budget died with its parent. On

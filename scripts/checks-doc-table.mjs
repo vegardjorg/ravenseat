@@ -65,9 +65,10 @@ export const PHRASES = {
   'env-no-example': 'an ignored `.env` has no `.env.example` beside it',
   'flaky-observed': 'the time log shows a gate command red and then green on the same commit',
   'red-on-base-off': '`gates.redOnBase` is not set',
-  'ledger-due': 'the finding log has a failure class due for a guard',
+  'ledger-due': 'the finding log has a failure class due for a guard, not declined and with no gate yet for that place',
   'ledger-guard-failed': 'the finding log shows a failure class back where a guard for it was in place',
   'ledger-marker': '`learning.guardFailedMarker` is on',
+  'inspection-on': 'the inspection queue is on (`inspection.mode`)',
   'not-lite': 'the project is not in lite mode',
   'client-format-changed': 'the newest Claude Code transcript has rows Ravenseat reads differently than expected (the format canary, `client.canary`)',
 };
@@ -87,6 +88,7 @@ export const KIND_PHRASES = {
   'ledger-due': (any) => `the finding log has ${any} due for a guard`,
   'ledger-guard-failed': (any) => `the finding log shows ${any} back where a guard was in place`,
   'ledger-recent': (any) => `the finding log shows ${any} 3 times in one area within 30 days (never in lite mode)`,
+  stack: (any) => `the project's stack is ${any} (a word of a stack found, such as typescript in Node/TypeScript, or a stack pack found)`,
 };
 /** What each argument names: kinds of check, settings, or failure classes. */
 const ARG_KIND = { missing: 'kind', found: 'kind', 'not-in-ci': 'kind', 'none-in-ci': 'kind', off: 'setting' };
@@ -204,6 +206,7 @@ export function renderConditions() {
     ['ledger-due:<classes>', 'ledger-due:access-control'],
     ['ledger-guard-failed:<classes>', 'ledger-guard-failed:access-control'],
     ['ledger-recent:<classes>', 'ledger-recent:duplication|scope-drift'],
+    ['stack:<stacks>', 'stack:typescript|python'],
   ].map(([form, example]) => `| \`${form}\` | ${cell(phrase(example))} (example: \`${example}\`) |`);
   return [
     '',

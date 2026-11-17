@@ -19,7 +19,13 @@
 // applies: false when its `when` no longer holds, so it can still be brought back). `medium_when` raises a low
 // card to medium while its conditions hold (something was observed, such as a flaky test), without the red marker.
 //
+// The same folders hold recipes.json: per failure class and stack, what would guard a class the finding log keeps seeing
+// (0i section 3.7). The card ledger-recipes shows the due classes with the first recipe whose `when` holds; see the
+// Recipes block below.
+//
 //   parseTemplate(text, key)      one file as an object, with errors in words
+//   recipeFor(cls, facts, list)   the recipe for a class in this project, or null
+//   recipeExampleProblems(r)      a recipe's examples that do not behave
 //   mergeCatalog(builtin, own)    the project's files over the plugin's
 //   loadCatalog({ builtin, own }) reads the two folders
 //   holds(when, facts)            does a suggestion apply? Named conditions only, see CONDITIONS
@@ -92,9 +98,14 @@ const CONDITIONS = {
   // The finding log (lib/findingRepeats.js facts, read by cli/checks.mjs into facts.ledger): a class came back in an
   // area often enough for a proposal, a guard did not hold, and whether learning.guardFailedMarker is on. No log, or
   // learning.repeats off: no facts, so none of these holds.
-  'ledger-due': (f) => (f.ledger?.due?.length ?? 0) > 0,
+  // Due counts only an open entry: a class and area the owner declined as a gate proposal, or one with a gate, is left
+  // out (openDue), so a no is remembered per class and area.
+  'ledger-due': (f) => openDue(f.ledger).length > 0,
   'ledger-guard-failed': (f) => (f.ledger?.guardFailed?.length ?? 0) > 0,
   'ledger-marker': (f) => f.ledger?.marker === true,
+  // The inspection queue is on (inspection.mode, lib/inspection.js setupOf, read by cli/checks.mjs). Proposals from the
+  // finding log need it (owner decision 2026-11-16). Unknown: not on, so no card that needs it.
+  'inspection-on': (f) => f.inspectionOn === true,
   // The project is not in lite mode (cli/checks.mjs facts.lite). Unknown: not lite, so the card shows.
   'not-lite': (f) => f.lite !== true,
   // The client format canary (lib/clientCanary.js facts, read by cli/checks.mjs): the newest transcript has rows the
@@ -104,6 +115,24 @@ const CONDITIONS = {
 
 /** The classes of the finding log entries in `list` (facts.ledger.due or .guardFailed). */
 const ledgerClasses = (list) => new Set((Array.isArray(list) ? list : []).map((e) => e?.class));
+
+/** What became of a due entry as a proposal that takes it off the cards (lib/findingRepeats.js proposalOf). */
+const CLOSED_PROPOSAL = new Set(['declined', 'exists']);
+
+/**
+ * The due entries still open: not `other` (it never gives a proposal), and not declined by the owner or already built
+ * as a gate for that class and area. An entry whose proposal is unknown (no tasks read) stays.
+ */
+const openDue = (ledger) =>
+  (Array.isArray(ledger?.due) ? ledger.due : []).filter((e) => e && e.class !== 'other' && !CLOSED_PROPOSAL.has(e.proposal?.state));
+
+/** The words of the stacks a project has (lib/kickstart.js detectChecks: "Node/TypeScript", "Python") and its packs. */
+function stackWords(f) {
+  const words = new Set();
+  for (const s of Array.isArray(f.stacks) ? f.stacks : []) for (const w of String(s).toLowerCase().split(/[^a-z0-9.+#-]+/)) if (w) words.add(w);
+  for (const id of Array.isArray(f.packs?.detected) ? f.packs.detected : []) words.add(String(id).toLowerCase());
+  return words;
+}
 
 /** The finding log entries as one short line for a card: the class, the area and the guard that did not hold. */
 function ledgerLine(list, { guard = false } = {}) {
@@ -131,7 +160,7 @@ function detailOf(key, facts) {
   // The canary's own lines: the version and the row types with counts, never content (lib/clients/claude/canary.js news).
   if (key === 'client-format')
     return facts.clientCanary?.lines?.length ? `Seen in the newest transcript: ${facts.clientCanary.lines.join('; ')}.` : null;
-  if (key === 'learning-proposals') return ledgerLine(facts.ledger?.due);
+  if (key === 'learning-proposals') return ledgerLine(openDue(facts.ledger));
   const p = facts.packs;
   if (!p) return null;
   const name = (id) => p.titles?.[id] ?? id;
@@ -167,9 +196,12 @@ const KIND_CONDITIONS = {
   // `ledger-guard-failed:<classes>`, and `ledger-recent:duplication|scope-drift`, which holds at 3 incidents of one of
   // the classes in one area within 30 days (the scope drift cards' important_when, plans/scope-drift-dry-katalog).
   // Never in lite mode: no scope drift or catalog card lights the red marker there (the plan's section 4).
-  'ledger-due': (f, arg) => anyKind(arg, (k) => ledgerClasses(f.ledger?.due).has(k)),
+  'ledger-due': (f, arg) => anyKind(arg, (k) => ledgerClasses(openDue(f.ledger)).has(k)),
   'ledger-guard-failed': (f, arg) => anyKind(arg, (k) => ledgerClasses(f.ledger?.guardFailed).has(k)),
   'ledger-recent': (f, arg) => f.lite !== true && anyKind(arg, (k) => (f.ledger?.recent?.[k] ?? 0) >= RECENT_MIN),
+  // The project's stack: `stack:typescript|python`. A word of a stack the manifests show (facts.stacks, so
+  // "Node/TypeScript" is node and typescript) or a stack pack found (facts.packs.detected, such as supabase).
+  stack: (f, arg) => anyKind(arg, (k) => stackWords(f).has(k.toLowerCase())),
 };
 
 const conditionsOf = (when) => String(when ?? '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -243,6 +275,111 @@ function parseTemplate(text, key) {
   return out;
 }
 
+// ---- Recipes: failure class x stack (recipes.json), 0i section 3.7 ----
+//
+// A recipe says what would guard a failure class that keeps coming back (the finding log), in one stack. They live in
+// the same catalog folder as the cards, as recipes.json, and a project changes them the same way in docs/queue/checks/
+// (same id replaces, `off: true` removes, a new id comes before the plugin's). `when` is a card condition, so a stack and
+// what the project has are said once, in one language (holds). `cards` names cards that already do the work, never a
+// copy. `examples` are facts the recipe must hold for (hit) and must not (miss): recipeExampleProblems, a test.
+//   { id, class, when, title, text, cards: [card keys], examples: { hit: [facts], miss: [facts] } }
+
+const RECIPE_ID = /^[a-z0-9][a-z0-9-]{0,59}$/;
+const CLASS_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const RECIPE_TEXT_MAX = 400;
+const RECIPE_CARDS_MAX = 3;
+const isPlain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/** The examples that do not behave, in words (empty: they all do). */
+function recipeExampleProblems(r) {
+  const out = [];
+  for (const [i, f] of (r?.examples?.hit ?? []).entries()) if (!holds(r.when, isPlain(f) ? f : {})) out.push(`${r.id}: hit example ${i + 1} does not hold for "${r.when}"`);
+  for (const [i, f] of (r?.examples?.miss ?? []).entries()) if (holds(r.when, isPlain(f) ? f : {})) out.push(`${r.id}: miss example ${i + 1} holds for "${r.when}"`);
+  return out;
+}
+
+/** One recipe as an object with its errors in words. `{ id, off: true }` is a removal. */
+function parseRecipe(raw, label) {
+  const id = typeof raw?.id === 'string' ? raw.id : '(no id)';
+  const at = `${label}/recipes.json: ${String(id).slice(0, 60)}`;
+  if (!isPlain(raw)) return { id, off: false, errors: [`${label}/recipes.json: every recipe must be an object`] };
+  if (raw.off === true) return { id, off: true, errors: RECIPE_ID.test(id) ? [] : [`${at}: "id" must be lower case letters, digits and -`] };
+  const r = {
+    id,
+    off: false,
+    class: typeof raw.class === 'string' ? raw.class : '',
+    when: typeof raw.when === 'string' ? raw.when : '',
+    title: typeof raw.title === 'string' ? raw.title.trim() : '',
+    text: typeof raw.text === 'string' ? raw.text.replace(/\s+/g, ' ').trim() : '',
+    cards: Array.isArray(raw.cards) ? raw.cards.filter((k) => typeof k === 'string' && k) : [],
+    examples: { hit: Array.isArray(raw.examples?.hit) ? raw.examples.hit : [], miss: Array.isArray(raw.examples?.miss) ? raw.examples.miss : [] },
+    errors: [],
+  };
+  const err = (m) => r.errors.push(`${at}: ${m}`);
+  if (!RECIPE_ID.test(id)) err('"id" must be lower case letters, digits and -');
+  if (!CLASS_ID.test(r.class)) err('"class" must be a failure class id (failure-classes.json)');
+  else if (r.class === 'other') err('the class other never gets a recipe');
+  for (const c of conditionsOf(r.when)) if (!knownCondition(c)) err(`unknown condition "${c}" in when`);
+  if (!r.title) err('"title" is missing');
+  if (!r.text) err('"text" is missing');
+  else if (r.text.length > RECIPE_TEXT_MAX) err(`"text" is over ${RECIPE_TEXT_MAX} characters`);
+  if (r.cards.length > RECIPE_CARDS_MAX) err(`at most ${RECIPE_CARDS_MAX} cards`);
+  if (!r.examples.hit.length) err('needs at least one hit example (facts it holds for)');
+  if (conditionsOf(r.when).length && !r.examples.miss.length) err('needs at least one miss example (facts it does not hold for)');
+  if (!r.errors.length) for (const p of recipeExampleProblems(r)) r.errors.push(`${label}/recipes.json: ${p}`);
+  return r;
+}
+
+/** recipes.json in a folder as { recipes, errors }. A folder without one has none. */
+function readRecipes(folder, label) {
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(path.join(folder, 'recipes.json'), 'utf8'));
+  } catch (e) {
+    return { recipes: [], errors: e?.code === 'ENOENT' ? [] : [`${label}/recipes.json: ${e.message}`] };
+  }
+  const list = Array.isArray(data) ? data : Array.isArray(data?.recipes) ? data.recipes : null;
+  if (!list) return { recipes: [], errors: [`${label}/recipes.json: expected { "recipes": [ ... ] }`] };
+  return { recipes: list.map((x) => parseRecipe(x, label)), errors: [] };
+}
+
+/**
+ * The project's recipes over the plugin's: off removes, the same id replaces in place, a new one comes first (the
+ * project's own choice wins for its class). A card a recipe names must be a card of the catalog: an unknown key is an
+ * error and leaves the recipe out; a card the project turned off only drops the link.
+ */
+function mergeRecipes(builtin = [], own = [], { allKeys, liveKeys }) {
+  const byId = new Map(builtin.map((r) => [r.id, r]));
+  const fresh = [];
+  for (const r of own) {
+    if (byId.has(r.id)) byId.set(r.id, r);
+    else fresh.push(r);
+  }
+  const errors = [];
+  const recipes = [];
+  for (const r of [...fresh, ...byId.values()]) {
+    // A removal or a recipe with a mistake: only its errors (a broken entry may have no cards at all).
+    if (r.off || r.errors.length) {
+      errors.push(...r.errors);
+      continue;
+    }
+    const unknown = r.cards.filter((k) => !allKeys.has(k));
+    if (unknown.length) {
+      errors.push(...unknown.map((k) => `recipes.json: ${r.id}: names the card "${k}", which is no card`));
+      continue;
+    }
+    const { errors: _none, off: _off, ...clean } = r;
+    recipes.push({ ...clean, cards: r.cards.filter((k) => liveKeys.has(k)) });
+  }
+  return { recipes, errors };
+}
+
+/** The recipe for a class in this project: the first whose `when` holds for the facts, or null. Never one for other. */
+function recipeFor(cls, facts, recipes = []) {
+  if (!cls || cls === 'other') return null;
+  return (Array.isArray(recipes) ? recipes : []).find((r) => r.class === cls && holds(r.when, facts ?? {})) ?? null;
+}
+
 /** The project's categories and templates over the plugin's. */
 function mergeCatalog(builtin, own) {
   const categories = new Map(builtin.categories.map((c) => [c.key, c]));
@@ -252,11 +389,14 @@ function mergeCatalog(builtin, own) {
   const shown = [...categories.values()].filter((c) => !c.off);
   const shownKeys = new Set(shown.map((c) => c.key));
   const valid = [...templates.values()].filter((x) => !x.off);
+  // A category switched off takes its suggestions with it. A category nobody listed is not lost: it shows under its key.
+  const live = valid.filter((x) => !x.errors.length && (shownKeys.has(x.category) || !categories.has(x.category)));
+  const recipes = mergeRecipes(builtin.recipes ?? [], own.recipes ?? [], { allKeys: new Set(templates.keys()), liveKeys: new Set(live.map((x) => x.key)) });
   return {
     categories: shown,
-    // A category switched off takes its suggestions with it. A category nobody listed is not lost: it shows under its key.
-    templates: valid.filter((x) => !x.errors.length && (shownKeys.has(x.category) || !categories.has(x.category))),
-    errors: [...builtin.errors, ...own.errors, ...valid.flatMap((x) => x.errors)],
+    templates: live,
+    recipes: recipes.recipes,
+    errors: [...builtin.errors, ...own.errors, ...valid.flatMap((x) => x.errors), ...recipes.errors],
   };
 }
 
@@ -282,7 +422,8 @@ function readFolder(folder, label) {
     /* no templates in this folder */
   }
   const templates = names.map((f) => parseTemplate(fs.readFileSync(path.join(folder, 'suggestions', f), 'utf8'), f.slice(0, -3)));
-  return { categories, templates, errors };
+  const recipes = readRecipes(folder, label);
+  return { categories, templates, recipes: recipes.recipes, errors: [...errors, ...recipes.errors] };
 }
 
 const loadCatalog = ({ builtin, own }) => mergeCatalog(readFolder(builtin, 'plugin catalog'), readFolder(own, 'docs/queue/checks'));
@@ -303,6 +444,70 @@ function suggestionState(t, tasks, dismissed) {
   if (!task) return { state: 'open', taskId: null };
   return { state: task.status === 'done' ? 'planned' : 'queued', taskId: task.id };
 }
+
+/** The card that shows the due classes with their recipes, and how many classes it shows (the rest are counted). */
+const LEDGER_CARD = 'ledger-recipes';
+const LEDGER_MAX = 3;
+const PLACES_MAX = 5;
+
+/**
+ * The due classes for the card ledger-recipes: per open entry the class, the count, the places (paths only, never an
+ * excerpt or code, 0i section 3.11), the stack, what became of it as a proposal, and the recipe with the cards it points
+ * to (their state on the tab when they show, else applies false). Fields are picked one by one, so nothing else on an
+ * entry reaches the card. What a "Build as gate" button needs later is here: the class, the area and the recipe id.
+ */
+function ledgerItems(facts, catalog, suggestions) {
+  const open = openDue(facts.ledger);
+  const stacks = (Array.isArray(facts.stacks) ? facts.stacks : []).filter((s) => typeof s === 'string');
+  const shown = new Map(suggestions.map((s) => [s.key, s]));
+  const titles = new Map((catalog.templates ?? []).map((x) => [x.key, x.title]));
+  const items = open.slice(0, LEDGER_MAX).map((e) => {
+    const r = recipeFor(e.class, facts, catalog.recipes);
+    return {
+      key: typeof e.key === 'string' ? e.key : `${e.class}@${e.area}`,
+      class: e.class,
+      title: e.title ?? e.class,
+      area: e.area,
+      scope: e.scope,
+      incidents: e.incidents,
+      severity: e.severity ?? null,
+      tasks: (Array.isArray(e.tasks) ? e.tasks : []).slice(0, 5),
+      files: (Array.isArray(e.files) ? e.files : []).filter((f) => typeof f === 'string' && f).slice(0, PLACES_MAX),
+      stacks,
+      proposal: e.proposal ? { state: e.proposal.state, task: e.proposal.task ?? null } : null,
+      recipe: r
+        ? {
+            id: r.id,
+            title: r.title,
+            text: r.text,
+            cards: r.cards.map((k) => {
+              const s = shown.get(k);
+              return s && s.applies ? { key: k, title: s.title, applies: true, state: s.state } : { key: k, title: titles.get(k) ?? k, applies: false, state: null };
+            }),
+          }
+        : null,
+    };
+  });
+  return { items, more: Math.max(0, open.length - items.length), capFull: facts.ledger?.cap?.full === true };
+}
+
+/** The card's line from its items: per class where, how often, the places, the stack and the recipe. */
+function ledgerRecipeLine({ items, more, capFull }) {
+  if (!items.length) return null;
+  const parts = items.map((i) => {
+    const where = i.scope === 'project' ? 'across the project' : `in ${i.area}`;
+    const at = i.files.length ? ` at ${i.files.join(', ')}` : '';
+    const proposed = i.proposal?.state === 'extend' && i.proposal.task ? ` (proposed as ${i.proposal.task})` : '';
+    const stack = ` Stack: ${i.stacks.length ? i.stacks.join(', ') : 'not known'}.`;
+    const cards = i.recipe?.cards.length ? ` See the card${i.recipe.cards.length > 1 ? 's' : ''} ${i.recipe.cards.map((c) => `"${c.title}"`).join(' and ')}.` : '';
+    const recipe = i.recipe ? ` Recipe: ${i.recipe.title}. ${i.recipe.text}${cards}` : ' No recipe yet for this class in this stack.';
+    return `${capital(i.title)} ${where}: ${i.incidents} incident(s)${at}${proposed}.${stack}${recipe}`;
+  });
+  if (more) parts.push(`And ${more} more.`);
+  if (capFull) parts.push('The cap of three open proposals is full, so a new gate proposal waits for a free slot.');
+  return parts.join(' ');
+}
+const capital = (s) => (s ? `${String(s)[0].toUpperCase()}${String(s).slice(1)}` : s);
 
 /**
  * The whole picture. It is a plain snapshot: the same object is the file, the --json answer and what the board draws.
@@ -339,6 +544,12 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
       applies: x.applies,
       ...suggestionState(x, tasks, dismissed),
     }));
+  // The due classes with their recipes, on the one card that shows them (read after the other cards' states are known).
+  const ledgerCard = suggestions.find((s) => s.key === LEDGER_CARD && s.applies);
+  if (ledgerCard) {
+    ledgerCard.ledger = ledgerItems(facts, catalog, suggestions);
+    ledgerCard.detail = ledgerRecipeLine(ledgerCard.ledger);
+  }
   return {
     version: REPORT_VERSION,
     scannedAt: now,
@@ -391,4 +602,4 @@ function planTask(s, found, tasks) {
   };
 }
 
-module.exports = { PRIORITIES, ACTIONS, CONDITIONS, holds, parseTemplate, mergeCatalog, loadCatalog, buildReport, planTask, planTasks };
+module.exports = { PRIORITIES, ACTIONS, CONDITIONS, holds, parseTemplate, mergeCatalog, loadCatalog, buildReport, planTask, planTasks, recipeFor, recipeExampleProblems };

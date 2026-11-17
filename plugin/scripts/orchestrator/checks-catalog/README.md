@@ -4,6 +4,10 @@ Every suggestion on the Checks tab and in `ravenseat checks` is a file here. No 
 
 - `categories.json`: the categories, in the order they show (`key`, `title`, `text`).
 - `suggestions/<key>.md`: one suggestion. The file name is its key.
+- `recipes.json`: per failure class and stack, what would guard a class the finding log keeps seeing. The card
+  `ledger-recipes` shows the first recipe whose `when` holds. `when` uses the card conditions, `cards` names cards that
+  already do the work, and `examples` (`hit`, `miss`: facts it must and must not hold for) are checked when it is read.
+  See [Recipes](../../../docs/checks.md#recipes).
 
 To change them for one project, without touching the plugin, use the same layout in `docs/queue/checks/`:
 
@@ -14,6 +18,7 @@ To change them for one project, without touching the plugin, use the same layout
 | Remove one | Add a file with the same name holding only a header with `off: true` |
 | Add or change a category | List it in `docs/queue/checks/categories.json` with the same or a new `key` |
 | Remove a category and its suggestions | List its key with `"off": true` |
+| Add, change or remove a recipe | List it in `docs/queue/checks/recipes.json`: a new id comes first, the same id replaces, `"off": true` removes |
 
 ## A template
 

@@ -61,6 +61,8 @@ const LABEL = 'finding-log';
 const PROJECT = '*';
 /** Example tasks kept per entry. */
 const MAX_TASKS = 5;
+/** Paths kept per entry for the Checks tab. */
+const MAX_PLACES = 5;
 const DAY_MS = 86_400_000;
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -190,6 +192,10 @@ function entryOf(cls, area, scope, incidents, guardFailed, setup) {
     tasks: [...new Set(incidents.map((i) => i.task).filter(Boolean))].slice(0, MAX_TASKS),
     files: place?.where?.files ?? [],
     line: place?.where?.line ?? null,
+    // Every path the incidents name, newest first, for the Checks tab (paths only, never a line of code: 0i section 3.11).
+    places: [...new Set(incidents.flatMap((i) => i.rows.flatMap((r) => (Array.isArray(r.where?.files) ? r.where.files : []))))]
+      .filter((f) => typeof f === 'string' && f)
+      .slice(0, MAX_PLACES),
     firstSeen: new Date(Math.min(...incidents.map((i) => i.first))).toISOString(),
     lastSeen: new Date(latest.t).toISOString(),
     due: incidents.length >= 2 && weight >= threshold,
@@ -242,8 +248,9 @@ function scan(rows, { now = Date.now(), setup, guards = [] } = {}) {
   return { entries, due: entries.filter((e) => e.due), guardFailed: entries.filter((e) => e.guardFailed) };
 }
 
-/** The entry as the Checks tab reads it: the class with its title, never an excerpt. */
+/** The entry as the Checks tab reads it: the class with its title and its places as paths, never an excerpt. */
 const summary = (e, classes) => ({
+  key: e.key,
   class: e.class,
   title: FC.titleOf(e.class, classes),
   area: e.area,
@@ -253,18 +260,36 @@ const summary = (e, classes) => ({
   severity: e.severity,
   tasks: e.tasks,
   lastSeen: e.lastSeen,
+  files: Array.isArray(e.places) ? e.places : [],
   guardFailed: e.guardFailed,
 });
 
 /**
- * The facts for lib/checksCatalog.js (facts.ledger): what is due, what failed, the marker setting, and `recent` (per
- * class, the most incidents in one area within RECENT_DAYS, for the scope drift cards' important_when).
+ * What became of a due entry as a gate proposal (lib/knownBugGate.js decide on its title per class and area): add (none
+ * yet), full (the shared cap is full, the next one waits), extend (an open one exists), exists (a gate was built) or
+ * declined (the owner cancelled it, remembered per class and area). Null without the tasks: unknown, nothing left out.
  */
-function facts(result, { rows = [], now = Date.now(), setup, classes } = {}) {
+function proposalOf(e, tasks, classes) {
+  if (!Array.isArray(tasks)) return null;
+  const d = G.decide({ title: gateTitle(e, classes), tasks, mode: 'propose' });
+  return { state: d.action, task: d.task?.id ?? null };
+}
+
+/**
+ * The facts for lib/checksCatalog.js (facts.ledger): what is due, what failed, the marker setting, and `recent` (per
+ * class, the most incidents in one area within RECENT_DAYS, for the scope drift cards' important_when). With `tasks`
+ * (the queue's, archived ones too) each due entry says what became of it as a proposal, and `cap` is the shared cap.
+ */
+function facts(result, { rows = [], now = Date.now(), setup, classes, tasks } = {}) {
   const s = setup ?? setupOf({});
   const out = { due: [], guardFailed: [], marker: s.guardFailedMarker, recent: {} };
   if (!s.repeats) return out;
-  out.due = (result?.due ?? []).map((e) => summary(e, classes));
+  out.due = (result?.due ?? []).map((e) => ({ ...summary(e, classes), proposal: proposalOf(e, tasks, classes) }));
+  // The cap shared with the inspection queue and the GATE proposals (0i section 3.9), when the tasks are known.
+  if (Array.isArray(tasks)) {
+    const open = G.sharedProposals(tasks);
+    out.cap = { open, max: G.SHARED_MAX, full: open >= G.SHARED_MAX };
+  }
   out.guardFailed = (result?.guardFailed ?? []).map((e) => summary(e, classes));
   const from = now - RECENT_DAYS * DAY_MS;
   const per = new Map();

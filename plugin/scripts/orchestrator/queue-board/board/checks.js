@@ -181,6 +181,31 @@ function checksButton(s) {
   });
 }
 
+/**
+ * The due classes on the card ledger-recipes (lib/checksCatalog.js ledgerItems), one line each: where, how often, the
+ * places (paths only), the stack and the recipe. Text only, never HTML from the report.
+ */
+function checksLedgerList(ledger) {
+  const items = (ledger?.items ?? []).map((i) => {
+    const where = i.scope === 'project' ? 'across the project' : `in ${i.area}`;
+    const proposed = i.proposal?.state === 'extend' && i.proposal.task ? ` Proposed as ${i.proposal.task}.` : '';
+    const places = i.files?.length ? ` At ${i.files.join(', ')}.` : '';
+    const stack = ` Stack: ${i.stacks?.length ? i.stacks.join(', ') : 'not known'}.`;
+    const cards = i.recipe?.cards?.length ? ` See: ${i.recipe.cards.map((c) => c.title).join(', ')}.` : '';
+    const recipe = i.recipe ? ` Recipe: ${i.recipe.text}${cards}` : ' No recipe yet for this class in this stack.';
+    return el(
+      'li',
+      {},
+      el('span', { class: 'checks-where', text: `${i.title} ${where}: ${i.incidents} incident(s).` }),
+      el('span', { text: `${proposed}${places}${stack}${recipe}` }),
+    );
+  });
+  const tail = [];
+  if (ledger?.more) tail.push(el('li', { text: `And ${ledger.more} more.` }));
+  if (ledger?.capFull) tail.push(el('li', { text: 'The cap of three open proposals is full, so a new gate proposal waits for a free slot.' }));
+  return el('ul', { class: 'checks-places' }, ...items, ...tail);
+}
+
 function checksSuggestionCard(s, categories) {
   const details = el(
     'details',
@@ -209,7 +234,7 @@ function checksSuggestionCard(s, categories) {
     ),
     el('h4', { class: 'checks-card-title', text: s.title }),
     el('p', { class: 'checks-text', text: s.why }),
-    s.detail ? el('p', { class: 'checks-source', text: s.detail }) : null,
+    s.ledger?.items?.length ? checksLedgerList(s.ledger) : s.detail ? el('p', { class: 'checks-source', text: s.detail }) : null,
     s.action === 'ask'
       ? el(
           'div',
