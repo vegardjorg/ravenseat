@@ -61,6 +61,27 @@ describe('clientFor().entries', () => {
     expect(E.usage(0)).toBeNull();
   });
 
+  it('the fields the cost reading needs (W2b2): message id, synthetic, thinking, text, meta, notification, version, cwd', () => {
+    const e = E.entry({
+      type: 'assistant',
+      version: '2.1.317',
+      cwd: '/w',
+      message: { id: 'm1', model: 'claude-opus-5-5', usage: { output_tokens: 9, output_tokens_details: { thinking_tokens: 4 } }, content: [{ type: 'text', text: 'a' }, { type: 'tool_use', id: 't' }, { type: 'text', text: 'b' }] },
+    });
+    expect(e).toMatchObject({ hasMessage: true, messageId: 'm1', synthetic: false, thinking: 4, text: 'a  b', meta: false, notification: false, version: '2.1.317', cwd: '/w' });
+    expect(E.entry({ type: 'assistant', message: { model: '<synthetic>' } }).synthetic).toBe(true);
+    expect(E.entry({ type: 'system', subtype: 'api_error', version: '', cwd: 3 })).toMatchObject({ hasMessage: false, text: '', version: null, cwd: null, thinking: undefined });
+    expect(E.entry({ type: 'user', isMeta: true, message: { content: 'x' } })).toMatchObject({ meta: true, text: 'x' });
+    expect(E.entry({ type: 'user', origin: { kind: 'task-notification' }, message: { content: 'x' } }).notification).toBe(true);
+    expect(E.entry({ type: 'user', turnOrigin: 'task_notification', message: {} }).notification).toBe(true);
+    expect(E.entry({ type: 'user', message: { content: [{ type: 'text', text: '<task-notification> done' }] } }).notification).toBe(true);
+    expect(E.entry({ type: 'user', message: { content: 'Background command "npm test" completed' } }).notification).toBe(true);
+    expect(E.entry({ type: 'user', message: { content: 'a prompt' } }).notification).toBe(false);
+    expect(E.resultText('abc')).toBe('abc');
+    expect(E.resultText([{ type: 'text', text: 'ab' }, { type: 'image' }, 'c'])).toBe('abc');
+    expect(E.resultText(undefined)).toBe('');
+  });
+
   it('the compaction row', () => {
     const e = E.entry({ type: 'system', subtype: 'compact_boundary' });
     expect(e).toMatchObject({ kind: 'system', subtype: 'compact_boundary', compaction: true, apiError: null });
@@ -83,7 +104,9 @@ describe('clientFor().entries', () => {
     expect(sys({ error: { type: 'overloaded_error', message: 'Overloaded' } })?.kind).toBe('overloaded');
     expect(sys({ type: 'rate_limit_error' })?.kind).toBe('rate_limit');
     expect(sys(undefined)).toMatchObject({ kind: 'other', form: 'system', code: '' });
-    expect(sys('usage_limit_reached')?.code).toBe('usage_limit_reached');
+    // The usage limit code alone is a rate limit, as the entry form (with its 429) is (W2b2).
+    expect(sys('usage_limit_reached')).toMatchObject({ kind: 'rate_limit', code: 'usage_limit_reached' });
+    expect(sys({ error: { type: 'usage_limit_reached' } })?.kind).toBe('rate_limit');
     // A normal answer and another system row are no API error.
     expect(E.entry({ type: 'assistant', message: { model: 'claude-opus-5-5', content: [] } }).apiError).toBeNull();
     expect(E.entry({ type: 'system', subtype: 'informational' }).apiError).toBeNull();

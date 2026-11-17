@@ -93,9 +93,9 @@ const ANALYSIS: Record<string, object> = {
       REPL: { calls: 1, errors: 0 },
       SubagentHandback: { calls: 1, errors: 0 },
     },
-    // The system form (F1): rate_limit (a code) and a plain 429, overloaded (529), and the usage limit as a bare code,
-    // which is 'other' (see claudeFormatContract.test.ts).
-    api_errors: { rate_limit: 2, overloaded: 1, other: 1 },
+    // The system form (F1): rate_limit (a code), a plain 429 and the usage limit as a bare code, overloaded (529). The
+    // usage limit was 'other' before W2b2; it is a rate limit as in the entry form (see claudeFormatContract.test.ts).
+    api_errors: { rate_limit: 3, overloaded: 1, other: 0 },
     cache_expiry: 0,
     thinking_tokens: 25,
     thinking_turns: 1,
@@ -188,7 +188,7 @@ describe('timeCost.analyzeTranscript on the format fixtures', () => {
             'fx-api-error-system-rate-limit': 'rate_limit',
             'fx-api-error-system-overloaded': 'overloaded',
             'fx-api-error-system-plain-429': 'rate_limit',
-            'fx-api-error-system-usage-limit': 'other',
+            'fx-api-error-system-usage-limit': 'rate_limit',
           },
     );
   });

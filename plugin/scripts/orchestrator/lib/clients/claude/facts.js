@@ -48,8 +48,9 @@ const FACTS = Object.freeze(
       move: 'W2',
       source: 'observed',
       // W2b1 (2026-11-17): lib/clients/claude/entries.js reads it (usage(), the core's names, values as written);
-      // trackGuard and turnTools ask clientFor().entries. timeCost moves in W2b2, after the W3 fixtures.
-      readers: ['lib/clients/claude/entries.js', 'lib/timeCost.js'],
+      // trackGuard and turnTools ask clientFor().entries. W2b2 (2026-11-17): timeCost too (addUsage, analyzeTranscript;
+      // entry().thinking for output_tokens_details.thinking_tokens).
+      readers: ['lib/clients/claude/entries.js'],
     },
     {
       id: 'transcript.entryTypes',
@@ -61,8 +62,9 @@ const FACTS = Object.freeze(
       source: 'observed',
       // W2b1 (2026-11-17): lib/clients/claude/entries.js reads it (entry(): kind, parts, tools; a row type the queue
       // does not know is 'unknown'); contextGuard, askBundle, logic/results, approvalWait and usageLimit ask
-      // clientFor().entries. timeCost moves in W2b2.
-      readers: ['lib/clients/claude/entries.js', 'lib/timeCost.js'],
+      // clientFor().entries. W2b2 (2026-11-17): timeCost too (the tool calls and results with is_error and size, the
+      // message id, the mission text, isMeta and the task notification, timestamp, version and cwd).
+      readers: ['lib/clients/claude/entries.js'],
     },
     {
       id: 'transcript.handback',

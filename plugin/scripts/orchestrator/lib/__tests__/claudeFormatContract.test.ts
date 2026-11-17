@@ -164,9 +164,9 @@ const EXPECTED: Record<string, Record<string, object>> = {
     'fx-api-error-system-rate-limit': sysError(N('10:01:10'), { kind: 'rate_limit', form: 'system', status: NaN, code: 'rate_limit' }),
     'fx-api-error-system-overloaded': sysError(N('10:01:20'), { kind: 'overloaded', form: 'system', status: 529, code: 'overloaded_error' }),
     'fx-api-error-system-plain-429': sysError(N('10:01:30'), { kind: 'rate_limit', form: 'system', status: 429, code: '' }),
-    // The usage limit as a bare code is kind 'other' here (no 429, no rate limit words), unlike the entry form, which
-    // carries the 429; usageLimit still reads it as the limit (below).
-    'fx-api-error-system-usage-limit': sysError(N('10:01:40'), { kind: 'other', form: 'system', status: NaN, code: 'usage_limit_reached' }),
+    // The usage limit as a bare code (no 429, no rate limit words) is a rate limit, as in the entry form, which carries
+    // the 429 (a deliberate change in W2b2: it was 'other'); usageLimit still reads it as the limit (below).
+    'fx-api-error-system-usage-limit': sysError(N('10:01:40'), { kind: 'rate_limit', form: 'system', status: NaN, code: 'usage_limit_reached' }),
     'fx-turn-after-compaction': asst(N('10:02:00'), 'claude-fable-5-2', u(50, 10, 0, 1500, [0, 1500]), ['text']),
     'fx-handback': asst(N('10:02:30'), 'claude-fable-5-2', u(1, 20, 1500, 0), ['tool:SubagentHandback'], 'RESULT status=DONE fixture'),
   },

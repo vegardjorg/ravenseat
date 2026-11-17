@@ -4,7 +4,8 @@
 // transcript.apiError in ./facts.js).
 //
 // entry(raw)  the event of a parsed row:
-//   { kind, type, subtype, at, timestamp, model, usage, parts, tools, handback, compaction, apiError, raw }
+//   { kind, type, subtype, at, timestamp, model, usage, parts, tools, handback, compaction, apiError, hasMessage,
+//     messageId, synthetic, thinking, text, meta, notification, version, cwd, raw }
 //     kind        'assistant' | 'user' | 'system' for the row types the queue reads, 'unknown' for anything else (the
 //                 2.1.317 request rows api-request, api-request-blob and api-request-shape, snapshots, a non-object
 //                 line); type keeps the row's own type
@@ -17,7 +18,17 @@
 //     tools       the 'tool' parts; handback = the last SubagentHandback message in the row, or null
 //     compaction  true for the compaction row (system, compact_boundary)
 //     apiError    { kind: 'rate_limit'|'overloaded'|'other', form: 'entry'|'system', status, code } or null (below)
+//   The fields the cost reading needs (lib/timeCost.js analyzeTranscript, 0w W2b2):
+//     hasMessage  the row has a message (an API error in the system form has none)
+//     messageId   message.id: the streamed lines of one model turn share it
+//     synthetic   message.model is '<synthetic>' (an API error entry, never a model turn)
+//     thinking    message.usage.output_tokens_details.thinking_tokens as written (undefined on older versions)
+//     text        the message text: the content string, or the text of the blocks joined with a space ('' for none)
+//     meta        isMeta is true (a system reminder, no real prompt)
+//     notification  a background task notification (origin.kind, turnOrigin, or the text when they are missing)
+//     version, cwd  the Claude Code version and the working directory, or null when not a non-empty string
 // usage(raw)  { input, output, cacheRead, cacheWritten, cache5m, cache1h, raw }, or null for a falsy value
+// resultText(content)  the text of a tool_result's content (a string, or text blocks; other blocks add nothing)
 // parse(line) JSON.parse, or undefined for a line that is not JSON (a half line at the cut, a line being written)
 // MARK        the strings a reader may look for in a line before it parses it (a cheap pre-check, never a decision)
 //
@@ -28,8 +39,10 @@
 //           holds is not confirmed (only the field names were seen): a string is taken as the code, an object gives
 //           status (error.status), the code (error.error.type, error.type or error.code) and text (error.message,
 //           error.error.message). W3 fixtures confirm it.
-//   Kind: 429 or rate limit is rate_limit, 529 or overloaded is overloaded, anything else other. The status, the code
-//   AND the text are matched, since a version may lack some of them. The text is only matched, never kept.
+//   Kind: 429, rate limit or the usage limit code (usage_limit_reached) is rate_limit, 529 or overloaded is overloaded,
+//   anything else other. The status, the code AND the text are matched, since a version may lack some of them. The
+//   text is only matched, never kept. The usage limit code is a rate limit in both forms (W2b2): the entry form
+//   carries the 429 with it, the system form may have only the code.
 //
 // The values are passed on as Claude Code wrote them (no number checks), so each reader adds them up exactly as it did
 // before the move; a reader that needs a check makes it. entry() never throws, whatever the row.
@@ -85,6 +98,32 @@ function usage(raw) {
   };
 }
 
+/** The text of a tool_result's content: a string, or the text blocks joined; images and other blocks add nothing. */
+function resultText(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.map((b) => (typeof b === 'string' ? b : typeof b?.text === 'string' ? b.text : '')).join('');
+}
+
+/** The message text: the content string, or every block's text joined with a space (a block without text adds ''). */
+function messageText(m) {
+  if (typeof m?.content === 'string') return m.content;
+  return Array.isArray(m?.content) ? m.content.map((c) => c?.text ?? '').join(' ') : '';
+}
+
+/**
+ * Is this row a background task notification? Claude Code marks one with origin.kind "task-notification" or
+ * turnOrigin "task_notification"; without those fields only the text tells: it starts with <task-notification>, or
+ * reads "Background command ... completed" (or failed, killed).
+ */
+function isNotification(r, text) {
+  if (r?.origin?.kind === 'task-notification' || r?.turnOrigin === 'task_notification') return true;
+  return /^\s*<task-notification>/.test(text) || /^\s*Background command\b[^\n]*\b(?:completed|failed|killed)\b/i.test(text);
+}
+
+/** A non-empty string, or null. */
+const nonEmpty = (x) => (typeof x === 'string' && x ? x : null);
+
 /** One content block as a part. */
 function part(c) {
   const type = c?.type;
@@ -97,9 +136,12 @@ function part(c) {
   return { kind: 'other', type };
 }
 
-/** 429 / rate limit, 529 / overloaded, anything else. */
+/** The codes that mean a rate limit: the short code, and the usage limit (the system form may carry only that). */
+const RATE_LIMIT_CODES = new Set(['rate_limit', 'usage_limit_reached']);
+
+/** 429 / rate limit / usage limit, 529 / overloaded, anything else. */
 function errorKind(status, code, text) {
-  if (status === 429 || code === 'rate_limit' || /\b429\b|rate[ _-]?limit/i.test(text)) return 'rate_limit';
+  if (status === 429 || RATE_LIMIT_CODES.has(code) || /\b429\b|rate[ _-]?limit/i.test(text)) return 'rate_limit';
   if (status === 529 || code === 'overloaded' || /\b529\b|overloaded/i.test(text)) return 'overloaded';
   return 'other';
 }
@@ -136,6 +178,8 @@ function entry(raw) {
   let handback = null;
   for (const t of tools) if (t.handback) handback = t.handback;
   const at = r ? Date.parse(r.timestamp) : NaN;
+  const text = messageText(m);
+  const thinking = m?.usage?.output_tokens_details?.thinking_tokens;
   return {
     kind: typeof type === 'string' && KNOWN.has(type) ? type : 'unknown',
     type: type ?? null,
@@ -149,8 +193,17 @@ function entry(raw) {
     handback,
     compaction: type === 'system' && r.subtype === 'compact_boundary',
     apiError: r ? apiErrorOf(r) : null,
+    hasMessage: !!m,
+    messageId: m?.id,
+    synthetic: m?.model === SYNTHETIC_MODEL,
+    thinking,
+    text,
+    meta: r?.isMeta === true,
+    notification: r ? isNotification(r, text) : false,
+    version: nonEmpty(r?.version),
+    cwd: nonEmpty(r?.cwd),
     raw,
   };
 }
 
-module.exports = { SYNTHETIC_MODEL, HANDBACK_TOOL, MARK, parse, usage, entry };
+module.exports = { SYNTHETIC_MODEL, HANDBACK_TOOL, MARK, parse, usage, resultText, entry };

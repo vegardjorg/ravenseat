@@ -50,7 +50,8 @@ const COUPLING: Record<string, RegExp> = {
 };
 
 /**
- * The files that read a Claude Code format directly today (2026-11-16, W1; 2 left after W2b1). W2 moves them behind
+ * The files that read a Claude Code format directly today (2026-11-16, W1; 2 left after W2b1, 1 after W2b2: the push
+ * guard, a deliberate exception). W2 moves them behind
  * lib/clients/claude and removes each entry here in the same commit; the bolk in the comment is the plan, not a rule.
  */
 const ALLOWED: string[] = [
@@ -65,8 +66,9 @@ const ALLOWED: string[] = [
   // W2b1 (done 2026-11-17): the transcript rows (content blocks, handback, usage, compact_boundary, both forms of an
   // API error) moved to lib/clients/claude/entries.js; approvalWait, askBundle, contextGuard (with hookOutput),
   // logic/results, trackGuard (with subagentTranscript), turnTools and usageLimit (with decide) ask clientFor().entries.
-  // W2b2: timeCost's usage and tool reading, after the W3 fixtures (its apiErrorKind already asks the adapter, F1).
-  'lib/timeCost.js',
+  // W2b2 (done 2026-11-17): timeCost's row reading (usage with the cache split, message id, model and '<synthetic>',
+  // tool_use and tool_result with is_error and size, thinking, timestamp, version, cwd, the mission text) asks
+  // clientFor().entries; timeCostFixtures.test.ts held it unchanged.
 ];
 
 /** Is a line a comment (//, /*, * continuation)? Comments may name the fields. */

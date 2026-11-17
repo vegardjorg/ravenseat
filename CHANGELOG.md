@@ -5,6 +5,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: the cost rows are now read through the same transcript row reader as the rest of the queue, and a
+  usage limit in the newer API error form counts as a rate limit, as it does in the older form.** The time and cost
+  analysis (tokens with the cache split, streamed turns, models, tool calls and failed results, thinking, version and
+  working directory) no longer reads Claude Code's transcript fields itself, so a format change is fixed in one place
+  and the fixtures per version hold the result byte for byte. A failed API call that Claude Code 2.1.317 and later
+  writes with only the usage limit code was counted as "other" in the API error tally; it is now a rate limit, like
+  the same limit in the older form, and the usage limit pause still recognizes it. No new setting.
 - **Hardening: the cost estimate for Fable 5.2, Mythos 5.2 and Sonnet 5.5 is corrected, and the Claude Code formats
   the queue reads are now locked by fixtures per version.** Fable 5.2 and Mythos 5.2 were priced at the older Fable
   row ($10 and $50 per million tokens, cache reads at $1) and Sonnet 5.5 at the Sonnet 5 row (cache reads at $0.20),

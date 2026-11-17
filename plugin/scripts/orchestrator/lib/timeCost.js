@@ -104,7 +104,10 @@ function priceFor(model) {
   return { price: PRICES[DEFAULT_MODEL], family: 'opus-5-5', known: false };
 }
 
-/** The pseudo model Claude Code writes on its own API error entries (not a real model; never priced or counted). */
+/**
+ * The pseudo model Claude Code writes on its own API error entries (not a real model; never priced or counted). Kept
+ * for older readers; analyzeTranscript asks the adapter (entries.entry().synthetic, the same value).
+ */
 const SYNTHETIC_MODEL = '<synthetic>';
 
 /** The time zone "day" is computed in: the machine's own (set the TZ environment variable to use another). */
@@ -203,14 +206,25 @@ const emptyTokens = () => ({
   cache_written_1h: 0,
 });
 
-/** Adds one turn's API usage to a token set (the same rules for the total and for each model). */
+// The client adapter's row reader (clientFor().entries, lib/clients/claude/entries.js), looked up once on first use:
+// every transcript field timeCost reads (usage, content blocks, API errors, message id, model, version, cwd, the
+// mission text) comes through it (0w W2b2), so a format change is fixed in one place.
+let entriesOf = null;
+const E = () => (entriesOf ??= require('./clients/index.js').clientFor().entries);
+
+/** Adds one turn's API usage (as Claude Code wrote it) to a token set (the same rules for the total and each model). */
 function addUsage(tokens, u) {
-  const written = u.cache_creation_input_tokens ?? 0;
-  const five = u.cache_creation?.ephemeral_5m_input_tokens;
-  const hour = u.cache_creation?.ephemeral_1h_input_tokens;
-  tokens.input += u.input_tokens ?? 0;
-  tokens.output += u.output_tokens ?? 0;
-  tokens.cache_read += u.cache_read_input_tokens ?? 0;
+  addCounts(tokens, E().usage(u));
+}
+
+/** Adds a usage in the adapter's names (entries.usage) to a token set. */
+function addCounts(tokens, n) {
+  const written = n.cacheWritten ?? 0;
+  const five = n.cache5m;
+  const hour = n.cache1h;
+  tokens.input += n.input ?? 0;
+  tokens.output += n.output ?? 0;
+  tokens.cache_read += n.cacheRead ?? 0;
   tokens.cache_written += written;
   // Without a split (older API responses) the write counts as 5 min, as for subagents.
   tokens.cache_written_5m += five ?? (hour == null ? written : 0);
@@ -221,19 +235,12 @@ function addUsage(tokens, u) {
  * The kind of an API error row in a transcript, or null when the row is not one. Claude Code wrote a failed API call
  * as an assistant entry (isApiErrorMessage, the HTTP status, a short code, model "<synthetic>" and "API Error: 529
  * Overloaded ..." as text), and since 2.1.317 also as a system api_error row (F1). Both forms are read by the client
- * adapter (clientFor().entries, lib/clients/claude/entries.js, 0w W2b1): 429 or rate limit -> rate_limit, 529 or
- * overloaded -> overloaded, anything else -> other.
+ * adapter (clientFor().entries, lib/clients/claude/entries.js, 0w W2b1): 429, rate limit or the usage limit code
+ * (usage_limit_reached, in both forms since W2b2) -> rate_limit, 529 or overloaded -> overloaded, anything else -> other.
  * @returns {'rate_limit'|'overloaded'|'other'|null}
  */
 function apiErrorKind(r) {
-  return apiErrorOf(r)?.kind ?? null;
-}
-
-let entriesOf = null; // the adapter's entries, looked up once (analyzeTranscript asks per row)
-/** The API error of a row in the adapter's terms ({ kind, form, status, code }), or null. */
-function apiErrorOf(r) {
-  entriesOf ??= require('./clients/index.js').clientFor().entries;
-  return entriesOf.entry(r).apiError;
+  return E().entry(r).apiError?.kind ?? null;
 }
 
 /**
@@ -282,15 +289,14 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
   let promptNo = 0;
   const resultChars = {};
   const cwds = new Map();
+  const rows = E();
   for (const line of String(text).split('\n')) {
     if (!line.trim()) continue;
-    let r;
-    try {
-      r = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const ts = r.timestamp ? Date.parse(r.timestamp) : NaN;
+    const r = rows.parse(line);
+    if (r === undefined) continue; // a half line
+    // The row in the adapter's terms; nothing below reads the raw row.
+    const e = rows.entry(r);
+    const ts = e.timestamp ? (e.at ?? NaN) : NaN;
     if (!Number.isNaN(ts)) {
       if (first === null) first = ts;
       last = ts;
@@ -303,72 +309,66 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
     }
     // Claude Code writes its version on every entry; the last one is the version the agent ended on. Kept to tell a
     // change on the client or model side (a jump in thinking per turn on one version) from a change in the work.
-    if (typeof r.version === 'string' && r.version) ccVersion = r.version;
-    if (detail && typeof r.cwd === 'string' && r.cwd) cwds.set(r.cwd, (cwds.get(r.cwd) ?? 0) + 1);
-    const m = r.message;
-    if (!m) {
+    if (e.version) ccVersion = e.version;
+    if (detail && e.cwd) cwds.set(e.cwd, (cwds.get(e.cwd) ?? 0) + 1);
+    if (!e.hasMessage) {
       // A row without a message can still be an API error: the 2.1.317+ system api_error row (F1). Not a model turn.
-      const err = apiErrorOf(r);
-      if (err?.form === 'system') apiErrors[err.kind]++;
+      if (e.apiError?.form === 'system') apiErrors[e.apiError.kind]++;
       continue;
     }
-    const content = Array.isArray(m.content) ? m.content : [];
-    if (r.type === 'user') {
-      if (!trackFromMission) {
-        const textChunks =
-          typeof m.content === 'string' ? m.content : content.map((c) => c?.text ?? '').join(' ');
-        trackFromMission = trackFromText(textChunks);
-      }
+    const parts = e.parts ?? [];
+    if (e.kind === 'user') {
+      if (!trackFromMission) trackFromMission = trackFromText(e.text);
       if (detail) {
-        for (const c of content)
-          if (c?.type === 'tool_result' && c.tool_use_id && !(c.tool_use_id in resultChars))
-            resultChars[c.tool_use_id] = resultText(c.content).length;
+        for (const p of parts)
+          if (p.kind === 'result' && p.id && !(p.id in resultChars)) resultChars[p.id] = rows.resultText(p.content).length;
         // A real prompt (not a system reminder, not only tool results) starts what the next turns answer.
-        const onlyResults = content.length > 0 && content.every((c) => c?.type === 'tool_result');
-        if (r.isMeta !== true && !onlyResults) {
+        const onlyResults = parts.length > 0 && parts.every((p) => p.kind === 'result');
+        if (!e.meta && !onlyResults) {
           promptNo++;
-          origin = isNotification(r) ? 'notification' : 'user';
+          origin = e.notification ? 'notification' : 'user';
         }
       }
-      for (const c of content) {
-        if (c?.type !== 'tool_result' || c.is_error !== true) continue;
-        if (c.tool_use_id) {
-          if (errorSeen.has(c.tool_use_id)) continue;
-          errorSeen.add(c.tool_use_id);
+      for (const p of parts) {
+        if (p.kind !== 'result' || p.isError !== true) continue;
+        if (p.id) {
+          if (errorSeen.has(p.id)) continue;
+          errorSeen.add(p.id);
         }
-        const name = toolName.get(c.tool_use_id) ?? 'unknown';
+        const name = toolName.get(p.id) ?? 'unknown';
         tools[name] ??= { calls: 0, errors: 0 };
         tools[name].errors++;
       }
       continue;
     }
-    if (r.type !== 'assistant') continue;
-    const kind = apiErrorKind(r);
-    if (kind) {
-      apiErrors[kind]++;
+    if (e.kind !== 'assistant') continue;
+    if (e.apiError) {
+      apiErrors[e.apiError.kind]++;
       continue;
     }
-    if (m.id && m.usage && m.model !== SYNTHETIC_MODEL) {
-      const earlier = turns.get(m.id);
-      turns.set(m.id, {
-        usage: m.usage,
+    const id = e.messageId;
+    if (id && e.usage && !e.synthetic) {
+      const earlier = turns.get(id);
+      turns.set(id, {
+        usage: e.usage,
+        thinking: e.thinking,
         ts: earlier?.ts ?? (Number.isNaN(ts) ? null : ts),
-        model: m.model ?? earlier?.model ?? null,
+        model: e.model ?? earlier?.model ?? null,
         ...(detail
           ? { calls: earlier?.calls ?? [], origin: earlier ? earlier.origin : origin, prompt: earlier ? earlier.prompt : promptNo }
           : {}),
       });
     }
-    for (const c of content) {
-      if (c?.type !== 'tool_use' || !c.id || tool.has(c.id)) continue;
-      tool.add(c.id);
-      const name = String(c.name ?? 'unknown');
-      toolName.set(c.id, name);
-      if (detail && m.id) turns.get(m.id)?.calls?.push({ id: c.id, name, input: c.input ?? {} });
+    for (const p of e.tools) {
+      if (!p.id || tool.has(p.id)) continue;
+      tool.add(p.id);
+      const name = String(p.name ?? 'unknown');
+      toolName.set(p.id, name);
+      if (detail && id) turns.get(id)?.calls?.push({ id: p.id, name, input: p.input ?? {} });
       tools[name] ??= { calls: 0, errors: 0 };
       tools[name].calls++;
       if (firstChange === null) {
-        if (['Edit', 'Write', 'NotebookEdit'].includes(c.name)) firstChange = ts;
+        if (['Edit', 'Write', 'NotebookEdit'].includes(p.name)) firstChange = ts;
         else callForChange++;
       }
     }
@@ -381,23 +381,22 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
   let previousTs = null;
   let thinking = 0;
   let thinkingTurns = 0;
-  for (const { usage: u, ts, model } of turns.values()) {
+  for (const { usage: u, thinking: think, ts, model } of turns.values()) {
     // Thinking is part of output_tokens; the detail is only there on newer responses (absent = unknown, not 0).
-    const think = u.output_tokens_details?.thinking_tokens;
     if (think != null && Number.isFinite(Number(think))) {
       thinking += Number(think);
       thinkingTurns++;
     }
-    const written = u.cache_creation_input_tokens ?? 0;
-    const read = u.cache_read_input_tokens ?? 0;
-    const hour = u.cache_creation?.ephemeral_1h_input_tokens;
-    addUsage(tokens, u);
+    const written = u.cacheWritten ?? 0;
+    const read = u.cacheRead ?? 0;
+    const hour = u.cache1h;
+    addCounts(tokens, u);
     // A turn without a model id is priced as DEFAULT_MODEL (as before) and kept under that name.
     const key = model ?? DEFAULT_MODEL;
     byModel[key] ??= { turns: 0, tokens: emptyTokens(), cost_usd: 0 };
     byModel[key].turns++;
-    addUsage(byModel[key].tokens, u);
-    context.push((u.input_tokens ?? 0) + read + written);
+    addCounts(byModel[key].tokens, u);
+    context.push((u.input ?? 0) + read + written);
     if (model) models.set(model, (models.get(model) ?? 0) + 1);
     // Cache expiry: the turn came after a pause longer than the cache lifetime and wrote more than it read (the whole context
     // was written again). The investigation, section 2.1: about $2.25 per expiry for an agent at 450k, vs $0.09 for a normal turn.
@@ -450,7 +449,8 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
             turns: [...turns.values()].map((x) => ({
               ts: x.ts,
               model: x.model,
-              usage: x.usage,
+              // The usage as Claude Code wrote it (turnTools and ravenseat cost read these turns).
+              usage: x.usage.raw,
               calls: x.calls ?? [],
               origin: x.origin ?? null,
               prompt: x.prompt ?? 0,
@@ -463,28 +463,12 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
   };
 }
 
-/** The text of a tool_result's content (a string, or text blocks; images and other blocks add nothing). */
-function resultText(content) {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content.map((b) => (typeof b === 'string' ? b : typeof b?.text === 'string' ? b.text : '')).join('');
-}
-
 /**
- * Is this user entry a background task notification? Claude Code marks one with origin.kind "task-notification" or
- * turnOrigin "task_notification"; without those fields only the text tells: it starts with <task-notification>, or
- * reads "Background command ... completed" (or failed, killed).
+ * Is this user entry a background task notification? The adapter decides (entries.entry().notification: the origin
+ * fields, or the text when they are missing).
  */
 function isNotification(r) {
-  if (r?.origin?.kind === 'task-notification' || r?.turnOrigin === 'task_notification') return true;
-  const m = r?.message;
-  const t =
-    typeof m?.content === 'string'
-      ? m.content
-      : Array.isArray(m?.content)
-        ? m.content.map((c) => c?.text ?? '').join(' ')
-        : '';
-  return /^\s*<task-notification>/.test(t) || /^\s*Background command\b[^\n]*\b(?:completed|failed|killed)\b/i.test(t);
+  return E().entry(r).notification;
 }
 
 // One formatter per time zone, made on first use. Building an Intl.DateTimeFormat is slow (it loads the zone and locale
