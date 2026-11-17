@@ -70,7 +70,7 @@ const CATEGORIES = Object.freeze([
       'Three sources can propose a task that builds a new guard: a failure that keeps repeating (inspection.mode, on), ' +
       'a known bug (gates.fromKnownBugs, propose) and the finding log (learning.proposals, off). Together they keep at ' +
       'most three proposals open, and each one waits for your approval, so none of them starts work by itself. The ' +
-      'finding log source is off because it asks the most of your time.',
+      'finding log source is an opt-in check, off until you turn it on, since its proposals ask for your time.',
   },
   { id: 'guards', title: 'Agent guards' },
   { id: 'push', title: 'Merge and push' },
@@ -257,7 +257,9 @@ const SETTINGS = Object.freeze([
     'The CPU load at which only the minimum slots stay open. Empty = CPU is not measured.'),
   row('gateQueue.enabled', 'load', 'onoff', 'Queue for heavy gates',
     'A heavy gate run waits for a slot shared by the whole machine, across worktrees and projects.'),
-  row('gateQueue.slots', 'load', 'integer', 'Heavy gate slots', 'How many heavy gate runs the machine runs at once.'),
+  row('gateQueue.slots', 'load', 'integer', 'Heavy gate slots',
+    'How many heavy gate runs the whole machine runs at once (1 by default), so parallel tracks do not slow each other ' +
+    'down. Raise it when the machine has room.'),
   row('gateQueue.heavyAfterSec', 'load', 'integer', 'Heavy after (seconds)',
     'A gate whose last run of the same kind took at least this long counts as heavy.'),
   row('gateQueue.agingMin', 'load', 'integer', 'Wait before it counts as base (minutes)',
@@ -274,7 +276,9 @@ const SETTINGS = Object.freeze([
   // ---- 4. Gates ----
   row('gates.quick', 'gates', 'list', 'Quick gate',
     'The commands a track runs before delivery. Set them up with `ravenseat kickstart gates --apply`.', BASIC),
-  row('gates.full', 'gates', 'list', 'Full gate', 'The full set of commands receive and merge run.', BASIC),
+  row('gates.full', 'gates', 'list', 'Full gate',
+    'The full set of commands receive and merge run. Empty = nothing runs and the gate counts as green, so set it up ' +
+    'with `ravenseat kickstart gates --apply`.', BASIC),
   row('maxFixRounds', 'gates', 'integer', 'Fix rounds before an owner question',
     'At this many fix rounds a task becomes an owner question instead of another round.'),
   row('fixPlateau', 'gates', 'onoff', 'Ask when a fix round stalls',
@@ -298,8 +302,10 @@ const SETTINGS = Object.freeze([
   row('gates.flakyRerun', 'gates', 'onoff', 'Rerun red gate commands once',
     'A red gate in a track reruns only its red commands once on the same commit. Green then counts as flaky.'),
   row('gateEvidence.mode', 'gates', 'choice', 'Gate evidence',
-    'Own: receive and merge run the gates themselves and check your answers and edits against the owner log. External: ' +
-    'a green CI check on the same commit counts as the full gate. Off: the track\'s own word counts.', {
+    'Who is trusted that the checks passed: Ravenseat running them itself (own), your CI (external), or the track\'s own ' +
+    'word (off). Own is the default, because a track could write a green result it never got. Own: receive and merge ' +
+    'run the gates themselves and check your answers and edits against the owner log. External: a green CI check on ' +
+    'the same commit counts as the full gate. Off: the track\'s own word counts.', {
       choices: ['own', 'external', 'off'],
       weakens: rankWeakens(['own', 'external', 'off']),
       protects: 'A track that writes a green gate result or an owner row (an answer, an edit, an approval) it never got ' +
@@ -324,7 +330,9 @@ const SETTINGS = Object.freeze([
     }),
   row('baseGate.commands', 'gates', 'list', 'Base gate commands',
     'Empty = the quick gates. A list runs after the quick gates (for example the full gate).'),
-  row('baseGate.timeoutSec', 'gates', 'integer', 'Base gate budget (seconds)', 'The time budget for the whole base gate.'),
+  row('baseGate.timeoutSec', 'gates', 'integer', 'Base gate budget (seconds)',
+    'The time budget for the whole base gate that runs after a merge, shared by its commands (900 by default). Raise it ' +
+    'when your full gate is slower than that.'),
   row('baseGate.tailLines', 'gates', 'integer', 'Base gate output lines kept',
     'The output lines kept for the fix task. Empty = the done command\'s value.'),
   row('baseGate.flakyRerun', 'gates', 'onoff', 'Rerun a red base gate once',
@@ -333,8 +341,10 @@ const SETTINGS = Object.freeze([
   // ---- 5. Tests and evidence ----
   // What makes a green gate worth something: the tests a track adds or removes, red on base and the QA evidence. Split
   // out of Gates by the owner decision of 2026-11-17 (H2); the keys stayed. The two test weakening switches are basic.
-  row('gates.redOnBase', 'tests', 'object', 'Red on base check',
-    'At receive, the track\'s new tests must pass on the tip and at least one must fail without the change. A warning.'),
+  row('gates.redOnBase', 'tests', 'object', 'Prove that new tests catch the bug',
+    'Off until you set a test command, since Ravenseat must know how to run one test file. On: at receive, a track\'s ' +
+    'new tests must pass with the change and at least one must fail without it, which shows the test really catches ' +
+    'the bug. Only a warning, because a pure refactor rightly has no failing test. The two fix rows in this group need it.'),
   row('gates.redOnBaseStrict', 'tests', 'onoff', 'A fix needs a proven red test',
     'Off by default: a fix task without a test that fails on the base gets one warning at receive. On: merge stops on it, ' +
     'and the owner can merge past it with --allow-no-test, which is logged. Needs gates.redOnBase.', {
@@ -344,7 +354,9 @@ const SETTINGS = Object.freeze([
       changes: 'Merge no longer stops on a fix without a proven red test; receive still warns.',
     }),
   row('gates.fixWithoutTestWarning', 'tests', 'onoff', 'Warn about a fix without a red test',
-    'A fix task whose red on base check proves no test gets one FIX WITHOUT TEST line at receive. It stops nothing.', {
+    'Needs gates.redOnBase, which is off until you set a test command. A fix task whose red on base check proves no ' +
+    'test gets one FIX WITHOUT TEST line at receive, so you see that the bug may come back. On by default: it is one ' +
+    'line and stops nothing.', {
       weakens: offWeakens,
       protects: 'A fix that comes in with a test that would pass without it, read past as one more red on base line.',
       whyNot: 'The fix-specific line names the task it fixes, so the owner sees the bug may come back.',
@@ -370,13 +382,18 @@ const SETTINGS = Object.freeze([
   row('testWeakening.findingLog', 'tests', 'onoff', 'Log test weakening as a finding',
     'What the test weakening check finds also becomes a finding log row, classed as a weak test. Nothing is printed. ' +
     'Off: no such row; the warning and the focus stop stay, so no guard is weaker.'),
-  row('testWeakening.testPaths', 'tests', 'list', 'More test paths', 'More test file patterns for the warning.'),
+  row('testWeakening.testPaths', 'tests', 'list', 'More test paths',
+    'More file patterns that count as test files for the test weakening warning, on top of the usual ones (the same ' +
+    'pattern rules as protectedPaths).'),
   row('testWeakening.markers', 'tests', 'list', 'More skip markers',
     'More regular expressions for an added line in a test file.'),
-  row('qa.evidenceTypes', 'tests', 'list', 'Evidence types', 'The kinds of QA evidence a track may write.'),
+  row('qa.evidenceTypes', 'tests', 'list', 'Evidence types',
+    'The kinds of QA evidence a track may report on an EVIDENCE line, such as a screenshot or a test run. Receive asks ' +
+    'for evidence on the labels in qa.evidenceLabels.'),
   row('qa.autoTypes', 'tests', 'list', 'Automatic evidence types',
     'Evidence types closed by `ravenseat qa auto --run` when the auto command is green.'),
-  row('qa.manualTypes', 'tests', 'list', 'Manual evidence types', 'Evidence types gathered in one manual round.'),
+  row('qa.manualTypes', 'tests', 'list', 'Manual evidence types',
+    'Evidence types a person gathers by hand. They are collected in one manual round for many tasks, not one at a time.'),
   row('qa.autoCommand', 'tests', 'object', 'Automatic evidence command',
     'The command `qa auto --run` runs, with {refs} and {id}. Empty = qa auto only lists.'),
   row('qa.evidenceLabels', 'tests', 'list', 'Labels that need evidence',
@@ -388,7 +405,9 @@ const SETTINGS = Object.freeze([
   row('checksPanel.mode', 'learning', 'onoff', 'Show the Checks tab',
     'The Checks tab with suggested checks. Not set, it follows the guidance switch.', { ...BASIC, ...QUEUE }),
   row('checksPanel.marker', 'learning', 'onoff', 'Red dot on the Checks tab',
-    'A small red dot on the Checks tab while an important suggestion is open. Off hides only the dot, the suggestions stay.', { ...BASIC, ...QUEUE }),
+    'A small red dot on the Checks tab while an important suggestion is open, so you notice it without opening the ' +
+    'tab. Off hides the dot for every reason; the suggestions stay. learning.guardFailedMarker only decides whether a ' +
+    'guard that did not hold lights it.', { ...BASIC, ...QUEUE }),
   row('gates.fromKnownBugs', 'learning', 'choice', 'Gates from known bugs',
     'A known bug that can happen again becomes a gate task: propose (you approve), auto or off.', {
       choices: ['propose', 'auto', 'off'],
@@ -397,22 +416,27 @@ const SETTINGS = Object.freeze([
       whyNot: 'Auto approves every proposed gate task at once; each one runs an agent and uses tokens without asking.',
       changes: 'Gate tasks from known bugs are approved by the queue itself. Doctor will report it.',
     }),
-  row('inspection.mode', 'learning', 'choice', 'Inspection queue',
-    'The same failure in the gates or CI, again and again, becomes one proposal to build a guard. You decide. ' +
-    'Off also hides the Checks card with recipes for failure classes that keep coming back, and its Build as gate button.', {
+  row('inspection.mode', 'learning', 'choice', 'Propose a guard for a failure that repeats',
+    'When the same failure shows up in the gates or CI again and again, Ravenseat proposes one task to build a guard ' +
+    'for it; you approve or decline. On by default, since a proposal only waits for your answer. Off: no such ' +
+    'proposals, and the Checks card with recipes for failures that keep coming back (and its Build as gate button) is ' +
+    'hidden too. Nothing is stopped either way.', {
       ...BASIC,
       choices: ['on', 'off'],
     }),
   row('inspection.minRepeats', 'learning', 'integer', 'Repeats before a proposal',
     'How many separate tasks, branch days or CI commits must fail the same way before it is proposed.'),
-  row('inspection.windowDays', 'learning', 'integer', 'Inspection window (days)', 'Only failures this recent count.'),
+  row('inspection.windowDays', 'learning', 'integer', 'Inspection window (days)',
+    'Only failures from this many recent days count toward a proposal (30 by default), so a failure fixed for good ' +
+    'long ago is not proposed again.'),
   row('inspection.registryFile', 'learning', 'text', 'Guard registry file',
     'The tracked list of guards and what each one guards against, relative to the project root.', { edit: 'file' }),
   // The repeat count on class and area (lib/findingRepeats.js). The count and the guard failed marker are on: they cost
   // no tokens, print nothing and stop nothing. The proposals are off: each one asks for the owner's time.
-  row('learning.repeats', 'learning', 'onoff', 'Count repeats in the finding log',
-    'The same class of failure in the same part of the code, in separate tasks, is counted from the finding log. ' +
-    'It prints nothing and stops nothing; the Checks tab reads it.', {
+  row('learning.repeats', 'learning', 'onoff', 'Count failures that come back',
+    'Counts failures of the same kind in the same part of the code, across tasks, from the finding log. It prints ' +
+    'nothing and stops nothing; the Checks tab uses it to say that a guard did not hold and to suggest recipes. On by ' +
+    'default, since it costs no tokens. Off also hides those.', {
       weakens: offWeakens,
       protects: 'A kind of failure that keeps coming back in one place, or past a guard, going unseen because each one ' +
         'was fixed alone.',
@@ -427,7 +451,8 @@ const SETTINGS = Object.freeze([
     'How many incidents of a class in the whole project make it due when no single area is. An untested fix counts twice.'),
   row('learning.guardFailedMarker', 'learning', 'onoff', 'Red marker when a guard did not hold',
     'A failure class back where a guard for it was in place lights the red marker on the Checks tab, until a new ' +
-    'guard or a fix with a proven test is in place there. It stops nothing.', {
+    'guard or a fix with a proven test is in place there. It stops nothing. On by default: it is rare, and a guard ' +
+    'that no longer holds is worth seeing. checksPanel.marker hides the dot for every reason.', {
       weakens: offWeakens,
       protects: 'A guard everyone trusts that no longer catches its own class.',
       whyNot: 'It is the one gap that always gets the red marker, and it is rare, so it does not nag.',
@@ -435,20 +460,24 @@ const SETTINGS = Object.freeze([
     }),
   row('learning.proposals', 'learning', 'onoff', 'Propose guards from the finding log',
     'A class that keeps coming back in one area becomes one proposed gate task (you approve it). It shares one cap ' +
-    'of three open proposals with the inspection queue and the gate lines. Off by default.'),
+    'of three open proposals with the inspection queue and the gate lines. Off by default, like every opt-in check, ' +
+    'since each proposal asks for your time.'),
   // The database probe recipes (0i section 3.8). Off by default: a probe gate is heavy, needs a running database, and
   // is the one kind of gate that can change data elsewhere when it points at the wrong host. On, it only shows a recipe;
   // building one still takes the owner's click and approve, and the mission demands the host check and the rollback.
   row('learning.dbProbes', 'learning', 'onoff', 'Database probe recipes',
-    'Off by default. On: for access control and migration failures that keep coming back, the Checks tab shows a ' +
-    'recipe for database probes (pgTAP, supabase test db, testcontainers), only when a local or throwaway database is ' +
-    'found. A gate built from it must check that its database host is local before it writes, and roll back.'),
+    'Off by default: a probe gate is heavy, needs a running database and can change data when it points at the wrong ' +
+    'one. On: for access control and migration failures that keep coming back, the Checks tab shows a recipe for ' +
+    'database probes (pgTAP, supabase test db, testcontainers), only when a local or throwaway database is found. A ' +
+    'gate built from it must check that its database host is local before it writes, and roll back. Turn on ' +
+    'dbGuard.localOnly too, so such a gate is refused when it points at a shared database.'),
   // Recipe precision (0i step 9, lib/recipePrecision.js). On by default, as the plan says (damped automatically): it only
   // moves a recipe the owner keeps declining from the card to the list, never stops work or hides a class, and the owner
   // can show one recipe again (ravenseat checks recipe <id> show). Off, every recipe whose `when` holds is offered.
-  row('learning.recipeDamping', 'learning', 'onoff', 'Damp recipes that are seldom accepted',
+  row('learning.recipeDamping', 'learning', 'onoff', 'Stop offering recipes you keep declining',
     'A recipe whose gate proposals are seldom accepted is listed on the Checks tab with its numbers, but no longer ' +
-    'offered on the card. It stops nothing. ravenseat checks recipe <id> show offers one again.'),
+    'offered on the card. On by default, so a recipe you keep saying no to stops asking. It stops nothing, and ' +
+    'ravenseat checks recipe <id> show offers one again. Off: every recipe that fits is offered.'),
   row('learning.recipeMinProposals', 'learning', 'integer', 'Decided proposals before damping',
     'How many of a recipe\'s proposals must be accepted or declined before it can be damped. Waiting ones do not count.'),
   row('learning.recipeMinProposalsDb', 'learning', 'integer', 'Decided proposals before damping a database recipe',
@@ -459,18 +488,19 @@ const SETTINGS = Object.freeze([
   // the owner's click, only ADDS a command to gates.quick and is refused from a track worktree; the lift only orders the
   // CI cards (never the red marker, section 3.9); the idle line is INFO. None of them stops work or runs a command, so
   // off is less advice, not a weaker guard: no weakens (owner decision 2026-11-17), like scopeNotes.* and client.canary.
-  row('learning.quickGateCard', 'learning', 'onoff', 'Offer to add a guard\'s command to gates.quick',
+  row('learning.quickGateCard', 'learning', 'onoff', 'Suggest adding a built guard to the quick gate',
     'A gate guard in the registry whose command is not in gates.quick gets a card on the Checks tab: one click (or ' +
-    'ravenseat checks quick-add <G-n>) adds that command at the end of gates.quick. Nothing runs from the card, and the ' +
-    'write can only add a command, never remove or replace one. Off: no card, and no guard is weaker.'),
-  row('learning.ciParityLift', 'learning', 'onoff', 'Put the CI cards first when a guard is not in CI',
+    'ravenseat checks quick-add <G-n>) adds that command at the end of gates.quick, so every track runs it. Nothing ' +
+    'runs from the card, and the write can only add a command, never remove or replace one. On by default, since you ' +
+    'still decide. Off: no card, and no guard is weaker.'),
+  row('learning.ciParityLift', 'learning', 'onoff', 'Point out a guard that CI skips',
     'When a gate guard\'s kind of check (tests, types, lint) is not run in CI, the cards tests-in-ci and quality-in-ci ' +
-    'are put first in their priority and name the guard. They are never raised to the red marker. Off: the usual ' +
-    'order, and no guard is weaker.'),
-  row('learning.idleGuardInfo', 'learning', 'onoff', 'INFO for a gate guard that has not run',
+    'are put first in their priority and name the guard. They are never raised to the red marker. On by default, ' +
+    'since it only changes the order. Off: the usual order, and no guard is weaker.'),
+  row('learning.idleGuardInfo', 'learning', 'onoff', 'Note a guard that has never run',
     'ravenseat guards and ravenseat doctor give one INFO line for a gate guard with 0 runs since it was built, after ' +
-    'the set number of days. It is INFO only and never stops anything. Off: no line (the registry still shows 0 ' +
-    'runs), and no guard is weaker.'),
+    'the set number of days. On by default, since a guard that never runs protects nothing. It is INFO only and never ' +
+    'stops anything. Off: no line (the registry still shows 0 runs), and no guard is weaker.'),
   row('learning.idleGuardDays', 'learning', 'integer', 'Days before a gate guard counts as not run',
     'How many days after it was built a gate guard with 0 runs gets the INFO line. 7 by default, as the plan says.'),
 
@@ -493,7 +523,10 @@ const SETTINGS = Object.freeze([
       changes: 'Such a change gives a warning, and the merge goes on. Doctor will report it.',
     }),
   row('gitSurface', 'guards', 'choice', 'Git hooks and config',
-    'Git hooks and executing git config compared with the accepted baseline: stop, warn or off.', {
+    'Git hooks and git settings that run code (core.hooksPath and similar) are compared with what you accepted. Stop: ' +
+    'a change stops receive and merge until you accept it. Warn: only a warning. Off: no check. The default is stop in ' +
+    'full mode, since a hook runs with your rights on your next commit or push, and warn in lite, where a first try ' +
+    'should not meet a hard stop.', {
       choices: ['stop', 'warn', 'off'],
       defaultByMode: { lite: 'warn', full: 'stop' },
       weakens: rankWeakens(['stop', 'warn', 'off']),
@@ -517,7 +550,9 @@ const SETTINGS = Object.freeze([
       changes: 'Receive no longer scans the track\'s commits, and merge does not stop on a key.',
     }),
   row('secretScan.allowlist', 'guards', 'onoff', 'Keys in approved commands and .mcp.json',
-    'Off by default. On: doctor looks for keys in the commands Claude Code has approved (.claude/settings*.json) and in the MCP servers in .mcp.json (env, headers, args, url), also in the agents\' worktrees.', {
+    'Looks for keys (tokens, passwords) in the commands Claude Code has approved (.claude/settings*.json) and in the ' +
+    'MCP servers in .mcp.json (env, headers, args, url), also in the agents\' worktrees. Off by default, like every ' +
+    'opt-in check; on, doctor does this on each run.', {
       weakens: offWeakens,
       protects: 'A token typed in a command that "Yes, and don\'t ask again" stored in clear text, or pasted into a tracked .mcp.json.',
       whyNot: 'A key in the tracked .claude/settings.json or .mcp.json is in the repo and its history.',
@@ -547,7 +582,8 @@ const SETTINGS = Object.freeze([
   row('secretScan.maxBytes', 'guards', 'integer', 'Secret scan size limit (bytes)',
     'A larger diff is not scanned, and the push asks instead.'),
   row('secretScan.timeoutMs', 'guards', 'integer', 'Secret scan time limit (ms)',
-    'The time limit per git or gitleaks call.'),
+    'The time limit per git or gitleaks call in the secret scan. A scan that does not finish in time makes the push ' +
+    'ask you first; it is never let through unchecked.'),
   row('deployCommands', 'guards', 'list', 'Deploy commands',
     'The push guard asks before any command that starts with one of these. Empty = off.'),
   row('claudeFingerprint', 'guards', 'onoff', 'Claude setup fingerprint',
@@ -640,8 +676,10 @@ const SETTINGS = Object.freeze([
   row('readGuard.autoLoaded', 'guards', 'list', 'Auto-loaded files',
     'Files Claude Code loads itself, which must never be read again with Read.'),
   row('readGuard.largeFiles', 'guards', 'list', 'Large files', 'Patterns for files that must always be read in excerpts.'),
-  row('readGuard.maxLines', 'guards', 'integer', 'Read warning (lines)', 'A read of more lines than this gets a warning.'),
-  row('readGuard.blockLines', 'guards', 'integer', 'Read stop (lines)', 'A read of more lines than this is stopped.'),
+  row('readGuard.maxLines', 'guards', 'integer', 'Read warning (lines)',
+    'A read of more lines than this gets a warning (300 by default); the stop comes at readGuard.blockLines.'),
+  row('readGuard.blockLines', 'guards', 'integer', 'Read stop (lines)',
+    'A read of more lines than this is stopped (2000 by default), so one large file cannot fill an agent\'s context.'),
   row('reads.mode', 'guards', 'choice', 'Read ownership',
     'A task that reads a file an active task changes: wait until it is done, or start and name the overlap.',
     { choices: ['wait', 'warn'], fullWhy: 'read ownership uses the reads field of the full task format' }),
@@ -715,8 +753,11 @@ const SETTINGS = Object.freeze([
   row('push.ciWatch', 'push', 'choice', 'CI watch after push',
     'off, or github: after a batch push the CI runs are followed, and a failure gives a fix task.',
     { choices: ['off', 'github'] }),
-  row('push.ciWatchIntervalSec', 'push', 'integer', 'CI watch interval (seconds)', 'How often the CI watch polls.'),
-  row('push.ciWatchTimeoutMin', 'push', 'integer', 'CI watch limit (minutes)', 'When the CI watch gives up.'),
+  row('push.ciWatchIntervalSec', 'push', 'integer', 'CI watch interval (seconds)',
+    'How often the CI watch asks GitHub how the runs are going. Lower answers sooner and makes more calls.'),
+  row('push.ciWatchTimeoutMin', 'push', 'integer', 'CI watch limit (minutes)',
+    'The CI watch stops with a timeout when CI has not finished after this many minutes, so it never waits forever. A ' +
+    'timeout gives no fix task.'),
   row('migrations.folder', 'push', 'text', 'Migrations folder',
     'The folder with numbered migrations. Empty turns the whole migration flow off.'),
   row('migrations.filePattern', 'push', 'text', 'Migration file pattern',
@@ -728,7 +769,8 @@ const SETTINGS = Object.freeze([
   row('migrations.environmentFile', 'push', 'text', 'Linked environment file',
     'The file that says which environment is linked, checked before a migration push.', { edit: 'file' }),
   row('migrations.allowedEnvironment', 'push', 'list', 'Allowed environments',
-    'The environments a migration push may go to.'),
+    'The environments a migration push may go to. Merge pushes migrations only when the linked environment file names ' +
+    'one of them, so a wrong link cannot reach the wrong database.'),
 
   // ---- 10. Review and agents ----
   row('helpers', 'review', 'object', 'Helper agents',
@@ -759,8 +801,10 @@ const SETTINGS = Object.freeze([
     'A task added or last edited this long ago is checked against the current code before it starts. Empty = no age rule.',
     { fullWhy: 'the intake triage is off in lite' }),
   row('triage.agentAdded', 'review', 'onoff', 'Triage tasks agents added',
-    'A task an agent added is checked once before it starts.', { fullWhy: 'the intake triage is off in lite' }),
-  row('triage.maxPerFill', 'review', 'integer', 'Triage steps per fill', 'At most this many triage steps per fill.',
+    'A task an agent added is checked once against the code before it starts, since you did not write it yourself. ' +
+    'Off: only the age rule applies.', { fullWhy: 'the intake triage is off in lite' }),
+  row('triage.maxPerFill', 'review', 'integer', 'Triage steps per fill',
+    'At most this many triage steps start per fill, so a large queue is checked a few tasks at a time.',
     { fullWhy: 'the intake triage is off in lite' }),
   row('triage.askAgainMin', 'review', 'integer', 'Triage asks again after (minutes)',
     'A printed triage step is not printed again for this long.', { fullWhy: 'the intake triage is off in lite' }),
@@ -798,7 +842,7 @@ const SETTINGS = Object.freeze([
   row('scopeNotes.dependencies', 'scope', 'onoff', 'Note a second library for the same job',
     'A new package in package.json or requirements.txt whose job the manifest already has a package for (dates, HTTP, ' +
     'validation, helpers, test runner ...) gets one NOTE line. It stops nothing.', BASIC),
-  row('scopeNotes.drift', 'scope', 'onoff', 'Note drift in numbers',
+  row('scopeNotes.drift', 'scope', 'onoff', 'Count changed files outside the task',
     'How many changed files lie outside the task\'s files and reads, and in which folders; a task with no files named ' +
     'gets the number of folders it touches. One NOTE line, it stops nothing.', BASIC),
   row('scopeNotes.ignoreNames', 'scope', 'list', 'Names a helper note skips',
@@ -865,8 +909,9 @@ const SETTINGS = Object.freeze([
     'A rule with `mode: stop` of a choice the owner accepted stops the merge when an added line breaks it ' +
     '(`merge --allow-catalog` overrides, logged). Off by default: the rule is then a warning.'),
   row('catalog.gateAfter', 'scope', 'integer', 'Separate tasks before a lint proposal',
-    'A rule broken in this many separate tasks (2 to 20, default 3) becomes one proposed gate task to put it in the ' +
-    'project\'s own lint. Only with learning.proposals on; it shares the cap of three open proposals.'),
+    'Only with learning.proposals on, which is off by default. Then a rule broken in this many separate tasks (2 to ' +
+    '20, default 3) becomes one proposed gate task to put it in the project\'s own lint. It shares the cap of three ' +
+    'open proposals.'),
 
   // ---- 12. Board and advice ----
   row('guidance', 'board', 'choice', 'Guidance',
@@ -880,13 +925,15 @@ const SETTINGS = Object.freeze([
     'On: Claude Code compacts the orchestrator session itself and the queue continues. Off: a ready /compact line; ' +
     'then also turn off auto-compaction in Claude Code ("autoCompactEnabled": false), or it compacts anyway.',
     { ...BASIC, ...QUEUE }),
-  row('board.port', 'board', 'integer', 'Board port', 'The local port the board listens on.'),
+  row('board.port', 'board', 'integer', 'Board port',
+    'The local port the board listens on (2000 by default). Change it when another program already uses that port.'),
   row('board.title', 'board', 'text', 'Board title', 'The title in the board\'s header and browser tab.'),
   row('board.updateCheck', 'board', 'onoff', 'Update check',
     'The board checks GitHub for a newer plugin version at most once a day (a plain GET that sends nothing about you).'),
   row('board.showCloud', 'board', 'onoff', 'Show the Cloud tab',
     'The Cloud tab, when cloud sessions are on (features.cloud).', QUEUE),
-  row('features.statistics', 'board', 'onoff', 'Statistics tab', 'The Statistics tab on the board.'),
+  row('features.statistics', 'board', 'onoff', 'Statistics tab',
+    'The Statistics tab on the board. On by default; off only hides the tab, and the time log is written as before.'),
   row('features.follow', 'board', 'onoff', 'Follow-up entries',
     'The follow-up page, the follow commands and their lines in show and pulse.'),
   // Advice about the size of Claude's instructions (lib/instructionSize.js). Not a guard, so off never weakens; owner
@@ -903,10 +950,11 @@ const SETTINGS = Object.freeze([
   // The client format canary (lib/clientCanary.js, roadmap 0w W4). On by default in both modes: it only shows (one
   // doctor row, one medium card that never lights the red marker) and stops nothing, so off weakens no guard. The shape
   // log is off by default: it writes a file in the data folder that is only of use when someone reports a form.
-  row('client.canary', 'board', 'onoff', 'Claude Code format canary',
+  row('client.canary', 'board', 'onoff', 'Notice when Claude Code changes its log format',
     'Doctor reads the tail of the newest Claude Code transcript and says when the version is newer than the formats ' +
     'Ravenseat was tested on, or rows read differently (new row types, turns without usage, unknown API errors); the ' +
-    'Checks tab shows one card while such rows are seen. Type names and counts only, never content. It stops nothing.'),
+    'Checks tab shows one card while such rows are seen. Type names and counts only, never content. It stops nothing. ' +
+    'On by default, so a change that could make the cost and time numbers wrong is seen early. Off: no row and no card.'),
   row('client.shapeLog', 'board', 'onoff', 'Log new API error forms',
     '`ravenseat checks` writes the shape of each new API error form (keys and value types, short codes, no text) to ' +
     'client-shapes.jsonl in the data folder, so the form can be confirmed and reported. Off by default.'),
@@ -931,7 +979,8 @@ const SETTINGS = Object.freeze([
     }),
   row('cloud.deleteBranch', 'cloud', 'onoff', 'Remove the branch after the merge',
     'The session\'s branch is removed from the remote after the merge.'),
-  row('cloud.bundleMax', 'cloud', 'integer', 'Tasks per session', 'Tasks in one session, one after another.'),
+  row('cloud.bundleMax', 'cloud', 'integer', 'Tasks per session',
+    'At most this many tasks in one cloud session, run one after another (4 by default).'),
   row('cloud.start', 'cloud', 'choice', 'How a session starts',
     'terminal: cloud-start in your terminal. routine: a scheduled task (see `ravenseat cloud setup`).',
     { choices: ['terminal', 'routine'] }),
@@ -945,16 +994,22 @@ const SETTINGS = Object.freeze([
   row('features.plans', 'plans', 'onoff', 'Plans room',
     'The Plans room on the board. On by default in both modes; the CLI plan register always works.', BASIC),
   row('features.focus', 'plans', 'onoff', 'Focus tab', 'The Focus tab on the board.', BASIC),
-  row('features.plans.legal', 'plans', 'onoff', 'Legal surface', 'The Legal surface in Plans.', { fullWhy: WHY_PLANS }),
-  row('features.plans.launch', 'plans', 'onoff', 'Launch surface', 'The Launch surface in Plans.', { fullWhy: WHY_PLANS }),
+  row('features.plans.legal', 'plans', 'onoff', 'Legal surface',
+    'The Legal surface in Plans, with the legal points of the plan register. Off by default: turn it on when the ' +
+    'project keeps legal points. It shows only while features.plans is on.', { fullWhy: WHY_PLANS }),
+  row('features.plans.launch', 'plans', 'onoff', 'Launch surface',
+    'The Launch surface in Plans, with what stands between the plan and launch. Off by default; it shows only while ' +
+    'features.plans is on.', { fullWhy: WHY_PLANS }),
   row('features.plans.documents', 'plans', 'onoff', 'Documents surface',
-    'The Documents and agreements surface in Plans.', { fullWhy: WHY_PLANS }),
+    'The Documents and agreements surface in Plans, with the documents the plan register tracks. Off by default; it ' +
+    'shows only while features.plans is on.', { fullWhy: WHY_PLANS }),
   row('focus.continueWhenEmpty', 'plans', 'onoff', 'Continue when the focus ends',
     'Off: the queue pauses and asks you when a focus has ended. On: it continues with the regular queue.',
     { fullWhy: 'lite has no focus stages to end' }),
   row('modules', 'plans', 'list', 'Areas', 'The areas of the product in the plan register.', { fullWhy: WHY_PLANS }),
   row('projectModuleSuggestion', 'plans', 'object', 'Suggested area per project',
-    'Used by `plan modules --link`.', { fullWhy: WHY_PLANS }),
+    'A suggested area for each project id ({ "<project>": "<area>" }), used only by `plan modules --link` for projects ' +
+    'that have no area yet. Empty = no suggestions.', { fullWhy: WHY_PLANS }),
   row('priorityRules', 'plans', 'object', 'Priority rules',
     'The priority rules in the plan register. Empty = the generic default rules.', { fullWhy: WHY_PLANS }),
   row('documents.vendors', 'plans', 'list', 'Vendors',
@@ -973,7 +1028,9 @@ const SETTINGS = Object.freeze([
   // ---- 15. History and storage (private and sharing, 9, are in it) ----
   row('stateSnapshots.enabled', 'history', 'onoff', 'Snapshots of the queue',
     'Rolling copies of queue.json at a few ages, kept in the data folder.'),
-  row('stateSnapshots.tiers', 'history', 'list', 'Snapshot ages', 'Two to eight ages such as "1h", "1d", "7d".'),
+  row('stateSnapshots.tiers', 'history', 'list', 'Snapshot ages',
+    'The ages of the rolling copies of queue.json, two to eight such as "1h", "1d", "7d". An older age lets you go ' +
+    'further back after a bad change.'),
   row('metrics.idleGapMin', 'history', 'integer', 'Idle gap (minutes)',
     'A gap longer than this between two transcript entries is idle and not counted as active time.'),
   // Owner decision B5: performance, not a guard (lib/timeLogArchive.js, lib/queueArchive.js).

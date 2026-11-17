@@ -880,7 +880,7 @@ names every guard weaker than its default on its `settings` row.
 
 ### Checks tab and learning
 
-Three sources can propose a task that builds a new guard: a failure that keeps repeating (`inspection.mode`, on), a known bug (`gates.fromKnownBugs`, `propose`) and the finding log (`learning.proposals`, off). Together they keep at most three proposals open, and each one waits for your approval, so none of them starts work by itself. The finding log source is off because it asks the most of your time.
+Three sources can propose a task that builds a new guard: a failure that keeps repeating (`inspection.mode`, on), a known bug (`gates.fromKnownBugs`, `propose`) and the finding log (`learning.proposals`, off). Together they keep at most three proposals open, and each one waits for your approval, so none of them starts work by itself. The finding log source is an opt-in check, off until you turn it on, since its proposals ask for your time.
 
 | Key | Default | Used for | Marks |
 |---|---|---|---|
