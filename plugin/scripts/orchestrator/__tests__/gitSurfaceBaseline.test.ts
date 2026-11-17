@@ -545,7 +545,11 @@ describe('the gitSurface setting', () => {
     p.plant('pre-push');
     const r = p.run(['receive', 'A']);
     expect(r.code).toBe(0);
-    expect(r.all).not.toMatch(/gitSurface|TAMPERED|accepted baseline/);
+    // The one line that names it is receive's other check (lib/guardLog.js outsideCli): "off" was written straight
+    // into queue.config.json with no setting-weakened row. The gitSurface check itself says nothing.
+    const lines = r.all.split(/\r?\n/);
+    expect(lines.some((l) => /^CONFIG CHANGED OUTSIDE THE CLI: .*gitSurface/.test(l))).toBe(true);
+    expect(lines.filter((l) => !l.startsWith('CONFIG CHANGED OUTSIDE THE CLI')).join('\n')).not.toMatch(/gitSurface|TAMPERED|accepted baseline/);
     expect(p.find().status).toBe('review');
     expect(p.pushCheck().code).not.toBe(2);
   });

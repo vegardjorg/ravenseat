@@ -36,6 +36,9 @@
 // asks with file:line on a hit. A first push scans the branch. A scan that does not finish (over secretScan.maxBytes, a
 // timeout, an error) asks too, and says so.
 // deployCommands: a command that starts with one of them gets "ask" (agents and the main session).
+// The main tree's control files (lib/controlFiles.js, controlFiles.guard): a queue agent's shell line that writes the main
+// tree's queue.config.json, .claude/, CLAUDE*.md, .git/hooks/, .git/config or the plugin's scripts, and a git config or git
+// remote write, is denied. Every deny and ask is one row in the time log (lib/guardLog.js): guard, rule, agent, task.
 //
 // What must stay out of git (H3 share, H4 privatePaths; lib/queueShare.js denyReason): the same push (and one of a
 // push.allowBranches branch) is DENIED when its commits track a data folder file that is not shared, a file under a
@@ -55,6 +58,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
@@ -261,21 +265,38 @@ process.stdin.on('end', () => {
     // session) or deny (queue agent). The main session stops here: the other rules would run on defaults that are not
     // the project's. A queue agent goes on through the rules below, which do not depend on the config (it never
     // pushes, runs only the allowed queue commands, has no network).
+    // The answer, and its row in the time log (lib/guardLog.js, guardLog.enabled): the guard and the rule, never the
+    // command. The append is synchronous, so it is done before the exit.
+    const answerWith = (decision, reason, rule) => {
+      process.stdout.write(JSON.stringify(HK.decision('PreToolUse', decision, reason)));
+      try {
+        require('./lib/guardLog.js').recordHook({ guard: 'push', rule, decision, input: p }, { cfg: k });
+      } catch {
+        // error-ignored: the decision is written; the row is measurement only
+      }
+      process.exit(0);
+    };
     if (k.configError) {
       const answer = require('./lib/configGuard.js').answerForHook(command, k.configError, guarded);
-      if (answer) {
-        process.stdout.write(JSON.stringify(HK.decision('PreToolUse', answer.decision, `push-guard: ${answer.reason}`)));
-        process.exit(0);
-      }
+      if (answer) answerWith(answer.decision, `push-guard: ${answer.reason}`, 'config-error');
       if (!guarded) process.exit(0);
     }
     const gitContext = canHit(command, k);
     if (!gitContext && !guarded) process.exit(0);
     // Gate evidence (lib/gateEvidence.js): a queue agent may not record or touch it (deny; the orchestrator is free).
     const tamper = guarded ? require('./lib/gateEvidence.js').tamperReason(command) : null;
-    if (tamper) {
-      process.stdout.write(JSON.stringify(HK.deny('PreToolUse', `push-guard: ${tamper}`)));
-      process.exit(0);
+    if (tamper) answerWith('deny', `push-guard: ${tamper}`, 'state-file');
+    // The main tree's control files (lib/controlFiles.js, controlFiles.guard): a queue agent's shell line that writes
+    // one, or writes the git config, is denied. The plugin's own scripts are the folder this hook lives in.
+    if (guarded && k.controlFiles?.guard !== false) {
+      const control = require('./lib/controlFiles.js').controlShellReason(command, {
+        cwd: typeof p.cwd === 'string' && p.cwd ? p.cwd : process.cwd(),
+        mainTree: k.root,
+        scriptsDir: path.dirname(fileURLToPath(import.meta.url)),
+        configFile: require('./lib/queueConfig.js').configFile(k.root),
+        env: process.env,
+      });
+      if (control) answerWith('deny', control.reason, control.rule);
     }
 
     const cwd = typeof p.cwd === 'string' && p.cwd ? p.cwd : process.cwd();
@@ -306,8 +327,7 @@ process.stdin.on('end', () => {
     });
     if (!answer) process.exit(0);
 
-    process.stdout.write(JSON.stringify(HK.decision('PreToolUse', answer.decision, `push-guard: ${answer.reason}`)));
-    process.exit(0);
+    answerWith(answer.decision, `push-guard: ${answer.reason}`, answer.rule ?? 'other');
   } catch (e) {
     failSafe(input, e);
   }

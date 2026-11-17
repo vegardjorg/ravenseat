@@ -721,6 +721,30 @@ also your decision and never goes back to an agent as a fix round. The same two 
 it does not prevent. A change undone before the next check is not seen, a process that outlives its run can act later,
 and git commands you or a script run by hand are not stopped.
 
+### The main tree's control files
+
+A few files in the main tree steer the orchestrator, the guards or every later session: `queue.config.json`, `.claude/`
+(the settings, hooks, agents, skills and rules Claude Code loads; `.claude/worktrees/` is left out), `CLAUDE*.md`,
+`.git/hooks/`, `.git/config` and the plugin's own scripts. Every override flag is denied to the queue's agents, but a
+direct write to these files would get around all of them. So a queue agent may not write them in the main tree: a
+Write, Edit or NotebookEdit there is denied (the write guard), and so is a shell line that names one and writes (a
+redirection, `cp`, `mv`, `sed -i`, `Set-Content`, `node -e` with `writeFileSync`, `cd <main> && ...`, `git -C <main>
+checkout ...`), and a `git config` or `git remote` write, which lands in the shared `.git/config`. Reading stays free.
+The agent's own worktree copies are its own branch: free here, and the protected paths stop them at `merge`. The main
+session is not affected. `"controlFiles": { "guard": false }` turns it off.
+
+`fill` and `start` also record a short hash of each of those files on the task (`control_fp`), and `receive` prints
+`CONTROL FILES CHANGED <id>: <files>` for a change that no commit explains (a file that is tracked and clean came in
+through a merge, which git log shows), with the other tracks that ran at the same time. It warns and never stops:
+you or `ravenseat settings set` may have changed a file while the track ran, and the fingerprint cannot tell who did.
+A weakened setting with no `setting-weakened` row (the config was edited outside the CLI) is logged once as
+`config-changed-outside-cli`, at `receive` and in `doctor`. `"controlFiles": { "fingerprint": false }` turns it off.
+
+The limits: a script file the agent wrote and then runs, a path built from pieces at run time and an unknown variable
+as the folder are not read, and a process that outlives its run can act later. This guards against a misled agent,
+not against a hostile process running as you: only another OS user for the agents or protection on the remote is a
+real boundary (guide.md, "Guarantees and limits").
+
 ### Your own Claude setup
 
 A track runs as you, so it can write outside its worktree, also in your own Claude folder (`~/.claude`, or
@@ -843,6 +867,9 @@ names every guard weaker than its default on its `settings` row.
 | `secretScan.enabled`, `secretScan.maxBytes`, `secretScan.timeoutMs` | `true`, `2000000`, `3000` | Secret check before a plain push of the base branch from the main session: the added lines of every commit in `<remote>/<baseBranch>..<baseBranch>` are scanned (gitleaks when on PATH, else built-in patterns, JWTs, URI passwords and `.env` files included) and a hit asks with file:line, never the value. A first push (no remote ref) scans the branch, minus what the remote has on other branches. A scan that does not finish (over `maxBytes`, over `timeoutMs` per git or gitleaks call, over the 6 s the whole scan has, any error) asks too, and says why; it never stops the push by itself. The 6 s stay below the hook's own 10 s, so a larger `timeoutMs` cannot let the hook be killed | Advanced |
 | `deployCommands` | `[]` | Commands that deploy, e.g. `["vercel --prod", "fly deploy"]`: the push guard asks before any command that starts with one of them, from an agent or the main session (a prefix match after env prefixes, so `npx vercel --prod` needs its own entry; a command inside `bash -c "..."`, `( )` or `cmd /c` is seen too). Empty = off | Advanced |
 | `claudeFingerprint` | `true` | The fingerprint of your own Claude setup (see "Your own Claude setup"): `start` records hashes, `receive` warns with `CLAUDE SETUP CHANGED`. `false` = off | Advanced |
+| `controlFiles.guard` | `true` | The write guard for the main tree's control files (see "The main tree's control files"): a queue agent's Write, Edit or shell write to `queue.config.json`, `.claude/` (not `.claude/worktrees/`), `CLAUDE*.md`, `.git/hooks/`, `.git/config` or the plugin's own scripts is denied, and so is a `git config` or `git remote` write. Its own worktree copies stay free, and the main session is not affected. `false` = off, a weakened guard | Advanced |
+| `controlFiles.fingerprint` | `true` | `fill` and `start` record a short hash of each of those files on the task (`control_fp`); `receive` warns with `CONTROL FILES CHANGED` about a change no commit explains. `false` = off, a weakened guard | Advanced |
+| `guardLog.enabled` | `true` | Every deny and ask from the push, write and read guard is one row in the time log (`guard-deny`, `guard-ask`: guard, rule, agent type, task, time, never the command); `doctor` (row `guards`) and the board's Statistics tab count them per track. `false` = no such rows, a weakened guard | Advanced |
 | `agentGuard.enabled` | `true` | The push, network and write guards apply to every subagent, whatever its agent type (a general-purpose agent, Explore, a custom one), not only to the queue's own. Read-only commands stay allowed, so Explore and other helpers that only read keep working. The main session is never guarded. `false` = back to the queue's own agent types only (tracks, reviewers, helpers); `ravenseat doctor` warns `AGENT GUARD OFF`, and turning it off is a weakened guard | Advanced |
 | `agentGuard.except` | `[]` | Agent types (from your own `.claude/agents`) the guards leave alone, e.g. `["my-deployer"]`. The queue's own agent types can never be listed out. `ravenseat doctor` gives an INFO line per entry, and an entry is a weakened guard | Advanced |
 | `agentPushBlock.enabled` | `true` | A git `pre-push` hook that stops a push from a track's worktree, also when the push guard never saw the command (a script the agent ran). `fill`, `start` and `resume` install it in the hooks folder git uses (after the first line of an existing shell `pre-push` from husky, lefthook or your own, which keeps running), and `prepare-track` marks the worktree. Pushes from the main checkout and from worktrees you made yourself are not affected, and the git surface baseline knows the block, so it never stops `receive`. `false` = removed at the next `fill`, `start` or `resume`; `ravenseat doctor` warns that agents can push from git itself when the text guard does not see the command, and turning it off is a weakened guard | Advanced |

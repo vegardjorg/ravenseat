@@ -197,7 +197,7 @@ describe('the guard question', () => {
   });
   it('assess: ask only for a plain push of baseBranch by the main session, never deny, stricter findings win', () => {
     const ctx = { baseBranch: 'main', migrations: {}, batchQuestion: () => '4 of 10 merged tasks since the last push; push anyway?' };
-    expect(assess('git push origin main', ctx)).toEqual({ decision: 'ask', reason: ctx.batchQuestion() });
+    expect(assess('git push origin main', ctx)).toEqual({ decision: 'ask', rule: 'push-questions', reason: ctx.batchQuestion() });
     expect(assess('git push', { ...ctx, branch: 'main' })?.decision).toBe('ask');
     // A track (agent_type set) is never asked about the batch: it may not push at all (H1, denied with its own reason).
     expect(assess('git push origin main', { ...ctx, agentType: 'track', guardedTypes: new Set() })?.decision).toBe('deny');

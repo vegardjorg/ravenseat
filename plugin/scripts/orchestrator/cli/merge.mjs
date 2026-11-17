@@ -23,11 +23,11 @@ import { pathToFileURL } from 'node:url';
 
 import {
   a, autoCleanFocus, BASE, branchFor, branchInfo, CONFIG, CLI, die, edit, focusCleanOut, FOLDER, G, git, GIT_ROOT, HELP,
-  HERE, L, MAIN_TREE, MIGR, parallelWarning, positional, pulseCursor, read, require, TK, val,
+  HERE, L, MAIN_TREE, MIGR, parallelWarning, positional, pulseCursor, read, require, TIME_LOG, TK, val,
 } from './context.mjs';
 import {
   blockList, findDeliveries, gitLarge, highestMigr, lastTrackReply, logTime, mergeBlock, minutes, readTimeLog,
-  attemptRows, reviewerFindingsLines, scratchpadFor, syncAttempts, takenForMigr, taskAgents, trackReport,
+  attemptRows, controlWhere, reviewerFindingsLines, scratchpadFor, syncAttempts, takenForMigr, taskAgents, trackReport,
 } from './tracks.mjs';
 import {
   BASE_SETUP, BH, fileFlaky, flakyRecheck, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf,
@@ -643,6 +643,72 @@ function reviewNewNames(diff) {
   }
 }
 
+/**
+ * The receive lines for the main tree's control files that changed since the fingerprint `before` (lib/controlFiles.js),
+ * leaving out a file that is tracked and clean now: it came in through a commit (another track's merge), which git log
+ * shows. Never throws: the check is a warning.
+ */
+export function controlFileLines(id, before, others = []) {
+  try {
+    const CF = require('./lib/controlFiles.js');
+    const where = controlWhere();
+    const changes = CF.compare(before, CF.fingerprint(where));
+    if (!changes.length) return [];
+    // The names git can know: relative to the main tree, not in .git, and the scripts folder when it lies in the tree.
+    const rel = path.relative(where.mainTree, where.scriptsDir).replace(/\\/g, '/');
+    const scriptsRel = rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : null;
+    const asGit = (name) => (name === CF.SCRIPTS_KEY ? scriptsRel : name.startsWith('.git/') ? null : name);
+    const names = changes.map((c) => asGit(c.name)).filter(Boolean);
+    const committed = new Set();
+    if (names.length) {
+      const tracked = new Set(String(git(['ls-files', '--', ...names]) ?? '').split(/\r?\n/).filter(Boolean));
+      const dirty = String(git(['status', '--porcelain', '--untracked-files=all', '--', ...names]) ?? '')
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((l) => l.slice(3).replace(/^"|"$/g, ''));
+      for (const c of changes) {
+        const g = asGit(c.name);
+        if (!g) continue;
+        const isTracked = g === scriptsRel ? [...tracked].some((t) => t.startsWith(`${g}/`)) : tracked.has(g);
+        const isDirty = dirty.some((d) => d === g || d.startsWith(`${g}/`));
+        if (isTracked && !isDirty && c.change !== 'removed') committed.add(c.name);
+      }
+    }
+    const kept = CF.unexplained(changes, { committed });
+    if (kept.length) logTime(id, 'control-files-changed', `${kept.length} file(s)`);
+    return CF.warningLines(id, kept, { root: where.mainTree, others });
+  } catch {
+    return []; // error-ignored: the fingerprint is a warning; receive goes on
+  }
+}
+
+/**
+ * The weakened settings no setting-weakened row explains (lib/guardLog.js outsideCli), each logged once as
+ * config-changed-outside-cli, as lines. `where` names the command that found it. Never throws.
+ */
+export function outsideCliLines(where) {
+  try {
+    const GL = require('./lib/guardLog.js');
+    const SV = require('./lib/settingsView.js');
+    const queue = fs.existsSync(path.join(FOLDER, 'queue.json')) ? read() : { tasks: [] };
+    const view = SV.settingsView({ config: CONFIG, queue, migrations: !!CONFIG.migrations?.folder });
+    const weakened = view.categories.flatMap((c) => c.rows).filter((r) => r.weakened).map((r) => ({ key: r.key, value: r.value }));
+    if (!weakened.length) return [];
+    const keys = GL.outsideCli(weakened, readTimeLog());
+    if (!keys.length) return [];
+    const TA = require('./lib/timeLogArchive.js');
+    for (const key of keys)
+      TA.appendText(TIME_LOG, `${JSON.stringify(GL.outsideCliRow(key, weakened.find((w) => w.key === key).value, { where }))}\n`);
+    return [
+      `CONFIG CHANGED OUTSIDE THE CLI: ${keys.join(', ')} ${keys.length === 1 ? 'is' : 'are'} weakened with no setting-weakened row ` +
+        `(queue.config.json was edited by hand or by an agent). Logged as config-changed-outside-cli. If you did not do it, ` +
+        `look at queue.config.json; ${CLI} settings set <key> <value> --i-understand --by owner is the way that logs it.`,
+    ];
+  } catch {
+    return []; // error-ignored: a check, never a stop
+  }
+}
+
 /** `ravenseat receive` (the usage is at the top of queue.mjs). */
 export function cmdReceive() {
   // ---- A track has delivered -> review + review package as plain files + reviewer prompts ----
@@ -755,6 +821,13 @@ export function cmdReceive() {
     const others = read().tasks.filter((x) => x.id !== id && ['running', 'review', 'picked'].includes(x.status)).map((x) => x.id);
     for (const l of CFP.warningLines(id, changes, { dir: o0.claude_fp.dir, others })) console.log(l);
   }
+  // The main tree's control files (lib/controlFiles.js): a change no commit explains while the track ran. Warns only.
+  if (o0.control_fp && CONFIG?.controlFiles?.fingerprint !== false) {
+    const others = read().tasks.filter((x) => x.id !== id && ['running', 'review', 'picked'].includes(x.status)).map((x) => x.id);
+    for (const l of controlFileLines(id, o0.control_fp, others)) console.log(l);
+  }
+  // A weakened setting no setting-weakened row explains: queue.config.json was edited outside the CLI (lib/guardLog.js).
+  for (const l of outsideCliLines(`receive ${id}`)) console.log(l);
   // The quick gates bound to the delivered tip (receiveGates), BEFORE the done command and any reviewer: the track's own
   // claim is informational only. A PARTIAL track is known to be unfinished, so no gate runs for it.
   // gateEvidence.mode off (owner decision B2): a track that says gates=OK is taken at its word, nothing runs; without
@@ -1346,6 +1419,8 @@ export async function cmdMerge() {
       `${id} has status ${o.status}; merge applies to review (after receive and an approved review). ` +
         '--force only for running/picked on the owner\'s word.',
     );
+  // A merge of a running or picked task skips receive: logged like the other overrides (lib/guardLog.js counts it).
+  if (force && ['running', 'picked'].includes(o.status)) logTime(id, 'force-merged', `status ${o.status}${resume ? ', resume' : ''}`);
   const gi = branchInfo(branch);
   if (!gi.exists) die(`Branch ${branch} does not exist.`);
   const trackTip = branchTip;

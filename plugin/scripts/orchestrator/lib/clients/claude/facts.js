@@ -256,6 +256,7 @@ const FACTS = Object.freeze(
       readers: [
         'lib/projectRoot.js',
         'lib/claudeFingerprint.js',
+        'lib/controlFiles.js',
         'lib/gateEnv.js',
         'lib/queueUpdate.js',
         'hook-effort.mjs',
@@ -281,7 +282,7 @@ const FACTS = Object.freeze(
       fragility: 'M',
       move: 'W4',
       source: 'envVars',
-      readers: ['lib/claudeFingerprint.js', 'lib/instructionSize.js', 'setup.mjs', 'cli/doctorBaseline.mjs'],
+      readers: ['lib/claudeFingerprint.js', 'lib/controlFiles.js', 'lib/instructionSize.js', 'setup.mjs', 'cli/doctorBaseline.mjs'],
     },
   ].map((f) => Object.freeze({ confirmed: W1, ...f, readers: Object.freeze([...f.readers]) })),
 );

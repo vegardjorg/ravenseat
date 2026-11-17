@@ -349,6 +349,29 @@ function blockerTable(rows) {
   );
 }
 
+/**
+ * "Guard decisions last 7 days": deny and ask per track from lib/guardLog.js counts (the doctor's decisions row), the
+ * rules seen, and the override events in the same window. Never the command or the path: the log holds neither.
+ */
+function guardTable(g) {
+  const list = Array.isArray(g?.byTrack) ? g.byTrack : [];
+  const over = Array.isArray(g?.overrides) ? g.overrides : [];
+  return el(
+    'section',
+    { class: 'blocker-stat guard-stat', 'aria-labelledby': 'guard-stat-title' },
+    el('h3', { id: 'guard-stat-title', class: 'setting-title', text: 'Guard decisions last 7 days' }),
+    list.length
+      ? metricsTableOf(
+          ['Track', 'Denied', 'Asked', 'Rules'],
+          list.map((x) => [x.track, counts(x.deny), counts(x.ask), (x.rules ?? []).join(', ') || '-']),
+        )
+      : el('p', { class: 'empty', text: 'No guard decisions logged in the last 7 days (guardLog.enabled).' }),
+    ...(over.length
+      ? [el('p', { class: 'graph-remark', text: `Overrides: ${over.map((x) => `${x.event} ${x.count}`).join(', ')}` })]
+      : []),
+  );
+}
+
 /** A plain table (the blocker table's style): the header cells and the rows (first cell is the row header). */
 function metricsTableOf(head, rows) {
   return el(
@@ -779,6 +802,8 @@ function drawStatistics() {
     el('div', { class: 'graphs' }, graph1, graphInOut, graph2, graph3, graph4),
     // Blockers last 7 days (ravenseat blockers): per reason code, count and blocked time, top first.
     blockerTable(d.blockers),
+    // Guard decisions last 7 days (lib/guardLog.js): deny and ask per track, and the overrides.
+    guardTable(d.guards),
     // Models, tools and errors (lib/transcriptMetrics.js); append() turns null into "null", so only when it exists.
     ...(d.metrics?.agents ? [transcriptMetricsSection(d.metrics, d.windowDays)] : []),
     // Flow last 14 days (lib/eventStatistics.js flowStatistics, the same figures as ravenseat cost).

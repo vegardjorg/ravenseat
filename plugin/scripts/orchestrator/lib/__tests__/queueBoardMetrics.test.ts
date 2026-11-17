@@ -54,6 +54,16 @@ const rows = [
     idle_gaps: 0,
   },
 ];
+// The guards' decisions (lib/guardLog.js counts, as queue-board.mjs builds them): two denials for one track, one ask
+// in the main session and a force-merged override.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const GL = require('../guardLog.js');
+const guards = GL.counts([
+  { time: iso(20), event: 'guard-deny', track: 'T-1', guard: 'write', rule: 'control-file' },
+  { time: iso(19), event: 'guard-deny', track: 'T-1', guard: 'push', rule: 'force-push' },
+  { time: iso(18), event: 'guard-ask', track: null, guard: 'push', rule: 'deploy' },
+  { time: iso(17), event: 'force-merged', track: 'T-1' },
+]);
 const state = { version: 'v1', data: { ...T.board(queue), gitError: null, logo: false, update: null } };
 
 const flush = async () => {
@@ -75,7 +85,7 @@ beforeAll(async () => {
       return {
         ok: true,
         status: 200,
-        json: async () => ({ version: 's1', data: { ...S.statistics(queue, rows), timeLogError: null } }),
+        json: async () => ({ version: 's1', data: { ...S.statistics(queue, rows), guards, timeLogError: null } }),
       };
     if (filePath.startsWith('/api/state'))
       return {
@@ -118,5 +128,17 @@ describe('Statistics: models, tools and errors', () => {
     expect(text).toMatch(/Active time 40 min of 1 h 10 min wall time \(2 idle gaps left out\)\./);
     expect(text).toMatch(/API errors: 0 rate limit, 1 overloaded, 0 other\./);
     expect(text).toMatch(/1 killed agents measured from their transcripts\./);
+  });
+
+  it('shows the guard decisions per track with the rules and the overrides, never a command', async () => {
+    const section = document.querySelector('[aria-labelledby="guard-stat-title"]') as HTMLElement;
+    expect(section).not.toBeNull();
+    expect(document.getElementById('guard-stat-title')?.textContent).toBe('Guard decisions last 7 days');
+    const rowsShown = [...section.querySelectorAll('tbody tr')].map((r) => [...r.children].map((c) => c.textContent));
+    expect(rowsShown).toEqual([
+      ['T-1', '2', '0', 'control-file, force-push'],
+      ['main', '0', '1', 'deploy'],
+    ]);
+    expect(section.textContent).toMatch(/Overrides: force-merged 1/);
   });
 });

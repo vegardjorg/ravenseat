@@ -390,6 +390,7 @@ function assessReading({ agentType, filePath, offset, limit, countLines, maxLine
     // An excerpt is allowed: a track that will edit the file must have read it (Edit requires that).
     if (excerpt) return null;
     return {
+      rule: 'auto-loaded',
       reason:
         `readGuard: ${path.posix.basename(norm(filePath))} is loaded automatically (CLAUDE.md files at start or the first ` +
         'time you read a file in the folder, memory at start). Do not read it again; the content is already in your ' +
@@ -401,6 +402,7 @@ function assessReading({ agentType, filePath, offset, limit, countLines, maxLine
   const max = maxLines ?? r.maxLines;
   if (isLargeFile(filePath, r) && countLines > max) {
     return {
+      rule: 'large-file',
       reason:
         `readGuard: the file has ${countLines} lines (max ${max} without a limit for this file type). Read in excerpts: ` +
         'Grep -n for the function, table or name you need, then Read with offset and limit around the match.',
@@ -408,6 +410,7 @@ function assessReading({ agentType, filePath, offset, limit, countLines, maxLine
   }
   if (countLines > r.blockLines) {
     return {
+      rule: 'long-file',
       reason:
         `readGuard: the file has ${countLines} lines (over ${r.blockLines}). Read in excerpts: Grep -n for what you ` +
         'need, then Read with offset and limit around the match.',

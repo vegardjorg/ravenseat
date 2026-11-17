@@ -242,6 +242,15 @@ const STANDARD = Object.freeze({
   // settings, agents, commands, skills, hooks and plugin manifests; receive warns (CLAUDE SETUP CHANGED) when one
   // changed while the track ran. Only hashes are stored. false = off.
   claudeFingerprint: true,
+  // The main tree's control files (lib/controlFiles.js): queue.config.json, .claude/ (not .claude/worktrees/),
+  // CLAUDE*.md, .git/hooks/, .git/config and the plugin's own scripts. guard: a queue agent's Write, Edit or shell write
+  // there is denied (the main session is not affected). fingerprint: fill and start record a short hash per file and
+  // receive warns (CONTROL FILES CHANGED) about a change git does not explain. Turning either off is a weakened guard.
+  controlFiles: { guard: true, fingerprint: true },
+  // The guards' own decisions (lib/guardLog.js): every deny and ask from the push, write and read guard is one row in the
+  // time log (guard, rule, agent type, task, never the command). doctor and the board count them per track. false =
+  // no such rows (a weakened guard: the decisions can no longer be seen afterwards).
+  guardLog: { enabled: true },
   // Which agent types the agent guards (push, network, queue CLI, the write guard) apply to (lib/agentGuard.js, owner
   // decision B3): every subagent by default. except: agent types left out ("general-purpose", "myplugin:helper"; no
   // case). enabled false: only the queue's own types, as before. The queue's own types (track, track-d, the shipped

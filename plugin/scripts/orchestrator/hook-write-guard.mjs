@@ -6,6 +6,9 @@
 // Denies a queue agent (every subagent, lib/agentGuard.js: track, track-d, the reviewers and helpers always) a direct write to the
 // gate evidence store (gate-evidence.json, anywhere) and to the data folder's queue.json and base-health.json. The main
 // session (no agent_type) is never stopped. Inert without a queue project (no queue.config.json and no QUEUE_* variable).
+// It also denies them a write to the main tree's control files (lib/controlFiles.js, controlFiles.guard): queue.config.json,
+// .claude/ (not .claude/worktrees/), CLAUDE*.md, .git/hooks/, .git/config and the plugin's own scripts (this folder).
+// Every denial is one row in the time log (lib/guardLog.js, guardLog.enabled): guard, rule, agent type, task.
 // A track (track, track-d) also gets a soft warning, never a denial, for a write the merge guard or receive flags later:
 // a protected path the task does not own, a new skip or focus marker in a test file, a test file that loses its last
 // assertion (lib/writeWarn.js), and with scopeNotes.driftWarn on (off by default) a file outside the task's files and
@@ -17,6 +20,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 // Not a queue project: do nothing. A plugin's hooks run in every project the user opens.
@@ -58,9 +62,14 @@ async function main() {
     policy = {}; // an unreadable config: the default, every subagent guarded
   }
   const agentGuard = { ...policy, subagent: typeof input.agent.id === 'string' && input.agent.id !== '' };
-  const answer = WG.assessWrite({ agentType: input.agent.type, filePath: abs, folder, guardedTypes, agentGuard });
+  // The queue's state files first, then the main tree's control files (lib/controlFiles.js, controlFiles.guard).
+  const answer =
+    WG.assessWrite({ agentType: input.agent.type, filePath: abs, folder, guardedTypes, agentGuard }) ??
+    controlAnswer(input.agent.type, abs, guardedTypes, agentGuard);
   if (answer) {
     process.stdout.write(JSON.stringify(HK.deny('PreToolUse', answer.reason)));
+    // One row in the time log (lib/guardLog.js): the guard and the rule, never the path or the content.
+    require('./lib/guardLog.js').recordHook({ guard: 'write', rule: answer.rule ?? 'state-file', decision: 'deny', input });
     return;
   }
   // Not denied: a track (only track and track-d, not the reviewers) gets a soft warning for a write the merge guard or
@@ -69,6 +78,29 @@ async function main() {
   const warnings = trackWarnings(input, abs, folder);
   if (!warnings.length) return;
   process.stdout.write(JSON.stringify(HK.context('PreToolUse', warnings.join('\n'))));
+}
+
+/**
+ * The denial for a write to one of the main tree's control files (lib/controlFiles.js), or null. The plugin's own
+ * scripts are the folder this hook lives in. Any error: null (the guard fails open).
+ */
+function controlAnswer(agentType, abs, guardedTypes, agentGuard) {
+  try {
+    const KK = require('./lib/queueConfig.js');
+    const k = KK.config();
+    return require('./lib/controlFiles.js').assessControlWrite({
+      agentType,
+      filePath: abs,
+      mainTree: k.root,
+      scriptsDir: path.dirname(fileURLToPath(import.meta.url)),
+      configFile: KK.configFile(k.root),
+      guardedTypes,
+      agentGuard,
+      enabled: k.controlFiles?.guard !== false,
+    });
+  } catch {
+    return null;
+  }
 }
 
 /** The warnings not yet given to this agent for this file and kind (state per agent in WRITE_WARN_STATE). */

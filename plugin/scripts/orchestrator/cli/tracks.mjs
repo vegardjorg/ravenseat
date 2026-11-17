@@ -564,7 +564,20 @@ export function markStarted(queue, o, { agent = null, head = null, scratchpad = 
       delete o.claude_fp;
     }
   }
+  // The main tree's control files before the track runs (lib/controlFiles.js, controlFiles.fingerprint); receive compares.
+  if (CONFIG?.controlFiles?.fingerprint !== false) {
+    try {
+      o.control_fp = require('./lib/controlFiles.js').fingerprint(controlWhere());
+    } catch {
+      delete o.control_fp;
+    }
+  }
   return o;
+}
+/** Where the main tree's control files are: the main tree, the plugin's scripts (this install) and the config file. */
+export function controlWhere() {
+  const root = CONFIG?.root ?? MAIN_TREE;
+  return { mainTree: root, scriptsDir: HERE, configFile: require('./lib/queueConfig.js').configFile(root) };
 }
 /** The time log row for a start (the same for start and fill). */
 export function logStart(r) {

@@ -122,6 +122,7 @@ const S = require('./lib/queueStatistics.js');
 const TK = require('./lib/timeCost.js');
 // The flow rows (fixRound, mergeConflict, baseGate, triage, push, load) and their figures for the Statistics tab.
 const ER = require('./lib/eventRows.js');
+const GL = require('./lib/guardLog.js');
 const ES = require('./lib/eventStatistics.js');
 // The Plans space. The register is read with queuePlan.js, and what the board needs is made by queuePlanView.js (read only).
 const P = require('./lib/queuePlan.js');
@@ -837,7 +838,9 @@ function timeLogRows() {
     const rows = all.filter((r) => r?.event === 'done');
     // The flow rows apart (boardFlow), so the "done" rows stay exactly as before.
     const events = all.filter((r) => ER.EVENTS.has(r?.event));
-    logCache = { key, rows, events, error: null };
+    // The guards' decisions and the overrides (lib/guardLog.js), for "Guard decisions last 7 days".
+    const guards = all.filter((r) => GL.OVERRIDES.includes(r?.event) || r?.event === GL.EVENTS.deny || r?.event === GL.EVENTS.ask);
+    logCache = { key, rows, events, guards, error: null };
   }
   return logCache;
 }
@@ -907,6 +910,8 @@ function statistics() {
     ...S.statistics(queue, log.rows),
     // "Blockers last 7 days" (queueLogic.blockerSummary, the same numbers as ravenseat blockers).
     blockers: L.blockerSummary(queue, { days: 7 }),
+    // "Guard decisions last 7 days" (lib/guardLog.js counts, the same numbers as the doctor's decisions row).
+    guards: GL.counts(log.guards ?? [], { from: Date.now() - 7 * 86_400_000 }),
     timeLogError: log.error,
     forecast: boardForecast(queue),
     flow: boardFlow(queue, log.events),

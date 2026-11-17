@@ -542,6 +542,36 @@ const SETTINGS = Object.freeze([
       whyNot: 'Git does not see ~/.claude, so a change there would go unnoticed and apply to every later session.',
       changes: 'Receive no longer compares your Claude setup before and after a track. Doctor will report it.',
     }),
+  // Friction: a track works in its own worktree and never needs the main tree's control files, so the guard only
+  // stops what was never meant to happen; the shell reading can stop a copy out of a control file (cp <main>/... .),
+  // which the denial explains. The fingerprint costs a few milliseconds at fill and receive and only warns. On by
+  // default by the owner's decision of 16.11.2026 (plans/ekstern-saas-vurdering-2026-11-15.md, bolk 1).
+  row('controlFiles.guard', 'guards', 'onoff', 'Control file write guard',
+    'Queue agents may not write the main tree\'s queue.config.json, .claude/, CLAUDE*.md, .git/hooks/, .git/config or ' +
+    'the plugin\'s scripts, with the file tools or the shell. Their own worktree copies stay free; the main session is not affected.', {
+      weakens: offWeakens,
+      protects: 'A track switching off a guard, adding a hook or rewriting the instructions by writing the main tree\'s control files directly.',
+      whyNot: 'Every override flag is denied to the agents, but a direct write to these files gets around all of them.',
+      changes: 'Queue agents can write the main tree\'s control files again. Doctor will report it.',
+    }),
+  row('controlFiles.fingerprint', 'guards', 'onoff', 'Control file fingerprint',
+    'Fill and start record a short hash of each main tree control file; receive warns (CONTROL FILES CHANGED) about a ' +
+    'change that no commit explains. Only hashes are stored.', {
+      weakens: offWeakens,
+      protects: 'A change to the main tree\'s control files while a track ran that the write guard did not see (a script the agent ran).',
+      whyNot: 'Ignored files such as .claude/settings.local.json and .git/config never show in git, so a change there goes unnoticed.',
+      changes: 'Receive no longer compares the main tree\'s control files before and after a track. Doctor will report it.',
+    }),
+  // Friction: none, it only appends a row when a guard has already decided. On by default by the owner's decision of
+  // 16.11.2026 (bolk 6, measurement only): the overrides are measured for two weeks before approval with presence.
+  row('guardLog.enabled', 'guards', 'onoff', 'Guard decision log',
+    'Every deny and ask from the push, write and read guard is one row in the time log: guard, rule, agent type, task ' +
+    'and time, never the command. Doctor and the board count them per track.', {
+      weakens: offWeakens,
+      protects: 'Seeing afterwards how often the guards stopped or asked an agent, and which track kept trying.',
+      whyNot: 'Without the rows a track that hits a guard again and again leaves no trace, and the overrides cannot be measured.',
+      changes: 'The guards still decide, but their decisions are no longer logged. Doctor will report it.',
+    }),
   row('agentGuard.enabled', 'guards', 'onoff', 'Guard every agent type',
     'The push, network, queue command and state file guards apply to every subagent, also general-purpose, Explore and ' +
     'your own. Off: only the queue\'s own agent types, which are always guarded.', {

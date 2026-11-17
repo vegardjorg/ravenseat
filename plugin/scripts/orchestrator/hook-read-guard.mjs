@@ -19,6 +19,7 @@
 //   - Denies any Read (offset and limit too) under a privatePaths entry with "read": false (lib/privatePaths.js
 //     readDenied, H4), also through an agent worktree's copy of the path, so its content never reaches a mission, a
 //     report or a transcript. The main session is never stopped (it has no agent_type).
+// Every denial is one row in the time log (lib/guardLog.js, guardLog.enabled): guard, rule, agent type, task, never the path.
 // Fails OPEN: any internal error gives no output and exit 0.
 // Smoke test: echo '{"agent_type":"track","tool_input":{"file_path":"CLAUDE.md"}}' | node scripts/orchestrator/hook-read-guard.mjs
 // =============================================================
@@ -124,6 +125,7 @@ async function main() {
         ),
       ),
     );
+    logDeny(input, 'private-path');
     return;
   }
   // The line count is needed when limit is missing (large files, the block limit and the read hint).
@@ -142,6 +144,16 @@ async function main() {
     return;
   }
   process.stdout.write(JSON.stringify(HK.deny('PreToolUse', answer.reason)));
+  logDeny(input, answer.rule ?? 'read-limit');
+}
+
+/** One row in the time log for a denial (lib/guardLog.js, guardLog.enabled): the rule, never the path. Never throws. */
+function logDeny(input, rule) {
+  try {
+    require('./lib/guardLog.js').recordHook({ guard: 'read', rule, decision: 'deny', input });
+  } catch {
+    // error-ignored: measurement only
+  }
 }
 
 main()

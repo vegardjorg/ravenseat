@@ -5,6 +5,22 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: the main tree's control files are out of a queue agent's reach, and the guards now log what they
+  decide.** With `controlFiles.guard` (on) a queue agent is denied Write and Edit on the main tree's
+  `queue.config.json`, `.claude/` (not `.claude/worktrees/`), `CLAUDE*.md`, `.git/hooks/`, `.git/config` and the
+  plugin's own scripts, and the push guard denies the shell forms with the same parser as the push and network rules.
+  Edge cases covered: a redirection or append, `cp`, `mv`, `tee`, `sed -i` and `node -e` that writes, a `cd` or
+  `git -C` to the main tree first, `$CLAUDE_PROJECT_DIR`, a `../` path back out of the worktree, a nested
+  `CLAUDE.local.md`, and `git config` or `git remote` writes, also from the agent's own worktree, which shares the main
+  tree's `.git/config`. Reading stays free, the agent's own worktree copies are free, and the main session is never
+  stopped. With `controlFiles.fingerprint` (on) `start` records short hashes and `receive` names a change that git
+  does not explain (CONTROL FILES CHANGED), as a warning: the owner and `settings set` change these files too. With
+  `guardLog.enabled` (on) every deny and ask from the push, write and read guards is one time log row with the guard,
+  the rule, the agent type and the task, never the command, path or content; `merge --force` on a running task logs
+  `force-merged`, and a weakened setting with no `setting-weakened` row logs `config-changed-outside-cli`.
+  `ravenseat doctor` and the board's Statistics tab count them per track. All three settings are guards, so turning
+  one off counts as weakened. Not closed locally, and documented: a script the agent writes and then runs, a path
+  built at run time and a process that outlives its run; the fingerprint at receive is the net for those.
 - **Hardening: a gate guard that no merge runs is now seen, and its command can be added to the merge gate in one
   click without weakening anything.** A gate guard in the registry whose command is not in `gates.quick` gets the card
   "Run a built gate guard on every merge" on the Checks tab, with an **Add to gates.quick** button per guard and

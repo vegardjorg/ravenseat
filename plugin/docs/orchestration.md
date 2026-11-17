@@ -1071,6 +1071,26 @@ Windows, so there are four layers:
   the rest, and never `--allow-guard`, `--force*` or `--by owner`/`--by theBoard`. The ownership the merge guard
   checks (`owned_files`, `shared_patch`, `owner_db`, `migr_block`) is locked after the start like `done_when` and
   `acceptance`: only `--by owner` or the board changes it, and never from a track worktree.
+- **The main tree's control files.** `queue.config.json`, `.claude/` (not `.claude/worktrees/`), `CLAUDE*.md` at any
+  depth, `.git/hooks/`, `.git/config` and the plugin's own `scripts/orchestrator/` steer every later session and gate.
+  With `controlFiles.guard` (on by default) the write guard denies a queue agent Write and Edit on them in the main tree
+  (its own worktree copy is free), and the push guard denies the shell forms with the same command parser as the push
+  and network rules: a redirection to one, one named with a writing command (`cp`, `mv`, `tee`, `sed -i`, `node -e`
+  that writes), also after a `cd` or `git -C` to the main tree or through `$CLAUDE_PROJECT_DIR`, and a `git config` or
+  `git remote` write (a worktree shares the main tree's `.git/config`). Reading stays free. The main session is never
+  stopped here. With `controlFiles.fingerprint` (on) `start` records short hashes of those files and `receive` names
+  what changed and git does not explain (CONTROL FILES CHANGED, logged as `control-files-changed`): a warning, never a
+  stop, since the owner, the orchestrator and `settings set` change them too and a hash cannot say who. Not closed
+  locally: a script file the agent writes and then runs, a path built at run time or held in an unknown variable, and a
+  process that outlives its run; the fingerprint at receive is the net for those, and the agents run as the same OS
+  user, so this is a guard against mistakes and casual tampering, not a security boundary (`lib/controlFiles.js`).
+- **The guards log what they decide.** With `guardLog.enabled` (on) every deny and ask from the push, write and read
+  guards is one row in the time log (`guard-deny`, `guard-ask`): the guard, the rule id, the agent type, the task and
+  the time, never the command, the path or the content (`lib/guardLog.js`). `merge --force` on a running or picked
+  task logs `force-merged`, and `receive` logs `config-changed-outside-cli` for a weakened setting that no
+  `setting-weakened` row explains (`queue.config.json` edited by hand). `ravenseat doctor` (row `decisions`, and
+  `config-cli` for the second) and the board's Statistics tab ("Guard decisions last 7 days") count them per track.
+  The rows rotate with the time log's monthly archives.
 - **Limits.** `maxTurns` is 400 for `track` and 600 for `track-d`, and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`
   (`env` in `settings.queue.json`, set by `setup --settings`) stops a track from starting agents of its own. A plugin's
   `hooks.json` cannot set environment variables, so this one lives in the project settings.

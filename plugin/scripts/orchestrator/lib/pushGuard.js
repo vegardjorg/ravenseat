@@ -338,32 +338,32 @@ function assessNetwork(command, context) {
   const read = SC.commandList(command);
   if (read.unsure.length && NETWORK_SHAPED.test(command))
     findings.push({
-      decision: 'deny',
+      decision: 'deny', rule: 'network-unread',
       reason: `The guard cannot read this command (${read.unsure.join('; ')}) and it looks like a network call. ${NETWORK_REASON}`,
     });
   for (const c of read.commands) {
     const { t, i0, word } = c;
     if (NETWORK_COMMANDS.has(word)) {
-      findings.push({ decision: 'deny', reason: `\`${t[i0]}\`: ${NETWORK_REASON}` });
+      findings.push({ decision: 'deny', rule: 'network-call', reason: `\`${t[i0]}\`: ${NETWORK_REASON}` });
       continue;
     }
     if (c.opaque) {
       // A pipe into a shell or eval, and an encoded PowerShell command, run text the guard cannot see.
       if (/pipe into a shell|encoded PowerShell|reads the pipe/.test(c.opaque))
-        findings.push({ decision: 'deny', reason: `It runs text as code (${c.opaque}). ${NETWORK_REASON}` });
+        findings.push({ decision: 'deny', rule: 'network-code', reason: `It runs text as code (${c.opaque}). ${NETWORK_REASON}` });
       // A variable as the command word with an address after it: the program is not known, the address is.
       else if (/^[$@]/.test(t[i0]) && t.slice(i0 + 1).some((x) => /^['"]?[a-z][a-z0-9+.-]*:\/\//i.test(x)))
-        findings.push({ decision: 'deny', reason: `${c.opaque}, with an address after it. ${NETWORK_REASON}` });
+        findings.push({ decision: 'deny', rule: 'network-variable', reason: `${c.opaque}, with an address after it. ${NETWORK_REASON}` });
       continue;
     }
     if (writesNodeModules(t, i0)) {
-      findings.push({ decision: 'deny', reason: `\`${t.slice(i0, i0 + 2).join(' ')}\`: ${NODE_MODULES_REASON}` });
+      findings.push({ decision: 'deny', rule: 'node-modules', reason: `\`${t.slice(i0, i0 + 2).join(' ')}\`: ${NODE_MODULES_REASON}` });
       continue;
     }
     const unknown = unknownPackages(t, i0, context.knownPackage);
     if (unknown.length > 0) {
       findings.push({
-        decision: 'ask',
+        decision: 'ask', rule: 'npx-unknown',
         reason: `\`${t[i0]}\` fetches a package that is not in package.json (${unknown.join(', ')}). ${NETWORK_REASON}`,
       });
     }
@@ -499,7 +499,7 @@ const queueShaped = (command) => QUEUE_SHAPED.test(command);
  * The command line is read with lib/shellCommands.js (nested shells, eval, $( ), subshells and inline git aliases
  * included). A part it cannot see into, in a line that looks like a push (or, for a queue agent, a queue CLI call),
  * gives ask for the main session and deny for a queue agent.
- * Returns null (no decision) or { decision: 'ask'|'deny', reason }.
+ * Returns null (no decision) or { decision: 'ask'|'deny', reason, rule }; rule is a short word the guard log records
  * With several matches the strictest wins (deny over ask).
  */
 function assess(command, context = {}) {
@@ -519,27 +519,27 @@ function assess(command, context = {}) {
     const g = SC.gitInvocation(t, i0);
     const sub = g ? String(g.sub).toLowerCase() : null;
     if (g && guarded) {
-      if (SC.isGitPush(g)) findings.push({ decision: 'deny', reason: AGENT_PUSH_REASON });
+      if (SC.isGitPush(g)) findings.push({ decision: 'deny', rule: 'agent-push', reason: AGENT_PUSH_REASON });
       else if (g.aliasFromEnv)
         findings.push({
-          decision: 'deny',
+          decision: 'deny', rule: 'git-alias-env',
           reason: `\`git ${g.sub}\` is an alias from an environment variable (--config-env); queue agents do not use git aliases.`,
         });
       else if (sub === 'config' && g.args.some((x) => /^alias\./i.test(x)))
         findings.push({
-          decision: 'deny',
+          decision: 'deny', rule: 'git-alias',
           reason: 'Queue agents do not define git aliases (git config alias.*): the push guard cannot see what they run.',
         });
       else if (sub === 'config' && configSetsExecKey(g.args))
         findings.push({
-          decision: 'deny',
+          decision: 'deny', rule: 'git-exec-key',
           reason:
             `Queue agents do not set git config keys that run a program (${configSetsExecKey(g.args)}): it would run at the ` +
             "orchestrator's next git command. Reading them (git config --get) is fine.",
         });
       else if (!SC.GIT_SUBCOMMANDS.has(sub))
         findings.push({
-          decision: 'deny',
+          decision: 'deny', rule: 'git-not-builtin',
           reason:
             `\`git ${g.sub}\` is not a git builtin (an alias from the git config?): queue agents use the plain git ` +
             'commands, so the guard can see what runs.',
@@ -562,7 +562,7 @@ function assess(command, context = {}) {
             ? template.map((name) => context.allowedBranchQuestion(name)).filter(Boolean)
             : [];
         findings.push({
-          decision: 'ask',
+          decision: 'ask', rule: 'force-push-allowed',
           reason: [
             `Forced push of ${template.join(', ')} replaces that branch's history on the remote. It is allowed by push.allowBranches, so it is your call.`,
             ...secrets,
@@ -570,23 +570,23 @@ function assess(command, context = {}) {
         });
       } else if (force) {
         findings.push({
-          decision: 'deny',
+          decision: 'deny', rule: 'force-push',
           reason:
             'Forced push is forbidden: shared history is never rewritten. Merge instead, and push normally. For your own pull request branch, the owner can add it to push.allowBranches in queue.config.json; then a forced push asks first.',
         });
       } else if (all) {
         findings.push({
-          decision: 'deny',
+          decision: 'deny', rule: 'push-all',
           reason: `\`git push --all/--mirror\` pushes all branches. Only baseBranch (${baseBranch}) is pushed.`,
         });
       } else if (deletes.includes(baseBranch)) {
         findings.push({
-          decision: 'deny',
+          decision: 'deny', rule: 'delete-base',
           reason: `Deleting baseBranch (${baseBranch}) on the remote is blocked (\`--delete\` or \`:${baseBranch}\`).`,
         });
       } else if (tags) {
         findings.push({
-          decision: 'deny',
+          decision: 'deny', rule: 'push-tags',
           reason: `\`git push --tags\` is blocked: only baseBranch (${baseBranch}) is pushed. Tags go by name, from your own terminal or with the owner's yes to a pattern in push.allowBranches.`,
         });
       } else {
@@ -596,12 +596,12 @@ function assess(command, context = {}) {
         allowedPushes.push(...allowed);
         if (others.length > 0) {
           findings.push({
-            decision: 'deny',
+            decision: 'deny', rule: 'push-branch',
             reason: `Push of ${others.join(', ')} is blocked: only baseBranch (${baseBranch}) is pushed, and in batches. Track branches are merged locally. For pull requests, the owner can allow branches with push.allowBranches in queue.config.json; ask them first.`,
           });
         } else if (template.includes('<unknown>')) {
           findings.push({
-            decision: 'ask',
+            decision: 'ask', rule: 'push-unknown-branch',
             reason: `Could not determine which branch is pushed. Confirm that it is baseBranch (${baseBranch}).`,
           });
         } else if (template.includes(baseBranch)) basePush = true;
@@ -609,7 +609,7 @@ function assess(command, context = {}) {
     } else if (g && (SC.isGitPush(g) || (g.aliasFromEnv && pushShaped(command)))) {
       // send-pack, `subtree push`, or an alias the guard cannot see: the main session confirms.
       findings.push({
-        decision: 'ask',
+        decision: 'ask', rule: 'push-unread-form',
         reason: `\`git ${g.sub}\` may push in a form the push guard does not assess. Confirm the target is baseBranch (${baseBranch}).`,
       });
     }
@@ -618,11 +618,11 @@ function assess(command, context = {}) {
       const call = SC.queueCall(t, i0);
       const reason = call ? agentQueueReason(call, { branch: context.branch, branchPrefix: context.branchPrefix, moved }) : null;
       if (['cd', 'pushd', 'popd', 'chdir', 'set-location', 'push-location', 'pop-location', 'sl'].includes(String(SC.commandWord(t[i0])).toLowerCase())) moved = true;
-      if (reason) findings.push({ decision: 'deny', reason });
+      if (reason) findings.push({ decision: 'deny', rule: 'queue-command', reason });
       const migration = migrationMatch(t, migrations);
       if (migration)
         findings.push({
-          decision: 'deny',
+          decision: 'deny', rule: 'migration-run',
           reason:
             `\`${migration}\` changes a database. Queue agents write the migration file and do not run it: the owner decides when ` +
             'it runs. Say in your result that it has not run.',
@@ -632,7 +632,7 @@ function assess(command, context = {}) {
     const deploy = deployCommands.length ? deployMatch(t, deployCommands) : null;
     if (deploy)
       findings.push({
-        decision: 'ask',
+        decision: 'ask', rule: 'deploy',
         reason: `\`${deploy}\` is a deploy command (deployCommands in queue.config.json). Confirm that this should go live now.`,
       });
 
@@ -645,7 +645,7 @@ function assess(command, context = {}) {
       const allowedOnes = Array.isArray(migrations.allowedEnvironment) ? migrations.allowedEnvironment : [];
       if (environment !== null && environment !== undefined && !allowedOnes.includes(environment)) {
         findings.push({
-          decision: 'deny',
+          decision: 'deny', rule: 'migration-environment',
           reason:
             `Migration push to "${environment}" is blocked: ${migrations.environmentFile} points to an environment that is not in ` +
             `migrations.allowedEnvironment (${allowedOnes.length ? allowedOnes.join(', ') : 'empty list'}). Link to the correct environment first.`,
@@ -661,11 +661,11 @@ function assess(command, context = {}) {
       findings.push(
         guarded
           ? {
-              decision: 'deny',
+              decision: 'deny', rule: 'unread-push',
               reason: `The push guard cannot read this command (${why}) and it looks like a push. ${AGENT_PUSH_REASON}`,
             }
           : {
-              decision: 'ask',
+              decision: 'ask', rule: 'unread-push',
               reason:
                 `The push guard cannot read this command (${why}) and it looks like a push. Confirm what it pushes ` +
                 `(only baseBranch ${baseBranch}, never forced).`,
@@ -673,7 +673,7 @@ function assess(command, context = {}) {
       );
     else if (guarded && queueShaped(command))
       findings.push({
-        decision: 'deny',
+        decision: 'deny', rule: 'unread-queue',
         reason: `The push guard cannot read this command (${why}) and it calls the queue CLI. Run ravenseat directly; allowed for queue agents: ${AGENT_QUEUE_LIST}.`,
       });
   }
@@ -683,7 +683,7 @@ function assess(command, context = {}) {
   if ((basePush || allowedPushes.length) && findings.length === 0 && !context.agentType && typeof context.trackingDeny === 'function') {
     const names = [...(basePush ? [baseBranch] : []), ...allowedPushes];
     const reasons = [...new Set(names.map((name) => context.trackingDeny(name)).filter(Boolean))];
-    if (reasons.length) findings.push({ decision: 'deny', reason: reasons.join(' Also: ') });
+    if (reasons.length) findings.push({ decision: 'deny', rule: 'tracking', reason: reasons.join(' Also: ') });
   }
   // The secret precheck, the missing controls and the batch threshold: only for the orchestrator (no agent_type; tracks
   // never push) and only when nothing else hit. All the questions go in one dialog.
@@ -691,12 +691,12 @@ function assess(command, context = {}) {
     const questions = [context.secretQuestion, context.controlsQuestion, context.batchQuestion]
       .map((f) => (typeof f === 'function' ? f() : null))
       .filter(Boolean);
-    if (questions.length) findings.push({ decision: 'ask', reason: questions.join(' Also: ') });
+    if (questions.length) findings.push({ decision: 'ask', rule: 'push-questions', reason: questions.join(' Also: ') });
   }
   // A branch the owner allowed (push.allowBranches): no batch or CI question, but a secret is as bad on any branch.
   if (allowedPushes.length && findings.length === 0 && !context.agentType && typeof context.allowedBranchQuestion === 'function') {
     const questions = allowedPushes.map((name) => context.allowedBranchQuestion(name)).filter(Boolean);
-    if (questions.length) findings.push({ decision: 'ask', reason: questions.join(' Also: ') });
+    if (questions.length) findings.push({ decision: 'ask', rule: 'allowed-branch-secret', reason: questions.join(' Also: ') });
   }
   if (findings.length === 0) return null;
   return findings.find((f) => f.decision === 'deny') || findings[0];

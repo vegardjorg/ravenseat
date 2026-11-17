@@ -73,7 +73,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'gateEvidence', 'ownership', 'history', 'share', 'client'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -700,6 +700,54 @@ function checkGuards() {
   }
 }
 
+/**
+ * The guards' own decisions (lib/guardLog.js): deny and ask per track in the last 7 days, and the overrides. And a
+ * weakened setting no setting-weakened row explains (queue.config.json edited outside the CLI): shown here, logged by
+ * receive. Reads only.
+ */
+function checkGuardDecisions() {
+  const GL = require('./lib/guardLog.js');
+  const TC = require('./lib/timeCost.js');
+  const DAYS = 7;
+  let rows = [];
+  try {
+    rows = TC.readRows(require('./lib/timeLogArchive.js').readText(KK.timeLog(), { from: Date.now() - DAYS * 86_400_000 }));
+  } catch {
+    rows = []; // no time log yet
+  }
+  const out = [];
+  if (!GL.enabled(CONFIG)) out.push(warn('decisions', 'guardLog.enabled is off: the guards still decide, but their decisions are not logged', `${CLI} settings set guardLog.enabled on`));
+  else {
+    const c = GL.counts(rows, { from: Date.now() - DAYS * 86_400_000 });
+    const over = c.overrides.filter((x) => x.event !== 'setting-weakened').map((x) => `${x.event} ${x.count}`);
+    out.push(ok('decisions', `${GL.doctorText(c, DAYS)}${over.length ? `; overrides: ${over.join(', ')}` : ''}`));
+  }
+  try {
+    const SV = require('./lib/settingsView.js');
+    let queue = { tasks: [] };
+    try {
+      queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    } catch {
+      queue = { tasks: [] };
+    }
+    const view = SV.settingsView({ config: CONFIG, queue, migrations: !!CONFIG.migrations?.folder });
+    const weakened = view.categories.flatMap((x) => x.rows).filter((r) => r.weakened).map((r) => ({ key: r.key, value: r.value }));
+    const all = TC.readRows(require('./lib/timeLogArchive.js').readText(KK.timeLog()));
+    const keys = GL.outsideCli(weakened, all);
+    if (keys.length)
+      out.push(
+        warn(
+          'config-cli',
+          `${keys.join(', ')} ${keys.length === 1 ? 'is' : 'are'} weakened with no setting-weakened row: queue.config.json was edited outside the CLI (receive logs it as config-changed-outside-cli)`,
+          `look at queue.config.json; ${CLI} settings set <key> <value> --i-understand --by owner is the way that logs it`,
+        ),
+      );
+  } catch {
+    // error-ignored: no time log or settings view, no row
+  }
+  return out;
+}
+
 function checkCanary() {
   const CC = require('./lib/clientCanary.js');
   if (!CC.setupOf(CONFIG).on) return [];
@@ -761,7 +809,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkGuards, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {
