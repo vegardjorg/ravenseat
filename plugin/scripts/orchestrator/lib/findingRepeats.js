@@ -63,6 +63,9 @@ const FC = require('./failureClasses.js');
 // recipeDamping and its numbers: a recipe below recipeMinAccepted percent accepted after recipeMinProposals decided
 // proposals (recipeMinProposalsDb for a database recipe) is listed but no longer offered (lib/recipePrecision.js, 0i
 // step 9). On by default: it only hides a suggestion, never stops work, and the owner can show the recipe again.
+// quickGateCard, ciParityLift, idleGuardInfo and idleGuardDays: CI parity for a built gate guard (lib/quickGate.js, 0i
+// step 9b). On by default: the card only offers (the write takes the owner's click and can only add a command), the lift
+// only orders the CI cards and never lights the red marker (section 3.9), and the idle line is INFO. 7 days is the plan's.
 const DEFAULTS = Object.freeze({
   repeats: true,
   windowDays: 90,
@@ -75,9 +78,13 @@ const DEFAULTS = Object.freeze({
   recipeMinProposals: 5,
   recipeMinProposalsDb: 10,
   recipeMinAccepted: 30,
+  quickGateCard: true,
+  ciParityLift: true,
+  idleGuardInfo: true,
+  idleGuardDays: 7,
 });
-const ONOFF = ['repeats', 'guardFailedMarker', 'proposals', 'dbProbes', 'recipeDamping'];
-const NUMBERS = ['windowDays', 'areaRepeats', 'projectRepeats', 'recipeMinProposals', 'recipeMinProposalsDb'];
+const ONOFF = ['repeats', 'guardFailedMarker', 'proposals', 'dbProbes', 'recipeDamping', 'quickGateCard', 'ciParityLift', 'idleGuardInfo'];
+const NUMBERS = ['windowDays', 'areaRepeats', 'projectRepeats', 'recipeMinProposals', 'recipeMinProposalsDb', 'idleGuardDays'];
 /** Whole percents, 1 to 100. */
 const PERCENTS = ['recipeMinAccepted'];
 const percent = (v, standard) => (Number.isInteger(v) && v >= 1 && v <= 100 ? v : standard);

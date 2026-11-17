@@ -3,6 +3,7 @@ title: Run lint and type check in CI
 category: ci
 priority: medium
 when: has-ci, not-in-ci:types|lint
+lift_when: guard-not-in-ci:types|lint
 content_min: 30
 why: These are fast and catch many mistakes, but ravenseat cannot see them in your CI. Someone pushing outside the queue skips them.
 ---

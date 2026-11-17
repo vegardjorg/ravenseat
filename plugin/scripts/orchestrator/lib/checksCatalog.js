@@ -7,7 +7,7 @@
 //   - a category with a new key is added, the same key replaces it, `"off": true` removes it and its suggestions.
 //
 // A template: a header (title, category, priority, when, why, content_min, also_task, action, setting, important_when,
-// medium_when) and two sections,
+// medium_when, lift_when) and two sections,
 // "## Investigate" and "## Plan and build". The sections become the mission of the investigation task.
 // Three kinds need no agent: `action: gates` (ravenseat kickstart gates --apply), `action: packs` (ravenseat checks packs
 // --apply: the stack packs for the review signals, lib/reviewPacks.js) and `action: ask`, whose one section
@@ -18,6 +18,11 @@
 // until it is fixed or the card is set aside (a card set aside never comes back by itself, and stays in the report with
 // applies: false when its `when` no longer holds, so it can still be brought back). `medium_when` raises a low
 // card to medium while its conditions hold (something was observed, such as a flaky test), without the red marker.
+// `lift_when` puts the card first within its own priority while its conditions hold, and names why (a built gate guard
+// whose kind of check CI does not run, 0i step 9b). It never changes the priority, so it never lights the red marker
+// (plans/feillogg-til-gater-2026-11-15.md section 3.9: the marker is for a guard that failed). `action: quick-gate` is
+// the card that offers to add a gate guard's command to gates.quick (`ravenseat checks quick-add <G-n>`, lib/quickGate.js):
+// the items come from the registry through facts.quickGate, never from the card's text.
 //
 // The same folders hold recipes.json: per failure class and stack, what would guard a class the finding log keeps seeing
 // (0i section 3.7). The card ledger-recipes shows the due classes with the first recipe whose `when` holds; see the
@@ -41,7 +46,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const PRIORITIES = ['high', 'medium', 'low'];
-const ACTIONS = ['gates', 'ask', 'packs', 'setting'];
+const ACTIONS = ['gates', 'ask', 'packs', 'setting', 'quick-gate'];
+/** The card that offers to add a gate guard's command to gates.quick (action quick-gate, lib/quickGate.js items). */
+const QUICK_GATE_CARD = 'quick-gate-add';
 const REPORT_VERSION = 1;
 /** Incidents of a class in one area within 30 days (lib/findingRepeats.js facts.recent) that make ledger-recent hold. */
 const RECENT_MIN = 3;
@@ -118,6 +125,8 @@ const CONDITIONS = {
   // The client format canary (lib/clientCanary.js facts, read by cli/checks.mjs): the newest transcript has rows the
   // adapter reads differently than expected. A newer version alone does not hold it. Off with client.canary off.
   'client-format-changed': (f) => f.clientCanary?.signal === true,
+  // A gate guard in the registry whose command is not in gates.quick (facts.quickGate.items, lib/quickGate.js items).
+  'guard-not-in-quick': (f) => Array.isArray(f.quickGate?.items) && f.quickGate.items.length > 0,
 };
 
 /** The classes of the finding log entries in `list` (facts.ledger.due or .guardFailed). */
@@ -156,6 +165,13 @@ function ledgerLine(list, { guard = false } = {}) {
 /** What held before the class came back (lib/findingRepeats.js guardFailed.reason), in plain words. */
 const GUARD_REASON = { guard: 'a guard for it', fix: 'a fix with a test that failed without it', 'untested-h': 'a fix without a test, high severity' };
 
+/** The guards not in gates.quick, as one line: id, command, and whether gates.full already runs it. */
+function quickGateLine(items) {
+  const list = (Array.isArray(items) ? items : []).slice(0, 3).map((i) => `${i.guard} "${i.command}"${i.inFull ? ' (in gates.full only)' : ''}`);
+  const more = (items?.length ?? 0) > 3 ? ` And ${items.length - 3} more.` : '';
+  return list.length ? `Not in gates.quick: ${list.join('; ')}.${more}` : null;
+}
+
 /** The line a suggestion adds from the facts, so the card names the stacks. Null when it has none. */
 function detailOf(key, facts) {
   // The command for the project's test runner (lib/fixTests.js suggestCommand); none is made up for an unknown stack.
@@ -168,6 +184,7 @@ function detailOf(key, facts) {
   if (key === 'client-format')
     return facts.clientCanary?.lines?.length ? `Seen in the newest transcript: ${facts.clientCanary.lines.join('; ')}.` : null;
   if (key === 'learning-proposals') return ledgerLine(openDue(facts.ledger));
+  if (key === QUICK_GATE_CARD) return quickGateLine(facts.quickGate?.items);
   const p = facts.packs;
   if (!p) return null;
   const name = (id) => p.titles?.[id] ?? id;
@@ -176,6 +193,21 @@ function detailOf(key, facts) {
   if (key === 'stack-pack-research' && p.unpacked?.length)
     return `No pack yet for: ${p.unpacked.join(', ')}. The research writes one for docs/queue/review-packs/, with examples that test it.`;
   return null;
+}
+
+/** Two detail lines as one (either may be null). */
+const joinDetail = (a, b) => (a && b ? `${a} ${b}` : (a ?? b ?? null));
+
+/** Why a card was lifted: the gate guards of the kinds in its lift_when that CI does not run. */
+function liftLine(x, facts) {
+  const ids = new Set();
+  for (const c of conditionsOf(x.liftWhen)) {
+    const [name, arg] = c.split(':');
+    if (name !== 'guard-not-in-ci' || !arg) continue;
+    for (const k of arg.split('|')) if (!placesOf(facts, k).has('ci')) for (const id of guardsOfKind(facts, k)) ids.add(id);
+  }
+  const list = [...ids].slice(0, 5).join(', ');
+  return list ? `A gate guard runs this on merge but CI does not: ${list}. A push around the queue skips it.` : null;
 }
 
 /** The line the cards that count something add (flaky runs, unpinned actions). Null when there is nothing to say. */
@@ -197,6 +229,9 @@ const KIND_CONDITIONS = {
   'not-in-ci': (f, arg) => anyKind(arg, (k) => placesOf(f, k).size > 0 && !placesOf(f, k).has('ci')),
   // None of the kinds runs in CI (found elsewhere or not at all): `none-in-ci:migrate`.
   'none-in-ci': (f, arg) => !anyKind(arg, (k) => placesOf(f, k).has('ci')),
+  // A gate guard's command is one of the kinds (facts.guardKinds, lib/quickGate.js guardKinds) and CI does not run that
+  // kind: `guard-not-in-ci:test`. Unknown facts (the setting learning.ciParityLift off): never.
+  'guard-not-in-ci': (f, arg) => anyKind(arg, (k) => guardsOfKind(f, k).length > 0 && !placesOf(f, k).has('ci')),
   // An opt-in check that is off (facts.optInOff: the keys, lib/optInChecks.js). Unknown facts: not off.
   off: (f, arg) => anyKind(arg, (k) => (f.optInOff ?? []).includes(k)),
   // The finding log per class: `ledger-due:migration-schema|access-control` (a proposal is due for one of them),
@@ -212,6 +247,9 @@ const KIND_CONDITIONS = {
   // The engine of the local database found: `local-db:postgres|mysql` (lib/checksScan.js localDatabase.engines).
   'local-db': (f, arg) => anyKind(arg, (k) => isPlainObject(f.localDatabase) && Array.isArray(f.localDatabase.engines) && f.localDatabase.engines.includes(k)),
 };
+
+/** The gate guards whose command is this kind of check (facts.guardKinds). */
+const guardsOfKind = (f, kind) => (isPlainObject(f.guardKinds) && Array.isArray(f.guardKinds[kind]) ? f.guardKinds[kind] : []);
 
 const conditionsOf = (when) => String(when ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 
@@ -266,6 +304,7 @@ function parseTemplate(text, key) {
     setting: head.setting || null,
     importantWhen: head.important_when || '',
     mediumWhen: head.medium_when || '',
+    liftWhen: head.lift_when || '',
     ask: (sections['ask claude'] ?? '').trim(),
     investigate: (sections.investigate ?? '').trim(),
     plan: (sections['plan and build'] ?? '').trim(),
@@ -280,6 +319,7 @@ function parseTemplate(text, key) {
   if (out.action === 'setting' && !out.setting) out.errors.push(`${key}: action setting needs "setting: <key>"`);
   for (const c of conditionsOf(out.importantWhen)) if (!knownCondition(c)) out.errors.push(`${key}: unknown condition "${c}" in important_when`);
   for (const c of conditionsOf(out.mediumWhen)) if (!knownCondition(c)) out.errors.push(`${key}: unknown condition "${c}" in medium_when`);
+  for (const c of conditionsOf(out.liftWhen)) if (!knownCondition(c)) out.errors.push(`${key}: unknown condition "${c}" in lift_when`);
   if (!out.action && (!out.investigate || !out.plan)) out.errors.push(`${key}: needs the sections "## Investigate" and "## Plan and build"`);
   return out;
 }
@@ -579,7 +619,9 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
     .map((x) => (x.applies && x.importantWhen && holds(x.importantWhen, facts) ? { ...x, priority: 'high' } : x))
     // medium_when: something observed raises a low card to medium (never to high, so no red marker).
     .map((x) => (x.applies && x.priority === 'low' && x.mediumWhen && holds(x.mediumWhen, facts) ? { ...x, priority: 'medium' } : x))
-    .sort((a, b) => rank(a) - rank(b) || (order.get(a.category) ?? 99) - (order.get(b.category) ?? 99) || a.key.localeCompare(b.key))
+    // lift_when: first within its own priority while it holds (never a higher priority, so never the red marker).
+    .map((x) => (x.applies && x.liftWhen && holds(x.liftWhen, facts) ? { ...x, lifted: true } : x))
+    .sort((a, b) => rank(a) - rank(b) || Number(!!b.lifted) - Number(!!a.lifted) || (order.get(a.category) ?? 99) - (order.get(b.category) ?? 99) || a.key.localeCompare(b.key))
     .map((x) => ({
       key: x.key,
       title: x.title,
@@ -592,7 +634,8 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
       ask: x.ask,
       investigate: x.investigate,
       plan: x.plan,
-      detail: x.applies ? (detailOf(x.key, facts) ?? countDetail(x.key, facts)) : null,
+      detail: x.applies ? joinDetail(detailOf(x.key, facts) ?? countDetail(x.key, facts), x.lifted ? liftLine(x, facts) : null) : null,
+      ...(x.lifted ? { lifted: true } : {}),
       // false only for a card set aside whose `when` no longer holds (state is then always dismissed).
       applies: x.applies,
       ...suggestionState(x, tasks, dismissed),
@@ -603,6 +646,10 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
     ledgerCard.ledger = ledgerItems(facts, catalog, suggestions);
     ledgerCard.detail = ledgerRecipeLine(ledgerCard.ledger);
   }
+  // The guards whose command is not in gates.quick, on the one card that offers to add them (the command from the
+  // registry, through facts.quickGate; the board posts only the guard id).
+  const quickCard = suggestions.find((s) => s.key === QUICK_GATE_CARD && s.applies);
+  if (quickCard) quickCard.quickGate = facts.quickGate.items;
   return {
     version: REPORT_VERSION,
     scannedAt: now,

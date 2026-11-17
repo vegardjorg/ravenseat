@@ -62,6 +62,7 @@
 //   - CHECKS (board/checks.js): what the project has and prioritized suggestions. GET /api/checks = `queue.mjs checks --json`,
 //     POST /api/checks { action, key } = `queue.mjs checks plan|dismiss|restore|turn-on|packs --apply|on|off` (lib/checksCatalog.js,
 //     and { action: 'build-gate', item: '<class>@<area>' } = `queue.mjs checks build-gate <item>`,
+//     and { action: 'quick-add', item: '<G-n>' } = `queue.mjs checks quick-add <item>` (adds that guard's command to gates.quick),
 //     checks-catalog/). state().checksMarker = the small red dot on the tab: a high suggestion is open and checksPanel.marker
 //     is not off. It is read in the background, at most every two minutes.
 //   - PLANS (see docs/plan-register.md): the Plans workspace (queue-board/plans/). GET /api/plans reads plans.json and
@@ -156,6 +157,7 @@ const R = require('./lib/settingsRegistry.js');
 const SV = require('./lib/settingsView.js');
 // The item key "Build as gate" sends on the Checks tab, checked before it reaches the command line.
 const FINDING_REPEATS = require('./lib/findingRepeats.js');
+const QUICK_GATE = require('./lib/quickGate.js');
 // The decision overview (the flag note for stuck work; the board's Decisions view uses the same file in the browser).
 const DEC = require('./lib/queueDecisions.js');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -2126,13 +2128,20 @@ async function write(filePath, b) {
       if (!item) return no('invalid item');
       return run(['checks', 'build-gate', item], `checks build-gate ${item}`);
     }
+    // The card quick-gate-add: only the guard's id comes from the board (lib/quickGate.js itemId); queue.mjs reads the
+    // command from the registry, can only ADD it to gates.quick, and never runs it.
+    if (b?.action === 'quick-add') {
+      const item = QUICK_GATE.itemId(b.item);
+      if (!item) return no('invalid item');
+      return run(['checks', 'quick-add', item], `checks quick-add ${item}`);
+    }
     const key =typeof b?.key === 'string' && /^[a-z0-9][a-z0-9-]{0,59}$/.test(b.key) ? b.key : null;
     if (!key) return no('invalid suggestion');
     if (b.action === 'plan') return run(['checks', 'plan', key, '--approved'], `checks plan ${key}`);
     if (b.action === 'dismiss' || b.action === 'restore') return run(['checks', b.action, key], `checks ${b.action} ${key}`);
     // An opt-in check's "Turn on" (lib/optInChecks.js): queue.mjs resolves the card's own setting, never one from the body.
     if (b.action === 'setting') return run(['checks', 'turn-on', key], `checks turn-on ${key}`);
-    return no('action must be plan, dismiss, restore, setting, gates, packs, build-gate, on or off');
+    return no('action must be plan, dismiss, restore, setting, gates, packs, build-gate, quick-add, on or off');
   }
   // The "Helper agents" tab: a switch goes through `ravenseat helpers on|off <agent>` (queue.json, under the lock).
   // A custom helper that is not approved for its file as it is now is refused here (and again in queue.mjs).

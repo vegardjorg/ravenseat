@@ -54,6 +54,7 @@ import { a, branchFor, CONFIG, CLI, FILE, FOLDER, FOLLOW_FILE, git, GIT_ROOT, HE
 import { cloudSetupFacts } from './cloud.mjs';
 import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 import { REPO_CHECKS } from './doctorRepo.mjs';
+import { idleGuardLines } from './inspection.mjs';
 import { checkTree } from './catalog.mjs';
 
 const BOARD = require('./lib/queueBoard.js');
@@ -687,6 +688,18 @@ function checkCatalog() {
  * (doctor never writes, so the shape log is left to `ravenseat checks`), never FAIL, nothing with client.canary off or
  * without a transcript.
  */
+/**
+ * A gate guard with 0 runs after learning.idleGuardDays (learning.idleGuardInfo, lib/quickGate.js idle): one INFO row per
+ * guard, nothing while every gate guard has run (or there is none). INFO only: it never stops anything.
+ */
+function checkGuards() {
+  try {
+    return idleGuardLines({ tree: MAIN_TREE }).map((l) => info('guards', l.replace(/^INFO: /, ''), `${CLI} guards`));
+  } catch {
+    return []; // error-ignored: a registry or time log that cannot be read gives no row here (ravenseat guards shows it)
+  }
+}
+
 function checkCanary() {
   const CC = require('./lib/clientCanary.js');
   if (!CC.setupOf(CONFIG).on) return [];
@@ -748,7 +761,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkGuards, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

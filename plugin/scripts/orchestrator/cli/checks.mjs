@@ -20,6 +20,9 @@
 //                                  the finding log, with the project's gate commands, CI files, test runner, the recipe
 //                                  and the places in its mission (lib/findingRepeats.js buildTask). Needs inspection.mode
 //                                  on; never from a track worktree. The board's button runs it.
+//   ravenseat checks quick-add <G-n>    the card quick-gate-add: ADDS that gate guard's command (read from the registry)
+//                                  at the end of gates.quick in queue.config.json. Never removes or replaces a command,
+//                                  never runs it, never from a track worktree (lib/quickGate.js). The board's button runs it.
 //   ravenseat checks recipe <id> show|damp|auto   the owner's choice for one recipe (lib/recipePrecision.js): show
 //                                  offers it although few of its proposals were accepted, damp keeps it off the card,
 //                                  auto lets its numbers decide again (queue.json checksPanel.recipes)
@@ -37,9 +40,9 @@ import { fileURLToPath } from 'node:url';
 
 import { a, CONFIG, CLI, die, edit, FILE, FOLDER, KK, LM, MAIN_TREE, read, require } from './context.mjs';
 import { addTask, ensureProject, PROJECT, readFacts } from './kickstart.mjs';
-import { guardRecord, guardsBoard, ledgerScan } from './inspection.mjs';
+import { ciParityFacts, guardById, guardRecord, guardsBoard, ledgerScan } from './inspection.mjs';
 import { allowlistFacts, broadFacts, gitignoreFacts, lockfileFacts, mcpFacts } from './doctorBaseline.mjs';
-import { trackBranchHere } from './settings.mjs';
+import { guardWeakening, trackBranchHere } from './settings.mjs';
 import { enableShare } from './share.mjs';
 
 const SCAN = require('./lib/checksScan.js');
@@ -50,6 +53,7 @@ const RP = require('./lib/reviewPacks.js');
 const RS = require('./lib/reviewSignals.js');
 const OI = require('./lib/optInChecks.js');
 const RV = require('./lib/repoVisibility.js');
+const QG = require('./lib/quickGate.js');
 
 /** The cached visibility (any age, never a network call here): the share card is offered only in a private repo. */
 const cachedVisibility = () => RV.readCache(FOLDER, { any: true })?.visibility ?? null;
@@ -243,6 +247,8 @@ function makeReport(queue) {
       // Accepted and declined per recipe; a damped recipe is listed, never offered on the card (lib/recipePrecision.js).
       recipePrecision: precision,
       recipeDamped: precision?.damped ?? [],
+      // CI parity for a built gate guard (0i step 9b): the card quick-gate-add and the lift of the CI cards.
+      ...safeCiParity(readFile),
     },
     catalog,
     tasks: queue?.tasks ?? [],
@@ -387,6 +393,9 @@ ${s.ask}
 ${CLI} checks dismiss ${s.key} sets it aside if you do it your own way.`);
   else if (s.action === 'packs') console.log(`${s.detail ?? ''}\n\nThis needs no agent: ${CLI} checks packs shows them, ${CLI} checks packs --apply turns them on.`);
   else if (s.action === 'setting') console.log(`This needs no agent: ${CLI} checks turn-on ${s.key} (sets ${s.setting} on). ${CLI} checks dismiss ${s.key} sets it aside.`);
+  else if (s.action === 'quick-gate') console.log(`${s.detail ?? ''}
+
+This needs no agent: ${CLI} checks quick-add <G-n> adds that guard's command to gates.quick (nothing runs).`);
   else if (s.action) console.log(`This needs no agent: ${CLI} kickstart gates --apply.`);
   else console.log(`Investigate\n${s.investigate}\n\nPlan and build\n${s.plan}\n\nAbout ${s.contentMin} min of agent work for the investigation.`);
 }
@@ -401,6 +410,7 @@ function plan(key) {
 ${s.ask}`);
   if (s.action === 'packs') die(`${key} needs no agent. Run: ${CLI} checks packs --apply`);
   if (s.action === 'setting') die(`${key} needs no agent. Run: ${CLI} checks turn-on ${key}`);
+  if (s.action === 'quick-gate') die(`${key} needs no agent. Run: ${CLI} checks quick-add <G-n> (${CLI} checks show ${key} lists the guards)`);
   if (s.action) die(`${key} needs no agent. Run: ${CLI} kickstart gates --apply`);
   if (s.state === 'queued' || s.state === 'planned') {
     console.log(`Not added: ${s.taskId} is already there.`);
@@ -532,6 +542,52 @@ function turnOn(key) {
   console.log(`${c.key} = on (queue.config.json). The card is done. Off again: ${CLI} settings set ${c.key} off.`);
 }
 
+/** The CI parity facts (cli/inspection.mjs ciParityFacts) with the project's package.json scripts; an error: none. */
+function safeCiParity(readFile) {
+  try {
+    const pkg = JSON.parse(readFile('package.json') ?? '{}');
+    const scripts = pkg && typeof pkg.scripts === 'object' && !Array.isArray(pkg.scripts) ? pkg.scripts : {};
+    return ciParityFacts({ scripts });
+  } catch {
+    // error-ignored: no card and no lift, the rest of the Checks tab is shown
+    return {};
+  }
+}
+
+/**
+ * `checks quick-add <G-n>`: the card "Run a built gate guard on every merge" (0i step 9b). The guard's command is read
+ * from the main tree's registry (never taken from the board or the command line) and ADDED at the end of gates.quick
+ * in queue.config.json; the write keeps the rest of the file and can never remove, replace or reorder a command
+ * (lib/quickGate.js addToQuickText). Refused from a track worktree, for a deploy command or a push, and for a guard that
+ * is not an active gate guard with a command. Nothing is run: the next merge runs it as a gate.
+ */
+function quickAdd(raw) {
+  const track = trackBranchHere();
+  if (track) die(`${CLI} checks quick-add cannot be run from inside a track worktree (branch ${track}); ask the owner. Nothing was changed.`);
+  const id = QG.itemId(raw);
+  if (!id) die(`Use: ${CLI} checks quick-add <G-n>   (a gate guard id from ${CLI} guards)`);
+  const { guard, error } = guardById(id);
+  if (!guard) die(`checks quick-add: ${error}. Nothing was changed.`);
+  if (guard.status !== 'active' || guard.kind !== 'gate' || typeof guard.command !== 'string' || !guard.command.trim())
+    die(`checks quick-add: ${id} is not an active gate guard with a command, so there is nothing to add. Nothing was changed.`);
+  const file = KK.configFile();
+  let text = null;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    if (e?.code !== 'ENOENT') die(`checks quick-add: could not read ${file} (${e.message}). Nothing was changed.`);
+  }
+  const r = QG.addToQuickText(text, guard.command, { deployCommands: CONFIG.deployCommands ?? [] });
+  if (r.error) die(`checks quick-add: ${r.error}. Nothing was changed.`);
+  if (!r.changed) return console.log(`"${guard.command.trim()}" is already in gates.quick. Nothing was changed.`);
+  // The one weakening rule every config write goes through (cli/settings.mjs). Adding a gate never weakens one, so this
+  // passes; it is here so a future rule on gates.quick applies to this write too.
+  guardWeakening('gates.quick', r.list, { confirmWith: `${CLI} checks quick-add ${id}` });
+  fs.writeFileSync(file, r.text);
+  console.log(`${id}: "${guard.command.trim()}" added at the end of gates.quick (queue.config.json). Nothing was run; the next merge runs it as a gate. Commit queue.config.json.`);
+  return undefined;
+}
+
 /** The test runner for the mission: the first test command the scan found (a gate first), else the one the files suggest. */
 function testRunnerOf(found) {
   const kind = (found?.kinds ?? []).find((k) => k.key === 'test');
@@ -645,6 +701,7 @@ export function cmdChecks() {
   if (sub === 'packs') return packs();
   if (sub === 'turn-on') return turnOn(a[2]);
   if (sub === 'build-gate') return buildGate(a[2]);
+  if (sub === 'quick-add') return quickAdd(a[2]);
   if (sub === 'recipe') return setRecipe(a[2], a[3]);
   if (sub === 'marker') {
     if (a[2] !== 'on' && a[2] !== 'off') return die(`Use: ${CLI} checks marker on|off`);
@@ -659,7 +716,7 @@ export function cmdChecks() {
     console.log(sub === 'dismiss' ? `${a[2]} is set aside. ${CLI} checks restore ${a[2]} brings it back.` : back);
     return undefined;
   }
-  if (sub && sub !== '--json') return die(`Use: ${CLI} checks [--json] | show <key> | plan <key> [--approved] | dismiss <key> | restore <key> | packs [--apply] | turn-on <key> | build-gate <class>@<area> | recipe <id> show|damp|auto | marker on|off | on | off`);
+  if (sub && sub !== '--json') return die(`Use: ${CLI} checks [--json] | show <key> | plan <key> [--approved] | dismiss <key> | restore <key> | packs [--apply] | turn-on <key> | build-gate <class>@<area> | quick-add <G-n> | recipe <id> show|damp|auto | marker on|off | on | off`);
   const queue = queueNow();
   if (queue && !GD.checksPanelOn(queue)) {
     if (a.includes('--json')) console.log(JSON.stringify({ off: true }));

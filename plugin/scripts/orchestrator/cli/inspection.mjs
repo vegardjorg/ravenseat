@@ -9,6 +9,8 @@
 //                                                 and cancels its proposal
 //   ravenseat guards [--json]                     the guard registry (lib/guardRegistry.js) with the measures from the
 //                                                 gate rows
+//                                                 and an INFO line for a gate guard with 0 runs after
+//                                                 learning.idleGuardDays (learning.idleGuardInfo; lib/quickGate.js)
 //   ravenseat guards add [--from-task <id>] --kind gate|instruction|review|none --title "..." --explain "..."
 //        [--command "<gate command>"] [--against "<lesson>"] [--signature <id>] [--task <id>]
 //        [--class <failure class> [--area <path>]]
@@ -37,6 +39,7 @@ const FS = require('./lib/failureSignature.js');
 const QA = require('./lib/queueArchive.js');
 const FR = require('./lib/findingRepeats.js');
 const KBG = require('./lib/knownBugGate.js');
+const QG = require('./lib/quickGate.js');
 
 const STATE_FILE = path.join(FOLDER, 'inspection.json');
 const QUEUE_PATH = path.join(HERE, 'queue.mjs');
@@ -266,6 +269,46 @@ export function guardsBoard() {
   };
 }
 
+// ---- CI parity for a built gate guard (0i step 9b, lib/quickGate.js) ----
+
+/**
+ * The Checks tab's facts for CI parity: the card "add to gates.quick" (facts.quickGate, with learning.quickGateCard on)
+ * and the kinds the active gate guards' commands are (facts.guardKinds, with learning.ciParityLift on). Read from the
+ * main tree's registry; nothing runs. Off, or a broken registry: no facts, so no card and no lift.
+ * @param {{ scripts?: Record<string, string> }} [opts] the project's package.json scripts (`npm run check` -> what it runs)
+ */
+export function ciParityFacts({ scripts = {} } = {}) {
+  const s = FR.setupOf(CONFIG);
+  const { registry, error } = readRegistry(MAIN_TREE);
+  if (error) return {};
+  return {
+    ...(s.quickGateCard ? { quickGate: { items: QG.items({ registry, gates: CONFIG.gates ?? {}, deployCommands: CONFIG.deployCommands ?? [] }) } } : {}),
+    ...(s.ciParityLift ? { guardKinds: QG.guardKinds(registry, { scripts }) } : {}),
+  };
+}
+
+/** One guard of the main tree's registry by id, or the reason there is none (a broken file is a reason). */
+export function guardById(id) {
+  const { file, registry, error } = readRegistry(MAIN_TREE);
+  if (error) return { guard: null, error: `${path.relative(MAIN_TREE, file).replace(/\\/g, '/')}: ${error}` };
+  const guard = registry.guards.find((g) => g?.id === id) ?? null;
+  return { guard, error: guard ? null : `no guard ${id} in ${path.relative(MAIN_TREE, file).replace(/\\/g, '/')}` };
+}
+
+/**
+ * The INFO lines for gate guards with 0 runs after learning.idleGuardDays (learning.idleGuardInfo on): ravenseat guards
+ * and ravenseat doctor. INFO only, never a stop. `rows` can be passed when they are already read.
+ * @param {{ tree?: string, rows?: object[], now?: number }} [opts]
+ */
+export function idleGuardLines({ tree = ROOT, rows = null, now = Date.now() } = {}) {
+  const s = FR.setupOf(CONFIG);
+  if (!s.idleGuardInfo) return [];
+  const { registry, error } = readRegistry(tree);
+  if (error || !registry.guards.some((g) => g?.kind === 'gate' && g?.command)) return [];
+  const list = QG.idle(registry, rows ?? timeRows(null), { now, days: s.idleGuardDays });
+  return QG.idleLines(list, { cli: CLI, quick: CONFIG.gates?.quick ?? [] });
+}
+
 function cmdSnooze() {
   const ref = a[2];
   if (!ref || ref.startsWith('--')) die(`inspection snooze <id> [--days ${I.SNOOZE_DAYS}]   (the proposal task or the signature id)`);
@@ -371,4 +414,6 @@ export function cmdGuards() {
   }
   if (error) console.log(`${rel}: ${error}`);
   for (const l of GR.lines(registry, rows, { cli: CLI, file: rel })) console.log(l);
+  // A gate guard that no gate has run since it was built (learning.idleGuardInfo): INFO, never a stop.
+  for (const l of idleGuardLines({ tree: ROOT, rows })) console.log(l);
 }

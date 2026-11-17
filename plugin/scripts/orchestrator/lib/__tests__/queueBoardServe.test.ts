@@ -380,4 +380,21 @@ describe('the board server: Build as gate on the Checks tab (0i step 7)', () => 
     expect(r.body.message).toMatch(/not due/i);
     expect(tasks().filter((t) => t.id.startsWith('GATE-'))).toEqual([]);
   }, 60_000);
+
+  // "Add to gates.quick" on the card quick-gate-add (0i step 9b): only a guard id passes, never a command.
+  const configFile = () => path.join(root, 'no-config.json'); // the server's QUEUE_CONFIG (as in the settings block)
+  it('quick-add refuses anything but a guard id before anything runs, needs the key, and passes a valid one to checks quick-add', async () => {
+    const saved = fs.existsSync(configFile()) ? fs.readFileSync(configFile(), 'utf8') : null;
+    for (const item of [undefined, '', '--json', 'G-1\nG-2', 'npm run lint', 'g-1']) {
+      const r = await post({ action: 'quick-add', item });
+      expect(r.status, String(item)).toBe(400);
+      expect(r.body.message).toBe('invalid item');
+    }
+    expect((await post({ action: 'quick-add', item: 'G-1' }, false)).status).toBe(401);
+    // Valid, but this project has no guard G-1: the command refuses it, and the config is not changed.
+    const r = await post({ action: 'quick-add', item: 'G-1' });
+    expect(r.status).toBe(409);
+    expect(r.body.message).toMatch(/no guard G-1/);
+    expect(fs.existsSync(configFile()) ? fs.readFileSync(configFile(), 'utf8') : null).toBe(saved);
+  }, 60_000);
 });

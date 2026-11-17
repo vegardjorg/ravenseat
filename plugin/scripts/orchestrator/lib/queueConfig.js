@@ -126,6 +126,10 @@ const STANDARD = Object.freeze({
   // dbProbes: the database probe recipes on the Checks tab (only with a local database found). Off by default.
   // recipeDamping: a recipe seldom accepted (below recipeMinAccepted percent after recipeMinProposals decided proposals,
   // recipeMinProposalsDb for a database recipe) is listed but no longer offered (lib/recipePrecision.js). On by default.
+  // quickGateCard, ciParityLift, idleGuardInfo, idleGuardDays: CI parity for a built gate guard (lib/quickGate.js, 0i step
+  // 9b). The card offers to add a guard's command to gates.quick (the write takes the owner's click and only adds), the
+  // lift puts the CI cards first when a guard's kind is not run in CI, and the INFO line names a gate guard with 0 runs
+  // after idleGuardDays. All on: none of them stops work or runs a command.
   learning: {
     repeats: true,
     windowDays: 90,
@@ -138,6 +142,10 @@ const STANDARD = Object.freeze({
     recipeMinProposals: 5,
     recipeMinProposalsDb: 10,
     recipeMinAccepted: 30,
+    quickGateCard: true,
+    ciParityLift: true,
+    idleGuardInfo: true,
+    idleGuardDays: 7,
   },
   // The batch push threshold (lib/pushBatch.js; `ravenseat push-check`, the push guard, the board). Every push of baseBranch
   // runs the whole CI, so pushes come in batches of MERGED TASKS (merges through ravenseat merge not yet on <remote>).

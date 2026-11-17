@@ -136,6 +136,8 @@ async function copyChecksAsk(s) {
 
 function checksButton(s) {
   const busy = t.checks.busy === s.key;
+  // The card quick-gate-add has one button per guard, on its list (checksQuickGateList), not one for the card.
+  if (s.action === 'quick-gate') return null;
   if (s.action === 'ask')
     return el('button', {
       type: 'button',
@@ -238,6 +240,33 @@ function checksLedgerList(ledger) {
   return el('ul', { class: 'checks-places' }, ...items, ...tail);
 }
 
+/**
+ * The gate guards whose command is not in gates.quick, on the card quick-gate-add (lib/quickGate.js items, 0i step 9b):
+ * one line each with the exact command, and a button that posts { action: 'quick-add', item: <guard id> }. Only the id
+ * is sent; `ravenseat checks quick-add` reads the command from the registry, can only add it, and never runs it.
+ */
+function checksQuickGateList(items) {
+  const busy = t.checks.busy === 'quick-add';
+  const lines = items.map((i) =>
+    el(
+      'li',
+      {},
+      el('span', { class: 'checks-where', text: `${i.guard} ${i.title}:` }),
+      el('code', { text: i.command }),
+      el('span', { text: i.inFull ? ' (in gates.full only)' : '' }),
+      el('button', {
+        type: 'button',
+        class: 'button button-outline',
+        text: busy ? 'Saving …' : 'Add to gates.quick',
+        disabled: busy,
+        title: `Adds "${i.command}" at the end of gates.quick in queue.config.json. Nothing runs now, and no command is removed. Commit the file afterwards.`,
+        onclick: () => checksWrite({ action: 'quick-add', item: i.guard }, 'Added to gates.quick'),
+      }),
+    ),
+  );
+  return el('ul', { class: 'checks-places' }, ...lines);
+}
+
 function checksSuggestionCard(s, categories) {
   const details = el(
     'details',
@@ -266,7 +295,7 @@ function checksSuggestionCard(s, categories) {
     ),
     el('h4', { class: 'checks-card-title', text: s.title }),
     el('p', { class: 'checks-text', text: s.why }),
-    s.ledger?.items?.length ? checksLedgerList(s.ledger) : s.detail ? el('p', { class: 'checks-source', text: s.detail }) : null,
+    s.quickGate?.length ? checksQuickGateList(s.quickGate) : s.ledger?.items?.length ? checksLedgerList(s.ledger) : s.detail ? el('p', { class: 'checks-source', text: s.detail }) : null,
     s.action === 'ask'
       ? el(
           'div',

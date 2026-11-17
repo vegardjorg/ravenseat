@@ -5,6 +5,20 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: a gate guard that no merge runs is now seen, and its command can be added to the merge gate in one
+  click without weakening anything.** A gate guard in the registry whose command is not in `gates.quick` gets the card
+  "Run a built gate guard on every merge" on the Checks tab, with an **Add to gates.quick** button per guard and
+  `ravenseat checks quick-add <G-n>` in the terminal. Edge cases covered: the command is read from the registry, never
+  from the board (the board sends only the guard id, checked before anything runs); the write only adds the command at
+  the end of `gates.quick` and keeps the rest of `queue.config.json` as written, so it can never remove, replace or
+  reorder a command; a `gates.quick` that is not a list of commands, a deploy command (`deployCommands`), a push, a
+  command of more than one line, a retired or unknown guard and a run from a track worktree are refused with the file
+  unchanged; nothing is run. When a gate guard runs tests, a type check or lint that CI does not run, "Run your tests
+  in CI" or "Run lint and type check in CI" is put first in its priority and names the guard (new card field
+  `lift_when`, condition `guard-not-in-ci:<kinds>`), never raised to the red dot. `ravenseat guards` and
+  `ravenseat doctor` give one INFO line for a gate guard with 0 runs 7 days after it was built. Settings, all on since
+  none of them stops work or runs a command: `learning.quickGateCard`, `learning.ciParityLift`,
+  `learning.idleGuardInfo` and `learning.idleGuardDays` (7).
 - **Hardening: a guard can now name the failure class and area it guards against, so a class that comes back past
   it is seen.** `ravenseat guards add` takes `--class <failure class>` and `--area <path>` (`--area '*'` or none is the
   whole project), and the repeat count reads them as the guard for that class and area ("guard failed" after it). The

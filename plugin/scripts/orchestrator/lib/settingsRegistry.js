@@ -396,6 +396,36 @@ const SETTINGS = Object.freeze([
     'The same for a database probe recipe. Higher, since they are few and often declined for their cost.'),
   row('learning.recipeMinAccepted', 'gates', 'integer', 'Accepted share that keeps a recipe (percent)',
     'A recipe below this share of accepted proposals, after enough are decided, is damped. 1 to 100.'),
+  // CI parity for a built gate guard (0i step 9b, lib/quickGate.js). All on: the card only offers, and its write takes
+  // the owner's click, only ADDS a command to gates.quick and is refused from a track worktree; the lift only orders the
+  // CI cards (never the red marker, section 3.9); the idle line is INFO. None of them stops work or runs a command.
+  row('learning.quickGateCard', 'gates', 'onoff', 'Offer to add a guard\'s command to gates.quick',
+    'A gate guard in the registry whose command is not in gates.quick gets a card on the Checks tab: one click (or ' +
+    'ravenseat checks quick-add <G-n>) adds that command at the end of gates.quick. Nothing runs from the card, and the ' +
+    'write can only add a command, never remove or replace one.', {
+      weakens: offWeakens,
+      protects: 'A guard that was built but never runs on a merge, so it guards nothing.',
+      whyNot: 'It only shows a card; the write waits for your click and cannot weaken the gates.',
+      changes: 'The card is gone; a guard\'s command still goes into gates.quick by hand or with checks quick-add.',
+    }),
+  row('learning.ciParityLift', 'gates', 'onoff', 'Put the CI cards first when a guard is not in CI',
+    'When a gate guard\'s kind of check (tests, types, lint) is not run in CI, the cards tests-in-ci and quality-in-ci ' +
+    'are put first in their priority and name the guard. They are never raised to the red marker.', {
+      weakens: offWeakens,
+      protects: 'A guard that holds on merge but is skipped when someone pushes around the queue.',
+      whyNot: 'It only orders cards and adds one line to them.',
+      changes: 'The CI cards keep their usual order and do not name the guard.',
+    }),
+  row('learning.idleGuardInfo', 'gates', 'onoff', 'INFO for a gate guard that has not run',
+    'ravenseat guards and ravenseat doctor give one INFO line for a gate guard with 0 runs since it was built, after ' +
+    'the set number of days. It is INFO only and never stops anything.', {
+      weakens: offWeakens,
+      protects: 'A guard in the registry that no gate runs, which reads as protection that is not there.',
+      whyNot: 'It is one INFO line, and only for a guard that has not run at all.',
+      changes: 'No line; the registry still shows 0 runs for the guard.',
+    }),
+  row('learning.idleGuardDays', 'gates', 'integer', 'Days before a gate guard counts as not run',
+    'How many days after it was built a gate guard with 0 runs gets the INFO line. 7 by default, as the plan says.'),
   row('testWeakening.enabled', 'gates', 'onoff', 'Test weakening warning',
     'Receive warns about deleted or moved test files and added skip or focus markers.', {
       weakens: offWeakens,

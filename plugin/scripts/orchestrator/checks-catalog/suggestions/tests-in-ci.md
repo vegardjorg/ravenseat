@@ -3,6 +3,7 @@ title: Run your tests in CI
 category: ci
 priority: high
 when: has-ci, not-in-ci:test
+lift_when: guard-not-in-ci:test
 content_min: 30
 why: You have tests and you have CI, but ravenseat cannot see that CI runs the tests. A push can then be green with broken behavior.
 ---

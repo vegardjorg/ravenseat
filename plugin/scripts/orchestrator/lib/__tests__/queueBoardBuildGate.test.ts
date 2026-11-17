@@ -7,6 +7,8 @@
 //   - A due class and area with nothing proposed yet (proposal state add) has the button; a click posts
 //     { action: 'build-gate', item: '<class>@<area>' } to /api/checks, the same keyed write as the other buttons.
 //   - The cap full (state full) shows that it waits, with no button; an open proposal (extend) names its task.
+//   - The card quick-gate-add (0i step 9b) lists each guard's exact command with an "Add to gates.quick" button that posts
+//     { action: 'quick-add', item: <guard id> } (never the command), and the card has no button of its own.
 // The whole board runs in jsdom with a small synthetic queue and report (no real data).
 // =============================================================
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -102,6 +104,20 @@ const report = {
         capFull: false,
       },
     },
+    {
+      key: 'quick-gate-add',
+      title: 'Run a built gate guard on every merge',
+      category: 'tests',
+      priority: 'medium',
+      why: 'Its command is not in gates.quick.',
+      contentMin: 5,
+      action: 'quick-gate',
+      applies: true,
+      state: 'open',
+      taskId: null,
+      detail: 'Not in gates.quick: G-1.',
+      quickGate: [{ guard: 'G-1', title: 'Lint for unchecked results', command: 'npm run lint:api', task: 'GATE-1', inFull: false }],
+    },
   ],
 };
 
@@ -172,5 +188,26 @@ describe('recipe precision on the Checks tab (0i step 9)', () => {
     const card = [...document.querySelectorAll('.checks-places')].find((u) => !u.classList.contains('checks-precision'))?.textContent ?? '';
     expect(card).toContain('Damped recipe, listed under Recipe precision and not offered here: contract-drift-type-check.');
     expect(card).not.toMatch(/Contract drift[^.]*No recipe yet/);
+  });
+});
+
+describe('the card "Run a built gate guard on every merge" (0i step 9b)', () => {
+  const card = () => [...document.querySelectorAll('.checks-suggestion')].find((c) => c.textContent?.includes('Run a built gate guard')) as HTMLElement;
+
+  it('shows the exact command and posts only the guard id', async () => {
+    expect(card().textContent).toContain('npm run lint:api');
+    const add = [...card().querySelectorAll<HTMLButtonElement>('button')].filter((b) => b.textContent === 'Add to gates.quick');
+    expect(add).toHaveLength(1);
+    expect(add[0].title).toContain('Nothing runs now');
+    add[0].click();
+    await flush();
+    expect(posts).toContainEqual({ file: '/api/checks', body: { action: 'quick-add', item: 'G-1' } });
+    expect(JSON.stringify(posts)).not.toContain('npm run lint:api');
+  });
+
+  it('has no card-wide button (no investigation, no turn on)', () => {
+    const texts = [...card().querySelectorAll('button')].map((b) => b.textContent);
+    expect(texts).not.toContain('Add investigation to queue');
+    expect(texts).not.toContain('Turn on');
   });
 });

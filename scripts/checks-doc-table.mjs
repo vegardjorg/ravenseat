@@ -73,6 +73,7 @@ export const PHRASES = {
   'inspection-on': 'the inspection queue is on (`inspection.mode`)',
   'not-lite': 'the project is not in lite mode',
   'client-format-changed': 'the newest Claude Code transcript has rows Ravenseat reads differently than expected (the format canary, `client.canary`)',
+  'guard-not-in-quick': 'a gate guard in the registry has a command that is not in `gates.quick` (`learning.quickGateCard`)',
 };
 
 /**
@@ -92,9 +93,10 @@ export const KIND_PHRASES = {
   'ledger-recent': (any) => `the finding log shows ${any} 3 times in one area within 30 days (never in lite mode)`,
   stack: (any) => `the project's stack is ${any} (a word of a stack found, such as typescript in Node/TypeScript, or a stack pack found)`,
   'local-db': (any) => `the local database found runs ${any}`,
+  'guard-not-in-ci': (any, each) => orJoin(each.map((k) => `a gate guard runs ${k} but CI does not`), ', '),
 };
 /** What each argument names: kinds of check, settings, or failure classes. */
-const ARG_KIND = { missing: 'kind', found: 'kind', 'not-in-ci': 'kind', 'none-in-ci': 'kind', off: 'setting' };
+const ARG_KIND = { missing: 'kind', found: 'kind', 'not-in-ci': 'kind', 'none-in-ci': 'kind', 'guard-not-in-ci': 'kind', off: 'setting' };
 const KIND_TITLE = Object.fromEntries(SCAN.KINDS.map((k) => [k.key, k.title.toLowerCase()]));
 
 /** The button on the tab for each `action`, and the command it runs. */
@@ -104,6 +106,7 @@ const BUTTONS = {
   packs: () => 'Turn on (`checks packs --apply`)',
   setting: (key) => `Turn on (\`checks turn-on ${key}\`)`,
   ask: () => 'Copy the text for Claude (no agent)',
+  'quick-gate': () => 'Add to gates.quick, one per guard (`checks quick-add <G-n>`; nothing runs)',
 };
 const PRIORITY = { high: 'High', medium: 'Medium', low: 'Low' };
 
@@ -157,6 +160,7 @@ function priorityCell(c) {
   const out = [PRIORITY[c.priority] ?? c.priority];
   if (c.importantWhen) out.push(`high (red dot) while ${whenWords(c.importantWhen)}`);
   if (c.mediumWhen && c.priority === 'low') out.push(`medium while ${whenWords(c.mediumWhen)}`);
+  if (c.liftWhen) out.push(`first in its priority while ${whenWords(c.liftWhen)} (learning.ciParityLift)`);
   return out.join('; ');
 }
 
