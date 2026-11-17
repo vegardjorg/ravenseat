@@ -7,12 +7,12 @@
 // or a closed laptop would), the user then commits something unrelated on main and edits a file, and `merge --resume`
 // finishes the task. A finished task once, merged once, the user's commit kept, the user's edit untouched, no orphan lock.
 // =============================================================
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { expectUserThingsIntact, snapshot, userMess } from './lab';
-import { FIXTURE_CAP_MS, ownTree, project, SCRIPTS, tmp } from './project';
+import { endCrashedFixtures, FIXTURE_CAP_MS, ownTree, project, SCRIPTS, tmp } from './project';
 
 /**
  * A gate that, while the hold file exists, says it has started and then waits for ever; otherwise green. With `afterMerge`
@@ -91,6 +91,8 @@ function userWorksOn(p: ReturnType<typeof project>) {
 }
 
 describe('RT-07: interrupted in the middle, the user works on, and the queue finishes it', () => {
+  // The merge is killed without warning on purpose; its gates may outlive it on POSIX (see endCrashedFixtures).
+  afterEach(() => endCrashedFixtures('rt07-gate-'));
   it('killed in the gates after the merge: --resume marks done once and keeps the user\'s commit and edits', async () => {
     const { p, scratch } = await killedMerge(true);
     // The merge itself had happened before the kill.
