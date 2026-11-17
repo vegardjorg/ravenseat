@@ -234,12 +234,25 @@ describe('the database and project cards (spor 3)', () => {
     C.buildReport({ facts: { git: true, ...facts }, catalog: C.loadCatalog({ builtin: BUILTIN, own: path.join(BUILTIN, 'none') }), now: 'x' });
   const card = (r: { suggestions: { key: string }[] }, key: string) => r.suggestions.find((s) => s.key === key);
 
-  it('the probes card is medium with a database, and high when migrations are set up and no probe was found', () => {
+  it('the probes card is medium with a database and no probe found, and goes once a probe check is found anywhere', () => {
     expect(card(report({}), 'db-rules-probes')).toBeUndefined();
     expect(card(report({ hasDatabase: true }), 'db-rules-probes')).toMatchObject({ priority: 'medium', category: 'database' });
     // Medium also with migrations and no probe: a gap worth a look, not the red marker.
     expect(card(report({ hasDatabase: true, hasMigrations: true }), 'db-rules-probes')).toMatchObject({ priority: 'medium' });
-    expect(card(report({ hasDatabase: true, hasMigrations: true, kinds: kinds(['db', 'script']) }), 'db-rules-probes')).toMatchObject({ priority: 'medium' });
+    // A probe check in a script, a gate, CI or a probe folder: the card has nothing left to suggest.
+    for (const where of ['script', 'gate', 'ci', 'config'])
+      expect(card(report({ hasDatabase: true, hasMigrations: true, kinds: kinds(['db', where]) }), 'db-rules-probes'), where).toBeUndefined();
+    // The same through the scan: a probe folder in the usual place counts, read from the files only.
+    const files = ['supabase/config.toml', 'supabase/migrations/001.sql', 'supabase/tests/rls.sql'];
+    const scanned = (list: string[]) =>
+      require('../checksScan.js').scan({
+        exists: (f: string) => list.includes(f),
+        read: () => null,
+        list: (d: string) => list.filter((f) => f.startsWith(`${d}/`)).map((f) => f.slice(d.length + 1)),
+      });
+    expect(scanned(files).hasDatabase).toBe(true);
+    expect(card(report(scanned(files)), 'db-rules-probes')).toBeUndefined();
+    expect(card(report(scanned(files.slice(0, 2))), 'db-rules-probes')).toMatchObject({ priority: 'medium' });
     const probes = card(report({ hasDatabase: true }), 'db-rules-probes') as { plan: string };
     expect(probes.plan).toMatch(/rolled back/);
     expect(probes.plan).toMatch(/gate queue/);
@@ -355,6 +368,9 @@ describe('the finding log cards (step 7 of the finding format)', () => {
     const quiet = report({ ledger: { due: [], guardFailed: [failed], marker: false, recent: {} } });
     expect(card(quiet, 'guard-failed')).toMatchObject({ priority: 'medium' });
     expect(quiet.important).toBe(base);
+    // The card's own words say the same: the marker by default, off with the setting (never "always").
+    expect(card(quiet, 'guard-failed')?.why).toMatch(/by default.*learning\.guardFailedMarker off/);
+    expect(card(quiet, 'guard-failed')?.why).not.toMatch(/always/);
   });
 
   it('a class that keeps coming back offers the proposals as a setting card while they are off, never red', () => {
@@ -401,6 +417,24 @@ describe('buildReport', () => {
     expect(state([{ id: 'KS-PLAN-HIGH-TWO', status: 'cancelled' }])['high-two']).toBe('open');
     expect(state([{ id: 'KS-CI', status: 'proposed' }])['high-one']).toBe('queued');
     expect(state([], ['low-one'])['low-one']).toBe('dismissed');
+  });
+  it('keeps a card set aside in the report when its condition no longer holds, so it can be brought back, never counted', () => {
+    const gone = C.parseTemplate(file('title: Gone\ncategory: one\npriority: high\nwhen: has-ci\nimportant_when: has-ci\nwhy: W'), 'gone');
+    const cat = { ...catalog, templates: [...catalog.templates, gone] };
+    // Not set aside and not applying: not in the report, as before.
+    expect(C.buildReport({ facts: {}, catalog: cat, now: 'x' }).suggestions.map((s: { key: string }) => s.key)).not.toContain('gone');
+    // Set aside and not applying: listed as set aside, marked as not applying now, and not important.
+    const r = C.buildReport({ facts: {}, catalog: cat, dismissed: ['gone', 'low-one'], now: 'x' });
+    const g = r.suggestions.find((s: { key: string }) => s.key === 'gone');
+    expect(g).toMatchObject({ state: 'dismissed', applies: false, title: 'Gone' });
+    expect(r.suggestions.find((s: { key: string }) => s.key === 'low-one')).toMatchObject({ state: 'dismissed', applies: true });
+    expect(r.important).toBe(C.buildReport({ facts: {}, catalog, dismissed: ['low-one'], now: 'x' }).important);
+    // A card that applies again is the usual set-aside card.
+    expect(C.buildReport({ facts: { ci: [{}] }, catalog: cat, dismissed: ['gone'], now: 'x' }).suggestions.find((s: { key: string }) => s.key === 'gone')).toMatchObject({
+      state: 'dismissed',
+      applies: true,
+      priority: 'high',
+    });
   });
 });
 

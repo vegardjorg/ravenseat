@@ -6,7 +6,7 @@ when: ledger-guard-failed
 important_when: ledger-guard-failed, ledger-marker
 content_min: 15
 action: ask
-why: The finding log shows a failure class back in a part of the code where a guard for it was already in place: a gate, a review point, or a fix with a test that failed without it. A guard that does not catch its own class is worse than none, because everyone trusts it. This is the one gap that always gets the red marker. It goes out when a new guard is in place there, or a fix of it comes with a test that fails without the fix. learning.guardFailedMarker off keeps the card without the marker.
+why: The finding log shows a failure class back in a part of the code where a guard for it was already in place: a gate, a review point, or a fix with a test that failed without it. A guard that does not catch its own class is worse than none, because everyone trusts it. So the card is high and lights the red marker by default, and learning.guardFailedMarker off keeps it at medium without the marker. It goes away when a new guard is in place there, or a fix of it comes with a test that fails without the fix.
 ---
 
 ## Ask Claude

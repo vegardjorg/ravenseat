@@ -5,6 +5,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: three edge cases on the Checks tab.** A card you set aside whose condition later stops holding stayed
+  out of sight, so it could not be brought back; it is now listed under "Set aside" as "does not apply now", with the
+  same "Bring back" (also `ravenseat checks restore <key>`), and it never counts for the red dot or the summary. The
+  report gives every card `applies` (false only for such a card), so older readers keep working; `checks plan` and
+  `checks turn-on` refuse a card that does not apply. "Test your database rules" now shows only when the project has a
+  database and no database probes were found (`pg_prove`, pgTAP, `supabase test db`, `sqlx test` or a probe folder),
+  read from the files as before. And the text of "A guard did not hold" now says what it does: high with the red dot
+  by default, medium without it when `learning.guardFailedMarker` is off. No new setting.
 - **The Checks tab has its own page, and its card table cannot go stale.** `plugin/docs/checks.md` explains the tab
   from the top down: what it reads and never runs, the four card states, exactly when the red dot lights, what each
   button runs, set aside and bring back, lite mode, turning it off, your own cards in `docs/queue/checks/`, the

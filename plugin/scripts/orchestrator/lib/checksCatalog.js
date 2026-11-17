@@ -15,7 +15,8 @@
 // such as the first commit: an agent's worktree is made from a commit. `action: setting` (with `setting: <key>`) turns an
 // opt-in check on (lib/optInChecks.js, `ravenseat checks turn-on <key>`); its `when` is usually `off:<key>`.
 // `important_when` raises the priority to high while its conditions hold, so an important gap lights the red marker
-// until it is fixed or the card is set aside (a card set aside never comes back by itself). `medium_when` raises a low
+// until it is fixed or the card is set aside (a card set aside never comes back by itself, and stays in the report with
+// applies: false when its `when` no longer holds, so it can still be brought back). `medium_when` raises a low
 // card to medium while its conditions hold (something was observed, such as a flaky test), without the red marker.
 //
 //   parseTemplate(text, key)      one file as an object, with errors in words
@@ -305,11 +306,15 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
   const rank = (x) => PRIORITIES.indexOf(x.priority);
   const order = new Map(catalog.categories.map((c, i) => [c.key, i]));
   const suggestions = catalog.templates
-    .filter((x) => holds(x.when, facts))
-    // important_when: an important gap makes the card high while it lasts (an empty one never does).
-    .map((x) => (x.importantWhen && holds(x.importantWhen, facts) ? { ...x, priority: 'high' } : x))
+    // A card applies while its `when` holds. A card set aside stays in the report also when it no longer applies, so
+    // the "Set aside" list can still bring it back (its key would otherwise stay in checksPanel.dismissed for good).
+    .map((x) => ({ ...x, applies: holds(x.when, facts) }))
+    .filter((x) => x.applies || dismissed.includes(x.key))
+    // important_when: an important gap makes the card high while it lasts (an empty one never does). Only for a card
+    // that applies: one that does not apply now keeps its own priority and is never counted (it is set aside anyway).
+    .map((x) => (x.applies && x.importantWhen && holds(x.importantWhen, facts) ? { ...x, priority: 'high' } : x))
     // medium_when: something observed raises a low card to medium (never to high, so no red marker).
-    .map((x) => (x.priority === 'low' && x.mediumWhen && holds(x.mediumWhen, facts) ? { ...x, priority: 'medium' } : x))
+    .map((x) => (x.applies && x.priority === 'low' && x.mediumWhen && holds(x.mediumWhen, facts) ? { ...x, priority: 'medium' } : x))
     .sort((a, b) => rank(a) - rank(b) || (order.get(a.category) ?? 99) - (order.get(b.category) ?? 99) || a.key.localeCompare(b.key))
     .map((x) => ({
       key: x.key,
@@ -323,7 +328,9 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
       ask: x.ask,
       investigate: x.investigate,
       plan: x.plan,
-      detail: detailOf(x.key, facts) ?? countDetail(x.key, facts),
+      detail: x.applies ? (detailOf(x.key, facts) ?? countDetail(x.key, facts)) : null,
+      // false only for a card set aside whose `when` no longer holds (state is then always dismissed).
+      applies: x.applies,
       ...suggestionState(x, tasks, dismissed),
     }));
   return {
@@ -336,8 +343,9 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
     categories: catalog.categories.map(({ key, title, text }) => ({ key, title, text: text ?? '' })),
     packs: facts.packs ?? null,
     suggestions,
-    // Open suggestions with high priority: the red marker on the Checks tab (checksPanel.marker).
-    important: suggestions.filter((x) => x.state === 'open' && x.priority === 'high').length,
+    // Open suggestions with high priority: the red marker on the Checks tab (checksPanel.marker). A card that does not
+    // apply is always set aside, so it never counts here.
+    important: suggestions.filter((x) => x.applies && x.state === 'open' && x.priority === 'high').length,
     knownBugs,
     catalogErrors: catalog.errors,
   };

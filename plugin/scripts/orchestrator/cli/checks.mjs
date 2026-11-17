@@ -297,9 +297,17 @@ function suggestion(report, key) {
   return s;
 }
 
+/** The suggestion, for a step that acts on it (plan, turn-on): one set aside that no longer applies is refused. */
+function applying(report, key) {
+  const s = suggestion(report, key);
+  if (s.applies === false) die(`${key} is set aside and does not apply to this project now, so nothing was added or changed. ${CLI} checks restore ${key} brings it back for when it applies.`);
+  return s;
+}
+
 function show(key) {
   const s = suggestion(makeReport(queueNow()), key);
   console.log(`${s.title} (${s.category}, ${s.priority} priority)\n\nWhy: ${s.why}\n`);
+  if (s.applies === false) console.log(`Set aside, and it does not apply to this project now. ${CLI} checks restore ${s.key} brings it back for when it does.\n`);
   if (s.action === 'ask') console.log(`This needs no agent. Ask Claude in your session:
 
 ${s.ask}
@@ -315,7 +323,7 @@ function plan(key) {
   needsQueue();
   const queue = read();
   const report = makeReport(queue);
-  const s = suggestion(report, key);
+  const s = applying(report, key);
   if (s.action === 'ask') die(`${key} needs no agent, and a queue agent cannot do it. Ask Claude in your session:
 
 ${s.ask}`);
@@ -423,7 +431,7 @@ function packs() {
 function turnOn(key) {
   const track = trackBranchHere();
   if (track) die(`${CLI} checks turn-on cannot be run from inside a track worktree (branch ${track}); ask the owner. Nothing was changed.`);
-  const s = suggestion(makeReport(queueNow()), key);
+  const s = applying(makeReport(queueNow()), key);
   const c = s.action === 'setting' ? OI.byKey(s.setting) : null;
   if (!c) die(`${key} has no setting to turn on. ${CLI} checks show ${key} says what it needs.`);
   // Sharing is never a plain setting write: the owner's click on the card (offered only in a private repo) is the
@@ -478,9 +486,11 @@ export function cmdChecks() {
   }
   if (sub === 'dismiss' || sub === 'restore') {
     needsQueue();
-    suggestion(makeReport(read()), a[2]);
+    const s = suggestion(makeReport(read()), a[2]);
     setDismissed(a[2], sub === 'dismiss');
-    console.log(sub === 'dismiss' ? `${a[2]} is set aside. ${CLI} checks restore ${a[2]} brings it back.` : `${a[2]} is back among the suggestions.`);
+    // A card set aside that no longer applies is restored too; it shows again once its condition holds.
+    const back = s.applies === false ? `${a[2]} is no longer set aside. It does not apply to this project now, and shows among the suggestions once it does.` : `${a[2]} is back among the suggestions.`;
+    console.log(sub === 'dismiss' ? `${a[2]} is set aside. ${CLI} checks restore ${a[2]} brings it back.` : back);
     return undefined;
   }
   if (sub && sub !== '--json') return die(`Use: ${CLI} checks [--json] | show <key> | plan <key> [--approved] | dismiss <key> | restore <key> | packs [--apply] | turn-on <key> | marker on|off | on | off`);

@@ -362,7 +362,8 @@ function checksInspectionSection(insp) {
  * Nothing when there are none of either.
  */
 function checksSummary(r) {
-  const high = r.suggestions.filter((s) => s.priority === 'high');
+  // A card set aside that does not apply now (applies: false) is not an important gap: only the "Set aside" list has it.
+  const high = r.suggestions.filter((s) => s.priority === 'high' && s.applies !== false);
   const open = high.filter((s) => s.state === 'open');
   const aside = high.filter((s) => s.state === 'dismissed');
   if (!open.length && !aside.length) return null;
@@ -462,6 +463,10 @@ function drawChecks() {
             'li',
             null,
             `${s.title} `,
+            // Its condition no longer holds: brought back, it shows again once it applies.
+            s.applies === false
+              ? el('span', { class: 'checks-source', text: '(does not apply now) ', title: 'Brought back, it shows among the suggestions again once it applies to the project.' })
+              : null,
             el('button', { type: 'button', class: 'link-button', text: 'Bring back', onclick: () => checksWrite({ action: 'restore', key: s.key }, 'Brought back') }),
           ),
         ),

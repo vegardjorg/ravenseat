@@ -23,7 +23,8 @@
 // A repeat always needs two incidents: one untested fix alone is a fix without a test (step 6 warns about it), not a
 // pattern, so it never makes a proposal by itself.
 //
-// GUARD FAILED (0i section 3.6, owner decision 8: always the red marker): an incident of the class in an area, within the
+// GUARD FAILED (0i section 3.6, owner decision 8: the red marker, by default; learning.guardFailedMarker off keeps the
+// card at medium without it): an incident of the class in an area, within the
 // window, after one of these had been in place there:
 //   guard        an active guard for the class (a registry entry with against.class, or a done gate task proposed from
 //                the log for the class and area, guardsFrom), or the row itself names the guard it was seen under;

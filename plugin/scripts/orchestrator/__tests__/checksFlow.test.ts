@@ -169,6 +169,24 @@ describe('ravenseat checks dismiss and restore', () => {
     expect(state()).toBe('open');
   });
 
+  it('a card set aside that no longer applies is still listed and can be brought back, but not planned', () => {
+    const p = project();
+    p.run('checks', 'dismiss', 'first-test');
+    // A test appears: the card's condition no longer holds, and it stays in the report as set aside.
+    p.write('package.json', NODE['package.json']);
+    const card = () => p.json().suggestions.find((x: { key: string }) => x.key === 'first-test');
+    expect(card()).toMatchObject({ state: 'dismissed', applies: false });
+    expect(p.json().important).toBe(p.json().suggestions.filter((s: { applies: boolean; state: string; priority: string }) => s.applies && s.state === 'open' && s.priority === 'high').length);
+    const plan = p.run('checks', 'plan', 'first-test');
+    expect(plan.code).not.toBe(0);
+    expect(plan.all).toMatch(/does not apply to this project now/);
+    const back = p.run('checks', 'restore', 'first-test');
+    expect(back.code).toBe(0);
+    expect(back.all).toMatch(/no longer set aside/);
+    // Restored and not applying: gone from the report, as any card that does not apply.
+    expect(card()).toBeUndefined();
+  });
+
   it('a no to a setup tip runs the tip\'s own "No:" command, which sets the card aside for good (also the tips of the earlier checks)', () => {
     const p = project();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
