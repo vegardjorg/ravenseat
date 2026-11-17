@@ -92,8 +92,8 @@ describe('through the hooks as hooks.json wires them', () => {
     expect(decide(p, 'Bash', { command: `echo x > "${target}"` }, 'track').decision).toBe('deny');
     // The config lives in the queue folder here (QUEUE_CONFIG): that is the one guarded.
     expect(decide(p, 'Edit', { file_path: p.configFile, old_string: 'a', new_string: 'b' }, 'track').decision).toBe('deny');
-    // The main session is never stopped by this guard (bolk 3 asks there).
-    expect(decide(p, 'Write', { file_path: target, content: 'x' }).decision).toBeNull();
+    // The main session is never denied here: it gets a question (approvals.ask, see approvalAsk.test.ts).
+    expect(decide(p, 'Write', { file_path: target, content: 'x' }).decision).toBe('ask');
     const rows = fs
       .readFileSync(String(p.env.QUEUE_TIME_LOG), 'utf8')
       .split('\n')

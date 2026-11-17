@@ -111,6 +111,23 @@ describe('ravenseat doctor: repo state', () => {
     expect(s[0].fix).toMatch(/disableAllHooks/);
   }, 60_000);
 
+  it('a broad PermissionRequest hook in the project settings gives an INFO naming the file, and nothing is changed', () => {
+    const p = project([]);
+    expect(p.named('permission-hook')[0].status).toBe('OK');
+    fs.mkdirSync(path.join(p.root, '.claude'));
+    const file = path.join(p.root, '.claude', 'settings.json');
+    const text = JSON.stringify({ hooks: { PermissionRequest: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'yes' }] }] } });
+    fs.writeFileSync(file, text);
+    const [h] = p.named('permission-hook');
+    expect(h.status).toBe('INFO');
+    expect(h.message).toContain('settings.json');
+    expect(h.message).toContain('approvals.ask');
+    expect(fs.readFileSync(file, 'utf8')).toBe(text);
+    // A narrow matcher (a tool the guards do not ask for) is fine.
+    fs.writeFileSync(file, JSON.stringify({ hooks: { PermissionRequest: [{ matcher: 'WebFetch', hooks: [] }] } }));
+    expect(p.named('permission-hook')[0].status).toBe('OK');
+  }, 60_000);
+
   it('a broken settings file is not this check’s business (no crash, no FAIL)', () => {
     const p = project([]);
     fs.mkdirSync(path.join(p.root, '.claude'));

@@ -25,6 +25,12 @@
 //         The hook passes it in as context.secretQuestion; with the batch question both are asked in one dialog.
 //   ask   a command that starts with one of config().deployCommands (after env prefixes), from an agent or the main
 //         session: a deploy is a deliberate step. A simple prefix match; empty list = off.
+//   ask   push.mode "owner" with push.ownerAsk (on): every plain push of baseBranch by the main session, with the tip
+//         and the merged tasks (context.ownerPushQuestion, lib/pushBatch.js ownerQuestion); a batch known to be empty
+//         does not ask. It is an approval: in dontAsk and bypassPermissions the hook turns it into a deny.
+//   ask   approvals.ask (on): the main session's overrides (merge --allow-* / --force*, --i-understand, --by owner,
+//         surface / owner-log accept, helpers approve, the board's /api/), lib/approvalAsk.js overrideFinding. Also an
+//         approval. A deny from any other rule wins; several asks become one dialog.
 //
 // Network guard for the queue's agents (hardening against prompt injection). Applies to every subagent, that is when the
 // hook payload has an agent_type (owner decision B3, lib/agentGuard.js): the queue's own types (track, track-d, the
@@ -495,6 +501,11 @@ const queueShaped = (command) => QUEUE_SHAPED.test(command);
  *                                  reason is a deny, never a question: the file would leave the machine for good.
  *   deployCommands?: string[]      default config().deployCommands,
  *   branchPrefix?: string          config().branchPrefix: a queue agent's `ravenseat add` must run on such a branch,
+ *   mainSession?: boolean          the call came from the main session (no agent_id); default: no agentType,
+ *   approvals?: { ask, boardPort?, tipOf? }  approvals.ask on: the main session's overrides ask (lib/approvalAsk.js
+ *                                  overrideFinding; tipOf gives the short tip of a track branch for the reason),
+ *   ownerPushQuestion?: () => string|null  push mode "owner": the question every plain push of baseBranch by the main
+ *                                  session gets (lib/pushBatch.js ownerQuestion); an approval, see approvalAsk.forMode,
  * }
  * The command line is read with lib/shellCommands.js (nested shells, eval, $( ), subshells and inline git aliases
  * included). A part it cannot see into, in a line that looks like a push (or, for a queue agent, a queue CLI call),
@@ -679,27 +690,50 @@ function assess(command, context = {}) {
   }
   // The network guard applies to the queue's agents: tracks, reviewers and helper agents (never the orchestrator).
   if (guarded) findings.push(...assessNetwork(command, context));
+  // The main session's overrides (lib/approvalAsk.js, approvals.ask): merge with --allow-* or --force*, --i-understand,
+  // --by owner, the owner's own acceptances and the board's API get Claude Code's permission dialog. Never for a
+  // subagent: a queue agent is denied all of them above, and the ordinary commands never match.
+  const main = context.mainSession ?? !context.agentType;
+  if (!guarded && main && context.approvals?.ask) {
+    const override = require('./approvalAsk.js').overrideFinding(command, context.approvals);
+    if (override) findings.push(override);
+  }
+  // The later steps run while nothing is denied; an ask before them shares their dialog.
+  const noDeny = () => !findings.some((f) => f.decision === 'deny');
   // What must stay out of git (H3, H4): a deny before any question, for the base branch and the allowed ones alike.
-  if ((basePush || allowedPushes.length) && findings.length === 0 && !context.agentType && typeof context.trackingDeny === 'function') {
+  if ((basePush || allowedPushes.length) && noDeny() && !context.agentType && typeof context.trackingDeny === 'function') {
     const names = [...(basePush ? [baseBranch] : []), ...allowedPushes];
     const reasons = [...new Set(names.map((name) => context.trackingDeny(name)).filter(Boolean))];
     if (reasons.length) findings.push({ decision: 'deny', rule: 'tracking', reason: reasons.join(' Also: ') });
   }
   // The secret precheck, the missing controls and the batch threshold: only for the orchestrator (no agent_type; tracks
-  // never push) and only when nothing else hit. All the questions go in one dialog.
-  if (basePush && findings.length === 0 && !context.agentType) {
-    const questions = [context.secretQuestion, context.controlsQuestion, context.batchQuestion]
-      .map((f) => (typeof f === 'function' ? f() : null))
+  // never push) and only when nothing is denied. All the questions go in one dialog. In push mode "owner" the push asks
+  // every time (context.ownerPushQuestion, lib/pushBatch.js ownerQuestion, push.ownerAsk): an approval, so the
+  // permission mode rule applies to it (lib/approvalAsk.js forMode).
+  if (basePush && noDeny() && !context.agentType) {
+    const owner = typeof context.ownerPushQuestion === 'function' ? context.ownerPushQuestion() : null;
+    const questions = [owner, ...[context.secretQuestion, context.controlsQuestion, context.batchQuestion].map((f) => (typeof f === 'function' ? f() : null))]
       .filter(Boolean);
-    if (questions.length) findings.push({ decision: 'ask', rule: 'push-questions', reason: questions.join(' Also: ') });
+    if (questions.length)
+      findings.push({ decision: 'ask', rule: 'push-questions', reason: questions.join(' Also: '), ...(owner ? { approval: true } : {}) });
   }
   // A branch the owner allowed (push.allowBranches): no batch or CI question, but a secret is as bad on any branch.
-  if (allowedPushes.length && findings.length === 0 && !context.agentType && typeof context.allowedBranchQuestion === 'function') {
+  if (allowedPushes.length && noDeny() && !context.agentType && typeof context.allowedBranchQuestion === 'function') {
     const questions = allowedPushes.map((name) => context.allowedBranchQuestion(name)).filter(Boolean);
     if (questions.length) findings.push({ decision: 'ask', rule: 'allowed-branch-secret', reason: questions.join(' Also: ') });
   }
   if (findings.length === 0) return null;
-  return findings.find((f) => f.decision === 'deny') || findings[0];
+  const denied = findings.find((f) => f.decision === 'deny');
+  if (denied) return denied;
+  if (findings.length === 1) return findings[0];
+  // Several questions: one dialog with all of them. An approval among them makes the whole answer one (its rule first).
+  const approval = findings.find((f) => f.approval);
+  return {
+    decision: 'ask',
+    rule: (approval ?? findings[0]).rule,
+    reason: [...new Set(findings.map((f) => f.reason))].join(' Also: '),
+    ...(approval ? { approval: true } : {}),
+  };
 }
 
 /**

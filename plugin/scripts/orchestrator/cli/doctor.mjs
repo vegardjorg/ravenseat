@@ -25,8 +25,10 @@
 //               paths/paths-ignore filter (a text scan, lib/pushBatch.js workflowCost)
 //   settings    one WARN line naming every guard weaker than its default (the registry's weakens, lib/settingsView.js
 //               doctorRows), INFO for what lite softens and for each protectedPaths.remove entry; quiet guidance keeps it
-//   merge, hooks-off, in-base (cli/doctorRepo.mjs): a lingering MERGE_HEAD in the main checkout, disableAllHooks in a
-//               Claude Code settings file, done tasks whose merge commit or branch is not in baseBranch (all WARN)
+//   merge, hooks-off, permission-hook, in-base (cli/doctorRepo.mjs): a lingering MERGE_HEAD in the main checkout,
+//               disableAllHooks in a Claude Code settings file, done tasks whose merge commit or branch is not in
+//               baseBranch (all WARN); a PermissionRequest hook in the project settings that can answer the guards'
+//               approval questions (INFO, never changed)
 //   taxonomy    only when something is wrong: one WARN naming what a project's docs/queue/failure-classes.json or
 //               failure-rules.json has that was ignored (lib/failureRules.js projectWarnings); the core list applies
 //   canary      the client format canary on the tail of the project's newest transcript (lib/clientCanary.js): OK when

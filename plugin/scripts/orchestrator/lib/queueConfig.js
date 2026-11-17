@@ -161,7 +161,9 @@ const STANDARD = Object.freeze({
   // Queue agents never push, and a delete stays denied. A forced push of such a branch asks first; of the base, never. The
   // secret scan runs on these too.
   // controlsWarning: a plain push asks when the project has no CI config or no gates (lib/controls.js); false = no question.
-  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90, controlsWarning: true, allowBranches: [] },
+  // ownerAsk: in mode "owner" every plain push of baseBranch by the main session asks (lib/pushBatch.js ownerQuestion),
+  // a deny in the permission modes dontAsk and bypassPermissions; false = only the batch questions (a weakened guard).
+  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90, controlsWarning: true, ownerAsk: true, allowBranches: [] },
   // The branch that goes live (production). null = unknown. `ravenseat doctor` warns when it is the same as baseBranch: every
   // batch push would then go straight to production. Nothing else reads it yet.
   productionBranch: null,
@@ -251,6 +253,11 @@ const STANDARD = Object.freeze({
   // time log (guard, rule, agent type, task, never the command). doctor and the board count them per track. false =
   // no such rows (a weakened guard: the decisions can no longer be seen afterwards).
   guardLog: { enabled: true },
+  // The main session's overrides (lib/approvalAsk.js): ask, Claude Code's own permission dialog, before a merge with
+  // --allow-* or --force*, --i-understand, --by owner, surface/owner-log accept, helpers approve, a call to the board's
+  // API and a direct write of a main tree control file. A deny in dontAsk and bypassPermissions. false = no question
+  // (a weakened guard: the model and the owner can no longer be told apart on these).
+  approvals: { ask: true },
   // Which agent types the agent guards (push, network, queue CLI, the write guard) apply to (lib/agentGuard.js, owner
   // decision B3): every subagent by default. except: agent types left out ("general-purpose", "myplugin:helper"; no
   // case). enabled false: only the queue's own types, as before. The queue's own types (track, track-d, the shipped

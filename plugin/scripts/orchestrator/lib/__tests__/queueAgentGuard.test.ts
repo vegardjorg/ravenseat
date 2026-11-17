@@ -339,7 +339,8 @@ describe('hook-push-guard.mjs: queue agents', () => {
       expect(run('ravenseat merge R --allow-guard', 'ravenseat:track')).toBe('deny');
       expect(run('bash -c "git push origin HEAD:main"', 'ravenseat:ask')).toBe('deny');
       expect(run('ravenseat show', 'ravenseat:track')).toBeNull();
-      expect(run('ravenseat merge R --allow-guard')).toBeNull(); // the orchestrator
+      // The orchestrator is not denied; the override asks the owner (approvals.ask, see redteam/approvalAsk.test.ts).
+      expect(run('ravenseat merge R --allow-guard')).toBe('ask');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

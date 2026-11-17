@@ -24,19 +24,21 @@ export function hooksFor(tool: string) {
 
 /**
  * The decision of every hook for one tool call, and the reasons given. `agent` makes it a subagent's call
- * (agent_type plus an agent_id, as Claude Code sends inside a subagent); without it, the main session's.
+ * (agent_type plus an agent_id, as Claude Code sends inside a subagent); without it, the main session's. `extra` adds
+ * payload fields, such as permission_mode.
  */
 export function decide(
   p: { repo: string; env: NodeJS.ProcessEnv | Record<string, string | undefined> },
   tool: string,
   toolInput: Record<string, unknown>,
   agent?: string,
+  extra: Record<string, unknown> = {},
 ) {
   let decision: string | null = null;
   const reasons: string[] = [];
   for (const h of hooksFor(tool)) {
     const r = spawnSync(h.command, h.args, {
-      input: JSON.stringify({ tool_name: tool, tool_input: toolInput, cwd: p.repo, ...(agent ? { agent_type: agent, agent_id: 'rt-agent-1' } : {}) }),
+      input: JSON.stringify({ tool_name: tool, tool_input: toolInput, cwd: p.repo, ...(agent ? { agent_type: agent, agent_id: 'rt-agent-1' } : {}), ...extra }),
       encoding: 'utf8',
       env: p.env as NodeJS.ProcessEnv,
       cwd: p.repo,

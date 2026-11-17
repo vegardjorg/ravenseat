@@ -5,6 +5,21 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: the main session's overrides and an owner-mode push now ask the owner in the permission dialog.** A
+  queue agent was already denied the overrides; the orchestrator could still be talked into one by a line in a report
+  or a document. With `approvals.ask` (on) the push guard answers `ask` on the main session's `merge` with `--allow-*`
+  or `--force*`, `--i-understand`, `--by owner` or `--by theBoard` (also `--by=owner` and `--set-by`), `surface` and
+  `owner-log accept`, `helpers approve` and a call to the board's `/api/`, and the write guard asks on its Write and
+  Edit of a control file. The dialog names the task, the flags and the branch tip, never a flag value. With
+  `push.ownerAsk` (on) every plain push of the base branch in `push.mode` `owner` asks too, with the tip and the merged
+  tasks; threshold mode is unchanged. Edge cases covered: the override behind `npx` or `npm exec`, in `bash -c` or
+  `powershell -c`, chained after a harmless step, in an `eval` or another line the parser cannot read, the board on a
+  loopback form or by its key header, and the plugin's own source in the project, which is left out so working on the
+  plugin does not ask every edit. In `dontAsk` and `bypassPermissions`, where no one sees a dialog, the answer is deny
+  with a line saying the owner can run the command in their own terminal. A plain `merge`, `receive` or `settings set`
+  does not ask. Each answer is a `guard-ask` or `guard-deny` row. Both settings are guards, so turning one off counts
+  as weakened. `ravenseat doctor` gives an INFO for a `PermissionRequest` hook with a broad matcher in the project
+  settings, and changes nothing.
 - **Hardening: the main tree's control files are out of a queue agent's reach, and the guards now log what they
   decide.** With `controlFiles.guard` (on) a queue agent is denied Write and Edit on the main tree's
   `queue.config.json`, `.claude/` (not `.claude/worktrees/`), `CLAUDE*.md`, `.git/hooks/`, `.git/config` and the

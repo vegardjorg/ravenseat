@@ -572,6 +572,18 @@ const SETTINGS = Object.freeze([
       whyNot: 'Without the rows a track that hits a guard again and again leaves no trace, and the overrides cannot be measured.',
       changes: 'The guards still decide, but their decisions are no longer logged. Doctor will report it.',
     }),
+  // Friction: one click per override from the main session, which is rare (0 such rows in 312 when measured); the
+  // orchestrator's ordinary commands never ask. On by default by the owner's decision of 16.11.2026 (bolk 3): the one
+  // cheap thing that tells the owner apart from a misled model on the usual path (lib/approvalAsk.js).
+  row('approvals.ask', 'guards', 'onoff', 'Ask before the main session overrides',
+    'Claude Code asks you before the main session merges with --allow-* or --force*, passes --i-understand or --by owner, ' +
+    'accepts the git surface, an owner row or a helper, calls the board\'s API or writes a control file directly. In ' +
+    'dontAsk and bypassPermissions it is denied instead: run the command yourself in your terminal.', {
+      weakens: offWeakens,
+      protects: 'The model passing an override or acting as you because a report, a document or a compacted session said you agreed.',
+      whyNot: 'Without the question an override from the main session cannot be told apart from yours: the CLI only sees the flag.',
+      changes: 'The main session passes overrides and writes the control files without a question. Doctor will report it.',
+    }),
   row('agentGuard.enabled', 'guards', 'onoff', 'Guard every agent type',
     'The push, network, queue command and state file guards apply to every subagent, also general-purpose, Explore and ' +
     'your own. Off: only the queue\'s own agent types, which are always guarded.', {
@@ -647,6 +659,17 @@ const SETTINGS = Object.freeze([
       protects: 'Pushing code that nothing automatic has checked.',
       whyNot: 'Without CI or gates, the push is the first time anyone can see the code fails.',
       changes: 'Pushes go out without the question even when there are no checks. Doctor will report it.',
+    }),
+  // Friction: one click per batch push, which in owner mode only happens on the owner's word anyway. On by default in
+  // owner mode by the owner's decision of 16.11.2026 (bolk 7): it makes "push only on my word" a rule instead of an
+  // instruction a compacted session can lose. No effect in threshold mode.
+  row('push.ownerAsk', 'push', 'onoff', 'Owner mode: every push asks',
+    'With push mode owner, every push of the base branch by the main session asks you first, also when the batch is ' +
+    'ready. In dontAsk and bypassPermissions it is denied instead: push from your terminal. No effect in threshold mode.', {
+      weakens: offWeakens,
+      protects: 'A push you did not ask for, and the CI runs and deploys it starts, in the mode where only you decide.',
+      whyNot: 'Without the question "only on your word" is an instruction: a ready batch with a green gate goes out unasked.',
+      changes: 'In owner mode a ready batch is pushed without a question when the orchestrator decides to. Doctor will report it.',
     }),
   row('wiring.stop', 'push', 'onoff', 'Done waits for the wiring spec',
     'Each WIRE line in a track\'s report becomes an open item on the task, and done (set done, the done step of merge) ' +

@@ -208,6 +208,8 @@ describe('the weakening rows from the design', () => {
     ['controlFiles.guard', false],
     ['controlFiles.fingerprint', false],
     ['guardLog.enabled', false],
+    ['approvals.ask', false],
+    ['push.ownerAsk', false],
     ['gates.fromKnownBugs', 'auto'],
     ['gateEvidence.mode', 'external'],
     ['gateEvidence.mode', 'off'],

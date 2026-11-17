@@ -26,6 +26,9 @@
 //   READY    merged tasks >= minTasks (0 = no lower limit), or the oldest work is older than maxAgeHours.
 //   NOT_YET  below minTasks ("4 of 10").
 //
+// Owner mode (push.mode "owner", push.ownerAsk on): ownerQuestion is the question the push guard asks before every
+// plain push of the base by the main session, whatever the verdict; null in threshold mode or for an empty batch.
+//
 // Pure except readBatch (the two git calls through an injected runner).
 // Tested in lib/__tests__/pushBatch.test.ts (temporary repos with a bare remote).
 // =============================================================
@@ -78,6 +81,7 @@ function setupProblems(push) {
     if (push[k] !== undefined && !(Number.isInteger(push[k]) && push[k] >= 0)) out.push(`push.${k} must be a whole number >= 0`);
   if (push.maxAgeHours !== undefined && push.maxAgeHours !== null && !(typeof push.maxAgeHours === 'number' && push.maxAgeHours > 0))
     out.push('push.maxAgeHours must be a number > 0 or null');
+  if (push.ownerAsk !== undefined && typeof push.ownerAsk !== 'boolean') out.push('push.ownerAsk must be true or false');
   return out;
 }
 
@@ -221,6 +225,35 @@ function guardQuestion({ batch, setup, health = 'unknown', fullGate = 'off', now
   return `${batch.taskCount} of ${setup.minTasks} merged tasks since the last push (${batch.firstParent} commit(s) on the first-parent line); push anyway?`;
 }
 
+/**
+ * Does every push of the base branch by the main session ask (bolk 7, owner decision 16.11.2026)? Only in push mode
+ * "owner", where the rule is "push only on the owner's word": the question makes that rule true instead of an
+ * instruction the model may lose in a compacted session. push.ownerAsk false turns it off (a weakened guard). In mode
+ * "threshold" the orchestrator pushes a ready batch by itself, as before.
+ * @param {object} cfg the configuration
+ */
+function ownerAskOn(cfg = {}) {
+  const own = isObject(cfg?.push) ? cfg.push : {};
+  return pushSetup(cfg).mode === 'owner' && own.ownerAsk !== false;
+}
+
+/**
+ * The owner-mode question for a plain push of the base branch by the main session, or null: off, threshold mode, or a
+ * batch known to be empty (git would send nothing). A batch that could not be read (a first push, a git error) asks
+ * with the tip alone: in owner mode the question is the rule, so it does not fail open.
+ * @param {{ cfg: object, batch?: object|null, base: string, tip?: string|null }} x
+ */
+function ownerQuestion({ cfg, batch = null, base, tip = null }) {
+  if (!ownerAskOn(cfg)) return null;
+  if (batch && batch.firstParent === 0) return null;
+  const at = String(batch?.tip ?? tip ?? '').slice(0, 7);
+  const ids = (batch?.tasks ?? []).slice(-5);
+  const what = batch
+    ? `${batch.taskCount} merged task(s)${ids.length ? ` (${ids.join(', ')}${batch.taskCount > ids.length ? ' ...' : ''})` : ''}, ${batch.firstParent} commit(s) on the first-parent line`
+    : 'a batch the guard could not count (a first push?)';
+  return `push.mode is owner: ${base}${at ? ` at ${at}` : ''} goes to the remote only on your word, ${what}. Say yes only if you asked for this push (push.ownerAsk).`;
+}
+
 /** The age, short (min / h / d). */
 function ageText(at, now = Date.now()) {
   const ms = now - Date.parse(at ?? '');
@@ -298,6 +331,8 @@ module.exports = {
   verdictWord,
   queueIdFromMerge,
   guardQuestion,
+  ownerAskOn,
+  ownerQuestion,
   fullGateText,
   ageText,
   boardBatch,

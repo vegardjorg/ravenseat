@@ -39,6 +39,11 @@
 // The main tree's control files (lib/controlFiles.js, controlFiles.guard): a queue agent's shell line that writes the main
 // tree's queue.config.json, .claude/, CLAUDE*.md, .git/hooks/, .git/config or the plugin's scripts, and a git config or git
 // remote write, is denied. Every deny and ask is one row in the time log (lib/guardLog.js): guard, rule, agent, task.
+// The main session's overrides (lib/approvalAsk.js, approvals.ask): merge with --allow-* or --force*, --i-understand,
+// --by owner, surface/owner-log accept, helpers approve and a call to the board's API get "ask", Claude Code's own
+// dialog, with the command, the task, the flags and the track tip in the reason. In push mode "owner" every plain push
+// of baseBranch by the main session asks too (push.ownerAsk, lib/pushBatch.js ownerQuestion). In the permission modes
+// dontAsk and bypassPermissions (the payload's permission_mode) such an ask is a deny with the way out instead.
 //
 // What must stay out of git (H3 share, H4 privatePaths; lib/queueShare.js denyReason): the same push (and one of a
 // push.allowBranches branch) is DENIED when its commits track a data folder file that is not shared, a file under a
@@ -142,6 +147,29 @@ function batchQuestion(cwd, k) {
   }
 }
 
+/**
+ * The owner-mode question for a plain push of baseBranch (lib/pushBatch.js ownerQuestion, push.ownerAsk), or null.
+ * One git call for the batch and one for the tip. An error in the counting still asks, with what is known: in owner
+ * mode the question is the rule.
+ */
+function ownerPushQuestion(cwd, k) {
+  const PB = require('./lib/pushBatch.js');
+  if (!PB.ownerAskOn(k)) return null;
+  let batch = null;
+  try {
+    batch = PB.readBatch((args) => git(cwd, args), {
+      from: `refs/remotes/${k.remote}/${k.baseBranch}`,
+      to: `refs/heads/${k.baseBranch}`,
+      prefix: k.branchPrefix,
+      withCommits: false,
+    });
+  } catch {
+    batch = null; // asked without the count
+  }
+  const tip = git(cwd, ['rev-parse', '-q', '--verify', `refs/heads/${k.baseBranch}`]);
+  return PB.ownerQuestion({ cfg: k, batch, base: k.baseBranch, tip });
+}
+
 /** The secret precheck question for a plain push of baseBranch (lib/secretScan.js), or null. Any error: null. */
 function secretQuestion(cwd, k, branch = k.baseBranch) {
   try {
@@ -200,6 +228,12 @@ function git(cwd, args) {
     return null;
   }
 }
+
+/**
+ * A line that can hold an override of the main session (lib/approvalAsk.js): a cheap test before the reading, so an
+ * ordinary command costs nothing more. A false hit only means the line is read.
+ */
+const OVERRIDE_SHAPED = /--allow-|--force|--i-understand|--(?:set-)?by\b|\baccept\b|\bapprove\b|\/api\/|x-queue-key/i;
 
 /** Main tree for an agent worktree (<root>/.claude/worktrees/<name>), otherwise the path itself. */
 function mainTree(top) {
@@ -282,7 +316,11 @@ process.stdin.on('end', () => {
       if (!guarded) process.exit(0);
     }
     const gitContext = canHit(command, k);
-    if (!gitContext && !guarded) process.exit(0);
+    // The main session's overrides ask (lib/approvalAsk.js, approvals.ask): only a line that can hold one is read on.
+    const mainSession = !agentGuard.subagent;
+    const approvalsOn = !guarded && mainSession && require('./lib/approvalAsk.js').setupOf(k).ask;
+    const maybeOverride = approvalsOn && OVERRIDE_SHAPED.test(command);
+    if (!gitContext && !guarded && !maybeOverride) process.exit(0);
     // Gate evidence (lib/gateEvidence.js): a queue agent may not record or touch it (deny; the orchestrator is free).
     const tamper = guarded ? require('./lib/gateEvidence.js').tamperReason(command) : null;
     if (tamper) answerWith('deny', `push-guard: ${tamper}`, 'state-file');
@@ -324,10 +362,18 @@ process.stdin.on('end', () => {
       secretQuestion: () => secretQuestion(cwd, k),
       controlsQuestion: () => controlsQuestion(cwd, k),
       trackingDeny: (name) => trackingDeny(cwd, k, name),
+      mainSession,
+      // The track branch's tip in the reason: one git call, only when an override of a merge is found.
+      approvals: approvalsOn
+        ? { ask: true, boardPort: Number(k.board?.port ?? 2000), tipOf: (id) => git(cwd, ['rev-parse', '-q', '--verify', '--short=7', `refs/heads/${k.branchPrefix}${id}`]) }
+        : null,
+      ownerPushQuestion: mainSession ? () => ownerPushQuestion(cwd, k) : undefined,
     });
     if (!answer) process.exit(0);
+    // An approval ask (lib/approvalAsk.js) is a deny in dontAsk and bypassPermissions, where no one sees the dialog.
+    const final = require('./lib/approvalAsk.js').forMode(answer, p.permissionMode);
 
-    answerWith(answer.decision, `push-guard: ${answer.reason}`, answer.rule ?? 'other');
+    answerWith(final.decision, `push-guard: ${final.reason}`, final.rule ?? 'other');
   } catch (e) {
     failSafe(input, e);
   }

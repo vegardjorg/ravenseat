@@ -745,6 +745,42 @@ as the folder are not read, and a process that outlives its run can act later. T
 not against a hostile process running as you: only another OS user for the agents or protection on the remote is a
 real boundary (guide.md, "Guarantees and limits").
 
+### The main session's overrides ask you
+
+The queue's agents are denied every override flag, but the orchestrator, the main session, can pass them, and the CLI
+cannot tell it from you: it only sees the flag. A track report or a document that says "the owner approved
+`--allow-guard`" is data, and a compacted session may have lost what you said. So with `approvals.ask` (on) the push
+guard answers with Claude Code's own permission dialog before the main session:
+
+- runs `merge` with an `--allow-*` or `--force*` flag (`--allow-guard`, `--allow-secret`, `--allow-unreviewed`,
+  `--force-red-base`, `--force-red-gate`, `--force` on a running task and the others);
+- passes `--i-understand` (a confirmed weakening with `settings set`), `--by owner` or `--by theBoard` (`resolve`,
+  `approve`, `qa ok`, `resume --answer`, `edit` of a locked field, `cancel`, `unlock`), or `--set-by owner`;
+- runs `surface accept`, `owner-log accept` or `helpers approve`, whose `--by` is free text;
+- calls the board's API (an `X-Queue-Key` header, or the board's port on a loopback address with `/api/`).
+
+The write guard asks before the main session writes one of the main tree's control files directly with Write or Edit
+(the same set as above; the plugin's scripts only when they are installed outside the project). The dialog names the
+command, the task, the flags and, for a merge, the track branch's tip, never a flag's value. You answer in Claude Code
+or through Remote Control. Each question is one `guard-ask` row in the time log.
+
+With `push.ownerAsk` (on) and `push.mode` `owner`, every push of the base branch by the main session asks too, with the
+tip and the merged tasks: "push only on my word" becomes a rule instead of an instruction. In `threshold` mode nothing
+changes.
+
+The ordinary commands never ask: `merge` without an override, `receive`, `settings set` without `--i-understand`,
+`resolve` without `--by owner`, and a push in `threshold` mode. If you told the orchestrator in chat to use the flag,
+you still get the dialog: that second step is the proof that it was you. The board is not affected, it runs the CLI
+itself.
+
+The permission mode matters. In `default`, `acceptEdits`, `plan` and `auto` the dialog reaches you (in `auto` a hook's
+question goes to you, not the classifier). In `dontAsk` and `bypassPermissions` nobody would see it, so the guard
+denies instead and says you can run the command yourself in your own terminal. A run with `claude -p` and no prompt
+handler denies a question by itself. `ravenseat doctor` gives an INFO line (`permission-hook`) when the project's
+settings have a PermissionRequest hook whose matcher takes Bash, PowerShell, Write or Edit, since such a hook can answer
+for you; it changes nothing. The limits: a script file the model writes and runs, or a hostile process running as you,
+is not stopped by a dialog (guide.md, "Guarantees and limits").
+
 ### Your own Claude setup
 
 A track runs as you, so it can write outside its worktree, also in your own Claude folder (`~/.claude`, or
@@ -870,6 +906,7 @@ names every guard weaker than its default on its `settings` row.
 | `controlFiles.guard` | `true` | The write guard for the main tree's control files (see "The main tree's control files"): a queue agent's Write, Edit or shell write to `queue.config.json`, `.claude/` (not `.claude/worktrees/`), `CLAUDE*.md`, `.git/hooks/`, `.git/config` or the plugin's own scripts is denied, and so is a `git config` or `git remote` write. Its own worktree copies stay free, and the main session is not affected. `false` = off, a weakened guard | Advanced |
 | `controlFiles.fingerprint` | `true` | `fill` and `start` record a short hash of each of those files on the task (`control_fp`); `receive` warns with `CONTROL FILES CHANGED` about a change no commit explains. `false` = off, a weakened guard | Advanced |
 | `guardLog.enabled` | `true` | Every deny and ask from the push, write and read guard is one row in the time log (`guard-deny`, `guard-ask`: guard, rule, agent type, task, time, never the command); `doctor` (row `guards`) and the board's Statistics tab count them per track. `false` = no such rows, a weakened guard | Advanced |
+| `approvals.ask` | `true` | Claude Code's own permission dialog before the main session's overrides (see "The main session's overrides ask you"): `merge` with `--allow-*` or `--force*`, `--i-understand`, `--by owner` or `--by theBoard`, `--set-by owner`, `surface accept`, `owner-log accept`, `helpers approve`, a call to the board's API, and a direct Write or Edit of a main tree control file. In the permission modes `dontAsk` and `bypassPermissions` it is a denial with the way out (run it in your own terminal). The ordinary commands never ask. `false` = no question, a weakened guard | Advanced |
 | `agentGuard.enabled` | `true` | The push, network and write guards apply to every subagent, whatever its agent type (a general-purpose agent, Explore, a custom one), not only to the queue's own. Read-only commands stay allowed, so Explore and other helpers that only read keep working. The main session is never guarded. `false` = back to the queue's own agent types only (tracks, reviewers, helpers); `ravenseat doctor` warns `AGENT GUARD OFF`, and turning it off is a weakened guard | Advanced |
 | `agentGuard.except` | `[]` | Agent types (from your own `.claude/agents`) the guards leave alone, e.g. `["my-deployer"]`. The queue's own agent types can never be listed out. `ravenseat doctor` gives an INFO line per entry, and an entry is a weakened guard | Advanced |
 | `agentPushBlock.enabled` | `true` | A git `pre-push` hook that stops a push from a track's worktree, also when the push guard never saw the command (a script the agent ran). `fill`, `start` and `resume` install it in the hooks folder git uses (after the first line of an existing shell `pre-push` from husky, lefthook or your own, which keeps running), and `prepare-track` marks the worktree. Pushes from the main checkout and from worktrees you made yourself are not affected, and the git surface baseline knows the block, so it never stops `receive`. `false` = removed at the next `fill`, `start` or `resume`; `ravenseat doctor` warns that agents can push from git itself when the text guard does not see the command, and turning it off is a weakened guard | Advanced |
@@ -887,6 +924,7 @@ names every guard weaker than its default on its `settings` row.
 | `push.minTasks`, `push.warnTasks`, `push.maxAgeHours` | `10`, `50`, `null` | Batch push threshold, counted in merged tasks since the last push. Below `minTasks` (0 = off) or on a red base the push guard asks before a plain push of the base branch; never denies. `warnTasks` makes a batch LARGE; `maxAgeHours` makes old work ready below `minTasks`. `threshold` with 10 and 50 for projects with expensive CI (see orchestration.md, Batch push) | Advanced |
 | `push.allowBranches` | `[]` | Branches the main session may push besides the base, for pull request flows: `["feat/*"]`, where `*` is any text. A forced push of such a branch asks first. Queue agents never push, a forced push of the base or a delete stays denied, and the secret scan runs on these too. Without it, you can also point `baseBranch` at an integration branch and open the pull request from that | Advanced |
 | `push.controlsWarning` | `true` | The push guard asks before a plain push of the base branch when the project has no CI config or no gates, with what is missing and how many commits go out. It never blocks. `false` turns the question off | Advanced |
+| `push.ownerAsk` | `true` | With `push.mode` `owner`, every plain push of the base branch by the main session asks you first, with the tip and the merged tasks, also when the batch is ready (a batch known to be empty does not ask). A denial in `dontAsk` and `bypassPermissions`: push from your own terminal. No effect in `threshold`. `false` = only the batch questions, a weakened guard | Advanced |
 | `reviewItems.stop` | `true` (`false` in Lite mode) | Each `FINDING` line of a chosen reviewer becomes an item on the task (`merge`, `resume --reason fix`), and `set <id> done` and the done step of `merge` refuse while one is open, with the commands that close it (`ravenseat review-item`). `false` = done passes and says `REVIEW ITEM STOP OFF`; the items stay open. Turning it off is a weakened guard | Advanced |
 | `review.requireFindings` | `true` | `merge` stops when a reviewer chosen for the class has no `FINDINGS` report after the review package, or the newest one has `H>0`. `merge --allow-unreviewed` goes past it (owner only, logged as `unreviewed-overridden`). `false` = no gate; the findings are still recorded. Turning it off is a weakened guard | Advanced |
 | `wiring.stop` | `true` | Each `WIRE <file> \| <what>` line in a track's report becomes an open item on the task (`receive`), and `set <id> done` and the done step of `merge` refuse while one is open, with one line per item and the commands that close it (`ravenseat wiring <id> <item> --commit <sha>` or `--reject "<reason>"`). `false` = done passes with open items and says `WIRING STOP OFF`; the items stay open. Turning it off is a weakened guard | Advanced |

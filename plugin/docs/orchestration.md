@@ -1078,12 +1078,27 @@ Windows, so there are four layers:
   and network rules: a redirection to one, one named with a writing command (`cp`, `mv`, `tee`, `sed -i`, `node -e`
   that writes), also after a `cd` or `git -C` to the main tree or through `$CLAUDE_PROJECT_DIR`, and a `git config` or
   `git remote` write (a worktree shares the main tree's `.git/config`). Reading stays free. The main session is never
-  stopped here. With `controlFiles.fingerprint` (on) `start` records short hashes of those files and `receive` names
+  denied here; its own Write and Edit on a control file asks the owner instead (next point). With `controlFiles.fingerprint` (on) `start` records short hashes of those files and `receive` names
   what changed and git does not explain (CONTROL FILES CHANGED, logged as `control-files-changed`): a warning, never a
   stop, since the owner, the orchestrator and `settings set` change them too and a hash cannot say who. Not closed
   locally: a script file the agent writes and then runs, a path built at run time or held in an unknown variable, and a
   process that outlives its run; the fingerprint at receive is the net for those, and the agents run as the same OS
   user, so this is a guard against mistakes and casual tampering, not a security boundary (`lib/controlFiles.js`).
+- **The main session's overrides ask the owner.** A queue agent is denied the overrides; the orchestrator may use
+  them, so a line in a report or a document that talks it into one is the risk there. With `approvals.ask` (on) the
+  push guard answers `ask` on the main session's `merge` or `merge-track` with `--allow-*` or `--force*`,
+  `--i-understand`, `--by owner` or `--by theBoard` (also `--set-by`), `surface accept`, `owner-log accept`,
+  `helpers approve` and a call to the board's `/api/` (a loopback address on `board.port`, or the `X-Queue-Key`
+  header), also behind `npx`, `npm exec` and in a line it cannot read with an override in it; the write guard asks on
+  its Write and Edit of a control file (the plugin's own source in the project is left out, so working on Ravenseat
+  itself does not ask every edit). The dialog names the task, the flags and the branch tip, never a flag value. In
+  `dontAsk` and `bypassPermissions`, where no one sees a dialog, the answer is deny with a line saying the owner can
+  run the command in their own terminal. With `push.mode` `owner` and `push.ownerAsk` (on) every plain push of the
+  base branch from the main session asks too, with the tip and the merged tasks; a batch that is known to be empty
+  does not, and threshold mode is unchanged. Each answer is a `guard-ask` or `guard-deny` row. A plain `merge`,
+  `receive` or `settings set` does not ask (`lib/approvalAsk.js`). `ravenseat doctor` gives an INFO for a
+  `PermissionRequest` hook with a broad matcher in the project settings, since such a hook can answer the dialog
+  before the owner sees it; it changes nothing.
 - **The guards log what they decide.** With `guardLog.enabled` (on) every deny and ask from the push, write and read
   guards is one row in the time log (`guard-deny`, `guard-ask`): the guard, the rule id, the agent type, the task and
   the time, never the command, the path or the content (`lib/guardLog.js`). `merge --force` on a running or picked

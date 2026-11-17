@@ -4,11 +4,12 @@
 // and statusline.input in ./facts.js).
 //
 // read(raw)    the hook payload as the core reads it:
-//   { event, session, cwd, effort, transcript, agent: { id, type, transcript }, tool: { name, input, response, interrupted },
-//     lastMessage, stopActive, notification, source, reason, error, prompt, raw }
+//   { event, session, cwd, effort, permissionMode, transcript, agent: { id, type, transcript },
+//     tool: { name, input, response, interrupted }, lastMessage, stopActive, notification, source, reason, error, prompt, raw }
 // status(raw)  the status line payload: { session, cwd, workspace, model, context, cost, limits, raw }
-// decision(event, decision, reason), deny(event, reason), context(event, text), contextOf(answer)
-//              the hookSpecificOutput answers (PreToolUse allow/deny/ask with a reason, additionalContext).
+// decision(event, decision, reason), deny(event, reason), ask(event, reason), context(event, text), contextOf(answer)
+//              the hookSpecificOutput answers (PreToolUse allow/deny/ask with a reason, additionalContext). ask is
+//              Claude Code's own permission dialog, which shows the reason to the person who answers (lib/approvalAsk.js).
 // message(text), block(reason)
 //              the top-level answers (systemMessage to the owner; decision 'block' with its reason). Since 0w W3 the core
 //              builds them only here (lib/contextGuard.js, lib/costGuard.js, hook-context.mjs); the coupling gate
@@ -34,6 +35,8 @@ function read(raw) {
     session: raw.session_id,
     cwd: raw.cwd,
     effort: raw.effort, // { level }
+    // default | acceptEdits | plan | auto | dontAsk | bypassPermissions (lib/approvalAsk.js forMode reads it).
+    permissionMode: raw.permission_mode,
     // The session's own transcript (in a subagent's hook, often the main session's file).
     transcript: raw.transcript_path,
     agent: { id: raw.agent_id, type: raw.agent_type, transcript: raw.agent_transcript_path },
@@ -76,6 +79,11 @@ function deny(event, reason) {
   return decision(event, 'deny', reason);
 }
 
+/** The permission dialog with its reason (an "ask"; the reason is shown to the person who answers). */
+function ask(event, reason) {
+  return decision(event, 'ask', reason);
+}
+
 /** Text for the agent's context (additionalContext; Claude Code takes up to 10,000 characters per string). */
 function context(event, text) {
   return { hookSpecificOutput: { hookEventName: event, additionalContext: text } };
@@ -99,4 +107,4 @@ function block(reason) {
   return { decision: 'block', reason };
 }
 
-module.exports = { read, status, decision, deny, context, contextOf, message, block };
+module.exports = { read, status, decision, deny, ask, context, contextOf, message, block };

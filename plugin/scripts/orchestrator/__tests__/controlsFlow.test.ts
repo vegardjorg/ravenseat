@@ -168,8 +168,9 @@ describe('the push guard with a missing control', () => {
     expect(project({}, { ci: true }).push()?.reason).toContain('with no gates, so');
   });
   it('is quiet with both controls there, and with the setting off', () => {
-    expect(project({ gates: { quick: [OK_GATE] } }, { ci: true }).push()).toBeNull();
-    expect(project({ push: { controlsWarning: false } }).push()).toBeNull();
+    // push.ownerAsk off: owner mode asks every push of the base (approvalAsk.test.ts); this locks the controls warning alone.
+    expect(project({ gates: { quick: [OK_GATE] }, push: { ownerAsk: false } }, { ci: true }).push()).toBeNull();
+    expect(project({ push: { controlsWarning: false, ownerAsk: false } }).push()).toBeNull();
   });
   it('does not soften a forced push', () => {
     expect(project().push('git push --force origin develop')?.decision).toBe('deny');

@@ -13,6 +13,10 @@
 //             what the task stores: the merge commit (merge_commit, set by `ravenseat merge`; merge_sha as an older name) when it resolves, otherwise the branch
 //             (o.branch, or the branch prefix + id) when it exists. A task with neither is counted as "not checked".
 //             A squash merge also shows up here (its branch is not an ancestor); the hint says so.
+//   permission-hook  INFO when the project's .claude/settings.json or settings.local.json has a PermissionRequest hook
+//             whose matcher takes Bash, PowerShell, Write or Edit (none, "*" or a pattern that matches one): such a hook
+//             can answer the guards' approval questions (approvals.ask, push.ownerAsk) without you. Only named, never
+//             changed: the hook may be yours on purpose (lib/approvalAsk.js permissionHookFindings).
 // Git runs read-only (rev-parse, diff --name-only, merge-base --is-ancestor). Nothing is written.
 //
 // Kept apart from cli/doctor.mjs so other doctor changes merge cleanly. Used by: cli/doctor.mjs (REPO_CHECKS).
@@ -24,10 +28,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { BASE, branchFor, FILE, GIT_ROOT, MAIN_TREE } from './context.mjs';
+import { BASE, branchFor, FILE, GIT_ROOT, MAIN_TREE, require } from './context.mjs';
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
+const info = (name, message, fix) => ({ status: 'INFO', name, message, fix });
 
 /** git in the main checkout: { code, out } (code null when git could not start). Read-only commands only. */
 function gitRun(args) {
@@ -107,6 +112,26 @@ export function checkDisableAllHooks() {
   ];
 }
 
+/** permission-hook: a PermissionRequest hook in the project's settings that can answer the guards' questions. */
+export function checkPermissionHooks({ root = MAIN_TREE } = {}) {
+  const files = [path.join(root, '.claude', 'settings.local.json'), path.join(root, '.claude', 'settings.json')].map((file) => {
+    try {
+      return { file, settings: JSON.parse(fs.readFileSync(file, 'utf8')) };
+    } catch {
+      return { file, settings: null }; // missing or unparsable: nothing to say here
+    }
+  });
+  const found = require('./lib/approvalAsk.js').permissionHookFindings(files);
+  if (!found.length) return [ok('permission-hook', 'no PermissionRequest hook in the project settings answers for Bash, PowerShell, Write or Edit')];
+  return [
+    info(
+      'permission-hook',
+      `a PermissionRequest hook in ${found.join(', ')} can answer the guards' approval questions (approvals.ask, push.ownerAsk) without you`,
+      'if it is not yours on purpose, narrow its matcher or remove it; nothing was changed',
+    ),
+  ];
+}
+
 /** The commit to check for a done task: the stored merge commit when it resolves, else the branch when it exists. */
 function workRef(o) {
   for (const sha of [o?.merge_commit, o?.merge_sha]) {
@@ -156,4 +181,4 @@ export function checkDoneInBase() {
 }
 
 /** The checks in the order cmdDoctor prints them. */
-export const REPO_CHECKS = [checkMergeHead, checkDisableAllHooks, checkDoneInBase];
+export const REPO_CHECKS = [checkMergeHead, checkDisableAllHooks, checkPermissionHooks, checkDoneInBase];

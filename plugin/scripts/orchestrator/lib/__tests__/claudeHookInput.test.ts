@@ -17,6 +17,7 @@ describe('hooks.read: the hook payload', () => {
       session_id: 's',
       cwd: '/w',
       effort: { level: 'medium' },
+      permission_mode: 'acceptEdits',
       transcript_path: '/t/s.jsonl',
       agent_id: 'a',
       agent_type: 'ravenseat:track',
@@ -39,6 +40,7 @@ describe('hooks.read: the hook payload', () => {
       session: 's',
       cwd: '/w',
       effort: { level: 'medium' },
+      permissionMode: 'acceptEdits',
       transcript: '/t/s.jsonl',
       agent: { id: 'a', type: 'ravenseat:track', transcript: '/t/s/subagents/agent-a.jsonl' },
       tool: { name: 'Bash', input: { command: 'ls' }, response: { stdout: 'x' }, interrupted: false },
@@ -104,6 +106,8 @@ describe('the hook answers', () => {
     expect(JSON.stringify(H.decision('PreToolUse', 'ask', 'sure?'))).toBe(
       '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"sure?"}}',
     );
+    // The ask builder gives the same bytes as decision(..., 'ask', ...).
+    expect(JSON.stringify(H.ask('PreToolUse', 'sure?'))).toBe(JSON.stringify(H.decision('PreToolUse', 'ask', 'sure?')));
     expect(JSON.stringify(H.context('PostToolUse', 'hint'))).toBe(
       '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"hint"}}',
     );

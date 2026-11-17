@@ -5,7 +5,9 @@
 //
 // Denies a queue agent (every subagent, lib/agentGuard.js: track, track-d, the reviewers and helpers always) a direct write to the
 // gate evidence store (gate-evidence.json, anywhere) and to the data folder's queue.json and base-health.json. The main
-// session (no agent_type) is never stopped. Inert without a queue project (no queue.config.json and no QUEUE_* variable).
+// session (no agent_type) is never denied by these rules. Inert without a queue project (no queue.config.json and no
+// QUEUE_* variable). The main session's own direct write to a main tree control file asks instead (lib/approvalAsk.js,
+// approvals.ask): Claude Code's dialog with the path in the reason, a deny in dontAsk and bypassPermissions.
 // It also denies them a write to the main tree's control files (lib/controlFiles.js, controlFiles.guard): queue.config.json,
 // .claude/ (not .claude/worktrees/), CLAUDE*.md, .git/hooks/, .git/config and the plugin's own scripts (this folder).
 // Every denial is one row in the time log (lib/guardLog.js, guardLog.enabled): guard, rule, agent type, task.
@@ -41,7 +43,11 @@ async function main() {
   const HK = require('./lib/clients/index.js').clientFor().hooks;
   const input = HK.read(await readIn());
   const agentType = PR.bareAgentType(input.agent.type);
-  if (!agentType) return; // main session: no effect
+  // The main session (no agent_id): never denied by the agent rules below, but a direct write to a main tree control
+  // file asks (lib/approvalAsk.js, approvals.ask).
+  // A main session started with --agent has an agent_type and no agent_id: after the ask it goes on as before.
+  if (!(typeof input.agent.id === 'string' && input.agent.id !== '') && mainSessionAsk(HK, input)) return;
+  if (!agentType) return;
   const WG = require('./lib/writeGuard.js');
   const file = WG.targetPath(input.tool.input);
   if (!file) return;
@@ -78,6 +84,42 @@ async function main() {
   const warnings = trackWarnings(input, abs, folder);
   if (!warnings.length) return;
   process.stdout.write(JSON.stringify(HK.context('PreToolUse', warnings.join('\n'))));
+}
+
+/**
+ * The main session's write of a main tree control file: "ask" (Claude Code's own dialog), or a deny in dontAsk and
+ * bypassPermissions (lib/approvalAsk.js). approvals.ask false: nothing. Any error: nothing (the guard fails open).
+ * Returns true when it answered.
+ */
+function mainSessionAsk(HK, input) {
+  try {
+    const WG = require('./lib/writeGuard.js');
+    const file = WG.targetPath(input.tool.input);
+    if (!file) return false;
+    const KK = require('./lib/queueConfig.js');
+    const k = KK.config();
+    const AA = require('./lib/approvalAsk.js');
+    if (!AA.setupOf(k).ask) return false;
+    const abs = path.isAbsolute(file) ? file : path.resolve(input.cwd || process.cwd(), file);
+    const finding = AA.controlWriteFinding({
+      filePath: abs,
+      mainTree: k.root,
+      scriptsDir: path.dirname(fileURLToPath(import.meta.url)),
+      configFile: KK.configFile(k.root),
+    });
+    if (!finding) return false;
+    const answer = AA.forMode(finding, input.permissionMode);
+    const reason = `Write guard: ${answer.reason}`;
+    process.stdout.write(JSON.stringify(answer.decision === 'ask' ? HK.ask('PreToolUse', reason) : HK.deny('PreToolUse', reason)));
+    try {
+      require('./lib/guardLog.js').recordHook({ guard: 'write', rule: answer.rule, decision: answer.decision, input });
+    } catch {
+      // error-ignored: the decision is written; the row is measurement only
+    }
+    return true;
+  } catch {
+    return false; // error-ignored: the guard fails open and must never stop the main session by a bug of its own
+  }
 }
 
 /**
