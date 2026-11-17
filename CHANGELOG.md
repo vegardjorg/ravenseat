@@ -5,6 +5,16 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening: when a newer Claude Code writes its transcripts in a form Ravenseat does not know yet, you now get one
+  line in `ravenseat doctor` and one card on the Checks tab instead of quietly short counts.** A format canary reads
+  only the tail of the project's newest transcript and compares it with the formats the fixtures cover: a newer
+  version alone is an INFO line, while row types the adapter does not know, assistant turns without token usage and
+  API errors of an unknown kind give a WARN line (never FAIL) and a medium card that never lights the red marker. Both
+  name the version, the row types and counts, never content, and say what to do: update Ravenseat, or report the form
+  if it stays. It never stops a track or a merge. The row types that are unknown on purpose (the request rows, the
+  edit snapshot) give no noise. New settings `client.canary` (on; off hides the line and the card) and
+  `client.shapeLog` (off; on lets `ravenseat checks` write the shape of a new API error form, keys and types without
+  values, to `client-shapes.jsonl` in the data folder, so it can be confirmed).
 - **Hardening: the cost rows are now read through the same transcript row reader as the rest of the queue, and a
   usage limit in the newer API error form counts as a rate limit, as it does in the older form.** The time and cost
   analysis (tokens with the cache split, streamed turns, models, tool calls and failed results, thinking, version and

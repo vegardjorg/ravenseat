@@ -29,6 +29,10 @@
 //               Claude Code settings file, done tasks whose merge commit or branch is not in baseBranch (all WARN)
 //   taxonomy    only when something is wrong: one WARN naming what a project's docs/queue/failure-classes.json or
 //               failure-rules.json has that was ignored (lib/failureRules.js projectWarnings); the core list applies
+//   canary      the client format canary on the tail of the project's newest transcript (lib/clientCanary.js): OK when
+//               it reads as expected, INFO for a Claude Code version newer than the fixtures, WARN for rows read
+//               differently (unknown row types, turns without usage, unknown API errors); never FAIL, no row without a
+//               transcript or with client.canary off. Type names and counts only, never content
 //   cloud rows  only with features.cloud on: what cloud tracks need (lib/cloudSetup.js), read locally; the setup itself is
 //               `ravenseat cloud setup`
 //   the safety baseline (cli/doctorBaseline.mjs, offline): secrets (a tracked .env or private key is FAIL), gates,
@@ -68,7 +72,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'gateEvidence', 'ownership', 'history', 'share'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'gateEvidence', 'ownership', 'history', 'share', 'client'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -678,6 +682,18 @@ function checkCatalog() {
   return [warn('catalog', `${r.errors.length} error(s) in docs/queue/catalog/: ${r.errors.slice(0, 2).join(' ')}${more}`, `${CLI} catalog check`)];
 }
 
+/**
+ * The client format canary (lib/clientCanary.js): one row about the tail of the project's newest transcript. Read only
+ * (doctor never writes, so the shape log is left to `ravenseat checks`), never FAIL, nothing with client.canary off or
+ * without a transcript.
+ */
+function checkCanary() {
+  const CC = require('./lib/clientCanary.js');
+  if (!CC.setupOf(CONFIG).on) return [];
+  const row = CC.doctorRow(CC.readLatest(MAIN_TREE), { cli: CLI });
+  return row ? [row] : [];
+}
+
 /** What cloud tracks need, only while they are on. The rows that are not problems stay in `ravenseat cloud setup`. */
 /**
  * Settings: the guards weaker than their default, in one line (lib/settingsView.js doctorRows). Not an advice row, so
@@ -732,7 +748,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

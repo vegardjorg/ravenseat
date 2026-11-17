@@ -525,6 +525,13 @@ const STANDARD = Object.freeze({
   // The pause at the subscription's usage limit (lib/usageLimit.js): the StopFailure hook saves the reset time, and no new
   // tracks or fix rounds start until then (exit 12). pause false turns it off.
   usageLimit: { pause: true },
+  // The client format canary (lib/clientCanary.js, roadmap 0w W4). canary: doctor reads the tail of the project's newest
+  // transcript and names a Claude Code version newer than the fixtures and rows read differently (one row, never FAIL),
+  // and the Checks tab gets one medium card while such rows are seen. It shows, it never stops. Off hides both.
+  // shapeLog: `ravenseat checks` writes the shape (keys, types, short codes, no values) of each new API error form in
+  // the newer system form to <dataFolder>/client-shapes.jsonl, so the form can be confirmed for the fixtures. Off by
+  // default: it writes a file nobody reads unless they report a form.
+  client: { canary: true, shapeLog: false },
   // Rolling copies of queue.json at a few ages (lib/stateSnapshots.js), in <dataFolder>/snapshots: on each write a tier
   // whose copy is at least as old as the tier takes the next younger copy, and the youngest takes the current state.
   // tiers: 2 to 8 ages such as "30m", "5h", "7d". enabled false turns it off.

@@ -10,7 +10,7 @@
 // changing that is a decision of its own, not part of the move.
 //
 // slug, transcriptsDir, agentFileName, agentOfFile, agentTranscriptPath, subagentsDirOf and sessionOfTranscript are pure; findAgentTranscript,
-// readAgentTranscript, listSubagents, listTranscripts, readSlice and readTail read the disk and never throw (a read
+// readAgentTranscript, listSubagents, listTranscripts, newestTranscript, readSlice and readTail read the disk and never throw (a read
 // error gives null or an empty list, as the callers did before the move).
 //
 // Why one file: the core had five copies of the folder rule and four of the agent-<id>.jsonl search (cli/ask.mjs,
@@ -134,6 +134,43 @@ function sessionOfTranscript(p) {
   return i > 0 ? parts[i - 1] : null;
 }
 
+/** A file's mtime in ms, or -Infinity when it cannot be read. */
+function mtimeOf(file) {
+  try {
+    return fs.statSync(file).mtimeMs;
+  } catch {
+    return -Infinity; // error-ignored: a file that went away is never the newest
+  }
+}
+
+/**
+ * The newest transcript in the folder, or null: the newest main session file, or a subagent file of that session when
+ * one is newer (a track writes to its own file while the orchestrator waits). One stat per main session and per
+ * subagent of the newest session, never a walk of every session folder (the format canary, ./canary.js).
+ */
+function newestTranscript(dir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return null; // error-ignored: no transcripts folder
+  }
+  let best = null;
+  let bestMs = -Infinity;
+  for (const e of entries) {
+    if (!e.isFile() || !e.name.endsWith('.jsonl')) continue;
+    const file = path.join(dir, e.name);
+    const ms = mtimeOf(file);
+    if (ms > bestMs) [best, bestMs] = [file, ms];
+  }
+  if (!best) return null;
+  for (const s of listSubagents(dir, path.basename(best).slice(0, -6))) {
+    const ms = mtimeOf(s.file);
+    if (ms > bestMs) [best, bestMs] = [s.file, ms];
+  }
+  return best;
+}
+
 /** `length` bytes of a file from `start` as UTF-8 (a cut multibyte character only spoils one line), or null. */
 function readSlice(filePath, start, length) {
   let fd;
@@ -173,6 +210,7 @@ module.exports = {
   listSubagents,
   listTranscripts,
   sessionOfTranscript,
+  newestTranscript,
   readSlice,
   readTail,
 };

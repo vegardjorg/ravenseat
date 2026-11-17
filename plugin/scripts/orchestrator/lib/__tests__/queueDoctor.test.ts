@@ -59,6 +59,8 @@ function project({ config = {}, hooks = null }: { config?: object | string; hook
     QUEUE_GIT: root,
     QUEUE_HOOKS: hooksFile,
     QUEUE_TIME_LOG: path.join(data, 'times.jsonl'),
+    // The format canary reads the newest transcript: keep it inside the test (empty unless a test writes one).
+    QUEUE_TRANSCRIPTS: path.join(data, 'transcripts'),
   };
   const run = (...args: string[]) => {
     const r = spawnSync(process.execPath, [QUEUE, 'doctor', ...args], { encoding: 'utf8', env, cwd: root });
@@ -253,5 +255,31 @@ describe('ravenseat doctor', () => {
     // All fixed: one OK line.
     fs.rmSync(path.join(dir, 'ci.yml'));
     expect(p.run('--all').out).toMatch(/^OK {4}ci-cost {4}1 workflow\(s\) on push, all with cancel-in-progress and a path filter$/m);
+  }, 60_000);
+
+  it('canary: no row without a transcript, OK, INFO for a newer version, WARN for new rows, never FAIL or content (0w W4)', () => {
+    const p = project();
+    const SECRET = 'PRIVATE-CONTENT-do-not-leak';
+    const canary = () => p.json().checks.filter((c) => c.name === 'canary');
+    expect(canary()).toEqual([]);
+    const dir = path.join(p.data, 'transcripts');
+    fs.mkdirSync(dir);
+    const write = (rows: object[]) => fs.writeFileSync(path.join(dir, 's1.jsonl'), `${rows.map((r) => JSON.stringify(r)).join('\n')}\n`);
+    const turn = (version: string) => ({ type: 'assistant', version, message: { id: 'm1', model: 'x', content: [], usage: { input_tokens: 1 } } });
+    write([turn('2.1.317')]);
+    expect(canary().map((c) => c.status)).toEqual(['OK']);
+    write([turn('2.1.400')]);
+    expect(canary()[0]).toMatchObject({ status: 'INFO' });
+    write([turn('2.1.400'), { type: 'brand-new-row', version: '2.1.400', text: SECRET }]);
+    const before = snapshot(p.root);
+    const r = p.run();
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/^WARN {2}canary {5}the newest transcript \(Claude Code 2\.1\.400, newer than/m);
+    expect(r.out).toContain('brand-new-row (1)');
+    expect(r.out).not.toContain(SECRET);
+    expect(snapshot(p.root)).toEqual(before);
+    // client.canary off: no row.
+    fs.writeFileSync(path.join(p.root, 'queue.config.json'), JSON.stringify({ client: { canary: false } }));
+    expect(canary()).toEqual([]);
   }, 60_000);
 });

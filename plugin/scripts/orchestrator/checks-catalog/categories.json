@@ -38,5 +38,10 @@
     "key": "instructions",
     "title": "Claude's instructions",
     "text": "The instruction files Claude Code loads at the start of every session, track and subagent."
+  },
+  {
+    "key": "client",
+    "title": "Claude Code",
+    "text": "How Ravenseat reads what Claude Code writes. A card here means a newer Claude Code writes something Ravenseat does not know yet."
   }
 ]

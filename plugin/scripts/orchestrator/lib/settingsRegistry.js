@@ -777,6 +777,16 @@ const SETTINGS = Object.freeze([
   row('instructionSize.maxChars', 'board', 'integer', 'Instruction characters in all',
     'Advice when everything loaded at the start of a session has more characters than this. 40,000 is where Claude ' +
     'Code itself warns.'),
+  // The client format canary (lib/clientCanary.js, roadmap 0w W4). On by default in both modes: it only shows (one
+  // doctor row, one medium card that never lights the red marker) and stops nothing, so off weakens no guard. The shape
+  // log is off by default: it writes a file in the data folder that is only of use when someone reports a form.
+  row('client.canary', 'board', 'onoff', 'Claude Code format canary',
+    'Doctor reads the tail of the newest Claude Code transcript and says when the version is newer than the formats ' +
+    'Ravenseat was tested on, or rows read differently (new row types, turns without usage, unknown API errors); the ' +
+    'Checks tab shows one card while such rows are seen. Type names and counts only, never content. It stops nothing.'),
+  row('client.shapeLog', 'board', 'onoff', 'Log new API error forms',
+    '`ravenseat checks` writes the shape of each new API error form (keys and value types, short codes, no text) to ' +
+    'client-shapes.jsonl in the data folder, so the form can be confirmed and reported. Off by default.'),
 
   // ---- 9. Cloud ----
   row('features.cloud', 'cloud', 'onoff', 'Cloud sessions',

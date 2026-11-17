@@ -3,6 +3,8 @@
 //
 //   ravenseat checks [--json]             reads the project's files (never runs anything), prints the overview and saves it as
 //                                  checks-report.json in the queue folder (ignored by git). Works before ravenseat init.
+//                                  It also reads the tail of the newest Claude Code transcript (the format canary,
+//                                  lib/clientCanary.js), and with client.shapeLog on writes client-shapes.jsonl there.
 //   ravenseat checks show <key>           the suggestion's template: what the investigation and the plan cover
 //   ravenseat checks plan <key> [--approved]   adds the investigation and planning as a task. A proposal without --approved; the
 //                                  board's button passes it, because the click is the owner's yes.
@@ -166,6 +168,30 @@ function projectFacts({ git, remote, found }) {
   return out;
 }
 
+/**
+ * The client format canary as facts for its card (lib/clientCanary.js): the tail of the newest transcript only, so the
+ * board's refresh stays light. With client.shapeLog on (and a data folder), the shape of a new API error form is logged
+ * too. Off, unreadable or no transcript: no signal, no card. An error never hides the rest of the report.
+ */
+function canaryFacts() {
+  try {
+    const CC = require('./lib/clientCanary.js');
+    const setup = CC.setupOf(CONFIG);
+    if (!setup.on) return { signal: false };
+    const summary = CC.readLatest(MAIN_TREE);
+    if (setup.shapeLog && summary && fs.existsSync(FILE)) {
+      try {
+        CC.logShapes(KK.dataFolder(), summary);
+      } catch {
+        // error-ignored: the log is a help for a report, never a reason to lose the card
+      }
+    }
+    return CC.facts(summary);
+  } catch {
+    return { signal: false }; // error-ignored: unknown, no card
+  }
+}
+
 /** Everything the report needs, read fresh. */
 function makeReport(queue) {
   const facts = readFacts();
@@ -198,6 +224,8 @@ function makeReport(queue) {
       catalogMissing: !exists('docs/queue/catalog'),
       // Lite mode (lib/liteMode.js): no scope drift card there, and none lights the red marker (condition not-lite).
       lite: LM.isLite(CONFIG),
+      // The client format canary (lib/clientCanary.js): the card while the newest transcript has rows read differently.
+      clientCanary: canaryFacts(),
     },
     catalog: CATALOG.loadCatalog({ builtin: BUILTIN, own: OWN }),
     tasks: queue?.tasks ?? [],

@@ -97,6 +97,9 @@ const CONDITIONS = {
   'ledger-marker': (f) => f.ledger?.marker === true,
   // The project is not in lite mode (cli/checks.mjs facts.lite). Unknown: not lite, so the card shows.
   'not-lite': (f) => f.lite !== true,
+  // The client format canary (lib/clientCanary.js facts, read by cli/checks.mjs): the newest transcript has rows the
+  // adapter reads differently than expected. A newer version alone does not hold it. Off with client.canary off.
+  'client-format-changed': (f) => f.clientCanary?.signal === true,
 };
 
 /** The classes of the finding log entries in `list` (facts.ledger.due or .guardFailed). */
@@ -125,6 +128,9 @@ function detailOf(key, facts) {
       ? `For this project: \`${facts.redOnBaseCommand}\` (read from its own files). Check that it runs only the files it is given.`
       : null;
   if (key === 'guard-failed') return ledgerLine(facts.ledger?.guardFailed, { guard: true });
+  // The canary's own lines: the version and the row types with counts, never content (lib/clients/claude/canary.js news).
+  if (key === 'client-format')
+    return facts.clientCanary?.lines?.length ? `Seen in the newest transcript: ${facts.clientCanary.lines.join('; ')}.` : null;
   if (key === 'learning-proposals') return ledgerLine(facts.ledger?.due);
   const p = facts.packs;
   if (!p) return null;

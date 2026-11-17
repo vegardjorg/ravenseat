@@ -8,7 +8,8 @@
 // pieces in ./mission.js, each with source and date. The transcript paths (folder, slug, agent files) live in
 // ./transcript.js, exposed as transcripts, the hook and status line payloads in ./hookInput.js, exposed as hooks, and
 // one transcript row as the event the core reads (usage, content blocks, handback, compaction, API error) in
-// ./entries.js, exposed as entries (W2b1).
+// ./entries.js, exposed as entries (W2b1). The format canary (W4: unknown row types, a newer version, turns without
+// usage, unknown API errors, no content) is ./canary.js, exposed as canary.
 //
 // Each part is loaded the first time it is used (W2c): the hooks that run on every tool call ask the registry for
 // hooks, and must not pay for dispatch.js and lib/logic/base.js, which they never call (lib/__tests__/hookWeight.test.ts).
@@ -125,5 +126,9 @@ module.exports = {
   // One transcript row as the event the core reads (usage, content blocks, handback, compaction, API error): ./entries.js.
   get entries() {
     return require('./entries.js');
+  },
+  // The format canary (W4): what the last rows of a transcript hold that the adapter does not expect, no content: ./canary.js.
+  get canary() {
+    return require('./canary.js');
   },
 };

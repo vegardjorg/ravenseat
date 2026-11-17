@@ -9,6 +9,12 @@ and the readers that use them) and `lib/__tests__/timeCostFixtures.test.ts` (wha
 safety net for W2b2). When Claude Code changes a format: add a new file for the new version family, keep the old one
 (old transcripts stay on disk), and fix the adapter until both are green.
 
+The format canary (`../../canary.js`, W4) compares the version in a user's newest transcript with `COVERED_VERSION`,
+the newest version in these files (`lib/__tests__/claudeCanary.test.ts` keeps the two in step), and counts the row
+types the adapter reads as unknown, minus its `QUIET_TYPES`. A new file here raises `COVERED_VERSION`; a row type
+that is unknown on purpose goes on `QUIET_TYPES`. With `client.shapeLog` on, `ravenseat checks` writes the shape of
+each new API error in the system form to `client-shapes.jsonl` in the data folder: the form to confirm here.
+
 ## Files
 
 | File | Version family | What it holds |

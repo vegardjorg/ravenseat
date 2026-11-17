@@ -341,3 +341,47 @@ describe('ravenseat checks: stack packs for the review signals', () => {
     expect(p.json().marker).toBe(true);
   });
 });
+
+describe('ravenseat checks: the client format canary (0w W4)', () => {
+  const SECRET = 'PRIVATE-CONTENT-do-not-leak';
+  /** A main session transcript in the test's transcripts folder (QUEUE_TRANSCRIPTS). */
+  const transcript = (p: { folder: string }, rows: object[]) => {
+    const dir = path.join(p.folder, 'transcripts');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 's1.jsonl'), `${rows.map((r) => JSON.stringify(r)).join('\n')}\n`);
+  };
+  const turn = { type: 'assistant', version: '2.1.400', message: { id: 'm1', model: 'x', content: [], usage: { input_tokens: 1 } } };
+  const busy = { type: 'system', subtype: 'api_error', version: '2.1.400', error: { status: 500, message: SECRET } };
+  const card = (p: { json: () => { suggestions: { key: string }[] } }) => p.json().suggestions.find((s) => s.key === 'client-format');
+
+  it('a new row type gives one medium card naming the version and the type, never content; no shape log by default', () => {
+    const p = project({ files: NODE });
+    transcript(p, [turn, { type: 'brand-new-row', version: '2.1.400', text: SECRET }, busy]);
+    const r = p.run('checks', '--json');
+    expect(r.code).toBe(0);
+    expect(r.out).not.toContain(SECRET);
+    const c = card(p) as unknown as { priority: string; detail: string };
+    expect(c.priority).toBe('medium');
+    expect(c.detail).toContain('Claude Code 2.1.400');
+    expect(c.detail).toContain('brand-new-row (1)');
+    expect(fs.existsSync(path.join(p.folder, 'client-shapes.jsonl'))).toBe(false);
+  });
+
+  it('no card while the rows read as expected, and none with client.canary off', () => {
+    const p = project({ files: NODE });
+    transcript(p, [turn]);
+    expect(card(p)).toBeUndefined();
+    const off = project({ files: NODE, config: { client: { canary: false } } });
+    transcript(off, [turn, { type: 'brand-new-row', version: '2.1.400' }]);
+    expect(card(off)).toBeUndefined();
+  });
+
+  it('client.shapeLog on writes the API error form without values', () => {
+    const p = project({ files: NODE, config: { client: { shapeLog: true } } });
+    transcript(p, [turn, busy]);
+    p.run('checks', '--json');
+    const text = fs.readFileSync(path.join(p.folder, 'client-shapes.jsonl'), 'utf8');
+    expect(JSON.parse(text.trim()).shape.error).toEqual({ message: 'string', status: 'number' });
+    expect(text).not.toContain(SECRET);
+  });
+});

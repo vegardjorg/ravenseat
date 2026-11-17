@@ -69,6 +69,7 @@ export const PHRASES = {
   'ledger-guard-failed': 'the finding log shows a failure class back where a guard for it was in place',
   'ledger-marker': '`learning.guardFailedMarker` is on',
   'not-lite': 'the project is not in lite mode',
+  'client-format-changed': 'the newest Claude Code transcript has rows Ravenseat reads differently than expected (the format canary, `client.canary`)',
 };
 
 /**
