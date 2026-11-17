@@ -252,6 +252,22 @@ describe('the weakening rows from the design', () => {
     expect(row('cloud.collect').weakens?.('auto', 'auto')).toBe(false);
   });
 
+  it('owner decision 2026-11-17: the advisory rows are no weakening (a card, an order, an INFO line, a log row), guardLog keeps its mark', () => {
+    const row = (k: string) => ROWS.find((x) => x.key === k) as Row;
+    // None of these stops, asks or denies anything: off is less advice, not a weaker guard, so no slide, no banner row
+    // and no doctor settings line.
+    for (const k of ['learning.quickGateCard', 'learning.ciParityLift', 'learning.idleGuardInfo', 'testWeakening.findingLog']) {
+      expect(row(k), k).toBeTruthy();
+      expect(row(k).weakens, k).toBe(null);
+      expect(row(k).protects, k).toBe(null);
+    }
+    // guardLog.enabled keeps it until the two weeks of measuring the overrides are over (owner decision 2026-11-17).
+    expect(row('guardLog.enabled').weakens?.(false, true)).toBe(true);
+    // The rows the Checks tab's "a guard did not hold" stands on keep it too.
+    expect(row('learning.repeats').weakens?.(false, true)).toBe(true);
+    expect(row('learning.guardFailedMarker').weakens?.(false, true)).toBe(true);
+  });
+
   it('instructionSize.mode off is no weakening: the instruction size rows are advice, not a guard', () => {
     const row = (k: string) => ROWS.find((x) => x.key === k) as Row;
     for (const k of ['instructionSize.mode', 'instructionSize.maxLines', 'instructionSize.maxChars']) {

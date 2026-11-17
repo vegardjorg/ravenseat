@@ -5,6 +5,11 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **The weakened-guards banner counts only guards.** `learning.quickGateCard`, `learning.ciParityLift`,
+  `learning.idleGuardInfo` and `testWeakening.findingLog` only show a card, order cards, give an INFO line or write a
+  log row, so turning one off is no longer treated as weakening a guard: no slide to confirm, no row in "guards are
+  weaker than the default", no line in doctor's `settings` row. The rows that stop, ask or deny keep their mark, and so
+  does `guardLog.enabled` while the overrides are being measured. No setting changed.
 - **Less noise from the checks that are off by choice.** An opt-in check that is off no longer reminds you on every
   run. `ravenseat doctor` names it only while a quiet look finds an important gap (a key in a tracked approved command
   or `.mcp.json`, the personal settings not ignored by the project, `bypassPermissions` in the shared settings), and not

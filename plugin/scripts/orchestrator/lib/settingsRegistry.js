@@ -398,32 +398,20 @@ const SETTINGS = Object.freeze([
     'A recipe below this share of accepted proposals, after enough are decided, is damped. 1 to 100.'),
   // CI parity for a built gate guard (0i step 9b, lib/quickGate.js). All on: the card only offers, and its write takes
   // the owner's click, only ADDS a command to gates.quick and is refused from a track worktree; the lift only orders the
-  // CI cards (never the red marker, section 3.9); the idle line is INFO. None of them stops work or runs a command.
+  // CI cards (never the red marker, section 3.9); the idle line is INFO. None of them stops work or runs a command, so
+  // off is less advice, not a weaker guard: no weakens (owner decision 2026-11-17), like scopeNotes.* and client.canary.
   row('learning.quickGateCard', 'gates', 'onoff', 'Offer to add a guard\'s command to gates.quick',
     'A gate guard in the registry whose command is not in gates.quick gets a card on the Checks tab: one click (or ' +
     'ravenseat checks quick-add <G-n>) adds that command at the end of gates.quick. Nothing runs from the card, and the ' +
-    'write can only add a command, never remove or replace one.', {
-      weakens: offWeakens,
-      protects: 'A guard that was built but never runs on a merge, so it guards nothing.',
-      whyNot: 'It only shows a card; the write waits for your click and cannot weaken the gates.',
-      changes: 'The card is gone; a guard\'s command still goes into gates.quick by hand or with checks quick-add.',
-    }),
+    'write can only add a command, never remove or replace one. Off: no card, and no guard is weaker.'),
   row('learning.ciParityLift', 'gates', 'onoff', 'Put the CI cards first when a guard is not in CI',
     'When a gate guard\'s kind of check (tests, types, lint) is not run in CI, the cards tests-in-ci and quality-in-ci ' +
-    'are put first in their priority and name the guard. They are never raised to the red marker.', {
-      weakens: offWeakens,
-      protects: 'A guard that holds on merge but is skipped when someone pushes around the queue.',
-      whyNot: 'It only orders cards and adds one line to them.',
-      changes: 'The CI cards keep their usual order and do not name the guard.',
-    }),
+    'are put first in their priority and name the guard. They are never raised to the red marker. Off: the usual ' +
+    'order, and no guard is weaker.'),
   row('learning.idleGuardInfo', 'gates', 'onoff', 'INFO for a gate guard that has not run',
     'ravenseat guards and ravenseat doctor give one INFO line for a gate guard with 0 runs since it was built, after ' +
-    'the set number of days. It is INFO only and never stops anything.', {
-      weakens: offWeakens,
-      protects: 'A guard in the registry that no gate runs, which reads as protection that is not there.',
-      whyNot: 'It is one INFO line, and only for a guard that has not run at all.',
-      changes: 'No line; the registry still shows 0 runs for the guard.',
-    }),
+    'the set number of days. It is INFO only and never stops anything. Off: no line (the registry still shows 0 ' +
+    'runs), and no guard is weaker.'),
   row('learning.idleGuardDays', 'gates', 'integer', 'Days before a gate guard counts as not run',
     'How many days after it was built a gate guard with 0 runs gets the INFO line. 7 by default, as the plan says.'),
   row('testWeakening.enabled', 'gates', 'onoff', 'Test weakening warning',
@@ -440,13 +428,10 @@ const SETTINGS = Object.freeze([
       whyNot: 'With .only in place the rest of the suite is skipped, so the gate says green without checking it.',
       changes: 'A focus marker gives only a warning, and the merge goes on. Doctor will report it.',
     }),
+  // A log row only: the warning and the focus stop are their own rows, so off weakens no guard (owner decision 2026-11-17).
   row('testWeakening.findingLog', 'gates', 'onoff', 'Log test weakening as a finding',
-    'What the test weakening check finds also becomes a finding log row, classed as a weak test. Nothing is printed.', {
-      weakens: offWeakens,
-      protects: 'A weakened test that is warned about once and then not counted when the same failure comes back.',
-      whyNot: 'Without the row the repeat count cannot see that a failure followed a weakened test.',
-      changes: 'The warning and the focus stop stay; the finding log gets no test weakening rows.',
-    }),
+    'What the test weakening check finds also becomes a finding log row, classed as a weak test. Nothing is printed. ' +
+    'Off: no such row; the warning and the focus stop stay, so no guard is weaker.'),
   row('testWeakening.testPaths', 'gates', 'list', 'More test paths', 'More test file patterns for the warning.'),
   row('testWeakening.markers', 'gates', 'list', 'More skip markers',
     'More regular expressions for an added line in a test file.'),
@@ -564,6 +549,7 @@ const SETTINGS = Object.freeze([
     }),
   // Friction: none, it only appends a row when a guard has already decided. On by default by the owner's decision of
   // 16.11.2026 (bolk 6, measurement only): the overrides are measured for two weeks before approval with presence.
+  // A log, not a guard, but it keeps weakens until that measuring is over (owner decision 2026-11-17).
   row('guardLog.enabled', 'guards', 'onoff', 'Guard decision log',
     'Every deny and ask from the push, write and read guard is one row in the time log: guard, rule, agent type, task ' +
     'and time, never the command. Doctor and the board count them per track.', {
