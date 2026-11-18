@@ -20,6 +20,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   selected. On touch screens the box keeps its 44 px target and the header makes room for it. The Decisions headings
   use weight 600 like the rest of the board, and three `flex-basis` rules that were misspelled (and so ignored) now
   apply.
+- **Board polish: a calmer palette with readable contrast in both themes.** In dark mode the cards now sit slightly
+  lighter than the canvas behind the columns, so they read as raised surfaces instead of holes. Muted text,
+  dividers and control borders are tuned so every text pair holds WCAG AA (4.5:1) and every control border 3:1 on
+  each surface, in light and dark; a test checks all of them. The palette also gains six tinted badge tones, each
+  with one meaning (neutral, ready, done, waiting on you, blocked, heavy class), ready for the card cleanup that
+  follows.
 
 ## 0.19.0 (2026-11-18)
 

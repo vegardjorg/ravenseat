@@ -97,6 +97,66 @@ describe('contrast for the marked card', () => {
   });
 });
 
+// The design language for the board (a calm work table): neutral surfaces, text carries the information, and each
+// status color has one meaning. Every text pair is WCAG AA (4.5:1 for normal text); control borders are non-text
+// UI (3:1). All pairs are checked in light and dark.
+describe('the palette: every text pair in both modes', () => {
+  const MODES: [string, Record<string, string>][] = [
+    ['light', PALETTE.light],
+    ['dark', PALETTE.dark],
+  ];
+  // The surfaces text can sit on: the canvas behind the columns, the card (also panel and top), the panel surface,
+  // and the hover surface / active tab.
+  const SURFACES = [
+    'surface-container-low',
+    'surface-container-lowest',
+    'surface',
+    'surface-container-high',
+  ];
+  // Tinted badges: one meaning each (neutral, info / ready, ok / done, waiting on you, error / stops, heavy class).
+  const TONES = ['neutral', 'info', 'ok', 'warn', 'danger', 'heavy'];
+
+  /** Every [label, foreground, background, minimum] pair for one mode. */
+  function pairs(p: Record<string, string>): [string, string, string, number][] {
+    const out: [string, string, string, number][] = [];
+    for (const s of SURFACES) {
+      out.push([`on-surface on ${s}`, p['on-surface'], p[s], 4.5]);
+      out.push([`on-surface-variant on ${s}`, p['on-surface-variant'], p[s], 4.5]);
+      out.push([`primary (link) on ${s}`, p.primary, p[s], 4.5]);
+      out.push([`outline (control border) on ${s}`, p.outline, p[s], 3]);
+    }
+    out.push(['on-primary on primary', p['on-primary'], p.primary, 4.5]);
+    for (const t of TONES)
+      out.push([`on-tone-${t} on tone-${t}`, p[`on-tone-${t}`], p[`tone-${t}`], 4.5]);
+    return out;
+  }
+
+  it.each(MODES)('the tone tokens exist in %s mode', (_name, p) => {
+    for (const t of TONES) {
+      expect(p[`tone-${t}`]).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(p[`on-tone-${t}`]).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+
+  it.each(MODES)('every text pair is at least 4.5:1 and every border 3:1 in %s mode', (_name, p) => {
+    const below = pairs(p)
+      .map(([label, fg, bg, min]) => ({ label, k: U.contrast(fg, bg), min }))
+      .filter((r) => !(r.k >= r.min))
+      .map((r) => `${r.label}: ${r.k.toFixed(2)} (needs ${r.min})`);
+    expect(below).toEqual([]);
+  });
+
+  it.each(MODES)('the card is lighter than the canvas in %s mode (a raised surface, not a hole)', (_name, p) => {
+    // Contrast against black grows with luminance, so it orders the surfaces without a luminance helper of its own.
+    const light = (c: string) => U.contrast(c, '#000000');
+    expect(light(p['surface-container-lowest'])).toBeGreaterThan(light(p['surface-container-low']));
+    // The hover surface stands out from the card in the direction of the mode (darker in light, lighter in dark).
+    if (_name === 'dark')
+      expect(light(p['surface-container-high'])).toBeGreaterThan(light(p['surface-container-lowest']));
+    else expect(light(p['surface-container-high'])).toBeLessThan(light(p['surface-container-lowest']));
+  });
+});
+
 describe('the tabs (arrow keys)', () => {
   it('right and left wrap around, Home and End go to the ends, other keys give null', () => {
     expect(U.tabMeasure(6, 5, 'ArrowRight')).toBe(0);
