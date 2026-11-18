@@ -35,6 +35,54 @@ export function cmdGuidance() {
   );
 }
 
+/**
+ * `ravenseat controls [dismiss|restore]`: what checks this project's code (CI config, gates), and the push question about it
+ * (lib/controls.js). dismiss stops that question for this project while nothing else goes missing; restore brings it back.
+ * State, not a setting: queue.json `controlsDismissed` (ignored by git, like guidance), written under the lock. It never
+ * touches a guard: the secret scan, the owner question and the merge guard ask as before.
+ */
+export function cmdControls() {
+  const C = require('./lib/controls.js');
+  const sub = a[1];
+  if (sub && sub !== 'dismiss' && sub !== 'restore') die(`Use: ${CLI} controls [dismiss|restore]`);
+  const missing = C.missing(CONFIG, MAIN_TREE);
+  if (sub === 'dismiss') {
+    if (!missing.length) {
+      console.log('Nothing is missing: this project has a CI config and gates, so there is no push question to dismiss.');
+      return;
+    }
+    // What is missing now is remembered: a later gap that is not in this list brings the question back.
+    edit((queue) => {
+      queue.controlsDismissed = { missing, at: new Date().toISOString() };
+    });
+    console.log(
+      `Dismissed for this project: a push no longer asks about ${missing.join(' and ')}. It asks again if something else goes ` +
+        `missing. push-check and doctor still show the fact. Undo: ${C.RESTORE(CLI)}.`,
+    );
+    return;
+  }
+  if (sub === 'restore') {
+    edit((queue) => {
+      delete queue.controlsDismissed;
+    });
+    console.log('Restored: a push asks again when this project has no CI config or no gates.');
+    return;
+  }
+  // The status: what is missing, and whether a push asks about it.
+  if (!missing.length) {
+    console.log('Controls: this project has a CI config and gates. A push has nothing to ask about here.');
+    return;
+  }
+  const dismissal = C.dismissalOf(read());
+  const off = CONFIG.push?.controlsWarning === false ? ' push.controlsWarning is off in queue.config.json, so no push asks about it.' : '';
+  if (C.covers(dismissal, missing)) console.log(`${C.dismissedLine(missing, CLI)}${off}`);
+  else
+    console.log(
+      `Controls: ${missing.join(', ')}, so nothing automatic checks a push. A push asks first.${off} ` +
+        `${C.DISMISS(CLI)} stops that question for this project; /ravenseat:kickstart adds checks one step at a time.`,
+    );
+}
+
 export function cmdHelpers() {
   // ---- The helper agents (lib/queueHelpers.js): list, switch one on or off, and the custom helpers of the project
   // (add, scan, approve, when, remove). Every write goes to queue.json (helpers.<agent>) under the lock, like `limit`,

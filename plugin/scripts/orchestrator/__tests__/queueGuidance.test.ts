@@ -91,6 +91,53 @@ describe('ravenseat guidance', () => {
 
 });
 
+describe('ravenseat controls dismiss', () => {
+  const GATE = { gates: { quick: ['node -e "process.exit(0)"'] } };
+  const reason = (p: ReturnType<typeof project>) => p.hook('git push origin main')?.permissionDecisionReason ?? '';
+
+  it('stops the push question for what is missing now, keeps the fact quiet, and the undo brings it back', () => {
+    const p = project(GATE);
+    p.origin();
+    expect(reason(p)).toContain('ravenseat controls dismiss');
+    const d = p.ravenseat('controls', 'dismiss');
+    expect(d.code).toBe(0);
+    expect(d.out).toContain('no CI config');
+    expect(d.out).toContain('ravenseat controls restore');
+    expect(reason(p)).not.toContain('no CI config');
+    // push-check keeps the fact as one quiet line, doctor names the dismissal once.
+    expect(p.pushCheck()).toContain('Controls: no CI config (dismissed for this project; undo: ravenseat controls restore).');
+    const doctor = p.ravenseat('doctor').out;
+    expect(doctor).toContain('no CI config found');
+    expect(doctor.split('dismissed for this project').length - 1).toBe(1);
+    expect(p.ravenseat('controls').out).toContain('dismissed for this project');
+    // The undo.
+    expect(p.ravenseat('controls', 'restore').code).toBe(0);
+    expect(reason(p)).toContain('no CI config');
+    expect(p.pushCheck()).toContain('so nothing automatic checks this push');
+  });
+
+  it('asks again when something new goes missing', () => {
+    const p = project(GATE);
+    p.origin();
+    p.ravenseat('controls', 'dismiss');
+    expect(reason(p)).not.toContain('no CI config');
+    fs.writeFileSync(path.join(p.folder, 'queue.config.json'), JSON.stringify({ baseBranch: 'main' }));
+    expect(reason(p)).toContain('no CI config and no gates');
+    expect(p.pushCheck()).toContain('Controls: no CI config, no gates, so nothing automatic checks this push');
+  });
+
+  it('has nothing to dismiss with both controls there, and refuses anything else', () => {
+    const p = project(GATE);
+    fs.mkdirSync(path.join(p.folder, '.github', 'workflows'), { recursive: true });
+    fs.writeFileSync(path.join(p.folder, '.github', 'workflows', 'ci.yml'), 'on: push\n');
+    const d = p.ravenseat('controls', 'dismiss');
+    expect(d.code).toBe(0);
+    expect(d.out).toContain('Nothing is missing');
+    expect(JSON.parse(fs.readFileSync(path.join(p.folder, 'data', 'queue.json'), 'utf8')).controlsDismissed).toBeUndefined();
+    expect(p.ravenseat('controls', 'odd').code).toBe(1);
+  });
+});
+
 describe('fixes around the switches', () => {
   it('baseGate.enabled: false is valid in doctor', () => {
     const r = project({ baseGate: { enabled: false } }).ravenseat('doctor');
@@ -113,6 +160,12 @@ describe('fixes around the switches', () => {
     const text = off.pushCheck();
     expect(text).toContain('main');
     expect(text).not.toContain('Controls:');
+  });
+
+  it('ravenseat settings push.controlsWarning names the dismiss command', () => {
+    const r = project().ravenseat('settings', 'push.controlsWarning');
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('ravenseat controls dismiss');
   });
 
   it('push.allowBranches lets the main session push that branch, and only that', () => {

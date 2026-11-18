@@ -64,6 +64,7 @@ ravenseat surface accept --by owner # accept the current state (after installing
 ravenseat unlock                    # who holds the queue lock; changes nothing (--force --by owner releases it)
 ravenseat attempt list <ID>         # the task's attempts; `ravenseat attempt close <ID> --outcome <...>` closes a stuck one
 ravenseat guidance [guided|quiet]   # one switch for advice about CI, gates, lockfiles and the budget; never a guard
+ravenseat controls [dismiss|restore] # no CI config or no gates: dismiss stops the push question for this project until something else goes missing
 ravenseat helpers                   # helper agents: on/off and what they cost
 ravenseat helpers add <file.md>     # a custom helper: copied, scanned, off until approved
 ravenseat plan show                 # plan register

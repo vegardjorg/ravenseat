@@ -129,6 +129,8 @@ const blocked = PB.blockedTexts({ external: plan.externalOnes.length, behind: ba
 const verdict = PB.batchVerdict({ batch, setup: SETUP, health, fullGate, blocked });
 // No CI config or no gates (lib/controls.js): said here too, since the orchestrator reads this before a push.
 const missingControls = require('./lib/controls.js').missing(K, K.root);
+// Dismissed for this project (`ravenseat controls dismiss`) while nothing new is missing: the fact stays as a quiet line.
+const controlsDismissed = require('./lib/controls.js').covers(require('./lib/controls.js').readDismissal(dataFolder()), missingControls);
 
 const summary = (s) => String(s).slice(0, 8);
 const fileText = (files, max = 6) =>
@@ -175,6 +177,7 @@ if (AS_JSON) {
           reason: verdict.reason,
         },
         controls_missing: missingControls,
+        controls_dismissed: controlsDismissed,
         ci_watch: CI.enabled ? { mode: CI.mode, command: `ravenseat push-check --watch-ci ${toSha}` } : null,
       },
       null,
@@ -273,7 +276,11 @@ function batchLines() {
       `; base ${healthText}, full gate ${gateText} at ${summary(toSha)} (${limits}).`,
     `Verdict: ${PB.verdictWord(verdict.verdict)} (${verdict.reason}).`,
     ...(missingControls.length && K.push?.controlsWarning !== false && !require('./lib/guidance.js').readQuiet(dataFolder())
-      ? [`Controls: ${missingControls.join(', ')}, so nothing automatic checks this push (/ravenseat:kickstart).`]
+      ? [
+          controlsDismissed
+            ? require('./lib/controls.js').dismissedLine(missingControls, require('./lib/projectRoot.js').cliCommand())
+            : `Controls: ${missingControls.join(', ')}, so nothing automatic checks this push (/ravenseat:kickstart).`,
+        ]
       : []),
     ...(CI.enabled
       ? [`CI watch (${CI.mode}): after the push, start ravenseat push-check --watch-ci ${toSha} in the background (run_in_background); exit 9 = a check failed (fix task CI-${toSha.slice(0, 7)}), 0 = green or an owner question, 10 = timeout.`]

@@ -293,6 +293,9 @@
 //                                                                  the weights and the order are never changed by it)
 //   node scripts/orchestrator/queue.mjs guidance [guided|quiet]     (one switch for advice about CI, gates and lockfiles, the
 //                                                                  light review, triage and gate proposals; never a guard)
+//   node scripts/orchestrator/queue.mjs controls [dismiss|restore]  (no CI config or no gates: dismiss stops the push question
+//                                                                  for this project until something else goes missing; restore
+//                                                                  brings it back; push-check and doctor keep the fact)
 //   node scripts/orchestrator/queue.mjs helpers [--json]            (the helper agents: on/off, when they run, and the
 //                                                                  measurement: runs, minutes, tokens, USD, share, findings)
 //   node scripts/orchestrator/queue.mjs helpers on|off <agent>      (switches a helper in queue.json; wins over
@@ -823,6 +826,8 @@ if (command === 'init') {
   (await import('./cli/helpers.mjs')).cmdHelpers();
 } else if (command === 'guidance') {
   (await import('./cli/helpers.mjs')).cmdGuidance();
+} else if (command === 'controls') {
+  (await import('./cli/helpers.mjs')).cmdControls();
 } else if (command === 'checks') {
   (await import('./cli/checks.mjs')).cmdChecks();
 } else if (command === 'inspection') {

@@ -553,13 +553,26 @@ function gateLines(g, n) {
       ];
     return [ok('gates', `${n} gate command(s) set${empty.length ? `, ${empty.length} of them check nothing (${empty.slice(0, 3).join(', ')})` : ''}`)];
   }
+  // With CI missing too, the ci row names the dismissal; said here only when it is not said there (once per doctor run).
+  const note = require('./lib/controls.js').ciHosts(MAIN_TREE).length ? controlsDismissedNote() : '';
   return [
     warn(
       'gates',
-      'gates.quick and gates.full are empty: your agents run no checks before they deliver',
+      `gates.quick and gates.full are empty: your agents run no checks before they deliver${note}`,
       "put the project's own check commands (build, type check, lint, tests) in gates.quick and gates.full",
     ),
   ];
+}
+
+/**
+ * The push question was dismissed for this project (`ravenseat controls dismiss`, lib/controls.js) and still covers what
+ * is missing: a short note for one doctor row, so the fact and the undo stay visible without a row of their own.
+ */
+function controlsDismissedNote() {
+  const C = require('./lib/controls.js');
+  return C.covers(C.readDismissal(FOLDER), C.missing(CONFIG, MAIN_TREE))
+    ? ` (push question dismissed for this project; undo: ${C.RESTORE(CLI)})`
+    : '';
 }
 
 /** CI: is there a CI config for one of the common hosts? */
@@ -569,7 +582,7 @@ export function checkCi() {
   return [
     info(
       'ci',
-      'no CI config found: nothing checks a push except your own machine',
+      `no CI config found: nothing checks a push except your own machine${controlsDismissedNote()}`,
       'set up CI on your git host to run your gates on every push (for GitHub: /ravenseat:setup offers a template)',
     ),
   ];

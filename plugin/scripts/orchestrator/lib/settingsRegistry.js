@@ -831,8 +831,13 @@ const SETTINGS = Object.freeze([
     'Unpushed work older than this makes the batch ready below the task count. Empty = off.'),
   row('push.allowBranches', 'push', 'list', 'Other branches the main session may push',
     'For pull request flows ("feat/*"). Queue agents never push.'),
+  // Friction: one extra question per push while CI or gates are missing, and in owner mode it comes after the owner already
+  // said push. Owner decision 18.11.2026: `ravenseat controls dismiss` stops it for this one project (state in queue.json,
+  // lib/controls.js, not a setting), and it asks again if something else goes missing. The default stays on: a new user
+  // with no checks still hears it once, and the dismissal is one command away in the question itself.
   row('push.controlsWarning', 'push', 'onoff', 'Ask on push without checks',
-    'A push asks first when the project has no CI config or no gates.', {
+    'A push asks first when the project has no CI config or no gates. `ravenseat controls dismiss` stops the question ' +
+    'for this project until something else goes missing (undo: `ravenseat controls restore`); off here stops it everywhere.', {
       weakens: offWeakens,
       protects: 'Pushing code that nothing automatic has checked.',
       whyNot: 'Without CI or gates, the push is the first time anyone can see the code fails.',

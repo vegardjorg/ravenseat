@@ -3,6 +3,19 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+- **The push question about missing checks can be dismissed for one project, without losing the fact.** A project
+  with no CI config or no gates asked before every push, also in owner mode right after you said push.
+  `ravenseat controls dismiss` now stops that question for this project. It remembers what was missing, so the
+  question comes back as soon as something else goes missing (for example the gates are emptied after you dismissed
+  "no CI config"). `ravenseat controls restore` undoes it, and `ravenseat controls` shows where it stands. The
+  dismissal is your own state in queue.json (ignored by git), so it never silences a colleague, and a broken value
+  counts as no dismissal. push-check keeps the fact on one quiet line with the undo, and doctor names it once on its
+  ci or gates row. `push.controlsWarning` keeps its default (on) and its meaning, and the secret scan and the
+  owner-mode push question still ask as before.
+- `push-check` printing its Controls line with `push.controlsWarning: false` was already fixed; a test covers it.
+
 ## 0.19.0 (2026-11-18)
 
 **The settings and checks are easier to read and quieter: sixteen groups, plain explanations, `ravenseat settings <key>`, a line on what each guard protects against, and a note when a setting has no effect because another one is off. Checks that are off by choice stop reminding you, receive prints one note line per kind, and the Checks tab folds the general ideas. The board key stays out of the output Claude reads, the review gate shows on the card before merge, and every merge override is counted. The main session's overrides and an owner-mode push now ask in the permission dialog, and the main tree's control files are out of a queue agent's reach. No protective default is weakened.**

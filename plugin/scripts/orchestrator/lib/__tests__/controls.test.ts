@@ -55,6 +55,44 @@ describe('the push question', () => {
     expect(C.question({ missing: [], commits: 12 })).toBeNull();
     expect(C.question({ missing: ['no gates'], commits: 0 })).toBeNull();
   });
+  it('offers one command that stops it for this project, and names the undo', () => {
+    const q = C.question({ missing: ['no CI config'], commits: 3 });
+    expect(q).toContain('ravenseat controls dismiss');
+    expect(q).toContain('ravenseat controls restore');
+  });
+});
+
+describe('the dismissal (ravenseat controls dismiss)', () => {
+  const at = '2026-11-18T10:00:00.000Z';
+  it('is read from queue.json and keeps only a list of words', () => {
+    expect(C.dismissalOf({ controlsDismissed: { missing: ['no CI config'], at } })).toEqual({ missing: ['no CI config'], at });
+    expect(C.dismissalOf({})).toBeNull();
+    expect(C.dismissalOf(null)).toBeNull();
+    expect(C.dismissalOf({ controlsDismissed: { missing: 'no CI config' } })).toBeNull();
+    expect(C.dismissalOf({ controlsDismissed: { missing: [] } })).toBeNull();
+  });
+  it('covers only what was missing when it was made: something new missing brings the question back', () => {
+    const d = { missing: ['no CI config'], at };
+    expect(C.covers(d, ['no CI config'])).toBe(true);
+    expect(C.covers(d, ['no CI config', 'no gates'])).toBe(false);
+    expect(C.covers(d, ['no gates'])).toBe(false);
+    expect(C.covers(null, ['no CI config'])).toBe(false);
+    expect(C.covers(d, [])).toBe(false);
+    expect(C.covers({ missing: ['no CI config', 'no gates'], at }, ['no gates'])).toBe(true);
+  });
+  it('readDismissal reads the data folder, and an unreadable file is no dismissal', () => {
+    const folder = emptyFolder();
+    expect(C.readDismissal(folder)).toBeNull();
+    fs.writeFileSync(path.join(folder, 'queue.json'), JSON.stringify({ controlsDismissed: { missing: ['no gates'], at } }));
+    expect(C.readDismissal(folder)).toEqual({ missing: ['no gates'], at });
+    fs.writeFileSync(path.join(folder, 'queue.json'), '{ not json');
+    expect(C.readDismissal(folder)).toBeNull();
+  });
+  it('the quiet line keeps the fact and names the undo', () => {
+    expect(C.dismissedLine(['no CI config'])).toBe(
+      'Controls: no CI config (dismissed for this project; undo: ravenseat controls restore).',
+    );
+  });
 });
 
 describe('verification', () => {

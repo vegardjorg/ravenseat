@@ -53,6 +53,7 @@
 //
 // The missing controls (lib/controls.js, push.controlsWarning): the same plain push asks when the project has no CI config
 // or no gates, with what is missing and how many commits. Also on a first push, which is what a new user does. Never a deny.
+// `ravenseat controls dismiss` stops it for this project until something else goes missing (queue.json controlsDismissed).
 //
 // Test: lib/__tests__/pushGuard.test.ts (the logic). Smoke test of the hook itself:
 //   echo '{"tool_input":{"command":"git push --force origin main"},"cwd":"."}' | node scripts/orchestrator/hook-push-guard.mjs
@@ -208,11 +209,13 @@ function controlsQuestion(cwd, k) {
     const C = require('./lib/controls.js');
     const missing = C.missing(k, k.root);
     if (!missing.length) return null;
+    // Dismissed for this project (`ravenseat controls dismiss`): quiet while nothing new is missing.
+    if (C.covers(C.readDismissal(dataFolder()), missing)) return null;
     const head = `refs/heads/${k.baseBranch}`;
     const remote = `refs/remotes/${k.remote}/${k.baseBranch}`;
     // A first push has no remote ref: everything on the branch goes.
     const range = git(cwd, ['rev-parse', '-q', '--verify', remote]) ? `${remote}..${head}` : head;
-    return C.question({ missing, commits: Number(git(cwd, ['rev-list', '--count', range])) || 0 });
+    return C.question({ missing, commits: Number(git(cwd, ['rev-list', '--count', range])) || 0, cli: require('./lib/projectRoot.js').cliCommand() });
   } catch {
     return null;
   }

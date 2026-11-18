@@ -10,7 +10,15 @@
 //   audited     no check ran, but an agent reviewed the change. Never counted as verified.
 //   unverified  nothing ran.
 //
-// Only ciHosts reads the disk (a few stats, cheap enough for a hook). Tested in lib/__tests__/controls.test.ts.
+// The dismissal (`ravenseat controls dismiss`, owner decision 2026-11-18): in owner mode a push only happens on the owner's
+// word, so the same question after every "push" is friction with no news in it. The owner can stop it for this project.
+// It is state, not a setting: queue.json in the data folder (`controlsDismissed`, ignored by git, like `guidance`), so one
+// person's dismissal never silences a colleague and queue.config.json stays the shared rules. It remembers WHAT was
+// missing: when something else goes missing later, the question is back. The fact never goes: push-check and doctor
+// keep one quiet line that names the undo (`ravenseat controls restore`).
+//
+// ciHosts and readDismissal read the disk (a few stats and one small file, cheap enough for a hook).
+// Tested in lib/__tests__/controls.test.ts and __tests__/queueGuidance.test.ts.
 // =============================================================
 'use strict';
 
@@ -50,15 +58,48 @@ function missing(config, root) {
   return [...(ciHosts(root).length ? [] : ['no CI config']), ...(hasGates(config) ? [] : ['no gates'])];
 }
 
+/** The command that stops the question for this project, and its undo. `cli` is the CLI as the user runs it (cliCommand). */
+const DISMISS = (cli = 'ravenseat') => `${cli} controls dismiss`;
+const RESTORE = (cli = 'ravenseat') => `${cli} controls restore`;
+
 /** The push guard's question, or null when nothing is missing or nothing is pushed. Never blocks: it is an "ask". */
-function question({ missing: what, commits }) {
+function question({ missing: what, commits, cli = 'ravenseat' }) {
   if (!what?.length || !commits) return null;
   return (
     `this push sends ${commits} commit(s) with ${what.join(' and ')}, so nothing automatic checks this code. ` +
-    '/ravenseat:kickstart adds checks one step at a time. "push": { "controlsWarning": false } in queue.config.json turns this question off. ' +
+    '/ravenseat:kickstart adds checks one step at a time. ' +
+    `${DISMISS(cli)} stops this question for this project until something else goes missing (undo: ${RESTORE(cli)}); ` +
+    '"push": { "controlsWarning": false } in queue.config.json turns it off for everyone. ' +
     'Push anyway?'
   );
 }
+
+/**
+ * The dismissal stored in a queue (queue.json `controlsDismissed`), or null. Only a non-empty list of words counts: a
+ * hand-edited or broken value is no dismissal, so the question shows (the safe side).
+ * @returns {{ missing: string[], at: string|null }|null}
+ */
+function dismissalOf(queue) {
+  const d = queue?.controlsDismissed;
+  if (!d || !Array.isArray(d.missing)) return null;
+  const words = d.missing.filter((w) => typeof w === 'string' && w);
+  return words.length ? { missing: words, at: typeof d.at === 'string' ? d.at : null } : null;
+}
+
+/** For the places with no queue at hand (the push hook, push-check, doctor). Unreadable: null, so the question shows. */
+function readDismissal(folder) {
+  try {
+    return dismissalOf(JSON.parse(fs.readFileSync(path.join(folder, 'queue.json'), 'utf8')));
+  } catch {
+    return null;
+  }
+}
+
+/** Does the dismissal cover what is missing now? Only when every word was missing at the dismissal too. */
+const covers = (dismissal, what) => Boolean(dismissal && what?.length && what.every((w) => dismissal.missing.includes(w)));
+
+/** The quiet line push-check prints for a dismissed question: the fact and the undo, no advice. */
+const dismissedLine = (what, cli = 'ravenseat') => `Controls: ${what.join(', ')} (dismissed for this project; undo: ${RESTORE(cli)}).`;
 
 /**
  * The verification of a merge that went through (a red gate or done command never gets here).
@@ -84,4 +125,20 @@ function verificationLine({ status, checks }, { quiet = false } = {}) {
 const noChecksLine = (id, { quiet = false } = {}) =>
   quiet ? `${id}: no checks ran.` : `${id}: NO CHECKS RAN: gates.quick is empty and the task has no done command. /ravenseat:kickstart adds checks one step at a time.`;
 
-module.exports = { CI_FILES, ciHosts, commandsOf, hasGates, missing, question, verification, verificationLine, noChecksLine };
+module.exports = {
+  CI_FILES,
+  ciHosts,
+  commandsOf,
+  hasGates,
+  missing,
+  DISMISS,
+  RESTORE,
+  question,
+  dismissalOf,
+  readDismissal,
+  covers,
+  dismissedLine,
+  verification,
+  verificationLine,
+  noChecksLine,
+};
