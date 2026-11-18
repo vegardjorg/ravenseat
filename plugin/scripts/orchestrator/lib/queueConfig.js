@@ -646,6 +646,9 @@ const STANDARD = Object.freeze({
     // their own right after In queue. Off by default. queue.json board.blockedColumn wins (written by
     // `ravenseat board-setting blocked on|off` and the gear).
     blockedColumn: false,
+    // The key stays out of Claude's view (0l bolk 5): the board opens itself in the browser with the key and prints
+    // the link without it; `ravenseat board open` opens it again. false prints the link with the key (weakened).
+    hideKey: true,
   },
   // The modules that can be switched off (FEATURES above): { "cloud": true } turns one on. Unknown keys are ignored.
   features: FEATURES,

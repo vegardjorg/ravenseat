@@ -9,11 +9,15 @@
 // temporary queue (never the real queue or the main repo).
 // =============================================================
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { boardOpen, keyFileArgs } from './boardKey';
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+
+// The board never prints its key (0l bolk 5): it writes the link to this file.
+const KF = keyFileArgs();
 
 type Task = Record<string, unknown> & { id: string; status: string };
 
@@ -212,7 +216,7 @@ describe('the board server: POST /api/task-edit', () => {
         s.close(() => done(p));
       });
     });
-    board = spawn(process.execPath, [path.resolve(__dirname, '..', '..', 'queue-board.mjs'), '--port', String(port)], {
+    board = spawn(process.execPath, [path.resolve(__dirname, '..', '..', 'queue-board.mjs'), '--port', String(port), ...KF.args], {
       cwd: root,
       env,
     });
@@ -223,7 +227,7 @@ describe('the board server: POST /api/task-edit', () => {
       const t = setTimeout(() => fail(new Error(`no start line: ${out} ${err}`)), 20_000);
       board!.stdout!.on('data', (d) => {
         out += String(d);
-        const m = /Open: (http:\/\/[^/\s]+)\/#key=(\S+)/.exec(out);
+        const m = boardOpen(out, KF.file);
         if (m) {
           clearTimeout(t);
           base = m[1];
@@ -245,7 +249,7 @@ describe('the board server: POST /api/task-edit', () => {
   const post = async (p: string, body: object) => {
     const r = await fetch(`${base}${p}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-queue-key': key },
+      headers: { 'content-type': 'application/json', origin: base, 'x-queue-key': key },
       body: JSON.stringify(body),
     });
     return { status: r.status, body: (await r.json()) as { ok: boolean; message?: string; log?: number } };

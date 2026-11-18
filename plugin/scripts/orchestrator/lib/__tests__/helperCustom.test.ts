@@ -12,12 +12,16 @@
 //   - merge-track protects the custom helper's file even when protectedPaths is empty
 // =============================================================
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { boardOpen, keyFileArgs } from './boardKey';
 import { spawn, type ChildProcess } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+
+// The board never prints its key (0l bolk 5): it writes the link to this file.
+const KF = keyFileArgs();
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const H = require('../queueHelpers.js');
@@ -350,7 +354,7 @@ describe('the board server', () => {
         s.close(() => done(p));
       });
     });
-    board = spawn(process.execPath, [path.resolve(__dirname, '..', '..', 'queue-board.mjs'), '--port', String(port)], { cwd: root, env });
+    board = spawn(process.execPath, [path.resolve(__dirname, '..', '..', 'queue-board.mjs'), '--port', String(port), ...KF.args], { cwd: root, env });
     await new Promise<void>((done, fail) => {
       let out = '';
       let err = '';
@@ -358,7 +362,7 @@ describe('the board server', () => {
       const t = setTimeout(() => fail(new Error(`no start line: ${out} ${err}`)), 20_000);
       board!.stdout!.on('data', (d) => {
         out += String(d);
-        const m = /Open: (http:\/\/[^/\s]+)\/#key=(\S+)/.exec(out);
+        const m = boardOpen(out, KF.file);
         if (m) {
           clearTimeout(t);
           base = m[1];
@@ -380,7 +384,7 @@ describe('the board server', () => {
   const post = async (p: string, body: object) => {
     const r = await fetch(`${base}${p}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-queue-key': key },
+      headers: { 'content-type': 'application/json', origin: base, 'x-queue-key': key },
       body: JSON.stringify(body),
     });
     return { status: r.status, body: (await r.json()) as { ok: boolean; message: string } };

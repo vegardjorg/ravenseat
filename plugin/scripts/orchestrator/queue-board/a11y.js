@@ -175,7 +175,7 @@
   // ---- The key after a restart ----
 
   /**
-   * The key from the link queue-board wrote in the terminal (`…/#key=abc`), pasted into the banner. Reads only the #
+   * The key from a link with the key (the board opens one itself; board.hideKey false prints it) (`…/#key=abc`), pasted into the banner. Reads only the #
    * part (or &key= in it). A bare key without a link is also accepted. Returns null when the text has no key.
    */
   function keyFromLink(text) {

@@ -13,12 +13,16 @@
 //     confirm: 'weaken' (422 with the warning texts, nothing written), then writes and logs it with that confirm.
 // =============================================================
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { boardOpen, keyFileArgs } from './boardKey';
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { CLIENT, boardScripts } from './boardClient';
+
+// The board never prints its key (0l bolk 5): it writes the link to this file.
+const KF = keyFileArgs();
 
 // The policy is written out in full on purpose: a change to it must be a change to this test too.
 const CSP =
@@ -58,7 +62,7 @@ beforeAll(async () => {
       s.close(() => done(p));
     });
   });
-  board = spawn(process.execPath, [path.resolve(__dirname, '..', '..', 'queue-board.mjs'), '--port', String(port)], {
+  board = spawn(process.execPath, [path.resolve(__dirname, '..', '..', 'queue-board.mjs'), '--port', String(port), ...KF.args], {
     cwd: root,
     env,
   });
@@ -69,7 +73,7 @@ beforeAll(async () => {
     const t = setTimeout(() => fail(new Error(`no start line: ${out} ${err}`)), 60_000);
     board!.stdout!.on('data', (d) => {
       out += String(d);
-      const m = /Open: (http:\/\/[^/\s]+)\/#key=(\S+)/.exec(out);
+      const m = boardOpen(out, KF.file);
       if (m) {
         clearTimeout(t);
         base = m[1];
@@ -158,7 +162,7 @@ describe('the board server: an owner question answered with a choice button', ()
     const post = async (body: object) => {
       const r = await fetch(`${base}/api/action`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-queue-key': key },
+        headers: { 'content-type': 'application/json', origin: base, 'x-queue-key': key },
         body: JSON.stringify(body),
       });
       return { status: r.status, body: (await r.json()) as { ok: boolean; message?: string } };
@@ -181,7 +185,7 @@ describe('the board server: the Blocked column switch (board.blockedColumn)', ()
   const post = async (body: object) => {
     const r = await fetch(`${base}/api/action`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-queue-key': key },
+      headers: { 'content-type': 'application/json', origin: base, 'x-queue-key': key },
       body: JSON.stringify(body),
     });
     return { status: r.status, body: (await r.json()) as { ok: boolean; message?: string } };
@@ -244,7 +248,7 @@ describe('the board server: the settings registry and the weakening rule (plans/
   const post = async (url: string, body: object) => {
     const r = await fetch(`${base}${url}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-queue-key': key },
+      headers: { 'content-type': 'application/json', origin: base, 'x-queue-key': key },
       body: JSON.stringify(body),
     });
     return { status: r.status, body: (await r.json()) as Record<string, any> };
@@ -360,7 +364,7 @@ describe('the board server: Build as gate on the Checks tab (0i step 7)', () => 
   const post = async (body: object, withKey = true) => {
     const r = await fetch(`${base}/api/checks`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...(withKey ? { 'x-queue-key': key } : {}) },
+      headers: { 'content-type': 'application/json', origin: base, ...(withKey ? { 'x-queue-key': key } : {}) },
       body: JSON.stringify(body),
     });
     return { status: r.status, body: (await r.json()) as { ok: boolean; message?: string } };

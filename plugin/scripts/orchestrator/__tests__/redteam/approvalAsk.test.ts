@@ -48,6 +48,9 @@ describe('the main session passes an override', () => {
     ['the board API with the key header', 'curl -s -H "X-Queue-Key: k" -X POST http://127.0.0.1:2000/api/action', 'override-board-api'],
     ['the board API with node fetch', `node -e "fetch('http://localhost:2000/api/setting',{method:'POST'})"`, 'override-board-api'],
     ['the board API on another loopback form', 'Invoke-RestMethod http://[::1]:2000/api/action -Method Post', 'override-board-api'],
+    ['the board with its key in a file', 'ravenseat board --key-file k.txt', 'override-board-key'],
+    ['the board script with --key-file=', 'node plugin/scripts/orchestrator/queue-board.mjs --port 2001 --key-file=k.txt', 'override-board-key'],
+    ['the board with a key file behind bash -c', 'bash -c "ravenseat board --key-file k.txt"', 'override-board-key'],
   ])('%s: ask with rule %s', (_name, command, rule) => {
     const f = find(command);
     expect(f?.decision).toBe('ask');
@@ -80,6 +83,9 @@ describe('the main session passes an override', () => {
       'ravenseat owner-log',
       'ravenseat helpers show my-helper',
       'ravenseat fill && ravenseat start Q-2',
+      'ravenseat board',
+      'ravenseat board open --follow',
+      'node plugin/scripts/orchestrator/queue-board.mjs --port 2001',
       'git commit -m "docs: merge --allow-guard and --by owner are asked now"',
       'grep -rn "--allow-guard" plugin/docs',
       'curl -s http://localhost:3000/api/users',

@@ -5,6 +5,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **The board key stays out of Claude's view.** `ravenseat board` now opens the board in your browser with its key
+  and prints the link without it, so the key no longer lands in the output Claude reads when it starts the board in
+  the background. `ravenseat board open` opens the running board again (a closed tab, `--follow` for the read view).
+  A write without the board's own Origin is refused, a `--key-file` for scripts is an override that asks first and is
+  denied to queue agents, and a new test fails if any start or open line carries the key. `board.hideKey` (on by
+  default) is the setting; off prints the link with the key as before and counts as a weakened guard.
 - **The review gate is visible before merge, and every merge override is counted.** A card in Review now shows
   **reviews k/n**: how many of the reviewers `receive` chose have reported FINDINGS after that receive, with a warning
   while one is missing or the newest report has a HIGH, the two cases where `merge` already stops. The board reads the

@@ -79,7 +79,7 @@ Requirements: Node.js 20 or newer, git and Claude Code. No npm packages are need
    what they wrote: a task that owns an uncommitted file is held back.
 3. **Add a task:** say "add to the queue: <what you want done>", or write a JSON file and run `ravenseat add --file task.json`.
 4. **Start the queue:** `/ravenseat:queue`. It shows the state and asks before it starts any agent.
-5. **Open the board:** `/ravenseat:board` gives you a local link. Answer questions under "Waiting on you"; an empty queue
+5. **Open the board:** `/ravenseat:board` opens the local board in your browser. Answer questions under "Waiting on you"; an empty queue
    shows the same three steps.
 
 Cloud sessions and follow-up entries are off by default, and so are the Legal, Launch and Documents surfaces in

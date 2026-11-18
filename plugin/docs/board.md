@@ -10,19 +10,30 @@ from a wider angle, does not run a separate engine, and every change it makes to
 <p align="center"><img src="../../assets/infographics/claude-code-and-board.webp" alt="Claude Code as the control surface plus the optional visual board, both on top of the same orchestration: task queue, agents, checks and your decisions" width="800"></p>
 
 ```
-ravenseat board            # prints the link, e.g. http://127.0.0.1:2000/#key=… (port: board.port)
+ravenseat board            # opens the board in your browser (port: board.port)
+ravenseat board open       # opens the running board again (--follow: the follow-up page)
 ```
 
 How to start it:
 - **In Claude Code:** `/ravenseat:board`, or ask Claude to start the board. It runs `ravenseat board` in the background (never in
-  the foreground: it is a server and would block the chat) and gives you the link. It stops with the session.
+  the foreground: it is a server and would block the chat), and the board opens itself in your browser. It stops with
+  the session.
 - **From your own terminal** (keeps running on its own): in the project folder,
   `node "<plugin folder>/scripts/orchestrator/ravenseat.mjs" board`. `ravenseat` itself is only on the PATH inside Claude Code;
   `/ravenseat:board` prints the full path. In a vendored install: `node scripts/orchestrator/ravenseat.mjs board`.
 
-It listens on 127.0.0.1 only. There is no user login, but every request needs the key in the printed link,
-and the key changes on every restart (an old tab then says "The key is old": open the new link). Do not expose
-the port.
+It listens on 127.0.0.1 only. There is no user login, but every request needs the key, and the key changes on every
+restart (an old tab then says "The key is old": run `ravenseat board open`). Do not expose the port.
+
+**The key stays out of Claude's view** (`board.hideKey`, on). The key gives every owner action on the board, and the
+start line is what Claude reads when it starts the board for you. So the board opens your browser itself with the
+key in the `#` part of the link (never sent to a server), and prints the link without it. `ravenseat board open`
+asks the running board to open it again; it needs no key and never gets one. A write without the board's Origin (a
+script, not your browser) is refused even with the key. No browser on the machine: the start line says so; set
+`board.hideKey` false to print the link with the key, as before (a weakened guard). Scripts and tests can pass
+`--key-file <path>` to get the link in a file instead of a browser; when Claude passes it, the approval guard asks you
+first (`approvals.ask`). Limits: a model with a browser tool on the same browser, or one that reads the process list
+while the browser starts, can still see the key; this closes the plain way (the start line, then curl).
 
 ## A tour
 

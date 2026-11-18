@@ -8,10 +8,14 @@
 // queue.json reads as before and a queue.json with attempts reads everywhere.
 // =============================================================
 import { afterAll, describe, expect, it } from 'vitest';
+import { boardOpen, keyFileArgs } from '../lib/__tests__/boardKey';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+// The board never prints its key (0l bolk 5): it writes the link to this file.
+const KF = keyFileArgs();
 
 type Attempt = Record<string, unknown> & { id: string; state: string; round: number };
 type Task = Record<string, unknown> & { id: string; status: string; attempts?: Attempt[] };
@@ -1284,7 +1288,7 @@ describe('the board answers a track through the same command (test round 3: N12)
         s.close(() => done(free));
       });
     });
-    const board = spawn(process.execPath, [path.join(SCRIPTS, 'queue-board.mjs'), '--port', String(port)], { cwd: p.folder, env: p.env });
+    const board = spawn(process.execPath, [path.join(SCRIPTS, 'queue-board.mjs'), '--port', String(port), ...KF.args], { cwd: p.folder, env: p.env });
     let said = '';
     board.stderr.on('data', (d: Buffer) => (said += String(d)));
     try {
@@ -1293,14 +1297,14 @@ describe('the board answers a track through the same command (test round 3: N12)
         const timer = setTimeout(() => fail(new Error(`no start line: ${out} ${said}`)), 60_000);
         board.stdout.on('data', (d: Buffer) => {
           out += String(d);
-          const m = /Open: (http:\/\/[^/\s]+)\/#key=(\S+)/.exec(out);
+          const m = boardOpen(out, KF.file);
           if (m) { clearTimeout(timer); done(m); }
         });
       });
       const post = (text: string) =>
         fetch(`${open[1]}/api/action`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-queue-key': open[2] },
+          headers: { 'content-type': 'application/json', origin: open[1], 'x-queue-key': open[2] },
           body: JSON.stringify({ type: 'track-answer', id: 'A', text }),
         });
       const empty = await post('  ');

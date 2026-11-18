@@ -19,11 +19,15 @@
 // It costs a few cents of usage and takes about a minute. Skipped otherwise.
 // =============================================================
 import { describe, expect, it } from 'vitest';
+import { boardOpen, keyFileArgs } from '../lib/__tests__/boardKey';
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+
+// The board never prints its key (0l bolk 5): it writes the link to this file.
+const KF = keyFileArgs();
 
 const LIVE = process.env.RAVENSEAT_LIVE_APPROVAL === '1' && process.platform === 'win32';
 const SCRIPTS = path.resolve(__dirname, '..');
@@ -98,13 +102,13 @@ describe.skipIf(!LIVE)('live: a background agent on a permission prompt shows as
         });
       });
       const transcripts = path.join(os.homedir(), '.claude', 'projects', REPO.replace(/[^A-Za-z0-9]/g, '-'));
-      board = spawn(process.execPath, [path.join(SCRIPTS, 'queue-board.mjs'), '--port', String(port)], {
+      board = spawn(process.execPath, [path.join(SCRIPTS, 'queue-board.mjs'), '--port', String(port), ...KF.args], {
         cwd: folder,
         env: { ...process.env, ...env, QUEUE_TRANSCRIPTS: transcripts },
       });
       let out = '';
       board.stdout!.on('data', (d: Buffer) => (out += String(d)));
-      const open = await until('the board', 60_000, () => /Open: (http:\/\/[^/\s]+)\/#key=(\S+)/.exec(out));
+      const open = await until('the board', 60_000, () => boardOpen(out, KF.file));
       const state = await (await fetch(`${open[1]}/api/state`, { headers: { 'x-queue-key': open[2] } })).json();
       const stuck = state.data.inbox.stuck.find((x: { id: string }) => x.id === id);
       expect(stuck?.awaiting_approval?.tool, JSON.stringify(state.data.inbox.stuck)).toBe('Write');

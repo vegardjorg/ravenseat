@@ -26,6 +26,7 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { project, SCRIPTS, task, tmp } from './project';
+import { boardOpen, keyFileArgs } from '../../lib/__tests__/boardKey';
 
 /** A free port on 127.0.0.1: the OS picks one, we close it again and hand the number to the board. */
 const freePort = () =>
@@ -105,7 +106,9 @@ describe('RT-23: a web page I visit cannot read or change my board through its H
     }
 
     port = await freePort();
-    board = spawn(process.execPath, [path.join(SCRIPTS, 'queue-board.mjs'), '--port', String(port)], {
+    // The key is never printed (0l bolk 5): the board writes it to the --key-file file.
+    const kf = keyFileArgs();
+    board = spawn(process.execPath, [path.join(SCRIPTS, 'queue-board.mjs'), '--port', String(port), ...kf.args], {
       cwd: p.folder,
       // No update check against GitHub from a test.
       env: { ...p.env, DISABLE_UPDATES: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
@@ -118,10 +121,10 @@ describe('RT-23: a web page I visit cannot read or change my board through its H
       const timer = setTimeout(() => fail(new Error(`the board printed no start line (stderr: ${err.slice(0, 500)})`)), 60_000);
       board.stdout!.on('data', (d: Buffer) => {
         out += String(d);
-        const m = /Open: http:\/\/[^/\s]+\/#key=(\S+)/.exec(out);
+        const m = boardOpen(out, kf.file);
         if (m) {
           clearTimeout(timer);
-          done(m[1]);
+          done(m[2]);
         }
       });
       board.once('exit', (code) => fail(new Error(`the board stopped at start (code ${code}, stderr: ${err.slice(0, 500)})`)));
@@ -229,14 +232,21 @@ describe('RT-23: a web page I visit cannot read or change my board through its H
     }
   });
 
+  it('a write without Origin (a script, not a browser) is refused (403), even with the right key and Host', async () => {
+    const before = queueNow();
+    const { Origin: _drop, ...noOrigin } = own();
+    expect((await write(noOrigin)).status).toBe(403);
+    expect(queueNow() === before, 'queue.json changed after a write without Origin').toBe(true);
+  });
+
   // Last, because it changes queue.json: proves the server is alive and the guards are what refused the rest.
   it('with the right key, Host and Origin the same write works', async () => {
     const before = queueNow();
     const r = await write(own());
     expect(r.status, r.body.slice(0, 300)).toBe(200);
     expect(queueNow() === before, 'queue.json did not change after an accepted write').toBe(false);
-    // localhost:<port> is the other valid Host, and a write without Origin (a script, not a browser) is allowed.
-    const { Origin: _drop, ...noOrigin } = own({ Host: `localhost:${port}` });
-    expect((await write(noOrigin, JSON.stringify({ mode: 'guided' }))).status).toBe(200);
+    // localhost:<port> is the other valid Host, with its own Origin.
+    const local = own({ Host: `localhost:${port}`, Origin: `http://localhost:${port}` });
+    expect((await write(local, JSON.stringify({ mode: 'guided' }))).status).toBe(200);
   });
 });

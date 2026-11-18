@@ -155,7 +155,7 @@ memory or the handover note (`scripts/.queue/follow.json`, the same lock as the 
   it to the owner at the end of the round with a recommendation.
 - **The owner decision:** `ravenseat follow close <id> --decision "…"` (or `--cancelled`). The command prints the close
   action but never does it; do it only when the decision calls for it.
-- The board has the read view at `/follow` (the link is printed when `ravenseat board` starts).
+- The board has the read view at `/follow` (`ravenseat board open --follow` opens it; the printed link has no key).
 
 ## Fewer turns per task
 

@@ -111,7 +111,7 @@ import zlib from 'node:zlib';
 import { Buffer } from 'node:buffer';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 
 const require = createRequire(import.meta.url);
 const CS = require('./lib/cloudSetup.js');
@@ -208,7 +208,9 @@ if (a.includes('--help') || a.includes('-h')) {
       `The default port is board.port in queue.config.json (now ${CONFIG.board?.port ?? 2000}).\n` +
       `The mascot's speech bubble is board.mascot in queue.config.json (now ${CONFIG.board?.mascot ?? 'chatty'}); ` +
       '--mascot off turns it off for every viewer.\n' +
-      'Open the link it prints (the key is new for every run). Ctrl+C stops the board.',
+      'The board opens itself in your browser with its key (new for every run); the key is never printed.\n' +
+      `  ${require('./lib/projectRoot.js').cliCommand()} board open [--follow] [--port <nr>]   opens the running board again\n` +
+      'board.hideKey false in queue.config.json prints the link with the key instead (a weakened guard). Ctrl+C stops the board.',
   );
   process.exit(0);
 }
@@ -216,6 +218,67 @@ const PORT = Number(val('--port') ?? CONFIG.board?.port ?? 2000);
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
   console.error('--port must be an integer between 1 and 65535');
   process.exit(1);
+}
+
+// ---- The key stays out of Claude's view (0l bolk 5, owner decision 16.11) ---------------------------------------
+// The key gives every owner action on the board (`--by owner`, confirmed weakenings). It used to be printed in the
+// start line, and that output is what Claude reads when it starts the board in the background, so the model held the
+// owner's key. Now the server opens the browser itself with the key in the # part, and prints the link without it.
+// `ravenseat board open` asks the running board (POST /open, no key, refused with an Origin) to open it again. Scripts
+// and tests pass --key-file <path>: the link goes to that file and no browser opens; the approval guard asks the owner
+// before the main session does that (lib/approvalAsk.js, rule override-board-key). board.hideKey false prints the key
+// as before (a weakened guard). Limits: a model with a browser tool on the same browser, or one that reads the process
+// list while the browser starts, can still see it; this closes the plain way (stdout, then curl).
+const HIDE_KEY = CONFIG.board?.hideKey !== false;
+const KEY_FILE = val('--key-file') ?? null;
+if (a[0] === 'open') await openRunningBoard();
+
+/**
+ * `ravenseat board open`: asks the board on PORT to open itself in the browser; exits. Never sees the key. Plain
+ * node:http with no keep-alive (fetch leaves a pooled socket, and process.exit with one open can crash Node on Windows).
+ */
+async function openRunningBoard() {
+  const cli = require('./lib/projectRoot.js').cliCommand();
+  const body = JSON.stringify({ follow: a.includes('--follow') });
+  const answer = await new Promise((done) => {
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port: PORT,
+        method: 'POST',
+        path: '/open',
+        agent: false,
+        timeout: 10_000,
+        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) },
+      },
+      (res) => {
+        let text = '';
+        res.setEncoding('utf8');
+        res.on('data', (d) => (text += d));
+        res.on('end', () => {
+          let b = {};
+          try {
+            b = JSON.parse(text) ?? {};
+          } catch {
+            /* not the board's answer */
+          }
+          done({ status: res.statusCode ?? 0, message: b?.message ?? null });
+        });
+      },
+    );
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => done(null));
+    req.end(body);
+  });
+  if (!answer) {
+    console.error(`No board answers on port ${PORT}. Start it with ${cli} board, or pass --port <nr>.`);
+    process.exit(1);
+  }
+  const ok = answer.status >= 200 && answer.status < 300;
+  const line = String(answer.message ?? (ok ? 'Opened the board in your browser.' : `The board on port ${PORT} answered ${answer.status}.`));
+  if (ok) console.log(line);
+  else console.error(line);
+  process.exit(ok ? 0 : 1);
 }
 // The mascot mode: --mascot overrides board.mascot. "off" = no speech bubble at all, for every viewer.
 const MASCOT_INPUT = val('--mascot') ?? CONFIG.board?.mascot ?? M.DEFAULT_MODE;
@@ -228,6 +291,53 @@ const HOST = '127.0.0.1';
 const KEY = crypto.randomBytes(24).toString('base64url');
 const VALID_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
 const VALID_ORIGIN = new Set([...VALID_HOSTS].map((v) => `http://${v}`));
+/** The link with the key (only for the browser, the key file, or the start line when board.hideKey is false). */
+const keyLink = (page = '/') => `http://${HOST}:${PORT}${page}#key=${KEY}`;
+/** The link without the key: safe to print. */
+const plainLink = (page = '/') => `http://${HOST}:${PORT}${page}`;
+/** --key-file: the link with the key, readable by this user only (best effort on Windows). */
+function writeKeyFile() {
+  fs.writeFileSync(KEY_FILE, `${keyLink()}\n`, { mode: 0o600 });
+}
+/**
+ * Opens the link in the default browser, without a shell that could log it and with nothing printed. Resolves
+ * { ok, error }: error is an error code, never a message (a spawn message can carry the arguments, and so the key).
+ * An opener still running after 5 s counts as opened (xdg-open can stay with the browser).
+ */
+function openBrowser(url) {
+  const [cmd, args, extra] =
+    process.platform === 'win32'
+      ? ['cmd.exe', ['/d', '/s', '/c', `start "" "${url}"`], { windowsVerbatimArguments: true }]
+      : process.platform === 'darwin'
+        ? ['open', [url], {}]
+        : ['xdg-open', [url], {}];
+  return new Promise((done) => {
+    let child;
+    try {
+      child = spawn(cmd, args, { ...extra, stdio: 'ignore', detached: true, windowsHide: true });
+    } catch (e) {
+      done({ ok: false, error: String(e?.code ?? 'failed') });
+      return;
+    }
+    const timer = setTimeout(() => {
+      child.unref();
+      done({ ok: true });
+    }, 5000);
+    timer.unref();
+    child.once('error', (e) => {
+      clearTimeout(timer);
+      done({ ok: false, error: String(e?.code ?? 'failed') });
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      done(code === 0 ? { ok: true } : { ok: false, error: `exit ${code}` });
+    });
+  });
+}
+/** The line after a failed open: what to do, never the key. */
+const openFailedLine = (error) =>
+  `Could not open a browser (${error}). Run ${require('./lib/projectRoot.js').cliCommand()} board open when one is ` +
+  'available, or set board.hideKey false in queue.config.json to print the link with its key (a weakened guard).';
 
 // ---- The update banner (lib/queueUpdate.js) ------------------------------------------------------------------------
 // The installed version: the plugin manifest (setupSources finds it), or ravenseat-version.json next to the scripts in a vendored
@@ -2708,6 +2818,9 @@ function readBody(req) {
   });
 }
 
+/** The time of the last POST /open (one per 2 s). */
+let lastOpen = 0;
+
 const server = http.createServer(async (req, res) => {
   try {
     // DNS rebinding: a foreign page that points its name to 127.0.0.1 sends its own Host.
@@ -2715,6 +2828,32 @@ const server = http.createServer(async (req, res) => {
       return send(res, 421, 'text/plain; charset=utf-8', 'Wrong host.');
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     const filePath = url.pathname;
+
+    // `ravenseat board open` (openRunningBoard): open the board in the browser again. No key, since the caller must never
+    // get it; the answer never carries it either. A browser always sends Origin on a POST, so a call with one is a web
+    // page and refused (a page must not be able to pop tabs), and one call per 2 s at most.
+    if (filePath === '/open') {
+      if (req.method !== 'POST') return json(res, 405, { ok: false, message: 'POST only' });
+      if (req.headers.origin != null)
+        return json(res, 403, { ok: false, message: `only from the command line: ${require('./lib/projectRoot.js').cliCommand()} board open` });
+      if (Date.now() - lastOpen < 2000) return json(res, 429, { ok: false, message: 'opened a moment ago; try again in a few seconds' });
+      lastOpen = Date.now();
+      let b = {};
+      try {
+        b = JSON.parse((await readBody(req)) || '{}') ?? {};
+      } catch {
+        /* no body: the board itself */
+      }
+      const page = b?.follow === true && FEATURES.follow ? '/follow' : '/';
+      // Scripted (--key-file): the link goes to the file again, no browser.
+      if (KEY_FILE) {
+        writeKeyFile();
+        return json(res, 200, { ok: true, message: 'Wrote the link to the key file again (--key-file); no browser opened.' });
+      }
+      if (process.env.VITEST) return json(res, 200, { ok: true, message: 'Under a test runner: no browser opened.' });
+      const r = await openBrowser(keyLink(page));
+      return json(res, r.ok ? 200 : 500, { ok: r.ok, message: r.ok ? 'Opened the board in your browser.' : openFailedLine(r.error) });
+    }
 
     if (!filePath.startsWith('/api/')) {
       if (req.method !== 'GET' && req.method !== 'HEAD')
@@ -2764,7 +2903,7 @@ const server = http.createServer(async (req, res) => {
     if (!correctKey(req))
       return json(res, 401, {
         ok: false,
-        message: 'The key is missing or old. Open the link queue-board wrote in the terminal.',
+        message: `The key is missing or old. Open the board again with ${require('./lib/projectRoot.js').cliCommand()} board open.`,
       });
 
     if (req.method === 'GET' && filePath === '/api/state') {
@@ -2923,8 +3062,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method !== 'POST') return json(res, 405, { ok: false, message: 'unknown method' });
-    // A write call must come from the board itself: Origin (when the browser sends it) and a JSON body.
+    // A write call must come from the board itself: Origin and a JSON body. A browser always sends Origin on a POST, so
+    // a write without one is a script (curl, node fetch), refused while the key is hidden (board.hideKey): the key
+    // alone is not taken as the owner's word. With hideKey false a script without Origin is let through, as before.
     const origin = req.headers.origin;
+    if (origin == null && HIDE_KEY)
+      return json(res, 403, { ok: false, message: 'a write needs the Origin of the board (the board in a browser sends it)' });
     if (origin != null && !VALID_ORIGIN.has(String(origin)))
       return json(res, 403, { ok: false, message: 'foreign origin' });
     if (!String(req.headers['content-type'] ?? '').startsWith('application/json'))
@@ -2947,7 +3090,8 @@ const server = http.createServer(async (req, res) => {
 server.on('error', (e) => {
   console.error(
     e?.code === 'EADDRINUSE'
-      ? `Port ${PORT} is in use. Pick another one with --port <nr>.`
+      ? `Port ${PORT} is in use. If a board already runs there, ${require('./lib/projectRoot.js').cliCommand()} board open ` +
+          'opens it; otherwise pick another port with --port <nr>.'
       : `Board stopped: ${e?.message ?? e}`,
   );
   process.exit(1);
@@ -2956,8 +3100,23 @@ server.on('error', (e) => {
 server.listen(PORT, HOST, () => {
   if (!fs.existsSync(FILE)) console.log(`WARNING: could not find the queue ${FILE}.`);
   console.log(`Kanban board for the work queue is running (only on this machine).`);
-  console.log(`Open: http://${HOST}:${PORT}/#key=${KEY}`);
-  if (FEATURES.follow) console.log(`Follow up: http://${HOST}:${PORT}/follow#key=${KEY}`);
+  const cli = require('./lib/projectRoot.js').cliCommand();
+  if (KEY_FILE) writeKeyFile();
+  if (!HIDE_KEY) {
+    // board.hideKey false (a weakened guard): the link with the key, as before 0l bolk 5.
+    console.log(`Open: ${keyLink()}`);
+    if (FEATURES.follow) console.log(`Follow up: ${keyLink('/follow')}`);
+  } else {
+    // The key is never printed: this output is what Claude reads when it starts the board.
+    const how = KEY_FILE ? 'the link with the key is in the --key-file file' : `it opens in your browser; ${cli} board open opens it again`;
+    console.log(`Open: ${plainLink()} (${how})`);
+    if (FEATURES.follow) console.log(`Follow up: ${plainLink('/follow')} (${cli} board open --follow)`);
+    // --no-open, and never under a test runner (VITEST): a forgotten --key-file in a test must not pop browser tabs.
+    if (!KEY_FILE && !a.includes('--no-open') && !process.env.VITEST)
+      openBrowser(keyLink())
+        .then((r) => console.log(r.ok ? 'Opened the board in your browser.' : openFailedLine(r.error)))
+        .catch(() => {});
+  }
   console.log(`Queue: ${FILE}. Ctrl+C stops the board.`);
   // The update check: once now and then once a day (the cache keeps it to one fetch per 24 hours, also across restarts).
   refreshLatest().catch(() => {});

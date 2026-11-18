@@ -13,6 +13,8 @@
 //   - runs `surface accept`, `owner-log accept` or `helpers approve`, whose --by is free text  rule override-owner-command
 //   - calls the board's API (an X-Queue-Key header, or the board's port on a loopback
 //     address with /api/)                                                                 rule override-board-api
+//   - starts the board with --key-file, which writes the key to a file it can read
+//     (0l bolk 5: the key otherwise only reaches the browser)                            rule override-board-key
 //   - a line the reading cannot see into that names the queue CLI and an override token  rule override-unread
 //   - writes a main tree control file with Write, Edit or NotebookEdit (the same set as
 //     lib/controlFiles.js; the plugin's scripts only when they live outside the project)  rule override-control-file
@@ -82,6 +84,8 @@ const MERGE = new Set(['merge', 'merge-track']);
 const OWNER_ONLY = Object.freeze({ surface: ['accept'], 'owner-log': ['accept'], helpers: ['approve'] });
 /** The --by values the queue records as the owner's (lib/ownerLog.js OWNER_BY, any case). */
 const OWNER_WORDS = new Set(['owner', 'theboard']);
+/** The board: `ravenseat board` and the script it runs. */
+const BOARD = new Set(['board', 'queue-board']);
 /** Programs that start another one (`npx ravenseat merge ...`). */
 const STARTERS = new Set(['npx', 'pnpx', 'bunx']);
 
@@ -147,6 +151,8 @@ function overrideOf(call) {
   }
   const sub = args.find((x) => !x.startsWith('-'));
   if (Object.hasOwn(OWNER_ONLY, name) && OWNER_ONLY[name].includes(sub)) return { rule: 'override-owner-command', flags: [] };
+  // The board's key in a file the session can read (0l bolk 5): the key otherwise only reaches the browser.
+  if (BOARD.has(name) && args.some((x) => flagName(x) === '--key-file')) return { rule: 'override-board-key', flags: ['--key-file'] };
   return null;
 }
 
@@ -161,13 +167,14 @@ function callText(call, o, tip) {
     'override-weaken': 'a confirmed weakening of a guard',
     'override-by-owner': 'acting as the owner',
     'override-owner-command': "the owner's own acceptance",
+    'override-board-key': "the board's key (every owner action on the board) in a file Claude can read",
   }[o.rule];
   return `\`${shown}\`${flags}${at}: ${what}, from the main session.`;
 }
 
 /** A line that names the queue CLI and an override token, for the parts the reading cannot see into. */
-const OVERRIDE_TOKEN = /--allow-|--force|--i-understand|--(?:set-)?by[\s=]+["']?(?:owner|theboard)\b|\b(?:surface|owner-log)\s+accept\b|\bhelpers\s+approve\b/i;
-const QUEUE_SHAPED = new RegExp(`(^|[\\s"'\`(;&|\\\\/])((?:${NAMES.CLI_PATTERN})(?:\\.mjs|\\.cmd)?|queue\\.mjs|merge-track\\.mjs)\\b`, 'i');
+const OVERRIDE_TOKEN = /--allow-|--force|--i-understand|--key-file|--(?:set-)?by[\s=]+["']?(?:owner|theboard)\b|\b(?:surface|owner-log)\s+accept\b|\bhelpers\s+approve\b/i;
+const QUEUE_SHAPED = new RegExp(`(^|[\\s"'\`(;&|\\\\/])((?:${NAMES.CLI_PATTERN})(?:\\.mjs|\\.cmd)?|queue\\.mjs|queue-board\\.mjs|merge-track\\.mjs)\\b`, 'i');
 
 /**
  * The board's API from a shell line: the key header, or the board's port on a loopback address with /api/.

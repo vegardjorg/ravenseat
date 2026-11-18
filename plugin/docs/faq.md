@@ -340,7 +340,7 @@ that is not local.
 ### Can a web page I visit control my board?
 
 Not in the ways the tests try. The board listens only on 127.0.0.1, and every API call needs the key from the link it
-printed, which a web page does not have. A request with another site's name as Host is refused, which also stops a
+opened in your browser, which a web page does not have (and the printed link leaves it out, so Claude does not see it either). A request with another site's name as Host is refused, which also stops a
 page that points its own domain at 127.0.0.1 (DNS rebinding). A write must come from the board's own page and be JSON,
 so a form or script on another site cannot send one. What it does not stop: a program running under your own account
 can read the key in your terminal, or the queue files directly.

@@ -37,7 +37,7 @@ are `/<name>`.
 - `/add-helper`: add an agent file as a custom helper agent: scan, read in full, report, approve on yes.
 - `/plans <id|project|module>`: plan work only, never building.
 - `/pick`: take one queue task by hand in this chat.
-- `/board`: start the local board in the background and give the link.
+- `/board`: start the local board in the background; it opens itself in the browser.
 - `/start`: answers only "ready" (a cheap way to open a session before you paste a task). For the queue state,
   run `ravenseat show`.
 

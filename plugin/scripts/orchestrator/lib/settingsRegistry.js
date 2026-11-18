@@ -1057,6 +1057,14 @@ const SETTINGS = Object.freeze([
   row('board.port', 'board', 'integer', 'Board port',
     'The local port the board listens on (2000 by default). Change it when another program already uses that port.'),
   row('board.title', 'board', 'text', 'Board title', 'The title in the board\'s header and browser tab.'),
+  row('board.hideKey', 'board', 'onoff', 'Keep the board key from Claude',
+    'The board opens itself in your browser with its key and prints the link without it; ravenseat board open opens ' +
+    'it again. A write without the Origin of the board (a script, not the browser) is refused.', {
+      weakens: offWeakens,
+      protects: 'Claude reading the key from the start line and then doing owner actions on the board with curl or fetch.',
+      whyNot: 'The key is in the output Claude reads when it starts the board, and the board takes a script call as yours.',
+      changes: 'The start line prints the link with the key, and a write with the key but no Origin is let through.',
+    }),
   row('board.updateCheck', 'board', 'onoff', 'Update check',
     'The board checks GitHub for a newer plugin version at most once a day (a plain GET that sends nothing about you).'),
   row('board.showCloud', 'board', 'onoff', 'Show the Cloud tab',

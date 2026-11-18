@@ -294,7 +294,7 @@
     <div id="stripe" class="stripe" aria-label="Next up and the chain" hidden></div>
     <!-- Shown when the server answers 401 (restarted); polling stops until the key is in place. -->
     <div id="key-banner" class="key-banner" role="alert" hidden>
-      <p class="key-banner-text">The board has been restarted. Paste the link from the terminal.</p>
+      <p class="key-banner-text">The board has been restarted. Run <code>ravenseat board open</code> for a tab with the new key, or paste a link with the key.</p>
       <form id="key-form" class="key-form">
         <input
           id="key-link"
@@ -303,7 +303,7 @@
           autocomplete="off"
           spellcheck="false"
           placeholder="http://127.0.0.1:…/#key=…"
-          aria-label="Link from the terminal"
+          aria-label="Link with the key"
         />
         <button type="submit" class="button button-filled">Use link</button>
       </form>

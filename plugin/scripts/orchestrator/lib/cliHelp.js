@@ -20,7 +20,7 @@ const GROUPS = [
     commands: [
       { cmd: 'setup', usage: 'setup', text: 'set this project up for the queue (run once)' },
       { cmd: 'add', usage: 'add --file task.json', text: 'add one task or a list' },
-      { cmd: 'board', usage: 'board', text: 'start the board (a local web page with the queue)' },
+      { cmd: 'board', usage: 'board [open]', text: 'start the board (a local web page with the queue; it opens in your browser), or open it again' },
     ],
   },
   {
