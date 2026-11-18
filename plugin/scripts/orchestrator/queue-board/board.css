@@ -618,22 +618,21 @@ textarea {
   overflow: hidden;
 }
 
-/* The project color as a stripe on the left. */
-.summary::before {
+/* The colored stripe on the left means "needs action": only cards in the Blocked column get it. The project color is a
+   dot in front of the project name instead (.summary-project::before), so a stripe on every card no longer says nothing. */
+.summary.stuck::before {
   content: '';
   position: absolute;
   inset: 0 auto 0 0;
-  width: 5px;
-  background: var(--p, var(--color-outline));
+  width: 3px;
+  background: var(--color-on-tone-danger);
 }
 
 .summary:hover {
   border-color: var(--color-outline);
 }
 
-.summary.ready {
-  border-color: var(--color-primary);
-}
+/* A ready card has no frame of its own: the "Ready now" badge says it. */
 
 /* Blocked: muted (dashed edge, no card surface), but the text keeps its contrast. */
 .summary.blocked {
@@ -654,11 +653,11 @@ textarea {
   opacity: 0.5;
 }
 
+/* Boosted: the focus ring alone, no shadow (a card at rest in the column does not lift). */
 .summary.boosted,
 .lane.boosted > .lane-header {
   outline: var(--focus);
   outline-offset: 2px;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); /* M3 shadow: black in both modes */
 }
 
 .summary-header {
@@ -673,10 +672,17 @@ textarea {
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--color-on-surface-variant);
+  font-variant-numeric: tabular-nums;
   margin-right: auto;
 }
 
-/* The project's short name in the card header (the color stripe alone is below 3:1). */
+/* The id and the project name stand together on the left; the rest of the metadata goes to the right. */
+.summary-id:has(+ .summary-project) {
+  margin-right: 0;
+}
+
+/* The project's short name in the card header, with the project color as a dot in front (the color alone is below 3:1,
+   so the name carries the meaning and the dot only repeats it). */
 .summary-project {
   font-size: var(--text-xs);
   color: var(--color-on-surface-variant);
@@ -684,6 +690,41 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 14ch;
+}
+
+.summary-id + .summary-project {
+  margin-right: auto;
+}
+
+.summary-project::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--distance-xs);
+  border-radius: 50%;
+  background: var(--p, var(--color-outline));
+  vertical-align: 0;
+}
+
+/* The class (K, D, U) and the estimate are plain text, not badges. D+ is the exception: .badge.class-dplus. */
+.summary-class,
+.summary-estimate {
+  font-size: var(--text-xs);
+  line-height: 16px;
+  color: var(--color-on-surface-variant);
+  white-space: nowrap;
+}
+
+.summary-estimate {
+  font-variant-numeric: tabular-nums;
+}
+
+/* "visual": a small eye (the word is hidden text for the screen reader, the tooltip explains it). */
+.summary-visual {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-on-surface-variant);
 }
 
 .summary-title {
@@ -740,52 +781,52 @@ textarea {
   max-width: 100%;
 }
 
+/* A badge is a tinted label with no frame: a tone surface and its dark text (the tone-* / on-tone-* pairs in
+   lib/queueBoard.js PALETTE, each with one meaning, 7:1 or more in both modes). Neutral by default; the border is
+   transparent so the size stays the same and forced colors can draw it. Weight 400 for neutral, 600 for status. */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: var(--distance-xs);
   padding: 0 var(--distance-sm);
   min-height: 20px;
-  border: 1px solid var(--color-outline-variant);
+  border: 1px solid transparent;
   border-radius: var(--radius);
+  background: var(--color-tone-neutral);
   font-size: var(--text-xs);
   line-height: 18px;
-  color: var(--color-on-surface-variant);
+  color: var(--color-on-tone-neutral);
   white-space: nowrap;
 }
 
+.badge .icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* Heavy: purple means D+ and nothing else. */
 .badge.class-dplus {
-  background: var(--color-tertiary-container);
-  color: var(--color-on-tertiary-container);
-  border-color: transparent;
+  background: var(--color-tone-heavy);
+  color: var(--color-on-tone-heavy);
   font-weight: 600;
 }
 
-.badge.visual {
-  background: var(--color-module-purple-container);
-  color: var(--color-on-surface);
-  border-color: transparent;
-}
-
 .badge.ready-badge {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  border-color: transparent;
+  background: var(--color-tone-info);
+  color: var(--color-on-tone-info);
   font-weight: 600;
 }
 
 .badge.qa {
-  background: var(--color-module-amber-container);
-  color: var(--color-on-surface);
-  border-color: transparent;
+  background: var(--color-tone-warn);
+  color: var(--color-on-tone-warn);
   font-weight: 600;
 }
 
 /* The cloud badge in In progress, the checkbox for a cloud bundle and the line above In queue. */
 .badge.cloud-badge {
-  background: var(--color-secondary-container);
-  color: var(--color-on-secondary-container);
-  border-color: transparent;
+  background: var(--color-tone-info);
+  color: var(--color-on-tone-info);
   font-weight: 600;
 }
 
@@ -843,9 +884,8 @@ textarea {
 
 .badge.old,
 .badge.deviation {
-  background: var(--color-error-container);
-  color: var(--color-on-error-container);
-  border-color: transparent;
+  background: var(--color-tone-danger);
+  color: var(--color-on-tone-danger);
   font-weight: 600;
 }
 
@@ -1666,22 +1706,19 @@ input.switch:disabled {
 }
 
 .badge.tone-ok {
-  background: var(--color-primary-container);
-  color: var(--color-on-primary-container);
-  border-color: transparent;
+  background: var(--color-tone-ok);
+  color: var(--color-on-tone-ok);
 }
 
 .badge.tone-warn {
-  background: var(--color-module-amber-container);
-  color: var(--color-on-surface);
-  border-color: transparent;
+  background: var(--color-tone-warn);
+  color: var(--color-on-tone-warn);
   font-weight: 600;
 }
 
 .badge.tone-bad {
-  background: var(--color-error-container);
-  color: var(--color-on-error-container);
-  border-color: transparent;
+  background: var(--color-tone-danger);
+  color: var(--color-on-tone-danger);
   font-weight: 600;
 }
 
@@ -2059,10 +2096,10 @@ body.with-option-line .toaster {
 
 /* ---- "Unlocks N", aging work and the chain on the cards ---- */
 
+/* "unlocks N" is neutral (it is information, not a state); the arrow icon comes before the text. */
 .badge.locks {
-  background: var(--color-secondary-container);
-  color: var(--color-on-secondary-container);
-  border-color: transparent;
+  background: var(--color-tone-neutral);
+  color: var(--color-on-tone-neutral);
 }
 
 /* Over p85 for the class: a subtle warm tone on the card; the explanation is in the tooltip. */
@@ -2113,7 +2150,7 @@ body.with-option-line .toaster {
   color: var(--color-on-surface-variant);
 }
 
-.board.chain-active .summary:not(.chain-selected):not(.chain-for):not(.chain-after)::before {
+.board.chain-active .summary.stuck:not(.chain-selected):not(.chain-for):not(.chain-after)::before {
   background: var(--color-outline-variant);
 }
 
@@ -2184,9 +2221,8 @@ body.with-option-line .toaster {
 }
 
 .badge.sp-type {
-  background: var(--color-secondary-container);
-  color: var(--color-on-secondary-container);
-  border-color: transparent;
+  background: var(--color-tone-neutral);
+  color: var(--color-on-tone-neutral);
   font-weight: 600;
 }
 
@@ -2194,8 +2230,8 @@ body.with-option-line .toaster {
    does not find it. The types are condition, lawyer and owner-task. */
 .badge.sp-lawyer,
 .badge.sp-condition {
-  background: var(--color-tertiary-container);
-  color: var(--color-on-tertiary-container);
+  background: var(--color-tone-warn);
+  color: var(--color-on-tone-warn);
 }
 
 .sp-text.missing {
@@ -2939,6 +2975,18 @@ div.row-option {
   opacity: 1;
 }
 
+/* Select mode on a mouse: the box shows on every markable card, so it gets room of its own instead of touching the card
+   edge and the id. Touch has its own, wider room below. */
+@media (hover: hover) {
+  .board.has-option .mark-box {
+    left: var(--distance-xs);
+  }
+
+  .board.has-option .summary[data-markable] .summary-header {
+    padding-left: var(--distance-md);
+  }
+}
+
 @media (hover: none) {
   .mark-box {
     width: 44px;
@@ -2952,9 +3000,9 @@ div.row-option {
   }
 }
 
-/* On-primary-container applies to the WHOLE selected card (id, project, footer and the neutral badges),
-   not just the title. The contrast against primary-container is computed from the palette in queueBoardA11y.test.ts (at least
-   4.5:1 in both modes). Badges with their own surface (Ready now, D+, QA …) keep their own pairs. */
+/* On-primary-container applies to the WHOLE selected card (id, project, class, estimate,
+   footer), not just the title. The contrast against primary-container is computed from the palette in queueBoardA11y.test.ts (at least
+   4.5:1 in both modes). Every badge has its own tone surface (neutral included), so it keeps its own pair. */
 .summary.marked {
   border-color: var(--color-primary);
   background: var(--color-primary-container);
@@ -2967,18 +3015,15 @@ div.row-option {
 .summary.marked .summary-project,
 .summary.marked .summary-footer,
 .summary.marked .age-over,
-.summary.marked .badge[class='badge'] {
+.summary.marked .summary-class:not(.badge),
+.summary.marked .summary-estimate,
+.summary.marked .summary-visual {
   color: var(--color-on-primary-container);
 }
 
-.summary.marked .badge[class='badge'] {
-  border-color: var(--color-on-primary-container);
-}
-
 .badge.wait-badge {
-  background: var(--color-module-amber-container);
-  color: var(--color-on-surface);
-  border-color: transparent;
+  background: var(--color-tone-warn);
+  color: var(--color-on-tone-warn);
   font-weight: 600;
 }
 

@@ -635,12 +635,13 @@ body.room-plans #optionLine {
   display: none;
 }
 
-/* The queue card: marker for the plan entry. */
+/* The queue card: marker for the plan entry. A neutral badge (purple means D+ only); it is clickable, so it keeps
+   the control outline. */
 .badge.plan-entry-badge {
   cursor: pointer;
-  background: var(--color-tertiary-container);
-  color: var(--color-on-tertiary-container);
-  border-color: var(--color-tertiary);
+  background: var(--color-tone-neutral);
+  color: var(--color-on-tone-neutral);
+  border-color: var(--color-outline);
 }
 
 /* ---- Narrow screen: the filters become a drawer, and the panel lies over the list ---- */

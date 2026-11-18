@@ -79,8 +79,8 @@ const HELP = [
 // because the tooltips do not work on touch or with the keyboard.
 const BADGES = [
   ['badge ready-badge', 'Ready now', 'Can start now: no blockers.'],
-  ['badge', '45 min', 'Estimated content in minutes.'],
-  ['badge visual', 'visual', 'The owner does a visual check after delivery.'],
+  ['summary-estimate', '45 min', 'Estimated content in minutes.'],
+  ['summary-visual', 'visual', 'The owner does a visual check after delivery.'],
   ['badge wait-badge', 'on hold', 'Parked until a date or an event.'],
   ['badge locks', 'unlocks 3', 'This many tasks are waiting on this one via the chain.'],
   ['badge cloud-badge', 'Cloud', 'Running in a cloud session.'],
@@ -106,7 +106,7 @@ function legend(idPrefix) {
       window.QueueA11y.CLASSES.map((k) =>
         row(
           el('span', {
-            class: `badge${k.class === 'D+' ? ' class-dplus' : ''}`,
+            class: `summary-class${k.class === 'D+' ? ' badge class-dplus' : ''}`,
             text: k.class,
           }),
           `${k.name[0].toUpperCase()}${k.name.slice(1)}. ${k.explanation}`,
@@ -130,17 +130,26 @@ function legend(idPrefix) {
     el(
       'dl',
       { class: 'explanation' },
+      // The marks drawn as on the card: visual is the eye with the word as hidden text, unlocks carries its arrow.
       BADGES.map(([cls, text, explanation]) =>
-        row(el('span', { class: cls, text }), explanation),
+        row(
+          cls === 'summary-visual'
+            ? el('span', { class: cls }, icon('eye'), el('span', { class: 'hidden-for-eye', text }))
+            : cls === 'badge locks'
+              ? el('span', { class: cls }, icon('unlocks'), text)
+              : el('span', { class: cls, text }),
+          explanation,
+        ),
       ),
       row(
         el('span', { class: 'summary-project', text: 'project' }),
-        'The project\'s short name; the color stripe on the left of the card is the project\'s color. Not shown when the cards ' +
+        'The project\'s short name; the dot in front of it is the project\'s color. Not shown when the cards ' +
           'are already grouped per project.',
       ),
       row(
         el('span', { class: 'explanation-edge', text: 'dashed edge' }),
-        'Blocked: waiting on something (the blocker is at the bottom of the card). Solid edge in the primary color: ready now.',
+        'Blocked: waiting on something (the blocker is at the bottom of the card). A red stripe on the left: the card is ' +
+          'in the Blocked column and needs action.',
       ),
     ),
   );

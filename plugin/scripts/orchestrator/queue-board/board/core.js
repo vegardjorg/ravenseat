@@ -272,6 +272,34 @@ const ICONS = {
       },
     ],
   ],
+  // Eye: the "visual" mark on a card (a manual visual check after merge). An outline and a filled pupil.
+  eye: [
+    [
+      'path',
+      {
+        d: 'M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': 2,
+        'stroke-linejoin': 'round',
+      },
+    ],
+    ['circle', { cx: 12, cy: 12, r: 3, fill: 'currentColor' }],
+  ],
+  // Arrow down and to the right: "unlocks N" (the tasks that wait on this one via the chain).
+  unlocks: [
+    [
+      'path',
+      {
+        d: 'M6 5v8a3 3 0 0 0 3 3h9M14 12l4 4-4 4',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': 2,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+      },
+    ],
+  ],
   handle: [9, 15].flatMap((x) =>
     [6, 12, 18].map((y) => ['circle', { cx: x, cy: y, r: 1.6, fill: 'currentColor' }]),
   ),

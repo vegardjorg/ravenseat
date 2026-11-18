@@ -34,6 +34,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   is gone and the chosen tab shows which room is open. Badges and counters use a 4 px corner and cards and panels
   8 px; only dots and the switch stay round. Purple no longer marks the Plans room. The arrow keys, Home and End in
   the tabs work as before. Visual only, no new setting.
+- **Board polish: quieter cards with one meaning per color.** The project color is now a small dot in front of the
+  project name instead of a stripe down every card; the stripe is kept only for cards in the Blocked column, where it
+  means "needs action". The class (K, D, U) and the estimate are plain text, and only D+ keeps a badge, so purple
+  means the heavy class and nothing else. "visual" is a small eye icon and "unlocks N" carries a small arrow. Every
+  badge is a tinted label without a frame, taken from the palette's badge tones (ready, waiting on you, blocked and
+  so on), and a ready card no longer gets a blue frame since its badge says it. In select mode the checkboxes get
+  their own room instead of touching the card edge. What a screen reader says on each card is unchanged, word for
+  word; a test checks it. Visual only, no new setting.
 
 ## 0.19.0 (2026-11-18)
 

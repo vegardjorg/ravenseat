@@ -321,8 +321,8 @@ function summaryEl(k, col) {
         'span',
         { class: 'summary-meta', id: metaId },
         el('span', { class: 'summary-id', text: k.id }),
-        // The project's short name as text (the color stripe alone has too low contrast), but not when
-        // the cards are already grouped per project.
+        // The project's short name as text, with the project color as a small dot in front of it (board.css,
+        // .summary-project::before, so the text stays the same), but not when the cards are already grouped per project.
         showProjectName()
           ? el('span', {
               class: 'summary-project',
@@ -345,16 +345,25 @@ function summaryEl(k, col) {
               },
             })
           : null,
+        // The class as plain text; only D+ is a badge (the heavy tone), since it counts against the D+ limit.
         k.class
           ? el('span', {
-              class: `badge${k.class === 'D+' ? ' class-dplus' : ''}`,
+              class: `summary-class${k.class === 'D+' ? ' badge class-dplus' : ''}`,
               text: k.class,
               title: window.QueueA11y.classLabel(k.class),
               'aria-label': window.QueueA11y.classLabel(k.class),
             })
           : null,
-        el('span', { class: 'badge', text: `${k.estimate} min`, title: 'Estimated work minutes for an agent, not wall-clock time' }),
-        k.visual ? el('span', { class: 'badge visual', text: 'visual', title: 'Needs a manual visual check after merge (the QA list)' }) : null,
+        el('span', { class: 'summary-estimate', text: `${k.estimate} min`, title: 'Estimated work minutes for an agent, not wall-clock time' }),
+        // "visual" as an eye icon. The word stays as hidden text, so the screen reader says the same as before.
+        k.visual
+          ? el(
+              'span',
+              { class: 'summary-visual', title: 'Needs a manual visual check after merge (the QA list)' },
+              icon('eye'),
+              el('span', { class: 'hidden-for-eye', text: 'visual' }),
+            )
+          : null,
         k.parked
           ? el('span', {
               class: 'badge wait-badge',
@@ -362,12 +371,14 @@ function summaryEl(k, col) {
               title: waitText(k.parked),
             })
           : null,
+        // The arrow is decoration (aria-hidden); the text says it.
         lockState
-          ? el('span', {
-              class: 'badge locks',
-              text: `unlocks ${lockState.count}`,
-              title: lockText,
-            })
+          ? el(
+              'span',
+              { class: 'badge locks', title: lockText },
+              icon('unlocks'),
+              `unlocks ${lockState.count}`,
+            )
           : null,
         col === 'queue' && !k.ready ? icon('lock', 'blocked') : null,
         hiddenText ? el('span', { class: 'hidden-for-eye', text: hiddenText }) : null,
