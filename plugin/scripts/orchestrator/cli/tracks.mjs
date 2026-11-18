@@ -227,14 +227,8 @@ export function taskAgents(o, to = new Date().toISOString()) {
   for (const a of [...secure, ...uncertainOnes.map((x) => ({ ...x, uncertain: true }))]) {
     const filePath = findTranscript(a.agent);
     const text = readTranscript(filePath);
-    // The reviewer's mission mentions the task only in the path "rev-<id>\reviewer-...", which mentionsTask does not see
-    // (the hyphen before the id); timeCost.trackFromText knows the path.
-    const firstMessage = text ? L.firstUserMessage(text) : null;
-    const mentions =
-      firstMessage != null &&
-      (L.mentionsTask(firstMessage, o.id) ||
-        TK.taskIdFor(TK.trackFromText(firstMessage) ?? '', (x) => x === o.id) === o.id);
-    if (a.uncertain && !mentions) continue;
+    // The mission names the task as a word or in the reviewer's path (logic/results.js missionNamesTask).
+    if (a.uncertain && !L.missionNamesTask(text, o.id)) continue;
     out.push({ ...a, path: filePath, text });
   }
   return out;

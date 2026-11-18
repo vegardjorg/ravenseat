@@ -5,6 +5,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **The review gate is visible before merge, and every merge override is counted.** A card in Review now shows
+  **reviews k/n**: how many of the reviewers `receive` chose have reported FINDINGS after that receive, with a warning
+  while one is missing or the newest report has a HIGH, the two cases where `merge` already stops. The board reads the
+  same reports as the gate (one shared mapping), only reviewer transcripts, and only when the agents or the receive
+  change. The Statistics table and the doctor `decisions` row now also count `unreviewed-overridden`,
+  `no-test-overridden` and `catalog-overridden`, which were logged but left out of the override counts. No default
+  changes and no guard is weaker.
 - **One row for the idle guard line, and a quieter canary in doctor.** `learning.idleGuardInfo` and
   `learning.idleGuardDays` are one setting now: `learning.idleGuardDays` (7 by default, `0` turns the INFO line off).
   An old `"idleGuardInfo": false` in queue.config.json still turns the line off, and setting the number with

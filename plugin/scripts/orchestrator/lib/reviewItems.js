@@ -277,6 +277,34 @@ function reviewGate({ required, since, reports }) {
   return out;
 }
 
+/**
+ * The gate as progress, for the "reviews k/n" badge on a card in Review (0l bolk 4): the same verdict merge gives, before
+ * anyone runs merge. total: the chosen reviewers the gate waits for (light never counts); done: those with a FINDINGS
+ * report after the last receive. null when the gate waits for nobody.
+ * @returns {null | { done: number, total: number, missing: string[], high: { type: string, H: number }[] }}
+ */
+function progress({ required, since, reports }) {
+  const types = (Array.isArray(required) ? required : []).filter((t) => !ADVISORY_REVIEWERS.includes(t));
+  if (!types.length) return null;
+  const g = reviewGate({ required: types, since, reports });
+  return { done: types.length - g.missing.length, total: types.length, missing: g.missing, high: g.high };
+}
+
+/**
+ * The reviewer reports from a task's agents ({ type, row, text } each, as cli/tracks.mjs taskAgents or the board finds
+ * them): one per reviewer transcript with text, with the time of its last done row and the parsed report (null when the
+ * answer has no FINDINGS). A type the plugin does not know still counts when receive chose it (a custom helper).
+ * `logic` is lib/queueLogic.js (REVIEWER_TYPES, reportFindings, lastAnswer), passed in so this file stays free of the
+ * transcript readers. Shared by the CLI (cli/reviewItem.mjs) and the board, so both read alike.
+ */
+function reportsOf(agents, chosen, logic) {
+  const want = new Set(Array.isArray(chosen) ? chosen : []);
+  const known = Array.isArray(logic?.REVIEWER_TYPES) ? logic.REVIEWER_TYPES : [];
+  return (agents ?? [])
+    .filter((x) => x?.text && (known.includes(x.type) || want.has(x.type)))
+    .map((x) => ({ type: x.type, time: x.row?.time ?? null, report: logic.reportFindings(logic.lastAnswer(x.text)) }));
+}
+
 /** The stop lines for the merge gate (null when it passes). */
 function gateLines(id, gate, { cli = 'ravenseat' } = {}) {
   if (!gate.missing.length && !gate.high.length) return null;
@@ -416,6 +444,8 @@ module.exports = {
   closeItem,
   roundOf,
   reviewGate,
+  progress,
+  reportsOf,
   gateLines,
   logInput,
   batchTask,

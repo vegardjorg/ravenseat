@@ -125,6 +125,10 @@ The Queue workspace has these tabs:
 - A running card gets the badge **silent** when the track has an agent worktree but no sign of life for
   `limits.silentMin` minutes (the same rule as `SILENT` in `ravenseat show`; the server measures it at most once a minute).
   After 60 minutes it also gets a card under Decisions. A track or a prepared round no agent took gets a card at once.
+- A card in Review gets the badge **reviews k/n**: how many of the reviewers `receive` chose have a FINDINGS report
+  after that receive (the light review never counts). It warns while one is missing or the newest report has a HIGH
+  (`reviews 2/2 H=1`), since `merge` stops on both; the tooltip names the reviewers. Off with
+  `review.requireFindings`, like the gate.
 - A built card gets the badge **Merged, not verified** when no gates, done command or agent review ran, and **Audited**
   when only an agent review ran ([When a project has no checks](queue.md#when-a-project-has-no-checks)).
 

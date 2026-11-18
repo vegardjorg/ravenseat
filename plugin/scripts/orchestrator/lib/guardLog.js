@@ -102,7 +102,7 @@ function recordHook({ guard, rule, decision, input }, o = {}) {
 }
 
 /** The override events counted next to the guard decisions. */
-const OVERRIDES = ['force-merged', 'config-changed-outside-cli', 'guard-overridden', 'secret-overridden', 'gate-red-overridden', 'base-red-overridden', 'partial-overridden', 'focus-overridden', 'setting-weakened'];
+const OVERRIDES = ['force-merged', 'config-changed-outside-cli', 'guard-overridden', 'secret-overridden', 'gate-red-overridden', 'base-red-overridden', 'partial-overridden', 'focus-overridden', 'unreviewed-overridden', 'no-test-overridden', 'catalog-overridden', 'setting-weakened'];
 
 /**
  * Deny and ask per track (the main session as "main"), from `from` (ms) on, with the rules seen; and the override

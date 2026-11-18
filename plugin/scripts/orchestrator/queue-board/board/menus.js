@@ -86,6 +86,7 @@ const BADGES = [
   ['badge cloud-badge', 'Cloud', 'Running in a cloud session.'],
   ['badge old', 'old', 'Picked or registered outside the queue more than 72 hours ago.'],
   ['badge tone-warn silent-badge', 'silent', 'Running with an agent, but no sign of life for a while (ravenseat show says what to do).'],
+  ['badge tone-warn reviews-badge', 'reviews 1/2', 'In review: this many of the reviewers receive chose have reported. Merge waits for all, and for no HIGH.'],
   ['badge qa', 'Waiting for QA', 'Built, but the owner has not looked it over.'],
   ['badge deviation', 'QA deviation', 'The owner found something during the check.'],
   ['badge deviation', 'Merged, not verified', 'No gates, no done command and no agent review ran on this task.'],

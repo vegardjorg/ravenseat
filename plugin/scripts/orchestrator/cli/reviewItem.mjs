@@ -64,14 +64,7 @@ const USE =
  * when receive chose it (a custom helper).
  */
 export function reviewReports(o) {
-  const chosen = new Set(Array.isArray(o.review_reviewers) ? o.review_reviewers : []);
-  return taskAgents(o)
-    .filter((x) => x.text && (L.REVIEWER_TYPES.includes(x.type) || chosen.has(x.type)))
-    .map((x) => ({
-      type: x.type,
-      time: x.row?.time ?? null,
-      report: L.reportFindings(L.lastAnswer(x.text)),
-    }));
+  return RI.reportsOf(taskAgents(o), o.review_reviewers, L);
 }
 
 /**

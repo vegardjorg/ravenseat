@@ -124,6 +124,24 @@ function silentText(k) {
   );
 }
 
+/**
+ * The "reviews k/n" badge on a card in Review: the text, the warning tone while merge would stop, and a title that names
+ * the missing reviewers and any HIGH (reviewer type names only, never finding text).
+ */
+function reviewsBadge(r) {
+  const high = (r.high ?? []).reduce((n, h) => n + Number(h.H ?? 0), 0);
+  const stops = (r.missing ?? []).length > 0 || high > 0;
+  const parts = [`${r.done} of ${r.total} chosen reviewers reported after the last receive`];
+  if (r.missing?.length) parts.push(`waiting for ${r.missing.join(', ')}`);
+  if (high) parts.push(`HIGH in the newest review: ${r.high.map((h) => `${h.type} H=${h.H}`).join(', ')}`);
+  parts.push(stops ? 'merge stops until then' : 'the merge gate passes');
+  return {
+    class: stops ? 'badge tone-warn reviews-badge' : 'badge reviews-badge',
+    text: `reviews ${r.done}/${r.total}${high ? ` H=${high}` : ''}`,
+    title: parts.join('; '),
+  };
+}
+
 /** Where a card in Blocked would otherwise be (its `home`), as a short text on the card. */
 const HOME_TEXT = {
   queue: 'in queue',
@@ -214,6 +232,9 @@ function footerFor(k, col) {
           text: `delivered ${age(k.delivered)} ago`,
         }),
       );
+    // The merge gate as progress (lib/reviewItems.js progress): the chosen reviewers that reported after receive.
+    // Warn while one is missing or the newest report has a HIGH: merge stops on either.
+    if (k.reviews) footer.push(el('span', reviewsBadge(k.reviews)));
   } else if (col === 'built') {
     if (k.qa_status === 'waiting')
       footer.push(el('span', { class: 'badge qa', text: 'Waiting for QA' }));

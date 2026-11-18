@@ -502,6 +502,74 @@ function approvalNow(queue) {
   }
 }
 
+// ---- The review progress on a card in Review (0l bolk 4) ---------------------------------------------------------
+// The merge gate (lib/reviewItems.js reviewGate) stops a merge while a reviewer receive chose has not reported, or
+// reports H>0. The card shows the same verdict as "reviews k/n" before anyone runs merge. The reviewer transcripts are
+// read only when the agents or the receive change (the key), and only the reviewer types: a track transcript is never
+// opened here. review.requireFindings false: no badge, like no gate.
+let reviewsCache = { key: null, list: [] };
+/**
+ * A transcript, or null when it is missing or over 50 MB (the CLI reads up to 300 MB, cli/tracks.mjs readTranscript;
+ * the board must not stall on one, so a reviewer with a larger transcript shows as missing here, never as reported).
+ */
+function readSmallTranscript(filePath) {
+  try {
+    if (!filePath || fs.statSync(filePath).size > 50 * 1024 * 1024) return null;
+    return fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return null;
+  }
+}
+function reviewsNow(queue) {
+  const RI = require('./lib/reviewItems.js');
+  if (!RI.requireOn(CONFIG)) return [];
+  const tasks = (queue.tasks ?? []).filter(
+    (o) => o.status === 'review' && Array.isArray(o.review_reviewers) && o.review_reviewers.length,
+  );
+  if (!tasks.length) return [];
+  try {
+    const ACT = require('./lib/trackActivity.js');
+    let rows = [];
+    try {
+      rows = TK.readRows(TA.readText(TIME_LOG, { from: TA.activeFrom(tasks) }));
+    } catch {
+      /* no time log: no reviewer has reported */
+    }
+    const per = tasks.map((o) => {
+      const { secure, uncertainOnes } = L.agentsForTask(rows, o.id, { from: o.started ?? o.picked_at ?? o.added_at ?? null });
+      const agents = [...secure, ...uncertainOnes.map((x) => ({ ...x, uncertain: true }))].filter(
+        (x) => L.REVIEWER_TYPES.includes(x.type) || o.review_reviewers.includes(x.type),
+      );
+      return { o, agents };
+    });
+    const key = JSON.stringify(
+      per.map(({ o, agents }) => [o.id, o.review_at ?? o.t_receive ?? null, o.review_reviewers, agents.map((x) => [x.agent, x.row?.time])]),
+    );
+    if (reviewsCache.key === key) return reviewsCache.list;
+    const root = ACT.transcriptsRoot(MAIN_TREE);
+    const list = [];
+    for (const { o, agents } of per) {
+      const read = [];
+      for (const x of agents) {
+        const text = readSmallTranscript(ACT.findTranscript(root, x.agent));
+        if (!text || (x.uncertain && !L.missionNamesTask(text, o.id))) continue;
+        read.push({ ...x, text });
+      }
+      const p = RI.progress({
+        required: o.review_reviewers,
+        since: o.review_at ?? o.t_receive ?? null,
+        reports: RI.reportsOf(read, o.review_reviewers, L),
+      });
+      if (p) list.push({ id: o.id, ...p });
+    }
+    reviewsCache = { key, list };
+    return list;
+  } catch (e) {
+    console.error(`the review progress failed: ${e?.message ?? e}`);
+    return [];
+  }
+}
+
 function silentNow(queue) {
   const limitMin = L.silentMinFor(queue);
   const running = (queue.tasks ?? []).filter((o) => L.silentWatched(o));
@@ -739,6 +807,8 @@ function state() {
       ageLimits: S.ageBounds(queue),
       // SILENT tracks (the badge on the card; cached 60 s).
       silent: silentNow(queue),
+      // "reviews k/n" on a card in Review: the merge gate's verdict (cached on the agents and the receive).
+      reviews: reviewsNow(queue),
       withoutAgent: withoutAgentNow(queue),
       // Tracks that stand still on a permission prompt (not cached: one small file, and the card should go at once).
       approval: approvalNow(queue),

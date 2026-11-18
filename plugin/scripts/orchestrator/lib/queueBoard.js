@@ -245,6 +245,7 @@ function buildBoard(
     cloud,
     branchPrefix = BRANCH_PREFIX,
     silent = [],
+    reviews = [],
     withoutAgent = [],
     baseRed = false,
     approval = [],
@@ -259,6 +260,8 @@ function buildBoard(
       { minutes: Math.round(x.silent_ms / 60_000), last_activity: x.last_activity ?? null },
     ]),
   );
+  // "reviews k/n" per id for a card in Review (lib/reviewItems.js progress, measured by the server, cached).
+  const reviewsFor = new Map((reviews ?? []).filter((x) => x?.id).map(({ id, ...x }) => [id, x]));
   const register = queue.projects ?? {};
   const lanes = projectLanes(queue);
   const colorFor = new Map(lanes.map((b) => [b.pid, b.color]));
@@ -371,6 +374,8 @@ function buildBoard(
       aging: agingState,
       // SILENT: running with an agent worktree but no sign of life (only running cards can be in the list).
       silent: silentFor.get(o.id) ?? null,
+      // The merge gate as progress: the chosen reviewers that reported after receive, and any HIGH (only in Review).
+      reviews: o.status === 'review' ? (reviewsFor.get(o.id) ?? null) : null,
       // "Unlocks N" and the chain (only when they exist, so the response does not grow for cards without a chain).
       unlocks: lockState.count
         ? { count: lockState.count, minutes: lockState.minutes, direct: lockState.direct }

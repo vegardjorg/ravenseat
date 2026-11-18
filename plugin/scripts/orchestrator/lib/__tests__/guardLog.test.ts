@@ -104,3 +104,19 @@ describe('a weakened config with no setting-weakened row', () => {
     expect(GL.outsideCli([{ key: 'secretScan.enabled', value: false }], rows)).toEqual(['secretScan.enabled']);
   });
 });
+
+describe('every merge override is counted', () => {
+  it('unreviewed, no-test and catalog overrides count next to the others (0l bolk 4)', () => {
+    const rows = ['unreviewed-overridden', 'no-test-overridden', 'catalog-overridden'].map((event) => ({
+      time: '2026-11-18T09:00:00Z',
+      event,
+      track: 'A',
+    }));
+    const c = GL.counts(rows, { from: Date.parse('2026-11-10T00:00:00Z') });
+    expect(c.overrides.map((x: { event: string }) => x.event).sort()).toEqual([
+      'catalog-overridden',
+      'no-test-overridden',
+      'unreviewed-overridden',
+    ]);
+  });
+});

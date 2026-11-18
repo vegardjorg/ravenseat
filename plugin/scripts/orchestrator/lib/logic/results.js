@@ -262,6 +262,17 @@ function mentionsTask(text, id) {
   return new RegExp(`(^|[^A-Za-z0-9-])${regexSafe(id)}(?![A-Za-z0-9])`).test(String(text ?? ''));
 }
 
+/**
+ * Does the mission at the start of this transcript name the task? The id as a whole word, or the track label in a path:
+ * a reviewer's mission mentions the task only in "rev-<id>\reviewer-...", which mentionsTask does not see (the hyphen
+ * before the id); timeCost.trackFromText knows the path. Used for the uncertain agents of agentsForTask.
+ */
+function missionNamesTask(transcript, id) {
+  const first = transcript ? firstUserMessage(transcript) : null;
+  if (first == null) return false;
+  return mentionsTask(first, id) || TK.taskIdFor(TK.trackFromText(first) ?? '', (x) => x === id) === id;
+}
+
 // ---- Cost per task ---------------------------------------------------------------------------------------
 
 /** The agent types that count toward a task: tracks and the reviewers (from the setup). */
@@ -628,6 +639,7 @@ module.exports = {
   batchFindings,
   lastAnswer,
   firstUserMessage,
+  missionNamesTask,
   mentionsTask,
   taskAgentTypes,
   agentsForTask,
