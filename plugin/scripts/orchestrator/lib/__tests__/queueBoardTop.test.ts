@@ -245,7 +245,7 @@ describe('the top: grid and phone', () => {
     const forWide: string[] = [];
     for (const k of topClasses()) {
       const max = px(valueAt375(k, 'max-width') ?? 'none');
-      for (const property of ['width', 'min-width', 'flex-base']) {
+      for (const property of ['width', 'min-width', 'flex-basis']) {
         const v = valueAt375(k, property);
         if (v === null) continue;
         const b = px(v);

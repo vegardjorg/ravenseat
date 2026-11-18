@@ -773,7 +773,7 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--distance-sm);
-  flex-base: 100%;
+  flex-basis: 100%;
   margin: var(--distance-xs) 0 0;
   font-size: var(--text-xs);
   color: var(--color-on-surface-variant);
@@ -783,7 +783,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: var(--distance-xs);
-  flex-base: 100%;
+  flex-basis: 100%;
 }
 
 .cloud-package-field textarea {
@@ -2827,21 +2827,27 @@ div.row-option {
 
 /* ---- Multi-select, the selection bar, the bulk action dialog and "Undo" ---- */
 
-/* The checkbox on the card: visible on hover and focus, and always when something is selected. 44 px touch target. */
+/* The checkbox on the card: visible on hover and focus, and always when something is selected.
+   It is absolutely positioned in the card's left padding, so it takes no space in the header and the id starts at the
+   card padding (in line with the title) whether the box shows or not. On a mouse the target is 24 x 36 px (WCAG 2.2
+   target size); on touch it is 44 px and the header makes room for it (see @media (hover: none) below). */
 .mark-box {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
-  margin: -12px 0 -12px -10px;
+  justify-content: flex-start;
+  width: var(--distance-lg);
+  height: calc(var(--distance-lg) + var(--distance-sm) + var(--distance-xs));
   cursor: pointer;
   opacity: 0;
 }
 
 .mark-box input {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   margin: 0;
   accent-color: var(--color-primary);
   cursor: pointer;
@@ -2857,7 +2863,14 @@ div.row-option {
 
 @media (hover: none) {
   .mark-box {
+    width: 44px;
+    height: 44px;
     opacity: 1;
+  }
+
+  /* On touch the box is always visible, so the header makes room for it instead of letting it cover the id. */
+  .summary[data-markable] .summary-header {
+    padding-left: var(--distance-lg);
   }
 }
 
@@ -3730,7 +3743,7 @@ body.with-option-line .board {
 }
 
 .key-error {
-  flex-base: 100%;
+  flex-basis: 100%;
   margin: 0;
 }
 
@@ -4067,6 +4080,7 @@ fieldset.setting legend {
 .decide-heading {
   margin: 0;
   font-size: var(--text-lg);
+  font-weight: 600; /* set here: a heading otherwise gets the browser default 700 */
   color: var(--color-on-surface);
 }
 .decide-keys {
@@ -4089,6 +4103,7 @@ fieldset.setting legend {
   align-items: center;
   gap: var(--distance-sm);
   font-size: var(--text-md);
+  font-weight: 600; /* set here: a heading otherwise gets the browser default 700 */
   color: var(--color-on-surface);
 }
 .decide-hint {

@@ -15,6 +15,11 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   ci or gates row. `push.controlsWarning` keeps its default (on) and its meaning, and the secret scan and the
   owner-mode push question still ask as before.
 - `push-check` printing its Controls line with `push.controlsWarning: false` was already fixed; a test covers it.
+- **Board polish: the card id lines up with the title.** The selection checkbox on a card now sits in the card's
+  left padding instead of taking room in the header, so the id no longer starts about 40 px in on cards that can be
+  selected. On touch screens the box keeps its 44 px target and the header makes room for it. The Decisions headings
+  use weight 600 like the rest of the board, and three `flex-basis` rules that were misspelled (and so ignored) now
+  apply.
 
 ## 0.19.0 (2026-11-18)
 

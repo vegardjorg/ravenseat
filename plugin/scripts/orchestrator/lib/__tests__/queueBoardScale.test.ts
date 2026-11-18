@@ -55,10 +55,11 @@ function rawPx() {
   return { font, distance };
 }
 
-// After: one raw font (the speech bubble at the top, the mascot owns it) and 21 raw spacings
-// (hairlines of 1 and 2 px, top grid and mascot, the negative margin on .mark-box and the space under the selection line).
+// After: one raw font (the speech bubble at the top, the mascot owns it) and 18 raw spacings
+// (hairlines of 1 and 2 px, top grid and mascot, and the space under the selection line). The negative margin on
+// .mark-box is gone: the checkbox is absolutely positioned now.
 // Before: 80 raw font values and 140 raw spacings.
-const THRESHOLD = { font: 1, distance: 21 };
+const THRESHOLD = { font: 1, distance: 18 };
 
 describe('scale', () => {
   it('the tokens exist with the agreed values', () => {
@@ -92,6 +93,34 @@ describe('scale', () => {
   it('only weight 400 and 600 (the two weights that are loaded)', () => {
     for (const { prop, val } of declarations())
       if (prop === 'font-weight') expect(['400', '600', 'inherit', 'normal']).toContain(val);
+  });
+});
+
+/** The declarations of the first rule whose selector list is exactly `selector` (comments removed). */
+function ruleFor(selector: string): Record<string, string> {
+  const without = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = without.match(new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'm'));
+  const out: Record<string, string> = {};
+  if (!m) return out;
+  for (const d of m[1].matchAll(/([a-z-]+)\s*:\s*([^;]+);/g)) out[d[1]] = d[2].trim();
+  return out;
+}
+
+describe('ground rules (headings, flex, the checkbox on the card)', () => {
+  it('no misspelled flex-base (the browser ignores it; flex-basis is the property)', () => {
+    expect(declarations().filter((d) => d.prop === 'flex-base')).toEqual([]);
+  });
+
+  it('the Decisions headings set weight 600 themselves (otherwise the browser default 700 applies)', () => {
+    expect(ruleFor('.decide-heading')['font-weight']).toBe('600');
+    expect(ruleFor('.decide-group-title')['font-weight']).toBe('600');
+  });
+
+  it('the hidden checkbox takes no space in the card header (the id starts at the card padding)', () => {
+    const box = ruleFor('.mark-box');
+    expect(box.position).toBe('absolute');
+    expect(box.margin).toBeUndefined();
   });
 });
 
