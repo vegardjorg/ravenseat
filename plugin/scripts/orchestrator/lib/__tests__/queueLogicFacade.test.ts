@@ -62,6 +62,8 @@ const EXPORTS = [
   'usageLimitGuard', 'validateNewField', 'waitingOnError', 'windDownGuard', 'withIndex', 'withoutAgentLines',
   // The Blocked column on the board (board.blockedColumn).
   'STUCK_BLOCK_CODES', 'stuckBlockOf',
+  // Which agents a track's transcript names (the merge gate and the board's reviews badge share it).
+  'missionNamesTask',
 ];
 
 describe('queueLogic.js facade', () => {
