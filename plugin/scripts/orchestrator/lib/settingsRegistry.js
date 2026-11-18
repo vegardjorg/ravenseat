@@ -10,7 +10,7 @@
 // A row:
 //   key            the path inside the file `store` names: "push.mode" in queue.config.json, "limits.maxConcurrent" or
 //                  "guidance" in queue.json. A key under features keeps its dot ("features.plans.legal").
-//   category       one of CATEGORIES (the fifteen groups, each with its basic settings first, the advanced ones under)
+//   category       one of CATEGORIES (the sixteen groups, each with its basic settings first, the advanced ones under)
 //   level          'basic' | 'advanced' (advanced shows the visible label LABELS.advanced, folded in its category)
 //   modes          ['lite', 'full'] or ['full'] (full only: lite hides it behind one line, LABELS.fullOnly)
 //   fullWhy        one line why a full-only row means nothing in lite; null otherwise
@@ -32,7 +32,7 @@
 //
 // Owner decisions B1-B5 (plans/ROADMAP.md): B1 (agentPushBlock.enabled), B2 (gateEvidence.mode, .external: gates,
 // advanced, both modes, choices own/external/off, external and off weaken) and B3 (agentGuard.enabled, .except) have
-// their rows, and so does B4 (ownership.sharedPatchCollides: guards, advanced, full only because shared_patch is the full
+// their rows, and so does B4 (ownership.sharedPatchCollides: files, advanced, full only because shared_patch is the full
 // task format, weakens when false). Owner decision 2026-11-12 also made `mode lite` (switching a full project) and
 // `cloud.collect auto` confirmed weakenings; `guidance quiet` and `kickstart gates` are not. The rest get their rows in
 // the same task that adds the key to STANDARD (the coverage test turns red until it does). B5 (history.rotateTimeLog,
@@ -49,13 +49,17 @@
 const LABELS = Object.freeze({ advanced: 'Advanced', fullOnly: 'Full mode only' });
 
 /**
- * The fifteen categories, in the order they are shown. `note` (optional) is one line shown under the title, on the board
+ * The sixteen categories, in the order they are shown. `note` (optional) is one line shown under the title, on the board
  * and in `ravenseat settings`, for what the rows of a group share and no single row can say.
  *
  * Owner decision 2026-11-17 (plans/gjennomgang-friksjon-innstillinger-2026-11-17.md, H2, L1, M7): "Gates and checks"
  * held 55 rows and "Review and agents" 32, so they were split into Gates, Tests and evidence, Checks tab and learning,
  * and Scope and catalog. No key changed (learning.* stays the name space of the learning loop); only the group a row is
  * shown in. The three sources of guard proposals share the learning group and its note, and keep their defaults.
+ * Owner decision 2026-11-18: "Agent guards" (29 rows, all Advanced) was split the same way into File and read guards
+ * (what a track may write, read and change: protected paths, control files, git hooks, read limits) and Command and
+ * secret guards (what an agent may run or send out: push, network, deploy, approvals, the secret scans and the opt-in
+ * checks). Each has its main switch under Basic (controlFiles.guard, agentGuard.enabled). No key changed.
  */
 const CATEGORIES = Object.freeze([
   { id: 'project', title: 'Project and git' },
@@ -72,7 +76,8 @@ const CATEGORIES = Object.freeze([
       'most three proposals open, and each one waits for your approval, so none of them starts work by itself. The ' +
       'finding log source is an opt-in check, off until you turn it on, since its proposals ask for your time.',
   },
-  { id: 'guards', title: 'Agent guards' },
+  { id: 'files', title: 'File and read guards' },
+  { id: 'guards', title: 'Command and secret guards' },
   { id: 'push', title: 'Merge and push' },
   { id: 'private', title: 'Private and sharing' },
   { id: 'review', title: 'Review and agents' },
@@ -504,8 +509,8 @@ const SETTINGS = Object.freeze([
   row('learning.idleGuardDays', 'learning', 'integer', 'Days before a gate guard counts as not run',
     'How many days after it was built a gate guard with 0 runs gets the INFO line. 7 by default, as the plan says.'),
 
-  // ---- 7. Agent guards ----
-  row('protectedPaths', 'guards', 'list', 'Protected paths',
+  // ---- 7. Agent guards: File and read guards ('files') and Command and secret guards ('guards'), mixed in this list ----
+  row('protectedPaths', 'files', 'list', 'Protected paths',
     'Paths a track may only change when its task owns them: hooks, settings, agents, the queue scripts and test configs. ' +
       'A list replaces the defaults; { "add": [...], "remove": [...] } changes them (the floor is never removed).', {
       weakens: listLosesEntries,
@@ -513,7 +518,7 @@ const SETTINGS = Object.freeze([
       whyNot: 'These files run code or give instructions with your rights in the orchestrator session.',
       changes: 'The merge guard no longer stops changes to the paths left out (the floor holds). Doctor will report it.',
     }),
-  row('dependencyFiles', 'guards', 'choice', 'Dependency files',
+  row('dependencyFiles', 'files', 'choice', 'Dependency files',
     'A task that changes a dependency file it does not own: stop like a protected path, or warn.', {
       choices: ['stop', 'warn'],
       defaultByMode: { lite: 'warn', full: 'stop' },
@@ -522,7 +527,7 @@ const SETTINGS = Object.freeze([
       whyNot: 'A new library runs its install scripts on your machine and becomes part of what you ship.',
       changes: 'Such a change gives a warning, and the merge goes on. Doctor will report it.',
     }),
-  row('gitSurface', 'guards', 'choice', 'Git hooks and config',
+  row('gitSurface', 'files', 'choice', 'Git hooks and config',
     'Git hooks and git settings that run code (core.hooksPath and similar) are compared with what you accepted. Stop: ' +
     'a change stops receive and merge until you accept it. Warn: only a warning. Off: no check. The default is stop in ' +
     'full mode, since a hook runs with your rights on your next commit or push, and warn in lite, where a first try ' +
@@ -586,7 +591,7 @@ const SETTINGS = Object.freeze([
     'ask you first; it is never let through unchecked.'),
   row('deployCommands', 'guards', 'list', 'Deploy commands',
     'The push guard asks before any command that starts with one of these. Empty = off.'),
-  row('claudeFingerprint', 'guards', 'onoff', 'Claude setup fingerprint',
+  row('claudeFingerprint', 'files', 'onoff', 'Claude setup fingerprint',
     'Receive warns when your own Claude setup (~/.claude) changed while a track ran. Only hashes are stored.', {
       weakens: offWeakens,
       protects: 'A track changing your own Claude settings, agents, skills or hooks outside the repository.',
@@ -597,15 +602,16 @@ const SETTINGS = Object.freeze([
   // stops what was never meant to happen; the shell reading can stop a copy out of a control file (cp <main>/... .),
   // which the denial explains. The fingerprint costs a few milliseconds at fill and receive and only warns. On by
   // default by the owner's decision of 16.11.2026 (plans/ekstern-saas-vurdering-2026-11-15.md, bolk 1).
-  row('controlFiles.guard', 'guards', 'onoff', 'Control file write guard',
+  row('controlFiles.guard', 'files', 'onoff', 'Control file write guard',
     'Queue agents may not write the main tree\'s queue.config.json, .claude/, CLAUDE*.md, .git/hooks/, .git/config or ' +
     'the plugin\'s scripts, with the file tools or the shell. Their own worktree copies stay free; the main session is not affected.', {
+      ...BASIC,
       weakens: offWeakens,
       protects: 'A track switching off a guard, adding a hook or rewriting the instructions by writing the main tree\'s control files directly.',
       whyNot: 'Every override flag is denied to the agents, but a direct write to these files gets around all of them.',
       changes: 'Queue agents can write the main tree\'s control files again. Doctor will report it.',
     }),
-  row('controlFiles.fingerprint', 'guards', 'onoff', 'Control file fingerprint',
+  row('controlFiles.fingerprint', 'files', 'onoff', 'Control file fingerprint',
     'Fill and start record a short hash of each main tree control file; receive warns (CONTROL FILES CHANGED) about a ' +
     'change that no commit explains. Only hashes are stored.', {
       weakens: offWeakens,
@@ -639,6 +645,7 @@ const SETTINGS = Object.freeze([
   row('agentGuard.enabled', 'guards', 'onoff', 'Guard every agent type',
     'The push, network, queue command and state file guards apply to every subagent, also general-purpose, Explore and ' +
     'your own. Off: only the queue\'s own agent types, which are always guarded.', {
+      ...BASIC,
       weakens: offWeakens,
       protects: 'An agent the queue did not define (a builtin or your own subagent) pushing, fetching from the network or ' +
         'writing the queue\'s state files.',
@@ -661,7 +668,7 @@ const SETTINGS = Object.freeze([
       changes: 'The hook is removed at the next fill, start or resume, and agents can push from git itself when the text ' +
         'guard does not see the command. Doctor will report it.',
     }),
-  row('ownership.sharedPatchCollides', 'guards', 'onoff', 'Shared patch collides with owned files',
+  row('ownership.sharedPatchCollides', 'files', 'onoff', 'Shared patch collides with owned files',
     'A path in a task\'s shared_patch collides with another active task\'s owned_files: the second task waits to start, ' +
     'and a merge that patches a file another active task owns stops. Off: shared_patch is compared only with shared_patch.', {
       fullWhy: 'shared_patch is a field of the full task format',
@@ -671,22 +678,22 @@ const SETTINGS = Object.freeze([
       changes: 'Both tasks can start, and the merge no longer stops on a shared_patch path another active task owns. ' +
         'Doctor will report it.',
     }),
-  row('readGuard.agentTypes', 'guards', 'list', 'More guarded agent types',
+  row('readGuard.agentTypes', 'files', 'list', 'More guarded agent types',
     'More agent types the read guard applies to (tracks and reviewers are always included).'),
-  row('readGuard.autoLoaded', 'guards', 'list', 'Auto-loaded files',
+  row('readGuard.autoLoaded', 'files', 'list', 'Auto-loaded files',
     'Files Claude Code loads itself, which must never be read again with Read.'),
-  row('readGuard.largeFiles', 'guards', 'list', 'Large files', 'Patterns for files that must always be read in excerpts.'),
-  row('readGuard.maxLines', 'guards', 'integer', 'Read warning (lines)',
+  row('readGuard.largeFiles', 'files', 'list', 'Large files', 'Patterns for files that must always be read in excerpts.'),
+  row('readGuard.maxLines', 'files', 'integer', 'Read warning (lines)',
     'A read of more lines than this gets a warning (300 by default); the stop comes at readGuard.blockLines.'),
-  row('readGuard.blockLines', 'guards', 'integer', 'Read stop (lines)',
+  row('readGuard.blockLines', 'files', 'integer', 'Read stop (lines)',
     'A read of more lines than this is stopped (2000 by default), so one large file cannot fill an agent\'s context.'),
-  row('reads.mode', 'guards', 'choice', 'Read ownership',
+  row('reads.mode', 'files', 'choice', 'Read ownership',
     'A task that reads a file an active task changes: wait until it is done, or start and name the overlap.',
     { choices: ['wait', 'warn'], fullWhy: 'read ownership uses the reads field of the full task format' }),
-  row('hotspots', 'guards', 'list', 'Hotspots',
+  row('hotspots', 'files', 'list', 'Hotspots',
     'Shared config blocks parallel tracks break each other on; only an agreed change gets through. Empty = off.',
     { fullWhy: 'hotspot changes are agreed in the full task format (hotspot_patch)' }),
-  row('contextGuard.blockOtherChats', 'guards', 'onoff', 'Stop other chats at 400k',
+  row('contextGuard.blockOtherChats', 'files', 'onoff', 'Stop other chats at 400k',
     'Chats that are not the orchestrator are stopped at 400k context instead of only getting the notice.'),
 
   // ---- 8. Merge and push ----

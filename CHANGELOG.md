@@ -5,6 +5,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Hardening for set-aside checks, one red card per cause, and a shorter guards group.** An important gap now shows in
+  `ravenseat doctor` also when its Checks card is set aside (or you said no in setup): setting a suggestion aside hides
+  the card, but a key in a tracked file or `bypassPermissions` in the shared settings is still named. Without such a gap
+  the off line stays behind `doctor --all`, as before. The `secret-scan-receive` card rises only to medium, never high,
+  while a secret file is already in git, so the red marker counts that cause once (the `secret-files` card) instead of
+  twice. Agent guards (29 rows, all Advanced) is split into File and read guards (15 rows, main switch
+  `controlFiles.guard` under Basic) and Command and secret guards (14 rows, main switch `agentGuard.enabled` under
+  Basic). No setting key or default changed.
 - **Better overview of the settings, and three calmer defaults in lite.** The settings come in fifteen groups instead
   of twelve: Gates is split into Gates, Tests and evidence, and Checks tab and learning, and the scope notes and the
   catalog get their own group, Scope and catalog, so no group holds most of the rows and each has its main switches

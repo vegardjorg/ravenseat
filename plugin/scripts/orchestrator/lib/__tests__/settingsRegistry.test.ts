@@ -123,8 +123,8 @@ describe('coverage: every setting has a row', () => {
 describe('every row is complete', () => {
   const CATEGORY_IDS = R.CATEGORIES.map((c: { id: string }) => c.id);
 
-  it('the fifteen categories, each with a title and at least one row', () => {
-    expect(R.CATEGORIES).toHaveLength(15);
+  it('the sixteen categories, each with a title and at least one row', () => {
+    expect(R.CATEGORIES).toHaveLength(16);
     for (const c of R.CATEGORIES) {
       expect(c.title, c.id).toMatch(/\S/);
       expect(ROWS.some((r) => r.category === c.id), c.id).toBe(true);
@@ -135,7 +135,7 @@ describe('every row is complete', () => {
   // owner split them. No key changed; only the group a row is shown in.
   it('the split groups: gates, tests and evidence, the Checks tab and learning, scope and catalog', () => {
     expect(R.CATEGORIES.map((c: { id: string }) => c.id)).toEqual([
-      'project', 'limits', 'load', 'gates', 'tests', 'learning', 'guards', 'push', 'private', 'review', 'scope',
+      'project', 'limits', 'load', 'gates', 'tests', 'learning', 'files', 'guards', 'push', 'private', 'review', 'scope',
       'board', 'cloud', 'plans', 'history',
     ]);
     const title = (id: string) => R.CATEGORIES.find((c: { id: string }) => c.id === id).title;
@@ -143,6 +143,8 @@ describe('every row is complete', () => {
     expect(title('tests')).toBe('Tests and evidence');
     expect(title('learning')).toBe('Checks tab and learning');
     expect(title('scope')).toBe('Scope and catalog');
+    expect(title('files')).toBe('File and read guards');
+    expect(title('guards')).toBe('Command and secret guards');
     const cat = (k: string) => (ROWS.find((x) => x.key === k) as Row).category;
     for (const k of ['gates.redOnBase', 'gates.redOnBaseStrict', 'gates.fixWithoutTestWarning', 'testWeakening.enabled', 'qa.autoCommand'])
       expect(cat(k), k).toBe('tests');
@@ -152,17 +154,24 @@ describe('every row is complete', () => {
       expect(cat(k), k).toBe('scope');
     for (const k of ['gates.quick', 'baseGate.enabled', 'gateEvidence.mode', 'fixPlateau', 'wait.blockSec']) expect(cat(k), k).toBe('gates');
     for (const k of ['helpers', 'reviewers', 'triage.agentAdded', 'proposals.autoAccept.enabled']) expect(cat(k), k).toBe('review');
+    for (const k of ['protectedPaths', 'gitSurface', 'controlFiles.guard', 'readGuard.blockLines', 'reads.mode', 'hotspots'])
+      expect(cat(k), k).toBe('files');
+    for (const k of ['secretScan.enabled', 'secretScan.atReceive', 'deployCommands', 'approvals.ask', 'agentGuard.enabled', 'agentPushBlock.enabled'])
+      expect(cat(k), k).toBe('guards');
     // Every key of these families in its group: nothing left behind.
     for (const r of ROWS) {
       if (r.key.startsWith('learning.') || r.key.startsWith('inspection.')) expect(r.category, r.key).toBe('learning');
       if (r.key.startsWith('scopeNotes.') || r.key.startsWith('catalog.')) expect(r.category, r.key).toBe('scope');
       if (r.key.startsWith('testWeakening.') || r.key.startsWith('qa.')) expect(r.category, r.key).toBe('tests');
+      if (r.key.startsWith('readGuard.') || r.key.startsWith('controlFiles.')) expect(r.category, r.key).toBe('files');
+      if (r.key.startsWith('secretScan.') || r.key.startsWith('agentGuard.')) expect(r.category, r.key).toBe('guards');
     }
   });
 
   it('the split groups are not nearly all Advanced: each has a basic row, and none holds more than 25 rows', () => {
-    // Agent guards (29 rows, all Advanced) was not part of the split; see the owner question in the review report.
-    for (const id of ['gates', 'tests', 'learning', 'review', 'scope']) {
+    // Agent guards (29 rows, all Advanced) was split too (owner decision 2026-11-18): File and read guards and Command
+    // and secret guards, each with its main switch under Basic.
+    for (const id of ['gates', 'tests', 'learning', 'review', 'scope', 'files', 'guards']) {
       const mine = ROWS.filter((r) => r.category === id);
       expect(mine.length, id).toBeLessThanOrEqual(25);
       expect(mine.some((r) => r.level === 'basic'), id).toBe(true);
@@ -284,7 +293,7 @@ describe('the weakening rows from the design', () => {
 
   it('B4: ownership.sharedPatchCollides is an advanced guard row, full mode only, with its reason', () => {
     const r = ROWS.find((x) => x.key === 'ownership.sharedPatchCollides') as Row;
-    expect(r).toMatchObject({ category: 'guards', level: 'advanced', modes: ['full'], type: 'onoff', edit: 'set', store: 'config' });
+    expect(r).toMatchObject({ category: 'files', level: 'advanced', modes: ['full'], type: 'onoff', edit: 'set', store: 'config' });
     expect(r.fullWhy).toMatch(/shared_patch/);
     expect(r.weakens?.(true, true)).toBe(false);
   });
@@ -375,7 +384,7 @@ describe('the config table in queue.md follows the registry (step 11)', () => {
         return { keys: [...cells[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]), marks: cells[cells.length - 1] };
       });
 
-  it('the fifteen categories, each its own table, in the registry order', () => {
+  it('the sixteen categories, each its own table, in the registry order', () => {
     expect(parts.map((p: { title: string }) => p.title)).toEqual(R.CATEGORIES.map((c: { title: string }) => c.title));
   });
 

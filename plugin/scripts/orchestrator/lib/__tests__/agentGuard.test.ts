@@ -199,13 +199,15 @@ describe('B3: the setting', () => {
   it('STANDARD holds the defaults', () => {
     expect(QC.STANDARD.agentGuard).toEqual({ enabled: true, except: [] });
   });
-  it('registry rows in Agent guards, advanced, both modes, weakening when off or with an exception', () => {
+  it('registry rows in Command and secret guards, both modes, weakening when off or with an exception', () => {
     const enabled = R.rowFor('agentGuard.enabled');
     const except = R.rowFor('agentGuard.except');
+    // The switch is the group's Basic row (owner decision 2026-11-18); the exception list stays Advanced.
+    expect(enabled.level).toBe('basic');
+    expect(except.level).toBe('advanced');
     for (const r of [enabled, except]) {
       expect(r, 'row').toBeTruthy();
       expect(r.category).toBe('guards');
-      expect(r.level).toBe('advanced');
       expect(r.modes).toEqual(['lite', 'full']);
       expect(r.protects && r.whyNot && r.changes).toBeTruthy();
     }

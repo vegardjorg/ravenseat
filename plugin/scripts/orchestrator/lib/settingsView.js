@@ -3,7 +3,7 @@
 //
 // The design is plans/innstillinger-vurdering-2026-11-12.md, steps 4 to 6b:
 //   settingsView  every row with its value now, its default for the mode, where it is stored and whether it weakens a
-//                 guard, grouped in the fifteen categories (basic rows first, advanced after). In lite, a full-only row
+//                 guard, grouped in the sixteen categories (basic rows first, advanced after). In lite, a full-only row
 //                 is marked `hidden` (one count line per category shows it is there); a category with nothing for lite
 //                 is `fullOnlyCategory` (one closed line). The board's /api/settings and `ravenseat settings` both use it.
 //   cliLines      `ravenseat settings` as text (--advanced, --all, --changed, a category).
