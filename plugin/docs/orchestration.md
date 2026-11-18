@@ -1122,9 +1122,9 @@ whether a skip is intended. `testWeakening.enabled: false` turns it off (`lib/te
 
 Reuse and scope: the guards above keep a track out of other tasks' files and the protected ones, but not from
 writing a helper that already exists, opening a new folder, adding a second library for the same job or drifting
-outside its own files. `receive` states those four as facts (`lib/scopeNotes.js`): one `NOTE reuse`, `NOTE new
-folder`, `NOTE dependency` or `NOTE drift` line each, and a `Reuse and scope` section in `00-package.md` that the
-reviewer weighs as `duplication` or `scope-drift`. The look-ups are `git grep -w`, `git ls-tree -d` and `git show` on
+outside its own files. `receive` states those four as facts (`lib/scopeNotes.js`): one `NOTE scope` line with a count per kind (a single
+fact keeps its own `NOTE reuse`, `NOTE new folder`, `NOTE dependency` or `NOTE drift` line; `receive <id> --all` prints
+the line of each), and a `Reuse and scope` section in `00-package.md` with every fact, which the reviewer weighs as `duplication` or `scope-drift`. The look-ups are `git grep -w`, `git ls-tree -d` and `git show` on
 the merge base, so nothing from the track runs and no tokens are used. They never stop and are on by default, also in
 lite; each has its own switch under `scopeNotes` (see [Reuse and scope notes](queue.md#reuse-and-scope-notes) for the
 rules and the friction of each part).

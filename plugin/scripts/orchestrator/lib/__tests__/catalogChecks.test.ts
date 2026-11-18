@@ -212,6 +212,29 @@ describe('what receive and merge say', () => {
     expect(lines[0]).toMatch(/binds nothing/);
   });
 
+  it('M4: two or more proposed choices are one NOTE line at receive; the CATALOG lines stay whole and come first', () => {
+    const held = decision({ id: 'D-0009', file: 'decisions/D-0009-x.md', status: 'accepted' });
+    const decisions = [decision(), decision({ id: 'D-0008', file: 'decisions/D-0008-x.md' }), held];
+    const r = CC.assess({ decisions, ledger: acceptedLedger(held), diff });
+    const lines = CC.receiveLines(r, { id: 'A', cli: 'ravenseat' });
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(/^CATALOG A: 2 added line\(s\) break D-0009/);
+    expect(lines[0]).toContain('ravenseat resume A --reason fix');
+    expect(lines[1]).toBe(
+      'NOTE catalog A: 2 proposed choices match added lines (D-0007, D-0008; 4 lines). They bind nothing; the reviewer weighs them. ' +
+        'Each is in 00-package.md (Catalog rules), or ravenseat receive A --all prints them.',
+    );
+    // --all: the detail form, one NOTE per proposed choice, still after the CATALOG line.
+    const all = CC.receiveLines(r, { id: 'A', cli: 'ravenseat', all: true });
+    expect(all).toHaveLength(3);
+    expect(all[0]).toMatch(/^CATALOG A: /);
+    expect(all[1]).toMatch(/^NOTE catalog A: 2 added line\(s\) match the check of D-0007, a proposed choice: app\/page\.ts:1, app\/page\.ts:2\./);
+    expect(all[2]).toMatch(/^NOTE catalog A: 2 added line\(s\) match the check of D-0008, a proposed choice/);
+    // The package still names each rule.
+    const section = CC.packageSection(r).join('\n');
+    for (const x of ['D-0007 (proposed, binds nothing)', 'D-0008 (proposed, binds nothing)', 'D-0009 (holds, warn)']) expect(section).toContain(x);
+  });
+
   it('the package section names each rule with its level; nothing hit, no section', () => {
     const d = decision({ status: 'accepted' });
     const s = CC.packageSection(CC.assess({ decisions: [d, decision({ id: 'D-0008', file: 'decisions/D-0008-x.md' })], ledger: acceptedLedger(d), diff }));

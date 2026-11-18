@@ -4,7 +4,8 @@
 // WHY: parallel tracks write the same helper again under the same name (Ravenseat itself has isObject in many files and
 // norm in several variants that differ a little), open a new top folder without asking, pull in a second library for a
 // job the project already has one for, or drift far outside the files the task named. None of this is wrong for sure,
-// so nothing here stops anything: each part is a plain fact, one NOTE line at receive and a line in the "Reuse and
+// so nothing here stops anything: each part is a plain fact, counted on one NOTE scope line at receive (receiveLines,
+// M4; --all or a single fact gives the NOTE line of each) and a line in the "Reuse and
 // scope" section of 00-package.md, so the owner and the reviewer see it before the merge. Bolk B1 of the scope drift
 // plan (plans/scope-drift-dry-katalog-2026-11-15.md, owner decision 16.11: these four facts are on by default, also in
 // lite, since they are only NOTE lines).
@@ -549,6 +550,32 @@ function noteLines(r, { id = '?' } = {}) {
   return out;
 }
 
+/**
+ * What receive prints (M4 of the friction review, 2026-11-17): the facts as ONE `NOTE scope` line with a count per
+ * kind and where the details are, since up to thirteen NOTE lines per delivery drowned the lines that stop or ask for
+ * something. A single fact stays its own full line (the summary would say less in the same space); `all` (receive
+ * --all) gives the detail form of noteLines. The package section (packageSection) always has every fact.
+ */
+function receiveLines(r, { id = '?', cli = 'ravenseat', all = false } = {}) {
+  const detail = noteLines(r, { id });
+  if (all || detail.length <= 1) return detail;
+  const parts = [];
+  if (r.reuse.length) parts.push(`${plural(r.reuse.length, 'name')} the base already defines (reuse)`);
+  if (r.folders.length) parts.push(plural(r.folders.length, 'new folder'));
+  if (r.dependencies.length) parts.push(`${plural(r.dependencies.length, 'dependency', 'dependencies')} for a job the project already covers`);
+  const d = r.drift && driftText(r.drift);
+  if (d)
+    parts.push(
+      d.kind === 'drift'
+        ? `${r.drift.outside} of ${plural(r.drift.changed, 'changed file')} outside the task's files (drift)`
+        : `${plural(r.drift.changed, 'file')} in ${r.drift.folders.length} folders, the task names none (scope)`,
+    );
+  return [
+    `NOTE scope (${id}): ${parts.join(', ')}. Facts for the reviewer, never a stop: each is in 00-package.md (Reuse and scope), ` +
+      `or ${cli} receive ${id} --all prints them.`,
+  ];
+}
+
 /** The "Reuse and scope" section of 00-package.md, as lines; null when every part is off. */
 function packageSection(r) {
   const s = r.setup;
@@ -596,5 +623,6 @@ module.exports = {
   writeOutside,
   assess,
   noteLines,
+  receiveLines,
   packageSection,
 };

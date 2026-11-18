@@ -351,6 +351,43 @@ describe('the lines and the package section', () => {
     expect(lines[5]).toBe('NOTE reuse (A): and 2 more names (see 00-package.md).');
     expect(SN.packageSection(r).filter((l: string) => l.startsWith('- reuse:')).length).toBe(7);
   });
+  it('M4: at receive the facts are one NOTE scope line with the counts and where the details are', () => {
+    const r = SN.assess({ diff, changedPaths, task, setup: SN.setupOf({}), io });
+    expect(SN.receiveLines(r, { id: 'A', cli: 'ravenseat' })).toEqual([
+      "NOTE scope (A): 1 name the base already defines (reuse), 1 new folder, 1 dependency for a job the project already covers, 1 of 2 changed files outside the task's files (drift). " +
+        'Facts for the reviewer, never a stop: each is in 00-package.md (Reuse and scope), or ravenseat receive A --all prints them.',
+    ]);
+    // --all gives the detail form, the same lines as noteLines.
+    expect(SN.receiveLines(r, { id: 'A', cli: 'ravenseat', all: true })).toEqual(SN.noteLines(r, { id: 'A' }));
+    // Every detail the summary leaves out is in the package section.
+    const section = SN.packageSection(r).join('\n');
+    expect(section).toContain('- reuse: `isObject`');
+    expect(section).toContain('- new folder: `newmod/` (1 file), not on the base');
+    expect(section).toContain('- dependency: `dayjs`');
+    expect(section).toContain('- drift: 1 of 2 changed files is outside owned_files, shared_patch and reads');
+  });
+  it('M4: a single fact stays its full line, none gives no line, a task without files gets the folder count', () => {
+    const off = SN.setupOf({ scopeNotes: { reuse: false, newFolders: false, dependencies: false, drift: false } });
+    const onlyDrift = SN.assess({ diff, changedPaths, task, setup: { ...off, drift: true }, io });
+    expect(SN.receiveLines(onlyDrift, { id: 'A' })).toEqual(SN.noteLines(onlyDrift, { id: 'A' }));
+    expect(SN.receiveLines(onlyDrift, { id: 'A' })).toHaveLength(1);
+    const clean = SN.assess({ diff: '', changedPaths: ['newmod/b.js'], task, setup: SN.setupOf({}), io });
+    expect(SN.receiveLines(clean, { id: 'A' })).toEqual([]);
+    const lite = SN.assess({ diff, changedPaths: ['newmod/b.js', 'package.json', 'docs/x.md'], task: { id: 'A' }, setup: SN.setupOf({}), io });
+    expect(SN.receiveLines(lite, { id: 'A', cli: 'rs' })[0]).toMatch(
+      /^NOTE scope \(A\): 1 name the base already defines \(reuse\), 1 new folder, 1 dependency for a job the project already covers, 3 files in 3 folders, the task names none \(scope\)\. .* rs receive A --all prints them\.$/,
+    );
+  });
+  it('M4: seven reuse names are still one line at receive, and all seven in the package', () => {
+    const names = Array.from({ length: 7 }, (_, i) => `helper${i}`);
+    const many = addedFile('lib/n.js', names.map((n) => `function ${n}() {}`));
+    const rows = names.map((n, i) => ({ file: 'lib/old.js', line: i + 1, text: `function ${n}() {}` }));
+    const r = SN.assess({ diff: many, changedPaths: ['lib/n.js'], task: { id: 'A', owned_files: ['lib/n.js'] }, setup: SN.setupOf({}), io: { ...io, findDefinitions: () => rows } });
+    const lines = SN.receiveLines(r, { id: 'A' });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^NOTE scope \(A\): 7 names the base already defines \(reuse\)\./);
+    expect(SN.packageSection(r).filter((l: string) => l.startsWith('- reuse:')).length).toBe(7);
+  });
   it('a failing lookup never throws: the part is skipped', () => {
     const bad = { ...io, findDefinitions: () => { throw new Error('git broke'); } };
     const r = SN.assess({ diff, changedPaths, task, setup: SN.setupOf({}), io: bad });
@@ -370,7 +407,7 @@ afterAll(() => {
 
 describe('queue.mjs receive with the scope notes', () => {
   /** Task A on queue/A writes isObject again in a new folder and adds dayjs next to moment; `config` is queue.config.json. */
-  const setup = (config: object) => {
+  const setup = (config: object, extra: string[] = []) => {
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'queue-scope-'));
     temporary.push(folder);
     const repo = path.join(folder, 'repo');
@@ -432,7 +469,7 @@ describe('queue.mjs receive with the scope notes', () => {
     } as NodeJS.ProcessEnv;
     delete env.QUEUE_SCRATCHPAD;
     delete env.QUEUE_SESSION;
-    const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'orchestrator', 'queue.mjs'), 'receive', 'A'], {
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'orchestrator', 'queue.mjs'), 'receive', 'A', ...extra], {
       encoding: 'utf8',
       env,
       cwd: folder,
@@ -441,10 +478,27 @@ describe('queue.mjs receive with the scope notes', () => {
     return { code: r.status, out: r.stdout ?? '', error: r.stderr ?? '', pkg: fs.existsSync(pkg) ? fs.readFileSync(pkg, 'utf8') : '' };
   };
 
-  it('prints the NOTE lines and writes the section', () => {
+  it('prints one NOTE scope line and writes every fact in the section (M4)', () => {
     const m = setup({});
     expect(m.error).toBe('');
     expect(m.code).toBe(0);
+    expect(m.out).toContain(
+      "NOTE scope (A): 1 name the base already defines (reuse), 1 new folder, 1 dependency for a job the project already covers, 1 of 2 changed files outside the task's files (drift).",
+    );
+    expect(m.out).toContain('receive A --all prints them.');
+    expect(m.out.split(/\r?\n/).filter((l) => l.startsWith('NOTE '))).toHaveLength(1);
+    expect(m.out).not.toContain('NOTE reuse');
+    expect(m.pkg).toContain('## Reuse and scope');
+    expect(m.pkg).toContain('- reuse: `isObject` (new in `newmod/b.js`) is already defined in `lib/a.js:2`');
+    expect(m.pkg).toContain('- new folder: `newmod/` (1 file), not on the base');
+    expect(m.pkg).toContain('- dependency: `dayjs` in `package.json`, the project already has `moment` (dates and times)');
+    expect(m.pkg).toContain('- drift: 1 of 2 changed files is outside owned_files, shared_patch and reads');
+  });
+  it('--all prints the NOTE line of each fact and writes the section', () => {
+    const m = setup({}, ['--all']);
+    expect(m.error).toBe('');
+    expect(m.code).toBe(0);
+    expect(m.out).not.toContain('NOTE scope (A)');
     expect(m.out).toContain('NOTE reuse (A): isObject (new in newmod/b.js) is already defined in lib/a.js:2.');
     expect(m.out).toContain('NOTE new folder (A): newmod/ (1 file) is not on the base.');
     expect(m.out).toContain('NOTE dependency (A): dayjs in package.json, and the project already has moment for dates and times.');
@@ -457,6 +511,7 @@ describe('queue.mjs receive with the scope notes', () => {
     expect(m.code).toBe(0);
     expect(m.out).not.toContain('NOTE reuse');
     expect(m.out).not.toContain('NOTE drift');
+    expect(m.out).not.toContain('NOTE scope');
     expect(m.pkg).not.toContain('## Reuse and scope');
     expect(m.pkg).toContain('# Review package A');
   });

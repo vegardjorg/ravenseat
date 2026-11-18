@@ -252,7 +252,7 @@ rule needs a new `catalog accept`). A proposed or unconfirmed choice gives one `
 
 | Level | When | What happens |
 |---|---|---|
-| info | The choice is proposed or unconfirmed | `NOTE catalog` line at receive, a package line; nothing is counted |
+| info | The choice is proposed or unconfirmed | `NOTE catalog` line at receive (two or more such choices share one line with their ids; `receive <id> --all` prints one each), a package line; nothing is counted |
 | warn | The choice is accepted (and `mode: warn`, or `mode: stop` with `catalog.checkStop` off) | `CATALOG` line at receive with the places, the invariant and the way forward (a fix round, or the owner changes the choice); a line in the review package; the hit is recorded on the task (`catalog_checks`) |
 | stop | The choice is accepted, `mode: stop` and `catalog.checkStop` on | As warn, and `merge` stops (exit 1). Only on the owner's word: `merge <id> --allow-catalog`, logged as `catalog-overridden` |
 

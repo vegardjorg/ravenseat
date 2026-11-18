@@ -168,17 +168,36 @@ const placesOf = (r, tick = (x) => x) =>
 /** The status of a choice that does not hold, in words. */
 const notHolding = (status) => (status === 'proposed' ? 'a proposed choice' : `a proposed choice (${status}: not accepted by the owner in this version)`);
 
-/** One line per rule for the receive output. Never the line's text: it may hold anything. */
-function receiveLines(result, { id, cli = 'ravenseat' } = {}) {
+/**
+ * The receive output. Never the line's text: it may hold anything. A CATALOG line per rule that enforces (warn or
+ * stop) comes first and stays whole: it asks for a fix round or the owner. The rules that bind nothing (info) are one
+ * NOTE line each when there is one, else ONE NOTE line with the ids and the count (M4 of the friction review,
+ * 2026-11-17); `all` (receive --all) gives one per rule. The package section (packageSection) always names each rule.
+ */
+function receiveLines(result, { id, cli = 'ravenseat', all = false } = {}) {
+  const rules = result?.rules ?? [];
+  const info = rules.filter((r) => r.level === 'info');
+  const out = enforcedLines(rules.filter((r) => r.level !== 'info'), { id, cli });
+  if (info.length > 1 && !all) {
+    const n = info.reduce((s, r) => s + r.count, 0);
+    out.push(
+      `NOTE catalog ${id}: ${info.length} proposed choices match added lines (${info.map((r) => r.id).join(', ')}; ${n} line${n === 1 ? '' : 's'}). ` +
+        `They bind nothing; the reviewer weighs them. Each is in 00-package.md (Catalog rules), or ${cli} receive ${id} --all prints them.`,
+    );
+    return out;
+  }
+  for (const r of info)
+    out.push(
+      `NOTE catalog ${id}: ${r.count} added line(s) match the check of ${r.id}, ${notHolding(r.status)}: ${placesOf(r)}. ` +
+        'It binds nothing; the reviewer weighs it.',
+    );
+  return out;
+}
+
+/** The CATALOG line of each rule that enforces (warn or stop), with the way out. */
+function enforcedLines(rules, { id, cli }) {
   const out = [];
-  for (const r of result?.rules ?? []) {
-    if (r.level === 'info') {
-      out.push(
-        `NOTE catalog ${id}: ${r.count} added line(s) match the check of ${r.id}, ${notHolding(r.status)}: ${placesOf(r)}. ` +
-          'It binds nothing; the reviewer weighs it.',
-      );
-      continue;
-    }
+  for (const r of rules) {
     let line =
       `CATALOG ${id}: ${r.count} added line(s) break ${r.id} (${r.title ?? 'a design choice'}): ${placesOf(r)}. ` +
       `The choice holds (accepted by the owner): ${r.invariant ?? ''} A fix round takes the lines out (${cli} resume ${id} --reason fix), ` +

@@ -134,7 +134,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `next` | What can start now, without changing anything |
 | `triage` / `triage <id> --verdict ready\|done\|stale\|adjust [--note "…"]` / `triage <id> --prompt --scratchpad <dir>` | The tasks that need an intake verdict before they start / record the triage helper's verdict (done and stale become an owner question, adjust adds the note to the mission) / write the triage prompt again (see orchestration.md, Intake triage) |
 | `fill --scratchpad <dir>` | Starts as many tasks as the limits allow and writes the mission prompts |
-| `receive <id> [--full-review]` | Receives a finished track: reads the RESULT line, builds the review package. After a fix round the package holds only the commits since the last review, with the previous findings; the same reviewers. `--full-review` gives the whole package |
+| `receive <id> [--full-review] [--all]` | Receives a finished track: reads the RESULT line, builds the review package. After a fix round the package holds only the commits since the last review, with the previous findings; the same reviewers. `--full-review` gives the whole package. The scope facts and the proposed catalog choices are one summary line each, with the details in `00-package.md`; `--all` prints a line per fact |
 | `deliveries` | Tracks with a `track-result.md` (RESULT line on top) that is not received yet; the pulse prints new ones as `NEW DELIVERY` |
 | `resume <id> --reason fix\|context [--new-agent]` | Writes `prompt-<id>-r<N>.md` for a new agent on the same branch (fix round or continuation of an adopted track). A fix round first tries to continue the agent that delivered: `CONTINUE`, the brief `fix-<id>-r<N>.md` and a SendMessage line, when it was active within `fixRound.continueWithinMin`. `--new-agent` skips that. A new fix agent gets a short mission with a pointer to `mission-<id>.md` |
 | `merge <id>` | Merges the track branch into the base branch (after review). A migration file from a task without a migration block stops at the merge guard (exit 4), also with no migration flow configured, and is never pushed by itself. Exit 9: the base branch is red (the base gate, see orchestration.md; only its fix task merges, `--force-red-base` overrides and is logged). Exit 4: the merge guard stopped it (protected paths the task does not own); `--allow-guard` overrides. Exit 1: the quick gates were red at the last receive (`gate_check`): a fix round, or `ravenseat receive` again when commits came after it; `--force-red-gate` overrides and is logged. A PARTIAL delivery stops the merge unless you pass `--allow-partial` (on the owner's word, logged); a later round that delivers DONE clears the stop |
@@ -503,9 +503,16 @@ to `00-package.md`. A command that was flaky on the same track before still coun
 
 Parallel tracks tend to write the same helper again, open a folder nobody asked for, add a second library for a job
 the project already has one for, or wander outside the files the task named. None of that is wrong for sure, so
-`receive` only states the facts: one `NOTE` line each, and a `Reuse and scope` section in `00-package.md` that the
-reviewer weighs (`duplication` and `scope-drift` are the finding classes for it). Nothing stops, nothing gets a red
+`receive` only states the facts: one `NOTE scope` line with a count per kind, and a `Reuse and scope` section in
+`00-package.md` with every fact, which the reviewer weighs (`duplication` and `scope-drift` are the finding classes for it). Nothing stops, nothing gets a red
 marker, and no agent or token is used: it is `git grep`, `git ls-tree` and `git show` on the merge base.
+
+```
+NOTE scope (A): 2 names the base already defines (reuse), 1 new folder, 1 dependency for a job the project already covers, 7 of 9 changed files outside the task's files (drift). Facts for the reviewer, never a stop: each is in 00-package.md (Reuse and scope), or ravenseat receive A --all prints them.
+```
+
+A single fact keeps its own line, and `ravenseat receive <id> --all` prints the line of each fact (the lines that stop
+or ask for something, such as `CATALOG`, `OWNERSHIP` or `HOTSPOT`, are always whole and come before the notes):
 
 ```
 NOTE reuse (A): isObject (new in lib/b.js) is already defined in lib/a.js:3, lib/c.js:12. Reuse it, or say in the report why it differs.

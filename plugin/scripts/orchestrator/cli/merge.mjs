@@ -585,7 +585,7 @@ const SCOPE_CODE = ['*.js', '*.cjs', '*.mjs', '*.jsx', '*.ts', '*.cts', '*.mts',
  * manifest. Everything is read, nothing runs from the track. A failure gives one NOTE line and no section; receive
  * goes on.
  */
-function scopeNotesFor(o, { branch, base, diff, changedNames }) {
+function scopeNotesFor(o, { branch, base, diff, changedNames, all = false }) {
   const SN = require('./lib/scopeNotes.js');
   const setup = SN.setupOf(CONFIG);
   try {
@@ -615,7 +615,7 @@ function scopeNotesFor(o, { branch, base, diff, changedNames }) {
       },
     };
     const r = SN.assess({ diff, changedPaths: changedNames, task: o, setup, io, migrations: CONFIG.migrations ?? null });
-    return { lines: SN.noteLines(r, { id: o.id }), section: SN.packageSection(r) };
+    return { lines: SN.receiveLines(r, { id: o.id, cli: CLI, all }), section: SN.packageSection(r) };
   } catch (e) {
     return { lines: [`NOTE scope notes (${o.id}): could not be made (${e?.message ?? e}); nothing is blocked on it.`], section: null };
   }
@@ -713,7 +713,7 @@ export function outsideCliLines(where) {
 export function cmdReceive() {
   // ---- A track has delivered -> review + review package as plain files + reviewer prompts ----
   const id = positional(1, ['--scratchpad', '--result', '--done-cwd'])[0];
-  if (!id) die('receive <id> [--scratchpad <folder>] [--result "RESULT ..."] [--force]');
+  if (!id) die('receive <id> [--scratchpad <folder>] [--result "RESULT ..."] [--force] [--all]');
   const o0 = read().tasks.find((x) => x.id === id);
   if (!o0) die(`Unknown task ${id}`);
   if (!['running', 'picked', 'review'].includes(o0.status))
@@ -1056,13 +1056,17 @@ export function cmdReceive() {
     );
   // The reuse and scope facts (lib/scopeNotes.js, bolk B1 of the scope drift plan): a name the base already defines, a
   // new folder, a second library for the same job, drift in numbers. NOTE lines and a package section, never a stop.
-  const scopeFacts = scopeNotesFor(o0, { branch, base: weakBase, diff, changedNames });
-  for (const l of scopeFacts.lines) console.log(l);
+  // M4 of the friction review: each kind of fact is ONE summary line here (the details are in 00-package.md); --all
+  // prints the line of each fact. A CATALOG line (an accepted choice broken) asks for something, so it comes first.
+  const allNotes = a.includes('--all');
+  const scopeFacts = scopeNotesFor(o0, { branch, base: weakBase, diff, changedNames, all: allNotes });
   // The check rules of the design choices (lib/catalogChecks.js, bolk B6): a CATALOG line for an accepted choice an added
   // line breaks, a NOTE for a proposed one, and the rules in the package after the scope facts. Never a stop here.
   const CC = require('./lib/catalogChecks.js');
   const catalogCheck = catalogRulesFor(id, diff);
-  for (const l of [...catalogCheck.lines, ...CC.receiveLines(catalogCheck.result, { id, cli: CLI })]) console.log(l);
+  const catalogLines = CC.receiveLines(catalogCheck.result, { id, cli: CLI, all: allNotes });
+  const enforced = catalogLines.filter((l) => !l.startsWith('NOTE '));
+  for (const l of [...enforced, ...scopeFacts.lines, ...catalogCheck.lines, ...catalogLines.filter((l) => l.startsWith('NOTE '))]) console.log(l);
   const ruleSection = CC.packageSection(catalogCheck.result);
   fs.writeFileSync(
     path.join(folder, '00-package.md'),

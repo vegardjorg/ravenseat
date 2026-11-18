@@ -137,7 +137,7 @@ function assessTrackWrite({
     out.push({
       kind: 'drift',
       text:
-        `Write guard (note): ${p} is outside the files and reads of task ${task.id}. receive counts it as drift (NOTE drift). ` +
+        `Write guard (note): ${p} is outside the files and reads of task ${task.id}. receive counts it as drift (NOTE scope). ` +
         'There is no need to stop for this alone when the mission needs the change: go on, and name the file and why in your ' +
         'report. If the change belongs to another task, leave it and write that in the report instead.',
     });

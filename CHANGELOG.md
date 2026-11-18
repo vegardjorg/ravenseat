@@ -5,6 +5,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Receive notes are one line per kind.** The reuse and scope facts (reuse, new folders, dependencies, drift) were
+  up to thirteen `NOTE` lines per delivery, and two or more proposed catalog choices one `NOTE catalog` line each. Each
+  kind is now one line with the counts (and the choice ids) and where the details are: every fact is still in the
+  `Reuse and scope` and `Catalog rules` sections of `00-package.md`, and `ravenseat receive <id> --all` prints the line
+  of each fact. A single fact keeps its own full line. The lines that stop or ask for something (`CATALOG`, ownership,
+  hotspots, test weakening, control files) stay whole, and a `CATALOG` line now comes before the notes. No check is
+  removed and no default changes.
+
 - **One setting in full, and what each guard protects against.** `ravenseat settings <key>` shows one setting with
   its explanation, the value now and where it comes from (queue.config.json, queue.json or the default of the mode),
   the defaults in lite and full, the values it takes, what it needs, whether a value weakens a guard and the command
