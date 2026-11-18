@@ -377,7 +377,10 @@ textarea {
   position: absolute;
   z-index: 12;
   top: calc(100% + 6px);
-  left: 0;
+  /* Anchored at the button's right edge: the buttons sit at the right end of the top bar, so the menu opens
+     leftwards and stays on screen. Narrow screens get their own full-width rule further down. */
+  right: 0;
+  left: auto;
   width: min(360px, calc(100vw - 32px));
   max-height: min(70vh, 560px);
   overflow-y: auto;
@@ -2474,6 +2477,7 @@ div.row-option {
   }
   .top .filter-menu {
     top: 100%;
+    right: auto;
     left: var(--distance-md);
     width: calc(100% - 2 * var(--distance-md));
   }

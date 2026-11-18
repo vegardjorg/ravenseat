@@ -297,3 +297,14 @@ describe('stale data', () => {
     expect(U.staleText(new Date(2026, 9, 15, 9, 5, 30))).toBe('Not updated since 09:05');
   });
 });
+
+describe('the Filter and Selection menus stay on screen', () => {
+  // The buttons sit at the right end of the top bar, so a 360 px menu anchored at the button's left edge stuck out
+  // past the right of a wide screen (1440 px: Selection ended at 1547 px). Anchored at the right edge it opens
+  // leftwards, inside the screen. Narrow screens keep their own full-width rule.
+  it('the menu is anchored at the right edge of its button, not the left', () => {
+    const r = ruleFor('.filter-menu');
+    expect(r.right).toBe('0');
+    expect(r.left).toBe('auto');
+  });
+});

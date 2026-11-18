@@ -5,6 +5,11 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **The Filter and Selection menus no longer stick out past the right edge on a wide screen.** Both menus opened
+  from the left edge of their button, which sits at the right end of the top bar, so on a 1440 px screen the
+  Selection menu ended about 100 px outside the window and the page got a sideways scroll. They now open from the
+  right edge of the button, leftwards. Narrow screens keep their full-width menu. A test checks the anchoring.
+
 - **The push question about missing checks can be dismissed for one project, without losing the fact.** A project
   with no CI config or no gates asked before every push, also in owner mode right after you said push.
   `ravenseat controls dismiss` now stops that question for this project. It remembers what was missing, so the
