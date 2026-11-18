@@ -3,7 +3,9 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.19.0 (2026-11-18)
+
+**The settings and checks are easier to read and quieter: sixteen groups, plain explanations, `ravenseat settings <key>`, a line on what each guard protects against, and a note when a setting has no effect because another one is off. Checks that are off by choice stop reminding you, receive prints one note line per kind, and the Checks tab folds the general ideas. The board key stays out of the output Claude reads, the review gate shows on the card before merge, and every merge override is counted. The main session's overrides and an owner-mode push now ask in the permission dialog, and the main tree's control files are out of a queue agent's reach. No protective default is weakened.**
 
 - **The board key stays out of Claude's view.** `ravenseat board` now opens the board in your browser with its key
   and prints the link without it, so the key no longer lands in the output Claude reads when it starts the board in
@@ -224,6 +226,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   time and cost analysis, the usage limit pause and the end gate, naming the version and the row when one breaks. The
   owner message and the block a hook answers are now built in one place, byte for byte as before, and the coupling
   gate catches a new direct build.
+
+### After you update
+- `ravenseat board` now opens the board in your browser itself and prints the link without its key. Use `ravenseat board open` (or `--follow`) to open it again. A script that wrote to the board without the board's own Origin needs `--key-file`, which asks first. `board.hideKey` off gives the old start line back.
+- `learning.idleGuardInfo` is now part of `learning.idleGuardDays` (0 = off, default 7). An `"idleGuardInfo": false` in queue.config.json still turns the line off.
+- In lite, `wiring.stop`, `scopeNotes.drift` and the Focus tab are off unless queue.config.json sets them. Full mode is unchanged.
+- The settings come in sixteen groups; no key is renamed apart from the folded idle guard row. `receive <id> --all` prints the scope and catalog notes one per finding, as before.
+- No setting changes its value on update, and no guard is turned off.
 
 ## 0.18.0 (2026-11-17)
 
