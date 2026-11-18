@@ -24,7 +24,10 @@
 //   defaultByMode  { lite, full } when the default follows the mode (gitSurface, dependencyFiles); else null
 //   choices        the values of a choice row, strongest first; else null
 //   weakens        (value, standard) => true when the value gives less protection than the standard; else null
-//   protects, whyNot, changes  the three texts of the warning dialog, the CLI warning and doctor; required with weakens
+//   protects, whyNot, changes  the three texts of the warning dialog, the CLI warning and doctor; required with weakens.
+//                  protects (one short sentence) is also set on a guard with no weakening value, and the board ("Protects
+//                  against: ...") and `ravenseat settings <key>` show it for every row that has it (finding M1); an
+//                  advice row has none
 //   requires       the rows this one needs to have any effect, or null: "key" (that row must be on: not false, off, none,
 //                  0 or empty) or "key=value" (it must have that value, as the CLI writes it: "push.mode=owner"). Only where
 //                  the code really ignores the row while the parent is off, read in the code (finding M3 of
@@ -250,7 +253,9 @@ function row(key, category, type, title, explanation, o = {}) {
     defaultByMode: o.defaultByMode ?? null,
     choices: o.choices ?? null,
     weakens: o.weakens ?? null,
-    protects: o.weakens ? o.protects : null,
+    // What the row guards against, in one short sentence (finding M1): required with weakens, and also set on the guards
+    // that have no weakening value (a list, a number or a choice that stops, asks or checks). Advice rows have none.
+    protects: o.protects ?? null,
     whyNot: o.weakens ? o.whyNot : null,
     changes: o.weakens ? o.changes : null,
     // A number that also takes none (null) although its default is a number (parseValue).
@@ -375,12 +380,19 @@ const SETTINGS = Object.freeze([
 
   // ---- 4. Gates ----
   row('gates.quick', 'gates', 'list', 'Quick gate',
-    'The commands a track runs before delivery. Set them up with `ravenseat kickstart gates --apply`.', BASIC),
+    'The commands a track runs before delivery. Set them up with `ravenseat kickstart gates --apply`.', {
+      ...BASIC,
+      protects: 'A track that delivers work its own quick checks would have failed.',
+    }),
   row('gates.full', 'gates', 'list', 'Full gate',
     'The full set of commands receive and merge run. Empty = nothing runs and the gate counts as green, so set it up ' +
-    'with `ravenseat kickstart gates --apply`.', BASIC),
+    'with `ravenseat kickstart gates --apply`.', {
+      ...BASIC,
+      protects: 'Broken code merged into the base branch, since receive and merge run these commands before it goes in.',
+    }),
   row('maxFixRounds', 'gates', 'integer', 'Fix rounds before an owner question',
-    'At this many fix rounds a task becomes an owner question instead of another round.'),
+    'At this many fix rounds a task becomes an owner question instead of another round.',
+    { protects: 'A task that loops through fix rounds without end instead of coming to you.' }),
   row('fixPlateau', 'gates', 'onoff', 'Ask when a fix round stalls',
     'Before a fix round, ask when the previous one committed nothing or the check fails the same way.'),
   row('fixRound.continueWithinMin', 'gates', 'integer', 'Continue the agent for a fix round (minutes)',
@@ -408,8 +420,7 @@ const SETTINGS = Object.freeze([
     'the same commit counts as the full gate. Off: the track\'s own word counts.', {
       choices: ['own', 'external', 'off'],
       weakens: rankWeakens(['own', 'external', 'off']),
-      protects: 'A track that writes a green gate result or an owner row (an answer, an edit, an approval) it never got ' +
-        'into the queue file, and has it believed at receive and merge.',
+      protects: 'A track that writes a green gate result or an owner row it never got, and has it believed at receive and merge.',
       whyNot: 'External trusts a CI run you do not see, under the check names you list. Off believes the track\'s ' +
         'gates=OK and every owner row in the queue file. A project with empty gates.quick and gates.full runs nothing ' +
         'under own anyway, so off saves no time there; it only removes the owner row check.',
@@ -444,7 +455,8 @@ const SETTINGS = Object.freeze([
   row('gates.redOnBase', 'tests', 'object', 'Prove that new tests catch the bug',
     'Off until you set a test command, since Ravenseat must know how to run one test file. On: at receive, a track\'s ' +
     'new tests must pass with the change and at least one must fail without it, which shows the test really catches ' +
-    'the bug. Only a warning, because a pure refactor rightly has no failing test. The two fix rows in this group need it.'),
+    'the bug. Only a warning, because a pure refactor rightly has no failing test. The two fix rows in this group need it.',
+    { protects: 'A new test that passes with or without the change, so it proves nothing about the bug.' }),
   row('gates.redOnBaseStrict', 'tests', 'onoff', 'A fix needs a proven red test',
     'Off by default: a fix task without a test that fails on the base gets one warning at receive. On: merge stops on it, ' +
     'and the owner can merge past it with --allow-no-test, which is logged. Needs gates.redOnBase.', {
@@ -685,7 +697,8 @@ const SETTINGS = Object.freeze([
     'The time limit per git or gitleaks call in the secret scan. A scan that does not finish in time makes the push ' +
     'ask you first; it is never let through unchecked.'),
   row('deployCommands', 'guards', 'list', 'Deploy commands',
-    'The push guard asks before any command that starts with one of these. Empty = off.'),
+    'The push guard asks before any command that starts with one of these. Empty = off.',
+    { protects: 'An agent that starts a deploy without asking you first.' }),
   row('claudeFingerprint', 'files', 'onoff', 'Claude setup fingerprint',
     'Receive warns when your own Claude setup (~/.claude) changed while a track ran. Only hashes are stored.', {
       weakens: offWeakens,
@@ -781,15 +794,24 @@ const SETTINGS = Object.freeze([
   row('readGuard.maxLines', 'files', 'integer', 'Read warning (lines)',
     'A read of more lines than this gets a warning (300 by default); the stop comes at readGuard.blockLines.'),
   row('readGuard.blockLines', 'files', 'integer', 'Read stop (lines)',
-    'A read of more lines than this is stopped (2000 by default), so one large file cannot fill an agent\'s context.'),
+    'A read of more lines than this is stopped (2000 by default), so one large file cannot fill an agent\'s context.',
+    { protects: 'One large file read whole that fills an agent\'s context.' }),
   row('reads.mode', 'files', 'choice', 'Read ownership',
     'A task that reads a file an active task changes: wait until it is done, or start and name the overlap.',
-    { choices: ['wait', 'warn'], fullWhy: 'read ownership uses the reads field of the full task format' }),
+    {
+      choices: ['wait', 'warn'],
+      fullWhy: 'read ownership uses the reads field of the full task format',
+      protects: 'A task that reads a file while another task is changing it.',
+    }),
   row('hotspots', 'files', 'list', 'Hotspots',
     'Shared config blocks parallel tracks break each other on; only an agreed change gets through. Empty = off.',
-    { fullWhy: 'hotspot changes are agreed in the full task format (hotspot_patch)' }),
+    {
+      fullWhy: 'hotspot changes are agreed in the full task format (hotspot_patch)',
+      protects: 'Parallel tracks that break each other in a shared config block.',
+    }),
   row('contextGuard.blockOtherChats', 'files', 'onoff', 'Stop other chats at 400k',
-    'Chats that are not the orchestrator are stopped at 400k context instead of only getting the notice.'),
+    'Chats that are not the orchestrator are stopped at 400k context instead of only getting the notice.',
+    { protects: 'A chat other than the orchestrator that keeps going past 400k context.' }),
 
   // ---- 8. Merge and push ----
   row('push.mode', 'push', 'choice', 'Who pushes',
@@ -874,7 +896,8 @@ const SETTINGS = Object.freeze([
     'The file that says which environment is linked, checked before a migration push.', { edit: 'file' }),
   row('migrations.allowedEnvironment', 'push', 'list', 'Allowed environments',
     'The environments a migration push may go to. Merge pushes migrations only when the linked environment file names ' +
-    'one of them, so a wrong link cannot reach the wrong database.'),
+    'one of them, so a wrong link cannot reach the wrong database.',
+    { protects: 'A migration pushed to the wrong database because the wrong environment is linked.' }),
 
   // ---- 10. Review and agents ----
   row('helpers', 'review', 'object', 'Helper agents',
@@ -1012,7 +1035,8 @@ const SETTINGS = Object.freeze([
     }),
   row('catalog.checkStop', 'scope', 'onoff', 'Stop the merge on a rule in mode stop',
     'A rule with `mode: stop` of a choice the owner accepted stops the merge when an added line breaks it ' +
-    '(`merge --allow-catalog` overrides, logged). Off by default: the rule is then a warning.'),
+    '(`merge --allow-catalog` overrides, logged). Off by default: the rule is then a warning.',
+    { protects: 'A merged line that breaks a catalog rule you accepted with mode stop.' }),
   row('catalog.gateAfter', 'scope', 'integer', 'Separate tasks before a lint proposal',
     'Only with learning.proposals on, which is off by default. Then a rule broken in this many separate tasks (2 to ' +
     '20, default 3) becomes one proposed gate task to put it in the project\'s own lint. It shares the cap of three ' +
@@ -1154,7 +1178,8 @@ const SETTINGS = Object.freeze([
     'Set by share on --public-ok: the owner confirmed sharing in a repo that is public or of unknown visibility. Without it the push guard refuses a commit with the shared files once the repo is no longer known to be private.',
     { edit: 'read' }),
   row('privatePaths', 'private', 'list', 'Private paths',
-    'Folders (trailing /) and files of your own that stay out of git: the .gitignore, the push and merge guard and the cloud\'s hidden paths all read this list. { "path": ..., "read": false } also keeps the queue\'s agents from reading it. ravenseat private add|remove|list.'),
+    'Folders (trailing /) and files of your own that stay out of git: the .gitignore, the push and merge guard and the cloud\'s hidden paths all read this list. { "path": ..., "read": false } also keeps the queue\'s agents from reading it. ravenseat private add|remove|list.',
+    { protects: 'Your own private files reaching git, a push or the cloud.' }),
   row('history.rotateTimeLog', 'history', 'choice', 'Time log rotation',
     'Monthly moves the time log to one archive per month next to it (times-2026-10.jsonl) on the first write of a new ' +
     'month; every reader that needs older rows reads the archives too. Off keeps one file that only grows.', {

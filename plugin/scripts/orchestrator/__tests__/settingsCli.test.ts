@@ -100,6 +100,27 @@ describe('ravenseat settings (read)', () => {
     expect(json.weakened.map((w: { key: string }) => w.key)).toEqual(['gitSurface']);
     expect(json.categories.map((c: { id: string }) => c.id)).toContain('guards');
   });
+
+  // M1: one row in full, a key prefix as a list, and an unknown name with the nearest keys (exit 1).
+  it('settings <key> shows one row in full; a prefix lists its rows; an unknown name suggests the nearest and exits 1', async () => {
+    fs.writeFileSync(configFile(), '{\n  "mode": "full",\n  "gitSurface": "off"\n}\n');
+    const one = await ravenseat(['settings', 'gitSurface']);
+    expect(one.code, one.err).toBe(0);
+    expect(one.out).toContain('Git hooks and config (gitSurface)');
+    expect(one.out).toContain('Now: off (set in queue.config.json). Weaker than the default.');
+    expect(one.out).toContain('Default: warn in lite, stop in full.');
+    expect(one.out).toContain('Protects against: ');
+    expect(one.out).toContain('Change it: ravenseat settings set gitSurface <stop|warn|off>');
+    const group = await ravenseat(['settings', 'learning.']);
+    expect(group.code, group.err).toBe(0);
+    expect(group.out).toMatch(/learning\.repeats +on/);
+    expect(group.out).not.toMatch(/^ +inspection\.mode /m);
+    const wrong = await ravenseat(['settings', 'gitSurfac']);
+    expect(wrong.code).toBe(1);
+    expect(wrong.err).toMatch(/No setting or category "gitSurfac"\. Did you mean gitSurface/);
+    // A category still works as before.
+    expect((await ravenseat(['settings', 'gates'])).out.split('\n')).toContain('Gates');
+  });
 });
 
 describe('ravenseat settings set: the weakening pattern', () => {

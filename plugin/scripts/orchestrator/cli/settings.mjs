@@ -5,6 +5,11 @@
 //        Read only. Basic rows first; --advanced adds the advanced ones, marked [advanced]. In lite, a full-only row is
 //        left out and counted ("+ 2 full mode only (--all)"); --all shows it with the reason. --changed lists only what
 //        differs from the default. The first line names the weakened guards.
+//   ravenseat settings <key> | <key prefix>
+//        Read only (finding M1). An exact key shows that row in full (lib/settingsView.js detailLines): value and where
+//        it comes from, the defaults in lite and full, the values, the explanation, what it protects against, what it
+//        needs, whether a value weakens a guard and how to change it. The start of a key (`learning.`) lists those rows.
+//        An unknown name names the nearest keys and exits 1. A category name still lists its category.
 //   ravenseat settings set <key> <value> [--i-understand --by owner]
 //        Writes one row with edit "set" to the file its store names: queue.config.json (the project's; the file keeps its
 //        form, lib/settingsView.js setJsonText) or queue.json (one person's, under the queue lock). A value that weakens
@@ -29,7 +34,7 @@ const R = require('./lib/settingsRegistry.js');
 const SV = require('./lib/settingsView.js');
 const PR = require('./lib/queueProposals.js');
 
-const USAGE = `${CLI} settings [<category>] [--advanced] [--all] [--changed] [--json] | ${CLI} settings set <key> <value> [--i-understand --by owner]`;
+const USAGE = `${CLI} settings [<category>|<key>|<key prefix>] [--advanced] [--all] [--changed] [--json] | ${CLI} settings set <key> <value> [--i-understand --by owner]`;
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /** The track branch the cwd is on, or null (the same question cli/surface.mjs and cli/unlock.mjs ask; also cli/checks.mjs turn-on). */
@@ -51,13 +56,42 @@ function queueOrEmpty() {
   return fs.existsSync(FILE) ? read() : { tasks: [] };
 }
 
+/** queue.config.json as written (not resolved), so `settings <key>` can say whether the file sets the value. */
+function ownConfig() {
+  return KK.readConfigFile(KK.configFile()).own;
+}
+
 function showSettings() {
   const flags = new Set(a.slice(1).filter((x) => x.startsWith('--')));
   const category = a.slice(1).find((x) => !x.startsWith('--')) ?? null;
-  const view = SV.settingsView({ config: CONFIG, queue: queueOrEmpty(), migrations: !!CONFIG.migrations?.folder });
+  const queue = queueOrEmpty();
+  // One setting in full (finding M1): an exact key, without case. No category id is a key, so a category keeps its list.
+  const exact = category ? R.SETTINGS.find((r) => r.key.toLowerCase() === category.toLowerCase()) : null;
+  if (exact) {
+    const lines = SV.detailLines(exact.key, { config: CONFIG, queue, own: ownConfig(), cli: CLI });
+    if (flags.has('--json')) console.log(JSON.stringify({ key: exact.key, lines }, null, 2));
+    else console.log(lines.join('\n'));
+    return;
+  }
+  const view = SV.settingsView({ config: CONFIG, queue, migrations: !!CONFIG.migrations?.folder });
   if (flags.has('--json')) {
     console.log(JSON.stringify(view, null, 2));
     return;
+  }
+  const wanted = category?.toLowerCase();
+  const isCategory = !!wanted && view.categories.some((c) => c.id === wanted || c.title.toLowerCase().startsWith(wanted));
+  if (category && !isCategory) {
+    // The start of a key (`settings learning.`) lists those rows; anything else names the nearest keys and exits 1.
+    if (SV.matchKeys(category).length) {
+      console.log(SV.matchLines(view, category, { cli: CLI }).join('\n'));
+      return;
+    }
+    const near = SV.suggestKeys(category);
+    die(
+      `No setting or category "${category}".` +
+        (near.length ? ` Did you mean ${near.join(', ')}?` : '') +
+        ` The categories: ${view.categories.map((c) => c.id).join(', ')}. Every key: ${CLI} settings --all.`,
+    );
   }
   const lines = SV.cliLines(view, {
     cli: CLI,

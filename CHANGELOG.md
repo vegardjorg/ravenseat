@@ -5,6 +5,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **One setting in full, and what each guard protects against.** `ravenseat settings <key>` shows one setting with
+  its explanation, the value now and where it comes from (queue.config.json, queue.json or the default of the mode),
+  the defaults in lite and full, the values it takes, what it needs, whether a value weakens a guard and the command
+  that changes it. A name space such as `learning.` lists its rows, and a mistyped key names the nearest ones (exit 1).
+  On the board, 52 rows now have one line "Protects against: ..." under the explanation: the 40 that can weaken a guard
+  (the text was only in the weakening dialog before) and 12 guards without a weakening value, such as the gates, the
+  read stop and the deploy commands. Advice rows have none. No default or behavior changed.
 - **Settings that depend on another one say so.** 49 settings have an effect only while another one is on, such as the
   CI watch numbers (`push.ciWatch` `github`), the gap review numbers (`scopeNotes.driftGap`), the recipe damping (the
   inspection queue and `learning.repeats`) and the fix without a test line (`gates.redOnBase`). Each such row now names

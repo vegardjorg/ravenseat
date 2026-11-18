@@ -231,9 +231,29 @@ describe('every row is complete', () => {
       expect(r.weakens?.(std, std), `${r.key} at its default`).toBe(false);
       for (const v of Object.values(r.defaultByMode ?? {})) expect(r.weakens?.(v, v), `${r.key} ${v}`).toBe(false);
     }
+    // A row without weakens has no dialog, so no whyNot or changes; it may still say what it protects against (M1).
     for (const r of ROWS.filter((x) => !x.weakens)) {
-      expect([r.protects, r.whyNot, r.changes], r.key).toEqual([null, null, null]);
+      expect([r.whyNot, r.changes], r.key).toEqual([null, null]);
     }
+  });
+
+  // M1 (plans/gjennomgang-friksjon-innstillinger-2026-11-17.md, bolk 5b): the board shows "Protects against: ..." under
+  // a row and `ravenseat settings <key>` prints it, so the text must be one short sentence.
+  it('protects is one short sentence, on every row that weakens and on the guards that do not, never on advice', () => {
+    const withProtects = ROWS.filter((x) => x.protects != null);
+    for (const r of withProtects) {
+      const t = String(r.protects);
+      expect(t.length, r.key).toBeLessThanOrEqual(140);
+      expect(t, r.key).toMatch(/^[A-Z].*\.$/);
+      expect(t.slice(0, -1), `${r.key}: one sentence`).not.toMatch(/[.!?]\s/);
+      expect(t, r.key).not.toMatch(/[\u2013\u2014]/);
+    }
+    for (const r of ROWS.filter((x) => x.weakens)) expect(r.protects, r.key).toMatch(/\S{3}/);
+    // Guards without a weakening value (a list or a number that stops, asks or checks) say it too.
+    for (const k of ['gates.full', 'gates.quick', 'gates.redOnBase', 'readGuard.blockLines', 'deployCommands', 'migrations.allowedEnvironment'])
+      expect(ROWS.find((x) => x.key === k)?.protects, k).toMatch(/\S{3}/);
+    // More rows protect than weaken.
+    expect(withProtects.length).toBeGreaterThan(ROWS.filter((x) => x.weakens).length);
   });
 
   it('no en or em dashes in any text', () => {

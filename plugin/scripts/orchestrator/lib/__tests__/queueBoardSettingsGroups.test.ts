@@ -217,6 +217,19 @@ describe('the settings registry in the gear (step 6)', () => {
     expect(row('push.mode').querySelector('.registry-requires')).toBeNull();
   });
 
+  // M1: the row's protects text was only in the weakening dialog; now it is one line under the explanation.
+  it('M1: a row that protects against something has one "Protects against" line under the explanation; advice has none', async () => {
+    await redraw({ mode: 'full' });
+    for (const k of ['gitSurface', 'gates.full']) {
+      const line = row(k).querySelector('.registry-protects') as HTMLElement;
+      expect(line, k).not.toBeNull();
+      expect(line.textContent, k).toBe(`Protects against: ${RG.rowFor(k).protects}`);
+      // Right after the explanation, so it reads as part of it.
+      expect(line.previousElementSibling?.classList.contains('setting-explanation'), k).toBe(true);
+    }
+    for (const k of ['learning.quickGateCard', 'projectName']) expect(row(k).querySelector('.registry-protects'), k).toBeNull();
+  });
+
   it('a guard weaker than the default gives the banner and a Weakened mark; none in the default setup', async () => {
     await redraw({ mode: 'full' });
     expect(document.getElementById('settings-weakened')).toBeNull();

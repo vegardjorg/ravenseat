@@ -8,6 +8,9 @@
 //                 is `fullOnlyCategory` (one closed line). The board's /api/settings and `ravenseat settings` both use it.
 //   cliLines      `ravenseat settings` as text (--advanced, --all, --changed, a category), with [needs ...] and
 //                 [no effect now: ...] for a row whose parent is off (requiresOf, finding M3).
+//   detailLines   `ravenseat settings <key>`: one row in full (value and source, defaults per mode, values, explanation,
+//                 protects, requires, weakens, how to change it), finding M1. matchKeys/matchLines list the rows of a key
+//                 prefix (`settings learning.`); suggestKeys names the nearest keys for an unknown name.
 //   parseValue    a value typed in the CLI or chosen on the board, checked against the row (on/off, a choice, a number).
 //   needsConfirm  the rule for the owner's confirmation: the new value weakens the guard (against the default) and is
 //                 weaker than the value now. Going back to a stronger value never needs it.
@@ -398,7 +401,139 @@ function cliLines(view, { cli = 'ravenseat', advanced = false, all = false, chan
     if (more.length) out.push(`  + ${more.join(', ')}`);
     out.push('');
   }
-  out.push(`Change one: ${cli} settings set <key> <value>. Everything: ${cli} settings --all.`);
+  out.push(`Change one: ${cli} settings set <key> <value>. One in full: ${cli} settings <key>. Everything: ${cli} settings --all.`);
+  return out;
+}
+
+// ---- One setting in full: `ravenseat settings <key>` (finding M1) ------------------------------------------
+
+/**
+ * The keys under a name space, without case, in registry order: `learning.` and `learning` both give learning.*. Only
+ * whole segments: `gitSurfac` is no name space, so it gets the "did you mean" instead of a list of one.
+ */
+function matchKeys(query, rows = R.SETTINGS) {
+  let q = String(query ?? '').toLowerCase();
+  if (!q) return [];
+  if (!q.endsWith('.')) q += '.';
+  return rows.filter((r) => r.key.toLowerCase().startsWith(q)).map((r) => r.key);
+}
+
+/** The edit distance between two short strings (Levenshtein), for the "did you mean" of an unknown key. */
+function distance(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++)
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * The nearest keys to a name that is no key: the ones that contain it (or whose last part does) first, then the ones
+ * a few typing errors away, against the whole key and its last part ("maxconcurrent" finds limits.maxConcurrent).
+ */
+function suggestKeys(query, { max = 3, rows = R.SETTINGS } = {}) {
+  const q = String(query ?? '').toLowerCase();
+  if (!q) return [];
+  const scored = rows.map((r) => {
+    const key = r.key.toLowerCase();
+    const last = key.split('.').at(-1);
+    const near = Math.min(distance(q, key), distance(q, last));
+    return { key: r.key, score: key.includes(q) ? 0 : near };
+  });
+  const limit = Math.max(2, Math.floor(q.length / 3));
+  return scored
+    .filter((s) => s.score <= limit)
+    .sort((x, y) => x.score - y.score)
+    .slice(0, max)
+    .map((s) => s.key);
+}
+
+/** `settings <prefix>`: the matching rows as in the list, under their groups (every level, full-only ones too). */
+function matchLines(view, query, { cli = 'ravenseat' } = {}) {
+  const want = new Set(matchKeys(query));
+  const categories = view.categories
+    .map((c) => ({ ...c, fullOnlyCategory: false, rows: c.rows.filter((r) => want.has(r.key)) }))
+    .filter((c) => c.rows.length);
+  const lines = cliLines({ ...view, categories }, { cli, all: true });
+  lines[lines.length - 1] = `One in full: ${cli} settings <key>. Change one: ${cli} settings set <key> <value>.`;
+  return lines;
+}
+
+/** What a row takes, in words. */
+function valuesText(row) {
+  const options = optionsOf(row);
+  if (options) return `${orList(options)}.`;
+  const none = getPath(KK.STANDARD, pathOf(row.key)) === null || row.nullable ? ' (or none)' : '';
+  if (row.key.startsWith('limits.')) return `a limit, checked against the other limits (${row.type === 'integer' ? 'a whole number' : 'text'}).`;
+  if (row.type === 'integer') return `a whole number, 0 or more${none}.`;
+  if (row.type === 'number') return `a number${none}.`;
+  if (row.type === 'list') return 'a list, written in the file.';
+  if (row.type === 'object') return 'an object, written in the file.';
+  return 'text.';
+}
+
+/** Where the value in force comes from: the file that sets it, or the default (of the mode, when it follows the mode). */
+function sourceOf(row, { own, queue, mode }) {
+  const segs = pathOf(row.key);
+  // queue.json first: for the limits and switches it is the store, and for board switches and auto-accept it wins.
+  const inQueue =
+    row.store === 'queue' || row.key.startsWith('board.') || row.key.startsWith('proposals.autoAccept.') ? getPath(queue ?? {}, segs) : undefined;
+  if (inQueue !== undefined) return 'set in queue.json';
+  if (getPath(own ?? {}, segs) !== undefined) return 'set in queue.config.json';
+  return row.defaultByMode ? `the ${mode} default` : 'the default';
+}
+
+/**
+ * `ravenseat settings <key>` as lines: the title, group and level, the value now and where it comes from, the default
+ * (for lite and full when it follows the mode), the values it takes, the explanation, what it protects against, what
+ * it needs (and whether it has an effect now), whether a value weakens a guard (with the dialog's texts), where it is
+ * saved and how to change it. null for a key that is no row. Read only.
+ * @param {string} key
+ * @param {{ config: object, queue?: object, own?: object, cli?: string }} o own = queue.config.json as written
+ */
+function detailLines(key, { config, queue = {}, own = {}, cli = 'ravenseat' } = {}) {
+  const row = R.rowFor(key);
+  if (!row) return null;
+  const view = settingsView({ config, queue, rows: [row] });
+  const v = view.categories[0].rows[0];
+  const mode = view.mode;
+  const group = R.CATEGORIES.find((c) => c.id === row.category)?.title ?? row.category;
+  const level = row.level === 'basic' ? 'Basic' : R.LABELS.advanced;
+  const out = [`${row.title} (${row.key})`];
+  out.push(`  Group: ${group}. Level: ${level}.${v.fullOnly ? ` ${R.LABELS.fullOnly}: ${row.fullWhy}.` : ''}`);
+  out.push(`  Now: ${v.valueText} (${sourceOf(row, { own, queue, mode })}).${v.weakened ? ' Weaker than the default.' : ''}`);
+  const dm = row.defaultByMode;
+  out.push(
+    dm
+      ? `  Default: ${valueText(row, dm.lite)} in lite, ${valueText(row, dm.full)} in full.`
+      : `  Default: ${v.standardText}.`,
+  );
+  out.push(`  Values: ${valuesText(row)}`);
+  out.push('', `  ${row.explanation}`, '');
+  if (row.protects) out.push(`  Protects against: ${row.protects}`);
+  if (v.requires.length) {
+    out.push(`  Needs: ${v.requires.map((q) => `${q.title} (${q.key}) ${q.want}`).join(' and ')}.`);
+    if (v.inactive) out.push(`  No effect now: ${v.inactiveWhy}`);
+  }
+  if (row.weakens) {
+    // The values that weaken against the default; a list or an object names the kind of change instead.
+    const options = optionsOf(row);
+    const weak = options
+      ? options.filter((o, i) => row.weakens(row.type === 'onoff' ? o === 'on' : row.choices[i], v.standard) === true)
+      : [];
+    out.push(`  Weakens a guard: ${weak.length ? orList(weak) : 'a value that gives less than the default'} (needs your confirmation).`);
+    out.push(`  Why not: ${row.whyNot}`, `  What changes: ${row.changes}`);
+  } else out.push('  Weakens a guard: no.');
+  out.push(`  ${STORE_TEXT[row.store]}.`);
+  if (row.edit === 'set' && row.key !== 'helpers') {
+    const options = optionsOf(row);
+    out.push(`  Change it: ${cli} settings set ${row.key} ${options ? `<${options.join('|')}>` : '<value>'}`);
+  } else if (row.edit === 'read') out.push(`  Change it: read only here (it is set where the project is set up).`);
+  else if (row.key === 'helpers') out.push(`  Change it: ${cli} helpers on|off <agent>.`);
+  else out.push(`  Change it: edit ${row.store === 'queue' ? 'queue.json' : 'queue.config.json'}.`);
   return out;
 }
 
@@ -702,6 +837,10 @@ module.exports = {
   needsConfirm,
   settingsView,
   cliLines,
+  detailLines,
+  matchKeys,
+  matchLines,
+  suggestKeys,
   warningLines,
   setJsonText,
 };

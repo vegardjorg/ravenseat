@@ -715,6 +715,16 @@ function requiresLine(r) {
   );
 }
 
+/**
+ * M1: "Protects against: <protects>" right under the explanation, for a row whose registry entry says what it guards
+ * against (every row that can weaken a guard, and the guards that cannot); null for an advice row. Before, the text was
+ * only in the weakening dialog.
+ */
+function protectsLine(r) {
+  if (!r.protects) return null;
+  return el('p', { class: 'setting-meta registry-protects', text: `Protects against: ${r.protects}` });
+}
+
 function registryField(r, d, labels) {
   const rowId = `setting-row-${cssId(r.key)}`;
   // A limit: the field with the guard rules (settingField, /api/limit), with the marks and the storage place.
@@ -764,6 +774,7 @@ function registryField(r, d, labels) {
       registryBadges(r, labels),
     ),
     el('p', { id: `${id}-help`, class: 'setting-explanation', text: r.explanation }),
+    protectsLine(r),
     requiresLine(r),
     isSwitch ? null : control,
     el('p', { class: 'setting-meta', text: meta }),

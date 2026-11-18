@@ -459,3 +459,70 @@ describe('requires: the row that has no effect now (M3)', () => {
     expect(on).toMatch(/gates\.fixWithoutTestWarning .*\[needs gates\.redOnBase\]$/m);
   });
 });
+
+// M1 (plans/gjennomgang-friksjon-innstillinger-2026-11-17.md, bolk 5b): `ravenseat settings <key>` shows one row in full,
+// with the explanation the list leaves out. Read only: nothing here changes a value or a default.
+describe('detailLines: one setting in full (M1)', () => {
+  const detail = (key: string, o: { own?: object; queue?: object } = {}) =>
+    SV.detailLines(key, { config: KK.resolveOwn(configFor(o.own ?? {}), o.own ?? {}), queue: o.queue ?? { tasks: [] }, own: o.own ?? {}, cli: 'ravenseat' });
+
+  it('a choice row with a default per mode: title, group, level, value and source, both defaults, values, texts, command', () => {
+    const r = R.rowFor('gitSurface');
+    const text = detail('gitSurface', { own: { mode: 'lite' } }).join('\n');
+    expect(text.split('\n')[0]).toBe(`${r.title} (gitSurface)`);
+    expect(text).toContain('Group: File and read guards. Level: Advanced.');
+    expect(text).toContain('Now: warn (the lite default).');
+    expect(text).toContain('Default: warn in lite, stop in full.');
+    expect(text).toContain('Values: stop, warn or off.');
+    expect(text).toContain(r.explanation);
+    expect(text).toContain(`Protects against: ${r.protects}`);
+    expect(text).toContain('Weakens a guard: off');
+    expect(text).toContain(`Why not: ${r.whyNot}`);
+    expect(text).toContain(`What changes: ${r.changes}`);
+    expect(text).toContain('Saved for the project (queue.config.json, remember to commit).');
+    expect(text).toContain('Change it: ravenseat settings set gitSurface <stop|warn|off>');
+    expect(text).not.toMatch(/[\u2013\u2014]/);
+  });
+
+  it('the source: the file, queue.json or the default; a weakened value is named', () => {
+    const file = detail('gitSurface', { own: { mode: 'full', gitSurface: 'off' } }).join('\n');
+    expect(file).toContain('Now: off (set in queue.config.json). Weaker than the default.');
+    expect(detail('push.mode').join('\n')).toMatch(/Now: \S+ \(the default\)\./);
+    const mine = detail('limits.maxConcurrent', { queue: { tasks: [], limits: { maxConcurrent: 3 } } }).join('\n');
+    expect(mine).toContain('Now: 3 (set in queue.json).');
+  });
+
+  it('requires: the parent is named, and "no effect now" while it is off', () => {
+    const off = detail('gates.fixWithoutTestWarning').join('\n');
+    expect(off).toMatch(/Needs: .*\(gates\.redOnBase\) on\./);
+    expect(off).toMatch(/No effect now: gates\.redOnBase is off now/);
+    const on = detail('gates.fixWithoutTestWarning', { own: { gates: { redOnBase: 'npx vitest run {files}' } } }).join('\n');
+    expect(on).toMatch(/Needs: /);
+    expect(on).not.toContain('No effect now');
+  });
+
+  it('a list is edited in the file, a read-only row says so, a row with no guard says it weakens nothing', () => {
+    expect(detail('protectedPaths').join('\n')).toContain('Change it: edit queue.config.json.');
+    expect(detail('baseBranch').join('\n')).toContain('Change it: read only here');
+    const plain = detail('projectName').join('\n');
+    expect(plain).toContain('Weakens a guard: no.');
+    expect(plain).not.toContain('Protects against');
+  });
+
+  it('an unknown key gives null, and the nearest keys are suggested', () => {
+    expect(detail('gitSurfac')).toBe(null);
+    expect(SV.suggestKeys('gitSurfac')[0]).toBe('gitSurface');
+    expect(SV.suggestKeys('maxconcurrent')).toContain('limits.maxConcurrent');
+    expect(SV.suggestKeys('learning.repeat')).toContain('learning.repeats');
+  });
+
+  it('a key prefix lists the matching rows (learning. gives the learning keys, nothing else)', () => {
+    const keys = SV.matchKeys('learning.');
+    expect(keys.length).toBeGreaterThan(3);
+    for (const k of keys) expect(k.startsWith('learning.'), k).toBe(true);
+    const text = SV.matchLines(view(), 'learning.', { cli: 'ravenseat' }).join('\n');
+    expect(text).toMatch(/learning\.repeats +on/);
+    expect(text).not.toMatch(/^ +inspection\.mode /m);
+    expect(text).toContain('One in full: ravenseat settings <key>.');
+  });
+});

@@ -427,6 +427,8 @@
 //   node scripts/orchestrator/queue.mjs settings [<category>] [--advanced] [--all] [--changed] [--json]   (every setting
 //                                                                  from the registry by category, basic first; lite leaves
 //                                                                  out the full-only rows and counts them. cli/settings.mjs)
+//   node scripts/orchestrator/queue.mjs settings <key>|<key prefix>   (one setting in full with its explanation and what
+//                                                                  it protects against, or the rows of a name space)
 //   node scripts/orchestrator/queue.mjs settings set <key> <value> [--i-understand --by owner]   (writes one setting to
 //                                                                  its file: queue.config.json keeps its form, queue.json
 //                                                                  under the lock. A value that weakens a guard prints the
