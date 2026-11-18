@@ -28,6 +28,8 @@
 'use strict';
 
 const { config } = require('./queueConfig.js');
+// The choice equal to the recommendation (the same rule the board's inbox and ravenseat question use).
+const { isRecommendedChoice } = require('./logic/questions.js');
 
 // ---- Value lists ---------------------------------------------------------------------------------------
 
@@ -3109,6 +3111,12 @@ function ownerDecisions(reg, queue, { now = new Date() } = {}) {
       action: q?.type === OWNER_ACTION_TYPE,
       text: q?.text ?? null,
       recommendation: q?.recommendation ?? null,
+      // Why it is asked, and the answer options with the recommended one marked (the same fields as the board's inbox,
+      // lib/queueBoard.js), so Plans > Decisions draws the same question card as the Decisions room (B24).
+      context: q?.context ?? null,
+      choices: Array.isArray(q?.choices)
+        ? q.choices.map((label) => ({ label, recommended: isRecommendedChoice(q, label) }))
+        : [],
       source: q?.source ?? null,
       added_at: added,
       days_open: added ? Math.max(0, daysBetween(added, today)) : null,

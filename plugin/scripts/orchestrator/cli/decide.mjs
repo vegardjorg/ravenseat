@@ -107,7 +107,11 @@ export function decisionLines(j, { width = WIDTH, max = Infinity, ravenseat = CL
         const label = `${i + 1}) ${text}`;
         out.push(`   ${label.padEnd(34)} ${o.cli ?? '(writes nothing)'}`);
       });
-      if (x.free) out.push(`   ${'or in your own words:'.padEnd(34)} ${x.free.cli}`);
+      // The same word as the board (QUESTION_WORDS): a question in your own words, an owner task "mark done".
+      if (x.free) {
+        const freeWord = x.kind === 'question' || !x.free.label ? 'or in your own words:' : `or ${x.free.label.toLowerCase()}:`;
+        out.push(`   ${freeWord.padEnd(34)} ${x.free.cli}`);
+      }
     }
     if (j.items.length > max) out.push('', `... and ${j.items.length - max} more (${ravenseat} decide --json for all).`);
   }

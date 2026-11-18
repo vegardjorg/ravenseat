@@ -504,7 +504,7 @@
         el('span', {
           class: 'plan-sp',
           text: `${t.question} question`,
-          title: 'Open owner questions that tasks here are waiting on (see Waiting on you)',
+          title: 'Open owner questions that tasks here are waiting on (answer them in Decisions)',
         }),
       );
     if (t.dragged)

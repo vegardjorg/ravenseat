@@ -126,8 +126,9 @@
 //                                                                  is the background: why it is asked, shown under the
 //                                                                  recommendation on the board)
 //        [--choice "..." --choice "..." (2-4) | --no-choices]           (answer options: each at most 60 characters, no
-//                                                                  duplicates; put the recommended one first, or let
-//                                                                  --recommendation be its exact text to mark it)
+//                                                                  duplicates; kept in the written order, so the number
+//                                                                  is the --choice number; let --recommendation be the
+//                                                                  exact text of one to mark it)
 //   node scripts/orchestrator/queue.mjs question --file <json>         ({ "<id>": { type, text, recommendation?, context?, source?, choices? } };
 //                                                                  all or nothing)
 //

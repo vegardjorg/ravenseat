@@ -447,9 +447,9 @@
     surface.addEventListener('pointercancel', end);
 
     // Click (not after a drag) and Enter: a task opens the panel and selects the chain; a question opens
-    // "Waiting on you", where it is answered.
+    // its card in Decisions, where it is answered.
     const opened = (g) => {
-      if (g.dataset.sp) ctx.openInbox();
+      if (g.dataset.sp) ctx.openDecisions(`decide:${g.dataset.sp}`);
       else ctx.openPanel(g.dataset.id);
     };
     surface.addEventListener('click', (e) => {

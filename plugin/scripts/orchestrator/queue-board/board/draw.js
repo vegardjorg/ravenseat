@@ -458,7 +458,7 @@ function draw() {
       visible,
       el,
       openPanel,
-      openInbox,
+      openDecisions,
       drawOnNew: draw,
     });
   } else if (t.view === 'flat') {

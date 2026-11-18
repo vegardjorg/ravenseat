@@ -37,7 +37,7 @@ branch (`queue/<ID>`), with a self-contained mission file.
    starts `ravenseat wait` with `run_in_background`. Claude Code starts a new turn when a background command exits, so an
    answer on the board (`OWNER ACTED: ...`) starts the next round, beginning with `ravenseat resolutions --unlogged`. On
    `TIMEOUT` (8 h, exit 10) it is started once more, then the loop stops. Every `--check-min` minutes (default 5, 0 = off) it also runs the track checks: `TRACKS NEED A LOOK: ...`, exit 11, once per finding. This only works while the Claude Code session
-   is open (also via Remote Control); it costs no tokens while it waits. The board's **Waiting on you** says
+   is open (also via Remote Control); it costs no tokens while it waits. The board's **Decisions** room says
    "Orchestrator listening" while the waiter's heartbeat (`<dataFolder>/wait-heartbeat.json`) is fresh.
 
 ### A repeated pulse: `ravenseat pulse-check`

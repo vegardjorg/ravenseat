@@ -55,11 +55,11 @@ describe('items from the inbox', () => {
     );
   });
 
-  it('puts the recommended choice first and keeps its 1-based choice number', () => {
+  it('keeps the choices in their written order, marks the recommended one, and keeps its 1-based choice number', () => {
     const q = byKey['decide:Q-1'];
-    expect(q.options.map((o: any) => o.label)).toEqual(['Vendor B', 'Vendor A']);
-    expect(q.options[0].recommended).toBe(true);
-    expect(q.options[0].action).toEqual({ type: 'resolve', sp: 'Q-1', choice: 2 });
+    expect(q.options.map((o: any) => o.label)).toEqual(['Vendor A', 'Vendor B']);
+    expect(q.options.map((o: any) => o.recommended)).toEqual([false, true]);
+    expect(q.options[1].action).toEqual({ type: 'resolve', sp: 'Q-1', choice: 2 });
     expect(q.free.action).toEqual({ type: 'resolve', sp: 'Q-1', answer: null });
   });
 

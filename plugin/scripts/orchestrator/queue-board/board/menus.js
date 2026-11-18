@@ -41,9 +41,12 @@ const HELP = [
   ],
   [
     'Waiting on you',
-    'Owner questions, QA, proposed and what is stuck. With a focus, the questions are sorted by what the answer unlocks in ' +
-      'the focus (step 1 first). "Sort" shows tasks without a project or with the wrong project, with proposals you can ' +
-      'accept.',
+    'The button at the top opens Decisions and carries the only count: owner questions, QA, proposed and what is stuck, ' +
+      'one card each. The board opens there only when something is new since your last visit; otherwise it opens the ' +
+      'queue view you used last. With a focus, the questions are sorted by what the answer unlocks in the focus (step 1 ' +
+      'first). Number keys pick a choice (the number is its --choice number), Enter takes the recommendation, u undoes. ' +
+      'Check the cards for "QA ok for selected" or "Approve selected". "Sort" lists tasks without a project or with the ' +
+      'wrong project, with proposals you can accept.',
   ],
   [
     'Batch queue',
@@ -160,7 +163,6 @@ function legend(idPrefix) {
 function openHelp() {
   t.selected = null;
   t.setting = null;
-  t.inbox = false;
   t.help = true;
   showPanel();
   panel.scrollTop = 0;

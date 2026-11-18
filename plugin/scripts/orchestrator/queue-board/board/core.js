@@ -5,13 +5,13 @@
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md). They load in order with defer and
 // share the page's global scope, so a top-level name in one is visible in all of them, as when they were one
 // board.js. Code that runs while a script loads may only use names from the scripts before it.
-// The order is the list in index.html: core, api, cards, draw, views, menus, statistics, settings, inbox, panel,
-// edit, select, bulk, interact, top, cloud and start (start.js runs the board).
+// The order is the list in index.html: core, api, cards, draw, views, menus, statistics, settings, question, decide,
+// checks, panel, edit, select, bulk, interact, top, cloud and start (start.js runs the board).
 //
 // The client for the kanban board of the work queue. Vanilla JS, no build step.
 //
 // The board fetches the state from queue-board.mjs (which uses the queue's own rules) and writes only via the server, which
-// runs queue.mjs. "Waiting on you" (side panel with owner questions, QA, proposed and what is stuck), the "Next up" strip,
+// runs queue.mjs. Decisions (owner questions, QA, proposed and what is stuck; the "Waiting on you" button opens it), the "Next up" strip,
 // "unlocks N" and the chain around a selected card (highlighted, the rest muted; Esc resets). The chain, "Next up" and
 // the inbox are computed on the server (queueBoard.js); here is only the view. The "Dependencies" view (circles and
 // strokes) is drawn by graph.js with the layout from queueGraph.js; here is only the wiring (draw and the chain).
@@ -121,13 +121,11 @@ const t = {
   pending: false,
   // The chain view
   chain: null, // the id of the card whose chain is highlighted (null = none)
-  inbox: false, // "Waiting on you" is open in the side panel
-  selectedQa: new Set(), // checked in the QA part
-  selectedSuggestion: new Set(), // checked in the Suggestion part
-  selectedSort: new Set(), // checked in the Sort part
-  answerOpen: null, // the question whose answer field is open
-  answerDraft: new Map(), // question → text written so far (survives redraws)
-  fromInbox: false, // detailPanel was opened from the inbox (the "Back" button)
+  // Decisions (board/decide.js): the cards checked for "QA ok for selected" and "Approve selected", and the Sort rows
+  // checked for "Accept all proposals for selected" (they survive a redraw).
+  selectedQa: new Set(),
+  selectedSuggestion: new Set(),
+  selectedSort: new Set(),
   // The cloud view
   cloudSelected: new Set(), // cards in the queue checked for a cloud bundle (the "Suitable for cloud" filter)
   cloudPackage: null, // { ids, text, copied } the last fetched cloud package (the text field is the fallback when copying fails)

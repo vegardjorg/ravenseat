@@ -382,11 +382,10 @@ async function update(force) {
       else if (t.view !== 'statistics')
         draw(); // the statistics have their own fetching
       else drawFilter();
-      // "Waiting on you": the counter at the top, and the panel when it is open.
-      drawInboxButton();
+      // "Waiting on you": the one counter at the top (board/decide.js).
+      drawWaitingButton();
       if (typeof drawDecisionsTab === 'function') drawDecisionsTab();
       if (typeof drawChecksTab === 'function') drawChecksTab();
-      if (t.inbox) drawInbox();
     }
   } catch (e) {
     t.error = e.message;

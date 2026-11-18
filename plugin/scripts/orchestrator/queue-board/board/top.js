@@ -367,7 +367,7 @@ function onboardingCard() {
         'li',
         null,
         el('strong', { text: 'Answer questions ' }),
-        'here under "Waiting on you" when the queue needs you.',
+        'in Decisions ("Waiting on you" at the top) when the queue needs you.',
       ),
     ),
     t.data?.checks?.next

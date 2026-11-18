@@ -39,7 +39,7 @@ come back with the work.
 - **Tracks:** each task runs as a subagent in its own git worktree, on its own branch. It gets a short mission file,
   does the work, runs your checks, commits on its branch and answers with one line. The long report goes to a file,
   not into the orchestrator's context.
-- **Board:** a local web page (kanban, plans, dependencies, cost, and "Waiting on you"). It is optional: everything
+- **Board:** a local web page (kanban, plans, dependencies, cost, and Decisions, opened by "Waiting on you"). It is optional: everything
   works from Claude Code, and `/ravenseat:decide` is the main loop for what waits on you.
 
 Worktrees do not reinstall your dependencies: `prepare-track.mjs` links the folders in `sharedLinks` (default

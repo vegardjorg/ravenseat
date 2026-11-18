@@ -2,10 +2,11 @@
  * @vitest-environment jsdom
  */
 // =============================================================
-// queueInboxSeen.test.ts: a card set aside with Seen on the Decisions tab also leaves "Waiting on you" (Q4 in test round 5).
+// queueInboxSeen.test.ts: a card set aside with Seen in Decisions also leaves "Waiting on you" (Q4 in test round 5).
 //
-// Why: the counter and the tab agreed that the card was gone, while the panel behind the counter kept listing it, so the
-// button said one thing and the panel another. Here the real board client runs in jsdom with a small synthetic queue.
+// Why: the counter once said one thing and the list behind it another. Since B24 there is one list (the Decisions room)
+// and one counter (on "Waiting on you", which opens that room), and both agree. Here the real board client runs in
+// jsdom with a small synthetic queue.
 // =============================================================
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'fs';
@@ -80,34 +81,29 @@ describe('Seen on the Decisions tab', () => {
     await flush();
   }, 60_000);
 
-  const panelText = () => document.getElementById('panel')?.textContent ?? '';
-  const openInbox = async () => {
+  const roomText = () => document.querySelector('.decide')?.textContent ?? '';
+  const openWaiting = async () => {
     (document.getElementById('inbox') as HTMLButtonElement).click();
     await flush();
   };
-  const closeInbox = async () => {
-    (document.querySelector('#panel .panel-header .button-icon') as HTMLButtonElement).click();
-    await flush();
-  };
 
-  it('before: the panel lists the silent track', async () => {
-    await openInbox();
-    expect(panelText()).toContain('Stuck');
-    expect(panelText()).toContain('EX-1');
-    await closeInbox();
+  it('before: "Waiting on you" opens Decisions, which lists the silent track', async () => {
+    await openWaiting();
+    expect(document.getElementById('show-decisions')?.getAttribute('aria-selected')).toBe('true');
+    expect(document.getElementById('panel')?.hidden).toBe(true);
+    expect(roomText()).toContain('EX-1');
+    expect(document.querySelector('#inbox .inbox-count')?.textContent).toBe('1');
   });
 
-  it('after: the panel says nothing is waiting, like the counter', async () => {
-    (document.getElementById('show-decisions') as HTMLButtonElement).click();
-    await flush();
+  it('after: the counter is gone and the room it opens says nothing is waiting', async () => {
     const seen = document.querySelector('.decide-card button[aria-label^="Seen"]') as HTMLButtonElement | null;
     expect(seen).toBeTruthy();
     seen!.click();
     await flush();
     expect(document.querySelector('#inbox .inbox-count')).toBeNull();
-    await openInbox();
-    expect(panelText()).not.toContain('Stuck');
-    expect(panelText()).not.toContain('EX-1');
-    expect(panelText()).toContain('Nothing waiting on you');
+    expect(document.getElementById('inbox')?.getAttribute('aria-label')).toBe('Waiting on you: nothing, opens Decisions');
+    await openWaiting();
+    expect(roomText()).not.toContain('EX-1');
+    expect(roomText()).toContain('Nothing waiting on you');
   });
 });

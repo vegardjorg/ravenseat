@@ -2167,13 +2167,15 @@
     unassessed: 'DPIA not assessed',
   };
   const DEC_STATUS = { open: 'Open', answered: 'Answered' };
-  /** The types in the queue (queueLogic.QUESTION_TYPES); owner-task is an owner action. */
-  const DEC_TYPE = {
-    question: 'Question',
-    condition: 'Condition',
-    lawyer: 'Lawyer',
-    'owner-task': 'Owner action',
-  };
+  /**
+   * The types in the queue (queueLogic.QUESTION_TYPES) by the names in the one word table for owner questions
+   * (lib/queueDecisions.js QUESTION_WORDS, B24), so Plans and the Decisions room call a type the same.
+   */
+  const DECISION_RULES =
+    typeof module === 'object' && module.exports ? require('./queueDecisions.js') : globalThis.QueueDecisions;
+  const DEC_TYPE = Object.fromEntries(
+    Object.entries(DECISION_RULES?.QUESTION_WORDS ?? {}).map(([type, w]) => [type, w.name]),
+  );
   const DEC_AMOUNT = {
     many: 'Two or more plan entries',
     one: 'One plan entry',

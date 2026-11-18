@@ -212,7 +212,7 @@ const BULK_INFO = {
     explanation:
       'Rolls back the last entry in the change log. It is refused when someone has changed the same fields since.',
   },
-  // The "Sort" list in "Waiting on you".
+  // The "Sort" list in Decisions.
   'accept-suggestion': {
     title: 'Accept proposed project',
     explanation:

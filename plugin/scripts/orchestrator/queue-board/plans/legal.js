@@ -9,7 +9,8 @@
 // Everything is views over data that already exists: the legal field on the plan entries and the owner questions in
 // queue.json. The surfaces write only two things:
 //   - an answer to an owner question: POST /api/action { type: 'resolve' } (= `queue.mjs resolve <id> --answer … --by owner`,
-//     same route and guard rules as "Waiting on you"; the plan entry is unblocked by itself),
+//     same route and guard rules as Decisions, drawn by the same renderer, board/question.js; the plan entry is
+//     unblocked by itself),
 //   - the lawyer package: POST /api/lawyerPackage saves a draft in <dataFolder>/lawyerPackages/lawyerPackage-<date>.md
 //     locally. It is never sent anywhere.
 // Legal points are changed with `queue.mjs plan edit <entry> --set '{"legal":…}'` (the copy line takes it on in
@@ -23,8 +24,8 @@
   const V = window.QueuePlanView;
 
   // State that does not belong in the url: the lawyer package preview, the answer drafts (so an
-  // update from the server does not wipe what you type) and an answer waiting for "Answer anyway".
-  const u = { package: null, packageFetching: false, draft: new Map(), confirm: null, sender: false };
+  // update from the server does not wipe what you type), the open text field and an answer waiting for "Answer anyway".
+  const u = { package: null, packageFetching: false, draft: new Map(), form: null, confirm: null, sender: false };
   const KEY = 'queue-board-key'; // same as board.js (sessionStorage)
 
   /** Write call with the key. Gives { status, answer } (the answer is JSON from the server, or an error text). */
@@ -164,7 +165,7 @@
     decision: [
       { name: 'Urgent', search: '?bfr=overdue,30' },
       { name: 'Blocks the most', search: '?bbl=many' },
-      { name: 'Owner actions', search: '?bty=owner-task' },
+      { name: 'Owner tasks', search: '?bty=owner-task' },
       { name: 'History (answered)', search: '?bst=answered' },
     ],
   };
@@ -845,24 +846,24 @@
     );
   }
 
-  async function sendAnswer(h, x, confirm = false) {
-    const text = u.draft.get(x.id) ?? '';
-    const r0 = V.resolveBody(x.id, text, { confirm });
-    if (r0.error) {
-      h.message(r0.error, true);
-      return;
-    }
+  /**
+   * Sends one answer (the body /api/action takes: a choice, or a text answer). A 409 from the guard asks first: the
+   * warning stands with "Answer anyway", which sends the same body with confirm.
+   */
+  async function sendAnswer(h, x, body, confirm = false) {
+    if (!body) return;
     u.sender = true;
     h.draw();
     try {
-      const r = await postJson('/api/action', r0.body);
+      const r = await postJson('/api/action', confirm ? { ...body, confirm: true } : body);
       if (r.status === 409 && r.answer?.confirm) {
-        u.confirm = { sp: x.id, message: r.answer.message };
+        u.confirm = { sp: x.id, message: r.answer.message, body };
       } else if (r.status !== 200 || !r.answer?.ok) {
         throw new Error(r.answer?.message ?? `HTTP ${r.status}`);
       } else {
         u.draft.delete(x.id);
         u.confirm = null;
+        u.form = null;
         h.message(`The answer to ${x.id} is saved.`);
         await h.get(true);
       }
@@ -871,7 +872,14 @@
     } finally {
       u.sender = false;
     }
-    h.draw({ focus: `dec-answer:${x.id}` });
+    h.draw({ focus: "dec-copy" });
+  }
+
+  /** The text answer: the same check as before (an answer, at most 4000 characters), then the same body. */
+  function sendText(h, x, text) {
+    const r0 = V.resolveBody(x.id, text);
+    if (r0.error) return h.message(r0.error, true);
+    sendAnswer(h, x, r0.body);
   }
 
   function decDetailEl(h, d, x) {
@@ -923,10 +931,12 @@
           }),
         ),
       ),
+      ...(window.QueueQuestion?.fromPlan(x)
+        ? window.QueueQuestion.body(window.QueueQuestion.fromPlan(x), { title: false, meta: false })
+        : []),
       h.el(
         'dl',
         { class: 'plans-field' },
-        h.field('Recommendation', x.recommendation),
         h.field('Source', x.source),
         h.field(
           'Added',
@@ -991,33 +1001,66 @@
     );
   }
 
+  /**
+   * Answering here is the same as in Decisions (board/question.js): the choices in their written order with the
+   * recommended one filled ("As recommended: ..."), then the free answer with the type's verb ("Other decision",
+   * "Mark done"). A choice is sent at once; the free answer opens the same text field. Here a click writes straight
+   * away (no undo window, as before in Plans), and the number keys belong to the Decisions room.
+   */
   function answerForm(h, x) {
-    const id = `dec-answer-${x.id.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+    const Q = window.QueueQuestion;
+    const D = window.QueueDecisions;
+    const item = Q?.fromPlan(x);
+    if (!item || !D) return section(h, 'Answer', h.el('p', { class: 'plans-help', text: 'Answer it in Decisions.' }));
     const waiting = u.confirm?.sp === x.id ? u.confirm : null;
+    const formOpen = u.form?.sp === x.id;
+    const option = formOpen && u.form.option !== 'free' ? item.options[u.form.option] : null;
+    const pick = (i) => {
+      const o = item.options[i];
+      if (!o) return;
+      if (o.needsText) {
+        u.form = { sp: x.id, option: i };
+        return h.draw({ focus: `decide:${item.key}:text` });
+      }
+      sendAnswer(h, x, D.boardCall(o.action)?.body);
+    };
+    const answers = formOpen
+      ? Q.form(item, {
+          option,
+          id: `dec-answer-${x.id.replace(/[^A-Za-z0-9_-]/g, '_')}`,
+          value: u.draft.get(x.id) ?? '',
+          busy: u.sender,
+          onInput: (v) => {
+            u.draft.set(x.id, v);
+            if (u.confirm?.sp === x.id) u.confirm = null;
+          },
+          onSave: (text) =>
+            option
+              ? sendAnswer(h, x, D.boardCall({ ...option.action, answer: text ?? undefined })?.body)
+              : sendText(h, x, text),
+          onOptionWithText: (i, text) =>
+            sendAnswer(h, x, D.boardCall({ ...item.options[i].action, ...(text ? { answer: text } : {}) })?.body),
+          onCancel: () => {
+            u.form = null;
+            h.draw({ focus: `decide:${item.key}:free` });
+          },
+          onError: (m) => h.message(m, true),
+        })
+      : Q.answers(item, {
+          onOption: pick,
+          onFree: () => {
+            u.form = { sp: x.id, option: 'free' };
+            h.draw({ focus: `decide:${item.key}:text` });
+          },
+        });
     return section(
       h,
       'Answer',
-      h.el('label', {
-        before: id,
+      h.el('p', {
         class: 'plans-help',
         text: 'The answer is saved with ravenseat resolve and logged in the decision log.',
       }),
-      (() => {
-        const ta = h.el('textarea', {
-          id,
-          class: 'jb-answer',
-          rows: '4',
-          maxlength: '4000',
-          'data-focus': `dec-answer:${x.id}`,
-          oninput: (e) => {
-            u.draft.set(x.id, e.target.value);
-            if (u.confirm?.sp === x.id) u.confirm = null;
-          },
-        });
-        // The draft survives the room being redrawn (update from the server every 15 seconds).
-        ta.value = u.draft.get(x.id) ?? '';
-        return ta;
-      })(),
+      answers,
       waiting
         ? h.el(
             'div',
@@ -1029,33 +1072,10 @@
               text: 'Answer anyway',
               disabled: u.sender,
               'data-focus': `dec-anyway:${x.id}`,
-              onclick: () => sendAnswer(h, x, true),
+              onclick: () => sendAnswer(h, x, waiting.body, true),
             }),
           )
         : null,
-      h.el(
-        'div',
-        { class: 'plans-actions' },
-        h.el('button', {
-          type: 'button',
-          class: 'button button-filled',
-          text: u.sender ? 'Saving …' : 'Answer',
-          disabled: u.sender,
-          'data-focus': `dec-send:${x.id}`,
-          onclick: () => sendAnswer(h, x),
-        }),
-        x.recommendation
-          ? h.el('button', {
-              type: 'button',
-              class: 'button button-outline',
-              text: 'Use the recommendation',
-              onclick: () => {
-                u.draft.set(x.id, x.recommendation);
-                h.draw({ focus: `dec-answer:${x.id}` });
-              },
-            })
-          : null,
-      ),
     );
   }
 
@@ -1094,7 +1114,7 @@
         h.el('p', {
           role: 'status',
           text: l.remaining
-            ? `${l.remaining} things remaining: ${left} of ${l.entries.length} entries before prod, ${l.legal.length} legal points, ${l.actions.length} owner actions, ${l.decisions.length} owner questions and ${l.documents.length} documents.`
+            ? `${l.remaining} things remaining: ${left} of ${l.entries.length} entries before prod, ${l.legal.length} legal points, ${l.actions.length} owner tasks, ${l.decisions.length} owner questions and ${l.documents.length} documents.`
             : '✓ Nothing is in the way as the register sees it now.',
         }),
       ),
@@ -1158,10 +1178,10 @@
         'No open legal points block prod.',
       ),
       block(
-        'Owner actions',
+        'Owner tasks',
         l.actions.length,
         decList(h, l.actions, go),
-        'No open owner actions.',
+        'No open owner tasks.',
       ),
       block(
         'Owner questions on entries before prod',

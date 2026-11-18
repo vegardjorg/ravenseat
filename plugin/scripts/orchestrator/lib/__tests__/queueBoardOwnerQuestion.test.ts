@@ -4,7 +4,8 @@
 // =============================================================
 // queueBoardOwnerQuestion.test.ts: an owner question reads like a question in a chat (board step B15).
 //
-// What the tests prove, in "Waiting on you" (board/inbox.js) and on the Decisions card (board/decide.js):
+// What the tests prove, on the Decisions card (board/decide.js, drawn by board/question.js, the one renderer Plans uses
+// too; "Waiting on you" opens this room since B24):
 //   - the order is fixed: the question, the recommendation as its own block, the context (what waits, why, the source),
 //     then the answers,
 //   - the recommendation sits on the tone-info surface with a "Recommendation" label, at least the size of the question,
@@ -90,9 +91,6 @@ const posts: { path: string; body: any }[] = [];
 const flush = async () => {
   for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0));
 };
-const panel = () => document.getElementById('panel') as HTMLElement;
-const row = (sp: string) =>
-  [...panel().querySelectorAll('.inbox-row')].find((r) => r.querySelector('.sp-id')?.textContent === sp) as HTMLElement;
 const card = (sp: string) => document.querySelector(`.decide-card[data-key="decide:${sp}"]`) as HTMLElement;
 /** a comes before b in the document. */
 const before = (a: Element | null, b: Element | null) =>
@@ -163,105 +161,90 @@ beforeAll(async () => {
   await flush();
 }, 60_000);
 
-describe('"Waiting on you": a question reads like a question in a chat', () => {
+describe('the Decisions card: a question reads like a question in a chat', () => {
   it('the order is the question, the recommendation, the context, then the answers', () => {
-    const r = row('Q-SSO');
-    const question = r.querySelector('.sp-ask');
-    const rec = r.querySelector('.sp-recommendation');
-    const context = r.querySelector('.sp-context');
-    const answers = r.querySelector('.answer-buttons');
+    const c = card('Q-SSO');
+    const question = c.querySelector('.sp-ask');
+    const rec = c.querySelector('.sp-recommendation');
+    const context = c.querySelector('.sp-context');
+    const answers = c.querySelector('.decide-options');
     expect(question?.textContent).toBe('Do we offer sign-in with Apple and Google from day one?');
     expect(before(question, rec)).toBe(true);
     expect(before(rec, context)).toBe(true);
     expect(before(context, answers)).toBe(true);
-    // Every button of the row is in the answers, after the recommendation.
-    for (const b of r.querySelectorAll('button:not(.link-button)')) expect(before(rec, b)).toBe(true);
+    // Every button of the card is in the answers, after the recommendation.
+    for (const x of c.querySelectorAll('button:not(.link-button)')) expect(before(rec, x)).toBe(true);
   });
 
   it('the recommendation is its own block with a label, not a muted meta line', () => {
-    const r = row('Q-SSO');
-    const rec = r.querySelector('.sp-recommendation') as HTMLElement;
+    const c = card('Q-SSO');
+    const rec = c.querySelector('.sp-recommendation') as HTMLElement;
     expect(rec.classList.contains('sp-meta')).toBe(false);
     expect(rec.querySelector('.sp-recommendation-label')?.textContent).toBe('Recommendation');
     expect(rec.querySelector('.sp-recommendation-text')?.textContent).toBe(SSO_REC);
-    expect([...r.querySelectorAll('.sp-meta')].some((m) => /Recommendation/.test(m.textContent ?? ''))).toBe(false);
+    expect([...c.querySelectorAll('.sp-meta, .decide-context')].some((m) => /Recommendation/.test(m.textContent ?? ''))).toBe(false);
   });
 
-  it('the context: why it is asked, and one muted line with what waits and the source', () => {
-    const r = row('Q-SSO');
-    expect(r.querySelector('.sp-why')?.textContent).toBe(SSO_WHY);
-    const meta = r.querySelector('.sp-context .sp-meta') as HTMLElement;
+  it('the context: why it is asked, and one muted line with what it unlocks, what waits and the source', () => {
+    const c = card('Q-SSO');
+    expect(c.querySelector('.sp-why')?.textContent).toBe(SSO_WHY);
+    const meta = c.querySelector('.sp-context .sp-meta') as HTMLElement;
     expect(meta.textContent).toContain('unlocks 1 task');
     expect(meta.textContent).toContain('Waiting:');
     expect(meta.textContent).toContain('EX-1');
     expect(meta.textContent).toContain('Source: docs/roadmap.md');
-    // "unlocks" left the header (it is context now, not a headline).
-    expect(r.querySelector('.row-header .sp-locks')).toBeNull();
+    // "unlocks" is context in the muted line, not a separate impact headline on a question.
+    expect(c.querySelector('.decide-impact')).toBeNull();
+  });
+
+  it('a choice equal to the recommendation says "As recommended", without a "(recommended)" suffix, in the written order', () => {
+    const c = card('PICK');
+    const buttons = [...c.querySelectorAll('.decide-options button:not(.link-button)')] as HTMLButtonElement[];
+    expect(buttons.map(label)).toEqual(['Vendor A', 'As recommended: Vendor B']);
+    // The number on the button is the --choice number.
+    expect(buttons.map((x) => x.querySelector('.decide-key')?.textContent)).toEqual(['1', '2']);
+    expect(buttons[1].className).toContain('button-filled');
+    expect(buttons[1].getAttribute('aria-label')).toBe('Answer PICK as recommended: Vendor B');
+    expect(buttons[0].getAttribute('aria-label')).toBe('Answer PICK: Vendor A');
+    // The recommended choice is the one-click answer, so there is no second "As recommended" button.
+    expect(c.querySelectorAll('.button-filled')).toHaveLength(1);
+    expect(c.textContent).not.toContain('(recommended)');
+  });
+
+  it('"Other decision" opens the text field; an owner task without a recommendation is answered with its verb', async () => {
+    const other = [...card('PICK').querySelectorAll('.decide-options button')].find(
+      (x) => x.textContent === 'Other decision',
+    ) as HTMLButtonElement;
+    expect(other).toBeTruthy();
+    expect(other.className).not.toContain('button-filled');
+    other.click();
+    await flush();
+    expect(card('PICK').querySelector('textarea')).not.toBeNull();
+    // The recommendation stays on top while the field is open.
+    expect(before(card('PICK').querySelector('.sp-recommendation'), card('PICK').querySelector('textarea'))).toBe(true);
+    const free = card('FREE');
+    expect(free.querySelector('.sp-recommendation')).toBeNull();
+    // An owner task is done, not answered: "Mark done" (B24, the one word table).
+    expect([...free.querySelectorAll('.decide-options button')].map((x) => x.textContent)).toEqual(['Mark done']);
   });
 
   it('"As recommended" is the filled button, its aria-label says what is answered, and one click answers', async () => {
-    const r = row('Q-SSO');
-    const filled = [...r.querySelectorAll('.answer-buttons .button-filled')] as HTMLButtonElement[];
-    expect(filled.map((b) => b.textContent)).toEqual(['As recommended']);
+    const c = card('Q-SSO');
+    const filled = [...c.querySelectorAll('.decide-options .button-filled')] as HTMLButtonElement[];
+    expect(filled.map(label)).toEqual(['As recommended']);
     expect(filled[0].getAttribute('aria-label')).toBe(`Answer Q-SSO as recommended: ${SSO_REC}`);
-    expect(r.textContent).not.toContain('(recommended)');
-    expect(r.textContent).not.toContain('Use the recommendation');
+    expect(c.textContent).not.toContain('(recommended)');
+    expect(c.textContent).not.toContain('Use the recommendation');
     filled[0].click();
+    await flush();
+    // The answer waits in its undo window; leaving the page writes it.
+    window.dispatchEvent(new Event('pagehide'));
     await flush();
     expect(posts.filter((p) => p.path === '/api/action').at(-1)?.body).toEqual({
       type: 'resolve',
       sp: 'Q-SSO',
       answer: SSO_REC,
     });
-  });
-
-  it('a choice equal to the recommendation says "As recommended", without a "(recommended)" suffix', () => {
-    const r = row('PICK');
-    const buttons = [...r.querySelectorAll('.answer-choices button')] as HTMLButtonElement[];
-    expect(buttons.map((b) => b.textContent)).toEqual(['Vendor A', 'As recommended: Vendor B']);
-    expect(buttons[1].className).toContain('button-filled');
-    expect(buttons[1].getAttribute('aria-label')).toBe('Answer PICK as recommended: Vendor B');
-    expect(buttons[0].getAttribute('aria-label')).toBe('Answer PICK: Vendor A');
-    // The recommended choice is the one-click answer, so there is no second "As recommended" button.
-    expect(r.querySelectorAll('.button-filled')).toHaveLength(1);
-    expect(r.textContent).not.toContain('(recommended)');
-  });
-
-  it('"Other decision" opens the text field; a question without a recommendation keeps its plain answer button', async () => {
-    const other = [...row('PICK').querySelectorAll('.answer-buttons button')].find(
-      (b) => b.textContent === 'Other decision',
-    ) as HTMLButtonElement;
-    expect(other).toBeTruthy();
-    expect(other.className).not.toContain('button-filled');
-    other.click();
-    await flush();
-    expect(row('PICK').querySelector('textarea')).not.toBeNull();
-    // The recommendation stays on top while the field is open.
-    expect(before(row('PICK').querySelector('.sp-recommendation'), row('PICK').querySelector('textarea'))).toBe(true);
-    const free = row('FREE');
-    expect(free.querySelector('.sp-recommendation')).toBeNull();
-    expect([...free.querySelectorAll('.answer-buttons button')].map((b) => b.textContent)).toEqual(['Answer']);
-  });
-});
-
-describe('the Decisions card follows the same order and words', () => {
-  it('question, recommendation block, then the buttons; "As recommended" with the same aria-label', () => {
-    const c = card('Q-SSO');
-    const title = c.querySelector('.decide-title');
-    const rec = c.querySelector('.sp-recommendation');
-    const options = c.querySelector('.decide-options');
-    expect(before(title, rec)).toBe(true);
-    expect(before(rec, options)).toBe(true);
-    expect(rec?.querySelector('.sp-recommendation-text')?.textContent).toBe(SSO_REC);
-    expect(c.querySelector('.sp-why')?.textContent).toBe(SSO_WHY);
-    expect([...c.querySelectorAll('.decide-context')].some((p) => /Recommendation/.test(p.textContent ?? ''))).toBe(false);
-    const filled = c.querySelector('.decide-options .button-filled') as HTMLButtonElement;
-    expect(label(filled)).toBe('As recommended');
-    expect(filled.getAttribute('aria-label')).toBe(`Answer Q-SSO as recommended: ${SSO_REC}`);
-    expect(c.textContent).not.toContain('(recommended)');
-    const pick = card('PICK').querySelector('.decide-options .button-filled') as HTMLButtonElement;
-    expect(label(pick)).toBe('As recommended: Vendor B');
-    expect(pick.getAttribute('aria-label')).toBe('Answer PICK as recommended: Vendor B');
   });
 });
 

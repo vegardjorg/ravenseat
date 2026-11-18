@@ -2726,7 +2726,7 @@ const BOARD_SCRIPTS = [
   'menus.js',
   'statistics.js',
   'settings.js',
-  'inbox.js',
+  'question.js',
   'decide.js',
   'checks.js',
   'panel.js',

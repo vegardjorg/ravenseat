@@ -2283,6 +2283,15 @@ ol.overview-list > .overview-row > * {
   margin-right: var(--distance-sm);
 }
 
+/* An owner question in "Waiting on you" is one compact row from board/question.js (its own grid). */
+ol.overview-list > .overview-row.overview-question {
+  display: block;
+}
+
+ol.overview-list > .overview-row.overview-question > * {
+  margin-right: 0;
+}
+
 .overview-row.undone {
   color: var(--color-on-surface-variant);
 }

@@ -5,7 +5,8 @@
 // stuck work. This file turns that into ONE list of decisions, each with
 //   - a verb (Decide, Check, Approve, Unstick) the board groups by,
 //   - the impact (what the answer unlocks, in the focus stages first), which the list is sorted by,
-//   - the options, the recommended one first, each with the exact write it does: the `ravenseat` arguments (cliArgs, used by
+//   - the options, each with the exact write it does (a question's choices in their written order, the recommended one
+//     marked, so the number on a button is the --choice number): the `ravenseat` arguments (cliArgs, used by
 //     `ravenseat decide` and the /ravenseat:decide skill) and the board's API call (boardCall, used by the Decisions view). Both run
 //     the same queue.mjs command with the same --by, so the log and the actor are the same whichever surface is used.
 // It also builds "Decided today" (decidedToday) from the queue's own timestamps.
@@ -81,19 +82,55 @@
 
   // ---- From "Waiting on you" to decisions ----------------------------------------------------------------------
 
-  /** The answer kinds an owner question can have (the field label and the verb on the button). */
-  const QUESTION_KIND = {
-    question: { name: 'Question', free: 'Answer in your own words' },
-    condition: { name: 'Waiting on condition', free: 'How is the condition fulfilled?' },
-    lawyer: { name: 'Waiting on lawyer', free: 'What did the lawyer say?' },
-    'owner-task': { name: 'Owner task', free: 'What is completed?' },
+  /**
+   * THE word table for owner questions (board step B24): every surface that shows one (the Decisions room, Plans >
+   * Decisions, the Plans overview, `ravenseat decide`) takes the type name and the button words from here, so the same
+   * question reads the same everywhere. Per type (queueLogic.QUESTION_TYPES):
+   *   name      the type badge
+   *   answer    the verb on the button that answers in text (never a question: the question is the field's label)
+   *   field     the label of the text field
+   *   optional  the text may be empty; the answer is then `empty` (the server still needs a non-empty answer)
+   */
+  const QUESTION_WORDS = {
+    question: { name: 'Question', answer: 'Answer', field: 'Your answer', optional: false, empty: null },
+    condition: {
+      name: 'Waiting on condition',
+      answer: 'Mark fulfilled',
+      field: 'How is the condition fulfilled?',
+      optional: false,
+      empty: null,
+    },
+    lawyer: {
+      name: 'Waiting on lawyer',
+      answer: 'Mark fulfilled',
+      field: 'What did the lawyer say, and what does it mean?',
+      optional: false,
+      empty: null,
+    },
+    'owner-task': { name: 'Owner task', answer: 'Mark done', field: 'Note (optional)', optional: true, empty: 'Done' },
   };
+  /** The free text answer on a plain question that has choices or a recommendation: something to differ from. */
+  const OTHER_DECISION = 'Other decision';
+  /** In the text field: start from the recommendation's text and change it. */
+  const START_FROM_RECOMMENDATION = 'Start from the recommendation';
+  /** The words for a question type (an unknown type reads as a plain question). */
+  const questionWords = (type) => QUESTION_WORDS[type] ?? QUESTION_WORDS.question;
+
+  /**
+   * The answer the free text option sends: the trimmed text, or the type's `empty` answer when the text is optional and
+   * left empty ("Mark done" without a note sends "Done"). An empty string means "write something first".
+   */
+  function freeAnswer(item, text) {
+    const s = String(text ?? '').trim();
+    if (s) return s;
+    return item?.free?.optional ? (item.free.empty ?? '') : '';
+  }
 
   /**
    * One list of decisions from the inbox (queueBoard.inbox: question, qa, proposed, stuck). Unsorted; see sortItems.
    * Each item: { key, verb, kind, id, title, text, context, recommendation, background, impact, options, free, open }.
    *   impact  { count, minutes, perStep: number[], focusCount, focusMinutes } (perStep = minutes per focus stage)
-   *   options [{ label, recommended, action, needsText? }] (the recommended one first; needsText = the label for the
+   *   options [{ label, recommended, action, needsText? }] (a question's choices in their written order; needsText = the label for the
    *           text the action needs, e.g. what is wrong in a QA deviation)
    *   free    { label, action } a free text answer (the action has answer: null until the text is given), or null
    *   open    the task to open for more (null for a question)
@@ -111,17 +148,16 @@
   }
 
   function questionItem(s) {
-    const kind = QUESTION_KIND[s.type] ?? QUESTION_KIND.question;
+    const kind = questionWords(s.type);
     const focus = s.focus ?? null;
     const choices = Array.isArray(s.choices) ? s.choices : [];
-    // The choices as options, the recommended one first (the rest keep their order). The action keeps the 1-based
-    // number, which is what `ravenseat resolve --choice` and the board's { choice } take.
-    const numbered = choices.map((c, i) => ({
+    // The choices as options in the order they were written, so option n is `ravenseat resolve --choice n` and key n on
+    // the board: one order on every surface (B24). The recommended one is marked, not moved.
+    let options = choices.map((c, i) => ({
       label: c.label,
       recommended: !!c.recommended,
       action: { type: 'resolve', sp: s.sp, choice: i + 1 },
     }));
-    let options = [...numbered.filter((o) => o.recommended), ...numbered.filter((o) => !o.recommended)];
     // Without choices, a recommendation is still a one-click answer: "As recommended" sends its text.
     if (!options.length && s.recommendation)
       options = [
@@ -148,6 +184,9 @@
       recommendation: s.recommendation ?? null,
       // Why it is asked (the question's optional `context` field), or null.
       background: s.context ?? null,
+      // The same two facts as the context lines, kept apart so the board can draw them as links.
+      source: s.source ?? null,
+      waiting,
       impact: {
         count: s.count ?? 0,
         minutes: s.minutes ?? 0,
@@ -158,9 +197,51 @@
         pausesQueue: String(s.sp).startsWith('focus-done-'),
       },
       options,
-      free: { label: kind.free, action: { type: 'resolve', sp: s.sp, answer: null } },
+      // The text answer: "Other decision" on a plain question with something to differ from, otherwise the type's verb
+      // ("Answer", "Mark fulfilled", "Mark done"). `field` labels the text field; `optional` lets it stay empty.
+      free: {
+        label: options.length && kind === QUESTION_WORDS.question ? OTHER_DECISION : kind.answer,
+        field: kind.field,
+        save: kind.answer,
+        optional: kind.optional,
+        empty: kind.empty,
+        action: { type: 'resolve', sp: s.sp, answer: null },
+      },
       open: null,
     };
+  }
+
+  /**
+   * A row from Plans > Decisions (queuePlan.ownerDecisions) as the same decision item the Decisions room draws, so Plans
+   * shows the same order, type name and buttons. The row has the queue's question fields plus what it blocks.
+   */
+  function fromPlanDecision(row) {
+    if (!row) return null;
+    return questionItem({
+      sp: row.id,
+      type: row.type,
+      text: row.text,
+      recommendation: row.recommendation,
+      context: row.context,
+      source: row.source,
+      choices: row.choices,
+      direct: row.tasks,
+      count: (row.tasks ?? []).length,
+      minutes: row.minutes,
+    });
+  }
+
+  /**
+   * The landing rule (B24): the board opens in Decisions only when a decision is new since the last visit (a key that
+   * was not there when the owner last saw the room). `seen` is null on a first visit (or when the browser keeps no
+   * storage): then anything waiting counts as new, as before. Otherwise the board opens the queue view used last.
+   */
+  function landInDecisions(keys, seen) {
+    const now = keys ?? [];
+    if (!now.length) return false;
+    if (!Array.isArray(seen)) return true;
+    const before = new Set(seen);
+    return now.some((k) => !before.has(k));
   }
 
   function qaItem(o, p, f) {
@@ -688,6 +769,14 @@
     VERBS,
     UNDO_MS,
     AS_RECOMMENDED,
+    QUESTION_WORDS,
+    OTHER_DECISION,
+    START_FROM_RECOMMENDATION,
+    questionWords,
+    freeAnswer,
+    questionItem,
+    fromPlanDecision,
+    landInDecisions,
     FLAG_NOTE,
     STOP_TEXT,
     minutesText,

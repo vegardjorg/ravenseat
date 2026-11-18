@@ -23,7 +23,7 @@ commands cover them.
 | Flag stuck work for the orchestrator (new) | `/api/action` `flag-stuck` | `ravenseat block <id> other --note "owner: looks stuck, please check"` (same command); `/ravenseat:decide` |
 | Put a task started without an agent back in the queue | `/api/action` `requeue` | `ravenseat set <id> waiting` (same command) |
 | Answer a track's question so it continues | `/api/action` `track-answer` | `ravenseat resume <id> --reason context --answer "<text>" --by owner` (same command) |
-| The list itself | Decisions tab, "Waiting on you" | `ravenseat decide`, `ravenseat decide --json`, `ravenseat decide --today` (new) |
+| The list itself | Decisions tab ("Waiting on you" opens it) | `ravenseat decide`, `ravenseat decide --json`, `ravenseat decide --today` (new) |
 
 ## Tasks and the queue
 

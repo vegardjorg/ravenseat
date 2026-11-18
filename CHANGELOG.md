@@ -5,6 +5,21 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board polish: one place to answer, one counter, and an owner question that reads the same everywhere.** The
+  "Waiting on you" side panel is gone. The button at the top keeps its name, its count and its keyboard access, and
+  now opens Decisions, which has everything the panel had: a checkbox on each Check and Approve card with **QA ok for
+  selected** and **Approve selected**, the **Sort** list with **Accept proposal**, choosing an option with a note, and
+  the line about answers not in the decision log yet. The count is shown once, on the button (the Decisions tab no
+  longer repeats it). The board now opens on Decisions only when a decision is new since your last visit in this
+  browser; otherwise it opens the queue view you used last (with no browser storage every visit counts as the first,
+  as before). Decisions, Plans > Decisions and the Plans overview draw owner questions with one renderer and one word
+  table: the same type names (Question, Waiting on condition, Waiting on lawyer, Owner task), the choices in the order
+  they were written with the recommended one filled, so the number on a button and in `ravenseat decide` is the
+  `--choice` number (before, the recommended choice was moved first and the numbers did not match), and the same
+  button words. An owner task gets **Mark done** with an optional note instead of a question on the button; an empty
+  note sends "Done", and the request to the server keeps its shape. Plans > Decisions answers with the same buttons and
+  text field (a click writes at once there, and "Answer anyway" still covers a guard warning). Tests cover the shared
+  words and order, the moved bulk tools, the one counter and both sides of the landing rule.
 - **Board polish: selecting cards opens a short menu next to the checkbox, like a desktop context menu.** With a
   mouse on a wide screen the bulk actions no longer sit in a wide bar at the bottom centre, far from the card you
   just checked. A narrow vertical menu opens next to the box you checked last, with the count and the summed estimate

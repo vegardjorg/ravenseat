@@ -101,10 +101,11 @@ beforeAll(async () => {
 }, 60_000);
 
 describe('the Decisions view', () => {
-  it('lands on Decisions when something waits on the owner, with the count on the tab', () => {
+  it('lands on Decisions on a first visit when something waits, with the one count on "Waiting on you"', () => {
     expect($('show-decisions').getAttribute('aria-selected')).toBe('true');
     expect($('room-queue').getAttribute('aria-selected')).toBe('false');
-    expect($('show-decisions').textContent).toContain('2');
+    expect($('inbox').querySelector('.inbox-count')?.textContent).toBe('2');
+    expect($('show-decisions').querySelector('.inbox-count')).toBeNull();
     expect(document.querySelector('.decide-group-title')?.textContent).toContain('Approve');
     expect(cards()).toHaveLength(2);
     const first = cards()[0];

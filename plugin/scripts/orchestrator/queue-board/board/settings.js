@@ -13,7 +13,6 @@
 // ---- Settings (the gear) ----
 async function openSettings() {
   t.selected = null;
-  t.inbox = false;
   t.setting = { loading: true };
   showPanel();
   drawSettings();

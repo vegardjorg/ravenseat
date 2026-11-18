@@ -2,8 +2,9 @@
  * @vitest-environment jsdom
  */
 // =============================================================
-// queueBoardChoices.test.ts: "Waiting on you" shows the choices of an owner question as buttons, and a click answers
-// through POST /api/action { type: 'resolve', sp, choice } (the same path as the free text answer). A question without
+// queueBoardChoices.test.ts: the Decisions room (where "Waiting on you" leads since B24) shows the choices of an owner
+// question as buttons in their written order, and a click answers through POST /api/action { type: 'resolve', sp, choice }
+// (the same path as the free text answer); the text field can go along as the choice's note. A question without
 // choices keeps the plain "Answer" button. The whole board runs in jsdom with a small synthetic queue (no real data).
 // =============================================================
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -60,9 +61,16 @@ function makeQueue() {
 const flush = async () => {
   for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
 };
-const panel = () => document.getElementById('panel') as HTMLElement;
-const row = (sp: string) =>
-  [...panel().querySelectorAll('.inbox-row')].find((r) => r.querySelector('.sp-id')?.textContent === sp) as HTMLElement;
+const card = (sp: string) => document.querySelector(`.decide-card[data-key="decide:${sp}"]`) as HTMLElement;
+/** The choice buttons on a card (not the free answer, not "Open <task>"). */
+const choices = (sp: string) =>
+  [...card(sp).querySelectorAll(':scope > .decide-options > button:not(.link-button):not([data-focus$=":free"])')] as HTMLButtonElement[];
+/** The visible text of a button without the key hint (the "1" in the Decisions room). */
+const label = (b: Element) =>
+  [...b.childNodes]
+    .filter((n) => !(n instanceof HTMLElement && n.classList.contains('decide-key')))
+    .map((n) => n.textContent)
+    .join('');
 
 beforeAll(async () => {
   const state = { version: 'v1', data: { ...T.board(makeQueue()), gitError: null, logo: false } };
@@ -88,45 +96,58 @@ beforeAll(async () => {
           : { ok: true },
     };
   };
-  for (const f of ['a11y.js', '../lib/queueGraph.js', 'graph.js', 'plan.js', 'performance.js', 'board/'])
+  for (const f of ['a11y.js', '../lib/queueGraph.js', 'graph.js', 'plan.js', 'performance.js', '../lib/queueDecisions.js', 'board/'])
     (0, eval)(clientSource(f));
   await flush();
   (document.getElementById('inbox') as HTMLButtonElement).click();
   await flush();
 }, 60_000);
 
-describe('"Waiting on you": choices on an owner question', () => {
-  it('shows one button per choice (the recommended one filled, "As recommended: <choice>"); no choice buttons without choices', () => {
-    const buttons = [...row('PICK').querySelectorAll('.answer-choices button')] as HTMLButtonElement[];
-    expect(buttons.map((b) => b.textContent)).toEqual(['Vendor A', 'As recommended: Vendor B']);
+describe('Decisions: choices on an owner question', () => {
+  it('shows one button per choice in the written order (the recommended one filled, "As recommended: <choice>"); no choice buttons without choices', () => {
+    const buttons = choices('PICK');
+    expect(buttons.map(label)).toEqual(['Vendor A', 'As recommended: Vendor B']);
     expect(buttons[1].className).toContain('button-filled');
     expect(buttons[0].className).toContain('button-outline');
-    expect(row('PICK').querySelector('.answer-choices')?.getAttribute('role')).toBe('group');
+    expect(card('PICK').querySelector('.decide-options')?.getAttribute('role')).toBe('group');
     // The free text answer stays available, as "Other decision".
-    expect([...row('PICK').querySelectorAll('.answer-buttons > .button')].map((b) => b.textContent)).toContain(
+    expect([...card('PICK').querySelectorAll('.decide-options > .link-button')].map((b) => b.textContent)).toContain(
       'Other decision',
     );
-    expect(row('FREE').querySelector('.answer-choices')).toBeNull();
-    expect([...row('FREE').querySelectorAll('.answer-buttons > .button')].map((b) => b.textContent)).toContain('Answer');
+    expect(choices('FREE')).toHaveLength(0);
+    expect([...card('FREE').querySelectorAll('.decide-options > .button')].map((b) => b.textContent)).toContain('Answer');
   });
 
-  it('a click answers through POST /api/action { type: resolve, sp, choice } (1-based), the free text field as a note', async () => {
-    (row('PICK').querySelectorAll('.answer-choices button')[0] as HTMLButtonElement).click();
+  it('a click answers through POST /api/action { type: resolve, sp, choice } (1-based), and a choice can take the text as a note', async () => {
+    // The answer waits in its undo window (5 s); the test catches that timer and runs it now.
+    const w = window as any;
+    const realTimeout = w.setTimeout;
+    let undoWindow: (() => unknown) | null = null;
+    w.setTimeout = (fn: () => unknown, ms?: number) => (ms === 5000 ? ((undoWindow = fn), 0) : realTimeout(fn, ms));
+    choices('PICK')[0].click();
+    await flush();
+    w.setTimeout = realTimeout;
+    expect(undoWindow).not.toBeNull();
+    await undoWindow!();
     await flush();
     expect(posts.filter((p) => p.path === '/api/action').at(-1)?.body).toEqual({
       type: 'resolve',
       sp: 'PICK',
       choice: 1,
     });
-    // With the free text field open and filled in, its text goes along as the note.
-    const open = [...row('PICK').querySelectorAll('.answer-buttons > .button')].find(
+    // With the text field open and filled in, "Choose with this note" sends the choice with the text.
+    const open = [...card('PICK').querySelectorAll('.decide-options > .link-button')].find(
       (b) => b.textContent === 'Other decision',
     ) as HTMLButtonElement;
     open.click();
     await flush();
-    const field = row('PICK').querySelector('textarea') as HTMLTextAreaElement;
+    const field = card('PICK').querySelector('textarea') as HTMLTextAreaElement;
     field.value = 'from March';
-    (row('PICK').querySelectorAll('.answer-choices button')[1] as HTMLButtonElement).click();
+    const withNote = [...card('PICK').querySelectorAll('.decide-form .decide-options button')] as HTMLButtonElement[];
+    expect(withNote.map((b) => b.textContent)).toEqual(['Vendor A', 'As recommended: Vendor B']);
+    withNote[1].click();
+    await flush();
+    window.dispatchEvent(new Event('pagehide'));
     await flush();
     expect(posts.filter((p) => p.path === '/api/action').at(-1)?.body).toEqual({
       type: 'resolve',

@@ -57,9 +57,10 @@ describe('ravenseat decide', () => {
     const q = j.items[0];
     expect(q.nr).toBe(1);
     expect(q.impact_line).toMatch(/^unlocks 2 tasks/);
+    // The choices in their written order (B24): the number in the list is the --choice number; the recommended one is marked.
     expect(q.options.map((o: any) => [o.label, o.recommended, o.cli])).toEqual([
-      ['Vendor B', true, 'ravenseat resolve Q-1 --choice 2 --by owner'],
       ['Vendor A', false, 'ravenseat resolve Q-1 --choice 1 --by owner'],
+      ['Vendor B', true, 'ravenseat resolve Q-1 --choice 2 --by owner'],
     ]);
     expect(q.free.cli).toBe('ravenseat resolve Q-1 --answer "<text>" --by owner');
     expect(j.items[1].options.map((o: any) => o.cli)).toEqual([

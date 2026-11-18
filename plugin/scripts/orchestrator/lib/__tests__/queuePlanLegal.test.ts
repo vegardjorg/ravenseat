@@ -453,7 +453,10 @@ describe('the wiring in the board (read as text)', () => {
   });
 
   it('answer goes via the resolve route, the lawyer package via /api/lawyerPackage, and no text is set as HTML', () => {
-    expect(jur).toContain("postJson('/api/action', r0.body)");
+    expect(jur).toContain("postJson('/api/action', confirm ? { ...body, confirm: true } : body)");
+    expect(jur).toContain('V.resolveBody(x.id, text)');
+    // The buttons and the text field come from the shared renderer (board/question.js), as in Decisions.
+    expect(jur).toContain('Q.answers(item');
     expect(jur).toContain("postJson('/api/lawyerPackage'");
     expect(board).toContain("if (filePath === '/api/lawyerPackage') return lawyerPackageWrite(b);");
     expect(board).toMatch(/isSymbolicLink\(\)/);

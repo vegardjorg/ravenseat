@@ -2163,64 +2163,13 @@ body.with-option-line .toaster {
   font-size: var(--text-xs);
 }
 
-.panel-header .back {
-  margin: 0 0 var(--distance-sm);
-}
-
-/* ---- The "Waiting on you" inbox (the side panel) ---- */
-
-.inbox-del {
-  padding: var(--distance-md) 0;
-  border-top: 1px solid var(--color-outline-variant);
-}
-
-.inbox-del:first-of-type {
-  margin-top: var(--distance-md);
-}
-
-.inbox-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--distance-sm);
-}
-
-.inbox-row {
-  padding: var(--distance-md);
-  border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-container-lowest);
-}
-
-.inbox-row > p {
-  margin: var(--distance-sm) 0 0;
-}
-
-.inbox-row > .button {
-  margin-top: var(--distance-sm);
-}
-
-.row-header {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--distance-sm) var(--distance-sm);
-}
+/* ---- An owner question: id, type and the muted line (board/question.js, everywhere it is drawn) ---- */
 
 .sp-id {
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--color-on-surface-variant);
   overflow-wrap: anywhere;
-}
-
-.sp-locks {
-  margin-left: auto;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--color-primary);
 }
 
 .badge.sp-type {
@@ -2237,7 +2186,7 @@ body.with-option-line .toaster {
   color: var(--color-on-tone-warn);
 }
 
-.sp-text.missing {
+.question-row-text.missing {
   color: var(--color-on-surface-variant);
   font-style: italic;
 }
@@ -2252,34 +2201,7 @@ body.with-option-line .toaster {
   margin: var(--distance-xs) var(--distance-sm) 0 0;
 }
 
-.answer-form {
-  border: 0;
-  padding: var(--distance-sm) 0 0;
-}
-
-/* The answer options of an owner question (choices): one button each, wrapped; long labels break inside the button. */
-.answer-choices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--distance-sm);
-  margin-top: var(--distance-sm);
-}
-
-.answer-choices .button {
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: left;
-}
-
-/* Phone width: one choice per line, full width, so each one is an easy target. */
-@media (max-width: 720px) {
-  .answer-choices .button {
-    flex: 1 1 100%;
-  }
-}
-
-/* ---- An owner question, read like a question in a chat (inbox.js and the Decisions card, step B15) ----
+/* ---- An owner question, read like a question in a chat (board/question.js: Decisions, Plans > Decisions; step B15) ----
    The question first and largest, then the recommendation as its own block on the tone-info pair (the most important
    thing on the card: at least the size of the question, a clear label), then why it is asked and one muted line
    (unlocks, waiting, source), then the answers. Colors only from tokens; the pairs are checked in both modes in
@@ -2334,94 +2256,6 @@ body.with-option-line .toaster {
   margin: 0;
   padding: 0 var(--distance-xs);
   font-size: inherit;
-}
-
-/* The answers: the recommended one filled, the other choices and "Other decision" in one wrapping row. */
-.answer-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--distance-sm);
-  margin-top: var(--distance-md);
-}
-
-/* The choices keep their own group (role=group for screen readers) inside the row. */
-.answer-buttons > .answer-choices {
-  margin: 0;
-}
-
-.answer-buttons > .field {
-  flex: 1 1 100%;
-}
-
-.answer-buttons > .button {
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: left;
-}
-
-@media (max-width: 720px) {
-  .answer-buttons > .button {
-    flex: 1 1 100%;
-  }
-}
-
-/* QA, proposed and stuck: checkbox (or id) and title on the left, one button on the right. */
-.row-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--distance-sm);
-  padding: var(--distance-sm) var(--distance-md);
-}
-
-.row-option {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 2px var(--distance-sm);
-  cursor: pointer;
-}
-
-div.row-option {
-  grid-template-columns: 1fr;
-  cursor: default;
-}
-
-.row-option input {
-  grid-row: span 3;
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  accent-color: var(--color-primary);
-}
-
-.row-title {
-  overflow-wrap: anywhere;
-}
-
-.qa-project + .qa-project {
-  margin-top: var(--distance-md);
-}
-
-.qa-name {
-  margin: var(--distance-sm) 0 var(--distance-xs);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.qa-feature-name {
-  margin: var(--distance-sm) 0 var(--distance-xs);
-  font-size: var(--text-xs);
-  color: var(--color-on-surface-variant);
-}
-
-.inbox-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: var(--distance-sm);
 }
 
 /* Whether `ravenseat wait` listens (lib/ownerWait.js): a dot, filled in the primary color while it does. */
@@ -3638,17 +3472,6 @@ body.with-option-line .board {
   color: var(--color-on-surface-variant);
 }
 
-/* "Waiting on you": what the answer unlocks in focus. */
-.sp-focus {
-  background: var(--color-secondary-container);
-  color: var(--color-on-secondary-container);
-}
-
-.sp-focus.empty-focus {
-  background: transparent;
-  color: var(--color-on-surface-variant);
-}
-
 /* The plan view: toolbar and four columns (Now, Next, Later, Waiting). */
 .board.plan {
   padding: var(--distance-md) var(--distance-lg);
@@ -4332,9 +4155,7 @@ fieldset.setting legend {
   flex: 1;
 }
 /* ---- Decisions (board/decide.js): everything that waits on the owner, one card per decision ---- */
-#show-decisions .inbox-count {
-  margin-left: var(--distance-xs);
-}
+
 .board.decisions {
   padding: var(--distance-md) var(--distance-lg);
 }
@@ -4481,9 +4302,6 @@ fieldset.setting legend {
   justify-content: flex-end;
   gap: var(--distance-sm);
 }
-.decide-more {
-  margin: 0;
-}
 .decide-done {
   border-top: 1px solid var(--color-outline-variant);
   padding-top: var(--distance-sm);
@@ -4516,6 +4334,58 @@ fieldset.setting legend {
   color: var(--color-on-surface);
   overflow-wrap: anywhere;
 }
+/* The checkbox on a Check or Approve card, and on a Sort row with a proposal (B24: what the side panel had). */
+.decide-check {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+/* "Select all" and "QA ok for selected" / "Approve selected" / "Accept all proposals for selected" under a group. */
+.decide-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+  padding-top: var(--distance-xs);
+}
+.decide-sort-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+  padding: var(--distance-sm) var(--distance-md);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+}
+/* One owner question as a compact row (the Plans overview): the text on the left, the verb button in a fixed column. */
+.question-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--distance-xs) var(--distance-md);
+  width: 100%;
+}
+.question-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.question-row-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.question-meta {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+.question-row-button {
+  white-space: nowrap;
+}
 @media (max-width: 720px) {
   .board.decisions {
     padding: var(--distance-sm) var(--distance-md);
@@ -4529,6 +4399,12 @@ fieldset.setting legend {
   }
   .decide-keys {
     display: none;
+  }
+  .question-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .question-row-button {
+    justify-self: start;
   }
 }
 @media (forced-colors: active) {

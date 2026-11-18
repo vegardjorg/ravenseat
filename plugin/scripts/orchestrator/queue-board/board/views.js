@@ -361,7 +361,7 @@ const BUILT_IN = [
     special: 'newEntry',
     title: 'Tasks added after the previous time the board was open in this browser.',
   },
-  { name: 'Waiting on me', inbox: true, title: 'Opens "Waiting on you".' },
+  { name: 'Waiting on me', decisions: true, title: 'Opens Decisions, where everything that waits on you is answered.' },
 ];
 const SPECIAL = {
   focus1: (k) => k.space?.step === 0,
@@ -388,7 +388,7 @@ function ownViews() {
 
 function useView(v) {
   closeViews(false);
-  if (v.inbox) return openInbox();
+  if (v.decisions) return openDecisions();
   t.special = v.special && SPECIAL[v.special] ? v.special : null;
   t.viewName = v.name;
   // Your own views include search, filter, grouping and view; the built-in ones reset search and filter.

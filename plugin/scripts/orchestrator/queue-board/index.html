@@ -40,7 +40,7 @@
     <script src="/board/menus.js" defer></script>
     <script src="/board/statistics.js" defer></script>
     <script src="/board/settings.js" defer></script>
-    <script src="/board/inbox.js" defer></script>
+    <script src="/board/question.js" defer></script>
     <script src="/board/decide.js" defer></script>
     <script src="/board/checks.js" defer></script>
     <script src="/board/panel.js" defer></script>
@@ -109,7 +109,7 @@
             Queue
           </button>
           <!-- Everything that waits on the owner, one card per decision (board/decide.js). The board lands here when
-               anything is waiting. The count is drawn into the button. -->
+               a decision is new since the last visit. The count is on "Waiting on you". -->
           <button
             type="button"
             id="show-decisions"
@@ -143,9 +143,7 @@
           type="button"
           id="inbox"
           class="button button-outline inbox-button"
-          aria-haspopup="dialog"
-          aria-expanded="false"
-          title="Questions, proposals to approve and visual checks that need you"
+          title="Opens Decisions: questions, proposals to approve and checks that need you"
         >
           Waiting on you
         </button>

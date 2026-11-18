@@ -23,7 +23,7 @@ ravenseat pulse-check               # the pulse in one read-only call: SILENT, o
 ravenseat wait                      # waits in the background at no token cost until something needs the orchestrator
 ravenseat cost                      # USD per merged change, cost per task (all runs), then per class
 ravenseat calibrate                 # how far minute and cost estimates are off, per class
-ravenseat decide                    # everything waiting on you, most impact first (/ravenseat:decide walks it)
+ravenseat decide                    # everything waiting on you, most impact first (/ravenseat:decide walks it; the board's Decisions room is the same list)
 ravenseat proposals                 # the proposals waiting, and the auto-accept rules
 ravenseat approve <ID>              # lets a proposal start (`ravenseat set <ID> cancelled` declines it)
 ravenseat conflicts                 # predicted merge conflicts between running tracks and the base

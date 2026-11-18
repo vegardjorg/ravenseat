@@ -143,6 +143,29 @@
     );
   }
 
+  /**
+   * One owner question in "Waiting on you": the compact row from the shared renderer (board/question.js), so the type
+   * name, the question and the button verb are the ones Decisions and Plans > Decisions use. The line leads with what
+   * the answer unlocks in the queue, then the plan entries it blocks and the deadline.
+   */
+  function ownerRow(h, d, x) {
+    const Q = window.QueueQuestion;
+    const row = (d.decisions?.openOnes ?? []).find((b) => String(b.id) === x.id);
+    const item = row ? Q?.fromPlan(row) : null;
+    if (!item) return null;
+    return h.el(
+      'li',
+      { class: 'overview-row overview-waiting overview-question' },
+      Q.compact(item, {
+        meta: [
+          x.blocks ? `blocks ${x.blocks} plan ${x.blocks === 1 ? 'entry' : 'entries'}` : null,
+          x.deadline ? `deadline ${x.deadline}${x.urgent ? ' (urgent)' : ''}` : null,
+        ],
+        onOpen: () => h.use({ surface: 'decision', sp: x.id }, { scroll: true }),
+      }),
+    );
+  }
+
   function waitingEl(h, d) {
     const v = V.waitingOnYou(d);
     return h.el(
@@ -164,12 +187,12 @@
             'ol',
             { class: 'overview-list' },
             ...v.points.map((x) =>
-              h.el(
+              (x.type === 'owner' && ownerRow(h, d, x)) || h.el(
                 'li',
                 { class: 'overview-row overview-waiting' },
                 h.el('span', {
                   class: `badge overview-type t-${x.type}`,
-                  text: x.type === 'owner' ? '? Owner question' : '§ Legal',
+                  text: x.type === 'owner' ? V.DEC_TYPE.question : '§ Legal',
                 }),
                 h.el('span', { class: 'overview-id', text: x.id }),
                 h.el('span', {

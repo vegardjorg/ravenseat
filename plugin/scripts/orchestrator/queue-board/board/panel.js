@@ -12,7 +12,7 @@ let panelFrom = null;
 /**
  * Shows the side panel as a modal dialog: remembers the element that opened it (focus goes back there
  * on close), and makes the rest of the page inert so Tab and the screen reader stay in the panel. The focus trap below catches Tab
- * at the ends. Everything that opens the panel (details, inbox, settings, help) goes here.
+ * at the ends. Everything that opens the panel (details, settings, help) goes here.
  */
 const PANEL_INERT = ['header.top', '#focusLine', '#stripe', '#board', '#optionLine'];
 function showPanel() {
@@ -25,13 +25,11 @@ function showPanel() {
   );
 }
 panel.addEventListener('keydown', (e) => window.QueueA11y.trapKey(e, panel));
-/** Opens the detail panel and selects the card's chain. `fromInbox`: the panel gets "Back to Waiting on you". */
-function openPanel(id, { fromInbox = false } = {}) {
+/** Opens the detail panel and selects the card's chain. */
+function openPanel(id) {
   if (!t.perId.has(id)) return;
   t.setting = null;
-  t.inbox = false;
   t.help = false;
-  t.fromInbox = fromInbox;
   t.selected = id;
   showPanel();
   selectChain(id);
@@ -42,9 +40,7 @@ function openPanel(id, { fromInbox = false } = {}) {
 function closePanel() {
   t.selected = null;
   t.setting = null;
-  t.inbox = false;
   t.help = false;
-  t.fromInbox = false;
   panel.hidden = true;
   background.hidden = true;
   panel.replaceChildren();
@@ -53,7 +49,7 @@ function closePanel() {
     PANEL_INERT.map((v) => document.querySelector(v)),
     false,
   );
-  drawInboxButton();
+  drawWaitingButton();
   // If the card that opened the panel was redrawn meanwhile, the new card with the same id gets focus.
   // The card may have been rebuilt while the panel was open: find it again by id (on the card it is the button
   // that has focus; the id sits on the card around it).
@@ -164,7 +160,7 @@ function drawPanel(fresh) {
           type: 'button',
           class: 'link-button',
           text: `${id} (${x.k.status})`,
-          onclick: () => openPanel(id, { fromInbox: t.fromInbox }),
+          onclick: () => openPanel(id),
         })
       : el('code', { text: id });
   };
@@ -208,14 +204,6 @@ function drawPanel(fresh) {
       el(
         'div',
         null,
-        t.fromInbox
-          ? el('button', {
-              type: 'button',
-              class: 'link-button back',
-              text: '← Waiting on you',
-              onclick: () => openInbox(),
-            })
-          : null,
         el('span', { class: 'summary-id', text: k.id }),
         el('h2', { id: 'panel-title', text: k.title }),
       ),

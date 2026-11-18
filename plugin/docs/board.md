@@ -51,11 +51,13 @@ files, cost and the actions for its status (see [task detail](guide.md#task-deta
 
 <p align="center"><img src="../../assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
 
-**Waiting on you.** Everything only you can decide lands here: questions from agents (with their
-recommendation), owner tasks and conditions. Each question reads like a question in a chat: the question first, the
-recommendation in its own highlighted block right under it, then why it is asked and one muted line with what the
-answer unlocks, the waiting tasks and the source, and last the answers: **As recommended** (one click) or **Other
-decision** (a text field). Answer on the board, and the orchestrator picks up the answer and unblocks the tasks.
+**Waiting on you.** The button at the top opens **Decisions**, where everything only you can decide is answered:
+questions from agents (with their recommendation), owner tasks and conditions. It carries the board's only count of
+what waits. Each question reads like a question in a chat: the question first, the recommendation in its own
+highlighted block right under it, then why it is asked and one muted line with what the answer unlocks, the waiting
+tasks and the source, and last the answers: **As recommended** (one click) or **Other decision** (a text field). An
+owner task is done, not answered: **Mark done**, with an optional note. Answer on the board, and the orchestrator picks
+up the answer and unblocks the tasks.
 
 <p align="center"><img src="../../assets/screenshots/light-14-decisions.jpg" alt="The Decisions tab: open decisions with the recommendation as the main button" width="800"></p>
 
@@ -151,8 +153,8 @@ The Queue workspace has these tabs:
 --remark "cancelled: …"` or `"declined: …"` (the same result as `ravenseat set <id> cancelled --remark …`, but logged).
 Edit runs `ravenseat edit <id> --json '{…}'`. All three go through `/api/task-edit` and give **Undo** for 30 seconds. A
 running, picked or review task is never cancelled from the board, since an agent or a person may be working on it:
-the panel shows `ravenseat set <id> cancelled --remark "<why>"` instead. **Waiting on you** has **Decline** next to
-**Approve** for each proposal; it opens the task with the confirm step.
+the panel shows `ravenseat set <id> cancelled --remark "<why>"` instead. In **Decisions** each proposal has
+**Decline** next to **Approve**; it asks for an optional reason first.
 
 **Select several cards.** Every card in In queue, proposed and the batch queue has a checkbox at its top left.
 Select with the box, x on the card, Ctrl/Cmd-click, Shift-click (everything from the previous selected), Ctrl/Cmd+A
@@ -166,19 +168,31 @@ rows, Enter picks one, Esc closes the menu and puts focus back on the checkbox (
 Shift+F10 on a card opens it again. On a narrow screen (below 600 px) or a touch screen the same actions sit in a bar
 at the bottom. Every action shows what changes before it is saved, and **Undo** stands for 30 seconds afterwards.
 
-**Decisions** (the tab next to Plans and Queue, with a count) is the owner's main view: everything that waits on
+**Decisions** (the tab next to Plans and Queue; the count is on **Waiting on you**, which opens it) is the owner's main view: everything that waits on
 the owner as one list, one card per decision, most impact first (minutes unlocked in focus stage 1 first, then what
 the answer unlocks), grouped as **Decide** (owner questions), **Check** (QA), **Approve** (proposals) and **Unstick**
 (an old pick, or work running long). Each card has an impact line, the recommendation as the filled button, and the
 other answers next to it. On an owner question the recommendation also stands in its own block under the question,
 and the filled button reads **As recommended** ("As recommended: Vendor B" when it is one of the choices). A click does not write at once: the card leaves and an **Undo** toast stands for 5 seconds;
 a new answer, leaving the page or the timer writes it. Keys: `j` / `k` move, `Enter` takes the recommendation, `1`-`4`
-picks an answer, `u` undoes. With nothing waiting it shows the listening status; **Decided today** (closed) is at the
-bottom. The board opens on Decisions when anything waits and on the queue otherwise. The rules are
+picks an answer (on a question's choices the number is its `--choice` number), `u` undoes. With nothing waiting it
+shows the listening status; **Decided today** (closed) is at the bottom. The board opens on Decisions only when a
+decision is new since your last visit in this browser (it remembers what the room showed, `queue-board-decisions-seen`
+in the browser's storage; without that storage every visit counts as the first); otherwise it opens the queue view you
+used last.
+With two or more cards in **Check** or **Approve**, each card has a checkbox and the group gets **Select all** and
+**QA ok for selected** or **Approve selected**, one write for all of them (`ravenseat qa ok` / `approve` with the ids).
+**Sort** under the groups lists tasks without a project, with an uncertain proposal or with a project that conflicts
+with the files and the plan; **Accept proposal** (or a selection and **Accept all proposals for selected**) moves them,
+with the change shown before it is saved. It is cleanup, so it is not counted. A line at the bottom names answers not
+in the decision log yet (`ravenseat resolutions --unlogged`).
+The cards are drawn by `board/question.js`, the one renderer for owner questions that Plans > Decisions and the Plans
+overview use too: the same type names (Question, Waiting on condition, Waiting on lawyer, Owner task), the choices in
+their written order with the recommended one filled, and the same button words. The rules are
 `lib/queueDecisions.js`, the same file `ravenseat decide` and `/ravenseat:decide` use, so the writes are the same commands (see
 [CLI parity](cli-parity.md)). "Flag for the orchestrator" on running work is `ravenseat block <id> other` with a fixed note.
 
-**Waiting on you** (the button at the top) collects what needs the owner: owner questions, proposals to approve,
+**Waiting on you** (the button at the top, which opens Decisions) counts what needs the owner: owner questions, proposals to approve,
 QA (done tasks with the label `visual` that wait for a manual check, `qa ok` / `qa deviation`) and what is stuck.
 A track whose agent stands still on a permission prompt gets a **NEEDS APPROVAL** card with the tool's name: answer the
 prompt in the Claude Code session that started the agent, and the card goes once the agent moves on. The Notification
@@ -192,8 +206,9 @@ and the time in `<dataFolder>/tool-trouble.json`, never the reason, the tool inp
 the main session are left out, and events older than half an hour drop off. A NEEDS APPROVAL card on the same task wins.
 An owner question with `choices` shows one button per choice; the one equal to the recommendation is filled and reads
 "As recommended: <choice>" (its screen reader name says what is answered, "Answer Q-SSO as recommended: …"). A click
-answers it through the same `POST /api/action { type: 'resolve' }` with `{ choice: <n> }`, and the text in the open
-answer field goes along as a note. A question whose recommendation is not one of its choices gets an **As recommended**
+answers it through the same `POST /api/action { type: 'resolve' }` with `{ choice: <n> }`. With the text field open,
+**Choose with this note** under it sends a choice with the text as its note. The choices stay in the order they were
+written, so the number on a button is the `--choice` number. A question whose recommendation is not one of its choices gets an **As recommended**
 button that answers with the recommendation's text. **Other decision** opens the free text answer. A question's
 optional `context` (`ravenseat question <id> --context "…"`, why it is asked) shows under the recommendation, and its
 `source` is a link when it names a task or a plan entry. A line under the title says
@@ -257,7 +272,7 @@ skill), and `/api/helper` refuses to switch on a helper that is not approved.
 
 When the queue has no task that is not done or cancelled, Flat and Project lanes show a first-run card instead of
 empty columns: 1. add work (say "add to the queue" in Claude Code, or `ravenseat add --file`), 2. start the queue with
-`/ravenseat:queue`, 3. answer questions here under **Waiting on you**, plus a link to the help.
+`/ravenseat:queue`, 3. answer questions in **Decisions** (**Waiting on you** at the top), plus a link to the help.
 
 ## Modules
 
@@ -376,7 +391,7 @@ serves only the files in its allow list (`STATIC`), all with the same strict Con
   `core.js` (constants, the state, helpers, toasts), `api.js` (key, API calls, fetching, the warning dialog),
   `cards.js` (filters, search, the card), `draw.js` (the columns, the chain, the strip), `views.js` (Focus wiring,
   grouping, saved views), `menus.js` (help, project lanes, the Filter menu), `statistics.js`, `settings.js` (the
-  gear), `inbox.js` ("Waiting on you"), `decide.js` (the Decisions tab), `checks.js` (the Checks tab), `panel.js` (the detail panel), `edit.js` (cancel, decline, edit, markdown),
+  gear), `question.js` (the one renderer for owner questions and answer buttons), `decide.js` (the Decisions tab and the "Waiting on you" button), `checks.js` (the Checks tab), `panel.js` (the detail panel), `edit.js` (cancel, decline, edit, markdown),
   `select.js` (multi-select and the selection menu), `bulk.js` (bulk dialog and undo), `interact.js` (writing, drag, keyboard), `top.js`
   (theme, gear sections, modules, view tabs), `cloud.js` (the Cloud view) and `start.js` (update banner, logo and
   the start). They share the page's global scope, so a top-level name in one is visible in the others, as when they

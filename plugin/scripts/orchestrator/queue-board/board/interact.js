@@ -420,7 +420,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key !== 'Escape' || boosted || t.bulk) return;
-  if (t.selected || t.setting || t.inbox || t.help) {
+  if (t.selected || t.setting || t.help) {
     e.preventDefault();
     closePanel();
   } else if (t.chain) {

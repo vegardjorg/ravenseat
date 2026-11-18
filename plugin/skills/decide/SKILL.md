@@ -82,8 +82,8 @@ Do not start tracks, merge, or run other queue commands after the summary; that 
 
 ## Notes
 
-- The board's Decisions tab shows the same list, with one-click answers and an undo window; the side panel "Waiting
-  on you" has the bulk tools (QA ok or approve for many at once). Both write through the same commands.
+- The board's Decisions tab shows the same list, with one-click answers, an undo window and the bulk tools (QA ok or
+  approve for many at once); "Waiting on you" at the top opens it. Both write through the same commands.
 - `ravenseat decide` without `--json` prints the list for a human; `ravenseat decide --today` prints what was decided today.
 - Owner questions that are answered here still need to be entered in the decision log by the orchestrator
   (`ravenseat resolutions --unlogged`); that is not part of this walk.
