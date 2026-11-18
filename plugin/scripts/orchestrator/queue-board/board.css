@@ -406,9 +406,8 @@ textarea {
 
 .filter-section-header h3 {
   margin: 0;
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--text-sm);
+  font-weight: 600;
   color: var(--color-on-surface-variant);
 }
 
@@ -468,8 +467,6 @@ textarea {
 .paused {
   font-size: var(--text-xs);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--color-on-surface-variant);
 }
 
@@ -517,7 +514,8 @@ textarea {
 /* --columns is 4, or 5 with the Blocked column (board.blockedColumn; draw.js sets it on the board). */
 .board.flat {
   display: grid;
-  grid-template-columns: repeat(var(--columns, 4), minmax(280px, 1fr));
+  /* At most 480 px per column (B5): on a wide screen the cards keep a readable width and the rest stays canvas. */
+  grid-template-columns: repeat(var(--columns, 4), minmax(280px, 480px));
   gap: var(--distance-md);
   padding: var(--distance-md) var(--distance-lg);
   overflow: auto hidden;
@@ -529,26 +527,38 @@ textarea {
   min-height: 0;
 }
 
+/* The column header (board step B5): the name in sentence case and weight 600, the counter as quiet text beside it, and
+   the WIP badge last. The name and the counter never wrap or shrink; when the column is narrow (1200 to 1440 px with
+   the panel open, or five columns) the badge gives way with an ellipsis, and its full text stays in the DOM (read by a
+   screen reader) and in its title. */
 .col-header {
   display: flex;
   align-items: baseline;
   gap: var(--distance-sm);
+  min-width: 0;
   padding: 0 var(--distance-xs) var(--distance-sm);
 }
 
 .col-header h2 {
+  flex: none;
   margin: 0;
   font-size: var(--text-md);
   line-height: 24px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .counter {
+  flex: none;
   color: var(--color-on-surface-variant);
   font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .wip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   margin-left: auto;
   font-size: var(--text-xs);
   font-weight: 600;
@@ -571,22 +581,111 @@ textarea {
   padding: 2px var(--distance-xs) var(--distance-lg);
 }
 
-.section-title,
-.section > summary {
+/* The group headings in a column (B5): "Ready now (4)" and the folds below it, in sentence case, weight 600, with the
+   count in normal weight. */
+.section-title {
   margin: var(--distance-sm) 0;
-  font-size: var(--text-xs);
-  line-height: 16px;
+  font-size: var(--text-sm);
+  line-height: 20px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--color-on-surface-variant);
 }
 
-.section > summary {
-  cursor: pointer;
-  min-height: 32px;
-  display: flex;
+.section-count {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A fold heading has no margin of its own: the button carries the 32 px target. */
+.section-title.fold-title {
+  margin: var(--distance-xs) 0;
+}
+
+/* ---- The shared disclosure style (B25, UX review K1, X5, PL6) ----
+   One look for every fold on the board and in Plans: a 16 px chevron first that turns down when open, the name, a hover
+   surface and a 32 px target (44 px on touch, below). The state is aria-expanded on a real button; the chevron is
+   decoration (aria-hidden). */
+.fold-button {
+  display: inline-flex;
   align-items: center;
+  gap: var(--distance-xs);
+  min-height: 32px;
+  max-width: 100%;
+  margin: 0 0 0 calc(-1 * var(--distance-xs));
+  padding: 0 var(--distance-sm) 0 var(--distance-xs);
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fold-button:hover {
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface);
+}
+
+.fold-button:focus-visible {
+  outline: var(--focus);
+  outline-offset: 1px;
+}
+
+/* The chevron: a 16 px box with a small right-pointing angle drawn by two borders in the text color, turned 90 degrees
+   when the fold is open. */
+.fold-chevron {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.fold-chevron::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  /* The shift centers the angle's visual weight in the 16 px box. */
+  transform: translateX(-1px) rotate(-45deg);
+}
+
+/* A button says open with aria-expanded; a native details (the Plans filter facets) with its open attribute. */
+[aria-expanded='true'] > .fold-chevron::before,
+details[open] > summary > .fold-chevron::before {
+  transform: translateY(-1px) rotate(45deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .fold-chevron::before {
+    transition: transform 120ms ease;
+  }
+}
+
+/* The Plans folds (the plan entries, document and legal groups, the filter facets, the Unregistered box) and the Focus
+   features get the same hover surface as the board's folds. */
+.plans-fold:hover,
+.plans-facet-title:hover,
+.unregistered-toggle:not(:disabled):hover,
+.plan-expand:hover {
+  background: var(--color-surface-container-high);
+}
+
+.plans-fold,
+.plans-facet-title {
+  border-radius: var(--radius);
+}
+
+.plans-facet-title {
+  gap: var(--distance-xs);
+  list-style: none;
+}
+
+.plans-facet-title::-webkit-details-marker {
+  display: none;
 }
 
 .shortlist {
@@ -1370,9 +1469,8 @@ code {
 }
 
 .mission h3.mission-title {
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--text-sm);
+  font-weight: 600;
   color: var(--color-on-surface-variant);
 }
 
@@ -1621,9 +1719,8 @@ code {
 
 .setting-title {
   margin: 0 0 var(--distance-sm);
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--text-sm);
+  font-weight: 600;
   color: var(--color-on-surface-variant);
 }
 
@@ -3479,11 +3576,9 @@ body.with-option-line .board {
 
 .area-heading h2 {
   margin: 0;
-  font-size: var(--text-xs);
-  line-height: 16px;
+  font-size: var(--text-sm);
+  line-height: 20px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--color-on-surface-variant);
 }
 
@@ -3747,6 +3842,9 @@ body.with-option-line .board {
 }
 
 .plan-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--distance-xs);
   min-height: 32px;
   font-size: var(--text-xs);
 }
@@ -4092,7 +4190,7 @@ fieldset.setting legend {
 /* Touch targets of at least 44 px on touch screens (section headers, the switcher, the search, every button and the
    clickable badges). Mouse and trackpad keep the dense board (buttons and tabs 36 px there). */
 @media (pointer: coarse) {
-  .section > summary,
+  .fold-button,
   .lane-header,
   .group-header,
   .plan-header,

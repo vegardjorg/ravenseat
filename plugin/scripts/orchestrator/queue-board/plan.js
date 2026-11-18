@@ -627,7 +627,7 @@
     );
   }
 
-  /** "▸ Features (6)" and, when open, the features (can be dragged to Now/Next as a step of their own). */
+  /** "Features (6)" with the shared chevron and, when open, the features (can be dragged to Now/Next as a step of their own). */
   function featureList(pid, p) {
     const pr = projectRow(pid);
     const features = (pr?.features ?? []).filter(
@@ -651,7 +651,7 @@
           s.ctx.drawOnNew();
         },
       },
-      el('span', { 'aria-hidden': 'true', text: open ? '▾ ' : '▸ ' }),
+      el('span', { class: 'fold-chevron', 'aria-hidden': 'true' }),
       `Features (${features.length})`,
     );
     if (!open) return [button];

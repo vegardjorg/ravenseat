@@ -103,7 +103,17 @@ The Queue workspace has these tabs:
 - **Flat:** the columns **In queue** (ready now, blocked, proposed by agents and the batch queue), **In progress**,
   **Review** and **Built**. Each card shows class, estimate, value, blockers and owner questions. Click a card for
   its details and actions (to the top of the queue, pick, put on hold, add to the batch queue, edit, cancel task,
-  and decline for a proposal). Drag cards to reorder them.
+  and decline for a proposal). Drag cards to reorder them. Under **Ready now**, **Blocked** (called **Waiting** when
+  the Blocked column is on), **Proposed** and **Batch queue** are folds: a button with an arrow before the name and
+  the count ("Blocked (5)"), opened and closed with a click, Enter or Space. Blocked is open from the start when it
+  has 20 cards or fewer and closed above that (its cards are then built only when you open it), Proposed is closed,
+  and the batch queue is open; your own choice holds for the rest of the visit. Clicking a card with a chain
+  highlights the tasks before and after it, and the chain line above the columns says why any of them are not
+  visible, with a button where one helps: "2 in the closed Blocked group" (Show), "hidden by the search" (Clear
+  search), "hidden by the filter" (Remove filter), "outside the selection" (Show all), "older than 7 days in Built"
+  (Show more), or "not shown in this view". Column and group headings are in sentence case; the In progress header
+  keeps its name on one line, and the agents badge ends in an ellipsis in a narrow column (the full text is in its
+  tooltip).
 - **Blocked** (off by default): with **Blocked as its own column** on in the gear (General), a column right after
   **In queue** holds every open task with an open blocker that needs action: the blocker codes `owner-question`,
   `merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `silent`, `no-agent`, `context`, `quota` and `other`

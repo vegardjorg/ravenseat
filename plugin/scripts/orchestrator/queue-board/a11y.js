@@ -237,6 +237,53 @@
     return { text, action: null, label: null };
   }
 
+  /**
+   * The chain line's text for cards in the chain that are not visible, one part per cause (UX review K2: the line said
+   * "hidden by the filter" also when the cards were in a closed fold). `causes` is [{ cause, n, name?, key? }]:
+   *   fold      n cards in the closed fold `name` (key = the fold's name on the board), action "fold:<key>" (Show)
+   *   filter    the Filter menu hides them, action "filter" (Remove filter)
+   *   search    the search hides them, action "search" (Clear search)
+   *   selection outside the selection `name` (the Selection menu), action "selection" (Show all)
+   *   older     in Built but older than the 7 days shown, action "older" (Show more)
+   *   elsewhere not shown in this view (no action)
+   * Answer: [{ text, action, label, aria }] in the given order; a cause with n 0 is left out. `aria` names the action
+   * on its own ("Show the Blocked group"), since a bare "Show" is ambiguous out of context.
+   */
+  function chainHidden(causes) {
+    const out = [];
+    for (const c of causes ?? []) {
+      const n = Number(c?.n) || 0;
+      if (n <= 0) continue;
+      if (c.cause === 'fold')
+        out.push({
+          text: `${n} in the closed ${c.name} group`,
+          action: `fold:${c.key}`,
+          label: 'Show',
+          aria: `Show the ${c.name} group`,
+        });
+      else if (c.cause === 'filter')
+        out.push({ text: `${n} hidden by the filter`, action: 'filter', label: 'Remove filter', aria: null });
+      else if (c.cause === 'search')
+        out.push({ text: `${n} hidden by the search`, action: 'search', label: 'Clear search', aria: null });
+      else if (c.cause === 'selection')
+        out.push({
+          text: `${n} outside the selection "${c.name}"`,
+          action: 'selection',
+          label: 'Show all',
+          aria: null,
+        });
+      else if (c.cause === 'older')
+        out.push({
+          text: `${n} older than 7 days in Built`,
+          action: 'older',
+          label: 'Show more',
+          aria: 'Show more in Built',
+        });
+      else out.push({ text: `${n} not shown in this view`, action: null, label: null, aria: null });
+    }
+    return out;
+  }
+
   // ---- Stale data ----
 
   /** Limit for when the data counts as stale: the last successful fetch is older than one minute. */
@@ -256,6 +303,7 @@
 
   return {
     emptyReason,
+    chainHidden,
     STALE_MS,
     stale,
     staleText,

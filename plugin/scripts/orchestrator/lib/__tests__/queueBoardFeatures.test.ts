@@ -259,7 +259,7 @@ describe('the Blocked column (board.blockedColumn, off by default)', () => {
     // Ready now (and so not in "Next up" either).
     const ready = document.querySelector('section.column[data-col="queue"] h3.section-title')?.textContent;
     expect(ready).toBe('Ready now (0)');
-    const fold = document.querySelector('section.column[data-col="queue"] details[data-section="blocked"] > summary');
+    const fold = document.querySelector('section.column[data-col="queue"] [data-section="blocked"] .fold-button');
     expect(fold?.textContent).toMatch(/^Blocked \(3\)$/);
     expect(colOf('EX-4')).toEqual(['review']);
   });
@@ -280,10 +280,10 @@ describe('the Blocked column (board.blockedColumn, off by default)', () => {
 
   it('never shows a task in two columns; depends_on and parking stay in In queue, muted with the reason', async () => {
     await serve(blockedState('b-on2', true));
-    // The In queue section for what is not ready is closed from the start; its cards are built when it opens.
-    const section = document.querySelector('section.column[data-col="queue"] details[data-section="blocked"]') as HTMLDetailsElement;
-    section.open = true;
-    section.dispatchEvent(new Event('toggle'));
+    // The In queue fold for what only waits (here called Waiting) is open from the start with 20 cards or fewer.
+    const fold = document.querySelector('section.column[data-col="queue"] [data-section="blocked"] .fold-button') as HTMLButtonElement;
+    expect(fold.textContent).toMatch(/^Waiting \(\d+\)$/);
+    expect(fold.getAttribute('aria-expanded')).toBe('true');
     await flush();
     for (const id of ['EX-1', 'EX-2', 'EX-3', 'EX-4']) expect(colOf(id), id).toHaveLength(1);
     expect(colOf('EX-1')).toEqual(['blocked']);

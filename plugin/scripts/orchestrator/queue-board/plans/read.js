@@ -743,7 +743,7 @@
               h.draw({ focus: 'unregistered-toggle' });
             },
           },
-          h.el('span', { class: 'unregistered-arrow', 'aria-hidden': 'true', text: open ? '▾' : '▸' }),
+          h.el('span', { class: 'unregistered-arrow fold-chevron', 'aria-hidden': 'true' }),
           // The count is in the text (never only as color).
           h.el('span', { text: title }),
         ),

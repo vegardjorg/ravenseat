@@ -94,11 +94,9 @@ beforeAll(async () => {
 
 const panel = () => document.getElementById('panel') as HTMLElement;
 async function open(id: string) {
-  // "Proposed" is a closed section by default: open it (its cards are built on toggle).
-  for (const d of document.querySelectorAll('details.section:not([open])') as NodeListOf<HTMLDetailsElement>) {
-    d.open = true;
-    d.dispatchEvent(new Event('toggle'));
-  }
+  // "Proposed" is a closed fold by default: open it (its cards are built when it opens).
+  for (const b of document.querySelectorAll('.section .fold-button[aria-expanded="false"]') as NodeListOf<HTMLButtonElement>)
+    b.click();
   await flush();
   const card = document.querySelector(`.summary[data-id="${id}"]`) as HTMLElement;
   expect(card, id).not.toBeNull();

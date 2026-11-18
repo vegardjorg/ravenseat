@@ -144,11 +144,12 @@ describe('motion, forced colors and touch targets', () => {
     expect(block).toMatch(/outline: \d+px solid Highlight/);
   });
 
-  it('touch screen: section headers, toggles, search and clickable badges are at least 44 px', () => {
+  it('touch screen: fold buttons, toggles, search and clickable badges are at least 44 px', () => {
     const i = css.indexOf('@media (pointer: coarse)');
     expect(i).toBeGreaterThan(-1);
     const block = css.slice(i, css.indexOf('}', css.indexOf('min-height', i)) + 1);
-    for (const sel of ['.section > summary', '.toggles-button', '.search', 'button.badge'])
+    // The section folds (Blocked, Proposed, Batch queue) are buttons since board step B25 (were details > summary).
+    for (const sel of ['.fold-button', '.toggles-button', '.search', 'button.badge'])
       expect(block).toContain(sel);
     expect(block).toContain('min-height: 44px');
   });

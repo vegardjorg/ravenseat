@@ -285,15 +285,16 @@ beforeAll(async () => {
 describe('the board with 1 150 tasks', () => {
   it('draws the columns, with Blocked closed and not built until it opens', () => {
     expect(main.querySelectorAll('.column').length).toBe(4);
-    const blocked = main.querySelector('details[data-section="blocked"]') as HTMLDetailsElement;
+    // Above 20 cards the Blocked fold starts closed (B25); its button opens and closes it.
+    const blocked = main.querySelector('[data-section="blocked"]') as HTMLElement;
     expect(blocked).not.toBeNull();
-    expect(blocked.open).toBe(false);
+    const button = blocked.querySelector('.fold-button') as HTMLButtonElement;
+    expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(blocked.querySelectorAll('.summary').length).toBe(0);
-    blocked.open = true;
-    blocked.dispatchEvent(new Event('toggle'));
+    button.click();
     expect(blocked.querySelectorAll('.summary').length).toBeGreaterThan(100);
-    blocked.open = false;
-    blocked.dispatchEvent(new Event('toggle'));
+    button.click();
+    expect(button.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('the card has no tabindex or aria-label; the title is a button with aria-describedby to the metadata', () => {

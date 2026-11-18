@@ -75,8 +75,11 @@ const HELP = [
     'The keyboard on the board',
     'Tab goes to one card title per column (or per cell in Project lanes). Arrow up and down move between the cards, ' +
       'arrow left and right to the neighboring column, Home and End to the first and last card. Enter opens the card, x selects ' +
-      'it, and Space lifts a card in the queue (the arrow keys move, Space drops, Esc cancels). "Blocked" is ' +
-      'closed from the start; open it to see the cards there.',
+      'it, and Space lifts a card in the queue (the arrow keys move, Space drops, Esc cancels). "Blocked", "Proposed" ' +
+      'and "Batch queue" are folds: the arrow before the name shows whether it is open, and a click, Enter or Space ' +
+      'opens or closes it. Blocked is open from the start when it has 20 cards or fewer, Proposed is closed, and what ' +
+      'you choose holds for the visit. When a card in a chain is not visible, the chain line says why (a closed fold, ' +
+      'the search, the filter, the selection, or older than 7 days in Built) with a button that shows it.',
   ],
   [
     'The task panel',

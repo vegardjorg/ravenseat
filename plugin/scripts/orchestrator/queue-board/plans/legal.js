@@ -251,6 +251,7 @@
             h.el(
               'summary',
               { class: 'plans-facet-title', 'data-focus': `${surface}-facet:${f.id}` },
+              h.el('span', { class: 'fold-chevron', 'aria-hidden': 'true' }),
               `${f.title} (${f.option.length})`,
             ),
             h.el(
@@ -430,11 +431,8 @@
             'data-focus': `${surface}g:${g.id}`,
             onclick: () => h.toggleClosed(key),
           },
-          h.el('span', {
-            class: 'plans-fold-arrow',
-            'aria-hidden': 'true',
-            text: open ? '▾' : '▸',
-          }),
+          // The shared chevron (board.css .fold-chevron), turned by aria-expanded on the button.
+          h.el('span', { class: 'plans-fold-arrow fold-chevron', 'aria-hidden': 'true' }),
           g.symbol
             ? h.el('span', {
                 class: `jb-facet-symbol jst-${g.id}`,

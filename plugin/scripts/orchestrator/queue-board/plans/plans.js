@@ -740,6 +740,7 @@
             el(
               'summary',
               { class: 'plans-facet-title', 'data-focus': `facet:${f.id}` },
+              el('span', { class: 'fold-chevron', 'aria-hidden': 'true' }),
               `${f.title} (${f.option.length})`,
             ),
             el(
@@ -992,7 +993,7 @@
           title: fullTitle ?? null,
           onclick: () => toggleOpen(key),
         },
-        el('span', { class: 'plans-fold-arrow', 'aria-hidden': 'true', text: open ? '▾' : '▸' }),
+        el('span', { class: 'plans-fold-arrow fold-chevron', 'aria-hidden': 'true' }),
         el('span', { class: 'plans-group-title', text: title }),
         el('span', {
           class: 'plans-count',

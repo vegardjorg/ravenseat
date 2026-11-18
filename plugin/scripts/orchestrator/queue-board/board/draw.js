@@ -81,7 +81,7 @@ function columnContent(col, summary, proposed, batch) {
     // With the Blocked column on, what only waits here (depends_on, ownership, parking) is called Waiting, so the two
     // are not both called Blocked.
     const waitName = shownColumns().includes(BLOCKED_COLUMN) ? 'Waiting' : 'Blocked';
-    searchBound(readyOnes, (match) => (title.textContent = `Ready now (${match.length})`));
+    searchBound(readyOnes, (match) => headingText(title, 'Ready now', match.length));
     parts.push(title, emptyText(readyOnes, 'Nothing is ready now.'));
     if (readyOnes.length) parts.push(groupedList(readyOnes, 'queue', 'ready'));
     if (blocked.length)
@@ -89,7 +89,7 @@ function columnContent(col, summary, proposed, batch) {
         section(
           'blocked',
           blocked,
-          (n) => `${waitName} (${n})`,
+          waitName,
           () => groupedList(blocked, 'queue', 'blocked'),
         ),
       );
@@ -98,7 +98,7 @@ function columnContent(col, summary, proposed, batch) {
         section(
           'proposed',
           proposed,
-          (n) => `Proposed (${n})`,
+          'Proposed',
           () => groupedList(proposed, 'proposed'),
         ),
       );
@@ -108,7 +108,7 @@ function columnContent(col, summary, proposed, batch) {
         section(
           'batch',
           batch,
-          (n) => `Batch queue (${n})`,
+          'Batch queue',
           () => batchContent(batch),
         ),
       );
@@ -278,38 +278,85 @@ function batchButtons(g, summary) {
   );
 }
 
+/** Blocked is open from the start up to this many cards (UX review K1); above it, it starts closed (400+ cards). */
+const FOLD_OPEN_LIMIT = 20;
+
+/** Whether a fold starts open when the viewer has made no choice: Blocked up to FOLD_OPEN_LIMIT cards, Proposed never, the batch queue always. */
+function foldOpenByDefault(name, count) {
+  if (name === 'blocked') return count <= FOLD_OPEN_LIMIT;
+  return name !== 'proposed';
+}
+
+/** Is the fold open: the viewer's own choice for the visit (t.folds), otherwise the default for this many cards. */
+function foldIsOpen(name, count) {
+  return t.folds.has(name) ? t.folds.get(name) : foldOpenByDefault(name, count);
+}
+
+/** "Ready now (4)": the name in the heading weight and the count in normal weight (the text reads the same). */
+function headingText(e, label, n) {
+  e.replaceChildren(`${label} `, el('span', { class: 'section-count', text: `(${n})` }));
+}
+
+let foldSeq = 0;
+
 /**
- * A section that can be closed (Blocked, Proposed, Batch queue). The content is built only when
- * the section is open (`build()`), so a closed Blocked costs nothing. The title (`title(count)`) follows the search,
- * and the section is hidden when none of the cards match.
+ * A fold in a column (Blocked, Proposed, Batch queue), drawn as a disclosure (board step B25): a heading with a real
+ * button that carries aria-expanded and aria-controls, a chevron, and the name with the count ("Blocked (5)"). Enter and
+ * Space work because it is a button. The content is built only when the fold is open (`build()`), so a closed Blocked
+ * with hundreds of cards costs nothing. The count follows the search, and the fold is hidden when none of the cards
+ * match. `label` is the shown name; the chain line uses it too (data-label).
  */
-function section(name, summary, title, build) {
-  const d = el('details', { class: 'section', 'data-section': name, open: !t.closed.has(name) });
-  const sum = el('summary');
-  searchBound(summary, (match) => {
-    sum.textContent = title(match.length);
-    d.hidden = !match.length;
+function section(name, summary, label, build) {
+  const id = `fold-${name}-${++foldSeq}`;
+  let open = foldIsOpen(name, summary.length);
+  const wrap = el('section', { class: 'section fold', 'data-section': name, 'data-label': label });
+  const button = el('button', {
+    type: 'button',
+    class: 'fold-button',
+    'aria-expanded': open ? 'true' : 'false',
+    'aria-controls': id,
   });
-  d.append(sum);
+  const chevron = el('span', { class: 'fold-chevron', 'aria-hidden': 'true' });
+  const count = el('span', { class: 'section-count' });
+  button.append(chevron, `${label} `, count);
+  const body = el('div', { class: 'fold-body', id, hidden: !open });
+  wrap.append(el('h3', { class: 'section-title fold-title' }, button), body);
+  searchBound(summary, (match) => {
+    count.textContent = `(${match.length})`;
+    wrap.hidden = !match.length;
+  });
   let built = false;
   const fill = (afterDrawing) => {
     if (built) return;
     built = true;
-    d.append(build());
+    body.append(build());
     if (!afterDrawing) return;
     // Opened after drawing: the search, the chain and the tab stop are set on the new cards.
-    useSearch(d);
+    useSearch(body);
     markChain();
-    rovingSetup();
   };
-  if (d.open) fill(false);
-  d.addEventListener('toggle', () => {
-    if (d.open) {
-      t.closed.delete(name);
-      fill(true);
-    } else t.closed.add(name);
+  if (open) fill(false);
+  button.addEventListener('click', () => {
+    open = !open;
+    // The viewer's own choice: it holds for this fold name across redraws for the rest of the visit.
+    t.folds.set(name, open);
+    button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    body.hidden = !open;
+    if (open) fill(true);
+    // The cards in a closed fold cannot be the tab stop, and the chain line names the fold as the cause.
+    rovingSetup();
+    drawStripe();
   });
-  return d;
+  return wrap;
+}
+
+/** Opens every fold with this name on the board (the "Show" action in the chain line), and keeps it open for the visit. */
+function openFold(name) {
+  t.folds.set(name, true);
+  const buttons = [...main.querySelectorAll(`[data-section="${CSS.escape(name)}"] > h3 > .fold-button`)];
+  for (const b of buttons) if (b.getAttribute('aria-expanded') !== 'true') b.click();
+  buttons[0]?.focus({ preventScroll: true });
+  drawStripe();
 }
 
 /** The column header. `summary` is the cards the counter counts (filtered, the counter follows the search); null = no counter. */
@@ -329,13 +376,15 @@ function columnHeader(col, summary) {
   );
   if (col === 'inProgress') {
     const full = w.agents >= w.max;
+    const wipText = window.QueueA11y.wipText(w);
     header.append(
       el('span', {
         class: `wip${full ? ' full' : ''}`,
-        // Readable text ("Agents 3 of 4 · heavy 1 of 2"); the explanation is in the legend.
-        text: window.QueueA11y.wipText(w),
+        // Readable text ("Agents 3 of 4 · heavy 1 of 2"); the explanation is in the legend. In a narrow column the badge
+        // ends in an ellipsis (board.css), so the title starts with the full text.
+        text: wipText,
         title:
-          'Agent slots in use (running and review), with the same rule as queue.mjs. Picked tasks and work ' +
+          `${wipText}. Agent slots in use (running and review), with the same rule as queue.mjs. Picked tasks and work ` +
           'outside the queue take no agent slot.',
       }),
     );
@@ -599,6 +648,58 @@ function markChain() {
   if (t.view === 'graph') window.QueueGraphView.mark(t.chain, t.chain ? kj : null);
 }
 
+/**
+ * Why each card in the chain is not visible (UX review K2): grouped as [{ cause, n, name?, key? }] for
+ * QueueA11y.chainHidden. The order is the order a viewer undoes them in: the selection and the filter decide what is
+ * built, then the search hides, then a closed fold, then Built's 7-day limit. Anything else is "not shown in this view"
+ * (a proposal in Project lanes, or a task that is not on the board at all).
+ */
+function chainCauses(ids) {
+  const groups = new Map();
+  const add = (cause, extra = {}) => {
+    const key = `${cause}|${extra.key ?? ''}`;
+    if (!groups.has(key)) groups.set(key, { cause, n: 0, ...extra });
+    groups.get(key).n++;
+  };
+  for (const id of ids) {
+    const x = t.perId.get(id);
+    if (!x) {
+      add('elsewhere');
+      continue;
+    }
+    const { k, col } = x;
+    if (t.special && (MARKABLE_COLUMNS.has(col) || t.special === 'newEntry') && !SPECIAL[t.special](k))
+      add('selection', { name: t.viewName ?? 'selection' });
+    else if (!visibleWithoutSearch(k, col)) add('filter');
+    else if (!searchMatch(k)) add('search');
+    else {
+      const f = closedFoldFor(k, col);
+      if (f) add('fold', { key: f.dataset.section, name: f.dataset.label });
+      else if (col === 'built' && !k.recent && !t.showMore) add('older');
+      else add('elsewhere');
+    }
+  }
+  return [...groups.values()];
+}
+
+/** The closed fold the card would be drawn in (Blocked, Proposed or Batch queue, in its lane in Project lanes), or null. */
+function closedFoldFor(k, col) {
+  const name = col === 'queue' && !k.ready ? 'blocked' : col === 'proposed' || col === 'batch' ? col : null;
+  if (!name) return null;
+  const scope = t.view === 'lanes' ? main.querySelector(`.lane[data-pid="${CSS.escape(k.project)}"]`) : main;
+  const f = scope?.querySelector(`.section[data-section="${name}"]`);
+  return f && f.querySelector('.fold-button')?.getAttribute('aria-expanded') === 'false' ? f : null;
+}
+
+/** The action next to a cause in the chain line. */
+function chainReveal(action) {
+  if (action.startsWith('fold:')) openFold(action.slice(5));
+  else if (action === 'older') {
+    t.showMore = true;
+    draw();
+  } else emptyAction(action);
+}
+
 // ---- The strip above the columns: "Next up" and the chain ----
 const stripe = $('stripe');
 function nextButton(v) {
@@ -645,21 +746,38 @@ function drawStripe() {
   const selected = t.chain ? t.perId.get(t.chain)?.k : null;
   if (selected?.chain) {
     const ids = [...selected.chain.before, ...selected.chain.after];
+    // Drawn and visible: not hidden by the search and not inside a closed fold (a fold opened and closed again keeps
+    // its cards in the DOM, under a hidden body).
     const drawn = new Set(
-      [...main.querySelectorAll('.summary:not([hidden]), .graph-svg .node')].map((e) => e.dataset.id),
+      [...main.querySelectorAll('.summary:not([hidden]), .graph-svg .node')]
+        .filter((e) => !e.closest('[hidden]'))
+        .map((e) => e.dataset.id),
     );
-    const hidden = ids.filter((id) => !drawn.has(id)).length;
+    const hidden = chainCauses(ids.filter((id) => !drawn.has(id)));
+    const causes = window.QueueA11y.chainHidden(hidden);
     parts.push(
       el(
         'div',
         { class: 'stripe-row chain-line', role: 'status' },
         el('span', {
           class: 'stripe-name',
-          text:
-            `Chain for ${selected.id}: ${selected.chain.before.length} before, ${selected.chain.after.length} after` +
-            (hidden ? ` · ${hidden} hidden by the filter` : '') +
-            ' · Esc resets',
+          text: `Chain for ${selected.id}: ${selected.chain.before.length} before, ${selected.chain.after.length} after`,
         }),
+        // Each cause, with its action right after it where there is one: Show (opens the fold), Clear search, Remove
+        // filter, Show all, Show more.
+        ...causes.flatMap((c) => [
+          el('span', { class: 'stripe-name', text: `· ${c.text}` }),
+          c.action
+            ? el('button', {
+                type: 'button',
+                class: 'link-button chain-reveal',
+                text: c.label,
+                'aria-label': c.aria,
+                onclick: () => chainReveal(c.action),
+              })
+            : null,
+        ]),
+        el('span', { class: 'stripe-name', text: '· Esc resets' }),
         el('span', { class: 'draw-chain chain-for-draw', 'aria-hidden': 'true' }),
         el('span', { class: 'chain-explanation', text: 'before' }),
         el('span', { class: 'draw-chain chain-after-draw', 'aria-hidden': 'true' }),

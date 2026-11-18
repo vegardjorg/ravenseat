@@ -104,9 +104,10 @@ const t = {
   filter: { selected: readFilter(), search: '' },
   view: VIEWS.includes(savedView) ? savedView : 'flat',
   showMore: false,
-  // Closed sections. Blocked is closed from the start (400+ cards), and the content of a closed
-  // section is built only when it is opened (section()).
-  closed: new Set(['proposed', 'blocked']),
+  // The viewer's own open or close choice per fold in a column (name → true open, false closed), kept for the visit.
+  // Without a choice the fold follows its default (foldOpenByDefault in draw.js): Blocked open with 20 cards or fewer,
+  // Proposed closed, the batch queue open. The content of a closed fold is built only when it is opened (section()).
+  folds: new Map(),
   // The card that is the tab stop in each column or cell (area key → card id).
   roving: new Map(),
   // What depends on the search (counters, empty texts, groups, lanes). Filled by draw(); the search

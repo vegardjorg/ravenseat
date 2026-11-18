@@ -5,6 +5,27 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board polish: headings in sentence case, and folds that look and behave like folds.** Column and group headings,
+  the mission heading, the setting titles, the filter section titles, the area headings and the paused label are no
+  longer set in capitals: "Ready now (4)" and "Blocked (5)" read as normal text in weight 600 with the count in normal
+  weight. The In progress header keeps its name on one line next to the agents badge (before, at 1200 to 1440 px with
+  the panel open or with five columns, "In progress" wrapped to two lines and the badge ran into Review); the badge now
+  ends in an ellipsis in a narrow column, and its tooltip starts with the full text. The flat columns stop at 480 px on
+  a wide screen. **Blocked**, **Proposed** and **Batch queue** were collapsed sections styled exactly like the static
+  Ready now heading, with no arrow; they are now real disclosure buttons in a heading, with a chevron that turns when
+  open, a hover surface, a 32 px target (44 px on touch), `aria-expanded` and `aria-controls`, and Enter and Space as
+  for any button. Blocked is open from the start when it has 20 cards or fewer and closed above that, so what holds
+  work back is visible on a normal queue while a large one still costs nothing to draw; Proposed stays closed, the
+  batch queue open, and your own choice holds for the visit as before. The chain line said "hidden by the filter" for
+  every chain card it could not see, also when the cause was a closed fold and no filter was on; it now names the real
+  cause per group ("2 in the closed Blocked group", "hidden by the search", "hidden by the filter", "outside the
+  selection", "older than 7 days in Built", "not shown in this view") with a button right after it where one helps
+  (Show opens the fold, Clear search, Remove filter, Show all, Show more). The Plans folds (plan entry groups, document
+  and legal groups, the filter facets, the Unregistered box) and the Focus features use the same chevron and hover
+  instead of small text arrows in different sizes, and the Unregistered box gets its intended padding and accent edge
+  back (its rules named a class the box never had, so the arrow sat 8 px from the window edge). The card's screen
+  reader text is unchanged. Tests cover the missing capitals, the header rule, the fold semantics, the 20-card default
+  on both sides, the remembered choice and each chain line cause.
 - **Board polish: the task panel says what the task is about first, and stays out of the way on a wide screen.** The
   panel now reads top down: the title, a short line on what the task is about, the actions, the full mission, and the
   technical facts (status, placement and score, owner files, branch, cloud, migrations, QA, verification, source,
