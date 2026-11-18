@@ -193,7 +193,9 @@ folded (closed) under them. In lite mode a row that only matters in full mode is
 ("2 more apply only in full mode (why). Show them"), and a category with nothing for lite is one closed line. Each row
 shows its value, the default and where it is saved: **Saved only for you (queue.json)** or **Saved for the project
 (queue.config.json, remember to commit)**. A guard that is weaker than its default gets a **Weakened** mark and is named
-in a banner at the top. The limits keep their fields and guard rules (`/api/limit`); a row that has its own section
+in a banner at the top. A row that has an effect only while another setting is on says "Has effect only when <that
+setting> is on", with a link to its row; while that setting is off the row is dimmed and marked **No effect now** (the
+tooltip says which setting is off), but it stays in place and can still be changed. The limits keep their fields and guard rules (`/api/limit`); a row that has its own section
 (Guidance, Checks, Columns, Cloud, Auto-accept, Helper agents) says where to change it; the other rows with a switch,
 a choice or a value save through `/api/setting` (= `ravenseat settings set <key> <value>`). The board remembers which
 folds you opened, per browser.

@@ -245,6 +245,93 @@ describe('every row is complete', () => {
   });
 });
 
+// M3 (plans/gjennomgang-friksjon-innstillinger-2026-11-17.md, owner decision): some rows have an effect only while another
+// one is on, and that was hidden. `requires` names the parents ("key" = it must be on, "key=value" = it must have that
+// value). Data for the surfaces only: no default and no behavior changes with it.
+describe('requires: a row that has an effect only while another one is on (M3)', () => {
+  const byKey = new Map(ROWS.map((r) => [r.key, r]));
+  /** "key" or "key=value" as { key, value } (value null: the parent must be on). */
+  const parse = (entry: string) => {
+    const i = entry.indexOf('=');
+    return i < 0 ? { key: entry, value: null } : { key: entry.slice(0, i), value: entry.slice(i + 1) };
+  };
+  const reqOf = (r: Row | undefined): string[] | null => (r as unknown as { requires?: string[] | null })?.requires ?? null;
+  const withRequires = () => ROWS.filter((r) => reqOf(r));
+
+  it('is null or a non-empty frozen list on every row', () => {
+    for (const r of ROWS) {
+      const req = (r as unknown as { requires?: unknown }).requires;
+      expect(req === null || Array.isArray(req), `${r.key}: requires is null or a list`).toBe(true);
+      if (!Array.isArray(req)) continue;
+      expect(req.length, r.key).toBeGreaterThan(0);
+      expect(Object.isFrozen(req), r.key).toBe(true);
+    }
+  });
+
+  it('every requires key is a row, never the row itself, and a value is one the parent can have', () => {
+    for (const r of withRequires()) {
+      for (const entry of reqOf(r) ?? []) {
+        const { key, value } = parse(entry);
+        const parent = byKey.get(key);
+        expect(parent, `${r.key} requires ${key}, which is no row`).toBeTruthy();
+        expect(key, r.key).not.toBe(r.key);
+        if (!parent || value === null) continue;
+        const options =
+          parent.type === 'onoff'
+            ? ['on', 'off']
+            : (parent.choices ?? []).map((c) => (c === true ? 'on' : c === false ? 'off' : String(c)));
+        expect(options, `${r.key} requires ${entry}`).toContain(value);
+      }
+    }
+  });
+
+  it('every entry of the REQUIRES table is a row, so a misspelled key cannot drop out unseen', () => {
+    for (const key of Object.keys(R.REQUIRES)) expect(byKey.has(key), `REQUIRES ${key} is no row`).toBe(true);
+    expect(withRequires().length).toBe(Object.keys(R.REQUIRES).length);
+  });
+
+  it('no cycles: following requires never comes back to the row', () => {
+    const walk = (key: string, path: string[]): void => {
+      expect(path, `a cycle: ${[...path, key].join(' -> ')}`).not.toContain(key);
+      for (const e of reqOf(byKey.get(key)) ?? []) walk(parse(e).key, [...path, key]);
+    };
+    for (const r of withRequires()) walk(r.key, []);
+  });
+
+  it('a parent in another group, or one a mode of the row does not have, is named in the explanation', () => {
+    for (const r of withRequires()) {
+      for (const entry of reqOf(r) ?? []) {
+        const parent = byKey.get(parse(entry).key);
+        if (!parent) continue;
+        const elsewhere = parent.category !== r.category || r.modes.some((m) => !parent.modes.includes(m));
+        if (elsewhere) expect(r.explanation, `${r.key} needs ${parent.key} from ${parent.category}`).toContain(parent.key);
+      }
+    }
+  });
+
+  it('the dependencies of finding M3, read in the code, are data', () => {
+    const req = (key: string) => reqOf(byKey.get(key));
+    expect(req('gates.fixWithoutTestWarning')).toEqual(['gates.redOnBase']);
+    expect(req('catalog.gateAfter')).toEqual(['learning.proposals', 'catalog.checks']);
+    expect(req('catalog.checkStop')).toEqual(['catalog.checks']);
+    expect(req('scopeNotes.driftGapFiles')).toEqual(['scopeNotes.driftGap']);
+    expect(req('scopeNotes.driftGapShare')).toEqual(['scopeNotes.driftGap']);
+    expect(req('push.ciWatchIntervalSec')).toEqual(['push.ciWatch=github']);
+    expect(req('push.ciWatchTimeoutMin')).toEqual(['push.ciWatch=github']);
+    expect(req('learning.dbProbes')).toEqual(['inspection.mode', 'learning.repeats']);
+    expect(req('learning.recipeDamping')).toEqual(['inspection.mode', 'learning.repeats']);
+    expect(req('learning.recipeMinProposals')).toEqual(['learning.recipeDamping']);
+    expect(req('push.ownerAsk')).toEqual(['push.mode=owner']);
+    expect(req('features.plans.legal')).toEqual(['features.plans']);
+    // Read in the code and left out on purpose: the strict mode stops every fix without red on base (doctor warns),
+    // the night window also splits the usage in Statistics, the catalog index reads ignoreNames, and
+    // `ravenseat instructions` measures against the limits with the advice off. learning.proposals also feeds the
+    // catalog rule gates, so it needs no learning.repeats.
+    for (const k of ['gates.redOnBaseStrict', 'limits.nightWindow', 'scopeNotes.ignoreNames', 'instructionSize.maxLines', 'learning.proposals'])
+      expect(req(k), k).toBeNull();
+  });
+});
+
 describe('the weakening rows from the design', () => {
   /** [key, a weaker value] for every setting the design says weakens a guard when changed from its default. */
   const WEAKER: [string, unknown][] = [

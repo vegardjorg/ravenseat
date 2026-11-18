@@ -682,8 +682,37 @@ function registryBadges(r, labels) {
     r.level !== 'basic' ? el('span', { class: 'badge', text: labels.advanced ?? 'Advanced' }) : null,
     r.fullOnly ? el('span', { class: 'badge', title: r.fullWhy ?? '', text: labels.fullOnly ?? 'Full mode only' }) : null,
     r.weakened ? el('span', { class: 'badge tone-bad', text: 'Weakened' }) : null,
+    // M3: the row needs another one that is off now, so it does nothing (lib/settingsView.js requiresOf). The tooltip
+    // and the screen reader name say why; the row and its control stay.
+    r.inactive
+      ? el('span', { class: 'badge registry-inactive-badge', title: r.inactiveWhy ?? '', 'aria-label': `No effect now: ${r.inactiveWhy ?? ''}`, text: 'No effect now' })
+      : null,
   ].filter(Boolean);
   return marks.length ? el('span', { class: 'helper-badges settings-badges' }, marks) : null;
+}
+
+/**
+ * M3: "Has effect only when <title> (<key>) is on." for a row with requires, each parent linked to its row (a click
+ * opens the fold it sits in); null for a row without. Shown whether the parent is on or off, so the tie is never hidden.
+ */
+function requiresLine(r) {
+  if (!r.requires?.length) return null;
+  const parts = r.requires.flatMap((q, i) => [
+    i ? ' and ' : null,
+    el('a', {
+      href: `#setting-row-${cssId(q.key)}`,
+      text: q.title,
+      onclick: () => document.getElementById(`setting-row-${cssId(q.key)}`)?.closest('details')?.setAttribute('open', ''),
+    }),
+    ` (${q.key}) is ${q.want}`,
+  ]);
+  return el(
+    'p',
+    { class: 'setting-meta registry-requires', title: r.inactiveWhy ?? 'The setting it needs is on now, so this one has its effect.' },
+    'Has effect only when ',
+    parts,
+    '.',
+  );
 }
 
 function registryField(r, d, labels) {
@@ -724,7 +753,9 @@ function registryField(r, d, labels) {
   const hasInput = isSwitch || !!control.querySelector('select,input');
   return el(
     'div',
-    { id: rowId, class: 'setting-field registry-field', 'data-key': r.key },
+    // registry-inactive dims the row (the surface and the text color, not opacity, so it keeps its contrast) while a
+    // setting it needs is off (M3); it is never hidden, and its control still works.
+    { id: rowId, class: `setting-field registry-field${r.inactive ? ' registry-inactive' : ''}`, 'data-key': r.key },
     el(
       'div',
       { class: 'registry-head' },
@@ -733,6 +764,7 @@ function registryField(r, d, labels) {
       registryBadges(r, labels),
     ),
     el('p', { id: `${id}-help`, class: 'setting-explanation', text: r.explanation }),
+    requiresLine(r),
     isSwitch ? null : control,
     el('p', { class: 'setting-meta', text: meta }),
     error,

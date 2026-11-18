@@ -808,6 +808,12 @@ settings --advanced`), **Full mode only** (not used in lite; `ravenseat settings
 weakens a guard needs `--i-understand --by owner` (see `settings set` under Everyday commands), and `ravenseat doctor`
 names every guard weaker than its default on its `settings` row.
 
+Some settings have an effect only while another one is on: the CI watch numbers need `push.ciWatch` `github`, the gap
+review numbers need `scopeNotes.driftGap`, the recipe damping needs the inspection queue and `learning.repeats`, a fix
+without a test is only warned about with `gates.redOnBase` set. The registry names that parent on the row (`requires`),
+and `ravenseat settings` marks it `[needs <key>]`, with `[no effect now: <key> is off]` while the parent is off. The
+board says "Has effect only when ..." and dims the row. Nothing is hidden, and the value can be set before the parent.
+
 ### Project and git
 
 | Key | Default | Used for | Marks |

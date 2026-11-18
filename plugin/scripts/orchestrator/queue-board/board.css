@@ -1791,6 +1791,19 @@ input.switch:disabled {
   font-weight: 600;
 }
 
+/* M3: a row whose parent setting is off has no effect now. Dimmed with the surface and the text color, not opacity, so
+   it keeps its contrast; a dashed edge on the left repeats it without color. Never hidden, and the control still works. */
+.registry-field.registry-inactive {
+  padding-left: var(--distance-sm);
+  border-left: 2px dashed var(--color-outline-variant);
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface-variant);
+}
+
+.registry-requires a {
+  color: inherit;
+}
+
 .settings-fold {
   margin-top: var(--distance-sm);
 }

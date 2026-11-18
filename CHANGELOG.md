@@ -5,6 +5,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Settings that depend on another one say so.** 49 settings have an effect only while another one is on, such as the
+  CI watch numbers (`push.ciWatch` `github`), the gap review numbers (`scopeNotes.driftGap`), the recipe damping (the
+  inspection queue and `learning.repeats`) and the fix without a test line (`gates.redOnBase`). Each such row now names
+  that setting: `ravenseat settings` marks it `[needs <key>]`, plus `[no effect now: <key> is off]` while it is off, and
+  the board says "Has effect only when ..." and dims the row with a **No effect now** mark and a tooltip. Nothing is
+  hidden and no default or behavior changes; a registry test checks that each named setting exists, that there are no
+  cycles, and that a setting in another group is named in the row's text.
 - **Hardening for set-aside checks, one red card per cause, and a shorter guards group.** An important gap now shows in
   `ravenseat doctor` also when its Checks card is set aside (or you said no in setup): setting a suggestion aside hides
   the card, but a key in a tracked file or `bypassPermissions` in the shared settings is still named. Without such a gap

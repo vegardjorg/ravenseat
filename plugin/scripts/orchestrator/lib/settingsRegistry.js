@@ -25,6 +25,13 @@
 //   choices        the values of a choice row, strongest first; else null
 //   weakens        (value, standard) => true when the value gives less protection than the standard; else null
 //   protects, whyNot, changes  the three texts of the warning dialog, the CLI warning and doctor; required with weakens
+//   requires       the rows this one needs to have any effect, or null: "key" (that row must be on: not false, off, none,
+//                  0 or empty) or "key=value" (it must have that value, as the CLI writes it: "push.mode=owner"). Only where
+//                  the code really ignores the row while the parent is off, read in the code (finding M3 of
+//                  plans/gjennomgang-friksjon-innstillinger-2026-11-17.md, owner decision). The board and `ravenseat
+//                  settings` show it ("Has effect only when ...", [needs ...]) and mark the row while it has no effect
+//                  (lib/settingsView.js); it is never hidden, and no default or behavior follows from it. A parent in
+//                  another group is named in the explanation (the registry test checks it, and that there are no cycles).
 //
 // INTERNAL lists keys in STANDARD that are not settings a person changes (empty today). QUEUE_ONLY lists the queue.json
 // keys that have no counterpart in STANDARD. The coverage test (lib/__tests__/settingsRegistry.test.ts) fails when a key
@@ -140,6 +147,93 @@ function fewerReviewers(v, std) {
 const BOTH = Object.freeze(['lite', 'full']);
 const FULL = Object.freeze(['full']);
 
+/**
+ * The `requires` of each row that has one (see the header), kept in one table so each entry can name the code that
+ * ignores the row while its parent is off. A key here that is no row fails the registry test. Read in the code, not
+ * guessed; left out on purpose (the code still reads them with the parent off): gates.redOnBaseStrict (stops every fix
+ * without red on base, which doctor warns about), limits.nightWindow (the Statistics night share), scopeNotes.ignoreNames
+ * (the catalog's near names), instructionSize.maxLines/maxChars (`ravenseat instructions`), baseGate.timeoutSec (the
+ * receive and merge budget), testWeakening.testPaths (red on base), migrations.pushCommand, environmentFile and
+ * allowedEnvironment (the push guard), learning.proposals (the catalog rule gates need no learning.repeats) and the
+ * cloud.* rows (the cloud commands do not read features.cloud).
+ */
+const REQUIRES = Object.freeze({
+  // lib/fixRound.js: continueWithinMin 0 turns continuation off before the context cap is read.
+  'fixRound.continueMaxContextK': ['fixRound.continueWithinMin'],
+  // lib/gateEvidence.js: the names are read only in mode external.
+  'gateEvidence.external': ['gateEvidence.mode=external'],
+  // lib/baseHealth.js setup: enabled false turns the base gate off, with its commands, output tail and rerun.
+  'baseGate.commands': ['baseGate.enabled'],
+  'baseGate.tailLines': ['baseGate.enabled'],
+  'baseGate.flakyRerun': ['baseGate.enabled'],
+  // cli/merge.mjs: the test weakening check (and its focus stop, finding row and markers) is skipped when off.
+  'testWeakening.focusStop': ['testWeakening.enabled'],
+  'testWeakening.findingLog': ['testWeakening.enabled'],
+  'testWeakening.markers': ['testWeakening.enabled'],
+  // lib/fixTests.js receiveLine: red on base off gives no verdict, so the default mode prints no fix line.
+  'gates.fixWithoutTestWarning': ['gates.redOnBase'],
+  // board/checks.js drawChecksTab: the dot sits on the tab, which is hidden with the tab off.
+  'checksPanel.marker': ['checksPanel.mode'],
+  // cli/inspection.mjs: with inspection.mode off nothing is scanned or proposed.
+  'inspection.minRepeats': ['inspection.mode'],
+  'inspection.windowDays': ['inspection.mode'],
+  // lib/findingRepeats.js scan and facts: learning.repeats off returns no entries, nothing due and no guard failed.
+  'learning.windowDays': ['learning.repeats'],
+  'learning.areaRepeats': ['learning.repeats'],
+  'learning.projectRepeats': ['learning.repeats'],
+  'learning.guardFailedMarker': ['learning.repeats'],
+  // checks-catalog/suggestions/ledger-recipes.md (when: inspection-on, ledger-due): the recipes, the database ones and
+  // their damping (lib/checksCatalog.js, lib/recipePrecision.js) are only on that card.
+  'learning.dbProbes': ['inspection.mode', 'learning.repeats'],
+  'learning.recipeDamping': ['inspection.mode', 'learning.repeats'],
+  'learning.recipeMinProposals': ['learning.recipeDamping'],
+  'learning.recipeMinProposalsDb': ['learning.recipeDamping', 'learning.dbProbes'],
+  'learning.recipeMinAccepted': ['learning.recipeDamping'],
+  // cli/inspection.mjs idleGuardLines: no lines with idleGuardInfo off.
+  'learning.idleGuardDays': ['learning.idleGuardInfo'],
+  // lib/agentGuard.js: with enabled false the other types are not guarded, so there is nothing to leave out.
+  'agentGuard.except': ['agentGuard.enabled'],
+  // lib/pushBatch.js ownerAskOn: only in push mode owner.
+  'push.ownerAsk': ['push.mode=owner'],
+  // cli/ciWatch.mjs: with push.ciWatch off nothing is watched.
+  'push.ciWatchIntervalSec': ['push.ciWatch=github'],
+  'push.ciWatchTimeoutMin': ['push.ciWatch=github'],
+  // lib/logic/merge.js migrFiles and lib/logic/select.js migrTens: no folder, no migration files and no blocks.
+  'migrations.filePattern': ['migrations.folder'],
+  'migrations.blockSize': ['migrations.folder'],
+  // lib/queueProposals.js: auto-accept off approves nothing, whatever the rules say.
+  'proposals.autoAccept.classes': ['proposals.autoAccept.enabled'],
+  'proposals.autoAccept.maxEstimateMin': ['proposals.autoAccept.enabled'],
+  'proposals.autoAccept.maxValue': ['proposals.autoAccept.enabled'],
+  // lib/scopeNotes.js: the depth is read only for the new folder note, the two numbers only for the gap review.
+  'scopeNotes.folderDepth': ['scopeNotes.newFolders'],
+  'scopeNotes.driftGapFiles': ['scopeNotes.driftGap'],
+  'scopeNotes.driftGapShare': ['scopeNotes.driftGap'],
+  // lib/catalogChecks.js: checks off tries no rule, so there is nothing to stop on and nothing broken again; the lint
+  // proposal also needs learning.proposals (cli/catalog.mjs proposeRuleGates).
+  'catalog.checkStop': ['catalog.checks'],
+  'catalog.gateAfter': ['learning.proposals', 'catalog.checks'],
+  // board/top.js applyFeatures: the Cloud tab comes with the cloud module.
+  'board.showCloud': ['features.cloud'],
+  // cli/checks.mjs canaryFacts: with the canary off no transcript is read, so no shape is logged.
+  'client.shapeLog': ['client.canary'],
+  // lib/queueConfig.js features: a part is off while its parent is off.
+  'features.plans.legal': ['features.plans'],
+  'features.plans.launch': ['features.plans'],
+  'features.plans.documents': ['features.plans'],
+  // lib/loadSlots.js: adaptive off keeps every slot open, so the scaling numbers are not read.
+  'loadGuard.minSlots': ['loadGuard.adaptive'],
+  'loadGuard.allSlotsFreeMemoryPct': ['loadGuard.adaptive'],
+  'loadGuard.allSlotsCpuPct': ['loadGuard.adaptive'],
+  'loadGuard.minSlotsCpuPct': ['loadGuard.adaptive'],
+  // lib/gateQueue.js isHeavy: with the gate queue off no run counts as heavy or waits for a slot.
+  'gateQueue.slots': ['gateQueue.enabled'],
+  'gateQueue.heavyAfterSec': ['gateQueue.enabled'],
+  'gateQueue.agingMin': ['gateQueue.enabled'],
+  // lib/stateSnapshots.js tiersFrom: enabled false gives no tiers.
+  'stateSnapshots.tiers': ['stateSnapshots.enabled'],
+});
+
 /** One row with the defaults filled in: advanced, both modes, queue.config.json, settable, no warning texts. */
 function row(key, category, type, title, explanation, o = {}) {
   return Object.freeze({
@@ -161,6 +255,7 @@ function row(key, category, type, title, explanation, o = {}) {
     changes: o.weakens ? o.changes : null,
     // A number that also takes none (null) although its default is a number (parseValue).
     nullable: o.nullable === true,
+    requires: REQUIRES[key] ? Object.freeze([...REQUIRES[key]]) : null,
   });
 }
 
@@ -1077,4 +1172,4 @@ function rowFor(key) {
   return SETTINGS.find((r) => r.key === key) ?? null;
 }
 
-module.exports = { LABELS, CATEGORIES, INTERNAL, QUEUE_ONLY, SETTINGS, rowFor };
+module.exports = { LABELS, CATEGORIES, INTERNAL, QUEUE_ONLY, SETTINGS, REQUIRES, rowFor };

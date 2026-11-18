@@ -6,7 +6,8 @@
 //                 guard, grouped in the sixteen categories (basic rows first, advanced after). In lite, a full-only row
 //                 is marked `hidden` (one count line per category shows it is there); a category with nothing for lite
 //                 is `fullOnlyCategory` (one closed line). The board's /api/settings and `ravenseat settings` both use it.
-//   cliLines      `ravenseat settings` as text (--advanced, --all, --changed, a category).
+//   cliLines      `ravenseat settings` as text (--advanced, --all, --changed, a category), with [needs ...] and
+//                 [no effect now: ...] for a row whose parent is off (requiresOf, finding M3).
 //   parseValue    a value typed in the CLI or chosen on the board, checked against the row (on/off, a choice, a number).
 //   needsConfirm  the rule for the owner's confirmation: the new value weakens the guard (against the default) and is
 //                 weaker than the value now. Going back to a stronger value never needs it.
@@ -213,6 +214,69 @@ function needsConfirm(row, value, { now, standard }) {
  */
 const SWITCH_ONLY = Object.freeze(['mode']);
 
+// ---- requires: the rows a row needs to have any effect (finding M3, lib/settingsRegistry.js REQUIRES) --------------
+
+/** Is a parent "on" for a plain requires entry? Off is false, null, "off", 0, "" and an empty list or object. */
+function isOn(v) {
+  if (v === false || v == null || v === 'off' || v === 0 || v === '') return false;
+  if (Array.isArray(v)) return v.length > 0;
+  if (isObject(v)) return Object.keys(v).length > 0;
+  return true;
+}
+
+/** "key" or "key=value" as { key, want } (want "on" for a plain key). */
+function parseRequires(entry) {
+  const s = String(entry);
+  const i = s.indexOf('=');
+  return i < 0 ? { key: s, want: 'on' } : { key: s.slice(0, i), want: s.slice(i + 1) };
+}
+
+/**
+ * A row's requires, each with the parent's title, group and whether it holds now, plus the parents that are off along
+ * the chain (a parent that holds can still need one that does not: the recipe numbers need recipeDamping, which needs
+ * the inspection queue). The parent is looked up in the whole registry, so a view of a few rows reads it too. Marks
+ * only: the value, the default and the controls stay as they are.
+ */
+function requiresOf(r, { config, queue }) {
+  const holds = (entry) => {
+    const { key, want } = parseRequires(entry);
+    const parent = R.rowFor(key);
+    const value = parent ? valueOf(parent, { config, queue }) : undefined;
+    const met = !parent || (want === 'on' ? isOn(value) : optionText(value).toLowerCase() === want.toLowerCase());
+    return { key, want, parent, value, met };
+  };
+  const list = (r.requires ?? []).map(holds);
+  const roots = [];
+  const walk = (entries, seen) => {
+    for (const h of entries) {
+      if (seen.has(h.key)) continue; // the registry test forbids cycles; this only keeps a bad file from looping
+      if (!h.met) {
+        if (!roots.some((x) => x.key === h.key)) roots.push(h);
+      } else if (h.parent?.requires) walk(h.parent.requires.map(holds), new Set([...seen, h.key]));
+    }
+  };
+  walk(list, new Set([r.key]));
+  const nowText = (h) => (h.want === 'on' ? 'off' : optionText(h.value));
+  const why = roots.length
+    ? `${roots.map((h) => `${h.key} is ${nowText(h)}`).join(' and ')} now, so this setting does nothing until ` +
+      (roots.length === 1 ? `it is ${roots[0].want}` : roots.map((h) => `${h.key} is ${h.want}`).join(' and ')) +
+      '. You can still set it.'
+    : null;
+  return {
+    requires: list.map((h) => ({
+      key: h.key,
+      title: h.parent?.title ?? h.key,
+      category: h.parent?.category ?? null,
+      want: h.want,
+      met: h.met,
+    })),
+    inactive: roots.length > 0,
+    inactiveBecause: roots.map((h) => h.key),
+    inactiveNow: roots.map((h) => `${h.key} is ${nowText(h)}`),
+    inactiveWhy: why,
+  };
+}
+
 /**
  * Every row with its value and marks, grouped in the categories.
  * @param {{ config: object, queue?: object, migrations?: boolean, rows?: object[] }} o
@@ -250,6 +314,9 @@ function settingsView({ config, queue = {}, migrations = true, rows = R.SETTINGS
       protects: r.protects,
       whyNot: r.whyNot,
       changes: r.changes,
+      // What the row needs to have any effect, and whether it has none now (M3): requires, inactive, inactiveBecause,
+      // inactiveNow, inactiveWhy. Shown on the board and in the CLI, never hidden.
+      ...requiresOf(r, { config, queue }),
       // The options that would open the warning dialog from the value now (the board asks before it sends anything).
       confirmFor: options
         ? options.filter((o, i) => {
@@ -316,6 +383,9 @@ function cliLines(view, { cli = 'ravenseat', advanced = false, all = false, chan
         r.level !== 'basic' ? `[${view.labels.advanced.toLowerCase()}]` : null,
         lite && r.fullOnly ? `[${view.labels.fullOnly.toLowerCase()}: ${r.fullWhy}]` : null,
         r.weakened ? '[weakened]' : null,
+        // M3: what the row needs, and that it does nothing now while that is off (lib/settingsRegistry.js REQUIRES).
+        r.requires?.length ? `[needs ${r.requires.map((q) => (q.want === 'on' ? q.key : `${q.key}=${q.want}`)).join(', ')}]` : null,
+        r.inactive ? `[no effect now: ${r.inactiveNow.join(', ')}]` : null,
       ].filter(Boolean);
       out.push(
         `  ${r.key.padEnd(kw)} ${r.valueText.padEnd(vw)} ${r.title} (${r.store === 'queue' ? 'you' : 'project'})` +

@@ -404,3 +404,58 @@ describe('protectedPaths: the object form { add, remove } (step 8)', () => {
     expect(r.weakens(std.filter((p: string) => p !== 'queue.config.json'), std)).toBe(false);
   });
 });
+
+// M3 (plans/gjennomgang-friksjon-innstillinger-2026-11-17.md): a row with `requires` in the registry says which row it
+// needs, and the view marks it as having no effect now while that row is off. Shown, never hidden; nothing else changes.
+describe('requires: the row that has no effect now (M3)', () => {
+  const rowOf = (v: any, key: string) => v.categories.flatMap((c: any) => c.rows).find((x: any) => x.key === key);
+
+  it('the default setup: a fix without a test warns only with red on base, which is off, so the row has no effect', () => {
+    const r = rowOf(view(), 'gates.fixWithoutTestWarning');
+    expect(r.requires).toEqual([
+      { key: 'gates.redOnBase', title: R.rowFor('gates.redOnBase').title, category: 'tests', want: 'on', met: false },
+    ]);
+    expect(r.inactive).toBe(true);
+    expect(r.inactiveBecause).toEqual(['gates.redOnBase']);
+    // The value and the default are untouched: only a mark.
+    expect(r.value).toBe(true);
+    expect(r.standard).toBe(true);
+    expect(r.hidden).toBe(false);
+  });
+
+  it('a parent that is on makes the row active; a row without requires has an empty list', () => {
+    const r = rowOf(view({ own: { gates: { redOnBase: 'npx vitest run {files}' } } }), 'gates.fixWithoutTestWarning');
+    expect(r.requires[0].met).toBe(true);
+    expect(r.inactive).toBe(false);
+    expect(r.inactiveBecause).toEqual([]);
+    const plain = rowOf(view(), 'push.mode');
+    expect(plain.requires).toEqual([]);
+    expect(plain.inactive).toBe(false);
+  });
+
+  it('a value: push.ownerAsk only in owner mode, the CI watch numbers only with ciWatch github', () => {
+    expect(rowOf(view(), 'push.ownerAsk').inactive).toBe(false);
+    const threshold = rowOf(view({ own: { push: { mode: 'threshold' } } }), 'push.ownerAsk');
+    expect(threshold.requires[0]).toMatchObject({ key: 'push.mode', want: 'owner', met: false });
+    expect(threshold.inactive).toBe(true);
+    expect(rowOf(view(), 'push.ciWatchIntervalSec').inactive).toBe(true);
+    expect(rowOf(view({ own: { push: { ciWatch: 'github' } } }), 'push.ciWatchIntervalSec').inactive).toBe(false);
+  });
+
+  it('through a chain: the inspection queue off leaves the recipe numbers without effect, and names the row that is off', () => {
+    expect(rowOf(view(), 'learning.recipeMinProposals').inactive).toBe(false);
+    const r = rowOf(view({ own: { inspection: { mode: 'off' } } }), 'learning.recipeMinProposals');
+    expect(r.requires[0]).toMatchObject({ key: 'learning.recipeDamping', met: true });
+    expect(r.inactive).toBe(true);
+    expect(r.inactiveBecause).toEqual(['inspection.mode']);
+  });
+
+  it('the CLI marks [needs ...], and [no effect now: ... is off] while the parent is off', () => {
+    const text = SV.cliLines(view(), { cli: 'ravenseat', all: true }).join('\n');
+    expect(text).toMatch(/gates\.fixWithoutTestWarning .*\[needs gates\.redOnBase\] \[no effect now: gates\.redOnBase is off\]/);
+    expect(text).toMatch(/push\.ciWatchTimeoutMin .*\[needs push\.ciWatch=github\] \[no effect now: push\.ciWatch is off\]/);
+    expect(text).toMatch(/push\.ownerAsk .*\[needs push\.mode=owner\](?! \[no effect)/);
+    const on = SV.cliLines(view({ own: { gates: { redOnBase: 'npx vitest run {files}' } } }), { cli: 'ravenseat', all: true }).join('\n');
+    expect(on).toMatch(/gates\.fixWithoutTestWarning .*\[needs gates\.redOnBase\]$/m);
+  });
+});

@@ -185,6 +185,38 @@ describe('the settings registry in the gear (step 6)', () => {
     expect(document.getElementById('g-maxConcurrent')).not.toBeNull();
   });
 
+  it('M3: a row that needs another says so, and is dimmed and marked No effect now while that one is off, never hidden', async () => {
+    await redraw({ mode: 'full' });
+    const r = row('gates.fixWithoutTestWarning');
+    expect(r).not.toBeNull();
+    const needs = r.querySelector('.registry-requires') as HTMLElement;
+    expect(needs.textContent).toBe(`Has effect only when ${RG.rowFor('gates.redOnBase').title} (gates.redOnBase) is on.`);
+    // The parent's name links to its row, so the owner finds the switch.
+    expect(needs.querySelector('a')?.getAttribute('href')).toBe('#setting-row-gates-redOnBase');
+    expect(r.classList.contains('registry-inactive')).toBe(true);
+    const badge = r.querySelector('.registry-inactive-badge') as HTMLElement;
+    expect(badge.textContent).toBe('No effect now');
+    // The tooltip and the screen reader text say why, in words.
+    expect(badge.getAttribute('title')).toMatch(/gates\.redOnBase is off now, so this setting does nothing until it is on/);
+    // The control stays, and works: the value can be set before the parent is turned on.
+    const control = document.getElementById('reg-gates-fixWithoutTestWarning') as HTMLInputElement;
+    expect(control).not.toBeNull();
+    expect(control.disabled).toBe(false);
+    // With the parent on, the line stays and the mark goes.
+    await redraw({ mode: 'full', gates: { redOnBase: 'npx vitest run {files}' } });
+    expect(row('gates.fixWithoutTestWarning').classList.contains('registry-inactive')).toBe(false);
+    expect(row('gates.fixWithoutTestWarning').querySelector('.registry-inactive-badge')).toBeNull();
+    expect(row('gates.fixWithoutTestWarning').querySelector('.registry-requires')).not.toBeNull();
+    // A value: push.ownerAsk only in owner mode.
+    await redraw({ mode: 'full', push: { mode: 'threshold' } });
+    expect(row('push.ownerAsk').querySelector('.registry-requires')?.textContent).toBe(
+      `Has effect only when ${RG.rowFor('push.mode').title} (push.mode) is owner.`,
+    );
+    expect(row('push.ownerAsk').classList.contains('registry-inactive')).toBe(true);
+    // A row without requires has neither.
+    expect(row('push.mode').querySelector('.registry-requires')).toBeNull();
+  });
+
   it('a guard weaker than the default gives the banner and a Weakened mark; none in the default setup', async () => {
     await redraw({ mode: 'full' });
     expect(document.getElementById('settings-weakened')).toBeNull();
