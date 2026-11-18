@@ -20,7 +20,7 @@ grow. Switch with `ravenseat mode full` (`ravenseat mode lite` goes back), and r
 Lite gets work moving with minimal setup. Full adds structure for larger projects; switch when you need it. Every
 setting, with what is full mode only and what is advanced, is in the [configuration tables](queue.md#configuration).
 
-<p align="center"><img src="../../assets/infographics/architecture.webp" alt="One Claude Code conversation drives the orchestrator, which keeps persistent state, starts agents in isolated worktrees and sends their work through checks and integration" width="800"></p>
+<p align="center"><img src="../../assets/infographics/task-flow.webp" alt="Pick the next task, a fresh agent builds it in an isolated worktree, checks run. Passing work is merged and the next task starts. Failing work gets a fix attempt by a fresh agent; if it is still blocked, it becomes your decision while independent tasks continue" width="800"></p>
 
 ## The pieces
 
