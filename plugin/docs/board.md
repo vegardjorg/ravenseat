@@ -147,6 +147,18 @@ The Queue workspace has these tabs:
 - A built card gets the badge **Merged, not verified** when no gates, done command or agent review ran, and **Audited**
   when only an agent review ran ([When a project has no checks](queue.md#when-a-project-has-no-checks)).
 
+**The task panel.** A click on a card (or Enter on its title) opens its panel. It reads top down: the title, a short
+line on what the task is about, the actions, the full mission, and last the technical facts (status, project, class,
+placement and score, dependencies, owner files, branch, cloud, migrations, QA, verification, source and remarks) under
+**Details**. Details is closed from the start and shows the status on its row; whether you keep it open is remembered
+in this browser. The short line is the first paragraph under a heading such as "What and why", "Why", "Goal",
+"Purpose", "Background" or "Summary" (or a bold `**Goal:**` label) in the mission; without one it is the first plain
+paragraph, skipping generated lines such as the `=====ID=====` marker, `TITLE:` and `BRANCH:` lines, headings and
+`**Ownership in the queue:**` blocks, and last the first list item. It is clipped at about 320 characters. From about
+1200 px wide the panel sits beside the board and is not modal: the board makes room for it and stays usable, a click
+on another card shows that card in the panel, Esc closes it and focus goes back to the card. On a narrower screen it
+is a modal sheet over the board, as before.
+
 **Cancel, decline and edit.** For a waiting task (also on hold or in the batch queue) the detail panel has **Edit**
 (value 1-10, content minutes and class, checked like `ravenseat add` / `ravenseat edit`) and **Cancel task**; for a proposal it has
 **Edit** and **Decline**. Cancel and decline ask first, with an optional one-line reason, and run `ravenseat cancel <id>

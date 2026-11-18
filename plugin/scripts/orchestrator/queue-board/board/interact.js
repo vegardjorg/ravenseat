@@ -207,6 +207,9 @@ main.addEventListener('click', (e) => {
     else markMany([summary.dataset.id], !t.marked.has(summary.dataset.id));
     return;
   }
+  // The card's title button gets focus first (a click on the card outside the button gives none), so the panel
+  // knows which card to give focus back to on close, also when it swaps content beside the board.
+  summary.querySelector('.summary-button')?.focus({ preventScroll: true });
   openPanel(summary.dataset.id);
 });
 // Shift-click should not select the text on the cards.

@@ -262,11 +262,14 @@ function optionAnchorBox() {
  * Places the menu next to the anchor box: to the right with its top at the box top; flipped to the left near the
  * right edge and upwards near the bottom, then clamped inside the viewport. Horizontally it never overlaps the box,
  * so it does not cover the checkbox it came from. Without a box on screen it sits in the bottom right corner.
+ * While the task panel sits beside the board (from 1200 px, panel.js), its left edge is the right edge here, so the
+ * menu never opens under the panel.
  */
 function placeOptionMenu() {
   const line = $('optionLine');
   if (line.hidden || !line.classList.contains('as-menu')) return;
-  const vw = window.innerWidth;
+  const sideEdge = document.body.classList.contains('panel-beside') ? panel.getBoundingClientRect().left : 0;
+  const vw = sideEdge > 0 ? Math.min(window.innerWidth, sideEdge) : window.innerWidth;
   const vh = window.innerHeight;
   const m = line.getBoundingClientRect();
   const box = optionAnchorBox();

@@ -1008,6 +1008,66 @@ textarea {
   padding: var(--distance-lg);
 }
 
+/* From 1200 px the panel sits beside the board and is not modal (panel.js applyPanelMode sets body.panel-beside): no
+   scrim, and the page makes room for it, so every card, the top and the gear stay visible and clickable while it is
+   open. A click on another card swaps the content. Below 1200 px it is the modal sheet over a scrim, as before. */
+@media (min-width: 1200px) {
+  body {
+    --panel-side: clamp(420px, 36vw, 560px);
+  }
+  body.panel-beside {
+    padding-right: var(--panel-side);
+  }
+  body.panel-beside .panel {
+    width: var(--panel-side);
+  }
+  /* The messages center over the board, not under the panel. */
+  body.panel-beside .toaster {
+    left: calc((100vw - var(--panel-side)) / 2);
+    max-width: min(640px, calc(100vw - var(--panel-side) - 32px));
+  }
+}
+
+/* B14: what the task is about, right under the title (the first paragraph of the mission's "What and why"). */
+.panel-summary {
+  margin: var(--distance-sm) 0 var(--distance-md);
+  font-size: var(--text-md);
+  line-height: 24px;
+  color: var(--color-on-surface);
+  overflow-wrap: anywhere;
+}
+
+/* B14: the technical facts last, folded under "Details" (closed by default, remembered per viewer). The summary row
+   keeps the status readable while it is closed. */
+.panel-details {
+  margin-top: var(--distance-lg);
+  border-top: 1px solid var(--color-outline-variant);
+  padding-top: var(--distance-sm);
+}
+
+.panel-details > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--distance-xs) var(--distance-sm);
+  min-height: 36px;
+  padding: var(--distance-xs) 0;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.panel-details-hint {
+  font-weight: 400;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
+.panel-details .facts {
+  margin-top: var(--distance-sm);
+}
+
 .panel-header {
   display: flex;
   align-items: flex-start;

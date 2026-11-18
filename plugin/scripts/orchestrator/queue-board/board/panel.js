@@ -10,21 +10,49 @@
 // ---- Detail panel ----
 let panelFrom = null;
 /**
- * Shows the side panel as a modal dialog: remembers the element that opened it (focus goes back there
- * on close), and makes the rest of the page inert so Tab and the screen reader stay in the panel. The focus trap below catches Tab
- * at the ends. Everything that opens the panel (details, settings, help) goes here.
+ * Two modes, by the width (UX review P1). From 1200 px (PANEL_SIDE_MEDIA) the panel sits beside the board and is not
+ * modal: no backdrop, no inert page, no focus trap, the board makes room for it (body.panel-beside in board.css) and a
+ * click on another card swaps the content. Below 1200 px it is a modal dialog as before: the rest of the page is inert
+ * so Tab and the screen reader stay in the panel, and the focus trap below catches Tab at the ends. In both modes Esc
+ * closes it and focus goes back to the element that opened it. Everything that opens the panel (details, settings,
+ * help) goes through showPanel.
  */
 const PANEL_INERT = ['header.top', '#focusLine', '#stripe', '#board', '#optionLine'];
-function showPanel() {
-  if (panel.hidden) panelFrom = document.activeElement;
-  panel.hidden = false;
-  background.hidden = false;
+const PANEL_SIDE_MEDIA = '(min-width: 1200px)';
+const panelBeside = () => !!window.matchMedia?.(PANEL_SIDE_MEDIA)?.matches;
+/** True while the panel is open as a modal dialog (narrow screens). */
+const panelModal = () => !panel.hidden && !background.hidden;
+/** Sets the open panel's mode from the width now: the backdrop, aria-modal, the inert page and the room beside it. */
+function applyPanelMode() {
+  const open = !panel.hidden;
+  const side = open && panelBeside();
+  const modal = open && !side;
+  background.hidden = !modal;
+  if (modal) panel.setAttribute('aria-modal', 'true');
+  else panel.removeAttribute('aria-modal');
+  document.body.classList.toggle('panel-beside', side);
   window.QueueA11y.setInert(
     PANEL_INERT.map((v) => document.querySelector(v)),
-    true,
+    modal,
   );
+  // The selection menu keeps out from under the side panel (select.js placeOptionMenu reads its edge).
+  if (typeof placeOptionMenu === 'function') placeOptionMenu();
 }
-panel.addEventListener('keydown', (e) => window.QueueA11y.trapKey(e, panel));
+function showPanel() {
+  // The element focus goes back to on close. Beside the board, a click on another card while the panel is open
+  // makes that card the one to go back to; a link inside the panel keeps the card that opened it.
+  const from = document.activeElement;
+  if (panel.hidden || (from && from !== document.body && !panel.contains(from))) panelFrom = from;
+  panel.hidden = false;
+  applyPanelMode();
+}
+// The width can cross 1200 px while the panel is open (a resized window): switch the mode at once.
+window.matchMedia?.(PANEL_SIDE_MEDIA)?.addEventListener?.('change', () => {
+  if (!panel.hidden) applyPanelMode();
+});
+panel.addEventListener('keydown', (e) => {
+  if (panelModal()) window.QueueA11y.trapKey(e, panel);
+});
 /** Opens the detail panel and selects the card's chain. */
 function openPanel(id) {
   if (!t.perId.has(id)) return;
@@ -43,6 +71,7 @@ function closePanel() {
   t.help = false;
   panel.hidden = true;
   background.hidden = true;
+  document.body.classList.remove('panel-beside');
   panel.replaceChildren();
   // Inert off before focus moves back (an inert element cannot get focus).
   window.QueueA11y.setInert(
@@ -60,6 +89,7 @@ function closePanel() {
   }
   if (panelFrom?.isConnected) panelFrom.focus();
   panelFrom = null;
+  if (typeof placeOptionMenu === 'function') placeOptionMenu();
 }
 async function getDetails(id) {
   try {
@@ -136,6 +166,94 @@ function placementFacts(k, idButton) {
   ];
 }
 
+// ---- What the task is about (B14) ----
+// The panel opens with a short summary of the mission under the title, so the owner sees what the task is about
+// before the actions and the technical facts. The rule, in order:
+//   1. the first paragraph under a heading that names the purpose (What and why, Why, Goal, Purpose, Background,
+//      Summary, About, and the Norwegian Hva og hvorfor, Hvorfor, Mål, Formål, Bakgrunn),
+//   2. the text of a bold label with such a name ("**Goal:** ..."),
+//   3. else the first prose paragraph that is not generated boilerplate: the =====ID===== marker, KEY: value lines
+//      (TITLE:, BRANCH:, BLOCK:, CLASS:), headings, bold-label blocks ("**Ownership in the queue:** ..."), code fences
+//      and tables are skipped,
+//   4. else the first list item.
+// The result is clipped at a word boundary to SUMMARY_MAX characters. No text: no summary.
+const SUMMARY_MAX = 320;
+const SUMMARY_NAME =
+  /^(what\b.*\bwhy|why\b|goal|purpose|background|summary|about\b|hva og hvorfor|hvorfor|mål\b|formål|bakgrunn)/i;
+/** The mission as blocks: { kind: 'heading' | 'para' | 'item', text }. Code, tables and metadata lines are left out. */
+function missionBlocks(text) {
+  const lines = String(text ?? '')
+    .replace(/\r\n/g, '\n')
+    .split('\n');
+  const blocks = [];
+  let para = [];
+  const end = () => {
+    if (para.length) blocks.push({ kind: 'para', text: para.join(' ') });
+    para = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (/^```/.test(l)) {
+      end();
+      while (++i < lines.length && !/^\s*```/.test(lines[i]));
+      continue;
+    }
+    const h = /^#{1,6}\s+(.*)$/.exec(l);
+    const item = /^(?:[-*]|\d+[.)])\s+(.*)$/.exec(l);
+    // Blank lines, tables, the =====ID===== marker and KEY: value metadata end a paragraph and are not text.
+    if (!l || /^\|/.test(l) || /^=+[^=\s]*=+$/.test(l) || /^[A-ZÆØÅ][A-ZÆØÅ0-9 _-]{1,30}:\s/.test(l)) end();
+    else if (h) {
+      end();
+      blocks.push({ kind: 'heading', text: h[1] });
+    } else if (item) {
+      end();
+      blocks.push({ kind: 'item', text: item[1] });
+    } else para.push(l);
+  }
+  end();
+  return blocks;
+}
+/** A paragraph that starts with a bold label ("**Ownership in the queue:** ..."): { label, rest }, else null. */
+function boldLabel(text) {
+  const m = /^\*\*([^*]+?)\*\*:?\s*(.*)$/.exec(text);
+  return m ? { label: m[1].replace(/:$/, '').trim(), rest: m[2].trim() } : null;
+}
+/** Clips at a word boundary and drops an unclosed `code` span, so the inline markup stays whole. */
+function clipSummary(text) {
+  let s = text.trim();
+  if (s.length <= SUMMARY_MAX) return s;
+  s = s.slice(0, SUMMARY_MAX);
+  const space = s.lastIndexOf(' ');
+  if (space > SUMMARY_MAX / 2) s = s.slice(0, space);
+  if ((s.match(/`/g) ?? []).length % 2) s = s.slice(0, s.lastIndexOf('`'));
+  return s.replace(/[\s,;:.]+$/, '') + '…';
+}
+/** The short "what the task is about" for the mission text, or null. */
+function missionSummary(text) {
+  const blocks = missionBlocks(text);
+  const named = (s) => SUMMARY_NAME.test(s.replace(/^\d+[.)]\s*/, '').trim());
+  // 1. Under a heading that names the purpose: the block right after it (a paragraph or a list item).
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].kind !== 'heading' || !named(blocks[i].text)) continue;
+    const next = blocks[i + 1];
+    if (next && next.kind !== 'heading') return clipSummary(next.text);
+  }
+  // 2. A bold label that names the purpose.
+  for (const b of blocks) {
+    const bl = b.kind === 'para' ? boldLabel(b.text) : null;
+    if (bl?.rest && named(bl.label)) return clipSummary(bl.rest);
+  }
+  // 3. The first prose paragraph that is not a bold-label block; 4. the first list item.
+  const pick =
+    blocks.find((b) => b.kind === 'para' && !boldLabel(b.text)) ?? blocks.find((b) => b.kind === 'item');
+  return pick ? clipSummary(pick.text) : null;
+}
+
+// "Details" (the technical facts) is closed by default; the choice is remembered per viewer (store wraps
+// localStorage in try/catch). Without storage the choice holds in memory for the visit.
+const PANEL_DETAILS_STORAGE = 'queue-board-panel-details';
+let panelDetailsOpen = store.getItem(PANEL_DETAILS_STORAGE) === 'open';
+
 function drawPanel(fresh) {
   const found = t.perId.get(t.selected);
   if (!found) return closePanel();
@@ -197,22 +315,13 @@ function drawPanel(fresh) {
         done: 'Built',
       }[k.status] ?? k.status);
 
-  panel.replaceChildren(
-    el(
-      'div',
-      { class: 'panel-header' },
-      el(
-        'div',
-        null,
-        el('span', { class: 'summary-id', text: k.id }),
-        el('h2', { id: 'panel-title', text: k.title }),
-      ),
-      el(
-        'button',
-        { type: 'button', class: 'button-icon', 'aria-label': 'Close', onclick: closePanel },
-        icon('close'),
-      ),
-    ),
+  // B14: the panel reads top down. Title, what the task is about, the actions, the full mission, and the
+  // technical facts last in "Details" (closed by default; the summary row keeps the status readable).
+  const summary = d?.mission ? missionSummary(d.mission.text) : null;
+  const details = el(
+    'details',
+    { class: 'panel-details' },
+    el('summary', null, 'Details', el('span', { class: 'panel-details-hint', text: status })),
     el(
       'dl',
       { class: 'facts' },
@@ -287,6 +396,30 @@ function drawPanel(fresh) {
       ),
       facts('Remarks', k.remarks.length ? list2(k.remarks) : null),
     ),
+  );
+  details.open = panelDetailsOpen;
+  details.addEventListener('toggle', () => {
+    panelDetailsOpen = details.open;
+    store.setItem(PANEL_DETAILS_STORAGE, details.open ? 'open' : 'closed');
+  });
+
+  panel.replaceChildren(
+    el(
+      'div',
+      { class: 'panel-header' },
+      el(
+        'div',
+        null,
+        el('span', { class: 'summary-id', text: k.id }),
+        el('h2', { id: 'panel-title', text: k.title }),
+      ),
+      el(
+        'button',
+        { type: 'button', class: 'button-icon', 'aria-label': 'Close', onclick: closePanel },
+        icon('close'),
+      ),
+    ),
+    summary ? el('p', { class: 'panel-summary' }, inline(summary)) : null,
     actionsFor(k, col),
     el(
       'section',
@@ -299,6 +432,7 @@ function drawPanel(fresh) {
         ? markdown(d.mission.text)
         : el('p', { class: 'empty', text: d?.error ?? 'Fetching the mission …' }),
     ),
+    details,
   );
   panel.scrollTop = scroll;
 }

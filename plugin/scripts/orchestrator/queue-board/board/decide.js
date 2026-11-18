@@ -665,7 +665,11 @@ function moveDecision(step) {
 document.addEventListener('keydown', (e) => {
   if (t.view !== 'decisions' || document.body.classList.contains('room-plans')) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (t.selected || t.setting || t.help || t.bulk || !$('guard-background').hidden) return;
+  // The open panel stops the keys while it is modal, or while focus is in it (beside the board from 1200 px the
+  // Decisions keys still work when focus is in the view).
+  const panelOpen = t.selected || t.setting || t.help;
+  if (panelOpen && (panelModal() || panel.contains(document.activeElement))) return;
+  if (t.bulk || !$('guard-background').hidden) return;
   if (inputField(document.activeElement)) return;
   const inView = main.contains(document.activeElement) || document.activeElement === document.body;
   if (e.key === 'u' || e.key === 'U') {

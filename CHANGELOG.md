@@ -5,6 +5,23 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board polish: the task panel says what the task is about first, and stays out of the way on a wide screen.** The
+  panel now reads top down: the title, a short line on what the task is about, the actions, the full mission, and the
+  technical facts (status, placement and score, owner files, branch, cloud, migrations, QA, verification, source,
+  remarks and the rest) last under **Details**. Details is closed from the start, shows the status on its row, and
+  whether you keep it open is remembered in this browser (with no browser storage it holds for the visit). The short
+  line is the first paragraph under a "What and why", "Why", "Goal", "Purpose", "Background" or "Summary" heading (also
+  the Norwegian "Hva og hvorfor"), or a bold `**Goal:**` label; without one it is the first plain paragraph, skipping
+  generated lines (the `=====ID=====` marker, `TITLE:` and `BRANCH:` lines, headings, `**Ownership in the queue:**`
+  blocks, code and tables), and last the first list item, clipped at a word boundary near 320 characters. A mission
+  with no text shows no line. From about 1200 px wide the panel is no longer modal: no scrim, no focus trap and no
+  inert board; the page makes room for it so every card, the top and the gear stay clickable, a click on another card
+  shows that card in the panel, the Decisions keys work while focus is in the view, the selection menu opens to the
+  left of its checkbox instead of under the panel, and messages center over the board. Esc still closes the panel,
+  focus still moves into it on open and back to the card on close (the card clicked last, when the content was
+  swapped), and the screen reader names (Close, Actions, The mission) are unchanged. Crossing 1200 px while the panel
+  is open switches the mode at once. Below 1200 px it is the modal sheet as before. Settings and the help open in the
+  same panel and follow the same rule.
 - **Board polish: one place to answer, one counter, and an owner question that reads the same everywhere.** The
   "Waiting on you" side panel is gone. The button at the top keeps its name, its count and its keyboard access, and
   now opens Decisions, which has everything the panel had: a checkbox on each Check and Approve card with **QA ok for

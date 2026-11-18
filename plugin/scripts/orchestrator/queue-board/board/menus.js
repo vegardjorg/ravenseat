@@ -78,6 +78,14 @@ const HELP = [
       'it, and Space lifts a card in the queue (the arrow keys move, Space drops, Esc cancels). "Blocked" is ' +
       'closed from the start; open it to see the cards there.',
   ],
+  [
+    'The task panel',
+    'A card opens its panel: the title, a short line on what the task is about (from the mission\'s "What and why", ' +
+      'or its first paragraph), the actions, the full mission, and the technical facts last under "Details" (closed ' +
+      'from the start, remembered in this browser). On a wide screen (about 1200 px and up) the panel sits beside the ' +
+      'board: the board stays usable and a click on another card shows that card. On a narrower screen it covers the ' +
+      'board until you close it. Esc closes it, and focus goes back to the card.',
+  ],
 ];
 
 // The legend for the classes, WIP and the badges on the cards. Shown in the help and in the statistics tab,
