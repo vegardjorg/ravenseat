@@ -30,6 +30,12 @@
   /** Tie break between verbs with the same impact: a question first, a check (unlocks nothing) last. */
   const VERB_ORDER = { decide: 0, unstick: 1, approve: 2, check: 3 };
 
+  /**
+   * The words for answering with the recommendation: the one-click option of a question without choices, and the mark
+   * on a choice equal to the recommendation ("As recommended: Vendor B"), never a "(recommended)" suffix after it.
+   */
+  const AS_RECOMMENDED = 'As recommended';
+
   /** How long the board waits before it writes a one-click answer, so "Undo" can take it back without a revert. */
   const UNDO_MS = 5000;
 
@@ -85,7 +91,7 @@
 
   /**
    * One list of decisions from the inbox (queueBoard.inbox: question, qa, proposed, stuck). Unsorted; see sortItems.
-   * Each item: { key, verb, kind, id, title, text, context, recommendation, impact, options, free, open }.
+   * Each item: { key, verb, kind, id, title, text, context, recommendation, background, impact, options, free, open }.
    *   impact  { count, minutes, perStep: number[], focusCount, focusMinutes } (perStep = minutes per focus stage)
    *   options [{ label, recommended, action, needsText? }] (the recommended one first; needsText = the label for the
    *           text the action needs, e.g. what is wrong in a QA deviation)
@@ -116,11 +122,11 @@
       action: { type: 'resolve', sp: s.sp, choice: i + 1 },
     }));
     let options = [...numbered.filter((o) => o.recommended), ...numbered.filter((o) => !o.recommended)];
-    // Without choices, a recommendation is still a one-click answer: "Use the recommendation" sends its text.
+    // Without choices, a recommendation is still a one-click answer: "As recommended" sends its text.
     if (!options.length && s.recommendation)
       options = [
         {
-          label: 'Use the recommendation',
+          label: AS_RECOMMENDED,
           recommended: true,
           action: { type: 'resolve', sp: s.sp, answer: s.recommendation },
         },
@@ -134,12 +140,14 @@
       id: s.sp,
       title: s.text ?? `${s.sp} (no text registered yet)`,
       text: s.text ?? null,
+      // The recommendation is not a context line: it has its own field (and its own block on the board).
       context: [
-        s.recommendation ? `Recommendation: ${s.recommendation}` : null,
         s.source ? `Source: ${s.source}` : null,
         waiting.length ? `Waiting: ${waiting.join(', ')}` : null,
       ].filter(Boolean),
       recommendation: s.recommendation ?? null,
+      // Why it is asked (the question's optional `context` field), or null.
+      background: s.context ?? null,
       impact: {
         count: s.count ?? 0,
         minutes: s.minutes ?? 0,
@@ -679,6 +687,7 @@
   return {
     VERBS,
     UNDO_MS,
+    AS_RECOMMENDED,
     FLAG_NOTE,
     STOP_TEXT,
     minutesText,

@@ -91,10 +91,20 @@ export function decisionLines(j, { width = WIDTH, max = Infinity, ravenseat = CL
     for (const x of j.items.slice(0, max)) {
       out.push('');
       out.push(cut(`${x.nr}. ${x.heading ?? x.verb.toUpperCase()}  ${x.id}  ${x.title}`, width));
+      // A question: the recommendation right under the title, then why it is asked (as on the board).
+      if (x.verb === 'decide' && x.recommendation) out.push(cut(`   Recommendation: ${x.recommendation}`, width));
+      if (x.background) out.push(cut(`   Why: ${x.background}`, width));
       out.push(`   ${x.impact_line}`);
       for (const c of x.context) out.push(`   ${c}`);
       x.options.forEach((o, i) => {
-        const label = `${i + 1}) ${o.label}${o.recommended ? ' (recommended)' : ''}`;
+        // "As recommended" already says it; a recommended choice of a question reads "As recommended: <choice>".
+        const text =
+          o.label === DEC.AS_RECOMMENDED
+            ? o.label
+            : o.recommended && x.verb === 'decide'
+              ? `${DEC.AS_RECOMMENDED}: ${o.label}`
+              : `${o.label}${o.recommended ? ' (recommended)' : ''}`;
+        const label = `${i + 1}) ${text}`;
         out.push(`   ${label.padEnd(34)} ${o.cli ?? '(writes nothing)'}`);
       });
       if (x.free) out.push(`   ${'or in your own words:'.padEnd(34)} ${x.free.cli}`);

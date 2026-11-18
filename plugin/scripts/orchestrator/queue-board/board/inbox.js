@@ -95,11 +95,97 @@ function checkOff(set, id, label) {
   });
 }
 
+// ---- An owner question, read like a question in a chat (board step B15) ----
+// Fixed order on every question: (1) the question, (2) the recommendation as its own block, (3) the context: why it
+// is asked, then one muted line with what the answer unlocks, the waiting tasks and the source, (4) the answers:
+// "As recommended" (or the recommended choice) filled, the other choices, and "Other decision" with a text field.
+// The Decisions card (decide.js) uses the same blocks, so both places read the same.
+
+/** The words for answering with the recommendation (the same as QueueDecisions.AS_RECOMMENDED). */
+const AS_RECOMMENDED = 'As recommended';
+
+/** What a screen reader says for a recommended answer: what is answered, not only "recommended". */
+const asRecommendedLabel = (sp, what) => `Answer ${sp} as recommended: ${what}`;
+
+/** The text on a recommended choice: "As recommended: Vendor B" (no "(recommended)" suffix). */
+const asRecommendedChoice = (label) => `${AS_RECOMMENDED}: ${label}`;
+
+/** The recommendation as its own block on the tone-info surface, with a label (null without a recommendation). */
+function recommendationBlock(text) {
+  if (!text) return null;
+  return el(
+    'div',
+    { class: 'sp-recommendation' },
+    el('p', { class: 'sp-recommendation-label', text: 'Recommendation' }),
+    el('p', { class: 'sp-recommendation-text', text }),
+  );
+}
+
+/**
+ * The source of a question as a link when the board knows it: a task opens its panel, a plan entry opens it in Plans.
+ * Anything else (a file path, a note) stays text; the board never opens a web address from queue data.
+ */
+function sourceLink(source) {
+  if (t.perId?.has(source))
+    return el('button', {
+      type: 'button',
+      class: 'link-button',
+      text: source,
+      onclick: () => openPanel(source, { fromInbox: true }),
+    });
+  if (window.QueuePlans?.title?.(source))
+    return el('button', {
+      type: 'button',
+      class: 'link-button',
+      text: source,
+      title: 'Open the plan entry',
+      onclick: () => {
+        closePanel();
+        window.QueuePlans.openEntry(source);
+      },
+    });
+  return el('span', { text: source });
+}
+
+/**
+ * The context under the recommendation: why it is asked (`context` on the question), then one muted line with what the
+ * answer unlocks, the waiting tasks (links) and the source. `waiting` = the task ids, `unlocks` = the text for the count.
+ */
+function questionContext({ background, unlocks, waiting, source }) {
+  const parts = [];
+  if (unlocks) parts.push(el('span', { text: unlocks }));
+  if (waiting?.length)
+    parts.push(
+      el(
+        'span',
+        null,
+        'Waiting: ',
+        waiting.map((id) =>
+          el('button', {
+            type: 'button',
+            class: 'link-button',
+            text: id,
+            onclick: () => openPanel(id, { fromInbox: true }),
+          }),
+        ),
+      ),
+    );
+  if (source) parts.push(el('span', null, 'Source: ', sourceLink(source)));
+  const line = parts.flatMap((x, i) => (i ? [el('span', { 'aria-hidden': 'true', text: ' · ' }), x] : [x]));
+  if (!background && !line.length) return null;
+  return el(
+    'div',
+    { class: 'sp-context' },
+    background ? el('p', { class: 'sp-why', text: background }) : null,
+    line.length ? el('p', { class: 'sp-meta' }, line) : null,
+  );
+}
+
 /**
  * The question's answer options as buttons (only when it has `choices`). One click answers the question with that choice
  * through the same POST /api/action { type: 'resolve' } as the free text answer, with { choice: <n> } (1-based); the server
  * looks up the text and runs queue.mjs resolve --choice. `note` gives the free text field, when it is open: its text is
- * stored as a note after the choice. The recommended choice (equal to the recommendation) is the filled button.
+ * stored as a note after the choice. The choice equal to the recommendation is the filled button, "As recommended: <choice>".
  */
 function choiceButtons(s, i, note) {
   if (!s.choices?.length) return null;
@@ -121,7 +207,8 @@ function choiceButtons(s, i, note) {
         type: 'button',
         class: `button ${c.recommended ? 'button-filled' : 'button-outline'}`,
         'data-focus': `choice:${i}:${j}`,
-        text: c.recommended ? `${c.label} (recommended)` : c.label,
+        text: c.recommended ? asRecommendedChoice(c.label) : c.label,
+        'aria-label': c.recommended ? asRecommendedLabel(s.sp, c.label) : `Answer ${s.sp}: ${c.label}`,
         title: note
           ? `Answer ${s.sp} with "${c.label}", with the text in the field as a note`
           : `Answer ${s.sp} with "${c.label}"`,
@@ -131,9 +218,37 @@ function choiceButtons(s, i, note) {
   );
 }
 
+/**
+ * "As recommended" for a question whose recommendation is not one of its choices (or that has no choices): one click
+ * answers with the recommendation's text. Null when a choice already is the recommendation (that choice is the button).
+ */
+function asRecommendedButton(s, i) {
+  if (!s.recommendation || s.choices?.some((c) => c.recommended)) return null;
+  return el('button', {
+    type: 'button',
+    class: 'button button-filled',
+    'data-focus': `recommended:${i}`,
+    text: AS_RECOMMENDED,
+    'aria-label': asRecommendedLabel(s.sp, s.recommendation),
+    onclick: async () => {
+      const completed = await action(
+        { type: 'resolve', sp: s.sp, answer: s.recommendation },
+        `${s.sp}: resolved as recommended`,
+      );
+      if (completed) {
+        t.answerOpen = null;
+        t.answerDraft.delete(s.sp);
+        drawInbox(true);
+      }
+    },
+  });
+}
+
 function questionRow(s, i) {
   const type = spType(s.type);
   const open = t.answerOpen === s.sp;
+  // With a recommendation or choices there is something to differ from: the free answer is "Other decision".
+  const other = s.recommendation || s.choices?.length ? 'Other decision' : type.button;
   const row = el(
     'li',
     { class: 'inbox-row' },
@@ -142,12 +257,6 @@ function questionRow(s, i) {
       { class: 'row-header' },
       el('span', { class: `badge sp-type sp-${s.type}`, text: type.name }),
       el('span', { class: 'sp-id', text: s.sp }),
-      el('span', {
-        class: 'sp-locks',
-        text: s.count
-          ? `unlocks ${s.count} ${s.count === 1 ? 'task' : 'tasks'} · ${duration(s.minutes)}`
-          : 'no task waiting',
-      }),
       // What the answer unlocks in focus (the sort basis when focus is set).
       s.focus
         ? el('span', {
@@ -165,44 +274,44 @@ function questionRow(s, i) {
           })
         : null,
     ),
+    // (1) The question that blocks, first and largest.
     el('p', {
-      class: s.text ? 'sp-text' : 'sp-text missing',
+      class: s.text ? 'sp-text sp-ask' : 'sp-text sp-ask missing',
       text: s.text ?? 'No text registered yet (ravenseat question <id> --text …).',
     }),
-    s.recommendation ? el('p', { class: 'sp-meta', text: `Recommendation: ${s.recommendation}` }) : null,
-    s.source ? el('p', { class: 'sp-meta', text: `Source: ${s.source}` }) : null,
-    s.direct.length
-      ? el(
-          'p',
-          { class: 'sp-meta' },
-          'Waiting: ',
-          s.direct.map((id) =>
-            el('button', {
-              type: 'button',
-              class: 'link-button',
-              text: id,
-              onclick: () => openPanel(id, { fromInbox: true }),
-            }),
-          ),
-        )
-      : null,
+    // (2) The recommendation, its own block.
+    recommendationBlock(s.recommendation),
+    // (3) Why it is asked, and the muted line: what it unlocks, what waits, the source.
+    questionContext({
+      background: s.context,
+      unlocks: s.count
+        ? `unlocks ${s.count} ${s.count === 1 ? 'task' : 'tasks'} · ${duration(s.minutes)}`
+        : 'no task waiting',
+      waiting: s.direct,
+      source: s.source,
+    }),
   );
   if (!open) {
+    // (4) The answers: the recommended one filled, the other choices, "Other decision".
     row.append(
-      ...[choiceButtons(s, i, null)].filter(Boolean),
-      el('button', {
-        type: 'button',
-        class: 'button button-muted',
-        'data-focus': `answer:${i}`,
-        // With choices the button opens the free text answer (a note or an answer that is not one of the choices).
-        text: s.choices?.length ? 'Answer in your own words' : type.button,
-        'aria-label': `${type.button}: ${s.sp}`,
-        onclick: () => {
-          t.answerOpen = s.sp;
-          drawInbox(true);
-          panel.querySelector(`#answer-${i}`)?.focus();
-        },
-      }),
+      el(
+        'div',
+        { class: 'answer-buttons' },
+        asRecommendedButton(s, i),
+        choiceButtons(s, i, null),
+        el('button', {
+          type: 'button',
+          class: 'button button-outline',
+          'data-focus': `answer:${i}`,
+          text: other,
+          'aria-label': `${other}: ${s.sp}`,
+          onclick: () => {
+            t.answerOpen = s.sp;
+            drawInbox(true);
+            panel.querySelector(`#answer-${i}`)?.focus();
+          },
+        }),
+      ),
     );
     return row;
   }
@@ -227,14 +336,15 @@ function questionRow(s, i) {
   row.append(
     el(
       'div',
-      { class: 'actions answer-form' },
+      { class: 'actions answer-form answer-buttons' },
       el('div', { class: 'field' }, el('label', { for: `answer-${i}`, text: type.field }), field),
       choiceButtons(s, i, () => field.value),
+      // Start from the recommendation's text and change it (the answer is still saved with "Save answer").
       s.recommendation
         ? el('button', {
             type: 'button',
             class: 'button button-outline',
-            text: 'Use the recommendation',
+            text: 'Start from the recommendation',
             onclick: () => {
               field.value = s.recommendation;
               t.answerDraft.set(s.sp, field.value);
@@ -251,9 +361,10 @@ function questionRow(s, i) {
           drawInbox(true);
         },
       }),
+      // One filled button per card: with a recommended choice that is the choice, otherwise saving the text.
       el('button', {
         type: 'button',
-        class: 'button button-filled',
+        class: s.choices?.some((c) => c.recommended) ? 'button button-outline' : 'button button-filled',
         text: s.type === 'condition' || s.type === 'lawyer' ? 'Mark fulfilled' : 'Save answer',
         onclick: save,
       }),

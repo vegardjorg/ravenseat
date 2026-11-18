@@ -96,18 +96,18 @@ beforeAll(async () => {
 }, 60_000);
 
 describe('"Waiting on you": choices on an owner question', () => {
-  it('shows one button per choice (the recommended one filled and marked); no choice buttons without choices', () => {
+  it('shows one button per choice (the recommended one filled, "As recommended: <choice>"); no choice buttons without choices', () => {
     const buttons = [...row('PICK').querySelectorAll('.answer-choices button')] as HTMLButtonElement[];
-    expect(buttons.map((b) => b.textContent)).toEqual(['Vendor A', 'Vendor B (recommended)']);
+    expect(buttons.map((b) => b.textContent)).toEqual(['Vendor A', 'As recommended: Vendor B']);
     expect(buttons[1].className).toContain('button-filled');
     expect(buttons[0].className).toContain('button-outline');
     expect(row('PICK').querySelector('.answer-choices')?.getAttribute('role')).toBe('group');
-    // The free text answer stays available.
-    expect([...row('PICK').querySelectorAll(':scope > .button')].map((b) => b.textContent)).toContain(
-      'Answer in your own words',
+    // The free text answer stays available, as "Other decision".
+    expect([...row('PICK').querySelectorAll('.answer-buttons > .button')].map((b) => b.textContent)).toContain(
+      'Other decision',
     );
     expect(row('FREE').querySelector('.answer-choices')).toBeNull();
-    expect([...row('FREE').querySelectorAll(':scope > .button')].map((b) => b.textContent)).toContain('Answer');
+    expect([...row('FREE').querySelectorAll('.answer-buttons > .button')].map((b) => b.textContent)).toContain('Answer');
   });
 
   it('a click answers through POST /api/action { type: resolve, sp, choice } (1-based), the free text field as a note', async () => {
@@ -119,8 +119,8 @@ describe('"Waiting on you": choices on an owner question', () => {
       choice: 1,
     });
     // With the free text field open and filled in, its text goes along as the note.
-    const open = [...row('PICK').querySelectorAll(':scope > .button')].find(
-      (b) => b.textContent === 'Answer in your own words',
+    const open = [...row('PICK').querySelectorAll('.answer-buttons > .button')].find(
+      (b) => b.textContent === 'Other decision',
     ) as HTMLButtonElement;
     open.click();
     await flush();

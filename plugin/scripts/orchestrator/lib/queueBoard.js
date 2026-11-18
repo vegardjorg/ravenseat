@@ -634,6 +634,8 @@ function inbox(
         type: q?.type ?? 'question',
         text: q?.text ?? null,
         recommendation: q?.recommendation ?? null,
+        // The background (why it is asked), optional: shown under the recommendation as context.
+        context: q?.context ?? null,
         source: q?.source ?? null,
         // The answer options (2-4, optional) as buttons; `recommended` = the one equal to the recommendation.
         choices: Array.isArray(q?.choices)

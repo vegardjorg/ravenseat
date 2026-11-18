@@ -75,7 +75,8 @@ describe('ravenseat decide', () => {
     const out = run('decide');
     expect(out).toContain('Waiting on you: 3 decisions, most impact first');
     expect(out).toContain('1. DECIDE  Q-1  Which vendor?');
-    expect(out).toContain('Vendor B (recommended)');
+    expect(out).toContain('As recommended: Vendor B');
+    expect(out).not.toContain('(recommended) (recommended)');
     expect(out).toContain('ravenseat approve T-5 --by owner');
     expect(run('decide', '--max', '1')).toContain('... and 2 more');
     expect(readFileSync(join(folder, 'queue.json'), 'utf8')).toBe(before);

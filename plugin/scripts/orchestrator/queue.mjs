@@ -122,11 +122,13 @@
 //                                                                  at a time (ALREADY WAITING, exit 0); started with
 //                                                                  run_in_background by the orchestrator loop; cli/wait.mjs)
 //   node scripts/orchestrator/queue.mjs question <id> --text "..." [--type question|condition|lawyer|owner-task]
-//        [--recommendation "..."] [--source "..."]                          (sets one; fields not given are kept)
+//        [--recommendation "..."] [--context "..."] [--source "..."]      (sets one; fields not given are kept; --context
+//                                                                  is the background: why it is asked, shown under the
+//                                                                  recommendation on the board)
 //        [--choice "..." --choice "..." (2-4) | --no-choices]           (answer options: each at most 60 characters, no
 //                                                                  duplicates; put the recommended one first, or let
 //                                                                  --recommendation be its exact text to mark it)
-//   node scripts/orchestrator/queue.mjs question --file <json>         ({ "<id>": { type, text, recommendation?, source?, choices? } };
+//   node scripts/orchestrator/queue.mjs question --file <json>         ({ "<id>": { type, text, recommendation?, context?, source?, choices? } };
 //                                                                  all or nothing)
 //
 // Limits, capacity and guards:

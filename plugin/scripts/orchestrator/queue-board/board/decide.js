@@ -225,23 +225,39 @@ window.addEventListener('pagehide', () => {
 
 // ---- Drawing ----
 
+/**
+ * The text and the screen reader name of an option. On an owner question the recommended answer says "As recommended"
+ * ("As recommended: Vendor B" for a choice) and its name says what is answered ("Answer Q-SSO as recommended: ...");
+ * the other verbs keep "(recommended)" after the label (QA ok, Approve).
+ */
+function optionWords(item, o) {
+  if (!o.recommended) return { text: o.label, name: o.label };
+  if (item.verb !== 'decide') return { text: `${o.label} (recommended)`, name: `${o.label} (recommended)` };
+  const asIs = o.label === AS_RECOMMENDED;
+  return {
+    text: asIs ? AS_RECOMMENDED : asRecommendedChoice(o.label),
+    name: asRecommendedLabel(item.id, asIs ? (item.recommendation ?? o.label) : o.label),
+  };
+}
+
 /** The option buttons on a card: the recommended one filled, with its number (1-4) as the key. */
 function decisionButtons(item) {
-  const buttons = item.options.map((o, i) =>
-    el('button', {
+  const buttons = item.options.map((o, i) => {
+    const words = optionWords(item, o);
+    return el('button', {
       type: 'button',
       class: `button ${o.recommended ? 'button-filled' : 'button-outline'}`,
       'data-focus': `decide:${item.key}:${i}`,
       'aria-keyshortcuts': o.recommended ? `Enter ${i + 1}` : String(i + 1),
       title: o.recommended ? `The recommendation (key: Enter or ${i + 1})` : `Key: ${i + 1}`,
       // The name a screen reader gives: what the button does. Some read the title above instead of the text.
-      'aria-label': o.recommended ? `${o.label} (recommended)` : o.label,
+      'aria-label': words.name,
       onclick: () => pickOption(item, i),
     },
     el('span', { class: 'decide-key', 'aria-hidden': 'true', text: String(i + 1) }),
-    o.recommended ? `${o.label} (recommended)` : o.label,
-    ),
-  );
+    words.text,
+    );
+  });
   const extra = [];
   if (item.free)
     extra.push(
@@ -250,7 +266,7 @@ function decisionButtons(item) {
         class: item.options.length ? 'link-button' : 'button button-filled',
         'data-focus': `decide:${item.key}:free`,
         'aria-keyshortcuts': item.options.length ? null : 'Enter',
-        text: item.free.label,
+        text: item.verb === 'decide' && item.options.length ? 'Other decision' : item.free.label,
         onclick: () => openForm(item, 'free'),
       }),
     );
@@ -373,6 +389,10 @@ function decisionCard(item, focusKey) {
       el('span', { class: 'sp-id', text: item.id }),
     ),
     el('p', { class: `decide-title${item.text === null && item.verb === 'decide' ? ' missing' : ''}`, text: item.title }),
+    // An owner question: the recommendation as its own block right under the question, then why it is asked
+    // (the same blocks as "Waiting on you", inbox.js).
+    item.verb === 'decide' ? recommendationBlock(item.recommendation) : null,
+    item.verb === 'decide' && item.background ? el('p', { class: 'sp-why', text: item.background }) : null,
     el('p', { class: 'decide-impact', text: D.impactLine(item) }),
     ...item.context.slice(0, 2).map((c) => el('p', { class: 'decide-context', text: c })),
     open ? decisionForm(item) : decisionButtons(item),

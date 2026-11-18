@@ -85,15 +85,17 @@ function approve(queue, ids, now = new Date().toISOString()) {
 
 // ---- Owner questions and resolutions -------------------------------------------------------------------
 //
-// `question`: { "<id>": { type, text, recommendation?, source?, choices?, added_at } } is the text behind the ids in `waiting_on`, so
+// `question`: { "<id>": { type, text, recommendation?, context?, source?, choices?, added_at } } is the text behind the ids in `waiting_on`, so
 // the board can show what the owner must answer. `resolutions`: { "<id>": { time, answer, by, logged? } } is the answer with
 // a timestamp; the id still sits in `resolved` (that list is what the blockers read). Both fields are optional: an
 // old queue.json without them works unchanged. `choices` (optional) is 2-4 short answer options the owner can pick
 // with one click on the board or `ravenseat resolve <id> --choice <n|text>`; a question without choices works as before.
+// `context` (optional) is the background: why it is asked, kept apart from the question itself so the board can show the
+// question first and the background under the recommendation. A question without it works as before.
 
 /** The types an owner question can have. `condition` is answered with how the condition is fulfilled. */
 const QUESTION_TYPES = ['question', 'condition', 'lawyer', 'owner-task'];
-const QUESTION_FIELD = new Set(['type', 'text', 'recommendation', 'source', 'choices', 'added_at']);
+const QUESTION_FIELD = new Set(['type', 'text', 'recommendation', 'context', 'source', 'choices', 'added_at']);
 const QUESTION_MAX_TEXT = 4000;
 /** The limits for `choices`: 2-4 options, each at most 60 characters (a button label, not an essay). */
 const CHOICES_MIN = 2;
@@ -180,10 +182,10 @@ function validQuestionId(id) {
 /**
  * Sets or updates owner questions (`queue.mjs question`, `question --file`, `add` with `{ tasks, question }`).
  * All or nothing: if one question is invalid, nothing is changed. A field that is not included is kept from before; `null`
- * removes recommendation, source or choices. `added_at` is set by the tool (the first time the question is registered).
+ * removes recommendation, context, source or choices. `added_at` is set by the tool (the first time the question is registered).
  * `choices` (optional): 2-4 short answer options (choicesError); the texts are stored trimmed.
  * @param {object} queue the queue (changed when the error list is empty)
- * @param {Record<string, { type?: string, text?: string, recommendation?: string|null, source?: string|null,
+ * @param {Record<string, { type?: string, text?: string, recommendation?: string|null, context?: string|null, source?: string|null,
  *   choices?: string[]|null }>} input
  * @returns {{ set: string[], error: string[] }}
  */
@@ -194,7 +196,7 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
   const newOnes = {};
   for (const [id, s] of Object.entries(input)) {
     if (!s || typeof s !== 'object' || Array.isArray(s)) {
-      error.push(`${id}: must be an object { type, text, recommendation?, source?, choices? }`);
+      error.push(`${id}: must be an object { type, text, recommendation?, context?, source?, choices? }`);
       continue;
     }
     const f = [];
@@ -209,7 +211,7 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
     if (!QUESTION_TYPES.includes(type)) f.push(`type must be ${QUESTION_TYPES.join(', ')}`);
     const text = s.text ?? previous.text;
     if (typeof text !== 'string' || !text.trim()) f.push('text missing');
-    for (const k of ['text', 'recommendation', 'source']) {
+    for (const k of ['text', 'recommendation', 'context', 'source']) {
       const v = s[k];
       if (v != null && (typeof v !== 'string' || v.length > QUESTION_MAX_TEXT))
         f.push(`${k} must be text (at most ${QUESTION_MAX_TEXT} characters)`);
@@ -220,7 +222,7 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
       continue;
     }
     const fresh = { type, text: text.trim() };
-    for (const k of ['recommendation', 'source']) {
+    for (const k of ['recommendation', 'context', 'source']) {
       const v = s[k] !== undefined ? s[k] : previous[k];
       if (typeof v === 'string' && v.trim()) fresh[k] = v.trim();
     }
@@ -323,6 +325,7 @@ function questionOverview(queue) {
         type: q?.type ?? 'question',
         text: q?.text ?? null,
         recommendation: q?.recommendation ?? null,
+        context: q?.context ?? null,
         source: q?.source ?? null,
         choices: Array.isArray(q?.choices) ? q.choices : [],
         resolved: resolved.has(sp),

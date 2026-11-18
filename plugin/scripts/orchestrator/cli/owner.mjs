@@ -107,14 +107,14 @@ export function cmdResolutions() {
 /** `ravenseat question` (the usage is at the top of queue.mjs). */
 export function cmdQuestion() {
   const file = val('--file');
-  const [id] = positional(1, ['--file', '--text', '--type', '--recommendation', '--source', '--choice']);
-  const fields = ['--text', '--type', '--recommendation', '--source', '--choice', '--no-choices'].some((f) =>
+  const [id] = positional(1, ['--file', '--text', '--type', '--recommendation', '--context', '--source', '--choice']);
+  const fields = ['--text', '--type', '--recommendation', '--context', '--source', '--choice', '--no-choices'].some((f) =>
     a.includes(f),
   );
   if (file || id || fields) {
     if (!file && !id)
       die(
-        'question <id> --text "..." [--type ...] [--recommendation "..."] [--source "..."] ' +
+        'question <id> --text "..." [--type ...] [--recommendation "..."] [--context "..."] [--source "..."] ' +
           '[--choice "..." (2-4 times) | --no-choices]',
       );
     let input;
@@ -122,7 +122,7 @@ export function cmdQuestion() {
     else {
       // Only the fields that are given are passed on; the rest are kept.
       const field = {};
-      for (const k of ['text', 'type', 'recommendation', 'source'])
+      for (const k of ['text', 'type', 'recommendation', 'context', 'source'])
         if (a.includes(`--${k}`)) field[k] = val(`--${k}`) ?? '';
       // Each --choice is one answer option (setQuestion checks 2-4, length and duplicates); --no-choices removes them.
       if (a.includes('--choice')) field.choices = repeated('--choice');
@@ -150,6 +150,7 @@ export function cmdQuestion() {
       );
       for (const line of L.choiceLines(r)) console.log(`    ${cut(line, WIDTH - 4)}`);
       if (r.recommendation) console.log(`  ${cut(`recommendation: ${r.recommendation}`, WIDTH - 2)}`);
+      if (r.context) console.log(`  ${cut(`context: ${r.context}`, WIDTH - 2)}`);
       if (r.choices.length && !r.resolved)
         console.log(`  answer: ravenseat resolve ${r.sp} --choice <1-${r.choices.length}> [--answer "note"]`);
     }

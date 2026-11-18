@@ -47,6 +47,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   so on), and a ready card no longer gets a blue frame since its badge says it. In select mode the checkboxes get
   their own room instead of touching the card edge. What a screen reader says on each card is unchanged, word for
   word; a test checks it. Visual only, no new setting.
+- **Board polish: an owner question reads like a question in a chat, with the recommendation easy to see.** In
+  "Waiting on you" and on the Decisions cards each question now comes in a fixed order: the question first and
+  largest, then the recommendation in its own highlighted block with a clear "Recommendation" label (at least the
+  size of the question, where it used to be a small grey line), then why it is asked and one muted line with what
+  the answer unlocks, the waiting tasks and the source, and last the answers. The doubled "Use the recommendation
+  (recommended)" is now **As recommended**, and a choice equal to the recommendation reads "As recommended: Vendor B"
+  without a "(recommended)" suffix; the screen reader name says what is answered ("Answer Q-SSO as recommended:
+  ..."). "Answer in your own words" is now **Other decision**, and `ravenseat decide` prints the same words. A
+  question can carry an optional background, `ravenseat question <id> --context "..."`, so the question text no
+  longer has to mix the question and the reason; existing questions and queue.json files work unchanged. The source
+  is a link when it names a task or a plan entry. Colors come from the existing tone tokens, checked at 4.5:1 in
+  light and dark. No new setting.
 
 ## 0.19.0 (2026-11-18)
 

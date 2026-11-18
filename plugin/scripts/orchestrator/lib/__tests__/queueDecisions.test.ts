@@ -63,9 +63,10 @@ describe('items from the inbox', () => {
     expect(q.free.action).toEqual({ type: 'resolve', sp: 'Q-1', answer: null });
   });
 
-  it('a question without choices but with a recommendation gets "Use the recommendation"', () => {
+  it('a question without choices but with a recommendation gets "As recommended"', () => {
     const q = byKey['decide:Q-2'];
     expect(q.options).toHaveLength(1);
+    expect(q.options[0].label).toBe('As recommended');
     expect(q.options[0].action).toEqual({ type: 'resolve', sp: 'Q-2', answer: 'Yes, behind a flag' });
   });
 

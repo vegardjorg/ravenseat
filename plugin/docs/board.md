@@ -52,8 +52,10 @@ files, cost and the actions for its status (see [task detail](guide.md#task-deta
 <p align="center"><img src="../../assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
 
 **Waiting on you.** Everything only you can decide lands here: questions from agents (with their
-recommendation), owner tasks and conditions. Each shows which tasks it blocks. Answer on the board, and the
-orchestrator picks up the answer and unblocks the tasks.
+recommendation), owner tasks and conditions. Each question reads like a question in a chat: the question first, the
+recommendation in its own highlighted block right under it, then why it is asked and one muted line with what the
+answer unlocks, the waiting tasks and the source, and last the answers: **As recommended** (one click) or **Other
+decision** (a text field). Answer on the board, and the orchestrator picks up the answer and unblocks the tasks.
 
 <p align="center"><img src="../../assets/screenshots/light-14-decisions.jpg" alt="The Decisions tab: open decisions with the recommendation as the main button" width="800"></p>
 
@@ -156,7 +158,8 @@ the panel shows `ravenseat set <id> cancelled --remark "<why>"` instead. **Waiti
 the owner as one list, one card per decision, most impact first (minutes unlocked in focus stage 1 first, then what
 the answer unlocks), grouped as **Decide** (owner questions), **Check** (QA), **Approve** (proposals) and **Unstick**
 (an old pick, or work running long). Each card has an impact line, the recommendation as the filled button, and the
-other answers next to it. A click does not write at once: the card leaves and an **Undo** toast stands for 5 seconds;
+other answers next to it. On an owner question the recommendation also stands in its own block under the question,
+and the filled button reads **As recommended** ("As recommended: Vendor B" when it is one of the choices). A click does not write at once: the card leaves and an **Undo** toast stands for 5 seconds;
 a new answer, leaving the page or the timer writes it. Keys: `j` / `k` move, `Enter` takes the recommendation, `1`-`4`
 picks an answer, `u` undoes. With nothing waiting it shows the listening status; **Decided today** (closed) is at the
 bottom. The board opens on Decisions when anything waits and on the queue otherwise. The rules are
@@ -175,9 +178,13 @@ card with the tool's name and the count: look at what it tried in its session, t
 lacks. The PermissionDenied and PostToolUseFailure hooks (`hook-tool-trouble.mjs`) keep only the agent id, the tool name
 and the time in `<dataFolder>/tool-trouble.json`, never the reason, the tool input or the error text; an interrupt and
 the main session are left out, and events older than half an hour drop off. A NEEDS APPROVAL card on the same task wins.
-An owner question with `choices` shows one button per choice (the recommended one filled); a click answers it through
-the same `POST /api/action { type: 'resolve' }` with `{ choice: <n> }`, and the text in the open answer field goes
-along as a note. "Answer in your own words" keeps the free text answer. A line under the title says
+An owner question with `choices` shows one button per choice; the one equal to the recommendation is filled and reads
+"As recommended: <choice>" (its screen reader name says what is answered, "Answer Q-SSO as recommended: …"). A click
+answers it through the same `POST /api/action { type: 'resolve' }` with `{ choice: <n> }`, and the text in the open
+answer field goes along as a note. A question whose recommendation is not one of its choices gets an **As recommended**
+button that answers with the recommendation's text. **Other decision** opens the free text answer. A question's
+optional `context` (`ravenseat question <id> --context "…"`, why it is asked) shows under the recommendation, and its
+`source` is a link when it names a task or a plan entry. A line under the title says
 "Orchestrator listening" while `ravenseat wait` runs in the orchestrator session (its heartbeat is under 90 s old), so an
 answer starts the next round at once; otherwise "Answers are picked up the next time the orchestrator runs".
 
