@@ -67,12 +67,16 @@ function doctorRow(s, { cli = 'ravenseat' } = {}) {
       fix: `update Ravenseat (${UPDATE}); if it stays after an update, report the version and these row types (no content) at ${REPORT}. ${cli} settings set client.canary off hides this row`,
     };
   }
+  // A newer version alone happens with nearly every Claude Code update and reads as expected, so it is no gap: the row
+  // is marked onRequest and only `doctor --all` shows it (lib/guidance.js filterDoctor, 0x L7). A changed format above
+  // is always shown.
   if (s.newer)
     return {
       status: 'INFO',
       name,
       message: `${versionText(s)} is newer than the formats the fixtures cover (${s.covered}); the last ${s.rows} row(s) of the newest transcript read as expected`,
       fix: null,
+      onRequest: true,
     };
   return { status: 'OK', name, message: `${versionText(s)}: the last ${s.rows} row(s) of the newest transcript read as expected`, fix: null };
 }

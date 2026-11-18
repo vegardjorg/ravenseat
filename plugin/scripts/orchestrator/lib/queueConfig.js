@@ -126,10 +126,11 @@ const STANDARD = Object.freeze({
   // dbProbes: the database probe recipes on the Checks tab (only with a local database found). Off by default.
   // recipeDamping: a recipe seldom accepted (below recipeMinAccepted percent after recipeMinProposals decided proposals,
   // recipeMinProposalsDb for a database recipe) is listed but no longer offered (lib/recipePrecision.js). On by default.
-  // quickGateCard, ciParityLift, idleGuardInfo, idleGuardDays: CI parity for a built gate guard (lib/quickGate.js, 0i step
-  // 9b). The card offers to add a guard's command to gates.quick (the write takes the owner's click and only adds), the
-  // lift puts the CI cards first when a guard's kind is not run in CI, and the INFO line names a gate guard with 0 runs
-  // after idleGuardDays. All on: none of them stops work or runs a command.
+  // quickGateCard, ciParityLift, idleGuardDays: CI parity for a built gate guard (lib/quickGate.js, 0i step 9b). The card
+  // offers to add a guard's command to gates.quick (the write takes the owner's click and only adds), the lift puts the
+  // CI cards first when a guard's kind is not run in CI, and the INFO line names a gate guard with 0 runs after
+  // idleGuardDays (0 is off). All on: none of them stops work or runs a command. The old switch idleGuardInfo is no key
+  // here any more, but false in a file still turns the line off (resolveOwn, lib/findingRepeats.js LEGACY).
   learning: {
     repeats: true,
     windowDays: 90,
@@ -144,7 +145,6 @@ const STANDARD = Object.freeze({
     recipeMinAccepted: 30,
     quickGateCard: true,
     ciParityLift: true,
-    idleGuardInfo: true,
     idleGuardDays: 7,
   },
   // The batch push threshold (lib/pushBatch.js; `ravenseat push-check`, the push guard, the board). Every push of baseBranch
@@ -733,6 +733,7 @@ function readConfigFile(file) {
  * What config() does after merge(), on its own so the tests and `ravenseat doctor` read a file the same way:
  *   - lite softens gitSurface and dependencyFiles to warn and turns reviewItems.stop, wiring.stop, scopeNotes.drift
  *     and features.focus off, unless the file sets them (the registry rows carry the same defaultByMode);
+ *   - the old learning.idleGuardInfo false makes learning.idleGuardDays 0 (off), so the one row shows what is in force;
  *   - protectedPaths in the object form { add, remove } becomes one list (lib/mergeGuard.js resolveProtectedPaths): the
  *     defaults plus add minus remove, the floor kept. A list stays as it is; a malformed object gives the defaults.
  * @param {object} k merge(STANDARD, own)
@@ -750,6 +751,8 @@ function resolveOwn(k, own = {}) {
     // Lite has no focus stages, so the Focus tab would stay empty.
     if (own.features?.focus === undefined) k.features = { ...k.features, focus: false };
   }
+  // learning.idleGuardDays is the one row for the idle guard line (0x L2); the old switch off still means off.
+  if (own.learning?.idleGuardInfo === false) k.learning = { ...k.learning, idleGuardDays: 0 };
   if (own.protectedPaths !== undefined && !Array.isArray(own.protectedPaths))
     k.protectedPaths = require('./mergeGuard.js').resolveProtectedPaths(own.protectedPaths, STANDARD.protectedPaths).list;
   return k;

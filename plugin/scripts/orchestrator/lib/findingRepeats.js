@@ -63,9 +63,11 @@ const FC = require('./failureClasses.js');
 // recipeDamping and its numbers: a recipe below recipeMinAccepted percent accepted after recipeMinProposals decided
 // proposals (recipeMinProposalsDb for a database recipe) is listed but no longer offered (lib/recipePrecision.js, 0i
 // step 9). On by default: it only hides a suggestion, never stops work, and the owner can show the recipe again.
-// quickGateCard, ciParityLift, idleGuardInfo and idleGuardDays: CI parity for a built gate guard (lib/quickGate.js, 0i
-// step 9b). On by default: the card only offers (the write takes the owner's click and can only add a command), the lift
-// only orders the CI cards and never lights the red marker (section 3.9), and the idle line is INFO. 7 days is the plan's.
+// quickGateCard, ciParityLift and idleGuardDays: CI parity for a built gate guard (lib/quickGate.js, 0i step 9b). On by
+// default: the card only offers (the write takes the owner's click and can only add a command), the lift only orders the
+// CI cards and never lights the red marker (section 3.9), and the idle line is INFO. 7 days is the plan's; 0 turns the
+// idle line off. idleGuardDays is the one row for it (0x L2): the old switch idleGuardInfo is no row any more, but false
+// in a file still turns the line off (LEGACY below), and setupOf still gives idleGuardInfo for the code that reads it.
 const DEFAULTS = Object.freeze({
   repeats: true,
   windowDays: 90,
@@ -80,11 +82,14 @@ const DEFAULTS = Object.freeze({
   recipeMinAccepted: 30,
   quickGateCard: true,
   ciParityLift: true,
-  idleGuardInfo: true,
   idleGuardDays: 7,
 });
-const ONOFF = ['repeats', 'guardFailedMarker', 'proposals', 'dbProbes', 'recipeDamping', 'quickGateCard', 'ciParityLift', 'idleGuardInfo'];
-const NUMBERS = ['windowDays', 'areaRepeats', 'projectRepeats', 'recipeMinProposals', 'recipeMinProposalsDb', 'idleGuardDays'];
+const ONOFF = ['repeats', 'guardFailedMarker', 'proposals', 'dbProbes', 'recipeDamping', 'quickGateCard', 'ciParityLift'];
+const NUMBERS = ['windowDays', 'areaRepeats', 'projectRepeats', 'recipeMinProposals', 'recipeMinProposalsDb'];
+/** Whole numbers where 0 is off. */
+const ZERO_OFF = ['idleGuardDays'];
+/** The old switches still read from a file: false turns its number off (0x L2). */
+const LEGACY = Object.freeze({ idleGuardInfo: 'idleGuardDays' });
 /** Whole percents, 1 to 100. */
 const PERCENTS = ['recipeMinAccepted'];
 const percent = (v, standard) => (Number.isInteger(v) && v >= 1 && v <= 100 ? v : standard);
@@ -117,6 +122,12 @@ function setupOf(cfg = {}) {
   for (const k of ONOFF) out[k] = typeof own[k] === 'boolean' ? own[k] : DEFAULTS[k];
   for (const k of NUMBERS) out[k] = whole(own[k], DEFAULTS[k]);
   for (const k of PERCENTS) out[k] = percent(own[k], DEFAULTS[k]);
+  for (const k of ZERO_OFF) out[k] = Number.isInteger(own[k]) && own[k] >= 0 ? own[k] : DEFAULTS[k];
+  // The old switch off wins also next to a number: the line was off, so it stays off until the number is set again
+  // (`ravenseat settings set learning.idleGuardDays <n>` turns the old switch on with it, cli/settings.mjs).
+  for (const [old, number] of Object.entries(LEGACY)) if (own[old] === false) out[number] = 0;
+  // Kept for the code that asks whether the line is on (cli/inspection.mjs idleGuardLines).
+  out.idleGuardInfo = out.idleGuardDays > 0;
   return out;
 }
 
@@ -130,6 +141,9 @@ function setupProblems(own) {
     if (own[k] !== undefined && !(Number.isInteger(own[k]) && own[k] >= 1)) out.push(`learning.${k} must be a whole number of 1 or more`);
   for (const k of PERCENTS)
     if (own[k] !== undefined && percent(own[k], null) == null) out.push(`learning.${k} must be a whole number from 1 to 100`);
+  for (const k of ZERO_OFF)
+    if (own[k] !== undefined && !(Number.isInteger(own[k]) && own[k] >= 0)) out.push(`learning.${k} must be a whole number of 0 or more (0 is off)`);
+  for (const k of Object.keys(LEGACY)) if (own[k] !== undefined && typeof own[k] !== 'boolean') out.push(`learning.${k} must be true or false`);
   return out;
 }
 

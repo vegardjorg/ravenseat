@@ -32,9 +32,10 @@
 //   taxonomy    only when something is wrong: one WARN naming what a project's docs/queue/failure-classes.json or
 //               failure-rules.json has that was ignored (lib/failureRules.js projectWarnings); the core list applies
 //   canary      the client format canary on the tail of the project's newest transcript (lib/clientCanary.js): OK when
-//               it reads as expected, INFO for a Claude Code version newer than the fixtures, WARN for rows read
-//               differently (unknown row types, turns without usage, unknown API errors); never FAIL, no row without a
-//               transcript or with client.canary off. Type names and counts only, never content
+//               it reads as expected, INFO for a Claude Code version newer than the fixtures (only with --all: it
+//               reads as expected, so it is no gap), WARN for rows read differently (unknown row types, turns without
+//               usage, unknown API errors); never FAIL, no row without a transcript or with client.canary off. Type
+//               names and counts only, never content
 //   cloud rows  only with features.cloud on: what cloud tracks need (lib/cloudSetup.js), read locally; the setup itself is
 //               `ravenseat cloud setup`
 //   the safety baseline (cli/doctorBaseline.mjs, offline): secrets (a tracked .env or private key is FAIL), gates,
@@ -691,7 +692,7 @@ function checkCatalog() {
  * without a transcript.
  */
 /**
- * A gate guard with 0 runs after learning.idleGuardDays (learning.idleGuardInfo, lib/quickGate.js idle): one INFO row per
+ * A gate guard with 0 runs after learning.idleGuardDays (0 is off, lib/quickGate.js idle): one INFO row per
  * guard, nothing while every gate guard has run (or there is none). INFO only: it never stops anything.
  */
 function checkGuards() {

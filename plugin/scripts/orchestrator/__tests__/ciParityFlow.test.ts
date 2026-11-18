@@ -157,4 +157,14 @@ describe('a gate guard that has not run (INFO)', () => {
     expect(off.q('guards').out).not.toContain('0 runs in');
     expect(off.q('doctor').out).not.toMatch(/G-1 .* has 0 runs/);
   });
+
+  it('learning.idleGuardDays 0 is off; set to a number, it turns an old idleGuardInfo false on with it (L2)', () => {
+    const zero = project({ config: { learning: { idleGuardDays: 0 } } });
+    expect(zero.q('guards').out).not.toContain('0 runs in');
+    const old = project({ config: { learning: { idleGuardInfo: false } } });
+    const r = old.q('settings', 'set', 'learning.idleGuardDays', '3');
+    expect(r.code, r.out).toBe(0);
+    expect(JSON.parse(old.configNow()).learning).toEqual({ idleGuardInfo: true, idleGuardDays: 3 });
+    expect(old.q('guards').out).toMatch(/INFO: G-1 .*0 runs in \d+ days/);
+  });
 });

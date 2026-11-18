@@ -194,6 +194,10 @@ function setSetting() {
   let next;
   try {
     next = SV.setJsonText(text, SV.pathOf(key), p.value);
+    // learning.idleGuardDays is the one row for the idle guard line (0x L2). The old switch learning.idleGuardInfo false
+    // still turns the line off, so a number above 0 turns that switch on with it; otherwise the number would do nothing.
+    if (key === 'learning.idleGuardDays' && p.value > 0 && JSON.parse(next).learning?.idleGuardInfo === false)
+      next = SV.setJsonText(next, ['learning', 'idleGuardInfo'], true);
   } catch (e) {
     die(`settings set: ${file} is not a JSON object (${e.message}). Nothing was changed.`);
   }

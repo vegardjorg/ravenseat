@@ -413,11 +413,24 @@ describe('the weakening rows from the design', () => {
     expect(row('cloud.collect').weakens?.('auto', 'auto')).toBe(false);
   });
 
+  it('L2: the idle guard line is one row, learning.idleGuardDays (0 is off); the old learning.idleGuardInfo has no row', () => {
+    const row = (k: string) => ROWS.find((x) => x.key === k) as Row | undefined;
+    expect(row('learning.idleGuardInfo')).toBe(undefined);
+    expect(QC.STANDARD.learning.idleGuardInfo).toBe(undefined);
+    expect(row('learning.idleGuardDays')).toMatchObject({ type: 'integer', category: 'learning' });
+    expect(row('learning.idleGuardDays')?.requires ?? []).toEqual([]);
+    expect(row('learning.idleGuardDays')?.explanation).toMatch(/0 turns it off/);
+    expect(row('learning.idleGuardDays')?.explanation).toMatch(/learning\.idleGuardInfo/);
+    // The old key in a file still turns the line off, as config() reads it.
+    expect(QC.resolveOwn(QC.merge(QC.STANDARD, { learning: { idleGuardInfo: false } }), { learning: { idleGuardInfo: false } }).learning.idleGuardDays).toBe(0);
+    expect(QC.resolveOwn(QC.merge(QC.STANDARD, {}), {}).learning.idleGuardDays).toBe(7);
+  });
+
   it('owner decision 2026-11-17: the advisory rows are no weakening (a card, an order, an INFO line, a log row), guardLog keeps its mark', () => {
     const row = (k: string) => ROWS.find((x) => x.key === k) as Row;
     // None of these stops, asks or denies anything: off is less advice, not a weaker guard, so no slide, no banner row
     // and no doctor settings line.
-    for (const k of ['learning.quickGateCard', 'learning.ciParityLift', 'learning.idleGuardInfo', 'testWeakening.findingLog']) {
+    for (const k of ['learning.quickGateCard', 'learning.ciParityLift', 'learning.idleGuardDays', 'testWeakening.findingLog']) {
       expect(row(k), k).toBeTruthy();
       expect(row(k).weakens, k).toBe(null);
       expect(row(k).protects, k).toBe(null);

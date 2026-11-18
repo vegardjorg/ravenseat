@@ -56,6 +56,18 @@ describe('the doctor row', () => {
     expect(r.message).toContain('Claude Code 2.1.400 is newer than the formats the fixtures cover (2.1.317)');
   });
 
+  it('a newer version alone is only shown by doctor --all; a changed format is shown by plain doctor (L7)', () => {
+    const G = require('../guidance.js');
+    const info = CC.doctorRow(K.summarize(newer));
+    expect(info).toMatchObject({ status: 'INFO', onRequest: true });
+    expect(G.filterDoctor([info], false).rows).toEqual([]);
+    expect(G.filterDoctor([info], false, { all: true }).rows).toEqual([info]);
+    const warned = CC.doctorRow(K.summarize(changed));
+    expect(warned.onRequest).toBeFalsy();
+    expect(G.filterDoctor([warned], false).rows).toEqual([warned]);
+    expect(CC.doctorRow(K.summarize(ok)).onRequest).toBeFalsy();
+  });
+
   it('WARN for rows read differently, with what to do, never FAIL and never content', () => {
     const r = CC.doctorRow(K.summarize(changed), { cli: 'rs' });
     expect(r.status).toBe('WARN');

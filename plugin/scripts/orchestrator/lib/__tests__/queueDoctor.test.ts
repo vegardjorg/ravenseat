@@ -257,7 +257,7 @@ describe('ravenseat doctor', () => {
     expect(p.run('--all').out).toMatch(/^OK {4}ci-cost {4}1 workflow\(s\) on push, all with cancel-in-progress and a path filter$/m);
   }, 60_000);
 
-  it('canary: no row without a transcript, OK, INFO for a newer version, WARN for new rows, never FAIL or content (0w W4)', () => {
+  it('canary: no row without a transcript, OK, INFO for a newer version (only --all), WARN for new rows, never FAIL or content (0w W4)', () => {
     const p = project();
     const SECRET = 'PRIVATE-CONTENT-do-not-leak';
     const canary = () => p.json().checks.filter((c) => c.name === 'canary');
@@ -269,7 +269,10 @@ describe('ravenseat doctor', () => {
     write([turn('2.1.317')]);
     expect(canary().map((c) => c.status)).toEqual(['OK']);
     write([turn('2.1.400')]);
-    expect(canary()[0]).toMatchObject({ status: 'INFO' });
+    // A newer version alone reads as expected: no gap, so only --all shows the INFO row (0x L7).
+    expect(canary()).toEqual([]);
+    const all = (JSON.parse(p.run('--json', '--all').out) as { checks: Check[] }).checks.filter((c) => c.name === 'canary');
+    expect(all[0]).toMatchObject({ status: 'INFO' });
     write([turn('2.1.400'), { type: 'brand-new-row', version: '2.1.400', text: SECRET }]);
     const before = snapshot(p.root);
     const r = p.run();

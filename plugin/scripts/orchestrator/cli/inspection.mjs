@@ -10,7 +10,7 @@
 //   ravenseat guards [--json]                     the guard registry (lib/guardRegistry.js) with the measures from the
 //                                                 gate rows
 //                                                 and an INFO line for a gate guard with 0 runs after
-//                                                 learning.idleGuardDays (learning.idleGuardInfo; lib/quickGate.js)
+//                                                 learning.idleGuardDays (0 is off; lib/quickGate.js)
 //   ravenseat guards add [--from-task <id>] --kind gate|instruction|review|none --title "..." --explain "..."
 //        [--command "<gate command>"] [--against "<lesson>"] [--signature <id>] [--task <id>]
 //        [--class <failure class> [--area <path>]]
@@ -296,7 +296,7 @@ export function guardById(id) {
 }
 
 /**
- * The INFO lines for gate guards with 0 runs after learning.idleGuardDays (learning.idleGuardInfo on): ravenseat guards
+ * The INFO lines for gate guards with 0 runs after learning.idleGuardDays (0 is off, as is the old idleGuardInfo false): ravenseat guards
  * and ravenseat doctor. INFO only, never a stop. `rows` can be passed when they are already read.
  * @param {{ tree?: string, rows?: object[], now?: number }} [opts]
  */
@@ -414,6 +414,6 @@ export function cmdGuards() {
   }
   if (error) console.log(`${rel}: ${error}`);
   for (const l of GR.lines(registry, rows, { cli: CLI, file: rel })) console.log(l);
-  // A gate guard that no gate has run since it was built (learning.idleGuardInfo): INFO, never a stop.
+  // A gate guard that no gate has run since it was built (learning.idleGuardDays): INFO, never a stop.
   for (const l of idleGuardLines({ tree: ROOT, rows })) console.log(l);
 }

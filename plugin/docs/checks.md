@@ -364,7 +364,7 @@ because none of them stops work or runs a command:
 - **The CI cards first** (`learning.ciParityLift`): when a gate guard runs tests, a type check or lint and CI does not
   run that kind, "Run your tests in CI" or "Run lint and type check in CI" is put first in its priority and names the
   guard. It is never raised to high: the red dot is for a guard that did not hold, not for a gap to look at.
-- **An INFO line for a guard that has not run** (`learning.idleGuardInfo`, `learning.idleGuardDays` 7): `ravenseat guards`
+- **An INFO line for a guard that has not run** (`learning.idleGuardDays` 7, `0` = off): `ravenseat guards`
   and `ravenseat doctor` name a gate guard with 0 runs in the time log since it was built, once it is that many days old.
   It is INFO only, and says how to add the command when it is not in `gates.quick`.
 

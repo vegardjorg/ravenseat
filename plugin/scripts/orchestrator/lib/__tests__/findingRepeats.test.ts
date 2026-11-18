@@ -167,6 +167,19 @@ describe('the setup', () => {
     expect(R.setupOf({ learning: { windowDays: 0, areaRepeats: 'x', proposals: 'yes' } })).toMatchObject({ windowDays: 90, areaRepeats: 2, proposals: false });
   });
 
+  it('learning.idleGuardDays is the one row for the idle guard line: 0 is off, and the old idleGuardInfo false still is (L2)', () => {
+    expect(R.setupOf({ learning: { idleGuardDays: 0 } })).toMatchObject({ idleGuardDays: 0, idleGuardInfo: false });
+    expect(R.setupOf({ learning: { idleGuardDays: 14 } })).toMatchObject({ idleGuardDays: 14, idleGuardInfo: true });
+    expect(R.setupOf({ learning: { idleGuardInfo: false } })).toMatchObject({ idleGuardDays: 0, idleGuardInfo: false });
+    // The old key off wins also next to a number: it was off before, so it stays off.
+    expect(R.setupOf({ learning: { idleGuardInfo: false, idleGuardDays: 7 } })).toMatchObject({ idleGuardDays: 0, idleGuardInfo: false });
+    expect(R.setupOf({ learning: { idleGuardInfo: true, idleGuardDays: 3 } })).toMatchObject({ idleGuardDays: 3, idleGuardInfo: true });
+    expect(R.setupOf({ learning: { idleGuardDays: -1 } })).toMatchObject({ idleGuardDays: 7, idleGuardInfo: true });
+    expect(R.setupProblems({ idleGuardDays: 0 })).toEqual([]);
+    expect(R.setupProblems({ idleGuardDays: -1 })).toEqual(['learning.idleGuardDays must be a whole number of 0 or more (0 is off)']);
+    expect(R.setupProblems({ idleGuardInfo: 'no' })).toEqual(['learning.idleGuardInfo must be true or false']);
+  });
+
   it('the thresholds and the window come from the setup; repeats off counts nothing', () => {
     const rows = [row({ daysAgo: 40 }), row({ daysAgo: 2 })];
     expect(scan(rows, { setup: R.setupOf({ learning: { areaRepeats: 3 } }) }).due).toEqual([]);

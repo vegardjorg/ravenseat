@@ -5,6 +5,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **One row for the idle guard line, and a quieter canary in doctor.** `learning.idleGuardInfo` and
+  `learning.idleGuardDays` are one setting now: `learning.idleGuardDays` (7 by default, `0` turns the INFO line off).
+  An old `"idleGuardInfo": false` in queue.config.json still turns the line off, and setting the number with
+  `ravenseat settings set` (or on the board) turns that old switch on with it. The format canary's INFO row for a
+  Claude Code version newer than the fixtures (the rows still read as expected) is shown only by `ravenseat doctor
+  --all`; a format that reads differently is still a WARN in plain doctor. No default changes and no guard is weaker.
 - **The Checks tab folds the general ideas.** A typical project had around ten low cards that only needed gates and
   tests, CI or an opt-in check that is off, so they showed nearly everywhere. A low card that observes nothing in the
   project now sits under a closed **More ideas (n)** fold below the suggestions (a native details element, keyboard and

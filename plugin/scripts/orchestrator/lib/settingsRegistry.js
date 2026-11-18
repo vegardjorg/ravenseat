@@ -192,8 +192,6 @@ const REQUIRES = Object.freeze({
   'learning.recipeMinProposals': ['learning.recipeDamping'],
   'learning.recipeMinProposalsDb': ['learning.recipeDamping', 'learning.dbProbes'],
   'learning.recipeMinAccepted': ['learning.recipeDamping'],
-  // cli/inspection.mjs idleGuardLines: no lines with idleGuardInfo off.
-  'learning.idleGuardDays': ['learning.idleGuardInfo'],
   // lib/agentGuard.js: with enabled false the other types are not guarded, so there is nothing to leave out.
   'agentGuard.except': ['agentGuard.enabled'],
   // lib/pushBatch.js ownerAskOn: only in push mode owner.
@@ -609,12 +607,14 @@ const SETTINGS = Object.freeze([
     'When a gate guard\'s kind of check (tests, types, lint) is not run in CI, the cards tests-in-ci and quality-in-ci ' +
     'are put first in their priority and name the guard. They are never raised to the red marker. On by default, ' +
     'since it only changes the order. Off: the usual order, and no guard is weaker.'),
-  row('learning.idleGuardInfo', 'learning', 'onoff', 'Note a guard that has never run',
-    'ravenseat guards and ravenseat doctor give one INFO line for a gate guard with 0 runs since it was built, after ' +
-    'the set number of days. On by default, since a guard that never runs protects nothing. It is INFO only and never ' +
-    'stops anything. Off: no line (the registry still shows 0 runs), and no guard is weaker.'),
-  row('learning.idleGuardDays', 'learning', 'integer', 'Days before a gate guard counts as not run',
-    'How many days after it was built a gate guard with 0 runs gets the INFO line. 7 by default, as the plan says.'),
+  // One row for the idle guard line (0x L2): the number of days, 0 for off. The old switch learning.idleGuardInfo is
+  // no row; false in a file still turns the line off (lib/queueConfig.js resolveOwn), and setting the number turns that
+  // switch on with it (cli/settings.mjs).
+  row('learning.idleGuardDays', 'learning', 'integer', 'Note a guard that has never run (days)',
+    'ravenseat guards and ravenseat doctor give one INFO line for a gate guard with 0 runs since it was built, this ' +
+    'many days after it was built. 7 by default, since a guard that never runs protects nothing. It is INFO only and ' +
+    'never stops anything. 0 turns it off: no line (the registry still shows 0 runs), and no guard is weaker. The old ' +
+    'learning.idleGuardInfo false in queue.config.json still turns it off.'),
 
   // ---- 7. Agent guards: File and read guards ('files') and Command and secret guards ('guards'), mixed in this list ----
   row('protectedPaths', 'files', 'list', 'Protected paths',
