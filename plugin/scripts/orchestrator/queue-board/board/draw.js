@@ -228,7 +228,7 @@ function batchGroups(summary) {
 
 /**
  * The buttons in a batch group. "Pack into track" shows the new track before it is created,
- * "Take out of batch queue" makes the tasks their own tracks again, and the box selects the group for the selection bar.
+ * "Take out of batch queue" makes the tasks their own tracks again, and the box selects the group for the selection menu.
  * They apply to the cards shown (search and filter); the line says so when any in the group are hidden.
  */
 function batchButtons(g, summary) {
@@ -246,7 +246,7 @@ function batchButtons(g, summary) {
       'label',
       {
         class: 'mark-group',
-        title: `Select ${who} for the selection bar (bulk actions)`,
+        title: `Select ${who} for the selection menu (bulk actions)`,
       },
       el('input', {
         type: 'checkbox',
@@ -355,7 +355,7 @@ function columnHeader(col, summary) {
 // ---- Drawing ----
 function draw() {
   t.pending = false;
-  // The selection bar and "Select all matches" follow the state and the filter in all views.
+  // The selection menu and "Select all matches" follow the state and the filter in all views.
   drawOptionLine();
   drawMarkMatch();
   const focus = document.activeElement?.closest?.('[data-id], [data-pid]');
@@ -565,6 +565,8 @@ function draw() {
   }
   markChain();
   drawStripe();
+  // The selection menu was drawn before the board was rebuilt: place it next to its box on the new board.
+  placeOptionMenu();
   if (t.selected) drawPanel();
 }
 

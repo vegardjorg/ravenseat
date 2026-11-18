@@ -3031,24 +3031,23 @@ div.row-option {
   background: transparent;
 }
 
-/* ---- Multi-select, the selection bar, the bulk action dialog and "Undo" ---- */
+/* ---- Multi-select, the selection menu, the bulk action dialog and "Undo" ---- */
 
-/* The checkbox on the card: visible on hover and focus, and always when something is selected.
-   It is absolutely positioned in the card's left padding, so it takes no space in the header and the id starts at the
-   card padding (in line with the title) whether the box shows or not. On a mouse the target is 24 x 36 px (WCAG 2.2
-   target size); on touch it is 44 px and the header makes room for it (see @media (hover: none) below). */
+/* The checkbox on the card: always visible on a card that can be selected, so selecting is not hidden behind a hover.
+   It is absolutely positioned in the card's left padding with room to the card edge (the box is centered in its target),
+   and the header of a markable card makes room for it, so it never touches the id. On a mouse the target is 24 x 36 px
+   (WCAG 2.2 target size); on touch it is 44 px with wider room (see @media (hover: none) below). */
 .mark-box {
   position: absolute;
   top: 0;
-  left: 0;
+  left: var(--distance-xs);
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   width: var(--distance-lg);
   height: calc(var(--distance-lg) + var(--distance-sm) + var(--distance-xs));
   cursor: pointer;
-  opacity: 0;
 }
 
 .mark-box input {
@@ -3059,34 +3058,18 @@ div.row-option {
   cursor: pointer;
 }
 
-.summary:hover .mark-box,
-.summary:focus-within .mark-box,
-.summary:focus .mark-box,
-.board.has-option .mark-box,
-.summary.marked .mark-box {
-  opacity: 1;
-}
-
-/* Select mode on a mouse: the box shows on every markable card, so it gets room of its own instead of touching the card
-   edge and the id. Touch has its own, wider room below. */
-@media (hover: hover) {
-  .board.has-option .mark-box {
-    left: var(--distance-xs);
-  }
-
-  .board.has-option .summary[data-markable] .summary-header {
-    padding-left: var(--distance-md);
-  }
+.summary[data-markable] .summary-header {
+  padding-left: var(--distance-md);
 }
 
 @media (hover: none) {
   .mark-box {
+    left: 0;
     width: 44px;
     height: 44px;
-    opacity: 1;
   }
 
-  /* On touch the box is always visible, so the header makes room for it instead of letting it cover the id. */
+  /* The touch target is wider, so the header makes more room for it instead of letting it cover the id. */
   .summary[data-markable] .summary-header {
     padding-left: var(--distance-lg);
   }
@@ -3127,18 +3110,22 @@ div.row-option {
   display: none;
 }
 
-/* The selection bar: sticky at the bottom, only when something is selected. */
+/* The selection bar (narrow screens and touch): fixed at the bottom, only when something is selected. It spans the
+   width between the side gutters and centers its content (left: 50% with a transform let it shrink to half the
+   screen on a phone). */
 .optionLine {
   position: fixed;
   z-index: 15;
-  left: 50%;
+  left: var(--distance-md);
+  right: var(--distance-md);
   bottom: var(--distance-md);
-  transform: translateX(-50%);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--distance-sm) var(--distance-md);
-  max-width: min(1100px, calc(100vw - 32px));
+  width: fit-content;
+  max-width: 1100px;
+  margin: 0 auto;
   padding: var(--distance-sm) var(--distance-md) var(--distance-sm) var(--distance-md);
   border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius-lg);
@@ -3151,7 +3138,7 @@ div.row-option {
   display: none;
 }
 
-/* Space below the last card, so the selection bar never covers it. */
+/* Space below the last card, so the selection bar never covers it (the bar layout only; the menu floats). */
 body.with-option-line .board {
   padding-bottom: 96px;
 }
@@ -3165,6 +3152,76 @@ body.with-option-line .board {
   display: flex;
   flex-wrap: wrap;
   gap: var(--distance-sm);
+}
+
+/* The selection menu (wide screens with a mouse): a short vertical list like a Windows context menu, next to the
+   checkbox checked last. select.js sets top and left (placeOptionMenu) and keeps it inside the viewport. The surface,
+   frame, radius and shadow are the Filter and Selection menus' (.filter-menu). */
+.optionLine.as-menu {
+  right: auto;
+  bottom: auto;
+  display: block;
+  width: 240px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--distance-xs) 0;
+  background: var(--color-surface-container-lowest);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.16); /* shadow: black in both modes */
+}
+
+.as-menu .option-tall {
+  padding: var(--distance-sm) var(--distance-md);
+  font-size: var(--text-sm);
+}
+
+/* "2 hidden by the filter" on its own line under the count. */
+.option-hidden {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--color-on-surface-variant);
+}
+
+.as-menu .option-buttons {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0;
+  padding: 0 var(--distance-xs);
+}
+
+/* A menu row: 36 px on a mouse (44 px on touch, in the coarse pointer block further down), the full width, left aligned, the hover surface. */
+.option-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--distance-sm);
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-on-surface);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.option-item:hover,
+.option-item:focus-visible {
+  background: var(--color-surface-container-high);
+}
+
+.option-item:focus-visible {
+  outline: var(--focus);
+  outline-offset: -2px;
+}
+
+.option-separator {
+  height: 1px;
+  margin: var(--distance-xs) var(--distance-sm);
+  background: var(--color-outline-variant);
 }
 
 .button-small {
@@ -4170,7 +4227,8 @@ fieldset.setting legend {
   .focus-row,
   button.badge,
   a.badge,
-  .badge[role='button'] {
+  .badge[role='button'],
+  .option-item {
     min-height: 44px;
   }
 

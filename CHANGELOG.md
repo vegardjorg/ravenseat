@@ -5,6 +5,17 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board polish: selecting cards opens a short menu next to the checkbox, like a desktop context menu.** With a
+  mouse on a wide screen the bulk actions no longer sit in a wide bar at the bottom centre, far from the card you
+  just checked. A narrow vertical menu opens next to the box you checked last, with the count and the summed estimate
+  on top, the same actions under the same conditions as before, and **Clear selection** below a line. It follows the
+  next box you check (also in another column), moves along when you scroll or resize, flips left or up near an edge
+  and never covers the box it came from. Arrow keys, Home and End move between the rows, Esc closes the menu and puts
+  focus back on the checkbox (Esc again clears the selection, as before), and Shift+F10 on a card opens it again. The
+  checkbox is now visible on every card that can be selected, with room to the card edge and the id. Narrow screens
+  (below 600 px) and touch screens keep the bar at the bottom, which now uses the full width on a phone instead of
+  shrinking to half of it. The preview, the dialog and **Undo** are unchanged. A test covers the order, the anchoring
+  and clamping, the keyboard and both layouts.
 - **The Filter and Selection menus no longer stick out past the right edge on a wide screen.** Both menus opened
   from the left edge of their button, which sits at the right end of the top bar, so on a 1440 px screen the
   Selection menu ended about 100 px outside the window and the page got a sideways scroll. They now open from the

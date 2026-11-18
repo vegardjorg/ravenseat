@@ -154,6 +154,18 @@ running, picked or review task is never cancelled from the board, since an agent
 the panel shows `ravenseat set <id> cancelled --remark "<why>"` instead. **Waiting on you** has **Decline** next to
 **Approve** for each proposal; it opens the task with the confirm step.
 
+**Select several cards.** Every card in In queue, proposed and the batch queue has a checkbox at its top left.
+Select with the box, x on the card, Ctrl/Cmd-click, Shift-click (everything from the previous selected), Ctrl/Cmd+A
+or "Select all matches", or a whole group from its header. On a wide screen with a mouse the **selection menu** opens
+next to the box you checked last, like a context menu: the count and the summed estimate on top (and how many are
+hidden by the filter), then **Move to project**, **Feature**, **Put on hold**, **Take off hold** (when one is on hold),
+**Move as block**, **Add to batch queue** / **Take out of batch queue**, **Pack into track** (two or more, all in the
+batch queue), **Label** and, below a line, **Clear selection**. It follows the next box you check, also in another
+column, moves along when you scroll and stays inside the window. Arrow up and down, Home and End move between the
+rows, Enter picks one, Esc closes the menu and puts focus back on the checkbox (Esc again clears the selection), and
+Shift+F10 on a card opens it again. On a narrow screen (below 600 px) or a touch screen the same actions sit in a bar
+at the bottom. Every action shows what changes before it is saved, and **Undo** stands for 30 seconds afterwards.
+
 **Decisions** (the tab next to Plans and Queue, with a count) is the owner's main view: everything that waits on
 the owner as one list, one card per decision, most impact first (minutes unlocked in focus stage 1 first, then what
 the answer unlocks), grouped as **Decide** (owner questions), **Check** (QA), **Approve** (proposals) and **Unstick**
@@ -365,7 +377,7 @@ serves only the files in its allow list (`STATIC`), all with the same strict Con
   `cards.js` (filters, search, the card), `draw.js` (the columns, the chain, the strip), `views.js` (Focus wiring,
   grouping, saved views), `menus.js` (help, project lanes, the Filter menu), `statistics.js`, `settings.js` (the
   gear), `inbox.js` ("Waiting on you"), `decide.js` (the Decisions tab), `checks.js` (the Checks tab), `panel.js` (the detail panel), `edit.js` (cancel, decline, edit, markdown),
-  `select.js` (multi-select), `bulk.js` (bulk dialog and undo), `interact.js` (writing, drag, keyboard), `top.js`
+  `select.js` (multi-select and the selection menu), `bulk.js` (bulk dialog and undo), `interact.js` (writing, drag, keyboard), `top.js`
   (theme, gear sections, modules, view tabs), `cloud.js` (the Cloud view) and `start.js` (update banner, logo and
   the start). They share the page's global scope, so a top-level name in one is visible in the others, as when they
   were one `board.js`. Code that runs while a script loads may only use names from the scripts before it; a new

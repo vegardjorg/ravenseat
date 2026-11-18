@@ -296,7 +296,7 @@ function groupedList(summary, col, section) {
         counter.textContent = `${ids.length} · ${duration(match.reduce((s2, k) => s2 + (Number(k.estimate) || 0), 0))}`;
         if (box) {
           box.checked = ids.length > 0 && ids.every((id) => t.marked.has(id));
-          box.title = `Select all ${ids.length} cards in the group for the selection bar (bulk actions)`;
+          box.title = `Select all ${ids.length} cards in the group for the selection menu (bulk actions)`;
         }
       });
       return d;

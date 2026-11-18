@@ -473,7 +473,7 @@ function actionsFor(k, col) {
   // Cancel, decline and edit (waiting and proposed), or the CLI hint for running and review.
   const edit = taskEditActions(k);
   if (edit) box.append(...[].concat(edit));
-  // Select and act (same dialog with preview as the selection bar).
+  // Select and act (same dialog with preview as the selection menu).
   const mark = markButtons(k, col);
   if (mark) box.append(mark);
   if (!box.children.length)

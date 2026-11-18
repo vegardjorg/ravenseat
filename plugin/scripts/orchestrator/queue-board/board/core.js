@@ -135,6 +135,10 @@ const t = {
   // (Shift-click selects everything between). `bulk` is the bulk action dialog (null = closed).
   marked: new Set(),
   anchor: null,
+  // The selection menu (select.js): the card whose checkbox was touched last (the menu opens next to it), and
+  // whether Esc has closed the menu while the selection stays (the next change or Shift+F10 opens it again).
+  menuAnchor: null,
+  optionClosed: false,
   bulk: null,
   // The server answered 401 (restarted); the banner is shown and polling stops.
   keyInvalid: false,

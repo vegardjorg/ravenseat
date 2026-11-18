@@ -54,9 +54,11 @@ const HELP = [
   [
     'Bulk actions',
     'Select cards with the checkbox, x on the card, Ctrl/Cmd-click or Shift-click, Ctrl/Cmd+A or "Select all ' +
-      'matches". The group header selects the whole group. The selection bar at the bottom moves to a project, puts on hold, moves as ' +
+      'matches". The group header selects the whole group. The selection menu next to the box you checked last (a bar ' +
+      'at the bottom on a narrow or touch screen) moves to a project, puts on hold, moves as ' +
       'a block, adds to the batch queue or sets a label. You always see what changes before it is saved, everything happens ' +
-      'together or not at all, and "Undo" is ready afterward. Esc clears the selection.',
+      'together or not at all, and "Undo" is ready afterward. In the menu the arrow keys move, Esc closes it and Shift+F10 on ' +
+      'a card opens it again. Esc clears the selection.',
   ],
   [
     'Selection, tabs and grouping',
@@ -281,7 +283,7 @@ function markLaneButton(p, per) {
     button.setAttribute('aria-pressed', all ? 'true' : 'false');
     button.title = all
       ? `Remove the ${ids.length} cards in ${p.pid} from the selection`
-      : `Select the ${ids.length} shown cards in queue and batch queue in ${p.pid}, for the selection bar`;
+      : `Select the ${ids.length} shown cards in queue and batch queue in ${p.pid}, for the selection menu`;
   });
   return button;
 }
