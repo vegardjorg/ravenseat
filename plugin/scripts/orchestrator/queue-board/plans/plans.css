@@ -5,24 +5,12 @@
   weight 400 or 600.
 */
 
-/* ---- The work rooms: each room has its own accent, and the other room is hidden ---- */
+/* ---- The work rooms: the chosen room tab carries the room, and the other room is hidden ---- */
 
+/* No colored stripe under the top any more: the underlined room tab (.toggles[role='tablist'] in board.css) says
+   which room is open, in both rooms with the same primary line. Purple is kept for the heavy class (D+) only. */
 .room-option {
   flex: none;
-}
-
-/* Queue: the primary color under the top. Plans: the tertiary color, also on the chosen room. The text in the switch carries the choice. */
-.top {
-  box-shadow: inset 0 -3px 0 var(--color-primary);
-}
-
-body.room-plans .top {
-  box-shadow: inset 0 -3px 0 var(--color-tertiary);
-}
-
-body.room-plans #room-plans[aria-selected='true'] {
-  background: var(--color-tertiary-container);
-  color: var(--color-on-tertiary-container);
 }
 
 /* In Plans the queue's row 2 (the view tabs and the search), the focus line, the strip, the board and the selection bar are gone. */
@@ -157,10 +145,11 @@ body.room-plans #optionLine {
   text-align: left;
 }
 
+/* The chosen view in the Plans list: the same neutral chosen state as a segmented switch (hover surface, 600),
+   not a filled purple. Purple is kept for the heavy class (D+) only. */
 .plans-view .link-button[aria-pressed='true'] {
-  background: var(--color-tertiary-container);
-  color: var(--color-on-tertiary-container);
-  border-color: var(--color-tertiary);
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface);
   font-weight: 600;
 }
 
@@ -219,7 +208,7 @@ body.room-plans #optionLine {
 .plans-count {
   min-width: 24px;
   padding: 0 var(--distance-xs);
-  border-radius: 9999px;
+  border-radius: var(--radius);
   background: var(--color-surface-container-high);
   color: var(--color-on-surface);
   font-size: var(--text-xs);
@@ -336,7 +325,7 @@ body.room-plans #optionLine {
   display: inline-block;
   width: 64px;
   height: 8px;
-  border-radius: 9999px;
+  border-radius: var(--radius);
   background: var(--color-surface-container-high);
   border: 1px solid var(--color-outline-variant);
   overflow: hidden;
@@ -545,14 +534,16 @@ body.room-plans #optionLine {
   margin-bottom: var(--distance-sm);
 }
 
+/* The same underlined tabs as the tab lists in board.css: 2 px primary line under the chosen tab, 36 px on a mouse
+   (44 px on touch below). */
 .plans-tab {
-  min-height: 40px;
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   gap: var(--distance-xs);
   padding: 0 var(--distance-sm);
   border: 0;
-  border-bottom: 3px solid transparent;
+  border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--color-on-surface-variant);
   font: inherit;
@@ -561,7 +552,7 @@ body.room-plans #optionLine {
 }
 
 .plans-tab[aria-selected='true'] {
-  border-bottom-color: var(--color-tertiary);
+  border-bottom-color: var(--color-primary);
   color: var(--color-on-surface);
   font-weight: 600;
 }
@@ -1467,7 +1458,7 @@ body.room-plans #optionLine {
   max-width: 140px;
   padding: 0 var(--distance-xs);
   border: 1px solid var(--color-outline-variant);
-  border-radius: 9999px;
+  border-radius: var(--radius-md);
   background: var(--color-surface-container-lowest);
   color: var(--color-on-surface);
   font: inherit;
@@ -2530,7 +2521,7 @@ ol.overview-list > .overview-row > * {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container);
   color: var(--color-on-surface);
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); /* M3 shadow: black in both modes */
@@ -2781,6 +2772,13 @@ ol.overview-list > .overview-row > * {
 .dep-mode .toggles-button {
   min-height: 32px;
   font-size: var(--text-sm);
+}
+
+/* The 32 px above is for the mouse; on touch the switch keeps the 44 px target like every other toggle. */
+@media (pointer: coarse) {
+  .dep-mode .toggles-button {
+    min-height: 44px;
+  }
 }
 
 .dep-summary {

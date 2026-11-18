@@ -163,6 +163,88 @@ describe('motion, forced colors and touch targets', () => {
   });
 });
 
+// ---- B3: buttons, tabs and radius ----
+// The radius scale is 4 (badge, counter), 6 (button, input, tab group) and 8 (card, panel, dialog). Round
+// (9999px or 50%) is only for shapes that are circles: dots, the switch track and its knob.
+const plansCss = readFileSync(
+  join(__dirname, '..', '..', 'queue-board', 'plans', 'plans.css'),
+  'utf8',
+);
+
+/** Every selector list whose rule sets border-radius to 9999px, in one CSS text (comments removed). */
+function pillSelectors(text: string): string[] {
+  const without = text.replace(/\/\*[\s\S]*?\*\//g, '');
+  const out: string[] = [];
+  for (const m of without.matchAll(/([^{}]+)\{([^{}]*)\}/g))
+    if (/border-radius:\s*9999px/.test(m[2])) out.push(m[1].trim().replace(/\s+/g, ' '));
+  return out;
+}
+
+describe('B3: radius scale, button levels and underlined tabs', () => {
+  it('the radius tokens are 4, 6 and 8 px (no 12 px step any more)', () => {
+    expect(css).toMatch(/--radius:\s*4px;/);
+    expect(css).toMatch(/--radius-md:\s*6px;/);
+    expect(css).toMatch(/--radius-lg:\s*8px;/);
+    expect(css).not.toMatch(/--radius-xl/);
+    expect(plansCss).not.toMatch(/--radius-xl/);
+  });
+
+  it('9999px only on round shapes (dots and the switch), never on buttons, tabs, badges or counters', () => {
+    const round = /(^|[\s,])(\.dot|\.inbox-listening-dot|input\.switch|\.toggles-button\.has-marker::after|\.doc-rev::before|\.graph-draw \.draw)(?=$|[\s,])/;
+    for (const sel of [...pillSelectors(css), ...pillSelectors(plansCss)]) expect(sel).toMatch(round);
+  });
+
+  it('buttons are 36 px on a mouse, the controls use the 6 px radius', () => {
+    expect(ruleFor('.button')['min-height']).toBe('36px');
+    expect(ruleFor('.button')['border-radius']).toBe('var(--radius-md)');
+    expect(ruleFor('.button-outline')['min-height']).toBeUndefined();
+    expect(ruleFor('.button-icon')['border-radius']).toBe('var(--radius-md)');
+    expect(ruleFor('.link-button')['border-radius']).toBe('var(--radius-md)');
+    expect(ruleFor('.toggles')['border-radius']).toBe('var(--radius-md)');
+  });
+
+  it('touch screen: every .button and the icon button keep a 44 px target', () => {
+    const i = css.indexOf('@media (pointer: coarse)');
+    // The whole media block: it ends at the first closing brace at the start of a line.
+    const block = css.slice(i, css.slice(i).search(/\r?\n\}/) + i);
+    expect(block).toMatch(/(^|[\s,])\.button(?=[\s,])/);
+    expect(block).toContain('min-height: 44px');
+    const icon = block.match(/\.button-icon \{([^}]*)\}/);
+    expect(icon).not.toBeNull();
+    expect(icon![1]).toMatch(/width: 44px;/);
+    expect(icon![1]).toMatch(/height: 44px;/);
+  });
+
+  it('button levels: secondary is the card surface with an outline, quiet has no frame', () => {
+    for (const sel of ['.button-outline', '.button-muted']) {
+      const r = ruleFor(sel);
+      expect(r.background).toBe('var(--color-surface-container-lowest)');
+      expect(r['border-color']).toBe('var(--color-outline)');
+      expect(r.color).toBe('var(--color-on-surface)');
+    }
+    const quiet = ruleFor('.link-button');
+    expect(quiet.border).toBe('0');
+    expect(quiet.color).toBe('var(--color-primary)');
+    // Danger outside a confirmation is the secondary form with the danger text, not a filled surface.
+    expect(ruleFor('.button-fare').color).toBe('var(--color-on-tone-danger)');
+  });
+
+  it('a tab list is underlined tabs: no frame, no dividers, the chosen tab has a 2 px primary line', () => {
+    const list = ruleFor(".toggles[role='tablist']");
+    expect(list.border).toBe('0');
+    const chosen = ruleFor(".toggles[role='tablist'] .toggles-button[aria-selected='true']");
+    expect(chosen['box-shadow']).toBe('inset 0 -2px 0 var(--color-primary)');
+    expect(chosen.background).toBe('transparent');
+    expect(chosen['font-weight']).toBe('600');
+    expect(ruleFor(".toggles[role='tablist'] .toggles-button + .toggles-button")['border-left']).toBe('0');
+  });
+
+  it('the 3 px room stripe under the top is gone, and the chosen room is not filled purple', () => {
+    expect(plansCss).not.toMatch(/inset 0 -3px 0/);
+    expect(plansCss).not.toMatch(/#room-plans\[aria-selected='true'\]\s*\{[^}]*tertiary/);
+  });
+});
+
 describe('emptyState', () => {
   it('a search that hides everything: the reason is the search, the action clears it', () => {
     expect(

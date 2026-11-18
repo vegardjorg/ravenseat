@@ -26,6 +26,14 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   each surface, in light and dark; a test checks all of them. The palette also gains six tinted badge tones, each
   with one meaning (neutral, ready, done, waiting on you, blocked, heavy class), ready for the card cleanup that
   follows.
+- **Board polish: calmer buttons and tabs, same hit areas.** Buttons are no longer round capsules: they use a small
+  6 px corner and 36 px height with a mouse, and keep the full 44 px target on touch screens. Each button has one
+  level: the main action is the only filled one, ordinary actions sit on the card surface with a thin outline, and
+  link actions such as "Answer in your own words" are plain text with a hover surface. The room and view switchers
+  and the settings tabs are underlined tabs (a 2 px line under the chosen one), so the colored stripe under the top
+  is gone and the chosen tab shows which room is open. Badges and counters use a 4 px corner and cards and panels
+  8 px; only dots and the switch stay round. Purple no longer marks the Plans room. The arrow keys, Home and End in
+  the tabs work as before. Visual only, no new setting.
 
 ## 0.19.0 (2026-11-18)
 

@@ -1,14 +1,17 @@
 /*
   Kanban board for the work queue (see docs/board.md). All colors are the tokens from the neutral palette
   (PALETTE in lib/queueBoard.js), served as --color-<token> in /theme.css (light, dark following the system, dark via
-  the switch). Never hex here. Radius 4/8/12 px, spacing 4/8/16/24 px, the system font.
+  the switch). Never hex here. Radius 4/6/8 px, spacing 4/8/16/24 px, the system font.
   Roles: app-root = surface-container-low, card = surface-container-lowest, sheet/panel = surface.
 */
 
 :root {
+  /* The radius scale: 4 px for badges and counters (a label, not clickable), 6 px for controls (buttons, inputs,
+     tab groups), 8 px for surfaces (cards, panels, dialogs, menus). Round (9999px or 50%) only where the shape is a
+     circle: dots and the switch. */
   --radius: 4px;
+  --radius-md: 6px;
   --radius-lg: 8px;
-  --radius-xl: 12px;
   /* The font and spacing scale. Use the tokens, not raw px: queueBoardScale.test.ts counts the
      raw values and stops any drift back. The font floor is 12 px, and the weight is 400 or 600 (only those
      two weights are used). Half values (6, 10, 12 px …) are rounded to the nearest step, ties up. */
@@ -238,12 +241,12 @@ textarea {
 }
 
 .search {
-  min-height: 40px;
+  min-height: 36px;
   width: 260px;
   max-width: 60vw;
   padding: 0 var(--distance-md);
   border: 1px solid var(--color-outline);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-surface-container-lowest);
 }
 
@@ -251,19 +254,28 @@ textarea {
   color: var(--color-placeholder);
 }
 
+/* Two kinds of toggle group share these classes:
+   - a segmented switch (role group, aria-pressed: Setup in the graph, the Plans views): one framed control with
+     the 6 px radius, the chosen segment on the hover surface in 600, no filled color;
+   - a tab list (role tablist: the rooms, the views, the settings): underlined tabs further down. */
 .toggles {
   display: inline-flex;
   border: 1px solid var(--color-outline);
-  border-radius: 9999px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .toggles-button {
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 var(--distance-md);
   border: 0;
   background: transparent;
+  color: var(--color-on-surface);
   cursor: pointer;
+}
+
+.toggles-button:hover {
+  background: var(--color-surface-container-high);
 }
 
 .toggles-button + .toggles-button {
@@ -281,8 +293,40 @@ textarea {
 
 .toggles-button[aria-pressed='true'],
 .toggles-button[aria-selected='true'] {
-  background: var(--color-secondary-container);
-  color: var(--color-on-secondary-container);
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface);
+  font-weight: 600;
+}
+
+/* Underlined tabs: plain text, no frame and no dividers; the chosen tab has a 2 px primary line under it and the
+   text in 600. The line is an inset shadow so the tab keeps its height, and forced colors get an outline instead
+   (see @media (forced-colors: active)). The arrow keys, Home and End are the tab list's own (unchanged). */
+.toggles[role='tablist'] {
+  border: 0;
+  border-radius: 0;
+  gap: var(--distance-xs);
+  overflow: visible;
+}
+
+.toggles[role='tablist'] .toggles-button {
+  padding: 0 var(--distance-sm);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  color: var(--color-on-surface-variant);
+}
+
+.toggles[role='tablist'] .toggles-button + .toggles-button {
+  border-left: 0;
+}
+
+.toggles[role='tablist'] .toggles-button:hover {
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface);
+}
+
+.toggles[role='tablist'] .toggles-button[aria-selected='true'] {
+  box-shadow: inset 0 -2px 0 var(--color-primary);
+  background: transparent;
+  color: var(--color-on-surface);
   font-weight: 600;
 }
 
@@ -293,7 +337,7 @@ textarea {
   width: 8px;
   height: 8px;
   margin-left: var(--distance-xs);
-  border-radius: 9999px;
+  border-radius: 50%;
   background: var(--color-error);
   vertical-align: super;
 }
@@ -340,7 +384,7 @@ textarea {
   padding: var(--distance-sm) 0;
   background: var(--color-surface-container-lowest);
   border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.16); /* shadow: black in both modes */
 }
 
@@ -506,7 +550,7 @@ textarea {
   font-size: var(--text-xs);
   font-weight: 600;
   padding: 2px var(--distance-sm);
-  border-radius: 9999px;
+  border-radius: var(--radius);
   background: var(--color-secondary-container);
   color: var(--color-on-secondary-container);
   white-space: nowrap;
@@ -568,7 +612,7 @@ textarea {
   position: relative;
   padding: var(--distance-sm) var(--distance-md) var(--distance-sm) var(--distance-md);
   border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container-lowest);
   cursor: pointer;
   overflow: hidden;
@@ -703,7 +747,7 @@ textarea {
   padding: 0 var(--distance-sm);
   min-height: 20px;
   border: 1px solid var(--color-outline-variant);
-  border-radius: 9999px;
+  border-radius: var(--radius);
   font-size: var(--text-xs);
   line-height: 18px;
   color: var(--color-on-surface-variant);
@@ -939,16 +983,19 @@ textarea {
   font-weight: 600;
 }
 
+/* The icon button (close, the gear): 36 px on a mouse like the other buttons, 44 px on touch (@media (pointer:
+   coarse) below). No frame; the hover surface shows it is clickable. */
 .button-icon {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 9999px;
+  border-radius: var(--radius-md);
   background: transparent;
+  color: var(--color-on-surface);
   cursor: pointer;
 }
 
@@ -996,15 +1043,21 @@ code {
   background: var(--color-surface-container-high);
 }
 
+/* The quiet button level: no surface and no frame, the primary text says it is an action, and the hover surface
+   confirms it. For link actions such as "Show more", "Reset" and "Answer in your own words". */
 .link-button {
   min-height: 32px;
   padding: 0 var(--distance-sm);
   margin: 0 var(--distance-sm) var(--distance-sm) 0;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-lg);
+  border: 0;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-primary);
   cursor: pointer;
+}
+
+.link-button:hover {
+  background: var(--color-surface-container-high);
 }
 
 .actions {
@@ -1100,10 +1153,17 @@ code {
   overflow-wrap: anywhere;
 }
 
+/* The button levels (one look per job, so the main action stands out and the rest stays calm):
+   - primary .button-filled: filled primary, at most one per view or dialog;
+   - secondary .button-outline and .button-muted: the card surface, a 1 px outline, the plain text color;
+   - quiet .link-button (above): no surface, no frame, primary text;
+   - danger .button-fare: the secondary form with the danger text; filled only inside a confirmation form.
+   All are 36 px on a mouse with the 6 px control radius; on touch they keep the 44 px target (@media (pointer:
+   coarse) below). */
 .button {
-  min-height: 44px;
-  padding: 0 var(--distance-lg);
-  border-radius: 9999px;
+  min-height: 36px;
+  padding: 0 var(--distance-md);
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   cursor: pointer;
   font-weight: 600;
@@ -1153,25 +1213,43 @@ code {
   }
 }
 
+/* The level classes also stand alone ("button-small button-outline" in the Plans room, without .button): they
+   carry the 1 px border and the control radius themselves, so no browser outset border or square corner shows. */
+:is(.button-filled, .button-muted, .button-outline, .button-fare) {
+  border-width: 1px;
+  border-style: solid;
+  border-color: transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
 .button-filled {
   background: var(--color-primary);
   color: var(--color-on-primary);
 }
 
 .button-muted {
-  background: var(--color-secondary-container);
-  color: var(--color-on-secondary-container);
+  background: var(--color-surface-container-lowest);
+  border-color: var(--color-outline);
+  color: var(--color-on-surface);
 }
 
 .button-outline {
-  min-height: 40px;
-  background: transparent;
+  background: var(--color-surface-container-lowest);
   border-color: var(--color-outline);
-  color: var(--color-primary);
+  color: var(--color-on-surface);
 }
 
 .button-fare {
+  background: var(--color-surface-container-lowest);
+  border-color: var(--color-outline);
+  color: var(--color-on-tone-danger);
+}
+
+/* Inside a confirmation form ("Yes, cancel the task", "Yes, decline") the danger action is the one filled button. */
+.task-edit .button-fare {
   background: var(--color-error-container);
+  border-color: transparent;
   color: var(--color-on-error-container);
 }
 
@@ -1231,7 +1309,7 @@ code {
 
 .tile {
   padding: var(--distance-md);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container-lowest);
   border: 1px solid var(--color-outline-variant);
 }
@@ -1269,7 +1347,7 @@ code {
 .blocker-stat {
   margin-top: var(--distance-lg);
   padding: var(--distance-md);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container-lowest);
   border: 1px solid var(--color-outline-variant);
 }
@@ -1307,7 +1385,7 @@ code {
 .graph {
   margin: 0;
   padding: var(--distance-md);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container-lowest);
   border: 1px solid var(--color-outline-variant);
 }
@@ -1646,7 +1724,7 @@ input.switch:disabled {
 .guard {
   width: min(480px, 100%);
   padding: var(--distance-lg);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   border: 1px solid var(--color-outline-variant);
 }
@@ -1881,7 +1959,7 @@ body.with-option-line .toaster {
   min-width: 22px;
   height: 22px;
   padding: 0 var(--distance-sm);
-  border-radius: 9999px;
+  border-radius: var(--radius);
   background: var(--color-primary);
   color: var(--color-on-primary);
   font-size: var(--text-xs);
@@ -1936,7 +2014,7 @@ body.with-option-line .toaster {
   min-height: 32px;
   padding: 0 var(--distance-sm);
   border: 1px solid var(--color-outline-variant);
-  border-radius: 9999px;
+  border-radius: var(--radius-md);
   background: var(--color-surface-container-low);
   font-size: var(--text-xs);
   cursor: pointer;
@@ -2072,7 +2150,7 @@ body.with-option-line .toaster {
 .inbox-row {
   padding: var(--distance-md);
   border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container-lowest);
 }
 
@@ -2695,7 +2773,7 @@ div.row-option {
 }
 .cloud-bundle-summary {
   padding: var(--distance-md);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container-lowest);
   border: 1px solid var(--color-outline-variant);
   display: grid;
@@ -2754,7 +2832,7 @@ div.row-option {
   padding: var(--distance-sm) var(--distance-sm) var(--distance-sm);
   border: 1px dashed var(--color-outline-variant);
   border-left: 5px solid var(--p, var(--color-outline));
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
 }
 
 .batch-group.ready {
@@ -2789,7 +2867,7 @@ div.row-option {
 .batch-bar {
   position: relative;
   height: 8px;
-  border-radius: 9999px;
+  border-radius: var(--radius);
   background: var(--color-surface-container-high);
   overflow: hidden;
 }
@@ -2799,7 +2877,7 @@ div.row-option {
   inset: 0 auto 0 0;
   width: calc(var(--share, 0) * 100%);
   background: var(--color-outline);
-  border-radius: 9999px;
+  border-radius: var(--radius);
 }
 
 .batch-group.ready .batch-fill {
@@ -2926,7 +3004,7 @@ div.row-option {
   max-width: min(1100px, calc(100vw - 32px));
   padding: var(--distance-sm) var(--distance-md) var(--distance-sm) var(--distance-md);
   border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container);
   color: var(--color-on-surface);
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); /* M3 shadow: black in both modes */
@@ -3102,7 +3180,7 @@ body.with-option-line .board {
   margin: var(--distance-sm) 0;
   padding: var(--distance-sm) var(--distance-md);
   border: 1px solid var(--color-primary);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
 }
 
 .bulk-package-title {
@@ -3206,7 +3284,7 @@ body.with-option-line .board {
 .focus-step {
   padding: 2px var(--distance-sm);
   border: 1px solid var(--color-outline-variant);
-  border-radius: 9999px;
+  border-radius: var(--radius);
   white-space: nowrap;
 }
 
@@ -3395,7 +3473,7 @@ body.with-option-line .board {
   gap: var(--distance-sm) var(--distance-md);
   padding: var(--distance-sm) var(--distance-md);
   border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container-lowest);
 }
 
@@ -3426,7 +3504,7 @@ body.with-option-line .board {
 
 .plan-draft.active {
   padding: 2px var(--distance-sm);
-  border-radius: 9999px;
+  border-radius: var(--radius);
   background: var(--color-tertiary-container);
   color: var(--color-on-tertiary-container);
   font-weight: 600;
@@ -3451,7 +3529,7 @@ body.with-option-line .board {
   flex-direction: column;
   min-width: 0;
   padding: var(--distance-sm);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container);
 }
 
@@ -3499,7 +3577,7 @@ body.with-option-line .board {
 .plan-element {
   padding: var(--distance-sm) var(--distance-sm);
   border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container-lowest);
   color: var(--color-on-surface);
   cursor: grab;
@@ -3874,7 +3952,7 @@ fieldset.setting legend {
 /* The last fetch is over one minute old. The warning surface (amber) and its own text, not just the color. */
 .status.stale {
   padding: 0 var(--distance-sm);
-  border-radius: 9999px;
+  border-radius: var(--radius);
   background: var(--color-module-amber-container);
   color: var(--color-on-surface);
   font-weight: 600;
@@ -3934,8 +4012,8 @@ fieldset.setting legend {
   }
 }
 
-/* Touch targets of at least 44 px on touch screens (section headers, the switcher, the search, the menu buttons and the
-   clickable badges). Mouse and trackpad keep the dense board. */
+/* Touch targets of at least 44 px on touch screens (section headers, the switcher, the search, every button and the
+   clickable badges). Mouse and trackpad keep the dense board (buttons and tabs 36 px there). */
 @media (pointer: coarse) {
   .section > summary,
   .lane-header,
@@ -3944,6 +4022,7 @@ fieldset.setting legend {
   .toggles-button,
   .search,
   .grouping,
+  .button,
   .button-outline,
   .mark-match,
   .link-button,
@@ -3956,6 +4035,12 @@ fieldset.setting legend {
   a.badge,
   .badge[role='button'] {
     min-height: 44px;
+  }
+
+  /* The icon button is a fixed square (36 px on a mouse): on touch the whole square grows to the target. */
+  .button-icon {
+    width: 44px;
+    height: 44px;
   }
 }
 
@@ -3992,7 +4077,7 @@ fieldset.setting legend {
   margin: var(--distance-sm) 0;
   padding: var(--distance-sm) var(--distance-md);
   border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-container-lowest);
 }
 
@@ -4172,7 +4257,7 @@ fieldset.setting legend {
   margin-right: var(--distance-xs);
   padding: 0 var(--distance-xs);
   border: 1px solid currentColor;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   font-size: var(--text-xs);
   text-align: center;
   opacity: 0.8;
