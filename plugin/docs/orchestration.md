@@ -1001,11 +1001,11 @@ refuses it like `--allow-guard`), logged as `secret-overridden`. A scan that doe
 for all the checks that are off, with one line per check, so you get one question; each check is in it once ever
 (`<dataFolder>/setup-tips.json`); the Checks tab has a low card with "Turn on" (`ravenseat checks
 turn-on <card>`), which you may set aside for good (a no in setup runs `checks dismiss <card>`, the same
-set aside); and `doctor` shows one INFO line naming the setting, but only while an important gap is there and the card
-is not set aside (`doctor --all` shows them all). A card is high,
+set aside); and `doctor` shows one INFO line naming the setting, but only while an important gap is there, also when
+the card is set aside (`doctor --all` shows them all). A card is high,
 and lights the tab's red dot, while an important gap is there: a key in a tracked approved command,
-`.claude/settings.local.json` not ignored by the project's own rules, a tracked file in the queue's data, or (for the
-scan at receive) a secret file already in git.
+`.claude/settings.local.json` not ignored by the project's own rules, or a tracked file in the queue's data. The scan at
+receive is medium, never high, while a secret file is already in git: the secret file card is the high one then.
 **Keys in approved commands, and the project's own .gitignore.** "Yes, and don't ask again" in Claude Code stores the
 whole command in `permissions.allow`, so a key typed in it sits in clear text in `.claude/settings.local.json`, or in the
 tracked `.claude/settings.json`. With `secretScan.allowlist` on, `doctor` (row `allowlist`) runs every rule in `permissions.allow`, `ask` and `deny` of both

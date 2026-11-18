@@ -56,12 +56,14 @@ describe('the opt-in checks', () => {
     expect(OI.tipLines([])).toEqual([]);
   });
 
-  it('doctor shows an off check only for an important gap on a card not set aside; else only with --all', () => {
+  it('doctor shows an off check only for an important gap, even on a card set aside; else only with --all', () => {
     const c = OI.byKey('gitignoreCheck.enabled');
     expect(OI.offShown(c, { gap: false, dismissed: [] })).toBe(false);
     expect(OI.offShown(c, { gap: true, dismissed: [] })).toBe(true);
-    // Set aside on the Checks tab, or a no in setup (the same dismiss): the line goes too, as the card does.
-    expect(OI.offShown(c, { gap: true, dismissed: ['gitignore-own-rules'] })).toBe(false);
+    // Set aside on the Checks tab, or a no in setup (the same dismiss): an important gap still shows (owner decision
+    // 2026-11-18), as a key in a tracked file must not go quiet. Without a gap the line stays for --all.
+    expect(OI.offShown(c, { gap: true, dismissed: ['gitignore-own-rules'] })).toBe(true);
+    expect(OI.offShown(c, { gap: false, dismissed: ['gitignore-own-rules'] })).toBe(false);
     expect(OI.offShown(c, { gap: true })).toBe(true);
   });
 
@@ -130,8 +132,10 @@ describe('the cards on the Checks tab', () => {
     expect(card(r, 'gitignore-own-rules')).toMatchObject({ priority: 'high' });
     expect(card(r, 'secret-scan-receive')).toMatchObject({ priority: 'low' });
     expect(r.important).toBe(before + 2);
-    // The receive scan: high when a secret file is already in git (doctor's secrets FAIL), the reason to stop the next.
-    expect(card(report({ ...OFF, secretsOk: false }), 'secret-scan-receive')).toMatchObject({ priority: 'high' });
+    // The receive scan: medium when a secret file is already in git (doctor's secrets FAIL), the reason to stop the next.
+    // Never high (owner decision 2026-11-18): the secret-files card is the high one then, so two red cards for one cause
+    // would be one too many, and the red marker does not count it.
+    expect(card(report({ ...OFF, secretsOk: false }), 'secret-scan-receive')).toMatchObject({ priority: 'medium' });
     r = report({ ...OFF, allowlistTrackedHit: true, gitignoreGap: true }, ['allowlist-scan', 'gitignore-own-rules']);
     expect(card(r, 'allowlist-scan')).toMatchObject({ state: 'dismissed' });
     expect(r.important).toBe(before);

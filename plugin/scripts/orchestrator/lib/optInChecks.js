@@ -11,8 +11,9 @@
 //     "Turn on" writes the setting; a card set aside stays set aside. A card that applies in every project is low and
 //     rises only through its important_when (owner decision 2026-11-17: off by choice is no advice by itself);
 //   - doctor shows one INFO line while the check is off (never WARN or FAIL), naming the setting, but only when a quiet
-//     look found an important gap and the card is not set aside (offShown); otherwise only `doctor --all` shows it.
-//     Off is the normal state, so a line about it on every run would be nagging (owner decision 2026-11-17).
+//     look found an important gap (offShown); otherwise only `doctor --all` shows it. Off is the normal state, so a line
+//     about it on every run would be nagging (owner decision 2026-11-17). An important gap shows also when the card is
+//     set aside (owner decision 2026-11-18): setting a suggestion aside must not hide a key in a tracked file.
 // A check counts as on only when its setting is exactly true: a missing or odd value is off, the default.
 // A no to a setup tip sets the Checks card aside (owner decision 2026-11-15): the tip names `ravenseat checks dismiss
 // <suggestion>`, the same "Set aside" as on the Checks tab, so the suggestion does not come back there either.
@@ -25,7 +26,7 @@
 //   tipsToGive(config, asked)   the checks setup still has to tip about
 //   tipLine(check)         one check as a line (its On and its No)
 //   tipLines(checks)       what setup prints: one TIP line, then one tipLine per check; [] for none
-//   offShown(check, { gap, dismissed })   does plain doctor show the off line? (else only --all)
+//   offShown(check, { gap })   does plain doctor show the off line? (else only --all)
 //   offLine(check, gap)    doctor's INFO text while the check is off
 //
 // Used by: setup.mjs, cli/doctorBaseline.mjs, cli/checks.mjs. Tested in: lib/__tests__/optInChecks.test.ts.
@@ -155,13 +156,13 @@ function tipLines(checks, cli = 'ravenseat') {
 }
 
 /**
- * Does plain doctor show the off line of a check? Only for an important gap (the same reason that makes its card high),
- * and not when the card is set aside (`dismissed`, queue.checksPanel.dismissed; a no in setup is the same dismiss), as
- * the card itself stays aside then. Otherwise the line is shown only by `doctor --all`.
+ * Does plain doctor show the off line of a check? Only for an important gap (the same reason that makes its card high).
+ * A card set aside on the Checks tab (or a no in setup, the same dismiss) does not hide it: the card stays aside, but an
+ * important gap, such as a key in a tracked file, is shown in doctor all the same (owner decision 2026-11-18). Without
+ * a gap the line is shown only by `doctor --all`. `c` is the check, kept so a later rule per check has it.
  */
-function offShown(c, { gap = false, dismissed = [] } = {}) {
-  if (!gap) return false;
-  return !(Array.isArray(dismissed) && dismissed.includes(c.suggestion));
+function offShown(c, { gap = false } = {}) {
+  return gap === true;
 }
 
 /** Doctor's INFO text while a check is off. `gap`: the check, run quietly, found something (never what). */

@@ -478,10 +478,11 @@ describe('ravenseat doctor: approved commands and the project gitignore', () => 
     expect(shown).not.toContain(GH);
     expect(shown).not.toContain('permissions.allow[0]');
     expect(shown).not.toContain('scripts/.queue/queue.json');
-    // Set aside on the Checks tab (or a no in setup, the same dismiss): the gap line goes as the card does; --all keeps it.
+    // Set aside on the Checks tab (or a no in setup, the same dismiss): an important gap still shows in plain doctor
+    // (owner decision 2026-11-18), as a key in a tracked file must not go quiet with the card; --all shows it too.
     fs.writeFileSync(path.join(p.env.QUEUE_FOLDER, 'queue.json'), JSON.stringify({ tasks: [], projects: {}, checksPanel: { dismissed: ['allowlist-scan'] } }));
     r = p.run();
-    expect(r.checks.filter((c) => c.name === 'allowlist')).toEqual([]);
+    expect(r.checks.filter((c) => c.name === 'allowlist').map((c) => c.status)).toEqual(['INFO']);
     expect(r.checks.filter((c) => c.name === 'gitignore').map((c) => c.status)).toEqual(['INFO']);
     expect(p.run('--all').checks.filter((c) => c.name === 'allowlist').map((c) => c.status)).toEqual(['INFO']);
   }, 60_000);

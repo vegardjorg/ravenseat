@@ -23,8 +23,9 @@
 //              gitignore)" and "not ignored". A tracked file in the data folder or .claude/settings.local.json: FAIL.
 //              allowlist and gitignore are opt-in (secretScan.allowlist, gitignoreCheck.enabled; lib/optInChecks.js):
 //              while off, each is one INFO line naming the setting, which may say an important gap is there (never what).
-//              Plain doctor shows an off line only for such a gap, and not when its Checks card is set aside; `doctor
-//              --all` shows every off line (owner decision 2026-11-17: off is the normal state, not a reminder).
+//              Plain doctor shows an off line only for such a gap, also when its Checks card is set aside (owner
+//              decision 2026-11-18); `doctor --all` shows every off line (owner decision 2026-11-17: off is the
+//              normal state, not a reminder).
 //              allowlistFacts() and gitignoreFacts() are the same reads for the Checks tab (cli/checks.mjs).
 //   base      the base branch does not exist: FAIL (in an empty repo: WARN).
 //   gates      gates.quick and gates.full both empty: WARN (the agents run no checks before delivery). A gate naming a
@@ -216,26 +217,16 @@ export function mcpFacts() {
   return { hits, tracked, local };
 }
 
-/** The cards set aside on the Checks tab (queue.checksPanel.dismissed; a no in setup is the same). Unreadable: none. */
-function dismissedCards() {
-  try {
-    const list = JSON.parse(fs.readFileSync(path.join(FOLDER, 'queue.json'), 'utf8'))?.checksPanel?.dismissed;
-    return Array.isArray(list) ? list : [];
-  } catch {
-    return []; // error-ignored: no queue yet, so nothing is set aside
-  }
-}
-
 /**
  * The doctor row of an opt-in check that is off (lib/optInChecks.js): one INFO line, never WARN or FAIL. Plain doctor
- * shows it only for an important gap on a card not set aside (OI.offShown); otherwise the row is marked onRequest and
+ * shows it only for an important gap, set aside or not (OI.offShown); otherwise the row is marked onRequest and
  * only `doctor --all` shows it (lib/guidance.js filterDoctor). Off is the normal state, so it is not named every run.
  */
 function offRow(key, gap) {
   const OI = require('./lib/optInChecks.js');
   const c = OI.byKey(key);
   const row = info(c.row, OI.offLine(c, { cli: CLI, gap }), `${OI.onCommand(c, CLI)} (or Turn on on the Checks tab); leave it off if you do not want it`);
-  return [OI.offShown(c, { gap, dismissed: dismissedCards() }) ? row : { ...row, onRequest: true }];
+  return [OI.offShown(c, { gap }) ? row : { ...row, onRequest: true }];
 }
 
 export function checkAllowlistSecrets() {
