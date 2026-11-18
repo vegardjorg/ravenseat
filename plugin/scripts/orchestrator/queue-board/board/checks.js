@@ -16,7 +16,7 @@
 
 const checksTab = $('show-checks');
 /** The view's own state. `open` keeps a card's details open across redraws. */
-t.checks = { report: null, error: null, fetching: false, time: 0, category: 'all', open: new Set(), asideOpen: false, busy: null };
+t.checks = { report: null, error: null, fetching: false, time: 0, category: 'all', open: new Set(), asideOpen: false, moreOpen: false, busy: null };
 
 const CHECKS_WHERE = { ci: 'CI', gate: 'Gate', script: 'Script', hook: 'Git hook', config: 'Config' };
 const CHECKS_PRIORITY = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -558,14 +558,35 @@ function drawChecks() {
   const aside = r.suggestions.filter((s) => s.state === 'dismissed');
   const filter = checksFilter(r, open);
   const wanted = filter ? filter.querySelector('select').value : 'all';
-  const shown = open.filter((s) => wanted === 'all' || s.category === wanted);
+  const inCategory = open.filter((s) => wanted === 'all' || s.category === wanted);
+  // A low idea with no signal in the project (quiet, lib/checksCatalog.js CONTEXT) is folded under "More ideas", so the
+  // list starts with what the scan found. A card in the queue or planned stays up. Nothing is removed or lowered.
+  const quiet = inCategory.filter((s) => s.quiet === true && s.state === 'open');
+  const shown = inCategory.filter((s) => !quiet.includes(s));
   wrap.append(
     el('div', { class: 'checks-head' }, el('h3', { class: 'decide-group-title', text: 'Suggestions, most important first' }), filter),
     el('p', { class: 'decide-hint', text: 'Optional, all of them. The button adds an investigation that ends in a plan with recommended steps. Nothing is built before you approve it.' }),
     shown.length
       ? el('ul', { class: 'checks-grid' }, ...shown.map((s) => checksSuggestionCard(s, r.categories)))
-      : el('p', { class: 'checks-text', text: 'No suggestions right now.' }),
+      : el('p', { class: 'checks-text', text: quiet.length ? 'Nothing found that needs you. Some general ideas are below.' : 'No suggestions right now.' }),
   );
+  if (quiet.length) {
+    const more = el(
+      'details',
+      { class: 'checks-details checks-more' },
+      // A native details and summary: a keyboard and a screen reader get the button and its open or closed state as
+      // is. The hint describes the fold also while it is closed (a description may point at hidden text).
+      el('summary', { text: `More ideas (${quiet.length})`, 'aria-describedby': 'checks-more-hint' }),
+      el('p', { id: 'checks-more-hint', class: 'decide-hint', text: 'Low ideas that fit most projects with this setup. The scan found no gap behind them, so they wait here. They come up by themselves once something is found.' }),
+      el('ul', { class: 'checks-grid' }, ...quiet.map((s) => checksSuggestionCard(s, r.categories))),
+    );
+    // Closed by default; a fold the owner opened stays open across redraws.
+    more.open = t.checks.moreOpen;
+    more.addEventListener('toggle', () => {
+      t.checks.moreOpen = more.open;
+    });
+    wrap.append(more);
+  }
   if (aside.length) {
     const box = el(
       'details',

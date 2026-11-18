@@ -5,6 +5,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **The Checks tab folds the general ideas.** A typical project had around ten low cards that only needed gates and
+  tests, CI or an opt-in check that is off, so they showed nearly everywhere. A low card that observes nothing in the
+  project now sits under a closed **More ideas (n)** fold below the suggestions (a native details element, keyboard and
+  screen reader friendly), and leaves it by itself once something is found (`medium_when`, `important_when`). Cards
+  with a gap or a hit, medium and high cards, and cards in the queue stay in the list as before. No card is removed and
+  no priority changes; `ravenseat checks --json` marks a folded card `"quiet": true`.
 - **Receive notes are one line per kind.** The reuse and scope facts (reuse, new folders, dependencies, drift) were
   up to thirteen `NOTE` lines per delivery, and two or more proposed catalog choices one `NOTE catalog` line each. Each
   kind is now one line with the counts (and the choice ids) and where the details are: every fact is still in the

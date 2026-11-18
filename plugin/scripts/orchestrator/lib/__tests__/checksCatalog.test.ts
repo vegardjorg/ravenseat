@@ -469,3 +469,51 @@ describe('the switch', () => {
     expect(guidance.checksPanelOn({ checksPanel: { mode: 'off' } })).toBe(false);
   });
 });
+
+describe('quiet cards: low ideas with no signal in the project (M6)', () => {
+  const catalog = C.loadCatalog({ builtin: BUILTIN, own: path.join(BUILTIN, 'does-not-exist') });
+  const base = { git: true, hasCommit: true, hasGates: true, remote: 'origin', stacks: ['Node/TypeScript'], ci: [{ file: 'ci.yml' }], kinds: kinds(['test', 'ci'], ['lint', 'ci'], ['types', 'ci']), runtimePinned: true };
+  const byKey = (r: { suggestions: { key: string }[] }, k: string) => r.suggestions.find((s) => s.key === k) as { quiet?: boolean; priority: string } | undefined;
+
+  it('the low cards that only need gates and tests are quiet, and they are still in the report', () => {
+    const r = C.buildReport({ facts: base, catalog, now: 'x' });
+    for (const key of ['changed-tests-in-quick', 'env-precheck', 'flaky-tests', 'test-timeouts-under-load', 'test-workers-cap']) {
+      expect(byKey(r, key), key).toMatchObject({ priority: 'low', quiet: true });
+    }
+  });
+  it('an opt-in card that is only off is quiet, and one lifted by its important gap is not', () => {
+    const facts = { ...base, optInOff: ['gitignoreCheck.enabled'] };
+    expect(byKey(C.buildReport({ facts, catalog, now: 'x' }), 'gitignore-own-rules')).toMatchObject({ priority: 'low', quiet: true });
+    const gap = byKey(C.buildReport({ facts: { ...facts, gitignoreGap: true }, catalog, now: 'x' }), 'gitignore-own-rules');
+    expect(gap).toMatchObject({ priority: 'high' });
+    expect(gap?.quiet).toBeFalsy();
+  });
+  it('a low card raised by medium_when is not quiet', () => {
+    const card = byKey(C.buildReport({ facts: { ...base, flakyObserved: 2 }, catalog, now: 'x' }), 'flaky-tests');
+    expect(card).toMatchObject({ priority: 'medium' });
+    expect(card?.quiet).toBeFalsy();
+  });
+  it('a low card whose when names a gap in the project (missing:, a hit) is not quiet', () => {
+    const r = C.buildReport({ facts: { ...base, envWithoutExample: true }, catalog, now: 'x' });
+    for (const key of ['coverage', 'formatter', 'env-example', 'unused-code']) {
+      const card = byKey(r, key);
+      expect(card, key).toBeTruthy();
+      expect(card?.quiet, key).toBeFalsy();
+    }
+  });
+  it('medium and high cards are never quiet, and quiet changes no priority', () => {
+    const r = C.buildReport({ facts: base, catalog, now: 'x' });
+    for (const s of r.suggestions as { quiet?: boolean; priority: string }[]) if (s.quiet) expect(s.priority).toBe('low');
+    const plain = catalog.templates.filter((t: { key: string }) => r.suggestions.some((s: { key: string }) => s.key === t.key));
+    for (const t of plain) expect(byKey(r, t.key)?.priority).toBe(t.priority);
+  });
+  it('a condition the catalog adds later counts as a signal unless it is named as context', () => {
+    const cat = { categories: [{ key: 'ci', title: 'CI' }], recipes: [], errors: [], templates: [
+      C.parseTemplate(file('title: A\ncategory: ci\npriority: low\nwhen: has-ci\nwhy: W.'), 'a'),
+      C.parseTemplate(file('title: B\ncategory: ci\npriority: low\nwhen: has-ci, actions-unpinned\nwhy: W.'), 'b'),
+    ] };
+    const r = C.buildReport({ facts: { ci: [{}], unpinnedActions: 1 }, catalog: cat, now: 'x' });
+    expect(byKey(r, 'a')?.quiet).toBe(true);
+    expect(byKey(r, 'b')?.quiet).toBeFalsy();
+  });
+});

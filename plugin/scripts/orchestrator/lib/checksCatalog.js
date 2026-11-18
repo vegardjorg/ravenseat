@@ -259,6 +259,25 @@ function knownCondition(c) {
   return arg ? !!KIND_CONDITIONS[name] : !!CONDITIONS[name];
 }
 
+/**
+ * The conditions that only describe the project's setup (it has git, CI, gates, tests, a stack; an opt-in setting is off)
+ * and so observe no gap or hit in it. A low card whose `when` has only these is quiet: the Checks tab folds it under
+ * "More ideas" (board/checks.js), since it would show in nearly every project (0x M6). Every other condition, also one
+ * added later, counts as a signal, so a new kind of gap is never folded away by mistake. Quiet changes no priority, and
+ * a card raised by medium_when, important_when or lift_when is not quiet.
+ */
+const CONTEXT = new Set([
+  'has-git', 'has-remote', 'has-ci', 'has-gates', 'checks-found', 'known-stack', 'not-lite', 'shared-settings',
+  'repo-private', 'has-database', 'has-migrations', 'has-local-database', 'db-probes-on', 'inspection-on',
+  'red-on-base-off', 'found', 'off', 'stack', 'local-db',
+]);
+
+/** Is a card quiet: low, not lifted, and every condition in its `when` is context (see CONTEXT)? */
+function quietCard(x) {
+  if (x.priority !== 'low' || x.lifted) return false;
+  return conditionsOf(x.when).every((c) => CONTEXT.has(c.split(':')[0]));
+}
+
 /** Does `when` hold? An empty `when` always does; an unknown condition never does (parseTemplate reports it). */
 function holds(when, facts) {
   return conditionsOf(when).every((c) => {
@@ -636,6 +655,8 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
       plan: x.plan,
       detail: x.applies ? joinDetail(detailOf(x.key, facts) ?? countDetail(x.key, facts), x.lifted ? liftLine(x, facts) : null) : null,
       ...(x.lifted ? { lifted: true } : {}),
+      // A low idea with no signal in the project: folded under "More ideas" on the Checks tab (CONTEXT above).
+      ...(x.applies && quietCard(x) ? { quiet: true } : {}),
       // false only for a card set aside whose `when` no longer holds (state is then always dismissed).
       applies: x.applies,
       ...suggestionState(x, tasks, dismissed),

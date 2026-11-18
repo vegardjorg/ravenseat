@@ -70,6 +70,12 @@ From the top down:
    priority, its category, a title, why it is suggested and sometimes a line read from your project (the stacks, how
    many `uses:` lines are not pinned, the test command Ravenseat found). With two or more categories, a "Show" list
    filters by category.
+   **More ideas (n)**, folded and closed: the low cards that observe nothing in the project, only its setup (it has
+   gates and tests, CI, a stack, or an opt-in check is off). They fit most projects, so they wait here instead of
+   filling the list. A card leaves the fold by itself once something is found (its `medium_when` or `important_when`
+   holds), and a card in the queue stays in the list. Nothing is removed and no priority changes; `ravenseat checks
+   --json` marks such a card `"quiet": true`. Any condition other than the setup ones in `lib/checksCatalog.js`
+   (`CONTEXT`) counts as something found, so a new kind of gap is never folded.
 7. **Set aside (n)**, folded: every card you set aside, each with "Bring back", also one that does not apply to the
    project now (marked "does not apply now").
 8. **A suggestion file has a mistake**, in red, when a card file cannot be read. That card is left out; the rest show.
