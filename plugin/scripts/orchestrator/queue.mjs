@@ -299,6 +299,11 @@
 //                                                                  (track, fix rounds, continuations, reviewers and fix tasks
 //                                                                  via fixes/qa_original: USD, tokens, runs), by cost; then
 //                                                                  per class: n, median and sum USD, findings H/M/L; the last tasks)
+//   node scripts/orchestrator/queue.mjs cost --reads [--since 7d] [--limit 15] [--json]   (only the files tracks most often read
+//                                                                  WHOLE (a Read with no offset/limit/pages), across tracks,
+//                                                                  from the subagent transcripts of the window: tracks, whole
+//                                                                  and excerpt reads, size; candidates for a catalog excerpt or
+//                                                                  a split; repo-relative, display only; lib/wholeReads.js)
 //   node scripts/orchestrator/queue.mjs cost measure <id> [...] [--findings "..."]   (measures and saves again, e.g. older finished ones)
 //   node scripts/orchestrator/queue.mjs calibrate [--days 28] [--min 5] [--json]   (per class: n, median actual/estimate
 //                                                                  minutes and the suggested weight, median USD, the model's

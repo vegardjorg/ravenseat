@@ -191,6 +191,46 @@ read classification and the other-repo rule are heuristics: a script that writes
 a session that changed directory with `cd` and then used relative paths does not count as elsewhere. Measurement
 only: nothing in the block stops the queue.
 
+### Whole-file reads
+
+`ravenseat cost --reads [--since 7d] [--limit 15] [--json]` lists the files that tracks most often read whole, across
+tracks. A file many tracks read whole is a candidate for a catalog excerpt ([catalog.md](catalog.md)) or for splitting
+into smaller files, so a track reads only the part it needs. It prints only this view, not the rest of the cost report.
+
+```
+Whole-file reads by tracks (last 28 days; 14 track(s), 24 whole read(s), 514 excerpt read(s); 176 transcript(s)):
+  tracks whole excerpt  size                   file
+       2     2      21  1246 lines, 100 KB     plugin/scripts/orchestrator/lib/settingsRegistry.js
+       1     1       0  328 lines, 22 KB       README.md
+  (18 more file(s); --limit 20 shows all.)
+  Left out: 267 read(s) outside the repo, 374 read(s) of files no longer in the main tree.
+Hint: a file many tracks read whole is a candidate for a catalog excerpt (docs/catalog.md) or for splitting ...
+```
+
+- **The data** is the subagent transcripts of the cost window, the same files, reader and read budget as "Turns and
+  tools" above. Nothing new is logged. A main session is no track and is left out. A transcript's track is the
+  `track` of its agent's start row in the time log, else the track its mission names, else the agent itself (a helper
+  or Explore agent then counts as its own track). Two agents of one track (a fix round, a reviewer) count once.
+- **Whole or excerpt.** A Read with no `offset`, `limit` or `pages` is whole; any of them makes it an excerpt. A whole
+  read the read guard turned down still counts, since the agent asked for the whole file. Grep and shell reads are not
+  counted, and images are left out (Read shows them whole by nature, and they can be neither excerpted nor split).
+- **Per file:** the tracks that read it whole, the whole reads, the excerpt reads, and the size in the main tree now
+  (lines and KB, an approximation; lines only up to 16 MB). Sorted by tracks, then whole reads, then path; the top
+  `--limit` (default 15, 1 to 1000) are shown, and the line under them says how many more there are.
+- **Paths** are repo-relative. A relative path is resolved against the transcript's working directory. The roots are
+  the main tree, its git worktrees and that working directory, since a track's worktree is usually gone after its merge.
+  A path under no root counts as "outside the repo" and is never printed, and a path that is no file in the main tree
+  now (deleted, renamed, or a folder that was not this repo) is counted as "no longer in the main tree" and is not
+  printed either.
+- **No data** gives one line, `Whole-file reads by tracks (last 28 days): nothing yet.` `--json` gives the same report
+  as one object (`files`, `files_total`, `tracks`, `whole_reads`, `excerpt_reads`, `outside`, `gone`, `limit`, `scan`).
+- **No setting:** it is a view only and changes nothing.
+
+Limits: the transcripts are only those under this project's Claude Code transcripts folder. Tracks started from a
+session in another folder have their transcripts there (`QUEUE_TRANSCRIPTS` points the view at another folder). The
+read budget means a long window on a busy project reads the newest transcripts first, and the header says how many
+were skipped.
+
 ## Measured: compacting the orchestrator against starting a new chat
 
 The orchestrator runs in one chat, and Claude Code compacts it automatically (`autoCompactWindow`, set to 300,000).

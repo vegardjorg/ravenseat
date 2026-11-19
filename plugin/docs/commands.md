@@ -23,6 +23,7 @@ ravenseat explain <ID>              # why one task stands where it stands, from 
 ravenseat pulse-check               # the pulse in one read-only call: SILENT, or the actions with their next commands
 ravenseat wait                      # waits in the background at no token cost until something needs the orchestrator
 ravenseat cost                      # USD per merged change, cost per task (all runs), then per class
+ravenseat cost --reads              # the files tracks most often read whole: candidates for a catalog excerpt or a split
 ravenseat calibrate                 # how far minute and cost estimates are off, per class
 ravenseat decide                    # everything waiting on you, most impact first (/ravenseat:decide walks it; the board's Decisions room is the same list)
 ravenseat proposals                 # the proposals waiting, and the auto-accept rules

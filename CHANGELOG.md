@@ -5,6 +5,15 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **`ravenseat cost --reads` lists the files tracks most often read whole (0y Y2).** A display-only view over the
+  subagent transcripts that `cost` already reads (no new log): per file the tracks that read it with no offset, limit
+  or pages, the whole and excerpt reads, and its size now, sorted by tracks then reads, top 15 (`--limit`), with one
+  hint line (a catalog excerpt or a split). Edge cases: two agents of one track count once; a whole read the read guard
+  refused still counts; Grep, shell reads and images do not; a relative path resolves against the track's own working
+  directory, which also stands in for a worktree removed after its merge; a path outside the repo, or one that is no
+  file in the main tree now, is counted but never printed; Windows paths match case-insensitively; no data gives one
+  calm line, and `--json` one object. The transcript listing is now shared with "Turns and tools" (same budget). No
+  setting.
 - **The read guard's denial of a large file carries the file's outline (0y Y1).** A whole-file Read that the guard
   turns down for size (the large-file and long-file rules) now also lists the file's headings and top-level
   declarations with their line numbers, so the agent can go straight to Read with offset and limit instead of a Grep

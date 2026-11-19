@@ -183,6 +183,8 @@ export function cmdCapacity() {
 /** `ravenseat cost` (the usage is at the top of queue.mjs). */
 export function cmdCost() {
   // ---- Cost per task. `cost measure <id...>` measures and saves again (e.g. older finished ones). ----
+  // `cost --reads`: only the whole-file reads view (lib/wholeReads.js), not the full cost report.
+  if (a.includes('--reads')) return cmdCostReads();
   if (a[1] === 'measure') {
     const ids = positional(2, ['--findings', '--result']);
     if (!ids.length) die('cost measure <id> [...]');
@@ -364,6 +366,24 @@ function projectRoots() {
 }
 
 /**
+ * The transcripts changed since `from` (epoch ms): the main sessions and their subagents from the adapter's listing
+ * (no folder, none), each with its size and mtime, newest first, so a read budget keeps the newest. Read-only; a file
+ * that vanished between the listing and the stat is left out.
+ */
+function windowTranscripts(from) {
+  const files = [];
+  for (const { file, ...x } of TR.listTranscripts(TRANSCRIPTS)) {
+    try {
+      const st = fs.statSync(file);
+      if (st.mtimeMs >= from) files.push({ file, size: st.size, mtime: st.mtimeMs, ...x });
+    } catch {
+      // error-ignored: a file that vanished is left out
+    }
+  }
+  return files.sort((x, y) => y.mtime - x.mtime);
+}
+
+/**
  * The "Turns and tools" report over [from, to): the main session transcripts (<TRANSCRIPTS>/<session>.jsonl) and the
  * subagent transcripts (<TRANSCRIPTS>/<session>/subagents/agent-<id>.jsonl) changed since `from`, newest first within
  * TURN_READ_BUDGET, each read once with timeCost.analyzeTranscript({ detail: true }) (the one transcript reader). A
@@ -371,17 +391,7 @@ function projectRoots() {
  * line rows say so, else "main session". Read-only; any read error leaves that file out.
  */
 function turnsAndToolsFor({ rows, from, to }) {
-  const files = [];
-  const add = (file, x) => {
-    try {
-      const st = fs.statSync(file);
-      if (st.mtimeMs >= from) files.push({ file, size: st.size, mtime: st.mtimeMs, ...x });
-    } catch {
-      // error-ignored: a file that vanished is left out
-    }
-  };
-  // The main sessions and their subagents, in folder order (the adapter's listing; no folder, no turns).
-  for (const { file, ...x } of TR.listTranscripts(TRANSCRIPTS)) add(file, x);
+  const files = windowTranscripts(from);
   const typeOf = new Map();
   const orchestrators = new Set();
   for (const r of rows ?? []) {
@@ -395,7 +405,6 @@ function turnsAndToolsFor({ rows, from, to }) {
       return null; // error-ignored: no meta file
     }
   };
-  files.sort((x, y) => y.mtime - x.mtime);
   const scan = { files: 0, bytes: 0, skipped: 0 };
   const bare = require('./lib/projectRoot.js').bareAgentType;
   // One transcript at a time (a generator), so only one is held in memory while the report adds it up.
@@ -431,6 +440,96 @@ function turnsAndToolsFor({ rows, from, to }) {
     sessionUsd,
     scan,
   });
+}
+
+// ---- Whole-file reads (lib/wholeReads.js): `ravenseat cost --reads` ----
+/** Lines are counted only in files up to this size; a larger one shows its KB alone. */
+const LINE_COUNT_MAX = 16 * 1024 * 1024;
+
+/**
+ * `ravenseat cost --reads [--since ...] [--limit N] [--json]`: the files tracks most often read whole, across tracks.
+ * The data is the subagent transcripts of the cost window (the same listing and read budget as "Turns and tools"); a
+ * main session is no track and is left out. A transcript's track is the `track` of its agent's start row in the time
+ * log, else the track its mission names (timeCost), else the agent itself. Display only: it writes nothing.
+ */
+function cmdCostReads() {
+  const WR = require('./lib/wholeReads.js');
+  const raw = val('--limit');
+  const limit = a.includes('--limit') ? Number(raw) : WR.DEFAULT_LIMIT;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) die('--limit must be a whole number 1-1000');
+  const since = sinceTime(val('--since'));
+  const from = since ? Date.parse(since) : Date.now() - CE.WINDOW_DAYS * 86_400_000;
+  const to = Date.now() + 1;
+  // agent id -> track label, from the time log's start rows.
+  const trackOf = new Map();
+  for (const r of readTimeLog()) if (r?.event === 'start' && r.agent_id && r.track) trackOf.set(r.agent_id, String(r.track));
+  const scan = { files: 0, bytes: 0, skipped: 0 };
+  // One transcript at a time (a generator), as in turnsAndToolsFor, so only one is held in memory.
+  function* transcripts() {
+    for (const f of windowTranscripts(from)) {
+      if (f.main) continue;
+      if (f.size > TURN_MAX_FILE || scan.bytes + f.size > TURN_READ_BUDGET) {
+        scan.skipped++;
+        continue;
+      }
+      let r;
+      try {
+        r = TK.analyzeTranscript(fs.readFileSync(f.file, 'utf8'), { detail: true });
+      } catch {
+        scan.skipped++;
+        continue; // error-ignored: an unreadable transcript is counted as skipped
+      }
+      scan.files++;
+      scan.bytes += f.size;
+      // No track known: the agent counts as its own track (a label only, never a path).
+      yield { track: trackOf.get(f.agent) ?? r.track ?? `agent:${f.agent}`, detail: r.detail };
+    }
+  }
+  // A repo-relative path is a file of the main tree now; the join never leaves the main tree.
+  const inMain = (rel) => {
+    const p = path.resolve(MAIN_TREE, rel);
+    const rootSlash = path.resolve(MAIN_TREE) + path.sep;
+    return p.startsWith(rootSlash) ? p : null;
+  };
+  const exists = (rel) => {
+    const p = inMain(rel);
+    try {
+      return Boolean(p && fs.statSync(p).isFile());
+    } catch {
+      return false; // error-ignored: not there now
+    }
+  };
+  const sizeOf = (rel) => {
+    const p = inMain(rel);
+    try {
+      const bytes = fs.statSync(p).size;
+      if (bytes > LINE_COUNT_MAX) return { lines: null, bytes };
+      const buf = fs.readFileSync(p);
+      let lines = 0;
+      for (const b of buf) if (b === 10) lines++;
+      if (buf.length && buf[buf.length - 1] !== 10) lines++;
+      return { lines, bytes };
+    } catch {
+      return null; // error-ignored: the size is only an approximation
+    }
+  };
+  const rep = WR.wholeReads({
+    transcripts: transcripts(),
+    roots: projectRoots(),
+    exists,
+    sizeOf,
+    from,
+    to,
+    limit,
+    caseInsensitive: process.platform === 'win32',
+    scan,
+  });
+  if (a.includes('--json')) {
+    console.log(JSON.stringify(rep, null, 2));
+    return;
+  }
+  const label = since ? `since ${since.slice(0, 10)}` : `last ${CE.WINDOW_DAYS} days`;
+  for (const l of WR.wholeReadLines(rep, label)) console.log(cut(l, WIDTH));
 }
 
 /** `ravenseat calibrate` (the usage is at the top of queue.mjs). */
