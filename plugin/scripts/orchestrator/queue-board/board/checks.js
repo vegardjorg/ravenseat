@@ -756,6 +756,9 @@ function checksTally(r) {
         ),
       ),
     ),
+    // The caption says what the pills count (owner QA 19.11). It holds no numbers, so the screen reader sentence above
+    // stays the only place a screen reader hears them.
+    el('p', { class: 'checks-tally-caption', text: 'Recommendations for your project' }),
   );
 }
 
@@ -776,14 +779,15 @@ function drawChecks() {
         disabled: t.checks.fetching,
         onclick: () => getChecks(true),
       }),
+      // The severity tally (QA-1a) sits on the heading's line, right-aligned, with its caption under it (owner QA
+      // 19.11). Before the report it is a placeholder of the same height, so the heading line never changes height.
+      checksTally(r),
       el('p', {
         class: 'decide-hint checks-note',
         text: 'Read from your files. Ravenseat did not run any of it, so this shows what is set up, not that it works.',
       }),
     ),
   );
-  // The severity tally (QA-1a) stands right under the header; before the report it is a placeholder of the same height.
-  wrap.append(checksTally(r));
   // "How it works" needs no report, so it stands from the first frame and nothing above the cards moves when they come.
   wrap.append(checksHow());
   if (!r) {

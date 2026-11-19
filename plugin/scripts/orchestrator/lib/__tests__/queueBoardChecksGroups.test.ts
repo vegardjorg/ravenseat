@@ -188,10 +188,12 @@ describe('B11: How it works', () => {
 
   it('sits at the top under the header, open, as a button that controls a region', () => {
     const how = view().querySelector('.checks-how') as HTMLElement;
-    // Under the header comes the severity tally (QA-1a, queueBoardQa1a.test.ts), then "How it works".
-    const tally = view().querySelector('.checks-head')?.nextElementSibling as HTMLElement;
-    expect(tally.classList.contains('checks-tally')).toBe(true);
-    expect(tally.nextElementSibling).toBe(how);
+    // The severity tally sits inside the header, on the heading's line (owner QA 19.11), and "How it works" comes
+    // right under the header.
+    const head = view().querySelector('.checks-head') as HTMLElement;
+    expect(head.querySelector('.checks-tally')).not.toBeNull();
+    expect(head.querySelector('.checks-tally-caption')?.textContent).toBe('Recommendations for your project');
+    expect(head.nextElementSibling).toBe(how);
     expect(toggle().tagName).toBe('BUTTON');
     expect(toggle().getAttribute('aria-expanded')).toBe('true');
     expect(toggle().getAttribute('aria-controls')).toBe('checks-how-body');

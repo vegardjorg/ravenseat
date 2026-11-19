@@ -5452,8 +5452,14 @@ body.stale .summary.stuck::before {
 /* The tally at the top of the Checks view: the three pills in a row. The pending placeholder has the same height, so
    nothing below moves when the report comes. */
 .checks-tally {
-  min-height: 24px;
-  margin: 0 0 var(--distance-sm);
+  /* On the heading's line, pushed to the right edge (owner QA 19.11); the pills and the caption are right-aligned
+     under each other. The min-height covers pills plus caption, so the placeholder is as tall as the real tally. */
+  margin-left: auto;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 .checks-tally-pills {
   list-style: none;
@@ -5461,7 +5467,14 @@ body.stale .summary.stuck::before {
   padding: 0;
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--distance-sm);
+}
+.checks-tally-caption {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+  text-align: right;
 }
 .checks-tally-count {
   font-variant-numeric: tabular-nums;
