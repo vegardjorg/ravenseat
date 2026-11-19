@@ -194,6 +194,12 @@ function scheduleDecision(item, option, text) {
   decisionToast(label);
   drawDecisionsTab();
   drawDecisions(true);
+  // B18: "Set a new focus" on the "focus ended" question (lib/logic/focus.js, choice 1) is answered as any choice and
+  // then opens the Focus tab, where the new focus is set. The undo window and the toast stay as they are.
+  if (String(item.id ?? '').startsWith('focus-done-') && write.type === 'resolve' && write.choice === 1) {
+    setView('plan');
+    draw();
+  }
 }
 
 /** Writes the waiting answer now (the timer, a new answer, or leaving the page). */

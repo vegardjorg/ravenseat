@@ -5,6 +5,20 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the Focus tab says how focus works and what happens now, with buttons instead of CLI advice.** Edge
+  cases closed in the Focus feature. A focus that stood still on a rest (a done task waiting on your QA, an owner
+  question, a proposal, the batch queue) or had ended showed a red band with `ravenseat` commands and no button, and
+  the owner question about a finished focus only came at the next fill. The server now builds one plain sentence,
+  "What happens now", from the focus status and the step evaluation: which step goes first and what is left, why
+  nothing starts, or that the focus is done and the queue is paused. It stands at the top of the Focus tab and, when
+  the focus line warns, in the band on the other tabs, with the buttons that settle it: QA, answer or review the card
+  in Decisions, pack the batch queue, continue the regular queue, or set a new focus. A copyable command shows only
+  where the board has no button. A "How focus works" box at the top of the Focus tab explains the four steps with
+  this focus's own values (the rest waits or fills free slots, the queue pauses and asks or goes on); it closes, and
+  the choice is remembered in the browser only. `ravenseat qa ok` now cleans the focus in the same write, as receive,
+  set and fill do, so the question comes right after the last QA. In Decisions, the answer "Set a new focus" opens the
+  Focus tab. Nothing new stops work, no new setting and no new colors: only the theme's tokens.
+
 - **Board: a done focus step says "done", and the Focus tab speaks one language.** Edge cases closed in the Focus
   feature. A step that points to a feature whose tasks are all done, or that only has rests left (QA waiting on you, a
   proposal, the batch queue), showed "does not exist" on the Focus tab, because the plan view listed features from

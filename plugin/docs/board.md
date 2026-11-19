@@ -77,7 +77,10 @@ ring it explains.
 <p align="center"><img src="../../assets/screenshots/light-15-focus.jpg" alt="The Focus tab: the forecast above the columns Now, Next, Later and Waiting" width="800"></p>
 
 **Focus.** The order the queue takes work in: drag areas, projects and features between Now, Next, Later and Waiting.
-The forecast above the columns says when the remaining tasks are done.
+"How focus works" at the top explains it in four steps that follow your focus's own settings, and you can close it.
+"What happens now" says in plain words what the queue does because of the focus (which step goes first, why nothing
+starts, what is left) with buttons that settle it. The forecast above the columns says when the remaining tasks are
+done.
 
 <p align="center"><img src="../../assets/screenshots/light-13-checks.jpg" alt="The Checks tab: what the project has for checking its code, and suggestions for what to add" width="800"></p>
 
@@ -154,8 +157,18 @@ The Queue workspace has these tabs:
 - **Project lanes:** the same cards with one row per project; drag a lane to change the project's priority. With the
   Blocked column on, each lane has a Blocked cell too.
 - **Focus:** the order the queue takes work in, as Now, Next, Later and Waiting. Drag areas, projects and features
-  between the columns. "Areas …" creates and names the areas. A **Forecast** box above the columns says when the
-  remaining tasks in the focus are done at 50, 85 and 95 % (the same as `ravenseat forecast`; the saved focus counts).
+  between the columns. "Areas …" creates and names the areas. At the top, **How focus works** is a box in four steps
+  (pick what comes first, step 1 before step 2, what the rest does, what happens when the focus is done) whose text
+  follows this focus's rest and continue-when-empty values; it is open until you close it, and the choice is
+  remembered in this browser only (no setting). Under it, **What happens now** is one sentence from the server
+  (`focusNow`, built from the focus status and the step evaluation) with the buttons that settle the state: **QA
+  <id>**, **Answer <question>** or **Review <proposal>** open that card in Decisions when the focus stands still on a
+  rest, **Pack the batch queue** opens the pack dialog, and when the focus is done **Continue the regular queue**
+  answers the owner question and **Set a new focus** opens the Focus tab. A copyable command shows only where the board
+  has no button. When the focus line warns, the red band on the other tabs shows the same line and buttons instead of
+  CLI advice. A **Forecast** box says when the remaining tasks in the focus are done at 50, 85 and 95 % (the same as
+  `ravenseat forecast`; the saved focus counts). In Decisions, the answer **Set a new focus** to the "focus ended"
+  question opens the Focus tab.
 - **Dependencies:** a graph of which tasks wait on which.
 - **Checks:** what the project has for checking its code, and prioritized suggestions for what to add, as cards in
   one group per category, under a "How it works" box you can close. A suggestion's button adds its investigation and

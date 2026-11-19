@@ -25,6 +25,9 @@ function planContext() {
     pending: () => t.pending,
     // The "?" for the Focus toolbar (B30).
     help: roomHelp,
+    // "How focus works" and "What happens now" at the top of the view (B18).
+    howBox: focusHowBox,
+    whatNow: () => focusNowLine(),
   };
 }
 
@@ -48,7 +51,7 @@ function focusEndBadges(f) {
           class: 'badge old focus-halted',
           text: 'queue paused',
           title:
-            'Nothing starts until you choose: set a new focus, or continue the regular queue (Decisions, or ravenseat resolve).',
+            'Nothing starts until you choose: set a new focus, or continue the regular queue (Decisions, or the buttons under "What happens now").',
         })
       : null,
   ].filter(Boolean);
@@ -56,6 +59,170 @@ function focusEndBadges(f) {
 function drawFocusTab(f) {
   const tab = $('show-plan');
   tab.replaceChildren('Focus', ...focusEndBadges(f));
+}
+
+/**
+ * The button for one "What happens now" action (B18; the actions come from the server, queueBoard.focusNow):
+ *   decide     opens that card in Decisions (QA, an owner question, a proposal),
+ *   resolve    answers the "focus ended" owner question with that choice (the same body as Decisions sends),
+ *   focus-tab  opens the Focus tab (left out on the Focus tab itself, where it would do nothing),
+ *   batch-pack opens the board's "Pack into track" dialog for those cards.
+ */
+function focusNowButton(a) {
+  if (a.type === 'focus-tab' && t.view === 'plan') return null;
+  const run = {
+    decide: () => openDecisions(a.key),
+    'focus-tab': () => {
+      setView('plan');
+      draw();
+    },
+    'batch-pack': () => openBulk('batch-pack', a.ids ?? []),
+    resolve: async () => {
+      try {
+        const answer = await writeWithGuard('/api/action', { type: 'resolve', sp: a.sp, choice: a.choice });
+        if (answer) messageWithInfo(`${a.sp}: ${a.label}`, answer);
+      } catch (e) {
+        message(`${a.sp}: ${e.message}`, true);
+      }
+      await update(true);
+    },
+  }[a.type];
+  if (!run) return null;
+  return el('button', { type: 'button', class: 'button button-outline button-small', text: a.label, onclick: run });
+}
+
+/**
+ * "What happens now" (B18): the server's one plain text (queueBoard.focusNow) with the buttons that settle the state,
+ * and a copyable CLI chip (B31) only where the board has no action. The same line stands on the Focus tab and, when the
+ * focus line warns, in the red band on the other tabs (instead of the old CLI advice). `status`: the band's line is a
+ * live status, as the warning row was.
+ */
+function focusNowLine({ status = false } = {}) {
+  const n = t.data?.focusNow;
+  if (!n?.text) return null;
+  const buttons = (n.actions ?? []).map(focusNowButton).filter(Boolean);
+  const chip = n.cli ? cliChip(n.cli) : null;
+  return el(
+    'div',
+    { class: `focus-now focus-now-${n.state}`, 'data-state': n.state },
+    el(
+      'p',
+      { class: 'focus-now-text', role: status ? 'status' : null },
+      el('span', { class: 'focus-now-label', text: 'What happens now: ' }),
+      n.text,
+    ),
+    buttons.length || chip
+      ? el('div', { class: 'focus-now-actions', role: 'group', 'aria-label': 'What happens now' }, buttons, chip)
+      : null,
+  );
+}
+
+/**
+ * "How focus works" (B18), the same collapsible box as "How it works" in Checks (B11, the checks-how classes): a heading
+ * with a real button (aria-expanded, aria-controls) that opens and closes a region named by it. Open until the owner
+ * closes it; the choice is remembered per browser through `store` (FOCUS_HOW_KEY), never a setting. The four steps say
+ * what the code does with this focus's own values (queueBoard.focusNow `how`: rest wait or fill, dependencies dragged
+ * along or not, pause and ask or continue when done).
+ */
+const FOCUS_HOW_KEY = 'queue-board-focus-how';
+let focusHowOpen = store.getItem(FOCUS_HOW_KEY) !== 'closed';
+const focusStroke = (d) => [['path', { d, fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }]];
+Object.assign(ICONS, {
+  'focus-step-pick': focusStroke('M12 3a9 9 0 1 1 0 18a9 9 0 0 1 0-18zM12 8a4 4 0 1 1 0 8a4 4 0 0 1 0-8z'),
+  'focus-step-order': focusStroke('M5 6h3M5 12h3M5 18h3M11 6h8M11 12h8M11 18h8'),
+  'focus-step-rest': focusStroke('M12 3a9 9 0 1 1 0 18a9 9 0 0 1 0-18zM12 7v5l3 2'),
+  'focus-step-done': focusStroke('M5 12l4 4 10-10'),
+  'focus-chevron': focusStroke('M6 9l6 6 6-6'),
+});
+function focusHowBox() {
+  const how = t.data?.focusNow?.how ?? { rest: 'wait', drag_with: true, continues: false };
+  const steps = [
+    [
+      'focus-step-pick',
+      'Pick what comes first',
+      'Drag areas, projects or features into Now and Next, in the order you want, and press Save focus.',
+    ],
+    [
+      'focus-step-order',
+      'Step 1 before step 2',
+      'Everything ready in step 1 starts before anything in step 2, whatever its score. ' +
+        (how.drag_with
+          ? 'Work outside the steps that they wait on comes along into the step.'
+          : 'Work outside the steps that they wait on does not come along, so a step can get stuck.'),
+    ],
+    how.rest === 'fill'
+      ? [
+          'focus-step-rest',
+          'The rest fills free slots',
+          'Tasks outside the steps start only when the focus has nothing ready.',
+        ]
+      : [
+          'focus-step-rest',
+          'The rest waits',
+          'Tasks outside the steps do not start while the focus applies, so free slots can stay empty.',
+        ],
+    how.continues
+      ? [
+          'focus-step-done',
+          'Then the regular queue',
+          'A done step leaves the focus by itself. When every step is done, the queue goes on with the rest by priority.',
+        ]
+      : [
+          'focus-step-done',
+          'Then the queue asks you',
+          'A done step leaves the focus by itself. When every step is done, the queue pauses and asks you in Decisions: ' +
+            'set a new focus or continue the regular queue.',
+        ],
+  ];
+  const toggle = el(
+    'button',
+    {
+      type: 'button',
+      id: 'focus-how-toggle',
+      class: 'checks-how-toggle',
+      'aria-expanded': String(focusHowOpen),
+      'aria-controls': 'focus-how-body',
+    },
+    el('span', { text: 'How focus works' }),
+    icon('focus-chevron'),
+  );
+  const body = el(
+    'div',
+    { id: 'focus-how-body', class: 'checks-how-body', role: 'region', 'aria-labelledby': 'focus-how-toggle' },
+    el(
+      'ol',
+      { class: 'checks-how-steps' },
+      ...steps.map(([name, head, text], i) =>
+        el(
+          'li',
+          { class: 'checks-how-step' },
+          el('span', { class: 'checks-how-icon' }, icon(name)),
+          el(
+            'span',
+            { class: 'checks-how-step-title' },
+            el('span', { class: 'checks-how-num', 'aria-hidden': 'true', text: `${i + 1}` }),
+            head,
+          ),
+          el('p', { class: 'checks-how-step-text', text }),
+        ),
+      ),
+    ),
+  );
+  body.hidden = !focusHowOpen;
+  const box = el(
+    'section',
+    { class: `checks-how focus-how${focusHowOpen ? '' : ' is-closed'}` },
+    el('h3', { class: 'checks-how-title' }, toggle),
+    body,
+  );
+  toggle.addEventListener('click', () => {
+    focusHowOpen = !focusHowOpen;
+    store.setItem(FOCUS_HOW_KEY, focusHowOpen ? 'open' : 'closed');
+    toggle.setAttribute('aria-expanded', String(focusHowOpen));
+    body.hidden = !focusHowOpen;
+    box.classList.toggle('is-closed', !focusHowOpen);
+  });
+  return box;
 }
 
 function drawFocusLine() {
@@ -111,7 +278,14 @@ function drawFocusLine() {
     );
     return;
   }
-  const notice = f.notice ?? null;
+  // The warning (B18): on the other tabs the red band shows "What happens now" with the buttons that settle it, never
+  // the CLI advice in focusStatus's notice (only without focusNow, from an older server, the notice text stands). On
+  // the Focus tab the same line stands in the view itself, so the band does not repeat it there.
+  const onPlan = t.view === 'plan';
+  const notice = onPlan ? null : (f.notice ?? null);
+  const warning = notice
+    ? (focusNowLine({ status: true }) ?? el('p', { class: 'focus-warning', role: 'status', text: notice }))
+    : null;
   focusLine.className = `focusLine${notice ? ' notice' : ''}`;
   const stage = (f.stage ?? []).flatMap((x, i) => [
     i ? el('span', { class: 'focus-arrow', 'aria-hidden': 'true', text: '→' }) : null,
@@ -176,7 +350,7 @@ function drawFocusLine() {
           'Open Focus: drag areas and projects between Now, Next, Later and Waiting.',
         ),
       ),
-      notice ? el('p', { class: 'focus-warning', role: 'status', text: notice }) : null,
+      warning,
     ].filter(Boolean),
   );
 }

@@ -82,7 +82,8 @@ fix tasks, gate tasks and questions.
 - **Focus:** you choose the areas to work on now (`ravenseat focus set`, or the Focus tab). The queue finishes the connected
   tasks in that focus, fixes and follow-ups included, before it picks up new feature work. When the focus is done,
   the queue pauses and asks whether to set a new focus or continue the regular queue (`focus.continueWhenEmpty`, off
-  by default). `ravenseat forecast` says when the rest of the focus is done.
+  by default); the Focus tab and the focus line say so under "What happens now", with the buttons for both.
+  `ravenseat forecast` says when the rest of the focus is done.
 - **Dependency graph:** each task says what it waits for, whether another task or a decision only you can make, so
   you see what is blocked and what can start right now.
 - **Plan register:** what is not ready yet lives as plan entries (`ravenseat plan show`, `/ravenseat:plans`) and moves into the

@@ -3807,6 +3807,52 @@ body.with-option-line .board {
   font-weight: 600;
 }
 
+/* "What happens now" (B18): one line of text and the buttons that settle the state. In the red band it takes the
+   band's colors; on the Focus tab it is a quiet box, the tone-info surface while the focus runs and tone-warn when the
+   queue stands still or is paused. Tokens only. The buttons are the board's (36 px, 44 px on touch). */
+.focus-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs) var(--distance-md);
+}
+.focusLine .focus-now {
+  margin: 0 0 var(--distance-xs);
+}
+.focus-now-text {
+  margin: 0;
+  flex: 1 1 320px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.focus-now-label {
+  font-weight: 600;
+}
+.focus-now-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs) var(--distance-sm);
+}
+.plan-view .focus-now {
+  padding: var(--distance-sm) var(--distance-md);
+  border-radius: var(--radius-lg);
+  background: var(--color-tone-info);
+  color: var(--color-on-tone-info);
+  font-size: var(--text-sm);
+}
+.plan-view .focus-now-none {
+  background: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+}
+.plan-view .focus-now-stuck,
+.plan-view .focus-now-held,
+.plan-view .focus-now-waiting,
+.plan-view .focus-now-ended-paused {
+  background: var(--color-tone-warn);
+  color: var(--color-on-tone-warn);
+}
+
 /* The grouping choice in the toolbar. */
 .grouping {
   min-height: 36px;

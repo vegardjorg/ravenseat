@@ -15,7 +15,8 @@ import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 import {
-  a, autoAcceptContext, autoAcceptRules, CLI, cut, die, edit, FOLDER, GIT_ROOT, L, positional, PR, read, require, val, WIDTH,
+  a, autoAcceptContext, autoAcceptRules, autoCleanFocus, CLI, cut, die, edit, FOLDER, focusCleanOut, GIT_ROOT, L, positional,
+  PR, read, require, val, WIDTH,
 } from './context.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
 
@@ -360,9 +361,14 @@ export function cmdQa() {
       if (s.error.length) die(`Nothing changed:\n  ${s.error.join('\n  ')}`);
       // Who said QA ok (qa auto --run sets "auto"; the board and /ravenseat:decide pass --by owner).
       if (by && by !== 'auto') for (const o of queue.tasks) if (s.ok.includes(o.id)) o.qa_ok_by = by;
+      // B18: QA on the last done task in a focus step was the step's last rest, so the focus is cleaned in the SAME
+      // write (queueLogic.cleanFocus, as receive, set and fill do): a step with nothing left leaves the focus, and a
+      // focus with nothing left gets its owner question now, not at the next fill. An error here never stops qa ok.
+      autoCleanFocus(queue, `qa ok ${s.ok.join(' ')}`);
       return s;
     });
     console.log(`QA ok: ${r.ok.join(', ')}`);
+    focusCleanOut();
   } else if (under === 'deviation') {
     const [id, text] = positional(2);
     if (!id || !text) die('qa deviation <id> "<what is wrong, and where>"');

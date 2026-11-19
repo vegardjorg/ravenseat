@@ -184,6 +184,9 @@
       el(
         'div',
         { class: 'plan-view' },
+        // B18: what focus is and what the queue does now because of it come first, before the settings.
+        ctx.howBox?.() ?? null,
+        ctx.whatNow?.() ?? null,
         toolbar(p),
         forecastBox(d.forecast),
         el(

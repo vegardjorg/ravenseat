@@ -446,6 +446,7 @@ function buildBoard(
   // "Waiting on you" reads the columns as they are without the Blocked column, so it is the same with the switch on or off.
   const inboxNow = inbox(queue, columns, { map, context: fk, now, withoutAgent, silent, baseRed, approval, toolTrouble });
   if (blockedColumn) columns.blocked = takeBlocked(columns, map, now);
+  const line = focusLine(queue, { now, context: fk, canStart: next.startable.map((v) => v.id) });
 
   return {
     wip: wip(queue),
@@ -459,8 +460,9 @@ function buildBoard(
     // What the queue would start now, and what is waiting on the owner.
     next,
     inbox: inboxNow,
-    // The focus line, areas and the basis for the plan view.
-    focus: focusLine(queue, { now, context: fk, canStart: next.startable.map((v) => v.id) }),
+    // The focus line, "What happens now" (B18), areas and the basis for the plan view.
+    focus: line,
+    focusNow: focusNow(queue, { now, context: fk, line }),
     areas: L.areaOverview(queue, now).map((r) => ({
       oid: r.oid,
       title: r.title,
@@ -883,6 +885,159 @@ function focusLine(queue, { now = Date.now(), context = null, canStart = [] } = 
     now: sequence.slice(0, n),
     next: sequence.slice(n),
   };
+}
+
+/** At most this many rests are named (and get a button) in "What happens now". */
+const FOCUS_NOW_RESTS_MAX = 3;
+
+/** "1 task" / "2 tasks" (the same for steps). */
+const countText = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * "What happens now" (B18): in plain words what the queue does now because of the focus, and the board actions that
+ * settle the state. Built from queueLogic.focusStatus (through focusLine, the same numbers as the focus line) and
+ * queueLogic.evaluateFocusStep (the rests a step stands still on). The text never names a CLI command: where the board
+ * has the action it is in `actions`, and `cli` holds a command only where the board has none (B31: a copyable chip).
+ *   state   none | not-started | active | waiting | held | stuck | ended-paused | ended-continuing
+ *   actions [{ type: 'decide', key, label }]          open that card in Decisions (QA, an owner question, a proposal)
+ *           [{ type: 'resolve', sp, choice, label }]  answer the "focus ended" owner question
+ *           [{ type: 'focus-tab', label }]            open the Focus tab
+ *           [{ type: 'batch-pack', ids, label }]      pack the batch queue (the board's bulk dialog)
+ *   how     { rest, drag_with, continues }: the focus's own values for "How focus works" (the defaults without a focus)
+ * Pure; changes nothing. `line` is the focusLine result when the caller has it.
+ */
+function focusNow(queue, { now = Date.now(), context = null, line = null } = {}) {
+  const k = context ?? L.rankingContext(queue, now);
+  const f = queue?.focus ?? null;
+  const how = {
+    rest: f?.rest === 'fill' ? 'fill' : 'wait',
+    drag_with: f ? f.drag_with_dependencies !== false : true,
+    // The setting (the focus's own value, else the config), not an owner answer: what a focus does when it is done.
+    continues: L.focusContinues(queue).setting === true,
+  };
+  const answer = (state, text, actions = [], cli = null) => ({ state, text, actions, cli, how });
+  if (!f?.order?.length) return answer('none', 'No focus: the queue starts the most valuable work per minute first.');
+  const st = line ?? focusLine(queue, { now, context: k });
+  const name = f.name ? ` "${f.name}"` : '';
+  const newFocus = { type: 'focus-tab', label: 'Set a new focus' };
+  if (st.not_started)
+    return answer(
+      'not-started',
+      `Focus${name} starts on ${String(f.from).slice(0, 10)}. Until then the queue runs as without focus.`,
+    );
+  if (st.expired || st.finished) {
+    const what = st.expired
+      ? `The focus period${name} is over (until ${String(f.to).slice(0, 10)})`
+      : `Focus${name} is done`;
+    if (!st.halted) return answer('ended-continuing', `${what}. The queue goes on with the rest by priority.`, [newFocus]);
+    const id = L.focusEndQuestionId(f);
+    const open = !!queue.question?.[id] && !(queue.resolved ?? []).includes(id);
+    const text = `${what}. The queue is paused: nothing starts until you choose.`;
+    // Without an open question (not registered yet, or answered "Set a new focus") the board has no "continue" action;
+    // ending the focus is the CLI's (or Clear focus and Save on the Focus tab).
+    return open
+      ? answer('ended-paused', text, [
+          { type: 'resolve', sp: id, choice: 2, label: L.FOCUS_END_CHOICES[1] },
+          newFocus,
+        ])
+      : answer('ended-paused', text, [newFocus], 'ravenseat focus off');
+  }
+  // The focus applies and has steps left. What waits outside it (pending, not on hold, not paused, not batched).
+  let outside = 0;
+  for (const o of queue.tasks ?? []) {
+    if (L.isExternalRow(o) || o.status !== 'waiting' || L.isBatched(o)) continue;
+    const p = L.focusSpace(o, k);
+    if (p.outside && !p.parked && !p.paused) outside += 1;
+  }
+  const outsideText = outside
+    ? how.rest === 'fill'
+      ? ` ${countText(outside, 'task')} outside the focus ${outside === 1 ? 'fills' : 'fill'} free slots.`
+      : ` ${countText(outside, 'task')} outside the focus ${outside === 1 ? 'waits' : 'wait'}.`
+    : '';
+  // When nothing in the focus starts: what that means for the free slots.
+  const slotsText = !outside
+    ? ''
+    : how.rest === 'fill'
+      ? ' Tasks outside the focus fill the free slots meanwhile.'
+      : ' Tasks outside the focus wait, so free slots stay empty.';
+  const steps = st.stage ?? [];
+  const label = (i) => `step ${i + 1} ${steps[i]?.label ?? steps[i]?.title ?? ''}`.trim();
+  const evaluation = L.evaluateFocusStep(queue, now);
+  const leftSteps = evaluation.filter((e) => e.status !== 'done').length;
+  const leftMin = steps.reduce((s, x) => s + (x.min_left ?? 0), 0);
+  const leftText = st.in_focus
+    ? ` Left: ${countText(st.in_focus, 'task')} in ${countText(leftSteps, 'step')}, about ${minutesText(leftMin)}.`
+    : '';
+  const progressText = st.inProgress ? ` ${st.inProgress} in progress.` : '';
+  if (st.readyOnes > 0) {
+    const i = Math.max(
+      steps.findIndex((x) => x.readyOnes > 0),
+      0,
+    );
+    const first = label(i);
+    return answer(
+      'active',
+      `${first[0].toUpperCase()}${first.slice(1)} goes first: ${steps[i]?.readyOnes ?? st.readyOnes} ready to start.` +
+        `${progressText}${outsideText}${leftText}`,
+    );
+  }
+  const question = st.ownerQuestion?.[0] ?? null;
+  const questionAction = question
+    ? [{ type: 'decide', key: `decide:${question.sp}`, label: `Answer ${question.sp}` }]
+    : [];
+  if (st.in_focus > 0 || st.inProgress > 0) {
+    const why = st.in_focus
+      ? ` ${countText(st.in_focus, 'task')} in the steps ${st.in_focus === 1 ? 'waits' : 'wait'} on other work.`
+      : '';
+    const unlock = question
+      ? ` Answering ${question.sp} unlocks ${countText(question.tasks, 'task')} in the focus.`
+      : '';
+    return answer(
+      'waiting',
+      `Nothing new in the focus can start now.${progressText}${why}${unlock}${slotsText}${leftText}`,
+      questionAction,
+    );
+  }
+  // Nothing open in the steps: the focus stands still on rests (QA, owner questions, proposals, the batch queue), or
+  // only on tasks that are on hold or in a paused project.
+  const withRests = evaluation.filter((e) => e.status === 'done-with-rests');
+  if (!withRests.length)
+    return answer(
+      'held',
+      `Nothing in the focus can start: the tasks left in the steps are on hold or in a paused project.${slotsText}`,
+    );
+  const rests = withRests.flatMap((e) => e.rests);
+  const restWords = (r) =>
+    r.type === 'qa'
+      ? `QA on ${r.id}`
+      : r.type === 'question'
+        ? `the owner question ${(r.sp ?? []).join(', ')}`
+        : r.type === 'proposed'
+          ? `your yes on the proposal ${r.id}`
+          : `the batch queue (${r.id})`;
+  const named = rests.slice(0, FOCUS_NOW_RESTS_MAX).map(restWords);
+  const more = rests.length > named.length ? ` and ${rests.length - named.length} more` : '';
+  const actions = [];
+  const seen = new Set();
+  const add = (a) => {
+    const key = `${a.type}:${a.key ?? a.label}`;
+    if (seen.has(key) || actions.length >= FOCUS_NOW_RESTS_MAX) return;
+    seen.add(key);
+    actions.push(a);
+  };
+  for (const r of rests) {
+    if (r.type === 'qa') add({ type: 'decide', key: `check:${r.id}`, label: `QA ${r.id}` });
+    else if (r.type === 'proposed') add({ type: 'decide', key: `approve:${r.id}`, label: `Review ${r.id}` });
+    else if (r.type === 'question')
+      for (const sp of r.sp ?? []) add({ type: 'decide', key: `decide:${sp}`, label: `Answer ${sp}` });
+  }
+  const batched = rests.filter((r) => r.type === 'batched').map((r) => r.id);
+  if (batched.length) add({ type: 'batch-pack', ids: batched, label: 'Pack the batch queue' });
+  return answer(
+    'stuck',
+    `The queue is standing still: ${label(withRests[0].index)} waits only on you: ${more ? `${named.join(', ')}${more}` : andList(named)}.${slotsText}`,
+    actions,
+  );
 }
 
 /**
@@ -2360,6 +2515,7 @@ module.exports = {
   sortList,
   sortSuggestion,
   focusLine,
+  focusNow,
   planBasis,
   focusPreview,
   AREA_ACTIONS,
