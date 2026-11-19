@@ -5,6 +5,28 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: Focus holds up at 50 steps (QA-1b).** Edge cases from the owner's QA with a real queue of 50+ tasks in
+  focus. (1) The **Add to focus …** picker listed every open card in a plain select; **What** is now a search field
+  over the list (the combobox pattern the Plans command line uses): it filters by id and title, every word must
+  match, the arrow keys and Page Up/Down move the choice, the count of matches is in a polite live region, and Esc
+  clears the search before it closes the dialog. With a handful of tasks every one shows, as before. (2) **Position**
+  was a select from step 1 to n+1 without labels; it is now **First**, **After a step** or **Last** (the default),
+  and After a step opens a searchable list of the steps by label (T<n>, task id and title, or the step's name).
+  The one-click **Add to focus** on a card, in the panel and in Selection still adds last; beside it, **Add to focus
+  at …** (the **at …** half of a split button on the card) opens the same picker with the task or tasks chosen and
+  sends the existing change with `at` (First 1, after step k k+1, Last without `at`). The server already took `at`,
+  so it is unchanged. (3) A step's open task list above 12 tasks shows about 12 rows at a time in its own scroll
+  area (a tab stop with a label, a fade at the bottom edge and a hint under it; titles stay on one line with the
+  full text as a tooltip). In focus with more than 12 steps draws compact one-line rows, and each step gets a small
+  menu with **Move to top** and **Move to bottom**; Home and End do the same for a step lifted with Space. The drop
+  bar from QA-1a is unchanged: the rows are the same elements it measures. Friction: every part removes work (no
+  scrolling through 50 options, no 50-row drag) and adds no step to the short case; the defaults are the old
+  behaviour (Last, one click, normal rows up to 12 steps or tasks). No setting.
+- **Test: the "hidden by the search" chain-line test no longer flakes.** It typed into the board search and read the
+  chain line after a few zero-delay ticks, while the board applies the search after a 150 ms debounce, so it passed
+  only on a slow run (about one in two). The test now waits past the debounce; the board itself redraws the line
+  when the search applies, so it had no race.
+
 - **Board: the gear toggles, Checks shows its severity, and Focus shows where a drag lands (QA-1a).** Three edge
   cases from the owner's QA. (1) A second click on the gear while Settings was open redrew Settings in its loading
   state and fetched it again, so the gear looked dead; it now closes the panel exactly as Close does, also while

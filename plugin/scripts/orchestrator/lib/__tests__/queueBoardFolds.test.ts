@@ -92,6 +92,19 @@ let state = stateFor('v1', 3, 2);
 const flush = async () => {
   for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0));
 };
+/**
+ * Types into the board search and waits until the board has applied it. The board debounces the search input by
+ * 150 ms (board/start.js, searchTime), and flush() only waits a few zero-delay ticks, so a test that reads the board
+ * right after flush() raced the debounce: it passed only when the run happened to be slower than 150 ms. Waiting a
+ * real 200 ms (past the debounce) and then flushing makes the order fixed.
+ */
+async function typeSearch(value: string) {
+  const search = document.getElementById('search') as HTMLInputElement;
+  search.value = value;
+  search.dispatchEvent(new Event('input'));
+  await new Promise((r) => setTimeout(r, 200));
+  await flush();
+}
 /** A new state from the "server": the board fetches again on the window's focus event. */
 async function serve(next: typeof state) {
   state = next;
@@ -273,17 +286,12 @@ describe('B25: the chain line names the real cause', () => {
   });
 
   it('the search: "hidden by the search" with Clear search', async () => {
-    const search = $('search') as HTMLInputElement;
-    search.value = 'EX-1';
-    search.dispatchEvent(new Event('input'));
-    await flush();
+    await typeSearch('EX-1');
     await openCard('EX-1');
     expect(chainText()).toContain('3 hidden by the search');
     expect([...$('stripe').querySelectorAll('.chain-line button')].map((b) => b.textContent)).toContain('Clear search');
     closePanel();
-    search.value = '';
-    search.dispatchEvent(new Event('input'));
-    await flush();
+    await typeSearch('');
   });
 
   it('the text for every cause, with the action that reveals it', () => {

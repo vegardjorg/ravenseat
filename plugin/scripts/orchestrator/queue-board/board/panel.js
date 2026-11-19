@@ -629,7 +629,7 @@ function actionsFor(k, col) {
   }
   // B21: "Add to focus" / "Remove from focus", or what step covers the task (views.js focusActions).
   const inFocus = focusActions(k);
-  if (inFocus) box.append(inFocus);
+  if (inFocus) box.append(...[].concat(inFocus)); // one element, or two buttons for a task outside the focus
   // Cancel, decline and edit (waiting and proposed), or the CLI hint for running and review.
   const edit = taskEditActions(k);
   if (edit) box.append(...[].concat(edit));

@@ -170,12 +170,22 @@ The Queue workspace has these tabs:
   is a fold, closed by default, with the name, the rest (waits or fills free slots), the end date, dragging
   dependencies along, what happens when the focus is done, **Clear focus** and **Areas …** (creates and names the
   areas). The draft state, **Add to focus …**, **Discard** and **Save focus** stay beside the In focus heading. **Add
-  to focus …** opens a picker (kind: task, feature, project or area; what; the step it goes in at, last by default)
-  that puts the step into the draft, as a drag does; nothing is saved before Save focus and its preview. A task step
+  to focus …** opens a picker (kind: task, feature, project or area; what; and the position) that puts the step into
+  the draft, as a drag does; nothing is saved before Save focus and its preview. **What** is a search field over the
+  list: type any part of the id or the title (every word must match), the arrow keys and Page Up/Down move the choice,
+  the number of matches is read out, and Esc clears the search first and closes the dialog only on an empty field.
+  **Position** is **First**, **After a step** or **Last** (the default); After a step opens a searchable list of the
+  steps by their label (T3, the task id and title, or the step's name). A task step
   taken out of In focus in the draft stands in Not in focus until the draft is saved or discarded, so it can be dragged
-  back. On the cards, a task outside every step has **Add to focus** in the detail panel, on its card right after the
-  reason (which then leaves out the `ravenseat focus` hint) and, for several cards, in Selection: each goes in as its
-  own `task:<id>` step, last in the list, in one change. A task that is its own step has **Remove from focus**, which
+  back. With more than 12 steps, In focus draws compact one-line rows, and every step row has a small **⋯** menu with
+  **Move to top** and **Move to bottom** (into the draft; Home and End do the same for a step lifted with Space). A
+  step whose task list holds more than 12 tasks shows about 12 at a time in its own scroll area, which is a tab stop
+  with a label and a hint under it. On the cards, a task outside every step has **Add to focus** in the detail panel,
+  on its card right after the reason (which then leaves out the `ravenseat focus` hint) and, for several cards, in
+  Selection: each goes in as its own `task:<id>` step, last in the list, in one change. Beside each one,
+  **Add to focus at …** (on the card the **at …** half of the button) opens the same picker with the task or tasks
+  already chosen, so only the position is picked; it sends the same change with `at` (First is 1, after step k is
+  k+1, Last leaves it out). A task that is its own step has **Remove from focus**, which
   takes that step out. A task that a feature, project or area step holds gets a note naming that step and no button
   (it cannot leave the focus alone, and its own step would only move it to the end); a task dragged along says which
   task waits on it. These actions show the same preview as Save focus (before, after, the steps, Next up) and save on
