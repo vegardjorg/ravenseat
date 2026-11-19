@@ -38,8 +38,9 @@ The plugin's hooks do nothing in projects without a `queue.config.json`, so it i
 
 Update with `/plugin update`, then run `ravenseat setup --settings` in the project: it refreshes the settings and names the
 project files older than the plugin, such as the mission template your agents get (**After a plugin update** under
-[how it works](#how-it-works) says how to replace them). The board shows a banner when a new version is out, with the steps (turn the check off
-with `"board": { "updateCheck": false }`, see [board](board.md#update-banner)). To try it without installing:
+[how it works](#how-it-works) says how to replace them). The board shows a banner when a new version is out, with the steps, and
+`ravenseat show` and `ravenseat doctor` say it in one line for those who do not use the board (`ravenseat update dismiss`
+hides a version; turn the check off with `"updates": { "check": false }`, see [board](board.md#update-banner)). To try it without installing:
 `claude --plugin-dir <path-to-this-repo>/plugin`.
 
 Without the plugin system you can copy everything into the project instead ("vendored" install): open Claude Code in

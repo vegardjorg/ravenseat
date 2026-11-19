@@ -36,7 +36,8 @@
 //                  (lib/settingsView.js); it is never hidden, and no default or behavior follows from it. A parent in
 //                  another group is named in the explanation (the registry test checks it, and that there are no cycles).
 //
-// INTERNAL lists keys in STANDARD that are not settings a person changes (empty today). QUEUE_ONLY lists the queue.json
+// INTERNAL lists keys in STANDARD that are not settings a person changes (today only board.updateCheck, the old name of
+// updates.check that is still read). QUEUE_ONLY lists the queue.json
 // keys that have no counterpart in STANDARD. The coverage test (lib/__tests__/settingsRegistry.test.ts) fails when a key
 // in STANDARD, a limit, a cloud setting, a board switch or a module has no row.
 //
@@ -99,7 +100,9 @@ const CATEGORIES = Object.freeze([
 ]);
 
 /** Keys in STANDARD that are not settings (none today; a key goes here only with a comment saying why). */
-const INTERNAL = Object.freeze([]);
+// board.updateCheck: the old name of updates.check (0u3). Still read (false turns the check off), but not shown as a
+// setting of its own, so the board and `ravenseat settings` show one switch.
+const INTERNAL = Object.freeze(['board.updateCheck']);
 
 /** queue.json keys with no counterpart in STANDARD (the limits are checked against LIMIT_NAME and LIMIT_EXTRA instead). */
 const QUEUE_ONLY = Object.freeze(['guidance', 'checksPanel.mode', 'checksPanel.marker']);
@@ -1070,8 +1073,10 @@ const SETTINGS = Object.freeze([
       whyNot: 'The key is in the output Claude reads when it starts the board, and the board takes a script call as yours.',
       changes: 'The start line prints the link with the key, and a write with the key but no Origin is let through.',
     }),
-  row('board.updateCheck', 'board', 'onoff', 'Update check',
-    'The board checks GitHub for a newer plugin version at most once a day (a plain GET that sends nothing about you).'),
+  row('updates.check', 'board', 'onoff', 'Update check',
+    'Ravenseat looks for a newer version on GitHub at most once a day (a plain GET that sends nothing about you): the ' +
+    'board shows a banner, and ravenseat show and doctor one line. It never stops any work. The old name ' +
+    'board.updateCheck still works; DISABLE_UPDATES and CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC also turn it off.'),
   row('board.showCloud', 'board', 'onoff', 'Show the Cloud tab',
     'The Cloud tab, when cloud sessions are on (features.cloud).', QUEUE),
   row('features.statistics', 'board', 'onoff', 'Statistics tab',

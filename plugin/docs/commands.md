@@ -9,7 +9,8 @@ ravenseat init --full               # once per project (a bare `ravenseat init` 
 ravenseat mode [lite|full]          # show or switch the mode
 ravenseat settings [--advanced] [--all] [--changed] [--json]  # every setting by category, its value and where it is saved
 ravenseat settings set <key> <value> # change one; a value that weakens a guard needs --i-understand --by owner
-ravenseat show                      # short queue view
+ravenseat show                      # short queue view (with one "ravenseat X is out" line at most once a day when a newer version is known)
+ravenseat update [dismiss [<ver>]]  # what is known about new versions; dismiss hides the notice for that version in show, doctor and on the board
 ravenseat add --file task.json      # add tasks
 ravenseat fill --scratchpad <dir>   # start what the limits allow
 ravenseat receive <ID>              # receive a finished track (with secretScan.atReceive on, also scans its commits for secrets: a hit blocks the merge)
@@ -50,7 +51,7 @@ ravenseat kickstart                 # which checks the project has and one next 
 ravenseat kickstart gates --apply   # sets the checks your project already has as gates
 ravenseat kickstart add             # proposes the next step as a task; it starts only when you approve it
 ravenseat gate "<failure class>"    # a known bug becomes a proposed gate task; gates.fromKnownBugs: propose, auto or off
-ravenseat doctor [--all] [--fix]    # health check: node, hooks, config, state, worktrees, budget, safety baseline, keys in approved commands and .mcp.json, broad shared permissions and the project .gitignore when turned on (--all adds CI cost tips); --fix writes the project's .gitignore from the settings first
+ravenseat doctor [--all] [--fix]    # health check: node, hooks, config, state, worktrees, budget, safety baseline, keys in approved commands and .mcp.json, broad shared permissions and the project .gitignore when turned on (--all adds CI cost tips), and an INFO row when a newer ravenseat is out; --fix writes the project's .gitignore from the settings first
 ravenseat share status             # whether the queue's own files are in git, the repo's visibility and what git tracks in the data folder
 ravenseat share on [--include <file> ...] --yes   # off by default: queue.json and plans.json in git as a backup; explains first, a public or unknown repo also needs --public-ok
 ravenseat share off                # the whole data folder is private again

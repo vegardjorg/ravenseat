@@ -85,7 +85,8 @@ function queueShow() {
       encoding: 'utf8',
       timeout: 15_000,
       stdio: ['ignore', 'pipe', 'ignore'],
-      env: { ...process.env, COLUMNS: '110' },
+      // QUEUE_HOOK: show keeps the update notice out of hook output (cli/update.mjs).
+      env: { ...process.env, COLUMNS: '110', QUEUE_HOOK: '1' },
     });
   } catch {
     return '(ravenseat show failed; run it yourself)';

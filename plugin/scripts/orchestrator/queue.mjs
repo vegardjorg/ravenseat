@@ -181,6 +181,12 @@
 //                                                                  CI cost and the safety baseline (secret files, gates, CI,
 //                                                                  lockfiles, productionBranch, large files; offline);
 //                                                                  exit 1 on any FAIL; cli/doctor.mjs)
+//   node scripts/orchestrator/queue.mjs update [dismiss [<version>]]   (the update notice, cli/update.mjs: without a word
+//                                                                  what is known (installed, the newest seen, dismissed);
+//                                                                  dismiss hides the "ravenseat X is out" line in show and
+//                                                                  doctor and the board's banner for that version (default:
+//                                                                  the newest known) until a newer one is out. show and
+//                                                                  doctor print the line; updates.check false turns it off)
 //   node scripts/orchestrator/queue.mjs instructions [--json] [--plan]   (read-only: what Claude Code loads as instructions at
 //                                                                  the start of every session, track and subagent, per file and
 //                                                                  per scope (project, ~/.claude, Ravenseat), the files loaded on
@@ -864,6 +870,8 @@ if (command === 'init') {
   (await import('./cli/view.mjs')).cmdState();
 } else if (command === 'diagnose') {
   (await import('./cli/view.mjs')).cmdDiagnose();
+} else if (command === 'update') {
+  await (await import('./cli/update.mjs')).cmdUpdate();
 } else if (command === 'doctor') {
   await (await import('./cli/doctor.mjs')).cmdDoctor();
 } else if (command === 'instructions') {

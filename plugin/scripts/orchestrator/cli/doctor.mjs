@@ -38,6 +38,9 @@
 //               names and counts only, never content
 //   cloud rows  only with features.cloud on: what cloud tracks need (lib/cloudSetup.js), read locally; the setup itself is
 //               `ravenseat cloud setup`
+//   update      only when a newer ravenseat is out and not dismissed: one INFO row with the update command (cli/update.mjs).
+//               Never WARN or FAIL. With a cache older than 24 h it checks GitHub first (3 s timeout); none in --json,
+//               an agent or CI; off with updates.check false
 //   the safety baseline (cli/doctorBaseline.mjs, offline): secrets (a tracked .env or private key is FAIL), gates,
 //               ci, lockfile, prod (productionBranch vs baseBranch), largefile
 // Exit code 1 when any check FAILs, otherwise 0. It never changes anything: no lock, no write, no git command that
@@ -59,6 +62,7 @@ import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 import { REPO_CHECKS } from './doctorRepo.mjs';
 import { idleGuardLines } from './inspection.mjs';
 import { checkTree } from './catalog.mjs';
+import { doctorUpdateRows } from './update.mjs';
 
 const BOARD = require('./lib/queueBoard.js');
 const QL = require('./lib/queueLock.js');
@@ -76,7 +80,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -820,6 +824,9 @@ export async function cmdDoctor() {
       return [fail(f.name.replace(/^check/, '').toLowerCase(), `the check failed: ${e?.message ?? e}`, 'report it as a bug')];
     }
   });
+  // A newer ravenseat (cli/update.mjs): one INFO row, never WARN or FAIL. It may check GitHub with a 3 s timeout when
+  // the cache is old; quiet in --json and in agent or CI context.
+  every.push(...(await doctorUpdateRows()));
   // Quiet guidance (lib/guidance.js) drops the advice rows, never a FAIL, and says how many went. --all shows everything.
   const { rows: checks, hidden } = require('./lib/guidance.js').filterDoctor(every, require('./lib/guidance.js').readQuiet(FOLDER), {
     all: a.includes('--all'),

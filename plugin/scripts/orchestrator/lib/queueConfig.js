@@ -634,15 +634,20 @@ const STANDARD = Object.freeze({
   // chats that are NOT the orchestrator. Default false: those chats only get the notice from 250k. The orchestrator's
   // own limits (compact, wind-down, hard stop) are not affected.
   contextGuard: { blockOtherChats: false },
+  // The update check (lib/queueUpdate.js): a plain GET of the published plugin.json at most once per 24 hours, sending
+  // nothing about you. The board shows a banner; `ravenseat show` and `ravenseat doctor` one line (cli/update.mjs; show
+  // only reads the cache and refreshes it in the background). false turns it off, and so does the old name
+  // board.updateCheck false, DISABLE_UPDATES or CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC. It never stops any work; the
+  // local "run ravenseat setup --settings" notice works either way.
+  updates: { check: true },
   board: {
     port: 2000,
     title: 'Queue board',
     // The mascot's speech bubble: "chatty" (everything), "events" (only events and clicks) or "off" (no bubbles at
     // all, for every viewer; the choice in the gear is then locked). `queue-board.mjs --mascot <mode>` overrides it.
     mascot: 'chatty',
-    // The update banner: the board checks GitHub for a newer plugin version at start (at most once per 24 hours, a
-    // plain GET that sends nothing about you). false turns it off; so do DISABLE_UPDATES and
-    // CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC. The local "run ravenseat setup --settings" notice works either way.
+    // The old name of updates.check (below), still read: false here turns the check off too. Not a registry row of its
+    // own (settingsRegistry.js INTERNAL); new configs use updates.check.
     updateCheck: true,
     // The Cloud tab: features.cloud is the switch for all of it, so the tab comes with it. false keeps the tab away with the module on.
     // queue.json board.showCloud wins (written by `ravenseat board-setting cloud on|off` and the gear). A saved Cloud view still opens.

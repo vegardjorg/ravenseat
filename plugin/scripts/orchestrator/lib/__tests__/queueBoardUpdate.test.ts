@@ -50,6 +50,8 @@ async function refetch() {
   await flush();
 }
 const banner = () => document.getElementById('update-banner') as HTMLElement;
+/** The board's POST calls (the X also stores the dismissal on the server, shared with `ravenseat update dismiss`). */
+const posts: { path: string; body: Record<string, unknown> }[] = [];
 
 beforeAll(async () => {
   setUpdate(U.notice({ mode: 'plugin', installed: '0.3.0', latest: '0.4.0', setupVersion: '0.3.0' }));
@@ -62,7 +64,11 @@ beforeAll(async () => {
   w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   w.HTMLElement.prototype.scrollIntoView = function () {};
   w.setInterval = () => 0;
-  w.fetch = async (filePath: string) => ({
+  w.fetch = async (filePath: string, init?: { method?: string; body?: string }) => {
+    if (init?.method === 'POST') posts.push({ path: filePath, body: JSON.parse(init.body ?? '{}') });
+    return answer(filePath);
+  };
+  const answer = (filePath: string) => ({
     ok: true,
     status: 200,
     json: async () =>
@@ -98,6 +104,9 @@ describe('the update banner', () => {
     (banner().querySelector('.update-banner-close') as HTMLButtonElement).click();
     expect(banner().hidden).toBe(true);
     expect(localStorage.getItem(U.DISMISS_KEY)).toBe('0.4.0');
+    // Also stored on the server, so `ravenseat show` and doctor stay quiet about it too.
+    await flush();
+    expect(posts).toContainEqual({ path: '/api/update-dismiss', body: { version: '0.4.0' } });
     // A new state with the same version: still hidden.
     setUpdate(U.notice({ mode: 'plugin', installed: '0.3.0', latest: '0.4.0', setupVersion: '0.3.0' }));
     await refetch();
@@ -142,5 +151,15 @@ describe('the update banner', () => {
       proto.getItem = get;
       proto.setItem = set;
     }
+  });
+
+  it('a version dismissed on the server (ravenseat update dismiss) is hidden here too, until a newer one is out', async () => {
+    setUpdate(U.notice({ mode: 'plugin', installed: '0.3.0', latest: '0.7.0', setupVersion: '0.3.0', dismissed: '0.7.0' }));
+    await refetch();
+    expect(banner().hidden).toBe(true);
+    setUpdate(U.notice({ mode: 'plugin', installed: '0.3.0', latest: '0.8.0', setupVersion: '0.3.0', dismissed: '0.7.0' }));
+    await refetch();
+    expect(banner().hidden).toBe(false);
+    expect(banner().textContent).toContain('ravenseat 0.8.0 is out');
   });
 });

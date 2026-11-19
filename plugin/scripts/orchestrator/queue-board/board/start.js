@@ -9,7 +9,10 @@
 'use strict';
 
 // ---- The update banner (the rules and texts in lib/queueUpdate.js; the server sends `update` in the state) ----
-/** The version whose banner was closed (localStorage through `store`, so blocked storage only means not remembered). */
+/**
+ * The version whose banner was closed in this browser (localStorage through `store`, so blocked storage only means not
+ * remembered). The server's dismissal comes in the state as update.dismissed; U.visible takes the newer of the two.
+ */
 const dismissedUpdate = () => store.getItem(window.QueueUpdate?.DISMISS_KEY ?? 'queue-board-update-dismissed');
 
 /** One step: the text, and the command with a "Copy" button (the same look as the cloud commands). */
@@ -101,6 +104,10 @@ function drawUpdateBanner() {
           title: 'Close until a newer version is out',
           onclick: () => {
             store.setItem(U.DISMISS_KEY, n.newVersion.latest);
+            // Also on the server (<dataFolder>/update-check.json, the same field `ravenseat update dismiss` writes), so
+            // other browsers and the CLI line in show and doctor stay quiet about it. A failed call only means this
+            // browser remembers it alone.
+            api('/api/update-dismiss', { version: n.newVersion.latest }).catch(() => {});
             drawUpdateBanner();
           },
         },

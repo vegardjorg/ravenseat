@@ -5,6 +5,17 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Updates: the new-version notice also reaches CLI users (0u3).** Edge case closed in the update check. Only the
+  board said that a newer ravenseat was out, so a project run from the terminal or by Claude alone never heard of it.
+  `ravenseat show` now prints one line, `ravenseat X is out (you have Y): claude plugin update ravenseat@ravenseat,
+  then ravenseat setup --settings`, at most once a day per version, and `ravenseat doctor` gives it as an INFO row
+  (never WARN or FAIL). `show` only reads the board's cache (`<dataFolder>/update-check.json`) and never waits on the
+  network: an old cache starts a background refresh with the board's check and timeout, so the answer is there next
+  time; `doctor` checks directly with a 3 second timeout. The line stays out of `--json`, agents (track worktrees and
+  the agent role), CI and hooks, and out of every other command. `ravenseat update dismiss` hides a version, and the
+  board's X now stores the same field, so a dismissal holds in every browser and in the CLI. The setting is now
+  `updates.check` (on by default, never stops any work); the old name `board.updateCheck` still works, and
+  `DISABLE_UPDATES` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` turn it off as before.
 - **Focus: a new focus fills free slots by default, with the setting Outside focus (B22).** Edge case closed in the
   focus default. A focus set without `--rest` used `wait`, so tasks outside it did not start and slots could stay
   empty while nothing on the board said why. The new setting `focus.restDefault` (Settings, Plans and focus, label

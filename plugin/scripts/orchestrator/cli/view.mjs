@@ -24,6 +24,7 @@ import { batchGroupLine } from './batch.mjs';
 import { followLines } from './orchestrator.mjs';
 import { findingsLineNow, findingsStateNow } from './finding.mjs';
 import { baseHealthLine } from './baseHealth.mjs';
+import { installInfo, showUpdateLine } from './update.mjs';
 
 /** "picked by X 3 h ago · 2 commits · OLD" for a picked task. */
 function pickLine(o) {
@@ -39,11 +40,10 @@ function pickLine(o) {
 function setupBehindLine() {
   try {
     const U = require('./lib/queueUpdate.js');
-    const src = require('./lib/queueBoard.js').setupSources(HERE, MAIN_TREE, (f) => fs.existsSync(f));
-    const file = src.manifest ?? path.join(HERE, 'ravenseat-version.json');
+    const inst = installInfo();
     return U.setupBehindLine({
-      mode: src.mode,
-      installed: JSON.parse(fs.readFileSync(file, 'utf8')).version ?? null,
+      mode: inst.mode,
+      installed: inst.version,
       setupVersion: U.readSetupRecord(fs, path.join(FOLDER, 'setup.json')),
     });
   } catch {
@@ -75,6 +75,9 @@ export function cmdShowSummary() {
   if (baseLine) console.log(baseLine);
   const setupLine = setupBehindLine();
   if (setupLine) console.log(setupLine);
+  // A newer ravenseat (cli/update.mjs): from the cache only, at most once a day per version, quiet for agents and CI.
+  const updateLine = showUpdateLine();
+  if (updateLine) console.log(updateLine);
   // The wiring spec's open items (lib/wiringItems.js): done waits for them, so they are said near the top too.
   const wiringLine = require('./lib/wiringItems.js').summaryLine(queue.tasks, CLI);
   if (wiringLine) console.log(wiringLine);

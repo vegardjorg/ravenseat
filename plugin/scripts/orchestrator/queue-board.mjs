@@ -85,8 +85,10 @@
 //     as queue.mjs follow; the board never writes follow.json. Only with features.follow on (off by default).
 //   - UPDATE BANNER (lib/queueUpdate.js): at start, and at most once per 24 hours (cache <dataFolder>/update-check.json),
 //     the server fetches the published plugin.json from GitHub with a plain GET (no headers of its own, nothing about
-//     the user or the project, 3 s timeout); any error is silent. Off with board.updateCheck: false or DISABLE_UPDATES
-//     or CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC. The state carries `update`, which also says when
+//     the user or the project, 3 s timeout); any error is silent. Off with updates.check: false (or the old
+//     board.updateCheck: false), DISABLE_UPDATES or CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC. The banner's X is
+//     stored in the same file (POST /api/update-dismiss, `dismissed`), shared with `ravenseat update dismiss` and the CLI
+//     line in show and doctor (cli/update.mjs). The state carries `update`, which also says when
 //     the plugin version differs from the one `ravenseat setup --settings` recorded in <dataFolder>/setup.json (local only).
 //
 // Security (another web page in the same browser must not be able to read or edit the queue):
@@ -377,6 +379,8 @@ const updateNotice = () =>
     latest: latestPublished,
     setupVersion: U.readSetupRecord(fs, SETUP_RECORD),
     projectFolder: MAIN_TREE,
+    // The version closed on the board or with `ravenseat update dismiss` (the same file as the cache).
+    dismissed: U.dismissedVersion(fs, UPDATE_CACHE),
   });
 
 // ---- The colors (the neutral palette in lib/queueBoard.js) ----------------------------------------------------------
@@ -2299,6 +2303,15 @@ async function write(filePath, b) {
   if (filePath === '/api/plan-undo') return planUndo(b);
   // The lawyer package (local draft, never sent).
   if (filePath === '/api/lawyerPackage') return lawyerPackageWrite(b);
+  // The update banner's X (board/start.js): the same dismissal as `ravenseat update dismiss` (lib/queueUpdate.js), so
+  // other browsers and the CLI line stay quiet about that version too.
+  if (filePath === '/api/update-dismiss') {
+    if (!U.parse(b.version)) return no('invalid version');
+    if (!U.dismiss(fs, UPDATE_CACHE, String(b.version)))
+      return { status: 500, answer: { ok: false, message: 'could not write update-check.json' } };
+    quick = null;
+    return { status: 200, answer: { ok: true, message: `The notice about ravenseat ${b.version} is hidden until a newer version is out.` } };
+  }
 
   if (filePath === '/api/move') {
     const id = idOrNull(b.id);

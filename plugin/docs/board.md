@@ -454,14 +454,22 @@ while the tab is hidden, with a note where to turn it on.
 When a newer ravenseat is out, a banner below the top says "ravenseat X is out (you have Y)", links to the CHANGELOG and lists the
 steps with a Copy button each: `claude plugin update ravenseat@ravenseat`, then `/reload-plugins` (or a new session),
 then `ravenseat setup --settings`. A vendored install gets `git pull` in your Ravenseat folder and
-`node scripts/install.mjs <project> --overwrite` instead. Close it with the X: it stays away until a newer version is out
-(remembered in this browser).
+`node scripts/install.mjs <project> --overwrite` instead. Close it with the X: it stays away until a newer version is out.
+The X is remembered in this browser and in `<dataFolder>/update-check.json`, so other browsers and the CLI line below
+stay quiet about that version too; `ravenseat update dismiss` writes the same field, and the board then hides it as well.
 
 How it checks: the board server (not the browser) fetches the published `plugin.json` from GitHub at start, at most
 once per 24 hours (cached in `<dataFolder>/update-check.json`). It is a plain GET with a 3 second timeout that sends
-nothing about you or the project; any error just means no banner. Turn it off with `"board": { "updateCheck": false }`
-in `queue.config.json`; it is also off when `DISABLE_UPDATES` or
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
+nothing about you or the project; any error just means no banner. Turn it off with `"updates": { "check": false }`
+in `queue.config.json` (the old `"board": { "updateCheck": false }` still works); it is also off when `DISABLE_UPDATES` or
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set. Off never stops any work.
+
+Without the board: `ravenseat show` prints one line, `ravenseat X is out (you have Y): claude plugin update
+ravenseat@ravenseat, then ravenseat setup --settings`, at most once a day per version, and `ravenseat doctor` prints it as
+an INFO row every time. `show` only reads the same cache and never waits on the network: when the cache is older than 24
+hours it starts a background refresh (the same check and timeout), so the answer is there next time. `doctor` checks
+directly when the cache is old. The line stays out of `--json` output, agents (track worktrees and the agent role), CI
+(`CI=true`) and hooks, and out of every other command, so agent output stays clean.
 
 Setup after an update (local, no network, also with the check off): `ravenseat setup --settings` records the plugin version
 it set up in `<dataFolder>/setup.json`. When the installed plugin differs from that record, the banner says to run
