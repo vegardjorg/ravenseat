@@ -308,11 +308,13 @@ Before each commit (also on a track branch), run only the tests your change can 
 ```
 npm run test:changed            # against origin/main; or: npm run test:changed -- <ref>
 npm run test:changed -- --list  # show the pick and why, run nothing
+node scripts/test-changed.mjs --stats  # the local run log: how often FULL, the picked share, run times
 ```
 
 It follows imports, the scripts the tests start as processes (queue.mjs commands, hooks, gates.mjs) and the files the
 tests read, and runs the whole suite instead whenever it cannot tell (it prints the reason). Run the whole suite
-(`npm test`) before every push. This is a working rule, not a git hook.
+(`npm test`) before every push. This is a working rule, not a git hook. Each run, and each plain `npm test`, is one
+row in the gitignored `scripts/.queue/test-runs.jsonl` (setting `testRuns.log`).
 
 ## License
 

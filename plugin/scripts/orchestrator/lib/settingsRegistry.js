@@ -495,6 +495,13 @@ const SETTINGS = Object.freeze([
   row('testWeakening.findingLog', 'tests', 'onoff', 'Log test weakening as a finding',
     'What the test weakening check finds also becomes a finding log row, classed as a weak test. Nothing is printed. ' +
     'Off: no such row; the warning and the focus stop stay, so no guard is weaker.'),
+  // Friction: none. It appends about 250 bytes to a local, gitignored file after a run that has already ended, the file
+  // is cut to its newest 1000 rows past 512 KB, and a failed write is ignored, so it can never slow or stop a run. On by
+  // default (TC-1, 2026-11-19): the pick of test:changed and the time a run takes can only be judged from rows that were
+  // there all along. A log row only, so off weakens no guard.
+  row('testRuns.log', 'tests', 'onoff', 'Log test runs',
+    'Each test:changed and plain npm test run in this repo is one row in a local file (time, mode, picked and total ' +
+    'files, run time, exit, test and failed counts), read with node scripts/test-changed.mjs --stats. Off: no rows.'),
   row('testWeakening.testPaths', 'tests', 'list', 'More test paths',
     'More file patterns that count as test files for the test weakening warning, on top of the usual ones (the same ' +
     'pattern rules as protectedPaths).'),

@@ -494,6 +494,11 @@ const STANDARD = Object.freeze({
   // test-weakening, class test-weakening), so a weakened test counts when the same failure comes back. On by default: it
   // prints nothing and stops nothing; false = no row.
   testWeakening: { enabled: true, focusStop: true, findingLog: true, testPaths: [], markers: [] },
+  // The local test run log (scripts/test-runs.mjs, TC-1): one row per `npm run test:changed` and plain `npm test` run in
+  // <dataFolder>/test-runs.jsonl (time, mode, picked and total files, run time, exit, test and failed counts), read with
+  // `node scripts/test-changed.mjs --stats`. It never leaves the machine and is capped in size; a failure to log never
+  // fails a run. false = no rows.
+  testRuns: { log: true },
   // The reuse and scope facts at receive (lib/scopeNotes.js, bolk B1 of the scope drift plan): one NOTE line each and a
   // "Reuse and scope" section in 00-package.md, never a stop, no tokens. reuse: a name the diff defines (JS/TS) that the
   // base already defines in another file (git grep -w on the merge base). newFolders: an added file in a folder at depth

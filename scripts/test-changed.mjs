@@ -2,7 +2,8 @@
 // =============================================================
 // scripts/test-changed.mjs: runs only the test files a change can reach, and the whole suite when it cannot tell.
 //
-// Why: the whole suite (about 290 files) takes 20 to 37 minutes. It still runs before every push; after a commit or a
+// Why: the whole suite (about 389 test files; a full run took about 40 minutes on 19.11.2026) still runs before every
+// push; after a commit or a
 // merge this picks the test files the change can affect. The rule is safety first: rather too many tests than too few,
 // and the whole suite (FULL, with the reason) whenever the script cannot know.
 //
@@ -23,7 +24,18 @@
 //         changed (its text is the input), not for what that file depends on.
 //       data: a json, html, css or yml file names a file; followed only for tests and helpers that read the data file.
 //   - docs (md, txt, images outside plugin/scripts) are never followed through sources: a docs-only change picks only
-//     the tests and helpers that name the doc or its folder, and otherwise reports "no tests affected".
+//     the tests and helpers that read the repo's own copy of the doc, and otherwise reports "no tests affected". A base
+//     name alone is not enough (TC-1): most tests name README.md or costs.md for a fixture they write in a temp folder.
+//     The path an expression builds is evaluated over the file's tokens (pathValue, pathFacts): __dirname,
+//     import.meta.url, process.cwd(), path.join/resolve, dirname, fileURLToPath, new URL(x, import.meta.url), template
+//     strings, and the parameters of the file's own functions through their call sites. A doc counts when a read call
+//     (read*, load*, open*, exists*, cat) or a folder listing gets a path that resolves to it or its folder, a repo
+//     relative path string names it, or a base the file cannot see (an imported ROOT, an upper case name it does not
+//     define) is joined with literals that fit the doc's path. A write call's path argument (writeFileSync, mkdir, git
+//     add and the like) never counts, and nor does a base under a temp or fixture folder. When a base cannot be told,
+//     the test is kept: safety first. The same test runs for the folder readers and the folder name rule below, when a
+//     change is docs only, and a test file's own dependencies spread only to the files that import it or name it in a
+//     string (not in a comment).
 //   - the command map: queue.mjs's dispatch edges to cli/ are replaced by a map from command word to cli module (read
 //     from the dispatch block). A file that names queue.mjs, or the `ravenseat` router (ravenseat.mjs, plugin/bin), depends
 //     on queue.mjs itself and on the cli module of every command word it contains. A command word is a string literal
@@ -47,17 +59,26 @@
 // (QUEUE_CI_GH, QUEUE_MERGE_RUNNING), never a repo file.
 //
 // Usage: npm run test:changed [-- <ref>] [--list]
+//        node scripts/test-changed.mjs --stats [--days N]
 //   <ref>   what to compare with (default origin/main): `git diff <ref>...HEAD` plus uncommitted changes (tracked and new)
 //   --list  print the pick (one path per line) and do not run vitest
+//   --stats the local test run log over the last N days (default 14): runs, full/some/none, median picked share, times
 // Exit code: vitest's; 0 when no test is affected; 2 for a usage error.
+//
+// The run log (scripts/test-runs.mjs, setting testRuns.log, default on): every run, FULL and --list included, appends
+// one JSON row to <dataFolder>/test-runs.jsonl (gitignored, capped): time, ref, mode, reason, picked, total, changed,
+// pick_s, run_s, exit, tests, failed. The counts come from scripts/test-run-reporter.mjs through RAVENSEAT_TEST_RUN_OUT;
+// the same reporter logs a plain `npm test`. A failure to log never changes the exit code.
 //
 // The pick is a pure function (selectTests) over a list of changed files and the repo's files with their text, so it is
 // tested without git: scripts/__tests__/testChanged.test.mjs.
 // =============================================================
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { appendRun, DEFAULT_DAYS, enabled, logPath, readRuns, runStats, statsLines } from './test-runs.mjs';
 
 /** Over this share of the test files the pick is not worth it: run everything. */
 export const FULL_SHARE = 0.6;
@@ -314,6 +335,480 @@ export function listsOwnFolder(text) {
     else up = null;
   }
   return found ? { up } : null;
+}
+
+// ---- Doc reads: does a test read THE REPO'S copy of a doc? ----------------------------------------------------
+//
+// Tests write files named README.md or docs/x.md into temp repos all the time, so "the test names README.md" says little.
+// For a changed doc a test or helper counts only when a path in it can land on the repo's own file. The paths are
+// evaluated over the lexer's tokens: __dirname, import.meta.url / dirname, process.cwd() (vitest runs from the repo root)
+// and the consts built from them with path.join / resolve / dirname, new URL(x, import.meta.url), fileURLToPath and
+// `${X}/...` templates. A value is one of:
+//   { k: 'path', p }      a repo path (from the root, posix)
+//   { k: 'tail', p }      folder p plus a part the code computes (join(DOCS, f)): any file under p
+//   { k: 'unknown', lits } located somewhere in the repo, but not computable (an imported or undefined ROOT-like name,
+//                         a path above the root); lits are the literal parts joined to it
+//   { k: 'lit', v }       a plain string
+//   null                  not a repo location (a temp folder, a parameter, p.repo)
+// A lower-case name the file does not define (a parameter like `root`, a field like `p.repo`) is not the repo; an
+// upper-case one (ROOT, PLUGIN_ROOT, HERE) or an imported name is "cannot tell", and that keeps picking.
+
+/** Calls that take a path to read. A bare literal passed to one counts (cwd is the repo root, or a helper adds it). */
+const READ_CALL = /^(read|load|open|cat|exists|slurp)/i;
+/** Calls that list a folder. */
+const LIST_CALL = /^(readdirSync|readdir|globSync|glob|opendirSync|opendir)$/;
+/** Calls that write or set up a fixture: a literal passed straight to one is the test's own file. */
+const WRITE_CALL = /^(write|append|put|commit|track|touch|mkdir|mk|rm|unlink|copy|cp|rename|symlink|link|add|seed|g|git)$|^(write|append|mkdir|copy|rename|symlink)/i;
+/** Test framework calls: their literals are titles, not paths. */
+const TEST_CALL = new Set(['it', 'test', 'describe', 'each', 'skip', 'only', 'todo', 'beforeAll', 'beforeEach', 'afterAll', 'afterEach']);
+/** Keywords where a const's expression has surely ended (tokens carry no newlines). */
+const STATEMENT_START = new Set(['const', 'let', 'var', 'function', 'class', 'export', 'import', 'if', 'for', 'while', 'return', 'it', 'test', 'describe', 'beforeAll', 'beforeEach', 'afterAll', 'afterEach', 'expect']);
+
+const isP = (t, v) => t?.t === 'punc' && t.v === v;
+/** Is the token at k the b of a.b (a member), not a name after a spread (...walk(d))? */
+const afterDot = (tokens, k) => isP(tokens[k - 1], '.') && !(isP(tokens[k - 2], '.') && isP(tokens[k - 3], '.'));
+
+/** The expression starting at k up to a depth-0 , ; or closing bracket (or a statement keyword): the end index. */
+function exprEnd(tokens, k, stopAtKeyword = false) {
+  let depth = 0;
+  for (; k < tokens.length; k++) {
+    const t = tokens[k];
+    if (t.t === 'punc') {
+      if (t.v === '(' || t.v === '[' || t.v === '{') depth++;
+      else if (t.v === ')' || t.v === ']' || t.v === '}') {
+        if (depth === 0) break;
+        depth--;
+      } else if ((t.v === ',' || t.v === ';') && depth === 0) break;
+    } else if (stopAtKeyword && depth === 0 && t.t === 'id' && STATEMENT_START.has(t.v)) break;
+  }
+  return k;
+}
+
+/** The arguments of the call whose '(' is at k: { args (token spans), end (after the ')') }. */
+function argsAt(tokens, k) {
+  const args = [];
+  let i = k + 1;
+  while (i < tokens.length && !isP(tokens[i], ')')) {
+    const e = exprEnd(tokens, i);
+    if (e > i) args.push(tokens.slice(i, e));
+    if (!isP(tokens[e], ',')) {
+      i = e;
+      break;
+    }
+    i = e + 1;
+  }
+  return { args, end: i + 1 };
+}
+
+/**
+ * The primary expression at k: a literal, a name chain (a.b.c), `new X(...)`, with calls and member accesses after it.
+ * Gives { node, end } or null. Nodes: lit, tpl, name, call { callee, args (nodes) }, member { of, prop }, mixed.
+ */
+function primaryAt(tokens, k) {
+  let isNew = false;
+  if (tokens[k]?.t === 'id' && tokens[k].v === 'new') (isNew = true), k++;
+  const t = tokens[k];
+  if (!t) return null;
+  let node;
+  if (t.t === 'str') (node = { k: 'lit', v: t.v }), k++;
+  else if (t.t === 'tpl') (node = t.interp ? { k: 'tpl', v: t.v } : { k: 'lit', v: t.v }), k++;
+  else if (t.t === 'id') {
+    let name = t.v;
+    k++;
+    while (isP(tokens[k], '.') && tokens[k + 1]?.t === 'id') (name += '.' + tokens[k + 1].v), (k += 2);
+    node = { k: 'name', v: name };
+  } else return null;
+  for (;;) {
+    if (isP(tokens[k], '(')) {
+      const { args, end } = argsAt(tokens, k);
+      const callee = node.k === 'name' ? (isNew ? 'new ' : '') + node.v : node.k === 'member' ? node.prop : '?';
+      node = { k: 'call', callee, args: args.map(toNode), spans: args, of: node.k === 'member' ? node.of : null };
+      isNew = false;
+      k = end;
+    } else if (isP(tokens[k], '.') && tokens[k + 1]?.t === 'id') {
+      node = { k: 'member', of: node, prop: tokens[k + 1].v };
+      k += 2;
+    } else break;
+  }
+  return { node, end: k };
+}
+
+/** A token span as one node: a primary when it covers the whole span, else mixed (with its tokens). */
+function toNode(span) {
+  const p = primaryAt(span, 0);
+  if (p && p.end === span.length) return p.node;
+  return { k: 'mixed', span };
+}
+
+const PATH_JOIN = /^(path\.)?(posix\.|win32\.)?(join|resolve)$/;
+const located = (v) => v && v.k !== 'lit';
+/** A normalized repo path, or 'unknown' when it leaves the repo root. */
+const norm = (p) => {
+  const n = path.posix.normalize(p || '.');
+  if (n === '.' || n === './') return '';
+  if (n.startsWith('..')) return null;
+  return n.replace(/^\.\//, '').replace(/\/$/, '');
+};
+const joinPath = (a, b) => (a ? `${a}/${b}` : b);
+
+/** The parameter names of the list whose '(' is at k (destructured ones are skipped). */
+function paramsAt(tokens, k) {
+  const out = [];
+  let depth = 0;
+  for (let i = k; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (isP(t, '(') || isP(t, '[') || isP(t, '{')) depth++;
+    else if (isP(t, ')') || isP(t, ']') || isP(t, '}')) {
+      if (--depth === 0) break;
+    } else if (depth === 1 && t.t === 'id' && (isP(tokens[i - 1], '(') || isP(tokens[i - 1], ',') || isP(tokens[i - 1], '.'))) out.push(t.v);
+  }
+  return out;
+}
+
+/**
+ * The path context of a code file: its defs (name -> token spans), its imported names, the parameters of its named
+ * functions (name -> [{ fn, index }]) and its calls by simple name (name -> argument spans), so a walker's `dir` is
+ * resolved through the calls that hand it a folder.
+ */
+function pathContext(text, file) {
+  const tokens = Array.isArray(text) ? text : lex(text);
+  const defs = new Map();
+  const imported = new Set();
+  const params = new Map();
+  const calls = new Map();
+  const addParams = (fn, k) => {
+    paramsAt(tokens, k).forEach((p, index) => {
+      if (!params.has(p)) params.set(p, []);
+      params.get(p).push({ fn, index });
+    });
+  };
+  for (let k = 0; k < tokens.length; k++) {
+    const t = tokens[k];
+    if (t.t !== 'id') continue;
+    if (t.v === 'function' && tokens[k + 1]?.t === 'id' && isP(tokens[k + 2], '(')) addParams(tokens[k + 1].v, k + 2);
+    else if (isP(tokens[k + 1], '(') && !afterDot(tokens, k) && !(tokens[k - 1]?.t === 'id' && tokens[k - 1].v === 'function')) {
+      if (!calls.has(t.v)) calls.set(t.v, []);
+      calls.get(t.v).push(argsAt(tokens, k + 1).args);
+    }
+    if ((t.v === 'const' || t.v === 'let' || t.v === 'var') && tokens[k + 1]?.t === 'id' && isP(tokens[k + 2], '=')) {
+      const e = exprEnd(tokens, k + 3, true);
+      const name = tokens[k + 1].v;
+      // const walk = (d) => ..., const walk = async (d) => ..., const walk = function (d) ...
+      let f = k + 3;
+      if (tokens[f]?.t === 'id' && (tokens[f].v === 'async' || tokens[f].v === 'function')) f++;
+      if (isP(tokens[f], '(')) {
+        let depth = 0;
+        let j = f;
+        for (; j < tokens.length; j++) {
+          if (isP(tokens[j], '(')) depth++;
+          else if (isP(tokens[j], ')') && --depth === 0) break;
+        }
+        // a type annotation may sit between ) and =>
+        if (tokens[f - 1]?.v === 'function' || tokens.slice(j + 1, j + 6).some((x) => isP(x, '=>') || isP(x, '{'))) addParams(name, f);
+      }
+      if (!defs.has(name)) defs.set(name, []);
+      defs.get(name).push(tokens.slice(k + 3, e));
+    } else if (t.v === 'import' && !isP(tokens[k + 1], '(')) {
+      // import X from / import { a, b as c } from / import * as X from: every name up to `from`
+      for (let j = k + 1; j < tokens.length && !(tokens[j].t === 'id' && tokens[j].v === 'from'); j++) {
+        if (tokens[j].t === 'id' && tokens[j].v !== 'as' && tokens[j].v !== 'type') imported.add(tokens[j].v);
+        if (tokens[j].t === 'str' || isP(tokens[j], ';')) break;
+      }
+    }
+  }
+  return { tokens, defs, imported, params, calls, file, memo: new Map() };
+}
+
+/**
+ * The values one name can have (shadowed consts, a parameter's calls) as one: null when none is a repo location (a
+ * temp folder: nothing of the repo to read), the location when all located ones agree, else "cannot tell". A value
+ * that is not located adds nothing: that branch reads no repo file.
+ */
+function combine(vals) {
+  const ls = vals.filter(located);
+  if (!ls.length) return vals.find((x) => x?.k === 'lit') ?? null;
+  const same = ls.every((x) => x.k === ls[0].k && x.p === ls[0].p && ls[0].k !== 'unknown');
+  return same ? ls[0] : { k: 'unknown', lits: [] };
+}
+
+/** What the calls in this file hand a parameter: one value per call; [unknown] when its function has no call here. */
+function paramValues(name, ctx, depth) {
+  const vals = [];
+  for (const { fn, index } of ctx.params.get(name) ?? []) {
+    const sites = ctx.calls.get(fn) ?? [];
+    if (!sites.length) return [{ k: 'unknown', lits: [] }];
+    for (const args of sites) vals.push(args[index] ? evalNode(toNode(args[index]), ctx, depth + 1) : null);
+  }
+  return vals;
+}
+
+/**
+ * paramValues for a walker's listing: the parameter counts as null while its calls are read, so the recursive call
+ * (walk(join(d, e.name))) adds nothing; values worked out meanwhile are forgotten, as they assumed that null.
+ */
+function ownParamValues(name, ctx) {
+  const saved = ctx.memo;
+  ctx.memo = new Map([[name, null]]);
+  try {
+    return paramValues(name, ctx, 0);
+  } finally {
+    ctx.memo = saved;
+  }
+}
+
+/** What a node points at (see the block above). */
+function evalNode(node, ctx, depth = 0) {
+  if (!node || depth > 40) return { k: 'unknown', lits: [] };
+  switch (node.k) {
+    case 'lit':
+      return { k: 'lit', v: node.v };
+    case 'name':
+      return evalName(node.v, ctx, depth);
+    case 'member':
+      if (['href', 'pathname'].includes(node.prop)) return evalNode(node.of, ctx, depth + 1);
+      return located(evalNode(node.of, ctx, depth + 1)) ? { k: 'unknown', lits: [] } : null;
+    case 'tpl':
+      return evalTemplate(node.v, ctx, depth);
+    case 'mixed': {
+      // a computed expression: located when any name or call in it is
+      const lits = node.span.filter((t) => t.t === 'str').map((t) => t.v);
+      for (let i = 0; i < node.span.length; i++) {
+        if (afterDot(node.span, i)) continue; // the b of a.b is part of a chain read from a
+        const p = primaryAt(node.span, i);
+        if (p && p.node.k !== 'lit' && located(evalNode(p.node, ctx, depth + 1))) return { k: 'unknown', lits };
+      }
+      return null;
+    }
+    case 'call':
+      break;
+    default:
+      return null;
+  }
+  const c = node.callee;
+  const args = node.args;
+  if (c === 'process.cwd') return { k: 'path', p: '' };
+  if (PATH_JOIN.test(c)) {
+    let acc = args.length ? evalNode(args[0], ctx, depth + 1) : null;
+    // path.resolve('x') is from the cwd, which is the repo root under vitest
+    if (acc?.k === 'lit' && /resolve$/.test(c)) acc = toRepoPath(acc.v);
+    for (const a of args.slice(1)) {
+      if (!acc) return null;
+      const v = evalNode(a, ctx, depth + 1);
+      if (v?.k === 'lit') {
+        if (acc.k === 'path') {
+          const n = norm(joinPath(acc.p, v.v));
+          acc = n === null ? { k: 'unknown', lits: [v.v] } : { k: 'path', p: n };
+        } else if (acc.k === 'lit') acc = { k: 'lit', v: path.posix.join(acc.v, v.v) };
+        else acc = { ...acc, lits: [...(acc.lits ?? []), v.v] };
+      } else if (acc.k === 'path') acc = { k: 'tail', p: acc.p };
+      else if (acc.k === 'lit') return null;
+    }
+    return acc;
+  }
+  if (/(^|\.)dirname$/.test(c)) {
+    const v = evalNode(args[0], ctx, depth + 1);
+    if (v?.k === 'path') return { k: 'path', p: dirOf(v.p) };
+    return located(v) ? { k: 'unknown', lits: [] } : null;
+  }
+  if (/(^|\.)(fileURLToPath|pathToFileURL|normalize)$/.test(c)) return evalNode(args[0], ctx, depth + 1);
+  if (c === 'new URL') {
+    const rel = evalNode(args[0], ctx, depth + 1);
+    const baseV = args[1] ? evalNode(args[1], ctx, depth + 1) : null;
+    if (baseV?.k === 'path' && rel?.k === 'lit') {
+      const n = norm(joinPath(dirOf(baseV.p), rel.v));
+      return n === null ? { k: 'unknown', lits: [rel.v] } : { k: 'path', p: n };
+    }
+    return located(baseV) ? { k: 'unknown', lits: rel?.k === 'lit' ? [rel.v] : [] } : null;
+  }
+  // any other call: what it returns is not a path this can follow (project(...) gives a temp repo). What it does with a
+  // located argument is read in pathFacts (callLits, callVals).
+  return null;
+}
+
+/** A literal from the cwd (the repo root under vitest) as a repo path; null when it leaves the root. */
+function toRepoPath(v) {
+  const n = norm(v);
+  return n === null ? null : { k: 'path', p: n };
+}
+
+function evalName(name, ctx, depth) {
+  const own = dirOf(ctx.file);
+  if (name === '__dirname' || name === 'import.meta.dirname') return { k: 'path', p: own };
+  if (name === '__filename' || name === 'import.meta.url' || name === 'import.meta.filename') return { k: 'path', p: ctx.file };
+  const head = name.split('.')[0];
+  if (name.includes('.')) {
+    // a field (p.repo, h.scratch) of an object a call made is not the repo. Only when every def of the head is located
+    // (an object literal of paths) is the field somewhere in it; a shadowed `p` that is once a path has no .folder.
+    const heads = ctx.defs.get(head) ?? [];
+    return heads.length && heads.every((span) => located(evalNode(toNode(span), ctx, depth + 1))) ? { k: 'unknown', lits: [] } : null;
+  }
+  if (ctx.memo.has(name)) return ctx.memo.get(name);
+  if (ctx.defs.has(name)) {
+    ctx.memo.set(name, null); // a cycle gives null
+    const v = combine(ctx.defs.get(name).map((span) => evalNode(toNode(span), ctx, depth + 1)));
+    ctx.memo.set(name, v);
+    return v;
+  }
+  if (ctx.params.has(name)) {
+    // a parameter of a named function: what its calls in this file hand it. A recursive call (walk(join(d, e.name)))
+    // gives null and adds nothing; a function with no call here (exported, a callback) cannot tell.
+    ctx.memo.set(name, null);
+    const v = combine(paramValues(name, ctx, depth));
+    ctx.memo.set(name, v);
+    return v;
+  }
+  if (ctx.imported.has(name) || /^[A-Z][A-Z0-9_]*$/.test(name)) return { k: 'unknown', lits: [] };
+  return null;
+}
+
+/** `${X}/a/b` and the like: the first ${...} part is the base, the text after it is joined; a later ${} is a tail. */
+function evalTemplate(raw, ctx, depth) {
+  const m = raw.match(/^\$\{([^}]*)\}([^$]*)(\$\{)?/);
+  if (!m) return null;
+  const inner = lex(m[1]);
+  const p = primaryAt(inner, 0);
+  const baseV = p && p.end === inner.length ? evalNode(p.node, ctx, depth + 1) : evalNode({ k: 'mixed', span: inner }, ctx, depth + 1);
+  if (!located(baseV)) return null;
+  const rest = m[2].replace(/^[/\\]+/, '');
+  if (baseV.k === 'path') {
+    if (m[3]) return { k: 'tail', p: norm(joinPath(baseV.p, rest.replace(/[/\\][^/\\]*$/, ''))) ?? baseV.p };
+    const n = rest ? norm(joinPath(baseV.p, rest)) : baseV.p;
+    return n === null ? { k: 'unknown', lits: [rest] } : { k: 'path', p: n };
+  }
+  return { ...baseV, lits: [...(baseV.lits ?? []), ...(rest ? [rest] : [])] };
+}
+
+/** For the tests: the value of an expression in a file with the given source. */
+export function pathValue(src, expr, file) {
+  const ctx = pathContext(src, file);
+  const p = primaryAt(lex(expr), 0);
+  return p ? evalNode(p.node, ctx) : null;
+}
+
+/**
+ * What a test or helper can read, for the docs rule: the values of its path expressions (joins, URLs, templates, its
+ * consts), the literals passed straight to a read call, the values its listing calls list, and the literals of other
+ * calls that also get a located value (readDoc(ROOT, 'costs.md')).
+ */
+export function pathFacts(text, file) {
+  const ctx = pathContext(text, file);
+  const { tokens } = ctx;
+  const values = [];
+  const readLits = new Set();
+  const listed = [];
+  const callLits = [];
+  const callVals = [];
+  const written = new Set(); // the first token of each argument of a write call: a path there is the test's own file
+  for (const name of ctx.defs.keys()) values.push(evalName(name, ctx, 0));
+  for (let k = 0; k < tokens.length; k++) {
+    const t = tokens[k];
+    if (t.t === 'tpl' && t.interp && !written.has(t)) values.push(evalTemplate(t.v, ctx, 0));
+    if (t.t !== 'id' || afterDot(tokens, k)) continue;
+    const p = primaryAt(tokens, k);
+    // every call in a chain: fs.readdirSync(DIR).filter(...) is a listing, then a filter
+    const chain = [];
+    for (let n = p?.node; n; n = n.of) if (n.k === 'call') chain.push(n);
+    for (const node of chain) visitCall(node, t);
+  }
+  function visitCall(node, t) {
+    const last = node.callee.slice(node.callee.lastIndexOf('.') + 1).replace(/^new /, '');
+    if ((PATH_JOIN.test(node.callee) || node.callee === 'new URL') && !written.has(t)) values.push(evalNode(node, ctx));
+    const vals = node.args.map((a) => evalNode(a, ctx));
+    if (LIST_CALL.test(last)) {
+      // a name this file does not define (a callback's `d`) can be handed the repo root: cannot tell.
+      // A walker's parameter: each folder its calls hand it (scripts(orchestrator), scripts(repoScripts)), not one
+      // combined value, so two known folders stay two known folders
+      const a0 = node.args[0];
+      const bare = a0?.k === 'name' && !a0.v.includes('.') && !ctx.defs.has(a0.v);
+      // deep: the listing goes down into subfolders (a walker, { recursive: true }, a glob), so it can reach the
+      // content below a folder it starts from
+      const deep = /^glob/.test(last) || node.spans.slice(1).some((s) => s.some((x) => x.t === 'id' && x.v === 'recursive'));
+      if (bare && ctx.params.has(a0.v)) listed.push(...ownParamValues(a0.v, ctx).filter(located).map((v) => ({ ...v, deep: true })));
+      else if (bare) listed.push({ k: 'unknown', lits: [], deep: true });
+      else if (vals[0]) listed.push({ ...vals[0], deep });
+    } else if (READ_CALL.test(last)) {
+      if (vals[0]?.k === 'lit') readLits.add(vals[0].v);
+      else if (vals[0]) values.push(vals[0]);
+    } else if (WRITE_CALL.test(last)) {
+      for (const s of node.spans) if (s[0]) written.add(s[0]);
+    } else if (!TEST_CALL.has(last) && !PATH_JOIN.test(node.callee) && vals.some(located)) {
+      // a helper handed a repo location and a name (readDoc(ROOT, 'costs.md'), check(DOCS)): it may read them
+      callLits.push(vals.filter((v) => v?.k === 'lit').map((v) => v.v));
+      callVals.push(...vals.filter(located));
+    }
+  }
+  // git ls-files over the whole tree: as an argument (['ls-files']) or a command with no path after it
+  const lsFiles = scanCode(text).strings.some((s) => s === 'ls-files' || /(^|\s)ls-files(\s+-[-\w=]+)*\s*$/.test(s));
+  return { values: values.filter(located), readLits, listed, callLits, callVals, lsFiles };
+}
+
+const under = (p, folder) => folder === '' || p === folder || p.startsWith(folder + '/');
+/** Do the literal parts fit a repo path? Every segment (not . or ..) is one of the path's, and there is at least one. */
+const litsFit = (lits, p) => {
+  const segs = lits.flatMap((l) => String(l).split(/[/\\]/)).filter((s) => s && s !== '.' && s !== '..');
+  const have = new Set(p.split('/'));
+  return segs.length > 0 && segs.every((s) => have.has(s));
+};
+/** A repo-relative path to p (at least one folder: docs/costs.md, plugin/docs/costs.md) in the text. */
+function namesRepoPath(text, p) {
+  const segs = p.split('/');
+  for (let i = 0; i < segs.length - 1; i++) {
+    const tail = segs.slice(i).join('/');
+    if (new RegExp(`(^|[^\\w.-])${escapeRe(tail)}(?![\\w-])`).test(text)) return true;
+  }
+  return false;
+}
+
+/** Does this test or helper read the repo's file p (a doc)? See the block above. */
+function readsDoc(facts, text, file, p, exists) {
+  const b = base(p);
+  if (namesRepoPath(text, p)) return true;
+  // a relative literal that resolves to the file (from the file's folder or one above it)
+  const { strings } = scanCode(text);
+  for (const s of strings) if (/^\.\.?\//.test(s) && s.endsWith(b) && resolve(file, s, (x) => x === p || exists(x)).includes(p)) return true;
+  for (const v of facts.values) {
+    if (v.k === 'path' && v.p === p) return true;
+    if (v.k === 'tail' && under(p, v.p)) return true;
+    if (v.k === 'unknown' && v.lits.some((l) => base(String(l).replace(/\\/g, '/')) === b) && litsFit(v.lits, p)) return true;
+  }
+  // a bare literal passed to a read call: from the cwd (the repo root) or through a helper that adds a folder
+  for (const l of facts.readLits) if (base(l) === b && (l === b || norm(l) === p)) return true;
+  if (facts.callLits.some((lits) => lits.includes(b))) return true;
+  return false;
+}
+
+/** Does this test or helper read the folder of p (it names one of its folder names)? */
+function readsDocFolder(facts, text, p) {
+  const dir = dirOf(p);
+  // the folder itself by its repo path with at least two parts (plugin/docs, not plugin/docs/other.md: that names a
+  // sibling file, which readsDoc handles); a bare 'docs' is too common in fixtures
+  if (dir.includes('/') && new RegExp(`(^|[^\\w.-])${escapeRe(dir)}(?![\\w-]|/[\\w.-])`).test(text)) return true;
+  for (const v of facts.values) {
+    // join(DOCS, f): any file there. A DOCS const only joined with literals reads exactly those (readsDoc).
+    if (v.k === 'tail' && under(dir, v.p)) return true;
+    if (v.k === 'unknown' && litsFit(v.lits, dir)) return true;
+  }
+  // the folder handed to a helper (check(DOCS)), or its name with a repo location (readDoc(ROOT, 'docs', f))
+  if (facts.callVals.some((v) => (v.k === 'path' || v.k === 'tail') && v.p === dir)) return true;
+  const folderNames = dir.split('/').filter((x) => !GENERIC_DIRS.has(x));
+  return facts.callLits.some((lits) => lits.some((l) => folderNames.includes(l)));
+}
+
+/**
+ * Can this folder reader see the doc p? git ls-files does; so does a listing of p's own folder, of a place it cannot
+ * compute (unless the literal parts name another folder: join(CLIENT, 'board') is never plugin/docs or above it), and
+ * of a folder above p's when it goes down into subfolders. A flat listing of a folder above p's shows only the folder's
+ * name, so it changes only when p is added or removed (status not M).
+ */
+function listsDocFolder(facts, p, status = 'M') {
+  if (facts.lsFiles) return true;
+  const dir = dirOf(p);
+  return facts.listed.some((v) => {
+    if (!v || v.k === 'lit') return false;
+    if (v.k === 'unknown') return !v.lits.length || litsFit(v.lits, dir);
+    if (!under(dir, v.p)) return false;
+    return v.p === dir || v.k === 'tail' || v.deep || status !== 'M';
+  });
 }
 
 // ---- The repo model ------------------------------------------------------------------------------------------
@@ -660,11 +1155,33 @@ export function selectTests({ changed, files, maxShare = FULL_SHARE }) {
     if (!hit) continue;
     for (const a of rev.get(d) ?? []) if (underTests(a) && !reason.has(a) && !viaData.has(a)) viaData.set(a, `${base(d)} names ${base(hit)}`);
   }
-  // A changed doc: the tests and helpers that name it (they read it).
+  // A changed doc: the tests and helpers that name it and have a path that can land on the repo's file (readsDoc: a
+  // README.md written into a temp repo, or a fixture folder's docs/x.md, is the test's own file). Not code: as before.
+  const facts = new Map();
+  const factsOf = (a) => {
+    if (!facts.has(a)) facts.set(a, pathFacts(files.get(a) ?? '', a));
+    return facts.get(a);
+  };
+  const codeText = (a) => isCode(a) && typeof files.get(a) === 'string';
   for (const d of changedDocs) {
-    for (const a of rev.get(d) ?? []) if (underTests(a) && !reason.has(a) && !viaData.has(a)) viaData.set(a, `names ${base(d)}`);
+    for (const a of rev.get(d) ?? []) {
+      if (!underTests(a) || reason.has(a) || viaData.has(a)) continue;
+      if (codeText(a) && !readsDoc(factsOf(a), files.get(a), a, d, exists)) continue;
+      viaData.set(a, `reads ${d}`);
+    }
   }
-  for (const [h, why] of [...viaData]) for (const t of dependents(h, rev)) if (!viaData.has(t)) viaData.set(t, `uses ${base(h)}: ${why}`);
+  // A helper passes this on to everything that depends on it. A test file passes it on only to a file that imports it or
+  // names it in a string (runs it): "as in queueFocusB17.test.ts" in a comment loads nothing.
+  const loads = (t, h) => {
+    const text = files.get(t);
+    if (typeof text !== 'string' || !isCode(t)) return true;
+    const { specs, strings } = scanCode(text);
+    return specs.some((s) => resolve(t, s, exists).includes(h)) || strings.some((s) => namesIn(s).has(base(h)));
+  };
+  for (const [h, why] of [...viaData]) {
+    const users = isTest(h) ? [...(rev.get(h) ?? [])].filter((t) => loads(t, h)) : [h];
+    for (const u of users) for (const t of u === h ? dependents(h, rev) : [u, ...dependents(u, rev)]) if (!viaData.has(t)) viaData.set(t, `uses ${base(h)}: ${why}`);
+  }
 
   // A computed import()/require() in an affected source file: it can load anything.
   for (const [p, word] of computedIn) if (reason.has(p)) return full(`${p} has a ${word}() with a computed argument (cannot be followed)`, tests);
@@ -673,10 +1190,16 @@ export function selectTests({ changed, files, maxShare = FULL_SHARE }) {
   for (const t of changedTests) why.set(t, 'changed');
   for (const t of tests) if (!why.has(t) && reason.has(t)) why.set(t, `depends on ${reason.get(t)}: ${chain(t)}`);
   for (const [t, w] of viaData) if (isTest(t) && !why.has(t)) why.set(t, `reads data: ${w}`);
-  for (const t of treeReaderTests) if (isTest(t) && !why.has(t)) why.set(t, 'reads folders of the repo');
+  // A folder reader is picked for every change, except a docs-only one: then only when it can list a changed doc's folder
+  // (listsDocFolder: a listing of the orchestrator's own folder never reaches plugin/docs).
+  const onlyDocs = changedOther.every((c) => isDoc(c.path));
+  const docStatus = new Map(changedOther.map((c) => [c.path, c.status]));
+  const readerFits = (h) => !onlyDocs || !codeText(h) || changedDocs.some((d) => listsDocFolder(factsOf(h), d, docStatus.get(d)));
+  for (const t of treeReaderTests) if (isTest(t) && !why.has(t) && readerFits(t)) why.set(t, 'reads folders of the repo');
   // A helper under __tests__ that reads folders passes that on to the tests that import it.
-  for (const h of treeReaderTests) if (!isTest(h)) for (const t of dependents(h, rev)) if (isTest(t) && !why.has(t)) why.set(t, `uses ${base(h)}, which reads folders`);
-  // Non-code files (and files under __tests__ that are not tests): tests that name one of their folders.
+  for (const h of treeReaderTests) if (!isTest(h) && readerFits(h)) for (const t of dependents(h, rev)) if (isTest(t) && !why.has(t)) why.set(t, `uses ${base(h)}, which reads folders`);
+  // Non-code files (and files under __tests__ that are not tests): tests that name one of their folders. For a doc the
+  // test must also have a path that can reach that folder (readsDocFolder): 'docs' is a common fixture folder name.
   for (const c of changedOther) {
     if (isCode(c.path) && !underTests(c.path)) continue;
     const parts = dirOf(c.path).split('/');
@@ -684,10 +1207,13 @@ export function selectTests({ changed, files, maxShare = FULL_SHARE }) {
     const dirs = parts.slice(from).filter((d) => !GENERIC_DIRS.has(d));
     if (!dirs.length) continue;
     const re = new RegExp(`(['"\`/])(${dirs.map(escapeRe).join('|')})(['"\`/])`);
-    for (const t of tests) if (!why.has(t) && re.test(files.get(t) ?? '')) why.set(t, `names the folder of ${c.path}`);
+    for (const t of tests) {
+      if (why.has(t) || !re.test(files.get(t) ?? '')) continue;
+      if (isDoc(c.path) && codeText(t) && !readsDocFolder(factsOf(t), files.get(t), c.path)) continue;
+      why.set(t, `names the folder of ${c.path}`);
+    }
   }
-  const docsOnly = changedOther.every((c) => isDoc(c.path));
-  return result([...why.keys()], tests, why, docsOnly ? 'docs only: no code affected, running the tests that read these files' : null, maxShare);
+  return result([...why.keys()], tests, why, onlyDocs ?'docs only: no code affected, running the tests that read these files' : null, maxShare);
 }
 
 /** Every file that depends (transitively) on h: one walk over the reverse edges. */
@@ -806,11 +1332,15 @@ function repoFiles() {
   return files;
 }
 
+const USAGE = 'Use: npm run test:changed [-- <ref>] [--list]   (ref default origin/main)\n' +
+  '     node scripts/test-changed.mjs --stats [--days N]   (the local test run log)';
+
 function main(argv) {
+  if (argv.includes('--stats')) return stats(argv);
   const list = argv.includes('--list');
   const rest = argv.filter((a) => a !== '--list');
   if (rest.some((a) => a.startsWith('-'))) {
-    console.error('Use: npm run test:changed [-- <ref>] [--list]   (ref default origin/main)');
+    console.error(USAGE);
     return 2;
   }
   const ref = rest[0] ?? 'origin/main';
@@ -821,27 +1351,83 @@ function main(argv) {
   if (!files) pick = full('git cannot list the repo files', []);
   else if (!changed) pick = full(`git cannot give the change against ${ref}`, []);
   else pick = selectTests({ changed, files });
-  const secs = ((Date.now() - t0) / 1000).toFixed(1);
+  const pickS = (Date.now() - t0) / 1000;
+  const secs = pickS.toFixed(1);
+  // The one log row of this run (scripts/test-runs.mjs); run fields are added after vitest. Never fails the run.
+  const row = {
+    time: new Date().toISOString(),
+    via: 'test:changed',
+    ref,
+    mode: pick.mode,
+    reason: pick.reason,
+    picked: pick.mode === 'full' ? pick.total : pick.tests.length,
+    total: pick.total,
+    changed: changed?.length,
+    pick_s: Math.round(pickS * 10) / 10,
+    list: list || undefined,
+  };
   if (pick.mode === 'full') {
     console.log(`test:changed: FULL: ${pick.reason} (${secs} s)`);
-    if (list) return 0;
-    return vitest([]);
+    if (list) return logged(row, 0);
+    return vitest([], row);
   }
   console.log(`test:changed: ${pick.tests.length} of ${pick.total} test files (${changed.length} changed files against ${ref}; ${pick.reason}; ${secs} s)`);
   if (list) {
     for (const t of pick.tests) console.log(`${t}  (${pick.why.get(t)})`);
-    return 0;
+    return logged(row, 0);
   }
-  if (!pick.tests.length) return 0;
+  if (!pick.tests.length) return logged({ ...row, run_s: 0, exit: 0, tests: 0, failed: 0 }, 0);
   console.log(`npx vitest run ${pick.tests.join(' ')}`);
-  return vitest(pick.tests);
+  return vitest(pick.tests, row);
 }
 
-/** Runs vitest from node_modules with node itself (no shell, so no quoting or .cmd differences). Gives its exit code. */
-function vitest(testFiles) {
+/** Appends the row and gives the exit code unchanged (appendRun never throws). */
+function logged(row, code) {
+  appendRun(row, { root: ROOT });
+  return code;
+}
+
+/** `--stats [--days N]`: the read view of the test run log. */
+function stats(argv) {
+  const i = argv.indexOf('--days');
+  const days = i >= 0 ? Number(argv[i + 1]) : DEFAULT_DAYS;
+  if (!Number.isFinite(days) || days <= 0) {
+    console.error(USAGE);
+    return 2;
+  }
+  const file = logPath(ROOT);
+  for (const line of statsLines(runStats(readRuns(file), { days }), file)) console.log(line);
+  if (!enabled(ROOT)) console.log('  (logging is off: testRuns.log false in queue.config.json or RAVENSEAT_TEST_RUNS=off)');
+  return 0;
+}
+
+/**
+ * Runs vitest from node_modules with node itself (no shell, so no quoting or .cmd differences). Gives its exit code.
+ * The counting reporter (scripts/test-run-reporter.mjs) writes the test and failed counts to a temp file named in
+ * RAVENSEAT_TEST_RUN_OUT, and the row of this run gets them with the run time and exit code.
+ */
+function vitest(testFiles, row) {
   const bin = path.join(ROOT, 'node_modules', 'vitest', 'vitest.mjs');
-  const r = spawnSync(process.execPath, [bin, 'run', ...testFiles], { cwd: ROOT, stdio: 'inherit' });
-  return r.status ?? 1;
+  let out = null;
+  try {
+    out = path.join(os.tmpdir(), `ravenseat-test-run-${process.pid}-${Date.now()}.json`);
+  } catch {
+    // error-ignored: no counts then
+  }
+  const env = out ? { ...process.env, RAVENSEAT_TEST_RUN_OUT: out } : process.env;
+  const t0 = Date.now();
+  const r = spawnSync(process.execPath, [bin, 'run', ...testFiles], { cwd: ROOT, stdio: 'inherit', env });
+  const code = r.status ?? 1;
+  let counts = {};
+  try {
+    if (out && fs.existsSync(out)) {
+      counts = JSON.parse(fs.readFileSync(out, 'utf8'));
+      fs.rmSync(out, { force: true });
+    }
+  } catch {
+    // error-ignored: the counts are optional
+  }
+  return logged({ ...row, run_s: Math.round((Date.now() - t0) / 100) / 10, exit: code, tests: counts.tests, failed: counts.failed }, code);
 }
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {

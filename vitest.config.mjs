@@ -34,5 +34,8 @@ export default defineConfig({
     setupFiles: ['plugin/scripts/orchestrator/__tests__/yieldBetweenTests.setup.mjs'],
     // Half the cores: with one worker per core the tests that spawn git and node starve the machine.
     maxWorkers: '50%',
+    // The default output, plus a reporter that only counts the tests for the local test run log (scripts/test-runs.mjs,
+    // testRuns.log). It prints nothing and never fails a run; without the file (a partial checkout) only the default.
+    reporters: fs.existsSync(new URL('./scripts/test-run-reporter.mjs', import.meta.url)) ? ['default', './scripts/test-run-reporter.mjs'] : ['default'],
   },
 });

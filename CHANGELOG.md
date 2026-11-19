@@ -5,6 +5,20 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **test:changed: a changed doc picks only the tests that read it, and every run is logged (TC-1).** Edge cases in the
+  pick for docs. A test that named `README.md` or `costs.md` was picked for a change to the repo's copy even when it
+  only wrote a fixture of that name in a temp folder, and the folder name rule picked every test with a `'docs'` path
+  part, so a change to four docs ran 196 of 389 test files. The pick now evaluates the path a test builds
+  (`__dirname`, `import.meta.url`, `process.cwd()`, `path.join` and `resolve`, `new URL`, template strings and the
+  file's own function parameters) and counts a doc only when a read or a folder listing reaches the repo's copy, a
+  repo relative path names it, or a base it cannot see is joined with fitting parts; a write call's path and a temp or
+  fixture base never count, and an undecidable base still picks. The same four docs now pick 9, all five tests that
+  read them among them. Over 221 single file changes the pick never grew; a test file's own dependencies no longer
+  spread to the files that only mention it in a comment. New: one JSON row per run (FULL and `--list` included) and
+  per plain `npm test` in the gitignored `scripts/.queue/test-runs.jsonl`, capped at 512 KB, with
+  `node scripts/test-changed.mjs --stats [--days N]` as the read view. Setting `testRuns.log` (default on: no
+  friction, a failed write never fails a run). The head comment's suite size is current again (about 389 files, about
+  40 minutes on 19.11).
 - **Board: dimmed nodes say why, and cards keep their project name (QA-1e).** Edge cases from the owner's QA. (1) In
   Dependencies a node could look gray for three reasons (outside the selected chain, a neighbor hidden by the filter
   or search, a done predecessor), and none of them was explained on screen. The legend now names the ones that apply
