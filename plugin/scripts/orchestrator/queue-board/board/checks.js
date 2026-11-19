@@ -710,7 +710,7 @@ function checksSummary(r) {
           ),
         )
       : null,
-    el('p', { class: 'checks-source', text: 'The red dot on the tab follows the open ones. Settings, or ravenseat checks marker off, hides the dot.' }),
+    el('p', { class: 'checks-source', text: 'The red dot on the tab follows the open ones. Settings can hide the dot.' }),
   );
 }
 

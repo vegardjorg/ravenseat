@@ -126,6 +126,19 @@
       },
     });
   }
+  /**
+   * A CLI command the board cannot run itself, as the same chip as on the board (cliChip in board/core.js, B31 X6):
+   * "Claude Code:", the command, and "Copy", last in its text, never mid-sentence.
+   */
+  function cliChip(command) {
+    return el(
+      'span',
+      { class: 'cli-chip' },
+      el('span', { class: 'cli-chip-label', text: 'Claude Code:' }),
+      el('code', { text: command }),
+      copyButton(command, `Copy ${command}`, 'button-small button-outline'),
+    );
+  }
   const date = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
@@ -512,6 +525,7 @@
     el,
     copy,
     copyButton,
+    cliChip,
     date,
     field: (...a) => field(...a),
     list: (...a) => list(...a),

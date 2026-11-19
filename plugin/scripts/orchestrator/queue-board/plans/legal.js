@@ -361,11 +361,12 @@
               : 'The queue has no owner questions.',
         }),
         surface === 'jur'
-          ? h.el('p', {
-              class: 'plans-help',
-              text:
-                'The points are added to the entry with ravenseat plan edit <PL-id> --set \'{"legal":{…}}\' (the fields are listed in docs/plan-register.md).',
-            })
+          ? h.el(
+              'p',
+              { class: 'plans-help' },
+              'Legal points are added to the plan entry (the fields are listed in docs/plan-register.md). ',
+              h.cliChip('ravenseat plan edit <PL-id> --set \'{"legal":{…}}\''),
+            )
           : null,
       );
     else if (!match.length)
@@ -503,6 +504,17 @@
     );
   }
 
+  /**
+   * What answering a question unlocks in the queue, in the Decisions room's words: "unlocks 2 tasks (1 h 30 min)",
+   * or the time in the queue alone when no task is counted.
+   */
+  function unlocksText(x) {
+    const D = window.QueueDecisions;
+    const time = D ? D.minutesText(x.minutes) : `${x.minutes} min`;
+    const n = x.tasks?.length ?? 0;
+    return n ? `unlocks ${n} ${n === 1 ? 'task' : 'tasks'} (${time})` : `◷ ${time} in queue`;
+  }
+
   function decRowEl(h, d, x, selected) {
     const isSelected = selected?.id === x.id;
     const block = x.blocked_entries.length;
@@ -533,11 +545,12 @@
         !x.resolved && block
           ? h.el('span', { class: 'badge', text: `▣ ${block} ${block === 1 ? 'entry' : 'entries'}` })
           : null,
+        // The same words as Decisions (lib/queueDecisions.js): "unlocks 1 task (1 h 30 min)", "opened today".
         !x.resolved && x.minutes
-          ? h.el('span', { class: 'badge', text: `◷ ${x.minutes} min in queue` })
+          ? h.el('span', { class: 'badge', text: unlocksText(x) })
           : null,
         !x.resolved && x.days_open != null
-          ? h.el('span', { class: 'jb-age', text: `open for ${x.days_open} d` })
+          ? h.el('span', { class: 'jb-age', text: window.QueueDecisions?.daysOpenText(x.days_open) ?? '' })
           : null,
       ),
       h.copyButton(V.ownerLine(x, d), `Copy the start line for ${x.id}`),
@@ -837,10 +850,12 @@
             ),
           )
         : null,
-      h.el('p', {
-        class: 'plans-help',
-        text: `Changed with ravenseat plan edit ${x.entry} --set '{"legal":…}' (the whole field), or with the start line above.`,
-      }),
+      h.el(
+        'p',
+        { class: 'plans-help' },
+        'Change the whole field with the start line above, or with ',
+        h.cliChip(`ravenseat plan edit ${x.entry} --set '{"legal":…}'`),
+      ),
     );
   }
 
@@ -1056,7 +1071,7 @@
       'Answer',
       h.el('p', {
         class: 'plans-help',
-        text: 'The answer is saved with ravenseat resolve and logged in the decision log.',
+        text: 'The answer is saved in the queue and logged in the decision log.',
       }),
       answers,
       waiting

@@ -360,7 +360,8 @@
     <!-- One stack for the message and "Undo" (the order is controlled by the toast queue in a11y.js). -->
     <div id="toaster" class="toaster">
       <div id="undo-message" class="undo-message" role="status" hidden></div>
-      <div id="message" class="message" role="alert" hidden></div>
+      <!-- role="status" for a success; message() in board/core.js sets role="alert" only for an error. -->
+      <div id="message" class="message" role="status" hidden></div>
     </div>
   </body>
 </html>

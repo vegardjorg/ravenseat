@@ -20,8 +20,8 @@ function taskEditActions(k) {
     return el(
       'p',
       { class: 'none task-cli-hint' },
-      'An agent or a person may be working on this task, so it is not cancelled from the board. To cancel it: ',
-      el('code', { text: `ravenseat set ${k.id} cancelled --remark "<why>"` }),
+      'An agent or a person may be working on this task, so it is not cancelled from the board. ',
+      cliChip(`ravenseat set ${k.id} cancelled --remark "<why>"`),
     );
   if (!TASK_EDIT_STATUSES.has(k.status)) return null;
   const f = t.taskForm?.id === k.id ? t.taskForm : null;

@@ -133,14 +133,24 @@
               'data-focus': `working:${x.id}`,
               onclick: () => h.goToEntry(x.id),
             }),
+            // "updated 9 min ago" in words (B31, PL4); the exact time stays in the tooltip.
             h.el('span', {
               class: 'overview-time',
-              text: `${x.by ? `${x.by}, ` : ''}last pulse ${h.date(x.at)}`,
+              title: h.date(x.at),
+              text: `${x.by ? `${x.by}, ` : ''}updated ${updatedAgo(x.at) ?? h.date(x.at)}`,
             }),
           ),
         ),
       ),
     );
+  }
+
+  /** How long ago a pulse came, in the shared words (lib/queueDecisions.js agoText): "just now", "9 min ago". */
+  function updatedAgo(iso) {
+    const ms = Date.now() - Date.parse(iso);
+    const D = window.QueueDecisions;
+    if (!Number.isFinite(ms) || !D) return null;
+    return D.agoText(ms / 60_000);
   }
 
   /**

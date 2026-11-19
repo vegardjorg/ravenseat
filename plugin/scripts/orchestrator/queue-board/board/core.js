@@ -467,9 +467,33 @@ function hideToast(key) {
 let messageTime = null;
 function message(text, error, ms) {
   const m = $('message');
+  // A success is a polite status; only an error interrupts (role alert). The role is set before the text, so the
+  // screen reader announces the new text once, with the right urgency.
+  m.setAttribute('role', error ? 'alert' : 'status');
   m.textContent = text;
   m.classList.toggle('error', !!error);
   showToast('message');
   clearTimeout(messageTime);
   messageTime = setTimeout(() => hideToast('message'), ms ?? (error ? 9000 : 6000));
+}
+
+/**
+ * A CLI command the board cannot run itself, as a small copyable chip: "Claude Code:", the command, and "Copy". It
+ * stands last in its text, never mid-sentence (B31, X6). Where the board has the control, the text names no CLI.
+ * copyText lives in board/cloud.js; it is looked up when the button is pressed, after every script has loaded.
+ */
+function cliChip(command) {
+  return el(
+    'span',
+    { class: 'cli-chip' },
+    el('span', { class: 'cli-chip-label', text: 'Claude Code:' }),
+    el('code', { text: command }),
+    el('button', {
+      type: 'button',
+      class: 'button-small button-outline',
+      text: 'Copy',
+      'aria-label': `Copy ${command}`,
+      onclick: () => copyText(command, 'The command is copied.'),
+    }),
+  );
 }

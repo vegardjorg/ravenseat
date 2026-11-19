@@ -1,5 +1,5 @@
 // =============================================================
-// bulk.js: the dialog for a bulk action (fields, preview, "Do it"), and "Undo" (30 seconds after a bulk
+// bulk.js: the dialog for a bulk action (fields, preview, the main button), and "Undo" (30 seconds after a bulk
 // action) and "Undo last" (the gear).
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md). They load in order with defer and
@@ -8,13 +8,49 @@
 // =============================================================
 'use strict';
 
-// ---- The dialog for a bulk action: fields, preview, "Do it" ----
+// ---- The dialog for a bulk action: fields, preview, the main button ----
 const bulkBackground = $('bulk-background');
 const bulkBox = $('bulk');
 
 /** The action the server gets (the label dialog selects add or remove). */
 const bulkAction = (m) =>
   m.type === 'label' ? (m.val.remove ? 'label-remove' : 'label-add') : m.type;
+
+/**
+ * The main button's text: the action's verb and how many tasks it touches ("Put 3 tasks on hold"), never a generic
+ * "Do it" (B31). The label and feature dialogs follow the field: removing says so.
+ */
+function bulkDoText(m) {
+  const n = countText(m.ids.length);
+  const v = m.val;
+  switch (m.type) {
+    case 'undo':
+      return 'Undo';
+    case 'project':
+      return `Move ${n}`;
+    case 'feature':
+      // An empty field removes the feature (set() stores null for it); before anything is written it sets one.
+      return v.name === null ? `Remove the feature from ${n}` : `Set the feature on ${n}`;
+    case 'park':
+      return `Put ${n} on hold`;
+    case 'continue':
+      return `Take ${n} off hold`;
+    case 'rank':
+      return `Move ${n} as a block`;
+    case 'batch-in':
+      return `Add ${n} to the batch queue`;
+    case 'batch-out':
+      return `Take ${n} out of the batch queue`;
+    case 'batch-pack':
+      return `Pack ${n} into a track`;
+    case 'label':
+      return v.remove ? `Remove the label from ${n}` : `Add the label to ${n}`;
+    case 'accept-suggestion':
+      return `Accept the projects for ${n}`;
+    default:
+      return `Change ${n}`;
+  }
+}
 
 /** What is missing before the preview can be worked out, or null. */
 function bulkMissing(m) {
@@ -44,13 +80,18 @@ function bulkField(type) {
       previewBulk();
     }
   };
+  // The help is a text, or [text, node] when a CLI chip stands last after the sentence (cliChip, board/core.js).
   const field = (id, label, control, help) =>
     el(
       'div',
       { class: 'field' },
       el('label', { for: id, text: label }),
       control,
-      help ? el('p', { class: 'field-help', text: help }) : null,
+      help
+        ? Array.isArray(help)
+          ? el('p', { class: 'field-help' }, ...help)
+          : el('p', { class: 'field-help', text: help })
+        : null,
     );
   const textField = (id, name, attr = {}) =>
     el('input', {
@@ -96,7 +137,7 @@ function bulkField(type) {
       'bulk-project',
       'Project',
       option,
-      'A new project is created with ravenseat project <pid> --title "…".',
+      ['No fitting project? Ask Claude to create one. ', cliChip('ravenseat project <pid> --title "…"')],
     );
   }
   if (type === 'feature')
@@ -265,7 +306,7 @@ function buildDialog(info, field, count) {
   const perform = el('button', {
     type: 'button',
     class: 'button button-filled',
-    text: m.type === 'undo' ? 'Undo' : 'Do it',
+    text: bulkDoText(m),
     disabled: true,
     onclick: executeBulk,
   });
@@ -432,8 +473,10 @@ function drawPreview() {
       parts.push(el('p', { class: 'empty', text: 'Nothing changes: all are already like that.' }));
   }
   m.el.preview.replaceChildren(...parts.filter(Boolean));
-  // "Do it" only when the preview is valid and has something to do.
+  // The main button says what it does and for how many (the label choice can change it), and is on only when the
+  // preview is valid and has something to do.
   const empty = f && m.type !== 'undo' && !f.package && !f.lines?.length;
+  m.el.do.textContent = bulkDoText(m);
   m.el.do.disabled = !can || m.loading || !!empty;
   m.el.do.title = !f
     ? 'See the changes first'
@@ -458,7 +501,7 @@ function lineList(lines, count) {
   );
 }
 
-/** "Do it": writes with the queue version from the preview. If the queue changed meanwhile, it is shown again. */
+/** The main button: writes with the queue version from the preview. If the queue changed meanwhile, it is shown again. */
 async function executeBulk() {
   const m = t.bulk;
   const f = m?.preview;

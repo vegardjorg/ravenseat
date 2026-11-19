@@ -1032,7 +1032,7 @@ describe('queuePlan: plan check', () => {
     };
     const k = P2.capacity(reg, queue, { donePerWeek: 3 });
     expect(k).toMatchObject({ entries: 3, track: 7, without_size: ['PL-C-3'], weeks: 2.3 });
-    expect(k.text).toContain('Now is about 2,3 weeks at the current pace');
+    expect(k.text).toContain('Now is about 2.3 weeks at the current pace');
     expect(P2.capacity(reg, queue).text).toContain('the pace is unknown');
   });
 

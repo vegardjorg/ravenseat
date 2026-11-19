@@ -3178,6 +3178,26 @@ body.with-option-line .toaster {
   align-items: center;
   gap: var(--distance-sm);
 }
+/* A CLI command the board cannot run itself (B31, X6): "Claude Code:", the command and Copy, last in its text. */
+.cli-chip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs);
+  vertical-align: middle;
+}
+.cli-chip-label {
+  color: var(--color-on-surface-variant);
+}
+.cli-chip code {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  padding: 0 var(--distance-xs);
+  border-radius: var(--radius);
+  background: var(--color-surface-container);
+  color: var(--color-on-surface);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
 .cloud-command code {
   flex: 1 1 20rem;
   font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
@@ -4854,8 +4874,23 @@ body.stale .summary.stuck::before {
 }
 .decide-keys {
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   color: var(--color-on-surface-variant);
+}
+/* A key in the keyboard hint (B31, D4): a small key cap in the theme's tokens, so the keys read at a glance. */
+.decide-keys kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 var(--distance-xs);
+  border: 1px solid var(--color-outline-variant);
+  border-bottom-width: 2px;
+  border-radius: var(--radius);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  text-align: center;
 }
 .decide-head .inbox-listening {
   margin: 0;

@@ -592,8 +592,9 @@ function drawDecisions(fresh) {
   const order = groups.flatMap((g) => g.items.map((x) => x.key));
   if (!order.includes(t.decide.focusKey)) t.decide.focusKey = order[0] ?? null;
   const focusKey = t.decide.focusKey;
-  // The keys hint names only the numbers that exist on the cards now.
-  const most = Math.max(0, ...items.map((x) => x.options.length));
+  // The keys hint names only the numbers that exist on the cards now, and never more than the keys that work.
+  const most = Math.min(D.NUMBER_KEYS, Math.max(0, ...items.map((x) => x.options.length)));
+  const kbd = (k) => el('kbd', { text: k });
   const head = el(
     'header',
     { class: 'decide-head' },
@@ -601,10 +602,20 @@ function drawDecisions(fresh) {
     // B30: the "?" opens the help at Waiting on you and Decisions.
     roomHelp('waiting', 'Decisions'),
     items.length
-      ? el('p', {
-          class: 'decide-keys',
-          text: `j / k to move · Enter = recommended${most ? ` · ${most > 1 ? `1-${most}` : '1'} = choose` : ''} · u = undo`,
-        })
+      ? el(
+          'p',
+          { class: 'decide-keys' },
+          kbd('j'),
+          ' ',
+          kbd('k'),
+          ' move · ',
+          kbd('Enter'),
+          ' recommended',
+          ...(most ? [' · ', kbd('1'), ...(most > 1 ? [' to ', kbd(String(most))] : []), ' choose'] : []),
+          ' · ',
+          kbd('u'),
+          ' undo',
+        )
       : null,
     listeningLine(Math.max(items.length, 1)),
     t.data.baseHealth?.status === 'red' ? el('p', { class: 'decide-base-red', text: t.data.baseHealth.text }) : null,
@@ -699,8 +710,9 @@ document.addEventListener('keydown', (e) => {
     else if (item.free) openForm(item, 'free');
     return;
   }
-  if (/^[1-4]$/.test(e.key) && item.options[Number(e.key) - 1]) {
+  const n = Number(e.key);
+  if (/^[1-9]$/.test(e.key) && n <= (DV()?.NUMBER_KEYS ?? 4) && item.options[n - 1]) {
     e.preventDefault();
-    pickOption(item, Number(e.key) - 1);
+    pickOption(item, n - 1);
   }
 });

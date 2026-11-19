@@ -171,7 +171,7 @@ function checksSwitchSection(d) {
     el('p', {
       id: 'checks-panel-help',
       class: 'setting-explanation',
-      text: 'What your project has for checking its code, and suggestions for what to add. Also ravenseat checks on|off in Claude Code. Off changes no gates or guards. Guidance in the Board tab stops other advice.',
+      text: 'What your project has for checking its code, and suggestions for what to add. Off changes no gates or guards. Guidance in the Board tab stops other advice.',
     }),
     error,
   );
@@ -225,7 +225,7 @@ function blockedColumnSection() {
       text:
         'Tasks with an open blocker that needs action (a merge conflict, red gates, a silent agent, an owner question and the like) ' +
         'get a column right after In queue, the ones holding back the most first. Tasks that only wait on another task or are on ' +
-        'hold stay in In queue. Saved for everyone. Claude Code: ravenseat board-setting blocked on|off.',
+        'hold stay in In queue. Saved for everyone.',
     }),
     error,
   );

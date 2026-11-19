@@ -1530,6 +1530,9 @@ function duplicates(entries) {
   return out;
 }
 
+/** A number with at most one decimal and a decimal point, as English text has it ("2.3", never "2,3"; B31, PL3). */
+const oneDecimal = (x) => String(Math.round(x * 10) / 10);
+
 /**
  * The capacity: how many queue tracks the Now entries need (SIZE_TRACK, minus finished queue tasks, at least the open ones),
  * against how many queue tasks get finished per week. Built and verified entries do not count.
@@ -1557,8 +1560,8 @@ function capacity(reg, queue, { donePerWeek = null, now = new Date() } = {}) {
   const text = !entries
     ? 'No open entries in Now.'
     : perWeek
-      ? `Now is about ${String(weeks).replace('.', ',')} weeks at the current pace (${track} tracks in ${entries} entries, ` +
-        `${String(Math.round(perWeek * 10) / 10).replace('.', ',')} finished queue tasks per week)` +
+      ? `Now is about ${oneDecimal(weeks)} weeks at the current pace (${track} tracks in ${entries} entries, ` +
+        `${oneDecimal(perWeek)} finished queue tasks per week)` +
         `${withoutSize.length ? `; ${withoutSize.length} without a size are not counted` : ''}.`
       : `Now is ${track} tracks in ${entries} entries; the pace is unknown (no finished queue tasks in the last ${CAPACITY_WINDOW_DAYS} days).`;
   return { entries, track, without_size: withoutSize, per_week: perWeek, weeks, text };

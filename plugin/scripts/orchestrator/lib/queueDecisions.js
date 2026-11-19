@@ -80,6 +80,23 @@
     return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
   }
 
+  /** How long something has been open, in whole days: "opened today", "open for 1 day", "open for 5 days". */
+  function daysOpenText(days) {
+    const d = Math.max(0, Math.floor(Number(days) || 0));
+    return d === 0 ? 'opened today' : `open for ${plural(d, 'day', 'days')}`;
+  }
+
+  /** How long ago, from minutes: "just now", "9 min ago", "2 h 5 min ago", "3 days ago" (from 48 h). */
+  function agoText(min) {
+    const m = Math.max(0, Math.round(Number(min) || 0));
+    if (m < 1) return 'just now';
+    if (m < 48 * 60) return `${minutesText(m)} ago`;
+    return `${plural(Math.floor(m / (24 * 60)), 'day', 'days')} ago`;
+  }
+
+  /** The number keys in Decisions go to 4 (1 to 4 pick that option); the hint never names more than this. */
+  const NUMBER_KEYS = 4;
+
   // ---- From "Waiting on you" to decisions ----------------------------------------------------------------------
 
   /**
@@ -780,6 +797,9 @@
     FLAG_NOTE,
     STOP_TEXT,
     minutesText,
+    daysOpenText,
+    agoText,
+    NUMBER_KEYS,
     fromInbox,
     compareImpact,
     sortItems,

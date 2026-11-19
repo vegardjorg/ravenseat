@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: buttons and hints say what they do, in plain words.** Edge cases closed in the board's wording. The bulk
+  dialog's main button said "Do it" whatever the action; it now names the verb and the count of the selection ("Put 3
+  tasks on hold", "Move 2 tasks", "Remove the label from 2 tasks") and follows the add or remove choice. A CLI command
+  the board cannot run itself no longer stands mid-sentence: it sits last in a small "Claude Code:" chip with a Copy
+  button (a new project in the bulk dialog, cancelling a running task in the panel, legal points in Plans), and where
+  the board has the switch itself (Settings, the Checks dot, answering in Plans) the text no longer names the CLI. The
+  pace in Plans used a decimal comma in English text ("2,3 finished queue tasks per week"); it is "2.3" now. Short
+  durations read naturally: "opened today" instead of "open for 0 d", "unlocks 1 task (1 h 30 min)" as in Decisions
+  instead of "90 min in queue", and "updated 9 min ago" instead of the full pulse timestamp (still in the tooltip). A
+  success toast is now a polite status and only an error is an alert, so "Saved" no longer interrupts a screen reader.
+  The keyboard hint in Decisions shows the keys as key caps in a readable size and never names a number key beyond 4,
+  the last one that works. No new setting and no new colors: only the theme's tokens.
 - **Board: the Checks room explains its buttons, groups its suggestions and holds its place while it reads.**
   Edge cases closed in the Checks room. The suggestions were one long list sorted by priority, so cards about tests,
   CI and security stood mixed; they now come in one group per category with a real heading, in the catalog's order
