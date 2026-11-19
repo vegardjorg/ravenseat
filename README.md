@@ -79,12 +79,11 @@ More in the [guide](plugin/docs/guide.md).
   queue, the tasks and the plan register in `scripts/.queue/` (gitignored by default), as plain files you can read.
 - One git worktree and one branch per running task, removed after the merge.
 
-<!-- TODO Vegard: add one or two lines on how to remove it again (uninstall the plugin, which files to delete).
-     A clear way out makes it easier to try. -->
+To remove it, run `claude plugin uninstall ravenseat@ravenseat` and delete the files above, the `@CLAUDE.queue.md`
+line in `CLAUDE.md` if setup added it, and the settings you no longer want. Until then, the hooks do nothing in a
+project without `queue.config.json`.
 
 ## What you come back to
-
-<!-- TODO Vegard: replace this illustration with a real summary from one of your runs. -->
 
 > **You:** What happened while I was away?
 >
@@ -231,8 +230,6 @@ npm install
 npm test                # the whole suite; run it before every push
 npm run test:changed    # only the tests your change can reach; run it before each commit
 ```
-
-<!-- TODO Vegard: move the details on test:changed (--list, --stats, the run log) to a CONTRIBUTING.md and link it here. -->
 
 ## License
 
