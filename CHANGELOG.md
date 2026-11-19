@@ -5,6 +5,9 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Docs: the README explains what Ravenseat does, checked against the code.** A new section "What Ravenseat does"
+  covers how a task flows, the guarantees the code enforces, parallel work, machine load, learning, modes and the known
+  limits. It replaces "Is it for you?", "Status" and the guarantee bullets, and shortens two sections that said the same.
 - **Updates: the new-version notice also reaches CLI users (0u3).** Edge case closed in the update check. Only the
   board said that a newer ravenseat was out, so a project run from the terminal or by Claude alone never heard of it.
   `ravenseat show` now prints one line, `ravenseat X is out (you have Y): claude plugin update ravenseat@ravenseat,

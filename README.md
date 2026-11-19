@@ -46,17 +46,137 @@ decisions only you can make.
 you say "push". **Your part.** Each delivery lists what the agent assumed (its Assumptions); read them before the
 merge, because passing tests do not show that the agent understood you.
 
+## What Ravenseat does
+
+**In two sentences.** Ravenseat is a Claude Code plugin and a local command-line tool (`ravenseat`) that keeps a
+project's plan and tasks in plain files and lets one Claude Code chat act as the orchestrator. The orchestrator hands
+each task to a fresh subagent (a track) in its own git worktree, runs your checks on the delivered commit itself,
+merges what passes on your machine, and collects what needs a person into one list of decisions.
+
+**Who it is for.** One person or a small team on Windows or Linux, with work that spans days or weeks and a project
+that has automated tests. **Who it is not for:** a single small change in one chat, or a project without meaningful
+checks, where there is little for it to verify and the extra steps do not pay off.
+
+### How a task flows
+
+1. You describe the work. The orchestrator adds tasks with their dependencies and, in full mode, the files each task
+   owns.
+2. The queue picks the next task that can start (dependencies done, no ownership conflict, enough free memory) and
+   starts a track in a new worktree with a short mission file.
+3. The track builds, commits on its branch and answers with one line; its long report goes to a file.
+4. `receive` runs your quick checks in the track's worktree, records the result for that exact commit, and builds a
+   review package (the diff, the changed files, test-weakening and scope notes) for the reviewers the task calls for.
+5. `merge` merges only when the recorded checks for that commit are green, one merge at a time, and checks the base
+   branch again after the merge. A red result gets a fix round; if it is still blocked, it becomes a question to you
+   while independent tasks continue. A delivery the track itself called unfinished (PARTIAL) is merged only on your
+   word, and the task then stays in review until the rest is done.
+6. By default nothing is pushed until you say "push". The push check reports what is in the push and blocks it when
+   the base branch is red, when commits from outside the queue are in it, or, when full checks are set up, without a
+   green full-check run on that exact commit.
+
+More in [how it works](plugin/docs/guide.md#how-it-works) and [the loop](plugin/docs/orchestration.md#the-loop).
+
+### Guarantees enforced by code
+
+- **Check results come from Ravenseat, not from the agent.** A track's own "checks passed" line is never used as
+  evidence. Each run Ravenseat makes is recorded with the commit sha, whether the tree was clean, and a hash of the
+  configured check commands, and merge and push read only that record. It guards against false claims, not against a
+  hostile process: the record is a local file under your user account.
+  ([Gate evidence](plugin/docs/orchestration.md#the-gate-evidence-what-a-push-and-a-merge-trust))
+- **A focused test stops the merge.** A new `.only`, `fit` or `fdescribe` in a test file stops the merge until it is
+  removed or you override it.
+- **Other test weakening is flagged.** Deleted test files, new skip markers (`.skip`, `xit`, `@pytest.mark.skip`,
+  `#[ignore]` and others) and a test file that lost all its assertions are listed in the review package and logged.
+  They do not stop the merge by themselves.
+- **Protected paths stop the merge.** A change to `.claude/`, `CLAUDE.md`, git hook folders, CI config, package
+  manifests and lockfiles, the queue config or Ravenseat's own scripts stops the merge unless the task owns the file
+  or you allow it (in lite mode, dependency files only warn). A minimum set always applies, whatever the config says.
+- **Agents cannot write the main tree's control files.** A track's Write or Edit, and a shell line that writes there
+  (a redirection, `cp`, `sed -i`, also inside `bash -c` or `eval`), is denied for `queue.config.json`, `.claude/`,
+  `CLAUDE*.md`, `.git/hooks/`, `.git/config` and Ravenseat's scripts. Git hooks and git config values that run a
+  program are compared before and after each check run.
+- **Agents cannot push.** A command guard and a pre-push hook in each track's worktree stop it.
+- **Overrides ask you.** When the orchestrator itself runs `merge` with an `--allow-*` or `--force*` flag, confirms a
+  weakened setting or acts "as the owner", Claude Code's permission dialog asks you first, so a line in an agent's
+  report cannot approve it.
+- **The finish line is fixed.** A task's completion criteria are locked when it starts.
+
+These are guard rails against a misled agent, not a sandbox: agents run as your OS user, and a script an agent writes
+and then runs is not read by the guards. See [guarantees and limits](plugin/docs/guide.md#guarantees-and-limits) and
+the [red team page](plugin/docs/redteam.md).
+
+### Parallel work without collisions
+
+- In full mode, each task lists the files it owns (`owned_files`) and may list files it only reads (`reads`). Two
+  tasks that own the same file never run at the same time, and by default a task that reads a file another running
+  task changes waits.
+- Shared blocks that many tasks need to touch (routes, registries, translations) can be listed as `hotspots`. No task
+  owns one. One task at a time can have a change agreed; otherwise the track writes `WIRE` lines in its report, and the
+  task cannot be set done until each one is closed with a commit or a reason. Off until you list hotspots.
+- Merges run one at a time, and a red base branch stops further merges until a fix task makes it green.
+
+More in [a task](plugin/docs/queue.md#a-task) and [the wiring spec](plugin/docs/orchestration.md#the-wiring-spec-stops-done).
+
+### Machine load and token cost
+
+- **Load guard.** Fewer new tracks start as free memory drops below 40 %, and none below 10 %; running tracks are not
+  stopped. `ravenseat machine` suggests how many your machine can take.
+- **Heavy checks take turns.** A check run that took two minutes or more last time waits for a slot shared by all
+  projects of your user on the machine. Runs in the main checkout go first, then the orchestrator's runs on a track,
+  then a track's own.
+- **No processes left behind.** A command over its time budget is ended with its whole process tree (`taskkill /T` on
+  Windows, the process group elsewhere), also when the process that started it dies.
+- **Cache-aware waiting.** Long calls return within 280 seconds with one line and the command to keep waiting, so the
+  orchestrator's 5-minute prompt cache does not expire while it waits. Subagents are set to a 1-hour cache.
+- **Small contexts.** Each mission starts with the files to read in the first turn; a track hands over at about 280k
+  tokens or at its second compaction; `ravenseat doctor` warns when the instructions Claude loads at start pass 200
+  lines in a file or 40,000 characters in total. Spend and the daily budget are under
+  [What does it cost in tokens?](#what-does-it-cost-in-tokens)
+
+More in [machine load](plugin/docs/full-mode.md#my-pc-chokes-on-parallel-builds),
+[the queue for heavy gates](plugin/docs/queue.md#the-queue-for-heavy-gates) and [costs](plugin/docs/costs.md).
+
+### Learning from repeated failures
+
+- Findings from reviews, check runs, CI, the secret scan and the test-weakening check go into one append-only finding
+  log, each with a class (such as `access-control`, `contract-drift` or `null-undefined`) and the area of the code. A
+  red check run or CI job also gets a normalized signature, so the same failure is counted as one thing.
+- The same signature in two incidents within 30 days becomes one proposal to add a guard. A class that keeps coming
+  back in one area shows on the Checks tab, with a button to build a check for it; proposals made from the finding log
+  by themselves are opt-in. At most three proposals wait at a time, and nothing is built without your yes.
+- A check recipe you keep declining (under 30 % accepted after five decisions) is no longer offered; you can bring it
+  back.
+- The project catalog (`docs/queue/catalog/`) holds the libraries you prefer, building blocks meant for reuse and the
+  design choices you accepted. The parts that touch a task's files go into its mission and its review package.
+
+More in [the Checks tab](plugin/docs/checks.md),
+[repeated failures](plugin/docs/orchestration.md#repeated-failures-and-the-guard-registry) and
+[the catalog](plugin/docs/catalog.md).
+
+### Modes, board and client
+
+- **Lite mode** is what `ravenseat init` sets up: a task needs only a title, and several stops are warnings while you
+  try it. **Full mode** adds risk classes (K, D, D+, U) and task sizing, a value per task, focus steps and helper
+  reviewers. By default tasks outside a new focus still fill free slots (`focus.restDefault`, `fill` or `wait`).
+  Settings come in the same sixteen groups in both.
+  ([Lite and full](plugin/docs/full-mode.md#lite-and-full-side-by-side))
+- **The board** is an optional local web page with the same state: the queue as columns, decisions, dependencies,
+  focus, the Checks tab, plans and statistics with cost. ([A tour](plugin/docs/board.md#a-tour))
+- **One client adapter.** Claude Code's transcript rows, hook payloads and agent calls are read in one place. A format
+  check on your latest transcript reports in `ravenseat doctor` and on the Checks tab when rows read differently than
+  expected, so a change in Claude Code shows up instead of miscounting quietly. Claude Code is the only client today.
+
+### Known limits
+
+- It is only as strong as your checks. Without meaningful tests, a green merge shows little; `ravenseat doctor` warns
+  when your project has no checks, and a push then asks you first.
+- Guard rails, not a sandbox: keep production credentials off the machine, and use Claude Code's permissions or
+  sandbox when you need a real boundary.
+- Developed on Windows; the tests run on Linux and Windows; macOS is not tested yet.
+- Young: public since late October 2026 and released often. The [FAQ](plugin/docs/faq.md) names the tests behind each
+  answer.
+
 <p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The queue board: in queue, in progress, review and built" width="800"></p>
-
-**Is it for you?** If you are building something that takes weeks, like a SaaS with several features, a backend and
-a database, the work no longer fits in one chat, and that is where Ravenseat helps most. For a small demo or a tool for
-your own use, plain Claude Code is probably enough. It suits one person or a small team using Claude Code on Windows
-or Linux. It works best with automated tests; without meaningful checks there is little for it to verify. If you
-would rather not read what an agent assumed before its work is merged, it will feel like overhead.
-
-**Status.** Young: public since late October 2026, built over several months inside the author's own project, released
-often. Developed on Windows; the tests run on Linux and Windows, macOS is not tested yet. The [FAQ](plugin/docs/faq.md)
-answers the usual worries, each with the tests behind the answer.
 
 ## Quick start
 
@@ -92,10 +212,8 @@ That is the basic workflow. Plain words work, and the commands are there when yo
 
 <p align="center"><img src="assets/infographics/task-flow.webp" alt="Pick the next task, a fresh agent builds it in an isolated worktree, checks run. Passing work is merged and the next task starts. Failing work gets a fix attempt by a fresh agent; if it is still blocked, it becomes your decision while independent tasks continue" width="800"></p>
 
-Each task runs in its own copy of the project (a git worktree), and your checks run on the result. Passing work is
-merged; a failure gets another try by a fresh agent, and when the system cannot safely go on, it asks you while the
-independent tasks keep moving. Ravenseat does not replace your tests, review standards or judgment, and it is only as
-strong as the checks your project has (`/ravenseat:setup` helps you set them up).
+The steps are in [How a task flows](#how-a-task-flows). Ravenseat does not replace your tests, review standards or
+judgment (`/ravenseat:setup` helps you set up checks).
 
 ## Your decisions, in one place
 
@@ -111,23 +229,10 @@ opened with `/ravenseat:board` ([a tour of the board](plugin/docs/board.md#a-tou
 ## Agents don't grade their own homework
 
 An agent that writes the code and then reports that it works is not proof that a change is ready. Ravenseat treats
-every agent as an untrusted worker and keeps those two jobs apart.
-
-- **Checks belong to the delivered commit.** The checks are run and recorded on exactly the delivered commit, not
-  reported by the agent.
-- **Acceptance criteria stay fixed.** A task's completion criteria are locked when it starts, and an optional
-  reviewer checks the work against them.
-- **Protected files get extra scrutiny.** Changes to test config, hooks, queue settings and other guarded paths stop
-  the merge unless you allow them, and deleted tests and new skip markers are flagged.
-- **Only you push or weaken a guard.** An agent in a task cannot push, and switching a guard off or weaker takes
-  your explicit confirmation, logged; none of it can be done from a task.
-
-These are guard rails, not a sandbox: agents run with your user account, so keep production credentials off the
-machine and use Claude Code's permissions or sandbox when you need a real boundary. Ravenseat amplifies a strong
-test suite; it cannot make up for a missing one. Without meaningful checks, no automated merge can show that a change
-is correct, and `ravenseat doctor` warns when your project has none. More in
-[full mode](plugin/docs/full-mode.md#agents-cheat-on-tests), [guarantees and limits](plugin/docs/guide.md#guarantees-and-limits)
-and [orchestration](plugin/docs/orchestration.md).
+every agent as an untrusted worker and keeps those two jobs apart: what the code enforces is listed under
+[Guarantees enforced by code](#guarantees-enforced-by-code), and what it does not under [Known limits](#known-limits).
+Ravenseat amplifies a strong test suite; it cannot make up for a missing one. More in
+[full mode](plugin/docs/full-mode.md#agents-cheat-on-tests) and [orchestration](plugin/docs/orchestration.md).
 
 Each answer in the [FAQ](plugin/docs/faq.md) names the tests behind it. The tests run on real git repositories and
 real processes, and for the main guarantees each guard was removed in turn to show that its test then fails. The [red team page](plugin/docs/redteam.md) lists what was found and what the tests cannot
@@ -162,9 +267,7 @@ reviewed then, and the latest window and the other classes are on the [costs](pl
 
 Both columns are set to compact automatically at 300k (in practice at about 270k). Claude Code's default lets a chat grow toward its full window before
 it compacts, and that is what gets expensive: a turn at over 500k tokens cost about 2.7 times a turn at 100k to 200k.
-So agents hand over after a second compaction or at 280k, the manager chat compacts automatically, state lives in files, worktrees share
-installed dependencies, and nothing polls in a loop. A load guard starts fewer agents while free memory is low, and
-`ravenseat machine` suggests how many your machine can take.
+That is why tracks hand over early and state lives in files ([machine load and token cost](#machine-load-and-token-cost)).
 
 One week, two different repos, one developer, same model and settings: not a controlled benchmark. Over all 19 days the
 chat came out cheaper per commit, from those early weeks. Run `ravenseat cost` to see the numbers in your own project.
