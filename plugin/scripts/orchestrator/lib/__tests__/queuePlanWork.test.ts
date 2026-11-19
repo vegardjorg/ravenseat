@@ -716,7 +716,8 @@ describe('the wiring (index.html, queue-board.mjs and the new files)', () => {
       expect(code(f)).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|eval\(/);
     expect(plans).toMatch(/window\.QueuePlanOverview\.side\(workHelp, d\)/);
     expect(plans).toMatch(/window\.QueuePlanWork\.optionLine\(workHelp, d\)/);
-    expect(plans).toMatch(/V\.readUrl\('\?room=plans&surface=overview'\)/);
+    // Plans opens on plans.startView (the Roadmap by default), no longer on the overview.
+    expect(plans).toMatch(/V\.readUrl\(V\.startSearch\(/);
     expect(plans).toMatch(/wait: true/);
   });
   it('CSS: no hex, and the pulse stands still with reduced motion', () => {

@@ -105,9 +105,11 @@
 
   /** The surfaces in the Plans room: the plan entries and the document register (same pattern, own filters). */
   const SURFACES = [
-    // The overview is the start page when you enter Plans (`surface=overview`). A web address without
-    // surface is still Plan entries, so old links and saved views work as before.
-    { id: 'overview', text: 'Overview' },
+    // The Roadmap (`surface=roadmap`, P1 of plans/plans-tab-ux-review-2026-11-19.md) is the start page when you enter
+    // Plans (plans.startView). The overview is still a surface, but no tab: it sits under More views (`more`) with the
+    // maps. A web address without surface is still Plan entries, so old links and saved views work as before.
+    { id: 'roadmap', text: 'Roadmap' },
+    { id: 'overview', text: 'Overview', more: true },
     { id: 'entries', text: 'Plan entries' },
     { id: 'doc', text: 'Documents and agreements' },
     // legal panel, owner decisions and the launch overview.
@@ -407,6 +409,8 @@
       entry.id,
       entry.title,
       entry.summary,
+      // the lead the server took from the plan document (P3), so a plan without a summary is found by its words too.
+      entry.lead?.text,
       entry.project,
       entry.remark,
       ...(entry.roadmap ?? []),
@@ -614,6 +618,16 @@
   function breadcrumbs(state, data) {
     if (state.surface === 'doc') return docBreadcrumbs(state, data);
     if (JB_SURFACES.includes(state.surface)) return jbBreadcrumbs(state, data);
+    // the Roadmap: Plans › Roadmap, and on the plan page › the plan's title (Roadmap then takes you back).
+    if (state.surface === 'roadmap') {
+      const entry = state.entry ? (data.entries ?? []).find((p) => p.id === state.entry) : null;
+      const base = { sortKey: null, copy: null, filter: null, entry: null };
+      return [
+        { ...base, level: 'room', text: 'Plans', state: { surface: 'roadmap', entry: null } },
+        { ...base, level: 'surface', sortKey: 'roadmap', text: 'Roadmap', state: { entry: null } },
+        ...(entry ? [{ ...base, level: 'entry', sortKey: entry.id, text: entry.title || entry.id, entry: entry.id }] : []),
+      ];
+    }
     // the overview. "Plans" takes you to the list of plan entries.
     if (state.surface === 'overview')
       return [
@@ -867,6 +881,11 @@
       }
     }
     const all = reg.entries ?? [];
+    // The Roadmap's Inbox (P1): a finding nobody has sorted yet (queueFindings.isNewFinding, the same rule as the
+    // FINDINGS line in `ravenseat show`). The lead (P3) comes from the server (ctx.leadFor reads the plan document,
+    // cached per file), so this function stays pure; without leadFor nothing is read.
+    const QF = ctx.queueFindings ?? require('./queueFindings.js');
+    const leadFor = typeof ctx.leadFor === 'function' ? ctx.leadFor : null;
     const entries = P.sortEntries(all).map((p) => {
       const by = P.derivedMaturity(p, queue?.tasks, { now });
       const jur = p.legal && typeof p.legal === 'object' ? p.legal : null;
@@ -917,6 +936,12 @@
         active: activeOnes[p.id] ?? null,
         created: p.created ?? null, // "Recently registered"
         history: (history.get(p.id) ?? []).slice(-20).reverse(),
+        // Inbox: { by, at } while the plan waits to be sorted (today only findings, by 'track'), else null.
+        inbox: QF.isNewFinding(p, queue?.tasks ?? [])
+          ? { by: 'track', at: p.finding?.reported ?? null }
+          : null,
+        // The lead from the plan document, only when nobody wrote a summary: { text, path, anchor } or null.
+        lead: !p.summary && leadFor ? (leadFor(p) ?? null) : null,
       };
       return out;
     });
@@ -2546,6 +2571,8 @@
     return {
       // the overview shows how many are waiting on you (owner questions and legal points).
       overview: waitingOnYou(d).total,
+      // the Roadmap shows the plans that are not dropped.
+      roadmap: (d?.entries ?? []).filter((p) => p.priority !== 'drop').length,
       entries: (d?.entries ?? []).length,
       doc: (d?.documents ?? []).length,
       jur: (d?.jur_points ?? []).filter((x) => LEGAL_OPEN.has(x.status)).length,
@@ -3545,6 +3572,320 @@
     return `Critical path: ${g.critical.path.join(' → ')} (about ${trackText(g.critical.sum)})`;
   }
 
+  // ---- The Roadmap: the start page of Plans (P1, P2 and P3 of plans/plans-tab-ux-review-2026-11-19.md) -------------
+  // Concept B, owner decision 2026-11-19 "as recommended": the plans read top to bottom in horizons (Now, Next, Later
+  // plus Inbox, Waiting on you and Done), each plan a title, one plain sentence and a muted line with the status in
+  // words, the area and the next step. On a wide screen the horizons may sit side by side as columns (owner addition:
+  // "kanban-ish"), on a narrow one they are one list. Everything here is derived from the data the room already has;
+  // no new stored field. The lead from the plan document (P3) is computed on the server (ctx.leadFor in plansData).
+
+  /** The horizons in roadmap order. A plan is in exactly one (horizonFor). */
+  const HORIZONS = [
+    { id: 'inbox', text: 'Inbox' },
+    { id: 'waiting', text: 'Waiting on you' },
+    { id: 'now', text: 'Now' },
+    { id: 'next', text: 'Next' },
+    { id: 'later', text: 'Later' },
+    { id: 'done', text: 'Done' },
+    { id: 'dropped', text: 'Dropped' },
+  ];
+  const HORIZON_IDS = HORIZONS.map((h) => h.id);
+  /** The horizons the column layout always shows, also when empty, so the columns do not jump about. */
+  const HORIZON_CORE = ['waiting', 'now', 'next', 'later', 'done'];
+  /** Sections that never fold: they need the owner, so every row stays in sight. */
+  const HORIZON_UNFOLDED = ['inbox', 'waiting'];
+  /** plans.roadmapFoldAfter: the default number of rows a long section shows before "Show n more". */
+  const ROADMAP_FOLD_AFTER = 8;
+  /** The widths for plans.roadmapLayout auto: columns from WIDE, always one list below NARROW (a phone). */
+  const ROADMAP_WIDE = 1200;
+  const ROADMAP_NARROW = 700;
+  const ROADMAP_LAYOUTS = ['auto', 'columns', 'list'];
+  /** plans.startView: where "Plans" at the top opens. */
+  const START_VIEWS = ['roadmap', 'overview', 'list'];
+  /** The views under More views (the overview and the maps are tools for plan work, not for reading). */
+  const MORE_VIEWS = [
+    { id: 'overview', text: 'Overview', state: { surface: 'overview' } },
+    { id: 'map', text: 'Priority map', state: { surface: 'entries', show: 'map' } },
+    { id: 'treeMap', text: 'Tree map', state: { surface: 'entries', show: 'treeMap' } },
+    { id: 'dep', text: 'Dependencies', state: { surface: 'entries', show: 'dep' } },
+  ];
+  /** The sentence under the title is clipped near this; the lead from a document near LEAD_MAX (the task panel's 320). */
+  const SENTENCE_MAX = 200;
+  const LEAD_MAX = 320;
+
+  const openQuestions = (p) => (p?.ownerQuestions ?? []).filter((q) => !q.resolved);
+
+  /**
+   * The horizon of a plan, first match wins: dropped, inbox (a finding nobody sorted, later also captured plans), done
+   * (built or verified, whatever the priority, so a finished plan never sits in Next), waiting on you (priority owner or
+   * an open owner question), now (in the queue, partly built or worked on in a session), next (priority now), later.
+   * @returns {'inbox'|'waiting'|'now'|'next'|'later'|'done'|'dropped'}
+   */
+  function horizonFor(p) {
+    if (p?.priority === 'drop') return 'dropped';
+    if (p?.inbox) return 'inbox';
+    if (p?.maturity === 'built' || p?.maturity === 'verified') return 'done';
+    if (p?.priority === 'owner' || openQuestions(p).length) return 'waiting';
+    if (p?.maturity === 'in-queue' || p?.maturity === 'partial' || p?.active) return 'now';
+    if (p?.priority === 'now') return 'next';
+    return 'later';
+  }
+
+  /** The words for a maturity before the queue, and the next step for it. */
+  const SHAPE = {
+    idea: 'Idea, needs shaping',
+    investigated: 'Investigated, needs a plan',
+    planned: 'Planned, not ready yet',
+    ready: 'Ready to become tasks',
+  };
+
+  /**
+   * The status in words and the next step (null when none is due) for a plan. The words name what a person would ask
+   * ("Being built: 3 of 7 tasks done", "Waiting on your answer to Q-SSO"), never a field name.
+   * @returns {{ text: string, next: string|null }}
+   */
+  function planStatus(p) {
+    const h = horizonFor(p);
+    const queue = p?.queue ?? [];
+    if (h === 'dropped') return { text: 'Dropped', next: null };
+    if (h === 'inbox')
+      return {
+        text: p.inbox?.by === 'track' ? 'Reported by a track, not sorted yet' : 'In the inbox, not sorted yet',
+        next: 'Sort it',
+      };
+    if (h === 'done') {
+      if (p.maturity === 'verified')
+        return p.stale
+          ? { text: 'Built; the check against the code is stale', next: 'Verify against the code again' }
+          : { text: 'Built and checked against the code', next: null };
+      return { text: 'Built, not checked against the code', next: 'Verify against the code' };
+    }
+    if (h === 'waiting') {
+      const q = openQuestions(p)[0];
+      return q
+        ? { text: `Waiting on your answer to ${q.id}`, next: `Answer ${q.id}` }
+        : { text: 'Waiting on your decision', next: 'Decide the priority' };
+    }
+    if (h === 'now') {
+      const running = queue.find((o) => o.column === 'inProgress' || o.column === 'review');
+      const waiting = queue.find((o) => o.column === 'queue' || o.column === 'batch');
+      const next = running ? `Running now: ${running.id}` : waiting ? `Next: ${waiting.id}` : null;
+      if (p.maturity === 'partial')
+        return { text: `Being built: ${p.finished ?? 0} of ${p.total ?? 0} tasks done`, next };
+      if (p.maturity === 'in-queue') {
+        const n = p.total ?? queue.length;
+        return { text: `In the queue: ${n} ${n === 1 ? 'task' : 'tasks'}, none done yet`, next };
+      }
+      return { text: 'Being worked on in Claude Code now', next };
+    }
+    const text = SHAPE[p.maturity] ?? MATURITY[p.maturity] ?? 'Not shaped yet';
+    // Later is a choice to wait, so it gets no nudge; Next says what moves it forward.
+    if (h === 'later') return { text, next: null };
+    return { text, next: p.maturity === 'ready' ? 'Turn into queue tasks' : 'Shape it with Claude' };
+  }
+
+  /** Warnings as words for the muted line (never only an icon): the deadline, a stale check, open legal points. */
+  function planNotes(p, now = new Date()) {
+    const out = [];
+    if (typeof p?.deadline === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.deadline)) {
+      const d = days(osloDate(now), p.deadline);
+      out.push(
+        d > 1
+          ? `deadline in ${d} days`
+          : d === 1
+            ? 'deadline tomorrow'
+            : d === 0
+              ? 'deadline today'
+              : `deadline passed ${-d} ${d === -1 ? 'day' : 'days'} ago`,
+      );
+    }
+    if (p?.stale && p.maturity !== 'verified') out.push('the check is stale');
+    const legal = p?.legal_open ?? 0;
+    if (legal) out.push(`${legal} open legal ${legal === 1 ? 'point' : 'points'}`);
+    return out;
+  }
+
+  /** Clips at a word boundary near `max` characters and ends with "…" (the task panel's clipSummary). */
+  function clipWords(text, max) {
+    let s = String(text ?? '').trim();
+    if (s.length <= max) return s;
+    s = s.slice(0, max);
+    const space = s.lastIndexOf(' ');
+    if (space > max / 2) s = s.slice(0, space);
+    return `${s.replace(/[\s,;:.]+$/, '')}…`;
+  }
+
+  /**
+   * The one plain sentence under the title: the person's summary, else the lead from the plan document (`from:
+   * 'document'`, so the view can say where it came from), else nothing ("No summary yet" is the view's text).
+   * @returns {{ text: string|null, from: 'summary'|'document'|null }}
+   */
+  function planSentence(p) {
+    if (p?.summary) return { text: clipWords(p.summary, SENTENCE_MAX), from: 'summary' };
+    if (p?.lead?.text) return { text: clipWords(p.lead.text, SENTENCE_MAX), from: 'document' };
+    return { text: null, from: null };
+  }
+
+  const PURPOSE_NAME =
+    /^(what\b.*\bwhy|why\b|goal|purpose|background|summary|about\b|hva og hvorfor|hvorfor|mål\b|formål|bakgrunn)/i;
+  /** KEY: value metadata and the =====ID===== marker are not prose. */
+  const META_LINE = /^(?:[A-ZÆØÅ][A-ZÆØÅ0-9 _-]{1,30}:\s|=+[^=\s]*=+$)/;
+
+  /**
+   * The lead of a plan document: the rule the task panel uses for a mission (board/panel.js missionSummary), on the
+   * read view's own blocks (markdownBlocks), starting at the source's anchor when it finds one. In order: the block
+   * right after a heading that names the purpose (What and why, Goal, Purpose, Background, Summary, ...), the text of a
+   * bold label with such a name, the first prose paragraph, the first list point. Code, tables, quotes and KEY: value
+   * lines are skipped, the inline markup becomes plain text, and the result is clipped near 320 characters.
+   * @param {string} text the markdown
+   * @param {string|null} [anchor] the source's anchor ("§ 1", a heading's words or a #slug)
+   * @returns {string|null}
+   */
+  function documentLead(text, anchor = null) {
+    let blocks = markdownBlocks(text);
+    const at = anchor ? anchorIndex(blocks, anchor) : -1;
+    if (at >= 0) {
+      const level = blocks[at].level;
+      const end = blocks.findIndex((b, i) => i > at && b.type === 'heading' && b.level <= level);
+      blocks = blocks.slice(at, end < 0 ? blocks.length : end);
+    }
+    const prose = (b) => b.type === 'paragraph' && !META_LINE.test(b.text);
+    const words = (b) => (b.type === 'list' ? b.points[0]?.text : b.text) ?? '';
+    const named = (s) => PURPOSE_NAME.test(cleanText(s).replace(/^\d+(?:\.\d+)*[.)]?\s*/, '').trim());
+    const bold = (s) => {
+      const m = /^\*\*([^*]+?)\*\*:?\s*(.*)$/.exec(s);
+      return m ? { label: m[1].replace(/:$/, '').trim(), rest: m[2].trim() } : null;
+    };
+    const done = (s) => {
+      let plain = cleanText(s).replace(/\s+/g, ' ').trim();
+      // A last sentence that only leads into a list ("Every task follows these rules:") says nothing on its own.
+      const intro = /^(.*[.!?])\s+[^.!?]*:$/.exec(plain);
+      if (intro) plain = intro[1];
+      return plain ? clipWords(plain, LEAD_MAX) : null;
+    };
+    for (let i = 0; i < blocks.length; i++) {
+      if (blocks[i].type !== 'heading' || !named(blocks[i].text)) continue;
+      const next = blocks[i + 1];
+      if (next && (prose(next) || next.type === 'list')) return done(words(next));
+    }
+    for (const b of blocks) {
+      const bl = prose(b) ? bold(b.text) : null;
+      if (bl?.rest && named(bl.label)) return done(bl.rest);
+    }
+    const pick = blocks.find((b) => prose(b) && !bold(b.text)) ?? blocks.find((b) => b.type === 'list');
+    return pick ? done(words(pick)) : null;
+  }
+
+  /**
+   * The source the plan page reads first: the first readable one with role plan, else one without a role, else the
+   * first readable one; null when none can be read here (readPathError).
+   */
+  function planSource(p) {
+    const readable = (p?.sources ?? []).filter((k) => k?.path && !readPathError(k.path));
+    return (
+      readable.find((k) => k.role === 'plan') ?? readable.find((k) => !k.role) ?? readable[0] ?? null
+    );
+  }
+
+  /**
+   * The sections of the roadmap. group 'horizon': one per horizon in roadmap order (keepEmpty keeps Waiting on you, Now,
+   * Next, Later and Done for the columns). group 'area': one per area (the register's order, then "Without area"), the
+   * plans in roadmap order, with the built share in words as the note.
+   * @returns {{ id: string, title: string, entries: object[], count: number, note?: string }[]}
+   */
+  function roadmapSections(entries, { group = 'horizon', modules = [], keepEmpty = false } = {}) {
+    const list = entries ?? [];
+    if (group === 'area') {
+      const rank = (p) => HORIZON_IDS.indexOf(horizonFor(p));
+      const ids = [...modules.map((m) => m.oid), WITHOUT_MODULE];
+      return ids
+        .map((oid) => {
+          const own = list
+            .map((p, i) => ({ p, i }))
+            .filter(({ p }) => (p.module ?? WITHOUT_MODULE) === oid)
+            .sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i)
+            .map(({ p }) => p);
+          const built = own.filter((p) => horizonFor(p) === 'done').length;
+          return {
+            id: oid,
+            title: oid === WITHOUT_MODULE ? 'Without area' : (modules.find((m) => m.oid === oid)?.title ?? oid),
+            entries: own,
+            count: own.length,
+            note: `${built} of ${own.length} built`,
+          };
+        })
+        .filter((x) => x.count);
+    }
+    return HORIZONS.map((h) => {
+      const own = list.filter((p) => horizonFor(p) === h.id);
+      return { id: h.id, title: h.text, entries: own, count: own.length };
+    }).filter((x) => x.count || (keepEmpty && HORIZON_CORE.includes(x.id)));
+  }
+
+  /**
+   * How many rows a section shows (so 300+ plans stay readable): all while a search or filter is active; Inbox and
+   * Waiting on you always all; Done and Dropped none until opened; the rest at most foldAfter (0 = never fold) until opened.
+   */
+  function sectionShown(id, n, { foldAfter = ROADMAP_FOLD_AFTER, expanded = false, active = false } = {}) {
+    if (active || expanded || HORIZON_UNFOLDED.includes(id)) return n;
+    if (id === 'done' || id === 'dropped') return 0;
+    return foldAfter > 0 ? Math.min(n, foldAfter) : n;
+  }
+
+  /**
+   * The layout of the roadmap: always one list below ROADMAP_NARROW (a phone gets no sideways scroll); else the
+   * viewer's remembered choice, else plans.roadmapLayout, else auto (columns from ROADMAP_WIDE px).
+   * @returns {'columns'|'list'}
+   */
+  function roadmapLayout({ width = ROADMAP_WIDE, choice = null, setting = 'auto' } = {}) {
+    if (width < ROADMAP_NARROW) return 'list';
+    if (choice === 'columns' || choice === 'list') return choice;
+    if (setting === 'columns' || setting === 'list') return setting;
+    return width >= ROADMAP_WIDE ? 'columns' : 'list';
+  }
+
+  /** The area's name for a plan (the module title), or null. */
+  function areaTitle(p, modules = []) {
+    if (!p?.module) return null;
+    return modules.find((m) => m.oid === p.module)?.title ?? p.module;
+  }
+
+  /** The Details row on the plan page: "Now · Ready · M · PL-AUTH". */
+  function detailsLine(p) {
+    return [PRIORITY[p?.priority]?.text, MATURITY[p?.maturity] ?? p?.maturity, p?.size, p?.id]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
+  /** The tasks of a plan in one sentence: "7 tasks: 3 done, 1 running, 3 waiting." (cancelled ones not counted). */
+  function tasksSentence(p) {
+    const q = (p?.queue ?? []).filter((o) => o.status !== 'cancelled');
+    if (!q.length) return 'No tasks yet.';
+    const done = q.filter((o) => o.column === 'built').length;
+    const running = q.filter((o) => o.column === 'inProgress' || o.column === 'review').length;
+    const waiting = q.length - done - running;
+    const parts = [
+      done ? `${done} done` : null,
+      running ? `${running} running` : null,
+      waiting ? `${waiting} waiting` : null,
+    ].filter(Boolean);
+    return `${q.length} ${q.length === 1 ? 'task' : 'tasks'}: ${parts.join(', ')}.`;
+  }
+
+  /** The search part Plans opens on for plans.startView (an unknown value opens the roadmap). */
+  function startSearch(view) {
+    if (view === 'overview') return '?room=plans&surface=overview';
+    if (view === 'list') return '?room=plans';
+    return '?room=plans&surface=roadmap';
+  }
+
+  /** The More views item the state shows (overview or a map), or null. */
+  function moreViewNow(state) {
+    if (state?.surface === 'overview') return 'overview';
+    if (state?.surface === 'entries' && ['map', 'treeMap', 'dep'].includes(state.show)) return state.show;
+    return null;
+  }
+
   // In Node (the server and the tests): the document folders from queue.config.json. In the browser there is no require, and
   // plans.js sets the folders from /api/plans.
   if (typeof module === 'object' && module.exports && typeof require === 'function') {
@@ -3727,5 +4068,29 @@
     criticalPathText,
     // PLAN-3a-QA1
     roomChildren,
+    // The Roadmap (P1 to P3)
+    HORIZONS,
+    HORIZON_CORE,
+    ROADMAP_FOLD_AFTER,
+    ROADMAP_WIDE,
+    ROADMAP_NARROW,
+    ROADMAP_LAYOUTS,
+    START_VIEWS,
+    MORE_VIEWS,
+    horizonFor,
+    planStatus,
+    planNotes,
+    clipWords,
+    planSentence,
+    documentLead,
+    planSource,
+    roadmapSections,
+    sectionShown,
+    roadmapLayout,
+    areaTitle,
+    detailsLine,
+    tasksSentence,
+    startSearch,
+    moreViewNow,
   };
 });

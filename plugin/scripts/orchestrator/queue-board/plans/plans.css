@@ -3124,3 +3124,450 @@ ol.overview-list > .overview-row.overview-question > * {
   stroke: var(--color-primary);
   stroke-width: 4;
 }
+
+/* ---- The Roadmap and the plan page (plans/roadmap.js) ----
+   Concept B of plans/plans-tab-ux-review-2026-11-19.md: the plans read top to bottom, one section per horizon. On a
+   wide screen the horizons sit side by side as columns (the Queue's .col-header and .counter), on a narrow one they
+   are one list with a readable measure. Same tokens as the rest of the room, so light and dark mode follow the theme;
+   status is always words, the color is only a bonus. Below 700 px the layout toggle goes (always a list) and nothing
+   is wider than the screen. */
+
+.plans-roadmap-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--distance-md) var(--distance-lg) var(--distance-lg);
+}
+
+.roadmap-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm) var(--distance-md);
+  margin-bottom: var(--distance-sm);
+}
+
+.roadmap-search {
+  flex: 1 1 220px;
+  max-width: 360px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 var(--distance-sm);
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.roadmap-toolbar .toggles-button {
+  min-height: 32px;
+  font-size: var(--text-sm);
+}
+
+.roadmap-count {
+  margin-left: auto;
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.roadmap-body {
+  margin-top: var(--distance-sm);
+}
+
+/* The list: one section under the other, at a readable width. */
+.roadmap-list {
+  max-width: 80ch;
+}
+
+.roadmap-list .roadmap-section + .roadmap-section {
+  margin-top: var(--distance-lg);
+}
+
+/* The columns: side by side, at least 220 px each; when they do not fit, the row scrolls inside itself, never the page. */
+.roadmap-columns {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 1fr);
+  gap: var(--distance-md);
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: var(--distance-xs);
+}
+
+.roadmap-columns .roadmap-section {
+  min-width: 0;
+  padding: var(--distance-sm);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container-low);
+}
+
+.roadmap-section .col-header {
+  padding: 0 0 var(--distance-xs);
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.roadmap-section-note {
+  margin-left: auto;
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-xs);
+}
+
+.roadmap-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.roadmap-card {
+  padding: var(--distance-sm) 0;
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.roadmap-columns .roadmap-card {
+  margin-top: var(--distance-sm);
+  padding: var(--distance-sm);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-container-lowest);
+}
+
+/* The title is the button: plain text in the reading color, underlined on hover, the whole width a target. */
+.roadmap-card-link {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-on-surface);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.roadmap-card-link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.roadmap-card-sentence {
+  margin: var(--distance-xs) 0 0;
+  color: var(--color-on-surface);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.roadmap-card-sentence.from-document {
+  font-style: italic;
+}
+
+.roadmap-card-sentence.none {
+  color: var(--color-on-surface-variant);
+}
+
+.roadmap-card-line {
+  margin: var(--distance-xs) 0 0;
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+/* Compact: one line per plan (the title, then the status line beside it when there is room). */
+.roadmap-body.compact .roadmap-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--distance-sm);
+  padding-top: var(--distance-xs);
+  padding-bottom: var(--distance-xs);
+}
+
+.roadmap-body.compact .roadmap-card-link {
+  width: auto;
+  min-height: 28px;
+  font-size: var(--text-sm);
+}
+
+.roadmap-body.compact .roadmap-card-line {
+  margin: 0;
+}
+
+.roadmap-section-empty {
+  margin: var(--distance-sm) 0 0;
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+}
+
+.roadmap-more {
+  margin-top: var(--distance-sm);
+  min-height: 32px;
+  padding: 0 var(--distance-sm);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.roadmap-more:hover,
+.roadmap-card-link:active {
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+/* More views: a disclosure at the end of the tab row, the list drops down over the content. */
+.plans-more-views {
+  position: relative;
+  flex: none;
+}
+
+/* list-item keeps the disclosure triangle, so it reads as something that opens. */
+.plans-more-views > summary {
+  display: list-item;
+  min-height: 36px;
+  line-height: 36px;
+  padding: 0 var(--distance-sm);
+  border-radius: var(--radius-md);
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.plans-more-views > summary:hover {
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.plans-more-views-list {
+  position: absolute;
+  z-index: 12;
+  right: 0;
+  min-width: 200px;
+  margin: var(--distance-xs) 0 0;
+  padding: var(--distance-xs);
+  list-style: none;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-container-lowest);
+}
+
+.plans-more-views-list .link-button {
+  width: 100%;
+  margin: 0;
+  text-align: left;
+}
+
+.plans-more-views-list .link-button[aria-current='true'] {
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+/* The plan page: one column at a readable measure; the document may be wider than the prose. */
+.plans-page {
+  max-width: 90ch;
+}
+
+.plans-page-head h2 {
+  margin: var(--distance-xs) 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.plans-page-head h2:focus {
+  outline: none;
+}
+
+.plans-page-head h2:focus-visible {
+  outline: var(--focus);
+}
+
+.plans-page-back {
+  margin: 0;
+  padding-left: 0;
+}
+
+.plans-page-status {
+  margin: 0;
+  color: var(--color-on-surface);
+  font-size: var(--text-md);
+}
+
+.plans-page-notes,
+.plans-page-from,
+.plans-page-hint {
+  margin: var(--distance-xs) 0 0;
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+}
+
+.plans-page-summary {
+  max-width: 70ch;
+  margin: var(--distance-md) 0 0;
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.plans-page-summary.from-document {
+  font-style: italic;
+}
+
+.plans-page-summary.none {
+  color: var(--color-on-surface-variant);
+}
+
+.plans-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--distance-sm);
+  margin-top: var(--distance-md);
+}
+
+.plans-page-actions > .toggles-button {
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-md);
+}
+
+.plans-page-more {
+  min-width: 0;
+}
+
+/* open, More takes its own line so the chips get the width */
+.plans-page-more[open] {
+  flex-basis: 100%;
+}
+
+.plans-page-more > summary {
+  display: list-item;
+  min-height: 36px;
+  line-height: 36px;
+  padding: 0 var(--distance-sm);
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.plans-page-more .cli-chip {
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.plans-page-more code {
+  overflow-wrap: anywhere;
+}
+
+.plans-page-warnings {
+  margin: var(--distance-xs) 0 0;
+  padding-left: var(--distance-lg);
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+}
+
+.plans-page-questions,
+.plans-page-doc,
+.plans-page-tasks {
+  margin-top: var(--distance-lg);
+}
+
+.plans-page h3 {
+  margin: 0 0 var(--distance-sm);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.plans-page-doc .read-doc {
+  max-height: 75vh;
+}
+
+.plans-page-also {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs);
+  margin: 0 0 var(--distance-sm);
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+}
+
+.plans-page-task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.plans-page-task-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--distance-sm);
+}
+
+.plans-page-task-status {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 699px) {
+  .plans-roadmap-scroll {
+    padding: var(--distance-sm) var(--distance-md) var(--distance-lg);
+  }
+
+  /* a phone always gets the list, so the choice is not offered */
+  .roadmap-layout {
+    display: none;
+  }
+
+  .roadmap-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .roadmap-count {
+    margin-left: 0;
+  }
+
+  .plans-surfaces {
+    flex-wrap: wrap;
+    padding: 0 var(--distance-sm);
+  }
+
+  /* the menu opens from the right edge, where the summary sits, and never wider than the screen */
+  .plans-more-views-list {
+    max-width: calc(100vw - 2 * var(--distance-md));
+  }
+
+  .plans-page-head h2 {
+    font-size: var(--text-lg);
+  }
+}
+
+@media (forced-colors: active) {
+  .roadmap-columns .roadmap-section,
+  .roadmap-columns .roadmap-card {
+    border: 1px solid CanvasText;
+  }
+
+  .plans-more-views-list .link-button[aria-current='true'] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}
+
+@media (pointer: coarse) {
+  .roadmap-card-link,
+  .roadmap-more,
+  .roadmap-search,
+  .roadmap-toolbar .toggles-button,
+  .plans-more-views > summary,
+  .plans-page-more > summary {
+    min-height: 44px;
+  }
+}

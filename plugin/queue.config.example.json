@@ -132,6 +132,8 @@
   "triage": { "minAgeDays": 3, "agentAdded": true, "maxPerFill": 3, "askAgainMin": 60 },
   "_focus": "When a focus has ended (every stage done, or its period is over): continueWhenEmpty false (default) pauses the queue (fill starts nothing) and asks the owner one question in Waiting on you: set a new focus or continue the regular queue. true = the queue continues by itself, with one line saying so. Per focus: ravenseat focus set ... --continue-when-empty on|off. A project that never set a focus is not affected. restDefault: what a new focus does with the tasks outside its steps when focus set has no --rest (fill, the default: they start when the focus leaves a slot free; wait: they do not start until the focus changes). An existing focus keeps its own value.",
   "focus": { "continueWhenEmpty": false, "restDefault": "fill" },
+  "_plans": "The Roadmap in the Plans room. startView: where Plans opens, roadmap (default), overview or list. roadmapLayout: auto (default: columns from 1200 px, one list below), columns or list; a viewer's own choice on the board wins, and below 700 px it is always one list. roadmapFoldAfter: rows a long section shows before Show n more (default 8, 0 = never fold). leadFromDocument: a plan without a summary shows the lead of its plan document (default true; false reads no document for the roadmap). None of them can stop work.",
+  "plans": { "startView": "roadmap", "roadmapLayout": "auto", "roadmapFoldAfter": 8, "leadFromDocument": true },
   "planBackup": null,
   "documentFolders": ["docs"],
   "indexFile": "docs/INDEX.md",

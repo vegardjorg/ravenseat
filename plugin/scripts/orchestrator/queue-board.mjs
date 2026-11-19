@@ -1119,6 +1119,10 @@ function statistics() {
 // ---- The plan register: read only, rebuilt when plans.json or queue.json changes (or every minute,
 // so "stale" and "Working now" expire on their own). Writing to the register never goes via the board in this track.
 let planCache = null;
+// The lead of a plan without a summary, read from its plan document (P3 of plans/plans-tab-ux-review-2026-11-19.md;
+// queueBoard.planLeadReader: the /api/doc guard, cached per file by time and size). One reader for the process, so the
+// cache lives as long as the board.
+const planLead = T.planLeadReader(SOURCE_ROOT, { fs, path });
 function plans() {
   const mt = (f) => {
     try {
@@ -1127,7 +1131,10 @@ function plans() {
       return 0;
     }
   };
-  const key = `${mt(PLAN_FILE)}|${mt(FILE)}|${archiveMtime()}|${Math.floor(Date.now() / 60_000)}`;
+  // The Roadmap settings (plans.* in queue.config.json) are read fresh and are part of the key, so a change in the gear
+  // reaches the open board on its next poll without a restart.
+  const view = KK.plansView(KK.config({ fresh: true }));
+  const key = `${mt(PLAN_FILE)}|${mt(FILE)}|${archiveMtime()}|${Math.floor(Date.now() / 60_000)}|${JSON.stringify(view)}`;
   if (planCache?.key === key) return planCache;
   const reg = fs.existsSync(PLAN_FILE)
     ? P.normalize(JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8')))
@@ -1155,8 +1162,16 @@ function plans() {
   const donePerWeek =
     S.doneInWindow(queue, S.daysBackward(now.getTime(), window)).length / (window / 7);
   const data = {
-    ...PRIVACY.plansData(reg, queue, { now, queueInfo, queuePlan: P, donePerWeek }),
+    ...PRIVACY.plansData(reg, queue, {
+      now,
+      queueInfo,
+      queuePlan: P,
+      donePerWeek,
+      // No document is read while the Plans room is off or plans.leadFromDocument is false.
+      leadFor: FEATURES.plans && view.leadFromDocument ? planLead : null,
+    }),
     exists: fs.existsSync(PLAN_FILE),
+    view,
   };
   const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
   planCache = { key, version, data };
@@ -2885,6 +2900,8 @@ const STATIC = {
   // Overview, and the keyboard, Ctrl+K, multi select and change in the row.
   '/plans/overview.js': [path.join('plans', 'overview.js'), 'text/javascript; charset=utf-8'],
   '/plans/work.js': [path.join('plans', 'work.js'), 'text/javascript; charset=utf-8'],
+  // The Roadmap (the start page) and the plan page.
+  '/plans/roadmap.js': [path.join('plans', 'roadmap.js'), 'text/javascript; charset=utf-8'],
   '/queuePlanView.js': [path.join('..', 'lib', 'queuePlanView.js'), 'text/javascript; charset=utf-8'],
 };
 

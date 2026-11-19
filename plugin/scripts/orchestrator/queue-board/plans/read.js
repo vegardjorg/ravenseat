@@ -266,7 +266,7 @@
   }
 
   /** The document itself: the top with path, time and buttons, then the text in a cell that scrolls on its own. */
-  function viewEl(h, context) {
+  function viewEl(h, context, { close = true } = {}) {
     const v = s.show[context];
     if (!v?.path) return null;
     const ctx = { context, path: v.path };
@@ -307,16 +307,19 @@
           h.draw();
         },
       }),
-      h.el('button', {
-        type: 'button',
-        class: 'button-small button-outline',
-        text: 'Close',
-        'aria-label': `Close the reader for ${v.path}`,
-        onclick: () => {
-          delete s.show[context];
-          h.draw();
-        },
-      }),
+      // the plan page has no Close: the document is what the page is about.
+      close
+        ? h.el('button', {
+            type: 'button',
+            class: 'button-small button-outline',
+            text: 'Close',
+            'aria-label': `Close the reader for ${v.path}`,
+            onclick: () => {
+              delete s.show[context];
+              h.draw();
+            },
+          })
+        : null,
     );
     let content;
     if (!d || d.status === 'loading')
@@ -396,6 +399,52 @@
         'The entry has no sources.',
       ),
       viewEl(h, context),
+    );
+  }
+
+  /**
+   * The plan document on the plan page (P2): the reader opens on the plan's own source (V.planSource: role plan first)
+   * at its anchor, with no click. The other sources are one line of buttons under "Also:", so a design or an
+   * investigation is a click away without a list in front of the plan.
+   */
+  function planDocument(h, p) {
+    const context = `page:${p.id}`;
+    const first = V.planSource(p);
+    if (!first)
+      return h.el('p', {
+        class: 'empty',
+        text: (p.sources ?? []).length
+          ? 'The plan points to documents the board cannot show here (outside the document folders).'
+          : 'The plan has no document yet.',
+      });
+    if (!s.show[context]) {
+      s.show[context] = { path: first.path, anchor: first.anchor ?? null, back: [] };
+      if (first.anchor && !s.doc.has(first.path)) s.scroll = { context, anchor: first.anchor };
+    }
+    const selected = s.show[context];
+    const others = (p.sources ?? []).filter((k) => k?.path && !V.readPathError(k.path));
+    return h.el(
+      'div',
+      { class: 'plans-page-reader' },
+      others.length > 1
+        ? h.el(
+            'p',
+            { class: 'plans-page-also' },
+            'Also: ',
+            ...others.map((k) => {
+              const isSel = selected?.path === k.path && (selected.anchor ?? null) === (k.anchor ?? null);
+              return h.el('button', {
+                type: 'button',
+                class: 'button-small button-outline',
+                text: `${k.path}${k.anchor ? ` ${k.anchor}` : ''}`,
+                'aria-pressed': isSel ? 'true' : 'false',
+                'aria-label': `Read ${k.path}${k.anchor ? ` at ${k.anchor}` : ''}`,
+                onclick: () => openOnes(h, context, k.path, k.anchor, { back: false }),
+              });
+            }),
+          )
+        : null,
+      viewEl(h, context, { close: false }),
     );
   }
 
@@ -774,5 +823,5 @@
     );
   }
 
-  window.QueuePlanRead = { sourceTab, unregisteredBox };
+  window.QueuePlanRead = { sourceTab, unregisteredBox, planDocument };
 })();

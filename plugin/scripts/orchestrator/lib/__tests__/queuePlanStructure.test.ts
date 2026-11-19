@@ -379,8 +379,12 @@ describe('the wiring in the board', () => {
   });
 
   it('plans.js picks the view and gives the zoom via the filter', () => {
-    expect(plans).toContain("['treeMap', 'Tree map']");
-    expect(plans).toContain("['dep', 'Dependencies']");
+    // The tree map and the dependencies are under More views (V.MORE_VIEWS) since the Roadmap became the start page.
+    expect(plans).toContain('V.MORE_VIEWS');
+    expect(V.MORE_VIEWS.filter((v: { id: string }) => ['treeMap', 'dep'].includes(v.id))).toEqual([
+      { id: 'treeMap', text: 'Tree map', state: { surface: 'entries', show: 'treeMap' } },
+      { id: 'dep', text: 'Dependencies', state: { surface: 'entries', show: 'dep' } },
+    ]);
     expect(plans).toMatch(/zoom: \(part\) => newFilter\(/);
   });
 });

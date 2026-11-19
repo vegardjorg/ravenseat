@@ -356,14 +356,31 @@ optional `context` (`ravenseat question <id> --context "…"`, why it is asked) 
 "Orchestrator listening" while `ravenseat wait` runs in the orchestrator session (its heartbeat is under 90 s old), so an
 answer starts the next round at once; otherwise "Answers are picked up the next time the orchestrator runs".
 
-The **Plans** workspace is the plan register. **Overview** has one card per area, what is being worked on now and
-what waits on you. An area card shows its entry count, a priority bar and a maturity bar, how much is built and the
+The **Plans** workspace is the plan register. It opens on the **Roadmap** (`plans.startView`), which reads top to
+bottom: one section per horizon, **Inbox** (findings a track reported that nobody has sorted), **Waiting on you**,
+**Now** (in the queue, partly built or worked on), **Next**, **Later** and **Done**, each with its count. A plan is its
+title, one plain sentence (the summary, or when there is none the lead of its plan document, in italics with "From the
+plan document" as the tooltip) and a muted line with the status in words, the area and the next step ("Being built: 3
+of 7 tasks done · Account · Running now: AUTH-3"). On a wide screen (from 1200 px) the horizons sit side by side as
+columns; below that they are one list, and below 700 px always a list. **Columns** and **List** override the width
+for you, **Area** groups by area instead of horizon, and **Compact** gives one line per plan; the board remembers these
+choices in your browser. A long section shows 8 plans and then **Show n more** (`plans.roadmapFoldAfter`), Done is
+folded until you open it, and a search shows every match. `/` goes to the search and `j`/`k` move between the plans.
+
+A click on a title opens the **plan page**: the title, the status with the next step, the summary, **Open in Plan
+entries** and **More** (the start line and the `/add-to-queue` line as CLI chips), the plan document itself (its plan
+source at its anchor, other sources under "Also"), the tasks, and last **Details** with the priority, maturity, size,
+id and history (closed by default, remembered). Escape or **Back to the roadmap** returns to the same card.
+
+**More views**, at the end of the tab row, holds the **Overview** and the maps. **Overview** has one card per area,
+what is being worked on now and what waits on you. An area card shows its entry count, a priority bar and a maturity bar, how much is built and the
 warning counts that are over 0. Each bar segment carries a symbol and its count (the word is in the tooltip), and one
 shared legend above the cards explains the symbols and colors: priority is primary for Now, the warn tone for Owner
 and neutral for Later (never red, which means an error), the same colors as in the list, the tree map and the
 dependencies of Plan entries. **Details** under each card lists every group with its word
-and count; a click on the card opens Plan entries filtered on the area. **Plan entries** shows the entries as a list, a priority map, a tree map or dependencies, with
-filters and the details of the selected entry. **Documents and agreements**, **Legal**, **Decisions** and **Launch**
+and count; a click on the card opens Plan entries filtered on the area. **Plan entries** shows the entries as a list (the Priority map, Tree map and Dependencies
+are under More views), with filters and the details of the selected entry, and **Open the plan page** for the reading
+view of the same entry. **Documents and agreements**, **Legal**, **Decisions** and **Launch**
 show the documents, the legal points, the owner decisions and what stands between the plan and launch.
 
 The gear holds the settings and the help. A second click on the gear while Settings is open closes the panel, as

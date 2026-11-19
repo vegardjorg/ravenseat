@@ -225,6 +225,11 @@ const REQUIRES = Object.freeze({
   'features.plans.legal': ['features.plans'],
   'features.plans.launch': ['features.plans'],
   'features.plans.documents': ['features.plans'],
+  // The Roadmap rows: without the Plans room there is no roadmap, and queue-board.mjs plans() reads no plan document.
+  'plans.startView': ['features.plans'],
+  'plans.roadmapLayout': ['features.plans'],
+  'plans.roadmapFoldAfter': ['features.plans'],
+  'plans.leadFromDocument': ['features.plans'],
   // lib/loadSlots.js: adaptive off keeps every slot open, so the scaling numbers are not read.
   'loadGuard.minSlots': ['loadGuard.adaptive'],
   'loadGuard.allSlotsFreeMemoryPct': ['loadGuard.adaptive'],
@@ -1181,6 +1186,36 @@ const SETTINGS = Object.freeze([
   row('features.plans.documents', 'plans', 'onoff', 'Documents surface',
     'The Documents and agreements surface in Plans, with the documents the plan register tracks. Off by default; it ' +
     'shows only while features.plans is on.', { fullWhy: WHY_PLANS }),
+  // The Roadmap (plans/plans-tab-ux-review-2026-11-19.md P1 to P3, owner decision 2026-11-19: concept B "as
+  // recommended", with columns on a wide screen). None of the four can stop work or weaken a guard: they choose what the
+  // board shows first, so none has a weakening value.
+  // Friction: none for a reader; the roadmap removes the three or four clicks it took to see a plan's own words. The
+  // Overview and the maps are one click further (More views), which is the cost. Default roadmap, because the owner
+  // found the plans unreadable from the Overview; overview and list stay for those who want the old start.
+  row('plans.startView', 'plans', 'choice', 'Plans opens on',
+    'Where Plans opens: roadmap (default: the plans in horizons, in plain words), overview (the area cards) or list ' +
+    '(Plan entries). The other pages stay one click away under More views.',
+    { ...BASIC, choices: ['roadmap', 'overview', 'list'] }),
+  // Friction: none; a viewer switches the layout on the board with one click and the board remembers it per browser,
+  // so this row is only the project's starting point. Default auto, because five columns do not fit below about 1200 px
+  // and a phone must never scroll sideways; on a wide screen columns show the most plans per screen.
+  row('plans.roadmapLayout', 'plans', 'choice', 'Roadmap layout',
+    'auto (default): the horizons side by side as columns from 1200 px, one list below. columns or list: always that. ' +
+    'A viewer\'s own choice on the board wins, and below 700 px it is always one list.',
+    { choices: ['auto', 'columns', 'list'] }),
+  // Friction: one click ("Show n more") to see the rest of a long section. Default 8, so a register of 300+ plans still
+  // fits each section on one screen; Inbox and Waiting on you never fold (they need the owner), Done is folded until
+  // opened, and nothing folds while a search or filter is active. 0 never folds.
+  row('plans.roadmapFoldAfter', 'plans', 'integer', 'Rows before a section folds',
+    'How many plans a long roadmap section shows before "Show n more" (default 8; 0 = never fold). Inbox and ' +
+    'Waiting on you always show every plan, Done is folded until opened, and a search shows every match.'),
+  // Friction: none; it only adds text. The server reads each plan document once per change (cached by time and size,
+  // through the /api/doc guard, at most 512 KB), so the cost is a stat per plan per minute. On by default because two
+  // thirds of real plans have no summary and would show "No summary yet". Off for a project whose documents are huge
+  // or slow to read.
+  row('plans.leadFromDocument', 'plans', 'onoff', 'Lead from the plan document',
+    'A plan without a summary shows the first lines of its plan document on the roadmap, marked "From the plan ' +
+    'document". Off: no document is read for the roadmap; the reader still opens them.'),
   row('focus.continueWhenEmpty', 'plans', 'onoff', 'Continue when the focus ends',
     'Off: the queue pauses and asks you when a focus has ended. On: it continues with the regular queue.',
     { fullWhy: 'lite has no focus steps to end' }),

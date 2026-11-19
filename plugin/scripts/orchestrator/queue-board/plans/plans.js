@@ -51,6 +51,9 @@
   const FACET_STORAGE = 'queue-board-plans-facets';
   const VIEW_STORAGE = 'queue-board-plans-views';
   const CLOSED_STORAGE = 'queue-board-plans-doc-closed'; // the document groups you have closed
+  // The Roadmap's choices per viewer (layout, group, compact, Details open on the plan page). Only a convenience: with
+  // storage blocked the defaults apply (plans.roadmapLayout and the width).
+  const ROADMAP_STORAGE = 'queue-board-plans-roadmap';
 
   const s = {
     data: null,
@@ -67,6 +70,11 @@
     drawer: false, // narrow screen: the filters are open as a drawer
     saves: false, // the "Save view" form is open
     closed: new Set(readList(CLOSED_STORAGE)), // closed document groups (open by default)
+    roadmap: readObject(ROADMAP_STORAGE), // the viewer's Roadmap choices
+    roadmapOpen: new Set(), // the Roadmap sections opened past the fold (this visit only)
+    moreViews: false, // the More views disclosure is open
+    roadmapTop: 0, // where the Roadmap was scrolled, so Back from a plan page lands in the same place
+    startPending: false, // Plans was opened before the register came; plans.startView is applied when it does
   };
 
   // ---- Helpers ----
@@ -92,6 +100,14 @@
       return Array.isArray(x) ? x : standard;
     } catch {
       return standard;
+    }
+  }
+  function readObject(key) {
+    try {
+      const x = JSON.parse(localStorage.getItem(key) ?? 'null');
+      return x && typeof x === 'object' && !Array.isArray(x) ? x : {};
+    } catch {
+      return {};
     }
   }
   function save(key, val) {
@@ -160,7 +176,7 @@
    * New state: the url is updated (push = a new step in the history; otherwise the step is replaced, e.g. while you
    * type in the search), the room is shown and Plans is drawn. The Queue room has no search part, so its address is as before.
    */
-  function useState(fresh, { push = true, scroll = false } = {}) {
+  function useState(fresh, { push = true, scroll = false, focus = null } = {}) {
     if (isPlans() && fresh.room !== 'plans') s.lastPlans = s.state;
     s.state = fresh;
     const url = location.pathname + (fresh.room === 'plans' ? V.writeUrl(fresh) : '');
@@ -169,7 +185,9 @@
       else history.replaceState(null, '', url);
     }
     showRoom();
-    if (isPlans()) draw({ scroll });
+    // `focus`: the data-focus of the element that gets focus after drawing (the plan page's title, or the card you
+    // came from when you go back to the Roadmap).
+    if (isPlans()) draw({ scroll, focus });
   }
 
   /** Filter change: the previous choice goes on the undo stack. */
@@ -211,8 +229,11 @@
   function selectRoom(r) {
     if (r === 'plans') {
       if (isPlans()) return;
-      // The overview is the start page in Plans.
-      useState(s.lastPlans ?? V.readUrl('?room=plans&surface=overview'));
+      // Plans opens where you were, else on plans.startView (the Roadmap by default; the overview and the list are the
+      // other choices). Before the register has come the setting is not known yet: the Roadmap is shown, and get()
+      // moves to the chosen start page when the answer comes (startPending).
+      if (!s.lastPlans && !s.data) s.startPending = true;
+      useState(s.lastPlans ?? V.readUrl(V.startSearch(s.data?.view?.startView)));
     } else if (isPlans()) useState({ ...s.state, room: 'queue' });
   }
   $('room-plans').addEventListener('click', () => selectRoom('plans'));
@@ -261,6 +282,16 @@
         // the document folders the reader allows come from the configuration on the server.
         if (Array.isArray(answer.data?.read_folders)) V.setReadFolders(answer.data.read_folders);
         s.version = answer.version;
+        // The first answer after Plans was opened from the top: the start page from plans.startView, as long as you
+        // are still on the Roadmap you got while waiting.
+        if (s.startPending) {
+          s.startPending = false;
+          const start = V.startSearch(answer.data?.view?.startView);
+          if (isPlans() && V.writeUrl(s.state) === V.writeUrl(V.readUrl(V.startSearch('roadmap'))) && start !== V.startSearch('roadmap')) {
+            s.state = V.readUrl(start);
+            history.replaceState(null, '', location.pathname + V.writeUrl(s.state));
+          }
+        }
         // while a chip is dragged or lifted in the priority map, the drawing waits until it is dropped.
         // the same while a row menu is open (it redraws when it closes).
         if (isPlans() && !window.QueuePlanMap?.busy() && !window.QueuePlanWork?.busy()) draw();
@@ -288,6 +319,8 @@
       e.dataset.scroll,
       e.scrollTop,
     ]);
+    // the Roadmap's scroll position survives a visit to a plan page (Back lands where you were).
+    for (const [n, top] of scrolling) if (n === 'roadmap') s.roadmapTop = top;
 
     room.replaceChildren();
     if (!s.data) {
@@ -312,6 +345,33 @@
         window.QueuePlanMap ? window.QueuePlanMap.deadlineBand(mapHelp, d, null) : null,
         window.QueuePlanOverview.side(workHelp, d),
       );
+      afterDrawing(focusKey, cursor, scrolling, false);
+      return;
+    }
+    // The Roadmap and the plan page are drawn by roadmap.js (P1 and P2 of the Plans rework). No filter pane and no
+    // detail panel: the page is one column that scrolls, and the plan page takes the whole width.
+    if (t.surface === 'roadmap' && window.QueuePlanRoadmap) {
+      room.classList.remove('has-selected', 'drawer-open');
+      const p = t.entry ? entryFor(t.entry) : null;
+      const body = p
+        ? window.QueuePlanRoadmap.page(roadmapHelp, d, p)
+        : window.QueuePlanRoadmap.cells(roadmapHelp, d, V.filter(d.entries, t.filter, t.search));
+      fillRoom(
+        pathEl(d, { drawer: false }),
+        surfaceOptionEl(d),
+        el(
+          'div',
+          { class: 'plans-roadmap-scroll', 'data-scroll': p ? 'page' : 'roadmap' },
+          t.entry && !p
+            ? el('p', {
+                class: 'empty',
+                text: `Did not find ${t.entry} in the register (merged or removed).`,
+              })
+            : null,
+          body,
+        ),
+      );
+      if (!p && !scrolling.some(([n]) => n === 'roadmap')) scrolling.push(['roadmap', s.roadmapTop]);
       afterDrawing(focusKey, cursor, scrolling, false);
       return;
     }
@@ -398,6 +458,14 @@
     const now = V.SURFACES.some((f) => f.id === s.state.surface) ? s.state.surface : 'entries';
     // Legal and Decisions show the open ones, Launch what remains.
     const count = V.surfaceCount(d);
+    // The overview is not a tab any more (it is under More views, with the maps); without roadmap.js loaded it stays.
+    const shown = V.SURFACES.filter(
+      (f) =>
+        surfaceOn(f.id) &&
+        (window.QueuePlanRoadmap ? !f.more : f.id !== 'roadmap'),
+    );
+    // On a More views page no tab is selected; the first tab then takes the Tab key, so the list stays reachable.
+    const reachable = shown.some((f) => f.id === now) ? now : shown[0]?.id;
     const tabs = el(
       'div',
       {
@@ -416,56 +484,79 @@
           buttons[j].focus();
         },
       },
-      ...V.SURFACES.filter((f) => surfaceOn(f.id)).map((f) =>
-        el(
-          'button',
-          {
-            type: 'button',
-            role: 'tab',
-            class: 'plans-surface',
-            'aria-selected': f.id === now ? 'true' : 'false',
-            tabindex: f.id === now ? '0' : '-1',
-            'data-focus': `surface:${f.id}`,
-            onclick: () => {
-              if (f.id !== now) useState({ ...s.state, surface: f.id });
+      ...shown.map((f) =>
+          el(
+            'button',
+            {
+              type: 'button',
+              role: 'tab',
+              class: 'plans-surface',
+              'aria-selected': f.id === now ? 'true' : 'false',
+              tabindex: f.id === reachable ? '0' : '-1',
+              'data-focus': `surface:${f.id}`,
+              onclick: () => {
+                // Plan entries while a map is shown: back to the list (the maps are under More views).
+                if (f.id === 'entries' && now === 'entries' && V.moreViewNow(s.state))
+                  useState({ ...s.state, show: 'list' });
+                else if (f.id !== now) useState({ ...s.state, surface: f.id, entry: null });
+              },
             },
-          },
-          f.text,
-          el('span', { class: 'plans-count', text: String(count[f.id]) }),
+            f.text,
+            count[f.id] != null ? el('span', { class: 'plans-count', text: String(count[f.id]) }) : null,
+          ),
         ),
-      ),
     );
-    if (now !== 'entries' || !window.QueuePlanMap) return tabs;
-    // the view of the plan entries, List or Priority map (show=map in the url).
-    const show = V.VIEWS.includes(s.state.show) ? s.state.show : 'list';
+    return el('div', { class: 'plans-surfaces-row' }, tabs, moreViewsEl());
+  }
+
+  /**
+   * More views: the overview and the maps (Priority map, Tree map, Dependencies), which are tools for working on the
+   * plans rather than for reading them. A disclosure with one button per view; the one shown is marked (aria-current).
+   */
+  function moreViewsEl() {
+    if (!window.QueuePlanRoadmap) return null;
+    const current = V.moreViewNow(s.state);
+    const views = V.MORE_VIEWS.filter((v) =>
+      v.id === 'overview'
+        ? !!window.QueuePlanOverview
+        : v.id === 'map'
+          ? !!window.QueuePlanMap
+          : !!window.QueuePlanStructure,
+    );
+    if (!views.length) return null;
+    const label = current ? `More views: ${views.find((v) => v.id === current)?.text ?? ''}` : 'More views';
+    // The open state survives a redraw from a live update (s.moreViews), and closes when a view is chosen.
     return el(
-      'div',
-      { class: 'plans-surfaces-row' },
-      tabs,
+      'details',
+      {
+        class: 'plans-more-views',
+        open: s.moreViews || null,
+        ontoggle: (e) => {
+          s.moreViews = e.currentTarget.open;
+        },
+      },
+      el('summary', { 'data-focus': 'more-views' }, label),
       el(
-        'div',
-        { class: 'toggles plans-show', role: 'group', 'aria-label': 'View' },
-        ...[
-          ['list', 'List'],
-          ['map', 'Priority map'],
-          // tree map and dependencies for the selection.
-          ...(window.QueuePlanStructure
-            ? [
-                ['treeMap', 'Tree map'],
-                ['dep', 'Dependencies'],
-              ]
-            : []),
-        ].map(([id, text]) =>
-          el('button', {
-            type: 'button',
-            class: 'toggles-button',
-            text,
-            'aria-pressed': show === id ? 'true' : 'false',
-            'data-focus': `show:${id}`,
-            onclick: () => {
-              if (show !== id) useState({ ...s.state, show: id });
-            },
-          }),
+        'ul',
+        { class: 'plans-more-views-list' },
+        views.map((v) =>
+          el(
+            'li',
+            null,
+            el('button', {
+              type: 'button',
+              class: 'link-button',
+              text: v.text,
+              'aria-current': v.id === current ? 'true' : null,
+              'data-focus': `more-view:${v.id}`,
+              onclick: () => {
+                s.moreViews = false;
+                // the selected plan entry stays selected between the list and the maps, as before.
+                const entry = s.state.surface === 'entries' ? s.state.entry : null;
+                useState({ ...s.state, ...v.state, entry }, { focus: 'more-views' });
+              },
+            }),
+          ),
         ),
       ),
     );
@@ -596,8 +687,72 @@
     selectRoom,
   };
 
+  /** Saves one of the viewer's Roadmap choices (layout, group, compact, details) and redraws. */
+  function setRoadmapPref(change, { redraw = true } = {}) {
+    s.roadmap = { ...s.roadmap, ...change };
+    save(ROADMAP_STORAGE, s.roadmap);
+    if (redraw) draw();
+  }
+
+  /**
+   * The helpers roadmap.js gets (the same building blocks as the other surfaces). `use` opens and closes the plan page
+   * with focus where a keyboard user expects it: on the page's title, and back on the plan's card.
+   */
+  const roadmapHelp = {
+    el,
+    copyButton,
+    cliChip,
+    date,
+    state: () => s.state,
+    use: (change) => {
+      const back = change.entry === null && s.state.entry ? `roadmap:${s.state.entry}` : null;
+      const opens = change.entry && change.surface !== 'entries' ? 'page-title' : null;
+      useState({ ...s.state, ...change }, { focus: back ?? opens, scroll: change.surface === 'entries' });
+    },
+    search: (value) => {
+      clearTimeout(searchTime);
+      const v = String(value).slice(0, 120);
+      searchTime = setTimeout(() => useState({ ...s.state, search: v.trim(), entry: null }, { push: false }), 200);
+    },
+    // the window's width, the same measure as the CSS media queries (the layout toggle hides below 700 px).
+    width: () => window.innerWidth,
+    prefs: () => ({
+      layout: ['columns', 'list'].includes(s.roadmap.layout) ? s.roadmap.layout : null,
+      group: s.roadmap.group === 'area' ? 'area' : 'horizon',
+      compact: s.roadmap.compact === true,
+    }),
+    setPref: (change) => setRoadmapPref(change),
+    isExpanded: (id) => s.roadmapOpen.has(id),
+    toggleExpanded: (id) => {
+      if (s.roadmapOpen.has(id)) s.roadmapOpen.delete(id);
+      else s.roadmapOpen.add(id);
+      draw({ focus: `roadmap-more:${id}` });
+    },
+    detailsOpen: () => s.roadmap.details === true,
+    // no redraw: the details element has already opened or closed itself.
+    setDetailsOpen: (open) => setRoadmapPref({ details: open === true }, { redraw: false }),
+    activeFilters: () => activeFiltersEl(s.data),
+    tabContent: (tab, p, d, opts) => tabContent(tab, p, d, opts),
+    planDocument: (p) =>
+      window.QueuePlanRead?.planDocument
+        ? window.QueuePlanRead.planDocument(readHelp, p)
+        : tabContent('doc', p, s.data),
+    showInQueue: (id) => showInQueue(id),
+  };
+
+  // The Roadmap's layout follows the width (columns from 1200 px, always a list below 700 px): redraw when the window
+  // crosses one of those widths, not on every pixel.
+  if (typeof window.matchMedia === 'function')
+    for (const w of [V.ROADMAP_NARROW, V.ROADMAP_WIDE]) {
+      const q = window.matchMedia(`(min-width: ${w}px)`);
+      const redraw = () => {
+        if (isPlans() && s.data && s.state.surface === 'roadmap' && !s.state.entry) draw();
+      };
+      if (typeof q.addEventListener === 'function') q.addEventListener('change', redraw);
+    }
+
   // ---- The breadcrumb ----
-  function pathEl(d) {
+  function pathEl(d, { drawer = true } = {}) {
     const part = V.breadcrumbs(s.state, d);
     return el(
       'nav',
@@ -618,9 +773,13 @@
                   text: l.text,
                   'data-focus': `path:${l.level}`,
                   // the parts on the document surface carry the state a click gives.
+                  // from a plan page back to the Roadmap, focus lands on the plan's card again.
                   onclick: () =>
                     l.state
-                      ? useState({ ...s.state, ...l.state })
+                      ? useState(
+                          { ...s.state, ...l.state },
+                          { focus: s.state.surface === 'roadmap' && s.state.entry ? `roadmap:${s.state.entry}` : null },
+                        )
                       : newFilter(l.filter, { entry: null, search: '' }),
                 }),
             l.copy
@@ -633,7 +792,10 @@
           );
         }),
       ),
-      el(
+      // the Roadmap has no filter pane (its search is in its own toolbar), so no Filters button.
+      !drawer
+        ? null
+        : el(
         'button',
         {
           type: 'button',
@@ -1275,6 +1437,16 @@
             'data-focus': 'prepare',
             onclick: () => copy(k.line),
           }),
+          // the reading view of the same plan (the Roadmap's plan page).
+          window.QueuePlanRoadmap
+            ? el('button', {
+                type: 'button',
+                class: 'button button-outline',
+                text: 'Open the plan page',
+                'data-focus': 'plan-page',
+                onclick: () => useState({ ...s.state, surface: 'roadmap', entry: p.id }, { focus: 'page-title' }),
+              })
+            : null,
         ),
         k.warnings.length
           ? el(
@@ -1321,7 +1493,8 @@
       : el('p', { class: 'empty', text: emptyText });
   }
 
-  function tabContent(tab, p, d) {
+  // withSummary false: the plan page shows the summary at the top already, so its Details leaves it out.
+  function tabContent(tab, p, d, { withSummary = true } = {}) {
     const over = [
       ...V.breadcrumbs({ entry: p.id, filter: V.emptyFilter() }, d)
         .slice(1, 3)
@@ -1333,7 +1506,7 @@
       return el(
         'div',
         {},
-        p.summary ? el('p', { class: 'plans-summary', text: p.summary }) : null,
+        withSummary && p.summary ? el('p', { class: 'plans-summary', text: p.summary }) : null,
         el(
           'dl',
           { class: 'plans-field' },
@@ -1550,6 +1723,11 @@
     /** Marker on a queue card: switch to Plans with the entry open (the filters reset, so the entry is always in the list). */
     openEntry(id) {
       if (!featureOn('plans')) return; // the Plans module is off (features.plans)
+      // The plan page on the Roadmap (the plan first, the facts under Details); without roadmap.js the entry list.
+      if (window.QueuePlanRoadmap) {
+        useState({ ...V.readUrl('?room=plans&surface=roadmap'), entry: id }, { focus: 'page-title' });
+        return;
+      }
       useState({ ...V.readUrl('?room=plans'), entry: id, tab: 'summary' }, { scroll: true });
       room.querySelector('.plans-entry.selected .plans-entry-button')?.focus();
     },

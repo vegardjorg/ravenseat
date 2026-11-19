@@ -383,6 +383,16 @@ const STANDARD = Object.freeze({
   // the default because wait can stop work without anything saying so, and anything that can stop work is off by
   // default; someone who wants a strict focus picks wait once. An existing focus keeps its stored rest.
   focus: { continueWhenEmpty: false, restDefault: 'fill' },
+  // The Plans room's Roadmap (plans/plans-tab-ux-review-2026-11-19.md P1 to P3, owner decision 2026-11-19: concept B
+  // "as recommended"). None of these can stop work; they only choose what the board shows first. Read fresh by the
+  // board (plansView below), so a change in the gear applies on the next poll.
+  //   startView         where "Plans" opens: roadmap (default), overview or list (Plan entries).
+  //   roadmapLayout     auto (default: columns from 1200 px, one list below), columns or list. A viewer's own choice
+  //                     on the board wins (remembered per browser); below 700 px it is always one list.
+  //   roadmapFoldAfter  rows a long section shows before "Show n more" (0 = never fold); Done is folded until opened.
+  //   leadFromDocument  a plan without a summary shows the lead of its plan document (the server reads it, cached per
+  //                     file). false reads no document for the roadmap; the reader still opens them.
+  plans: { startView: 'roadmap', roadmapLayout: 'auto', roadmapFoldAfter: 8, leadFromDocument: true },
   // Read guard (hook-read-guard.mjs): in addition to the built-in lists.
   readGuard: {
     agentTypes: [], // more agent types the guard applies to (track, track-d and the reviewers are already included)
@@ -909,6 +919,27 @@ function boardPanelMode(cfg = config()) {
   return PANEL_MODES.includes(v) ? v : STANDARD.board.panelMode;
 }
 
+/** The highest plans.roadmapFoldAfter (a larger number is taken as this; 0 already means never fold). */
+const ROADMAP_FOLD_MAX = 500;
+/**
+ * The Roadmap settings (plans.* in queue.config.json), each checked on its own: a value of the wrong kind falls back to
+ * its default, so a hand-edited file never breaks the board. The board gets this object with /api/plans.
+ * @param {object} [cfg] the configuration (default: config())
+ * @returns {{ startView: string, roadmapLayout: string, roadmapFoldAfter: number, leadFromDocument: boolean }}
+ */
+function plansView(cfg = config()) {
+  const own = isObject(cfg?.plans) ? cfg.plans : {};
+  const std = STANDARD.plans;
+  const fold = own.roadmapFoldAfter;
+  return {
+    startView: ['roadmap', 'overview', 'list'].includes(own.startView) ? own.startView : std.startView,
+    roadmapLayout: ['auto', 'columns', 'list'].includes(own.roadmapLayout) ? own.roadmapLayout : std.roadmapLayout,
+    roadmapFoldAfter:
+      Number.isInteger(fold) && fold >= 0 ? Math.min(fold, ROADMAP_FOLD_MAX) : std.roadmapFoldAfter,
+    leadFromDocument: typeof own.leadFromDocument === 'boolean' ? own.leadFromDocument : std.leadFromDocument,
+  };
+}
+
 /** Is the module on? An unknown name is off. */
 function featureOn(name, cfg) {
   return features(cfg)[name] === true;
@@ -942,4 +973,5 @@ module.exports = {
   boardSwitches,
   PANEL_MODES,
   boardPanelMode,
+  plansView,
 };

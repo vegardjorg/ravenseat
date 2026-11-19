@@ -268,8 +268,12 @@ Change the priority by dragging cards (or with the keyboard), or select several 
 
 <p align="center"><img src="../../assets/screenshots/light-07-plans-overview.jpg" alt="The plan register overview per area" width="800"></p>
 
-The **Plans** room is the plan register: one card per area with priority (now, owner, later) and maturity (from
-idea to built and verified), open questions, legal points and stale plans, plus what is being worked on right now.
+The **Plans** room is the plan register. It opens on the **Roadmap**: the plans in horizons (Waiting on you, Now,
+Next, Later, Done, and an Inbox for findings nobody has sorted), each with one plain sentence and its status and next
+step in words. A wide screen shows the horizons side by side as columns, a narrow one as a list. A click opens the
+plan page with the plan document first and the technical facts folded under Details. The **Overview** (one card per
+area with priority and maturity, open questions, legal points and stale plans, plus what is being worked on right
+now) and the maps below are under **More views**.
 
 <p align="center"><img src="../../assets/screenshots/light-09-priority-map.jpg" alt="The priority map: plan entries per area and priority column" width="800"></p>
 
