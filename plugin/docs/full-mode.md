@@ -115,7 +115,13 @@ A track cannot grade its own work:
 ## "My PC chokes on parallel builds"
 
 With many parallel tracks the machine, not the token quota, is often the limit: gates slow down and go red from
-memory and timeouts, and reruns eat the gain. So the **load guard** makes `ravenseat fill` open fewer slots than
+memory and timeouts, and reruns eat the gain. Measured in a larger private project with up to 14 tracks allowed at
+once (the configured cap, not a measured count): the median quick check took 110 s from 15 to 19 October 2026 and
+1,244 s from 25 to 30 October, and a database task's work went from 34 to 165 minutes. Free memory fell to 1.5 to
+2.7 % with five or six checks running at once, and the later work was also heavier, so load explains part of the gap,
+not all of it.
+
+So the **load guard** makes `ravenseat fill` open fewer slots than
 `maxConcurrent` while free memory is low (all slots from 40 % free, one at the hard limit of 10 %, linear in between;
 CPU optional) and says why: `LOAD: 2 of 5 slots: free memory 18 % (all slots from 40 %)`. Below the hard limit no new
 tracks start (exit 7). Settings: `loadGuard` in `queue.config.json`

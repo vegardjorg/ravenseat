@@ -10,7 +10,8 @@ controlled. Most gains below are before and
 after comparisons in that project; several changes went in on the same days, so the effect of each one alone is not
 known.
 - The cost per task is **measured**: the subagent logs record the tokens, and the dollar amounts are what those
-  tokens would cost at API prices. On a subscription you pay a flat fee; the amounts only show relative use.
+  tokens would cost at API prices. All amounts on this page are API-equivalent at list price. On a subscription they
+  are quota, not dollars: you pay a flat fee, and the amounts only show relative use.
 - **How it is measured:** the usage of each agent is read from its transcript, counted once per message id, and tied
   to a task through the track label (a reviewer counts when its mission names the task id). Tokens are priced at the
   Opus list price per million: input 4 USD, output 20, cache read 0.20, cache write 5 (5-minute cache) or 8 (1-hour
@@ -26,15 +27,25 @@ known.
 checks cost. Here they were about a third of what the queue spent, because the measured repo has a very heavy test
 suite (over a thousand database security probes and many check scripts) and a reviewer on almost every task; most
 projects will spend less. The same suite run by hand in one chat would cost about the same: the queue does not make
-tests dearer, it adds the reviewers and makes sure every task runs the checks before it is merged. How much you pay is
+tests more expensive, it adds the reviewers and makes sure every task runs the checks before it is merged. How much you pay is
 your choice: lighter gates and fewer reviewers cost less and catch less, and no checks at all is how insecure code
 gets merged.
 
-Two repos, same developer, same model and settings (automatic compaction at about 270k, 1-hour subagent cache). One is
+Two repos, same developer, same model and settings (automatic compaction at about 270k, 1-hour subagent cache; the
+queue repo tried a 5-minute subagent cache from 13 November, so in the last two days of week 3 that setting differed).
+One is
 a large repo run with the queue, which ran on its own with a heavy test suite and a reviewer on almost every task. The
 other is this repo, built from a plain roadmap file in one long main session without a queue, which I followed
 closely. That session started many agents of its own, so this compares steering, not parallel work against no parallel
 work. Prices are the list prices above (API-equivalent).
+
+Both columns count subagents. Cost per turn is all measured cost in the window (the main session and every agent it
+started: in the queue repo the orchestrator plus every track, reviewer and fix agent) divided by all their turns. In
+the plain chat, 61 % of the spend was its own subagents.
+
+Per turn the queue was cheaper in every week. Per commit it was mixed: cheaper in the last week, about 15 % more expensive over
+all 19 days (below). Both setups compact at 300k; how much that setting itself changes is measured separately under
+[the same project before and after compaction at 300k](#measured-the-same-project-before-and-after-compaction-at-300k).
 
 ### The last week, the fairest comparison
 
@@ -82,6 +93,14 @@ builds, and through the owner following it. The plain chat spent more on reading
 25 to 29 %); part of that gap is the queue's share diluted by its checks, so fixed missions that name the files are a
 possible reason, not a measured one.
 
+**Without the checks.** Take the tests and the review out of both (in the plain chat: its tests and its assessment
+agents, 4.3 % and 7.5 % of its spend; in the queue: 17.6 % and 14.9 %) and divide by the same commits and lines. Over
+all 19 days the queue then cost 2.36 against 2.60 USD per commit (about 9 % cheaper) and 8.0 against 7.0 USD per 1,000
+lines (about 14 % more expensive). That is about cost-neutral at the precision these numbers allow, not a saving. With the
+checks out, reading was 40 % of the remaining spend in the queue against 49 % in the plain chat, a smaller gap than the
+raw 27 % against 46 %. A test turn's whole cost, its context included, counts as a check here; per turn cannot be
+split this way, since there are no turn counts per category.
+
 Limits: two different repos and kinds of work (this repo is a tool with a light test suite), one developer, not a
 controlled benchmark. Commits come from `git log --no-merges --shortstat` and include generated files and tests; about
 38 commits in this repo were made outside the sessions (README edits on the web), which makes its cost per commit look
@@ -100,9 +119,12 @@ project, against about 800 of 873 D tasks), so the K median is close to build co
 | D+ (high-risk) | 120 | about 7.4 | about 8.8 | about 36M | about 137 |
 | U (investigation) | 67 | about 1.7 | about 2.1 | about 6.5M | about 42 |
 
-**Orchestrator on top:** in the 14 days from 2026-10-28 the orchestrator cost about 840 USD over 12,168 turns for
-about 530 finished tasks: about 1.6 USD and 23 turns per finished task, night pulses and dialogue with the developer
-included.
+**Orchestrator on top.** The orchestrator's cost per finished task halved when its context shrank, with the same
+number of steps: 1.36 to 1.57 USD per task on 28 and 30 September, when it ran toward 1M (mean context per turn 480k
+to 575k), against 0.64 to 0.80 USD from 7 to 14 October (173k to 196k; compaction at 300k from 8 October), at 9.4 to 13.5 turns per
+task throughout. It later rose again as the turns per task about doubled: in the 14 days from 2026-11-05 it cost about
+563 USD over 8,133 turns for about 376 to 403 finished tasks (time log and queue file), about 1.4 to 1.5 USD and about
+21 turns per finished task, night pulses and dialogue with the developer included.
 
 Cost per task drifts. By the same done date, the D median went from about 5.2 USD to 6.9 (2026-10-28 to 11-03, n 139)
 and 11.9 (2026-11-04 to 11-11, n 131); in that last window K was about 3.8 (n 57), D+ 11.7 (n 24) and U 1.7 (n 7),
@@ -235,9 +257,15 @@ were skipped.
 
 The orchestrator runs in one chat, and Claude Code compacts it automatically (`autoCompactWindow`, set to 300,000).
 In 10 orchestrator sessions with about 6,000 turns (late September to early October):
-- **Cost:** compacting cost about the same as starting a new chat by hand and reading the handover note in again. The
-  compacted chat then carries a little more context (about 16k tokens) for the rest of the cycle.
-- **Back to work:** after a compaction, the first agent started after about 6 turns, against about 17 in a new chat.
+- **Cost:** at the same size, compacting cost about the same as starting a new chat by hand and reading the handover
+  note in again. The new chat then carries a little more context (about 16k tokens) for the rest of the cycle.
+- **Back to work:** after a compaction, the first agent started after about 6 turns, against about 17 turns in a new
+  chat (26 compactions against 9 new chats). In 80 compactions in the 14 days from 2026-11-05 the median was 5 turns.
+- **The size is the lever, not the method.** How large the chat gets before it is reset matters more than how it is
+  reset. The same study found a reset at about 200k about 7 % cheaper for the orchestrator than at 300k, and the best
+  point near 150k (about 15 % cheaper, at about 17 resets a day). So smaller windows do save tokens, by compaction or by
+  a new chat. Setup writes 300k; a lower `autoCompactWindow` in `.claude/settings.json` is your call.
+- **Units:** this study counted weighted tokens (input 1, cache read 0.1, 1-hour cache write 2, output 5), not USD.
 - **When:** compaction started at about 268k tokens of context (the median of 122 compactions in the 14 days from
   2026-10-28), not at 300k.
 - **Limit:** the compaction call itself is not in the transcript, so its cost is an estimate. It assumes the call reads
@@ -256,8 +284,8 @@ parallel and a 5-minute subagent cache. The changes went in together, so how muc
   "Now" part and a dated log; `ravenseat handover archive` moves old log entries to a monthly archive, and only "Now" is read
   after compaction and at takeover. A status line (`ravenseat setup --settings`) shows context, cost, quota and running
   tracks while you work.
-- Prompt cache expiry while waiting was about 23% of all usage. So there are no sleep or polling loops, and
-  subagents use a 1-hour cache.
+- Prompt cache expiry while waiting was about 23% of the spend in the first measured day (29 to 30 September, with a
+  5-minute subagent cache). So there are no sleep or polling loops, and subagents use a 1-hour cache.
 - A fix round continues the agent that delivered while its prompt cache is warm (within an hour), so it reads the fix
   list on a cached context. Otherwise a new agent gets a short mission (the fix list and a pointer to the original
   mission), so a fix does not pay for the whole build context again. The review after it reads only the new commits.
@@ -265,11 +293,98 @@ parallel and a 5-minute subagent cache. The changes went in together, so how muc
 - Fixed overhead per track (setup, reading, checks, report) was about 60% of a small K task and 30 to 40% of a D or
   D+ task. So task sizes are set per class, and small tasks are bundled.
 
+## Measured: the same project before and after compaction at 300k
+
+Without a setting of your own, Claude Code runs Opus 4.7 and later, the Fable models, Sonnet 5 and later and Haiku
+5.5 with a 1M window and compacts at about 967k tokens
+([Claude Code docs, default auto-compact thresholds](https://code.claude.com/docs/en/model-config#default-auto-compact-thresholds)).
+So a chat grows to almost 1M before it compacts. `ravenseat setup --settings` writes `autoCompactWindow: 300000` to
+the project's `.claude/settings.json`, which every session in the project reads: your own chats, the orchestrator and
+all subagents (subagents compact as their own window fills and inherit the session's window,
+[Claude Code docs, subagent auto-compaction](https://code.claude.com/docs/en/sub-agents)).
+
+**The cost line.** In the larger private project above, the orchestrator's turns from 5 to 19 November 2026 (n 8,031,
+Opus 5.5, turns without a long pause, list prices) fit: a turn costs about 0.020 USD plus about 0.0215 USD per 100k
+tokens of context. The fit covers contexts up to about 270k; above that it is an extrapolation.
+
+The same project, Opus 5.5 only, before and after the setting:
+
+| | 25 to 30 September 2026, compacting near 1M | 8 October to 15 November 2026, compacting at 300k |
+|---|---|---|
+| Main chat: median context per turn | 464k | 183k |
+| Main chat: cost per turn | 0.157 USD (n 5,689) | 0.065 USD (n 27,771) |
+| Subagents: median context per turn | 215k | 122k |
+| Subagents: largest context | 907k | 293k (under 275k from 16 October) |
+| Subagents: cost per turn | 0.109 USD (n 41,498) | 0.056 USD (n 225,907) |
+
+So a main-chat turn cost about 2.4 times less after the change, and a subagent turn about 1.9 times less. The two
+halves of the after window give 0.062 and 0.073 USD (main) and 0.051 and 0.070 (subagents); early November had a
+thinking spike from outside the project (see the drift under the median cost per task).
+
+**How much of that is context size.** The cost line predicts about 2.0 times for the main chat (464k against 190k), so
+context size accounts for most of the main-chat gain. For subagents it predicts only about 1.45 times (215k against
+120k) against the 1.9 measured; the rest fits the 1-hour subagent cache and the lower effort per agent type, which
+cannot be split from each other. The changes landed close together: the 1-hour subagent cache and effort per agent type
+(before, every track and reviewer ran at the highest effort) on 1 October, target task sizes on 6 October, the track
+context guard on 7 October, the 300k window on 8 October, and the short handover note on 30 October. **Read the table
+as the combined effect of the setup, not of the setting alone.**
+
+The largest subagent context fell from 907k to under 275k, which matches the window applying to subagents in practice
+(a track compacts at about 267k, `hook-track-context.mjs`; on 9 October, 21 track compactions at 267k to 275k all
+delivered correctly). Ravenseat adds its own cap on top: a track delivers PARTIAL at its second compaction or at 280k.
+
+**What it means if you come from a 1M chat.** Most of the saving comes from compaction at 300k, which setup turns on
+and which you could also set by hand. The queue itself is about cost-neutral for building and steering against a chat
+already compacted at 300k (see [without the checks](#week-by-week-and-the-whole-period)); the checks come on top, as
+much as you choose to run.
+
+- **Method.** Reconstructed from the per-turn usage export of the project's transcripts; each turn is counted and
+  priced exactly as in [cost per turn by context size](#measured-cost-per-turn-by-context-size). Main sessions (rows
+  with no agent id) and subagents are kept apart, Opus 5.5 turns only. The export also holds this repo's own
+  development chat; it is left out of the main-chat figures. Opus 5.5 main-chat turns start on 25 September, so the
+  before window is six days. The week from 1 to 7 October, before the window changed, is left out of both columns.
+
+## Measured: cost per turn by context size
+
+A turn costs more the more context it carries. This table is the measurement behind that.
+
+**The cleanest figure.** In the main chats of late September 2026, when they still ran long, a turn at 500k or more
+cost about 2.9 times a turn at 100k to 200k, in the same model and the same days (Opus 5.5, n 2,640 against 738). The
+cost line above, extended that far, gives about 3.1 times at 500k to 800k and about 4.1 times at 800k to 1M against a
+turn at 150k: the same shape from November data.
+
+**Across months.** The main sessions (the developer's own chats and the orchestrator) of the larger private project,
+Opus 5.5 only, this repo's development chat left out: 35,491 turns from 25 September to mid-November 2026. The largest
+context seen was 999,695 tokens. Almost every turn above 500k is from September and most turns at 100k to 200k are from
+October and November, so this table mixes context size with period; read the ratios with that in mind.
+
+| Context per turn | Turns (n) | Of them in September | Mean USD per turn | Against 100k to 200k |
+|---|---|---|---|---|
+| under 100k | 1,391 | 62 | 0.078 | 1.3 |
+| 100k to 200k | 16,962 | 738 | 0.059 | 1.0 |
+| 200k to 300k | 12,450 | 829 | 0.075 | 1.3 |
+| 300k to 500k | 1,820 | 1,420 | 0.125 | 2.1 |
+| 500k to 800k | 2,060 | 1,832 | 0.190 | 3.2 |
+| 800k to 1M | 808 | 808 | 0.272 | 4.6 |
+
+These ratios explain why a chat that grows toward 1M costs more; they are not the queue's saving. They are means, and
+they include resume turns that write the whole context to the cache again.
+- **How a turn's cost is computed.** A turn is one message id, counted once (the largest value of each usage field
+  over the transcript rows of that id). Context = input + cache write + cache read. Cost = input x 4 + output x 20 +
+  cache read x 0.20 + 5-minute cache write x 5 + 1-hour cache write x 8, in USD per million tokens (the Opus list
+  prices at the top of this page, as `lib/timeCost.js` prices them). A main-session turn is a row with no agent id. The
+  mean of each band is divided by the mean of the 100k to 200k band.
+- **Rerunning it.** The split by band was a one-off script over an export of the project's transcripts, not part of the
+  plugin. Any reader of Claude Code transcripts that follows the rules above gives the same table;
+  `ravenseat cost` already shows the share of cost from turns above `cost.contextThresholdK` (default 200k), with the
+  same counting ([turns and tools](#turns-and-tools)).
+
 ## Measured: your own long sessions
 
 In one large project, from August to early October, the long main sessions (the developer's own and the
-orchestrator's) were about 66% of all usage, about twice as much as all the agents together. A turn at over 500k
-context cost about 2.7 times a turn at 100k to 200k. Resuming a long session after more than an hour away wrote the
+orchestrator's, mixed models) were about 66% of all usage, about twice as much as all the agents together. A turn at
+500k or more cost about 2.9 times a turn at 100k to 200k in the same model and days
+([cost per turn by context size](#measured-cost-per-turn-by-context-size)). Resuming a long session after more than an hour away wrote the
 whole context to the cache again, about 15% of those sessions' cost; in the orchestrator from 2026-10-28 to 11-11 it
 was 2.9%. Start a new session with a short handover note well before the context is full, and do not pick up a long
 session after a long break.
@@ -304,11 +419,14 @@ guard, and nothing else depends on it.
 ## Estimated, not measured: the alternatives
 
 - *One long chat.* With Claude Code's default it grows toward its full window before it compacts, and each turn pays
-  for the whole history: a turn at over 500k cost about 2.7 times a turn at 100k to 200k, and quality dropped as the
-  context filled (not measured). With compaction at about 300k a turn costs no more than a queue turn (measured
-  above); what it still costs is your presence, since the work moves only while you are in the chat.
-- *Many small chats by hand.* The context stays small, but every chat pays the start-up cost again (reading the
-  project, finding files, running checks), and you do the coordination yourself: no shared queue, no file ownership,
-  no review step, and merge conflicts when chats overlap.
+  for the whole history: a turn at 500k or more cost about 2.9 times a turn at 100k to 200k in the same model and days
+  (measured above), and quality dropped as the context filled (not measured). With compaction at about 300k a
+  turn costs a little more than a queue turn (measured above); what it still costs is your presence, since the work
+  moves only while you are in the chat.
+- *Many small chats by hand.* The context stays small, and at the same size a new chat costs about what a compaction
+  does ([measured above](#measured-compacting-the-orchestrator-against-starting-a-new-chat)), so small chats do not
+  cost more in tokens. What they cost is the work around them: a handover by hand each time, the overview spread over many
+  chats, and no safe way to run them in parallel (no shared queue, no file ownership, no review step, and merge
+  conflicts when chats overlap).
 
 Run `ravenseat cost` in your own project to see where your tokens go.
