@@ -11,8 +11,9 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   Claude Code's default (a 1M window, compaction at about 967k), then shows one project on the same model before and
   after the 300k setting (25 to 30 September against 8 October to 15 November 2026), main chat and subagents apart,
   with how much of each gain context size alone explains and the dates of the other changes in those weeks. The older
-  mixed-model figure for long contexts is replaced by a same-model one from the same days (a turn at 500k or more cost
-  about 2.9 times a turn at 100k to 200k), in the README, `costs.md` and the GIF alt text. The queue against one chat
+  mixed-model figure for long contexts is replaced by a same-model comparison over the whole setup (a main-chat turn in
+  a long chat cost about 2.4 times a turn with compaction at 300k; a single band is the wrong reference, since a 300k
+  chat climbs to about 268k and starts again), in the README, `costs.md` and the GIF. The queue against one chat
   compacted at 300k now also shows the figures without checks and review, and small fresh chats are described as not
   costing more in tokens (the reset size is the lever). The orchestrator's cost per task is given both ways: it halved as its
   context shrank and later rose as turns per task doubled. All amounts are marked API-equivalent at list price.

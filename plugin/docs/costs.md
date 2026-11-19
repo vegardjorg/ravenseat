@@ -348,8 +348,12 @@ much as you choose to run.
 
 A turn costs more the more context it carries. This table is the measurement behind that.
 
-**The cleanest figure.** In the main chats of late September 2026, when they still ran long, a turn at 500k or more
-cost about 2.9 times a turn at 100k to 200k, in the same model and the same days (Opus 5.5, n 2,640 against 738). The
+**The fairest figure.** With compaction at 300k a chat climbs to about 268k, compacts and starts again, so a single
+band is the wrong reference: the fair comparison is the average turn over the whole setup. That is 0.157 USD per
+main-chat turn in late September against 0.065 from 8 October (the before and after table above), about 2.4 times. The
+deepest turns cost the most: a turn at 800k to 1M cost 0.272 USD (n 808), about 4 times the 300k setup's average turn,
+and a turn at 500k to 800k 0.189 USD (n 1,832). Within late September alone, a turn at 500k or more cost about 2.2
+times a turn at 200k to 300k and about 2.9 times one at 100k to 200k (Opus 5.5, n 2,640 against 829 and 738). The
 cost line above, extended that far, gives about 3.1 times at 500k to 800k and about 4.1 times at 800k to 1M against a
 turn at 150k: the same shape from November data.
 
@@ -382,8 +386,8 @@ they include resume turns that write the whole context to the cache again.
 ## Measured: your own long sessions
 
 In one large project, from August to early October, the long main sessions (the developer's own and the
-orchestrator's, mixed models) were about 66% of all usage, about twice as much as all the agents together. A turn at
-500k or more cost about 2.9 times a turn at 100k to 200k in the same model and days
+orchestrator's, mixed models) were about 66% of all usage, about twice as much as all the agents together. A main-chat
+turn in those long sessions cost about 2.4 times a turn with compaction at 300k, in the same model
 ([cost per turn by context size](#measured-cost-per-turn-by-context-size)). Resuming a long session after more than an hour away wrote the
 whole context to the cache again, about 15% of those sessions' cost; in the orchestrator from 2026-10-28 to 11-11 it
 was 2.9%. Start a new session with a short handover note well before the context is full, and do not pick up a long
@@ -419,7 +423,7 @@ guard, and nothing else depends on it.
 ## Estimated, not measured: the alternatives
 
 - *One long chat.* With Claude Code's default it grows toward its full window before it compacts, and each turn pays
-  for the whole history: a turn at 500k or more cost about 2.9 times a turn at 100k to 200k in the same model and days
+  for the whole history: a main-chat turn cost about 2.4 times a turn with compaction at 300k, in the same model
   (measured above), and quality dropped as the context filled (not measured). With compaction at about 300k a
   turn costs a little more than a queue turn (measured above); what it still costs is your presence, since the work
   moves only while you are in the chat.

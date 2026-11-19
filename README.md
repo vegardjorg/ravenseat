@@ -10,7 +10,7 @@
 <p align="center"><b>A work queue for Claude Code. Each task runs in a fresh agent in its own copy of the project, the plan lives in plain files, and only your checks decide what is merged.</b></p>
 <p align="center"><sub>Open source · Runs on your machine · Built for Claude Code · Board optional</sub></p>
 
-<p align="center"><img src="assets/media/explanation.gif" alt="A 44 second loop: a project spread over many chats and a long chat where a turn deep in its 1M window costs about 2.9 times a turn at 100k to 200k, then the queue where each agent starts fresh, builds, checks and merges while you step away and come back to the decisions, cheaper per turn with less reading, checks that cost what your tests cost, and the board optional" width="800"></p>
+<p align="center"><img src="assets/media/explanation.gif" alt="A 44 second loop: a project spread over many chats and a long chat where a turn costs about 2.4 times a turn with compaction at 300k, then the queue where each agent starts fresh, builds, checks and merges while you step away and come back to the decisions, cheaper per turn with less reading, checks that cost what your tests cost, and the board optional" width="800"></p>
 
 When a Claude Code project outgrows one chat:
 
@@ -68,9 +68,10 @@ of the main-chat gain (about 2.0 times), but only about 1.45 times of the subage
 subagent cache and the lower effort per agent type, which landed a week earlier. Task sizes and a track context guard
 also changed in those days, so this is the combined effect of the setup, not of the setting alone.
 
-**Why size matters.** In the main chats of late September, when they still ran long, a turn at 500k or more cost about
-2.9 times a turn at 100k to 200k, in the same model and the same days. The cost line above, extended that far, gives
-about 3.1 times at 500k to 800k and about 4.1 times at 800k to 1M.
+**Why size matters.** With compaction at 300k a chat climbs to about 268k, compacts and starts again, so the fair
+comparison is the average turn over the whole setup, as in the table: about 2.4 times. The deepest turns cost the
+most. In late September a turn at 800k to 1M cost 0.272 USD, about 4 times the 300k setup's average turn, and a turn
+at 500k to 800k cost 0.189 USD (n 808 and 1,832, same model). The cost line above gives the same shape.
 
 **Subagents are covered too.** Subagents compact automatically as their own window fills, and they inherit the
 session's window ([Claude Code docs](https://code.claude.com/docs/en/sub-agents)). The data shows it: the largest
