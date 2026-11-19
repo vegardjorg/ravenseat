@@ -20,6 +20,8 @@
   --text-md: 16px;
   --text-lg: 20px;
   --text-xl: 28px;
+  /* The smallest step: a tight gap in a stack or a compact row (QA-1, so such rules use a token, not raw px). */
+  --distance-2xs: 2px;
   --distance-xs: 4px;
   --distance-sm: 8px;
   --distance-md: 16px;
@@ -4341,7 +4343,7 @@ body.with-option-line .board {
   flex-wrap: wrap;
   align-items: center;
   gap: 0 var(--distance-md);
-  padding: 2px var(--distance-sm);
+  padding: var(--distance-2xs) var(--distance-sm);
 }
 
 .plan-list-compact > .plan-element > .plan-header {
@@ -5726,7 +5728,7 @@ body.stale .summary.stuck::before {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: var(--distance-2xs);
 }
 .checks-tally-pills {
   list-style: none;
