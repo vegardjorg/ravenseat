@@ -62,6 +62,25 @@ a track adding a proposal) cannot corrupt the file. `ravenseat undo` undoes the 
 field (`WARNING: T1: unknown field "owns"; the queue does not read it (did you mean owned_files?).`). The task is added
 as given, so fix it with `ravenseat edit`.
 
+### Task links
+
+A task's reading material is its plan entry's sources (`plan`, roles `plan`, `investigation` and `spec`) and its own
+`sources` (`[{ "path", "anchor"?, "role"? }]`, which narrows the plan to the part this task needs). A repo path in
+`source` is origin only. `add` and `edit` check these links and print ONE line when one is dead, its anchor finds no
+heading, or the file is gitignored (so an agent's worktree does not have it), for example:
+
+```
+WARNING: task links: T1: PL-AUTH source docs/auth.md § 9 finds no heading; T2: sources docs/old.md is missing. The task was added anyway; fix a plan source with ravenseat plan edit, a task link with ravenseat edit <id>.
+```
+
+The task is added (or changed) anyway, with the same exit code. `edit` checks only when the edit writes `plan`,
+`sources` or `source`, so an unrelated edit says nothing about an older link. With `--answer-json`, `add` and `edit`
+print one JSON line instead of the text, and the problems are in its `linkProblems`
+(`[{ "id", "problems": [{ "kind": "dead"|"anchor"|"ignored"|"plan", "path", "anchor", "from" }] }]`). An anchor is a
+section number (`§ 3.2`, the most stable) or heading text (`#sync`), found the same way as in the mission.
+`links.addWarn: false` turns the check off. Links that broke later are counted by the `links` row in
+`ravenseat doctor` (`links.doctor`), and `ravenseat plan check` names a plan source whose anchor finds no heading.
+
 Status flow: `proposed` → `waiting` (approved, ready to run) → `running` → `review` → `done`, or `cancelled`. Tasks
 added by an agent start as `proposed` and need `approve`; tasks the owner or the orchestrator adds start as `waiting`.
 A track adds from its own worktree: the queue sets `added_by` from the branch, refuses `--approved` and allows 3 open
@@ -125,7 +144,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | Command | What it does |
 |---|---|
 | `init` | Creates an empty queue (run once per project) |
-| `add --file task.json` / `add --json '{…}'` | Adds one task or a list |
+| `add --file task.json` / `add --json '{…}'` [`--answer-json`] | Adds one task or a list. One `WARNING: task links` line names a dead link, an anchor without a heading or a gitignored source (the task is added anyway; see [Task links](#task-links)). `--answer-json`: one JSON line instead of the text, with `linkProblems` |
 | `decide [--json] [--max N]` / `decide --today` | Everything waiting on the owner (questions, QA, proposals, stuck work) as one list, most impact first, each answer with its exact `ravenseat` command; read only. `/ravenseat:decide` walks it one decision at a time / what was decided today |
 | `approve <id> [--by owner]` | Approves a proposal (`--by` records who) |
 | `proposals [auto [on\|off] …]` / `proposals log` / `proposals undo <id>` | Lists the proposals waiting, and auto-accept of proposals by the owner's rules (default off) / what was auto-accepted / back to proposed (see below) |
@@ -142,7 +161,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `review-item <id>` / `review-item <id> <item> --commit <sha> \| --task <id> \| --batch \| --reject <code> --note "<sentence>"` / `review-item <id> --defer-all-L` | The task's review items from the reviewers' `FINDING` lines (`<reviewer>#<round>:<code>`), and closing one: fixed in a commit in the base branch that changes the item's file, placed in an unfinished task or the `review-rest` batch task, or rejected with a code and one sentence. `--defer-all-L` moves every open LOW that may wait into one batch task. Each close writes a finding log row. `done` waits until none is open (`reviewItems.stop`); logged, so `undo` takes it back |
 | `set <id> <status>` | Sets status by hand. `done` warns (never stops) when the task never started or its branch has commits that are not in the base, names the tasks it frees and gives the way back (`set <id> review`, then `merge <id>`) |
 | `cancel <id> [--remark "…"]` | Cancels a waiting or proposed task (decline a proposal with `--remark "declined: …"`); logged, so `undo` puts it back. Running and review tasks: `set <id> cancelled` |
-| `edit <id> --json '{…}'` | Changes fields (logged; `undo` rolls it back) |
+| `edit <id> --json '{…}'` [`--answer-json`] | Changes fields (logged; `undo` rolls it back). An edit that writes `plan`, `sources` or `source` gets the same task links line as `add`; `--answer-json` carries it as `linkProblems` |
 | `info <id>` | Short view of one task (with `fixes` and `fixed by` when it has fix links) |
 | `explain <id> [--json]` | Why one task stands where it stands, from the rules the queue starts by: what blocks a waiting task (dependency, owner question, file or DB conflict, parking, focus, an uncommitted file), a stop on the whole queue, the full limits and its place among the startable ones; for a running task when it started, the round, an open block and the last sign of life with its source, SILENT over `silentMin`. Read-only |
 | `question` / `resolve <q> --answer "…"` | Owner questions / answer one (waiting tasks get the answer in their mission) |
@@ -1056,6 +1075,8 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 | `focus.restDefault` | `fill` | Outside focus: what happens to tasks outside a new focus. `fill`: they start when the focus leaves a slot free. `wait`: they do not start until the focus changes, so slots can stay empty. Only a new focus reads it (`focus set` without `--rest`, a new focus on the Focus tab); an existing focus keeps its value. `fill` is the default because `wait` can stop work without anything saying so; with `wait`, "What happens now" always says how many tasks outside the focus wait | Advanced, Full mode only |
 | `modules`, `projectModuleSuggestion`, `priorityRules`, `documentFolders`, `indexFile`, `planBackup` | see `queue.config.example.json` | Plan register structure: areas, the module link suggestion, the priority rules, document folders, the index file and the backup script (see `plan-register.md`) | Advanced, Full mode only |
 | `documents.vendors`, `documents.secretsManifest`, `documents.vendorSwitches` | `[]`, `null`, `[]` | Vendors checked against documents, the file listing the vendors in use, and planned vendor switches | Advanced, Full mode only |
+| `links.addWarn` | `true` | `add` and `edit` print one `WARNING: task links` line when a task link (plan sources, `sources`, a path in `source`) is dead, its anchor finds no heading, or the file is gitignored. The task is added anyway; see [Task links](#task-links). It stops nothing, so `false` weakens no guard | Advanced |
+| `links.doctor` | `true` | `ravenseat doctor` shows one INFO row `links` with counts for open tasks: dead links, anchors without a heading, gitignored sources, private links and tasks that link to a plan or sources but have nothing to read. Only when there is a finding; counts only, never content. It stops nothing, so `false` weakens no guard | Advanced |
 
 ### History and storage
 

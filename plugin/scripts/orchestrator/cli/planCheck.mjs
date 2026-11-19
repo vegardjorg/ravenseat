@@ -113,6 +113,8 @@ export function planCheck(json) {
   console.log(`Plan check: ${reg.entries.length} entries, ${r.count} findings. ${r.capacity.text}`);
   chunk('Unregistered (no entry points to the document)', r.unregistered, (s) => s);
   chunk('Dead paths', r.dead_paths, (x) => `${x.id}: ${x.path}`);
+  // V3: the file is there, but the anchor finds no heading (the mission would hand over the whole file).
+  chunk('Anchors without a heading', r.anchor_misses ?? [], (x) => `${x.id}: ${x.path} ${x.anchor}`);
   chunk('Stale', r.stale, (x) => `${x.id}: ${x.reason}`);
   chunk('Built, but not verified (plan verify)', r.not_verified, (s) => s);
   chunk('Status deviation', r.statusDeviation, (x) => `${who(x)}: ${x.reason}`);

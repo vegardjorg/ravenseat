@@ -47,7 +47,7 @@ undo.
 | `plan verify <id> --findings "…"` | Record that a plan was checked against the code |
 | `plan rules` | The priority rules |
 | `plan active <id>` | "Working now" marker shown on the board |
-| `plan check` | Unregistered documents, dead paths, stale entries |
+| `plan check` | Unregistered documents, dead paths, anchors without a heading (the file exists, but the source's `anchor` finds no heading, with the same lookup as the mission; `anchor_misses` in `--json`), stale entries |
 | `plan undo` | Undo |
 | `plan backup` | Runs the script in `planBackup` (optional; for example a private backup repo) |
 | `plan doc …` | Optional register of controlled documents (versions, revisions, links) |

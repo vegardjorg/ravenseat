@@ -30,6 +30,9 @@
 const { config } = require('./queueConfig.js');
 // The choice equal to the recommendation (the same rule the board's inbox and ravenseat question use).
 const { isRecommendedChoice } = require('./logic/questions.js');
+// The anchor lookup of the task links and the mission (anchorQuery + missionText sectionArea), for plan check's
+// "anchor without a heading" (roadmap 0p2 V3). The same lookup everywhere, so plan check and the add warning agree.
+const { anchorHits } = require('./taskLinks.js');
 
 // ---- Value lists ---------------------------------------------------------------------------------------
 
@@ -1578,7 +1581,9 @@ const isExempt = (filePath) => unregisteredException().some((re) => re.test(file
  *   documents: the .md files in documentFolders() (relative paths); readDoc: the text of a source; changedFiles: the
  *   files (of those given) changed after the verification; projectFor: the project a task belongs to (queueLogic, with
  *   the prefixes), otherwise the field `project`.
- * @returns {{ unregistered: string[], dead_paths: object[], stale: object[], not_verified: string[],
+ *   anchor_misses: the sources whose file exists but whose anchor finds no heading ({ id, path, anchor }), with the
+ *   mission's own lookup (taskLinks anchorHits), so plan check and the add/edit warning agree.
+ * @returns {{ unregistered: string[], dead_paths: object[], anchor_misses: object[], stale: object[], not_verified: string[],
  *   statusDeviation: object[], ruleDeviation: object[], gaps: object[], duplicates: object[], capacity: object,
  *   references: { id: string, path: string, role: string }[], count: number }}
  */
@@ -1596,6 +1601,7 @@ function check(reg, queue, ctx = {}) {
   const unregistered = (ctx.documents ?? []).filter((s) => !pointed.has(s) && !isExempt(s)).sort();
 
   const deadPaths = [];
+  const anchorMisses = [];
   const stale = [];
   const notVerified = [];
   const statusDeviation = [];
@@ -1607,6 +1613,18 @@ function check(reg, queue, ctx = {}) {
     if (ctx.existsPath)
       for (const k of p.sources ?? [])
         if (!sourcePathError(k.path) && !ctx.existsPath(k.path)) deadPaths.push({ id: p.id, path: k.path });
+
+    // Anchors without a heading (V3): the file exists, but its anchor finds no heading, so the mission would hand the
+    // agent the whole file instead of the section. Before, docStatus returned a silent null here. Every role is
+    // checked: a broken anchor is broken whoever reads it. Dropped entries too, since the link is still written down.
+    if (ctx.readDoc)
+      for (const k of p.sources ?? []) {
+        if (typeof k?.anchor !== 'string' || !k.anchor.trim() || sourcePathError(k.path)) continue;
+        if (ctx.existsPath && !ctx.existsPath(k.path)) continue; // a dead path is reported above
+        const doc = ctx.readDoc(k.path);
+        if (typeof doc === 'string' && !anchorHits(doc, k.anchor))
+          anchorMisses.push({ id: p.id, path: k.path, anchor: k.anchor });
+      }
 
     const by = derivedMaturity(p, tasks, { now });
     const doneTasks = queueTasksFor(p, tasks).filter((o) => o.status === 'done');
@@ -1718,6 +1736,7 @@ function check(reg, queue, ctx = {}) {
   const out = {
     unregistered,
     dead_paths: deadPaths,
+    anchor_misses: anchorMisses,
     stale,
     not_verified: notVerified,
     statusDeviation,
@@ -1734,6 +1753,7 @@ function check(reg, queue, ctx = {}) {
   out.count =
     unregistered.length +
     deadPaths.length +
+    anchorMisses.length +
     stale.length +
     notVerified.length +
     statusDeviation.length +

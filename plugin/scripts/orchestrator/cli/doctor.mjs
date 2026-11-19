@@ -38,6 +38,9 @@
 //               names and counts only, never content
 //   cloud rows  only with features.cloud on: what cloud tracks need (lib/cloudSetup.js), read locally; the setup itself is
 //               `ravenseat cloud setup`
+//   links       only when there is a finding: one INFO row with counts over the open tasks' links (cli/taskLinksCheck.mjs):
+//               dead links, anchors without a heading, gitignored sources, private links and tasks that link somewhere
+//               but have nothing to read. Counts only, never a path or an id; off with links.doctor false
 //   update      only when a newer ravenseat is out and not dismissed: one INFO row with the update command (cli/update.mjs).
 //               Never WARN or FAIL. With a cache older than 24 h it checks GitHub first (3 s timeout); none in --json,
 //               an agent or CI; off with updates.check false
@@ -63,6 +66,7 @@ import { REPO_CHECKS } from './doctorRepo.mjs';
 import { idleGuardLines } from './inspection.mjs';
 import { checkTree } from './catalog.mjs';
 import { doctorUpdateRows } from './update.mjs';
+import { checkLinks } from './taskLinksCheck.mjs';
 
 const BOARD = require('./lib/queueBoard.js');
 const QL = require('./lib/queueLock.js');
@@ -816,7 +820,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkLinks, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

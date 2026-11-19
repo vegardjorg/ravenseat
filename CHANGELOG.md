@@ -5,6 +5,19 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Task links: add, edit, doctor and plan check name a link that does not lead anywhere (0p2 B2).** Hardening of the
+  task links, for three edge cases that went unnoticed. A task's reading material is its plan entry's sources and its
+  own `sources`; a path in `source` is origin. When one of these is missing, its anchor finds no heading, or the file
+  is gitignored, `add` and `edit` now print one `WARNING: task links` line naming the task, the link and what is
+  wrong. The task is added anyway and the exit code is the same; `edit` checks only when it writes `plan`, `sources`
+  or `source`. `add` gets `--answer-json` like `edit`, and both carry the problems there as `linkProblems`.
+  `ravenseat doctor` adds one INFO row `links` with counts for open tasks (dead links, anchors without a heading,
+  gitignored sources, private links, tasks that link somewhere but have nothing to read), only when there is a
+  finding, and never with a path or a title. `ravenseat plan check` now reports a plan source whose anchor finds no
+  heading as "Anchors without a heading" (`anchor_misses` in `--json`); before, the miss was a quiet null. Anchors are
+  found with the mission's own lookup everywhere, so the three agree. New settings `links.addWarn` and `links.doctor`
+  (Plans and focus), both on: they stop nothing.
+
 - **Docs: the README explains what Ravenseat does, checked against the code.** A new section "What Ravenseat does"
   covers how a task flows, the guarantees the code enforces, parallel work, machine load, learning, modes and the known
   limits. It replaces "Is it for you?", "Status" and the guarantee bullets, and shortens two sections that said the same.

@@ -22,8 +22,14 @@
 //   anchorQuery(anchor)   an anchor as sectionArea's input: { section } for a number, { anchor } for heading text
 //   READABLE_ROLES        the source roles that are reading material
 //   LINKS_MAX             the cap on readable links (the read-first list's cap)
+// B2 (the WARNING line, the doctor row and plan check's anchor check):
+//   linksSetup(config)    the switches links.addWarn and links.doctor (both on by default)
+//   warningLine(rows)     the ONE WARNING line for add/edit, or null
+//   doctorTotals(tasks, linksOf) / doctorMessage(totals)   the doctor row's counts and text (counts only)
+//   anchorHits(text, anchor)  does an anchor find a heading (plan check, V3)
 //
-// Used by: nothing yet (B2 and B3 wire it in). Tested in: lib/__tests__/taskLinks.test.ts.
+// Used by: cli/taskLinksCheck.mjs (add, edit, doctor), lib/queuePlan.js (plan check).
+// Tested in: lib/__tests__/taskLinks.test.ts, lib/__tests__/taskLinksCli.test.ts.
 // =============================================================
 'use strict';
 
@@ -240,4 +246,139 @@ function check(link, ctx) {
   return { ...link, exists, anchorHit, lines, ignored, private: isPrivate, readPath, entry };
 }
 
-module.exports = { taskLinks, sourcePaths, anchorQuery, READABLE_ROLES, LINKS_MAX };
+// ---- B2: the add/edit warning (V1) and the doctor row (V2) ---------------------------------------------------------
+//
+// Pure, like the rest of this file: the CLI (cli/taskLinksCheck.mjs) runs taskLinks with the real file reader and git
+// check-ignore, and these turn the answers into the one WARNING line and the counts of the doctor row.
+
+/** The statuses of a task that is finished with: its links are no longer read by anyone, so doctor skips them. */
+const CLOSED_STATUSES = ['done', 'cancelled'];
+
+/**
+ * The two switches of B2 from queue.config.json `links`: `addWarn` (the add/edit line) and `doctor` (the doctor row).
+ * Both on by default; only a boolean false turns one off (any other value keeps the default, as in catalog setupOf).
+ * @param {object} [config]
+ * @returns {{ addWarn: boolean, doctor: boolean }}
+ */
+function linksSetup(config) {
+  const own = config && typeof config.links === 'object' && config.links && !Array.isArray(config.links) ? config.links : {};
+  return { addWarn: own.addWarn !== false, doctor: own.doctor !== false };
+}
+
+/**
+ * Where a link was written, as the reader of the warning knows it: "PL-AUTH source docs/a.md" for a plan entry's
+ * source, "sources docs/a.md" for the task's own `sources`, "source text docs/a.md" for a path in `source`.
+ */
+function whereText(problem, planId) {
+  const p = `${problem.path}${problem.anchor ? ` ${problem.anchor}` : ''}`;
+  if (problem.from === 'plan') return `${planId ?? 'plan'} source ${p}`;
+  if (problem.from === 'sources') return `sources ${p}`;
+  return `source text ${p}`;
+}
+
+/** One problem from taskLinks as a short phrase (no file content, only the path and the anchor the author wrote). */
+function problemText(problem, planId) {
+  if (problem.kind === 'plan')
+    return problem.mergedTo !== undefined
+      ? `plan ${problem.id} was merged${problem.mergedTo ? ` into ${problem.mergedTo}` : ''}`
+      : `plan ${problem.id} is not in the plan register`;
+  if (problem.kind === 'dead') return `${whereText({ ...problem, anchor: null }, planId)} is missing`;
+  if (problem.kind === 'anchor') return `${whereText(problem, planId)} finds no heading`;
+  if (problem.kind === 'ignored')
+    return `${whereText({ ...problem, anchor: null }, planId)} is gitignored, so an agent's worktree does not have it`;
+  return `${whereText(problem, planId)}: ${problem.kind}`;
+}
+
+/** How many problems the one line names before it says "and N more" (a list of 40 tasks must stay one readable line). */
+const WARNING_MAX = 6;
+
+/**
+ * The ONE WARNING line for add or edit (V1), or null when no task has a problem. Each problem is "<task id>: <phrase>";
+ * the line ends with what to do. The task is saved either way: the line only tells the author while it is cheap to fix.
+ * @param {{ id: string, plan?: string|null, problems: object[] }[]} rows  one row per task added or edited
+ * @param {{ verb?: string, cli?: string }} [o]  verb: 'added' (add) or 'changed' (edit); cli: the command to name
+ *   in the hint (projectRoot cliCommand: `ravenseat`, or the node form in a vendored install)
+ * @returns {string|null}
+ */
+function warningLine(rows, { verb = 'added', cli = 'ravenseat' } = {}) {
+  const all = [];
+  for (const r of Array.isArray(rows) ? rows : [])
+    for (const p of r?.problems ?? []) all.push(`${r.id}: ${problemText(p, r.plan ?? null)}`);
+  if (!all.length) return null;
+  const shown = all.slice(0, WARNING_MAX).join('; ');
+  const more = all.length > WARNING_MAX ? `; and ${all.length - WARNING_MAX} more` : '';
+  return (
+    `WARNING: task links: ${shown}${more}. The task was ${verb} anyway; fix a plan source with ${cli} plan edit, ` +
+    `a task link with ${cli} edit <id>.`
+  );
+}
+
+/** Does the task link to reading material at all (a plan id, or its own sources)? Only then is "nothing to read" a gap. */
+const linksSomewhere = (task) =>
+  (typeof task?.plan === 'string' && task.plan !== '') || (Array.isArray(task?.sources) && task.sources.length > 0);
+
+/**
+ * The doctor counts over the open tasks (V2). `linksOf(task)` is taskLinks for that task (the caller holds the I/O).
+ * "Nothing to read" counts only tasks that link somewhere and still end up with nothing readable: a task without a
+ * plan or sources has nothing to read by design.
+ * @param {object[]} tasks
+ * @param {(task: object) => { counts: object } | null | undefined} linksOf
+ * @returns {{ tasks: number, dead: number, anchorMiss: number, ignored: number, private: number, nothingToRead: number }}
+ */
+function doctorTotals(tasks, linksOf) {
+  const t = { tasks: 0, dead: 0, anchorMiss: 0, ignored: 0, private: 0, nothingToRead: 0 };
+  for (const task of Array.isArray(tasks) ? tasks : []) {
+    if (!task || typeof task !== 'object' || CLOSED_STATUSES.includes(task.status)) continue;
+    t.tasks += 1;
+    const c = safe(linksOf, [task], null)?.counts;
+    if (!c) continue;
+    t.dead += c.dead || 0;
+    t.anchorMiss += c.anchorMiss || 0;
+    t.ignored += c.ignored || 0;
+    t.private += c.private || 0;
+    if (c.nothingToRead && linksSomewhere(task)) t.nothingToRead += 1;
+  }
+  return t;
+}
+
+/**
+ * The doctor row's message, counts only, or null when there is nothing to report. Private links are named in the
+ * message when there is a finding, but are no finding on their own: a private plan is a choice, not a fault.
+ */
+function doctorMessage(t) {
+  if (!t || !(t.dead || t.anchorMiss || t.ignored || t.nothingToRead)) return null;
+  const parts = [
+    t.dead ? `${t.dead} dead link(s)` : null,
+    t.anchorMiss ? `${t.anchorMiss} anchor(s) without a heading` : null,
+    t.ignored ? `${t.ignored} gitignored source(s)` : null,
+    t.private ? `${t.private} private link(s)` : null,
+    t.nothingToRead ? `${t.nothingToRead} task(s) with nothing to read` : null,
+  ].filter(Boolean);
+  return `open tasks: ${parts.join(', ')} (${t.tasks} open task(s) checked)`;
+}
+
+/**
+ * Does the anchor find a heading in the text (plan check, V3)? The same lookup as taskLinks and the mission
+ * (anchorQuery + sectionArea), so plan check, the add warning and the read-first list never disagree. An empty or
+ * missing anchor is no miss.
+ */
+function anchorHits(text, anchor) {
+  const q = anchorQuery(anchor);
+  if (!q || typeof text !== 'string') return true;
+  return sectionArea(text, q) != null;
+}
+
+module.exports = {
+  taskLinks,
+  sourcePaths,
+  anchorQuery,
+  anchorHits,
+  linksSetup,
+  problemText,
+  warningLine,
+  doctorTotals,
+  doctorMessage,
+  READABLE_ROLES,
+  LINKS_MAX,
+  CLOSED_STATUSES,
+};

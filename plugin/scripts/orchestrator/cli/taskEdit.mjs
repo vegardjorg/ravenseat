@@ -20,6 +20,7 @@ import {
   PREFIX, pulseCursor, read, readCursor, readPlans, require, undoHint, val, values, CONFIG, CLI, G, git,
 } from './context.mjs';
 import { logTime, measurementLine, measureTask, minutes, saveMeasurement, turnWarningLines } from './tracks.mjs';
+import { linkProblems, linkProblemsJson, printLinkWarning } from './taskLinksCheck.mjs';
 
 // The lock on the finish line and the ownership (done_when, acceptance, owned_files, shared_patch, owner_db, migr_block;
 // lib/doneCheck.js LOCKED_FIELDS and doneLockError): edit and undo refuse a change after the start unless --by is owner
@@ -298,11 +299,18 @@ export function cmdEdit() {
   // The finding log (lib/findingSources.js), after the write: one row per newly fixed task, at most a warning.
   if (newFixes.length) FSRC.record(() => FSRC.fixLinks({ id, fixes: newFixes }));
   const changedField = [...Object.keys(field), ...(bonus != null ? ['bonus', 'remarks'] : [])];
+  // The task links (V1, cli/taskLinksCheck.mjs), only when this edit wrote one (plan, sources or source): an old
+  // broken link is doctor's row, not a surprise on an unrelated edit. The change is saved either way.
+  const touchesLinks = ['plan', 'sources', 'source'].some((k) => k in field);
+  const links = touchesLinks ? linkProblems(read().tasks.filter((x) => x.id === id)) : [];
   // --answer-json (the board): one JSON line with the changelog no., so "Undo" rolls back exactly this edit.
   if (a.includes('--answer-json'))
-    console.log(JSON.stringify({ ok: true, id, changed: changedField, log: lastEntry?.nr ?? null }));
+    console.log(
+      JSON.stringify({ ok: true, id, changed: changedField, log: lastEntry?.nr ?? null, linkProblems: linkProblemsJson(links) }),
+    );
   else {
     console.log(`${id} changed: ${changedField.join(', ')}`);
+    printLinkWarning(links, 'changed');
     if (bonus != null)
       console.log(
         'The addition is in the track block from now on (ravenseat trackFile / fill --ids). If the track is already running: send it with SendMessage.',

@@ -24,6 +24,7 @@ import {
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
+import { linkProblems, linkProblemsJson, printLinkWarning } from './taskLinksCheck.mjs';
 
 const FSRC = require('./lib/findingSources.js');
 
@@ -404,6 +405,22 @@ export function cmdAdd() {
   // The finding log (lib/findingSources.js), after the write: a new task that fixes another is a defect after merge,
   // one row per fixed task (the ids only). At most a warning.
   FSRC.record(() => newOnes.flatMap((n) => FSRC.fixLinks({ id: n.id, fixes: FX.fixesList(n.fixes) ?? [] })));
+  // The task links (V1, cli/taskLinksCheck.mjs): a dead link, an anchor without a heading or a gitignored source, after
+  // the write and outside the lock (it reads files and asks git). The tasks are added either way; links.addWarn off
+  // skips the check.
+  const links = linkProblems(newOnes);
+  // --answer-json (the board and scripts): one JSON line instead of the text, with the link problems in it.
+  if (a.includes('--answer-json')) {
+    console.log(
+      JSON.stringify({
+        ok: true,
+        added: added.result,
+        autoAccepted: added.autoAccepted.map((x) => x.id),
+        linkProblems: linkProblemsJson(links),
+      }),
+    );
+    return;
+  }
   const waiting = added.result.filter((r) => r.status === 'waiting').map((r) => r.id);
   const proposed = added.result.filter((r) => r.status === 'proposed').map((r) => r.id);
   if (waiting.length) console.log(`Added: ${waiting.join(', ')}`);
@@ -461,7 +478,9 @@ export function cmdAdd() {
   // A track was just told it has nothing to do about the project; these are for whoever approves.
   if (!track) for (const x of added.projectWarnings) console.log(`WARNING: ${x}`);
   for (const x of added.planWarnings) console.log(`WARNING: ${x}`);
-  const linked = [...new Set(newOnes.map((n) => n?.plan).filter(Boolean))];
+  // ONE line for every link problem of every task just added (nothing when the links are fine).
+  printLinkWarning(links, 'added');
+  const linked =[...new Set(newOnes.map((n) => n?.plan).filter(Boolean))];
   if (linked.length) console.log(`Linked to plan entry: ${linked.join(', ')} (in-queue automatically)`);
   if (added.phaseEnded.length)
     console.log(`Phase plan removed (has queue tasks now): ${added.phaseEnded.join(', ')}`);

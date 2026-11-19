@@ -1182,6 +1182,14 @@ const SETTINGS = Object.freeze([
     'The index file make-index maintains. Empty turns the index off.', { edit: 'file', fullWhy: WHY_PLANS }),
   row('planBackup', 'plans', 'text', 'Plan backup script',
     'A script that backs up the plan register (`plan backup`).', { edit: 'file', fullWhy: WHY_PLANS }),
+  // Task links (lib/taskLinks.js, cli/taskLinksCheck.mjs, roadmap 0p2 B2, guards V1 and V2). On in both modes: each
+  // only states a fact and stops nothing, so off is no weakening. The rows are worded as in the plan (§ 4).
+  row('links.addWarn', 'plans', 'onoff', 'Warn on broken task links',
+    'add and edit print one WARNING line when a task link (plan sources, sources, a path in source) is dead, its ' +
+    'anchor finds no heading, or the file is gitignored. The task is added anyway. It stops nothing.'),
+  row('links.doctor', 'plans', 'onoff', 'Task links in doctor',
+    'Doctor shows one INFO row with counts for open tasks: dead links, anchors without a heading, gitignored sources ' +
+    'and tasks with nothing to read. Counts only, never content. It stops nothing.'),
 
   // ---- 15. History and storage (private and sharing, 9, are in it) ----
   row('stateSnapshots.enabled', 'history', 'onoff', 'Snapshots of the queue',

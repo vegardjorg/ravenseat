@@ -28,7 +28,10 @@
 //         --priority, 30 min, the mission = the title. No small-task guard or batch queue in lite)
 //   node scripts/orchestrator/queue.mjs add --file task.json        (one object, a list, or { "tasks": [...],
 //                                                                  "question": { "<id>": { type, text, ... } } })
-//   node scripts/orchestrator/queue.mjs add --json '{"id":"A-1",...}' [--approved]
+//   node scripts/orchestrator/queue.mjs add --json '{"id":"A-1",...}' [--approved] [--answer-json]
+//        A dead task link, an anchor without a heading or a gitignored source gives ONE `WARNING: task links` line;
+//        the task is added anyway (links.addWarn, cli/taskLinksCheck.mjs). --answer-json: one JSON line instead of
+//        the text ({ ok, added, autoAccepted, linkProblems }); edit --answer-json carries linkProblems too.
 //        Status: "proposed" when added_by is an agent (a track/task id, reviewer or investigation agent), otherwise
 //        "waiting". --approved (only orchestrator/the owner, e.g. a serious finding from review) gives waiting.
 //        --accept "<criterion>" (repeatable, one task only): its acceptance criteria (field acceptance), copied into

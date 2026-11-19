@@ -537,6 +537,14 @@ const STANDARD = Object.freeze({
     checkStop: false,
     gateAfter: 3,
   },
+  // Task links (lib/taskLinks.js, cli/taskLinksCheck.mjs, roadmap 0p2 step B2). addWarn: add and edit print one WARNING
+  // line when a task link (a plan source, a `sources` entry, a path in `source`) is dead, its anchor finds no heading,
+  // or the file is gitignored; the task is saved anyway. doctor: one INFO row with counts over the open tasks' links,
+  // only when there is a finding. Both only state facts and stop nothing, so they are on.
+  links: {
+    addWarn: true,
+    doctor: true,
+  },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.
