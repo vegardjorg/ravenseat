@@ -5,6 +5,17 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the Statistics charts keep their legends inside the card, and a value text gives way to a line.** Edge
+  cases closed in the Statistics tab. Two rules written for other views shared a class name with the charts and won by
+  coming later in the style sheet: the Dependencies graph's full-height rule stretched each chart over its whole card,
+  and the help legend's grid stacked the color samples, so the legends ended 59 to 115 px below the card edge. Those
+  rules are now scoped to their own views (the graph surface and the help legend), the chart rules to the chart card,
+  and a test fails if a rule for the graph or the help matches inside a chart card again. A legend line sample is now
+  drawn like its line in the chart (dashed for the estimate, the quota, the cap and Done; solid for Added). In the
+  horizontal charts a value text such as "288k" moves past a cap or estimate line instead of sitting on it, and the
+  lines are drawn first so the text is on top. The context chart's axis ends a tenth past the larger of the max and
+  the cap, so the cap sits at about 91 % of the width instead of 60 % and the top value never lands on the edge. No new
+  setting and no new colors.
 - **Board: the dependency graph's ids stay clear of the ring, and priority is not red anywhere in Plans.** Edge cases
   closed in the Dependencies view and the Plans views. An id under a task sat 13 units below the circle without
   counting the ring around it, so at a thick ring (in progress, selected) the text ran into it, and the font grew with

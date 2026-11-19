@@ -1747,7 +1747,9 @@ code {
   font-weight: 600;
 }
 
-.graph-svg {
+/* Scoped to the chart card (S1): the Dependencies view has its own .graph-svg rule (height: 100%), which
+   otherwise won by coming later and stretched the chart over the whole card, so the legend ran below it. */
+.graph .graph-svg {
   display: block;
   width: 100%;
   height: auto;
@@ -1822,7 +1824,8 @@ code {
   --s: var(--color-error);
 }
 
-.explanation {
+/* The legend under a chart, scoped to the card (S1): the help legend is a grid of its own (.legend .explanation). */
+.graph .explanation {
   display: flex;
   flex-wrap: wrap;
   gap: var(--distance-xs) var(--distance-md);
@@ -1833,22 +1836,27 @@ code {
   color: var(--color-on-surface-variant);
 }
 
-.explanation li {
+.graph .explanation li {
   display: inline-flex;
   align-items: center;
   gap: var(--distance-sm);
 }
 
-.draw-dot {
+.graph .draw-dot {
   width: 10px;
   height: 10px;
   border-radius: 2px;
   background: var(--s);
 }
 
-.draw-line {
+/* A line sample is dashed like the estimate, quota and cap lines; draw-solid for a solid line ("Added"). */
+.graph .draw-line {
   width: 16px;
   border-top: 2px dashed var(--s);
+}
+
+.graph .draw-line.draw-solid {
+  border-top-style: solid;
 }
 
 .graph-remark {
@@ -2681,11 +2689,6 @@ body.with-option-line .toaster {
   --s: var(--color-category-teal);
 }
 
-.draw-line {
-  width: 16px;
-  border-top: 2px solid var(--s);
-}
-
 @media (max-width: 720px) {
   .top {
     padding: var(--distance-sm) var(--distance-md);
@@ -2915,7 +2918,8 @@ body.with-option-line .toaster {
   cursor: grabbing;
 }
 
-.graph-svg {
+/* Scoped to the graph surface (S1), so it never matches the Statistics charts (.graph .graph-svg, height: auto). */
+.graph-surface .graph-svg {
   display: block;
   width: 100%;
   height: 100%;
@@ -4478,7 +4482,8 @@ fieldset.setting legend {
   accent-color: var(--color-primary);
 }
 
-/* The legend (the help and the statistics tab). */
+/* The legend (the help and the statistics tab). The .explanation rules are scoped to .legend (S1), so they never
+   reach the legend under a Statistics chart (.graph .explanation). */
 .legend {
   margin: var(--distance-md) 0;
   padding-top: var(--distance-md);
@@ -4491,7 +4496,7 @@ fieldset.setting legend {
   font-weight: 600;
 }
 
-.explanation {
+.legend .explanation {
   display: grid;
   gap: var(--distance-sm);
   margin: 0;
@@ -4504,16 +4509,16 @@ fieldset.setting legend {
   gap: var(--distance-sm);
 }
 
-.explanation dt,
-.explanation dd {
+.legend .explanation dt,
+.legend .explanation dd {
   margin: 0;
 }
 
-.explanation dd {
+.legend .explanation dd {
   color: var(--color-on-surface-variant);
 }
 
-.explanation .wip {
+.legend .explanation .wip {
   display: inline-block;
   margin-left: 0;
   white-space: normal;

@@ -107,8 +107,27 @@ function barGraph({ rows, series, tipsFor, format, stroke, summary }) {
   return svg;
 }
 
-/** Horizontal bars (charts 2 and 4). `rows`: [{ label, strong?, parts: [{ val, css }], tips, text }]. */
-function horizontalGraph({ groups, max, strokes = [], summary, format }) {
+/** The width of a value text in the charts' units: about 7.2 a character at the 12 unit font (an estimate). */
+const textWidth = (text) => String(text ?? '').length * 7.2;
+
+/**
+ * Where a value text starts so no vertical line runs through it (S1): right after the bar, and past every line that
+ * would cross it (`lineXs`, the x of the lines in the same rows). Pushed against the right edge `edge` it is drawn
+ * ending there instead. Returns the x and the text anchor.
+ */
+function valuePlace(barEnd, text, lineXs, edge) {
+  const w = textWidth(text);
+  let x = barEnd + 6;
+  for (const lx of [...lineXs].sort((a, b) => a - b)) if (lx >= x - 3 && lx <= x + w + 3) x = lx + 6;
+  return x + w > edge ? { x: edge, anchor: 'end' } : { x, anchor: null };
+}
+
+/**
+ * Horizontal bars (charts 2 and 4). `rows`: [{ label, strong?, parts: [{ val, css }], tips, text }]. `axisEnd` (optional)
+ * is the end of the axis; without it the axis ends at a round number at or above `max`. The value texts are drawn
+ * last, so a text lies on top of the lines, and they move past a line that would cross them.
+ */
+function horizontalGraph({ groups, max, axisEnd, strokes = [], summary, format }) {
   const B = 560;
   const V = 96;
   const HO = 84;
@@ -119,9 +138,11 @@ function horizontalGraph({ groups, max, strokes = [], summary, format }) {
   const GROUP = 14;
   const height = (g) => g.rows.length * (ROW + BETWEEN) - BETWEEN;
   const H = TO + groups.reduce((sum, g) => sum + height(g) + GROUP, 0) - GROUP + BU;
-  const top = roundUp(max);
+  const top = axisEnd > 0 ? axisEnd : roundUp(max);
   const pw = B - V - HO;
   const x = (v) => V + (Math.min(v, top) / top) * pw;
+  // The value texts wait until every line is drawn (they go on top).
+  const values = [];
   const svg = s('svg', {
     viewBox: `0 0 ${B} ${H}`,
     class: 'graph-svg',
@@ -134,8 +155,11 @@ function horizontalGraph({ groups, max, strokes = [], summary, format }) {
       s('text', { x: x(v), y: H - 6, 'text-anchor': 'middle', text: format(v) }),
     );
   let y = TO;
+  // The x of the lines that cross the rows: the global ones (all rows) plus the group's own.
+  const globalXs = strokes.map((st) => x(st.val));
   for (const g of groups) {
     const y0 = y;
+    const lineXs = [...globalXs, ...(g.strokes ?? []).map((st) => x(st.val))];
     for (const r of g.rows) {
       svg.append(
         s('text', {
@@ -161,7 +185,11 @@ function horizontalGraph({ groups, max, strokes = [], summary, format }) {
         );
         from += d.val;
       }
-      svg.append(chunk, s('text', { x: x(from) + 6, y: y + ROW - 3, text: r.text }));
+      svg.append(chunk);
+      const at = valuePlace(x(from), r.text, lineXs, B - 4);
+      values.push(
+        s('text', { x: at.x, y: y + ROW - 3, 'text-anchor': at.anchor, class: 'value', text: r.text }),
+      );
       y += ROW + BETWEEN;
     }
     for (const st of g.strokes ?? [])
@@ -182,6 +210,7 @@ function horizontalGraph({ groups, max, strokes = [], summary, format }) {
         tips(st.tips),
       ),
     );
+  svg.append(...values);
   return svg;
 }
 
@@ -260,7 +289,8 @@ function graph(title, content, explanation, remark) {
               'li',
               null,
               el('span', {
-                class: `${stroke === 'line' ? 'draw-line' : stroke ? 'draw-line' : 'draw-dot'} ${css}`,
+                // 'line' is a solid line in the chart ("Added"), true a dashed one (estimate, quota, cap, "Done").
+                class: `${stroke === 'line' ? 'draw-line draw-solid' : stroke ? 'draw-line' : 'draw-dot'} ${css}`,
               }),
               text,
             ),
@@ -725,6 +755,9 @@ function drawStatistics() {
           ],
           strokes: [{ val: k.cap, css: 'line-quota', tips: `Cap approx. ${thousand(k.cap)}` }],
           max: Math.max(k.max ?? 0, k.cap),
+          // The axis ends a tenth past the larger of max and cap (S1): a round end (500k for a 300k cap) left 40 %
+          // of the width empty and pushed the max bar's text onto the cap line; 300k now sits at about 91 %.
+          axisEnd: Math.max(k.max ?? 0, k.cap) * 1.1,
           format: thousand,
           summary: `Context at end for ${k.count} track agents: median ${thousand(k.median)}, max ${thousand(k.max)}, cap approx. ${thousand(k.cap)}.`,
         })
