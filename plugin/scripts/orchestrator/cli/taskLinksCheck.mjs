@@ -15,9 +15,10 @@
 //   linkProblems(tasks)   [{ id, plan, problems }] for the tasks given (add and edit), [] when links.addWarn is off
 //   printLinkWarning(rows, verb)  prints the ONE WARNING line (nothing when there is no problem)
 //   checkLinks()          the doctor row `links` (INFO, counts only), [] without a finding or with links.doctor off
+//   missionLinkLines(tasks)  the READ and PRIVATE header lines of each track block (B3; make-mission.mjs reads them)
 //
-// Used by: cli/tasks.mjs (add), cli/taskEdit.mjs (edit), cli/doctor.mjs.
-// Tested in: lib/__tests__/taskLinksCli.test.ts.
+// Used by: cli/tasks.mjs (add), cli/taskEdit.mjs (edit), cli/doctor.mjs, cli/tracks.mjs (makeTrackBlocks).
+// Tested in: lib/__tests__/taskLinksCli.test.ts, lib/__tests__/missionLinks.test.ts.
 // =============================================================
 
 import fs from 'node:fs';
@@ -109,6 +110,35 @@ export function linkProblems(tasks) {
   } catch {
     return []; // error-ignored: a link check never stops add or edit
   }
+}
+
+/** Does the task link to reading material (a plan id, or its own sources)? Only those cost a lookup at all. */
+const linksSomewhere = (t) =>
+  (typeof t?.plan === 'string' && t.plan !== '') || (Array.isArray(t?.sources) && t.sources.length > 0);
+
+/**
+ * The read-first header lines of each task's track block (roadmap 0p2 step B3): READ and PRIVATE lines from
+ * taskLinks (lib/taskLinks.js missionLines), which make-mission.mjs puts first in the mission's read-first list.
+ * A task without a plan or sources gets no entry and costs no I/O, so its track block (and mission) stays byte for
+ * byte as before. Runs in the orchestrator when it writes the track file, never in a track agent (taskLinks reads
+ * private files to check them). Never throws: a failed lookup gives no lines, and the mission still has its own paths.
+ * @param {object[]} tasks
+ * @returns {Map<string, string[]>} task id -> lines (only tasks with at least one line)
+ */
+export function missionLinkLines(tasks) {
+  const out = new Map();
+  const linked = (tasks ?? []).filter((t) => t && typeof t === 'object' && linksSomewhere(t));
+  if (!linked.length) return out;
+  try {
+    const ctx = linkContext();
+    for (const t of linked) {
+      const lines = TL.missionLines(TL.taskLinks(t, ctx));
+      if (lines.length) out.set(t.id, lines);
+    }
+  } catch {
+    // error-ignored: the links are an addition; the mission keeps its own read-first paths without them
+  }
+  return out;
 }
 
 /** The rows with at least one problem, without the plan id (the JSON answer's `linkProblems`). */

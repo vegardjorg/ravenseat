@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Task links: the mission reads the task's documents first, with paths that work from the worktree (0p2 B3).**
+  Hardening of the read-first list for three edge cases. A task's plan entry sources (roles `plan`, `investigation`
+  and `spec`; a source without a role counts as `plan`) or its own `sources` (which replace the plan's) now come
+  first in the mission's "Read these in your first turn" list, an anchor as a line range such as `docs/auth.md:41-80`,
+  and the mission's own paths fill what is left under the same cap of 12. A file the agent's worktree will not have,
+  because it is gitignored or not committed at the mission's head, is written with its absolute path in the main
+  tree, also when the mission text names it; before, its relative path led nowhere from the worktree. A file under
+  `privatePaths` with `"read": false` gets a line to ask the orchestrator for an excerpt instead of a path. A task
+  without `plan` or `sources` gets the same mission as before, byte for byte, and a path in `source` stays origin
+  only. The links are looked up by the orchestrator when it writes the track block (`READ:` and `PRIVATE:` lines
+  above the `## TRACK` heading); `make-mission.mjs` reads them from there.
+
 - **Task links: add, edit, doctor and plan check name a link that does not lead anywhere (0p2 B2).** Hardening of the
   task links, for three edge cases that went unnoticed. A task's reading material is its plan entry's sources and its
   own `sources`; a path in `source` is origin. When one of these is missing, its anchor finds no heading, or the file

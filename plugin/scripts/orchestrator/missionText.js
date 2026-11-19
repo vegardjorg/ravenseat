@@ -13,8 +13,11 @@
 //   classFromBlock(body)        the class in a track block ("class D+" in the ## TRACK line, or a CLASS: line)
 //   sectionPointers(text, read)   appends "(line A–B)" after "file.md § N" and "file.md#heading"
 //   readFirstPaths(text, exists)  the existing repo paths a mission names, for the block at its top (readFirstBlock)
-// No I/O here (the read and exists functions and the config are injected; repoFileExists makes the real exists);
-// tests: __tests__/missionText.test.ts and __tests__/missionReadFirst.test.ts.
+//   readFirstList(text, exists, o)  the same list with the task's links first, placed paths and private lines
+//                                (roadmap 0p2 B3), under the one cap; privateBlock(list) writes the private lines
+// No I/O here (the read and exists functions and the config are injected; repoFileExists and repoFileRoot make the
+// real ones); tests: __tests__/missionText.test.ts, __tests__/missionReadFirst.test.ts and
+// lib/__tests__/missionLinks.test.ts.
 // =============================================================
 
 const CLASSES = ['K', 'D', 'D+', 'U'];
@@ -349,6 +352,11 @@ function splitQueueLines(text) {
  * @returns {string[]}
  */
 function readFirstPaths(text, exists, max = READ_FIRST_MAX) {
+  return readFirstItems(text, exists, max).map((x) => x.entry);
+}
+
+/** readFirstPaths with the file of each entry kept ({ file, entry }), for readFirstList's placing. */
+function readFirstItems(text, exists, max = READ_FIRST_MAX) {
   const seen = new Set();
   const known = new Map();
   const out = [];
@@ -367,15 +375,88 @@ function readFirstPaths(text, exists, max = READ_FIRST_MAX) {
     }
     if (!known.get(file)) continue;
     seen.add(entry);
-    out.push(entry);
+    out.push({ file, entry });
   }
   return out;
+}
+
+// A read-first entry with a line range at its end ("docs/a.md:3-9" or "docs/a.md:12"). Without one, the entry reads the
+// whole file. Matched at the end only, so the colon of a Windows drive ("C:/x/a.md") is no range.
+const LINE_RANGE_END = /:\d+(?:-\d+)?$/;
+
+/**
+ * The read-first list of a mission with the task's links (roadmap 0p2 step B3), split into what the agent opens and
+ * what is private.
+ *
+ * Order, under ONE cap (max, READ_FIRST_MAX): first the task's links (`links`, already in read-first form, made by
+ * the orchestrator from the plan entry and the task's `sources`: lib/taskLinks.js missionLines), then the private
+ * links (`privateLinks`, one label each, never a path to open), then the mission's own paths in readFirstPaths order.
+ *
+ * Each mission path is placed with `place(file)`: it returns the path to write (the same repo-relative path, or the
+ * absolute path when the agent's worktree will not have the file), or null for a private file, which then becomes a
+ * private line instead. A mission path already read whole by a link is left out, as is an exact duplicate.
+ *
+ * With no links and the default placing this is exactly readFirstPaths (a task without links keeps its mission
+ * byte for byte). Pure: the caller does the I/O (exists, place). Never throws for odd input; a place that throws
+ * keeps the path as it is.
+ * @param {string} text the mission (the track block)
+ * @param {(relPath: string) => boolean} exists is this repo-relative path an existing file in the repo
+ * @param {{ links?: string[], privateLinks?: string[], place?: (file: string) => string|null, max?: number }} [o]
+ * @returns {{ read: string[], private: string[] }}
+ */
+function readFirstList(text, exists, { links = [], privateLinks = [], place = (f) => f, max = READ_FIRST_MAX } = {}) {
+  // A link is one line of text: anything with a line break is dropped (it could not be one list entry).
+  const clean = (l) =>
+    Array.isArray(l) ? l.filter((x) => typeof x === 'string' && x.trim() && !/[\r\n]/.test(x)).map((x) => x.trim()) : [];
+  const read = [];
+  const priv = [];
+  const full = () => read.length + priv.length >= max;
+  for (const e of clean(links)) if (!full() && !read.includes(e)) read.push(e);
+  for (const e of clean(privateLinks)) if (!full() && !priv.includes(e)) priv.push(e);
+  // The files a link already reads whole: the mission's own pointer into the same file adds nothing.
+  const whole = new Set(read.filter((e) => !LINE_RANGE_END.test(e)));
+  const privWhole = new Set(priv);
+  for (const { file, entry } of readFirstItems(text, exists, Infinity)) {
+    if (full()) break;
+    let at = file;
+    try {
+      at = place(file);
+    } catch {
+      at = file; // a broken helper never stops the mission: the path stays as the mission wrote it
+    }
+    const rest = entry.slice(file.length); // "", ":3-9" or " § 2"
+    if (at === null) {
+      // Private: a label from the repo-relative path, never a path to open.
+      const label = `${file}${rest}`;
+      if (!privWhole.has(file) && !priv.includes(label)) priv.push(label);
+      continue;
+    }
+    const placed = typeof at === 'string' && at ? at : file;
+    const e = `${placed}${rest}`;
+    if (whole.has(placed) || read.includes(e)) continue;
+    read.push(e);
+  }
+  return { read, private: priv };
 }
 
 /** The block at the top of the mission, or '' for an empty list (no block at all). */
 function readFirstBlock(list) {
   const l = Array.isArray(list) ? list.filter((x) => typeof x === 'string' && x) : [];
   return l.length ? [READ_FIRST_HEADING, ...l.map((p) => `- ${p}`)].join('\n') : '';
+}
+
+/** The start of the line for a private document: the agent asks for an excerpt instead of opening the file. */
+const PRIVATE_LINE = 'Private, ask the orchestrator for an excerpt (do not open it):';
+
+/**
+ * The private lines right under the read-first block, one per private document (privatePaths with read: false), or
+ * '' when there are none. Never a path to open: the label is the repo-relative path and its anchor, so the agent can
+ * name what it needs, and the orchestrator decides what to hand over.
+ * @param {string[]} list labels such as "docs/internal/x.md § 2"
+ */
+function privateBlock(list) {
+  const l = Array.isArray(list) ? list.filter((x) => typeof x === 'string' && x) : [];
+  return l.map((p) => `${PRIVATE_LINE} ${p}`).join('\n');
 }
 
 /**
@@ -386,29 +467,46 @@ function readFirstBlock(list) {
  * @param {typeof import('node:fs')} [f]
  */
 function repoFileExists(roots, f = require('node:fs')) {
+  const rootOf = repoFileRoot(roots, f);
+  return (rel) => rootOf(rel) !== null;
+}
+
+/**
+ * The same test as repoFileExists, answering WHICH root holds the file (the first one, as given), or null. The
+ * mission uses it to write the absolute path of a file the agent's worktree will not have (make-mission.mjs place).
+ * @param {string[]} roots
+ * @param {typeof import('node:fs')} [f]
+ * @returns {(rel: string) => string|null}
+ */
+function repoFileRoot(roots, f = require('node:fs')) {
   const path = require('node:path');
   return (rel) => {
-    if (typeof rel !== 'string' || !rel || path.isAbsolute(rel) || /^[A-Za-z]:/.test(rel)) return false;
-    return roots.filter(Boolean).some((root) => {
+    if (typeof rel !== 'string' || !rel || path.isAbsolute(rel) || /^[A-Za-z]:/.test(rel)) return null;
+    for (const root of roots.filter(Boolean)) {
       try {
         const base = f.realpathSync(root);
         const full = f.realpathSync(path.resolve(base, rel));
         const r = path.relative(base, full);
-        if (!r || path.isAbsolute(r) || r.split(path.sep)[0] === '..') return false;
-        return f.statSync(full).isFile();
+        if (!r || path.isAbsolute(r) || r.split(path.sep)[0] === '..') continue;
+        if (f.statSync(full).isFile()) return root;
       } catch {
-        return false;
+        // not in this root; try the next one
       }
-    });
+    }
+    return null;
   };
 }
 
 module.exports = {
   CLASSES,
   READ_FIRST_MAX,
+  READ_FIRST_HEADING,
   readFirstPaths,
+  readFirstList,
   readFirstBlock,
+  privateBlock,
   repoFileExists,
+  repoFileRoot,
   gateText,
   makeQueueCommon,
   fillClient,

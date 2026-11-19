@@ -23,6 +23,7 @@ import {
   branchFor, CE, CONFIG, CLI, die, edit, G, GIT_ROOT, gitRead, HERE, L, LS, MAIN_TREE, MIGR, missionFile, read, require,
   TIME_LOG, TK, val, values,
 } from './context.mjs';
+import { missionLinkLines } from './taskLinksCheck.mjs';
 
 const AT = require('./lib/logic/attempt.js');
 const CL = require('./lib/clients/index.js');
@@ -594,6 +595,10 @@ export function makeTrackBlocks(queue, idList) {
       .map((id) => queue.tasks.find((x) => x.id === id))
       .filter((o) => o && (o.status === 'running' || o.status === 'picked')),
   );
+  // The task's documents (its plan entry's reading sources, or its own `sources`) as READ and PRIVATE header lines
+  // (roadmap 0p2 B3): make-mission.mjs puts them first in the read-first list. Looked up here, in the orchestrator,
+  // because taskLinks reads private files to check them. A task without a plan or sources gets no lines.
+  const links = missionLinkLines(idList.map((id) => queue.tasks.find((x) => x.id === id)).filter(Boolean));
   const blocks = idList.map((id) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
@@ -616,6 +621,7 @@ export function makeTrackBlocks(queue, idList) {
       `TITLE: TRACK ${o.id} (${o.title})`,
       `BLOCK: ${block}`,
       `BRANCH: ${o.branch}`,
+      ...(links.get(o.id) ?? []),
       '',
       L.trackBlock(o, queue, { text, warning: notices.get(o.id)?.warning ?? null }),
     ].join('\n');

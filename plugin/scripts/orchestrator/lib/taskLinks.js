@@ -27,9 +27,11 @@
 //   warningLine(rows)     the ONE WARNING line for add/edit, or null
 //   doctorTotals(tasks, linksOf) / doctorMessage(totals)   the doctor row's counts and text (counts only)
 //   anchorHits(text, anchor)  does an anchor find a heading (plan check, V3)
+// B3 (the mission):
+//   missionLines(result)  the READ and PRIVATE header lines of the track block (make-mission.mjs reads them)
 //
-// Used by: cli/taskLinksCheck.mjs (add, edit, doctor), lib/queuePlan.js (plan check).
-// Tested in: lib/__tests__/taskLinks.test.ts, lib/__tests__/taskLinksCli.test.ts.
+// Used by: cli/taskLinksCheck.mjs (add, edit, doctor, the track block), lib/queuePlan.js (plan check).
+// Tested in: lib/__tests__/taskLinks.test.ts, lib/__tests__/taskLinksCli.test.ts, lib/__tests__/missionLinks.test.ts.
 // =============================================================
 'use strict';
 
@@ -368,8 +370,40 @@ function anchorHits(text, anchor) {
   return sectionArea(text, q) != null;
 }
 
+// ---- B3: the mission's read-first list ------------------------------------------------------------------------------
+//
+// The orchestrator (cli/taskLinksCheck.mjs missionLinkLines, called from the track block in cli/tracks.mjs) writes a
+// task's links as header lines of its track block, before the "## TRACK" heading; make-mission.mjs reads them and
+// puts them first in the read-first list (missionText.js readFirstList):
+//   READ: <entry>      a link the agent opens: "docs/plan.md:6-7", or the absolute main-tree path of a gitignored file
+//   PRIVATE: <label>   a private link (privatePaths read: false): the agent asks the orchestrator for an excerpt
+// The track agent never runs this: taskLinks reads private files to check them, which is the orchestrator's job.
+
+/** A private link as the agent sees it: the repo-relative path and its anchor ("docs/x.md § 2", "docs/x.md #sync"). */
+function privateLabel(link) {
+  const q = anchorQuery(link.anchor);
+  if (!q) return link.path;
+  return 'section' in q ? `${link.path} § ${q.section}` : `${link.path} #${q.anchor}`;
+}
+
+/**
+ * The track block header lines for a taskLinks answer: READ lines for `read` (in order), then PRIVATE lines for
+ * `private`, both within the cap taskLinks applied. [] for a task without readable links (an origin-only `source`
+ * gives nothing). A value with a line break is left out: one header line must stay one line.
+ * @param {{ read?: object[], private?: object[] } | null | undefined} result
+ * @returns {string[]}
+ */
+function missionLines(result) {
+  const oneLine = (s) => typeof s === 'string' && s !== '' && !/[\r\n]/.test(s);
+  const out = [];
+  for (const l of result?.read ?? []) if (oneLine(l?.entry)) out.push(`READ: ${l.entry}`);
+  for (const l of result?.private ?? []) if (oneLine(l?.path) && oneLine(privateLabel(l))) out.push(`PRIVATE: ${privateLabel(l)}`);
+  return out;
+}
+
 module.exports = {
   taskLinks,
+  missionLines,
   sourcePaths,
   anchorQuery,
   anchorHits,

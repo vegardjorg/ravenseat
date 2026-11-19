@@ -81,6 +81,18 @@ section number (`§ 3.2`, the most stable) or heading text (`#sync`), found the 
 `links.addWarn: false` turns the check off. Links that broke later are counted by the `links` row in
 `ravenseat doctor` (`links.doctor`), and `ravenseat plan check` names a plan source whose anchor finds no heading.
 
+**In the mission.** When the mission is made (`fill`, `trackFile` and `make-mission.mjs`), the task's reading
+material comes first in its "Read these in your first turn" list, with an anchor as a line range
+(`docs/auth.md:41-80`). The mission's own paths fill what is left under the same cap of 12. A task's own `sources`
+replace the plan entry's sources; a source without a role counts as `plan`, and `history` and `reference` are left
+out. A file the agent's worktree will not have (gitignored, or not committed at the mission's head) gets its
+absolute path in the main tree, also when the mission text names it. A file under `privatePaths` with
+`"read": false` never gets a path: the mission has a line saying it is private and that the agent asks the
+orchestrator for an excerpt. A task without `plan` or `sources` reads nothing extra, and neither does a path in
+`source`, so its mission stays as it was. The orchestrator looks the links up when it writes the track block (as
+`READ:` and `PRIVATE:` lines above the `## TRACK` heading); the track agent never reads the register or private
+files for this.
+
 Status flow: `proposed` → `waiting` (approved, ready to run) → `running` → `review` → `done`, or `cancelled`. Tasks
 added by an agent start as `proposed` and need `approve`; tasks the owner or the orchestrator adds start as `waiting`.
 A track adds from its own worktree: the queue sets `added_by` from the branch, refuses `--approved` and allows 3 open
