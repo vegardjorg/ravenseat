@@ -582,8 +582,9 @@
 //   node scripts/orchestrator/queue.mjs focus                          (current focus, the stages, dragged along, Next up, notice)
 //   node scripts/orchestrator/queue.mjs focus set <stage> [<stage> ...] [--rest wait|fill] [--to <date>] [--name "..."]
 //        [--without-dependencies] [--continue-when-empty on|off] [--by "..."]
-//        (stage = area:<oid>, project:<pid>, feature:<pid>/<name> or a bare area/project name. Everything in stage 1
-//         before everything in stage 2, regardless of score; within a stage, score applies. The most specific stage wins.
+//        (stage = area:<oid>, project:<pid>, feature:<pid>/<name>, task:<id> (one task) or a bare area/project/task
+//         name (written with its type when it names more than one). Everything in stage 1 before everything in stage 2,
+//         regardless of score; within a stage, score applies. The most specific stage wins (task, feature, project, area).
 //         --rest wait (default): tasks outside the focus do not start; fill: they fill slots the focus does not use.
 //         Dependencies of focus tasks are dragged along (transitively) unless --without-dependencies. --to YYYY-MM-DD = up to
 //         and including that day (UTC). Pause on a project takes precedence.
@@ -592,6 +593,12 @@
 //         is stamped and ONE owner question focus-done-<from> is registered (Waiting on you: "Set a new focus" or
 //         "Continue the regular queue"; the second lifts the pause). on = the queue continues as without focus, with
 //         one line. --continue-when-empty on|off overrides the config for this focus. No focus set = not affected.)
+//   node scripts/orchestrator/queue.mjs focus add <step|id> [--at <n>] [--by "..."]
+//   node scripts/orchestrator/queue.mjs focus remove <step|id> [--by "..."]
+//        (change the list in place, the rest of the focus stays as it is. A bare task id = task:<id>. --at is the
+//         1-based place (default: last). Adding a step already in the list changes nothing (exit 0, with a message).
+//         Refused with exit 1 and nothing changed: no focus set (use focus set), an unknown step or task id, --at out
+//         of range, a step not in the list, and the last step (use focus off). One changelog entry: queue.mjs undo.)
 //   node scripts/orchestrator/queue.mjs focus evaluate [--json] [--all]
 //        (each stage with open, ready, minutes left, rests (batch queue, proposals, waiting only on owner questions,
 //         QA with the owner) with a suggestion per rest, and status active | done-with-rests | done.)

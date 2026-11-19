@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Focus: one task can be a step, and one step can be added or taken out without writing the list again.** Edge
+  cases closed in the Focus feature. A focus step could only be an area, a project or a feature, so putting one
+  task first meant moving it into a feature of its own, and adding or dropping one step meant typing the whole list
+  again with `focus set`. A step can now be `task:<id>`; it is the most specific kind, so it wins over a feature,
+  project or area step that also holds the task. `ravenseat focus add <step|id> [--at <n>]` and
+  `ravenseat focus remove <step|id>` change the list in place and keep the rest of the focus as it is; a bare task id
+  means `task:<id>`. Adding a step already in the list changes nothing and says so; an unknown task id, an `--at` out
+  of range, a step not in the list, no focus set and the last step are refused with a clear message and exit 1, with
+  nothing changed. Each change is one changelog entry, so `ravenseat undo` takes it back. A task step whose task is
+  done leaves the focus through `focus clean`, as other done steps do. The board accepts task steps when the focus is
+  saved, and the Focus tab shows a task step with its id and title, its fold showing that one task. No new setting.
+
 - **Board: the Focus tab is one ordered list, with each step's tasks and the settings in a fold.** Edge cases closed in
   the Focus feature. The steps stood in two columns, Now and Next, whose split changed nothing the queue does, so a
   step could look more or less "in focus" than it was, and a step never showed which tasks it held. The steps now

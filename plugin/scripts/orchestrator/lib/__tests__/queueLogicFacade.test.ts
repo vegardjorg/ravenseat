@@ -64,6 +64,8 @@ const EXPORTS = [
   'STUCK_BLOCK_CODES', 'stuckBlockOf',
   // Which agents a track's transcript names (the merge gate and the board's reviews badge share it).
   'missionNamesTask',
+  // One focus step added or taken out in place (B20: ravenseat focus add / focus remove).
+  'addFocusStep', 'removeFocusStep',
 ];
 
 describe('queueLogic.js facade', () => {

@@ -45,7 +45,7 @@
     },
   ];
   const sectionName = (key) => SECTIONS.find((k) => k.key === key)?.name ?? key;
-  const TYPE_NAME = { area: 'Area', project: 'Project', feature: 'Feature' };
+  const TYPE_NAME = { area: 'Area', project: 'Project', feature: 'Feature', task: 'Task' };
   // B17 (H4): a step whose tasks are all done says "done", never "does not exist". The status comes from the server
   // (planBasis step_status, from queueLogic.evaluateFocusStep).
   const DONE_TITLE = {
@@ -154,6 +154,11 @@
       const p = projectRow(rest);
       return { type, title: p?.title ?? rest, counts: p, exists: !!p, status };
     }
+    if (type === 'task') {
+      // B20: one task as a step (planBasis task_steps: its title, counts and whether it is still in the queue).
+      const t = data()?.plan?.task_steps?.[key] ?? null;
+      return { type, title: t?.title ?? rest, counts: t, exists: !!t?.exists, status };
+    }
     const pid = rest.slice(0, rest.indexOf('/'));
     const name = rest.slice(rest.indexOf('/') + 1);
     const f = projectRow(pid)?.features.find((x) => x.name === name) ?? null;
@@ -177,7 +182,9 @@
     if (col === 'waiting' && type !== 'project')
       return type === 'area'
         ? 'An area cannot be paused. Drag the projects in the area to On pause, or leave the area in Not in focus.'
-        : 'A feature cannot be paused. Use "Put on hold" on the tasks, or leave the feature in Not in focus.';
+        : type === 'task'
+          ? 'A task cannot be paused here. Use "Put on hold" on the task, or leave it in Not in focus.'
+          : 'A feature cannot be paused. Use "Put on hold" on the tasks, or leave the feature in Not in focus.';
     const p = draft();
     p.steps = p.steps.filter((x) => x !== key);
     if (type === 'project') p.pause.delete(restFor(key));
@@ -631,8 +638,9 @@
         class: 'plan-name',
         text: i.type === 'feature' ? `${i.pid} › ${i.title}` : i.title,
       }),
-      // The project id beside the title, as in a project inside an area and on the cards (B17).
-      i.type === 'project' ? el('span', { class: 'pid', text: restFor(key) }) : null,
+      // The project id beside the title, as in a project inside an area and on the cards (B17); a task step (B20)
+      // shows its task id the same way.
+      i.type === 'project' || i.type === 'task' ? el('span', { class: 'pid', text: restFor(key) }) : null,
       !i.exists
         ? el('span', {
             class: 'badge old',

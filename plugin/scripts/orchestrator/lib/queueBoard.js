@@ -853,7 +853,8 @@ function stepLabel(step, queue) {
   const colon = s.indexOf(':');
   const type = s.slice(0, colon);
   const rest = s.slice(colon + 1);
-  if (type === 'project') return rest;
+  // A project step and a task step (B20) are their id, as on the cards.
+  if (type === 'project' || type === 'task') return rest;
   if (type === 'feature') {
     const slash = rest.indexOf('/');
     return slash > 0 ? `${rest.slice(0, slash)} › ${rest.slice(slash + 1)}` : rest;
@@ -1190,7 +1191,20 @@ function planBasis(queue, { now = Date.now(), context = null } = {}) {
       dragged: sum('dragged'),
     };
   });
-  return { areas, projects, step_status: stepStatus, step_tasks: stepTasks };
+  // B20: a task step (`task:<id>`) is one task, so the Focus tab needs its title and numbers, and whether the task is
+  // still in the queue. The counts are the same fields as a project row, for that one task.
+  const taskSteps = {};
+  for (const step of order) {
+    const s = String(step);
+    if (!s.startsWith('task:')) continue;
+    const id = s.slice('task:'.length);
+    const o = tasks.find((x) => x?.id === id && !L.isExternalRow(x)) ?? null;
+    const r = empty();
+    if (o && (['running', 'review', 'picked'].includes(o.status) || (o.status === 'waiting' && !L.isBatched(o))))
+      countRow(r, o);
+    taskSteps[s] = { id, title: o?.title ?? null, status: o?.status ?? null, exists: !!o, ...out(r) };
+  }
+  return { areas, projects, step_status: stepStatus, step_tasks: stepTasks, task_steps: taskSteps };
 }
 
 /** "3 h 20 min" / "45 min" (the previews). */

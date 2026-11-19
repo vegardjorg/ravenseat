@@ -37,7 +37,7 @@ function setFocus(queue, input, now = new Date().toISOString()) {
   const raw = Array.isArray(input?.order) ? input.order : [];
   if (!raw.length)
     error.push(
-      'focus needs at least one step (area:<oid>, project:<pid> or feature:<pid>/<name>)',
+      'focus needs at least one step (area:<oid>, project:<pid>, feature:<pid>/<name> or task:<id>)',
     );
   const order = [];
   for (const t of raw) {
@@ -118,6 +118,144 @@ function removeFocus(queue) {
   delete queue.focus;
   dropFocusEndQuestions(queue);
   return oldOne;
+}
+
+// ---- Adding or taking out one step (B20) ----------------------------------------------------------------------------
+//
+// `queue.mjs focus add <step|id> [--at <n>]` and `focus remove <step|id>` change the list in place, so the owner never
+// writes the whole list again to add or drop one step. Each change is ONE changelog entry with `focus: true` changes
+// (order, now_count, history), the same form cleanFocus writes, so queue.mjs undo takes it back. The rest of the focus
+// (name, rest, to, from) is kept as it is.
+
+/**
+ * Writes a new order (and now_count) into the focus, with one focus.history row and one changelog entry. Then the
+ * "focus ended" record and question are brought in step (syncFocusEnd): a new step can give an ended focus work again,
+ * and taking out the last open step can end it.
+ * @returns {object|null} the changelog entry
+ */
+function changeFocusSteps(queue, after, { by, now, action, row }) {
+  const who = String(by ?? '').trim() || 'unknown';
+  const f = queue.focus;
+  const next = {
+    ...after,
+    history: [...(Array.isArray(f.history) ? f.history : []), { at: now, by: who, ...row }].slice(
+      -FOCUS_HISTORY_MAX,
+    ),
+  };
+  const changes = [];
+  for (const field of ['order', 'now_count', 'history'])
+    if (Object.hasOwn(next, field) && !equalValue(f[field], next[field]))
+      changes.push({
+        focus: true,
+        field,
+        before: cloneJson(f[field] ?? null),
+        after: cloneJson(next[field]),
+      });
+  queue.focus = { ...f, ...next };
+  const entry = logChange(queue, { by: who, action, changes, now });
+  syncFocusEnd(queue, { now });
+  return entry;
+}
+
+/**
+ * Adds one step to the focus (queue.mjs focus add). `raw` is any form parseStep reads, so a bare task id is
+ * `task:<id>`. `at` is the 1-based place in the list (default: last). A step already in the list is a no-op with a
+ * message. Refused, with nothing changed: no focus set (focus set starts one), an unknown step or task id, and `at`
+ * outside 1 to n+1. Warns (not an error) when the step has no open tasks.
+ * @returns {{ error: string[], warnings: string[], stage?: string, index?: number, noop?: boolean,
+ *   message?: string, entry?: object|null }}
+ */
+function addFocusStep(queue, raw, { at = null, by = null, now = new Date().toISOString() } = {}) {
+  if (!queue?.focus?.order?.length)
+    return {
+      error: ['no focus set: start one with ravenseat focus set <step> [<step> ...]'],
+      warnings: [],
+    };
+  const r = parseStep(raw, queue);
+  if ('error' in r) return { error: [r.error], warnings: [] };
+  const order = queue.focus.order;
+  const there = order.indexOf(r.stage);
+  if (there >= 0)
+    return {
+      error: [],
+      warnings: [],
+      stage: r.stage,
+      index: there,
+      noop: true,
+      message: `${r.stage} is already step ${there + 1} in the focus: nothing changed`,
+      entry: null,
+    };
+  let index = order.length;
+  if (at != null) {
+    const n = Number(at);
+    if (String(at).trim() === '' || !Number.isInteger(n) || n < 1 || n > order.length + 1)
+      return {
+        error: [`--at must be a whole number from 1 to ${order.length + 1} (got ${at})`],
+        warnings: [],
+      };
+    index = n - 1;
+  }
+  const after = { order: [...order.slice(0, index), r.stage, ...order.slice(index)] };
+  // now_count keeps the same steps in "Now": a step put in front of the limit moves it one down.
+  const nowCount = queue.focus.now_count;
+  if (nowCount != null && index < nowCount) after.now_count = nowCount + 1;
+  const warnings = [];
+  const open = (queue.tasks ?? []).some(
+    (o) => openTask(o) && o.status !== 'proposed' && !isExternalRow(o) && stepMatch(o, r.stage, queue) > 0,
+  );
+  if (!open) warnings.push(`step ${index + 1} (${r.stage}) has no open tasks`);
+  const title = stepTitle(r.stage, queue);
+  const entry = changeFocusSteps(queue, after, {
+    by,
+    now,
+    action: 'focus add',
+    row: { action: 'added', stage: r.stage, title },
+  });
+  return { error: [], warnings, stage: r.stage, index, entry };
+}
+
+/**
+ * Takes one step out of the focus (queue.mjs focus remove). `raw` is the saved form (so a step whose project or task
+ * is gone can still be removed), a bare task id (`task:<id>` when that step is in the list), or any form parseStep
+ * reads. Refused, with nothing changed: no focus, a step that is not in the list, and the last step (a focus without
+ * steps means no focus, and that is `focus off`, as cleanFocus never takes out the last step either).
+ * @returns {{ error: string[], stage?: string, index?: number, entry?: object|null }}
+ */
+function removeFocusStep(queue, raw, { by = null, now = new Date().toISOString() } = {}) {
+  if (!queue?.focus?.order?.length) return { error: ['no focus set: there is no step to remove'] };
+  const order = queue.focus.order;
+  const s = String(raw ?? '').trim();
+  let stage = order.includes(s) ? s : null;
+  if (!stage && s && !s.includes(':') && order.includes(`task:${s}`)) stage = `task:${s}`;
+  if (!stage) {
+    const r = parseStep(s, queue);
+    if (!('error' in r) && order.includes(r.stage)) stage = r.stage;
+    else
+      return {
+        error: [
+          `${'error' in r ? s || '(empty)' : r.stage} is not in the focus (the steps: ${order.join(', ')})`,
+        ],
+      };
+  }
+  if (order.length === 1)
+    return {
+      error: [
+        `${stage} is the last step: a focus needs at least one step (ravenseat focus off removes the focus)`,
+      ],
+    };
+  const index = order.indexOf(stage);
+  const after = { order: order.filter((x) => x !== stage) };
+  const nowCount = queue.focus.now_count;
+  if (nowCount != null && index < nowCount)
+    after.now_count = Math.min(Math.max(nowCount - 1, 1), after.order.length);
+  const title = stepTitle(stage, queue);
+  const entry = changeFocusSteps(queue, after, {
+    by,
+    now,
+    action: 'focus remove',
+    row: { action: 'removed', stage, title },
+  });
+  return { error: [], stage, index, entry };
 }
 
 /** At most this many stages and pause changes in one plan from the board. */
@@ -833,6 +971,8 @@ function proceed(queue, ids) {
 module.exports = {
   setFocus,
   removeFocus,
+  addFocusStep,
+  removeFocusStep,
   FOCUS_PLAN_MAX,
   saveFocusPlan,
   focusStatus,

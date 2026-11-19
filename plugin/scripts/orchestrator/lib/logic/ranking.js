@@ -65,7 +65,7 @@ const WITHOUT_AREA = 'without-area';
 /** Valid values for focus.rest. Standard: wait. */
 const FOCUS_REST = ['wait', 'fill'];
 /** How specific a stage is: the most specific stage that matches a task decides the stage. */
-const STEP_SPECIFICITY = { area: 1, project: 2, feature: 3 };
+const STEP_SPECIFICITY = { area: 1, project: 2, feature: 3, task: 4 };
 /** Sort values for tasks outside the focus (rest waiting) and parked (last of all). */
 const REST_STEP = 1_000_000;
 const PARKED_STEP = 2_000_000;
@@ -80,8 +80,9 @@ function areaFor(o, queue) {
 }
 
 /**
- * Interprets one stage from the CLI or the board: `area:<oid>`, `project:<pid>`, `feature:<pid>/<name>`, or a bare
- * name (area if it exists, otherwise project; if both exist, the type must be written). Returns the saved form.
+ * Interprets one stage from the CLI or the board: `area:<oid>`, `project:<pid>`, `feature:<pid>/<name>`, `task:<id>`
+ * (one task as a step, B20), or a bare name (the area, project or task id it names; when it names more than one of
+ * them, the type must be written). Returns the saved form.
  * @returns {{ stage: string } | { error: string }}
  */
 function parseStep(raw, queue) {
@@ -91,16 +92,19 @@ function parseStep(raw, queue) {
   if (!s) return { error: 'empty step' };
   const colon = s.indexOf(':');
   if (colon < 0) {
-    const isArea = Object.hasOwn(areas, s);
-    const isProject = Object.hasOwn(register, s);
-    if (isArea && isProject)
+    const kinds = [
+      Object.hasOwn(areas, s) ? 'area' : null,
+      Object.hasOwn(register, s) ? 'project' : null,
+      taskFor(s, queue) ? 'task' : null,
+    ].filter(Boolean);
+    if (kinds.length > 1)
       return {
-        error: `${s} is both an area and a project: write area:${s} or project:${s}`,
+        error: `${s} is both ${kinds.map((k) => `a${k === 'area' ? 'n' : ''} ${k}`).join(' and ')}: write ` +
+          kinds.map((k) => `${k}:${s}`).join(' or '),
       };
-    if (isArea) return { stage: `area:${s}` };
-    if (isProject) return { stage: `project:${s}` };
+    if (kinds.length) return { stage: `${kinds[0]}:${s}` };
     return {
-      error: `unknown step ${s} (neither area nor project; see ravenseat areas and projects)`,
+      error: `unknown step ${s} (neither area, project nor task id; see ravenseat areas, projects and show)`,
     };
   }
   const type = s.slice(0, colon);
@@ -123,10 +127,20 @@ function parseStep(raw, queue) {
     if (!Object.hasOwn(register, pid)) return { error: `unknown project ${pid} in ${s}` };
     return { stage: `feature:${pid}/${name}` };
   }
-  return { error: `unknown step type ${type} (use area:, project: or feature:)` };
+  if (type === 'task') {
+    if (!rest) return { error: `a task step is written task:<id> (got ${s})` };
+    if (!taskFor(rest, queue)) return { error: `unknown task ${rest} (see ravenseat show)` };
+    return { stage: `task:${rest}` };
+  }
+  return { error: `unknown step type ${type} (use area:, project:, feature: or task:)` };
 }
 
-/** Does the task match a (saved) stage? Returns the specificity (1–3) or 0. */
+/** The task with this id in the queue (an external row is not a task), or null. A task step needs one (parseStep). */
+function taskFor(id, queue) {
+  return (queue?.tasks ?? []).find((o) => o?.id === id && !isExternalRow(o)) ?? null;
+}
+
+/** Does the task match a (saved) stage? Returns the specificity (1–4; a task step is the most specific) or 0. */
 function stepMatch(o, stage, queue) {
   const s = String(stage);
   const colon = s.indexOf(':');
@@ -143,6 +157,7 @@ function stepMatch(o, stage, queue) {
     const f = typeof o?.feature === 'string' ? o.feature.trim() : '';
     return projectFor(o, register) === pid && f === name ? STEP_SPECIFICITY.feature : 0;
   }
+  if (type === 'task') return o?.id === rest ? STEP_SPECIFICITY.task : 0;
   return 0;
 }
 
@@ -418,6 +433,11 @@ function stepTitle(stage, queue) {
   const rest = s.slice(colon + 1);
   if (type === 'area') return queue?.areas?.[rest]?.title ?? rest;
   if (type === 'project') return queue?.projects?.[rest]?.title ?? rest;
+  // A task step: "<id> <title>", so the CLI line and the previews say which task it is.
+  if (type === 'task') {
+    const title = taskFor(rest, queue)?.title;
+    return title ? `${rest} ${title}` : rest;
+  }
   return rest.slice(rest.indexOf('/') + 1);
 }
 

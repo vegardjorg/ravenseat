@@ -1594,9 +1594,12 @@ async function taskEdit(b, queueNow) {
   return { status: 200, answer: { ok: true, log: r.data.log ?? null } };
 }
 
-/** A stage from the plan view: area:<oid>, project:<pid> or feature:<pid>/<name> (queue.mjs validates the rest). */
+/**
+ * A stage from the plan view: area:<oid>, project:<pid>, feature:<pid>/<name> or task:<id> (B20; the id in the form of ID
+ * below). queue.mjs validates the rest (an unknown task id is refused there).
+ */
 const STEP =
-  /^(area|project):[a-z0-9]+(?:-[a-z0-9]+)*$|^feature:[a-z0-9]+(?:-[a-z0-9]+)*\/[^\u0000-\u001f\u007f]{1,80}$/;
+  /^(area|project):[a-z0-9]+(?:-[a-z0-9]+)*$|^feature:[a-z0-9]+(?:-[a-z0-9]+)*\/[^\u0000-\u001f\u007f]{1,80}$|^task:[A-Za-z0-9][A-Za-z0-9._-]{0,40}$/;
 
 /**
  * "Save focus" from the plan view. The body: { plan: { order[], now_count?, rest?, to?, name?,

@@ -110,7 +110,7 @@ const {
   lastUndoable, undoEntry, expectCheck, rankBlock,
 } = require('./logic/edit.js');
 const {
-  setFocus, removeFocus, FOCUS_PLAN_MAX, saveFocusPlan, focusStatus, evaluateFocusStep, focusWithoutDone, cleanFocus,
+  setFocus, removeFocus, addFocusStep, removeFocusStep, FOCUS_PLAN_MAX, saveFocusPlan, focusStatus, evaluateFocusStep, focusWithoutDone, cleanFocus,
   restText, focusCleanLines, setArea, areaOverview, park, proceed, focusEnd, syncFocusEnd, dropFocusEndQuestions,
   focusEndLine,
 } = require('./logic/focus.js');
@@ -282,6 +282,9 @@ module.exports = {
   evaluateFocusStep,
   focusWithoutDone,
   cleanFocus,
+  // One step added or taken out in place (B20)
+  addFocusStep,
+  removeFocusStep,
   focusCleanLines,
   restText,
   setArea,

@@ -296,6 +296,31 @@ export function cmdFocus() {
     if (!r.taken_out.length) console.log('No done focus steps to take out.');
     for (const l of L.focusCleanLines(r)) console.log(l);
     if (r.entry) console.log(`Changelog no. ${r.entry.nr}; undo: ravenseat undo`);
+  } else if (under === 'add' || under === 'remove') {
+    // B20: one step added or taken out in place (queueLogic.addFocusStep / removeFocusStep). A bare task id is
+    // task:<id>. One changelog entry, so `ravenseat undo` takes it back. Exit 1 with nothing changed on an error.
+    const words = positional(2, ['--at', '--by']);
+    if (words.length !== 1)
+      die(`focus ${under} <step|id>${under === 'add' ? ' [--at <n>]' : ''} takes exactly one step (got ${words.length})`);
+    const at = under === 'add' ? val('--at') : null;
+    if (under === 'add' && a.includes('--at') && at == null) die('--at needs a number (1 = first step)');
+    const r = edit((queue) => {
+      const s =
+        under === 'add'
+          ? L.addFocusStep(queue, words[0], { at, by: byName() })
+          : L.removeFocusStep(queue, words[0], { by: byName() });
+      if (s.error.length) die(`Focus not changed:\n  ${s.error.join('\n  ')}`);
+      return { s, text: L.focusText(queue) };
+    });
+    if (r.s.noop) console.log(`${r.s.message}.`);
+    else {
+      console.log(
+        `${under === 'add' ? 'Added' : 'Removed'} ${r.s.stage} ` +
+          `(${under === 'add' ? 'now step' : 'was step'} ${r.s.index + 1}). Focus: ${r.text}`,
+      );
+      if (r.s.entry) console.log(`Changelog no. ${r.s.entry.nr}; undo: ravenseat undo`);
+    }
+    for (const x of r.s.warnings ?? []) console.log(`WARNING: ${x}`);
   } else if (under === 'off') {
     const oldOne = edit((queue) => L.removeFocus(queue));
     console.log(
@@ -305,7 +330,7 @@ export function cmdFocus() {
     );
   } else if (under && !under.startsWith('--')) {
     die(
-      'focus | focus set <step> [<step> ...] [--rest wait|fill] [--to <date>] [--name "..."] [--without-dependencies] [--continue-when-empty on|off] | focus evaluate [--json] | focus clean [--dry] | focus off',
+      'focus | focus set <step> [<step> ...] [--rest wait|fill] [--to <date>] [--name "..."] [--without-dependencies] [--continue-when-empty on|off] | focus add <step|id> [--at <n>] | focus remove <step|id> | focus evaluate [--json] | focus clean [--dry] | focus off',
     );
   } else {
     const queue = read();
