@@ -263,6 +263,20 @@ const ICONS = {
       },
     ],
   ],
+  // Arrow left: "Back to menu" in the help (B9).
+  back: [
+    [
+      'path',
+      {
+        d: 'M15 6l-6 6 6 6',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': 2,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+      },
+    ],
+  ],
   // Checkmark: empty inbox ("Nothing waiting on you").
   checkmark: [
     [

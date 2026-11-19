@@ -301,8 +301,10 @@ describe('C2: "Turn this tab off" is out of the Checks header', () => {
     $('show-checks').click();
     await flush();
     const head = document.querySelector('.checks-view .checks-head') as HTMLElement;
-    const buttons = [...head.querySelectorAll('button')].map((b) => b.textContent?.trim());
+    // The room's "?" (B30) opens the help; it is no action on the room, so it does not count here.
+    const buttons = [...head.querySelectorAll('button:not(.room-help)')].map((b) => b.textContent?.trim());
     expect(buttons).toEqual(['Read again']);
+    expect(head.querySelectorAll('.room-help')).toHaveLength(1);
     expect(document.querySelector('.checks-view')?.textContent).not.toMatch(/Turn this tab off/);
   });
 

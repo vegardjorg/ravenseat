@@ -516,6 +516,7 @@ function drawChecks() {
       'div',
       { class: 'checks-head' },
       el('h2', { class: 'decide-heading', text: 'Checks' }),
+      roomHelp('checks', 'Checks'),
       el('button', {
         type: 'button',
         class: 'button button-outline',

@@ -598,6 +598,8 @@ function drawDecisions(fresh) {
     'header',
     { class: 'decide-head' },
     el('h2', { id: 'decide-title', class: 'decide-heading', text: 'Decisions' }),
+    // B30: the "?" opens the help at Waiting on you and Decisions.
+    roomHelp('waiting', 'Decisions'),
     items.length
       ? el('p', {
           class: 'decide-keys',

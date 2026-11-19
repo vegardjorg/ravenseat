@@ -410,6 +410,8 @@ function columnHeader(col, summary) {
     { class: 'col-header' },
     el('h2', { text: shownColumns().find((k) => k.key === col).name }),
     counter,
+    // B30: the queue room has no header of its own, so its "?" sits in the In queue column header.
+    col === 'queue' ? roomHelp('work', 'the queue') : null,
     col === 'queue' ? cloudBundleLine() : null,
   );
   if (col === 'inProgress') {

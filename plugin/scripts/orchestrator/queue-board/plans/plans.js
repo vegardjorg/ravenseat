@@ -643,6 +643,8 @@
           return `Filters${n ? ` (${n})` : ''}`;
         })(),
       ),
+      // B30: the "?" for the Plans room, last in its one-line header (roomHelp is the board's, board/menus.js).
+      typeof roomHelp === 'function' ? roomHelp('plans', 'Plans') : null,
     );
   }
 

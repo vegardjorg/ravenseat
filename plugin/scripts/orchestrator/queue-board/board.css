@@ -3932,6 +3932,94 @@ body.with-option-line .board {
   color: var(--color-on-surface-variant);
 }
 
+/* The section headings take focus from the contents list and the rooms' "?" (B30); keep them clear of the panel's top. */
+.help-del h3,
+#help-legend h3 {
+  scroll-margin-top: var(--distance-md);
+}
+
+/* B9: "Back to menu" first in the help's header, the arrow before the words. */
+.help-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--distance-xs);
+  padding-inline: var(--distance-sm) var(--distance-md);
+}
+.help-back .icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* B30: the contents list at the top of the help, two columns of plain links. */
+.help-contents {
+  margin: var(--distance-md) 0;
+  padding: var(--distance-sm) var(--distance-md);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+}
+.help-contents-list {
+  columns: 2;
+  column-gap: var(--distance-md);
+  margin: 0;
+  padding-inline-start: var(--distance-md);
+  font-size: var(--text-sm);
+  line-height: 28px;
+}
+.help-contents-list li {
+  break-inside: avoid;
+}
+.help-contents-list a {
+  color: var(--color-primary);
+}
+
+/* B30: the small "?" in a room's own header. 24 px drawn, so a header's line height does not change; the hit area is
+   36 px on a mouse and 44 px on touch (the ::after below). Colors are the theme's tokens only. */
+.room-help {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-on-surface-variant);
+  font: 600 var(--text-xs) / 1 inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+.room-help::after {
+  content: '';
+  position: absolute;
+  inset: -6px; /* 24 + 2 x 6 = 36px */
+}
+.room-help:hover {
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+  color: var(--color-on-surface);
+}
+.room-help:active {
+  background-image: linear-gradient(var(--state-press), var(--state-press));
+}
+/* On touch the hit area grows to 44 px: in the shared touch block further down. */
+
+/* The Statistics room's header line (B30): the heading and its "?". */
+.stat-head {
+  display: flex;
+  align-items: center;
+  gap: var(--distance-sm);
+  margin-bottom: var(--distance-md);
+}
+
+/* The Plans room's "?" sits last in its one-line header. */
+.plans-path .room-help {
+  margin-inline-start: var(--distance-xs);
+}
+
 /* The plan view: toolbar and four columns (Now, Next, Later, Waiting). */
 .board.plan {
   padding: var(--distance-md) var(--distance-lg);
@@ -4631,6 +4719,14 @@ body.stale .summary.stuck::before {
   .button-icon {
     width: 44px;
     height: 44px;
+  }
+
+  /* The rooms' "?" (B30) keeps its 24 px drawing; the hit area grows to 44 px. The help's contents links too. */
+  .room-help::after {
+    inset: -10px;
+  }
+  .help-contents-list {
+    line-height: 44px;
   }
 }
 

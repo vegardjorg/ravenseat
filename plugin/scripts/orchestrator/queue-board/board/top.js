@@ -62,12 +62,14 @@ function helpSection() {
     'section',
     { class: 'setting', 'aria-labelledby': 'setting-help' },
     el('h3', { id: 'setting-help', class: 'setting-title', text: 'Help' }),
+    // The id is where "Back to menu" in the help puts focus (B9).
     el('button', {
+      id: 'settings-open-help',
       type: 'button',
       class: 'button button-outline',
       text: 'How to use the board',
       onclick: () => {
-        openHelp();
+        openHelp({ fromSettings: true });
       },
     }),
   );

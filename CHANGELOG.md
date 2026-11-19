@@ -5,6 +5,21 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the help starts with the basics and can be reached from every room.** "How to use the board" was 13
+  sections of running text in one column that began with Areas, a full-mode idea, had no contents, and could only be
+  reached through the gear; once open, the only way out was Close, which dropped you out of Settings. Now a contents
+  list at the top links every section and the legend, and a link moves focus to that heading without touching the
+  address (where the board's key lives). The sections come in the order a new user needs them: what the board shows,
+  Waiting on you and Decisions, and picking and running work first, then the task panel, Focus, Plans, Checks and
+  Statistics, with selection, bulk actions, the batch queue, the keyboard and Areas last. What the board shows,
+  Picking and running work, Checks and Statistics are new sections written from what the board does; the others keep
+  their text, split into shorter paragraphs, and Focus and the Focus tab are one section. Opened from
+  Settings, the help has **Back to menu**, which returns to Settings with focus on the button that opened it, also
+  while Settings are still loading. Each room has a small "?" in its own header (Decisions, Checks, Statistics, the
+  Focus toolbar, the Plans breadcrumb line, and the In queue column header for the queue) named "Help for <room>",
+  which opens the help at that room's section; closing puts focus back on the "?", even when the room was redrawn
+  meanwhile. It is 24 px drawn with a 36 px hit area (44 px on touch), so the fixed top and the rooms' one-line
+  headers keep their height, and it uses only the theme's tokens.
 - **Board: Settings in six tabs, each setting in one place.** Settings had grown to one General page of 29 sections
   (about 8 800 px at 1440 x 900, over nine screens of scrolling) next to a Helper agents tab, and a few rows in the
   categories only said "Changed in Guidance" (or Logo and mascot, Columns, Cloud) without a control. Settings now have

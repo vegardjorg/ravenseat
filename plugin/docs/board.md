@@ -298,6 +298,21 @@ A way in to one setting opens its tab first, opens the fold it sits in and focus
 Settings** at the end of the Checks view lands on **Show the Checks tab**, and a link in the weakened banner or in a
 "Has effect only when" line lands on that setting's control, in whichever tab it is.
 
+**How to use the board** opens the help in the same side panel. A contents list at the top links every section and
+the legend; a link scrolls there and moves focus to the section's heading without changing the address (the key lives
+in the `#` part). The sections come in the order a new user needs them: What the board shows, Waiting on you and
+Decisions, Picking and running work, The task panel, Focus, Plans and Queue, Checks and Statistics, then the advanced
+parts: Selection, tabs and grouping, Bulk actions, Batch queue, The keyboard on the board, and Areas last, followed by
+the legend. Opened from Settings, the help has **Back to menu** first in its header, which goes back to Settings with
+focus on **How to use the board**; Esc and Close close the panel and focus goes back to the gear.
+
+Each room has a small **?** in its own header that opens the help at that room's section, with focus on its heading;
+closing the help puts focus back on the **?**. It sits after the heading in Decisions, Checks and Statistics, first in
+the Focus toolbar, last in the Plans breadcrumb line, and in the **In queue** column header for Flat and Project lanes
+(the queue has no header of its own). Its name for a screen reader is "Help for Decisions" and so on. It is drawn
+24 px with a 36 px hit area (44 px on touch), so no header and not the fixed top grows. Settings itself has the
+**How to use the board** button instead.
+
 **Every setting by category.** The tabs list every row of the settings registry (`lib/settingsRegistry.js`, the same
 list as `ravenseat settings`) in its category: Project and git, Limits and cost, Machine load, Gates, Tests and
 evidence, Checks tab and learning, File and read guards, Command and secret guards, Merge and push, Private and

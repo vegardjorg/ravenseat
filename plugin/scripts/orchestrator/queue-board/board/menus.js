@@ -7,88 +7,163 @@
 // =============================================================
 'use strict';
 
-// "How to use the board" (in the gear): short help in the side panel.
+// "How to use the board" (in the gear): short help in the side panel. The sections come in the order a new user needs
+// them (B30, UX review H1): what the board shows, Waiting on you and Decisions, and picking and running work first, then
+// the rooms, and the advanced parts last (selection, bulk actions, the batch queue, the keyboard, areas). Each section
+// has an id (help-<id>) that the contents list at the top and the "?" in each room header (roomHelp) jump to.
 const HELP = [
-  [
-    'Areas',
-    'An area groups projects that belong together, for example Auth or Payments and invoicing. ' +
-      'You prioritize areas instead of many projects. Create and edit them with "Areas …" in Queue → Focus. A project ' +
-      'belongs to one area.',
-  ],
-  [
-    'Focus',
-    'The focus is the order in which the queue takes work: everything in step 1 before step 2, regardless of score. Within a ' +
-      'step the points apply. A step is an area, a project or a feature. The most specific wins: a project with ' +
-      'a step of its own takes precedence over its area\'s step. "Rest waits" means nothing outside the steps starts; "fill ' +
-      'free slots" starts them only when the focus has nothing ready. Tasks that something in focus waits on are dragged ' +
-      'along. The focus applies until you change it, or until the end date. The focus line at the top turns red when the focus ' +
-      'has nothing ready, and says which answer unlocks the most.',
-  ],
-  [
-    'The Focus tab',
-    'Focus shows the focus as four columns: Now and Next (the steps in order), Later (the rest) and Waiting ' +
-      '(projects on pause). Drag areas, projects and features between the columns, or lift with Space, ' +
-      'move with the arrow keys and drop with Space (Esc cancels). The changes are a draft until you press "Save ' +
-      'focus"; then you first see what changes and what the queue starts next.',
-  ],
-  [
-    'Plans and Queue',
-    'The switch at the top left changes workspace. Plans opens on the Overview, with one card per area. "Plan entries" ' +
-      'is the plan register: area › project › entry in the list (click to fold), the details on the right, and the filters ' +
-      'with counts on the left (on a narrower screen behind the "Filters" button). The copy buttons give the start line for ' +
-      '/plans. A badge like PL-ALONE-1 on a card opens the entry in Plans; the Queue tab in the entry\'s ' +
-      'details lists its tasks, and a click shows the card here.',
-  ],
-  [
-    'Waiting on you',
-    'The button at the top opens Decisions and carries the only count: owner questions, QA, proposed and what is stuck, ' +
-      'one card each. The board opens there only when something is new since your last visit; otherwise it opens the ' +
-      'queue view you used last. With a focus, the questions are sorted by what the answer unlocks in the focus (step 1 ' +
-      'first). Number keys pick a choice (the number is its --choice number), Enter takes the recommendation, u undoes. ' +
-      'Check the cards for "QA ok for selected" or "Approve selected". "Sort" lists tasks without a project or with the ' +
-      'wrong project, with proposals you can accept.',
-  ],
-  [
-    'Batch queue',
-    'Small tasks that do not block anything can go into the batch queue. There they do not start alone, but are packed ' +
-      'together into one track of the right size ("Pack into track" when the group is large enough). D+, tasks others wait on and ' +
-      'tasks with open owner questions cannot be there.',
-  ],
-  [
-    'Bulk actions',
-    'Select cards with the checkbox, x on the card, Ctrl/Cmd-click or Shift-click, Ctrl/Cmd+A or "Select all ' +
-      'matches". The group header selects the whole group. The selection menu next to the box you checked last (a bar ' +
-      'at the bottom on a narrow or touch screen) moves to a project, puts on hold, moves as ' +
-      'a block, adds to the batch queue or sets a label. You always see what changes before it is saved, everything happens ' +
-      'together or not at all, and "Undo" is ready afterward. In the menu the arrow keys move, Esc closes it and Shift+F10 on ' +
-      'a card opens it again. Esc clears the selection.',
-  ],
-  [
-    'Selection, tabs and grouping',
-    '"Selection" has built-in selections (Focus now, Ready in focus, On hold, Sort, New since last visit …) and your own ' +
-      '(search, filter, grouping and view), saved in this browser. "Show all" at the top of the menu removes ' +
-      'the selection. The tabs (Flat, Project lanes, Focus …) are the views; the arrow keys move between them, Enter selects. ' +
-      'The grouping beside the tabs ' +
-      'splits the cards by area and project, project and feature, or focus step.',
-  ],
-  [
-    'The keyboard on the board',
-    'Tab goes to one card title per column (or per cell in Project lanes). Arrow up and down move between the cards, ' +
-      'arrow left and right to the neighboring column, Home and End to the first and last card. Enter opens the card, x selects ' +
-      'it, and Space lifts a card in the queue (the arrow keys move, Space drops, Esc cancels). "Blocked", "Proposed" ' +
-      'and "Batch queue" are folds: the arrow before the name shows whether it is open, and a click, Enter or Space ' +
-      'opens or closes it. Blocked is open from the start when it has 20 cards or fewer, Proposed is closed, and what ' +
-      'you choose holds for the visit. When a card in a chain is not visible, the chain line says why (a closed fold, ' +
-      'the search, the filter, the selection, or older than 7 days in Built) with a button that shows it.',
-  ],
-  [
-    'The task panel',
-    'A card opens its panel: the title, a short line on what the task is about (from the mission\'s "What and why", ' +
-      'or its first paragraph), the actions, the full mission, and the technical facts last under "Details" (closed ' +
-      'from the start, remembered in this browser). On a wide screen (about 1200 px and up) the panel sits beside the ' +
-      'board: the board stays usable and a click on another card shows that card. On a narrower screen it covers the ' +
-      'board until you close it. Esc closes it, and focus goes back to the card.',
-  ],
+  {
+    id: 'board',
+    title: 'What the board shows',
+    text: [
+      'The tabs at the top left are the rooms: Queue holds the cards, Decisions what waits on you, Plans the plan ' +
+        'register, and Checks (when it is on) what your project has for checking its code. In Queue the columns are ' +
+        'In queue, In progress, Review and Built; Blocked gets a column of its own when that is switched on in Settings.',
+      'The view tabs under the rooms show the queue in other ways: Flat, Project lanes, Focus, Dependencies and ' +
+        'Statistics (Cloud when the cloud is on). The gear at the top right opens Settings, where this help lives, and ' +
+        'the "?" in a room\'s header opens the help at that room.',
+    ],
+  },
+  {
+    id: 'waiting',
+    title: 'Waiting on you and Decisions',
+    text: [
+      'The button at the top opens Decisions and carries the only count: owner questions, QA, proposed and what is stuck, ' +
+        'one card each. The board opens there only when something is new since your last visit; otherwise it opens the ' +
+        'queue view you used last. With a focus, the questions are sorted by what the answer unlocks in the focus (step 1 ' +
+        'first).',
+      'Number keys pick a choice (the number is its --choice number), Enter takes the recommendation, u undoes. ' +
+        'Check the cards for "QA ok for selected" or "Approve selected". "Sort" lists tasks without a project or with the ' +
+        'wrong project, with proposals you can accept.',
+    ],
+  },
+  {
+    id: 'work',
+    title: 'Picking and running work',
+    text: [
+      'The queue starts the work itself when it runs (/ravenseat:queue in Claude Code). "Ready now" in In queue is what ' +
+        'can start now, with no blockers, and "Next up" above the columns is what the queue starts in the next free slot. ' +
+        'The order follows the focus, then the points.',
+      'To change it, open a card: "To the top of the queue" moves it first, and "Pick" (with who is picking) takes it ' +
+        'to do yourself. A picked task takes no agent slot, and "Release" puts it back in the queue. In the queue, Space ' +
+        'on a card lifts it, the arrow keys move it and Space drops it.',
+    ],
+  },
+  {
+    id: 'panel',
+    title: 'The task panel',
+    text: [
+      'A card opens its panel: the title, a short line on what the task is about (from the mission\'s "What and why", ' +
+        'or its first paragraph), the actions, the full mission, and the technical facts last under "Details" (closed ' +
+        'from the start, remembered in this browser).',
+      'On a wide screen (about 1200 px and up) the panel sits beside the board: the board stays usable and a click on ' +
+        'another card shows that card. On a narrower screen it covers the board until you close it. Esc closes it, and ' +
+        'focus goes back to the card.',
+    ],
+  },
+  {
+    id: 'focus',
+    title: 'Focus',
+    text: [
+      'The focus is the order in which the queue takes work: everything in step 1 before step 2, regardless of score. ' +
+        'Within a step the points apply. A step is an area, a project or a feature. The most specific wins: a project ' +
+        'with a step of its own takes precedence over its area\'s step. "Rest waits" means nothing outside the steps ' +
+        'starts; "fill free slots" starts them only when the focus has nothing ready. Tasks that something in focus waits ' +
+        'on are dragged along. The focus applies until you change it, or until the end date. The focus line at the top ' +
+        'turns red when the focus has nothing ready, and says which answer unlocks the most.',
+      'The Focus tab shows the focus as four columns: Now and Next (the steps in order), Later (the rest) and Waiting ' +
+        '(projects on pause). Drag areas, projects and features between the columns, or lift with Space, move with the ' +
+        'arrow keys and drop with Space (Esc cancels). The changes are a draft until you press "Save focus"; then you ' +
+        'first see what changes and what the queue starts next.',
+    ],
+  },
+  {
+    id: 'plans',
+    title: 'Plans and Queue',
+    text: [
+      'The switch at the top left changes workspace. Plans opens on the Overview, with one card per area. "Plan entries" ' +
+        'is the plan register: area › project › entry in the list (click to fold), the details on the right, and the ' +
+        'filters with counts on the left (on a narrower screen behind the "Filters" button). The copy buttons give the ' +
+        'start line for /plans.',
+      'A badge like PL-ALONE-1 on a card opens the entry in Plans; the Queue tab in the entry\'s details lists its ' +
+        'tasks, and a click shows the card here.',
+    ],
+  },
+  {
+    id: 'checks',
+    title: 'Checks',
+    text: [
+      'Checks shows what your project has for checking its code (CI, gates, scripts, git hooks and config), read from ' +
+        'your files. Ravenseat did not run any of it, so it shows what is set up, not that it works. "Read again" reads ' +
+        'the files again.',
+      'The suggestions under it come most important first, and all of them are optional. "Add investigation to queue" ' +
+        'adds an investigation that ends in a plan with recommended steps, and nothing is built before you approve it. ' +
+        '"Set aside" hides a suggestion until you bring it back. The tab can be turned off in Settings.',
+    ],
+  },
+  {
+    id: 'statistics',
+    title: 'Statistics',
+    text: [
+      'Statistics shows throughput, lead time and usage over the last days: the key figures, the forecast, the charts ' +
+        'of done and added per day, the blockers and guard decisions of the last 7 days, and the flow. The legend for ' +
+        'the badges on the cards is at the bottom, as here.',
+    ],
+  },
+  {
+    id: 'selection',
+    title: 'Selection, tabs and grouping',
+    text: [
+      '"Selection" has built-in selections (Focus now, Ready in focus, On hold, Sort, New since last visit …) and your ' +
+        'own (search, filter, grouping and view), saved in this browser. "Show all" at the top of the menu removes ' +
+        'the selection. The tabs (Flat, Project lanes, Focus …) are the views; the arrow keys move between them, Enter ' +
+        'selects. The grouping beside the tabs splits the cards by area and project, project and feature, or focus step.',
+    ],
+  },
+  {
+    id: 'bulk',
+    title: 'Bulk actions',
+    text: [
+      'Select cards with the checkbox, x on the card, Ctrl/Cmd-click or Shift-click, Ctrl/Cmd+A or "Select all ' +
+        'matches". The group header selects the whole group. The selection menu next to the box you checked last (a bar ' +
+        'at the bottom on a narrow or touch screen) moves to a project, puts on hold, moves as a block, adds to the ' +
+        'batch queue or sets a label.',
+      'You always see what changes before it is saved, everything happens together or not at all, and "Undo" is ready ' +
+        'afterward. In the menu the arrow keys move, Esc closes it and Shift+F10 on a card opens it again. Esc clears ' +
+        'the selection.',
+    ],
+  },
+  {
+    id: 'batch',
+    title: 'Batch queue',
+    text: [
+      'Small tasks that do not block anything can go into the batch queue. There they do not start alone, but are packed ' +
+        'together into one track of the right size ("Pack into track" when the group is large enough). D+, tasks others ' +
+        'wait on and tasks with open owner questions cannot be there.',
+    ],
+  },
+  {
+    id: 'keyboard',
+    title: 'The keyboard on the board',
+    text: [
+      'Tab goes to one card title per column (or per cell in Project lanes). Arrow up and down move between the cards, ' +
+        'arrow left and right to the neighboring column, Home and End to the first and last card. Enter opens the card, ' +
+        'x selects it, and Space lifts a card in the queue (the arrow keys move, Space drops, Esc cancels).',
+      '"Blocked", "Proposed" and "Batch queue" are folds: the arrow before the name shows whether it is open, and a ' +
+        'click, Enter or Space opens or closes it. Blocked is open from the start when it has 20 cards or fewer, Proposed ' +
+        'is closed, and what you choose holds for the visit. When a card in a chain is not visible, the chain line says ' +
+        'why (a closed fold, the search, the filter, the selection, or older than 7 days in Built) with a button that ' +
+        'shows it.',
+    ],
+  },
+  {
+    id: 'areas',
+    title: 'Areas',
+    text: [
+      'An area groups projects that belong together, for example Auth or Payments and invoicing. You prioritize areas ' +
+        'instead of many projects. Create and edit them with "Areas …" in Queue → Focus. A project belongs to one area.',
+    ],
+  },
 ];
 
 // The legend for the classes, WIP and the badges on the cards. Shown in the help and in the statistics tab,
@@ -171,16 +246,34 @@ function legend(idPrefix) {
   );
 }
 
-function openHelp() {
+/**
+ * Opens "How to use the board" in the side panel. `o.at` is a section id ('focus', 'checks' ...): the help opens there
+ * with focus on that section's heading (the "?" in a room header). `o.fromSettings` is set by the button in Settings:
+ * the header then has "Back to menu" (B9), which goes back to Settings with focus on that button. Called with no
+ * argument (or with a click event) it opens at the top with focus on Close, as before.
+ */
+function openHelp(o) {
+  const at = typeof o?.at === 'string' ? o.at : null;
+  const fromSettings = o?.fromSettings === true;
   t.selected = null;
   t.setting = null;
   t.help = true;
   showPanel();
   panel.scrollTop = 0;
+  // B9: first in the header, so it is the first tab stop and sits where a way back is looked for.
+  const back = fromSettings
+    ? el(
+        'button',
+        { type: 'button', class: 'button button-outline help-back', onclick: backToSettings },
+        icon('back'),
+        'Back to menu',
+      )
+    : null;
   panel.replaceChildren(
     el(
       'div',
       { class: 'panel-header' },
+      back,
       el('div', null, el('h2', { id: 'panel-title', text: 'How to use the board' })),
       el(
         'button',
@@ -188,24 +281,94 @@ function openHelp() {
         icon('close'),
       ),
     ),
-    ...HELP.map(([title, text]) =>
+    helpContents(),
+    ...HELP.map(({ id, title, text }) =>
       el(
         'section',
-        { class: 'help-del' },
-        el('h3', { class: 'setting-title', text: title }),
-        el('p', { class: 'help-text', text }),
+        { class: 'help-del', id: `help-${id}`, 'aria-labelledby': `help-${id}-title` },
+        el('h3', { id: `help-${id}-title`, class: 'setting-title', tabindex: -1, text: title }),
+        text.map((x) => el('p', { class: 'help-text', text: x })),
       ),
     ),
-    legend('help'),
+    el('div', { id: 'help-legend' }, legend('help')),
     el('p', {
       class: 'inbox-info',
       text:
         'Everything the board writes goes via ravenseat with a lock, and nothing changes before you have seen the explanation and confirmed.',
     }),
   );
-  panel.querySelector('.button-icon')?.focus();
+  if (!at || !helpGoTo(at)) panel.querySelector('.panel-header .button-icon')?.focus();
 }
-// The help opens from the gear (the button at the top of the settings), no longer from "?" at the top.
+
+/**
+ * The contents list at the top of the help: one link per section and the legend. A link moves focus to its heading
+ * (helpGoTo) and never sets the hash: the board's key lives in the hash.
+ */
+function helpContents() {
+  const entries = [...HELP.map((x) => [x.id, x.title]), ['legend', 'Legend']];
+  return el(
+    'nav',
+    { class: 'help-contents', 'aria-label': 'Contents' },
+    el(
+      'ol',
+      { class: 'help-contents-list' },
+      entries.map(([id, title]) =>
+        el(
+          'li',
+          null,
+          el('a', {
+            href: `#help-${id}`,
+            text: title,
+            onclick: (e) => {
+              e.preventDefault();
+              helpGoTo(id);
+            },
+          }),
+        ),
+      ),
+    ),
+  );
+}
+
+/** Scrolls the help to a section and gives its heading focus (the heading is no tab stop: tabindex -1). False if none. */
+function helpGoTo(id) {
+  const heading = id === 'legend' ? panel.querySelector('#help-legend h3') : $(`help-${id}-title`);
+  if (!heading || !panel.contains(heading)) return false;
+  heading.tabIndex = -1;
+  heading.scrollIntoView?.({ block: 'start' });
+  heading.focus();
+  return true;
+}
+
+/** B9: "Back to menu" goes back to Settings, with focus on "How to use the board" once Settings are drawn. */
+async function backToSettings() {
+  // The button is drawn while Settings load too: focus goes there at once, and again once the loaded Settings are
+  // drawn (a redraw replaces the button), unless the panel was closed meanwhile.
+  const loading = openSettings();
+  $('settings-open-help')?.focus();
+  await loading;
+  if (t.setting && !panel.contains(document.activeElement)) $('settings-open-help')?.focus();
+}
+
+/**
+ * The small "?" in a room's own header (B30): opens the help at the room's section. `name` gives the accessible name
+ * ("Help for Decisions"); the visible text is only "?". data-help lets closePanel find it again after a redraw.
+ */
+function roomHelp(section, name) {
+  return el('button', {
+    type: 'button',
+    class: 'room-help',
+    'aria-label': `Help for ${name}`,
+    title: `How ${name} works`,
+    'data-help': section,
+    'data-focus': `help:${section}`,
+    text: '?',
+    onclick: (e) => {
+      e.stopPropagation();
+      openHelp({ at: section });
+    },
+  });
+}
 
 function laneEl(p, per, columns = COLUMNS) {
   // The numbers in the lane header and whether the lane is shown follow the search (searchBound at the bottom).

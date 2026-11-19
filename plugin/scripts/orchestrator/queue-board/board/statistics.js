@@ -558,6 +558,10 @@ function transcriptMetricsSection(m, windowDays) {
 
 function drawStatistics() {
   const d = t.stat.data;
+  // B30: a one-line header with the "?", drawn while the figures load too.
+  main.append(
+    el('div', { class: 'stat-head' }, el('h2', { class: 'decide-heading', text: 'Statistics' }), roomHelp('statistics', 'Statistics')),
+  );
   if (!d) {
     main.append(
       el('p', {

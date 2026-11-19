@@ -87,6 +87,9 @@ function closePanel() {
     const fresh = main.querySelector(`[data-id="${CSS.escape(fromId)}"]`);
     panelFrom = fresh?.querySelector('.summary-button') ?? fresh;
   }
+  // A room's "?" (roomHelp) that was redrawn while the help was open: the new "?" for the same section gets focus.
+  const fromHelp = panelFrom?.isConnected ? null : panelFrom?.dataset?.help;
+  if (fromHelp) panelFrom = document.querySelector(`.room-help[data-help="${CSS.escape(fromHelp)}"]`);
   if (panelFrom?.isConnected) panelFrom.focus();
   panelFrom = null;
   if (typeof placeOptionMenu === 'function') placeOptionMenu();

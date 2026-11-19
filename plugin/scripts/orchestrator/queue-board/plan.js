@@ -222,6 +222,8 @@
     return el(
       'div',
       { class: 'plan-tool', role: 'toolbar', 'aria-label': 'Focus' },
+      // B30: the "?" opens the help at Focus (the board passes roomHelp in the context).
+      s.ctx.help ? s.ctx.help('focus', 'Focus') : null,
       el(
         'label',
         {

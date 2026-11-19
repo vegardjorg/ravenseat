@@ -23,6 +23,8 @@ function planContext() {
     drawOnNew: draw,
     status: (text) => ($('status').textContent = text),
     pending: () => t.pending,
+    // The "?" for the Focus toolbar (B30).
+    help: roomHelp,
   };
 }
 
