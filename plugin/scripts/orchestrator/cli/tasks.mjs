@@ -19,7 +19,7 @@ import path from 'node:path';
 
 import {
   a, autoAcceptContext, autoAcceptIn, byName, CONFIG, CLI, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
-  namedIds, positional, PR, queueBranchId, read, readPlans, restoreArchived, undoHint, val, values, withLock, write,
+  missionMovedJson, missionMovedLine, moveLongMission, namedIds, positional, PR, queueBranchId, read, readPlans, restoreArchived, undoHint, val, values, withLock, write,
   require,
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
@@ -257,6 +257,8 @@ export function cmdAdd() {
   if (a.includes('--plan') && (!planArg || planArg.startsWith('--')))
     die('--plan requires a plan entry id (ravenseat plan show)');
   const liteNotes = [];
+  // The missions moved out of queue.json in this add (moveLongMission), for the NOTE lines and --answer-json.
+  const missionMoved = [];
   const added = edit((queue) => {
     const error = [];
     let planWarnings = [];
@@ -350,7 +352,7 @@ export function cmdAdd() {
         if (fixes.length) n.fixes = fixes;
         else delete n.fixes;
       }
-      queue.tasks.push({
+      const stored = {
         value: 5,
         content_min: 30,
         migr_tens: 0,
@@ -362,7 +364,14 @@ export function cmdAdd() {
         ...n,
         status,
         added_at: new Date().toISOString(),
-      });
+      };
+      // A mission longer than queue.missionInlineMax goes to <dataFolder>/mission/<id>.md now that every check has
+      // passed (cli/context.mjs moveLongMission), so queue.json stays small; the agent reads the file as before. Only
+      // the stored copy gets the path: `n` keeps the text, so the warnings after the write (a protected path the
+      // mission names, the project proposal) read the mission as they always did.
+      const moved = moveLongMission(stored);
+      if (moved) missionMoved.push(moved);
+      queue.tasks.push(stored);
     }
     // New tasks must have a project and a feature. If they lack them, that is reported now, not when a later fill stops
     // on them.
@@ -417,6 +426,8 @@ export function cmdAdd() {
         added: added.result,
         autoAccepted: added.autoAccepted.map((x) => x.id),
         linkProblems: linkProblemsJson(links),
+        // Only when a mission moved, so the answer is as before otherwise.
+        ...(missionMoved.length ? { missionMoved: missionMovedJson(missionMoved) } : {}),
       }),
     );
     return;
@@ -424,6 +435,7 @@ export function cmdAdd() {
   const waiting = added.result.filter((r) => r.status === 'waiting').map((r) => r.id);
   const proposed = added.result.filter((r) => r.status === 'proposed').map((r) => r.id);
   if (waiting.length) console.log(`Added: ${waiting.join(', ')}`);
+  for (const m of missionMoved) console.log(missionMovedLine(m));
   for (const x of liteNotes) console.log(`Note: ${x}`);
   for (const x of added.autoAccepted)
     console.log(`Auto-accepted ${x.id} by the owner's rules (${x.reason}); undo: ${CLI} proposals undo ${x.id}`);

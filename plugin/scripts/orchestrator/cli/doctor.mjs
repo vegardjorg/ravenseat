@@ -141,6 +141,10 @@ export function baselineProblems(own) {
   const hd = own.history?.archiveDoneAfterDays;
   if (hd !== undefined && hd !== null && !(Number.isInteger(hd) && hd >= 0))
     out.push('history.archiveDoneAfterDays must be a whole number >= 0 or null (treated as null: nothing is archived)');
+  // queue.missionInlineMax (roadmap 2c3, lib/missionInline.js): a broken value reads as the default 16000, so it is named here.
+  const mi = own.queue?.missionInlineMax;
+  if (mi !== undefined && !(Number.isInteger(mi) && mi >= 0))
+    out.push('queue.missionInlineMax must be a whole number >= 0 (0 = off; treated as 16000)');
   return out;
 }
 

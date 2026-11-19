@@ -17,7 +17,7 @@ import fs from 'node:fs';
 
 import {
   a, autoCleanFocus, branchFor, branchInfo, byName, checkExpect, die, edit, editLogged, focusCleanOut, FX, hasLock, L, lastEntry, LOCK, P,
-  PREFIX, pulseCursor, read, readCursor, readPlans, require, undoHint, val, values, CONFIG, CLI, G, git,
+  missionMovedJson, missionMovedLine, moveLongMission, PREFIX, pulseCursor, read, readCursor, readPlans, require, undoHint, val, values, CONFIG, CLI, G, git,
 } from './context.mjs';
 import { logTime, measurementLine, measureTask, minutes, saveMeasurement, turnWarningLines } from './tracks.mjs';
 import { linkProblems, linkProblemsJson, printLinkWarning } from './taskLinksCheck.mjs';
@@ -242,6 +242,8 @@ export function cmdEdit() {
     die(`Nothing changed: ${unknownFlags.length ? `edit does not know ${unknownFlags.join(', ')}. ` : ''}edit ${id} needs --json '{...}', --files a,b, --accept "<criterion>" or --bonus "<text>". Status: ${CLI} set ${id} <status>.`);
   // The ids a `fixes` edit adds (not the ones already there): each is a new defect after merge for the finding log.
   let newFixes = [];
+  // The mission this edit moved out of queue.json (moveLongMission), for the NOTE line and --answer-json.
+  const missionMoved = [];
   editLogged('edit', (queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
@@ -297,6 +299,13 @@ export function cmdEdit() {
       const t = L.addToBonus(o, bonus, new Date().toISOString());
       if (t) die(`Invalid bonus: ${t}`);
     }
+    // A new mission longer than queue.missionInlineMax goes to <dataFolder>/mission/<id>.md (cli/context.mjs
+    // moveLongMission), last, so a refused edit writes no file. Only when this edit sets the mission: an old long
+    // inline mission is left alone by an edit of another field. The changelog (editLogged) then holds the path.
+    if ('mission' in field) {
+      const m = moveLongMission(o);
+      if (m) missionMoved.push(m);
+    }
   });
   // The finding log (lib/findingSources.js), after the write: one row per newly fixed task, at most a warning.
   if (newFixes.length) FSRC.record(() => FSRC.fixLinks({ id, fixes: newFixes }));
@@ -308,10 +317,19 @@ export function cmdEdit() {
   // --answer-json (the board): one JSON line with the changelog no., so "Undo" rolls back exactly this edit.
   if (a.includes('--answer-json'))
     console.log(
-      JSON.stringify({ ok: true, id, changed: changedField, log: lastEntry?.nr ?? null, linkProblems: linkProblemsJson(links) }),
+      JSON.stringify({
+        ok: true,
+        id,
+        changed: changedField,
+        log: lastEntry?.nr ?? null,
+        linkProblems: linkProblemsJson(links),
+        // Only when the mission moved, so the answer is as before otherwise.
+        ...(missionMoved.length ? { missionMoved: missionMovedJson(missionMoved) } : {}),
+      }),
     );
   else {
     console.log(`${id} changed: ${changedField.join(', ')}`);
+    for (const m of missionMoved) console.log(missionMovedLine(m));
     printLinkWarning(links, 'changed');
     if (bonus != null)
       console.log(

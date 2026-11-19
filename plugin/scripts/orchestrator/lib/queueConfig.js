@@ -594,6 +594,11 @@ const STANDARD = Object.freeze({
   // untouched for that many days move from queue.json to <dataFolder>/queue-archive.json (lib/queueArchive.js), where
   // info, explain, undo, plans, statistics and the board still find them read-only. null = never.
   history: { rotateTimeLog: 'monthly', archiveDoneAfterDays: 30 },
+  // The queue file itself (roadmap 2c3). missionInlineMax: add and edit move an inline mission longer than this many
+  // characters to <dataFolder>/mission/<id>.md and store the path (lib/missionInline.js, cli/context.mjs
+  // moveLongMission), so queue.json, which every command and board refresh reads and writes whole, stays small. The
+  // agent reads the file as before. It stops nothing, so it is on; 0 turns it off.
+  queue: { missionInlineMax: 16000 },
   // Auto-accept of agent proposals (lib/queueProposals.js): a proposal that fits the rules is approved by the queue
   // itself (in `queue.mjs add` and `orchestrator pulse`), logged and can be undone. Default off. `queue.mjs proposals
   // auto` and the board's gear write the queue's own rules (queue.json proposals.autoAccept), which win field by field.

@@ -1224,6 +1224,11 @@ const SETTINGS = Object.freeze([
     'folder, where info, explain, plans and statistics still find them. None keeps them all in queue.json.', {
       nullable: true,
     }),
+  // Roadmap 2c3 (lib/missionInline.js): performance, not a guard. It stops nothing (the text moves to a file the agent
+  // reads as before), so it is on by default, and 0 (off) weakens no guard.
+  row('queue.missionInlineMax', 'history', 'integer', 'Longest inline mission (characters)',
+    'add and edit move an inline mission longer than this to mission/<id>.md in the data folder and store the path, ' +
+    'so queue.json stays small. The agent reads the file as before. It stops nothing. 0 keeps every mission inline.'),
 ]);
 
 /** The row for a key, or null. */

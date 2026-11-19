@@ -42,7 +42,7 @@ a track adding a proposal) cannot corrupt the file. `ravenseat undo` undoes the 
 | `id`, `title` | Unique id and title |
 | `domain` | Domain; limits how many tracks run in the same domain (`maxPerDomain`) |
 | `class` | `K` code, `D` database, `D+` high-risk database or security, `U` investigation (no production code) |
-| `mission` | The mission text. Must be self-contained: the track agent knows nothing else |
+| `mission` | The mission text, or the path to a mission file (one line, for example `scripts/.queue/mission/<id>.md`, the form the board and `batch pack` write). Must be self-contained: the track agent knows nothing else. A task with no documents keeps its whole text here. When `add` or `edit` gets an inline text longer than `queue.missionInlineMax` characters (default 16000), the text moves to `mission/<id>.md` in the data folder and the field stores that path, with one `NOTE: <id>: the mission (<n> KB) was moved to <path> ...` line (`missionMoved` in `--answer-json`). The agent reads the file exactly as it read the text. A file that already holds other text is never overwritten: the mission then goes to the next free `<id>+2.md`, `<id>+3.md`, and the line names both. A file that already holds the same text is reused |
 | `value` | Value 1 to 10, used for ranking |
 | `content_min` | Estimated minutes |
 | `depends_on` | Task ids that must be done first |
@@ -1118,10 +1118,12 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 | `metrics.idleGapMin` | `5` | A gap longer than this between two transcript entries is idle and not counted as active time | Advanced |
 | `history.rotateTimeLog` | `"monthly"` | `monthly` moves the time log to one archive per UTC month next to it on the first write of a new month; `off` keeps one file | Advanced |
 | `history.archiveDoneAfterDays` | `30` | Done and cancelled tasks untouched for this many days move from queue.json to `queue-archive.json` in the data folder; `null` keeps them all in queue.json | Advanced |
+| `queue.missionInlineMax` | `16000` | `add` and `edit` move an inline mission longer than this many characters to `mission/<id>.md` in the data folder and store the path (see the `mission` field), so queue.json stays small; the agent reads the file as before. It stops nothing, so `0` (every mission stays inline) weakens no guard | Advanced |
 
-**Where the history lives.** Both settings are about speed, not safety: every command parses queue.json, and the budget
-guard, start, fill and the board read the time log, so both used to grow without end. Turning either off is an INFO line
-in `ravenseat doctor` (with the size once it is large), never a weakened guard.
+**Where the history lives.** These settings are about speed, not safety: every command parses queue.json, and the budget
+guard, start, fill and the board read the time log, so both used to grow without end. Turning either `history` setting
+off is an INFO line in `ravenseat doctor` (with the size once it is large), never a weakened guard. `queue.missionInlineMax`
+keeps long mission texts out of queue.json in the same spirit.
 
 - The time log (`timeLog`, default `scripts/.queue/times.jsonl`) is the current month. On the first write of a new UTC
   month the old file is renamed to `times-YYYY-MM.jsonl` (the month of its last write) in the same folder; a second

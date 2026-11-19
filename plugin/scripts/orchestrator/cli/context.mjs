@@ -157,6 +157,54 @@ export function missionRef(file) {
   const rel = path.relative(MAIN_TREE, file);
   return (rel.startsWith('..') || path.isAbsolute(rel) ? file : rel).replace(/\\/g, '/');
 }
+// A long inline mission moves out of queue.json (roadmap 2c3, lib/missionInline.js; queue.missionInlineMax, default
+// 16000 characters, 0 = off).
+const MI = require('./lib/missionInline.js');
+/**
+ * Moves the task's inline mission to <dataFolder>/mission/<id>.md when it is longer than queue.missionInlineMax, and
+ * stores the path in `o.mission` (the same form as the board and batch pack, via missionRef). Call it under the queue
+ * lock, after the command's own checks have passed, so a refused add or edit writes no file.
+ *
+ * Never overwrites a file: one with the same text is reused, one with other text keeps its text and the mission goes
+ * to <id>+2.md (lib/missionInline.js chooseFile). If the queue write fails afterwards, the file stays behind; the next
+ * try finds the same text and reuses it, so a retry makes no second copy.
+ * @param {object} o the task (changed in place)
+ * @returns {null | { id: string, path: string, kb: number, chars: number, renamed: boolean, reused: boolean, taken: string }}
+ *   null when nothing moved; otherwise the facts for the NOTE line (missionMovedLine) and the JSON answers (missionMovedJson)
+ */
+export function moveLongMission(o) {
+  const max = MI.inlineMax(CONFIG);
+  if (!o || !MI.needsMove(o.mission, max)) return null;
+  const text = o.mission;
+  const dir = path.join(FOLDER, 'mission');
+  const pick = MI.chooseFile(dir, o.id, text);
+  if (pick.error) die(`Nothing changed: ${o.id}: the mission is longer than queue.missionInlineMax (${max}), and ${pick.error}`);
+  if (!pick.reused) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      // 'wx': fails rather than overwrite, should a file appear between the check and the write.
+      fs.writeFileSync(pick.file, text, { flag: 'wx' });
+    } catch (e) {
+      die(`Nothing changed: ${o.id}: could not write the mission file ${pick.file} (${e?.code ?? e?.message ?? e}).`);
+    }
+  }
+  const ref = missionRef(pick.file);
+  o.mission = ref;
+  return {
+    id: o.id,
+    path: ref,
+    kb: MI.sizeKb(text),
+    chars: text.length,
+    renamed: pick.renamed,
+    reused: pick.reused,
+    taken: missionRef(path.join(dir, `${o.id}.md`)),
+  };
+}
+/** The NOTE line for a moved mission (text output only). */
+export const missionMovedLine = (m) => MI.noteLine(m);
+/** The moved missions as the --json / --answer-json answers carry them (without the text-only `taken`). */
+export const missionMovedJson = (list) =>
+  list.map(({ id, path: p, kb, chars, renamed, reused }) => ({ id, path: p, kb, chars, renamed, reused }));
 // ---- Work outside the queue and the orchestrator cursor ------------------------------------------------
 // Read-only, with --no-optional-locks (queueGit.js): a scan never takes index.lock from a session that is committing.
 export const gitRead = G.makeGit(GIT_ROOT);

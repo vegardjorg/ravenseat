@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **A long inline mission moves to a mission file at add and edit (2c3 MISSION-INLINE-MAX).** Hardening of queue.json
+  for tasks with no documents, whose whole text lives in `mission`. When `add` or `edit` gets an inline mission longer
+  than the new setting `queue.missionInlineMax` (default 16000 characters, `0` turns it off), the text goes to
+  `mission/<id>.md` in the data folder, the same place and form the board and `batch pack` use, and the task stores the
+  path. One line says so: `NOTE: <id>: the mission (<n> KB) was moved to <path> to keep queue.json small; the agent
+  reads it as before.` `--answer-json` carries the same facts as `missionMoved` and prints no extra line. Edge cases: a
+  file that already holds other text is never overwritten (the mission takes the next free `<id>+2.md`, and the line
+  names both), a file with the same text is reused, an edit of another field leaves an inline mission alone, and the
+  changelog that `undo` reads holds the path. Under the limit nothing changes. The agent's mission (`trackFile`,
+  `readMission`) reads the file byte for byte as it read the text. `ravenseat doctor` names a value that is not a whole
+  number >= 0.
+
 - **Task links: the shape of a task's own `sources` is checked at add and edit (0p2 B4).** Hardening of the field for
   a few edge cases. `sources` (`[{ path, anchor?, role? }]`) now gets the plan register's own source check: `add` and
   `edit` refuse a value that is not a list, an entry that is not an object or has an unknown field, a path that is
