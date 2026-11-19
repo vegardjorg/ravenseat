@@ -135,7 +135,7 @@ function placementFacts(k, idButton) {
   else if (!f?.active) stage = 'No focus (the whole queue is ranked by score)';
   else if (pl.step == null)
     stage = pl.out
-      ? `Outside focus: ${pl.reason ?? 'waiting until focus is done'}`
+      ? `Outside focus: ${pl.reason ? boardReason(pl.reason) : 'waiting until focus is done'}`
       : 'Outside focus (fills available capacity after the focus steps)';
   else stage = `T${pl.step + 1} ${f.stage?.[pl.step]?.title ?? ''}`.trim();
   if (pl.nr && pl.by)
@@ -595,6 +595,9 @@ function actionsFor(k, col) {
       );
     }
   }
+  // B21: "Add to focus" / "Remove from focus", or what step covers the task (views.js focusActions).
+  const inFocus = focusActions(k);
+  if (inFocus) box.append(inFocus);
   // Cancel, decline and edit (waiting and proposed), or the CLI hint for running and review.
   const edit = taskEditActions(k);
   if (edit) box.append(...[].concat(edit));

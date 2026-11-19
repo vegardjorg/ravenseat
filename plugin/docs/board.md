@@ -166,7 +166,18 @@ The Queue workspace has these tabs:
   stays in the data and is sent back unchanged, but the board no longer draws it. Below the lists, **Focus settings**
   is a fold, closed by default, with the name, the rest (waits or fills free slots), the end date, dragging
   dependencies along, what happens when the focus is done, **Clear focus** and **Areas …** (creates and names the
-  areas). The draft state, **Discard** and **Save focus** stay beside the In focus heading. Below 600 px the order is
+  areas). The draft state, **Add to focus …**, **Discard** and **Save focus** stay beside the In focus heading. **Add
+  to focus …** opens a picker (kind: task, feature, project or area; what; the step it goes in at, last by default)
+  that puts the step into the draft, as a drag does; nothing is saved before Save focus and its preview. A task step
+  taken out of In focus in the draft stands in Not in focus until the draft is saved or discarded, so it can be dragged
+  back. On the cards, a task outside every step has **Add to focus** in the detail panel, on its card right after the
+  reason (which then leaves out the `ravenseat focus` hint) and, for several cards, in Selection: each goes in as its
+  own `task:<id>` step, last in the list, in one change. A task that is its own step has **Remove from focus**, which
+  takes that step out. A task that a feature, project or area step holds gets a note naming that step and no button
+  (it cannot leave the focus alone, and its own step would only move it to the end); a task dragged along says which
+  task waits on it. These actions show the same preview as Save focus (before, after, the steps, Next up) and save on
+  confirm (`POST /api/focus { change }`, the same code as `ravenseat focus add` / `focus remove`, so `undo` takes it
+  back); taking out the only step is refused with a pointer to **Clear focus**. Below 600 px the order is
   What happens now, In focus, Not in focus, On pause and the settings fold, one under another. At the top, **How focus works** is a box in four steps
   (pick what comes first, step 1 before step 2, what the rest does, what happens when the focus is done) whose text
   follows this focus's rest and continue-when-empty values; it is open until you close it, and the choice is

@@ -202,7 +202,7 @@ main.addEventListener('dragend', () => {
 // ---- Click and keyboard ----
 main.addEventListener('click', (e) => {
   // The checkboxes (the cloud bundle and multi-select) and the buttons in the groups do not open the detail panel.
-  if (e.target.closest?.('.cloud-select, .mark-box, .batch-buttons')) return;
+  if (e.target.closest?.('.cloud-select, .mark-box, .batch-buttons, .focus-add')) return;
   const summary = e.target.closest?.('.summary');
   if (!summary || boosted) return;
   // Ctrl/Cmd-click selects one card, Shift-click everything from the previous selected to this one.

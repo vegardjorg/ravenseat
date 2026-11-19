@@ -1611,6 +1611,8 @@ const STEP =
  */
 async function focus(b, queueNow) {
   const no = (message) => ({ status: 400, answer: { ok: false, message } });
+  // B21: one change from a card, the Selection or the panel (focusChange below) instead of a whole plan.
+  if (b.change != null) return focusChange(b, queueNow);
   const p = b.plan && typeof b.plan === 'object' && !Array.isArray(b.plan) ? b.plan : null;
   if (!p) return no('missing plan');
   const list = (x) => (Array.isArray(x) ? x.map(String) : x == null ? [] : null);
@@ -1697,6 +1699,76 @@ async function focus(b, queueNow) {
     answer: {
       ok: true,
       message: order.length ? 'Focus saved' : 'Focus removed',
+      info: r.data.warnings ?? [],
+    },
+  };
+}
+
+/**
+ * B21: one focus change from a card, the Selection or the detail panel. The body: { change: { action: add|remove,
+ * steps[], at? }, dry, expect }. A remove takes exactly one step; `at` (1-based place, add only) defaults to last.
+ *   dry: true → preview (queueBoard.focusChangePreview: the B20 logic, queueLogic.addFocusStep / removeFocusStep, on a
+ *               copy) and the queue's version `changed`. Writes nothing. A no-op (every step already there) cannot be saved.
+ *   otherwise  → queue.mjs focus add|remove --json --expect-changed <expect>: the same code writes as in the CLI, one
+ *               changelog entry (undo takes it back); 409 with outdated: true when the queue has changed since the preview.
+ */
+async function focusChange(b, queueNow) {
+  const no = (message) => ({ status: 400, answer: { ok: false, message } });
+  const c = b.change && typeof b.change === 'object' && !Array.isArray(b.change) ? b.change : null;
+  if (!c) return no('missing change');
+  if (!T.FOCUS_CHANGES.includes(c.action)) return no('action must be add or remove');
+  const steps = Array.isArray(c.steps) ? c.steps.map(String) : null;
+  if (!steps?.length || steps.length > L.FOCUS_PLAN_MAX || steps.some((x) => !STEP.test(x)))
+    return no('invalid step');
+  if (c.action === 'remove' && steps.length !== 1) return no('remove takes exactly one step');
+  const at = c.at == null ? null : Number(c.at);
+  if (at != null && (c.action !== 'add' || !Number.isInteger(at) || at < 1)) return no('invalid position');
+  const expectValue = b.expect == null ? null : String(b.expect);
+  if (expectValue != null && !Number.isFinite(Date.parse(expectValue))) return no('invalid expect');
+  const queue = queueNow();
+  if (b.dry === true) {
+    const f = T.focusChangePreview(
+      queue,
+      { action: c.action, steps, at },
+      { now: Date.now(), uncommitted: uncommitted().uncommitted },
+    );
+    return {
+      status: 200,
+      answer: { ok: true, dry: true, changed: queue.changed ?? null, ...f, can: !f.error.length && !f.noop },
+    };
+  }
+  const r = await queueJson([
+    'focus',
+    c.action,
+    ...steps,
+    ...(at != null ? ['--at', String(at)] : []),
+    '--json',
+    '--by',
+    'theBoard',
+    ...(expectValue ? ['--expect-changed', expectValue] : []),
+  ]);
+  quick = null;
+  console.log(
+    `${new Date().toLocaleTimeString('en-GB')} focus ${c.action}: ${r.ok ? 'ok' : `failed (${errorText(r, '?')})`}`,
+  );
+  if (!r.ok || r.data?.ok !== true) {
+    const outdated = r.code === 6 || r.data?.outdated === true;
+    return {
+      status: 409,
+      answer: {
+        ok: false,
+        outdated,
+        message: outdated
+          ? 'The queue has changed since the preview. Review the change again.'
+          : errorText(r, `ravenseat focus ${c.action} failed`),
+      },
+    };
+  }
+  return {
+    status: 200,
+    answer: {
+      ok: true,
+      message: r.data.noop ? r.data.message : c.action === 'add' ? 'Added to focus' : 'Removed from focus',
       info: r.data.warnings ?? [],
     },
   };

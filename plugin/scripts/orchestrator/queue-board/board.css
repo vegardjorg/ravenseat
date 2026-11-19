@@ -5628,3 +5628,20 @@ body.stale .summary.stuck::before {
   margin: 0;
   font-size: inherit;
 }
+
+/* B21: "Add to focus" on an outside-focus card, right after the reason: a compact outline button in the footer's
+   text size (24 px target with a mouse, the WCAG 2.2 target size; 44 px on touch). Colors come from .button-outline. */
+.summary-footer .focus-add {
+  min-height: 24px;
+  padding: 0 var(--distance-sm);
+  font-size: var(--text-xs);
+}
+@media (hover: none) {
+  .summary-footer .focus-add {
+    min-height: 44px;
+  }
+}
+/* The note in the detail panel on what step covers a task (no button: a broader step holds it). */
+.focus-cover {
+  margin: 0;
+}

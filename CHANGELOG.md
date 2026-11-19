@@ -5,6 +5,19 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: focus on the cards, and a picker on the Focus tab.** Edge cases closed in the Focus feature. Putting one
+  task into the focus or taking it out meant the CLI or dragging on the Focus tab, and a card outside the focus named
+  `ravenseat focus` as its way out. A task outside every step now has **Add to focus** in the detail panel, on its card
+  right after the reason and, for several cards, in Selection; a task that is its own step has **Remove from focus**.
+  A task that a broader step (feature, project or area) holds gets a note naming that step and no button, since it
+  cannot leave the focus alone. Each action shows the same preview as Save focus and saves on confirm through
+  `POST /api/focus { change }`, which runs the same code as `ravenseat focus add` / `focus remove`, so one `undo` takes
+  it back; a preview the queue has moved past is shown again. Several cards go in as one change: `focus add` takes
+  several steps (in together at `--at`, a step already there skipped and named), and `focus add` / `focus remove` take
+  `--json` and `--expect-changed`. Taking out the only step is refused with a pointer to Clear focus. The Focus tab has
+  **Add to focus …** (kind, what, position) that puts the step into the draft. A task step taken out of In focus in the
+  draft now stands in Not in focus, so it can be dragged back. No new setting.
+
 - **Focus: one task can be a step, and one step can be added or taken out without writing the list again.** Edge
   cases closed in the Focus feature. A focus step could only be an area, a project or a feature, so putting one
   task first meant moving it into a feature of its own, and adding or dropping one step meant typing the whole list

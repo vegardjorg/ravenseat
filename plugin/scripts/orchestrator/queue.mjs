@@ -598,7 +598,10 @@
 //        (change the list in place, the rest of the focus stays as it is. A bare task id = task:<id>. --at is the
 //         1-based place (default: last). Adding a step already in the list changes nothing (exit 0, with a message).
 //         Refused with exit 1 and nothing changed: no focus set (use focus set), an unknown step or task id, --at out
-//         of range, a step not in the list, and the last step (use focus off). One changelog entry: queue.mjs undo.)
+//         of range, a step not in the list, and the last step (use focus off). One changelog entry: queue.mjs undo.
+//         focus add takes several steps too: they go in together at --at, in the given order, one changelog entry;
+//         a step already in the list is skipped and named. --json answers with one JSON line and --expect-changed
+//         <iso> refuses with exit 6 when the queue changed after that version: the board's card actions use both.)
 //   node scripts/orchestrator/queue.mjs focus evaluate [--json] [--all]
 //        (each stage with open, ready, minutes left, rests (batch queue, proposals, waiting only on owner questions,
 //         QA with the owner) with a suggestion per rest, and status active | done-with-rests | done.)

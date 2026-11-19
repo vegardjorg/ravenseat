@@ -133,14 +133,16 @@ function removeFocus(queue) {
  * and taking out the last open step can end it.
  * @returns {object|null} the changelog entry
  */
-function changeFocusSteps(queue, after, { by, now, action, row }) {
+function changeFocusSteps(queue, after, { by, now, action, rows }) {
   const who = String(by ?? '').trim() || 'unknown';
   const f = queue.focus;
   const next = {
     ...after,
-    history: [...(Array.isArray(f.history) ? f.history : []), { at: now, by: who, ...row }].slice(
-      -FOCUS_HISTORY_MAX,
-    ),
+    // One history row per step added or taken out (B21: several steps can go in with one change).
+    history: [
+      ...(Array.isArray(f.history) ? f.history : []),
+      ...rows.map((row) => ({ at: now, by: who, ...row })),
+    ].slice(-FOCUS_HISTORY_MAX),
   };
   const changes = [];
   for (const field of ['order', 'now_count', 'history'])
@@ -158,12 +160,14 @@ function changeFocusSteps(queue, after, { by, now, action, row }) {
 }
 
 /**
- * Adds one step to the focus (queue.mjs focus add). `raw` is any form parseStep reads, so a bare task id is
- * `task:<id>`. `at` is the 1-based place in the list (default: last). A step already in the list is a no-op with a
- * message. Refused, with nothing changed: no focus set (focus set starts one), an unknown step or task id, and `at`
- * outside 1 to n+1. Warns (not an error) when the step has no open tasks.
- * @returns {{ error: string[], warnings: string[], stage?: string, index?: number, noop?: boolean,
- *   message?: string, entry?: object|null }}
+ * Adds one step, or several (B21: the board's Selection), to the focus (queue.mjs focus add). `raw` is any form
+ * parseStep reads, so a bare task id is `task:<id>`, or a list of them. Several steps go in together at one place, in
+ * the given order, as ONE changelog entry (one undo takes all of them back). `at` is the 1-based place in the list
+ * (default: last). A step already in the list is skipped and named in `skipped`; when every step is already there the
+ * add is a no-op with a message. Refused, with nothing changed: no focus set (focus set starts one), an unknown step or
+ * task id (one is enough), and `at` outside 1 to n+1. Warns (not an error) for a step with no open tasks.
+ * @returns {{ error: string[], warnings: string[], stage?: string, stages?: string[], skipped?: string[],
+ *   index?: number, noop?: boolean, message?: string, entry?: object|null }}
  */
 function addFocusStep(queue, raw, { at = null, by = null, now = new Date().toISOString() } = {}) {
   if (!queue?.focus?.order?.length)
@@ -171,20 +175,37 @@ function addFocusStep(queue, raw, { at = null, by = null, now = new Date().toISO
       error: ['no focus set: start one with ravenseat focus set <step> [<step> ...]'],
       warnings: [],
     };
-  const r = parseStep(raw, queue);
-  if ('error' in r) return { error: [r.error], warnings: [] };
+  const list = Array.isArray(raw) ? raw : [raw];
+  if (!list.length) return { error: ['focus add needs a step'], warnings: [] };
   const order = queue.focus.order;
-  const there = order.indexOf(r.stage);
-  if (there >= 0)
+  const error = [];
+  const stages = [];
+  const skipped = [];
+  for (const one of list) {
+    const r = parseStep(one, queue);
+    if ('error' in r) error.push(r.error);
+    else if (order.includes(r.stage)) {
+      if (!skipped.includes(r.stage)) skipped.push(r.stage);
+    } else if (!stages.includes(r.stage)) stages.push(r.stage);
+  }
+  if (error.length) return { error, warnings: [] };
+  if (!stages.length) {
+    const there = order.indexOf(skipped[0]);
     return {
       error: [],
       warnings: [],
-      stage: r.stage,
+      stage: skipped[0],
+      stages: [],
+      skipped,
       index: there,
       noop: true,
-      message: `${r.stage} is already step ${there + 1} in the focus: nothing changed`,
+      message:
+        skipped.length === 1
+          ? `${skipped[0]} is already step ${there + 1} in the focus: nothing changed`
+          : `${skipped.join(', ')} are already in the focus: nothing changed`,
       entry: null,
     };
+  }
   let index = order.length;
   if (at != null) {
     const n = Number(at);
@@ -195,23 +216,23 @@ function addFocusStep(queue, raw, { at = null, by = null, now = new Date().toISO
       };
     index = n - 1;
   }
-  const after = { order: [...order.slice(0, index), r.stage, ...order.slice(index)] };
-  // now_count keeps the same steps in "Now": a step put in front of the limit moves it one down.
+  const after = { order: [...order.slice(0, index), ...stages, ...order.slice(index)] };
+  // now_count keeps the same steps in "Now": steps put in front of the limit move it down by as many.
   const nowCount = queue.focus.now_count;
-  if (nowCount != null && index < nowCount) after.now_count = nowCount + 1;
+  if (nowCount != null && index < nowCount) after.now_count = nowCount + stages.length;
   const warnings = [];
-  const open = (queue.tasks ?? []).some(
-    (o) => openTask(o) && o.status !== 'proposed' && !isExternalRow(o) && stepMatch(o, r.stage, queue) > 0,
-  );
-  if (!open) warnings.push(`step ${index + 1} (${r.stage}) has no open tasks`);
-  const title = stepTitle(r.stage, queue);
+  const opened = (queue.tasks ?? []).filter((o) => openTask(o) && o.status !== 'proposed' && !isExternalRow(o));
+  stages.forEach((stage, i) => {
+    if (!opened.some((o) => stepMatch(o, stage, queue) > 0))
+      warnings.push(`step ${index + i + 1} (${stage}) has no open tasks`);
+  });
   const entry = changeFocusSteps(queue, after, {
     by,
     now,
     action: 'focus add',
-    row: { action: 'added', stage: r.stage, title },
+    rows: stages.map((stage) => ({ action: 'added', stage, title: stepTitle(stage, queue) })),
   });
-  return { error: [], warnings, stage: r.stage, index, entry };
+  return { error: [], warnings, stage: stages[0], stages, skipped, index, entry };
 }
 
 /**
@@ -253,7 +274,7 @@ function removeFocusStep(queue, raw, { by = null, now = new Date().toISOString()
     by,
     now,
     action: 'focus remove',
-    row: { action: 'removed', stage, title },
+    rows: [{ action: 'removed', stage, title }],
   });
   return { error: [], stage, index, entry };
 }

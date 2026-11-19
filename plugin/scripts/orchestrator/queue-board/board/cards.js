@@ -171,11 +171,26 @@ function footerFor(k, col) {
   } else if (col === 'queue') {
     if (k.ready) footer.push(el('span', { class: 'badge ready-badge', text: 'Ready now' }));
     else {
-      const h = k.blockers[0] ?? '';
+      // B21: an outside-focus card shows its reason without the CLI hint, and "Add to focus" right after it.
+      const h = boardReason(k.blockers[0] ?? '');
       const more = k.blockers.length > 1 ? ` (+${k.blockers.length - 1})` : '';
       footer.push(
-        el('span', { class: 'blocker', text: h + more, title: k.blockers.join('\n') }),
+        el('span', { class: 'blocker', text: h + more, title: k.blockers.map(boardReason).join('\n') }),
       );
+      if (focusCover(k).kind === 'outside')
+        footer.push(
+          el('button', {
+            type: 'button',
+            class: 'button button-outline button-small focus-add',
+            tabindex: '-1', // roving tabindex on the card title; the panel has the same action for the keyboard
+            text: 'Add to focus',
+            title: 'Adds this task as its own step, last in the focus. You see what changes before it is saved.',
+            onclick: (e) => {
+              e.stopPropagation();
+              changeFocus({ action: 'add', steps: [`task:${k.id}`] });
+            },
+          }),
+        );
     }
   } else if (col === 'proposed') {
     footer.push(el('span', { text: k.added_by ? `proposed by ${k.added_by}` : 'proposed' }));

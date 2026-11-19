@@ -332,6 +332,7 @@ function drawOptionLine() {
   const min = summary.reduce((s, x) => s + (Number(x.k.estimate) || 0), 0);
   const allBatch = summary.every((x) => x.col === 'batch');
   const anyBatch = summary.some((x) => x.col === 'batch');
+  const outsideFocus = summary.filter((x) => focusCover(x.k).kind === 'outside').map((x) => x.k.id);
   const anyParked = summary.some((x) => x.k.parked);
   // A row in the menu, a button in the bar. `action` names it (the focus after a redraw).
   const button = (action, text, title, fn, cls = 'button-outline') =>
@@ -383,6 +384,17 @@ function drawOptionLine() {
         )
       : null,
     button('label', 'Label', BULK_INFO.label.explanation, () => openBulk('label')),
+    // B21: the selected outside the focus go in as their own steps, last, in one change (one undo). Tasks a step
+    // already covers are left as they are, so the row shows only when at least one is outside.
+    outsideFocus.length
+      ? button(
+          'focus-add',
+          'Add to focus',
+          `Adds ${countText(outsideFocus.length)} outside the focus as their own steps, last in the focus, in one ` +
+            'change. Selected tasks that are already in a step stay where they are. You see what changes first.',
+          () => changeFocus({ action: 'add', steps: outsideFocus.map((id) => `task:${id}`) }),
+        )
+      : null,
     // In the menu a separator keeps "Clear selection" apart from the actions that change the queue.
     bar ? null : el('div', { role: 'separator', class: 'option-separator' }),
     button(

@@ -299,25 +299,56 @@ export function cmdFocus() {
   } else if (under === 'add' || under === 'remove') {
     // B20: one step added or taken out in place (queueLogic.addFocusStep / removeFocusStep). A bare task id is
     // task:<id>. One changelog entry, so `ravenseat undo` takes it back. Exit 1 with nothing changed on an error.
-    const words = positional(2, ['--at', '--by']);
-    if (words.length !== 1)
-      die(`focus ${under} <step|id>${under === 'add' ? ' [--at <n>]' : ''} takes exactly one step (got ${words.length})`);
+    // B21: add takes several steps (they go in together at --at, one entry), and both take --json (one JSON line, for
+    // the board) and --expect-changed (exit 6 when the queue changed after the board's preview).
+    const words = positional(2, ['--at', '--by', '--expect-changed']);
+    const json = a.includes('--json');
+    const fail = (errors, code = 1) => {
+      if (!json) die(`Focus not changed:\n  ${errors.join('\n  ')}`, code);
+      console.log(JSON.stringify({ ok: false, error: errors }));
+      if (hasLock) fs.rmSync(LOCK, { recursive: true, force: true });
+      process.exit(code);
+    };
+    if (under === 'add' ? !words.length : words.length !== 1)
+      fail([
+        under === 'add'
+          ? 'focus add <step|id> [<step|id> ...] [--at <n>] needs at least one step'
+          : `focus remove <step|id> takes exactly one step (got ${words.length})`,
+      ]);
     const at = under === 'add' ? val('--at') : null;
-    if (under === 'add' && a.includes('--at') && at == null) die('--at needs a number (1 = first step)');
+    if (under === 'add' && a.includes('--at') && at == null) fail(['--at needs a number (1 = first step)']);
     const r = edit((queue) => {
+      checkExpect(queue);
       const s =
         under === 'add'
-          ? L.addFocusStep(queue, words[0], { at, by: byName() })
+          ? L.addFocusStep(queue, words.length === 1 ? words[0] : words, { at, by: byName() })
           : L.removeFocusStep(queue, words[0], { by: byName() });
-      if (s.error.length) die(`Focus not changed:\n  ${s.error.join('\n  ')}`);
+      if (s.error.length) fail(s.error);
       return { s, text: L.focusText(queue) };
     });
+    if (json) {
+      console.log(
+        JSON.stringify({
+          ok: true,
+          noop: !!r.s.noop,
+          message: r.s.message ?? null,
+          stage: r.s.stage ?? null,
+          stages: r.s.stages ?? (r.s.stage ? [r.s.stage] : []),
+          index: r.s.index ?? null,
+          entry: r.s.entry?.nr ?? null,
+          focus: r.text,
+          warnings: r.s.warnings ?? [],
+        }),
+      );
+      return;
+    }
     if (r.s.noop) console.log(`${r.s.message}.`);
     else {
       console.log(
-        `${under === 'add' ? 'Added' : 'Removed'} ${r.s.stage} ` +
+        `${under === 'add' ? 'Added' : 'Removed'} ${(r.s.stages ?? [r.s.stage]).join(', ')} ` +
           `(${under === 'add' ? 'now step' : 'was step'} ${r.s.index + 1}). Focus: ${r.text}`,
       );
+      if (r.s.skipped?.length) console.log(`Already in the focus, left as they are: ${r.s.skipped.join(', ')}`);
       if (r.s.entry) console.log(`Changelog no. ${r.s.entry.nr}; undo: ravenseat undo`);
     }
     for (const x of r.s.warnings ?? []) console.log(`WARNING: ${x}`);

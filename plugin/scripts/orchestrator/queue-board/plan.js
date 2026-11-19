@@ -78,6 +78,7 @@
     drag: null, // { key } while something is dragged with the mouse
     boosted: null, // { key, for } while something is lifted with the keyboard (for = draft before the lift, for Esc)
     dialog: null, // open dialog (preview or areas)
+    taskKeys: new Set(), // B21: task steps the picker put into a draft on this page (Not in focus keeps them)
   };
 
   // ---- Helpers ----
@@ -137,6 +138,10 @@
     return { ...p, steps: [...p.steps], pause: new Set(p.pause) };
   }
 
+  /** The open cards (not Built) a task step can name, in board order. */
+  const openCards = () =>
+    ['queue', 'proposed', 'batch', 'inProgress', 'review'].flatMap((col) => data()?.columns?.[col] ?? []);
+  const taskCard = (id) => openCards().find((k) => k.id === id) ?? null;
   const projectRow = (pid) => data()?.plan?.projects.find((p) => p.pid === pid) ?? null;
   const areaRow = (oid) => data()?.plan?.areas.find((o) => o.oid === oid) ?? null;
 
@@ -155,9 +160,11 @@
       return { type, title: p?.title ?? rest, counts: p, exists: !!p, status };
     }
     if (type === 'task') {
-      // B20: one task as a step (planBasis task_steps: its title, counts and whether it is still in the queue).
+      // B20: one task as a step (planBasis task_steps: its title, counts and whether it is still in the queue). B21: a
+      // task the picker just put into the draft is no saved step yet, so its title comes from its card.
       const t = data()?.plan?.task_steps?.[key] ?? null;
-      return { type, title: t?.title ?? rest, counts: t, exists: !!t?.exists, status };
+      const card = t ? null : taskCard(rest);
+      return { type, title: t?.title ?? card?.title ?? rest, counts: t, exists: !!t?.exists || !!card, status };
     }
     const pid = rest.slice(0, rest.indexOf('/'));
     const name = rest.slice(rest.indexOf('/') + 1);
@@ -276,12 +283,22 @@
       el('button', {
         type: 'button',
         class: 'button button-outline button-small',
+        text: 'Add to focus …',
+        title:
+          'Choose a task, feature, project or area and the step it goes in at. It goes into the draft; Save focus shows ' +
+          'what changes before anything is saved.',
+        onclick: openPicker,
+      }),
+      el('button', {
+        type: 'button',
+        class: 'button button-outline button-small',
         text: 'Discard',
         disabled: !s.draft,
         title: 'Forget the draft and show the focus as saved in the queue. Nothing in the queue changes.',
         onclick: () => {
           s.draft = null;
           s.basis = null;
+          s.taskKeys.clear();
           s.ctx.drawOnNew();
         },
       }),
@@ -293,7 +310,7 @@
         title:
           'First shows what changes and what the queue starts next. Nothing is saved until you confirm, and everything ' +
           'is saved together or not at all.',
-        onclick: previewList,
+        onclick: () => previewList(),
       }),
     );
   }
@@ -492,7 +509,11 @@
     if (col === 'focus') return p.steps;
     const d = data();
     if (col === 'waiting') return [...p.pause].sort().map((pid) => `project:${pid}`);
-    const out = [];
+    // B21: a task step taken out of In focus in the draft (a saved one, or one the picker added) stands here, so it can
+    // be dragged back. It leaves the list when the draft is saved or discarded.
+    const out = [...new Set([...savedSteps(), ...s.taskKeys])].filter(
+      (key) => typeFor(key) === 'task' && columnFor(p, key) === 'later',
+    );
     for (const o of d.plan.areas) {
       if (o.oid === 'without-area' || !o.in_register) continue;
       const key = `area:${o.oid}`;
@@ -1028,30 +1049,64 @@
     };
   }
 
-  async function previewList() {
-    const plan = planForServer(current());
+  /**
+   * What the preview dialog saves. The draft (Save focus) sends the whole plan; a card action (B21, changeFocus) sends one
+   * change ({ change: { action, steps, at? } }) that the server makes with the B20 logic (focus add / focus remove).
+   * `fresh()` gives the job again after the queue changed under the preview.
+   */
+  function draftJob() {
+    return {
+      title: 'Save focus',
+      saveLabel: 'Save focus',
+      explanation:
+        'The focus decides the order in which the queue starts work: everything in step 1 before step 2, regardless of score. ' +
+        'Review what changes before you save. Nothing is saved yet.',
+      body: { plan: planForServer(current()) },
+      saved: () => {
+        s.draft = null;
+        s.basis = null;
+        s.taskKeys.clear();
+      },
+      fresh: draftJob,
+    };
+  }
+  function changeJob(change) {
+    const add = change.action === 'add';
+    const n = change.steps.length;
+    const job = {
+      title: add ? 'Add to focus' : 'Remove from focus',
+      saveLabel: add ? 'Add to focus' : 'Remove from focus',
+      explanation: add
+        ? `${n === 1 ? 'The task goes' : `The ${n} tasks go`} into the focus as ${n === 1 ? 'its own step' : 'their own steps'}, ` +
+          `${change.at ? `at step ${change.at}` : 'last in the list'}. The rest of the focus stays as it is. Review what ` +
+          'changes before you save. Nothing is saved yet. Undo takes it back.'
+        : 'The step comes out of the focus; the rest of the focus stays as it is. Review what changes before you save. ' +
+          'Nothing is saved yet. Undo takes it back.',
+      body: { change },
+      saved: () => {},
+      fresh: () => job,
+    };
+    return job;
+  }
+
+  async function previewList(job = draftJob()) {
     showDialog([
-      el('h2', { id: 'plan-dialog-title', text: 'Save focus' }),
+      el('h2', { id: 'plan-dialog-title', text: job.title }),
       el('p', { class: 'bulk-loading', text: 'Working out what changes …' }),
     ]);
     let answer;
     try {
-      answer = await s.ctx.api('/api/focus', { plan, dry: true });
+      answer = await s.ctx.api('/api/focus', { ...job.body, dry: true });
     } catch (e) {
       return showDialog([
-        el('h2', { id: 'plan-dialog-title', text: 'Save focus' }),
+        el('h2', { id: 'plan-dialog-title', text: job.title }),
         el('p', { class: 'bulk-error', text: e.message }),
         buttons([['Close', closeDialog, 'button-outline']]),
       ]);
     }
     const content = [
-      el('h2', { id: 'plan-dialog-title', text: 'Save focus' }),
-      el('p', {
-        class: 'bulk-explanation',
-        text:
-          'The focus decides the order in which the queue starts work: everything in step 1 before step 2, regardless of score. ' +
-          'Review what changes before you save. Nothing is saved yet.',
-      }),
+      el('h2', { id: 'plan-dialog-title', text: job.title }),
+      el('p', { class: 'bulk-explanation', text: job.explanation }),
       el(
         'dl',
         { class: 'facts' },
@@ -1101,17 +1156,16 @@
     content.push(
       buttons([
         ['Cancel', closeDialog, 'button-outline'],
-        answer.can ? ['Save focus', () => save(plan, answer.changed), 'button-filled'] : null,
+        answer.can ? [job.saveLabel, () => save(job, answer.changed), 'button-filled'] : null,
       ]),
     );
     showDialog(content, '.button-filled');
   }
 
-  async function save(plan, expectValue) {
+  async function save(job, expectValue) {
     try {
-      const answer = await s.ctx.api('/api/focus', { plan, expect: expectValue });
-      s.draft = null;
-      s.basis = null;
+      const answer = await s.ctx.api('/api/focus', { ...job.body, expect: expectValue });
+      job.saved();
       closeDialog();
       s.ctx.messageWithInfo(answer.message ?? 'Focus saved', answer);
       await s.ctx.update(true);
@@ -1119,7 +1173,7 @@
       if (e.answer?.outdated) {
         s.ctx.message('The queue has changed since the preview. Here is the new one.', true);
         await s.ctx.update(true);
-        return previewList();
+        return previewList(job.fresh());
       }
       s.ctx.message(e.message, true);
     }
@@ -1134,6 +1188,96 @@
         .map(([text, fn, cls]) =>
           el('button', { type: 'button', class: `button ${cls}`, text, onclick: fn }),
         ),
+    );
+  }
+
+  // ---- "Add to focus …" (B21): pick a task, feature, project or area and a position, into the draft ----
+  const PICK_KINDS = [
+    ['task', 'Task'],
+    ['feature', 'Feature'],
+    ['project', 'Project'],
+    ['area', 'Area'],
+  ];
+  /** The steps of one kind that are not in the draft's In focus yet: [key, label]. */
+  function pickOptions(kind, p) {
+    const d = data();
+    let all = [];
+    if (kind === 'task') all = openCards().map((k) => [`task:${k.id}`, `${k.id} ${k.title}`]);
+    else if (kind === 'feature')
+      all = (d.plan?.projects ?? []).flatMap((pr) =>
+        (pr.features ?? []).map((x) => [`feature:${pr.pid}/${x.name}`, `${pr.pid} › ${x.name}`]),
+      );
+    else if (kind === 'project')
+      all = (d.plan?.projects ?? []).map((pr) => [`project:${pr.pid}`, `${pr.title ?? pr.pid} (${pr.pid})`]);
+    else
+      all = (d.plan?.areas ?? [])
+        .filter((o) => o.in_register && o.oid !== 'without-area')
+        .map((o) => [`area:${o.oid}`, o.title ?? o.oid]);
+    return all.filter(([key]) => !p.steps.includes(key));
+  }
+  function openPicker() {
+    const p = current();
+    const n = p.steps.length;
+    const field = (id, label, control) =>
+      el('div', { class: 'field' }, el('label', { for: id, text: label }), control);
+    const kind = el(
+      'select',
+      { id: 'plan-pick-kind', 'aria-label': 'Kind' },
+      PICK_KINDS.map(([v, text]) => el('option', { value: v, text })),
+    );
+    const what = el('select', { id: 'plan-pick-what', 'aria-label': 'What' });
+    const none = el('p', { class: 'sp-meta', hidden: true, text: 'Everything of this kind is in focus already.' });
+    const where = el(
+      'select',
+      { id: 'plan-pick-where', 'aria-label': 'Position' },
+      Array.from({ length: n + 1 }, (_, i) =>
+        el('option', {
+          value: String(i + 1),
+          text: `Step ${i + 1}${i === 0 ? ' (first)' : ''}${i === n ? ' (last)' : ''}`,
+          selected: i === n,
+        }),
+      ),
+    );
+    const add = el('button', { type: 'button', class: 'button button-filled', text: 'Add' });
+    const fill = () => {
+      const list = pickOptions(kind.value, p);
+      what.replaceChildren(...list.map(([v, text]) => el('option', { value: v, text })));
+      none.hidden = list.length > 0;
+      what.disabled = !list.length;
+      add.disabled = !list.length;
+    };
+    kind.addEventListener('change', fill);
+    fill();
+    add.addEventListener('click', () => {
+      const key = what.value;
+      if (!key) return;
+      const error = move(key, 'focus', Number(where.value) - 1);
+      if (error) return s.ctx.message(error, true);
+      if (typeFor(key) === 'task') s.taskKeys.add(key);
+      s.ctx.status(`${info(key).title} is in the draft at step ${where.value}. Save focus shows what changes.`);
+      closeDialog();
+    });
+    showDialog(
+      [
+        el('h2', { id: 'plan-dialog-title', text: 'Add to focus' }),
+        el('p', {
+          class: 'bulk-explanation',
+          text:
+            'Choose what goes into the focus and at which step. It goes into the draft: nothing changes in the queue ' +
+            'until Save focus, which shows what changes first.',
+        }),
+        field('plan-pick-kind', 'Kind', kind),
+        field('plan-pick-what', 'What', what),
+        none,
+        field('plan-pick-where', 'Position', where),
+        el(
+          'div',
+          { class: 'guard-buttons' },
+          el('button', { type: 'button', class: 'button button-outline', text: 'Cancel', onclick: closeDialog }),
+          add,
+        ),
+      ],
+      '#plan-pick-kind',
     );
   }
 
@@ -1323,6 +1467,14 @@
     openAreas: (ctx) => {
       s.ctx = ctx;
       openAreas();
+    },
+    /**
+     * B21: one focus change from a card, the Selection or the detail panel ({ action: 'add'|'remove', steps, at? }):
+     * the dry preview first, saved only on confirm (POST /api/focus { change }).
+     */
+    changeFocus: (ctx, change) => {
+      s.ctx = ctx;
+      previewList(changeJob(change));
     },
   };
 })();

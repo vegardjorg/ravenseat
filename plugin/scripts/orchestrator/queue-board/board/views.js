@@ -31,6 +31,74 @@ function planContext() {
   };
 }
 
+// ---- Focus on the cards (B21) ----
+// "Add to focus" and "Remove from focus" in the detail panel, in Selection and on an outside-focus card. Every one goes
+// through POST /api/focus { change } with the dry preview first (plan.js changeFocus, the same dialog as Save focus).
+
+/**
+ * How the saved focus covers a card:
+ *   none     no focus, or the task is not ranked now (running, done, ...): no focus action
+ *   own      the task is its own step (task:<id>): "Remove from focus" takes that step out
+ *   step     a broader step (feature, project, area) holds it: a note names the step, no button (removing the task
+ *            alone is not possible, and adding it as its own step would only move it to the end of the list)
+ *   dragged  something in focus waits on it, so it comes along: a note, no button
+ *   outside  outside every step: "Add to focus" adds it as its own step, last in the list
+ * @returns {{ kind: string, index?: number, title?: string, by?: string }}
+ */
+function focusCover(k) {
+  const f = t.data?.focus;
+  const order = f?.order ?? [];
+  if (!order.length || !k) return { kind: 'none' };
+  const own = order.indexOf(`task:${k.id}`);
+  if (own >= 0) return { kind: 'own', index: own, title: f.stage?.[own]?.title ?? k.id };
+  const pl = k.space;
+  if (!pl || k.parked) return { kind: 'none' };
+  if (pl.dragged_by) return { kind: 'dragged', index: pl.step, by: pl.dragged_by };
+  if (pl.step != null) return { kind: 'step', index: pl.step, title: f.stage?.[pl.step]?.title ?? '' };
+  if (pl.outside && !pl.paused) return { kind: 'outside' };
+  return { kind: 'none' };
+}
+
+/** The outside-focus reason without its CLI hint: on the board the "Add to focus" button stands beside it instead. */
+const boardReason = (text) => String(text ?? '').replace(/;\s*ravenseat focus\)$/, ')');
+
+/** Opens the preview of one focus change (plan.js), and saves on confirm. */
+function changeFocus(change) {
+  window.QueuePlan.changeFocus(planContext(), change);
+}
+
+/** The "Add to focus" / "Remove from focus" button, or the note on what covers the task, for the detail panel. */
+function focusActions(k) {
+  const c = focusCover(k);
+  if (c.kind === 'outside')
+    return el('button', {
+      type: 'button',
+      class: 'button button-outline',
+      text: 'Add to focus',
+      title: 'Adds this task as its own step, last in the focus. You see what changes before it is saved.',
+      onclick: () => changeFocus({ action: 'add', steps: [`task:${k.id}`] }),
+    });
+  if (c.kind === 'own')
+    return el('button', {
+      type: 'button',
+      class: 'button button-outline',
+      text: 'Remove from focus',
+      title: `Takes step T${c.index + 1} (this task) out of the focus. You see what changes before it is saved.`,
+      onclick: () => changeFocus({ action: 'remove', steps: [`task:${k.id}`] }),
+    });
+  if (c.kind === 'step')
+    return el('p', {
+      class: 'sp-meta focus-cover',
+      text: `In focus through step T${c.index + 1}: ${c.title}. Change that step on the Focus tab.`,
+    });
+  if (c.kind === 'dragged')
+    return el('p', {
+      class: 'sp-meta focus-cover',
+      text: `In focus because ${c.by} in step T${c.index + 1} waits on it.`,
+    });
+  return null;
+}
+
 /** The focus line at the top: the steps, the rest, ready in focus, dragged along, and the warning when the focus has nothing ready. */
 const focusLine = $('focusLine');
 /**

@@ -1236,6 +1236,15 @@ function focusPreview(queue, input, { now = Date.now(), uncommitted = [] } = {})
       next: [],
       next_text: null,
     };
+  return { error: [], warnings: r.warnings, before_text: beforeText, ...previewAfter(copy, r, { now, uncommitted }) };
+}
+
+/**
+ * What a focus preview says about the queue AFTER the change (shared by focusPreview and, B21, focusChangePreview):
+ * the steps with numbers, the rest, dragged along, the end date, the pause changes and "Next up". `copy` is the changed
+ * copy; `r` holds `removed`, `paused` and `still` (empty for a one-step change).
+ */
+function previewAfter(copy, r, { now = Date.now(), uncommitted = [] } = {}) {
   const lines = [];
   const k = L.rankingContext(copy, now);
   const st = L.focusStatus(copy, { now, context: k });
@@ -1277,18 +1286,15 @@ function focusPreview(queue, input, { now = Date.now(), uncommitted = [] } = {})
         : 'Focus applies until you change it.',
     );
   }
-  if (r.paused.length)
+  if (r.paused?.length)
     lines.push(
       `Paused: ${r.paused.join(', ')} (not started, not even if they are in a step).`,
     );
-  if (r.still.length) lines.push(`Unpaused: ${r.still.join(', ')}.`);
+  if (r.still?.length) lines.push(`Unpaused: ${r.still.join(', ')}.`);
   const n = nextUp(copy, { now, uncommitted });
   const list = n.startable.length ? n.startable : n.whenAvailable;
   return {
-    error: [],
-    warnings: r.warnings,
     lines,
-    before_text: beforeText,
     after_text: copy.focus ? L.focusText(copy) : 'no focus',
     next: list.map((v) => ({ id: v.id, title: v.title })),
     next_text: n.stop
@@ -1298,6 +1304,62 @@ function focusPreview(queue, input, { now = Date.now(), uncommitted = [] } = {})
         : n.whenAvailable.length
           ? 'Next when a slot becomes available:'
           : 'Nothing can be started with this focus now.',
+  };
+}
+
+/** The changes POST /api/focus { change } can make (B21: the card actions). */
+const FOCUS_CHANGES = ['add', 'remove'];
+
+/**
+ * The preview of one focus change from a card, the Selection or the panel (POST /api/focus { change, dry }, B21):
+ * queueLogic.addFocusStep / removeFocusStep (the same code as `queue.mjs focus add` / `focus remove`) on a copy, and
+ * what it gives, in the same form as focusPreview. Writes nothing. The two refusals the board can meet in normal use
+ * are said in board words (no CLI command): no focus set, and taking out the only step.
+ * @param {{ action: 'add'|'remove', steps: string[], at?: number|null }} change
+ * @returns {{ error: string[], warnings: string[], lines: string[], before_text: string, after_text: string,
+ *   next: { id: string, title: string }[], next_text: string|null, noop: boolean, message: string|null }}
+ */
+function focusChangePreview(queue, change, { now = Date.now(), uncommitted = [] } = {}) {
+  const beforeText = queue.focus ? L.focusText(queue) : 'no focus';
+  const refused = (error, warnings = []) => ({
+    error,
+    warnings,
+    lines: [],
+    before_text: beforeText,
+    after_text: beforeText,
+    next: [],
+    next_text: null,
+    noop: false,
+    message: null,
+  });
+  const action = change?.action;
+  const steps = Array.isArray(change?.steps) ? change.steps.map(String) : [];
+  if (!FOCUS_CHANGES.includes(action)) return refused([`unknown focus change ${action}`]);
+  const order = queue.focus?.order ?? [];
+  if (!order.length) return refused(['No focus is set. Set one on the Focus tab first.']);
+  if (action === 'remove' && order.length === 1 && order.includes(steps[0]))
+    return refused([
+      'This is the only step in the focus. A focus needs at least one step: Clear focus on the Focus tab ends it.',
+    ]);
+  const copy = L.cloneJson(queue);
+  const at = new Date(now).toISOString();
+  const r =
+    action === 'add'
+      ? L.addFocusStep(copy, steps.length === 1 ? steps[0] : steps, { at: change.at ?? null, by: 'theBoard', now: at })
+      : L.removeFocusStep(copy, steps[0], { by: 'theBoard', now: at });
+  if (r.error.length) return refused(r.error, r.warnings ?? []);
+  if (r.noop) return { ...refused([], r.warnings ?? []), noop: true, message: r.message, lines: [`${r.message}.`] };
+  const lines = [];
+  if (r.skipped?.length) lines.push(`Already in the focus, left as they are: ${r.skipped.join(', ')}.`);
+  const after = previewAfter(copy, { removed: false, paused: [], still: [] }, { now, uncommitted });
+  return {
+    error: [],
+    warnings: r.warnings ?? [],
+    before_text: beforeText,
+    ...after,
+    lines: [...lines, ...after.lines],
+    noop: false,
+    message: null,
   };
 }
 
@@ -2556,6 +2618,8 @@ module.exports = {
   focusNow,
   planBasis,
   focusPreview,
+  focusChangePreview,
+  FOCUS_CHANGES,
   AREA_ACTIONS,
   areaPlan,
   board,
