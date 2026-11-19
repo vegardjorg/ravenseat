@@ -6,19 +6,21 @@
 //   - Cancel and decline: only a task that is waiting (also on hold or in the batch queue) or proposed. A running,
 //     picked or review task is never cancelled from the board (an agent or a person may be working on it); the board
 //     shows the CLI command instead (cliCancelHint). Declining a proposal is cancelling it with the reason as a remark.
-//   - Edit: value (1-10), content minutes and class, only for waiting and proposed tasks. The result is checked with
-//     queueLogic.validate, the same check `queue.mjs add` and `edit` run.
+//   - Edit: value (1-10), content minutes, class and the description (the short human summary,
+//     lib/taskDescription.js), only for waiting and proposed tasks. The result is checked with queueLogic.validate,
+//     the same check `queue.mjs add` and `edit` run.
 // =============================================================
 'use strict';
 
 const L = require('./queueLogic.js');
+const DESC = require('./taskDescription.js');
 
 /** The statuses a task can be cancelled (or declined) from on the board and with `queue.mjs cancel`. */
 const CANCEL_STATUSES = new Set(['waiting', 'proposed']);
 /** The statuses the board's "Edit" form is shown for. */
 const EDIT_STATUSES = new Set(['waiting', 'proposed']);
 /** The fields the "Edit" form sets. */
-const EDIT_FIELDS = ['value', 'content_min', 'class'];
+const EDIT_FIELDS = ['value', 'content_min', 'class', 'description'];
 /** The task classes (the same list queueLogic.validate checks). */
 const CLASSES = Object.keys(L.WEIGHT);
 /** The largest content estimate the form takes (minutes). A track is far smaller; this only stops typing errors. */
@@ -86,8 +88,8 @@ function cliCancelHint(o) {
 }
 
 /**
- * Reads the "Edit" form ({ value, content_min, class }, strings or numbers) into the fields to change. Only fields
- * that are given are taken; an empty field is left as it is.
+ * Reads the "Edit" form ({ value, content_min, class, description? }, strings or numbers) into the fields to change.
+ * Only fields that are given are taken; an empty number field is left as it is, an empty description removes it.
  * @returns {{ error: string[], field: object }}
  */
 function editFields(form) {
@@ -116,6 +118,13 @@ function editFields(form) {
     const k = String(f.class).trim();
     if (!CLASSES.includes(k)) error.push(`class must be one of ${CLASSES.join(', ')}`);
     else field.class = k;
+  }
+  // The description is different from the numbers: an EMPTY one is a choice (remove it), so it is taken whenever the
+  // form sends the key. The board sends it only when the owner changed it. Trimmed text, or null to remove it.
+  if (Object.hasOwn(f, 'description')) {
+    const d = DESC.descriptionValue(f.description);
+    if (d.error) error.push(d.error);
+    else field.description = d.value;
   }
   return { error, field };
 }

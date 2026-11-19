@@ -1271,6 +1271,17 @@ details[open] > summary > .fold-chevron::before {
   color: var(--color-on-surface);
   overflow-wrap: anywhere;
 }
+/* 2c4: the author's own description in the summary's place: plain text, and a line break they wrote is kept. */
+.panel-description {
+  white-space: pre-line;
+}
+/* The task's own sources in Details: the path, then the anchor and the role as badges on the same line. */
+.panel-sources .panel-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs);
+}
 
 /* B14: the technical facts last, folded under "Details" (closed by default, remembered per viewer). The summary row
    keeps the status readable while it is closed. */

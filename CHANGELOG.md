@@ -5,6 +5,21 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **A task's own `description` is shown in the board panel and `info` (2c4 TASK-DESCRIPTION).** The field was already
+  known to the queue but read by nothing. It is now a task's short summary written by a person: the detail panel shows
+  it at the top, in place of the summary it derives from the mission, and falls back to that summary when there is
+  none. `add --description "<text>"` (one task) or `"description"` in the task file sets it, `edit <id> --description`
+  or the board's Edit form changes it, and `--description ""` (or `null` in `--json`) removes it. Edge cases: it is
+  stored trimmed, an empty one is not stored, one that is not text is refused, and a line break is allowed as in the
+  title. The soft limit is 320 characters, the panel summary's own length: a longer one is saved with one line,
+  `WARNING: <id>: the description is <n> characters, over the soft limit of 320; it was saved anyway.`, which
+  `--answer-json` carries as `descriptionWarning` and the board shows with its confirmation. The board shows it as
+  plain text, never as markup, and the Edit form sends it only when it changed (and waits until the task is fetched),
+  so an unchanged description is never rewritten. It is for people only: the track block and the agent's mission are
+  byte-identical with or without it. Optional, so there is no setting. Two gaps from 0p2 B5 are closed with it:
+  `ravenseat info <id>` now also shows `plan`, the task's own `sources` with anchors and roles, and the origin
+  `source`, and the panel lists the task's own `sources` under Details next to the plan entry and the source.
+
 - **A long inline mission moves to a mission file at add and edit (2c3 MISSION-INLINE-MAX).** Hardening of queue.json
   for tasks with no documents, whose whole text lives in `mission`. When `add` or `edit` gets an inline mission longer
   than the new setting `queue.missionInlineMax` (default 16000 characters, `0` turns it off), the text goes to

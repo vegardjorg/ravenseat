@@ -37,7 +37,7 @@ function taskEditActions(k) {
       class: 'button button-outline',
       text: 'Edit',
       'aria-expanded': String(f?.mode === 'edit'),
-      title: 'Change the value, the content minutes and the class. "Undo" is ready afterwards.',
+      title: 'Change the value, the content minutes, the class and the description. "Undo" is ready afterwards.',
       onclick: () => open('edit'),
     }),
     el('button', {
@@ -71,7 +71,7 @@ function escapeCloses(form, text) {
     closeTaskForm(text);
   });
 }
-/** The "Edit" form: value (1-10), content minutes and class, starting from the task as it is. */
+/** The "Edit" form: value (1-10), content minutes, class and description, starting from the task as it is. */
 function editForm(k, f) {
   const v = f.values;
   const keep = (name) => (e) => (v[name] = e.target.value);
@@ -100,6 +100,21 @@ function editForm(k, f) {
   );
   klass.value = v.class ?? k.class ?? 'K';
   klass.addEventListener('change', keep('class'));
+  // The description (2c4, lib/taskDescription.js): the short human summary at the top of the panel. It starts from
+  // the task's description as /api/task gave it (the card data does not carry it), so the field waits, disabled,
+  // until the details are fetched: saving an empty field before then would remove a description the owner never saw.
+  // It is sent only when changed; an emptied field sends "" and removes it. The server trims it and warns over 320.
+  const d = t.details.get(k.id);
+  const loaded = Boolean(d?.mission);
+  const startDescription = loaded && typeof d.description === 'string' ? d.description : '';
+  const description = el('textarea', {
+    id: 'edit-description',
+    rows: '3',
+    'aria-describedby': 'edit-description-hint',
+    disabled: !loaded,
+  });
+  description.value = v.description ?? startDescription;
+  description.addEventListener('input', keep('description'));
   const form = el(
     'form',
     { class: 'task-edit' },
@@ -117,6 +132,20 @@ function editForm(k, f) {
       el('div', { class: 'field' }, el('label', { for: 'edit-class', text: 'Class' }), klass),
       el(
         'div',
+        { class: 'field' },
+        el('label', { for: 'edit-description', text: 'Description (optional)' }),
+        description,
+        el('p', {
+          id: 'edit-description-hint',
+          class: 'task-edit-text',
+          text: loaded
+            ? 'A short summary for people, shown at the top of the panel. The agent never sees it. ' +
+              'About 320 characters; a longer one is saved with a warning. Empty removes it.'
+            : 'Fetching the task …',
+        }),
+      ),
+      el(
+        'div',
         { class: 'task-edit-buttons' },
         el('button', { type: 'submit', class: 'button button-filled', text: 'Save' }),
         el('button', {
@@ -130,14 +159,10 @@ function editForm(k, f) {
   );
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    taskWrite(
-      {
-        type: 'edit',
-        id: k.id,
-        form: { value: value.value, content_min: content.value, class: klass.value },
-      },
-      `${k.id} is changed`,
-    );
+    const fields = { value: value.value, content_min: content.value, class: klass.value };
+    // Only a description the owner changed is sent, so an unchanged one is never rewritten.
+    if (loaded && description.value !== startDescription) fields.description = description.value;
+    taskWrite({ type: 'edit', id: k.id, form: fields }, `${k.id} is changed`);
   });
   escapeCloses(form, 'Edit');
   return form;
@@ -210,8 +235,10 @@ async function taskWrite(body, ok) {
     const answer = await api('/api/task-edit', body);
     t.taskForm = null;
     t.details.delete(body.id);
-    if (answer?.log) undoToast(answer.log, ok);
-    else message(ok);
+    // The server's warning (a description over the soft limit, saved anyway) goes with the confirmation.
+    const said = answer?.warning ? `${ok}. ${answer.warning}` : ok;
+    if (answer?.log) undoToast(answer.log, said);
+    else message(said);
   } catch (e) {
     message(e.message, true);
   }

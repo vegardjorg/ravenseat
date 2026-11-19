@@ -40,6 +40,7 @@ a track adding a proposal) cannot corrupt the file. `ravenseat undo` undoes the 
 | Field | Meaning |
 |---|---|
 | `id`, `title` | Unique id and title |
+| `description` | Optional: a short summary of the task, written by a person for people (one or two sentences, about 320 characters). The board's detail panel shows it at the top, in place of the summary it otherwise derives from the mission, and `ravenseat info` shows it under the title. The agent never sees it: the track block and the mission are the same with or without it. Set it with `add ... --description "…"` (one task) or `"description"` in the task file, and change it with `edit <id> --description "…"` or the board's Edit form; `--description ""` (or `null` in `--json`) removes it. Text only, trimmed; a line break is allowed, as in the title. A longer one is saved with one `WARNING` line (see [The description](#the-description)) |
 | `domain` | Domain; limits how many tracks run in the same domain (`maxPerDomain`) |
 | `class` | `K` code, `D` database, `D+` high-risk database or security, `U` investigation (no production code) |
 | `mission` | The mission text, or the path to a mission file (one line, for example `scripts/.queue/mission/<id>.md`, the form the board and `batch pack` write). Must be self-contained: the track agent knows nothing else. A task with no documents keeps its whole text here. When `add` or `edit` gets an inline text longer than `queue.missionInlineMax` characters (default 16000), the text moves to `mission/<id>.md` in the data folder and the field stores that path, with one `NOTE: <id>: the mission (<n> KB) was moved to <path> ...` line (`missionMoved` in `--answer-json`). The agent reads the file exactly as it read the text. A file that already holds other text is never overwritten: the mission then goes to the next free `<id>+2.md`, `<id>+3.md`, and the line names both. A file that already holds the same text is reused |
@@ -113,12 +114,36 @@ orchestrator for an excerpt. A task without `plan` or `sources` reads nothing ex
 `READ:` and `PRIVATE:` lines above the `## TRACK` heading); the track agent never reads the register or private
 files for this.
 
+**In the board's panel.** The detail panel lists the task's own `sources` under Details, each path with its anchor
+and role, between the plan entry and the origin `source`. The plan entry's own sources are in the Plans view, one
+click away from the plan entry chip.
+
 Status flow: `proposed` → `waiting` (approved, ready to run) → `running` → `review` → `done`, or `cancelled`. Tasks
 added by an agent start as `proposed` and need `approve`; tasks the owner or the orchestrator adds start as `waiting`.
 A track adds from its own worktree: the queue sets `added_by` from the branch, refuses `--approved` and allows 3 open
 proposals per track. The small-task guard does not apply to it and `batched` is dropped, since the owner decides the size when approving. In full mode too, its proposal needs only `id`, `title` and `mission`: `domain`, `project` and `feature`
 follow the track and the class is `K`, unless the task sets them.
 With [auto-accept](#auto-accept-of-proposals) on, the queue approves the proposals that fit the owner's rules itself.
+
+### The description
+
+`description` is a task's short summary in the author's own words, for people only. Where it shows:
+
+- the board's detail panel, at the top under the title, in place of the summary the panel otherwise derives from the
+  mission (the first paragraph of a "What and why" section, or the first prose). Shown as plain text, never as markup;
+- `ravenseat info <id>`, right under the title (as one line), and `info <id> --field description` raw.
+
+It never reaches the agent: the track block and the mission are byte-identical with or without it. It is optional
+and stops nothing, so there is no setting for it. The soft limit is 320 characters, the same as the panel's derived
+summary. A longer one is saved anyway, with one line:
+
+```
+WARNING: T1: the description is 399 characters, over the soft limit of 320; it was saved anyway. Keep it to a short summary; the mission holds the detail.
+```
+
+With `--answer-json` the line is in the answer's `descriptionWarning` (a list) instead, and the board shows it with
+its confirmation. A description that is not text is refused (`description must be text`), and an empty one is not
+stored.
 
 ## The done command and the fix-round cap
 
@@ -176,7 +201,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | Command | What it does |
 |---|---|
 | `init` | Creates an empty queue (run once per project) |
-| `add --file task.json` / `add --json '{…}'` [`--answer-json`] | Adds one task or a list. One `WARNING: task links` line names a dead link, an anchor without a heading or a gitignored source (the task is added anyway; see [Task links](#task-links)). `--answer-json`: one JSON line instead of the text, with `linkProblems` |
+| `add --file task.json` / `add --json '{…}'` [`--description "…"`] [`--answer-json`] | Adds one task or a list. One `WARNING: task links` line names a dead link, an anchor without a heading or a gitignored source (the task is added anyway; see [Task links](#task-links)). `--description` sets the [description](#the-description) of the one task added. `--answer-json`: one JSON line instead of the text, with `linkProblems` (and `descriptionWarning` when a description is over the soft limit) |
 | `decide [--json] [--max N]` / `decide --today` | Everything waiting on the owner (questions, QA, proposals, stuck work) as one list, most impact first, each answer with its exact `ravenseat` command; read only. `/ravenseat:decide` walks it one decision at a time / what was decided today |
 | `approve <id> [--by owner]` | Approves a proposal (`--by` records who) |
 | `proposals [auto [on\|off] …]` / `proposals log` / `proposals undo <id>` | Lists the proposals waiting, and auto-accept of proposals by the owner's rules (default off) / what was auto-accepted / back to proposed (see below) |
@@ -194,7 +219,8 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `set <id> <status>` | Sets status by hand. `done` warns (never stops) when the task never started or its branch has commits that are not in the base, names the tasks it frees and gives the way back (`set <id> review`, then `merge <id>`) |
 | `cancel <id> [--remark "…"]` | Cancels a waiting or proposed task (decline a proposal with `--remark "declined: …"`); logged, so `undo` puts it back. Running and review tasks: `set <id> cancelled` |
 | `edit <id> --json '{…}'` [`--answer-json`] | Changes fields (logged; `undo` rolls it back). An edit that writes `plan`, `sources` or `source` gets the same task links line as `add`; `--answer-json` carries it as `linkProblems` |
-| `info <id>` | Short view of one task (with `fixes` and `fixed by` when it has fix links) |
+| `edit <id> --description "…"` | Sets or replaces the [description](#the-description); `--description ""` removes it. Logged like any edit |
+| `info <id>` | Short view of one task: the description under the title, `fixes` and `fixed by` when it has fix links, and its links (`plan`, `sources` with anchors and roles, and the origin `source`) |
 | `explain <id> [--json]` | Why one task stands where it stands, from the rules the queue starts by: what blocks a waiting task (dependency, owner question, file or DB conflict, parking, focus, an uncommitted file), a stop on the whole queue, the full limits and its place among the startable ones; for a running task when it started, the round, an open block and the last sign of life with its source, SILENT over `silentMin`. Read-only |
 | `question` / `resolve <q> --answer "…"` | Owner questions / answer one (waiting tasks get the answer in their mission) |
 | `question <q> --text "…" --choice "…" --choice "…"` / `resolve <q> --choice <n\|text> [--answer "note"]` | Answer options on a question: 2-4 choices, each at most 60 characters, no duplicates (`--no-choices` removes them; in an add file: `"choices": [...]` under `question`). The order is kept as written everywhere, so the number is the `--choice` number; give `--recommendation` the exact text of one choice to mark it. The stored answer is the choice's text, plus ` (note: …)` with `--answer`. `ravenseat question` and the after-compact summary list the choices numbered, and the board shows them as buttons (the recommended one as "As recommended: <choice>"). `--context "…"` (optional, `"context"` in an add file) is the background, why it is asked, kept apart from the question text; the board shows it under the recommendation, and `null` removes it |

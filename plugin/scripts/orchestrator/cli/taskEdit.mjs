@@ -32,6 +32,8 @@ const WI = require('./lib/wiringItems.js');
 const RI = require('./lib/reviewItems.js');
 // A new `fixes` link is a defect after merge: a row in the finding log (lib/findingSources.js).
 const FSRC = require('./lib/findingSources.js');
+// The task's short human summary (`description`): its stored form and the soft-limit WARNING (lib/taskDescription.js).
+const DESC = require('./lib/taskDescription.js');
 let trackBranchCache;
 /**
  * The track branch the cwd is on (`<branchPrefix><id>`), or null. A track agent runs ravenseat from its worktree, so this is
@@ -210,6 +212,13 @@ export function cmdEdit() {
   // --files a,b replaces the files the task owns (--files "" empties the list). Locked after the start like --json.
   if (a.includes('--files'))
     field.owned_files = String(val('--files') ?? '').split(',').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean);
+  // --description "<text>" sets or replaces the short human summary; --description "" removes it (as null or "" in
+  // --json does). Stored trimmed (lib/taskDescription.js); a value that is not text is refused by validate below.
+  if (a.includes('--description')) field.description = val('--description') ?? '';
+  if (Object.hasOwn(field, 'description')) {
+    const d = DESC.descriptionValue(field.description);
+    if (!d.error) field.description = d.value;
+  }
   // --bonus "<text>" adds text to the mission (the track block) and the remarks, with a timestamp.
   const bonus = a.includes('--bonus') ? (val('--bonus') ?? '') : null;
   if (bonus != null && !String(bonus).trim())
@@ -236,10 +245,12 @@ export function cmdEdit() {
   ])
     delete field[f];
   // An edit with nothing to write (a mistyped flag, or only fields with their own commands) must not look like it worked.
-  const unknownFlags = a.filter((x) => x.startsWith('--') && !['--json', '--files', '--accept', '--bonus', '--by'].includes(x));
+  const unknownFlags = a.filter(
+    (x) => x.startsWith('--') && !['--json', '--files', '--accept', '--bonus', '--description', '--by'].includes(x),
+  );
   if (!Object.keys(field).length && bonus == null && !read().tasks.some((x) => x.id === id)) die(`Unknown task ${id}`);
   if (!Object.keys(field).length && bonus == null)
-    die(`Nothing changed: ${unknownFlags.length ? `edit does not know ${unknownFlags.join(', ')}. ` : ''}edit ${id} needs --json '{...}', --files a,b, --accept "<criterion>" or --bonus "<text>". Status: ${CLI} set ${id} <status>.`);
+    die(`Nothing changed: ${unknownFlags.length ? `edit does not know ${unknownFlags.join(', ')}. ` : ''}edit ${id} needs --json '{...}', --files a,b, --accept "<criterion>", --description "<text>" or --bonus "<text>". Status: ${CLI} set ${id} <status>.`);
   // The ids a `fixes` edit adds (not the ones already there): each is a new defect after merge for the finding log.
   let newFixes = [];
   // The mission this edit moved out of queue.json (moveLongMission), for the NOTE line and --answer-json.
@@ -295,6 +306,8 @@ export function cmdEdit() {
     for (const k of ['done_when', 'acceptance', 'max_fix_rounds']) if (k in field && field[k] == null) delete o[k];
     // `sources` is replaced as a whole; null or [] removes it (the task then reads its plan entry's sources again).
     if ('sources' in field && !(Array.isArray(field.sources) && field.sources.length)) delete o.sources;
+    // An empty description (null, "" or blank, made null above) removes the field, so the queue file looks as before.
+    if ('description' in field && field.description == null) delete o.description;
     if (bonus != null) {
       const t = L.addToBonus(o, bonus, new Date().toISOString());
       if (t) die(`Invalid bonus: ${t}`);
@@ -314,6 +327,8 @@ export function cmdEdit() {
   // broken link is doctor's row, not a surprise on an unrelated edit. The change is saved either way.
   const touchesLinks = ['plan', 'sources', 'source'].some((k) => k in field);
   const links = touchesLinks ? linkProblems(read().tasks.filter((x) => x.id === id)) : [];
+  // A description this edit set over the soft limit (lib/taskDescription.js): one WARNING line; it is saved anyway.
+  const descriptionLine = 'description' in field ? DESC.descriptionWarning(id, field.description) : null;
   // --answer-json (the board): one JSON line with the changelog no., so "Undo" rolls back exactly this edit.
   if (a.includes('--answer-json'))
     console.log(
@@ -325,12 +340,15 @@ export function cmdEdit() {
         linkProblems: linkProblemsJson(links),
         // Only when the mission moved, so the answer is as before otherwise.
         ...(missionMoved.length ? { missionMoved: missionMovedJson(missionMoved) } : {}),
+        // Only when the description is over the soft limit, for the same reason (a list, as in add).
+        ...(descriptionLine ? { descriptionWarning: [descriptionLine] } : {}),
       }),
     );
   else {
     console.log(`${id} changed: ${changedField.join(', ')}`);
     for (const m of missionMoved) console.log(missionMovedLine(m));
     printLinkWarning(links, 'changed');
+    if (descriptionLine) console.log(descriptionLine);
     if (bonus != null)
       console.log(
         'The addition is in the track block from now on (ravenseat trackFile / fill --ids). If the track is already running: send it with SendMessage.',

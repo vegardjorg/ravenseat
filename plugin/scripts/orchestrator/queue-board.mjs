@@ -184,6 +184,8 @@ const TIME_LOG = KK.timeLog();
 const TA = require('./lib/timeLogArchive.js');
 // The archive of done tasks (lib/queueArchive.js, owner decision B5): statistics, plans and lookups by id read it too.
 const QARCH = require('./lib/queueArchive.js');
+// The task's short human summary and its own sources for the detail panel (/api/task; lib/taskDescription.js).
+const DESC = require('./lib/taskDescription.js');
 const archiveMtime = () => {
   try {
     return fs.statSync(QARCH.archiveFile(FOLDER)).mtimeMs;
@@ -1595,7 +1597,9 @@ async function taskEdit(b, queueNow) {
       },
     };
   }
-  return { status: 200, answer: { ok: true, log: r.data.log ?? null } };
+  // A description over the soft limit is saved with a WARNING (lib/taskDescription.js); the board shows the line.
+  const warning = Array.isArray(r.data.descriptionWarning) ? r.data.descriptionWarning.join(' ') : '';
+  return { status: 200, answer: { ok: true, log: r.data.log ?? null, ...(warning ? { warning } : {}) } };
 }
 
 /**
@@ -3114,7 +3118,14 @@ const server = http.createServer(async (req, res) => {
       const mission = missionFor(o);
       const branch = branchFor(o);
       const archived = o.archived_at ? { archived: true, archived_at: o.archived_at, task: o } : {};
-      return json(res, 200, { ok: true, mission, branch: { name: branch, ...branchInfo(branch) }, ...archived });
+      // The description (or null) and the task's own sources ({ path, anchor, role }), drawn as text by the panel.
+      return json(res, 200, {
+        ok: true,
+        mission,
+        branch: { name: branch, ...branchInfo(branch) },
+        ...DESC.panelFields(o),
+        ...archived,
+      });
     }
     // The archived tasks (lib/queueArchive.js) for the board's history and search: ?q= matches id, title, project and
     // feature (case blind), newest first, at most 50. Read-only.

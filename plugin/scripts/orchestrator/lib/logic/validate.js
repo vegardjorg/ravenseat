@@ -25,6 +25,9 @@ function validate(o, existing = [], register) {
     error.push('id missing or has invalid characters');
   if (existing.some((e) => e.id === o.id)) error.push(`id ${o.id} already exists`);
   if (!o.title) error.push('title missing');
+  // `description`: the short human summary (lib/taskDescription.js). Optional; only its type is checked here. Like
+  // the title it may hold a line break, and its length is a soft limit (a WARNING in add and edit), never an error.
+  error.push(...require('../taskDescription.js').descriptionErrors(o));
   if (!o.domain) error.push('domain missing');
   if (!CLASSES.has(o.class)) error.push(`class must be one of ${[...CLASSES].join(', ')}`);
   if (!o.mission) error.push('mission missing (path to track description or text)');

@@ -320,7 +320,12 @@ function drawPanel(fresh) {
 
   // B14: the panel reads top down. Title, what the task is about, the actions, the full mission, and the
   // technical facts last in "Details" (closed by default; the summary row keeps the status readable).
-  const summary = d?.mission ? missionSummary(d.mission.text) : null;
+  // 2c4: "what the task is about" is the task's own `description` when the author wrote one (from /api/task,
+  // lib/taskDescription.js), shown as plain text; otherwise the summary derived from the mission, as before.
+  const description = typeof d?.description === 'string' && d.description ? d.description : null;
+  const summary = !description && d?.mission ? missionSummary(d.mission.text) : null;
+  // The task's own sources (0p2 B5), normalised by the server with taskLinks: { path, anchor, role }.
+  const ownSources = Array.isArray(d?.sources) ? d.sources.filter((s) => s && typeof s.path === 'string') : [];
   const details = el(
     'details',
     { class: 'panel-details' },
@@ -350,6 +355,26 @@ function drawPanel(fresh) {
                 window.QueuePlans?.openEntry(k.plan);
               },
             })
+          : null,
+      ),
+      // The task's own reading material, narrowing the plan entry: the path, then the anchor and the role as badges.
+      // Text only (el with text), so a path or an anchor can never become markup.
+      facts(
+        'Sources',
+        ownSources.length
+          ? el(
+              'ul',
+              { class: 'panel-sources' },
+              ownSources.map((s) =>
+                el(
+                  'li',
+                  { class: 'panel-source' },
+                  el('code', { text: s.path }),
+                  s.anchor ? el('span', { class: 'badge', text: String(s.anchor) }) : null,
+                  s.role ? el('span', { class: 'badge', text: String(s.role) }) : null,
+                ),
+              ),
+            )
           : null,
       ),
       facts(
@@ -422,7 +447,11 @@ function drawPanel(fresh) {
         icon('close'),
       ),
     ),
-    summary ? el('p', { class: 'panel-summary' }, inline(summary)) : null,
+    description
+      ? el('p', { class: 'panel-summary panel-description', text: description })
+      : summary
+        ? el('p', { class: 'panel-summary' }, inline(summary))
+        : null,
     actionsFor(k, col),
     el(
       'section',

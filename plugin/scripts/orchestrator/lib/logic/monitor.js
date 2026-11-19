@@ -63,13 +63,21 @@ function infoValueText(v) {
  */
 function infoView(o, { fixedBy = [], costEstimate = null } = {}) {
   const out = [];
+  // The human summary right after the title, and the links (plan, sources with roles and anchors, the origin
+  // `source`; roadmap 2c4 and 0p2 B5) after the summary fields (lib/taskDescription.js infoLines).
+  const extra = require('../taskDescription.js').infoLines(o);
   for (const f of INFO_FIELD) {
     const v = o[f];
-    if (v == null || (Array.isArray(v) && !v.length)) continue;
+    if (v == null || (Array.isArray(v) && !v.length)) {
+      if (f === 'title') out.push(...extra.description);
+      continue;
+    }
     out.push(
       `${f}: ${Array.isArray(v) ? v.join(', ') : f === 'head_start' ? String(v).slice(0, 12) : v}`,
     );
+    if (f === 'title') out.push(...extra.description);
   }
+  out.push(...extra.links);
   if (costEstimate && Number.isFinite(costEstimate.usd))
     out.push(
       `estimate: ${estimate(o)} min · ~$${costEstimate.usd} (` +

@@ -27,6 +27,8 @@ import { guardWeakening, logWeakened } from './settings.mjs';
 import { linkProblems, linkProblemsJson, printLinkWarning } from './taskLinksCheck.mjs';
 
 const FSRC = require('./lib/findingSources.js');
+// The task's short human summary (`description`): its stored form and the soft-limit WARNING (lib/taskDescription.js).
+const DESC = require('./lib/taskDescription.js');
 
 /**
  * Adds the data folder and the agents' worktrees to the repo's .gitignore on a fresh init, so a new user does not have to.
@@ -192,6 +194,7 @@ export function cmdAdd() {
   // Lite: `add "<title>" [--mission ...] [--priority N] [--files a,b] [--depends a,b] [--id X] [--by ...]` builds the task from the flags.
   const quickTitle = val('--title') ?? positional(1, [
     '--file', '--json', '--title', '--mission', '--priority', '--files', '--depends', '--id', '--by', '--plan', '--accept',
+    '--description',
   ])[0];
   let source = val('--file') ? fs.readFileSync(val('--file'), 'utf8') : val('--json');
   if (!source && quickTitle != null) {
@@ -246,6 +249,23 @@ export function cmdAdd() {
     if (newOnes.length !== 1) die('--accept sets the criteria of one task; with several, put "acceptance" in each task');
     if (newOnes[0]?.acceptance != null) die('--accept and "acceptance" in the task both set the criteria; use one');
     newOnes[0].acceptance = accepts;
+  }
+  // --description "<text>": the short human summary of the ONE task added (lib/taskDescription.js), the same rule as
+  // --accept. Several tasks, or a task with its own `description`, set it in the file instead.
+  if (a.includes('--description')) {
+    if (newOnes.length !== 1)
+      die('--description sets the description of one task; with several, put "description" in each task');
+    if (newOnes[0]?.description != null) die('--description and "description" in the task both set it; use one');
+    newOnes[0].description = val('--description') ?? '';
+  }
+  // The stored form: trimmed, and an empty one is not stored at all. Text only: anything else is left for validate
+  // below, which refuses it with "description must be text".
+  for (const n of newOnes) {
+    if (!n || typeof n !== 'object' || !Object.hasOwn(n, 'description')) continue;
+    const d = DESC.descriptionValue(n.description);
+    if (d.error) continue;
+    if (d.value == null) delete n.description;
+    else n.description = d.value;
   }
   const approved = a.includes('--approved');
   // From a track's own branch it is always a proposal from that track (the agents' rule is in lib/pushGuard.js agentAddReason).
@@ -418,6 +438,8 @@ export function cmdAdd() {
   // the write and outside the lock (it reads files and asks git). The tasks are added either way; links.addWarn off
   // skips the check.
   const links = linkProblems(newOnes);
+  // A description over the soft limit (lib/taskDescription.js): one WARNING line per task; it is stored anyway.
+  const descriptionWarning = newOnes.map((n) => DESC.descriptionWarning(n.id, n.description)).filter(Boolean);
   // --answer-json (the board and scripts): one JSON line instead of the text, with the link problems in it.
   if (a.includes('--answer-json')) {
     console.log(
@@ -428,6 +450,8 @@ export function cmdAdd() {
         linkProblems: linkProblemsJson(links),
         // Only when a mission moved, so the answer is as before otherwise.
         ...(missionMoved.length ? { missionMoved: missionMovedJson(missionMoved) } : {}),
+        // Only when a description is over the soft limit, for the same reason.
+        ...(descriptionWarning.length ? { descriptionWarning } : {}),
       }),
     );
     return;
@@ -467,6 +491,7 @@ export function cmdAdd() {
   const TF = require('./lib/taskFields.js');
   for (const n of newOnes)
     for (const u of TF.unknownFields(n, Object.keys(WRONG_NAMES))) console.log(TF.unknownFieldWarning(n.id, u));
+  for (const line of descriptionWarning) console.log(line);
   // Owning a protected path is what lets a change there past the merge guard, so it should not happen unnoticed.
   const protectedPaths = autoAcceptContext(read()).protectedPaths;
   for (const n of newOnes) {
