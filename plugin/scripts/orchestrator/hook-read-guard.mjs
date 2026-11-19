@@ -12,7 +12,9 @@
 //   - Denies Read without offset/limit of files that are loaded automatically (CLAUDE.md, MEMORY.md + readGuard.autoLoaded).
 //   - Denies Read without limit of a file in readGuard.largeFiles (and migrations.folder/*.sql) over 300 lines (override
 //     with READ_GUARD_MAX_LINES or readGuard.maxLines), and of any text file over readGuard.blockLines (2000).
-//     The denial tells the agent what to do instead (Grep, then offset and limit).
+//     The denial tells the agent what to do instead (Grep, then offset and limit). For those two rules it also carries
+//     the file's outline (Markdown headings, JS/TS top-level declarations and exports, SQL create statements, with line
+//     numbers, at most 60; lib/readOutline.js). readGuard.outline false gives the text without it; it fails open.
 //   - For track and track-d a Read that is let through gives a SOFT read hint (additionalContext, never block) when a file
 //     over about 300 lines is read whole (READ_HINT_MAX_LINES), or the same file is read whole a second time. The logic lives
 //     in readHint.js; the state in <Temp>/queue-read-hint/<agent_id>.json (READ_HINT_STATE overrides).
@@ -143,8 +145,22 @@ async function main() {
     readHint(input, agentType, abs, ti, countLines);
     return;
   }
-  process.stdout.write(JSON.stringify(HK.deny('PreToolUse', answer.reason)));
+  process.stdout.write(JSON.stringify(HK.deny('PreToolUse', denyText(answer, abs, cfg))));
   logDeny(input, answer.rule ?? 'read-limit');
+}
+
+/**
+ * The denial text: for a whole-file Read of a large or long file, today's text plus the file's outline (headings and
+ * top-level declarations with line numbers, lib/readOutline.js), so the agent can go straight to offset and limit.
+ * readGuard.outline false, another rule (auto-loaded) or anything that goes wrong gives today's text unchanged.
+ */
+function denyText(answer, abs, cfg) {
+  if (answer.rule !== 'large-file' && answer.rule !== 'long-file') return answer.reason;
+  try {
+    return require('./lib/readOutline.js').withOutline(answer.reason, abs, { enabled: cfg?.readGuard?.outline !== false });
+  } catch {
+    return answer.reason; // error-ignored: the outline only adds text and must never change a denial
+  }
 }
 
 /** One row in the time log for a denial (lib/guardLog.js, guardLog.enabled): the rule, never the path. Never throws. */

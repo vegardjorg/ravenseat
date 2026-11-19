@@ -5,6 +5,16 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **The read guard's denial of a large file carries the file's outline (0y Y1).** A whole-file Read that the guard
+  turns down for size (the large-file and long-file rules) now also lists the file's headings and top-level
+  declarations with their line numbers, so the agent can go straight to Read with offset and limit instead of a Grep
+  round first. Outlined: Markdown `#` headings (skipping code fences), JS/TS top-level `function` and `class` lines and
+  `export` lines (`.js .mjs .cjs .jsx .ts .tsx .mts .cts`), and SQL `create` statements. At most 60 entries, then one
+  `… N more (Grep -n for the rest)` line; an entry is cut at 100 characters. Edge cases: it scans at most 1 MiB and
+  for at most 200 ms, and another file type, a binary file (a NUL byte), an unreadable file, a larger file, a slow scan
+  or nothing found gives the denial text exactly as before. The auto-loaded rule (CLAUDE.md, memory) is unchanged. The
+  setting `readGuard.outline` is on by default, since it stops nothing and only adds text; `false` gives the old text
+  byte for byte.
 - **A task's own `description` is shown in the board panel and `info` (2c4 TASK-DESCRIPTION).** The field was already
   known to the queue but read by nothing. It is now a task's short summary written by a person: the detail panel shows
   it at the top, in place of the summary it derives from the mission, and falls back to that summary when there is

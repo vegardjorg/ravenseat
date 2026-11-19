@@ -336,7 +336,10 @@ context size. The system keeps both small:
 - **Cache-friendly waiting.** No sleep or poll loops. Subagent prompt cache TTL is set to 1 hour
   (`subagentPromptCacheTtl`), so a reviewer started a while later still hits the cache.
 - **Reading guard.** `hook-read-guard.mjs` stops tracks and reviewers from re-reading files that are already loaded
-  automatically, or reading huge files in full.
+  automatically, or reading huge files in full. A denial of a large or long file carries the file's outline (Markdown
+  headings, JS/TS top-level declarations and exports, SQL `create` statements, with line numbers, at most 60), so the
+  agent can Read with offset and limit without a Grep round first (`lib/readOutline.js`). It scans at most 1 MiB for at
+  most 200 ms and fails open to the plain denial; `readGuard.outline` false leaves it out.
 - **Push guard.** `hook-push-guard.mjs` asks before force pushes, pushes of other branches than the base, and
   migration pushes to environments not listed as allowed, and denies deleting the base on the remote (`--delete`,
   `:<base>`). It reads the whole command line (`lib/shellCommands.js`): `bash -c`, `sh -c`, `powershell -Command`,

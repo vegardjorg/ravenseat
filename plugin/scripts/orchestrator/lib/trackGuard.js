@@ -22,6 +22,7 @@
 //                when they exceed maxLines; migrations.folder/*.sql is included automatically when it is set
 //   maxLines   the limit for largeFiles (default 300)
 //   blockLines  all text files over this many lines are read in excerpts (default 2000)
+//   outline     the hook adds the file's outline to a large-file or long-file denial (default true; lib/readOutline.js)
 //
 // The functions here do no I/O beyond readTail/readHeader/subagentTranscript/countCompactionsFrom/cachedCompactions
 // (several take fs functions passed in), so they can be tested (lib/__tests__/trackGuard.test.ts,

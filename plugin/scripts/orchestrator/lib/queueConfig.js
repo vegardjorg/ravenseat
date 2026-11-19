@@ -386,6 +386,9 @@ const STANDARD = Object.freeze({
     largeFiles: [], // glob patterns for files that must always be read in excerpts
     maxLines: 300,
     blockLines: 2000,
+    // A denial of a large or long file carries the file's outline (headings, top-level declarations, line numbers;
+    // lib/readOutline.js). It only adds text and fails open; false gives the denial text without it.
+    outline: true,
   },
   // Merge guard (lib/mergeGuard.js): paths a track may only change when its task owns them (owned_files or
   // shared_patch). Otherwise merge-track.mjs stops before the merge (exit 4; --allow-guard overrides). These paths can

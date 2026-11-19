@@ -799,6 +799,13 @@ const SETTINGS = Object.freeze([
   row('readGuard.blockLines', 'files', 'integer', 'Read stop (lines)',
     'A read of more lines than this is stopped (2000 by default), so one large file cannot fill an agent\'s context.',
     { protects: 'One large file read whole that fills an agent\'s context.' }),
+  // Friction: none, it stops nothing and only adds up to about 60 lines to a denial that happens anyway; the scan reads
+  // at most 1 MiB for at most 200 ms and fails open to the old text. On by default by the owner's decision of 16.11.2026
+  // (roadmap 0y Y1, plans/projectarchitect-vurdering-2026-11-16.md): it saves the agent a Grep round per denial.
+  row('readGuard.outline', 'files', 'onoff', 'Outline in the read denial',
+    'A denied whole-file Read of a large file also lists the file\'s headings and top-level declarations with their line ' +
+    'numbers (Markdown, JS/TS, SQL; at most 60), so the agent can read with offset and limit straight away. Off: the ' +
+    'denial text without it.'),
   row('reads.mode', 'files', 'choice', 'Read ownership',
     'A task that reads a file an active task changes: wait until it is done, or start and name the overlap.',
     {
