@@ -96,9 +96,12 @@ const HELP = [
       'Checks shows what your project has for checking its code (CI, gates, scripts, git hooks and config), read from ' +
         'your files. Ravenseat did not run any of it, so it shows what is set up, not that it works. "Read again" reads ' +
         'the files again.',
-      'The suggestions under it come most important first, and all of them are optional. "Add investigation to queue" ' +
-        'adds an investigation that ends in a plan with recommended steps, and nothing is built before you approve it. ' +
-        '"Set aside" hides a suggestion until you bring it back. The tab can be turned off in Settings.',
+      'The suggestions under it are grouped by category, the most important first in each group, and all of them are ' +
+        'optional. "How it works" at the top of the room shows the four steps: "Add investigation to queue" puts an ' +
+        'investigation in the queue (the click is your yes), it ends in a plan with recommended steps and changes no ' +
+        'files, you choose which steps become tasks, and nothing is built before you approve it. "Turn on" and "Use as ' +
+        'gates" need no agent. The Important box leads to its cards. "Set aside" hides a suggestion until you bring it ' +
+        'back. The tab can be turned off in Settings.',
     ],
   },
   {

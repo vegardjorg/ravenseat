@@ -46,11 +46,20 @@ nothing, and a card you set aside stays away.
 
 From the top down:
 
-1. **The header.** "Read again" reads the files once more (the board keeps an answer for a minute otherwise). "Turn
-   this tab off" is the same as `ravenseat checks off`. Under them, the reminder that nothing was run.
-2. **The summary**, only when there is something to say: the important (high) suggestions that are open, by name, and
-   under "Skipped" the important ones you set aside, each with "Bring back".
-3. **What you have.** One card per CI config file (the host, the file, what it runs on and its jobs), and one card per
+1. **The header.** "Read again" reads the files once more (the board keeps an answer for a minute otherwise), and the
+   "?" opens the help at Checks. Under them, the reminder that nothing was run. The tab is turned off in Settings (the
+   line at the end of the tab opens it) or with `ravenseat checks off`.
+2. **How it works**, a box that is open until you close it (the board remembers that in this browser). Four steps, as
+   the code runs them: clicking "Add investigation to queue" puts one investigation, a class U task `KS-PLAN-<KEY>`, in
+   the queue, and the click is your yes; an agent investigates how the check fits your project and writes a plan
+   (recommendation, cost, risk and build steps; "not worth it" is a fine answer) and changes no files; you choose which
+   build steps become tasks; the ones you approve are built in the queue. One line says that "Turn on" and "Use as
+   gates" need no agent. While the first read runs, placeholders in the cards' shape stand under it, so the view does
+   not jump when the cards come.
+3. **The summary**, only when there is something to say: the important (high) suggestions that are open, each as a
+   button that scrolls to its card and puts focus on it (also when the category filter hid it), with "Go to
+   suggestions" for the list, and under "Skipped" the important ones you set aside, each with "Bring back".
+4. **What you have.** One card per CI config file (the host, the file, what it runs on and its jobs), and one card per
    kind of check found, with every place it was found and a badge "In CI" or "Not in CI". The places are:
    - **CI**: a command in GitHub Actions (`.github/workflows/*.yml`), GitLab CI, Bitbucket Pipelines, Azure
      Pipelines, CircleCI or a Jenkinsfile, with the file and the job.
@@ -62,27 +71,29 @@ From the top down:
 
    A command that runs a `package.json` script counts as what the script does: `npm run check` with
    `"check": "tsc && eslint ."` is a type check and a lint.
-4. **Gates from known bugs**, one line, when there are any: how many wait for your yes, how many are approved and how
+5. **Gates from known bugs**, one line, when there are any: how many wait for your yes, how many are approved and how
    many are done (see [Known bugs become gates](queue.md#known-bugs-become-gates)).
-5. **Guards** and **Repeated failures**: the guard registry and the failures that went red the same way more than once
+6. **Guards** and **Repeated failures**: the guard registry and the failures that went red the same way more than once
    (see [below](#the-guard-registry-and-repeated-failures)).
-6. **Suggestions, most important first.** One card per suggestion that applies to the project now. A card shows its
-   priority, its category, a title, why it is suggested and sometimes a line read from your project (the stacks, how
-   many `uses:` lines are not pinned, the test command Ravenseat found). With two or more categories, a "Show" list
-   filters by category.
+7. **Suggestions by category.** One card per suggestion that applies to the project now, in one group per category
+   with a heading and the category's one line, in the order of the categories below; a category with no card has no
+   group. A card shows its priority, a title, why it is suggested and sometimes a line read from your project (the
+   stacks, how many `uses:` lines are not pinned, the test command Ravenseat found). With two or more categories, a
+   "Show" list filters by category.
    **More ideas (n)**, folded and closed: the low cards that observe nothing in the project, only its setup (it has
    gates and tests, CI, a stack, or an opt-in check is off). They fit most projects, so they wait here instead of
    filling the list. A card leaves the fold by itself once something is found (its `medium_when` or `important_when`
    holds), and a card in the queue stays in the list. Nothing is removed and no priority changes; `ravenseat checks
    --json` marks such a card `"quiet": true`. Any condition other than the setup ones in `lib/checksCatalog.js`
    (`CONTEXT`) counts as something found, so a new kind of gap is never folded.
-7. **Set aside (n)**, folded: every card you set aside, each with "Bring back", also one that does not apply to the
+8. **Set aside (n)**, folded: every card you set aside, each with "Bring back", also one that does not apply to the
    project now (marked "does not apply now").
-8. **A suggestion file has a mistake**, in red, when a card file cannot be read. That card is left out; the rest show.
+9. **A suggestion file has a mistake**, in red, when a card file cannot be read. That card is left out; the rest show.
 
-The order of the suggestions: high first, then medium, then low; within a priority by category, in the order of the
-categories (Using what you have, Tests, CI, Code quality, Security, Dependencies, Database, Claude's instructions, Claude
-Code), then by key.
+The order of the suggestions: one group per category, in the order of the categories (Using what you have, Tests, CI,
+Code quality, Security, Dependencies, Database, Claude's instructions, Claude Code); inside a group high first, then
+medium, then low, then by key. `ravenseat checks` in the terminal and `--json` keep the flat order: high first, then
+medium, then low, within a priority by category.
 
 A card is in one of four states:
 

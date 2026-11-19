@@ -79,10 +79,12 @@ The forecast above the columns says when the remaining tasks are done.
 
 <p align="center"><img src="../../assets/screenshots/light-13-checks.jpg" alt="The Checks tab: what the project has for checking its code, and suggestions for what to add" width="800"></p>
 
-**Checks.** Cards for what your project already has for checking its code, and suggestions for what to add, most
-important first. It is read from your files, so it shows what is set up, not that it works. A suggestion's button adds
-an investigation to the queue, and nothing is built before you approve it; some need no agent and turn a check on with
-one click. A small red dot on the tab shows while an important suggestion is open, and "Set aside" keeps a card away
+**Checks.** Cards for what your project already has for checking its code, and suggestions for what to add, grouped
+by category with the most important first in each group. It is read from your files, so it shows what is set up, not
+that it works. "How it works" at the top shows the four steps: a suggestion's button adds an investigation to the queue
+(the click is your yes), the investigation ends in a plan and changes no files, you choose which steps become tasks,
+and nothing is built before you approve it; some need no agent and turn a check on with one click. The Important box
+leads to its cards, and placeholders hold the cards' place while the tab reads the project. A small red dot on the tab shows while an important suggestion is open, and "Set aside" keeps a card away
 until you bring it back. The guard registry and the failures that repeat are on the same tab. Every card and rule:
 [The Checks tab](checks.md).
 
@@ -153,8 +155,9 @@ The Queue workspace has these tabs:
   between the columns. "Areas …" creates and names the areas. A **Forecast** box above the columns says when the
   remaining tasks in the focus are done at 50, 85 and 95 % (the same as `ravenseat forecast`; the saved focus counts).
 - **Dependencies:** a graph of which tasks wait on which.
-- **Checks:** what the project has for checking its code, and prioritized suggestions for what to add, as cards. A
-  suggestion's button adds its investigation and planning to the queue; building needs your approval afterwards. The stack
+- **Checks:** what the project has for checking its code, and prioritized suggestions for what to add, as cards in
+  one group per category, under a "How it works" box you can close. A suggestion's button adds its investigation and
+  planning to the queue; building needs your approval afterwards. The stack
   pack suggestion needs no agent and writes `review.packs` on your click. A red dot on the tab while an important
   suggestion is open (`checksPanel.marker`). Read from files, nothing is run. Off with the link on the tab, in Settings or with `ravenseat checks off`
   (see [the Checks tab](checks.md)).

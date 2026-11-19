@@ -15,8 +15,35 @@
 'use strict';
 
 const checksTab = $('show-checks');
+/**
+ * "How it works" (B11) is open until the owner closes it. The choice is remembered per browser through `store` (core.js:
+ * every localStorage access in try/catch), so blocked storage only means it is not remembered; t.checks.howOpen holds
+ * it for the visit either way.
+ */
+const CHECKS_HOW_KEY = 'queue-board-checks-how';
 /** The view's own state. `open` keeps a card's details open across redraws. */
-t.checks = { report: null, error: null, fetching: false, time: 0, category: 'all', open: new Set(), asideOpen: false, moreOpen: false, busy: null };
+t.checks = {
+  report: null,
+  error: null,
+  fetching: false,
+  time: 0,
+  category: 'all',
+  open: new Set(),
+  asideOpen: false,
+  moreOpen: false,
+  busy: null,
+  howOpen: store.getItem(CHECKS_HOW_KEY) !== 'closed',
+};
+
+// The icons of "How it works" and its chevron, in the board's icon set (core.js ICONS): 24 px strokes in the text color.
+const checksStroke = (d) => [['path', { d, fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }]];
+Object.assign(ICONS, {
+  'checks-step-add': checksStroke('M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM12 8v8M8 12h8'),
+  'checks-step-look': checksStroke('M11 5a6 6 0 1 1 0 12a6 6 0 0 1 0-12zM20 20l-4.5-4.5'),
+  'checks-step-choose': checksStroke('M4 7l2 2 3-3M4 16l2 2 3-3M13 8h7M13 17h7'),
+  'checks-step-build': checksStroke('M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9'),
+  'checks-chevron': checksStroke('M6 9l6 6 6-6'),
+});
 
 const CHECKS_WHERE = { ci: 'CI', gate: 'Gate', script: 'Script', hook: 'Git hook', config: 'Config' };
 const CHECKS_PRIORITY = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -267,14 +294,22 @@ function checksQuickGateList(items) {
   return el('ul', { class: 'checks-places' }, ...lines);
 }
 
-function checksSuggestionCard(s, categories) {
+/**
+ * One suggestion card. In a category group (B10) the card says nothing about its category (the group heading does) and
+ * its headings sit one level under the group's h4: the title h5, its inner headings h6. In the "More ideas" fold, which
+ * is not grouped, the card names its category and its title is h4 as before. The card has an id and tabindex -1, so the
+ * Important box can scroll to it and put focus on it (checksGoTo).
+ */
+function checksSuggestionCard(s, categories, { grouped = false } = {}) {
+  const title = grouped ? 'h5' : 'h4';
+  const inner = grouped ? 'h6' : 'h5';
   const details = el(
     'details',
     { class: 'checks-details' },
     el('summary', { text: 'What this involves' }),
-    el('h5', { text: 'Investigate' }),
+    el(inner, { text: 'Investigate' }),
     el('p', { class: 'checks-template', text: s.investigate }),
-    el('h5', { text: 'Plan and build' }),
+    el(inner, { text: 'Plan and build' }),
     el('p', { class: 'checks-template', text: s.plan }),
   );
   details.open = t.checks.open.has(s.key);
@@ -286,21 +321,21 @@ function checksSuggestionCard(s, categories) {
   const under = s.state === 'queued' ? `In the queue: ${s.taskId}` : s.state === 'planned' ? `Plan delivered: ${s.taskId}` : null;
   return el(
     'li',
-    { class: `checks-card checks-suggestion checks-${s.priority}` },
+    { class: `checks-card checks-suggestion checks-${s.priority}`, id: checksCardId(s.key), tabindex: '-1' },
     el(
       'div',
       { class: 'checks-card-head' },
       el('span', { class: 'checks-priority', text: CHECKS_PRIORITY[s.priority] ?? s.priority }),
-      el('span', { class: 'checks-source', text: category }),
+      grouped ? null : el('span', { class: 'checks-source', text: category }),
     ),
-    el('h4', { class: 'checks-card-title', text: s.title }),
+    el(title, { class: 'checks-card-title', text: s.title }),
     el('p', { class: 'checks-text', text: s.why }),
     s.quickGate?.length ? checksQuickGateList(s.quickGate) : s.ledger?.items?.length ? checksLedgerList(s.ledger) : s.detail ? el('p', { class: 'checks-source', text: s.detail }) : null,
     s.action === 'ask'
       ? el(
           'div',
           { class: 'checks-ask' },
-          el('h5', { text: 'Ask Claude in your session' }),
+          el(inner, { text: 'Ask Claude in your session' }),
           el('p', { class: 'checks-template', text: s.ask }),
         )
       : s.action
@@ -320,6 +355,151 @@ function checksSuggestionCard(s, categories) {
           }),
       s.action || under ? null : el('span', { class: 'checks-source', text: `About ${s.contentMin} min of agent work` }),
     ),
+  );
+}
+
+/** A safe id part from a key (a catalog key is a slug; anything else from an own catalog is made safe). */
+const checksIdPart = (key) => String(key).replace(/[^A-Za-z0-9_-]/g, '-');
+/** A suggestion card's id, the target of the Important box's buttons. */
+const checksCardId = (key) => `checks-card-${checksIdPart(key)}`;
+
+/**
+ * The suggestions grouped by category (B10): one section per category that has a card, in the order of
+ * checks-catalog/categories.json (report.categories keeps it), with a real h4 heading and the category's one line.
+ * A category a card names that the list does not have (an own catalog) comes last, under its key. Inside a group the
+ * cards keep the report's order, so the most important come first there too. Empty groups are not drawn.
+ */
+function checksGroups(list, categories) {
+  const known = categories.map((c) => c.key);
+  const extra = [...new Set(list.map((s) => s.category))].filter((k) => !known.includes(k));
+  return [...known, ...extra]
+    .map((key) => {
+      const cards = list.filter((s) => s.category === key);
+      if (!cards.length) return null;
+      const c = categories.find((x) => x.key === key);
+      const id = `checks-group-${checksIdPart(key)}`;
+      return el(
+        'section',
+        { class: 'checks-group', 'aria-labelledby': id },
+        el('h4', { id, class: 'checks-group-title', text: c?.title ?? key }),
+        c?.text ? el('p', { class: 'checks-source', text: c.text }) : null,
+        el('ul', { class: 'checks-grid' }, ...cards.map((s) => checksSuggestionCard(s, categories, { grouped: true }))),
+      );
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Scrolls to a suggestion's card (or, with no key, to the suggestions heading) and puts focus there (B34, UX review C1).
+ * A card the category filter hides is shown first: the filter goes back to all categories and the view is drawn again.
+ */
+function checksGoTo(key) {
+  const id = key ? checksCardId(key) : 'checks-suggestions-title';
+  if (key && !document.getElementById(id) && t.checks.category !== 'all') {
+    t.checks.category = 'all';
+    draw();
+  }
+  const target = document.getElementById(id);
+  if (!target) return;
+  // A card in a closed fold ("More ideas") is opened first, so the focus lands on something visible.
+  const fold = target.closest('details');
+  if (fold && !fold.open) fold.open = true;
+  // The ring shows where the focus went also after a mouse click (where :focus-visible would not), until it leaves.
+  // The class comes first, so its scroll margin keeps the target clear of the top edge.
+  target.classList.add('checks-target');
+  target.addEventListener('blur', () => target.classList.remove('checks-target'), { once: true });
+  target.scrollIntoView({ block: 'start' });
+  target.focus({ preventScroll: true });
+}
+
+/**
+ * "How it works" (B11): how a suggestion becomes work, in four steps with an icon each, as the code runs it:
+ * checksButton posts { action: 'plan' }, which queue-board.mjs runs as `ravenseat checks plan <key> --approved` (the
+ * click is the yes); lib/checksCatalog.js planTask makes the class U task KS-PLAN-<KEY>, whose mission asks for a plan
+ * with recommendation, cost, risks and build steps, says that "not worth doing" is a fine result, and changes no project
+ * files; the owner decides which steps become tasks, and those run in the queue like any task. One line covers the
+ * cards that need no agent. A real button with aria-expanded and aria-controls opens and closes a region named by it;
+ * only the region's own height changes, the view is not drawn again, and the choice is remembered (CHECKS_HOW_KEY).
+ */
+function checksHow() {
+  const steps = [
+    [
+      'checks-step-add',
+      'You ask',
+      ['Click "Add investigation to queue". It puts one investigation, ', el('code', { text: 'KS-PLAN-<KEY>' }), ', in the queue, and the click is your yes.'],
+    ],
+    [
+      'checks-step-look',
+      'Claude investigates',
+      ['An agent looks at how the check fits your project and writes a plan: recommendation, cost, risk and build steps. Saying "not worth it" is a fine answer. It changes no files.'],
+    ],
+    ['checks-step-choose', 'You choose', ['You read the plan and pick which build steps become tasks.']],
+    ['checks-step-build', 'The queue builds', ['The steps you approve are built in the queue, like any other task.']],
+  ];
+  const toggle = el(
+    'button',
+    {
+      type: 'button',
+      id: 'checks-how-toggle',
+      class: 'checks-how-toggle',
+      'aria-expanded': String(t.checks.howOpen),
+      'aria-controls': 'checks-how-body',
+    },
+    el('span', { text: 'How it works' }),
+    icon('checks-chevron'),
+  );
+  const body = el(
+    'div',
+    { id: 'checks-how-body', class: 'checks-how-body', role: 'region', 'aria-labelledby': 'checks-how-toggle' },
+    el(
+      'ol',
+      { class: 'checks-how-steps' },
+      ...steps.map(([name, head, text], i) =>
+        el(
+          'li',
+          { class: 'checks-how-step' },
+          el('span', { class: 'checks-how-icon' }, icon(name)),
+          el(
+            'span',
+            { class: 'checks-how-step-title' },
+            el('span', { class: 'checks-how-num', 'aria-hidden': 'true', text: `${i + 1}` }),
+            head,
+          ),
+          el('p', { class: 'checks-how-step-text' }, ...text),
+        ),
+      ),
+    ),
+    el('p', { class: 'checks-source', text: '"Turn on" and "Use as gates" need no agent: your click writes the change to queue.config.json right away.' }),
+  );
+  body.hidden = !t.checks.howOpen;
+  const box = el('section', { class: `checks-how${t.checks.howOpen ? '' : ' is-closed'}` }, el('h3', { class: 'checks-how-title' }, toggle), body);
+  toggle.addEventListener('click', () => {
+    t.checks.howOpen = !t.checks.howOpen;
+    store.setItem(CHECKS_HOW_KEY, t.checks.howOpen ? 'open' : 'closed');
+    toggle.setAttribute('aria-expanded', String(t.checks.howOpen));
+    body.hidden = !t.checks.howOpen;
+    box.classList.toggle('is-closed', !t.checks.howOpen);
+  });
+  return box;
+}
+
+/**
+ * The placeholders while the first read runs (B34, UX review C3): a summary box, a heading and three cards in the cards'
+ * shape, so the view has its form at once and does not jump much when the report comes. Hidden from a screen reader,
+ * which gets the one status line instead.
+ */
+function checksSkeleton() {
+  const bars = () => [
+    el('span', { class: 'checks-skeleton-bar checks-skeleton-short' }),
+    el('span', { class: 'checks-skeleton-bar' }),
+    el('span', { class: 'checks-skeleton-bar checks-skeleton-mid' }),
+  ];
+  return el(
+    'div',
+    { class: 'checks-skeleton', 'aria-hidden': 'true' },
+    el('div', { class: 'checks-card checks-skeleton-box' }, ...bars()),
+    el('span', { class: 'checks-skeleton-bar checks-skeleton-heading' }),
+    el('ul', { class: 'checks-grid' }, ...[1, 2, 3].map(() => el('li', { class: 'checks-card checks-skeleton-card' }, ...bars()))),
   );
 }
 
@@ -475,7 +655,9 @@ function checksInspectionSection(insp) {
 
 /**
  * The summary at the top: important (high) suggestions that are open, and those set aside, each with one click back.
- * Nothing when there are none of either.
+ * Nothing when there are none of either. Each open one is a button that scrolls to its card and puts focus on it, and
+ * "Go to suggestions" goes to the list (B34, UX review C1: the box said two were open and led nowhere, while the cards
+ * stood below the fold). The headings are h3, the level of the view's other sections.
  */
 function checksSummary(r) {
   // A card set aside that does not apply now (applies: false) is not an important gap: only the "Set aside" list has it.
@@ -486,9 +668,34 @@ function checksSummary(r) {
   return el(
     'div',
     { class: 'checks-card checks-summary' },
-    open.length ? el('h4', { class: 'checks-card-title', text: `Important: ${checksPlural(open.length, 'suggestion')} open` }) : null,
-    open.length ? el('p', { class: 'checks-text', text: open.map((s) => s.title).join(', ') }) : null,
-    aside.length ? el('h4', { class: 'checks-card-title', text: `Skipped: ${checksPlural(aside.length, 'important suggestion')}` }) : null,
+    open.length
+      ? el(
+          'div',
+          { class: 'checks-card-head' },
+          el('h3', { class: 'checks-card-title', text: `Important: ${checksPlural(open.length, 'suggestion')} open` }),
+          el('button', { type: 'button', class: 'button button-outline', text: 'Go to suggestions', onclick: () => checksGoTo(null) }),
+        )
+      : null,
+    open.length
+      ? el(
+          'ul',
+          { class: 'checks-summary-list' },
+          ...open.map((s) =>
+            el(
+              'li',
+              null,
+              el('button', {
+                type: 'button',
+                class: 'link-button checks-summary-go',
+                text: s.title,
+                title: 'Shows this suggestion in the list below',
+                onclick: () => checksGoTo(s.key),
+              }),
+            ),
+          ),
+        )
+      : null,
+    aside.length ? el('h3', { class: 'checks-card-title', text: `Skipped: ${checksPlural(aside.length, 'important suggestion')}` }) : null,
     aside.length
       ? el(
           'ul',
@@ -530,8 +737,15 @@ function drawChecks() {
       }),
     ),
   );
+  // "How it works" needs no report, so it stands from the first frame and nothing above the cards moves when they come.
+  wrap.append(checksHow());
   if (!r) {
-    wrap.append(el('p', { class: 'empty', text: t.checks.error ? `Could not read the checks: ${t.checks.error}` : 'Reading the project …' }));
+    if (t.checks.error) wrap.append(el('p', { class: 'empty', text: `Could not read the checks: ${t.checks.error}` }));
+    else {
+      // The first read: one polite status line, and placeholders in the cards' shape instead of an empty view (C3).
+      wrap.setAttribute('aria-busy', 'true');
+      wrap.append(el('p', { class: 'checks-source', role: 'status', text: 'Reading the project …' }), checksSkeleton());
+    }
     main.append(wrap);
     return;
   }
@@ -558,10 +772,19 @@ function drawChecks() {
   const quiet = inCategory.filter((s) => s.quiet === true && s.state === 'open');
   const shown = inCategory.filter((s) => !quiet.includes(s));
   wrap.append(
-    el('div', { class: 'checks-head' }, el('h3', { class: 'decide-group-title', text: 'Suggestions, most important first' }), filter),
-    el('p', { class: 'decide-hint', text: 'Optional, all of them. The button adds an investigation that ends in a plan with recommended steps. Nothing is built before you approve it.' }),
+    // The heading takes focus from "Go to suggestions" in the Important box (tabindex -1: not a tab stop of its own).
+    el(
+      'div',
+      { class: 'checks-head' },
+      el('h3', { id: 'checks-suggestions-title', class: 'decide-group-title', tabindex: '-1', text: 'Suggestions by category' }),
+      filter,
+    ),
+    el('p', {
+      class: 'decide-hint',
+      text: 'Optional, all of them, the most important first in each group. "How it works" at the top shows what a button does. Nothing is built before you approve it.',
+    }),
     shown.length
-      ? el('ul', { class: 'checks-grid' }, ...shown.map((s) => checksSuggestionCard(s, r.categories)))
+      ? el('div', { class: 'checks-groups' }, ...checksGroups(shown, r.categories))
       : el('p', { class: 'checks-text', text: quiet.length ? 'Nothing found that needs you. Some general ideas are below.' : 'No suggestions right now.' }),
   );
   if (quiet.length) {

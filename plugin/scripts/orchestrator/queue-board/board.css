@@ -5218,6 +5218,195 @@ body.stale .summary.stuck::before {
   padding-left: var(--distance-md);
 }
 
+/* The Important box's way to the cards (B34, UX review C1): each open important suggestion as a link button. */
+.checks-summary-list {
+  list-style: none;
+  /* The link buttons' own padding is pulled back, so their text lines up with the heading above. */
+  margin: 0 0 0 calc(-1 * var(--distance-sm));
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--distance-xs);
+}
+.checks-summary-list .link-button {
+  margin: 0;
+  min-height: 36px;
+  font: inherit;
+  text-align: left;
+}
+.checks-summary-list .link-button:hover {
+  background: var(--state-hover);
+}
+/* Where the Important box moved the focus (a card or the suggestions heading), until the focus leaves it. A plain
+   click inside a card shows no ring. */
+.checks-target {
+  scroll-margin-top: var(--distance-md);
+  outline: var(--focus);
+  outline-offset: 2px;
+}
+
+/* The suggestions in category groups (B10): a group heading, its one line, then the cards. */
+.checks-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-lg);
+}
+.checks-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+}
+.checks-group-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+.checks-group > .checks-grid {
+  margin-top: var(--distance-xs);
+}
+
+/* "How it works" (B11): a box that opens and closes in place. Only its own body changes height; nothing has a fixed
+   height, and the toggle is 36 px on a mouse, 44 px on touch. */
+.checks-how {
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+}
+.checks-how-title {
+  margin: 0;
+  font-size: var(--text-md);
+}
+.checks-how-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--distance-sm);
+  width: 100%;
+  min-height: 36px;
+  padding: var(--distance-xs) var(--distance-md);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.checks-how-toggle:hover {
+  background: var(--state-hover);
+}
+.checks-how-toggle .icon {
+  margin-left: auto;
+  color: var(--color-on-surface-variant);
+}
+.checks-how.is-closed .checks-how-toggle .icon {
+  transform: rotate(-90deg);
+}
+.checks-how-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-sm);
+  padding: 0 var(--distance-md) var(--distance-md);
+}
+.checks-how-body[hidden] {
+  display: none;
+}
+.checks-how-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--distance-sm);
+}
+.checks-how-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+  padding: var(--distance-sm) var(--distance-md);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-container-low);
+}
+.checks-how-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--color-tone-info);
+  color: var(--color-on-tone-info);
+}
+.checks-how-icon .icon {
+  width: 20px;
+  height: 20px;
+}
+.checks-how-step-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--distance-xs);
+  font-weight: 600;
+}
+.checks-how-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-on-surface-variant);
+}
+.checks-how-step-text {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+@media (hover: none) {
+  .checks-how-toggle,
+  .checks-summary-list .link-button {
+    min-height: 44px;
+  }
+}
+
+/* Placeholders while the first read runs (B34, UX review C3), in the cards' shape so the view keeps its form. Still
+   for someone who asked for less motion; a slow pulse otherwise. */
+.checks-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-md);
+}
+.checks-skeleton-box {
+  min-height: 88px;
+}
+.checks-skeleton-card {
+  min-height: 148px;
+}
+.checks-skeleton-bar {
+  display: block;
+  height: 12px;
+  width: 80%;
+  border-radius: var(--radius);
+  background: var(--color-surface-container-high);
+}
+.checks-skeleton-short {
+  width: 30%;
+}
+.checks-skeleton-mid {
+  width: 55%;
+}
+.checks-skeleton-heading {
+  width: 160px;
+  height: 16px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .checks-skeleton .checks-skeleton-bar {
+    animation: checks-skeleton-pulse 1.6s ease-in-out infinite;
+  }
+}
+@keyframes checks-skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
 /* The number fields in the gear's Cloud section. */
 .cloud-setting-number {
   width: 5.5rem;

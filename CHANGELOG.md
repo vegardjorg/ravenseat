@@ -5,6 +5,22 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the Checks room explains its buttons, groups its suggestions and holds its place while it reads.**
+  Edge cases closed in the Checks room. The suggestions were one long list sorted by priority, so cards about tests,
+  CI and security stood mixed; they now come in one group per category with a real heading, in the catalog's order
+  (Using what you have, Tests, CI, Code quality, Security, Dependencies, Database, Claude's instructions, Claude Code),
+  the most important first inside each group, and a category with no card draws no group. The "More ideas" fold is
+  unchanged. A **How it works** box at the top shows in four steps with an icon each what a button really does: the
+  click on "Add investigation to queue" puts one investigation (`KS-PLAN-<KEY>`) in the queue and is your yes, the
+  agent writes a plan (recommendation, cost, risk and build steps, where "not worth it" is a fine answer) and changes
+  no files, you choose which steps become tasks, and the approved ones are built in the queue; one line says that
+  "Turn on" and "Use as gates" need no agent. The box is a button with aria-expanded and a region, open until you
+  close it, remembered in this browser and still working where storage is blocked; only its own height changes. The
+  **Important** box said how many suggestions were open but led nowhere while the cards stood below the fold: each one
+  is now a button that scrolls to its card and puts focus on it, also when the category filter hid it, and "Go to
+  suggestions" goes to the list. While the first read runs, placeholders in the cards' shape (still for someone who
+  asked for less motion) and one status line replace the near empty view that jumped when the cards came. No new
+  setting and no new colors: only the theme's tokens.
 - **Board: the help starts with the basics and can be reached from every room.** "How to use the board" was 13
   sections of running text in one column that began with Areas, a full-mode idea, had no contents, and could only be
   reached through the gear; once open, the only way out was Close, which dropped you out of Settings. Now a contents
