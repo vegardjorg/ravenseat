@@ -412,6 +412,12 @@ const SETTINGS = Object.freeze([
     'The time budget for the gate run a track starts itself; a gate over it is red. Empty = the base gate budget; 0 = no budget.'),
   row('wait.blockSec', 'gates', 'integer', 'Longest blocking call (seconds)',
     'Gates, receive and merge wait at most this long, then print RUNNING with the command that waits on. At most 590; 0 = wait until done.'),
+  // Friction: none. A hidden window changes no output, exit code or stdio; it only stops a console window opening for
+  // each git, cmd or npm call below a detached run (a test run made the screen blink). On by default for that reason;
+  // off only as an escape hatch if the preload ever gets in a project's way. Windows only; off weakens no guard.
+  row('windows.hideConsoles', 'gates', 'onoff', 'Hide console windows (Windows)',
+    'Detached runs (the wait mode, gates, the tree guard, the update check) start everything below them with hidden ' +
+    'windows, so a test run opens no console window per git call. Off: the windows show as before.'),
   row('gates.flakyRerun', 'gates', 'onoff', 'Rerun red gate commands once',
     'A red gate in a track reruns only its red commands once on the same commit. Green then counts as flaky.'),
   row('gateEvidence.mode', 'gates', 'choice', 'Gate evidence',

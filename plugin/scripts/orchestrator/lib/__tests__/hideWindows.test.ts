@@ -67,6 +67,7 @@ describe('hideWindows: windowsHide is the default for every process call', () =>
   it('hiddenWindowsEnv adds the preload once, keeps NODE_OPTIONS already set, and leaves other platforms alone', () => {
     expect(HW.hiddenWindowsEnv({ A: '1' }, 'linux')).toEqual({ A: '1' });
     expect(HW.hiddenWindowsEnv({ RAVENSEAT_HIDE_WINDOWS: 'off' }, 'win32')).toEqual({ RAVENSEAT_HIDE_WINDOWS: 'off' });
+    expect(HW.hiddenWindowsEnv({ A: '1' }, 'win32', false)).toEqual({ A: '1' }); // windows.hideConsoles false
     const env = HW.hiddenWindowsEnv({ PATH: 'p', NODE_OPTIONS: '--max-old-space-size=4096' }, 'win32');
     expect(env.PATH).toBe('p');
     expect(env.NODE_OPTIONS).toContain('--max-old-space-size=4096');

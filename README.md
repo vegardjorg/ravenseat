@@ -100,7 +100,7 @@ second token saving.
 
 All amounts are API-equivalent at list price. On a subscription they are quota, not dollars.
 
-For experts: a turn is one message id from the transcript, counted once, context = input + cache write + cache read,
+Details: a turn is one message id from the transcript, counted once, context = input + cache write + cache read,
 priced at the Opus list price; the tables, the dates of each change and the method are in
 [costs](plugin/docs/costs.md#measured-the-same-project-before-and-after-compaction-at-300k), and `ravenseat cost` shows
 your own split, including the share of cost from turns above 200k. `ravenseat doctor` warns when the instructions
@@ -120,7 +120,7 @@ is compacted, a hook adds back the queue, the open questions and the short "Now"
 40 lines), read from the files and not from the summary. Older handover entries move to a monthly archive that is read
 only when needed. A crash, a compaction or a second chat loses nothing that matters.
 
-For experts: a `SessionStart` hook on `compact` and a `PreCompact` hook do the re-injection
+Details: a `SessionStart` hook on `compact` and a `PreCompact` hook do the re-injection
 ([orchestration](plugin/docs/orchestration.md), [costs](plugin/docs/costs.md#measured-compacting-the-orchestrator-against-starting-a-new-chat)).
 
 ### Long projects, kept in order
@@ -137,7 +137,7 @@ For experts: a `SessionStart` hook on `compact` and a `PreCompact` hook do the r
 - **History** stays: each task keeps its changes, owner answers and cost, and a task's finish line is locked when it
   starts.
 
-For experts: focus, value-based order and helper reviewers are full mode; lite mode keeps the core loop only
+Details: focus, value-based order and helper reviewers are full mode; lite mode keeps the core loop only
 ([full mode](plugin/docs/full-mode.md), [plan register](plugin/docs/plan-register.md)).
 
 ### Security that does not depend on the model remembering
@@ -159,7 +159,7 @@ your CI config and manifests, runs nothing, and suggests the checks you lack; ab
 of frameworks such as Django, Rails, Next.js or Spring to review. A failure that comes back becomes a proposal for a
 new check, built only on your yes. The full list is under [Guarantees enforced by code](#guarantees-enforced-by-code).
 
-For experts: the guards are `PreToolUse` hooks on shell, Read and Write/Edit; the evidence is keyed to the commit sha,
+Details: the guards are `PreToolUse` hooks on shell, Read and Write/Edit; the evidence is keyed to the commit sha,
 a clean tree and a hash of the check commands. Guard rails, not a sandbox: agents run as your OS user, and a script an
 agent writes and then runs is not read ([red team](plugin/docs/redteam.md), [Checks tab](plugin/docs/checks.md)).
 Run `npm run redteam` to check it yourself.
@@ -184,7 +184,7 @@ A load guard starts fewer agents as free memory drops: in the larger private pro
 once, the median quick check took 1,244 s against 110 s ten days earlier, as free memory ran out
 ([machine load](plugin/docs/full-mode.md#my-pc-chokes-on-parallel-builds)).
 
-For experts: conflict prediction and the trial merge use `git merge-tree --write-tree` (git 2.38 or newer, objects
+Details: conflict prediction and the trial merge use `git merge-tree --write-tree` (git 2.38 or newer, objects
 only, never the index or a ref); merges hold a lock; a push is blocked when the base is red or commits from outside the
 queue are in it ([how a task flows](#how-a-task-flows), [orchestration](plugin/docs/orchestration.md)).
 

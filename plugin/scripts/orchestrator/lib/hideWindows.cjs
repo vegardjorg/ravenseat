@@ -13,8 +13,8 @@
 //   hiddenWindowsEnv(env)   a copy of env whose NODE_OPTIONS also loads the preload (hideWindowsPreload.cjs), so every
 //                           node process below a detached start installs the default too, children and grandchildren
 //                           alike. Only on Windows (the flag means nothing elsewhere, so other platforms get env as is),
-//                           and not with RAVENSEAT_HIDE_WINDOWS=off. No config key: hiding a window has no friction, so
-//                           there is nothing to choose; the env switch is only an escape hatch.
+//                           and not with windows.hideConsoles false in queue.config.json or RAVENSEAT_HIDE_WINDOWS=off
+//                           (escape hatches: hiding a window has no friction, so it is on by default).
 //
 // windowsHide changes nothing for the user beyond the missing window: output, exit codes and stdio are the same.
 // =============================================================
@@ -93,9 +93,11 @@ function installHideDefault(cp = require('node:child_process')) {
  * preload already there is not added twice.
  * @param {Record<string, string | undefined>} env
  * @param {string} [platform]
+ * @param {boolean} [enabled] windows.hideConsoles (read from the queue config when left out; on when it cannot be read)
  */
-function hiddenWindowsEnv(env, platform = process.platform) {
+function hiddenWindowsEnv(env, platform = process.platform, enabled = configOn()) {
   const out = { ...env };
+  if (!enabled) return out;
   // RAVENSEAT_HIDE_WINDOWS=off: the escape hatch if the preload ever gets in a project's way (windows show again).
   if (platform !== 'win32' || /^(off|0|false|no)$/i.test(String(out.RAVENSEAT_HIDE_WINDOWS ?? ''))) return out;
   const part = `--require "${PRELOAD}"`;
@@ -103,6 +105,15 @@ function hiddenWindowsEnv(env, platform = process.platform) {
   if (now.includes(part)) return out;
   out.NODE_OPTIONS = now ? `${now} ${part}` : part;
   return out;
+}
+
+/** windows.hideConsoles from the queue config; true when the config cannot be read (the default). */
+function configOn() {
+  try {
+    return require('./queueConfig.js').config()?.windows?.hideConsoles !== false;
+  } catch {
+    return true; // error-ignored: the default holds
+  }
 }
 
 module.exports = { installHideDefault, hiddenWindowsEnv, PRELOAD, MARK };

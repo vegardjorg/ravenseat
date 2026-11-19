@@ -10,8 +10,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   reach what it started, so every git, cmd or npm call below it, test runs included, opened a window for a moment. A
   small preload (`lib/hideWindows.cjs`) now makes `windowsHide` the default for every process call, and the detached
   starts pass it on through `NODE_OPTIONS`, so children and grandchildren start hidden too. An explicit
-  `windowsHide: false` is kept. Windows only. No setting, since hiding the window changes nothing else;
-  `RAVENSEAT_HIDE_WINDOWS=off` is an escape hatch that shows the windows again.
+  `windowsHide: false` is kept. Windows only. New setting `windows.hideConsoles`, on by default, since hiding the
+  window changes nothing else; `false` (or `RAVENSEAT_HIDE_WINDOWS=off` for one shell) shows the windows again.
 
 - **Board: the view tabs keep their place when chosen.** Layout hardening. Flat, Project lanes, Focus,
   Dependencies, Cloud and Statistics turn bold when chosen, which made the tabs after them move a few pixels. They

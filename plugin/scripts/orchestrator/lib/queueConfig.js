@@ -113,6 +113,10 @@ const STANDARD = Object.freeze({
   // then goes on detached, and the call prints one RUNNING line with the next command (`<command> --wait <id>`) and the
   // Bash timeout for it. 0 = off (the call blocks until done, as before). QUEUE_WAIT=off turns it off for one call.
   wait: { blockSec: 280 },
+  // Hidden windows below detached runs on Windows (lib/hideWindows.cjs): the wait mode, gates, the tree guard and the
+  // update check pass a preload on through NODE_OPTIONS, so their git, cmd and npm calls open no console window each.
+  // false = windows show as before. RAVENSEAT_HIDE_WINDOWS=off does the same for one shell. Other platforms: no effect.
+  windows: { hideConsoles: true },
   // The inspection queue (lib/inspection.js, `ravenseat inspection`): the same failure signature (lib/failureSignature.js)
   // in at least minRepeats incidents within windowDays days becomes ONE proposal to build a guard. mode on or off.
   // registryFile = the tracked guard registry (lib/guardRegistry.js), relative to the project root.
