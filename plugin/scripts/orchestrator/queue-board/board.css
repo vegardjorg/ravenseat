@@ -4265,6 +4265,258 @@ body.with-option-line .board {
   min-height: 36px;
 }
 
+/* QA-1b: a step's open task list above 12 tasks (plan.js TASK_CAP) gets its own scroll area about 12 rows high.
+   Each row is one line (the title ends in an ellipsis, the full text is in its tooltip), so 12 rows are 12 lines.
+   The area is a tab stop with a focus ring, and a fade at the bottom edge plus the hint under it say that it
+   scrolls. The fade is the section's own surface color, so it works in both modes. */
+.plan-tasks {
+  --plan-task-row: 1.75rem;
+}
+
+.plan-tasks-list.is-capped {
+  max-height: calc(12 * var(--plan-task-row) + 11 * var(--distance-xs));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--distance-xs);
+  /* The fade: a local background that scrolls with the content covers the fixed shadow at the very bottom. */
+  background:
+    linear-gradient(var(--color-surface-container-lowest), var(--color-surface-container-lowest)) bottom / 100% 24px
+      no-repeat local,
+    linear-gradient(transparent, var(--color-outline-variant)) bottom / 100% 12px no-repeat scroll;
+}
+
+.plan-tasks-list.is-capped:focus-visible {
+  outline: var(--focus);
+  outline-offset: 2px;
+}
+
+.plan-tasks-list.is-capped li {
+  flex-wrap: nowrap;
+  min-height: var(--plan-task-row);
+}
+
+.plan-tasks-list.is-capped .plan-tasks-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-tasks-list.is-capped li > code,
+.plan-tasks-list.is-capped li > .badge {
+  flex: none;
+}
+
+.plan-tasks-hint {
+  margin: var(--distance-xs) 0 0;
+  padding-left: var(--distance-sm);
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
+/* QA-1b: In focus with more than 12 steps (plan.js .plan-list-compact). Each step is one line: the header, the
+   numbers and the Tasks fold button side by side, wrapping only when the line is too narrow; an opened task list
+   takes the full width under it. The rows stay .plan-element children of the list, so the drop bar is unchanged. */
+.plan-list-compact {
+  gap: var(--distance-xs);
+}
+
+.plan-list-compact > .plan-element {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--distance-md);
+  padding: 2px var(--distance-sm);
+}
+
+.plan-list-compact > .plan-element > .plan-header {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.plan-list-compact > .plan-element > .plan-tall {
+  margin-top: 0;
+}
+
+.plan-list-compact > .plan-element > .plan-tasks-toggle {
+  min-height: 32px;
+}
+
+.plan-list-compact > .plan-element > .plan-tasks {
+  flex: 1 0 100%;
+  margin-bottom: var(--distance-xs);
+}
+
+/* QA-1b: the step menu (Move to top / Move to bottom) at the end of an In focus row: a 32 px button, and the menu
+   under it in the board's menu look (.option-item rows). */
+.plan-step-menu-space {
+  position: relative;
+  margin-inline-start: auto;
+  flex: none;
+}
+
+.plan-step-menu-button {
+  width: 32px;
+  height: 32px;
+  font-size: var(--text-md);
+  line-height: 1;
+}
+
+.plan-step-menu-button:focus-visible {
+  outline: var(--focus);
+}
+
+.plan-step-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  min-width: 12rem;
+  padding: var(--distance-xs);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container-lowest);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.16); /* shadow: black in both modes */
+  cursor: default;
+}
+
+.plan-step-menu .option-item:disabled {
+  color: var(--color-on-surface-variant);
+  cursor: default;
+  background-image: none;
+}
+
+/* QA-1b: the Add to focus picker. The searchable list (plan.js searchPick): the field, a list about 8 rows high with
+   its own scroll, and the count under it. The chosen option has a surface and an edge, not only a color (as the
+   Plans command line). */
+.plan-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+}
+
+.plan-pick-list {
+  max-height: 16rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: var(--distance-xs);
+  list-style: none;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container-lowest);
+}
+
+.plan-pick-list:empty {
+  display: none;
+}
+
+.plan-pick-option {
+  display: flex;
+  align-items: baseline;
+  gap: var(--distance-sm);
+  min-height: 32px;
+  padding: var(--distance-xs) var(--distance-sm);
+  border-left: 4px solid transparent;
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.plan-pick-option:hover {
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.plan-pick-option.active {
+  background: var(--color-tertiary-container);
+  color: var(--color-on-tertiary-container);
+  border-left-color: var(--color-tertiary);
+}
+
+.plan-pick-option .plan-step {
+  align-self: center;
+}
+
+.plan-pick-main {
+  flex: none;
+  font-weight: 600;
+}
+
+.plan-pick-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
+.plan-pick-option.active .plan-pick-sub {
+  color: inherit;
+}
+
+.plan-pick-count {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
+/* The position group: three choices on one row, the step search under it when "After a step" is chosen. The dialog
+   is a .bulk box, whose input and label rules are for text fields; the radios and their labels undo them. */
+.plan-pick-where {
+  margin: 0 0 var(--distance-sm);
+  padding: 0;
+  border: 0;
+}
+
+.plan-pick-where legend {
+  margin-bottom: var(--distance-xs);
+  padding: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
+.plan-pick-where-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--distance-xs) var(--distance-md);
+  margin-bottom: var(--distance-sm);
+}
+
+.bulk .plan-pick-where-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--distance-xs);
+  min-height: 36px;
+  font-size: var(--text-sm);
+  color: var(--color-on-surface);
+  cursor: pointer;
+}
+
+.bulk .plan-pick-where-choice input {
+  min-height: 0;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--color-primary);
+}
+
+.plan-pick-after[hidden] {
+  display: none;
+}
+
+/* The task(s) "Add to focus at …" from a card or the Selection already chose. */
+.plan-pick-chosen {
+  max-height: 8rem;
+  overflow-y: auto;
+  margin: 0 0 var(--distance-sm);
+  padding: var(--distance-xs) var(--distance-sm);
+  list-style: none;
+  border-left: 2px solid var(--color-outline-variant);
+  font-size: var(--text-sm);
+}
+
 /* "Focus settings": the fold below the lists (the checks-how box). Fields wrap on one row; the summary is quiet. */
 .plan-settings-toggle > span:first-child {
   flex: none;
@@ -5720,13 +5972,26 @@ body.stale .summary.stuck::before {
 
 /* B21: "Add to focus" on an outside-focus card, right after the reason: a compact outline button in the footer's
    text size (24 px target with a mouse, the WCAG 2.2 target size; 44 px on touch). Colors come from .button-outline. */
-.summary-footer .focus-add {
+.summary-footer .focus-add,
+.summary-footer .focus-add-at {
   min-height: 24px;
   padding: 0 var(--distance-sm);
   font-size: var(--text-xs);
 }
+/* QA-1b: "Add to focus" and "at …" read as one split button: joined edges, the shared border drawn once. */
+.summary-footer .focus-add:has(+ .focus-add-at) {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  margin-inline-end: calc(-1 * var(--distance-sm));
+}
+.summary-footer .focus-add + .focus-add-at {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-inline-start-width: 0;
+}
 @media (hover: none) {
-  .summary-footer .focus-add {
+  .summary-footer .focus-add,
+  .summary-footer .focus-add-at {
     min-height: 44px;
   }
 }

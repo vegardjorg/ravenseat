@@ -395,6 +395,16 @@ function drawOptionLine() {
           () => changeFocus({ action: 'add', steps: outsideFocus.map((id) => `task:${id}`) }),
         )
       : null,
+    // QA-1b: the same tasks at a chosen place (First, After a step, Last), still in one change.
+    outsideFocus.length
+      ? button(
+          'focus-add-at',
+          'Add to focus at …',
+          `Choose where ${countText(outsideFocus.length)} outside the focus go in, as their own steps: first, after a ` +
+            'step you pick, or last. One change; you see what changes first.',
+          () => pickFocus(outsideFocus.map((id) => `task:${id}`)),
+        )
+      : null,
     // In the menu a separator keeps "Clear selection" apart from the actions that change the queue.
     bar ? null : el('div', { role: 'separator', class: 'option-separator' }),
     button(

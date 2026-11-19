@@ -79,7 +79,21 @@
     boosted: null, // { key, for } while something is lifted with the keyboard (for = draft before the lift, for Esc)
     dialog: null, // open dialog (preview or areas)
     taskKeys: new Set(), // B21: task steps the picker put into a draft on this page (Not in focus keeps them)
+    menu: null, // QA-1b: the step key whose step menu (Move to top / bottom) is open, or null
+    refocusScroll: false, // QA-1b: let the refocus scroll the page (a step moved to the top or bottom moved far)
   };
+
+  // QA-1b: an open task list above this many tasks gets its own scroll area, and In focus with more steps than this
+  // draws compact rows. 12 rows fit on a laptop screen beside the rest of the step.
+  const TASK_CAP = 12;
+
+  // A press outside an open step menu closes it (as the board's other menus do).
+  document.addEventListener('pointerdown', (e) => {
+    if (s.menu && !e.target?.closest?.('.plan-step-menu-space')) {
+      s.menu = null;
+      s.ctx?.drawOnNew();
+    }
+  });
 
   // ---- Helpers ----
   const el = (...a) => s.ctx.el(...a);
@@ -235,10 +249,20 @@
         settingsFold(p),
       ),
     );
+    // An open step menu takes the focus to its first item that can be used (QA-1b).
+    if (s.menu) {
+      const first = main.querySelector('.plan-step-menu [role="menuitem"]:not([disabled])');
+      if (first) {
+        first.focus();
+        return;
+      }
+    }
     const refocus = s.refocus ? document.getElementById(s.refocus) : null;
+    const scroll = s.refocusScroll;
     s.refocus = null;
+    s.refocusScroll = false;
     if (refocus && !s.boosted) {
-      refocus.focus({ preventScroll: true });
+      refocus.focus({ preventScroll: !scroll });
       return;
     }
     const template = s.boosted?.key ?? focus;
@@ -560,7 +584,9 @@
     const list = el(
       'ol',
       {
-        class: 'plan-list',
+        // QA-1b: past TASK_CAP steps, In focus draws compact rows (board.css .plan-list-compact) so 50 steps stay
+        // scannable. Only the look changes: the rows are the same .plan-element children the drop bar measures.
+        class: `plan-list${sorted && elements.length > TASK_CAP ? ' plan-list-compact' : ''}`,
         'data-col': k.key,
         'aria-label': `${k.name}: ${elements.length} ${elements.length === 1 ? 'element' : 'elements'}`,
         ondragover: (e) => dragOver(e),
@@ -683,6 +709,7 @@
         : stepNr && DONE_TITLE[i.status]
           ? el('span', { class: 'badge', text: 'done', title: DONE_TITLE[i.status] })
           : null,
+      stepNr ? stepMenu(key, stepNr, p.steps.length, i) : null,
     );
     // B19: a step in In focus folds open to show its tasks.
     const children = stepNr ? tasksFold(key, stepNr) : [];
@@ -736,6 +763,97 @@
   }
 
   /**
+   * The step menu (QA-1b): a small button at the end of an In focus row that opens Move to top and Move to bottom, so
+   * a step goes to either end of 50 steps in two clicks instead of a long drag. It is one tab stop per row (the items
+   * are reached with the arrow keys inside the open menu, as on the Selection menu). Both moves go into the draft, as
+   * a drag does; the focus stays on the moved step's menu button and the live status says where it is now. The menu
+   * is drawn from s.menu, and QueuePlan.busy holds the board's redraws while it is open.
+   */
+  function stepMenu(key, stepNr, n, i) {
+    const open = s.menu === key;
+    const buttonId = `plan-step-menu-${key}`;
+    const button = el(
+      'button',
+      {
+        type: 'button',
+        id: buttonId,
+        class: 'button-icon plan-step-menu-button',
+        'aria-haspopup': 'menu',
+        'aria-expanded': open ? 'true' : 'false',
+        'aria-label': `Move step T${stepNr}, ${i.title}`,
+        title: 'Move this step to the top or the bottom of the focus.',
+        onclick: (e) => {
+          e.stopPropagation();
+          s.menu = open ? null : key;
+          s.refocus = buttonId;
+          s.ctx.drawOnNew();
+        },
+      },
+      el('span', { 'aria-hidden': 'true', text: '⋯' }),
+    );
+    const close = () => {
+      s.menu = null;
+      s.refocus = buttonId;
+      s.ctx.drawOnNew();
+    };
+    const moveTo = (where) => {
+      move(key, 'focus', where === 'top' ? 0 : n);
+      s.menu = null;
+      s.refocus = buttonId;
+      s.refocusScroll = true; // the step moved far: let the page follow it
+      s.ctx.status(
+        `${i.title} is step ${where === 'top' ? 1 : n} of ${n} now. The change is in the draft until you press "Save focus".`,
+      );
+      s.ctx.drawOnNew();
+    };
+    const item = (text, where, disabled) =>
+      el('button', {
+        type: 'button',
+        role: 'menuitem',
+        class: 'option-item',
+        tabindex: '-1',
+        disabled,
+        text,
+        onclick: (e) => {
+          e.stopPropagation();
+          moveTo(where);
+        },
+      });
+    const menu = open
+      ? el(
+          'div',
+          {
+            class: 'plan-step-menu',
+            role: 'menu',
+            'aria-label': `Move step T${stepNr}`,
+            onkeydown: (e) => {
+              const items = [...e.currentTarget.querySelectorAll('[role="menuitem"]:not([disabled])')];
+              const at = items.indexOf(document.activeElement);
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                e.stopPropagation();
+                const next = items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
+                next?.focus();
+              } else if (e.key === 'Home' || e.key === 'End') {
+                e.preventDefault();
+                e.stopPropagation();
+                (e.key === 'Home' ? items[0] : items.at(-1))?.focus();
+              } else if (e.key === 'Escape' || e.key === 'Tab') {
+                // Esc gives the focus back to the button; Tab closes too, so no menu is left open behind the focus.
+                if (e.key === 'Escape') e.preventDefault();
+                e.stopPropagation();
+                close();
+              }
+            },
+          },
+          item('Move to top', 'top', stepNr === 1),
+          item('Move to bottom', 'bottom', stepNr === n),
+        )
+      : null;
+    return el('span', { class: 'plan-step-menu-space' }, button, menu);
+  }
+
+  /**
    * The fold of a step in In focus (B19): a real button (aria-expanded, aria-controls) and a region named by it with the
    * step's tasks and a status badge per task (planBasis step_tasks: the saved steps only, so a step that is only in the
    * draft says so). The button keeps keyboard focus across the redraw (s.refocus).
@@ -766,6 +884,11 @@
       el('span', { class: 'fold-chevron', 'aria-hidden': 'true' }),
       saved ? `Tasks (${tasks.length})` : 'Tasks',
     );
+    // QA-1b: above TASK_CAP tasks the list gets its own scroll area (board.css .plan-tasks-list.is-capped, about 12
+    // rows high), so one big step does not push the other 49 off the page. A scroll area must be reachable without a
+    // mouse, so it is a tab stop (the arrow keys then scroll it) with a label that says how many tasks it holds, and a
+    // visible hint under it says that it scrolls.
+    const capped = tasks.length > TASK_CAP;
     const content = !saved
       ? el('p', {
           class: 'plan-remark',
@@ -775,7 +898,13 @@
         ? el('p', { class: 'plan-remark', text: 'No open tasks left in this step.' })
         : el(
             'ul',
-            { class: 'plan-tasks-list' },
+            {
+              class: `plan-tasks-list${capped ? ' is-capped' : ''}`,
+              tabindex: capped ? '0' : null,
+              'aria-label': capped
+                ? `Tasks in step T${stepNr}: ${tasks.length} tasks. The list scrolls.`
+                : null,
+            },
             tasks.map((x) => {
               const [word, tone, why] = TASK_STATE[x.state] ?? [x.state, '', ''];
               return el(
@@ -783,16 +912,25 @@
                 null,
                 el('code', { class: 'plan-tasks-id', text: x.id }),
                 ' ',
-                el('span', { class: 'plan-tasks-title', text: x.title ?? '' }),
+                // The title stays on one line in a capped list (equal rows); the full text is in the tooltip.
+                el('span', { class: 'plan-tasks-title', text: x.title ?? '', title: x.title || null }),
                 ' ',
                 el('span', { class: `badge${tone ? ` ${tone}` : ''}`, text: word, title: why }),
               );
             }),
           );
+    const hint =
+      saved && capped
+        ? el('p', {
+            class: 'plan-tasks-hint',
+            text: `All ${tasks.length} tasks are in the list: scroll it, or focus it and use the arrow keys, to see the rest.`,
+          })
+        : null;
     const region = el(
       'div',
       { id: regionId, class: 'plan-tasks', role: 'region', 'aria-labelledby': buttonId },
       content,
+      hint,
     );
     region.hidden = !open;
     return [button, region];
@@ -988,7 +1126,7 @@
         e.stopPropagation();
         s.boosted = { key, before: copy(p), hasDraft: !!s.draft };
         s.ctx.status(
-          `${info(key).title} is lifted. The arrow keys move it (up and down in In focus, left and right between the sections), Space drops, Esc cancels.`,
+          `${info(key).title} is lifted. The arrow keys move it (up and down in In focus, Home and End to the top and the bottom, left and right between the sections), Space drops, Esc cancels.`,
         );
         s.ctx.drawOnNew();
       }
@@ -1007,12 +1145,14 @@
       move(key, sequence[j]);
       s.ctx.status(`In ${SECTIONS[j].name}. Space drops, Esc cancels.`);
       s.ctx.drawOnNew();
-    } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && col === 'focus') {
+    } else if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key) && col === 'focus') {
       e.preventDefault();
       e.stopPropagation();
       const list = draft().steps;
       const i = list.indexOf(key);
-      const j = i + (e.key === 'ArrowUp' ? -1 : 1);
+      // QA-1b: Home and End take a lifted step to the top and the bottom (the step menu does the same with a mouse).
+      const j =
+        e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : i + (e.key === 'ArrowUp' ? -1 : 1);
       if (j < 0 || j >= list.length) return;
       list.splice(i, 1);
       list.splice(j, 0, key);
@@ -1073,7 +1213,8 @@
     const background = makeDialog();
     const box = document.getElementById('plan-dialog');
     if (!s.dialog) s.dialog = { from: document.activeElement };
-    box.replaceChildren(...content);
+    // replaceChildren() would turn a null (a part a dialog leaves out) into the text "null".
+    box.replaceChildren(...content.filter((x) => x != null));
     background.hidden = false;
     const template =
       (focusSelector ? box.querySelector(focusSelector) : null) ?? box.querySelector('button');
@@ -1259,86 +1400,334 @@
     ['project', 'Project'],
     ['area', 'Area'],
   ];
-  /** The steps of one kind that are not in the draft's In focus yet: [key, label]. */
+  // The words the pickers count with: [one, many].
+  const PICK_NOUN = {
+    task: ['task', 'tasks'],
+    feature: ['feature', 'features'],
+    project: ['project', 'projects'],
+    area: ['area', 'areas'],
+    step: ['step', 'steps'],
+  };
+
+  /**
+   * The steps of one kind that are not in the draft's In focus yet, as picker options:
+   * { value: the step key, main: the id or name, sub: the title or project (quieter), search: lowercase text }.
+   */
   function pickOptions(kind, p) {
     const d = data();
     let all = [];
-    if (kind === 'task') all = openCards().map((k) => [`task:${k.id}`, `${k.id} ${k.title}`]);
+    if (kind === 'task') all = openCards().map((k) => option(`task:${k.id}`, k.id, k.title ?? ''));
     else if (kind === 'feature')
       all = (d.plan?.projects ?? []).flatMap((pr) =>
-        (pr.features ?? []).map((x) => [`feature:${pr.pid}/${x.name}`, `${pr.pid} › ${x.name}`]),
+        (pr.features ?? []).map((x) => option(`feature:${pr.pid}/${x.name}`, `${pr.pid} › ${x.name}`, '')),
       );
     else if (kind === 'project')
-      all = (d.plan?.projects ?? []).map((pr) => [`project:${pr.pid}`, `${pr.title ?? pr.pid} (${pr.pid})`]);
+      all = (d.plan?.projects ?? []).map((pr) => option(`project:${pr.pid}`, pr.title ?? pr.pid, pr.pid));
     else
       all = (d.plan?.areas ?? [])
         .filter((o) => o.in_register && o.oid !== 'without-area')
-        .map((o) => [`area:${o.oid}`, o.title ?? o.oid]);
-    return all.filter(([key]) => !p.steps.includes(key));
+        .map((o) => option(`area:${o.oid}`, o.title ?? o.oid, o.oid));
+    return all.filter((o) => !p.steps.includes(o.value));
   }
-  function openPicker() {
-    const p = current();
-    const n = p.steps.length;
-    const field = (id, label, control) =>
-      el('div', { class: 'field' }, el('label', { for: id, text: label }), control);
-    const kind = el(
-      'select',
-      { id: 'plan-pick-kind', 'aria-label': 'Kind' },
-      PICK_KINDS.map(([v, text]) => el('option', { value: v, text })),
-    );
-    const what = el('select', { id: 'plan-pick-what', 'aria-label': 'What' });
-    const none = el('p', { class: 'sp-meta', hidden: true, text: 'Everything of this kind is in focus already.' });
-    const where = el(
-      'select',
-      { id: 'plan-pick-where', 'aria-label': 'Position' },
-      Array.from({ length: n + 1 }, (_, i) =>
-        el('option', {
-          value: String(i + 1),
-          text: `Step ${i + 1}${i === 0 ? ' (first)' : ''}${i === n ? ' (last)' : ''}`,
-          selected: i === n,
+  /** One picker option; `badge` is the step number (T3) in the step list, shown first. */
+  function option(value, main, sub, badge = null) {
+    return { value, main, sub, badge, search: [badge, main, sub].filter(Boolean).join(' ').toLowerCase() };
+  }
+  /**
+   * The steps in order as picker options, by the label a step has in In focus: T<n>, then the task id and title for a
+   * task step, the name and project for a feature, the title and id for a project, the title for an area.
+   */
+  function stepOptions(steps) {
+    return steps.map((key, i) => {
+      const x = info(key);
+      const main = x.type === 'task' ? restFor(key) : x.title;
+      const sub = x.type === 'task' ? x.title : x.type === 'feature' ? x.pid : x.type === 'project' ? restFor(key) : '';
+      return option(key, main, sub, `T${i + 1}`);
+    });
+  }
+
+  /**
+   * A searchable single choice (QA-1b): a text field with role combobox over a listbox of options, the WAI-ARIA
+   * pattern the Plans command line uses (plans/work.js buildPalette). Typing filters the options by every word (id
+   * and title both count); exactly one shown option is chosen (aria-selected, and aria-activedescendant on the field),
+   * so the arrow keys change the choice while the focus stays in the field. The number of matches is said in a polite
+   * live region under the list. Esc in the field clears the search first and only bubbles to the dialog (which then
+   * closes) when the field is already empty. With a handful of options every one shows, as the old select did.
+   *   id      the field's id (the label's `for`); the list is `${id}-list`, the count `${id}-count`
+   *   noun    [one, many] for the count, e.g. ['task', 'tasks']
+   *   chosen  the value chosen from the start (default: the first option)
+   * Returns { root, input, value(), setOptions(options, noun?), onChange }; onChange (set by the caller) runs on every
+   * change of the choice.
+   */
+  function searchPick({ id, label, noun, options, chosen = null, placeholder = 'Type to search by id or title' }) {
+    const listId = `${id}-list`;
+    const countId = `${id}-count`;
+    let all = options;
+    let shown = all;
+    let words = noun;
+    let value = chosen ?? all[0]?.value ?? null;
+    const input = el('input', {
+      id,
+      type: 'text',
+      class: 'plan-pick-search',
+      role: 'combobox',
+      'aria-autocomplete': 'list',
+      'aria-expanded': 'true', // the list is always shown in the dialog
+      'aria-controls': listId,
+      'aria-describedby': countId,
+      autocomplete: 'off',
+      spellcheck: 'false',
+      placeholder,
+    });
+    const list = el('ul', { id: listId, class: 'plan-pick-list', role: 'listbox', 'aria-label': label });
+    const count = el('p', { id: countId, class: 'plan-pick-count', 'aria-live': 'polite' });
+    const api = { input, value: () => value, setOptions, onChange: null };
+
+    const word = (n) => (n === 1 ? words[0] : words[1]);
+    /** Redraws the shown options with the choice marked, and the count. */
+    function render() {
+      list.replaceChildren(
+        ...shown.map((o) => {
+          const i = all.indexOf(o);
+          return el(
+            'li',
+            {
+              id: `${id}-o${i}`,
+              role: 'option',
+              class: `plan-pick-option${o.value === value ? ' active' : ''}`,
+              'aria-selected': o.value === value ? 'true' : 'false',
+              'data-value': o.value,
+              // The field keeps the focus (and so the keyboard) when an option is clicked.
+              onmousedown: (e) => e.preventDefault(),
+              onclick: () => choose(o.value),
+            },
+            o.badge ? el('span', { class: 'plan-step', text: o.badge }) : null,
+            o.badge ? ' ' : null,
+            el('span', { class: 'plan-pick-main', text: o.main }),
+            o.sub ? ' ' : null,
+            o.sub ? el('span', { class: 'plan-pick-sub', text: o.sub }) : null,
+          );
         }),
+      );
+      const active = list.querySelector('[aria-selected="true"]');
+      if (active) input.setAttribute('aria-activedescendant', active.id);
+      else input.removeAttribute('aria-activedescendant');
+      active?.scrollIntoView({ block: 'nearest' });
+      count.textContent = !input.value.trim()
+        ? `${all.length} ${word(all.length)}`
+        : shown.length
+          ? `${shown.length} of ${all.length} match`
+          : 'No matches';
+    }
+    function choose(v) {
+      value = v;
+      render();
+      api.onChange?.();
+    }
+    /** Filters by the words in the field; a choice the filter hides moves to the first match (or none). */
+    function filter() {
+      const parts = input.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      shown = all.filter((o) => parts.every((w) => o.search.includes(w)));
+      if (!shown.some((o) => o.value === value)) value = shown[0]?.value ?? null;
+      render();
+      api.onChange?.();
+    }
+    /** New options (and, optionally, new count words), with the search cleared and the first option chosen. */
+    function setOptions(next, nextNoun = words) {
+      all = next;
+      words = nextNoun;
+      input.value = '';
+      value = all[0]?.value ?? null;
+      filter();
+    }
+    input.addEventListener('input', filter);
+    input.addEventListener('keydown', (e) => {
+      const i = shown.findIndex((o) => o.value === value);
+      // Up and down one, Page up and down ten; no wrap, so the number of presses to an end is predictable.
+      const step = { ArrowDown: 1, ArrowUp: -1, PageDown: 10, PageUp: -10 }[e.key];
+      if (step) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!shown.length) return;
+        choose(shown[Math.max(0, Math.min(shown.length - 1, (i < 0 ? 0 : i) + step))].value);
+      } else if (e.key === 'Enter') {
+        // The choice is already made by the arrows; Enter must not do anything else here.
+        e.preventDefault();
+      } else if (e.key === 'Escape' && input.value) {
+        // First Esc clears the search; the dialog stays open (it closes on the next Esc).
+        e.preventDefault();
+        e.stopPropagation();
+        input.value = '';
+        filter();
+      }
+    });
+    api.root = el('div', { class: 'plan-pick' }, input, list, count);
+    render();
+    return api;
+  }
+
+  /**
+   * The position control (QA-1b): a labelled group of three choices, First, After a step and Last (the default, as the
+   * one-click "Add to focus"). "After a step" opens a searchable list of the steps by their label, the last step chosen
+   * from the start, so 50 steps never mean a 50-item select. Without steps there is nothing to choose: the step
+   * becomes step 1. Returns { root, index() } where index() is the 0-based place among `steps` (n = last), or null
+   * when "After a step" has no step chosen (its search matches nothing).
+   */
+  function positionControl(steps, onChange) {
+    const n = steps.length;
+    if (!n)
+      return {
+        root: el('p', { class: 'sp-meta', text: 'Position: there are no steps yet, so it becomes step 1.' }),
+        index: () => 0,
+      };
+    const after = searchPick({
+      id: 'plan-pick-after',
+      label: 'Steps in focus',
+      noun: PICK_NOUN.step,
+      options: stepOptions(steps),
+      chosen: steps[n - 1],
+      placeholder: 'Type to search the steps',
+    });
+    after.onChange = onChange;
+    const afterBox = el(
+      'div',
+      { class: 'field plan-pick-after', hidden: true },
+      el('label', { for: 'plan-pick-after', text: 'After step' }),
+      after.root,
+    );
+    let where = 'last';
+    const choices = [
+      ['first', 'First', 'Step 1, before everything in focus now.'],
+      ['after', 'After a step', 'Right after the step you choose below.'],
+      ['last', 'Last', `Step ${n + 1}, after everything in focus now.`],
+    ].map(([value, text, title]) =>
+      el(
+        'label',
+        { class: 'plan-pick-where-choice', title },
+        el('input', {
+          type: 'radio',
+          name: 'plan-pick-where',
+          value,
+          checked: value === where,
+          onchange: (e) => {
+            if (!e.target.checked) return;
+            where = value;
+            afterBox.hidden = where !== 'after';
+            onChange?.();
+          },
+        }),
+        el('span', { text }),
       ),
     );
-    const add = el('button', { type: 'button', class: 'button button-filled', text: 'Add' });
-    const fill = () => {
-      const list = pickOptions(kind.value, p);
-      what.replaceChildren(...list.map(([v, text]) => el('option', { value: v, text })));
-      none.hidden = list.length > 0;
-      what.disabled = !list.length;
-      add.disabled = !list.length;
+    const root = el(
+      'fieldset',
+      { class: 'plan-pick-where' },
+      el('legend', { text: 'Position' }),
+      el('div', { class: 'plan-pick-where-choices' }, choices),
+      afterBox,
+    );
+    const index = () => {
+      if (where === 'first') return 0;
+      if (where === 'last') return n;
+      const i = steps.indexOf(after.value());
+      return i < 0 ? null : i + 1;
     };
-    kind.addEventListener('change', fill);
-    fill();
-    add.addEventListener('click', () => {
-      const key = what.value;
+    return { root, index };
+  }
+
+  /**
+   * "Add to focus …" (B21, QA-1b). Two ways in:
+   *   - the Focus tab toolbar: choose a kind, search for what, and a position; Add puts it into the draft (Save focus
+   *     then shows what changes), positions counted in the draft;
+   *   - "Add to focus at …" on a card, in the detail panel or the Selection (`fixed`: the task keys, already chosen):
+   *     only the position is chosen, counted in the saved focus, and Preview opens the same dry preview as the
+   *     one-click "Add to focus" with the change { action: 'add', steps, at? }. `at` is the 1-based place (First is 1,
+   *     after step k is k+1); Last leaves it out, so it is exactly the one-click change.
+   */
+  function openPicker({ fixed = null } = {}) {
+    const p = current();
+    const steps = fixed ? savedSteps() : p.steps;
+    const field = (id, label, control) =>
+      el('div', { class: 'field' }, el('label', { for: id, text: label }), control);
+    const primary = el('button', { type: 'button', class: 'button button-filled', text: fixed ? 'Preview' : 'Add' });
+    let what = null;
+    let kind = null;
+    const none = el('p', { class: 'sp-meta', hidden: true, text: 'Everything of this kind is in focus already.' });
+    // Add (or Preview) only when there is something to add and a place to put it.
+    const refresh = () => {
+      const empty = what ? !what.value() : !fixed.length;
+      primary.disabled = empty || where.index() == null;
+    };
+    const where = positionControl(steps, () => refresh());
+    if (!fixed) {
+      kind = el(
+        'select',
+        { id: 'plan-pick-kind', 'aria-label': 'Kind' },
+        PICK_KINDS.map(([v, text]) => el('option', { value: v, text })),
+      );
+      what = searchPick({ id: 'plan-pick-what', label: 'What', noun: PICK_NOUN.task, options: pickOptions('task', p) });
+      what.onChange = refresh;
+      // A new kind refills the list (and clears the search); the count then speaks of that kind.
+      const fill = () => {
+        const list = pickOptions(kind.value, p);
+        none.hidden = list.length > 0;
+        what.input.disabled = !list.length;
+        what.setOptions(list, PICK_NOUN[kind.value]);
+      };
+      kind.addEventListener('change', fill);
+      none.hidden = what.value() != null;
+      what.input.disabled = what.value() == null;
+    }
+    primary.addEventListener('click', () => {
+      const index = where.index();
+      if (index == null) return;
+      if (fixed) {
+        // Last (index n) is the one-click change: no `at`.
+        const change = { action: 'add', steps: fixed, ...(index < steps.length ? { at: index + 1 } : {}) };
+        return previewList(changeJob(change));
+      }
+      const key = what.value();
       if (!key) return;
-      const error = move(key, 'focus', Number(where.value) - 1);
+      const error = move(key, 'focus', index);
       if (error) return s.ctx.message(error, true);
       if (typeFor(key) === 'task') s.taskKeys.add(key);
-      s.ctx.status(`${info(key).title} is in the draft at step ${where.value}. Save focus shows what changes.`);
+      s.ctx.status(`${info(key).title} is in the draft at step ${index + 1}. Save focus shows what changes.`);
       closeDialog();
     });
+    refresh();
+    const n = fixed?.length ?? 0;
     showDialog(
       [
-        el('h2', { id: 'plan-dialog-title', text: 'Add to focus' }),
+        el('h2', { id: 'plan-dialog-title', text: fixed ? 'Add to focus at …' : 'Add to focus' }),
         el('p', {
           class: 'bulk-explanation',
-          text:
-            'Choose what goes into the focus and at which step. It goes into the draft: nothing changes in the queue ' +
-            'until Save focus, which shows what changes first.',
+          text: fixed
+            ? `Choose where ${n === 1 ? 'the task goes' : `the ${n} tasks go`} in the focus, as ${n === 1 ? 'its own step' : 'their own steps'}. ` +
+              'Preview shows what changes before anything is saved.'
+            : 'Choose what goes into the focus and at which step. It goes into the draft: nothing changes in the queue ' +
+              'until Save focus, which shows what changes first.',
         }),
-        field('plan-pick-kind', 'Kind', kind),
-        field('plan-pick-what', 'What', what),
-        none,
-        field('plan-pick-where', 'Position', where),
+        fixed
+          ? el(
+              'ul',
+              { class: 'plan-pick-chosen', 'aria-label': n === 1 ? 'The task' : `The ${n} tasks` },
+              fixed.map((k) =>
+                el('li', null, el('code', { text: restFor(k) }), ' ', el('span', { text: info(k).title })),
+              ),
+            )
+          : null,
+        kind ? field('plan-pick-kind', 'Kind', kind) : null,
+        what ? field('plan-pick-what', 'What', what.root) : null,
+        what ? none : null,
+        where.root,
         el(
           'div',
           { class: 'guard-buttons' },
           el('button', { type: 'button', class: 'button button-outline', text: 'Cancel', onclick: closeDialog }),
-          add,
+          primary,
         ),
       ],
-      '#plan-pick-kind',
+      fixed ? 'input[name="plan-pick-where"]:checked' : '#plan-pick-kind',
     );
   }
 
@@ -1522,7 +1911,7 @@
   window.QueuePlan = {
     draw,
     /** Should the board hold off redrawing (something is dragged or lifted, or a dialog is open)? */
-    busy: () => !!s.drag || !!s.boosted || open(),
+    busy: () => !!s.drag || !!s.boosted || !!s.menu || open(),
     /** Does the plan have an unsaved draft (the focus line says so)? */
     hasDraft: hasChanges,
     openAreas: (ctx) => {
@@ -1536,6 +1925,14 @@
     changeFocus: (ctx, change) => {
       s.ctx = ctx;
       previewList(changeJob(change));
+    },
+    /**
+     * QA-1b: "Add to focus at …" from a card, the Selection or the detail panel. Opens the picker with these task steps
+     * already chosen; only the position is picked, then the same dry preview as changeFocus.
+     */
+    pickFocus: (ctx, steps) => {
+      s.ctx = ctx;
+      openPicker({ fixed: [...steps] });
     },
   };
 })();

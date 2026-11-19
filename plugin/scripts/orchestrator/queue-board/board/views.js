@@ -67,17 +67,38 @@ function changeFocus(change) {
   window.QueuePlan.changeFocus(planContext(), change);
 }
 
-/** The "Add to focus" / "Remove from focus" button, or the note on what covers the task, for the detail panel. */
+/**
+ * QA-1b: "Add to focus at …": the Focus picker with these task steps already chosen, so only the position (First,
+ * After a step, Last) is picked; then the same preview as changeFocus.
+ */
+function pickFocus(steps) {
+  window.QueuePlan.pickFocus(planContext(), steps);
+}
+
+/**
+ * The "Add to focus" / "Remove from focus" button, or the note on what covers the task, for the detail panel. A task
+ * outside the focus gets two buttons: the one-click add (last) and "Add to focus at …" (QA-1b), so the return value
+ * is an element or an array of them.
+ */
 function focusActions(k) {
   const c = focusCover(k);
   if (c.kind === 'outside')
-    return el('button', {
-      type: 'button',
-      class: 'button button-outline',
-      text: 'Add to focus',
-      title: 'Adds this task as its own step, last in the focus. You see what changes before it is saved.',
-      onclick: () => changeFocus({ action: 'add', steps: [`task:${k.id}`] }),
-    });
+    return [
+      el('button', {
+        type: 'button',
+        class: 'button button-outline',
+        text: 'Add to focus',
+        title: 'Adds this task as its own step, last in the focus. You see what changes before it is saved.',
+        onclick: () => changeFocus({ action: 'add', steps: [`task:${k.id}`] }),
+      }),
+      el('button', {
+        type: 'button',
+        class: 'button button-outline',
+        text: 'Add to focus at …',
+        title: 'Choose where the task goes: first, after a step you pick, or last. You see what changes before it is saved.',
+        onclick: () => pickFocus([`task:${k.id}`]),
+      }),
+    ];
   if (c.kind === 'own')
     return el('button', {
       type: 'button',

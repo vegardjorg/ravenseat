@@ -190,6 +190,20 @@ function footerFor(k, col) {
               changeFocus({ action: 'add', steps: [`task:${k.id}`] });
             },
           }),
+          // QA-1b: the other half of a split button: the same add at a chosen place (First, After a step, Last).
+          // The visible "at …" is part of the accessible name (WCAG 2.5.3, label in name).
+          el('button', {
+            type: 'button',
+            class: 'button button-outline button-small focus-add-at',
+            tabindex: '-1',
+            text: 'at …',
+            'aria-label': 'Add to focus at …',
+            title: 'Choose where the task goes in the focus: first, after a step you pick, or last.',
+            onclick: (e) => {
+              e.stopPropagation();
+              pickFocus([`task:${k.id}`]);
+            },
+          }),
         );
     }
   } else if (col === 'proposed') {

@@ -480,19 +480,25 @@ describe('the board: focus on the cards', () => {
     open.click();
     await flush();
     const kind = dialog().querySelector('select[aria-label="Kind"]') as HTMLSelectElement;
-    const what = () => dialog().querySelector('select[aria-label="What"]') as HTMLSelectElement;
-    const where = dialog().querySelector('select[aria-label="Position"]') as HTMLSelectElement;
-    expect(kind && what() && where).toBeTruthy();
+    // QA-1b: What is a searchable combobox over a listbox, and Position is First / After a step / Last
+    // (queueBoardQa1b.test.ts covers both in depth).
+    const what = () => dialog().querySelector('#plan-pick-what[role="combobox"]') as HTMLInputElement;
+    const first = dialog().querySelector('input[name="plan-pick-where"][value="first"]') as HTMLInputElement;
+    expect(kind && what() && first).toBeTruthy();
     expect([...kind.options].map((o) => o.value)).toEqual(['task', 'feature', 'project', 'area']);
     kind.value = 'task';
     kind.dispatchEvent(new Event('change', { bubbles: true }));
     await flush();
-    const values = [...what().options].map((o) => o.value);
+    const values = [...$(what().getAttribute('aria-controls')!).querySelectorAll('[role="option"]')].map(
+      (o) => (o as HTMLElement).dataset.value,
+    );
     expect(values).toContain('task:MISC-1');
     // What is already a step is not offered again.
     expect(values).not.toContain('task:MISC-3');
-    what().value = 'task:MISC-1';
-    (dialog().querySelector('select[aria-label="Position"]') as HTMLSelectElement).value = '1';
+    what().value = 'MISC-1';
+    what().dispatchEvent(new Event('input', { bubbles: true }));
+    first.checked = true;
+    first.dispatchEvent(new Event('change', { bubbles: true }));
     [...dialog().querySelectorAll('button')].find((b) => b.textContent === 'Add')!.click();
     await flush();
     const keys = [...document.querySelectorAll('.plan-list[data-col="focus"] > .plan-element')].map(
