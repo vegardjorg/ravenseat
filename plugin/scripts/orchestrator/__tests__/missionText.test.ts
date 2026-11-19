@@ -208,6 +208,11 @@ describe('sectionPointers', () => {
     expect(sectionPointers('Read `docs/a.md` § 6.1.', read)).toBe(
       'Read `docs/a.md` § 6.1 (line 7–8).',
     );
+    // A Windows short (8.3) path, like the CI runner's temp folder C:/Users/RUNNER~1/...: the whole path is the pointer.
+    const short = 'C:/Users/RUNNER~1/AppData/Local/Temp/x/docs/a.md';
+    expect(sectionPointers(`Read ${short} § 6.`, (f: string) => (f === short ? doc : null))).toBe(
+      `Read ${short} § 6 (line 5–8).`,
+    );
     // without a section, unknown file, unknown section: untouched
     for (const t of ['Read docs/a.md.', 'Read docs/b.md § 6.', 'Read docs/a.md § 9.'])
       expect(sectionPointers(t, read)).toBe(t);

@@ -406,8 +406,10 @@ describe('the docs', () => {
     expect(doc).toMatch(/lost contact/);
     expect(doc).toMatch(/Changes are paused/);
     const log = readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8');
-    const unreleased = log.slice(log.indexOf('## Unreleased'), log.indexOf('\n## ', log.indexOf('## Unreleased') + 5));
-    expect(unreleased).toMatch(/stale/i);
-    expect(unreleased).not.toMatch(/\u2014/);
+    // The entry that describes it, wherever it is now: "## Unreleased" is empty right after a release, so reading only
+    // that section failed on the release commit itself.
+    const entry = log.split('\n- **').find((e) => /stale/i.test(e) && /lost contact|Changes are paused/i.test(e)) ?? '';
+    expect(entry).toMatch(/stale/i);
+    expect(entry).not.toMatch(/\u2014/);
   });
 });

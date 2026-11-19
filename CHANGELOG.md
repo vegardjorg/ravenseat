@@ -3,6 +3,14 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+- **Missions: a section pointer on a Windows short path gets its line range.** Edge case hardening. A pointer like
+  `C:/Users/RUNNER~1/.../plan.md § 2` (an 8.3 short name, as in some temp folders) was cut at the `~`, so the file
+  was not found and the "(line A-B)" range was left out. The `~` now counts as part of the path. A docs test that
+  read only the "Unreleased" section of the changelog now finds its entry wherever it is, so it no longer fails on
+  a release commit.
+
 ## 0.20.0 (2026-11-19)
 
 **The board holds up with large queues and keeps its layout still, test runs pick only what a change touches and are logged, tracks read less of large files, and on Windows no console window opens per git call below a detached run.**

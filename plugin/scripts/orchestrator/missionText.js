@@ -223,7 +223,7 @@ function sectionArea(text, { section, anchor }) {
 // "docs/x.md § 6", "`docs/x.md` § 6.2", "`docs/x.md#heading`", also with an absolute Windows path. A closing
 // backtick is included in the match, so "(line A–B)" ends up outside the code span.
 const POINTER =
-  /`?((?:[A-Za-z]:[\\/])?[\w.\\/-]*[\w-]\.md)`?(?:\s*§\s*(\d+(?:\.\d+)*)(?![\d.]\d)|#([\p{L}\p{N}_-]+)(?![\p{L}\p{N}_-]))`?(?!`?\s*\(line)/gu;
+  /`?((?:[A-Za-z]:[\\/])?[\w.~\\/-]*[\w-]\.md)`?(?:\s*§\s*(\d+(?:\.\d+)*)(?![\d.]\d)|#([\p{L}\p{N}_-]+)(?![\p{L}\p{N}_-]))`?(?!`?\s*\(line)/gu;
 
 /**
  * Appends "(line A–B)" after every section pointer that can be looked up. Pointers without a section, and pointers to
