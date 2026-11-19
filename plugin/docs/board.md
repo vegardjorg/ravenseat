@@ -72,7 +72,14 @@ u work from the keyboard.
 **Dependencies.** The chains as a graph: circles are tasks (solid ring = in progress, dashed = blocked), squares are
 open questions. It shows at a glance which single answer unlocks the most work. Each id sits below its ring, never
 inside it, and stays between 12 and 14 px on screen at any zoom; every legend sample has an edge in the color of the
-ring it explains.
+ring it explains. The legend also explains why a node looks dimmed, with only the entries that apply right now:
+"faded: outside the selected chain" (while a chain is selected), "small gray: hidden by your filter or search" (a
+predecessor or successor the filter or search hides, drawn because **Show neighbors** is on) and "pale: done" (a done
+predecessor, with **Show finished**). A neighbor's tooltip and screen reader name say "<id> <title>: hidden by the
+filter or search", and a click still opens it; a done node says "done". Selecting a task fills the status line at the
+bottom of the top area, "Showing the chain of <id> (<n> tasks) · Clear selection", with any chain members the view
+hides and their actions in between. The line always keeps its height, so the graph never moves; it is a polite live
+region, and **Clear selection** or Esc (after Esc has closed the panel) clears the chain.
 
 <p align="center"><img src="../../assets/screenshots/light-15-focus.jpg" alt="The Focus tab: the focus steps and the forecast" width="800"></p>
 
@@ -156,7 +163,8 @@ The Queue workspace has these tabs:
   the count ("Blocked (5)"), opened and closed with a click, Enter or Space. Blocked is open from the start when it
   has 20 cards or fewer and closed above that (its cards are then built only when you open it), Proposed is closed,
   and the batch queue is open; your own choice holds for the rest of the visit. Clicking a card with a chain
-  highlights the tasks before and after it, and the chain line above the columns says why any of them are not
+  highlights the tasks before and after it and fades the rest. The chain line above the columns says so ("Showing
+  the chain of <id> (<n> tasks): 2 before, 1 after · the rest is faded", with **Clear selection**) and why any of them are not
   visible, with a button where one helps: "2 in the closed Blocked group" (Show), "hidden by the search" (Clear
   search), "hidden by the filter" (Remove filter), "outside the filter" (Show all), "older than 7 days in Built"
   (Show more), or "not shown in this view". Column and group headings are in sentence case; the In progress header
@@ -175,7 +183,8 @@ The Queue workspace has these tabs:
   changed: it still shows only what needs you. Saved in queue.json as `board.blockedColumn`
   (`ravenseat board-setting blocked on|off`).
 - **Project lanes:** the same cards with one row per project; drag a lane to change the project's priority. With the
-  Blocked column on, each lane has a Blocked cell too.
+  Blocked column on, each lane has a Blocked cell too. A card keeps its project short name and color dot here, and in
+  Flat grouped by area or feature, so a card looks the same in every view.
 - **Focus:** the order the queue takes work in, as one ordered list **In focus** (step 1 first; each step row has a
   **Tasks** fold that lists the step's tasks with a status per task: ready, blocked, waits on an answer, QA waiting on
   you and so on; a done step keeps its "done" badge), then **Not in focus** (the rest) and **On pause** (projects on

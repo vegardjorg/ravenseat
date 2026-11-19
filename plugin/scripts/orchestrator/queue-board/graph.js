@@ -9,6 +9,8 @@
 // board.js owns the state, the search, the filter menu, detailPanel and the chain (t.chain). It calls
 //   window.QueueGraphView.draw(ctx)  when the view is drawn, and
 //   window.QueueGraphView.mark(id, chain)  when the chain is selected or reset (Esc).
+// mark() also fills the chain status line in the top area and switches the legend's "faded" entry (QA-1e Q6); the
+// status line's "Clear selection" calls ctx.resetChain and its hidden-member causes come from ctx.chainCauses.
 // All text is set with textContent; the colors are the CSS variables from theme.css (light and dark).
 // =============================================================
 'use strict';
@@ -54,6 +56,9 @@
   let make = null;
   let surface = null;
   let ctx = null;
+  // The chain status line and the legend's "faded" entry: built by draw(), updated in place by mark() (QA-1e Q6).
+  let statusEl = null;
+  let fadedItem = null;
 
   function readOption() {
     let v = null;
@@ -164,10 +169,24 @@
     );
   }
 
-  function legend() {
+  /**
+   * The legend. Besides the states, it explains the three ways a node can look dimmed (QA-1e Q6), and only the ones
+   * that apply right now:
+   *   - "faded": outside the selected chain. Its slot is always there (hidden with .legend-idle, which keeps the
+   *     space), so selecting a chain never moves the legend; mark() switches it on and off.
+   *   - "small gray": a neighbor (role 'neighbor' in queueGraph), drawn only when the filter or search hides it.
+   *   - "pale": a done predecessor (role 'done'), drawn only with "Show finished".
+   */
+  function legend(o) {
     const el = ctx.el;
-    const chunk = (cls, text) =>
-      el('li', null, el('span', { class: `draw ${cls}`, 'aria-hidden': 'true' }), text);
+    const chunk = (cls, text, extra) =>
+      el('li', extra ?? null, el('span', { class: `draw ${cls}`, 'aria-hidden': 'true' }), text);
+    const has = (role) => o.nodes.some((n) => n.role === role);
+    fadedItem = chunk('t-faded', 'faded: outside the selected chain', {
+      'data-legend': 'faded',
+      class: 'legend-idle',
+      'aria-hidden': 'true',
+    });
     return el(
       'ul',
       { class: 'graph-draw', 'aria-label': 'Legend' },
@@ -177,6 +196,42 @@
       // The batch queue has its own badge (dotted ring and "S").
       chunk('t-batch', 'in the batch queue (packed into a track)'),
       chunk('t-sp', 'owner question'),
+      has('neighbor')
+        ? chunk('t-neighbor', 'small gray: hidden by your filter or search', { 'data-legend': 'neighbor' })
+        : null,
+      has('done') ? chunk('t-done', 'pale: done', { 'data-legend': 'done' }) : null,
+      fadedItem,
+    );
+  }
+
+  /**
+   * The chain status line (QA-1e Q6): "Showing the chain of <id> (<n> tasks) · Clear selection", with the chain
+   * members that are hidden right now and their actions in between (from board.js, ctx.chainCauses). The element is
+   * always in the graph top with a fixed height (board.css), so the text appearing never moves the graph, and it is
+   * a polite live region that mark() updates in place: a screen reader hears the change, not a new element.
+   */
+  function chainStatus(id, chain) {
+    if (!statusEl) return;
+    if (!id || !chain) {
+      statusEl.replaceChildren();
+      return;
+    }
+    const el = ctx.el;
+    const n = 1 + new Set([...(chain.before ?? []), ...(chain.after ?? [])]).size;
+    const lead = window.QueueA11y?.chainLead
+      ? window.QueueA11y.chainLead(id, n)
+      : `Showing the chain of ${id} (${plural(n, 'task', 'tasks')})`;
+    statusEl.replaceChildren(
+      el('span', { class: 'graph-chain-text', text: lead }),
+      ...(ctx.chainCauses?.() ?? []),
+      el('span', { class: 'graph-chain-sep', 'aria-hidden': 'true', text: ' · ' }),
+      el('button', {
+        type: 'button',
+        class: 'link-button',
+        text: 'Clear selection',
+        title: 'Show every task at full strength again (Esc does the same)',
+        onclick: () => ctx.resetChain?.(),
+      }),
     );
   }
 
@@ -251,9 +306,13 @@
       ]
         .filter(Boolean)
         .join('\n');
+    // A neighbor is drawn small and gray because the filter or search hides it (QA-1e Q6): its name says so first,
+    // so a hover or a screen reader explains the gray before the state. A done predecessor's state line is "done".
     return [
-      `${n.id}: ${n.title}`,
-      `${STATE[n.state] ?? n.status}${n.role === 'neighbor' ? ' (hidden by the filter)' : ''}`,
+      n.role === 'neighbor'
+        ? `${n.id} ${n.title}: hidden by the filter or search`
+        : `${n.id}: ${n.title}`,
+      STATE[n.state] ?? n.status,
       n.locks ? `Unlocks ${plural(n.locks, 'task', 'tasks')}` : null,
     ]
       .filter(Boolean)
@@ -512,6 +571,13 @@
       g.classList.toggle('after', active && afterSet.has(x));
       g.classList.toggle('i-chain', active && spWith.has(x));
     }
+    // Say why the rest is faded (QA-1e Q6): the legend's "faded" entry and the status line follow the chain.
+    if (fadedItem) {
+      fadedItem.classList.toggle('legend-idle', !active);
+      if (active) fadedItem.removeAttribute('aria-hidden');
+      else fadedItem.setAttribute('aria-hidden', 'true');
+    }
+    chainStatus(active ? id : null, active ? chain : null);
   }
 
   /** Draws the view in `ctx.main` (board.js has emptied it). */
@@ -520,12 +586,15 @@
     const el = c.el;
     const { setup: o, counts } = setup();
     const focus = document.activeElement?.closest?.('.graph-svg .node')?.dataset.id ?? null;
+    // Empty until mark() fills it; always in the layout with its fixed height (a full row of its own).
+    statusEl = el('p', { class: 'graph-chain-status', role: 'status', 'aria-live': 'polite' });
     const top = el(
       'div',
       { class: 'graph-top' },
       recap(counts, o),
-      legend(),
+      legend(o),
       optionRow(),
+      statusEl,
     );
     if (!o.nodes.length) {
       svg = null;

@@ -2933,6 +2933,54 @@ body.with-option-line .toaster {
   background: var(--color-secondary-container);
 }
 
+/* The dimmed states (QA-1e Q6), each sample drawn the way the graph draws it: a node outside the selected chain at
+   the chain view's opacity, a neighbor small and gray (.task.role-neighbor .fill, no ring) and a done predecessor
+   pale (.task.role-done). The text next to each sample carries the meaning; the sample only repeats it. */
+.graph-draw .t-faded {
+  opacity: 0.15;
+}
+
+.graph-draw .t-neighbor {
+  width: 10px;
+  height: 10px;
+  border: none;
+  background: var(--color-outline-variant);
+}
+
+.graph-draw .t-done {
+  opacity: 0.45;
+}
+
+/* "faded" applies only while a chain is selected. Off, it keeps its slot (visibility, not display), so selecting a
+   chain never reflows the legend or the top area. */
+.graph-draw .legend-idle {
+  visibility: hidden;
+}
+
+/* The chain status line (QA-1e Q6): a full row of its own at the bottom of the top area, with a fixed height and empty
+   until a chain is selected, so the text appearing never pushes the graph down. One line; a long cause list is cut. */
+.graph-chain-status {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--distance-sm);
+  height: 32px;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--color-on-surface-variant);
+}
+
+.graph-chain-text {
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.graph-chain-status .link-button {
+  margin: 0;
+}
+
 .graph-option {
   display: flex;
   flex-wrap: wrap;
@@ -5362,6 +5410,11 @@ body.stale .summary.stuck::before {
   /* The icon button is a fixed square (36 px on a mouse): on touch the whole square grows to the target. */
   .button-icon {
     width: 44px;
+    height: 44px;
+  }
+
+  /* The chain status line's fixed height grows with its "Clear selection" target (QA-1e Q6). */
+  .graph-chain-status {
     height: 44px;
   }
 

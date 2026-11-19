@@ -5,6 +5,19 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: dimmed nodes say why, and cards keep their project name (QA-1e).** Edge cases from the owner's QA. (1) In
+  Dependencies a node could look gray for three reasons (outside the selected chain, a neighbor hidden by the filter
+  or search, a done predecessor), and none of them was explained on screen. The legend now names the ones that apply
+  right now ("faded: outside the selected chain", "small gray: hidden by your filter or search", "pale: done"); the
+  "faded" entry keeps its slot while no chain is selected, so the legend never reflows. Selecting a task fills a
+  status line of fixed height at the bottom of the graph's top area, "Showing the chain of <id> (<n> tasks) · Clear
+  selection", a polite live region updated in place; Esc still clears the chain. A neighbor's tooltip and accessible
+  name now lead with "<id> <title>: hidden by the filter or search", and a click still opens it. The strip above the
+  columns uses the same wording in the card views and adds "the rest is faded"; in Dependencies it leaves the chain
+  to the graph's own line, so the chain is no longer explained twice. (2) Cards in Project lanes and in Flat grouped by
+  area or feature dropped the project short name and its color dot, so a card changed shape when the view changed.
+  They keep it everywhere now, and the card cache key no longer depends on the view or grouping (switching reuses
+  the card node). No setting: these are explanation and consistency fixes.
 - **Board: the top bar and the focus line keep a fixed size (QA-1d).** Edge cases from the owner's QA. (1) "Select
   all matches" appeared in the top bar with a search or filter, and its label changed length ("Select all matches
   (N)", "All matches selected (N)"), so the right-aligned bar slid sideways. It is now the first row of the Filter

@@ -241,6 +241,15 @@
   }
 
   /**
+   * The lead of the chain status line (QA-1e, Q6), the same words in Dependencies and in the card views:
+   * "Showing the chain of <id> (<n> tasks)". `n` counts the selected task with everything before and after it.
+   */
+  function chainLead(id, n) {
+    const count = Math.max(1, Number(n) || 0);
+    return `Showing the chain of ${id} (${count} ${count === 1 ? 'task' : 'tasks'})`;
+  }
+
+  /**
    * The chain line's text for cards in the chain that are not visible, one part per cause (UX review K2: the line said
    * "hidden by the filter" also when the cards were in a closed fold). `causes` is [{ cause, n, name?, key? }]:
    *   fold      n cards in the closed fold `name` (key = the fold's name on the board), action "fold:<key>" (Show)
@@ -454,6 +463,7 @@
 
   return {
     emptyReason,
+    chainLead,
     chainHidden,
     focusFit,
     STALE_MS,

@@ -549,6 +549,12 @@ function draw() {
       openPanel,
       openDecisions,
       drawOnNew: draw,
+      // The chain status line in the graph's top area (QA-1e Q6): its "Clear selection" and the hidden members.
+      resetChain,
+      chainCauses: () => {
+        const selected = t.chain ? t.perId.get(t.chain)?.k : null;
+        return selected?.chain ? chainCauseParts(selected) : [];
+      },
     });
   } else if (t.view === 'flat') {
     const countedFor = (key) =>
@@ -816,40 +822,21 @@ function drawStripe() {
     );
   row.append(next);
   const selected = t.chain ? t.perId.get(t.chain)?.k : null;
-  if (selected?.chain) {
-    const ids = [...selected.chain.before, ...selected.chain.after];
-    // Drawn and visible: not hidden by the search and not inside a closed fold (a fold opened and closed again keeps
-    // its cards in the DOM, under a hidden body).
-    const drawn = new Set(
-      [...main.querySelectorAll('.summary:not([hidden]), .graph-svg .node')]
-        .filter((e) => !e.closest('[hidden]'))
-        .map((e) => e.dataset.id),
-    );
-    const hidden = chainCauses(ids.filter((id) => !drawn.has(id)));
-    const causes = window.QueueA11y.chainHidden(hidden);
+  // Dependencies has its own chain status line in the graph's top area (graph.js, QA-1e Q6), with the same lead and
+  // the same causes (chainCauseParts), so the strip leaves it out there: the chain is never explained twice.
+  if (selected?.chain && t.view !== 'graph') {
     row.append(
       el(
         'div',
         { class: 'chain-line', role: 'status' },
         el('span', {
           class: 'stripe-name',
-          text: `Chain for ${selected.id}: ${selected.chain.before.length} before, ${selected.chain.after.length} after`,
+          text: `${window.QueueA11y.chainLead(selected.id, chainSize(selected))}: ${selected.chain.before.length} before, ${selected.chain.after.length} after`,
         }),
-        // Each cause, with its action right after it where there is one: Show (opens the fold), Clear search, Remove
-        // filter, Show all, Show more.
-        ...causes.flatMap((c) => [
-          el('span', { class: 'stripe-name', text: `· ${c.text}` }),
-          c.action
-            ? el('button', {
-                type: 'button',
-                class: 'link-button chain-reveal',
-                text: c.label,
-                'aria-label': c.aria,
-                onclick: () => chainReveal(c.action),
-              })
-            : null,
-        ]),
-        el('span', { class: 'stripe-name', text: '· Esc resets' }),
+        // Why the other cards look gray (QA-1e Q6): .board.chain-active dims every card outside the chain.
+        el('span', { class: 'stripe-name', text: '· the rest is faded' }),
+        ...chainCauseParts(selected),
+        el('span', { class: 'stripe-name', text: '· Esc clears' }),
         el('span', { class: 'draw-chain chain-for-draw', 'aria-hidden': 'true' }),
         el('span', { class: 'chain-explanation', text: 'before' }),
         el('span', { class: 'draw-chain chain-after-draw', 'aria-hidden': 'true' }),
@@ -857,11 +844,45 @@ function drawStripe() {
         el('button', {
           type: 'button',
           class: 'link-button',
-          text: 'Reset',
+          text: 'Clear selection',
           onclick: resetChain,
         }),
       ),
     );
   }
   stripe.replaceChildren(row);
+}
+
+/** How many tasks the chain status line counts: the selected one with every task before and after it. */
+function chainSize(selected) {
+  return 1 + new Set([...selected.chain.before, ...selected.chain.after]).size;
+}
+
+/**
+ * The chain members that are not visible right now, as the parts of a chain status line: one "· <cause>" span per
+ * cause, each with its action right after it where there is one (Show opens the fold, Clear search, Remove filter,
+ * Show all, Show more). Used by the strip in the card views and by graph.js in Dependencies (ctx.chainCauses).
+ */
+function chainCauseParts(selected) {
+  const ids = [...selected.chain.before, ...selected.chain.after];
+  // Drawn and visible: not hidden by the search and not inside a closed fold (a fold opened and closed again keeps
+  // its cards in the DOM, under a hidden body). In Dependencies a node counts as drawn, a small gray neighbor too.
+  const drawn = new Set(
+    [...main.querySelectorAll('.summary:not([hidden]), .graph-svg .node')]
+      .filter((e) => !e.closest('[hidden]'))
+      .map((e) => e.dataset.id),
+  );
+  const causes = window.QueueA11y.chainHidden(chainCauses(ids.filter((id) => !drawn.has(id))));
+  return causes.flatMap((c) => [
+    el('span', { class: 'stripe-name', text: `· ${c.text}` }),
+    c.action
+      ? el('button', {
+          type: 'button',
+          class: 'link-button chain-reveal',
+          text: c.label,
+          'aria-label': c.aria,
+          onclick: () => chainReveal(c.action),
+        })
+      : null,
+  ]).filter(Boolean);
 }

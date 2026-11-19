@@ -279,12 +279,6 @@ function footerFor(k, col) {
   return footer;
 }
 
-/** The project name on the card is redundant in Project lanes and when Flat is grouped by project. */
-function showProjectName() {
-  if (t.view === 'lanes') return false;
-  return !['area', 'feature'].includes(t.grouping);
-}
-
 function summaryEl(k, col) {
   const movable = col === 'queue';
   const p = project(k.project);
@@ -351,14 +345,15 @@ function summaryEl(k, col) {
         { class: 'summary-meta', id: metaId },
         el('span', { class: 'summary-id', text: k.id }),
         // The project's short name as text, with the project color as a small dot in front of it (board.css,
-        // .summary-project::before, so the text stays the same), but not when the cards are already grouped per project.
-        showProjectName()
-          ? el('span', {
-              class: 'summary-project',
-              text: k.project,
-              title: p?.title ?? k.project,
-            })
-          : null,
+        // .summary-project::before, so the text stays the same). Shown in every view and grouping (QA-1e Q8): it used
+        // to drop out in Project lanes and in Flat grouped by area or feature, where the lane or group header already
+        // names the project, but a card that changes its header when the view changes read as a glitch, and a card
+        // is often read on its own (dragged, in the panel's context, scrolled past its header).
+        el('span', {
+          class: 'summary-project',
+          text: k.project,
+          title: p?.title ?? k.project,
+        }),
         // The plan entry the card belongs to. A click switches to Plans with the entry open. The badge is not a
         // tab stop of its own (roving tabindex); with the keyboard the way goes via "Plan entry" in detailPanel.
         k.plan
@@ -440,8 +435,9 @@ function summarySignature(k, col) {
   return JSON.stringify([
     k,
     col,
+    // The project's title (the name chip's tooltip). The chip itself no longer depends on the view or the grouping
+    // (QA-1e Q8), so neither is in the key: switching them reuses the card node.
     project(k.project)?.title ?? null,
-    showProjectName(),
     col === 'queue' && cloudFilterOn() && k.cloud?.suitable ? t.cloudSelected.has(k.id) : null,
     // The age in the text (In progress is also updated by the clock, see setInterval at the bottom).
     k.delivered ? age(k.delivered) : null,
