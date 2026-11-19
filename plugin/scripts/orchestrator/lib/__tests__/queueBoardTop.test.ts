@@ -190,8 +190,9 @@ describe('the top: the markup in the top', () => {
   it('help and theme are out of the top, and board.js does not look up the buttons that are gone', () => {
     expect(html).not.toMatch(/id="(help|theme)"/);
     expect(js).not.toMatch(/\$\('(help|theme)'\)/);
-    // They live in the gear now: the help button and the theme choice sit in the settings panel.
-    expect(js).toMatch(/helpSection\(\),\s*themeSection\(\)/);
+    // They live in the gear now: the help button above the settings tabs, the theme choice in the Board tab (B8).
+    expect(js).toMatch(/helpSection\(\),\s*registryHead\(d\),\s*settingsTabs\(now\)/);
+    expect(js).toMatch(/theme: \{ draw: \(\) => themeSection\(\) \}/);
   });
 
   it('the speech bubble is an empty, hidden note, and no test text is left', () => {
@@ -207,7 +208,9 @@ describe('the top: the markup in the top', () => {
     expect(order.every((i) => i >= 0)).toBe(true);
     expect(order[0]).toBeLessThan(order[1]);
     expect(order[1]).toBeLessThan(order[2]);
-    expect(js).toMatch(/helpSection\(\),\s*themeSection\(\),\s*mascotSection\(\)/);
+    // B8: the mascot choice is the last thing in Settings, while loading and as the last part of the last tab.
+    expect(js).toMatch(/themeSection\(\),\s*mascotSection\(\),\s*\);/);
+    expect(js).toMatch(/'cat:cloud', 'mascot'\] \}/);
     expect(js).toMatch(/QueueMascotView\?\.newState\(t\.data\)/);
     const mascot = readFileSync(join(folder, 'mascot.js'), 'utf8');
     expect(mascot).not.toMatch(/\.innerHTML\s*=/);

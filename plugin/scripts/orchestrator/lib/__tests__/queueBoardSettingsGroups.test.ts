@@ -136,7 +136,8 @@ describe('the settings registry in the gear (step 6)', () => {
   it('draws the categories in order, basic rows first and Advanced folded closed under them', async () => {
     await redraw({ mode: 'full' });
     const ids = [...panel().querySelectorAll('[data-category]')].map((c) => c.getAttribute('data-category'));
-    expect(ids.slice(0, 3)).toEqual(['project', 'limits', 'load']);
+    // B8: in the order of the tabs (Queue and context first), and in the registry's order within a tab.
+    expect(ids.slice(0, 3)).toEqual(['limits', 'load', 'history']);
     const limits = category('limits');
     expect(limits.querySelector('h3')?.textContent).toBe('Limits and cost');
     const advanced = limits.querySelector('details[data-fold="advanced"]') as HTMLDetailsElement;

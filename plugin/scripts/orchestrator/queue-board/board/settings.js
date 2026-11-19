@@ -1,8 +1,10 @@
 // =============================================================
-// settings.js: the settings (the gear) and its tabs, General and Helper agents.
-// General also draws every row of the settings registry by category (registrySections: basic rows first, the
-// Advanced ones folded under them, the full-only ones behind one line in lite, where each is saved, and a banner for
-// the weakened guards). A change that weakens a guard opens the warning dialog in api.js (confirmWeaken) first.
+// settings.js: the settings (the gear) in six tabs (B8): Queue and context, Checks, Guards, Agents, Project
+// and Board. Each tab holds some of the settings registry's sixteen categories (registryCategory: basic rows first, the
+// Advanced ones folded under them, the full-only ones behind one line in lite, where each is saved) and the own
+// sections whose real switch belongs to those categories; the mode line and the banner for the weakened guards sit
+// above the tabs. "Logo and mascot" is the last thing in the last tab. A change that weakens a guard opens the warning
+// dialog in api.js (confirmWeaken) first. openSettingsAt(id) opens Settings on one control, in its tab.
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md). They load in order with defer and
 // share the page's global scope, so a top-level name in one is visible in all of them, as when they were one
@@ -18,6 +20,14 @@ async function openSettings() {
   drawSettings();
   panel.querySelector('.button-icon')?.focus();
   await getSettings();
+}
+/**
+ * Opens Settings on one control (an element id, such as 'checks-panel'): its tab is chosen first, a fold it sits in is
+ * opened, and the control gets focus. Every way in to one setting goes through here or focusSetting.
+ */
+async function openSettingsAt(id) {
+  await openSettings();
+  focusSetting(id);
 }
 async function getSettings() {
   let answer;
@@ -45,55 +55,33 @@ function drawSettings() {
     ),
   );
   if (!d || d.loading || d.error) {
+    // While loading (or on an error): the parts that need no server, and "Logo and mascot" still last.
     panel.replaceChildren(
       header,
       helpSection(),
-      themeSection(),
-      mascotSection(),
       el('p', {
         class: 'empty',
         text: d?.error ? `Could not read the settings: ${d.error}` : 'Fetching the settings …',
       }),
+      themeSection(),
+      mascotSection(),
     );
     return;
   }
-  const o = d.setup;
-  // Two tabs: General (everything that was here before) and Helper agents (the switches and the measurement).
-  const tab = settingsTab();
-  if (tab === 'helpers') {
-    panel.replaceChildren(header, settingsTabs(tab), helpersPanel(d));
-    panel.scrollTop = scroll;
-    return;
-  }
+  const now = settingsTab();
+  const parts = settingsParts(d);
   panel.replaceChildren(
     header,
-    settingsTabs(tab),
-    el(
-      'div',
-      { id: 'settings-panel-general', role: 'tabpanel', 'aria-labelledby': 'settings-tab-general' },
-      helpSection(),
-      guidanceSection(d),
-      checksSwitchSection(d),
-      blockedColumnSection(),
-      themeSection(),
-      mascotSection(),
-      registrySections(d),
-      autoAcceptSection(d.autoAccept, d),
-      undoSection(),
+    // Help, the mode and the weakened guards are seen from every tab.
+    helpSection(),
+    registryHead(d),
+    settingsTabs(now),
+    // Every tab panel is drawn, the ones not chosen hidden: a link to a setting in another tab finds its control.
+    ...SETTINGS_TABS.map((x) =>
       el(
-        'section',
-        { class: 'setting', 'aria-labelledby': 'setting-setup' },
-        el('h3', { id: 'setting-setup', class: 'setting-title', text: 'Setup (read only)' }),
-        el('dl', { class: 'facts' }, setupFacts(o)),
-      ),
-      boardSection(),
-      modulesSection(),
-      el(
-        'section',
-        { class: 'setting', 'aria-labelledby': 'setting-rules' },
-        el('h3', { id: 'setting-rules', class: 'setting-title', text: 'Rules from the skill' }),
-        list2(o.rules),
-        el('p', { class: 'setting-source', text: `Source: ${o.rulesSource}` }),
+        'div',
+        { id: `settings-panel-${x.id}`, role: 'tabpanel', 'aria-labelledby': `settings-tab-${x.id}`, hidden: x.id !== now },
+        x.parts.map((p) => parts.draw(p)),
       ),
     ),
   );
@@ -183,7 +171,7 @@ function checksSwitchSection(d) {
     el('p', {
       id: 'checks-panel-help',
       class: 'setting-explanation',
-      text: 'What your project has for checking its code, and suggestions for what to add. Also ravenseat checks on|off in Claude Code. Off changes no gates or guards. Guidance above stops other advice.',
+      text: 'What your project has for checking its code, and suggestions for what to add. Also ravenseat checks on|off in Claude Code. Off changes no gates or guards. Guidance in the Board tab stops other advice.',
     }),
     error,
   );
@@ -243,20 +231,183 @@ function blockedColumnSection() {
   );
 }
 
-// ---- The settings tabs: General and Helper agents ----
+// ---- The settings tabs (B8, UX review 2.10: one long page of 29 sections became six tabs) ----
+/**
+ * The tabs and what each one holds, in order. A part is a registry category ('cat:<id>', lib/settingsRegistry.js
+ * CATEGORIES, all sixteen used once) or an own section (OWN_PARTS). An own section goes next to the settings it is the
+ * real control for, and their registry rows are then left out, so each setting is in one place with its real control.
+ * Auto-accept sits in "Queue and context" (it decides what the queue approves by itself), which keeps Agents and the
+ * queue tab near two screens each. "Queue and context" is for the queue and the agents' context (B13, the compaction
+ * window, lands there). "Logo and mascot" is the last part of the last tab: the very bottom of Settings (owner
+ * decision). The id 'helpers' is the old Helper agents tab, so a viewer who had it open lands on Agents.
+ */
 const SETTINGS_TABS = [
-  { id: 'general', text: 'General' },
-  { id: 'helpers', text: 'Helper agents' },
+  { id: 'queue', text: 'Queue and context', parts: ['cat:limits', 'cat:load', 'autoAccept', 'cat:history', 'undo'] },
+  { id: 'checks', text: 'Checks', parts: ['cat:gates', 'cat:tests', 'checks', 'cat:learning'] },
+  { id: 'guards', text: 'Guards', parts: ['cat:files', 'cat:guards', 'cat:push', 'cat:scope', 'cat:private'] },
+  { id: 'helpers', text: 'Agents', parts: ['helpers', 'cat:review', 'helperAdd'] },
+  { id: 'project', text: 'Project', parts: ['cat:project', 'cat:plans', 'modules', 'setup', 'rules'] },
+  { id: 'board', text: 'Board', parts: ['theme', 'guidance', 'blocked', 'cat:board', 'cloud', 'cat:cloud', 'mascot'] },
 ];
-/** The chosen tab (remembered in this browser; a value that is no tab gives General). */
+
+/**
+ * The own sections: draw gives the section (or null when the server sends nothing for it), covers says which registry
+ * keys it is the real control for (their rows are then not drawn in the category), and at gives the id of the control
+ * a link to that key focuses.
+ */
+const OWN_PARTS = {
+  undo: { draw: () => undoSection() },
+  checks: { covers: (k) => k === 'checksPanel.mode', at: () => 'checks-panel', draw: (d) => checksSwitchSection(d) },
+  helpers: { covers: (k) => k === 'helpers', at: () => 'setting-helpers', draw: (d) => helpersSection(d) },
+  autoAccept: {
+    covers: (k) => k.startsWith('proposals.autoAccept.'),
+    at: (k) =>
+      ({ 'proposals.autoAccept.maxEstimateMin': 'aa-max-estimate', 'proposals.autoAccept.maxValue': 'aa-max-value' })[k] ??
+      'aa-enabled',
+    draw: (d) => autoAcceptSection(d.autoAccept, d),
+  },
+  helperAdd: { draw: () => helperAddForm() },
+  // A module with its own registry row (features.<name>, with a real switch) is not listed again.
+  modules: { draw: (d) => modulesSection((name) => !!registryRow(d, `features.${name}`)) },
+  setup: {
+    draw: (d) =>
+      el(
+        'section',
+        { class: 'setting', 'aria-labelledby': 'setting-setup' },
+        el('h3', { id: 'setting-setup', class: 'setting-title', text: 'Setup (read only)' }),
+        el('dl', { class: 'facts' }, setupFacts(d.setup)),
+      ),
+  },
+  rules: {
+    draw: (d) =>
+      el(
+        'section',
+        { class: 'setting', 'aria-labelledby': 'setting-rules' },
+        el('h3', { id: 'setting-rules', class: 'setting-title', text: 'Rules from the skill' }),
+        list2(d.setup.rules),
+        el('p', { class: 'setting-source', text: `Source: ${d.setup.rulesSource}` }),
+      ),
+  },
+  theme: { draw: () => themeSection() },
+  guidance: { covers: (k) => k === 'guidance', at: () => 'guidance-quiet', draw: (d) => guidanceSection(d) },
+  blocked: { covers: (k) => k === 'board.blockedColumn', at: () => 'board-blocked-column', draw: () => blockedColumnSection() },
+  cloud: {
+    covers: (k) => k === 'board.showCloud' || k === 'features.cloud' || k.startsWith('cloud.'),
+    at: (k) => {
+      if (k === 'board.showCloud') return 'board-show-cloud';
+      const own = k.startsWith('cloud.') ? `cloud-setting-${k.slice(6)}` : null;
+      return own && document.getElementById(own) ? own : 'cloud-module';
+    },
+    draw: () => boardSection(),
+    // The rows of the Cloud category that have no switch here (the hidden paths) go inside this section, so Cloud is
+    // one section with one heading.
+    merge: 'cloud',
+  },
+  mascot: { covers: (k) => k === 'board.mascot', at: () => 'figure-switch', draw: () => mascotSection() },
+};
+
+/**
+ * Every part drawn once, the own sections first, so a category knows which of its rows have their real control in an
+ * own section that is there now. An older server without the board switches has no Columns or Cloud section; those
+ * rows then stay in their category and say where they are changed, as before.
+ */
+function settingsParts(d) {
+  const own = {};
+  for (const [name, p] of Object.entries(OWN_PARTS)) own[name] = p.draw(d);
+  const covered = (key) => Object.entries(OWN_PARTS).some(([name, p]) => own[name] && p.covers?.(key));
+  const v = d.registry;
+  const labels = v?.labels ?? {};
+  return {
+    draw(part) {
+      if (!part.startsWith('cat:')) return own[part];
+      const id = part.slice(4);
+      // An older server without the registry: the limits as before, under one heading, in the first tab.
+      if (!v?.categories)
+        return id === 'limits'
+          ? el(
+              'section',
+              { class: 'setting', 'aria-labelledby': 'setting-queue' },
+              el('h3', { id: 'setting-queue', class: 'setting-title', text: 'The queue' }),
+              d.field.map((f) => settingField(f, d)),
+            )
+          : null;
+      const c = v.categories.find((x) => x.id === id);
+      const drawn = c ? registryCategory(c, d, labels, covered) : null;
+      // A category whose own section is drawn and takes its other rows (merge): the rows go under that section's
+      // heading, which then carries the category, and the category draws nothing of its own.
+      const host = Object.entries(OWN_PARTS).find(([name, p]) => p.merge === id && own[name])?.[0];
+      if (!drawn || !host) return drawn;
+      own[host].setAttribute('data-category', id);
+      own[host].append(...[...drawn.children].filter((x) => x.tagName !== 'H3'));
+      return null;
+    },
+  };
+}
+
+/** The chosen tab (remembered in this browser; an old value such as general, or one that is no tab, gives the first). */
 function settingsTab() {
   const v = store.getItem('queue-board-settings-tab');
-  return SETTINGS_TABS.some((x) => x.id === v) ? v : 'general';
+  return SETTINGS_TABS.some((x) => x.id === v) ? v : SETTINGS_TABS[0].id;
 }
+/**
+ * Chooses a tab in place (no redraw, so the controls keep their state): the tab is selected and the only tab stop, its
+ * panel shows and the others hide, and the panel starts at the top again. Remembered in this browser.
+ */
 function chooseSettingsTab(id, focus = false) {
   store.setItem('queue-board-settings-tab', id);
-  drawSettings();
+  for (const x of SETTINGS_TABS) {
+    const b = document.getElementById(`settings-tab-${x.id}`);
+    const p = document.getElementById(`settings-panel-${x.id}`);
+    if (b) {
+      b.setAttribute('aria-selected', x.id === id ? 'true' : 'false');
+      b.tabIndex = x.id === id ? 0 : -1;
+    }
+    if (p) p.hidden = x.id !== id;
+  }
+  panel.scrollTop = 0;
   if (focus) $(`settings-tab-${id}`)?.focus();
+}
+
+/** The id to focus for a registry key: its own row, or the real control in the own section that covers it. */
+function settingTarget(key) {
+  if (document.getElementById(`setting-row-${cssId(key)}`)) return `setting-row-${cssId(key)}`;
+  for (const p of Object.values(OWN_PARTS)) if (p.covers?.(key) && p.at) return p.at(key);
+  return `setting-row-${cssId(key)}`;
+}
+
+/**
+ * Focuses one setting (an element id: a control, or a registry row whose first control is taken): its tab is chosen
+ * first, every fold around it is opened, and it scrolls into view. Returns false when it is not in Settings.
+ */
+function focusSetting(id) {
+  const target = document.getElementById(id);
+  if (!target || !panel.contains(target)) return false;
+  const pane = target.closest('[role="tabpanel"]');
+  if (pane?.hidden) chooseSettingsTab(pane.id.replace('settings-panel-', ''));
+  for (let fold = target.closest('details'); fold; fold = fold.parentElement?.closest('details') ?? null) fold.open = true;
+  let control = target.matches('input,select,textarea,button')
+    ? target
+    : target.querySelector('input:not([disabled]),select:not([disabled]),textarea,button');
+  if (!control) {
+    // A read-only row or a heading takes focus itself, without becoming a tab stop.
+    control = target;
+    control.tabIndex = -1;
+  }
+  control.scrollIntoView?.({ block: 'center' });
+  control.focus();
+  return true;
+}
+
+/** A link to a setting by its registry key (the weakened banner, "Has effect only when"): no hash change, just focus. */
+function settingLink(key, text) {
+  return el('a', {
+    href: `#${settingTarget(key)}`,
+    text,
+    onclick: (e) => {
+      e.preventDefault();
+      focusSetting(settingTarget(key));
+    },
+  });
 }
 /** Real tabs (role tab, aria-selected, roving tabindex); the arrow keys, Home and End move and select. */
 function settingsTabs(now) {
@@ -292,33 +443,28 @@ function settingsTabs(now) {
 }
 
 /**
- * The "Helper agents" tab: one row per helper with what it does, when it runs, an on/off switch (a real checkbox
+ * The "Helper agents" section of the Agents tab: one row per helper with what it does, when it runs, an on/off switch (a real checkbox
  * with role switch and a label) and what it has cost (runs, minutes, tokens, USD, share of the task cost, findings).
  * The switch goes through /api/helper -> `ravenseat helpers on|off <agent>`; the board never writes the files itself.
  */
-function helpersPanel(d) {
+function helpersSection(d) {
   const rows = Array.isArray(d.helpers) ? d.helpers : [];
   return el(
-    'div',
-    { id: 'settings-panel-helpers', role: 'tabpanel', 'aria-labelledby': 'settings-tab-helpers' },
-    el(
-      'section',
-      { class: 'setting', 'aria-labelledby': 'setting-helpers' },
-      el('h3', { id: 'setting-helpers', class: 'setting-title', text: 'Helper agents' }),
-      el('p', {
-        class: 'setting-explanation',
-        text:
-          'Optional reviewers on top of the fixed ones for the class (D: reviewer, D+: reviewer and reviewer-security). ' +
-          'One runs for a task when it is on and one of its conditions hits. The conditions are in queue.config.json ' +
-          '(helpers), or for a custom helper set with ravenseat helpers when; the switch here is saved in the queue. ' +
-          'A custom helper (an agent file of the project) can only be switched on after Claude has reviewed it and you have ' +
-          'approved it for the file as it is now; a later change to the file turns it off.',
-      }),
-      rows.length
-        ? rows.map((h) => helperRow(h))
-        : el('p', { class: 'empty', text: 'No helper agents in the setup (helpers in queue.config.json).' }),
-    ),
-    helperAddForm(),
+    'section',
+    { class: 'setting', 'aria-labelledby': 'setting-helpers' },
+    el('h3', { id: 'setting-helpers', class: 'setting-title', text: 'Helper agents' }),
+    el('p', {
+      class: 'setting-explanation',
+      text:
+        'Optional reviewers on top of the fixed ones for the class (D: reviewer, D+: reviewer and reviewer-security). ' +
+        'One runs for a task when it is on and one of its conditions hits. The conditions are in queue.config.json ' +
+        '(helpers), or for a custom helper set with ravenseat helpers when; the switch here is saved in the queue. ' +
+        'A custom helper (an agent file of the project) can only be switched on after Claude has reviewed it and you have ' +
+        'approved it for the file as it is now; a later change to the file turns it off.',
+    }),
+    rows.length
+      ? rows.map((h) => helperRow(h))
+      : el('p', { class: 'empty', text: 'No helper agents in the setup (helpers in queue.config.json).' }),
   );
 }
 
@@ -558,7 +704,7 @@ const OWN_SECTION = {
   'board.mascot': 'Logo and mascot',
   'board.showCloud': 'Cloud',
   'features.cloud': 'Cloud',
-  helpers: 'the Helper agents tab',
+  helpers: 'Helper agents',
 };
 function ownSection(key) {
   if (OWN_SECTION[key]) return OWN_SECTION[key];
@@ -572,16 +718,13 @@ const openKey = (what, id) => `queue-board-settings-${what}-${id}`;
 const isOpen = (what, id) => store.getItem(openKey(what, id)) === '1';
 const rememberOpen = (what, id, open) => store.setItem(openKey(what, id), open ? '1' : '0');
 
-function registrySections(d) {
+/**
+ * Above the tabs: the mode line and the banner for the weakened guards (null for an older server without the
+ * registry). The categories themselves are drawn per tab (settingsParts).
+ */
+function registryHead(d) {
   const v = d.registry;
-  // An older server without the registry: the limits as before, under one heading.
-  if (!v?.categories)
-    return el(
-      'section',
-      { class: 'setting', 'aria-labelledby': 'setting-queue' },
-      el('h3', { id: 'setting-queue', class: 'setting-title', text: 'The queue' }),
-      d.field.map((f) => settingField(f, d)),
-    );
+  if (!v?.categories) return null;
   const lite = v.mode === 'lite';
   return el(
     'div',
@@ -593,11 +736,13 @@ function registrySections(d) {
         : 'Mode: full.',
     }),
     v.weakened.length ? weakenedBanner(v.weakened) : null,
-    v.categories.map((c) => registryCategory(c, d, v.labels ?? {})),
   );
 }
 
-/** The banner: the guards that are weaker than the default now, by name, with where to find each. */
+/**
+ * The banner: the guards that are weaker than the default now, by name, each a link that switches to the setting's
+ * tab and focuses its control.
+ */
 function weakenedBanner(list) {
   return el(
     'div',
@@ -611,7 +756,7 @@ function weakenedBanner(list) {
       'ul',
       null,
       list.map((w) =>
-        el('li', null, el('a', { href: `#setting-row-${cssId(w.key)}`, text: w.title }), ` (${w.key} ${w.valueText})`),
+        el('li', null, settingLink(w.key, w.title), ` (${w.key} ${w.valueText})`),
       ),
     ),
   );
@@ -619,7 +764,14 @@ function weakenedBanner(list) {
 
 const cssId = (key) => String(key).replace(/[^A-Za-z0-9_-]/g, '-');
 
-function registryCategory(c, d, labels) {
+/**
+ * One category. covered(key) is true for a row whose real control is in an own section drawn now (Guidance, Checks,
+ * Columns, Cloud, Auto-accept, Helper agents, Logo and mascot): that row is left out, so a setting is never in two
+ * places, and a category with no rows left is not drawn (Cloud: all of it is in the Cloud section).
+ */
+function registryCategory(all, d, labels, covered = () => false) {
+  const c = { ...all, rows: all.rows.filter((r) => !covered(r.key)) };
+  if (!c.rows.length) return null;
   const id = `setting-cat-${c.id}`;
   const title = el('h3', { id, class: 'setting-title', text: c.title });
   // A category with nothing for lite: one closed line.
@@ -698,11 +850,8 @@ function requiresLine(r) {
   if (!r.requires?.length) return null;
   const parts = r.requires.flatMap((q, i) => [
     i ? ' and ' : null,
-    el('a', {
-      href: `#setting-row-${cssId(q.key)}`,
-      text: q.title,
-      onclick: () => document.getElementById(`setting-row-${cssId(q.key)}`)?.closest('details')?.setAttribute('open', ''),
-    }),
+    // The parent may sit in a closed fold or in another tab: the link switches to it and focuses its control.
+    settingLink(q.key, q.title),
     ` (${q.key}) is ${q.want}`,
   ]);
   return el(

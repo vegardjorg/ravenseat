@@ -313,7 +313,7 @@ describe('the Blocked column (board.blockedColumn, off by default)', () => {
     $('show-flat').click();
   });
 
-  it('the gear has the switch under General, and a change goes through board-switch blockedColumn', async () => {
+  it('the gear has the switch in the Board tab (B8), and a change goes through board-switch blockedColumn', async () => {
     const posts: unknown[] = [];
     const w = window as any;
     const before = w.fetch;
@@ -341,7 +341,7 @@ describe('the Blocked column (board.blockedColumn, off by default)', () => {
     const box = document.getElementById('board-blocked-column') as HTMLInputElement;
     expect(box).not.toBeNull();
     expect(box.checked).toBe(false);
-    expect(box.closest('#settings-panel-general')).not.toBeNull();
+    expect(box.closest('#settings-panel-board')).not.toBeNull();
     expect(document.querySelector('label[for="board-blocked-column"]')?.textContent).toBe('Blocked as its own column');
     box.checked = true;
     box.dispatchEvent(new Event('change'));

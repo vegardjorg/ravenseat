@@ -59,7 +59,7 @@ after a change, or do not approve). Then ask one question: "Approve <name>?" Sto
 
 The hash binds the approval to exactly the file you read: if the file changed since, approve refuses and you review
 again. A red scan also needs `--force`, and only when the owner said yes knowing it is red. Then ask whether to switch
-it on now (`ravenseat helpers on <name>`), or leave it for the board's Helper agents tab. Tell the owner that Claude Code loads
+it on now (`ravenseat helpers on <name>`), or leave it for the board's Settings (Agents tab). Tell the owner that Claude Code loads
 project agents at session start: a new helper can run after the session is restarted (or `/agents` is opened).
 
 ## Later: a changed file

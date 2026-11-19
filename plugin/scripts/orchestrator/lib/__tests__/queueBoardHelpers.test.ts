@@ -2,8 +2,9 @@
  * @vitest-environment jsdom
  */
 // =============================================================
-// queueBoardHelpers.test.ts: the "Helper agents" tab in the board's settings (board.js). The settings have two real
-// tabs (General, Helper agents) with the arrow keys; the helper tab has one row per helper with what it does, when it
+// queueBoardHelpers.test.ts: the "Helper agents" section in the board's settings (board.js). The settings have six real
+// tabs with the arrow keys (B8, all of them in queueBoardSettingsTabs.test.ts); the Agents tab (id helpers, the old
+// Helper agents tab) has the section with one row per helper with what it does, when it
 // runs, a real checkbox with role switch and a label, and the measurement ("No runs yet" when empty). Flipping the
 // switch posts { name, enabled } to /api/helper (the server turns it into `ravenseat helpers on|off`), and a refused write puts
 // the switch back and shows the message. The whole board runs in jsdom with a mock server (no network).
@@ -136,22 +137,27 @@ beforeAll(async () => {
 }, 60_000);
 
 describe('the settings tabs', () => {
-  it('are real tabs: General selected first, one tab stop, each controls its panel', () => {
+  it('are real tabs: Queue and context selected first, one tab stop, Agents controls the panel with the helpers', () => {
     const list = panel().querySelector('[role="tablist"]') as HTMLElement;
     expect(list.getAttribute('aria-label')).toBe('Settings');
-    expect([...list.querySelectorAll('[role="tab"]')].map((x) => x.textContent)).toEqual(['General', 'Helper agents']);
-    expect(tab('general').getAttribute('aria-selected')).toBe('true');
-    expect(tab('general').tabIndex).toBe(0);
+    expect([...list.querySelectorAll('[role="tab"]')].map((x) => x.textContent)).toContain('Agents');
+    expect(tab('queue').getAttribute('aria-selected')).toBe('true');
+    expect(tab('queue').tabIndex).toBe(0);
     expect(tab('helpers').tabIndex).toBe(-1);
-    expect(tab('general').getAttribute('aria-controls')).toBe('settings-panel-general');
-    expect(document.getElementById('settings-panel-general')?.getAttribute('role')).toBe('tabpanel');
-    expect(document.getElementById('settings-panel-helpers')).toBeNull();
+    expect(tab('helpers').getAttribute('aria-controls')).toBe('settings-panel-helpers');
+    expect(document.getElementById('settings-panel-helpers')?.getAttribute('role')).toBe('tabpanel');
+    expect(document.getElementById('settings-panel-helpers')?.hidden).toBe(true);
   });
 
-  it('ArrowRight moves to Helper agents, selects it and keeps focus on the tab; the choice is remembered', async () => {
-    tab('general').focus();
-    tab('general').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  it('the arrow keys reach Agents, select it and keep focus on the tab; the choice is remembered', async () => {
+    tab('queue').focus();
+    tab('queue').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     await flush();
+    tab('checks').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await flush();
+    tab('guards').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await flush();
+    expect(document.getElementById('settings-panel-helpers')?.hidden).toBe(false);
     expect(tab('helpers').getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(tab('helpers'));
     expect(document.getElementById('settings-panel-helpers')?.getAttribute('aria-labelledby')).toBe(

@@ -5,6 +5,19 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: Settings in six tabs, each setting in one place.** Settings had grown to one General page of 29 sections
+  (about 8 800 px at 1440 x 900, over nine screens of scrolling) next to a Helper agents tab, and a few rows in the
+  categories only said "Changed in Guidance" (or Logo and mascot, Columns, Cloud) without a control. Settings now have
+  six tabs built on the registry's sixteen categories: Queue and context, Checks, Guards, Agents, Project and Board,
+  each between about 1 600 and 1 900 px. Every category sits in exactly one tab; a setting with its own section
+  (Guidance, the Checks switch, Columns, Cloud, Auto-accept, Helper agents, Logo and mascot) is only there, with its
+  real control, and the read-only Modules list no longer repeats a module that has a switch of its own. Logo and
+  mascot is the very last section, also while Settings load. The tabs are a real tab list (one tab stop, the arrow
+  keys, Home and End), and the chosen tab is remembered per browser; an old saved General or Helper agents tab, a value
+  that is no tab and blocked browser storage all open a working tab. Lite and full mode, and the Advanced folds, work inside each tab as before.
+  Every way in to one setting switches to its tab first: **Turn it off in Settings** in the Checks view lands on the
+  Checks switch, and the links in the weakened banner and in "Has effect only when" open the fold and focus the
+  control in whichever tab it is, without changing the address.
 - **Board: stale data no longer looks live.** When the server stopped, only the status text turned red ("Could not
   read the queue (Failed to fetch)"), while the cards kept counting "running 1 h 3 min" from old data and every
   button still wrote. Now one banner below the top says in plain words what is wrong and what to do, with the time of

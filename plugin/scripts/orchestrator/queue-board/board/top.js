@@ -236,10 +236,17 @@ function applyFeatures() {
 }
 window.QueueFeatures = { on: featureOn };
 
-/** The gear's "Modules" section: each module on or off, read only (the switch is the file). */
-function modulesSection() {
+/**
+ * The gear's "Modules" section: each module on or off, read only (the switch is the file). skip(name) leaves out a
+ * module that has its own row with a real switch in Settings (B8: one place per setting); with none left there is no
+ * section.
+ */
+function modulesSection(skip = () => false) {
   const f = t.data?.features;
   if (!f) return null;
+  // The cloud has its own section with a real switch.
+  const names = Object.keys(f).filter((name) => name !== 'cloud' && !skip(name));
+  if (!names.length) return null;
   return el(
     'section',
     { class: 'setting', 'aria-labelledby': 'setting-modules' },
@@ -248,8 +255,7 @@ function modulesSection() {
       'dl',
       { class: 'facts' },
       // flatMap: el() flattens only one level, so each dt/dd pair is spread here.
-      // The cloud has its own section with a real switch.
-      Object.keys(f).filter((name) => name !== 'cloud').flatMap((name) => [
+      names.flatMap((name) => [
         el('dt', { text: FEATURE_LABEL[name] ?? name }),
         el('dd', {
           text: `${f[name] ? 'On' : 'Off'}: set features.${name} in queue.config.json to change`,

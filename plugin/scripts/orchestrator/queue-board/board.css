@@ -1925,9 +1925,12 @@ code {
   padding-left: var(--distance-md);
 }
 
-/* ---- Settings: the tabs (General, Helper agents) and the helper rows with an on/off switch ---- */
+/* ---- Settings: the six tabs (B8) and the helper rows with an on/off switch ---- */
 
+/* Six underlined tabs wrap to a second line in a narrow panel instead of scrolling sideways. */
 .settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
   margin-top: var(--distance-md);
 }
 

@@ -138,7 +138,7 @@ The Queue workspace has these tabs:
   and merge."). A search that matches nothing shows one message above the columns, "Nothing matches" with **Clear
   search**, and the columns show 0; a column the search empties while others still match says "No matches here." The
   chosen card keeps its shape: its ring shows it, and "selected" is read by a screen reader only.
-- **Blocked** (off by default): with **Blocked as its own column** on in the gear (General), a column right after
+- **Blocked** (off by default): with **Blocked as its own column** on in the gear (Board tab), a column right after
   **In queue** holds every open task with an open blocker that needs action: the blocker codes `owner-question`,
   `merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `silent`, `no-agent`, `context`, `quota` and `other`
   (the same `blocks` entries `ravenseat blockers` counts). The task leaves its own column, so it is never shown twice.
@@ -267,22 +267,42 @@ what waits on you. **Plan entries** shows the entries as a list, a priority map,
 filters and the details of the selected entry. **Documents and agreements**, **Legal**, **Decisions** and **Launch**
 show the documents, the legal points, the owner decisions and what stands between the plan and launch.
 
-The gear holds the settings and the help, in two tabs. **General**: theme, mascot, the queue's limits, **Auto-accept
-proposals** (the switch, the classes K and U, max estimate and max value, saved together through `ravenseat proposals auto`
-via `/api/proposals`, and the log of what was auto-accepted with an Undo button per row, `/api/proposals-undo` =
-`ravenseat proposals undo <id>`; see [queue.md](queue.md#auto-accept-of-proposals)), **Columns** with the switch **Blocked as
-its own column** (off by default; `board.blockedColumn`, the same as `ravenseat board-setting blocked on|off`, see
-[What it shows](#what-it-shows)) and the read-only setup. **Helper agents**: one row per [helper agent](orchestration.md#helper-agents) with what it does,
-when it runs (classes, labels, paths in plain text), an on/off switch (a checkbox with role switch; Space toggles it)
-and what it has cost: runs, median and total minutes, tokens and USD, its share of the task cost, and H/M/L findings
-per run ("No runs yet" until it has run). General also has the Guidance switch, `ravenseat guidance quiet`: no advice about CI, gates or lockfiles, and the guards stay on. The switch is saved through `ravenseat helpers on|off <agent>` (the board posts
-to `/api/helper` behind the key and the Origin check, like every other write; it never writes files itself). The
-arrow keys move between the two tabs, and the board remembers the last one.
+The gear holds the settings and the help. **How to use the board**, the mode line and the banner for weakened guards
+sit at the top, seen from every tab; under them the settings are in six tabs, so no tab is much longer than two
+screens:
 
-**Every setting by category.** Under the sections above, General lists every row of the settings registry
-(`lib/settingsRegistry.js`, the same list as `ravenseat settings`) in its category: Project and git, Limits and cost,
-Machine load, Gates, Tests and evidence, Checks tab and learning, File and read guards, Command and secret guards,
-Merge and push, Private and sharing, Review and agents, Scope and catalog, Board and advice, Cloud, Plans and focus, History and storage. A category can have
+| Tab | What is in it |
+|---|---|
+| **Queue and context** | Limits and cost, Machine load, **Auto-accept proposals**, History and storage, **Undo last**. The agents' context settings land here too. |
+| **Checks** | Gates, Tests and evidence, the **Show the Checks tab** switch, Checks tab and learning |
+| **Guards** | File and read guards, Command and secret guards, Merge and push, Scope and catalog, Private and sharing |
+| **Agents** | **Helper agents**, Review and agents, **Add a custom helper** |
+| **Project** | Project and git, Plans and focus, the read-only **Modules** (only modules without a row of their own), **Setup** and **Rules from the skill** |
+| **Board** | Theme, **Guidance**, **Columns**, Board and advice, **Cloud**, and **Logo and mascot** last, at the very bottom of Settings |
+
+The tabs are a real tab list: one tab stop, the arrow keys, Home and End move between them, and the board remembers
+the last one per browser (an old saved General opens Queue and context, an old Helper agents opens Agents; without
+browser storage it opens on the first tab). **Auto-accept proposals** has the switch, the classes K and U, max
+estimate and max value, saved together through `ravenseat proposals auto` via `/api/proposals`, and the log of what
+was auto-accepted with an Undo button per row, `/api/proposals-undo` = `ravenseat proposals undo <id>`; see
+[queue.md](queue.md#auto-accept-of-proposals). **Columns** has the switch **Blocked as its own column** (off by
+default; `board.blockedColumn`, the same as `ravenseat board-setting blocked on|off`, see [What it shows](#what-it-shows)).
+**Helper agents**: one row per [helper agent](orchestration.md#helper-agents) with what it does, when it runs
+(classes, labels, paths in plain text), an on/off switch (a checkbox with role switch; Space toggles it) and what it
+has cost: runs, median and total minutes, tokens and USD, its share of the task cost, and H/M/L findings per run ("No
+runs yet" until it has run). The switch is saved through `ravenseat helpers on|off <agent>` (the board posts to
+`/api/helper` behind the key and the Origin check, like every other write; it never writes files itself).
+**Guidance** is `ravenseat guidance quiet`: no advice about CI, gates or lockfiles, and the guards stay on.
+
+A way in to one setting opens its tab first, opens the fold it sits in and focuses its control: **Turn it off in
+Settings** at the end of the Checks view lands on **Show the Checks tab**, and a link in the weakened banner or in a
+"Has effect only when" line lands on that setting's control, in whichever tab it is.
+
+**Every setting by category.** The tabs list every row of the settings registry (`lib/settingsRegistry.js`, the same
+list as `ravenseat settings`) in its category: Project and git, Limits and cost, Machine load, Gates, Tests and
+evidence, Checks tab and learning, File and read guards, Command and secret guards, Merge and push, Private and
+sharing, Review and agents, Scope and catalog, Board and advice, Cloud, Plans and focus, History and storage; the
+table above says which tab holds which. A category can have
 one line under its title for what its rows share (Checks tab and learning explains the shared cap of three guard
 proposals). Each category shows its basic rows first; the advanced ones are marked **Advanced** and
 folded (closed) under them. In lite mode a row that only matters in full mode is hidden behind one line per category
@@ -292,8 +312,9 @@ shows its value, the default and where it is saved: **Saved only for you (queue.
 in a banner at the top. A row that guards against something has one line "Protects against: ..." under its
 explanation (the same text the weakening dialog shows); an advice row has none. A row that has an effect only while another setting is on says "Has effect only when <that
 setting> is on", with a link to its row; while that setting is off the row is dimmed and marked **No effect now** (the
-tooltip says which setting is off), but it stays in place and can still be changed. The limits keep their fields and guard rules (`/api/limit`); a row that has its own section
-(Guidance, Checks, Columns, Cloud, Auto-accept, Helper agents) says where to change it; the other rows with a switch,
+tooltip says which setting is off), but it stays in place and can still be changed. The limits keep their fields and guard rules (`/api/limit`); a setting that has its own section
+(Guidance, Checks, Columns, Cloud, Auto-accept, Helper agents, Logo and mascot) is only there, with its real control,
+and has no second row in its category (the Cloud category's other rows sit inside the Cloud section); the other rows with a switch,
 a choice or a value save through `/api/setting` (= `ravenseat settings set <key> <value>`). The board remembers which
 folds you opened, per browser.
 
@@ -358,10 +379,12 @@ hides what is off:
 | `cloud` | off | The Cloud tab, the "Suitable for cloud" filter and the Cloud row in the task detail |
 | `follow` | off | The `/follow` page and its link in the terminal |
 
-The gear's **General** tab has a read-only **Modules** section: each module, On or Off, and the key to set. There
-is no switch in the browser; change the file and restart the board.
+Each module has a row with its switch in the gear's categories (Plans and focus in the Project tab, Board and advice
+in the Board tab; `/api/setting`, the same as `ravenseat settings set features.<name> on|off`). The board reads
+queue.config.json when it starts, so restart it after a change. A module without such a row (from an older server) is
+listed in the read-only **Modules** section of the Project tab instead, never in both.
 
-The cloud is the exception, because the board has its own section for it. The gear's **Cloud** section has one switch for all
+The cloud is the exception, because the board has its own section for it. The gear's **Cloud** section (Board tab) has one switch for all
 of it (the same as `ravenseat cloud on|off`) and needs no restart. Off, nothing about the cloud shows. On, the section also
 has the Cloud tab's own switch (`board.showCloud`, on by default; `ravenseat board-setting cloud on|off`, which writes
 queue.json and wins over queue.config.json) and the settings from `ravenseat cloud settings`. A saved Cloud view still opens
@@ -416,7 +439,7 @@ the flag, the mascot is off for every viewer: no bubbles, no click, nothing is c
 in the gear is locked.
 
 **Logo or mascot.** The Ravenseat logo is the default picture; the raven on the right talks. **Show the mascot instead
-of the logo** under Logo and mascot in the gear switches to the mascot (`/logo`), per browser.
+of the logo** under Logo and mascot (the last section of the gear's Board tab) switches to the mascot (`/logo`), per browser.
 
 **Hiding the picture.** Off keeps the picture. To remove it completely in one browser, click **Hide the picture
 completely** in the gear. **Show the picture again** in the same place brings it back.

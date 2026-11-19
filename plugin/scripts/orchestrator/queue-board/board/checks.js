@@ -630,11 +630,8 @@ function checksOffHint() {
       class: 'link-button',
       text: 'Turn it off in Settings',
       title: 'Opens Settings at the Checks switch. Guards and gates are not affected.',
-      onclick: async () => {
-        await openSettings();
-        // Focus scrolls the panel just enough; the switch sits near the top of General.
-        $('checks-panel')?.focus();
-      },
+      // openSettingsAt chooses the Checks tab first, then focuses the switch there (B8).
+      onclick: () => openSettingsAt('checks-panel'),
     }),
   );
 }

@@ -101,7 +101,7 @@ matches), `mostlyPaths` (more than half of the changed files match), `plan` (tru
 `minMissionItems` (numbered points in `prompt-<ID>.md`). Path patterns: `dir/` is the folder from the root, `*.md`
 is that file name anywhere, `**` is any number of folders. A helper with no condition never runs.
 
-- **Switching:** `ravenseat helpers on|off <agent>` (or the board's Helper agents tab) saves the switch in `queue.json`
+- **Switching:** `ravenseat helpers on|off <agent>` (or the board's Settings, Agents tab) saves the switch in `queue.json`
   (`helpers.<agent>.enabled`), which wins over `queue.config.json`, like `ravenseat limit`. `ravenseat helpers` lists them.
 - **Backward compatible:** `reviewers` per class works as before. A helper also listed in `reviewers` for a class is
   fixed there (the switch does not stop it for that class); it is never started twice.
@@ -152,7 +152,7 @@ ravenseat triage <id> --verdict ready|done|stale|adjust [--note "<the agent's no
 ```
 
 `minAgeDays: null` turns the age rule off, `agentAdded: false` the agent rule. `ravenseat helpers off triage` (or the board's
-Helper agents tab) turns triage off entirely; in lite mode it is off unless switched on there. The board and
+Settings, Agents tab) turns triage off entirely; in lite mode it is off unless switched on there. The board and
 `ravenseat helpers` show its runs and cost (the agent message names the task, so the time log ties it to it) and its
 verdicts: how many were ready, done, stale and adjust, and how many tracks it saved (done plus stale).
 
@@ -216,7 +216,7 @@ A custom helper is an agent file of the project's own (or one you found) used as
 the orchestrator session with the tools its frontmatter gives it, so it is reviewed before it is ever on.
 
 1. **Add:** `ravenseat helpers add <file.md> [--name <name>] [--classes K,U] [--labels a,b] [--paths p,q]`, or paste the
-   path under "Add a custom helper" in the board's Helper agents tab. The file is copied to
+   path under "Add a custom helper" in the board's Settings, Agents tab. The file is copied to
    `.claude/agents/<name>.md` (where Claude Code finds project agents, so the orchestrator starts it by its bare name
    as `subagent_type`), `name:` in its frontmatter is set to the registered name, and it is registered in `queue.json`
    as `source: custom` with `path`, `sha256` and `added_at`. It is **off**. A name that is a builtin agent (Claude
