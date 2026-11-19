@@ -90,8 +90,9 @@ are done.
 by category with the most important first in each group. It is read from your files, so it shows what is set up, not
 that it works. "How it works" at the top shows the four steps: a suggestion's button adds an investigation to the queue
 (the click is your yes), the investigation ends in a plan and changes no files, you choose which steps become tasks,
-and nothing is built before you approve it; some need no agent and turn a check on with one click. The Important box
-leads to its cards, and placeholders hold the cards' place while the tab reads the project. A small red dot on the tab shows while an important suggestion is open, and "Set aside" keeps a card away
+and nothing is built before you approve it; some need no agent and turn a check on with one click. A tally under the
+header counts the open suggestions per level (High, Medium, Low; a zero count is muted), and each card's level is a
+pill in the same color: red for high, orange for medium, yellow for low. The Important box leads to its cards, and placeholders hold the cards' place while the tab reads the project. A small red dot on the tab shows while an important suggestion is open, and "Set aside" keeps a card away
 until you bring it back. The guard registry and the failures that repeat are on the same tab. Every card and rule:
 [The Checks tab](checks.md).
 
@@ -162,7 +163,9 @@ The Queue workspace has these tabs:
   **Tasks** fold that lists the step's tasks with a status per task: ready, blocked, waits on an answer, QA waiting on
   you and so on; a done step keeps its "done" badge), then **Not in focus** (the rest) and **On pause** (projects on
   pause). Drag areas, projects and features between them, or lift one with Space and move it with the arrow keys (up
-  and down in In focus, left and right between the sections). The saved `now_count` (the old split into Now and Next)
+  and down in In focus, left and right between the sections). While you drag in In focus, a thin gray bar shows the
+  exact spot the step will land; there is no bar where the drop would leave the step where it is. With the keyboard
+  the lifted row itself moves, so it needs no bar. The saved `now_count` (the old split into Now and Next)
   stays in the data and is sent back unchanged, but the board no longer draws it. Below the lists, **Focus settings**
   is a fold, closed by default, with the name, the rest (waits or fills free slots), the end date, dragging
   dependencies along, what happens when the focus is done, **Clear focus** and **Areas …** (creates and names the
@@ -311,7 +314,8 @@ and count; a click on the card opens Plan entries filtered on the area. **Plan e
 filters and the details of the selected entry. **Documents and agreements**, **Legal**, **Decisions** and **Launch**
 show the documents, the legal points, the owner decisions and what stands between the plan and launch.
 
-The gear holds the settings and the help. **How to use the board**, the mode line and the banner for weakened guards
+The gear holds the settings and the help. A second click on the gear while Settings is open closes the panel, as
+Close does. **How to use the board**, the mode line and the banner for weakened guards
 sit at the top, seen from every tab; under them the settings are in six tabs, so no tab is much longer than two
 screens:
 

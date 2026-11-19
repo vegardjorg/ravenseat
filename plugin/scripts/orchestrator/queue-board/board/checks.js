@@ -47,6 +47,13 @@ Object.assign(ICONS, {
 
 const CHECKS_WHERE = { ci: 'CI', gate: 'Gate', script: 'Script', hook: 'Git hook', config: 'Config' };
 const CHECKS_PRIORITY = { high: 'High', medium: 'Medium', low: 'Low' };
+/** The levels, highest first: the order of the tally at the top of the view (QA-1a). */
+const CHECKS_LEVELS = ['high', 'medium', 'low'];
+/**
+ * The classes of a level pill (QA-1a). board.css colors checks-pill-high with the danger tone (red), -medium with
+ * caution (orange) and -low with warn (yellow); a level outside the three gets the plain pill shape and no color.
+ */
+const checksPillClass = (level) => `checks-pill checks-pill-${CHECKS_LEVELS.includes(level) ? level : 'other'}`;
 
 /** The tab follows the switch; a view that was switched off goes back to the queue. */
 function drawChecksTab() {
@@ -325,7 +332,8 @@ function checksSuggestionCard(s, categories, { grouped = false } = {}) {
     el(
       'div',
       { class: 'checks-card-head' },
-      el('span', { class: 'checks-priority', text: CHECKS_PRIORITY[s.priority] ?? s.priority }),
+      // The level word is a pill in its level's color (QA-1a); the word still carries the meaning without color.
+      el('span', { class: `checks-priority ${checksPillClass(s.priority)}`, text: CHECKS_PRIORITY[s.priority] ?? s.priority }),
       grouped ? null : el('span', { class: 'checks-source', text: category }),
     ),
     el(title, { class: 'checks-card-title', text: s.title }),
@@ -714,6 +722,43 @@ function checksSummary(r) {
   );
 }
 
+/**
+ * The tally at the top of the view (QA-1a): how many suggestions are open per level, as pills in the level colors
+ * (High N, Medium N, Low N). "Open" is what the Important box counts: state open and not marked as not applying now;
+ * a card in the queue, planned or set aside is not open. A zero count stays in its place but is muted (the neutral
+ * tone), so the three slots never move and "Low 0" still says there are none. A screen reader gets one sentence; the
+ * pills themselves are hidden from it, so it does not hear the same numbers twice.
+ * Before the first report there is an empty placeholder of the same height, so nothing below moves when it comes.
+ */
+function checksTally(r) {
+  if (!r) return el('div', { class: 'checks-tally checks-tally-pending', 'aria-hidden': 'true' });
+  const open = r.suggestions.filter((s) => s.state === 'open' && s.applies !== false);
+  const count = Object.fromEntries(CHECKS_LEVELS.map((l) => [l, open.filter((s) => s.priority === l).length]));
+  return el(
+    'div',
+    { class: 'checks-tally' },
+    el('span', {
+      class: 'hidden-for-eye',
+      text: `Open suggestions: ${count.high} high, ${count.medium} medium, ${count.low} low.`,
+    }),
+    el(
+      'ul',
+      { class: 'checks-tally-pills', 'aria-hidden': 'true' },
+      ...CHECKS_LEVELS.map((l) =>
+        el(
+          'li',
+          {
+            class: `${checksPillClass(l)} checks-tally-item${count[l] ? '' : ' checks-pill-zero'}`,
+            'data-level': l,
+          },
+          `${CHECKS_PRIORITY[l]} `,
+          el('span', { class: 'checks-tally-count', text: String(count[l]) }),
+        ),
+      ),
+    ),
+  );
+}
+
 /** The whole view, into main. */
 function drawChecks() {
   const r = t.checks.report;
@@ -737,6 +782,8 @@ function drawChecks() {
       }),
     ),
   );
+  // The severity tally (QA-1a) stands right under the header; before the report it is a placeholder of the same height.
+  wrap.append(checksTally(r));
   // "How it works" needs no report, so it stands from the first frame and nothing above the cards moves when they come.
   wrap.append(checksHow());
   if (!r) {

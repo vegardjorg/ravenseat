@@ -2417,7 +2417,10 @@ function boardTitle(config = {}, { defaultName = 'theProject' } = {}) {
  *     decorative divider.
  *   - tone-<name> (surface) and on-tone-<name> (text) are tinted badges with ONE meaning each: neutral (class, estimate,
  *     project), info (ready, running), ok (approved, check in order), warn (waiting on you, stale data), danger (blocked
- *     and needs action, failed check) and heavy (only the D+ class).
+ *     and needs action, failed check), heavy (only the D+ class) and caution (the orange of a medium Checks
+ *     suggestion: high is danger, medium caution, low warn, so the three levels read red, orange, yellow).
+ *   - drop-indicator is the bar that shows where a dragged step lands in Focus: dark gray in light mode, light gray in
+ *     dark mode, 3:1 on the section surface and the drop zone.
  * Every text pair is checked for WCAG AA in both modes in queueBoardA11y.test.ts.
  */
 const PALETTE = Object.freeze({
@@ -2461,6 +2464,9 @@ const PALETTE = Object.freeze({
     'on-tone-danger': '#8c1d18',
     'tone-heavy': '#efe8f8',
     'on-tone-heavy': '#4e3577',
+    'tone-caution': '#fddcbf',
+    'on-tone-caution': '#8a3a00',
+    'drop-indicator': '#4a4f57',
     'category-teal': '#0f7c7a',
     'category-plum': '#8e3b6e',
     'category-ocean-blue': '#1f5fa8',
@@ -2512,6 +2518,9 @@ const PALETTE = Object.freeze({
     'on-tone-danger': '#f6c9c6',
     'tone-heavy': '#352a4d',
     'on-tone-heavy': '#dccdf5',
+    'tone-caution': '#4d2a0f',
+    'on-tone-caution': '#ffc999',
+    'drop-indicator': '#c4c9d0',
     'category-teal': '#5fc4c0',
     'category-plum': '#e08cbd',
     'category-ocean-blue': '#8ab8f0',

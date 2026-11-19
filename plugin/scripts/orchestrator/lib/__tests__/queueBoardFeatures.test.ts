@@ -170,6 +170,9 @@ describe('the module switches on the board', () => {
     expect(document.querySelector('[aria-labelledby="setting-modules"]')?.textContent).not.toContain('features.cloud');
 
     await serve(stateFor('gear-on', ['waiting'], { features: { cloud: true } }));
+    // The gear toggles (QA-1a): the first click closes the open Settings, the second opens them on the new state.
+    $('settings').click();
+    await flush();
     $('settings').click();
     await flush();
     const select = document.getElementById('cloud-setting-collect') as HTMLSelectElement;

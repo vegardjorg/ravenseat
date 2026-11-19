@@ -259,7 +259,10 @@ describe('custom helpers in the tab', () => {
   it('a file changed since approval: Changed since approval, the switch off and disabled', async () => {
     switches = { ...switches, 'db-check': { ...(switches['db-check'] as object), enabled: true } };
     (hashes as Record<string, string>)['db-check'] = 'cd'.repeat(32);
-    // Open the settings again: the rows are fetched from the server (the tab is remembered).
+    // Open the settings again: the rows are fetched from the server (the tab is remembered). The gear toggles
+    // (QA-1a), so the first click closes the open Settings and the second opens them fresh.
+    (document.getElementById('settings') as HTMLButtonElement).click();
+    await flush();
     (document.getElementById('settings') as HTMLButtonElement).click();
     await flush();
     const r = row('db-check');

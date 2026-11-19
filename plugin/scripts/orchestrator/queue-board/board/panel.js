@@ -45,6 +45,8 @@ function showPanel() {
   if (panel.hidden || (from && from !== document.body && !panel.contains(from))) panelFrom = from;
   panel.hidden = false;
   applyPanelMode();
+  // The gear's aria-expanded follows what the panel now shows (settings.js; Settings, a card or the help).
+  drawGearExpanded();
 }
 // The width can cross 1200 px while the panel is open (a resized window): switch the mode at once.
 window.matchMedia?.(PANEL_SIDE_MEDIA)?.addEventListener?.('change', () => {
@@ -73,6 +75,7 @@ function closePanel() {
   background.hidden = true;
   document.body.classList.remove('panel-beside');
   panel.replaceChildren();
+  drawGearExpanded();
   // Inert off before focus moves back (an inert element cannot get focus).
   window.QueueA11y.setInert(
     PANEL_INERT.map((v) => document.querySelector(v)),

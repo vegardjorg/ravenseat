@@ -5,6 +5,24 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the gear toggles, Checks shows its severity, and Focus shows where a drag lands (QA-1a).** Three edge
+  cases from the owner's QA. (1) A second click on the gear while Settings was open redrew Settings in its loading
+  state and fetched it again, so the gear looked dead; it now closes the panel exactly as Close does, also while
+  Settings is still loading, and it still opens Settings when the panel shows a card or the help. The gear carries
+  `aria-expanded` and `aria-controls`. (2) The Checks view gets a tally under its header of the open suggestions per
+  level (High, Medium, Low; only open cards that apply count, as in the Important box; a zero count keeps its slot
+  and is muted), with one screen-reader sentence, and each card's level word is a pill in its color: red (the danger
+  tone), orange (a new `tone-caution` pair in both palettes) and yellow (the warn tone). Every pill holds 4.5:1 in
+  light and dark, and the palette test now also checks that orange sits at least 12 degrees of hue from both
+  neighbours. The Important and Skipped boxes stay: they name the cards and lead to them, which the tally does not.
+  (3) Dragging a step in In focus shows a 3 px bar with round ends at the exact spot it will land, from the same
+  midpoint rule as the drop; it moves on dragover, goes on dragleave, drop and dragend, and is not drawn where the
+  drop would leave the step in place. It is absolutely positioned, so the rows never shift under the pointer, and it
+  uses a new `drop-indicator` token (dark gray in light mode, light gray in dark mode, 3:1 on the section and the drop
+  zone). Not in focus and On pause have no order, so they keep the highlighted list as the target; the keyboard lift
+  moves the row itself and needs no bar. Friction: none of the three stops work or adds a step; they are plain fixes
+  with one justified default each (the gear closes what it opened, the colors follow the existing tones, the bar
+  shows only a real move). No setting.
 - **`ravenseat cost --reads` lists the files tracks most often read whole (0y Y2).** A display-only view over the
   subagent transcripts that `cost` already reads (no new log): per file the tracks that read it with no offset, limit
   or pages, the whole and excerpt reads, and its size now, sorted by tracks then reads, top 15 (`--limit`), with one

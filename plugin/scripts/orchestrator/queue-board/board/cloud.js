@@ -145,6 +145,6 @@ function drawCloudQueue() {
   );
 }
 
-// The gear opens the settings in the side panel.
+// The gear opens the settings in the side panel, and closes the panel when Settings is already open (QA-1a).
 $('settings').append(icon('gear'));
-$('settings').addEventListener('click', openSettings);
+$('settings').addEventListener('click', toggleSettings);

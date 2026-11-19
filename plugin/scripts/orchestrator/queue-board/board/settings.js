@@ -13,10 +13,27 @@
 'use strict';
 
 // ---- Settings (the gear) ----
+/** True while the side panel shows Settings, also in its loading state (t.setting is null when it shows anything else). */
+function settingsShown() {
+  return !panel.hidden && t.setting != null;
+}
+/**
+ * The gear toggles (QA-1a): a click while Settings is shown closes the panel exactly as its X does (closePanel), and a
+ * click while the panel is closed, or shows a card or the help, opens Settings. Before, a second click redrew Settings
+ * in its loading state and fetched it again, so the gear looked dead.
+ */
+function toggleSettings() {
+  if (settingsShown()) closePanel();
+  else openSettings();
+}
+/** aria-expanded on the gear says whether Settings is shown. showPanel and closePanel (panel.js) call it. */
+function drawGearExpanded() {
+  document.getElementById('settings')?.setAttribute('aria-expanded', String(settingsShown()));
+}
 async function openSettings() {
   t.selected = null;
   t.setting = { loading: true };
-  showPanel();
+  showPanel(); // also sets the gear's aria-expanded, now that t.setting is set
   drawSettings();
   panel.querySelector('.button-icon')?.focus();
   await getSettings();

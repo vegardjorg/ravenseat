@@ -565,8 +565,11 @@
         'aria-label': `${k.name}: ${elements.length} ${elements.length === 1 ? 'element' : 'elements'}`,
         ondragover: (e) => dragOver(e),
         ondragleave: (e) => {
-          if (!e.currentTarget.contains(e.relatedTarget))
+          // Only a leave out of the list counts: moving onto a row (or the drop bar) inside it keeps both marks.
+          if (!e.currentTarget.contains(e.relatedTarget)) {
             e.currentTarget.classList.remove('release-her');
+            removeDropBars(e.currentTarget);
+          }
         },
         ondrop: (e) => release(e, k.key),
       },
@@ -895,6 +898,7 @@
     e.currentTarget.classList.remove('dragged');
     for (const x of document.querySelectorAll('.plan-list.release-her'))
       x.classList.remove('release-her');
+    removeDropBars(document);
     s.drag = null;
     if (s.ctx.pending()) s.ctx.drawOnNew();
   }
@@ -903,6 +907,53 @@
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     e.currentTarget.classList.add('release-her');
+    showDropBar(e.currentTarget, e.clientY);
+  }
+
+  // ---- The drop bar (QA-1a): a thin bar at the exact spot a dragged step will land in In focus ----
+  /**
+   * Where a drop at height y puts the dragged step in this list: the index from releaseIndex, the same midpoint rule
+   * release uses, so the bar and the drop always agree. null when there is no place to show: the list is not ordered
+   * (only In focus is; in Not in focus and On pause the place does not matter, and the highlighted list is the target),
+   * or the drop would not move the step (it is in this list and would land where it already is).
+   */
+  function dropTarget(list, y) {
+    if (list.dataset.col !== 'focus') return null;
+    const index = releaseIndex(list, y);
+    // releaseIndex counts the rows without the dragged one, so landing at its own position among all rows is no move.
+    const from = [...list.querySelectorAll(':scope > .plan-element')].findIndex((x) => x.dataset.key === s.drag?.key);
+    return from >= 0 && from === index ? null : index;
+  }
+  /**
+   * Shows, moves or removes the drop bar in one list. The bar is absolutely positioned (board.css .plan-drop-bar), so it
+   * takes no room and the rows, and with them the midpoints releaseIndex reads, never shift while the pointer moves. It
+   * sits in the middle of the gap the step lands in: between two rows, just above the first or just below the last.
+   * It is only for the eye (aria-hidden): the keyboard way (keyPress) moves the lifted row itself and says the place in
+   * the live status, so it has no separate target to mark.
+   */
+  function showDropBar(list, y) {
+    const index = dropTarget(list, y);
+    let bar = list.querySelector(':scope > .plan-drop-bar');
+    if (index == null) {
+      bar?.remove();
+      return;
+    }
+    const others = [...list.querySelectorAll(':scope > .plan-element')].filter((x) => x.dataset.key !== s.drag?.key);
+    const top = list.getBoundingClientRect().top;
+    const prev = others[index - 1]?.getBoundingClientRect();
+    const next = others[index]?.getBoundingClientRect();
+    const middle = prev && next ? (prev.bottom + next.top) / 2 : next ? next.top - 2 : prev ? prev.bottom + 2 : top + 4;
+    if (!bar) {
+      bar = el('li', { class: 'plan-drop-bar', 'aria-hidden': 'true' });
+      list.append(bar);
+    }
+    bar.dataset.index = String(index);
+    // From the list's padding edge (where an absolute child is placed), centred on the 3 px bar.
+    bar.style.top = `${Math.round(middle - top - (list.clientTop || 0) - 1.5)}px`;
+  }
+  /** Removes every drop bar under root (one list, or the document after a drop or a cancelled drag). */
+  function removeDropBars(root) {
+    for (const x of root.querySelectorAll('.plan-drop-bar')) x.remove();
   }
   /** The position in the list where the element is dropped: before the first element whose middle is below the mouse. */
   function releaseIndex(list, y) {
@@ -920,6 +971,7 @@
     e.preventDefault();
     const key = s.drag.key;
     const index = releaseIndex(e.currentTarget, e.clientY);
+    removeDropBars(document);
     s.drag = null;
     const error = move(key, col, index);
     if (error) s.ctx.message(error, true);

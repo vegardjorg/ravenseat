@@ -113,8 +113,9 @@ describe('the palette: every text pair in both modes', () => {
     'surface',
     'surface-container-high',
   ];
-  // Tinted badges: one meaning each (neutral, info / ready, ok / done, waiting on you, error / stops, heavy class).
-  const TONES = ['neutral', 'info', 'ok', 'warn', 'danger', 'heavy'];
+  // Tinted badges: one meaning each (neutral, info / ready, ok / done, waiting on you, error / stops, heavy class,
+  // caution: the orange of a medium Checks suggestion, between danger for high and warn for low; QA-1a).
+  const TONES = ['neutral', 'info', 'ok', 'warn', 'danger', 'heavy', 'caution'];
 
   /** Every [label, foreground, background, minimum] pair for one mode. */
   function pairs(p: Record<string, string>): [string, string, string, number][] {
@@ -128,8 +129,39 @@ describe('the palette: every text pair in both modes', () => {
     out.push(['on-primary on primary', p['on-primary'], p.primary, 4.5]);
     for (const t of TONES)
       out.push([`on-tone-${t} on tone-${t}`, p[`on-tone-${t}`], p[`tone-${t}`], 4.5]);
+    // The Focus drop bar (QA-1a) is a non-text mark: 3:1 on the section surface and on the highlighted drop zone.
+    for (const s of ['surface-container', 'surface-container-high'])
+      out.push([`drop-indicator on ${s}`, p['drop-indicator'], p[s], 3]);
     return out;
   }
+
+  /** The hue of a #rrggbb color in degrees (0 to 360), for telling the severity tones apart. */
+  function hue(hex: string): number {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b);
+    const d = max - Math.min(r, g, b);
+    if (!d) return 0;
+    const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (h * 60 + 360) % 360;
+  }
+
+  it.each(MODES)('the orange caution tone sits clearly between the red danger and the yellow warn in %s mode', (_name, p) => {
+    // The three Checks levels must not blur together: the caution color is at least 12 degrees of hue from each
+    // neighbour, in the order red, orange, yellow on the color wheel (surface and text alike).
+    for (const part of ['tone', 'on-tone']) {
+      const [danger, caution, warn] = ['danger', 'caution', 'warn'].map((t) => hue(p[`${part}-${t}`]));
+      expect(caution - danger, `${part} caution vs danger`).toBeGreaterThanOrEqual(12);
+      expect(warn - caution, `${part} warn vs caution`).toBeGreaterThanOrEqual(12);
+    }
+  });
+
+  it.each(MODES)('the drop bar is a dark gray in light mode and a light gray in dark mode (%s)', (name, p) => {
+    expect(p['drop-indicator']).toMatch(/^#[0-9a-f]{6}$/i);
+    // Contrast against black grows with luminance: a dark gray stays near black, a light gray is far from it.
+    const lum = U.contrast(p['drop-indicator'], '#000000');
+    if (name === 'light') expect(lum).toBeLessThan(5);
+    else expect(lum).toBeGreaterThan(10);
+  });
 
   it.each(MODES)('the tone tokens exist in %s mode', (_name, p) => {
     for (const t of TONES) {

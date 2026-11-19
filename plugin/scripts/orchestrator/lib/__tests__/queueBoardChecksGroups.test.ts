@@ -188,7 +188,10 @@ describe('B11: How it works', () => {
 
   it('sits at the top under the header, open, as a button that controls a region', () => {
     const how = view().querySelector('.checks-how') as HTMLElement;
-    expect(view().querySelector('.checks-head')?.nextElementSibling).toBe(how);
+    // Under the header comes the severity tally (QA-1a, queueBoardQa1a.test.ts), then "How it works".
+    const tally = view().querySelector('.checks-head')?.nextElementSibling as HTMLElement;
+    expect(tally.classList.contains('checks-tally')).toBe(true);
+    expect(tally.nextElementSibling).toBe(how);
     expect(toggle().tagName).toBe('BUTTON');
     expect(toggle().getAttribute('aria-expanded')).toBe('true');
     expect(toggle().getAttribute('aria-controls')).toBe('checks-how-body');
