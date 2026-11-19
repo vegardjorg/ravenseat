@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the area cards in Plans read at a glance, and priority is no longer red.** Edge cases closed on the Plans
+  overview. Each area card repeated a running legend under its bars ("Idea and investigated 0 · Planned and ready
+  1 · ..."), so a card was three lines of text, and a maturity segment in the planned color barely showed on the
+  bar's track. The bars now have labelled segments: each segment carries its symbol and count as text, grows with its
+  count but never gets narrower than its text, has its word in the tooltip and a 1 px edge that holds 3:1 against the
+  card in light and dark, and a group at 0 draws no segment. One shared legend above the cards says once what every
+  symbol and color means, and the card's accessible name names every group with its count. Priority used the error
+  red for Now, while red elsewhere on the board means an error; Now is the strong primary tone, Owner the warn tone
+  (waits on you) and Later a muted neutral, and red stays for errors and deadlines. The full breakdown, every group
+  with its word and count, also those at 0, sits in a **Details** disclosure under each card: its own tab stop after
+  the card button, never inside it, and opening it grows only that card. No new setting and no new colors: only the
+  theme's tokens.
 - **Board: buttons and hints say what they do, in plain words.** Edge cases closed in the board's wording. The bulk
   dialog's main button said "Do it" whatever the action; it now names the verb and the count of the selection ("Put 3
   tasks on hold", "Move 2 tasks", "Remove the label from 2 tasks") and follows the add or remove choice. A CLI command

@@ -4,8 +4,9 @@
 //
 // One screen that answers "where are we":
 //   - "Working now" at the top: entries a /plans session is working on (active_session, pulse marker, gone after 2 hours),
-//   - eight module cards (count, bar by priority and by maturity, how much is built, and up to three warning counts:
-//     owner questions, legal and stale, each only when it is over 0); a click opens the list filtered on the module,
+//   - one shared legend, then eight module cards (count, a priority bar and a maturity bar with labelled segments, how
+//     much is built, and up to three warning counts: owner questions, legal and stale, each only when it is over 0); a
+//     click opens the list filtered on the module, and a Details disclosure under each card holds the full breakdown,
 //   - "Waiting on you": the five owner questions and legal points that block the most, with an answer button,
 //   - the capacity in Now, with a notice when Now grows faster than the queue drains,
 //   - recently changed and recently registered.
@@ -16,34 +17,122 @@
 
 (function () {
   const V = window.QueuePlanView;
+  /** The Drop symbol (as PRIORITY.drop in queuePlanView.js), for the dropped count in a card's details. */
+  const PRIORITY_DROP = '✕';
 
-  /** A bar split into parts (width by count). The text beside it carries the numbers, so color is never alone. */
-  function bar(h, parts, name, cls) {
-    const sum = parts.reduce((n, x) => n + x.count, 0);
-    const text = parts.map((x) => `${x.text} ${x.count}`).join(', ');
+  /**
+   * A bar split into labelled segments (B32, PL1). Each segment shows its symbol and count as text and the word in its
+   * tooltip, so its meaning never rests on color alone; the shared legend above the cards says the words once. A
+   * segment grows with its count but is never narrower than its own text. A group at 0 draws no segment.
+   */
+  function bar(h, parts, cls) {
     return h.el(
       'span',
-      { class: 'overview-bar', role: 'img', 'aria-label': `${name}: ${text}` },
+      { class: 'overview-bar', 'aria-hidden': 'true' },
       ...parts
         .filter((x) => x.count > 0)
         .map((x) =>
-          h.el('span', {
-            class: `overview-del ${cls}-${x.id}`,
-            '--share': `${sum ? (x.count / sum) * 100 : 0}%`,
-          }),
+          h.el(
+            'span',
+            {
+              class: `overview-del ${cls}-${x.id}`,
+              title: `${x.text}: ${x.count}`,
+              '--grow': String(x.count),
+            },
+            h.el('span', { class: 'overview-del-symbol', text: x.symbol }),
+            ` ${x.count}`,
+          ),
         ),
     );
   }
 
-  /** The legend under a bar: symbol (when there is one), text and number. */
-  function explanation(h, parts) {
+  /** One row on the card face: a short label and its bar. */
+  function barRow(h, label, parts, cls) {
     return h.el(
       'span',
-      { class: 'overview-explanation', 'aria-hidden': 'true' },
-      parts.map((x) => `${x.symbol ? `${x.symbol} ` : ''}${x.text} ${x.count}`).join(' · '),
+      { class: 'overview-bar-row' },
+      h.el('span', { class: 'overview-label', text: label }),
+      bar(h, parts, cls),
     );
   }
 
+  /** A legend sample: the same segment look as on the cards, with the symbol in it. */
+  function swatch(h, x, cls) {
+    return h.el(
+      'li',
+      { class: 'overview-legend-item' },
+      h.el('span', {
+        class: `overview-legend-swatch overview-del ${cls}-${x.id}`,
+        'aria-hidden': 'true',
+        text: x.symbol,
+      }),
+      h.el('span', { text: x.text }),
+    );
+  }
+
+  /** The one shared legend above the area cards (B32): what each segment's symbol and color mean. */
+  function legendEl(h) {
+    const L = V.AREA_LEGEND;
+    const group = (title, parts, cls) =>
+      h.el(
+        'span',
+        { class: 'overview-legend-group' },
+        h.el('span', { class: 'overview-legend-title', text: title }),
+        h.el('ul', { class: 'overview-legend-list', 'aria-label': title }, ...parts.map((x) => swatch(h, x, cls))),
+      );
+    return h.el(
+      'div',
+      { class: 'overview-legend' },
+      group('Priority', L.priority, 'pri'),
+      group('Maturity', L.maturity, 'mod'),
+    );
+  }
+
+  /**
+   * The full breakdown of one card, behind a "Details" disclosure after the card button (its own tab stop, never
+   * inside the button): every group with its word and count, also those at 0.
+   */
+  function detailsEl(h, k) {
+    const line = (title, parts) =>
+      h.el(
+        'div',
+        { class: 'overview-details-line' },
+        h.el('dt', { text: title }),
+        h.el(
+          'dd',
+          null,
+          h.el(
+            'ul',
+            { class: 'overview-details-groups' },
+            ...parts.map((x) =>
+              h.el(
+                'li',
+                null,
+                h.el('span', { class: 'overview-details-symbol', 'aria-hidden': 'true', text: x.symbol }),
+                ` ${x.text} ${x.count}`,
+              ),
+            ),
+          ),
+        ),
+      );
+    return h.el(
+      'details',
+      { class: 'overview-card-details' },
+      h.el(
+        'summary',
+        { 'data-focus': `moduleDetails:${k.oid}` },
+        'Details',
+        h.el('span', { class: 'hidden-for-eye', text: ` for ${k.title}` }),
+      ),
+      h.el(
+        'dl',
+        { class: 'overview-details-list' },
+        line('Priority', k.priority),
+        line('Maturity', k.maturity),
+        k.dropped ? line('Dropped', [{ symbol: PRIORITY_DROP, text: 'Drop', count: k.dropped }]) : null,
+      ),
+    );
+  }
   function moduleCard(h, k) {
     const pst = Math.round(k.share * 100);
     // A warning count is shown only when there is something to act on: "0 owner questions" is not a warning.
@@ -65,7 +154,7 @@
           type: 'button',
           class: 'overview-summary',
           'data-focus': `moduleCard:${k.oid}`,
-          'aria-label': `${k.title}: ${k.count} entries. Open the list filtered on the area.`,
+          'aria-label': V.areaCardLabel(k),
           onclick: () => {
             const f = V.emptyFilter();
             f.module = [k.oid];
@@ -81,15 +170,11 @@
             text: `${k.count} ${k.count === 1 ? 'entry' : 'entries'}${k.dropped ? `, ${k.dropped} dropped` : ''}`,
           }),
         ),
-        h.el('span', { class: 'overview-label', text: 'Priority' }),
-        bar(h, k.priority, 'Priority', 'pri'),
-        explanation(h, k.priority),
-        h.el('span', { class: 'overview-label', text: 'Maturity' }),
-        bar(h, k.maturity, 'Maturity', 'mod'),
-        explanation(h, k.maturity),
+        barRow(h, 'Priority', k.priority, 'pri'),
+        barRow(h, 'Maturity', k.maturity, 'mod'),
         h.el('span', {
           class: 'overview-built',
-          text: `Built: ${k.built} of ${k.count} (${pst} %)`,
+          text: `Built ${k.built} of ${k.count} (${pst} %)`,
         }),
         h.el(
           'span',
@@ -107,6 +192,7 @@
             : null,
         ),
       ),
+      detailsEl(h, k),
     );
   }
 
@@ -329,6 +415,7 @@
           'section',
           { class: 'overview-modules', 'aria-label': 'Areas' },
           h.el('h2', { class: 'hidden-for-eye', text: 'Areas' }),
+          legendEl(h),
           h.el(
             'ul',
             { class: 'overview-shortlist' },

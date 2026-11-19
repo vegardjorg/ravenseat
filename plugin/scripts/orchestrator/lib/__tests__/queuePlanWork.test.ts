@@ -751,7 +751,14 @@ describe('the wiring (index.html, queue-board.mjs and the new files)', () => {
       active: 0,
     };
     const w: any = {
-      QueuePlanView: { emptyFilter: () => ({}), workingNow: () => [], moduleSummary: () => [card] },
+      QueuePlanView: {
+        emptyFilter: () => ({}),
+        workingNow: () => [],
+        moduleSummary: () => [card],
+        // B32: the shared legend and the card's accessible name.
+        AREA_LEGEND: { priority: [], maturity: [] },
+        areaCardLabel: () => 'M',
+      },
     };
     // The file is the repo's own overview.js, run with a stub window (as the browser does with the real one).
     new Function('window', overview)(w);

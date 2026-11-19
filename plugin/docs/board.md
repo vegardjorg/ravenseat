@@ -266,7 +266,11 @@ optional `context` (`ravenseat question <id> --context "…"`, why it is asked) 
 answer starts the next round at once; otherwise "Answers are picked up the next time the orchestrator runs".
 
 The **Plans** workspace is the plan register. **Overview** has one card per area, what is being worked on now and
-what waits on you. **Plan entries** shows the entries as a list, a priority map, a tree map or dependencies, with
+what waits on you. An area card shows its entry count, a priority bar and a maturity bar, how much is built and the
+warning counts that are over 0. Each bar segment carries a symbol and its count (the word is in the tooltip), and one
+shared legend above the cards explains the symbols and colors: priority is primary for Now, the warn tone for Owner
+and neutral for Later (never red, which means an error). **Details** under each card lists every group with its word
+and count; a click on the card opens Plan entries filtered on the area. **Plan entries** shows the entries as a list, a priority map, a tree map or dependencies, with
 filters and the details of the selected entry. **Documents and agreements**, **Legal**, **Decisions** and **Launch**
 show the documents, the legal points, the owner decisions and what stands between the plan and launch.
 

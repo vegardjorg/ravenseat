@@ -2570,13 +2570,26 @@
 
   /** The maturities the owner sets (like queuePlan.MATURITY_MANUAL); in-queue, partial, built and verified are computed. */
   const MATURITY_MANUAL = ['idea', 'investigated', 'planned', 'ready'];
-  /** The maturity bar on the module card: four groups, each with text and number (color is never the only carrier). */
+  /**
+   * The maturity bar on the module card: four groups, each with text, symbol and number (color is never the only
+   * carrier). The symbols differ from the priority symbols, so a segment reads on its own with the shared legend (B32).
+   */
   const MATURITY_GROUPS = [
-    { id: 'early', text: 'Idea and investigated', by: ['idea', 'investigated'] },
-    { id: 'planned', text: 'Planned and ready', by: ['planned', 'ready'] },
-    { id: 'work', text: 'In queue and partially built', by: ['in-queue', 'partial'] },
-    { id: 'built', text: 'Built and verified', by: ['built', 'verified'] },
+    { id: 'early', text: 'Idea and investigated', symbol: '◌', by: ['idea', 'investigated'] },
+    { id: 'planned', text: 'Planned and ready', symbol: '◔', by: ['planned', 'ready'] },
+    { id: 'work', text: 'In queue and partially built', symbol: '◑', by: ['in-queue', 'partial'] },
+    { id: 'built', text: 'Built and verified', symbol: '✓', by: ['built', 'verified'] },
   ];
+  /** The priorities on the module card, in bar order (Drop is counted apart, as "N dropped"). */
+  const AREA_PRIORITIES = ['now', 'owner', 'later'];
+  /**
+   * The one shared legend above the area cards (B32, PL1): every symbol with its word, once for the page, instead of
+   * a running legend under every bar.
+   */
+  const AREA_LEGEND = Object.freeze({
+    priority: AREA_PRIORITIES.map((k) => ({ id: k, text: PRIORITY[k].text, symbol: PRIORITY[k].symbol })),
+    maturity: MATURITY_GROUPS.map((g) => ({ id: g.id, text: g.text, symbol: g.symbol })),
+  });
   /** Keys for priority: 1 Now, 2 Later, 3 Owner, 4 Drop. */
   const PRIORITY_KEY = { 1: 'now', 2: 'later', 3: 'owner', 4: 'drop' };
   /** "Waiting on you" shows the five that block the most. */
@@ -2630,7 +2643,7 @@
         title: oid === WITHOUT_MODULE ? 'Without area' : (titles.get(oid) ?? oid),
         count: activeOnes.length,
         dropped: all.length - activeOnes.length,
-        priority: ['now', 'owner', 'later'].map((k) => ({
+        priority: AREA_PRIORITIES.map((k) => ({
           id: k,
           text: PRIORITY[k].text,
           symbol: PRIORITY[k].symbol,
@@ -2639,6 +2652,7 @@
         maturity: MATURITY_GROUPS.map((g) => ({
           id: g.id,
           text: g.text,
+          symbol: g.symbol,
           count: activeOnes.filter((p) => g.by.includes(p.maturity)).length,
         })),
         built: f.built,
@@ -2650,6 +2664,21 @@
       });
     }
     return out;
+  }
+
+  /**
+   * The accessible name of an area card (B32): the card face shows symbols and counts, so the name says the words.
+   * Every priority and maturity group is named with its count (also 0), then how much is built and what a click does.
+   * @param {ReturnType<typeof moduleSummary>[number]} k
+   */
+  function areaCardLabel(k) {
+    const list = (parts) => parts.map((x) => `${x.text} ${x.count}`).join(', ');
+    const pst = Math.round((k.share ?? 0) * 100);
+    return (
+      `${k.title}: ${k.count} ${k.count === 1 ? 'entry' : 'entries'}${k.dropped ? `, ${k.dropped} dropped` : ''}. ` +
+      `Priority: ${list(k.priority)}. Maturity: ${list(k.maturity)}. ` +
+      `Built ${k.built} of ${k.count} (${pst} %). Open the list filtered on the area.`
+    );
   }
 
   /**
@@ -3658,6 +3687,8 @@
     BULK_MAX,
     PALETTE_ACTIONS,
     moduleSummary,
+    areaCardLabel,
+    AREA_LEGEND,
     waitingOnYou,
     nowAccess,
     capacityWarning,
