@@ -5,6 +5,24 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Docs: clearer token numbers, with the method published.** Docs hardening, no code change. The README opens with
+  "Why it holds up" (tokens, state in files, long projects, security, parallel merging). The token section starts from
+  a cost line (a turn costs about 0.02 USD plus about 0.02 USD per 100k tokens of context, Opus 5.5, 8,031 turns) and
+  Claude Code's default (a 1M window, compaction at about 967k), then shows one project on the same model before and
+  after the 300k setting (25 to 30 September against 8 October to 15 November 2026), main chat and subagents apart,
+  with how much of each gain context size alone explains and the dates of the other changes in those weeks. The older
+  mixed-model figure for long contexts is replaced by a same-model one from the same days (a turn at 500k or more cost
+  about 2.9 times a turn at 100k to 200k), in the README, `costs.md` and the GIF alt text. The queue against one chat
+  compacted at 300k now also shows the figures without checks and review, and small fresh chats are described as not
+  costing more in tokens (the reset size is the lever). The orchestrator's cost per task is given both ways: it halved as its
+  context shrank and later rose as turns per task doubled. All amounts are marked API-equivalent at list price.
+  `costs.md` has two new sections, "The same project before and after compaction at 300k" and "Cost per turn by
+  context size", each with n, dates and how a turn's cost is computed. The README and the setup step now say that
+  `ravenseat setup --settings` sets `autoCompactWindow: 300000` for every session in the project, the user's own chats
+  and all subagents included. The parallel-load measurement in
+  [full mode](plugin/docs/full-mode.md#my-pc-chokes-on-parallel-builds) now says 14 tracks was the configured cap and
+  that load explains part of the slowdown, not all of it. The repeat of the guarantees ("Agents don't grade their own
+  homework") is folded into the security section.
 - **Board: dimmed nodes say why, and cards keep their project name (QA-1e).** Edge cases from the owner's QA. (1) In
   Dependencies a node could look gray for three reasons (outside the selected chain, a neighbor hidden by the filter
   or search, a done predecessor), and none of them was explained on screen. The legend now names the ones that apply

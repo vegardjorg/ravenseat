@@ -7,28 +7,24 @@
 
 <h1 align="center">Ravenseat</h1>
 <p align="center"><a href="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml"><img src="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI: tests on Linux and Windows"></a></p>
-<p align="center"><b>A work queue for Claude Code, so multi-day work doesn't depend on one chat: agents build, your tests decide, you answer what needs you.</b></p>
+<p align="center"><b>A work queue for Claude Code. Each task runs in a fresh agent in its own copy of the project, the plan lives in plain files, and only your checks decide what is merged.</b></p>
 <p align="center"><sub>Open source · Runs on your machine · Built for Claude Code · Board optional</sub></p>
 
-<p align="center"><img src="assets/media/explanation.gif" alt="A 44 second loop: a project spread over many chats and a long chat that costs 2.7 times more per turn, then the queue where each agent starts fresh, builds, checks and merges while you step away and come back to the decisions, cheaper per turn with less reading, checks that cost what your tests cost, and the board optional" width="800"></p>
+<p align="center"><img src="assets/media/explanation.gif" alt="A 44 second loop: a project spread over many chats and a long chat where a turn deep in its 1M window costs about 2.9 times a turn at 100k to 200k, then the queue where each agent starts fresh, builds, checks and merges while you step away and come back to the decisions, cheaper per turn with less reading, checks that cost what your tests cost, and the board optional" width="800"></p>
 
-When a Claude Code project outgrows one chat, the signs are familiar:
+When a Claude Code project outgrows one chat:
 
-- Findings, research and half-built features are spread across dozens of chats.
-- A feature that takes several days loses its thread every time a chat ends.
-- Two chats change the same files and undo each other's work.
-- The one long chat that keeps the overview grows toward its full context window (up to 1M tokens) before Claude
-  Code compacts it, and every turn reads all of it again, so each turn costs more than the last.
-- You spend more time keeping agents on track than deciding what to build.
+- the one long chat grows toward its 1M-token window, and every turn pays for all of it;
+- findings, plans and half-built work are spread over many chats, and two chats undo each other's work;
+- rules written in `CLAUDE.md` are followed most of the time, which is not the same as always.
 
-Ravenseat keeps the project's plan and task list (the queue) in plain files outside the chat, so it survives a crash,
-a compaction and two chats at once. One Claude Code chat acts as
-the manager: you tell it what to build, and it hands each task to a fresh agent in its own copy of the project, runs
-your tests on the result, merges what passes on your machine, and asks you only about decisions a human should make.
-Work that spans days gets finished across many chats, and you can follow along and answer from your phone with Claude
-Code's Remote Control. A turn costs no more than doing the work yourself in one chat; the checks you choose come on top.
-The difference is that you do not have to sit there: queue the work, go do something else, and come back to the
-decisions only you can make.
+Ravenseat is a Claude Code plugin for that stage. You tell one chat (the orchestrator) what to build. It writes the
+work down as tasks in plain files, hands each task to a fresh agent in its own git worktree, runs your tests on exactly
+the commit the agent delivered, merges what passes on your machine, and asks you only what a person has to decide.
+Each agent starts small and reads its task from a file instead of a long conversation, so a turn costs less than in a
+chat that has grown large. The rules that matter run as code on every action, so an agent cannot push, cannot change
+the project's control files and cannot mark its own work as tested. You can queue the work, step away, follow along
+from your phone with Claude Code's Remote Control, and come back to merged changes and a list of decisions.
 
 > **You:** Add dark mode in settings, a weekly streak on the habit card, and a CSV export once the streak is done.
 >
@@ -45,6 +41,150 @@ decisions only you can make.
 **What it will not do on its own.** It asks before it starts, merges only on your machine, and pushes nothing until
 you say "push". **Your part.** Each delivery lists what the agent assumed (its Assumptions); read them before the
 merge, because passing tests do not show that the agent understood you.
+
+## Why it holds up
+
+### Fewer tokens per turn
+
+**A turn costs about 0.02 USD, plus about 0.02 USD for every 100k tokens of context it carries** (Opus 5.5, 8,031
+orchestrator turns in November 2026, in a larger private project). Every turn in Claude Code sends the whole
+conversation again, so a chat that grows large pays for its size on every turn.
+
+Without a setting of your own, Claude Code runs Opus 4.7 and later, the Fable models, Sonnet 5 and later and Haiku 5.5
+with a 1M window and compacts at about 967k
+([Claude Code docs](https://code.claude.com/docs/en/model-config#default-auto-compact-thresholds)), so a chat grows to
+almost 1M before it compacts. `ravenseat setup --settings` sets compaction at 300k instead. In the same project, on the
+same model, before and after that setup:
+
+| | 25 to 30 September 2026, compacting near 1M | 8 October to 15 November 2026, compacting at 300k |
+|---|---|---|
+| Main chat: median context per turn | 464k | 183k |
+| Main chat: cost per turn | 0.157 USD (n 5,689) | 0.065 USD (n 27,771) |
+| Subagents: largest context | 907k | 293k (under 275k from 16 October) |
+| Subagents: cost per turn | 0.109 USD (n 41,498) | 0.056 USD (n 225,907) |
+
+A main-chat turn cost about 2.4 times less, and a subagent turn about 1.9 times less. Context size alone predicts most
+of the main-chat gain (about 2.0 times), but only about 1.45 times of the subagent gain; the rest fits the 1-hour
+subagent cache and the lower effort per agent type, which landed a week earlier. Task sizes and a track context guard
+also changed in those days, so this is the combined effect of the setup, not of the setting alone.
+
+**Why size matters.** In the main chats of late September, when they still ran long, a turn at 500k or more cost about
+2.9 times a turn at 100k to 200k, in the same model and the same days. The cost line above, extended that far, gives
+about 3.1 times at 500k to 800k and about 4.1 times at 800k to 1M.
+
+**Subagents are covered too.** Subagents compact automatically as their own window fills, and they inherit the
+session's window ([Claude Code docs](https://code.claude.com/docs/en/sub-agents)). The data shows it: the largest
+subagent context fell from 907k to under 275k. On top of that, a Ravenseat track delivers PARTIAL at its second
+compaction or at 280k. Setup writes `autoCompactWindow: 300000` to the project's `.claude/settings.json`, so it applies
+to every session in the project: your own chats, the orchestrator and all subagents. The guided setup asks first, and
+an existing value of your own is kept.
+
+**Many small fresh chats are a real alternative.** At the same size, compacting cost about the same as starting a new
+chat and reading a handover note in again, and after a compaction the orchestrator started its first agent after
+about 6 turns, against about 17 turns in a new chat. In tokens, what matters is how large a chat gets before it is
+reset, not how it is reset, so small chats do not cost more in tokens. What they cost is the handover by hand each time,
+the overview spread over many chats, and no safe way to run them in parallel.
+
+**The queue against one chat compacted at 300k.** Both count their subagents (in the one chat, 61 % of its spend was
+its own subagents). The queue was cheaper per turn in every week: 0.059 against 0.068 USD in the last week measured,
+0.061 against 0.077 over all 19 days. Per commit it was mixed: cheaper in the last week (3.33 against 4.76 USD), about
+15 % more expensive over all 19 days (3.50 against 2.95). Checks and review were about a third of the queue's spend.
+Without them, over the 19 days, the queue cost 2.36 against 2.60 USD per commit (about 9 % cheaper) and 8.0 against
+7.0 per 1,000 lines (about 14 % more expensive).
+
+**What this means if you come from a 1M chat.** Most of the saving comes from compaction at 300k, which setup turns on
+for you (you could also set it by hand). The queue itself is about cost-neutral for building and steering, and the
+checks come on top, as much as you choose to run. Its value is the structure, the parallel work and the safety, not a
+second token saving.
+
+All amounts are API-equivalent at list price. On a subscription they are quota, not dollars.
+
+For experts: a turn is one message id from the transcript, counted once, context = input + cache write + cache read,
+priced at the Opus list price; the tables, the dates of each change and the method are in
+[costs](plugin/docs/costs.md#measured-the-same-project-before-and-after-compaction-at-300k), and `ravenseat cost` shows
+your own split, including the share of cost from turns above 200k. `ravenseat doctor` warns when the instructions
+Claude loads at start pass 200 lines in a file or 40,000 characters in total.
+
+### State lives in files, not in the chat
+
+**The orchestrator's cost per finished task halved, with the same number of steps, because its context shrank: from
+1.36 to 1.57 USD to 0.64 to 0.80** (late September against mid-October 2026, at 9 to 14 turns per task). It later rose
+again to about 1.4 USD as the turns per task about doubled. After a compaction it was back to starting agents after
+about 6 turns, against about 17 turns in a new chat that read a handover note.
+
+The queue, each task's mission, the project catalog and the plan register are plain files in your repo. An agent
+reads a short mission that lists the files to read first, not the conversation that led to it. When the orchestrator
+is compacted, a hook adds back the queue, the open questions and the short "Now" part of the handover note (at most
+40 lines), read from the files and not from the summary. Older handover entries move to a monthly archive that is read
+only when needed. A crash, a compaction or a second chat loses nothing that matters.
+
+For experts: a `SessionStart` hook on `compact` and a `PreCompact` hook do the re-injection
+([orchestration](plugin/docs/orchestration.md), [costs](plugin/docs/costs.md#measured-compacting-the-orchestrator-against-starting-a-new-chat)).
+
+### Long projects, kept in order
+
+**About 1,200 tasks were finished and costed in three weeks of October 2026** (in the larger private project;
+[costs](plugin/docs/costs.md#measured-median-cost-per-finished-task-subagents-only)).
+
+- **Plans** go in a plan register, and tasks link back to the plan entry they came from (`--plan <id>`). A track that
+  finds something outside its task files it there as a finding instead of building it.
+- **Focus** says which areas to finish now; the queue finishes those tasks, fixes included, before new feature work,
+  and other tasks fill only the slots left free.
+- **Decisions** wait in one list, each with a recommendation and the work it blocks; accepted design choices go in the
+  catalog and into the missions that touch them.
+- **History** stays: each task keeps its changes, owner answers and cost, and a task's finish line is locked when it
+  starts.
+
+For experts: focus, value-based order and helper reviewers are full mode; lite mode keeps the core loop only
+([full mode](plugin/docs/full-mode.md), [plan register](plugin/docs/plan-register.md)).
+
+### Security that does not depend on the model remembering
+
+**244 red team tests on real git and real processes: 243 passed and 1 was skipped in the last run (2026-11-18). For
+32 guarantees the guard was switched off and the test shown to fail.**
+
+Instructions in `CLAUDE.md` and in skills are advice. They compete with everything else in the context, a long file is
+followed less well than a short one, and text an agent reads can argue against them. So Ravenseat runs the rules that
+matter as code, on every action:
+
+- the result of your checks comes from Ravenseat's own run on the delivered commit, never from the agent's report;
+- agents cannot push, and cannot write `CLAUDE.md`, `.claude/`, git hooks, git config or the queue config;
+- a change to protected paths (CI config, lockfiles, Ravenseat's own scripts) stops the merge unless the task owns it;
+- an override from the orchestrator opens Claude Code's permission dialog, so a line in a report cannot approve it.
+
+It works with any stack whose checks run from a command line: your gates are your own commands. The Checks tab reads
+your CI config and manifests, runs nothing, and suggests the checks you lack; about 30 stack packs add the risky calls
+of frameworks such as Django, Rails, Next.js or Spring to review. A failure that comes back becomes a proposal for a
+new check, built only on your yes. The full list is under [Guarantees enforced by code](#guarantees-enforced-by-code).
+
+For experts: the guards are `PreToolUse` hooks on shell, Read and Write/Edit; the evidence is keyed to the commit sha,
+a clean tree and a hash of the check commands. Guard rails, not a sandbox: agents run as your OS user, and a script an
+agent writes and then runs is not read ([red team](plugin/docs/redteam.md), [Checks tab](plugin/docs/checks.md)).
+Run `npm run redteam` to check it yourself.
+
+### Parallel work, merged safely
+
+**Several agents build at once, and merges still happen one at a time, each only on a green check run for that exact
+commit.**
+
+1. Each task runs in its own git worktree, so agents never share files on disk. In full mode, two tasks that own the
+   same file never run at the same time.
+2. While tracks run, the queue predicts conflicts between their branches and the base and suggests a merge order.
+3. `receive` runs your quick checks in the agent's worktree and records the result for that commit, then builds a
+   review package for the reviewers the task calls for.
+4. `merge` takes one branch at a time and first runs a trial merge in memory. Conflicts git's text merge resolves are
+   merged; a file that needs a hand fix stops the merge before the checkout is touched, and the task records the files
+   and the other tasks that touched them, so the fix round starts with that list.
+5. The base branch is checked after every merge. A red base stops further merges and gets a fix task. Work an agent
+   called unfinished is merged only on your word.
+
+A load guard starts fewer agents as free memory drops: in the larger private project, with up to 14 agents allowed at
+once, the median quick check took 1,244 s against 110 s ten days earlier, as free memory ran out
+([machine load](plugin/docs/full-mode.md#my-pc-chokes-on-parallel-builds)).
+
+For experts: conflict prediction and the trial merge use `git merge-tree --write-tree` (git 2.38 or newer, objects
+only, never the index or a ref); merges hold a lock; a push is blocked when the base is red or commits from outside the
+queue are in it ([how a task flows](#how-a-task-flows), [orchestration](plugin/docs/orchestration.md)).
 
 ## What Ravenseat does
 
@@ -117,7 +257,7 @@ the [red team page](plugin/docs/redteam.md).
 
 More in [a task](plugin/docs/queue.md#a-task) and [the wiring spec](plugin/docs/orchestration.md#the-wiring-spec-stops-done).
 
-### Machine load and token cost
+### Machine load
 
 - **Load guard.** Fewer new tracks start as free memory drops below 40 %, and none below 10 %; running tracks are not
   stopped. `ravenseat machine` suggests how many your machine can take.
@@ -126,14 +266,9 @@ More in [a task](plugin/docs/queue.md#a-task) and [the wiring spec](plugin/docs/
   then a track's own.
 - **No processes left behind.** A command over its time budget is ended with its whole process tree (`taskkill /T` on
   Windows, the process group elsewhere), also when the process that started it dies.
-- **Cache-aware waiting.** Long calls return within 280 seconds with one line and the command to keep waiting, so the
-  orchestrator's 5-minute prompt cache does not expire while it waits. Subagents are set to a 1-hour cache.
-- **Small contexts.** Each mission starts with the files to read in the first turn; a track hands over at about 280k
-  tokens or at its second compaction; `ravenseat doctor` warns when the instructions Claude loads at start pass 200
-  lines in a file or 40,000 characters in total. Spend and the daily budget are under
-  [What does it cost in tokens?](#what-does-it-cost-in-tokens)
 
-More in [machine load](plugin/docs/full-mode.md#my-pc-chokes-on-parallel-builds),
+Token use is under [Fewer tokens per turn](#fewer-tokens-per-turn), and spend and the daily budget under
+[What does it cost in tokens?](#what-does-it-cost-in-tokens) More in [machine load](plugin/docs/full-mode.md#my-pc-chokes-on-parallel-builds),
 [the queue for heavy gates](plugin/docs/queue.md#the-queue-for-heavy-gates) and [costs](plugin/docs/costs.md).
 
 ### Learning from repeated failures
@@ -192,7 +327,9 @@ Start in lite mode, the core loop only; [full mode](plugin/docs/full-mode.md) ad
 You need Node.js 20 or newer and git.
 
 **2. Set up your project.** Ask Claude: *"Set up the queue."* (`/ravenseat:setup`, the guided setup that also finds your
-checks). Not sure yet? Ask Claude to run `ravenseat kickstart` or `ravenseat doctor` first: they show what they find
+checks). It asks before it adds the recommended settings to `.claude/settings.json`. One of them sets automatic
+compaction at 300k (`autoCompactWindow: 300000`) for every Claude Code session in the project, your own chats and
+all subagents included; an existing value of your own is kept. Not sure yet? Ask Claude to run `ravenseat kickstart` or `ravenseat doctor` first: they show what they find
 and change nothing. For a minimal setup without the guide, see [lite mode in more detail](plugin/docs/guide.md#lite-mode-in-more-detail)
 (`ravenseat init`).
 
@@ -226,21 +363,10 @@ one click on the board. Typical decisions: unclear requirements, security tradeo
 approval, and tasks still blocked after a fix attempt. The board is optional: a local page with the same project state,
 opened with `/ravenseat:board` ([a tour of the board](plugin/docs/board.md#a-tour)).
 
-## Agents don't grade their own homework
-
-An agent that writes the code and then reports that it works is not proof that a change is ready. Ravenseat treats
-every agent as an untrusted worker and keeps those two jobs apart: what the code enforces is listed under
-[Guarantees enforced by code](#guarantees-enforced-by-code), and what it does not under [Known limits](#known-limits).
-Ravenseat amplifies a strong test suite; it cannot make up for a missing one. More in
-[full mode](plugin/docs/full-mode.md#agents-cheat-on-tests) and [orchestration](plugin/docs/orchestration.md).
-
-Each answer in the [FAQ](plugin/docs/faq.md) names the tests behind it. The tests run on real git repositories and
-real processes, and for the main guarantees each guard was removed in turn to show that its test then fails. The [red team page](plugin/docs/redteam.md) lists what was found and what the tests cannot
-show. Run `npm run redteam` to check it yourself.
-
 ## What does it cost in tokens?
 
-A queue turn costs no more than a turn in one chat. The checks come on top, and they cost what your checks cost:
+The cost per turn and per commit against one chat compacted at 300k is under
+[Fewer tokens per turn](#fewer-tokens-per-turn). The checks come on top of a turn, and they cost what your checks cost:
 your tests, plus a reviewer on the tasks that need one. In the measured repo they were about a third of the queue's
 spend, because it has a very heavy test suite (over a thousand database security probes and many check scripts) and
 a reviewer on almost every task. A lighter suite costs less. The same suite run by hand in one chat would cost about
@@ -253,8 +379,6 @@ and moving large files, which gives many cheap commits and lines.
 
 | | By hand in one chat | With the queue |
 |---|---|---|
-| Cost per turn | about 0.07 USD | about 0.06 USD |
-| Cost per commit, checks included | about 4.8 USD | about 3.3 USD |
 | Cost per 1,000 inserted lines | about 12 USD | about 12 USD |
 | Spent on checks (tests and review) | about 6 % in tests, plus a few assessment agents | about 30 %, from a very heavy test suite and a reviewer on almost every task |
 | While you are away | the chat waits for your next message | agents keep building, checking and merging |
@@ -264,10 +388,6 @@ The chat column is this repo, built in one long chat that I followed closely. Th
 the queue ran on its own, with a heavy test suite and a reviewer on almost every task. Over about 1,200 measured
 tasks in October, an ordinary code task cost a median of about 2.5 USD (API-equivalent); code tasks were rarely
 reviewed then, and the latest window and the other classes are on the [costs](plugin/docs/costs.md) page.
-
-Both columns are set to compact automatically at 300k (in practice at about 270k). Claude Code's default lets a chat grow toward its full window before
-it compacts, and that is what gets expensive: a turn at over 500k tokens cost about 2.7 times a turn at 100k to 200k.
-That is why tracks hand over early and state lives in files ([machine load and token cost](#machine-load-and-token-cost)).
 
 One week, two different repos, one developer, same model and settings: not a controlled benchmark. Over all 19 days the
 chat came out cheaper per commit, from those early weeks. Run `ravenseat cost` to see the numbers in your own project.
