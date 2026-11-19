@@ -5,6 +5,10 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the view tabs keep their place when chosen.** Layout hardening. Flat, Project lanes, Focus,
+  Dependencies, Cloud and Statistics turn bold when chosen, which made the tabs after them move a few pixels. They
+  now use the same width-keeping label as the room tabs, the Focus tab too when its end badges are drawn.
+
 - **Docs: clearer token numbers, with the method published.** Docs hardening, no code change. The README opens with
   "Why it holds up" (tokens, state in files, long projects, security, parallel merging). The token section starts from
   a cost line (a turn costs about 0.02 USD plus about 0.02 USD per 100k tokens of context, Opus 5.5, 8,031 turns) and

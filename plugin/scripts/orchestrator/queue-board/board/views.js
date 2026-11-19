@@ -147,7 +147,8 @@ function focusEndBadges(f) {
 }
 function drawFocusTab(f) {
   const tab = $('show-plan');
-  tab.replaceChildren('Focus', ...focusEndBadges(f));
+  // The bold-width label (tabLabel in core.js), so choosing Focus does not move the tabs after it.
+  tab.replaceChildren(tabLabel('Focus'), ...focusEndBadges(f));
 }
 
 /**

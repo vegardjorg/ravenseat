@@ -44,6 +44,13 @@ for (const [id, name] of [
   if (!tab || tab.querySelector('svg.icon')) continue;
   tab.replaceChildren(icon(name), tabLabel(tab.textContent.trim()));
 }
+// The view tabs (Flat, Project lanes, Focus, Dependencies, Cloud, Statistics) are bold when chosen too, so their text
+// goes in the same width-keeping label: choosing a view no longer moves the tabs after it by a few pixels.
+for (const id of ['show-flat', 'show-lanes', 'show-plan', 'show-graph', 'show-cloud', 'show-statistics']) {
+  const tab = $(id);
+  if (!tab || tab.querySelector('.tab-label')) continue;
+  tab.replaceChildren(tabLabel(tab.textContent.trim()));
+}
 // The status text is clipped with an ellipsis when it is long (board.css .status), so its full text is also the
 // tooltip. One observer covers every place that sets it (api.js, interact.js, views.js); the live region still
 // gives a screen reader the whole text.

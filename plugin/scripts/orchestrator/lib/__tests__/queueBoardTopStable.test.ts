@@ -342,7 +342,8 @@ describe('B27: a stable layout', () => {
 
   it('choosing a room never widens its tab: the label keeps its bold width, the Checks dot is out of the flow', async () => {
     // Measured before: "Waiting on you" moved 1 px in Decisions because the chosen tab turned bold.
-    for (const id of ['room-plans', 'room-queue', 'show-decisions', 'show-checks']) {
+    // The view tabs turn bold when chosen too (owner QA 19.11: they moved a few pixels), so they keep the same label.
+    for (const id of ['room-plans', 'room-queue', 'show-decisions', 'show-checks', 'show-flat', 'show-lanes', 'show-plan', 'show-graph', 'show-cloud', 'show-statistics']) {
       const label = $(id).querySelector('.tab-label') as HTMLElement | null;
       expect(label, id).not.toBeNull();
       expect(label!.dataset.label).toBe(label!.textContent);
