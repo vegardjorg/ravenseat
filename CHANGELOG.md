@@ -16,7 +16,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   chat climbs to about 268k and starts again), in the README, `costs.md` and the GIF. The queue against one chat
   compacted at 300k now also shows the figures without checks and review, and small fresh chats are described as not
   costing more in tokens (the reset size is the lever). The orchestrator's cost per task is given both ways: it halved as its
-  context shrank and later rose as turns per task doubled. All amounts are marked API-equivalent at list price.
+  context shrank and later rose as turns per task went from about 13 to 22 (about half from fewer tracks in parallel, the rest from more
+  review and checking per task). All amounts are marked API-equivalent at list price.
   `costs.md` has two new sections, "The same project before and after compaction at 300k" and "Cost per turn by
   context size", each with n, dates and how a turn's cost is computed. The README and the setup step now say that
   `ravenseat setup --settings` sets `autoCompactWindow: 300000` for every session in the project, the user's own chats

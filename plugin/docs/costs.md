@@ -122,9 +122,13 @@ project, against about 800 of 873 D tasks), so the K median is close to build co
 **Orchestrator on top.** The orchestrator's cost per finished task halved when its context shrank, with the same
 number of steps: 1.36 to 1.57 USD per task on 28 and 30 September, when it ran toward 1M (mean context per turn 480k
 to 575k), against 0.64 to 0.80 USD from 7 to 14 October (173k to 196k; compaction at 300k from 8 October), at 9.4 to 13.5 turns per
-task throughout. It later rose again as the turns per task about doubled: in the 14 days from 2026-11-05 it cost about
-563 USD over 8,133 turns for about 376 to 403 finished tasks (time log and queue file), about 1.4 to 1.5 USD and about
-21 turns per finished task, night pulses and dialogue with the developer included.
+task throughout. It later rose again: in the 14 days from 2026-11-05 it cost about 563 USD over 8,133 turns for about
+376 finished tasks, about 1.5 USD and about 22 turns per finished task, night pulses and dialogue with the developer
+included. Measured the same way (all orchestrator turns of the days over the tasks finished in them), it was about 13
+turns per task from 7 October to 5 November and about 22 after, a step in the week of 2 November. About half of the
+rise came from running fewer tracks in parallel (the cap went from 14 to between 0 and 4, so about 220 coordination
+turns a day were spread over 29 finished tasks a day instead of 67), and the rest from more review, fix rounds and
+checking per task. The task mix explains none of it, and cost per turn barely moved (0.066 to 0.069 USD).
 
 Cost per task drifts. By the same done date, the D median went from about 5.2 USD to 6.9 (2026-10-28 to 11-03, n 139)
 and 11.9 (2026-11-04 to 11-11, n 131); in that last window K was about 3.8 (n 57), D+ 11.7 (n 24) and U 1.7 (n 7),

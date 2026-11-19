@@ -110,7 +110,8 @@ Claude loads at start pass 200 lines in a file or 40,000 characters in total.
 
 **The orchestrator's cost per finished task halved, with the same number of steps, because its context shrank: from
 1.36 to 1.57 USD to 0.64 to 0.80** (late September against mid-October 2026, at 9 to 14 turns per task). It later rose
-again to about 1.4 USD as the turns per task about doubled. After a compaction it was back to starting agents after
+again to about 1.5 USD as the turns per task went from about 13 to 22, mostly because fewer tracks ran in parallel
+(the same daily coordination spread over fewer tasks) and each task got more review and checking. After a compaction it was back to starting agents after
 about 6 turns, against about 17 turns in a new chat that read a handover note.
 
 The queue, each task's mission, the project catalog and the plan register are plain files in your repo. An agent
