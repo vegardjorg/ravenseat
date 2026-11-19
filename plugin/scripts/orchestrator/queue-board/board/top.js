@@ -30,6 +30,32 @@ function setTheme(option) {
 }
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTheme());
 
+// ---- The room tabs and the status (board steps B6 and B27) ----
+// Each room tab gets a 16 px icon before its text, and the text goes in a label that keeps the width of its bold form
+// (tabLabel in core.js). The icon is aria-hidden, so the tab's name, its role and the arrow keys of the tab list are
+// unchanged. Decisions redraws its own tab (drawDecisionsTab in board/decide.js) the same way.
+for (const [id, name] of [
+  ['room-plans', 'tab-plans'],
+  ['room-queue', 'tab-queue'],
+  ['show-decisions', 'tab-decisions'],
+  ['show-checks', 'tab-checks'],
+]) {
+  const tab = $(id);
+  if (!tab || tab.querySelector('svg.icon')) continue;
+  tab.replaceChildren(icon(name), tabLabel(tab.textContent.trim()));
+}
+// The status text is clipped with an ellipsis when it is long (board.css .status), so its full text is also the
+// tooltip. One observer covers every place that sets it (api.js, interact.js, views.js); the live region still
+// gives a screen reader the whole text.
+{
+  const status = $('status');
+  const copy = () => {
+    status.title = status.textContent;
+  };
+  new MutationObserver(copy).observe(status, { childList: true, characterData: true, subtree: true });
+  copy();
+}
+
 /** The help lives in the gear. The button switches the panel's content to "How to use the board". */
 function helpSection() {
   return el(

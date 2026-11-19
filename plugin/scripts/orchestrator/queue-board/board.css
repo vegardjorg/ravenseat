@@ -25,6 +25,9 @@
   --distance-md: 16px;
   --distance-lg: 24px;
   --focus: 2px solid var(--color-primary);
+  /* The top's fixed height from 721 px up (B16): padding 6 + row 50 + gap 4 + row 50 + padding 6 + the 1 px border.
+     The panel beside the board starts below it. */
+  --top-height: 117px;
 }
 
 * {
@@ -67,16 +70,20 @@ textarea {
 
 /* ---- The top: title, status, search, view, theme, filters ---- */
 
-/* A grid in two rows (6 + 48 + 4 + 48 + 6 = 112 px) with the mascot spanning both rows.
+/* A grid in two FIXED rows (6 + 50 + 4 + 50 + 6 + the 1 px border = 117 px, --top-height) with the mascot spanning both
+   rows. Fixed tracks, not auto (B16): Plans hides row 2, and with auto rows the mascot's 104 px were spread over one
+   row instead of two, so row 1 sat 1 px higher in Plans and the top changed height with what wrapped in each room.
+   The rows never wrap from 721 px up: what varies in length gives way (the title and the status clip, the search
+   shrinks, the view tabs scroll in their row below 1200 px); only the phone rule (720 px) lets them grow.
    The mascot sits in the LEFT corner. To move it right, change only `grid-template` below to
-   "row1 mascot" auto "row2 mascot" auto / minmax(0, 1fr) auto (the bubble does not follow automatically; see .bubble). */
+   "row1 mascot" 50px "row2 mascot" 50px / minmax(0, 1fr) auto (the bubble does not follow automatically; see .bubble). */
 .top {
   flex: none;
   position: relative; /* the anchor for the speech bubble */
   display: grid;
   grid-template:
-    'mascot row1' auto
-    'mascot row2' auto / auto minmax(0, 1fr);
+    'mascot row1' 50px
+    'mascot row2' 50px / auto minmax(0, 1fr);
   column-gap: var(--distance-md);
   row-gap: 4px;
   background: var(--color-surface-container-lowest);
@@ -88,8 +95,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: var(--distance-md);
-  flex-wrap: wrap;
-  min-height: 48px;
+  flex-wrap: nowrap;
+  height: 50px;
   min-width: 0;
 }
 
@@ -221,18 +228,33 @@ textarea {
   }
 }
 
+/* The title is plain text (B6: the accent is for what you can press, not decoration). It clips before it pushes. */
 .title {
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
   font-size: var(--text-lg);
   line-height: 28px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* The status ("Updated at ...", "Checks: 3 of 4 in place", an error) varies in length, so it comes last in row 1,
+   right before the gear, and is clipped with an ellipsis (the full text is its tooltip, set in board/top.js; a
+   screen reader gets the live region's whole text). It never moves "Waiting on you" or the gear (B27). */
 .status {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 360px;
   margin: 0;
   color: var(--color-on-surface-variant);
   font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status.error {
@@ -240,7 +262,11 @@ textarea {
   font-weight: 600;
 }
 
+/* In the top the search is the part that gives way: 260 px, shrinking to 120 px before anything else (for example when
+   "Select all matches" appears), so row 2 never wraps. */
 .search {
+  flex: 0 1 260px;
+  min-width: 120px;
   min-height: 36px;
   width: 260px;
   max-width: 60vw;
@@ -330,6 +356,44 @@ textarea {
   font-weight: 600;
 }
 
+/* The room tabs (Plans, Queue, Decisions, Checks): a fixed width at the start of row 1, each with a 16 px icon before its
+   text (B6; the icon is aria-hidden, the text names the tab). :not([hidden]) so a module that is off keeps its tab gone.
+   The underline on the chosen tab says which room is open; there is no colored line under the top. */
+.room-option {
+  flex: none;
+}
+
+.room-option .toggles-button:not([hidden]) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--distance-xs);
+}
+
+/* The label is as wide as its bold form: a hidden copy in 600 below the text, 0 px high. So the chosen tab (600) is
+   no wider than it was unchosen, and nothing after the tabs moves when the room changes (B27). */
+.tab-label {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tab-label::after {
+  content: attr(data-label);
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 600;
+}
+
+/* The marker dot on the Checks tab sits in the tab's corner, out of the flow, so it does not widen the tab. */
+.room-option .toggles-button.has-marker::after {
+  position: absolute;
+  top: var(--distance-xs);
+  right: 0;
+  margin-left: 0;
+}
+
 /* The small red dot on the Checks tab: a high suggestion is open (state.checksMarker; ravenseat checks marker off hides it). */
 .toggles-button.has-marker::after {
   content: '';
@@ -350,6 +414,8 @@ textarea {
 /* ---- Search and the Filter menu (the logo sits in the mascot zone above) ---- */
 
 .search-filter {
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--distance-sm);
@@ -505,7 +571,11 @@ textarea {
 
 /* ---- Board ---- */
 
+/* position: relative contains the absolutely positioned screen-reader text (.hidden-for-eye) in the board. Without it
+   such a span was placed against the page and made the page itself scroll in Statistics; the page scrollbar then
+   moved the right side of the top 15 px (B16). */
 .board {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -1118,7 +1188,13 @@ details[open] > summary > .fold-chevron::before {
     padding-right: var(--panel-side);
   }
   body.panel-beside .panel {
+    top: var(--top-height);
     width: var(--panel-side);
+  }
+  /* The top keeps the full width (B16): it reaches over the room made for the panel, and the panel starts below it,
+     so opening a card neither narrows nor rewraps the top, and the gear stays where it was. */
+  body.panel-beside .top {
+    margin-right: calc(-1 * var(--panel-side));
   }
   /* The messages center over the board, not under the panel. */
   body.panel-beside .toaster {
@@ -2141,25 +2217,26 @@ body.with-option-line .toaster {
 
 /* ---- The "Waiting on you" button ---- */
 
+/* A fixed place right after the room tabs (B27): nothing before it changes length. */
 .inbox-button {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: var(--distance-sm);
   padding: 0 var(--distance-md);
 }
 
-.inbox-button.active {
-  border-color: var(--color-primary);
-}
-
+/* The counter is the warning tone (something waits on you), not a filled accent (B6). The button itself stays a plain
+   secondary button; the count carries the signal. The same counter sits on the Decisions group headings. */
 .inbox-count {
   min-width: 22px;
   height: 22px;
   padding: 0 var(--distance-sm);
   border-radius: var(--radius);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--color-tone-warn);
+  color: var(--color-on-tone-warn);
   font-size: var(--text-xs);
+  font-weight: 600;
   line-height: 22px;
   text-align: center;
 }
@@ -2182,12 +2259,38 @@ body.with-option-line .toaster {
   display: none;
 }
 
+/* One row of fixed height (B27): "Next up" on the left and, while a card is chosen, the chain line on the right of the
+   same row. Opening a card used to add a second row and push the whole board 38 px down. The "Next up" chips give
+   way (they shrink and clip); the chain line keeps its text. */
 .stripe-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--distance-sm) var(--distance-sm);
-  min-height: 36px;
+  height: 36px;
+}
+
+.stripe-next {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--distance-sm);
+  overflow: hidden;
+}
+
+.stripe-next .stripe-name {
+  flex: none;
+  white-space: nowrap;
+}
+
+.chain-line {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--distance-sm);
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .stripe-name {
@@ -2204,6 +2307,8 @@ body.with-option-line .toaster {
 }
 
 .next-summary {
+  flex: 0 1 auto;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: var(--distance-sm);
@@ -2234,20 +2339,21 @@ body.with-option-line .toaster {
   white-space: nowrap;
 }
 
-/* The legend in the chain line: the same ring as on the cards. */
+/* The legend in the chain line: a short line piece in the ring color of the cards (a framed square read as an empty
+   checkbox). */
 .draw-chain {
-  width: 14px;
-  height: 14px;
-  border-radius: var(--radius);
-  border: 1px solid var(--color-outline-variant);
+  flex: none;
+  width: 16px;
+  height: 0;
+  border-top: 3px solid var(--color-outline-variant);
 }
 
 .chain-for-draw {
-  box-shadow: 0 0 0 2px var(--color-secondary);
+  border-top-color: var(--color-secondary);
 }
 
 .chain-after-draw {
-  box-shadow: 0 0 0 2px var(--color-tertiary);
+  border-top-color: var(--color-tertiary);
 }
 
 .chain-explanation {
@@ -2510,12 +2616,49 @@ body.with-option-line .toaster {
   }
 }
 
+/* ---- Medium width: the compact top and narrower columns below 1200 px (B26) ----
+   A half-screen window on a PC (1000 to 1199 px) is not a phone: the top keeps its two fixed rows and the columns stay
+   side by side. Row 1 drops the room icons and clips the status sooner; in row 2 the search starts at 160 px and the
+   view tabs scroll in their own row (with room for the focus ring) before anything could wrap. Four columns fit at
+   1000 px (4 x 220 + 3 x 16 + 2 x 24 = 976). After the base rules and before the phone rules, so both cascade right. */
+@media (max-width: 1199px) {
+  .room-option .icon {
+    display: none;
+  }
+  .status {
+    max-width: 240px;
+  }
+  .top .search {
+    flex-basis: 160px;
+  }
+  .top-row2 .toggles {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    padding: var(--distance-xs);
+    margin: 0 calc(-1 * var(--distance-xs));
+  }
+  .top-row2 .toggles-button {
+    flex: none;
+  }
+  .board.flat {
+    grid-template-columns: repeat(var(--columns, 4), minmax(220px, 480px));
+  }
+  .lane-headers,
+  .lane-row {
+    grid-template-columns: repeat(var(--columns, 4), minmax(220px, 1fr));
+  }
+}
+
 /* The top on a phone (below 720 px): the mascot becomes 56 px high and sits at the top, the rows wrap, the tabs get
    their own row that scrolls sideways (overflow-x on the row, never on the page), and the bubble becomes a toast below the top.
    No part of the top is wider than the viewport at 375 px (checked in lib/__tests__/queueBoardTop.test.ts). */
 @media (max-width: 720px) {
+  /* The only place where the rows of the top may grow and wrap (the fixed rows are for 721 px and up). */
   .top {
     column-gap: var(--distance-sm);
+    grid-template-rows: auto auto;
   }
   .mascot {
     align-self: start;
@@ -2525,6 +2668,20 @@ body.with-option-line .toaster {
   }
   .top-row {
     gap: var(--distance-sm);
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 48px;
+  }
+  /* The strip may take a second row on a phone: the chain line goes below "Next up". */
+  .stripe-row {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 36px;
+  }
+  .chain-line {
+    flex-wrap: wrap;
+    margin-left: 0;
+    white-space: normal;
   }
   .top .toggles {
     flex: 1 1 100%;
@@ -3426,8 +3583,11 @@ body.with-option-line .board {
 /* ---- The focus line, grouping, views, help, the plan view and "Sort" ---- */
 
 /* The focus line below the top: same surface as the "Next up" strip, with a warning color when the focus has nothing ready. */
+/* min-height: one row (36 px, the padding and the border) from the first paint, also before the first state, so
+   the board does not jump down when the data arrives (B27). */
 .focusLine {
   flex: none;
+  min-height: 45px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -4390,6 +4550,13 @@ fieldset.setting legend {
 }
 .decide-card.current {
   border-color: var(--color-primary);
+}
+/* One filled button per view (B6): the recommendation is filled only on the current card (the one Enter answers); on
+   the other cards it is drawn as a secondary button. The class stays, so the order and the keys are unchanged. */
+.decide-card:not(.current) .button-filled {
+  background: var(--color-surface-container-lowest);
+  border-color: var(--color-outline);
+  color: var(--color-on-surface);
 }
 .decide-card-head {
   display: flex;

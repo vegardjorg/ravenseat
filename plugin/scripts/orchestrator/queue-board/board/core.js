@@ -325,6 +325,59 @@ const ICONS = {
       { cx: 12, cy: 12, r: 5.25, fill: 'none', stroke: 'currentColor', 'stroke-width': 3 },
     ],
   ],
+  // The room tabs (B6), each before its text: Plans a page with a folded corner, Queue a list, Decisions a speech
+  // bubble (an owner question reads like a chat), Checks a shield with a tick. The tab- prefix keeps the class
+  // (icon tab-plans) clear of the board's own classes.
+  'tab-plans': [
+    [
+      'path',
+      {
+        d: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': 2,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+      },
+    ],
+  ],
+  'tab-queue': [
+    [
+      'path',
+      {
+        d: 'M4 6h16M4 12h16M4 18h10',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': 2,
+        'stroke-linecap': 'round',
+      },
+    ],
+  ],
+  'tab-decisions': [
+    [
+      'path',
+      {
+        d: 'M4 5h16v11H10l-5 4v-4H4z',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': 2,
+        'stroke-linejoin': 'round',
+      },
+    ],
+  ],
+  'tab-checks': [
+    [
+      'path',
+      {
+        d: 'M12 3l7 3v5c0 4.5-3 7.5-7 10-4-2.5-7-5.5-7-10V6zM9 12l2 2 4-4',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': 2,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+      },
+    ],
+  ],
 };
 function icon(name, label) {
   const ns = 'http://www.w3.org/2000/svg';
@@ -341,6 +394,14 @@ function icon(name, label) {
     s.append(d);
   }
   return s;
+}
+
+/**
+ * A room tab's text. It reserves the width of its bold form (the chosen tab is in 600, board.css .tab-label), so
+ * choosing a room never moves "Waiting on you" or anything else after the tabs (B27).
+ */
+function tabLabel(text) {
+  return el('span', { class: 'tab-label', 'data-label': text, text });
 }
 
 /** "14 min", "3 h 12 min", "4 d" (display only). */

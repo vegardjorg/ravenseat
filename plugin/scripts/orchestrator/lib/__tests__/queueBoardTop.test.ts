@@ -178,7 +178,7 @@ describe('the top: the markup in the top', () => {
     expect(top).toMatch(/<div id="mascot" class="mascot empty"><\/div>/);
   });
 
-  it('row 1 has title, status, "Waiting on you" and the gear; row 2 has the tabs, the search and the grouping', () => {
+  it('row 1 has "Waiting on you", title, status and the gear; row 2 has the tabs, the search and the grouping', () => {
     const row1 = top.slice(top.indexOf('top-row1'), top.indexOf('top-row2'));
     const row2 = top.slice(top.indexOf('top-row2'));
     for (const id of ['status', 'inbox', 'settings']) expect(row1).toContain(`id="${id}"`);
@@ -221,8 +221,9 @@ describe('the top: grid and phone', () => {
   it('the top is a grid with the mascot over both rows, in one line that switches sides', () => {
     const top = rules.find((r) => r.media === null && r.selectors.includes('.top'));
     expect(top?.decl.display).toBe('grid');
+    // Two fixed rows (B16, see queueBoardTopStable.test.ts): the same height in every room.
     expect(top?.decl['grid-template']).toMatch(
-      /'mascot row1' auto\s+'mascot row2' auto \/ auto minmax\(0, 1fr\)/,
+      /'mascot row1' 50px\s+'mascot row2' 50px \/ auto minmax\(0, 1fr\)/,
     );
   });
 

@@ -99,6 +99,16 @@ The plan register, the priority map, dark mode and the settings panel are shown 
 
 The switch at the top left changes between two workspaces, **Queue** and **Plans**.
 
+**The top bar** has two rows of fixed height and looks the same in every room, so nothing in it moves when you switch
+rooms or views. Row 1 is the room tabs (Plans, Queue, Decisions, Checks, each with an icon), then **Waiting on you**,
+the project title, the status ("Updated at ...", the checks count or an error) and the gear. The status comes last
+and is cut short with an ellipsis when it is long; hover it for the full text. Row 2 is the view tabs, the search,
+Filter, Selection and the grouping; in Plans it stays empty. Below about 1200 px (a half-screen window) the top turns
+compact: the room tabs drop their icons, the search starts narrower and the view tabs scroll sideways in their row
+instead of wrapping, and the columns narrow to 220 px so four fit at 1000 px. On a phone (720 px and below) the rows
+wrap as before. The focus line and the "Next up" strip keep their height: choosing a card puts its chain into the
+"Next up" row instead of adding a row, so the board does not move down.
+
 The Queue workspace has these tabs:
 - **Flat:** the columns **In queue** (ready now, blocked, proposed by agents and the batch queue), **In progress**,
   **Review** and **Built**. Each card shows class, estimate, value, blockers and owner questions. Click a card for
@@ -165,7 +175,8 @@ in this browser. The short line is the first paragraph under a heading such as "
 "Purpose", "Background" or "Summary" (or a bold `**Goal:**` label) in the mission; without one it is the first plain
 paragraph, skipping generated lines such as the `=====ID=====` marker, `TITLE:` and `BRANCH:` lines, headings and
 `**Ownership in the queue:**` blocks, and last the first list item. It is clipped at about 320 characters. From about
-1200 px wide the panel sits beside the board and is not modal: the board makes room for it and stays usable, a click
+1200 px wide the panel sits beside the board, below the top bar (which keeps its full width), and is not modal: the
+board makes room for it and stays usable, a click
 on another card shows that card in the panel, Esc closes it and focus goes back to the card. On a narrower screen it
 is a modal sheet over the board, as before.
 

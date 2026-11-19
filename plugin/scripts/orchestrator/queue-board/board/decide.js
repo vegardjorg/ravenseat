@@ -73,7 +73,7 @@ waitingButton?.addEventListener('click', () => openDecisions());
 /** The tab next to Plans and Queue. No count here: the count is on "Waiting on you" (one counter). */
 function drawDecisionsTab() {
   if (!decideTab) return;
-  decideTab.replaceChildren('Decisions');
+  decideTab.replaceChildren(icon('tab-decisions'), tabLabel('Decisions'));
   drawWaitingButton();
   drawRoomTabs();
 }

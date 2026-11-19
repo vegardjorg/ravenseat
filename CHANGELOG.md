@@ -5,6 +5,31 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board polish: a top bar that stays put, and a half-screen window that works.** The top had no fixed height: its
+  rows sized themselves to the mascot zone and to what wrapped, so row 1 sat 1 px higher in Plans (row 2 is hidden
+  there and the grid spread the mascot's 104 px over one row instead of two), and at about 1000 px the top was 117,
+  145, 153 or 185 px tall depending on the room, with the gear dropping under the logo and the grouping on a third
+  row. Opening the settings or a card beside the board at 1280 or 1440 px narrowed the top and wrapped it to 185 px,
+  and in Statistics a hidden screen reader text made the whole page scroll, so the right side of the top moved 15 px.
+  The top now has two fixed rows (117 px, the same in every room and at every width from 721 px up), and nothing in it
+  wraps: the title and the status clip with an ellipsis, the search shrinks first, and below 1200 px the room icons
+  go, the search starts at 160 px and the view tabs scroll in their own row. The page never scrolls (the board and the
+  Plans room contain their hidden text), and with the panel beside the board the top keeps its full width and the
+  panel starts below it. **Waiting on you** has a fixed place right after the room tabs; the status ("Updated at
+  ...", the checks count, an error), whose length varies, comes last before the gear with its full text as the
+  tooltip. A chosen room tab keeps its width (the bold label is reserved) and the Checks marker dot no longer widens
+  its tab, so the tabs, Waiting on you and the gear stand at the same x and y in every room. The flat and lane
+  columns narrow to 220 px below 1200 px, so four columns fit at 1000 px (before, Built ended up off screen). The
+  focus line keeps its height from the first paint (it used to appear after the first fetch and push the board 45 px
+  down), choosing a card puts its chain line into the "Next up" row instead of adding a row (the board moved 38 px
+  down), with short line pieces instead of empty squares as the before and after legend, and the Plans breadcrumb has
+  one height on every surface. The accent is calmer: the title is plain text, the counter on Waiting on you and on the
+  Decisions groups is the warning tone instead of filled blue, Decisions fills the recommended answer only on the
+  current card (the others show it as a secondary button, same order and keys), the room tabs get icons, and the
+  "working now" pulse in Plans runs three times and stops. Tests cover the fixed rows, the phone-only wrapping, the
+  page that never scrolls, the panel beside the top, the accent rules, the compact rules, the column fit at 1000 and
+  1100 px, the order in row 1, the clipped status and its tooltip, the reserved tab width, the focus line and the
+  one-row strip.
 - **Board polish: headings in sentence case, and folds that look and behave like folds.** Column and group headings,
   the mission heading, the setting titles, the filter section titles, the area headings and the paused label are no
   longer set in capitals: "Ready now (4)" and "Blocked (5)" read as normal text in weight 600 with the count in normal

@@ -8,12 +8,10 @@
 /* ---- The work rooms: the chosen room tab carries the room, and the other room is hidden ---- */
 
 /* No colored stripe under the top any more: the underlined room tab (.toggles[role='tablist'] in board.css) says
-   which room is open, in both rooms with the same primary line. Purple is kept for the heavy class (D+) only. */
-.room-option {
-  flex: none;
-}
+   which room is open, in both rooms with the same primary line. Purple is kept for the heavy class (D+) only. The room
+   tabs themselves are styled in board.css (.room-option).
 
-/* In Plans the queue's row 2 (the view tabs and the search), the focus line, the strip, the board and the selection bar are gone. */
+   In Plans the queue's row 2 (the view tabs and the search), the focus line, the strip, the board and the selection bar are gone. */
 body.room-plans .top-row2,
 body.room-plans #focusLine,
 body.room-plans #stripe,
@@ -22,7 +20,10 @@ body.room-plans #optionLine {
   display: none !important;
 }
 
+/* position: relative keeps absolutely positioned screen-reader text inside the room, so the page never scrolls
+   (a page scrollbar would move the right side of the top, B16). */
 .plans-room {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -39,8 +40,11 @@ body.room-plans #optionLine {
 
 /* ---- The breadcrumb ---- */
 
+/* One height on every surface (B27): 36 px controls, the padding and the border. A link button and the plain current
+   part used to give the trail different heights, so the content below moved 6 px between Overview and Plan entries. */
 .plans-path {
   flex: none;
+  height: 45px;
   display: flex;
   align-items: center;
   gap: var(--distance-sm);
@@ -49,9 +53,12 @@ body.room-plans #optionLine {
   background: var(--color-surface-container-lowest);
 }
 
+/* One line (the trail has a fixed height): a very long trail clips at the right instead of wrapping. */
 .plans-path-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
   align-items: center;
   gap: var(--distance-xs);
   margin: 0;
@@ -2337,9 +2344,10 @@ ol.overview-list > .overview-row.overview-question > * {
   color: var(--color-tertiary);
 }
 
+/* Three pulses when the marker appears, then it stands still (B6: no endless motion; the text carries the meaning). */
 .pulse,
 .plans-entry.under-work .plans-warning.v-active {
-  animation: plans-pulse 1.6s ease-in-out infinite;
+  animation: plans-pulse 1.6s ease-in-out 3;
 }
 
 .plans-warning.v-active {

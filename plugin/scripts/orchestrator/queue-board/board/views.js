@@ -57,11 +57,13 @@ function drawFocusTab(f) {
 }
 
 function drawFocusLine() {
+  // Before the first state the line stays in the layout, empty, with its one-row height (B27): hiding it and showing
+  // it when the data arrived pushed the board 45 px down after the first paint.
+  focusLine.hidden = false;
   if (!t.data) {
-    focusLine.hidden = true;
+    focusLine.replaceChildren();
     return;
   }
-  focusLine.hidden = false;
   const f = t.data.focus;
   drawFocusTab(f);
   const toPlan = (text, title) =>

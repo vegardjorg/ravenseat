@@ -719,30 +719,33 @@ function drawStripe() {
   stripe.hidden = t.view === 'statistics' || t.view === 'decisions' || t.view === 'checks' || !t.data;
   if (stripe.hidden) return;
   const n = t.data.next;
+  // One row (B27): "Next up" on the left (.stripe-next, which gives way) and the chain line on the right of the same
+  // row, so choosing a card does not add a row and push the board down.
   const row = el('div', { class: 'stripe-row' });
+  const next = el('div', { class: 'stripe-next' });
   const name = (text) => el('span', { class: 'stripe-name', text });
-  if (!n) row.append(name('Next up'));
+  if (!n) next.append(name('Next up'));
   else if (n.stop)
-    row.append(
+    next.append(
       name('Next up'),
       el('span', { class: 'badge old', text: n.text, title: n.message ?? n.text }),
     );
   else if (n.startable.length)
-    row.append(
+    next.append(
       name(`Next up (${n.available} ${n.available === 1 ? 'free slot' : 'free slots'})`),
       ...n.startable.map(nextButton),
     );
   else if (n.whenAvailable.length)
-    row.append(name('When a slot frees up'), ...n.whenAvailable.map(nextButton));
+    next.append(name('When a slot frees up'), ...n.whenAvailable.map(nextButton));
   else
-    row.append(
+    next.append(
       name('Next up'),
       el('span', {
         class: 'stripe-empty',
         text: n.available ? 'Nothing is ready to start.' : 'Nothing is waiting for a slot.',
       }),
     );
-  const parts = [row];
+  row.append(next);
   const selected = t.chain ? t.perId.get(t.chain)?.k : null;
   if (selected?.chain) {
     const ids = [...selected.chain.before, ...selected.chain.after];
@@ -755,10 +758,10 @@ function drawStripe() {
     );
     const hidden = chainCauses(ids.filter((id) => !drawn.has(id)));
     const causes = window.QueueA11y.chainHidden(hidden);
-    parts.push(
+    row.append(
       el(
         'div',
-        { class: 'stripe-row chain-line', role: 'status' },
+        { class: 'chain-line', role: 'status' },
         el('span', {
           class: 'stripe-name',
           text: `Chain for ${selected.id}: ${selected.chain.before.length} before, ${selected.chain.after.length} after`,
@@ -791,5 +794,5 @@ function drawStripe() {
       ),
     );
   }
-  stripe.replaceChildren(...parts);
+  stripe.replaceChildren(row);
 }
