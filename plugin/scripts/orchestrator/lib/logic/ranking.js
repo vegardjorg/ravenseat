@@ -88,7 +88,7 @@ function parseStep(raw, queue) {
   const areas = queue?.areas ?? {};
   const register = queue?.projects ?? {};
   const s = String(raw ?? '').trim();
-  if (!s) return { error: 'empty stage' };
+  if (!s) return { error: 'empty step' };
   const colon = s.indexOf(':');
   if (colon < 0) {
     const isArea = Object.hasOwn(areas, s);
@@ -100,7 +100,7 @@ function parseStep(raw, queue) {
     if (isArea) return { stage: `area:${s}` };
     if (isProject) return { stage: `project:${s}` };
     return {
-      error: `unknown stage ${s} (neither area nor project; see ravenseat areas and projects)`,
+      error: `unknown step ${s} (neither area nor project; see ravenseat areas and projects)`,
     };
   }
   const type = s.slice(0, colon);
@@ -119,11 +119,11 @@ function parseStep(raw, queue) {
     const pid = separator < 0 ? '' : rest.slice(0, separator).trim();
     const name = separator < 0 ? '' : rest.slice(separator + 1).trim();
     if (!pid || !name)
-      return { error: `a feature stage is written feature:<project>/<name> (got ${s})` };
+      return { error: `a feature step is written feature:<project>/<name> (got ${s})` };
     if (!Object.hasOwn(register, pid)) return { error: `unknown project ${pid} in ${s}` };
     return { stage: `feature:${pid}/${name}` };
   }
-  return { error: `unknown stage type ${type} (use area:, project: or feature:)` };
+  return { error: `unknown step type ${type} (use area:, project: or feature:)` };
 }
 
 /** Does the task match a (saved) stage? Returns the specificity (1–3) or 0. */

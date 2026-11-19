@@ -284,7 +284,7 @@ export function cmdFocus() {
         if (t.rests.length > max) console.log(`    … and ${t.rests.length - max} more (--all shows all)`);
       }
       const done = ev.filter((t) => t.status === 'done').length;
-      if (done) console.log(`${done} stage(s) are done: ravenseat focus clean takes them out.`);
+      if (done) console.log(`${done} step(s) are done: ravenseat focus clean takes them out.`);
     }
   } else if (under === 'clean') {
     // Takes out the stages with status done (queueLogic.cleanFocus); --dry computes without writing.
@@ -292,8 +292,8 @@ export function cmdFocus() {
     const r = dry
       ? L.cleanFocus(L.cloneJson(read()), { by: byName(), dry: true })
       : edit((queue) => L.cleanFocus(queue, { by: byName() }));
-    if (dry) console.log(`Dry run (nothing written): ${r.taken_out.length} stage(s) would be taken out.`);
-    if (!r.taken_out.length) console.log('No done focus stages to take out.');
+    if (dry) console.log(`Dry run (nothing written): ${r.taken_out.length} step(s) would be taken out.`);
+    if (!r.taken_out.length) console.log('No done focus steps to take out.');
     for (const l of L.focusCleanLines(r)) console.log(l);
     if (r.entry) console.log(`Changelog no. ${r.entry.nr}; undo: ravenseat undo`);
   } else if (under === 'off') {
@@ -305,7 +305,7 @@ export function cmdFocus() {
     );
   } else if (under && !under.startsWith('--')) {
     die(
-      'focus | focus set <stage> [<stage> ...] [--rest wait|fill] [--to <date>] [--name "..."] [--without-dependencies] [--continue-when-empty on|off] | focus evaluate [--json] | focus clean [--dry] | focus off',
+      'focus | focus set <step> [<step> ...] [--rest wait|fill] [--to <date>] [--name "..."] [--without-dependencies] [--continue-when-empty on|off] | focus evaluate [--json] | focus clean [--dry] | focus off',
     );
   } else {
     const queue = read();
@@ -493,9 +493,9 @@ export function cmdRank() {
       process.exit(0);
     }
     const where = space.top
-      ? 'at the top of the stage'
+      ? 'at the top of the step'
       : space.bottom
-        ? 'at the bottom of the stage'
+        ? 'at the bottom of the step'
         : space.over
           ? `right above ${space.over}`
           : `right below ${space.under}`;

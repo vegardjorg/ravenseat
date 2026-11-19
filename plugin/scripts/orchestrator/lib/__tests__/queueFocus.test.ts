@@ -494,7 +494,7 @@ describe('setFocus and parseStep', () => {
     expect(L.parseStep('goods', queue)).toEqual({ stage: 'area:goods' });
     expect(L.parseStep('calendar', queue)).toEqual({ stage: 'project:calendar' });
     expect(L.parseStep('security', queue).error).toMatch(/both an area and a project/);
-    expect(L.parseStep('no', queue).error).toMatch(/unknown stage/);
+    expect(L.parseStep('no', queue).error).toMatch(/unknown step/);
     expect(L.parseStep('feature:calendar', queue).error).toMatch(/feature:<project>\/<name>/);
     expect(L.parseStep('feature:calendar/ Overview ', queue)).toEqual({
       stage: 'feature:calendar/Overview',
@@ -509,10 +509,10 @@ describe('setFocus and parseStep', () => {
       ISO,
     );
     expect(r.error.join(' | ')).toMatch(
-      /appears more than once.*unknown stage no.*rest must be.*has passed/,
+      /appears more than once.*unknown step no.*rest must be.*has passed/,
     );
     expect(queue.focus).toBeUndefined();
-    expect(L.setFocus(queue, { order: [] }, ISO).error[0]).toMatch(/at least one stage/);
+    expect(L.setFocus(queue, { order: [] }, ISO).error[0]).toMatch(/at least one step/);
   });
 
   it('the default is rest wait and drag along; warns about pause, an empty stage and zero ready ones', () => {
@@ -529,8 +529,8 @@ describe('setFocus and parseStep', () => {
       rest: 'wait',
       drag_with_dependencies: true,
     });
-    expect(r.warnings.join(' | ')).toMatch(/the project warehouse in stage 1 is paused/);
-    expect(r.warnings.join(' | ')).toMatch(/stage 2 \(area:help\) has no open tasks/);
+    expect(r.warnings.join(' | ')).toMatch(/the project warehouse in step 1 is paused/);
+    expect(r.warnings.join(' | ')).toMatch(/step 2 \(area:help\) has no open tasks/);
     expect(r.warnings.join(' | ')).toMatch(/no ready tasks/);
   });
 });
@@ -712,7 +712,7 @@ describe('cleanFocus', () => {
     ]);
     expect(queue.changelog?.at(-1)?.action).toBe('focus clean');
     const lines = L.focusCleanLines(r);
-    expect(lines.some((l) => /Focus stage .*Warehouse.* done and taken out/.test(l))).toBe(true);
+    expect(lines.some((l) => /Focus step .*Warehouse.* done and taken out/.test(l))).toBe(true);
     expect(lines.some((l) => /Security.*rests.*S-1/.test(l))).toBe(true);
 
     expect(L.undoEntry(queue, { by: 'test' }).error).toEqual([]);
@@ -808,7 +808,7 @@ describe('queue.mjs: focus evaluate, focus clean and automatic removal (against 
   it('set <id> done takes out the stage that becomes done; undo puts it back', () => {
     const s = run(['set', 'SB-2', 'done', '--without-cost']);
     expect(s.code).toBe(0);
-    expect(s.out).toMatch(/Focus stage T1 Warehouse .*done and taken out/);
+    expect(s.out).toMatch(/Focus step T1 Warehouse .*done and taken out/);
     expect(s.out).toMatch(/Security.*done with rests/);
     expect(readQueue().focus!.order).toEqual(['project:calendar', 'project:security']);
     expect(readQueue().focus!.history?.[0]?.by).toMatch(/set/);
@@ -832,7 +832,7 @@ describe('queue.mjs: focus evaluate, focus clean and automatic removal (against 
     expect(r.out).toMatch(/done and taken out/);
     expect(readQueue().focus!.order).toEqual(['project:calendar', 'project:security']);
     expect(readQueue().focus!.history?.[0]?.by).toBe('owner');
-    expect(run(['focus', 'clean']).out).toMatch(/No done focus stages/);
+    expect(run(['focus', 'clean']).out).toMatch(/No done focus steps/);
   });
 });
 

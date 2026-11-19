@@ -633,7 +633,7 @@ function drawDecisions(fresh) {
     const bar = bulkBar(g);
     const hint =
       g.verb === 'decide' && t.data.inbox?.focus_sorted
-        ? `${g.hint} Sorted by how much the answer unlocks in focus: stage 1 first, then the minutes.`
+        ? `${g.hint} Sorted by how much the answer unlocks in focus: step 1 first, then the minutes.`
         : g.hint;
     parts.push(
       el(

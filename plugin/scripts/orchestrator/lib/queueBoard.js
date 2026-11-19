@@ -841,6 +841,24 @@ function sortList(queue) {
  * the steps with title and type, and the split between Now (the first `now_count` steps, default 1) and Next.
  * null when no focus is set.
  */
+/**
+ * The short name of a step in the focus line, written the way the cards write a project (B17): a project step is its
+ * id ("billing", as the project chip on a card), a feature step is "pid › name", an area step its title. The full
+ * title stays in `title` (the tooltip).
+ */
+function stepLabel(step, queue) {
+  const s = String(step);
+  const colon = s.indexOf(':');
+  const type = s.slice(0, colon);
+  const rest = s.slice(colon + 1);
+  if (type === 'project') return rest;
+  if (type === 'feature') {
+    const slash = rest.indexOf('/');
+    return slash > 0 ? `${rest.slice(0, slash)} › ${rest.slice(slash + 1)}` : rest;
+  }
+  return L.stepTitle(step, queue);
+}
+
 function focusLine(queue, { now = Date.now(), context = null, canStart = [] } = {}) {
   const st = L.focusStatus(queue, { now, canStart, context });
   if (!st) return null;
@@ -857,6 +875,7 @@ function focusLine(queue, { now = Date.now(), context = null, canStart = [] } = 
       stage: t,
       type: String(t).slice(0, String(t).indexOf(':')),
       title: L.stepTitle(t, queue),
+      label: stepLabel(t, queue),
       waiting: st.per_step[i]?.waiting ?? 0,
       readyOnes: st.per_step[i]?.readyOnes ?? 0,
       min_left: st.per_step[i]?.min_left ?? 0,
@@ -913,6 +932,34 @@ function planBasis(queue, { now = Date.now(), context = null } = {}) {
     if (!perFeature.has(key)) perFeature.set(key, { pid, name, ...empty() });
     countRow(perFeature.get(key), o);
   }
+  // B17 (H4): a focus step can point to a feature with no pending tasks left (all done, or only rests such as QA
+  // waiting on the owner). The list above is built from pending tasks only, so such a step had no row and the Focus
+  // tab called it "does not exist". A feature that any task in the project has (whatever its status) gets a row with
+  // zero counts; a name no task has ever had still gets none, so a typo still reads "does not exist".
+  for (const step of queue.focus?.order ?? []) {
+    const s = String(step);
+    if (!s.startsWith('feature:')) continue;
+    const rest = s.slice('feature:'.length);
+    const slash = rest.indexOf('/');
+    if (slash < 1) continue;
+    const pid = rest.slice(0, slash);
+    const name = rest.slice(slash + 1);
+    const key = `${pid}/${name}`;
+    if (perFeature.has(key)) continue;
+    const known = tasks.some(
+      (o) =>
+        !L.isExternalRow(o) &&
+        typeof o.feature === 'string' &&
+        o.feature.trim() === name &&
+        L.projectFor(o, register) === pid,
+    );
+    if (known) perFeature.set(key, { pid, name, ...empty() });
+  }
+  // The status of each focus step (queueLogic.evaluateFocusStep: active, done-with-rests or done), so the Focus tab
+  // can mark a done step "done". Empty without a focus.
+  const stepStatus = {};
+  if (queue.focus?.order?.length)
+    for (const e of L.evaluateFocusStep(queue, now)) stepStatus[e.stage] = e.status;
   const out = (r) => ({
     waiting: r.waiting,
     readyOnes: r.readyOnes,
@@ -964,7 +1011,7 @@ function planBasis(queue, { now = Date.now(), context = null } = {}) {
       dragged: sum('dragged'),
     };
   });
-  return { areas, projects };
+  return { areas, projects, step_status: stepStatus };
 }
 
 /** "3 h 20 min" / "45 min" (the previews). */
@@ -1009,7 +1056,7 @@ function focusPreview(queue, input, { now = Date.now(), uncommitted = [] } = {})
     const parts = focusLine(copy, { now, context: k });
     parts.stage.forEach((t, i) =>
       lines.push(
-        `${i < parts.now_count ? 'Now' : 'Next'}, stage ${i + 1}: ${t.title} (${t.type}): ` +
+        `${i < parts.now_count ? 'Now' : 'Next'}, step ${i + 1}: ${t.title} (${t.type}): ` +
           `${t.waiting} waiting, ${t.readyOnes} ready, ${minutesText(t.min_left)} left.`,
       ),
     );
@@ -1039,7 +1086,7 @@ function focusPreview(queue, input, { now = Date.now(), uncommitted = [] } = {})
   }
   if (r.paused.length)
     lines.push(
-      `Paused: ${r.paused.join(', ')} (not started, not even if they are in a stage).`,
+      `Paused: ${r.paused.join(', ')} (not started, not even if they are in a step).`,
     );
   if (r.still.length) lines.push(`Unpaused: ${r.still.join(', ')}.`);
   const n = nextUp(copy, { now, uncommitted });
@@ -1099,8 +1146,8 @@ function areaPlan(queue, b = {}) {
     const tt = to ? focusStep(to) : null;
     if (tf || tt)
       lines.push(
-        `Tasks in ${pid} follow the area: from ${tf ? `stage ${tf}` : 'outside focus'} to ` +
-          `${tt ? `stage ${tt}` : 'outside focus'} (unless the project has its own stage).`,
+        `Tasks in ${pid} follow the area: from ${tf ? `step ${tf}` : 'outside focus'} to ` +
+          `${tt ? `step ${tt}` : 'outside focus'} (unless the project has its own step).`,
       );
     return { error: [], args, lines };
   }
@@ -1111,7 +1158,7 @@ function areaPlan(queue, b = {}) {
     return {
       error: [],
       args: ['area', oid, '--delete'],
-      lines: [`Area ${oid} is deleted. No projects or stages use it.`],
+      lines: [`Area ${oid} is deleted. No projects or steps use it.`],
     };
   }
   const field = { title: b.title == null ? null : String(b.title) };

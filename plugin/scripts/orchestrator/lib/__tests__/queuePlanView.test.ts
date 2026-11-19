@@ -311,7 +311,7 @@ describe('"Prepare for queue"', () => {
 describe('the queue status with the focus step', () => {
   it('separates the focus step from the priority and says when a task is not started', () => {
     expect(V.queueStatusText({ column: 'queue', applies: true, step: 1, step_title: 'Alpha' })).toBe(
-      'In queue, stage 2 in focus (Alpha)',
+      'In queue, step 2 in focus (Alpha)',
     );
     expect(V.queueStatusText({ column: 'queue', applies: true, step: null, outside: true })).toBe(
       'In queue, outside focus: not started',

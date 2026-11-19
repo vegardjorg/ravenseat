@@ -164,7 +164,7 @@ function placementFacts(k, idButton) {
     ...facts('Dragged along by', pl.dragged_by ? idButton(pl.dragged_by) : null),
     ...facts(
       'Score',
-      el('span', { text: formula, title: 'Higher score is started first within the same stage.' }),
+      el('span', { text: formula, title: 'Higher score is started first within the same step.' }),
     ),
   ];
 }

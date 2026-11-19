@@ -1136,8 +1136,8 @@ const SETTINGS = Object.freeze([
   row('features.plans', 'plans', 'onoff', 'Plans room',
     'The Plans room on the board. On by default in both modes; the CLI plan register always works.', BASIC),
   row('features.focus', 'plans', 'onoff', 'Focus tab',
-    'The Focus tab on the board, with the focus stages and their tasks. On in full mode. Off in lite, which has no ' +
-    'focus stages, so the tab would stay empty. The ravenseat focus command works either way.',
+    'The Focus tab on the board, with the focus steps and their tasks. On in full mode. Off in lite, which has no ' +
+    'focus steps, so the tab would stay empty. The ravenseat focus command works either way.',
     { ...BASIC, defaultByMode: { lite: false, full: true } }),
   row('features.plans.legal', 'plans', 'onoff', 'Legal surface',
     'The Legal surface in Plans, with the legal points of the plan register. Off by default: turn it on when the ' +
@@ -1150,7 +1150,7 @@ const SETTINGS = Object.freeze([
     'shows only while features.plans is on.', { fullWhy: WHY_PLANS }),
   row('focus.continueWhenEmpty', 'plans', 'onoff', 'Continue when the focus ends',
     'Off: the queue pauses and asks you when a focus has ended. On: it continues with the regular queue.',
-    { fullWhy: 'lite has no focus stages to end' }),
+    { fullWhy: 'lite has no focus steps to end' }),
   row('modules', 'plans', 'list', 'Areas', 'The areas of the product in the plan register.', { fullWhy: WHY_PLANS }),
   row('projectModuleSuggestion', 'plans', 'object', 'Suggested area per project',
     'A suggested area for each project id ({ "<project>": "<area>" }), used only by `plan modules --link` for projects ' +

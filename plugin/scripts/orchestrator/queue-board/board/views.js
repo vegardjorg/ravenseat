@@ -68,8 +68,11 @@ function drawFocusLine() {
   }
   const f = t.data.focus;
   drawFocusTab(f);
-  const toPlan = (text, title) =>
-    el('button', {
+  // "Set focus" / "Edit focus" opens the Focus tab, so on the Focus tab itself (where the focus is edited) it is
+  // hidden (B17): there it only switched to the tab already open.
+  const toPlan = (text, title) => {
+    if (t.view === 'plan') return null;
+    return el('button', {
       type: 'button',
       class: 'button button-outline button-small',
       text,
@@ -79,6 +82,7 @@ function drawFocusLine() {
         draw();
       },
     });
+  };
   const draft = window.QueuePlan?.hasDraft()
     ? el('span', {
         class: 'badge old',
@@ -111,9 +115,10 @@ function drawFocusLine() {
   focusLine.className = `focusLine${notice ? ' notice' : ''}`;
   const stage = (f.stage ?? []).flatMap((x, i) => [
     i ? el('span', { class: 'focus-arrow', 'aria-hidden': 'true', text: '→' }) : null,
+    // The short name as the cards write it (B17): a project by its id, a feature as "pid › name"; the title in the tooltip.
     el('span', {
       class: `focus-step${i < f.now_count ? ' now' : ''}`,
-      text: `${i + 1} ${x.title}`,
+      text: `${i + 1} ${x.label ?? x.title}`,
       title:
         `Step ${i + 1} (${i < f.now_count ? 'Now' : 'Next'}): ${x.title}, ${x.type}. ` +
         `${x.waiting} waiting, ${x.readyOnes} ready, ${duration(x.min_left)} left.`,

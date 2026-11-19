@@ -42,6 +42,14 @@
     },
   ];
   const TYPE_NAME = { area: 'Area', project: 'Project', feature: 'Feature' };
+  // B17 (H4): a step whose tasks are all done says "done", never "does not exist". The status comes from the server
+  // (planBasis step_status, from queueLogic.evaluateFocusStep).
+  const DONE_TITLE = {
+    done: 'Every task in this step is done. The queue takes the step out of the focus by itself.',
+    'done-with-rests':
+      'Nothing here is left to start. Rests keep the step in the focus until they are settled: QA waiting on you, ' +
+      'proposals, the batch queue or owner questions.',
+  };
 
   const s = {
     ctx: null,
@@ -114,18 +122,20 @@
   function info(key) {
     const type = typeFor(key);
     const rest = restFor(key);
+    // The saved step's status (active, done-with-rests, done); null for an element that is no saved step.
+    const status = data()?.plan?.step_status?.[key] ?? null;
     if (type === 'area') {
       const o = areaRow(rest);
-      return { type, title: o?.title ?? rest, counts: o, exists: !!o?.in_register };
+      return { type, title: o?.title ?? rest, counts: o, exists: !!o?.in_register, status };
     }
     if (type === 'project') {
       const p = projectRow(rest);
-      return { type, title: p?.title ?? rest, counts: p, exists: !!p };
+      return { type, title: p?.title ?? rest, counts: p, exists: !!p, status };
     }
     const pid = rest.slice(0, rest.indexOf('/'));
     const name = rest.slice(rest.indexOf('/') + 1);
     const f = projectRow(pid)?.features.find((x) => x.name === name) ?? null;
-    return { type, title: name, pid, counts: f, exists: !!f };
+    return { type, title: name, pid, counts: f, exists: !!f, status };
   }
 
   /** Where an element sits in the plan now: now, next, waiting (paused project) or later. */
@@ -300,7 +310,7 @@
         {
           class: 'plan-field',
           title:
-            'What happens when every stage is done or the period is over: continue the regular queue by priority, or ' +
+            'What happens when every step is done or the period is over: continue the regular queue by priority, or ' +
             'pause the queue and ask you (an owner question in Decisions). "Config default" uses focus.continueWhenEmpty.',
         },
         el('span', { text: 'When the focus is done' }),
@@ -543,13 +553,17 @@
         class: 'plan-name',
         text: i.type === 'feature' ? `${i.pid} › ${i.title}` : i.title,
       }),
+      // The project id beside the title, as in a project inside an area and on the cards (B17).
+      i.type === 'project' ? el('span', { class: 'pid', text: restFor(key) }) : null,
       !i.exists
         ? el('span', {
             class: 'badge old',
             text: 'does not exist',
             title: 'The step points to something that no longer exists in the queue. Drag it to Later.',
           })
-        : null,
+        : stepNr && DONE_TITLE[i.status]
+          ? el('span', { class: 'badge', text: 'done', title: DONE_TITLE[i.status] })
+          : null,
     );
     const children = [];
     if (i.type === 'area') {

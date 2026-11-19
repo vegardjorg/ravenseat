@@ -103,7 +103,7 @@ function explainTask(queue, id, { L, now = Date.now(), uncommitted = [], dailyUs
   // Its place: what selectNext would start with every slot free.
   const wide = L.selectNext({ ...queue, limits: { ...g, maxConcurrent: tasks.length + 1 } }, now, { uncommitted });
   const place = wide.findIndex((x) => x.id === id);
-  if (place >= 0) lines.push(`Place ${place + 1} of ${wide.length} among the tasks that could start (by focus stage, then score).`);
+  if (place >= 0) lines.push(`Place ${place + 1} of ${wide.length} among the tasks that could start (by focus step, then score).`);
   else lines.push('A task picked ahead of it in the same round conflicts with it (files or DB objects).');
   return head(guard ? `waiting, and held by ${guard.stop}` : 'waiting for a slot');
 }

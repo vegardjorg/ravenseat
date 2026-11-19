@@ -3777,10 +3777,9 @@ body.with-option-line .board {
   white-space: nowrap;
 }
 
+/* The steps in Now: the primary edge and bold text, no fill (B17: one meaning per color, a fill marks a selection). */
 .focus-step.now {
-  background: var(--color-secondary-container);
-  color: var(--color-on-secondary-container);
-  border-color: transparent;
+  border-color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -4147,16 +4146,8 @@ body.with-option-line .board {
   background: var(--color-surface-container);
 }
 
-/* Live: plan.js builds `plan-${k.key}`, and the key for Now is 'now'. */
-.plan-column.plan-now {
-  background: var(--color-secondary-container);
-}
-
-.plan-column.plan-now > .col-header h2,
-.plan-column.plan-now > .col-header .counter,
-.plan-column.plan-now > .plan-col-help {
-  color: var(--color-on-secondary-container);
-}
+/* The Now column has no tone of its own (B17): a fixed blue Now looked like an active drop zone, and the drop zone
+   (.release-her below) is the one place with the primary edge. Now reads as Now by its heading and its place. */
 
 .plan-col-help {
   margin: 0 var(--distance-xs) var(--distance-sm);

@@ -221,7 +221,7 @@ Shift+F10 on a card opens it again. On a narrow screen (below 600 px) or a touch
 at the bottom. Every action shows what changes before it is saved, and **Undo** stands for 30 seconds afterwards.
 
 **Decisions** (the tab next to Plans and Queue; the count is on **Waiting on you**, which opens it) is the owner's main view: everything that waits on
-the owner as one list, one card per decision, most impact first (minutes unlocked in focus stage 1 first, then what
+the owner as one list, one card per decision, most impact first (minutes unlocked in focus step 1 first, then what
 the answer unlocks), grouped as **Decide** (owner questions), **Check** (QA), **Approve** (proposals) and **Unstick**
 (an old pick, or work running long). Each card has an impact line, the recommendation as the filled button, and the
 other answers next to it. On an owner question the recommendation also stands in its own block under the question,

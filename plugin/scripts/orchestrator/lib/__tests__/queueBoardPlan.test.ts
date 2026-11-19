@@ -330,8 +330,8 @@ describe('focusPreview: "Save focus" explained before it is saved', () => {
     );
     expect(f.error).toEqual([]);
     expect(f.before_text).toBe('no focus');
-    expect(f.lines[0]).toMatch(/^Now, stage 1: Calendar/);
-    expect(f.lines[1]).toMatch(/^Next, stage 2: Core/);
+    expect(f.lines[0]).toMatch(/^Now, step 1: Calendar/);
+    expect(f.lines[1]).toMatch(/^Next, step 2: Core/);
     expect(f.lines.some((x) => /waits fully/.test(x))).toBe(true);
     expect(f.lines.some((x) => /applies until you change it/.test(x))).toBe(true);
     expect(f.next.map((n) => n.id)).toContain('V-1');

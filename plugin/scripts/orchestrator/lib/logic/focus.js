@@ -37,7 +37,7 @@ function setFocus(queue, input, now = new Date().toISOString()) {
   const raw = Array.isArray(input?.order) ? input.order : [];
   if (!raw.length)
     error.push(
-      'focus needs at least one stage (area:<oid>, project:<pid> or feature:<pid>/<name>)',
+      'focus needs at least one step (area:<oid>, project:<pid> or feature:<pid>/<name>)',
     );
   const order = [];
   for (const t of raw) {
@@ -95,14 +95,14 @@ function setFocus(queue, input, now = new Date().toISOString()) {
   );
   order.forEach((t, i) => {
     const match = opened.filter((o) => stepMatch(o, t, trial) > 0);
-    if (!match.length) warnings.push(`stage ${i + 1} (${t}) has no open tasks`);
+    if (!match.length) warnings.push(`step ${i + 1} (${t}) has no open tasks`);
     const pausedOnes = [
       ...new Set(
         match.filter((o) => projectPaused(o, register)).map((o) => projectFor(o, register)),
       ),
     ];
     for (const pid of pausedOnes)
-      warnings.push(`the project ${pid} in stage ${i + 1} is paused (pause takes precedence over focus)`);
+      warnings.push(`the project ${pid} in step ${i + 1} is paused (pause takes precedence over focus)`);
   });
   const status = focusStatus(trial, { now: nowMs });
   if (status.active && status.readyOnes === 0)
@@ -143,7 +143,7 @@ function saveFocusPlan(queue, input, now = new Date().toISOString()) {
     (order?.length ?? 0) > FOCUS_PLAN_MAX ||
     pause.length + proceed.length > FOCUS_PLAN_MAX
   )
-    error.push(`at most ${FOCUS_PLAN_MAX} stages and ${FOCUS_PLAN_MAX} pause changes`);
+    error.push(`at most ${FOCUS_PLAN_MAX} steps and ${FOCUS_PLAN_MAX} pause changes`);
   const register = { ...(queue.projects ?? {}) };
   for (const pid of [...pause, ...proceed])
     if (!Object.hasOwn(register, pid))
@@ -230,8 +230,8 @@ function focusStatus(queue, { now = Date.now(), canStart = null, context = null 
   if (!k.applies) return out;
   if (k.finished) {
     out.notice = k.halted
-      ? `Focus${name} is done: nothing left in the stages. Queue paused, nothing starts. ${focusEndHow(queue)}`
-      : `Focus${name} is done: nothing left in the stages. Continuing the regular queue ` +
+      ? `Focus${name} is done: nothing left in the steps. Queue paused, nothing starts. ${focusEndHow(queue)}`
+      : `Focus${name} is done: nothing left in the steps. Continuing the regular queue ` +
         `(continue when empty: on, ${out.continue_when_empty.from}).`;
     return out;
   }
@@ -270,7 +270,7 @@ function focusStatus(queue, { now = Date.now(), canStart = null, context = null 
         : ' The rest fills free slots (rest: fill).';
     out.notice =
       out.in_focus === 0 && out.inProgress === 0
-        ? `Focus${name} is empty: nothing left in the stages.${rest}`
+        ? `Focus${name} is empty: nothing left in the steps.${rest}`
         : `Nothing ready in focus${name}${out.inProgress ? ` (${out.inProgress} in progress)` : ''}.${answer}${rest}`;
   }
   return out;
@@ -631,17 +631,17 @@ function focusCleanLines(r) {
   const tnr = new Map((r?.evaluation ?? []).map((t) => [t.stage, t.index + 1]));
   for (const t of r?.taken_out ?? [])
     lines.push(
-      `Focus stage T${tnr.get(t.stage) ?? '?'} ${t.title} (${t.stage}) done and taken out (undo: ravenseat undo)`,
+      `Focus step T${tnr.get(t.stage) ?? '?'} ${t.title} (${t.stage}) done and taken out (undo: ravenseat undo)`,
     );
   for (const t of r?.with_rests ?? [])
     lines.push(
-      `Focus stage T${t.index + 1} ${t.title} done with rests (${t.rests.length}): ` +
+      `Focus step T${t.index + 1} ${t.title} done with rests (${t.rests.length}): ` +
         `${restGroupText(t.rests)}. Details: ravenseat focus evaluate`,
     );
   if (r?.end_line) lines.push(r.end_line);
   else if (r?.kept)
     lines.push(
-      `Focus stage T${r.kept.index + 1} ${r.kept.title} is done, and all stages are done: set a new focus ` +
+      `Focus step T${r.kept.index + 1} ${r.kept.title} is done, and all steps are done: set a new focus ` +
         '(ravenseat focus set …) or ravenseat focus off.',
     );
   return lines;
@@ -795,7 +795,7 @@ function park(queue, ids, { by, reason = null, to = null, now = new Date().toISO
     const d = k.dragged.get(o.id);
     if (d && !list.includes(d.by))
       warnings.push(
-        `${o.id} is pulled along by ${d.by} in the focus (stage ${d.stage + 1}); it waits until ${o.id} continues`,
+        `${o.id} is pulled along by ${d.by} in the focus (step ${d.stage + 1}); it waits until ${o.id} continues`,
       );
   }
   for (const o of selected)

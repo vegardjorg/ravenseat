@@ -158,8 +158,8 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `cost [--since 7d] [--max 10] [--json]` | USD per merged change for the window first (see [Cost estimates and calibration](#cost-estimates-and-calibration)), then cost per task with all its runs (track, fix rounds, continuations, reviewers, fix tasks) by cost, then where the cost went (the orchestrator session as its own line, the unknown share by its source), week over week with n, per turn against the 14-day median per agent type (the 2x warning), and cost per class (n, median, sum, build/review/fix) by start date from the measured track sessions |
 | `calibrate [--days 28] [--min 5] [--json]` | Per class: how far the minute estimates and the cost model are off, and the suggested correction (read-only) |
 | `projects`, `project <pid> …` | Projects: progress, pause, prefixes |
-| `focus set <steps> [--continue-when-empty on\|off]` | Focus period: only these steps are started. When the focus has ended (every stage done, or `--to` passed), `focus.continueWhenEmpty` in queue.config.json decides (default off): off pauses the queue (fill starts nothing, `focus.finished_at` is stamped, and one owner question "set a new focus or continue the regular queue?" appears in Waiting on you; answering "Continue the regular queue" lifts the pause), on continues as without focus with one line. `--continue-when-empty` overrides it for this focus; `ravenseat focus` shows the setting. A project that never set a focus is not affected |
-| `focus evaluate [--json]` / `focus clean [--dry]` | Each stage as active, done-with-rests (batch queue, proposals, owner questions, QA, with a suggestion per rest) or done / takes out the done stages (history and changelog, so `undo` works; the last stage stays). `receive`, `set <id> done\|cancelled` and `fill` clean automatically, and the board hides done stages |
+| `focus set <steps> [--continue-when-empty on\|off]` | Focus period: only these steps are started. When the focus has ended (every step done, or `--to` passed), `focus.continueWhenEmpty` in queue.config.json decides (default off): off pauses the queue (fill starts nothing, `focus.finished_at` is stamped, and one owner question "set a new focus or continue the regular queue?" appears in Waiting on you; answering "Continue the regular queue" lifts the pause), on continues as without focus with one line. `--continue-when-empty` overrides it for this focus; `ravenseat focus` shows the setting. A project that never set a focus is not affected |
+| `focus evaluate [--json]` / `focus clean [--dry]` | Each step as active, done-with-rests (batch queue, proposals, owner questions, QA, with a suggestion per rest) or done / takes out the done steps (history and changelog, so `undo` works; the last step stays). `receive`, `set <id> done\|cancelled` and `fill` clean automatically, and the board hides done steps |
 | `park <id>` / `continue <id>` | Park / unpark |
 | `pick <id> --by "<who>"` / `deliver <id>` | A person or a separate chat takes a task by hand / delivers it |
 | `diagnose` | Why the queue runs fewer tracks than it could (with suggested fixes) |
@@ -177,7 +177,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 
 `ravenseat forecast` answers "when will the remaining tasks be done?" in one paragraph, for example: `Focus "X": 14 tasks
 left. 50 %: by Tue 4 Nov (4 days), 85 %: Thu 6 Nov, 95 %: Fri 7 Nov. Based on 31 done in the last 28 days. Expected
-cost about 42 USD.` The remaining tasks are the open ones in the current focus stages (with the dependencies they pull
+cost about 42 USD.` The remaining tasks are the open ones in the current focus steps (with the dependencies they pull
 along) when a focus applies, otherwise every waiting, running, picked and review task; proposals, the done and the
 cancelled never count. `--project <pid>` narrows it to one project. The method is Monte Carlo: each of 2000 runs draws
 a day's throughput (done per calendar day in the last `--days` days, zero days included) with replacement until the
@@ -1049,7 +1049,7 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 
 | Key | Default | Used for | Marks |
 |---|---|---|---|
-| `features.plans`, `features.focus` | on, on (`focus` is off in Lite mode) | The board's Plans room (`ravenseat plan` always works) and Focus tab (`ravenseat focus` always works). The Focus tab is off in Lite mode, which has no focus stages, so it would stay empty | Basic |
+| `features.plans`, `features.focus` | on, on (`focus` is off in Lite mode) | The board's Plans room (`ravenseat plan` always works) and Focus tab (`ravenseat focus` always works). The Focus tab is off in Lite mode, which has no focus steps, so it would stay empty | Basic |
 | `features.plans.legal`, `features.plans.launch`, `features.plans.documents` | off | The Legal, Launch and Documents surfaces in Plans; a part is off when `features.plans` is off | Advanced, Full mode only |
 | `focus.continueWhenEmpty` | `false` | Off: the queue pauses and asks you when a focus has ended. On: it continues with the regular queue | Advanced, Full mode only |
 | `modules`, `projectModuleSuggestion`, `priorityRules`, `documentFolders`, `indexFile`, `planBackup` | see `queue.config.example.json` | Plan register structure: areas, the module link suggestion, the priority rules, document folders, the index file and the backup script (see `plan-register.md`) | Advanced, Full mode only |

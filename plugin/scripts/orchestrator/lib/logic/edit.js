@@ -183,7 +183,7 @@ function editMany(queue, input, { by = null, now = new Date().toISOString(), dry
       const d = k.dragged.get(p.o.id);
       if (d && !newPerId.get(d.by)?.parked)
         warnings.push(
-          `${p.o.id} is pulled along by ${d.by} in the focus (stage ${d.stage + 1}); it waits until ${p.o.id} continues`,
+          `${p.o.id} is pulled along by ${d.by} in the focus (step ${d.stage + 1}); it waits until ${p.o.id} continues`,
         );
     }
     if (p.new.batched === true && p.new.parked)
@@ -537,7 +537,7 @@ function rankBlock(queue, ids, space = {}, now = Date.now()) {
     if (outside.length)
       return {
         error: [
-          `${outside.join(', ')} is in another stage than ${ref}; ranger only moves within the stage (edit the focus to move between stages)`,
+          `${outside.join(', ')} is in another step than ${ref}; ranger only moves within the step (edit the focus to move between steps)`,
         ],
       };
   }

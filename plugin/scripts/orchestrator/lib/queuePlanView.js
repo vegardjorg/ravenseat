@@ -747,7 +747,7 @@
   };
 
   /**
-   * The status text for a queue task in the Queue tab: e.g. "In queue, stage 2 in focus (Core)" or "In queue, outside focus:
+   * The status text for a queue task in the Queue tab: e.g. "In queue, step 2 in focus (Core)" or "In queue, outside focus:
    * not started". The focus step is the queue's axis; the priority (Now, Later) is the plan register's, and they are shown separately.
    * @param {{ status?: string, column?: string|null, step?: number|null, outside?: boolean, applies?: boolean,
    *   step_title?: string|null }} o
@@ -756,7 +756,7 @@
     if (o.column === 'queue') {
       if (!o.applies) return 'In queue';
       if (o.outside || o.step == null) return 'In queue, outside focus: not started';
-      return `In queue, stage ${o.step + 1} in focus${o.step_title ? ` (${o.step_title})` : ''}`;
+      return `In queue, step ${o.step + 1} in focus${o.step_title ? ` (${o.step_title})` : ''}`;
     }
     if (o.column && COLUMN_TEXT[o.column]) return COLUMN_TEXT[o.column];
     return o.status === 'cancelled' ? 'Cancelled' : String(o.status ?? 'unknown');

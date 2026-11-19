@@ -516,7 +516,7 @@ describe('rankBlock', () => {
     const queue = reasonQueue();
     queue.focus = { order: ['project:ui', 'project:warehouse'], rest: 'fill' };
     expect(L.rankBlock(queue, ['SB-1'], { over: 'V-1' }, NOW).error.join()).toContain(
-      'another stage than V-1',
+      'another step than V-1',
     );
     // top moves SB-1 to the top of the goods stage, but never ahead of the ui stage.
     apply(queue, L.rankBlock(queue, ['SB-1'], { top: true }, NOW).changes!);

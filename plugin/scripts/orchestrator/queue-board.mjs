@@ -966,8 +966,8 @@ function state() {
     // `ravenseat wait` runs and will start an orchestrator turn when the owner acts (lib/ownerWait.js heartbeatState).
     listening,
   };
-  // Each stage gets status and rests; a stage with only rests shows them in the title (the focus line and the cards
-  // read the title), not as an empty stage.
+  // Each step gets status and rests; a step with only rests shows them in the title and the label (the focus line
+  // reads the label, the cards and the panel the title), not as an empty step.
   if (focusEval && Array.isArray(data.focus?.stage))
     data.focus.stage = data.focus.stage.map((t) => {
       const e = focusEval.get(t.stage);
@@ -977,9 +977,11 @@ function state() {
         const types = new Map();
         for (const r of e.rests) types.set(r.type, (types.get(r.type) ?? 0) + 1);
         const text = [...types].map(([type, n]) => `${n} ${type}`).join(', ');
-        return { ...t, ...extra, title: `${t.title} (done, rests: ${text})` };
+        const suffix = ` (done, rests: ${text})`;
+        return { ...t, ...extra, title: `${t.title}${suffix}`, label: `${t.label ?? t.title}${suffix}` };
       }
-      if (e.status === 'done') return { ...t, ...extra, title: `${t.title} (done)` };
+      if (e.status === 'done')
+        return { ...t, ...extra, title: `${t.title} (done)`, label: `${t.label ?? t.title} (done)` };
       return { ...t, ...extra };
     });
   const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
@@ -1617,7 +1619,7 @@ async function focus(b, queueNow) {
     order.length > L.FOCUS_PLAN_MAX ||
     order.some((x) => !STEP.test(x))
   )
-    return no('invalid stage');
+    return no('invalid step');
   if (!pause || !proceed || [...pause, ...proceed].some((x) => !PID.test(x)))
     return no('invalid project id in pause/continue');
   if (p.rest != null && !L.FOCUS_REST.includes(p.rest))

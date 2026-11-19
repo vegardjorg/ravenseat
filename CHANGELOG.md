@@ -5,6 +5,19 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: a done focus step says "done", and the Focus tab speaks one language.** Edge cases closed in the Focus
+  feature. A step that points to a feature whose tasks are all done, or that only has rests left (QA waiting on you, a
+  proposal, the batch queue), showed "does not exist" on the Focus tab, because the plan view listed features from
+  pending tasks only. Such a feature now keeps its row and the step carries a neutral "done" badge, with what keeps it
+  in the focus in the tooltip; a feature no task has ever had still says "does not exist". The "Set focus" and "Edit
+  focus" button in the focus line is hidden on the Focus tab itself, where it only switched to the tab already open.
+  The Now column no longer has a fixed blue tone that looked like an active drop zone: it looks like the other columns,
+  and the steps in Now in the focus line have the primary edge and bold text instead of a fill. The board, the
+  previews, the warnings, the CLI texts and the docs say "step" for a focus step everywhere ("stage" is gone; the data
+  field keeps its name). A project step in the focus line is written like the project on a card, by its id with the
+  title in the tooltip, and a feature step as "project › feature"; the Focus tab shows the id beside a project's title.
+  No new setting and no new colors: only the theme's tokens.
+
 - **Board: the Statistics charts keep their legends inside the card, and a value text gives way to a line.** Edge
   cases closed in the Statistics tab. Two rules written for other views shared a class name with the charts and won by
   coming later in the style sheet: the Dependencies graph's full-height rule stretched each chart over its whole card,

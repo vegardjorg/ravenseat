@@ -133,7 +133,7 @@ describe('sorting and grouping', () => {
 describe('the impact line', () => {
   const items = Object.fromEntries(D.fromInbox(inbox).map((x: any) => [x.key, x]));
   it('says what the answer unlocks, in words', () => {
-    expect(D.impactLine(items['decide:Q-2'])).toBe('unlocks 2 tasks (30 min) · in focus: 2 (30 min), stage 1 first');
+    expect(D.impactLine(items['decide:Q-2'])).toBe('unlocks 2 tasks (30 min) · in focus: 2 (30 min), step 1 first');
     expect(D.impactLine(items['approve:T-5'])).toBe('queues it (45 min) · then unlocks 1 task (20 min)');
     expect(D.impactLine(items['check:T-9'])).toBe('closes the QA; nothing waits on it');
     expect(D.impactLine({ ...items['approve:T-5'], batched: true })).toContain('puts it in the batch queue (45 min), where it does not start alone');

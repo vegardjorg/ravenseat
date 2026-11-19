@@ -614,7 +614,7 @@
     return sortItems(fromInbox(inbox));
   }
 
-  /** One line about what the answer does: "unlocks 3 tasks (4 h) · in focus: 2 (stage 1)". */
+  /** One line about what the answer does: "unlocks 3 tasks (4 h) · in focus: 2 (step 1)". */
   function impactLine(item) {
     const x = item?.impact ?? {};
     const parts = [];
@@ -633,8 +633,8 @@
     const stage = (x.perStep ?? []).findIndex((m) => m > 0);
     if (stage >= 0) {
       if (item?.verb === 'decide')
-        parts.push(`in focus: ${x.focusCount} (${minutesText(x.focusMinutes)}), stage ${stage + 1} first`);
-      else parts.push(`in focus stage ${stage + 1}`);
+        parts.push(`in focus: ${x.focusCount} (${minutesText(x.focusMinutes)}), step ${stage + 1} first`);
+      else parts.push(`in focus step ${stage + 1}`);
     }
     return parts.join(' · ');
   }
