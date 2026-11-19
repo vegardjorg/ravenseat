@@ -3,7 +3,9 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
-## Unreleased
+## 0.20.0 (2026-11-19)
+
+**The board holds up with large queues and keeps its layout still, test runs pick only what a change touches and are logged, tracks read less of large files, and on Windows no console window opens per git call below a detached run.**
 
 - **Windows: no console window per git call under a detached run.** Edge case hardening. A detached run (the wait
   mode, a gate command, the tree guard, the update check) has no console, and `windowsHide` on its own start did not
@@ -578,6 +580,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   longer has to mix the question and the reason; existing questions and queue.json files work unchanged. The source
   is a link when it names a task or a plan entry. Colors come from the existing tone tokens, checked at 4.5:1 in
   light and dark. No new setting.
+
+### After you update
+- On Windows, detached runs (the wait mode, gates, the tree guard, the update check) now start everything below them with hidden windows (new setting `windows.hideConsoles`, on). `false`, or `RAVENSEAT_HIDE_WINDOWS=off` for one shell, shows them again.
+- In this repo, `npm run test:changed` and `npm test` each write one row to `<dataFolder>/test-runs.jsonl` (setting `testRuns.log`, on). `node scripts/test-changed.mjs --stats` reads it.
+- A long inline mission moves to a mission file at add and edit, and `ravenseat cost --reads` lists the files tracks most often read whole.
+- No setting changes its value on update, and no guard is turned off.
 
 ## 0.19.0 (2026-11-18)
 
