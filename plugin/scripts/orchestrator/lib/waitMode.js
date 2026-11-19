@@ -27,6 +27,7 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawn, spawnSync } = require('node:child_process');
+const { hiddenWindowsEnv } = require('./hideWindows.cjs');
 
 /** The default block budget: under the 5 minute prompt cache, with room for the call's own start and end. */
 const DEFAULT_BLOCK_SEC = 280;
@@ -217,7 +218,8 @@ function startOrAttach({ folder, command, args, key, what, childArgv, cwd, hardS
           detached: true, // its own process group (POSIX) / no console (Windows): it outlives this call
           windowsHide: true,
           stdio: ['ignore', out, err],
-          env: { ...env, QUEUE_WAIT: 'off' }, // the command it runs never uses the wait mode itself
+          // The command it runs never uses the wait mode itself. Hidden windows passed on to everything below it (lib/hideWindows.cjs: windowsHide here does not reach what the run starts).
+          env: hiddenWindowsEnv({ ...env, QUEUE_WAIT: 'off' }),
         },
       );
       runner.unref();

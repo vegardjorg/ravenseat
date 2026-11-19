@@ -39,6 +39,7 @@
 'use strict';
 
 const { spawn: spawnAsync, spawnSync } = require('node:child_process');
+const { hiddenWindowsEnv } = require('./hideWindows.cjs');
 const fs = require('node:fs');
 
 /** How long the supervisor waits for the ended tree to close its pipes before it ends anyway. */
@@ -149,6 +150,7 @@ function supervise(timeoutMs, command, parentPid) {
     detached: true, // the guard: its own process group (POSIX), outside this process's job (Windows)
     stdio: ['ignore', 'inherit', 'inherit'],
     windowsHide: true,
+    env: hiddenWindowsEnv(process.env), // hidden windows passed on to the command (lib/hideWindows.cjs: windowsHide here does not reach what the run starts)
   });
   let ended = false;
   const end = (code) => {

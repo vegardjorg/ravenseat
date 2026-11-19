@@ -232,6 +232,7 @@
         detached: true,
         stdio: 'ignore',
         windowsHide: true,
+        env: require('./hideWindows.cjs').hiddenWindowsEnv(process.env), // hidden windows below it (lib/hideWindows.cjs: windowsHide here does not reach what the run starts)
       });
       child?.on?.('error', () => {});
       child?.unref?.();

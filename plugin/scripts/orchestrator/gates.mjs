@@ -102,6 +102,7 @@ const { config } = require('./lib/queueConfig.js');
 const { firstErrorLine, gateType, resultLine } = require('./lib/orchestratorHelp.js');
 const TL = require('./lib/timeLogRows.js');
 const TR = require('./lib/treeRun.js');
+const { hiddenWindowsEnv } = require('./lib/hideWindows.cjs');
 const { timeLog } = require('./lib/queueConfig.js');
 
 const args = process.argv.slice(2);
@@ -504,7 +505,8 @@ function runShell(command, { timeoutMs = null } = {}) {
     const child = spawn(process.execPath, TR.guardShellArgs(command), {
       cwd,
       detached: true,
-      env: gateCommandEnv(), // scrubbed (lib/gateEnv.js): the check runs the track's code. With its own temp folder (lib/gateTemp.js)
+      // Hidden windows passed on to the gate command and its children (lib/hideWindows.cjs: windowsHide here does not reach what the run starts).
+      env: hiddenWindowsEnv(gateCommandEnv()), // scrubbed (lib/gateEnv.js): the check runs the track's code. With its own temp folder (lib/gateTemp.js)
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'], // no stdin: a command that reads it gets end of file instead of hanging
     });

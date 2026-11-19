@@ -5,30 +5,24 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Windows: no console window per git call under a detached run.** Edge case hardening. A detached run (the wait
+  mode, a gate command, the tree guard, the update check) has no console, and `windowsHide` on its own start did not
+  reach what it started, so every git, cmd or npm call below it, test runs included, opened a window for a moment. A
+  small preload (`lib/hideWindows.cjs`) now makes `windowsHide` the default for every process call, and the detached
+  starts pass it on through `NODE_OPTIONS`, so children and grandchildren start hidden too. An explicit
+  `windowsHide: false` is kept. Windows only. No setting, since hiding the window changes nothing else;
+  `RAVENSEAT_HIDE_WINDOWS=off` is an escape hatch that shows the windows again.
+
 - **Board: the view tabs keep their place when chosen.** Layout hardening. Flat, Project lanes, Focus,
   Dependencies, Cloud and Statistics turn bold when chosen, which made the tabs after them move a few pixels. They
   now use the same width-keeping label as the room tabs, the Focus tab too when its end badges are drawn.
 
-- **Docs: clearer token numbers, with the method published.** Docs hardening, no code change. The README opens with
-  "Why it holds up" (tokens, state in files, long projects, security, parallel merging). The token section starts from
-  a cost line (a turn costs about 0.02 USD plus about 0.02 USD per 100k tokens of context, Opus 5.5, 8,031 turns) and
-  Claude Code's default (a 1M window, compaction at about 967k), then shows one project on the same model before and
-  after the 300k setting (25 to 30 September against 8 October to 15 November 2026), main chat and subagents apart,
-  with how much of each gain context size alone explains and the dates of the other changes in those weeks. The older
-  mixed-model figure for long contexts is replaced by a same-model comparison over the whole setup (a main-chat turn in
-  a long chat cost about 2.4 times a turn with compaction at 300k; a single band is the wrong reference, since a 300k
-  chat climbs to about 268k and starts again), in the README, `costs.md` and the GIF. The queue against one chat
-  compacted at 300k now also shows the figures without checks and review, and small fresh chats are described as not
-  costing more in tokens (the reset size is the lever). The orchestrator's cost per task is given both ways: it halved as its
-  context shrank and later rose as turns per task went from about 13 to 22 (about half from fewer tracks in parallel, the rest from more
-  review and checking per task). All amounts are marked API-equivalent at list price.
-  `costs.md` has two new sections, "The same project before and after compaction at 300k" and "Cost per turn by
-  context size", each with n, dates and how a turn's cost is computed. The README and the setup step now say that
-  `ravenseat setup --settings` sets `autoCompactWindow: 300000` for every session in the project, the user's own chats
-  and all subagents included. The parallel-load measurement in
-  [full mode](plugin/docs/full-mode.md#my-pc-chokes-on-parallel-builds) now says 14 tracks was the configured cap and
-  that load explains part of the slowdown, not all of it. The repeat of the guarantees ("Agents don't grade their own
-  homework") is folded into the security section.
+- **Docs: re-ran and corrected some test numbers and stats.** Docs hardening, no code change. The README opens with
+  "Why it holds up" (tokens, state in files, long projects, security, parallel merging), and the cost figures in the
+  README, `costs.md` and the GIF were measured again on one model, with dates, n and the method in `costs.md`. The
+  README and the setup step now say that `ravenseat setup --settings` sets `autoCompactWindow: 300000` for every
+  session in the project, subagents included.
+
 - **test:changed: a changed doc picks only the tests that read it, and every run is logged (TC-1).** Edge cases in the
   pick for docs. A test that named `README.md` or `costs.md` was picked for a change to the repo's copy even when it
   only wrote a fixture of that name in a temp folder, and the folder name rule picked every test with a `'docs'` path
