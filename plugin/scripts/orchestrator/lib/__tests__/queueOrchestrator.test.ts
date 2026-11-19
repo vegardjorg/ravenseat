@@ -828,6 +828,14 @@ describe('environment check and step plan for merge', () => {
     });
   });
 
+  it('keepReview (a PARTIAL delivery merged with --allow-partial): every step but done, with a note', () => {
+    const k = K2.mergePlan({ o: { id: 'K', migr_block: '3600–3609' }, files: ['db/migrations/3600_m.sql'], migrations: MIGR, baseGate: true, keepReview: true });
+    expect(k.step).toEqual(['merge', 'migr-push', 'gates', 'base-gate', 'fill']);
+    expect(k.keepReview).toBe(true);
+    expect(k.notes.join(' ')).toMatch(/K was delivered PARTIAL: merged, but it stays in review/);
+    expect(K2.mergePlan({ o: { id: 'N' }, files: [], migrations: MIGR }).keepReview).toBe(false);
+  });
+
   it('migration push only when the branch has migration files (the block decides when the diff is missing)', () => {
     const m = K2.mergePlan({
       o: { id: 'M', migr_block: '3600–3609' },

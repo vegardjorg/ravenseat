@@ -339,6 +339,8 @@
 //         recorded in <dataFolder>/merge-state-<id>.json; --resume (after Ctrl-C, a crash, a stop after the merge or a
 //         conflict resolved and committed by hand) runs the steps after the merge that have not run: migration push,
 //         gates, base gate, done, fill. lib/mergeLock.js.)
+//        (--allow-partial on a PARTIAL delivery: every step but done; the task stays in review with a remark, keeps
+//         delivered_partial, its branch and worktree, and `resume <id> --reason context` continues the rest.)
 //        (with a done command: run again first unless the last green run was on the same branch tip; red = a fix round
 //         as in receive, never a merge, exit 1 or 8.)
 //        (after an approved review; run from Bash (merge-track calls sh), with a long timeout: the gates can take minutes. In one

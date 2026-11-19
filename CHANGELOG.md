@@ -5,6 +5,16 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Merge: a PARTIAL delivery merged with `--allow-partial` stays in review.** Edge case closed in the merge flow.
+  `ravenseat merge <id> --allow-partial` merged a track that called itself unfinished and then set the task done, so
+  the rest of the task had no place in the queue. Now the merge, the migration push, the gates, the base gate and
+  fill run as before, but the done step is left out: the task stays in review with a remark that the rest remains,
+  `delivered_partial` stays set until a finished delivery is received, and the track branch and worktree are kept.
+  Because the task is not done, it frees no dependent task, gets no cost measurement and leaves the focus as it is.
+  The merge output says the task stays in review and names the next command, `ravenseat resume <id> --reason
+  context`, then `receive` and `merge` again. A second `merge` or `merge --resume` before that says the same and
+  changes nothing. No new setting.
+
 - **Board: focus on the cards, and a picker on the Focus tab.** Edge cases closed in the Focus feature. Putting one
   task into the focus or taking it out meant the CLI or dragging on the Focus tab, and a card outside the focus named
   `ravenseat focus` as its way out. A task outside every step now has **Add to focus** in the detail panel, on its card

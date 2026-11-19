@@ -1406,6 +1406,14 @@ export async function cmdMerge() {
   }
   const state0 = ML.readState(FOLDER, id);
   const force = a.includes('--force');
+  // A PARTIAL delivery (receive sets delivered_partial, a later finished delivery clears it): merged only with
+  // --allow-partial, and then the task stays in review, since the track said the rest is not done. The flag stays until
+  // a finished delivery is received; the merge never clears it. A resume of such a merge keeps it in review too.
+  const keepReview = !!o.delivered_partial;
+  const restLine = `${CLI} resume ${id} --reason context, then ${CLI} receive ${id} and ${CLI} merge ${id}`;
+  // A partial merge that already went through has nothing left to resume: what is left is the rest of the task.
+  if (resume && keepReview && !state0 && o.status === 'review' && o.merge_commit && containsCommit(branchTip, `refs/heads/${BASE}`))
+    die(`${id} was merged with --allow-partial and stays in review: nothing of the merge is left to resume. The rest of the task remains: ${restLine}.`);
   if (resume) {
     const left = state0 ? ML.remainingSteps(state0.plan ?? [], state0.steps_done ?? []) : [];
     if (o.status === 'done' && !left.some((s) => s !== 'done')) {
@@ -1435,6 +1443,12 @@ export async function cmdMerge() {
         `has not happened${gi.commits ? ` (${gi.commits} commit(s) ahead)` : ''}. Run ${CLI} merge ${id} (without --resume).`,
     );
   if (!resume && gi.commits === 0) {
+    // A partial merge that went through (no merge state left): the branch is in base, and the task waits for the rest.
+    if (tipInBase && o.status === 'review' && keepReview && !state0)
+      die(
+        `${branch} is already merged into ${BASE}: ${id} was merged with --allow-partial and stays in review until the rest ` +
+          `is delivered. Next: ${restLine}. Nothing was done.`,
+      );
     // M7: the branch is in base already. A task still in review was cut off after the merge (Ctrl-C, a crash, a stop
     // after the merge): the remaining steps are what is left, not a new merge.
     if (tipInBase && o.status === 'review')
@@ -1648,6 +1662,7 @@ export async function cmdMerge() {
     base: BASE,
     migrations: MIGR,
     baseGate: BASE_SETUP.enabled && !BASE_SETUP.sameAsQuick,
+    keepReview,
   });
   // The steps this call runs: all of them, or (resume) the ones after the merge that the state does not list as done.
   // A task already done (set by hand, or the done step ran) never gets `done` again.
@@ -1725,6 +1740,8 @@ export async function cmdMerge() {
           trackTip,
           ...(o.head_start ? ['--wave-base', o.head_start] : []),
           ...(allowGuard ? ['--allow-guard'] : []),
+          // A partial merge: the rest is continued on the same branch, so the track's worktree stays (resume frees it).
+          ...(keepReview ? ['--keep-worktree'] : []),
         ],
       ];
     if (step === 'migr-push') return [String(MIGR.pushCommand), [], true];
@@ -2141,13 +2158,24 @@ export async function cmdMerge() {
     // The merge went through: an open blocker (merge-conflict, gate-red or one set by hand) is closed.
     L.closeBlock(ox);
     delete ox.merge_conflict;
+    // A partial merge: the task stays in review, and the remark says why (delivered_partial is left as it is).
+    if (keepReview)
+      ox.remarks = [
+        ...(ox.remarks ?? []),
+        `${new Date().toISOString()} merged with --allow-partial at ${short(mstate.merge_commit ?? trackTip)}; the rest of the task remains, so it stays in review until a finished delivery (${CLI} resume ${id} --reason context)`,
+      ];
     return ox;
   });
   ML.clearState(FOLDER, id);
-  tidyAfterMerge(branch, { resume, start: o.head_start });
+  tidyAfterMerge(branch, { resume, start: o.head_start, keepTrack: keepReview });
   console.log(`Full log: ${logFile}`);
   printBase();
   console.log(CONTROLS.verificationLine(verified, { quiet: GUIDANCE.isQuiet(read()) }));
+  if (keepReview)
+    console.log(
+      `PARTIAL: ${id} is merged, but ${id} stays in review, not done: the track delivered it PARTIAL, so the rest remains. ` +
+        `Tasks that wait on it stay waiting. Next: ${restLine}.`,
+    );
   // When fill started tracks, the very last line says so (a background merge read with tail still shows it).
   const reminder = L.startReminderLine(res.filled);
   if (reminder) console.log(reminder);
@@ -2176,9 +2204,16 @@ function deleteCloudBranch(branch) {
 /**
  * Best effort after a whole merge; it never changes the merge's result. A resume never ran merge-track's worktree
  * cleanup, so it runs here. The queue's own branch goes with `git branch -d`, which refuses anything not merged; a
- * branch the owner named (a picked task's own) stays.
+ * branch the owner named (a picked task's own) stays. `keepTrack` (a partial merge): the track's branch, its worktrees and
+ * its cloud branch stay, since the rest of the task is continued on them; only other merged agent branches go.
  */
-function tidyAfterMerge(branch, { resume, start }) {
+function tidyAfterMerge(branch, { resume, start, keepTrack = false }) {
+  if (keepTrack) {
+    const gone = G.mergedAgentBranches(git, BASE).filter((b) => git(['branch', '-d', b]) != null);
+    if (gone.length) console.log(`Agent branches: ${gone.length} merged one(s) deleted.`);
+    console.log(`Branch: ${branch} kept (the rest of the task is continued on it).`);
+    return;
+  }
   try {
     for (const r of cleanupDetachedOf(branch, { start, against: BASE, main: GIT_ROOT })) console.log(`Worktree: ${r.status}: ${r.message}`);
   } catch (e) {

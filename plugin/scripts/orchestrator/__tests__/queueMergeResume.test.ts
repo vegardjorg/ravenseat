@@ -386,3 +386,77 @@ describe('ravenseat merge --resume after an interruption (M7)', () => {
     expect(fs.existsSync(p.lockFile)).toBe(false);
   });
 });
+
+describe('ravenseat merge --allow-partial keeps the rest of the task (MERGE-PARTIAL-REVIEW)', () => {
+  /** Edits a task in queue.json directly (after p.track, which writes the whole file again). */
+  const patch = (folder: string, id: string, fn: (t: Task) => void) => {
+    const file = path.join(folder, 'queue.json');
+    const q = JSON.parse(fs.readFileSync(file, 'utf8')) as { tasks: Task[] };
+    fn(q.tasks.find((x) => x.id === id) as Task);
+    fs.writeFileSync(file, JSON.stringify(q));
+  };
+  // What the receive of a PARTIAL delivery leaves on the task.
+  const markPartial = (t: Task) => {
+    t.delivered_partial = true;
+  };
+
+  it('merges, but the task stays in review with a remark, delivered_partial stays, and resume --reason context continues it', () => {
+    const p = project();
+    const tip = p.track('A', { 'a.txt': 'from A\n' });
+    p.track('B', { 'b.txt': 'from B\n' });
+    // B waits on A: a merge that carries only part of A must not free it.
+    patch(p.folder, 'B', (t) => {
+      t.depends_on = ['A'];
+      t.status = 'waiting';
+    });
+    patch(p.folder, 'A', markPartial);
+    const m = p.run('merge', 'A', '--allow-partial', '--without-fill');
+    expect(m.error).toBe('');
+    expect(m.code).toBe(0);
+    // The merge itself happened as today: the tip is in the base and the merge commit is on the task.
+    expect(p.contains(tip)).toBe(true);
+    expect(p.ranSteps()).toEqual(['merge', 'gates']);
+    const a = p.find('A') as Task;
+    expect(a.status).toBe('review');
+    expect(a.delivered_partial).toBe(true);
+    expect(a.done).toBeUndefined();
+    expect(typeof a.merge_commit).toBe('string');
+    expect((a.remarks as string[]).join('\n')).toMatch(/--allow-partial.*the rest of the task remains/);
+    expect(p.find('B')?.status).toBe('waiting');
+    // Said plainly, with the command that continues it.
+    expect(m.out).toMatch(/A stays in review/);
+    expect(m.out).toContain('resume A --reason context');
+    // The branch is kept for the continuation (a done merge deletes a merged queue branch).
+    expect(p.gTry(['rev-parse', '-q', '--verify', 'refs/heads/queue/A']).status).toBe(0);
+    expect(fs.existsSync(p.stateFile('A'))).toBe(false);
+    // A second merge, or a resume of the merge, points to the rest instead of the cut-off-merge advice.
+    for (const args of [['merge', 'A', '--without-fill'], ['merge', 'A', '--resume', '--without-fill']]) {
+      const again = p.run(...args);
+      expect(again.code).toBe(1);
+      expect(again.error).toContain('stays in review');
+      expect(again.error).toContain('resume A --reason context');
+    }
+    expect(p.ranSteps()).toEqual([]);
+    expect(p.find('A')?.status).toBe('review');
+    // The continuation of the rest.
+    const scratch = path.join(p.folder, 'scratch');
+    const r = p.run('resume', 'A', '--reason', 'context', '--scratchpad', scratch);
+    expect(r.error).toBe('');
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('RESUME A-r1 (context)');
+    expect(p.find('A')).toMatchObject({ status: 'review', delivered_partial: true });
+  });
+
+  it('a merge without the flag still stops, and a merge of a finished delivery still ends done', () => {
+    const p = project();
+    p.track('A', { 'a.txt': 'from A\n' });
+    patch(p.folder, 'A', markPartial);
+    const stop = p.run('merge', 'A', '--without-fill');
+    expect(stop.code).not.toBe(0);
+    expect(stop.error).toContain('--allow-partial');
+    expect(p.ranSteps()).toEqual([]);
+    p.track('C', { 'c.txt': 'from C\n' });
+    expect(p.run('merge', 'C', '--without-fill').code).toBe(0);
+    expect(p.find('C')?.status).toBe('done');
+  });
+});

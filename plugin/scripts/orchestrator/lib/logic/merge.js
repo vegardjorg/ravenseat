@@ -91,11 +91,22 @@ function migrFiles(files, migrations) {
  * few). A block without files gives only a note. Without a migration folder there is never a push step.
  * `baseGate` adds the step `base-gate` after the quick gates: the base gate's own commands (lib/baseHealth.js) on the new
  * base tip, only when they are not the quick gates themselves (then the gates step is the base check).
+ * `keepReview` (a PARTIAL delivery merged with --allow-partial): no `done` step, since the track itself said the task is
+ * unfinished. The task stays in review until a finished delivery is merged; everything else runs as usual.
  * @param {{ o: object, files: string[]|null, withoutMigrPush?: boolean, withoutFill?: boolean, base?: string,
- *   migrations?: object, baseGate?: boolean }} x
- * @returns {{ step: string[], migrPush: boolean, migr: string[], notes: string[] }}
+ *   migrations?: object, baseGate?: boolean, keepReview?: boolean }} x
+ * @returns {{ step: string[], migrPush: boolean, migr: string[], notes: string[], keepReview: boolean }}
  */
-function mergePlan({ o, files, withoutMigrPush = false, withoutFill = false, base = 'baseBranch', migrations, baseGate = false }) {
+function mergePlan({
+  o,
+  files,
+  withoutMigrPush = false,
+  withoutFill = false,
+  base = 'baseBranch',
+  migrations,
+  baseGate = false,
+  keepReview = false,
+}) {
   const m = migrSetup(migrations);
   const notes = [];
   let migr = [];
@@ -119,9 +130,10 @@ function mergePlan({ o, files, withoutMigrPush = false, withoutFill = false, bas
       notes.push('the branch has migrations, but the task has no migration block: they are NOT pushed. Check them, and push them yourself');
     migrPush = hasMigr && !!m.pushCommand && !withoutMigrPush && mayPush;
   }
-  const step = ['merge', ...(migrPush ? ['migr-push'] : []), 'gates', ...(baseGate ? ['base-gate'] : []), 'done'];
+  const step = ['merge', ...(migrPush ? ['migr-push'] : []), 'gates', ...(baseGate ? ['base-gate'] : []), ...(keepReview ? [] : ['done'])];
+  if (keepReview) notes.push(`${o?.id ?? 'the task'} was delivered PARTIAL: merged, but it stays in review (no done step) until a finished delivery`);
   if (!withoutFill) step.push('fill');
-  return { step, migrPush, migr, notes };
+  return { step, migrPush, migr, notes, keepReview };
 }
 
 /** The last `n` non-empty lines (the error excerpt when a step stops). */
@@ -224,7 +236,9 @@ function executeMerge({
         return stop(
           step,
           `The gates (--quick) are red after the merge${plan.migrPush ? ' and the migration push' : ''}. The task stays in ` +
-            'review; fix it (or send a fix round), and then run set <id> done and fill.',
+            (plan.keepReview
+              ? 'review (it was delivered PARTIAL, so it is not set done either way); fix it in the continuation of the rest.'
+              : 'review; fix it (or send a fix round), and then run set <id> done and fill.'),
           r.out,
         );
       lines.push(`gates --quick: ${lastLine(r.out)}`);
@@ -248,7 +262,7 @@ function executeMerge({
         continue;
       }
       if (r.code !== 0)
-        return stop(step, `fill failed (exit ${r.code}). ${o.id} is done.`, r.out);
+        return stop(step, `fill failed (exit ${r.code}). ${o.id} is ${plan.keepReview ? 'merged and stays in review' : 'done'}.`, r.out);
       lines.push(...fillExcerpt(r.out));
       filled = filledSummary(r.out);
     }
