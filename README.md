@@ -120,7 +120,7 @@ The queue, each task's instructions, the plan register and your accepted design 
 A crash, a compaction or a second chat loses nothing that matters. After a compaction the main chat was back to
 starting agents after about 6 turns, against about 17 turns in a new chat that read a handover note.
 
-### It does not cost more, and the setup makes every turn cheaper
+### It costs about the same, and the setup makes every turn cheaper
 
 Setup turns on compaction at 300k tokens. In the same project and on the same model, a main-chat turn then cost less
 than half as much as before: 0.065 against 0.157 USD. The queue itself is about cost-neutral for building and
