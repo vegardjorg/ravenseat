@@ -1151,6 +1151,14 @@ const SETTINGS = Object.freeze([
   row('focus.continueWhenEmpty', 'plans', 'onoff', 'Continue when the focus ends',
     'Off: the queue pauses and asks you when a focus has ended. On: it continues with the regular queue.',
     { fullWhy: 'lite has no focus steps to end' }),
+  // B22 (owner decision 2026-11-19, owner question 3 of plans/fokus-vurdering-2026-11-18.md). Default fill (STANDARD in
+  // lib/queueConfig.js): wait can stop work without anything saying so, and anything that can stop work is off by
+  // default. Friction: someone who wants a strict focus picks wait once. Only a new focus reads it (`focus set` without
+  // --rest, a new focus from the Focus tab); an explicit --rest or the board's choice wins, a stored focus keeps its rest.
+  row('focus.restDefault', 'plans', 'choice', 'Outside focus',
+    'What happens to tasks outside a new focus. fill (default): they start when the focus leaves a slot free. ' +
+    'wait: they do not start until the focus changes, so slots can stay empty.',
+    { fullWhy: 'lite has no focus steps', choices: ['fill', 'wait'] }),
   row('modules', 'plans', 'list', 'Areas', 'The areas of the product in the plan register.', { fullWhy: WHY_PLANS }),
   row('projectModuleSuggestion', 'plans', 'object', 'Suggested area per project',
     'A suggested area for each project id ({ "<project>": "<area>" }), used only by `plan modules --link` for projects ' +

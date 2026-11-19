@@ -39,7 +39,7 @@ const EXPORTS = [
   'evidenceText', 'evidenceWarning', 'executeMerge', 'expectCheck', 'externalAccept', 'externalAdd',
   'contenders', 'dbKey', 'externalCollisions', 'externalDone', 'externalId', 'fileOverlap', 'fileRootMatch', 'fillExcerpt', 'filledSummary', 'startReminderLine', 'noAgentMinFor',
   'findTrackReport', 'firstUserMessage', 'focusApplies', 'focusCleanLines', 'focusContinues', 'focusEnd',
-  'focusEndLine', 'focusEndQuestionId', 'focusEndText', 'focusRanEmpty', 'focusSpace', 'focusStatus', 'focusText',
+  'focusEndLine', 'focusEndQuestionId', 'focusEndText', 'focusRanEmpty', 'focusRestDefault', 'focusSpace', 'focusStatus', 'focusText',
   'focusWithoutDone', 'groups', 'hasLabel', 'hasMigr', 'hasOrchestratorTrailer', 'heldBackLines', 'highestBlockNr', 'inBatchQueue',
   'inNightWindow', 'infoField', 'infoValueText', 'infoView', 'isAgentSource', 'isBatched', 'isCloud', 'isExternalRow',
   'isOldPick', 'isRecommendedChoice', 'lastAnswer', 'lastUndoable', 'limitText', 'loadGuard', 'loadSlotsFor', 'lockUpCount', 'logChange',

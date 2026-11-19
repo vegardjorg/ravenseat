@@ -1640,7 +1640,8 @@ async function focus(b, queueNow) {
   const input = {
     order,
     ...(nowCount != null ? { now_count: nowCount } : {}),
-    rest: p.rest ?? 'wait',
+    // B22: a plan without a rest is left to saveFocusPlan (the stored focus's rest, else focus.restDefault).
+    ...(p.rest != null ? { rest: p.rest } : {}),
     to,
     name: name || null,
     drag_with_dependencies: p.drag_with_dependencies !== false,

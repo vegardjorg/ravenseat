@@ -515,7 +515,8 @@ describe('setFocus and parseStep', () => {
     expect(L.setFocus(queue, { order: [] }, ISO).error[0]).toMatch(/at least one step/);
   });
 
-  it('the default is rest wait and drag along; warns about pause, an empty stage and zero ready ones', () => {
+  // The rest default is focus.restDefault, fill unless the project chose wait (B22, queueFocusB22.test.ts).
+  it('the default is rest fill and drag along; warns about pause, an empty stage and zero ready ones', () => {
     const queue = reasonQueue();
     queue.projects!.warehouse.pause = true;
     queue.areas!.help = { title: 'Help' };
@@ -526,7 +527,7 @@ describe('setFocus and parseStep', () => {
       from: ISO,
       to: null,
       order: ['area:goods', 'area:help'],
-      rest: 'wait',
+      rest: 'fill',
       drag_with_dependencies: true,
     });
     expect(r.warnings.join(' | ')).toMatch(/the project warehouse in step 1 is paused/);
@@ -877,7 +878,8 @@ describe('queue.mjs: area, areas, focus, park, continue (against a copy)', () =>
     const areasRun = run(['areas']);
     expect(areasRun.out).toMatch(/goods +2 waiting · 2 ready/);
     expect(areasRun.out).toMatch(/without-area/);
-    const s = run(['focus', 'set', 'goods', '--name', 'Goods first']);
+    // --rest wait explicitly: without it a new focus takes focus.restDefault, fill by default (B22).
+    const s = run(['focus', 'set', 'goods', '--name', 'Goods first', '--rest', 'wait']);
     expect(s.code).toBe(0);
     expect(s.out).toMatch(/Focus set: 1 Goods · rest waiting/);
     expect(readQueue().focus?.order).toEqual(['area:goods']);

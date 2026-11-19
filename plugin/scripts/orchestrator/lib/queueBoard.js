@@ -904,14 +904,17 @@ const countText = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
  *           [{ type: 'resolve', sp, choice, label }]  answer the "focus ended" owner question
  *           [{ type: 'focus-tab', label }]            open the Focus tab
  *           [{ type: 'batch-pack', ids, label }]      pack the batch queue (the board's bulk dialog)
- *   how     { rest, drag_with, continues }: the focus's own values for "How focus works" (the defaults without a focus)
+ *   how     { rest, drag_with, continues }: the focus's own values for "How focus works" (the defaults without a focus;
+ *           rest is then the setting focus.restDefault, what a new focus gets)
  * Pure; changes nothing. `line` is the focusLine result when the caller has it.
  */
 function focusNow(queue, { now = Date.now(), context = null, line = null } = {}) {
   const k = context ?? L.rankingContext(queue, now);
   const f = queue?.focus ?? null;
   const how = {
-    rest: f?.rest === 'fill' ? 'fill' : 'wait',
+    // A stored focus: its own rest (one with none is read as wait, as the ranking does). Without a focus: the rest a
+    // new focus would get, the setting focus.restDefault (B22), so the Focus tab preselects it.
+    rest: f ? (f.rest === 'fill' ? 'fill' : 'wait') : L.focusRestDefault(),
     drag_with: f ? f.drag_with_dependencies !== false : true,
     // The setting (the focus's own value, else the config), not an owner answer: what a focus does when it is done.
     continues: L.focusContinues(queue).setting === true,
@@ -950,17 +953,24 @@ function focusNow(queue, { now = Date.now(), context = null, line = null } = {})
     const p = L.focusSpace(o, k);
     if (p.outside && !p.parked && !p.paused) outside += 1;
   }
-  const outsideText = outside
-    ? how.rest === 'fill'
-      ? ` ${countText(outside, 'task')} outside the focus ${outside === 1 ? 'fills' : 'fill'} free slots.`
-      : ` ${countText(outside, 'task')} outside the focus ${outside === 1 ? 'waits' : 'wait'}.`
-    : '';
+  // With rest wait the line always says how many tasks outside the focus wait, also 0 (owner question 3, B22): wait can
+  // keep slots empty, so the count is never left out. With fill, nothing is said when nothing is outside.
+  const waitCount = ` ${countText(outside, 'task')} outside the focus ${outside === 1 ? 'waits' : 'wait'}`;
+  const outsideText =
+    how.rest === 'wait'
+      ? `${waitCount}.`
+      : outside
+        ? ` ${countText(outside, 'task')} outside the focus ${outside === 1 ? 'fills' : 'fill'} free slots.`
+        : '';
   // When nothing in the focus starts: what that means for the free slots.
-  const slotsText = !outside
-    ? ''
-    : how.rest === 'fill'
-      ? ' Tasks outside the focus fill the free slots meanwhile.'
-      : ' Tasks outside the focus wait, so free slots stay empty.';
+  const slotsText =
+    how.rest === 'wait'
+      ? outside
+        ? `${waitCount}, so free slots stay empty.`
+        : `${waitCount}.`
+      : outside
+        ? ' Tasks outside the focus fill the free slots meanwhile.'
+        : '';
   const steps = st.stage ?? [];
   const label = (i) => `step ${i + 1} ${steps[i]?.label ?? steps[i]?.title ?? ''}`.trim();
   const evaluation = L.evaluateFocusStep(queue, now);

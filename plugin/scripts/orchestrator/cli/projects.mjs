@@ -370,6 +370,7 @@ export function cmdFocus() {
         'No focus set: the queue is ranked by score and projectBonus.\n' +
           'Set: ravenseat focus set area:<oid> project:<pid> feature:<pid>/<name> ... [--rest wait|fill] [--to <date>]' +
           ' [--continue-when-empty on|off]\n' +
+          `Outside a new focus (without --rest): ${L.focusRestDefault()} (config focus.restDefault)\n` +
           `When a focus has ended: continue when empty: ${L.focusContinues(queue).setting ? 'on' : 'off'} ` +
           '(config focus.continueWhenEmpty)',
       );

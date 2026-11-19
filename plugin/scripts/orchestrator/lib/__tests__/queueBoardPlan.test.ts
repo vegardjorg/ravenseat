@@ -260,7 +260,8 @@ describe('board(): place, area and sorting with focus', () => {
 
   it('with focus on Calendar (rest waiting): Calendar first with nr/by, Goods outside with a reason', () => {
     const queue = reasonQueue();
-    L.saveFocusPlan(queue, { order: ['project:ui'] }, '2026-10-07T11:00:00.000Z');
+    // rest wait chosen explicitly: a new focus without a rest takes focus.restDefault, fill by default (B22).
+    L.saveFocusPlan(queue, { order: ['project:ui'], rest: 'wait' }, '2026-10-07T11:00:00.000Z');
     const t = T.board(queue, { now: NOW });
     expect(t.focus).toMatchObject({ active: true, now_count: 1 });
     const ids = t.columns.queue.map((k) => k.id);
@@ -325,7 +326,7 @@ describe('focusPreview: "Save focus" explained before it is saved', () => {
     const for_ = JSON.stringify(queue);
     const f = T.focusPreview(
       queue,
-      { order: ['project:ui', 'area:core'] },
+      { order: ['project:ui', 'area:core'], rest: 'wait' },
       { now: NOW },
     );
     expect(f.error).toEqual([]);

@@ -82,7 +82,7 @@ const {
 } = require('./logic/conflicts.js');
 const {
   blockersWithPause, WITHOUT_AREA, FOCUS_REST, areaFor, parseStep, stepMatch, focusApplies, ownStep, parkedNow,
-  focusEndQuestionId, FOCUS_END_CHOICES, focusRanEmpty, focusContinues, focusEndText, draggedWith, rankingContext, focusSpace, ranking, compareRanking, parseToDate, stepTitle, stepText, focusText,
+  focusEndQuestionId, FOCUS_END_CHOICES, focusRanEmpty, focusContinues, focusRestDefault, focusEndText, draggedWith, rankingContext, focusSpace, ranking, compareRanking, parseToDate, stepTitle, stepText, focusText,
   score, scoreParts,
 } = require('./logic/ranking.js');
 const {
@@ -257,6 +257,7 @@ module.exports = {
   FOCUS_END_CHOICES,
   focusRanEmpty,
   focusContinues,
+  focusRestDefault,
   focusEndText,
   focusEnd,
   syncFocusEnd,

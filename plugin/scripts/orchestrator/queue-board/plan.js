@@ -106,7 +106,15 @@
       // Kept and sent back as it is (owner question 1): the board no longer draws the split.
       now_count: Number(f?.now_count) || 1,
       pause: new Set((data()?.plan?.projects ?? []).filter((p) => p.pause).map((p) => p.pid)),
-      rest: f?.rest === 'fill' ? 'fill' : 'wait',
+      // A saved focus keeps its own rest. Without one, a new focus starts with the setting focus.restDefault (B22), which
+      // the server sends as focusNow.how.rest; the standard default is fill.
+      rest: f
+        ? f.rest === 'fill'
+          ? 'fill'
+          : 'wait'
+        : data()?.focusNow?.how?.rest === 'wait'
+          ? 'wait'
+          : 'fill',
       to: f?.to ? String(f.to).slice(0, 10) : '',
       name: f?.name ?? '',
       drag_with: f ? f.drag_with !== false : true,
@@ -371,7 +379,8 @@
           class: 'plan-field',
           title:
             'What happens to tasks outside the steps? "Wait fully" saves money: slots may stay empty. ' +
-            '"Fill free slots" starts them only when the focus has nothing ready.',
+            '"Fill free slots" starts them only when the focus has nothing ready. A new focus starts with the ' +
+            'setting Outside focus in Settings, Plans and focus (fill unless you changed it).',
         },
         el('span', { text: 'Rest' }),
         el(

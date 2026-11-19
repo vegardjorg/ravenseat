@@ -195,6 +195,15 @@ function focusEndQuestionId(focus) {
   const stamp = String(focus?.from ?? '').replace(/\D/g, '').slice(0, 14);
   return `focus-done-${stamp || 'unset'}`;
 }
+/**
+ * The rest a NEW focus gets when nothing chooses one (B22): queue.config.json focus.restDefault, fill by default. Any
+ * value other than wait (missing, mistyped) gives fill, the value that never stops work by itself. Only a new focus
+ * reads it (setFocus); a stored focus keeps its own rest, and one with none is still read as wait, as before.
+ */
+function focusRestDefault() {
+  return cfg()?.focus?.restDefault === 'wait' ? 'wait' : 'fill';
+}
+
 /** The choices of the owner question; the second one lifts the pause (focusContinues). */
 const FOCUS_END_CHOICES = ['Set a new focus', 'Continue the regular queue'];
 
@@ -519,6 +528,7 @@ module.exports = {
   FOCUS_END_CHOICES,
   focusRanEmpty,
   focusContinues,
+  focusRestDefault,
   focusEndText,
   ownStep,
   parkedNow,

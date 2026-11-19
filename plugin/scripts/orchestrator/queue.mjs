@@ -587,7 +587,8 @@
 //        (stage = area:<oid>, project:<pid>, feature:<pid>/<name>, task:<id> (one task) or a bare area/project/task
 //         name (written with its type when it names more than one). Everything in stage 1 before everything in stage 2,
 //         regardless of score; within a stage, score applies. The most specific stage wins (task, feature, project, area).
-//         --rest wait (default): tasks outside the focus do not start; fill: they fill slots the focus does not use.
+//         --rest fill: tasks outside the focus fill slots the focus does not use; wait: they do not start. Left out = the
+//         config focus.restDefault (fill by default, B22); an explicit --rest wins, and a stored focus keeps its rest.
 //         Dependencies of focus tasks are dragged along (transitively) unless --without-dependencies. --to YYYY-MM-DD = up to
 //         and including that day (UTC). Pause on a project takes precedence.
 //         When the focus has ENDED (every stage done, or the period over), the setting continueWhenEmpty decides:

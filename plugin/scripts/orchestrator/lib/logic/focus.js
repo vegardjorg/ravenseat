@@ -17,7 +17,7 @@ const { blockerParts, blockers } = require('./conflicts.js');
 const {
   WITHOUT_AREA, FOCUS_REST, FOCUS_MAX_TEXT, areaFor, parseStep, stepMatch, ownStep, parkedNow, rankingContext,
   focusSpace, parseToDate, stepTitle, focusText, focusApplies, focusRanEmpty, focusContinues, focusEndQuestionId,
-  FOCUS_END_CHOICES,
+  FOCUS_END_CHOICES, focusRestDefault,
 } = require('./ranking.js');
 const { cloneJson, equalValue, logChange } = require('./edit.js');
 const { setQuestion } = require('./questions.js');
@@ -25,7 +25,7 @@ const { setQuestion } = require('./questions.js');
 /**
  * Sets the focus (queue.mjs focus set). input: { order: [stage], rest?, to?, name?, drag_with_dependencies?, set_by?,
  * continue_when_empty? } (continue_when_empty: true/false overrides the config focus.continueWhenEmpty for this focus;
- * left out = the config decides). An open owner question about the previous focus having ended is dropped.
+ * left out = the config decides; rest left out = the config focus.restDefault, fill by default, B22). An open owner question about the previous focus having ended is dropped.
  * Everything is validated before anything is changed. Warnings (not errors): stages without open tasks, paused projects in a stage, and
  * a focus that gives zero ready tasks now. Changes `queue` only when the error list is empty.
  * @returns {{ error: string[], warnings: string[], focus?: object }}
@@ -46,7 +46,8 @@ function setFocus(queue, input, now = new Date().toISOString()) {
     else if (order.includes(r.stage)) error.push(`${r.stage} appears more than once`);
     else order.push(r.stage);
   }
-  const rest = input?.rest ?? 'wait';
+  // B22: a rest left out is the setting focus.restDefault (fill unless the project chose wait); an explicit rest wins.
+  const rest = input?.rest ?? focusRestDefault();
   if (!FOCUS_REST.includes(rest)) error.push(`rest must be ${FOCUS_REST.join(' or ')}`);
   let to = null;
   if (input?.to != null && input.to !== '') {
@@ -285,7 +286,7 @@ const FOCUS_PLAN_MAX = 50;
 /**
  * Saves the plan view from the board (queue.mjs focus save) in ONE change, all or nothing:
  *   - focus: { order, now_count?, rest?, to?, name?, drag_with_dependencies?, set_by? } like setFocus;
- *     empty order = the focus is removed (like focus off);
+ *     empty order = the focus is removed (like focus off); rest left out keeps the stored focus's rest (B22);
  *   - the "Waiting" column in the plan: `pause` (projects that are paused) and `continue` (taken off pause).
  * The pause changes are made before the focus is checked, so the warnings (paused projects in a stage, no ready ones) apply to the queue
  * as it will be. Changes `queue` only when the error list is empty.
@@ -330,7 +331,10 @@ function saveFocusPlan(queue, input, now = new Date().toISOString()) {
   let focus = null;
   let warnings = [];
   if (order.length) {
-    const s = setFocus(trial, input, now);
+    // B22: a save without a rest edits the focus it replaces, so that focus keeps its stored rest; only when there is
+    // none (a new focus) does setFocus take the setting focus.restDefault. The board sends its choice explicitly.
+    const keep = input?.rest == null && FOCUS_REST.includes(queue.focus?.rest) ? { rest: queue.focus.rest } : {};
+    const s = setFocus(trial, { ...input, ...keep }, now);
     if (s.error.length) return { error: s.error, warnings: s.warnings };
     focus = s.focus;
     warnings = s.warnings;

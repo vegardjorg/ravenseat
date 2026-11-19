@@ -5,6 +5,15 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Focus: a new focus fills free slots by default, with the setting Outside focus (B22).** Edge case closed in the
+  focus default. A focus set without `--rest` used `wait`, so tasks outside it did not start and slots could stay
+  empty while nothing on the board said why. The new setting `focus.restDefault` (Settings, Plans and focus, label
+  Outside focus; choices `fill` and `wait`, default `fill`) decides what a NEW focus does with the tasks outside its
+  steps: `ravenseat focus set` without `--rest`, and a new focus from the Focus tab, which now preselects the setting.
+  An explicit `--rest` or the board's choice wins. A focus already set keeps its stored value, nothing is migrated,
+  and a board save without a rest keeps the value of the focus it replaces. "How focus works" describes the value a
+  new focus would get, and with `wait` the "What happens now" line always says how many tasks outside the focus
+  wait, also when none do. Someone who wants a strict focus picks `wait` once.
 - **Merge: a PARTIAL delivery merged with `--allow-partial` stays in review.** Edge case closed in the merge flow.
   `ravenseat merge <id> --allow-partial` merged a track that called itself unfinished and then set the task done, so
   the rest of the task had no place in the queue. Now the merge, the migration push, the gates, the base gate and

@@ -373,7 +373,12 @@ const STANDARD = Object.freeze({
   // question in "Waiting on you": set a new focus or continue the regular queue. true = the queue continues by itself
   // (rest fill keeps filling, an expired focus is ranked as without focus), with one line saying so. A focus can
   // override it: ravenseat focus set ... --continue-when-empty on|off. A project that never set a focus is not affected.
-  focus: { continueWhenEmpty: false },
+  // restDefault (B22, owner decision 2026-11-19): what a NEW focus does with the tasks outside its steps when nothing
+  // chooses (`focus set` without --rest, or a board save with no rest and no focus to keep one from). fill (the
+  // default): they start when the focus leaves a slot free. wait: they do not start until the focus changes. fill is
+  // the default because wait can stop work without anything saying so, and anything that can stop work is off by
+  // default; someone who wants a strict focus picks wait once. An existing focus keeps its stored rest.
+  focus: { continueWhenEmpty: false, restDefault: 'fill' },
   // Read guard (hook-read-guard.mjs): in addition to the built-in lists.
   readGuard: {
     agentTypes: [], // more agent types the guard applies to (track, track-d and the reviewers are already included)

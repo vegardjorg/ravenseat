@@ -80,7 +80,9 @@ fix tasks, gate tasks and questions.
 ## "Half-done features everywhere"
 
 - **Focus:** you choose the areas to work on now (`ravenseat focus set`, or the Focus tab). The queue finishes the connected
-  tasks in that focus, fixes and follow-ups included, before it picks up new feature work. When the focus is done,
+  tasks in that focus, fixes and follow-ups included, before it picks up new feature work. Tasks outside a new focus
+  fill the slots it leaves free (`focus.restDefault`, `fill` by default); pick `wait` in Settings, or `--rest wait`,
+  for a strict focus that leaves slots empty instead. When the focus is done,
   the queue pauses and asks whether to set a new focus or continue the regular queue (`focus.continueWhenEmpty`, off
   by default); the Focus tab and the focus line say so under "What happens now", with the buttons for both. The
   Focus tab shows the steps as one ordered list, In focus, where each step opens to show its tasks; Not in focus and
