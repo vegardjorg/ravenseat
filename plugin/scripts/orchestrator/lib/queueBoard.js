@@ -1115,6 +1115,30 @@ function planBasis(queue, { now = Date.now(), context = null } = {}) {
   const stepStatus = {};
   if (queue.focus?.order?.length)
     for (const e of L.evaluateFocusStep(queue, now)) stepStatus[e.stage] = e.status;
+  // B19: the tasks of each saved step, so a step row on the Focus tab can fold open and show what the step is. The
+  // assignment is the step evaluation's (dragged along first, otherwise the task's own most specific step); done tasks
+  // without a rest and cancelled ones are left out. `state` is one word the board turns into a badge.
+  const stepTasks = {};
+  const order = queue.focus?.order ?? [];
+  const taskState = (o) => {
+    if (o.status === 'done') return 'qa';
+    if (o.status === 'proposed') return 'proposed';
+    if (['running', 'review', 'picked'].includes(o.status)) return 'active';
+    if (o.status !== 'waiting') return o.status;
+    if (L.isBatched(o)) return 'batched';
+    if (L.parkedNow(o, now)) return 'parked';
+    const parts = L.blockerParts(o, tasks, queue.resolved);
+    if (!parts.length) return 'ready';
+    return parts.every((x) => x.type === 'question') ? 'question' : 'blocked';
+  };
+  if (order.length)
+    for (const o of tasks) {
+      if (!o || L.isExternalRow(o) || o.status === 'cancelled') continue;
+      if (o.status === 'done' && o.qa_status !== 'waiting') continue;
+      const step = fk.dragged.get(o.id)?.stage ?? L.ownStep(o, queue);
+      if (step == null || order[step] == null) continue;
+      (stepTasks[order[step]] ??= []).push({ id: o.id, title: o.title ?? null, state: taskState(o) });
+    }
   const out = (r) => ({
     waiting: r.waiting,
     readyOnes: r.readyOnes,
@@ -1166,7 +1190,7 @@ function planBasis(queue, { now = Date.now(), context = null } = {}) {
       dragged: sum('dragged'),
     };
   });
-  return { areas, projects, step_status: stepStatus };
+  return { areas, projects, step_status: stepStatus, step_tasks: stepTasks };
 }
 
 /** "3 h 20 min" / "45 min" (the previews). */

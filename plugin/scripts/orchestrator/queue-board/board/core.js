@@ -50,7 +50,7 @@ const panel = $('panel');
 const background = $('panel-background');
 
 // "graph" is the "Dependencies" view (graph.js, the layout in queueGraph.js). "plan" is
-// the plan view (Now, Next, Later, Waiting) in plan.js. The tab is called "Focus" (the id `plan` is kept), so
+// the plan view (In focus, Not in focus, On pause) in plan.js. The tab is called "Focus" (the id `plan` is kept), so
 // it is not confused with the Plans room (the plan register, plans/plans.js).
 const VIEWS = ['flat', 'lanes', 'plan', 'graph', 'cloud', 'statistics'];
 // The modules that can be switched off (features in queue.config.json, lib/queueConfig.js): the view tabs they own.

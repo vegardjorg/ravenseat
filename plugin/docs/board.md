@@ -74,13 +74,15 @@ open questions. It shows at a glance which single answer unlocks the most work. 
 inside it, and stays between 12 and 14 px on screen at any zoom; every legend sample has an edge in the color of the
 ring it explains.
 
-<p align="center"><img src="../../assets/screenshots/light-15-focus.jpg" alt="The Focus tab: the forecast above the columns Now, Next, Later and Waiting" width="800"></p>
+<p align="center"><img src="../../assets/screenshots/light-15-focus.jpg" alt="The Focus tab: the focus steps and the forecast" width="800"></p>
 
-**Focus.** The order the queue takes work in: drag areas, projects and features between Now, Next, Later and Waiting.
+**Focus.** The order the queue takes work in: one ordered list, In focus, where each step opens to show its tasks, and
+under it Not in focus and On pause. Drag areas, projects and features between them. The name, the rest and the other
+choices sit in Focus settings, a fold below the lists.
 "How focus works" at the top explains it in four steps that follow your focus's own settings, and you can close it.
 "What happens now" says in plain words what the queue does because of the focus (which step goes first, why nothing
-starts, what is left) with buttons that settle it. The forecast above the columns says when the remaining tasks are
-done.
+starts, what is left) with buttons that settle it. The forecast under the In focus list says when the remaining tasks
+are done.
 
 <p align="center"><img src="../../assets/screenshots/light-13-checks.jpg" alt="The Checks tab: what the project has for checking its code, and suggestions for what to add" width="800"></p>
 
@@ -156,8 +158,16 @@ The Queue workspace has these tabs:
   (`ravenseat board-setting blocked on|off`).
 - **Project lanes:** the same cards with one row per project; drag a lane to change the project's priority. With the
   Blocked column on, each lane has a Blocked cell too.
-- **Focus:** the order the queue takes work in, as Now, Next, Later and Waiting. Drag areas, projects and features
-  between the columns. "Areas …" creates and names the areas. At the top, **How focus works** is a box in four steps
+- **Focus:** the order the queue takes work in, as one ordered list **In focus** (step 1 first; each step row has a
+  **Tasks** fold that lists the step's tasks with a status per task: ready, blocked, waits on an answer, QA waiting on
+  you and so on; a done step keeps its "done" badge), then **Not in focus** (the rest) and **On pause** (projects on
+  pause). Drag areas, projects and features between them, or lift one with Space and move it with the arrow keys (up
+  and down in In focus, left and right between the sections). The saved `now_count` (the old split into Now and Next)
+  stays in the data and is sent back unchanged, but the board no longer draws it. Below the lists, **Focus settings**
+  is a fold, closed by default, with the name, the rest (waits or fills free slots), the end date, dragging
+  dependencies along, what happens when the focus is done, **Clear focus** and **Areas …** (creates and names the
+  areas). The draft state, **Discard** and **Save focus** stay beside the In focus heading. Below 600 px the order is
+  What happens now, In focus, Not in focus, On pause and the settings fold, one under another. At the top, **How focus works** is a box in four steps
   (pick what comes first, step 1 before step 2, what the rest does, what happens when the focus is done) whose text
   follows this focus's rest and continue-when-empty values; it is open until you close it, and the choice is
   remembered in this browser only (no setting). Under it, **What happens now** is one sentence from the server

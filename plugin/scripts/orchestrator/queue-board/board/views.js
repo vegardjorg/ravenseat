@@ -140,7 +140,7 @@ function focusHowBox() {
     [
       'focus-step-pick',
       'Pick what comes first',
-      'Drag areas, projects or features into Now and Next, in the order you want, and press Save focus.',
+      'Drag areas, projects or features into In focus, in the order you want, and press Save focus.',
     ],
     [
       'focus-step-order',
@@ -273,7 +273,7 @@ function drawFocusLine() {
             'regardless of score.',
         }),
         draft,
-        toPlan('Set focus', 'Open Focus and drag areas or projects to Now and Next.'),
+        toPlan('Set focus', 'Open Focus and drag areas or projects into In focus.'),
       ),
     );
     return;
@@ -347,7 +347,7 @@ function drawFocusLine() {
         draft,
         toPlan(
           'Edit focus',
-          'Open Focus: drag areas and projects between Now, Next, Later and Waiting.',
+          'Open Focus: drag areas and projects between In focus, Not in focus and On pause.',
         ),
       ),
       warning,

@@ -4114,7 +4114,7 @@ body.with-option-line .board {
   margin-inline-start: var(--distance-xs);
 }
 
-/* The plan view: toolbar and four columns (Now, Next, Later, Waiting). */
+/* The plan view (the Focus tab): one ordered list In focus, then Not in focus and On pause, then the settings fold. */
 .board.plan {
   padding: var(--distance-md) var(--distance-lg);
 }
@@ -4175,15 +4175,11 @@ body.with-option-line .board {
   color: var(--color-on-surface-variant);
 }
 
-.plan-columns {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(240px, 1fr));
-  gap: var(--distance-md);
-  align-items: start;
-  overflow-x: auto;
-}
-
-.plan-column {
+/* B19: the sections. "In focus" spans the width; under it "Not in focus" and "On pause" stand side by side, and below
+   600 px they stack (the media rule further down). The page order is the reading order on every width: nothing is
+   reordered with CSS. No section has a tone of its own; the drop zone (.release-her) is the one place with the
+   primary edge (B17). */
+.plan-section {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -4192,8 +4188,95 @@ body.with-option-line .board {
   background: var(--color-surface-container);
 }
 
-/* The Now column has no tone of its own (B17): a fixed blue Now looked like an active drop zone, and the drop zone
-   (.release-her below) is the one place with the primary edge. Now reads as Now by its heading and its place. */
+.plan-section-head {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.plan-rest {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--distance-md);
+  align-items: start;
+}
+
+/* The draft bar sits in the In focus header: no box of its own, pushed to the end of the line. */
+.plan-section-head .plan-tool {
+  margin-inline-start: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.plan-section-focus .plan-forecast {
+  margin-bottom: 0;
+}
+
+/* A step's tasks (the fold in each In focus row). */
+.plan-tasks {
+  margin-top: var(--distance-xs);
+}
+
+.plan-tasks[hidden] {
+  display: none;
+}
+
+.plan-tasks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--distance-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+  border-left: 2px solid var(--color-outline-variant);
+}
+
+.plan-tasks-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs) var(--distance-sm);
+  font-size: var(--text-xs);
+}
+
+.plan-tasks-id {
+  color: var(--color-on-surface-variant);
+}
+
+.plan-tasks-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-on-surface);
+}
+
+.plan-tasks-toggle {
+  min-height: 36px;
+}
+
+/* "Focus settings": the fold below the lists (the checks-how box). Fields wrap on one row; the summary is quiet. */
+.plan-settings-toggle > span:first-child {
+  flex: none;
+  white-space: nowrap;
+}
+
+.plan-settings-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--color-on-surface-variant);
+}
+
+.plan-settings-fields,
+.plan-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm) var(--distance-md);
+}
 
 .plan-col-help {
   margin: 0 var(--distance-xs) var(--distance-sm);
@@ -4324,7 +4407,7 @@ body.with-option-line .board {
   display: inline-flex;
   align-items: center;
   gap: var(--distance-xs);
-  min-height: 32px;
+  min-height: 36px;
   font-size: var(--text-xs);
 }
 
@@ -4370,12 +4453,33 @@ body.with-option-line .board {
     padding: var(--distance-sm);
   }
 
-  .plan-columns {
+  .focusLine {
+    padding: var(--distance-xs) var(--distance-md);
+  }
+}
+
+/* B19 mobile order: below 600 px every Focus section stacks in page order (what happens now, In focus, Not in focus,
+   On pause, the settings fold); the settings fields stand one under another at full width. */
+@media (max-width: 599px) {
+  .plan-rest {
     grid-template-columns: 1fr;
   }
 
-  .focusLine {
-    padding: var(--distance-xs) var(--distance-md);
+  .plan-section-head .plan-tool {
+    margin-inline-start: 0;
+  }
+
+  .plan-settings-fields {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .plan-settings-fields .plan-field input[type='text'],
+  .plan-settings-fields .plan-field input[type='date'],
+  .plan-settings-fields .plan-field select {
+    flex: 1;
+    min-width: 0;
+    width: auto;
   }
 }
 

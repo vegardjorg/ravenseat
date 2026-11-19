@@ -71,10 +71,12 @@ const HELP = [
         'starts; "fill free slots" starts them only when the focus has nothing ready. Tasks that something in focus waits ' +
         'on are dragged along. The focus applies until you change it, or until the end date. The focus line at the top ' +
         'turns red when the focus has nothing ready, and says which answer unlocks the most.',
-      'The Focus tab shows the focus as four columns: Now and Next (the steps in order), Later (the rest) and Waiting ' +
-        '(projects on pause). Drag areas, projects and features between the columns, or lift with Space, move with the ' +
-        'arrow keys and drop with Space (Esc cancels). The changes are a draft until you press "Save focus"; then you ' +
-        'first see what changes and what the queue starts next.',
+      'The Focus tab shows the focus as one ordered list, In focus (the steps in order, each one opens to show its ' +
+        'tasks), then Not in focus (the rest) and On pause (projects on pause). Drag areas, projects and features ' +
+        'between them, or lift with Space, move with the arrow keys (up and down in In focus, left and right between ' +
+        'the sections) and drop with Space (Esc cancels). The name, the rest, the end date, dragging along, what ' +
+        'happens when the focus is done and Areas sit in Focus settings below the lists. The changes are a draft until ' +
+        'you press "Save focus"; then you first see what changes and what the queue starts next.',
     ],
   },
   {

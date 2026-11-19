@@ -1,9 +1,15 @@
 // =============================================================
 // plan.js: the plan view on queue-board. Vanilla JS, no build step.
 //
-// Four columns: "Now" and "Next" are the focus period (the steps in order; Now = the first steps), "Later" is the rest
-// (not started while the rest waits), and "Waiting" is projects on pause. Areas, projects and features are dragged between
-// the columns with mouse or keyboard (Space lifts, the arrow keys move, Space drops, Esc cancels). The changes
+// The Focus tab (B19): one ordered list "In focus" holds the steps in order (step 1 first; the queue takes everything
+// ready in a step before anything in the next). Each step row folds open to show its tasks, with a status per task
+// (planBasis step_tasks from the server). Below the list, "Not in focus" is the rest (not started while the rest waits)
+// and "On pause" is projects on pause, each a section of its own. The focus settings (name, rest, until, drag along,
+// when done, Clear focus, Areas) sit in a fold below the lists, closed by default. The saved focus still has a
+// `now_count` (the old split between Now and Next); it stays in the data and is sent back unchanged, but is not drawn
+// (owner question 1, 2026-11-18).
+// Areas, projects and features are dragged between the sections with mouse or keyboard (Space lifts, the arrow keys
+// move: up and down within In focus, left and right between the sections; Space drops, Esc cancels). The changes
 // are collected in a draft; "Save focus" first shows what changes and what the queue starts next (POST /api/focus with dry),
 // and saves only when the owner confirms (queue.mjs focus save, all or nothing, with the queue version from the
 // preview). "Areas" creates and edits areas and moves projects between them (POST /api/area), also
@@ -14,33 +20,31 @@
 'use strict';
 
 (function () {
-  const COLUMNS = [
+  // The three sections in their order on the page (also the order the left and right arrow keys move through).
+  const SECTIONS = [
     {
-      key: 'now',
-      name: 'Now',
+      key: 'focus',
+      name: 'In focus',
       help:
-        'The steps the queue takes first, in order from the top. Everything in a step starts before anything in the next step, regardless of score.',
-    },
-    {
-      key: 'next',
-      name: 'Next',
-      help: 'The steps that come after Now, in order. They start when Now has nothing ready.',
+        'The steps the queue takes, in order from the top. Everything ready in a step starts before anything in the ' +
+        'next step, regardless of score.',
     },
     {
       key: 'later',
-      name: 'Later',
+      name: 'Not in focus',
       help:
-        'The rest of the queue. With "rest waits" nothing starts from here until the focus changes; with "fill free slots" ' +
-        'only when the focus has nothing ready.',
+        'Everything outside the steps. With "rest waits" nothing starts from here until the focus changes; with ' +
+        '"fill free slots" only when the focus has nothing ready.',
     },
     {
       key: 'waiting',
-      name: 'Waiting',
+      name: 'On pause',
       help:
         'Projects on pause. They do not start, not even if something in focus waits on them. Drag a project here to ' +
         'pause it, or out of here to resume.',
     },
   ];
+  const sectionName = (key) => SECTIONS.find((k) => k.key === key)?.name ?? key;
   const TYPE_NAME = { area: 'Area', project: 'Project', feature: 'Feature' };
   // B17 (H4): a step whose tasks are all done says "done", never "does not exist". The status comes from the server
   // (planBasis step_status, from queueLogic.evaluateFocusStep).
@@ -50,12 +54,27 @@
       'Nothing here is left to start. Rests keep the step in the focus until they are settled: QA waiting on you, ' +
       'proposals, the batch queue or owner questions.',
   };
+  // B19: the status word per task in an opened step (planBasis step_tasks `state`) and its badge tone. Tones keep one
+  // meaning each: ok = can start, warn = waits on you. Everything else is the neutral badge.
+  const TASK_STATE = {
+    ready: ['ready', 'tone-ok', 'No blockers: starts when a slot is free.'],
+    active: ['in progress', '', 'Running, picked or in review.'],
+    blocked: ['blocked', '', 'Waits on another task first.'],
+    question: ['waits on an answer', 'tone-warn', 'Waits on an owner question: answer it in Decisions.'],
+    qa: ['QA waiting on you', 'tone-warn', 'Done, and waits on your QA in Decisions.'],
+    proposed: ['proposed', '', 'A proposal that waits on your review.'],
+    batched: ['batch queue', '', 'In the batch queue: starts when the batch is packed.'],
+    parked: ['on hold', '', 'Put on hold for now.'],
+  };
 
   const s = {
     ctx: null,
-    draft: null, // { now, next, pause: Set, rest, to, name, drag_with } (null = no unsaved changes)
+    draft: null, // { steps, now_count, pause: Set, rest, to, name, drag_with } (null = no unsaved changes)
     basis: null, // the server's plan (JSON) when the draft was started: changed meanwhile → remark
     openOnes: new Set(), // projects that show their features
+    openSteps: new Set(), // steps in In focus whose tasks are folded open
+    settingsOpen: false, // the "Focus settings" fold (closed by default, not remembered)
+    refocus: null, // id of a fold button that should keep focus after the redraw
     drag: null, // { key } while something is dragged with the mouse
     boosted: null, // { key, for } while something is lifted with the keyboard (for = draft before the lift, for Esc)
     dialog: null, // open dialog (preview or areas)
@@ -75,12 +94,16 @@
     return t >= 10 || !(m % 60) ? `${t} h` : `${t} h ${m % 60} min`;
   }
 
+  /** The saved steps in order (the server still splits them in now and next; here they are one list). */
+  const savedSteps = () => [...(data()?.focus?.now ?? []), ...(data()?.focus?.next ?? [])];
+
   /** The plan as saved in the queue (focus and paused projects). */
   function serverPlan() {
     const f = data()?.focus;
     return {
-      now: [...(f?.now ?? [])],
-      next: [...(f?.next ?? [])],
+      steps: savedSteps(),
+      // Kept and sent back as it is (owner question 1): the board no longer draws the split.
+      now_count: Number(f?.now_count) || 1,
       pause: new Set((data()?.plan?.projects ?? []).filter((p) => p.pause).map((p) => p.pid)),
       rest: f?.rest === 'fill' ? 'fill' : 'wait',
       to: f?.to ? String(f.to).slice(0, 10) : '',
@@ -98,8 +121,7 @@
     if (!c || c.setting_from !== 'config focus.continueWhenEmpty') return 'Config default';
     return `Config default (${c.setting ? 'continue' : 'pause'})`;
   }
-  const normal = (p) =>
-    JSON.stringify({ ...p, pause: [...p.pause].sort(), now: p.now, next: p.next });
+  const normal = (p) => JSON.stringify({ ...p, pause: [...p.pause].sort(), steps: p.steps });
   const current = () => s.draft ?? serverPlan();
   const hasChanges = () => !!s.draft && normal(s.draft) !== normal(serverPlan());
 
@@ -112,7 +134,7 @@
     return s.draft;
   }
   function copy(p) {
-    return { ...p, now: [...p.now], next: [...p.next], pause: new Set(p.pause) };
+    return { ...p, steps: [...p.steps], pause: new Set(p.pause) };
   }
 
   const projectRow = (pid) => data()?.plan?.projects.find((p) => p.pid === pid) ?? null;
@@ -138,33 +160,30 @@
     return { type, title: name, pid, counts: f, exists: !!f, status };
   }
 
-  /** Where an element sits in the plan now: now, next, waiting (paused project) or later. */
+  /** Where an element sits in the plan now: focus (a step), waiting (paused project) or later. */
   function columnFor(p, key) {
-    if (p.now.includes(key)) return 'now';
-    if (p.next.includes(key)) return 'next';
+    if (p.steps.includes(key)) return 'focus';
     if (typeFor(key) === 'project' && p.pause.has(restFor(key))) return 'waiting';
     return 'later';
   }
 
   // ---- Moving (shared by mouse and keyboard) ----
   /**
-   * Moves an element to a column (at position `index` in Now/Next; otherwise last). Returns an error message when
+   * Moves an element to a section (at position `index` in In focus; otherwise last). Returns an error message when
    * the move makes no sense (an area or a feature cannot be paused).
    */
   function move(key, col, index = null) {
     const type = typeFor(key);
     if (col === 'waiting' && type !== 'project')
       return type === 'area'
-        ? 'An area cannot be paused. Drag the projects in the area to Waiting, or leave the area in Later.'
-        : 'A feature cannot be paused. Use "Put on hold" on the tasks, or leave the feature in Later.';
+        ? 'An area cannot be paused. Drag the projects in the area to On pause, or leave the area in Not in focus.'
+        : 'A feature cannot be paused. Use "Put on hold" on the tasks, or leave the feature in Not in focus.';
     const p = draft();
-    p.now = p.now.filter((x) => x !== key);
-    p.next = p.next.filter((x) => x !== key);
+    p.steps = p.steps.filter((x) => x !== key);
     if (type === 'project') p.pause.delete(restFor(key));
-    if (col === 'now' || col === 'next') {
-      const list = p[col];
-      const i = index == null ? list.length : Math.max(0, Math.min(index, list.length));
-      list.splice(i, 0, key);
+    if (col === 'focus') {
+      const i = index == null ? p.steps.length : Math.max(0, Math.min(index, p.steps.length));
+      p.steps.splice(i, 0, key);
     } else if (col === 'waiting') p.pause.add(restFor(key));
     return null;
   }
@@ -180,22 +199,26 @@
     }
     const p = current();
     const focus = document.activeElement?.closest?.('.plan-element')?.dataset.key ?? null;
+    // The order on the page is also the order on a phone (B19): what happens now, In focus, Not in focus, On pause,
+    // then the settings fold. Above 600 px only Not in focus and On pause stand side by side (board.css .plan-rest).
     main.append(
       el(
         'div',
         { class: 'plan-view' },
-        // B18: what focus is and what the queue does now because of it come first, before the settings.
+        // B18: what focus is and what the queue does now because of it come first.
         ctx.howBox?.() ?? null,
         ctx.whatNow?.() ?? null,
-        toolbar(p),
-        forecastBox(d.forecast),
-        el(
-          'div',
-          { class: 'plan-columns' },
-          COLUMNS.map((k) => column(k, p)),
-        ),
+        section(SECTIONS[0], p, d.forecast),
+        el('div', { class: 'plan-rest' }, section(SECTIONS[1], p), section(SECTIONS[2], p)),
+        settingsFold(p),
       ),
     );
+    const refocus = s.refocus ? document.getElementById(s.refocus) : null;
+    s.refocus = null;
+    if (refocus && !s.boosted) {
+      refocus.focus({ preventScroll: true });
+      return;
+    }
     const template = s.boosted?.key ?? focus;
     if (template)
       main
@@ -224,19 +247,84 @@
     );
   }
 
-  function toolbar(p) {
+  /** The draft bar beside "In focus": help, whether there is a draft, Discard and Save focus (never in the fold). */
+  function toolbar() {
     const changed = hasChanges();
     const serverChanged = s.draft && s.basis !== normal(serverPlan());
+    return el(
+      'div',
+      { class: 'plan-tool', role: 'toolbar', 'aria-label': 'Focus draft' },
+      // B30: the "?" opens the help at Focus (the board passes roomHelp in the context).
+      s.ctx.help ? s.ctx.help('focus', 'Focus') : null,
+      el('span', {
+        class: `plan-draft${changed ? ' active' : ''}`,
+        role: 'status',
+        text: changed
+          ? `Draft, not saved${serverChanged ? '. The queue has changed meanwhile; the preview checks against the new one.' : ''}`
+          : 'No unsaved changes',
+        title: changed
+          ? 'The changes do not apply until you press "Save focus" and confirm.'
+          : 'Drag areas, projects and features between the sections to edit the focus.',
+      }),
+      el('button', {
+        type: 'button',
+        class: 'button button-outline button-small',
+        text: 'Discard',
+        disabled: !s.draft,
+        title: 'Forget the draft and show the focus as saved in the queue. Nothing in the queue changes.',
+        onclick: () => {
+          s.draft = null;
+          s.basis = null;
+          s.ctx.drawOnNew();
+        },
+      }),
+      el('button', {
+        type: 'button',
+        class: 'button button-filled button-small',
+        text: 'Save focus',
+        disabled: !changed,
+        title:
+          'First shows what changes and what the queue starts next. Nothing is saved until you confirm, and everything ' +
+          'is saved together or not at all.',
+        onclick: previewList,
+      }),
+    );
+  }
+
+  /**
+   * "Focus settings" (B19): the fields and buttons that edit the focus as a whole, in a fold below the lists. Closed
+   * by default; a real button (aria-expanded, aria-controls) opens a region named by it, in place, as "How focus
+   * works" does. The open state lives only as long as the page (no setting, nothing stored).
+   */
+  function settingsFold(p) {
     const setField = (field, val) => {
       draft()[field] = val;
       s.ctx.drawOnNew();
     };
-    const emptyNow = !p.now.length && p.next.length > 0;
-    return el(
+    const open = s.settingsOpen;
+    const summary = [
+      p.name ? `"${p.name}"` : null,
+      p.rest === 'fill' ? 'the rest fills free slots' : 'the rest waits',
+      p.to ? `until ${p.to}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const toggle = el(
+      'button',
+      {
+        type: 'button',
+        id: 'plan-settings-toggle',
+        class: 'checks-how-toggle plan-settings-toggle',
+        'aria-expanded': String(open),
+        'aria-controls': 'plan-settings-body',
+      },
+      el('span', { text: 'Focus settings' }),
+      el('span', { class: 'plan-settings-summary', text: summary }),
+      s.ctx.icon('focus-chevron'),
+    );
+    const fields = el(
       'div',
-      { class: 'plan-tool', role: 'toolbar', 'aria-label': 'Focus' },
-      // B30: the "?" opens the help at Focus (the board passes roomHelp in the context).
-      s.ctx.help ? s.ctx.help('focus', 'Focus') : null,
+      { class: 'plan-settings-fields' },
       el(
         'label',
         {
@@ -258,7 +346,7 @@
         {
           class: 'plan-field',
           title:
-            'What happens to tasks outside Now and Next? "Wait fully" saves money: slots may stay empty. ' +
+            'What happens to tasks outside the steps? "Wait fully" saves money: slots may stay empty. ' +
             '"Fill free slots" starts them only when the focus has nothing ready.',
         },
         el('span', { text: 'Rest' }),
@@ -337,22 +425,24 @@
           ),
         ),
       ),
-      el('span', {
-        class: `plan-draft${changed ? ' active' : ''}`,
-        role: 'status',
-        text: changed
-          ? `Draft, not saved${serverChanged ? '. The queue has changed meanwhile; the preview checks against the new one.' : ''}`
-          : 'No unsaved changes',
-        title: changed
-          ? 'The changes do not apply until you press "Save focus" and confirm.'
-          : 'Drag areas, projects and features between the columns to edit the focus.',
+    );
+    const actions = el(
+      'div',
+      { class: 'plan-settings-actions' },
+      el('button', {
+        type: 'button',
+        class: 'button button-outline button-small',
+        text: 'Clear focus',
+        disabled: !p.steps.length,
+        title:
+          'Moves all steps to Not in focus in the draft. Saving without steps means no focus: the queue goes by score and ' +
+          'projectBonus.',
+        onclick: () => {
+          draft().steps = [];
+          s.ctx.drawOnNew();
+        },
       }),
-      emptyNow
-        ? el('span', {
-            class: 'plan-remark',
-            text: 'Now is empty: the first step in Next becomes Now when saved.',
-          })
-        : null,
+      // Owner question 6: areas are setup, not daily focus work, so "Areas …" lives with the settings.
       el('button', {
         type: 'button',
         class: 'button button-outline button-small',
@@ -362,49 +452,37 @@
           'is saved.',
         onclick: openAreas,
       }),
-      el('button', {
-        type: 'button',
-        class: 'button button-outline button-small',
-        text: 'Clear focus',
-        disabled: !p.now.length && !p.next.length,
-        title:
-          'Moves all steps to Later in the draft. Saving without steps means no focus: the queue goes by score and ' +
-          'projectBonus.',
-        onclick: () => {
-          const u = draft();
-          u.now = [];
-          u.next = [];
-          s.ctx.drawOnNew();
-        },
-      }),
-      el('button', {
-        type: 'button',
-        class: 'button button-outline button-small',
-        text: 'Discard',
-        disabled: !s.draft,
-        title: 'Forget the draft and show the focus as saved in the queue. Nothing in the queue changes.',
-        onclick: () => {
-          s.draft = null;
-          s.basis = null;
-          s.ctx.drawOnNew();
-        },
-      }),
-      el('button', {
-        type: 'button',
-        class: 'button button-filled button-small',
-        text: 'Save focus',
-        disabled: !changed,
-        title:
-          'First shows what changes and what the queue starts next. Nothing is saved until you confirm, and everything ' +
-          'is saved together or not at all.',
-        onclick: previewList,
-      }),
     );
+    const body = el(
+      'div',
+      {
+        id: 'plan-settings-body',
+        class: 'checks-how-body plan-settings-body',
+        role: 'region',
+        'aria-labelledby': 'plan-settings-toggle',
+      },
+      fields,
+      actions,
+    );
+    body.hidden = !open;
+    const box = el(
+      'section',
+      { class: `checks-how plan-settings${open ? '' : ' is-closed'}` },
+      el('h2', { class: 'checks-how-title' }, toggle),
+      body,
+    );
+    toggle.addEventListener('click', () => {
+      s.settingsOpen = !s.settingsOpen;
+      toggle.setAttribute('aria-expanded', String(s.settingsOpen));
+      body.hidden = !s.settingsOpen;
+      box.classList.toggle('is-closed', !s.settingsOpen);
+    });
+    return box;
   }
 
-  /** The elements in a column, in order. Later: areas, and projects without an area that are not elsewhere. */
+  /** The elements in a section, in order. Not in focus: areas, and projects without an area that are not elsewhere. */
   function elementsIn(col, p) {
-    if (col === 'now' || col === 'next') return p[col];
+    if (col === 'focus') return p.steps;
     const d = data();
     if (col === 'waiting') return [...p.pause].sort().map((pid) => `project:${pid}`);
     const out = [];
@@ -413,7 +491,7 @@
       const key = `area:${o.oid}`;
       if (columnFor(p, key) === 'later') out.push(key);
     }
-    // Projects without a (known) area, and features that have been in a step, sit on their own in Later.
+    // Projects without a (known) area, and features that have been in a step, sit on their own in Not in focus.
     for (const pr of d.plan.projects) {
       const hasArea = d.plan.areas.some(
         (o) => o.in_register && o.oid !== 'without-area' && o.oid === pr.area,
@@ -428,19 +506,13 @@
   /** Projects with something to do (pending or active), or that are in a step or on pause. */
   function visibleProject(pr, p) {
     const key = `project:${pr.pid}`;
-    return (
-      pr.waiting > 0 ||
-      pr.activeOnes > 0 ||
-      p.now.includes(key) ||
-      p.next.includes(key) ||
-      p.pause.has(pr.pid)
-    );
+    return pr.waiting > 0 || pr.activeOnes > 0 || p.steps.includes(key) || p.pause.has(pr.pid);
   }
 
-  function column(k, p) {
+  /** One section (In focus, Not in focus, On pause): a real h2 that names it, the help, and the list. */
+  function section(k, p, forecast = null) {
     const elements = elementsIn(k.key, p);
-    const sorted = k.key === 'now' || k.key === 'next';
-    const shift = k.key === 'next' ? p.now.length : 0;
+    const sorted = k.key === 'focus';
     const sum = elements.reduce(
       (acc, n) => {
         const t = info(n).counts;
@@ -462,7 +534,7 @@
         ondrop: (e) => release(e, k.key),
       },
       elements.length
-        ? elements.map((n, i) => element(n, p, sorted ? shift + i + 1 : null))
+        ? elements.map((n, i) => element(n, p, sorted ? i + 1 : null))
         : el('li', {
             class: 'plan-empty',
             text:
@@ -470,24 +542,27 @@
                 ? 'No projects on pause.'
                 : k.key === 'later'
                   ? 'Everything is in focus.'
-                  : 'Drag an area, project or feature here.',
+                  : 'Nothing in focus. Drag an area, project or feature here, or lift one with Space and move it with the arrow keys.',
           }),
     );
+    const headId = `plan-head-${k.key}`;
     return el(
       'section',
-      { class: `plan-column plan-${k.key}`, 'aria-label': k.name },
+      { class: `plan-section plan-section-${k.key}`, 'aria-labelledby': headId },
       el(
         'header',
-        { class: 'col-header', title: k.help },
-        el('h2', { text: k.name }),
+        { class: 'col-header plan-section-head', title: k.help },
+        el('h2', { id: headId, text: k.name }),
         el('span', {
           class: 'counter',
           text: `${sum.waiting} · ${time(sum.min)}`,
-          title: `${sum.waiting} pending tasks, ${time(sum.min)} estimated left in the column`,
+          title: `${sum.waiting} pending tasks, ${time(sum.min)} estimated left in the section`,
         }),
+        sorted ? toolbar() : null,
       ),
       el('p', { class: 'plan-col-help', text: k.help }),
       list,
+      sorted ? forecastBox(forecast) : null,
     );
   }
 
@@ -535,7 +610,7 @@
     return el('span', { class: 'plan-tall' }, parts);
   }
 
-  /** One element (card) in a column: area with projects, project with its features, or feature. */
+  /** One element (card) in a section: area with projects, project with its features, or feature. */
   function element(key, p, stepNr) {
     const i = info(key);
     const col = columnFor(p, key);
@@ -562,13 +637,14 @@
         ? el('span', {
             class: 'badge old',
             text: 'does not exist',
-            title: 'The step points to something that no longer exists in the queue. Drag it to Later.',
+            title: 'The step points to something that no longer exists in the queue. Drag it to Not in focus.',
           })
         : stepNr && DONE_TITLE[i.status]
           ? el('span', { class: 'badge', text: 'done', title: DONE_TITLE[i.status] })
           : null,
     );
-    const children = [];
+    // B19: a step in In focus folds open to show its tasks.
+    const children = stepNr ? tasksFold(key, stepNr) : [];
     if (i.type === 'area') {
       // Projects in the area that are not in a step of their own or on pause (those are shown there).
       const mine = (i.counts?.projects ?? [])
@@ -605,9 +681,9 @@
         tabindex: 0,
         draggable: 'true',
         'aria-label':
-          `${name} ${i.title}, in ${COLUMNS.find((k) => k.key === col).name}` +
+          `${name} ${i.title}, in ${sectionName(col)}` +
           `${stepNr ? `, step ${stepNr}` : ''}. Space lifts, the arrow keys move.`,
-        title: `${name} ${i.title}. Drag to another column, or lift with Space and move with the arrow keys.`,
+        title: `${name} ${i.title}. Drag to another section, or lift with Space and move with the arrow keys.`,
         ondragstart: (e) => dragStart(e, key),
         ondragend: dragEnd,
         onkeydown: (e) => keyPress(e, key),
@@ -618,7 +694,70 @@
     );
   }
 
-  /** A project inside an area (can be dragged out to a step of its own or to Waiting). */
+  /**
+   * The fold of a step in In focus (B19): a real button (aria-expanded, aria-controls) and a region named by it with the
+   * step's tasks and a status badge per task (planBasis step_tasks: the saved steps only, so a step that is only in the
+   * draft says so). The button keeps keyboard focus across the redraw (s.refocus).
+   */
+  function tasksFold(key, stepNr) {
+    const saved = savedSteps().includes(key);
+    const tasks = data()?.plan?.step_tasks?.[key] ?? [];
+    const open = s.openSteps.has(key);
+    const buttonId = `plan-tasks-toggle-${stepNr}`;
+    const regionId = `plan-tasks-${stepNr}`;
+    const button = el(
+      'button',
+      {
+        type: 'button',
+        id: buttonId,
+        class: 'link-button plan-expand plan-tasks-toggle',
+        'aria-expanded': open ? 'true' : 'false',
+        'aria-controls': regionId,
+        title: 'Show the tasks in this step and where each one stands.',
+        onclick: (e) => {
+          e.stopPropagation();
+          if (open) s.openSteps.delete(key);
+          else s.openSteps.add(key);
+          s.refocus = buttonId;
+          s.ctx.drawOnNew();
+        },
+      },
+      el('span', { class: 'fold-chevron', 'aria-hidden': 'true' }),
+      saved ? `Tasks (${tasks.length})` : 'Tasks',
+    );
+    const content = !saved
+      ? el('p', {
+          class: 'plan-remark',
+          text: 'Not saved yet: the tasks of this step show here after "Save focus".',
+        })
+      : !tasks.length
+        ? el('p', { class: 'plan-remark', text: 'No open tasks left in this step.' })
+        : el(
+            'ul',
+            { class: 'plan-tasks-list' },
+            tasks.map((x) => {
+              const [word, tone, why] = TASK_STATE[x.state] ?? [x.state, '', ''];
+              return el(
+                'li',
+                null,
+                el('code', { class: 'plan-tasks-id', text: x.id }),
+                ' ',
+                el('span', { class: 'plan-tasks-title', text: x.title ?? '' }),
+                ' ',
+                el('span', { class: `badge${tone ? ` ${tone}` : ''}`, text: word, title: why }),
+              );
+            }),
+          );
+    const region = el(
+      'div',
+      { id: regionId, class: 'plan-tasks', role: 'region', 'aria-labelledby': buttonId },
+      content,
+    );
+    region.hidden = !open;
+    return [button, region];
+  }
+
+  /** A project inside an area (can be dragged out to a step of its own or to On pause). */
   function underElement(key, p) {
     const i = info(key);
     return el(
@@ -629,7 +768,7 @@
         tabindex: 0,
         draggable: 'true',
         'aria-label': `Project ${i.title} in the area. Drag it out to give it a step of its own. Space lifts.`,
-        title: `Project ${i.title}. Drag it out of the area to give it a step of its own (for example "Widgets now, the rest of Platform later"), or to Waiting to pause it.`,
+        title: `Project ${i.title}. Drag it out of the area to give it a step of its own (for example "Widgets now, the rest of Platform later"), or to On pause to pause it.`,
         ondragstart: (e) => dragStart(e, key),
         ondragend: dragEnd,
         onkeydown: (e) => keyPress(e, key),
@@ -646,7 +785,7 @@
     );
   }
 
-  /** "Features (6)" with the shared chevron and, when open, the features (can be dragged to Now/Next as a step of their own). */
+  /** "Features (6)" with the shared chevron and, when open, the features (can be dragged to In focus as a step of their own). */
   function featureList(pid, p) {
     const pr = projectRow(pid);
     const features = (pr?.features ?? []).filter(
@@ -662,7 +801,7 @@
         class: 'link-button plan-expand',
         'aria-expanded': open ? 'true' : 'false',
         title:
-          'Show the features in the project. A feature can be dragged to Now or Next as a step of its own.',
+          'Show the features in the project. A feature can be dragged to In focus as a step of its own.',
         onclick: (e) => {
           e.stopPropagation();
           if (open) s.openOnes.delete(pid);
@@ -687,8 +826,8 @@
               'data-key': f.stage,
               tabindex: 0,
               draggable: 'true',
-              'aria-label': `Feature ${f.name}. Drag to Now or Next to give it a step of its own. Space lifts.`,
-              title: `Feature ${f.name}: drag to Now or Next to give it a step of its own.`,
+              'aria-label': `Feature ${f.name}. Drag to In focus to give it a step of its own. Space lifts.`,
+              title: `Feature ${f.name}: drag to In focus to give it a step of its own.`,
               ondragstart: (e) => dragStart(e, f.stage),
               ondragend: dragEnd,
               onkeydown: (e) => keyPress(e, f.stage),
@@ -759,7 +898,7 @@
         e.stopPropagation();
         s.boosted = { key, before: copy(p), hasDraft: !!s.draft };
         s.ctx.status(
-          `${info(key).title} is lifted. The arrow keys move it (left and right between the columns), Space drops, Esc cancels.`,
+          `${info(key).title} is lifted. The arrow keys move it (up and down in In focus, left and right between the sections), Space drops, Esc cancels.`,
         );
         s.ctx.drawOnNew();
       }
@@ -767,38 +906,27 @@
     }
     if (s.boosted.key !== key) return;
     const col = columnFor(p, key);
-    const sequence = COLUMNS.map((k) => k.key);
+    const sequence = SECTIONS.map((k) => k.key);
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
       e.stopPropagation();
       let j = sequence.indexOf(col) + (e.key === 'ArrowLeft' ? -1 : 1);
-      // An area or a feature cannot be in Waiting: skip that column.
+      // An area or a feature cannot be on pause: skip that section.
       if (sequence[j] === 'waiting' && typeFor(key) !== 'project') j = -1;
       if (j < 0 || j >= sequence.length) return;
       move(key, sequence[j]);
-      s.ctx.status(`In ${COLUMNS[j].name}. Space drops, Esc cancels.`);
+      s.ctx.status(`In ${SECTIONS[j].name}. Space drops, Esc cancels.`);
       s.ctx.drawOnNew();
-    } else if (
-      (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
-      (col === 'now' || col === 'next')
-    ) {
+    } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && col === 'focus') {
       e.preventDefault();
       e.stopPropagation();
-      const u = draft();
-      const list = u[col];
+      const list = draft().steps;
       const i = list.indexOf(key);
       const j = i + (e.key === 'ArrowUp' ? -1 : 1);
-      // Above the top of Next goes to the bottom of Now, and below the bottom of Now to the top of Next.
-      if (j < 0 && col === 'next') move(key, 'now');
-      else if (j >= list.length && col === 'now') move(key, 'next', 0);
-      else if (j >= 0 && j < list.length) {
-        list.splice(i, 1);
-        list.splice(j, 0, key);
-      } else return;
-      const fresh = current();
-      const newCol = columnFor(fresh, key);
-      const space = fresh[newCol].indexOf(key) + 1;
-      s.ctx.status(`Position ${space} of ${fresh[newCol].length} in ${newCol === 'now' ? 'Now' : 'Next'}.`);
+      if (j < 0 || j >= list.length) return;
+      list.splice(i, 1);
+      list.splice(j, 0, key);
+      s.ctx.status(`Step ${j + 1} of ${list.length} in In focus.`);
       s.ctx.drawOnNew();
     } else if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
@@ -817,6 +945,7 @@
       s.ctx.drawOnNew();
     }
   }
+
 
   // ---- The dialog (focus preview, areas) ----
   function makeDialog() {
@@ -870,13 +999,16 @@
   }
   const open = () => !!s.dialog;
 
-  /** The plan sent to the server (Now empty and Next not: the first in Next becomes Now). */
+  /**
+   * The plan sent to the server. The steps go in their order; now_count is the saved one, sent back unchanged (only
+   * held between 1 and the number of steps), since the board no longer draws the split (owner question 1).
+   */
   function planForServer(p) {
-    const order = [...p.now, ...p.next];
+    const order = [...p.steps];
     const serverPause = serverPlan().pause;
     return {
       order,
-      ...(order.length ? { now_count: Math.max(p.now.length, 1) } : {}),
+      ...(order.length ? { now_count: Math.min(Math.max(p.now_count || 1, 1), order.length) } : {}),
       rest: p.rest,
       to: p.to || null,
       name: p.name || null,

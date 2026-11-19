@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the Focus tab is one ordered list, with each step's tasks and the settings in a fold.** Edge cases closed in
+  the Focus feature. The steps stood in two columns, Now and Next, whose split changed nothing the queue does, so a
+  step could look more or less "in focus" than it was, and a step never showed which tasks it held. The steps now
+  stand in one list, In focus, in step order; each row opens with a Tasks button to the step's tasks with a status per
+  task (ready, blocked, waits on an answer, QA waiting on you and more), from the same assignment the queue uses, and
+  a done step keeps its "done" badge. Not in focus and On pause follow as sections of their own. The name, the rest,
+  the end date, dragging along, what happens when the focus is done, Clear focus and Areas moved into Focus settings,
+  a fold below the lists that is closed by default; Discard and Save focus stay beside the list. Below 600 px the
+  sections stand one under another in reading order. The arrow keys move a lifted step up and down in the list and
+  left and right between the sections. The saved `now_count` stays in the data and is sent back unchanged. Nothing new
+  stops work, no new setting and no new colors: only the theme's tokens.
+
 - **Board: the Focus tab says how focus works and what happens now, with buttons instead of CLI advice.** Edge
   cases closed in the Focus feature. A focus that stood still on a rest (a done task waiting on your QA, an owner
   question, a proposal, the batch queue) or had ended showed a red band with `ravenseat` commands and no button, and
