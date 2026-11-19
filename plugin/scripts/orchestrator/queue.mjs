@@ -772,8 +772,10 @@
 // Task fields (see queueLogic.validate): id, title, domain, class (K|D|D+|U), mission (path to a track description
 // or the text itself), value (1-10, default 5), content_min (min for a K track, default 30), migr_tens (number of
 // blocks of migration numbers, 0 for client/investigation; only used with the migration flow), depends_on [id], waiting_on
-// [owner question id], owned_files [path or folder/], owner_db [feature], shared_patch [shared feature], source (plan and
-// sub-plan), added_by, project (pid), plan (plan entry id in plans.json), feature (short name), labels (e.g.
+// [owner question id], owned_files [path or folder/], owner_db [feature], shared_patch [shared feature], source (origin,
+// free text, read by nobody), sources ([{ path, anchor?, role? }], the task's own reading material, narrowing its plan
+// entry; shape checked by queuePlan.sourceListErrors), added_by, project (pid), plan (plan entry id in plans.json),
+// feature (short name), labels (e.g.
 // ["visual"]), requires (resources, see queueLogic.REQUIRES), batched (true = batch queue), fixes (id or [id]: the
 // task(s) this fix task fixes; the ids must exist, stored as a list, lib/fixLinks.js). Set by the tool: picked_by,
 // picked_at, qa_status (waiting|ok|deviation), qa_note, qa_original (on a fix task), evidence ({ type, ref }, from the

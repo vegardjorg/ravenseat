@@ -32,7 +32,7 @@ const { config } = require('./queueConfig.js');
 const { isRecommendedChoice } = require('./logic/questions.js');
 // The anchor lookup of the task links and the mission (anchorQuery + missionText sectionArea), for plan check's
 // "anchor without a heading" (roadmap 0p2 V3). The same lookup everywhere, so plan check and the add warning agree.
-const { anchorHits } = require('./taskLinks.js');
+const { anchorHits, READABLE_ROLES } = require('./taskLinks.js');
 
 // ---- Value lists ---------------------------------------------------------------------------------------
 
@@ -266,12 +266,51 @@ function moduleFor(entry, projects) {
  */
 function sourcePathError(filePath) {
   if (typeof filePath !== 'string' || !filePath.trim()) return 'missing path';
+  // A line break would let one path write extra lines into the mission's read-first list (B3 drops such a path;
+  // refusing it here keeps it out of the register and the queue in the first place).
+  if (/[\r\n]/.test(filePath)) return `${JSON.stringify(filePath)}: must not contain a line break`;
   if (/^[A-Za-z]:|^[\\/]/.test(filePath))
     return `${filePath}: must be relative to the project root (e.g. docs/…)`;
   if (filePath.includes('\\')) return `${filePath}: use slash /, not \\`;
   if (filePath.split('/').some((d) => d === '..' || d === '.'))
     return `${filePath}: . and .. are not allowed in a path`;
   return null;
+}
+
+/**
+ * The shape errors of a `sources` list ([{ path, anchor?, role? }]), shared by the plan register (validateEntry) and a
+ * task's own `sources` (logic/validate.js), so both refuse the same paths with the same words.
+ *
+ * - `existsPath`: checks that each path exists (the register's rule; a task's dead link is a warning, B2, so omitted).
+ * - `strict`: a task's sources are written into the mission, so a role must be one of SOURCE_ROLES and an anchor must
+ *   be one line. A plan entry keeps role as free text, so registers written before this check still load.
+ * - `label`: the word before each path in a message ("source" in the register, "sources" on a task).
+ * @returns {string[]} the errors, without the owner's id (the caller adds it)
+ */
+function sourceListErrors(sources, { existsPath = null, strict = false, label = 'source' } = {}) {
+  const error = [];
+  if (sources == null) return error;
+  if (!Array.isArray(sources)) return ['sources must be a list'];
+  for (const k of sources) {
+    if (!isObject(k)) {
+      error.push(`every ${label} must be { path, anchor?, role? }`);
+      continue;
+    }
+    for (const n of Object.keys(k))
+      if (!['path', 'anchor', 'role'].includes(n)) error.push(`${label} ${k.path ?? '?'}: unknown field ${n}`);
+    const sf = sourcePathError(k.path);
+    if (sf) error.push(`${label} ${sf}`);
+    else if (existsPath && !existsPath(k.path)) error.push(`${label} ${k.path} does not exist`);
+    // A path with a line break is named once (above, JSON-quoted); the field messages below then say "?".
+    const where = typeof k.path === 'string' && /[\r\n]/.test(k.path) ? '?' : k.path;
+    if (k.anchor != null && typeof k.anchor !== 'string') error.push(`${label} ${where}: anchor must be text`);
+    else if (strict && typeof k.anchor === 'string' && /[\r\n]/.test(k.anchor))
+      error.push(`${label} ${where}: anchor must be one line`);
+    if (k.role != null && typeof k.role !== 'string') error.push(`${label} ${where}: role must be text`);
+    else if (strict && k.role != null && !SOURCE_ROLES.includes(k.role))
+      error.push(`${label} ${where}: unknown role ${k.role} (allowed: ${SOURCE_ROLES.join(', ')})`);
+  }
+  return error;
 }
 
 /**
@@ -367,20 +406,7 @@ function validateEntry(entry, ctx = {}) {
     f(`size must be one of ${SIZES.join(', ')}`);
 
   // The sources must exist. A plan entry points to documents, it does not copy them.
-  if (entry.sources != null && !Array.isArray(entry.sources)) f('sources must be a list');
-  for (const k of Array.isArray(entry.sources) ? entry.sources : []) {
-    if (!isObject(k)) {
-      f('every source must be { path, anchor?, role? }');
-      continue;
-    }
-    for (const n of Object.keys(k))
-      if (!['path', 'anchor', 'role'].includes(n)) f(`source ${k.path ?? '?'}: unknown field ${n}`);
-    const sf = sourcePathError(k.path);
-    if (sf) f(`source ${sf}`);
-    else if (ctx.existsPath && !ctx.existsPath(k.path)) f(`source ${k.path} does not exist`);
-    if (k.anchor != null && typeof k.anchor !== 'string') f(`source ${k.path}: anchor must be text`);
-    if (k.role != null && typeof k.role !== 'string') f(`source ${k.path}: role must be text`);
-  }
+  for (const t of sourceListErrors(entry.sources, { existsPath: ctx.existsPath })) f(t);
 
   for (const field of ['roadmap', 'depends_on', 'ownerQuestions', 'merged_from']) {
     const v = entry[field];
@@ -1314,7 +1340,9 @@ function planLinkError(reg, planId) {
 /**
  * Links new queue tasks to plan entries (`add --plan <id>` and the field `plan` in the add file). `planId` is set on
  * tasks without their own `plan`. Refuses an unknown or merged planEntry (all or nothing). If the task has no project,
- * it gets the entry's project (every task gets plan, project and source). Warns when the entry is not ready, is
+ * it gets the entry's project. The entry's sources are the task's reading material, looked up when the mission is made
+ * (taskLinks.js); nothing is copied onto the task, and `source` is left alone: it is the task's origin (free text,
+ * read by nobody), not reading material. Warns when the entry is not ready, is
  * dropped, or belongs to another project than the task. The entry becomes in-queue by itself (derivedMaturity).
  * @returns {{ error: string[], warnings: string[], tasks: object[] }} tasks as copies with the fields set
  */
@@ -1405,6 +1433,13 @@ const NOT_STARTED_PHRASE = /\bnot\s+(started|begun)\b/i;
  * unregistered list), but are never read for the status deviation, since a done or old document says nothing about the entry's status.
  */
 const SOURCE_ROLES_WITHOUT_STATUS = ['history', 'reference'];
+
+/**
+ * Every source role the queue knows: the reading material (taskLinks.js READABLE_ROLES: plan, investigation, spec)
+ * and the roles that are not read for status (history, reference). A task's own `sources` must use one of these
+ * (sourceListErrors, strict); a source without a role counts as `plan`.
+ */
+const SOURCE_ROLES = Object.freeze([...READABLE_ROLES, ...SOURCE_ROLES_WITHOUT_STATUS]);
 /** A section with more lines than this counts as a large section: only the top is read for status. */
 const LARGE_SECTION_LINES = 25;
 /** How many lines from the top of a large section are read for status. */
@@ -3401,6 +3436,8 @@ module.exports = {
   anchorSection,
   docStatus,
   SOURCE_ROLES_WITHOUT_STATUS,
+  SOURCE_ROLES,
+  sourceListErrors,
   duplicates,
   capacity,
   check,

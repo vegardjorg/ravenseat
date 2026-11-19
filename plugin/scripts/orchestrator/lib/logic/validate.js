@@ -35,6 +35,12 @@ function validate(o, existing = [], register) {
   if (o.value != null && !(o.value >= 1 && o.value <= 10)) error.push('value must be 1–10');
   // `fixes`: the task(s) this one fixes (lib/fixLinks.js). The shape here; add and edit also check that the ids exist.
   error.push(...require('../fixLinks.js').fixesShapeError(o));
+  // `sources`: the task's own reading material ([{ path, anchor?, role? }], narrowing its plan entry), checked with the
+  // plan register's own source check (queuePlan.sourceListErrors), strict because the paths go into the mission: a
+  // relative path without `..` or a line break, a known role, a one-line anchor. Whether the file exists is a link
+  // warning (cli/taskLinksCheck.mjs), not an error. `source` is origin (free text, read by nobody) and is not checked.
+  // Required here, not at the top: queuePlan.js loads logic/questions.js, which the facade loads too.
+  error.push(...require('../queuePlan.js').sourceListErrors(o.sources, { strict: true, label: 'sources' }));
   // `done_when` (the shell command that must exit 0 for the track to count as done) and `max_fix_rounds` (lib/doneCheck.js).
   error.push(...require('../doneCheck.js').doneWhenErrors(o));
   const emptyRegister = !register || Object.keys(register).length === 0;

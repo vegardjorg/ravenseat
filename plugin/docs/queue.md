@@ -31,7 +31,9 @@ a track adding a proposal) cannot corrupt the file. `ravenseat undo` undoes the 
   "shared_patch": [],
   "project": "auth",
   "feature": "Login",
-  "source": "docs/auth-plan.md § 2"
+  "plan": "PL-AUTH-1",
+  "sources": [{ "path": "docs/auth-plan.md", "anchor": "§ 2", "role": "plan" }],
+  "source": "review of AUTH-2, finding M1"
 }
 ```
 
@@ -49,7 +51,10 @@ a track adding a proposal) cannot corrupt the file. `ravenseat undo` undoes the 
 | `hotspot_patch` | Optional: the hotspots (`hotspots` in `queue.config.json`) this task may change, agreed by the owner. Only one active task can hold the same hotspot (a start conflict). Without it a hotspot change stops the merge, and the track writes a wiring spec instead |
 | `shared_patch` | Shared functions the task changes in patch form |
 | `reads` | Optional: files, or folders ending in `/`, the task builds on but does not change. A task that reads a file an active task (running, in review or picked) changes waits until that task is done, and so does a task that would change a file an active task reads; two readers never block each other. With `"reads": { "mode": "warn" }` in `queue.config.json` it starts anyway, and `start`, `fill` (`READS WARNING`), `explain` and the mission name the overlap. The mission lists the read files and tells the agent not to change them. Never ownership for the merge guard |
-| `project`, `feature`, `source` | Project id (must exist), feature name, and the plan section the task comes from |
+| `project`, `feature` | Project id (must exist) and feature name |
+| `plan` | Optional: the plan entry the task belongs to (`PL-NAME-1`, must exist in the [plan register](plan-register.md); `add --plan <id>` sets it). The entry's sources are the task's reading material, looked up when the mission is made (see [Task links](#task-links)) |
+| `sources` | Optional: the task's own reading material, a list of `{ "path", "anchor"?, "role"? }` with the same shape as a plan entry's sources. It narrows the plan entry to the part this task needs and replaces the entry's sources in the mission. `path` is relative to the project root, with `/`, without `.` or `..` and without a line break; `anchor` is one line (`§ 2` or heading text); `role` is `plan` (the default), `investigation`, `spec`, `history` or `reference` (the last two are checked but not read). `add` and `edit` refuse a bad shape (`Nothing added: T1: sources /etc/a.md: must be relative to the project root (e.g. docs/…)`); a file that is missing is a link warning, not a refusal. `edit` replaces the whole list, and `[]` or `null` removes it. Set it in the task file, or with `edit <id> --json '{"sources":[...]}'` |
+| `source` | Optional: the task's origin, where it came from (`"review of AUTH-2, finding M1"`, `"owner 18.11"`, `"docs/auth-plan.md § 2"`). Free text, never checked as a path and read by nobody: the mission prints it in the track heading only. Reading material goes in `plan` and `sources` |
 | `batched` | `true` for small low-value tasks: they go to the batch queue (`ravenseat batch`) instead of their own track. Approving such a proposal does not start it: it starts when packed, or alone after `edit <id> --json '{"batched":false}'` |
 | `done_when` | Optional: a shell command (one line, at most 500 characters) that must exit 0 in the track's worktree for the track to count as done, e.g. `npm test -- src/x.test.ts`. The mission tells the track to run it before it reports; `receive` and `merge` run it again (see [the done command](#the-done-command-and-the-fix-round-cap)). `null` in `edit` removes it. A proposal with it is never auto-accepted |
 | `acceptance` | Optional: a list of 1 to 10 short criteria (one line each, at most 300 characters), set with `ravenseat add ... --accept "..." --accept "..."` (one task) or `ravenseat edit <id> --accept "..."` (replaces the list). The mission copies them under "Acceptance criteria (fixed, do not change)", `ravenseat info` and the board's detail panel show them, and `reviewer-gap` answers MET / NOT MET / UNCLEAR per criterion. Locked after the start, like `done_when` (see [the lock](#the-finish-line-is-locked-after-the-start)). `null` in `edit` removes it |
@@ -66,7 +71,22 @@ as given, so fix it with `ravenseat edit`.
 
 A task's reading material is its plan entry's sources (`plan`, roles `plan`, `investigation` and `spec`) and its own
 `sources` (`[{ "path", "anchor"?, "role"? }]`, which narrows the plan to the part this task needs). A repo path in
-`source` is origin only. `add` and `edit` check these links and print ONE line when one is dead, its anchor finds no
+`source` is origin only. The three fields relate like this:
+
+- `plan` links to an id. The plan entry owns the paths, anchors and roles, so a moved document is fixed once, in the
+  register, for every task that links to it.
+- `sources` is for the task that needs another part than the rest of the plan ("of PL-AUTH-1, read only § 2"). When
+  it is set, it replaces the entry's sources in the mission; without it, the task reads the entry's sources.
+- `source` says where the task came from. It is never read, so it can name a review, a chat or a decision.
+
+```json
+{ "id": "AUTH-3", "plan": "PL-AUTH-1", "sources": [{ "path": "docs/auth-plan.md", "anchor": "§ 2" }],
+  "source": "review of AUTH-2, finding M1" }
+```
+
+Here the mission reads `docs/auth-plan.md` § 2 (as a line range), not the rest of PL-AUTH-1's documents, and prints
+the review only in the track heading. `add` and `edit` refuse a `sources` entry with a bad shape (see the field table)
+the same way they refuse any other field shape. They also check these links and print ONE line when one is dead, its anchor finds no
 heading, or the file is gitignored (so an agent's worktree does not have it), for example:
 
 ```

@@ -291,6 +291,8 @@ export function cmdEdit() {
     if (o.batched === false) delete o.batched;
     // null removes the done command, the criteria and the task's own fix-round cap (the config cap applies again).
     for (const k of ['done_when', 'acceptance', 'max_fix_rounds']) if (k in field && field[k] == null) delete o[k];
+    // `sources` is replaced as a whole; null or [] removes it (the task then reads its plan entry's sources again).
+    if ('sources' in field && !(Array.isArray(field.sources) && field.sources.length)) delete o.sources;
     if (bonus != null) {
       const t = L.addToBonus(o, bonus, new Date().toISOString());
       if (t) die(`Invalid bonus: ${t}`);

@@ -5,6 +5,15 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Task links: the shape of a task's own `sources` is checked at add and edit (0p2 B4).** Hardening of the field for
+  a few edge cases. `sources` (`[{ path, anchor?, role? }]`) now gets the plan register's own source check: `add` and
+  `edit` refuse a value that is not a list, an entry that is not an object or has an unknown field, a path that is
+  absolute, uses `.` or `..`, a backslash or a line break, an anchor that spans lines, and a role other than `plan`,
+  `investigation`, `spec`, `history` and `reference`, with the same `Nothing added:` and `Invalid change:` messages
+  as other field shapes. A file that is missing stays a link warning. `edit` replaces the whole list, and `[]` or
+  `null` removes it. The plan register's path check also refuses a line break now. `source` is documented as the
+  task's origin (free text, read by nobody), and docs/queue.md explains how `plan`, `sources` and `source` relate.
+
 - **Task links: the mission reads the task's documents first, with paths that work from the worktree (0p2 B3).**
   Hardening of the read-first list for three edge cases. A task's plan entry sources (roles `plan`, `investigation`
   and `spec`; a source without a role counts as `plan`) or its own `sources` (which replace the plan's) now come
