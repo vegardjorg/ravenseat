@@ -56,9 +56,11 @@ const HELP = [
       'A card opens its panel: the title, a short line on what the task is about (from the mission\'s "What and why", ' +
         'or its first paragraph), the actions, the full mission, and the technical facts last under "Details" (closed ' +
         'from the start, remembered in this browser).',
-      'On a wide screen (about 1200 px and up) the panel sits beside the board: the board stays usable and a click on ' +
-        'another card shows that card. On a narrower screen it covers the board until you close it. Esc closes it, and ' +
-        'focus goes back to the card.',
+      'On a wide screen (about 1200 px and up) the panel floats over the right side of the board, so the board does ' +
+        'not move when it opens: the board stays usable, a click on another card shows that card, and a click ' +
+        'anywhere else closes the panel (not while a form in it has unsaved changes). Prefer the board to make room ' +
+        'for it? Set "Side panel" to beside in Settings, Board. On a narrower screen it covers the board until you ' +
+        'close it. Esc and Close close it, and focus goes back to the card.',
     ],
   },
   {

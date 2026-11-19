@@ -23,6 +23,19 @@ const { cloneJson, equalValue, logChange } = require('./edit.js');
 const { setQuestion } = require('./questions.js');
 
 /**
+ * The one focus step limit (QA-1c Q12): `focus set` (setFocus), `focus add` (addFocusStep) and the board's plan save
+ * (saveFocusPlan, also the board's previews, which run the same functions on a copy) all refuse a focus with more steps
+ * than this, with the same message. It is a sanity cap against a runaway script or a pasted list, not a setting: an
+ * owner who runs hundreds of task steps is far below it, and a larger group belongs in one broader step. Before, only
+ * the board's save refused more than 50 steps, so a focus built with `focus add` past 50 could no longer be saved from
+ * the board.
+ */
+const FOCUS_STEPS_MAX = 500;
+const FOCUS_STEPS_ERROR =
+  `a focus can have at most ${FOCUS_STEPS_MAX} steps; ` +
+  'put a large group in one broader step (area:<oid>, project:<pid> or feature:<pid>/<name>)';
+
+/**
  * Sets the focus (queue.mjs focus set). input: { order: [stage], rest?, to?, name?, drag_with_dependencies?, set_by?,
  * continue_when_empty? } (continue_when_empty: true/false overrides the config focus.continueWhenEmpty for this focus;
  * left out = the config decides; rest left out = the config focus.restDefault, fill by default, B22). An open owner question about the previous focus having ended is dropped.
@@ -40,6 +53,8 @@ function setFocus(queue, input, now = new Date().toISOString()) {
       'focus needs at least one step (area:<oid>, project:<pid>, feature:<pid>/<name> or task:<id>)',
     );
   const order = [];
+  // The shared step limit is checked on the raw list first, so a runaway list is not parsed step by step.
+  if (raw.length > FOCUS_STEPS_MAX) return { error: [FOCUS_STEPS_ERROR], warnings };
   for (const t of raw) {
     const r = parseStep(t, queue);
     if ('error' in r) error.push(r.error);
@@ -179,6 +194,8 @@ function addFocusStep(queue, raw, { at = null, by = null, now = new Date().toISO
   const list = Array.isArray(raw) ? raw : [raw];
   if (!list.length) return { error: ['focus add needs a step'], warnings: [] };
   const order = queue.focus.order;
+  // More new steps than the limit can never fit: refused before they are parsed (the exact count is checked below).
+  if (list.length > FOCUS_STEPS_MAX) return { error: [FOCUS_STEPS_ERROR], warnings: [] };
   const error = [];
   const stages = [];
   const skipped = [];
@@ -207,6 +224,8 @@ function addFocusStep(queue, raw, { at = null, by = null, now = new Date().toISO
       entry: null,
     };
   }
+  // The shared step limit on the focus as it would be (the steps already there are skipped, so they do not count twice).
+  if (order.length + stages.length > FOCUS_STEPS_MAX) return { error: [FOCUS_STEPS_ERROR], warnings: [] };
   let index = order.length;
   if (at != null) {
     const n = Number(at);
@@ -280,8 +299,16 @@ function removeFocusStep(queue, raw, { by = null, now = new Date().toISOString()
   return { error: [], stage, index, entry };
 }
 
-/** At most this many stages and pause changes in one plan from the board. */
-const FOCUS_PLAN_MAX = 50;
+/**
+ * The old name of the step limit in one plan from the board, kept so callers that read it keep working. It is now the
+ * shared limit (FOCUS_STEPS_MAX above), the same for set, add and the plan save.
+ */
+const FOCUS_PLAN_MAX = FOCUS_STEPS_MAX;
+/**
+ * At most this many pause changes (pause plus continue) in one plan from the board. A pause change names a project,
+ * and every one must be in the register, so this stays a small cap of its own, apart from the step limit.
+ */
+const FOCUS_PAUSE_MAX = 50;
 
 /**
  * Saves the plan view from the board (queue.mjs focus save) in ONE change, all or nothing:
@@ -299,11 +326,10 @@ function saveFocusPlan(queue, input, now = new Date().toISOString()) {
   if (!order) error.push('order must be a list (empty = no focus)');
   const pause = Array.isArray(input?.pause) ? [...new Set(input.pause.map(String))] : [];
   const proceed = Array.isArray(input?.continue) ? [...new Set(input.continue.map(String))] : [];
-  if (
-    (order?.length ?? 0) > FOCUS_PLAN_MAX ||
-    pause.length + proceed.length > FOCUS_PLAN_MAX
-  )
-    error.push(`at most ${FOCUS_PLAN_MAX} steps and ${FOCUS_PLAN_MAX} pause changes`);
+  // The shared step limit (the same message as focus set and focus add), and the pause changes' own cap.
+  if ((order?.length ?? 0) > FOCUS_STEPS_MAX) error.push(FOCUS_STEPS_ERROR);
+  if (pause.length + proceed.length > FOCUS_PAUSE_MAX)
+    error.push(`at most ${FOCUS_PAUSE_MAX} pause changes (pause and continue together) in one save`);
   const register = { ...(queue.projects ?? {}) };
   for (const pid of [...pause, ...proceed])
     if (!Object.hasOwn(register, pid))
@@ -999,6 +1025,8 @@ module.exports = {
   addFocusStep,
   removeFocusStep,
   FOCUS_PLAN_MAX,
+  FOCUS_STEPS_MAX,
+  FOCUS_STEPS_ERROR,
   saveFocusPlan,
   focusStatus,
   evaluateFocusStep,

@@ -879,9 +879,13 @@ function state() {
   const baseKey = JSON.stringify([baseHealth, pushBatch, checks, checksPanel, checksMarker]);
   // Is a `ravenseat wait` listening (its heartbeat is fresh)? Read every time, so the line flips without a queue change.
   const listening = OW.heartbeatState(FOLDER).listening;
+  // How the side panel sits on a wide screen (board.panelMode, QA-1c Q5): read fresh and part of the cache key, so a
+  // change in the gear reaches the open board on its next poll without a restart.
+  const panelMode = KK.boardPanelMode(fresh);
   if (
     quick &&
     quick.listening === listening &&
+    quick.panelMode === panelMode &&
     quick.mtime === mtime &&
     quick.updateKey === updateKey &&
     quick.baseKey === baseKey &&
@@ -971,6 +975,8 @@ function state() {
     forecast: boardForecast(showQueue),
     // `ravenseat wait` runs and will start an orchestrator turn when the owner acts (lib/ownerWait.js heartbeatState).
     listening,
+    // The side panel's mode on a wide screen: "float" (over the board, default) or "beside" (the board makes room).
+    panelMode,
   };
   // Each step gets status and rests; a step with only rests shows them in the title and the label (the focus line
   // reads the label, the cards and the panel the title), not as an empty step.
@@ -999,6 +1005,7 @@ function state() {
     budget,
     stat: s?.version ?? null,
     listening,
+    panelMode,
     updateKey,
     baseKey,
     version,
@@ -1627,12 +1634,10 @@ async function focus(b, queueNow) {
   const order = list(p.order);
   const pause = list(p.pause);
   const proceed = list(p.continue);
-  if (
-    !order ||
-    order.length > L.FOCUS_PLAN_MAX ||
-    order.some((x) => !STEP.test(x))
-  )
-    return no('invalid step');
+  if (!order) return no('invalid step');
+  // The one focus step limit (QA-1c Q12), with the same message as `focus set`, `focus add` and the save itself.
+  if (order.length > L.FOCUS_STEPS_MAX) return no(L.FOCUS_STEPS_ERROR);
+  if (order.some((x) => !STEP.test(x))) return no('invalid step');
   if (!pause || !proceed || [...pause, ...proceed].some((x) => !PID.test(x)))
     return no('invalid project id in pause/continue');
   if (p.rest != null && !L.FOCUS_REST.includes(p.rest))
@@ -1727,8 +1732,10 @@ async function focusChange(b, queueNow) {
   if (!c) return no('missing change');
   if (!T.FOCUS_CHANGES.includes(c.action)) return no('action must be add or remove');
   const steps = Array.isArray(c.steps) ? c.steps.map(String) : null;
-  if (!steps?.length || steps.length > L.FOCUS_PLAN_MAX || steps.some((x) => !STEP.test(x)))
-    return no('invalid step');
+  if (!steps?.length) return no('invalid step');
+  // More steps in one add than the whole focus may hold: the shared limit's message (addFocusStep checks the sum).
+  if (steps.length > L.FOCUS_STEPS_MAX) return no(L.FOCUS_STEPS_ERROR);
+  if (steps.some((x) => !STEP.test(x))) return no('invalid step');
   if (c.action === 'remove' && steps.length !== 1) return no('remove takes exactly one step');
   const at = c.at == null ? null : Number(c.at);
   if (at != null && (c.action !== 'add' || !Number.isInteger(at) || at < 1)) return no('invalid position');
@@ -2897,13 +2904,20 @@ function correctKey(req) {
   return input.length === answerKey.length && crypto.timingSafeEqual(input, answerKey);
 }
 
-function readBody(req) {
+/**
+ * The request body cap. A write is small (a task id, a form), so 16 KB is plenty; the one exception is the focus plan
+ * (POST /api/focus), which may carry up to queueLogic.FOCUS_STEPS_MAX steps of up to ~130 characters each (QA-1c Q12):
+ * it gets FOCUS_BODY_MAX, so a plan at the step limit is never refused as "too large" before the limit can answer.
+ */
+const BODY_MAX = 16_384;
+const FOCUS_BODY_MAX = 131_072;
+function readBody(req, limit = BODY_MAX) {
   return new Promise((resolve, reject) => {
     let n = 0;
     const chunks = [];
     req.on('data', (b) => {
       n += b.length;
-      if (n > 16_384) {
+      if (n > limit) {
         reject(new Error('request too large'));
         req.destroy();
       } else chunks.push(b);
@@ -3176,7 +3190,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 415, { ok: false, message: 'application/json only' });
     let b;
     try {
-      b = JSON.parse((await readBody(req)) || '{}');
+      b = JSON.parse((await readBody(req, filePath === '/api/focus' ? FOCUS_BODY_MAX : BODY_MAX)) || '{}');
     } catch {
       return json(res, 400, { ok: false, message: 'invalid JSON' });
     }

@@ -672,6 +672,11 @@ const STANDARD = Object.freeze({
     // their own right after In queue. Off by default. queue.json board.blockedColumn wins (written by
     // `ravenseat board-setting blocked on|off` and the gear).
     blockedColumn: false,
+    // How the side panel (a task, Settings, the help) sits on a wide screen (QA-1c Q5). "float": over the board as an
+    // overlay, so nothing in the work area reflows when it opens or closes, and a click outside closes it. "beside":
+    // the board makes room for it (the docked panel from before), for those who prefer to read the board next to it.
+    // Below 1200 px it is a modal sheet in both. Read fresh by the board, so a change in the gear applies at once.
+    panelMode: 'float',
     // The key stays out of Claude's view (0l bolk 5): the board opens itself in the browser with the key and prints
     // the link without it; `ravenseat board open` opens it again. false prints the link with the key (weakened).
     hideKey: true,
@@ -882,6 +887,19 @@ function boardSwitches(cfg = config(), queue = null) {
   return out;
 }
 
+/** The values of board.panelMode (QA-1c Q5); the first is the default. */
+const PANEL_MODES = Object.freeze(['float', 'beside']);
+/**
+ * The side panel's mode on a wide screen: board.panelMode from the configuration when it is one of PANEL_MODES, else
+ * the default (float). An unknown value never breaks the board; it falls back to the default.
+ * @param {object} [cfg] the configuration (default: config())
+ * @returns {'float'|'beside'}
+ */
+function boardPanelMode(cfg = config()) {
+  const v = cfg?.board?.panelMode;
+  return PANEL_MODES.includes(v) ? v : STANDARD.board.panelMode;
+}
+
 /** Is the module on? An unknown name is off. */
 function featureOn(name, cfg) {
   return features(cfg)[name] === true;
@@ -913,4 +931,6 @@ module.exports = {
   featureOffText,
   BOARD_SWITCHES,
   boardSwitches,
+  PANEL_MODES,
+  boardPanelMode,
 };

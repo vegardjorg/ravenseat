@@ -56,6 +56,29 @@ function taskEditActions(k) {
   else if (f) parts.push(cancelForm(k, f));
   return parts;
 }
+/**
+ * True when the task form open in the panel holds unsaved changes (QA-1c Q5: the floating panel then stays open on a
+ * click outside, panel.js panelKeepsOpen). The Edit form counts as changed when a field the owner touched differs from
+ * the task as it is (the values start empty and fill as fields are typed in); Cancel and Decline when a reason is typed.
+ * A form for another card than the one shown does not count (it is not on screen).
+ */
+function taskFormDirty() {
+  const f = t.taskForm;
+  if (!f || f.id !== t.selected) return false;
+  const v = f.values ?? {};
+  if (f.mode !== 'edit') return Boolean(String(v.reason ?? '').trim());
+  const k = t.perId.get(f.id)?.k;
+  if (!k) return false;
+  const d = t.details.get(f.id);
+  const startDescription = d?.mission && typeof d.description === 'string' ? d.description : '';
+  const differs = (value, start) => value != null && String(value) !== String(start ?? '');
+  return (
+    differs(v.value, k.value) ||
+    differs(v.content_min, k.content_min) ||
+    differs(v.class, k.class ?? 'K') ||
+    differs(v.description, startDescription)
+  );
+}
 /** Closes the open form and puts focus back on the button that opened it. */
 function closeTaskForm(text) {
   t.taskForm = null;

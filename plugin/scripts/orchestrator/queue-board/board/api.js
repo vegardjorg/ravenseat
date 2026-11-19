@@ -386,6 +386,8 @@ async function update(force) {
       t.data = answer.data;
       t.version = answer.version;
       applyFeatures();
+      // board.panelMode may have changed in the gear (QA-1c Q5): an open panel switches between float and beside now.
+      if (!panel.hidden) applyPanelMode();
       indexes();
       drawLogo();
       drawUpdateBanner();

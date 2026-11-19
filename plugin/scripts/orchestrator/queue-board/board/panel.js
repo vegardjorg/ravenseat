@@ -10,27 +10,52 @@
 // ---- Detail panel ----
 let panelFrom = null;
 /**
- * Two modes, by the width (UX review P1). From 1200 px (PANEL_SIDE_MEDIA) the panel sits beside the board and is not
- * modal: no backdrop, no inert page, no focus trap, the board makes room for it (body.panel-beside in board.css) and a
- * click on another card swaps the content. Below 1200 px it is a modal dialog as before: the rest of the page is inert
- * so Tab and the screen reader stay in the panel, and the focus trap below catches Tab at the ends. In both modes Esc
- * closes it and focus goes back to the element that opened it. Everything that opens the panel (details, settings,
- * help) goes through showPanel.
+ * The side panel holds a task, Settings or the help (everything that opens it goes through showPanel). How it sits
+ * depends on the width and on board.panelMode (QA-1c Q5; the server sends it as t.data.panelMode).
+ *
+ * The a11y model:
+ *   - Below 1200 px (PANEL_SIDE_MEDIA) it is a modal dialog in both modes, as before: a scrim, aria-modal, the rest of
+ *     the page inert so Tab and the screen reader stay in the panel, and the focus trap below catches Tab at the ends.
+ *     A click on the scrim closes it.
+ *   - From 1200 px it is NOT modal in both modes: no scrim, no aria-modal, no inert page and no focus trap. The board
+ *     stays readable and usable beside it, and the panel stays a labelled dialog region that Tab can leave and enter.
+ *       float (default, body.panel-float): it floats over the right part of the board as an overlay with the overlay
+ *         elevation. The board's layout never changes, so nothing reflows when it opens or closes. A pointer click
+ *         outside closes it (panelOutsideClick below).
+ *       beside (body.panel-beside): the docked panel from before; the board makes room for it and an outside click
+ *         leaves it open.
+ *   - Focus as before in every mode: opening moves focus into the panel, Esc and X close it and focus goes back to the
+ *     element that opened it (or the card or "?" with the same id when that was redrawn). A click outside that put
+ *     focus on something else leaves focus there, so the click is never undone.
+ *   - A click on another card (or graph node, or any control that opens the panel) swaps the content in every mode.
  */
 const PANEL_INERT = ['header.top', '#focusLine', '#stripe', '#board', '#optionLine'];
 const PANEL_SIDE_MEDIA = '(min-width: 1200px)';
-const panelBeside = () => !!window.matchMedia?.(PANEL_SIDE_MEDIA)?.matches;
+/** The wide screen, where the panel is not modal. */
+const panelWide = () => !!window.matchMedia?.(PANEL_SIDE_MEDIA)?.matches;
+/** board.panelMode from the state: 'beside' only when the server says so; anything else (also unknown) is float. */
+const panelModeSetting = () => (t.data?.panelMode === 'beside' ? 'beside' : 'float');
 /** True while the panel is open as a modal dialog (narrow screens). */
 const panelModal = () => !panel.hidden && !background.hidden;
-/** Sets the open panel's mode from the width now: the backdrop, aria-modal, the inert page and the room beside it. */
+/** True while the panel floats over the board (wide screen, float mode): the mode where an outside click closes it. */
+const panelFloats = () => !panel.hidden && document.body.classList.contains('panel-float');
+/**
+ * Counts every open, swap and close of the panel. The outside-click check reads it before and after a click: a click
+ * that opened, swapped or closed the panel itself (a card, a graph node, the gear, a "?") changed it, so it is not an
+ * outside click, whatever element it hit.
+ */
+let panelChanges = 0;
+/** Sets the open panel's mode from the width and the setting now: the scrim, aria-modal, the inert page and the body class. */
 function applyPanelMode() {
   const open = !panel.hidden;
-  const side = open && panelBeside();
+  const side = open && panelWide();
   const modal = open && !side;
+  const beside = side && panelModeSetting() === 'beside';
   background.hidden = !modal;
   if (modal) panel.setAttribute('aria-modal', 'true');
   else panel.removeAttribute('aria-modal');
-  document.body.classList.toggle('panel-beside', side);
+  document.body.classList.toggle('panel-beside', beside);
+  document.body.classList.toggle('panel-float', side && !beside);
   window.QueueA11y.setInert(
     PANEL_INERT.map((v) => document.querySelector(v)),
     modal,
@@ -44,11 +69,87 @@ function showPanel() {
   const from = document.activeElement;
   if (panel.hidden || (from && from !== document.body && !panel.contains(from))) panelFrom = from;
   panel.hidden = false;
+  panelChanges++;
   applyPanelMode();
   // The gear's aria-expanded follows what the panel now shows (settings.js; Settings, a card or the help).
   drawGearExpanded();
 }
-// The width can cross 1200 px while the panel is open (a resized window): switch the mode at once.
+
+// ---- Closing on a click outside (QA-1c Q5) ----
+/**
+ * Why the panel must stay open now, or null: a new-task form (any form in the panel marked data-new-task, whatever it
+ * holds) or an edit form with unsaved changes (edit.js taskFormDirty: the Edit form with a changed field, or a typed
+ * reason in Cancel or Decline). X and Esc still close it; this only guards the click outside and the scrim.
+ */
+function panelKeepsOpen() {
+  if (panel.hidden) return null;
+  if (panel.querySelector('form[data-new-task]')) return 'new';
+  if (typeof taskFormDirty === 'function' && taskFormDirty()) return 'unsaved';
+  return null;
+}
+const PANEL_KEEP_HINT = 'The panel has unsaved changes. Save or cancel the form first, or close the panel with X.';
+/**
+ * Elements whose clicks never count as outside: menus, list boxes and dialogs (opened from the panel, such as the
+ * guard's confirm, the bulk dialog, the focus picker and the plan dialog, or the board's own), and the messages with
+ * "Undo". Their own Esc and buttons close them; the panel stays.
+ */
+const PANEL_NOT_OUTSIDE =
+  '[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], dialog, .guard-background, #toaster';
+/** A pointer press farther than this from the click is a drag (the graph's pan, a lane drag), not a click. */
+const PANEL_DRAG_PX = 6;
+/** The last pointer press: where it was and whether it started in the panel. Cleared by the click that follows. */
+let panelPress = null;
+/** panelChanges when the current click started (set in the capture phase, read after the click's own handlers). */
+let panelChangesAtClick = null;
+function notePanelPress(e) {
+  panelPress = { x: e.clientX ?? 0, y: e.clientY ?? 0, inside: panel.contains(e.target) };
+}
+// Capture phase, so a handler that stops the press cannot hide it. pointerdown and mousedown both fire for a mouse
+// (same spot), and a touch screen sends pointerdown.
+document.addEventListener('pointerdown', notePanelPress, true);
+document.addEventListener('mousedown', notePanelPress, true);
+document.addEventListener(
+  'click',
+  () => {
+    panelChangesAtClick = panelChanges;
+  },
+  true,
+);
+/**
+ * The click after every other handler (bubble phase on the document): closes the floating panel when the click was a
+ * pointer click outside it that did nothing to the panel itself. Not an outside click:
+ *   - a keyboard activation (Enter or Space on a control gives a click without a press): the keyboard closes the
+ *     panel with Esc, so a keyboard user moving through the board is never surprised,
+ *   - a press that started in the panel (a text selection dragged out of it) or a drag (the press moved),
+ *   - a click that opened, swapped or closed the panel (panelChanges moved: another card, the gear, a "?"),
+ *   - a click in a menu or a dialog (PANEL_NOT_OUTSIDE), or on an element that its own click removed (a menu item),
+ *   - any click while the panel is modal (the scrim has its own handler) or sits beside the board (beside mode).
+ * With unsaved changes (panelKeepsOpen) the panel stays and a short hint says why.
+ */
+function panelOutsideClick(e) {
+  const press = panelPress;
+  const changesBefore = panelChangesAtClick;
+  panelPress = null;
+  panelChangesAtClick = null;
+  if (!panelFloats() || !press || press.inside) return;
+  if (changesBefore !== panelChanges) return;
+  const target = e.target;
+  if (!(target instanceof Element) || !target.isConnected) return;
+  if (panel.contains(target) || target.closest(PANEL_NOT_OUTSIDE)) return;
+  if (Math.hypot((e.clientX ?? 0) - press.x, (e.clientY ?? 0) - press.y) > PANEL_DRAG_PX) return;
+  if (panelKeepsOpen()) return message(PANEL_KEEP_HINT, false);
+  // The click may have focused what it hit (a button, a field): keep focus there instead of moving it back.
+  const active = document.activeElement;
+  closePanel({ keepFocus: !!active && active !== document.body && !panel.contains(active) });
+}
+document.addEventListener('click', panelOutsideClick);
+/** The scrim (narrow screens): closes the modal panel, unless a form in it must stay open (panelKeepsOpen). */
+function panelBackgroundClick() {
+  if (panelKeepsOpen()) return message(PANEL_KEEP_HINT, false);
+  closePanel();
+}
+// The width can cross 1200 px while the panel is open (a resized window): switch the mode at once. A new
+// board.panelMode on a poll does the same (api.js update calls applyPanelMode while the panel is open).
 window.matchMedia?.(PANEL_SIDE_MEDIA)?.addEventListener?.('change', () => {
   if (!panel.hidden) applyPanelMode();
 });
@@ -67,13 +168,22 @@ function openPanel(id) {
   panel.querySelector('.button-icon')?.focus();
   if (!t.details.has(id)) getDetails(id);
 }
-function closePanel() {
+/**
+ * Closes the panel. `o.keepFocus` (the outside click, when the click focused something else) leaves focus where it is;
+ * otherwise focus goes back to the element that opened the panel. Used directly as an onclick handler too, where `o`
+ * is the click event (no keepFocus).
+ */
+function closePanel(o) {
+  const keepFocus = o?.keepFocus === true;
   t.selected = null;
   t.setting = null;
   t.help = false;
+  // An open task form goes with the panel (QA-1c Q5): reopening the card starts without it, as a fresh panel does.
+  t.taskForm = null;
   panel.hidden = true;
   background.hidden = true;
-  document.body.classList.remove('panel-beside');
+  panelChanges++;
+  document.body.classList.remove('panel-beside', 'panel-float');
   panel.replaceChildren();
   drawGearExpanded();
   // Inert off before focus moves back (an inert element cannot get focus).
@@ -93,7 +203,7 @@ function closePanel() {
   // A room's "?" (roomHelp) that was redrawn while the help was open: the new "?" for the same section gets focus.
   const fromHelp = panelFrom?.isConnected ? null : panelFrom?.dataset?.help;
   if (fromHelp) panelFrom = document.querySelector(`.room-help[data-help="${CSS.escape(fromHelp)}"]`);
-  if (panelFrom?.isConnected) panelFrom.focus();
+  if (!keepFocus && panelFrom?.isConnected) panelFrom.focus();
   panelFrom = null;
   if (typeof placeOptionMenu === 'function') placeOptionMenu();
 }
@@ -276,6 +386,15 @@ function drawPanel(fresh) {
   const p = project(k.project);
   const d = t.details.get(k.id);
   const scroll = panel.scrollTop;
+  // The redraw replaces every element in the panel, so the one with focus would go and focus fall to the page (the
+  // first open of a card redraws when its details arrive, right after Close got focus). Remember it by id, or as the
+  // Close button, and give the new one focus after the redraw.
+  const had = !fresh && panel.contains(document.activeElement) ? document.activeElement : null;
+  const focusAgain = had?.id
+    ? `#${CSS.escape(had.id)}`
+    : had?.matches?.('.panel-header .button-icon')
+      ? '.panel-header .button-icon'
+      : null;
 
   const idButton = (id) => {
     const x = t.perId.get(id);
@@ -469,6 +588,7 @@ function drawPanel(fresh) {
     ),
     details,
   );
+  if (focusAgain && !panel.contains(document.activeElement)) panel.querySelector(focusAgain)?.focus({ preventScroll: true });
   panel.scrollTop = scroll;
 }
 

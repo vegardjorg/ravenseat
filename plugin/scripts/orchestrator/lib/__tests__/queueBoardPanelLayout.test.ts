@@ -336,6 +336,8 @@ describe('P1: modal below 1200 px', () => {
 });
 
 describe('P1: beside the board from 1200 px', () => {
+  // QA-1c Q5: from 1200 px the panel now floats over the board by default (board.panelMode float, body.panel-float);
+  // the docked panel (body.panel-beside) is the beside mode, tested in queueBoardPanelFloat.test.ts. Not modal in both.
   it('is not modal: no aria-modal, no backdrop, no inert board, no focus trap', async () => {
     wide = true;
     await openCard('EX-1');
@@ -343,7 +345,8 @@ describe('P1: beside the board from 1200 px', () => {
     expect(panel().hasAttribute('aria-modal')).toBe(false);
     expect(backdrop().hidden).toBe(true);
     for (const sel of ['#board', 'header.top']) expect(document.querySelector(sel)?.hasAttribute('inert')).toBe(false);
-    expect(document.body.classList.contains('panel-beside')).toBe(true);
+    expect(document.body.classList.contains('panel-float')).toBe(true);
+    expect(document.body.classList.contains('panel-beside')).toBe(false);
     // Focus went to the panel.
     expect(panel().contains(document.activeElement)).toBe(true);
     const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });

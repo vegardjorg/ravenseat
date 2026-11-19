@@ -213,7 +213,7 @@ main.addEventListener('click', (e) => {
     return;
   }
   // The card's title button gets focus first (a click on the card outside the button gives none), so the panel
-  // knows which card to give focus back to on close, also when it swaps content beside the board.
+  // knows which card to give focus back to on close, also when it swaps content on a wide screen (float or beside).
   summary.querySelector('.summary-button')?.focus({ preventScroll: true });
   openPanel(summary.dataset.id);
 });
@@ -446,4 +446,5 @@ document.addEventListener('keydown', (e) => {
     emptyOption();
   }
 });
-background.addEventListener('click', closePanel);
+// The scrim (narrow screens) closes the modal panel, unless a form in it must stay open (panel.js panelBackgroundClick).
+background.addEventListener('click', panelBackgroundClick);

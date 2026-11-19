@@ -110,7 +110,7 @@ const {
   lastUndoable, undoEntry, expectCheck, rankBlock,
 } = require('./logic/edit.js');
 const {
-  setFocus, removeFocus, addFocusStep, removeFocusStep, FOCUS_PLAN_MAX, saveFocusPlan, focusStatus, evaluateFocusStep, focusWithoutDone, cleanFocus,
+  setFocus, removeFocus, addFocusStep, removeFocusStep, FOCUS_PLAN_MAX, FOCUS_STEPS_MAX, FOCUS_STEPS_ERROR, saveFocusPlan, focusStatus, evaluateFocusStep, focusWithoutDone, cleanFocus,
   restText, focusCleanLines, setArea, areaOverview, park, proceed, focusEnd, syncFocusEnd, dropFocusEndQuestions,
   focusEndLine,
 } = require('./logic/focus.js');
@@ -274,6 +274,9 @@ module.exports = {
   setFocus,
   removeFocus,
   FOCUS_PLAN_MAX,
+  // QA-1c Q12: the one focus step limit for focus set, focus add and the board's plan save, and its message.
+  FOCUS_STEPS_MAX,
+  FOCUS_STEPS_ERROR,
   saveFocusPlan,
   scoreParts,
   stepTitle,

@@ -5,6 +5,21 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the side panel no longer reflows the board, and one focus step limit (QA-1c).** Edge cases from the
+  owner's QA. (1) From 1200 px the side panel (a task, Settings, the help) docked: the body made room for it, so
+  every open and close narrowed the work area, pushed "Edit focus" in the focus line to a new row and rewrapped the
+  Dependencies view's top row. It now floats over the board as an overlay by default (`board.panelMode` `float`, a
+  new Basic row in Settings, Board, **Side panel**), below the top bar with the overlay elevation, and the board's
+  layout never changes. It stays non-modal on a wide screen (no scrim, no inert board, no focus trap) and modal below
+  1200 px, as before. A pointer click outside closes it; a click on another card or graph node still swaps the
+  content; clicks in a menu or dialog opened from it, a press that starts in it, a drag (the graph's pan) and a
+  keyboard activation outside do not count; and a new-task form or an edit form with unsaved changes keeps it open
+  with a short message (also on the narrow scrim). X and Esc work as before, and a closing click that focused
+  something else keeps that focus. `beside` keeps the docked panel for those who prefer it, and a change in the gear
+  applies to an open panel on the next refresh. (2) The board's Save focus refused more than 50 steps while
+  `focus set` and `focus add` had no limit, so a focus built past 50 steps from the CLI could no longer be saved
+  from the board. All three now share one sanity cap of 500 steps with the same message, the pause changes in one
+  save keep their own cap of 50, and the board's request cap for `/api/focus` fits a plan at the step limit.
 - **Board: Focus holds up at 50 steps (QA-1b).** Edge cases from the owner's QA with a real queue of 50+ tasks in
   focus. (1) The **Add to focus …** picker listed every open card in a plain select; **What** is now a search field
   over the list (the combobox pattern the Plans command line uses): it filters by id and title, every word must

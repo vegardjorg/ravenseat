@@ -240,11 +240,27 @@ placement and score, dependencies, owner files, branch, cloud, migrations, QA, v
 in this browser. The short line is the first paragraph under a heading such as "What and why", "Why", "Goal",
 "Purpose", "Background" or "Summary" (or a bold `**Goal:**` label) in the mission; without one it is the first plain
 paragraph, skipping generated lines such as the `=====ID=====` marker, `TITLE:` and `BRANCH:` lines, headings and
-`**Ownership in the queue:**` blocks, and last the first list item. It is clipped at about 320 characters. From about
-1200 px wide the panel sits beside the board, below the top bar (which keeps its full width), and is not modal: the
-board makes room for it and stays usable, a click
-on another card shows that card in the panel, Esc closes it and focus goes back to the card. On a narrower screen it
-is a modal sheet over the board, as before.
+`**Ownership in the queue:**` blocks, and last the first list item. It is clipped at about 320 characters.
+
+**Where the side panel sits.** The task panel, Settings and the help share one side panel. From about 1200 px wide it
+is not modal (no scrim, nothing on the board is made inert, Tab can leave it) and starts below the top bar, which
+keeps its full width. How it sits is `board.panelMode` in queue.config.json (Settings, Board, **Side panel**):
+
+- `float` (the default): the panel floats over the right side of the board with a soft shadow. The board never
+  changes size, so nothing reflows when it opens or closes: the focus line stays on one row and the Dependencies
+  view's top row does not rewrap. A pointer click anywhere outside the panel closes it, with these exceptions: a click
+  on another card or graph node shows that card instead; a click in a menu or dialog (one opened from the panel, such
+  as a confirm or the focus picker) is not outside; a press that starts in the panel, or a drag such as panning the
+  graph, does not count; and while a new-task form or an edit form with unsaved changes (a changed field in Edit, a
+  typed reason in Cancel or Decline) is open, the panel stays and a short message says why. A keyboard activation
+  outside (Enter or Space on a board control) leaves the panel open; Esc closes it.
+- `beside`: the panel docked as before: the board makes room for it (and narrows and rewraps while it is open), and
+  a click outside leaves it open.
+
+In both, a click on another card shows that card in the panel, Esc and Close close it, and focus goes back to the
+card (unless the closing click put focus somewhere else, which is kept). On a narrower screen it is a modal sheet over
+a scrim in both modes, as before; a click on the scrim closes it, except while a form in it has unsaved changes. A new
+value in the gear reaches an open board on its next refresh, also while the panel is open.
 
 **Cancel, decline and edit.** For a waiting task (also on hold or in the batch queue) the detail panel has **Edit**
 (value 1-10, content minutes and class, checked like `ravenseat add` / `ravenseat edit`) and **Cancel task**; for a proposal it has

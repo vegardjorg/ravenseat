@@ -1065,6 +1065,14 @@ const SETTINGS = Object.freeze([
     'chatty, events (only events and clicks) or off for every viewer.', { ...BASIC, choices: ['chatty', 'events', 'off'] }),
   row('board.blockedColumn', 'board', 'onoff', 'Blocked column',
     'Tasks with an open blocker that needs action get a column after In queue.', { ...BASIC, ...QUEUE }),
+  // QA-1c Q5. Friction: float removes the reflow, since a docked panel narrowed the board and rewrapped the focus line
+  // and the Dependencies view's top row every time a task, Settings or the help opened; the cost is that the panel
+  // covers the right side of the board while it is open, and a click outside closes it. beside is kept as an option for
+  // those who want to read the cards next to the panel. Not a guard, so neither value weakens anything.
+  row('board.panelMode', 'board', 'choice', 'Side panel',
+    'float: on a wide screen the panel opens over the board, so nothing moves, and a click outside closes it. ' +
+    'beside: the board makes room for the panel and rewraps while it is open. Below 1200 px it covers the board in ' +
+    'both.', { ...BASIC, choices: ['float', 'beside'] }),
   row('limits.autocompact', 'board', 'onoff', 'Automatic compaction',
     'On: Claude Code compacts the orchestrator session itself and the queue continues. Off: a ready /compact line; ' +
     'then also turn off auto-compaction in Claude Code ("autoCompactEnabled": false), or it compacts anyway.',

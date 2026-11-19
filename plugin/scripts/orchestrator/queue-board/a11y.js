@@ -8,7 +8,8 @@
 //   - Focus trap: one shared feature for all the dialogs (the side panel, the guard dialog, the bulk actions and the
 //     plan dialog), instead of three copies. `nextInTrap` is the rule, `trapKey` applies it on a Tab press.
 //   - Inert: the rest of the page (the top, the board, the strips) is made inert while the side panel is open as a
-//     modal sheet (below 1200 px; from 1200 px it sits beside the board and nothing is inert, board/panel.js).
+//     modal sheet (below 1200 px; from 1200 px it floats over or sits beside the board and nothing is inert,
+//     board/panel.js).
 //   - Toast queue: one stack for the message and "Undo", so they never sit on top of each other.
 //   - Contrast: the WCAG 2 ratio between two colors (K1 is computed from the palette in the test).
 //   - Tabs: which tab the arrow keys go to.

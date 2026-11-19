@@ -41,6 +41,10 @@
   /* The top's fixed height from 721 px up (B16): padding 6 + row 50 + gap 4 + row 50 + padding 6 + the 1 px border.
      The panel beside the board starts below it. */
   --top-height: 117px;
+  /* The elevation of a surface that floats over the board without a scrim (the floating side panel, QA-1c Q5): the
+     same soft shadow as the menus, black in both modes. In dark mode the panel's outline-variant edge carries it, and
+     forced colors drop the shadow and keep the edge. */
+  --elevation-overlay: 0 4px 16px rgb(0 0 0 / 0.16);
 }
 
 * {
@@ -1237,12 +1241,22 @@ details[open] > summary > .fold-chevron::before {
   padding: var(--distance-lg);
 }
 
-/* From 1200 px the panel sits beside the board and is not modal (panel.js applyPanelMode sets body.panel-beside): no
-   scrim, and the page makes room for it, so every card, the top and the gear stay visible and clickable while it is
-   open. A click on another card swaps the content. Below 1200 px it is the modal sheet over a scrim, as before. */
+/* From 1200 px the panel is not modal (no scrim, the board stays usable) in one of two modes, board.panelMode
+   (panel.js applyPanelMode sets the body class). Below 1200 px it is the modal sheet over a scrim in both.
+     - float (default, QA-1c Q5, body.panel-float): the panel floats over the right side of the board as an overlay,
+       below the top, with the overlay elevation. The board is never resized, so nothing in the work area (the focus
+       line, the columns, the dependency view's top row) reflows when it opens or closes. A click outside closes it.
+     - beside (body.panel-beside): the page makes room for it, so every card stays visible beside it; the board
+       narrows and rewraps while it is open. Kept for those who prefer to read the board next to the panel.
+   In both a click on another card swaps the content. */
 @media (min-width: 1200px) {
   body {
     --panel-side: clamp(420px, 36vw, 560px);
+  }
+  body.panel-float .panel {
+    top: var(--top-height);
+    width: var(--panel-side);
+    box-shadow: var(--elevation-overlay);
   }
   body.panel-beside {
     padding-right: var(--panel-side);
@@ -1256,7 +1270,8 @@ details[open] > summary > .fold-chevron::before {
   body.panel-beside .top {
     margin-right: calc(-1 * var(--panel-side));
   }
-  /* The messages center over the board, not under the panel. */
+  /* The messages center over the uncovered part of the board, not under the panel (in both modes). */
+  body.panel-float .toaster,
   body.panel-beside .toaster {
     left: calc((100vw - var(--panel-side)) / 2);
     max-width: min(640px, calc(100vw - var(--panel-side) - 32px));
