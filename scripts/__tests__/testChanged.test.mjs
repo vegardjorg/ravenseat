@@ -6,7 +6,7 @@
 // helper, text read, data file, folder reader) and each rule that falls back to the whole suite.
 // =============================================================
 import { describe, expect, it } from 'vitest';
-import { commandMap, globToRegex, lex, parseNameStatus, readConfig, scanCode, selectTests } from '../test-changed.mjs';
+import { commandMap, globToRegex, lex, parseNameStatus, pathValue, readConfig, scanCode, selectTests } from '../test-changed.mjs';
 
 const O = 'plugin/scripts/orchestrator';
 
@@ -140,6 +140,98 @@ describe('the pick: docs', () => {
   it('a test that names the folder of a changed doc reads it', () => {
     const files = repo({ [`${O}/__tests__/docsRead.test.ts`]: "const t = read(path.join(PLUGIN, 'docs', name + '.md'));" });
     expect(names(pick(['plugin/docs/guide.md'], files))).toEqual(['docsRead.test.ts']);
+  });
+
+  // TC-1: tests write a README.md fixture into a temp repo, and a helper that does so spread the pick to every test using
+  // it (196 of 388 files for a docs-only change). Only a path that can land on the repo's own file counts.
+  const fixtureWriter = [
+    "const ORCH = path.join(__dirname, '..');",
+    "const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'q-'));",
+    "fs.writeFileSync(path.join(repo, 'README.md'), 'start\\n');",
+    "g(['add', '--', 'README.md']);",
+    "expect(lockGaps(['README.md'])).toEqual([]);",
+    "spawnSync(process.execPath, [path.join(ORCH, 'hook-guard.mjs')]);",
+  ].join('\n');
+
+  it('a test that writes the doc base name into a temp repo is not picked for the repo doc', () => {
+    const files = repo({ [`${O}/__tests__/fixture.test.ts`]: fixtureWriter });
+    expect(names(pick(['README.md'], files))).toEqual(['readme.test.ts']);
+  });
+
+  it('a helper that writes the fixture does not spread the doc to the tests using it', () => {
+    const files = repo({
+      [`${O}/__tests__/project.ts`]: fixtureWriter,
+      [`${O}/__tests__/usesProject.test.ts`]: "import { project } from './project';",
+    });
+    expect(names(pick(['README.md'], files))).toEqual(['readme.test.ts']);
+  });
+
+  it('the readers of the repo doc are still picked: a root-like base, a repo-relative path, a relative path', () => {
+    const files = repo({
+      // ROOT computed from __dirname up to the repo root
+      [`${O}/lib/__tests__/rootJoin.test.ts`]: "const ROOT = join(__dirname, '..', '..', '..', '..', '..');\nreadFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8');",
+      // a docs folder from __dirname and a list of names read through it
+      [`${O}/lib/__tests__/docsList.test.ts`]: "const docs = path.resolve(__dirname, '..', '..', '..', '..', 'docs');\nfor (const f of ['guide.md', 'costs.md']) fs.readFileSync(path.join(docs, f), 'utf8');",
+      [`${O}/__tests__/repoPath.test.ts`]: "const t = read('plugin/docs/costs.md');",
+      [`${O}/__tests__/relative.test.ts`]: "const t = fs.readFileSync(new URL('../../../../README.md', import.meta.url), 'utf8');",
+      // a root-like name the file does not define (imported): cannot tell, so it counts
+      [`${O}/__tests__/importedRoot.test.ts`]: "import { PLUGIN_ROOT } from './paths';\nread(path.join(PLUGIN_ROOT, 'docs', 'costs.md'));",
+      'CHANGELOG.md': null,
+      'plugin/docs/costs.md': null,
+    });
+    expect(names(pick(['CHANGELOG.md'], files))).toEqual(['rootJoin.test.ts']);
+    expect(names(pick(['plugin/docs/costs.md'], files))).toEqual(['importedRoot.test.ts', 'repoPath.test.ts', 'docsList.test.ts']);
+    expect(names(pick(['README.md'], files))).toEqual(['readme.test.ts', 'relative.test.ts']);
+  });
+
+  it('a path from __dirname that lands on another folder (a fixture) does not count', () => {
+    const files = repo({
+      [`${O}/__tests__/fixtureDir.test.ts`]: "const FIX = path.join(__dirname, 'fixtures');\nconst t = fs.readFileSync(path.join(FIX, 'README.md'), 'utf8');",
+    });
+    expect(names(pick(['README.md'], files))).toEqual(['readme.test.ts']);
+  });
+
+  it('a test that names docs for a fixture folder is not picked for every docs change', () => {
+    const files = repo({
+      [`${O}/__tests__/fixtureDocs.test.ts`]: "const repo = mk();\nfs.mkdirSync(path.join(repo, 'docs'));\nexpect(types(['docs/a.txt'])).toBe(1);",
+      [`${O}/__tests__/docsDir.test.ts`]: "const DOCS = path.join(__dirname, '..', '..', '..', 'docs');\nfor (const f of list) read(path.join(DOCS, f));",
+    });
+    expect(names(pick(['plugin/docs/guide.md'], files))).toEqual(['docsDir.test.ts']);
+  });
+
+  it('a folder reader is picked for a doc only when it can list the doc folder', () => {
+    const files = repo({
+      [`${O}/__tests__/scanOrch.test.ts`]: "for (const f of fs.readdirSync(path.join(__dirname, '..'))) check(f);",
+      [`${O}/__tests__/scanDocs.test.ts`]: "for (const f of fs.readdirSync(path.join(__dirname, '..', '..', '..', 'docs'))) check(f);",
+      [`${O}/__tests__/scanAll.test.ts`]: "const out = git(['ls-files']);\nconst HERE = __dirname;",
+      // walkers: the folder comes from the calls that hand it over (a recursive call adds nothing)
+      [`${O}/__tests__/walkOrch.test.ts`]: "const ORCH = join(__dirname, '..');\nfunction walk(d) { for (const e of readdirSync(d)) walk(join(d, e)); }\nwalk(ORCH);",
+      [`${O}/__tests__/walkRoot.test.ts`]: "const ROOT = join(__dirname, '..', '..', '..', '..');\nfunction walk(d) { for (const e of readdirSync(d)) out.push(...walk(join(d, e))); }\nwalk(ROOT);",
+    });
+    files.set(`${O}/__tests__/flatPlugin.test.ts`, "const pluginRoot = path.join(__dirname, '..', '..', '..');\nconst before = fs.readdirSync(pluginRoot);");
+    files.set(`${O}/__tests__/otherFolder.test.ts`, "import { CLIENT } from './paths';\nconst f = fs.readdirSync(path.join(CLIENT, 'board')).filter(Boolean);");
+    const r = names(pick(['plugin/docs/guide.md'], files));
+    expect(r).toEqual(['scanAll.test.ts', 'scanDocs.test.ts', 'walkRoot.test.ts']);
+    // a flat listing of a folder above the doc sees it only when it is added or removed
+    expect(names(pick([{ path: 'plugin/docs/new.md', status: 'A' }], files))).toContain('flatPlugin.test.ts');
+    // a code change still picks every folder reader
+    expect(names(pick([`${O}/lib/other.js`], files))).toEqual(expect.arrayContaining(['scanOrch.test.ts', 'scanDocs.test.ts', 'scanAll.test.ts']));
+  });
+});
+
+describe('pathValue: what a path expression points at', () => {
+  const at = (src, expr, file = `${O}/lib/__tests__/a.test.ts`) => pathValue(src, expr, file);
+  it('follows __dirname, import.meta and consts built from them', () => {
+    expect(at("const ROOT = join(__dirname, '..', '..');", 'ROOT')).toEqual({ k: 'path', p: O });
+    expect(at('', "path.resolve(__dirname, '..', 'x.md')")).toEqual({ k: 'path', p: `${O}/lib/x.md` });
+    expect(at('', "fileURLToPath(new URL('../b.md', import.meta.url))")).toEqual({ k: 'path', p: `${O}/lib/b.md` });
+    expect(at('', "path.join(process.cwd(), 'README.md')")).toEqual({ k: 'path', p: 'README.md' });
+    expect(at("const D = join(__dirname, '..');", 'join(D, name)')).toEqual({ k: 'tail', p: `${O}/lib` });
+  });
+  it('a temp folder is not the repo; an unknown upper-case root is "cannot tell"', () => {
+    expect(at("const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'x'));", "path.join(repo, 'README.md')")).toBe(null);
+    expect(at('', "path.join(p.repo, 'README.md')")).toBe(null);
+    expect(at('', "path.join(REPO_ROOT, 'README.md')")).toEqual({ k: 'unknown', lits: ['README.md'] });
   });
 });
 
