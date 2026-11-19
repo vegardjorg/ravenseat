@@ -70,7 +70,9 @@ u work from the keyboard.
 <p align="center"><img src="../../assets/screenshots/light-03-dependencies.jpg" alt="Dependency chains as a graph" width="800"></p>
 
 **Dependencies.** The chains as a graph: circles are tasks (solid ring = in progress, dashed = blocked), squares are
-open questions. It shows at a glance which single answer unlocks the most work.
+open questions. It shows at a glance which single answer unlocks the most work. Each id sits below its ring, never
+inside it, and stays between 12 and 14 px on screen at any zoom; every legend sample has an edge in the color of the
+ring it explains.
 
 <p align="center"><img src="../../assets/screenshots/light-15-focus.jpg" alt="The Focus tab: the forecast above the columns Now, Next, Later and Waiting" width="800"></p>
 
@@ -269,7 +271,8 @@ The **Plans** workspace is the plan register. **Overview** has one card per area
 what waits on you. An area card shows its entry count, a priority bar and a maturity bar, how much is built and the
 warning counts that are over 0. Each bar segment carries a symbol and its count (the word is in the tooltip), and one
 shared legend above the cards explains the symbols and colors: priority is primary for Now, the warn tone for Owner
-and neutral for Later (never red, which means an error). **Details** under each card lists every group with its word
+and neutral for Later (never red, which means an error), the same colors as in the list, the tree map and the
+dependencies of Plan entries. **Details** under each card lists every group with its word
 and count; a click on the card opens Plan entries filtered on the area. **Plan entries** shows the entries as a list, a priority map, a tree map or dependencies, with
 filters and the details of the selected entry. **Documents and agreements**, **Legal**, **Decisions** and **Launch**
 show the documents, the legal points, the owner decisions and what stands between the plan and launch.

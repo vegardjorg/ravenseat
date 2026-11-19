@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the dependency graph's ids stay clear of the ring, and priority is not red anywhere in Plans.** Edge cases
+  closed in the Dependencies view and the Plans views. An id under a task sat 13 units below the circle without
+  counting the ring around it, so at a thick ring (in progress, selected) the text ran into it, and the font grew with
+  the zoom to about 18 px and more. The id now hangs below the ring's outer edge with its thickest stroke and a small
+  gap, at every circle size, and the font is held between 12 and 14 px on screen at any zoom (the board's text floor
+  and one step up); a question's id and its "unlocks N" keep the same distance to the square. Every legend sample now
+  has an edge in the color of the ring it explains that holds 3:1 against the surface in light and dark (the owner
+  question sample was a pale square with no edge), and the legend text is one step larger. In Plans, the list's
+  priority symbols, the priority facet, the tree map, the structure legend and the dependency nodes still drew Now in
+  red; they now use the area cards' colors (strong primary for Now, the warn tone for Owner, a muted neutral for
+  Later), and a Now field keeps a visible selection outline, focus ring and built fill. Red stays for errors,
+  deadlines and legal warnings. Keyboard and screen reader behaviour are unchanged; no new setting and no new colors.
 - **Board: the area cards in Plans read at a glance, and priority is no longer red.** Edge cases closed on the Plans
   overview. Each area card repeated a running legend under its bars ("Idea and investigated 0 · Planned and ready
   1 · ..."), so a card was three lines of text, and a maturity segment in the planned color barely showed on the

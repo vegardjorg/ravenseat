@@ -31,6 +31,17 @@
     batch: 'in the batch queue: not started alone, packed into a track',
   };
 
+  // Where the ids sit (B33). A task's ring has radius r + RING_GAP, and its thickest stroke in board.css is
+  // RING_STROKE_MAX (a selected node); half of that stroke lies outside the ring. The label hangs below that outer
+  // edge with LABEL_GAP to spare (dominant-baseline: hanging in board.css, so the font size never moves its top).
+  // A question's square has a stroke of at most SP_STROKE_MAX (focus); its id sits above it, "unlocks N" below it.
+  const RING_GAP = 3;
+  const RING_STROKE_MAX = 4;
+  const SP_STROKE_MAX = 3;
+  const LABEL_GAP = 3;
+  /** The y of a task's label (its top) below a circle with radius r: clear of the ring at every size. */
+  const labelY = (r) => r + RING_GAP + RING_STROKE_MAX / 2 + LABEL_GAP;
+
   // The view's options (saved in the browser). Neighbors is on by default, the rest off.
   const option = readOption();
   // The layout for the last key (version + filter + option), and how many times it has been computed (for the check).
@@ -266,9 +277,14 @@
         s('rect', { class: 'sp-box', x: -h, y: -h, width: 2 * h, height: 2 * h, rx: 6 }),
         s('text', { class: 'sp-badge', y: 5, text: '?' }),
         n.locks
-          ? s('text', { class: 'graph-locks', y: h + 13, text: `unlocks ${n.locks}` })
+          ? s('text', {
+              class: 'graph-locks',
+              y: h + SP_STROKE_MAX / 2 + LABEL_GAP,
+              text: `unlocks ${n.locks}`,
+            })
           : null,
-        s('text', { class: 'label', y: -h - 6, text: n.sp }),
+        // Above the square: the alphabetic baseline sits LABEL_GAP above the edge (ids have no descenders).
+        s('text', { class: 'label above', y: -(h + SP_STROKE_MAX / 2 + LABEL_GAP + 1), text: n.sp }),
       );
     }
     const classes = ['node', 'task', `t-${n.state}`, `role-${n.role}`];
@@ -282,7 +298,9 @@
         r: n.r,
         '--p': n.color && n.role !== 'neighbor' ? `var(--color-${n.color})` : null,
       }),
-      n.role === 'core' || n.role === 'free' ? s('circle', { class: 'ring', r: n.r + 3 }) : null,
+      n.role === 'core' || n.role === 'free'
+        ? s('circle', { class: 'ring', r: n.r + RING_GAP })
+        : null,
       n.state === 'qa'
         ? s('circle', { class: 'qa-dot', cx: n.r + 3, cy: -n.r - 1, r: 3 })
         : null,
@@ -295,7 +313,7 @@
             s('text', { y: 3.5, text: 'S' }),
           )
         : null,
-      s('text', { class: 'label', y: n.r + 13, text: n.id }),
+      s('text', { class: 'label', y: labelY(n.r), text: n.id }),
     );
   }
 
@@ -380,6 +398,8 @@
   function use() {
     if (!make || !snippet) return;
     make.setAttribute('transform', `translate(${snippet.x} ${snippet.y}) scale(${snippet.s})`);
+    // The font cap in board.css divides by the zoom, so an id stays between 12 and 14 px on screen.
+    svg.style.setProperty('--graph-scale', String(Math.round(snippet.s * 1000) / 1000));
     svg.classList.toggle('zoom-medium', snippet.s >= 0.8);
     svg.classList.toggle('zoom-near', snippet.s >= 1.4);
   }
@@ -530,6 +550,7 @@
   window.QueueGraphView = {
     draw,
     mark,
+    labelY,
     get calculations() {
       return calculations;
     },

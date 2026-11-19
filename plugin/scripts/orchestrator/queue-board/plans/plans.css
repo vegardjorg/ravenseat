@@ -432,17 +432,22 @@ body.room-plans #optionLine {
   font-weight: 600;
 }
 
+/* The same priority colors as the area cards (B32, B33): strong primary for Now, the warn tone for Owner (waits on
+   you), a muted neutral for Later. Never red: red in Plans means an error or a deadline. */
 .plans-pri.pri-now .plans-pri-symbol,
 .plans-facet-option .plans-pri.pri-now {
-  color: var(--color-error);
+  color: var(--color-primary);
 }
 
 .plans-pri.pri-owner .plans-pri-symbol,
 .plans-facet-option .plans-pri.pri-owner {
-  color: var(--color-tertiary);
+  color: var(--color-on-tone-warn);
 }
 
-.plans-pri.pri-later .plans-pri-symbol,
+.plans-pri.pri-later .plans-pri-symbol {
+  color: var(--color-on-tone-neutral);
+}
+
 .plans-pri.pri-drop .plans-pri-symbol {
   color: var(--color-on-surface-variant);
 }
@@ -2794,25 +2799,26 @@ ol.overview-list > .overview-row.overview-question > * {
   border: 1px solid var(--color-outline);
 }
 
-/* The priority colors, shared by the tree map, the legend and the nodes. */
+/* The priority colors, shared by the tree map, the legend and the nodes: the area cards' colors (B32, B33), so
+   priority never means red anywhere in Plans. Now is the strong primary, Owner the warn tone, Later a muted neutral. */
 .structure-explanation-pri.pri-now .structure-prove,
 .tree-map-field.pri-now {
-  --pri-surface: var(--color-error-container);
-  --pri-text: var(--color-on-error-container);
-  --pri-edge: var(--color-error);
+  --pri-surface: var(--color-primary);
+  --pri-text: var(--color-on-primary);
+  --pri-edge: var(--color-primary);
 }
 
 .structure-explanation-pri.pri-owner .structure-prove,
 .tree-map-field.pri-owner {
-  --pri-surface: var(--color-tertiary-container);
-  --pri-text: var(--color-on-tertiary-container);
-  --pri-edge: var(--color-tertiary);
+  --pri-surface: var(--color-tone-warn);
+  --pri-text: var(--color-on-tone-warn);
+  --pri-edge: var(--color-outline);
 }
 
 .structure-explanation-pri.pri-later .structure-prove,
 .tree-map-field.pri-later {
-  --pri-surface: var(--color-surface-container-high);
-  --pri-text: var(--color-on-surface);
+  --pri-surface: var(--color-tone-neutral);
+  --pri-text: var(--color-on-tone-neutral);
   --pri-edge: var(--color-outline);
 }
 
@@ -2931,6 +2937,18 @@ ol.overview-list > .overview-row.overview-question > * {
   z-index: 1;
 }
 
+/* A Now field is primary itself: its selection and focus outline and its built fill use the field's text color, so
+   they never vanish as primary on primary (the fill at 14% keeps the text at 4.5:1 in light and dark). */
+.tree-map-field.pri-now.selected,
+.tree-map-field.pri-now:focus-visible {
+  outline-color: var(--color-on-primary);
+}
+
+.tree-map-field.pri-now .tree-map-fill {
+  background: color-mix(in srgb, var(--color-on-primary) 14%, transparent);
+  border-top-color: var(--color-on-primary);
+}
+
 /* Dependencies */
 .dep-header {
   display: flex;
@@ -3020,14 +3038,19 @@ ol.overview-list > .overview-row.overview-question > * {
   stroke-width: 1.5;
 }
 
+/* The area cards' priority colors (B33): strong primary for Now, the warn tone for Owner, a muted neutral for Later. */
 .dep-node.pri-now .dep-fill {
-  fill: var(--color-error-container);
-  stroke: var(--color-error);
+  fill: var(--color-primary);
+  stroke: var(--color-primary);
 }
 
 .dep-node.pri-owner .dep-fill {
-  fill: var(--color-tertiary-container);
-  stroke: var(--color-tertiary);
+  fill: var(--color-tone-warn);
+  stroke: var(--color-outline);
+}
+
+.dep-node.pri-later .dep-fill {
+  fill: var(--color-tone-neutral);
 }
 
 .dep-node.pri-drop .dep-fill {
@@ -3046,6 +3069,11 @@ ol.overview-list > .overview-row.overview-question > * {
   stroke-width: 3;
 }
 
+/* A Now node is primary itself: its thick critical-path stroke is the light primary container, so it still shows. */
+.dep-node.pri-now.critical .dep-fill {
+  stroke: var(--color-primary-container);
+}
+
 /* Blocked: dashed ring outside. */
 .dep-ring {
   fill: none;
@@ -3060,11 +3088,17 @@ ol.overview-list > .overview-row.overview-question > * {
 }
 
 .dep-node.pri-now text.dep-symbol {
-  fill: var(--color-on-error-container);
+  fill: var(--color-on-primary);
 }
 
 .dep-node.pri-owner text.dep-symbol {
-  fill: var(--color-on-tertiary-container);
+  fill: var(--color-on-tone-warn);
+}
+
+/* Neighbors and finished entries draw on the plain container whatever their priority, so the symbol follows it. */
+.dep-node.role-neighbor text.dep-symbol,
+.dep-node.done text.dep-symbol {
+  fill: var(--color-on-surface-variant);
 }
 
 .dep-node.role-neighbor text.dep-label,
