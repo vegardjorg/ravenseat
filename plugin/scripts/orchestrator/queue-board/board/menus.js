@@ -305,7 +305,10 @@ function markLaneButton(p, per) {
 const filterButton = $('filter-button');
 const filterMenu = $('filter-menu');
 
-/** Pause or resume a project (guard rule 6 warns when something is in progress). In the Filter menu and the lane header. */
+/**
+ * Pause or resume a project (guard rule 6 warns when something is in progress). In the project's lane header only: it
+ * changes the queue for everyone, so it is a command and not a filter (B28, UX review M1). The Filter menu points here.
+ */
 function pauseButton(p) {
   return el('button', {
     type: 'button',
@@ -341,8 +344,9 @@ function drawFilterMenu() {
   for (const col of ['queue', 'blocked', 'inProgress', 'review'])
     for (const k of t.data?.columns[col] ?? [])
       opened.set(k.project, (opened.get(k.project) ?? 0) + 1);
-  const parts = FILTER_SECTIONS.map((s) => {
-    const option = s.option();
+  // A section with nothing to choose (Plan entry before any task has one) is not drawn: no lone "Select all" (B28, M2).
+  const sections = FILTER_SECTIONS.map((s) => ({ s, option: s.option() })).filter((x) => x.option.length);
+  const parts = sections.map(({ s, option }) => {
     const selected = t.filter.selected[s.key];
     const all = option.length > 0 && option.every((v) => selected.has(v.val));
     return el(
@@ -389,6 +393,7 @@ function drawFilterMenu() {
               { for: id, title: p?.title ?? null },
               p ? el('span', { class: 'dot', '--p': `var(--color-${p.color})` }) : null,
               el('span', { class: 'filter-name', text: v.text }),
+              // "paused" is state, so it stays; the command itself is in the lane header.
               p?.pause ? el('span', { class: 'paused', text: 'paused' }) : null,
               p
                 ? el('span', {
@@ -398,10 +403,10 @@ function drawFilterMenu() {
                   })
                 : null,
             ),
-            p?.movable ? pauseButton(p) : null,
           );
         }),
       ),
+      s.key === 'projects' ? pauseHint(option) : null,
     );
   });
   parts.push(
@@ -423,6 +428,31 @@ function drawFilterMenu() {
   );
   filterMenu.replaceChildren(...parts);
   if (focus) filterMenu.querySelector(`[data-focus="${CSS.escape(focus)}"]`)?.focus();
+}
+
+/**
+ * The line under Projects that says where Pause went: a view switch to Project lanes, never the command itself. The
+ * focus lands on the first lane's Pause, so the keyboard way is one Enter more than before. Only when a project can be paused.
+ */
+function pauseHint(option) {
+  if (!option.some((v) => v.project?.movable)) return null;
+  return el(
+    'p',
+    { class: 'filter-hint' },
+    "Pause and resume sit in each project's lane header. ",
+    el('button', {
+      type: 'button',
+      class: 'link-button',
+      'data-focus': 'pause-hint',
+      text: 'Show project lanes',
+      onclick: () => {
+        closeFilter(false);
+        setView('lanes');
+        draw();
+        main.querySelector('.lane-header [data-focus^="pause:"]')?.focus();
+      },
+    }),
+  );
 }
 
 function changedFilter() {

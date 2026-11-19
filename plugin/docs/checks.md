@@ -380,8 +380,9 @@ Everything else is the same as in full mode.
 
 ## Turning the tab off
 
-`ravenseat checks off`, the "Turn this tab off" link on the tab, or "Show the Checks tab" in Settings
-(`checksPanel.mode`, stored in `queue.json`). Off removes the tab, the overview of `ravenseat checks` and the
+`ravenseat checks off`, or "Show the Checks tab" in Settings (`checksPanel.mode`, stored in `queue.json`). The tab
+itself keeps only **Read again** in its header; a quiet line at the end of the tab, **Turn it off in Settings**, opens
+Settings at that switch. Off removes the tab, the overview of `ravenseat checks` and the
 suggestions in setup. It changes no gates and no guards. `ravenseat checks on` brings it back.
 
 Without its own setting, the tab follows `ravenseat guidance`: in `quiet` it is off, so someone who runs their own setup

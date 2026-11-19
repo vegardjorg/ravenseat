@@ -334,36 +334,50 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) rememberVisit();
 });
 
-/** The built-in views (cannot be deleted). `special` is a filter on the cards in queue, proposed and the batch queue. */
+/**
+ * The built-in views (cannot be deleted). `special` is a filter on the cards in queue, proposed and the batch queue.
+ * `explain` is the short line shown under the name in the menu (B28, UX review M3: not only in a tooltip); `title` is
+ * the longer tooltip. "Waiting on me" is gone from here: it opened Decisions, which the "Waiting on you" button at the
+ * top already does, and a selection only filters (X3).
+ */
 const BUILT_IN = [
   {
     name: 'Focus now',
     special: 'focus1',
+    explain: 'The first focus step, ready ones first.',
     title: 'Only tasks in the first focus step, ready ones first.',
   },
   {
     name: 'Ready in focus',
     special: 'readyFocus',
+    explain: 'Ready tasks in any focus step.',
     title: 'Ready tasks in the focus steps, including those dragged along.',
   },
   {
     name: 'Outside focus, ready',
     special: 'outsideReady',
+    explain: 'Only the focus holds them back.',
     title: 'Tasks stopped only by the focus: they can start if you give them a step.',
   },
-  { name: 'On hold', special: 'onWait', title: 'Tasks that are put on hold.' },
+  {
+    name: 'On hold',
+    special: 'onWait',
+    explain: 'Tasks put on hold. They do not start.',
+    title: 'Tasks that are put on hold.',
+  },
   {
     name: 'Sort',
     special: 'sort',
+    explain: 'No project, or the project is uncertain.',
     title:
       'Tasks without a project, with an uncertain proposal, or where the project conflicts with the files and the plan they come from.',
   },
   {
     name: 'New since last visit',
     special: 'newEntry',
+    explain: 'Added since your last visit here.',
     title: 'Tasks added after the previous time the board was open in this browser.',
   },
-  { name: 'Waiting on me', decisions: true, title: 'Opens Decisions, where everything that waits on you is answered.' },
 ];
 const SPECIAL = {
   focus1: (k) => k.space?.step === 0,
@@ -390,7 +404,6 @@ function ownViews() {
 
 function useView(v) {
   closeViews(false);
-  if (v.decisions) return openDecisions();
   t.special = v.special && SPECIAL[v.special] ? v.special : null;
   t.viewName = v.name;
   // Your own views include search, filter, grouping and view; the built-in ones reset search and filter.
@@ -457,18 +470,28 @@ function showAll() {
 }
 function drawViewMenu() {
   const ownOnes = ownViews();
-  const row = (v, removeIt) =>
-    el(
+  // A row in the B23 menu style: the name, and under it a short explanation in muted text that is the row's
+  // description (aria-describedby), so the name stays the row's accessible name.
+  const row = (v, removeIt, i) => {
+    const explainId = `view-explain-${removeIt ? 'own' : 'built'}-${i}`;
+    const explain = removeIt ? 'Your search, filter, grouping and view.' : v.explain;
+    return el(
       'li',
-      { class: 'filter-row' },
-      el('button', {
-        type: 'button',
-        class: 'link-button view-option',
-        text: v.name,
-        title: v.title ?? 'Your saved selection: search, filter, grouping and view.',
-        'aria-current': t.viewName === v.name ? 'true' : null,
-        onclick: () => useView(v),
-      }),
+      { class: 'filter-row view-row' },
+      el(
+        'button',
+        {
+          type: 'button',
+          class: 'view-option',
+          'aria-label': v.name,
+          'aria-describedby': explainId,
+          title: v.title ?? 'Your saved selection: search, filter, grouping and view.',
+          'aria-current': t.viewName === v.name ? 'true' : null,
+          onclick: () => useView(v),
+        },
+        el('span', { class: 'view-name', text: v.name }),
+        el('span', { class: 'view-explain', id: explainId, text: explain }),
+      ),
       removeIt
         ? el('button', {
             type: 'button',
@@ -487,6 +510,7 @@ function drawViewMenu() {
           })
         : null,
     );
+  };
   const nameField = el('input', {
     id: 'view-name',
     type: 'text',
@@ -525,18 +549,18 @@ function drawViewMenu() {
       el(
         'ul',
         { class: 'filter-list' },
-        BUILT_IN.map((v) => row(v, false)),
+        BUILT_IN.map((v, i) => row(v, false, i)),
       ),
     ),
     el(
       'section',
       { class: 'filter-section' },
-      el('div', { class: 'filter-section-header' }, el('h3', { text: 'Your' })),
+      el('div', { class: 'filter-section-header' }, el('h3', { text: 'Saved' })),
       ownOnes.length
         ? el(
             'ul',
             { class: 'filter-list' },
-            ownOnes.map((v) => row(v, true)),
+            ownOnes.map((v, i) => row(v, true, i)),
           )
         : el('p', { class: 'empty', text: 'No saved selections yet.' }),
     ),
@@ -576,6 +600,13 @@ viewMenu.addEventListener('keydown', (e) => {
     e.preventDefault();
     e.stopPropagation();
     closeViews(true);
+  } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target.classList?.contains('view-option')) {
+    // The arrow keys move between the selections (as in the Filter menu); Tab still reaches Delete, the name field and Save.
+    const rows = [...viewMenu.querySelectorAll('.view-option')];
+    const i = rows.indexOf(e.target);
+    const j = Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+    e.preventDefault();
+    rows[j]?.focus();
   }
 });
 document.addEventListener('click', (e) => {

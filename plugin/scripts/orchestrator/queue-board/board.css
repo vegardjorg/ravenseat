@@ -514,7 +514,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: var(--distance-sm);
-  min-height: 44px;
+  min-height: 36px;
   padding: 0 var(--distance-md);
 }
 
@@ -536,8 +536,22 @@ textarea {
   display: flex;
   align-items: center;
   gap: var(--distance-sm);
-  min-height: 44px;
+  min-height: 36px;
   cursor: pointer;
+}
+
+/* Under Projects in the Filter menu: where Pause went (the lane header), with a view switch (B28, M1). */
+.filter-hint {
+  margin: var(--distance-xs) 0 0;
+  padding: 0 var(--distance-md);
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
+.filter-hint .link-button {
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
 }
 
 .filter-name {
@@ -806,6 +820,11 @@ details[open] > summary > .fold-chevron::before {
   margin: var(--distance-sm) 0;
   color: var(--color-on-surface-variant);
   font-size: var(--text-xs);
+}
+
+/* An empty line inside a menu ("No saved selections yet.") gets the menu's side padding, like the rows (B28, X3). */
+.filter-menu .empty {
+  padding: 0 var(--distance-md);
 }
 
 .show-more {
@@ -3815,11 +3834,61 @@ body.with-option-line .board {
   color: var(--color-on-surface-variant);
 }
 
-/* The Views menu. */
+/* The Selection menu (B28, UX review M3): the B23 selection menu's style. 240 px wide, rows 36 px on a mouse (44 px
+   on touch, in the coarse pointer block further down), the name in the on-surface text color with a short muted
+   explanation under it, the shared hover layer on the row itself. The narrow-screen rule for .top .filter-menu still
+   makes it full width. */
+.selection-menu {
+  width: min(240px, calc(100vw - 32px));
+}
+
+.view-row {
+  min-height: 0;
+  padding: 0 var(--distance-xs);
+}
+
+/* The row's button carries the hover, so the list row does not add a second layer. */
+.view-row:hover {
+  background-image: none;
+}
+
 .view-option {
   flex: 1;
-  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  min-height: 36px;
+  padding: var(--distance-xs) var(--distance-sm);
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-on-surface);
+  font: inherit;
+  font-size: var(--text-sm);
   text-align: left;
+  cursor: pointer;
+}
+
+.view-option:hover,
+.view-option:focus-visible {
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.view-option:focus-visible {
+  outline: var(--focus);
+  outline-offset: -2px;
+}
+
+.view-explain {
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
+/* The save row wraps in the narrow menu: the name field on its own line, Save current under it at the right. */
+.view-save {
+  flex-wrap: wrap;
 }
 
 .view-option[aria-current='true'] {
@@ -3846,7 +3915,7 @@ body.with-option-line .board {
 }
 
 .view-save input {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 0;
 }
 
@@ -4466,7 +4535,10 @@ fieldset.setting legend {
   button.badge,
   a.badge,
   .badge[role='button'],
-  .option-item {
+  .option-item,
+  .view-option,
+  .filter-row,
+  .filter-row label {
     min-height: 44px;
   }
 
@@ -4969,4 +5041,14 @@ fieldset.setting legend {
 .cloud-setting-number {
   width: 5.5rem;
   flex: none;
+}
+
+/* The quiet "Turn it off in Settings" line at the end of the Checks view (B28, UX review C2). */
+.checks-off-hint {
+  margin-top: var(--distance-lg);
+}
+
+.checks-off-hint .link-button {
+  margin: 0;
+  font-size: inherit;
 }

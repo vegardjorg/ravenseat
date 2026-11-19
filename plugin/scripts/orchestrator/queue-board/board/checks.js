@@ -523,13 +523,6 @@ function drawChecks() {
         disabled: t.checks.fetching,
         onclick: () => getChecks(true),
       }),
-      el('button', {
-        type: 'button',
-        class: 'link-button',
-        text: 'Turn this tab off',
-        title: 'Same as ravenseat checks off. Settings or ravenseat checks on brings it back. Guards and gates are not affected.',
-        onclick: () => checksWrite({ action: 'off' }, 'Checks tab off'),
-      }),
       el('p', {
         class: 'decide-hint checks-note',
         text: 'Read from your files. Ravenseat did not run any of it, so this shows what is set up, not that it works.',
@@ -618,5 +611,30 @@ function drawChecks() {
   // The recipes' numbers under the suggestions: a damped recipe is listed here, not offered on its card.
   wrap.append(...checksPrecisionSection(r.recipePrecision));
   for (const e of r.catalogErrors ?? []) wrap.append(el('p', { class: 'setting-error', text: `A suggestion file has a mistake: ${e}` }));
+  wrap.append(checksOffHint());
   main.append(wrap);
+}
+
+/**
+ * The quiet way to turn the tab off (B28, UX review C2): a line at the end of the view that opens Settings on the
+ * existing "Show the Checks tab" switch. It no longer sits in the header next to "Read again" with the same weight,
+ * and the view writes nothing itself: the switch in Settings does the write, as before.
+ */
+function checksOffHint() {
+  return el(
+    'p',
+    { class: 'checks-source checks-off-hint' },
+    'Do not need this tab? ',
+    el('button', {
+      type: 'button',
+      class: 'link-button',
+      text: 'Turn it off in Settings',
+      title: 'Opens Settings at the Checks switch. Guards and gates are not affected.',
+      onclick: async () => {
+        await openSettings();
+        // Focus scrolls the panel just enough; the switch sits near the top of General.
+        $('checks-panel')?.focus();
+      },
+    }),
+  );
 }

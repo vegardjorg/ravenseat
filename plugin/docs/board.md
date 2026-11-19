@@ -110,6 +110,16 @@ instead of wrapping, and the columns narrow to 220 px so four fit at 1000 px. On
 wrap as before. The focus line and the "Next up" strip keep their height: choosing a card puts its chain into the
 "Next up" row instead of adding a row, so the board does not move down.
 
+**Filter and Selection only change what you see.** Filter has the sections Show, Projects and Plan entry; a section
+with nothing to choose (Plan entry before any task has one) is left out. Pausing a project changes the queue for
+everyone, so it is not in Filter: **Pause** and **Continue** sit in each project's lane header (Project lanes), with
+the same warning as before when something is in progress, and the line under Projects in Filter has **Show project
+lanes**, which switches the view and puts focus on the first Pause. A paused project still says "paused" in Filter.
+**Selection** is a 240 px menu in the style of the selection menu: each built-in selection (Focus now, Ready in focus,
+Outside focus ready, On hold, Sort, New since last visit) has a short explanation under its name, and your own ones
+sit under **Saved**. Arrow up and down move between the selections and Esc closes either menu with focus back on its
+button. What waits on you is the **Waiting on you** button at the top, not a selection.
+
 The Queue workspace has these tabs:
 - **Flat:** the columns **In queue** (ready now, blocked, proposed by agents and the batch queue), **In progress**,
   **Review** and **Built**. Each card shows class, estimate, value, blockers and owner questions. Click a card for

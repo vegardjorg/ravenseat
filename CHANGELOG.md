@@ -5,6 +5,18 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board menus with one job each.** The Filter menu had a Pause button on every project row next to the filter
+  checkboxes, so a click meant to narrow the view could pause a project for everyone. Filter now holds only filters:
+  Pause and Continue stay in each project's lane header with the same write and the same in-progress warning, and the
+  line under Projects in Filter switches to Project lanes with focus on the first Pause. A Filter section with nothing
+  to choose (Plan entry before any task has one) is no longer drawn as a heading with a lone "Select all". The
+  Selection menu explained Sort, Outside focus ready and On hold only in tooltips, which a keyboard or touch user never
+  sees; every built-in selection now has a short visible line under its name (its description for a screen reader),
+  in a 240 px menu with 36 px rows (44 px on touch) like the selection menu. "Waiting on me" is out of it (it opened
+  Decisions, which the Waiting on you button does), your own selections sit under "Saved", the empty line has the
+  menu's side padding, and the arrow keys move between the selections. In Checks, "Turn this tab off" sat next to
+  "Read again" with the same weight; the header keeps only Read again, and a quiet line at the end of the tab opens
+  Settings at the existing Checks switch.
 - **Board polish: hover and press that show in dark mode, empty columns that say something, and an empty search that
   is said once.** Hover was a different rule per control (a surface swap on tabs and folds, a 5 % brightness filter on
   buttons, only an edge on cards), and in dark mode the button filter and the card-to-hover step (1.15:1) were close
