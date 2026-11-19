@@ -212,7 +212,10 @@ const getAll = () => {
 };
 setInterval(() => {
   if (!document.hidden) getAll();
-  // The age on the cards in In progress moves on without the queue changing.
+  // The stale state (B29): no fetch for over a minute also counts, so it is checked on the clock too.
+  drawStale();
+  // The age on the cards in In progress moves on without the queue changing (and stops at the last update while the
+  // data is stale: age() counts to boardNow()).
   for (const e of main.querySelectorAll('[data-start]')) e.textContent = age(e.dataset.start);
   // The status becomes "Not updated since …" when fetching stops (closed tab, server down).
   if (!boosted) drawStatus();

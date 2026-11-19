@@ -23,7 +23,7 @@ How to start it:
   `/ravenseat:board` prints the full path. In a vendored install: `node scripts/orchestrator/ravenseat.mjs board`.
 
 It listens on 127.0.0.1 only. There is no user login, but every request needs the key, and the key changes on every
-restart (an old tab then says "The key is old": run `ravenseat board open`). Do not expose the port.
+restart (an old tab then shows the key banner: run `ravenseat board open`, or paste the new link). Do not expose the port.
 
 **The key stays out of Claude's view** (`board.hideKey`, on). The key gives every owner action on the board, and the
 start line is what Claude reads when it starts the board for you. So the board opens your browser itself with the
@@ -320,6 +320,28 @@ skill), and `/api/helper` refuses to switch on a helper that is not approved.
 When the queue has no task that is not done or cancelled, Flat and Project lanes show a first-run card instead of
 empty columns: 1. add work (say "add to the queue" in Claude Code, or `ravenseat add --file`), 2. start the queue with
 `/ravenseat:queue`, 3. answer questions in **Decisions** (**Waiting on you** at the top), plus a link to the help.
+
+## Stale data
+
+When the board cannot get a fresh state, it says so instead of looking live. One banner below the top says what is
+wrong, when the last good update was, and what to do:
+
+- **No server** ("The board lost contact with its server at 18:54."): the server stopped or the network is gone. The
+  banner shows `ravenseat board` with a Copy button, and the board keeps trying by itself.
+- **The queue file cannot be read** ("The board cannot read the queue file."): the server is up but queue.json is half
+  written or broken. It tries again by itself.
+- **A server error**: the server answered with an error; restart the board if it keeps happening.
+- **Old data** ("The board has not been updated since 18:54."), on the warn tone: no error, but no fetch for over a
+  minute, for example after the computer slept. It updates when the tab is in front.
+- **The key changed** (the server was restarted): the key banner with the link field, plus the time of the last update.
+
+The first three are on the danger tone (something is broken), old data on the warn tone. Each has **Try again**. While
+the data is stale the cards are dimmed (surface and text color, not opacity, so they keep 4.5:1, with a dashed edge),
+the running times stop at the last update ("times on the cards are as of then"), and **Changes are paused**: a write,
+a drag or a Space lift is refused with a toast that says why, so nobody acts on old data. The status line only says
+"Not updated since 18:54" meanwhile. Error text is plain words, never a code like "Failed to fetch" or "HTTP 503", and
+never the key. When updates come back, the banner goes by itself and the board is drawn again, without a reload. A
+screen reader hears going stale and coming back once each (a polite live region); a retry that fails again is silent.
 
 ## Modules
 

@@ -141,6 +141,8 @@ const t = {
   bulk: null,
   // The server answered 401 (restarted); the banner is shown and polling stops.
   keyInvalid: false,
+  errorKind: null, // B29: what the last failed fetch was ('offline', 'key', 'queue', 'server'; QueueA11y.errorKind)
+  stale: null, // B29: the stale view (QueueA11y.staleView) while the data is old, otherwise null
 };
 
 // ---- The filters (the Filter menu) ----
@@ -404,9 +406,18 @@ function tabLabel(text) {
   return el('span', { class: 'tab-label', 'data-label': text, text });
 }
 
-/** "14 min", "3 h 12 min", "4 d" (display only). */
+/**
+ * The clock the board's relative times count from. While the data is stale (B29, t.stale set by drawStale in
+ * board/api.js) it is the time of the last successful fetch, so "running 1 h 3 min" stops instead of counting on from
+ * old data; the banner says the times are as of then.
+ */
+function boardNow() {
+  return t.stale && t.fetched ? t.fetched.getTime() : Date.now();
+}
+
+/** "14 min", "3 h 12 min", "4 d" (display only), counted to boardNow(). */
 function age(iso) {
-  const ms = Date.now() - Date.parse(iso);
+  const ms = boardNow() - Date.parse(iso);
   if (!Number.isFinite(ms)) return '?';
   const min = Math.max(0, Math.round(ms / 60_000));
   if (min < 60) return `${min} min`;

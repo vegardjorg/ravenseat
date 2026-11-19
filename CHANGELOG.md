@@ -5,6 +5,17 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: stale data no longer looks live.** When the server stopped, only the status text turned red ("Could not
+  read the queue (Failed to fetch)"), while the cards kept counting "running 1 h 3 min" from old data and every
+  button still wrote. Now one banner below the top says in plain words what is wrong and what to do, with the time of
+  the last good update: the board lost contact with its server (with `ravenseat board` to copy), the queue file cannot
+  be read, the server answered with an error, or nothing has been fetched for over a minute; the key case keeps the
+  key banner and gets the time too. Broken states use the danger tone, old data the warn tone, and each has Try again.
+  While stale the cards are dimmed with the surface and text color (4.5:1 kept, dashed edge), the running times stop
+  at the last update, and writes, drags and keyboard lifts are refused with a toast that says why. Error text from
+  failed calls is a plain sentence instead of "Failed to fetch" or "HTTP 500", and never includes the key. When
+  updates come back the banner goes by itself and the board is drawn again without a reload; a screen reader hears
+  going stale and coming back once each, not every failed retry.
 - **Board menus with one job each.** The Filter menu had a Pause button on every project row next to the filter
   checkboxes, so a click meant to narrow the view could pause a project for everyone. Filter now holds only filters:
   Pause and Continue stay in each project's lane header with the same write and the same in-progress warning, and the

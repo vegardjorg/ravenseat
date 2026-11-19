@@ -15,7 +15,7 @@
 //   - Legend: the classes K, D, D+ and U, and the WIP text in In progress.
 //   - The key from a link pasted in after a server restart.
 //   - Theme choice (System, Light, Dark).
-//   - Empty state and stale data.
+//   - Empty state and stale data, and the stale and error states: the banner, its live announcement, plain error text.
 // =============================================================
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -301,12 +301,133 @@
     return `Not updated since ${t}:${m}`;
   }
 
+  // ---- Stale and error states (B29, S-stale) ----
+  // When the board's data is old it must not look live: one banner says in plain words what is wrong and what to do,
+  // the cards are dimmed, the times on them stop at the last update and writes are paused. The rules are here (pure,
+  // tested in queueBoardStale.test.ts); board/api.js draws them.
+
+  /** "14:05" in local time (hours and minutes) for a fetch time in ms, or null without one. */
+  function hhmm(ms) {
+    if (!Number.isFinite(ms)) return null;
+    const d = new Date(ms);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  /**
+   * What kind of failure an HTTP status is: 0 or none = the server did not answer (stopped, or the network is gone),
+   * 401 = the key changed (the server was restarted), 503 = the server could not read the queue file, anything else = a
+   * server error.
+   */
+  function errorKind(status) {
+    if (!status) return 'offline';
+    if (status === 401) return 'key';
+    if (status === 503) return 'queue';
+    return 'server';
+  }
+
+  /** A plain sentence for a failed call without its own message from the server: never a code, a stack or the key. */
+  function plainError(status) {
+    const kind = errorKind(status);
+    if (kind === 'offline')
+      return 'The board cannot reach its server. It may have stopped: start it again with ravenseat board.';
+    if (kind === 'key') return 'The key changed because the board was restarted. Run ravenseat board open.';
+    if (kind === 'queue') return 'The server could not read the queue file. The board tries again by itself.';
+    return 'The server could not do this. Try again; if it keeps happening, restart the board.';
+  }
+
+  /** The reason a write is refused while the data is stale (the toast when a change is tried). */
+  const STALE_BLOCKED =
+    'Changes are paused: the board is showing old data. They work again as soon as the board is back in contact.';
+
+  /**
+   * Is the board stale, and what does the banner say? Returns null while the data is live, otherwise
+   * { kind, tone, title, text, command, retry }:
+   *   - kind: 'key' (the key banner with its link field carries it), 'offline', 'queue', 'server' or 'old' (no error,
+   *     but no fetch for over a minute, for example after the computer slept).
+   *   - tone: 'danger' when something is broken and needs the owner (no server, an unreadable queue file, a server
+   *     error), 'warn' for data that is just old (the warn tone means stale data, PALETTE in lib/queueBoard.js).
+   *   - command: a command to show with a Copy button, or null. retry: whether "Try again" makes sense.
+   * Input: { keyInvalid, error (the kind from errorKind, or null), fetched (ms of the last successful fetch, or null),
+   * now (ms) }.
+   */
+  function staleView(o) {
+    const at = hhmm(o.fetched);
+    const last = at
+      ? `Showing the state from ${at}; times on the cards are as of then. Changes are paused until it is back.`
+      : 'Nothing has been read yet. Changes are paused until it is back.';
+    if (o.keyInvalid)
+      return {
+        kind: 'key',
+        tone: 'danger',
+        title: 'The key changed because the board was restarted.',
+        text: last,
+        command: 'ravenseat board open',
+        retry: false,
+      };
+    if (o.error === 'offline')
+      return {
+        kind: 'offline',
+        tone: 'danger',
+        title: at ? `The board lost contact with its server at ${at}.` : 'The board cannot reach its server.',
+        text: `${last} If the server stopped, start it again. The board keeps trying by itself.`,
+        command: 'ravenseat board',
+        retry: true,
+      };
+    if (o.error === 'queue')
+      return {
+        kind: 'queue',
+        tone: 'danger',
+        title: 'The board cannot read the queue file.',
+        text: `${last} The file may be half written or broken; the board tries again by itself.`,
+        command: null,
+        retry: true,
+      };
+    if (o.error)
+      return {
+        kind: 'server',
+        tone: 'danger',
+        title: "The board's server answered with an error.",
+        text: `${last} The board tries again by itself; if it keeps happening, restart the board.`,
+        command: 'ravenseat board',
+        retry: true,
+      };
+    if (stale(o.fetched, o.now))
+      return {
+        kind: 'old',
+        tone: 'warn',
+        title: `The board has not been updated since ${at}.`,
+        text: `${last} It updates again when the tab is in front, or try now.`,
+        command: null,
+        retry: true,
+      };
+    return null;
+  }
+
+  /**
+   * The one sentence a screen reader hears when the stale state changes (a polite live region), or null when nothing
+   * changed: going stale, a different kind of stale, and coming back are said once each; a retry that fails again is
+   * silent. `before` and `after` are staleView results (or null).
+   */
+  function staleAnnouncement(before, after) {
+    const a = before?.kind ?? null;
+    const b = after?.kind ?? null;
+    if (a === b) return null;
+    if (!b) return 'The board is back in contact and up to date.';
+    return `${after.title} Showing the last state; changes are paused.`;
+  }
+
   return {
     emptyReason,
     chainHidden,
     STALE_MS,
     stale,
     staleText,
+    hhmm,
+    errorKind,
+    plainError,
+    STALE_BLOCKED,
+    staleView,
+    staleAnnouncement,
     FOCUSABLE,
     nextInTrap,
     focusable,

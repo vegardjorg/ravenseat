@@ -153,9 +153,14 @@ function nearestAfter(list, selector, y, exception) {
 main.addEventListener('dragstart', (e) => {
   const summary = e.target.closest?.('.summary[draggable="true"]');
   const header = e.target.closest?.('.lane-header[draggable="true"]');
+  if (!summary && !header) return;
+  // B29: no move from old data; the toast says why.
+  if (staleBlocked()) {
+    e.preventDefault();
+    return;
+  }
   if (summary) drag = startMove(summary, 'summary');
-  else if (header) drag = startMove(header.parentElement, 'lane');
-  else return;
+  else drag = startMove(header.parentElement, 'lane');
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', drag.el.dataset.id ?? drag.el.dataset.pid);
   drag.el.classList.add('drags');
@@ -380,6 +385,7 @@ main.addEventListener('keydown', (e) => {
     } else if (e.key === ' ' && summary.draggable) {
       e.preventDefault();
       suppressWhitespace = true;
+      if (staleBlocked()) return; // B29: no lift from old data
       boosted = startMove(summary, 'summary');
       summary.classList.add('boosted');
       $('status').textContent =
@@ -393,6 +399,7 @@ main.addEventListener('keydown', (e) => {
     }
   } else if (header && e.target === header && header.draggable && e.key === ' ') {
     e.preventDefault();
+    if (staleBlocked()) return; // B29: no lift from old data
     boosted = startMove(header.parentElement, 'lane');
     header.parentElement.classList.add('boosted');
     $('status').textContent =

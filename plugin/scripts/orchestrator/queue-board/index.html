@@ -289,6 +289,11 @@
     </header>
     <!-- The update banner (a newer ravenseat version, or setup not run after an update), drawn by board/start.js from the state. -->
     <div id="update-banner" class="update-banner" role="status" aria-live="polite" hidden></div>
+    <!-- B29: the one banner while the data is stale (no server, an unreadable queue file, a server error, or no fetch for
+         over a minute), drawn by board/api.js from QueueA11y.staleView. Not a live region itself: #stale-live says the
+         transitions once each, so a retry that fails again is silent. -->
+    <div id="stale-banner" class="stale-banner" hidden></div>
+    <p id="stale-live" class="hidden-for-eye" role="status" aria-live="polite"></p>
     <!-- The focus line (the steps, the rest, ready ones in focus, a notice when the focus has nothing ready). -->
     <!-- Not hidden at load: it keeps its one-row height from the first paint, so the board does not jump down when the
          first state arrives (it stays empty until then). -->
@@ -310,6 +315,7 @@
         <button type="submit" class="button button-filled">Use link</button>
       </form>
       <p id="key-error" class="key-error" hidden></p>
+      <p id="key-banner-time" class="key-banner-time" hidden></p>
     </div>
     <main id="board" class="board" role="tabpanel" aria-label="Board"></main>
     <!-- The Plans room (breadcrumb trail and three panes), drawn by plans/plans.js. -->

@@ -56,13 +56,28 @@ $('key-form').addEventListener('submit', (e) => {
 // mascot may say something (the night line on an owner action); a dry run or a preview does not count.
 const OWNER_ACTIONS = new Set(['/api/action', '/api/bulk', '/api/move', '/api/focus', '/api/task-edit']);
 async function api(filePath, body) {
+  // B29: no write from a board that shows old data, so nobody acts on it. The reason is the error's text (the toast).
+  if (body && t.stale) {
+    const e = new Error(window.QueueA11y.STALE_BLOCKED);
+    e.status = 0;
+    e.blocked = true;
+    throw e;
+  }
   const init = { headers: { 'X-Queue-Key': t.key ?? '' } };
   if (body) {
     init.method = 'POST';
     init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
-  const res = await fetch(filePath, init);
+  let res;
+  try {
+    res = await fetch(filePath, init);
+  } catch {
+    // No answer at all (the server stopped, or the network is gone): a plain sentence instead of "Failed to fetch".
+    const e = new Error(window.QueueA11y.plainError(0));
+    e.status = 0;
+    throw e;
+  }
   let answer = null;
   try {
     answer = await res.json();
@@ -74,7 +89,8 @@ async function api(filePath, body) {
   if (res.status === 401) showKeyBanner();
   if (!res.ok) {
     // The status and the answer come along, so a warning from the guard rules (409 + confirm) can be confirmed.
-    const e = new Error(answer?.message ?? `HTTP ${res.status}`);
+    // The server's own message is plain text; without one, a plain sentence instead of "HTTP 500".
+    const e = new Error(answer?.message ?? window.QueueA11y.plainError(res.status));
     e.status = res.status;
     e.answer = answer;
     throw e;
@@ -364,6 +380,7 @@ async function update(force) {
     const q = t.version && !force ? `?version=${encodeURIComponent(t.version)}` : '';
     const answer = await api(`/api/state${q}`);
     t.error = null;
+    t.errorKind = null;
     t.fetched = new Date();
     if (!answer.unchanged) {
       t.data = answer.data;
@@ -389,9 +406,11 @@ async function update(force) {
     }
   } catch (e) {
     t.error = e.message;
+    t.errorKind = window.QueueA11y.errorKind(e.status);
     if (!t.data) draw();
   } finally {
     fetching = false;
+    drawStale();
     // While a card is lifted, the keyboard help text stays in the status line.
     if (!boosted) drawStatus();
   }
@@ -433,6 +452,122 @@ function checksText(c) {
   return done === wanted.length ? '' : ` · Checks: ${done} of ${wanted.length} in place`;
 }
 
+// ---- Stale and error states (B29, S-stale; the rules and texts in a11y.js, staleView) ----
+const staleBanner = $('stale-banner');
+let staleRetrying = false;
+
+/** The stale view now (null while live). */
+function staleNow() {
+  return window.QueueA11y.staleView({
+    keyInvalid: !!t.keyInvalid,
+    error: t.error ? (t.errorKind ?? 'server') : null,
+    fetched: t.fetched?.getTime() ?? null,
+    now: Date.now(),
+  });
+}
+
+/** "Try again": one forced fetch, with the button busy meanwhile (a failed retry changes nothing else). */
+async function retryStale(button) {
+  if (staleRetrying) return;
+  staleRetrying = true;
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  button.textContent = 'Trying …';
+  try {
+    await update(true);
+  } finally {
+    staleRetrying = false;
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    button.textContent = 'Try again';
+    // Still stale: focus stays on the button. Back in contact the banner is gone, so focus goes to the board.
+    if (button.isConnected && !staleBanner.hidden) button.focus();
+    else main.querySelector('[tabindex="0"]')?.focus();
+  }
+}
+
+/** The banner's content for one stale view: title, text, the command with Copy, and "Try again". */
+function staleBannerContent(v) {
+  const command = v.command
+    ? el(
+        'div',
+        { class: 'cloud-command stale-banner-command' },
+        el('code', { text: v.command }),
+        el('button', {
+          type: 'button',
+          class: 'button button-outline',
+          text: 'Copy',
+          'aria-label': `Copy ${v.command}`,
+          onclick: () => copyText(v.command, 'The command is copied.'),
+        }),
+      )
+    : null;
+  const parts = [
+    el(
+      'div',
+      { class: 'stale-banner-content' },
+      el('p', { class: 'stale-banner-title', text: v.title }),
+      el('p', { class: 'stale-banner-text', text: v.text }),
+      command,
+    ),
+  ];
+  if (v.retry)
+    parts.push(
+      el('button', {
+        type: 'button',
+        class: 'button button-outline stale-retry',
+        text: 'Try again',
+        onclick: (e) => retryStale(e.currentTarget),
+      }),
+    );
+  return parts;
+}
+
+/**
+ * Draws the stale state: the one banner (the key banner carries the key case), the dimmed board (body.stale), the
+ * frozen times (boardNow in core.js reads t.stale) and the paused writes (api). Says each transition once in
+ * #stale-live. Coming back hides the banner and draws the board again (fresh times), without a reload.
+ */
+function drawStale() {
+  const before = t.stale;
+  const after = staleNow();
+  t.stale = after;
+  document.body.classList.toggle('stale', !!after);
+  // The key case: the key banner with its link field is the banner; it gets the time of the last update.
+  const keyTime = $('key-banner-time');
+  keyTime.hidden = after?.kind !== 'key';
+  keyTime.textContent = after?.kind === 'key' ? after.text : '';
+  const show = !!after && after.kind !== 'key';
+  // Rebuilt only when the kind changes, so a failed retry neither moves focus nor flickers the banner.
+  if (show && before?.kind !== after.kind) {
+    staleBanner.replaceChildren(...staleBannerContent(after));
+    staleBanner.className = `stale-banner stale-${after.tone}`;
+  }
+  staleBanner.hidden = !show;
+  // The key banner is an alert of its own, so going to the key case is not said twice.
+  const said = window.QueueA11y.staleAnnouncement(before, after);
+  if (said && after?.kind !== 'key') $('stale-live').textContent = said;
+  // Back in contact: the "Changes are paused" toast is no longer true, so it goes too.
+  if (before && !after && $('message').textContent === window.QueueA11y.STALE_BLOCKED) hideToast('message');
+  if (before && !after && t.data) {
+    // Back in contact: the cards are drawn again from now (the ages count on), as after a new state.
+    if (drag || boosted || t.busy || window.QueuePlan?.busy()) t.pending = true;
+    else if (t.view === 'cloud') getCloudQueue();
+    else if (t.view !== 'statistics') draw();
+  }
+  // The running times are only moved by the clock (a reused card keeps its text): set them when the state changes, so
+  // they stop at the last update going stale and count from now coming back.
+  if (!!before !== !!after)
+    for (const e of main.querySelectorAll('[data-start]')) e.textContent = age(e.dataset.start);
+}
+
+/** A move or lift tried while the data is stale: the reason in the toast, and true so the caller stops. */
+function staleBlocked() {
+  if (!t.stale) return false;
+  message(window.QueueA11y.STALE_BLOCKED, true);
+  return true;
+}
+
 function drawStatus() {
   const s = $('status');
   if (!t.key) {
@@ -440,20 +575,14 @@ function drawStatus() {
     s.classList.add('error');
     return;
   }
-  s.classList.toggle('error', !!t.error);
-  // The last successful fetch is over one minute old (the clock at the bottom calls drawStatus).
-  const old =
-    !t.error && !t.keyInvalid && window.QueueA11y.stale(t.fetched?.getTime() ?? NaN, Date.now());
+  // B29: while the data is stale the banner under the top says what is wrong; the status line only says how old the
+  // data is ("Not updated since 14:05", on the warning surface). It is not live meanwhile (#stale-live says the
+  // transitions once), so the 15 second clock and every failed retry stay silent.
+  const old = !!t.stale;
+  s.classList.remove('error');
   s.classList.toggle('stale', old);
-  if (old) s.textContent = window.QueueA11y.staleText(t.fetched);
-  else if (t.keyInvalid)
-    s.textContent = t.fetched
-      ? `The key is old. Showing the state from ${clock(t.fetched)}.`
-      : 'The key is old.';
-  else if (t.error)
-    s.textContent = t.fetched
-      ? `Could not read the queue (${t.error}). Showing the state from ${clock(t.fetched)}.`
-      : `Could not read the queue (${t.error}).`;
+  s.setAttribute('aria-live', old ? 'off' : 'polite');
+  if (old) s.textContent = t.fetched ? window.QueueA11y.staleText(t.fetched) : 'Not updated yet';
   else if (t.fetched)
     s.textContent =
       `Updated at ${clock(t.fetched)}` +

@@ -4451,6 +4451,87 @@ fieldset.setting legend {
   font-weight: 600;
 }
 
+/* ---- Stale and error states (B29, S-stale; board/api.js drawStale, the rules in a11y.js staleView) ---- */
+
+/* The one banner under the top while the data is old: what is wrong, the time of the last update, what to do (a command
+   with Copy) and "Try again". Danger when something is broken and needs the owner (no server, an unreadable queue
+   file, a server error), warn for data that is just old: the same tones as the badges, one meaning each. */
+.stale-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--distance-sm) var(--distance-md);
+  padding: var(--distance-sm) var(--distance-md);
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.stale-banner[hidden] {
+  display: none;
+}
+
+.stale-banner.stale-danger {
+  background: var(--color-tone-danger);
+  color: var(--color-on-tone-danger);
+}
+
+.stale-banner.stale-warn {
+  background: var(--color-tone-warn);
+  color: var(--color-on-tone-warn);
+}
+
+.stale-banner-content {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.stale-banner-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.stale-banner-text {
+  margin: var(--distance-xs) 0 0;
+}
+
+.stale-banner-command {
+  margin-top: var(--distance-xs);
+}
+
+/* The command on the banner's own color: the lightest surface, so it reads as a field in light and dark mode. */
+.stale-banner-command code {
+  flex: 0 1 auto;
+  padding: var(--distance-xs) var(--distance-sm);
+  border-radius: var(--radius);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+}
+
+.stale-retry {
+  flex: 0 0 auto;
+}
+
+/* The key case: the key banner carries it, with the time of the last update on its own line. */
+.key-banner-time {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.key-banner-time[hidden] {
+  display: none;
+}
+
+/* The cards are dimmed while the data is stale, with the surface and the text color, not opacity, so the text keeps
+   4.5:1 (computed from the palette in queueBoardStale.test.ts), and a dashed edge says it without color. */
+body.stale .summary {
+  background: var(--color-surface-container-high);
+  border-style: dashed;
+  color: var(--color-on-surface-variant);
+}
+
+body.stale .summary.stuck::before {
+  background: var(--color-outline-variant);
+}
+
 /* Reduced motion turns off smooth scrolling (also scrollIntoView, which follows scroll-behavior), transitions
    and animations everywhere, including those added later. */
 @media (prefers-reduced-motion: reduce) {
@@ -4504,7 +4585,8 @@ fieldset.setting legend {
   }
 
   .badge,
-  .status.stale {
+  .status.stale,
+  .stale-banner {
     border: 1px solid CanvasText;
   }
 
