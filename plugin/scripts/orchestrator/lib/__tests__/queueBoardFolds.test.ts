@@ -229,7 +229,8 @@ describe('B25: folds that look like folds', () => {
 
   it('the fold button has the shared disclosure style: hover surface, 32 px target and a turning chevron', () => {
     expect(rule(css, '.fold-button')).toMatch(/min-height:\s*32px/);
-    expect(css).toMatch(/\.fold-button:hover\s*\{[^}]*background:\s*var\(--color-/);
+    // The shared hover layer since B7 (queueBoardHoverEmpty.test.ts).
+    expect(css).toMatch(/\.fold-button:hover\s*\{[^}]*background-image:\s*linear-gradient\(var\(--state-hover\)/);
     expect(rule(css, '.fold-chevron')).toMatch(/width:\s*16px/);
     expect(css).toMatch(/\[aria-expanded='true'\]\s*>\s*\.fold-chevron/);
     // The Plans folds get the same chevron and hover.

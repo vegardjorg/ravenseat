@@ -58,12 +58,44 @@ function emptyAction(action) {
   } else if (action === 'selection') showAll();
 }
 
-/** Empty state for a list: shown when none of the cards match the search (also when the list was empty already). */
+/**
+ * Empty state for a list: shown when none of the cards match the search (also when the list was empty already).
+ * When the list has cards but the search hides all of them, it is a quiet line without an action (UX review K4): the
+ * one "Nothing matches" message with Clear search is above the columns (searchNone), not repeated in every column.
+ */
 function emptyText(summary, text) {
   const box = el('div', { class: 'empty empty-state' });
   searchBound(summary, (match) => {
     box.hidden = match.length > 0;
-    if (!box.hidden) box.replaceChildren(...emptyContent(text, summary.length > 0));
+    if (box.hidden) return;
+    if (summary.length > 0 && t.filter.search) box.replaceChildren(el('p', { text: 'No matches here.' }));
+    else box.replaceChildren(...emptyContent(text, false));
+  });
+  return box;
+}
+
+/**
+ * What an empty column on the flat board says (board step B7): one calm line about what goes there, not a blank box.
+ * A lane cell keeps the short "Nothing here." (a long line in every lane would be noise).
+ */
+const COLUMN_EMPTY = {
+  blocked: 'Nothing is blocked. Tasks with a blocker that needs action show here.',
+  inProgress: 'Nothing in progress. Running and picked tasks show here.',
+  review: 'Nothing to review. Delivered tasks wait here for review and merge.',
+  built: 'Nothing built yet. Merged tasks show here.',
+};
+
+/**
+ * The one message above the flat columns when the search matches nothing on the board (UX review K4): the reason and
+ * Clear search, while the columns only show 0. `all` is every card the columns would show without the search.
+ */
+function searchNone(all) {
+  const box = el('div', { class: 'empty empty-state search-empty', hidden: true });
+  searchBound(all, (match) => {
+    const none = !!t.filter.search && all.length > 0 && match.length === 0;
+    box.hidden = !none;
+    main.classList.toggle('search-none', none);
+    if (none) box.replaceChildren(...emptyContent('', true));
   });
   return box;
 }
@@ -71,8 +103,9 @@ function emptyText(summary, text) {
 /**
  * The content of a column (flat) or a cell (lane) for the given cards. The cards are filtered, but not
  * searched: the search hides cards, and the counters and empty texts follow the search via searchBound.
+ * `column`: drawn as a flat column (the longer empty text from COLUMN_EMPTY), else a lane cell.
  */
-function columnContent(col, summary, proposed, batch) {
+function columnContent(col, summary, proposed, batch, column = false) {
   const parts = [];
   if (col === 'queue') {
     const readyOnes = summary.filter((k) => k.ready);
@@ -120,7 +153,12 @@ function columnContent(col, summary, proposed, batch) {
     show = summary.filter((k) => k.recent);
     hidden = summary.length - show.length;
   }
-  parts.push(emptyText(show, 'Nothing here.'));
+  const emptyLine = !column
+    ? 'Nothing here.'
+    : col === 'built' && hidden
+      ? 'Nothing built in the last 7 days.'
+      : (COLUMN_EMPTY[col] ?? 'Nothing here.');
+  parts.push(emptyText(show, emptyLine));
   if (show.length) parts.push(groupedList(show, col));
   if (col === 'built' && (hidden || t.showMore)) {
     const button = el('button', {
@@ -511,11 +549,15 @@ function draw() {
       drawOnNew: draw,
     });
   } else if (t.view === 'flat') {
+    const countedFor = (key) =>
+      key === 'built' && !t.showMore ? filtered.built.filter((x) => x.recent) : filtered[key];
+    // Every card the columns can show (In queue also holds Proposed and the batch queue): the search message reads it.
+    const all = columns.flatMap(({ key }) =>
+      key === 'queue' ? [...filtered.queue, ...filtered.proposed, ...filtered.batch] : countedFor(key),
+    );
+    main.append(searchNone(all));
     for (const { key, name } of columns) {
-      const counted =
-        key === 'built' && !t.showMore
-          ? filtered.built.filter((x) => x.recent)
-          : filtered[key];
+      const counted = countedFor(key);
       main.append(
         el(
           'section',
@@ -533,6 +575,7 @@ function draw() {
               filtered[key],
               key === 'queue' ? filtered.proposed : null,
               key === 'queue' ? filtered.batch : null,
+              true,
             ),
           ),
         ),
@@ -724,20 +767,44 @@ function drawStripe() {
   const row = el('div', { class: 'stripe-row' });
   const next = el('div', { class: 'stripe-next' });
   const name = (text) => el('span', { class: 'stripe-name', text });
+  // The search hides cards in Flat, Project lanes and Dependencies, so "Next up" there shows only the cards the search
+  // keeps (UX review K4: it showed a card the empty search had hidden everywhere else), and says how many it hides.
+  // The list itself is the server's (queueLogic), unchanged; only what is drawn follows the search.
+  const searched = !!t.filter.search && ['flat', 'lanes', 'graph'].includes(t.view);
+  const kept = (list) =>
+    searched
+      ? list.filter((v) => {
+          const x = t.perId.get(v.id);
+          return !x || searchMatch(x.k);
+        })
+      : list;
+  const hiddenNote = (list, keptList) =>
+    list.length > keptList.length
+      ? el('span', {
+          class: 'stripe-empty',
+          text: `${list.length - keptList.length} hidden by the search`,
+        })
+      : null;
   if (!n) next.append(name('Next up'));
   else if (n.stop)
     next.append(
       name('Next up'),
       el('span', { class: 'badge old', text: n.text, title: n.message ?? n.text }),
     );
-  else if (n.startable.length)
+  else if (n.startable.length) {
+    const shown = kept(n.startable);
     next.append(
       name(`Next up (${n.available} ${n.available === 1 ? 'free slot' : 'free slots'})`),
-      ...n.startable.map(nextButton),
+      ...shown.map(nextButton),
     );
-  else if (n.whenAvailable.length)
-    next.append(name('When a slot frees up'), ...n.whenAvailable.map(nextButton));
-  else
+    const note = hiddenNote(n.startable, shown);
+    if (note) next.append(note);
+  } else if (n.whenAvailable.length) {
+    const shown = kept(n.whenAvailable);
+    next.append(name('When a slot frees up'), ...shown.map(nextButton));
+    const note = hiddenNote(n.whenAvailable, shown);
+    if (note) next.append(note);
+  } else
     next.append(
       name('Next up'),
       el('span', {

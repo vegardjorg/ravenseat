@@ -5,6 +5,26 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board polish: hover and press that show in dark mode, empty columns that say something, and an empty search that
+  is said once.** Hover was a different rule per control (a surface swap on tabs and folds, a 5 % brightness filter on
+  buttons, only an edge on cards), and in dark mode the button filter and the card-to-hover step (1.15:1) were close
+  to invisible; a pressed control had no state of its own except on buttons. Buttons, tabs, fold headers, link and
+  icon buttons, the "Next up" chips and cards now share one hover tone and one press tone: a thin layer of the text
+  color over the control's own surface (8 % and 14 %, a filled button uses its own text color), so it darkens a light
+  surface and lightens a dark one. The tones are computed from the palette in both modes: at least 1.15:1 against
+  every surface, press always stronger, and the text on them keeps 4.5:1. Forced colors drop the layers, the press
+  movement still stops with reduced motion, and the focus rings are unchanged. Cards get their 12 px padding from B4,
+  with the checkbox re-centered on the id row. An empty column said "Nothing here."; In progress, Review, Built and
+  the Blocked column now say in one calm line what goes there. Choosing a card added " · selected" to its id row, so
+  "unlocks 2" wrapped to its own line and the card grew a row; the word is now screen reader text out of the flow and
+  the ring shows the choice. A search that matched nothing printed "Nothing matches" with Clear search in every
+  column while "Next up" still offered a card the search hid; now one message with Clear search stands above the
+  columns, the columns show 0, a column the search empties while others match says "No matches here.", and "Next up"
+  shows only what the search keeps ("1 hidden by the search"; the server's list itself is unchanged). Keyboard order,
+  roles and the roving tab stop are unchanged. Tests cover the shared tones per control, the contrast math in both
+  modes, the forced-colors and reduced-motion rules, the card padding, the column texts, the selected word and the
+  empty search with Next up.
+
 - **Board polish: a top bar that stays put, and a half-screen window that works.** The top had no fixed height: its
   rows sized themselves to the mascot zone and to what wrapped, so row 1 sat 1 px higher in Plans (row 2 is hidden
   there and the grid spread the mascot's 104 px over one row instead of two), and at about 1000 px the top was 117,

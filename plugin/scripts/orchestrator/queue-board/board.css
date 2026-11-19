@@ -25,6 +25,19 @@
   --distance-md: 16px;
   --distance-lg: 24px;
   --focus: 2px solid var(--color-primary);
+  /* The card padding (12 px, B4 and B7): between the two steps, made from them so no raw px enters. */
+  --distance-card: calc(var(--distance-sm) + var(--distance-xs));
+  /* Hover and press (B7): ONE tone each for buttons, tabs, fold headers and cards, a thin layer of the text color over
+     whatever surface the control has (background-image: linear-gradient(var(--state-hover), var(--state-hover))). It
+     darkens a light surface and lightens a dark one, so it shows in both modes (computed in
+     queueBoardHoverEmpty.test.ts: at least 1.15:1 against every surface, text on it at least 4.5:1). Forced colors
+     turn both off. */
+  --state-hover: color-mix(in srgb, var(--color-on-surface) 8%, transparent);
+  --state-press: color-mix(in srgb, var(--color-on-surface) 14%, transparent);
+  /* On a filled (primary) button the layer is its own text color, since on-surface barely shows on the light primary of
+     dark mode. */
+  --state-hover-filled: color-mix(in srgb, var(--color-on-primary) 10%, transparent);
+  --state-press-filled: color-mix(in srgb, var(--color-on-primary) 15%, transparent);
   /* The top's fixed height from 721 px up (B16): padding 6 + row 50 + gap 4 + row 50 + padding 6 + the 1 px border.
      The panel beside the board starts below it. */
   --top-height: 117px;
@@ -301,7 +314,11 @@ textarea {
 }
 
 .toggles-button:hover {
-  background: var(--color-surface-container-high);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.toggles-button:active {
+  background-image: linear-gradient(var(--state-press), var(--state-press));
 }
 
 .toggles-button + .toggles-button {
@@ -345,7 +362,12 @@ textarea {
 }
 
 .toggles[role='tablist'] .toggles-button:hover {
-  background: var(--color-surface-container-high);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+  color: var(--color-on-surface);
+}
+
+.toggles[role='tablist'] .toggles-button:active {
+  background-image: linear-gradient(var(--state-press), var(--state-press));
   color: var(--color-on-surface);
 }
 
@@ -497,7 +519,7 @@ textarea {
 }
 
 .filter-row:hover {
-  background: var(--color-surface-container-high);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
 .filter-row input {
@@ -693,7 +715,12 @@ textarea {
 }
 
 .fold-button:hover {
-  background: var(--color-surface-container-high);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+  color: var(--color-on-surface);
+}
+
+.fold-button:active {
+  background-image: linear-gradient(var(--state-press), var(--state-press));
   color: var(--color-on-surface);
 }
 
@@ -741,7 +768,14 @@ details[open] > summary > .fold-chevron::before {
 .plans-facet-title:hover,
 .unregistered-toggle:not(:disabled):hover,
 .plan-expand:hover {
-  background: var(--color-surface-container-high);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.plans-fold:active,
+.plans-facet-title:active,
+.unregistered-toggle:not(:disabled):active,
+.plan-expand:active {
+  background-image: linear-gradient(var(--state-press), var(--state-press));
 }
 
 .plans-fold,
@@ -782,7 +816,7 @@ details[open] > summary > .fold-chevron::before {
 
 .summary {
   position: relative;
-  padding: var(--distance-sm) var(--distance-md) var(--distance-sm) var(--distance-md);
+  padding: var(--distance-card);
   border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius-lg);
   background: var(--color-surface-container-lowest);
@@ -800,8 +834,15 @@ details[open] > summary > .fold-chevron::before {
   background: var(--color-on-tone-danger);
 }
 
+/* Hover: the control edge and the shared hover layer over the card's own surface (also a marked, ready or dimmed card);
+   press: the press layer. */
 .summary:hover {
   border-color: var(--color-outline);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.summary:active {
+  background-image: linear-gradient(var(--state-press), var(--state-press));
 }
 
 /* A ready card has no frame of its own: the "Ready now" badge says it. */
@@ -1278,7 +1319,11 @@ details[open] > summary > .fold-chevron::before {
 }
 
 .button-icon:hover {
-  background: var(--color-surface-container-high);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.button-icon:active {
+  background-image: linear-gradient(var(--state-press), var(--state-press));
 }
 
 .button-icon .icon {
@@ -1335,7 +1380,11 @@ code {
 }
 
 .link-button:hover {
-  background: var(--color-surface-container-high);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.link-button:active {
+  background-image: linear-gradient(var(--state-press), var(--state-press));
 }
 
 .actions {
@@ -1453,20 +1502,19 @@ code {
   cursor: default;
 }
 
-/* Press color and hover, so a click shows at once. */
+/* Hover and press, so a click shows at once: the shared layers over the button's own surface (filled, muted, outline
+   and danger alike), and a small press movement. */
 .button:not(:disabled):hover {
-  filter: brightness(0.95);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
 .button:not(:disabled):active {
-  filter: brightness(0.85);
+  background-image: linear-gradient(var(--state-press), var(--state-press));
   transform: scale(0.97);
 }
 
 .button {
-  transition:
-    filter 0.1s,
-    transform 0.1s;
+  transition: transform 0.1s;
 }
 
 /* While saving: the button shows "Saving …" and a busy cursor, the row is dimmed. */
@@ -1504,6 +1552,14 @@ code {
 .button-filled {
   background: var(--color-primary);
   color: var(--color-on-primary);
+}
+
+.button-filled:not(:disabled):hover {
+  background-image: linear-gradient(var(--state-hover-filled), var(--state-hover-filled));
+}
+
+.button-filled:not(:disabled):active {
+  background-image: linear-gradient(var(--state-press-filled), var(--state-press-filled));
 }
 
 .button-muted {
@@ -2324,6 +2380,11 @@ body.with-option-line .toaster {
 
 .next-summary:hover {
   border-color: var(--color-outline);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.next-summary:active {
+  background-image: linear-gradient(var(--state-press), var(--state-press));
 }
 
 .next-id {
@@ -2396,8 +2457,17 @@ body.with-option-line .toaster {
   box-shadow: 0 0 0 2px var(--color-tertiary);
 }
 
+/* K3: "selected" is screen reader text out of the flow (the ring says it on screen), so the id row never gets longer and
+   the card keeps its shape when it is chosen. Before and after keep their visible word: their rings differ only in
+   color. */
 .summary.chain-selected .summary-id::after {
   content: ' · selected';
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .summary.chain-for .summary-id::after {
@@ -3187,7 +3257,8 @@ body.with-option-line .toaster {
    (WCAG 2.2 target size); on touch it is 44 px with wider room (see @media (hover: none) below). */
 .mark-box {
   position: absolute;
-  top: 0;
+  /* 4 + 36 / 2 = 22 px: the middle of the id row below the 12 px card padding. */
+  top: var(--distance-xs);
   left: var(--distance-xs);
   z-index: 1;
   display: inline-flex;
@@ -3206,12 +3277,14 @@ body.with-option-line .toaster {
   cursor: pointer;
 }
 
+/* The card padding is 12 px, so the header keeps the id 32 px from the card edge, clear of the 4 + 24 px checkbox. */
 .summary[data-markable] .summary-header {
-  padding-left: var(--distance-md);
+  padding-left: calc(var(--distance-md) + var(--distance-xs));
 }
 
 @media (hover: none) {
   .mark-box {
+    top: 0;
     left: 0;
     width: 44px;
     height: 44px;
@@ -3219,7 +3292,7 @@ body.with-option-line .toaster {
 
   /* The touch target is wider, so the header makes more room for it instead of letting it cover the id. */
   .summary[data-markable] .summary-header {
-    padding-left: var(--distance-lg);
+    padding-left: calc(var(--distance-lg) + var(--distance-xs));
   }
 }
 
@@ -3358,7 +3431,7 @@ body.with-option-line .board {
 
 .option-item:hover,
 .option-item:focus-visible {
-  background: var(--color-surface-container-high);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
 .option-item:focus-visible {
@@ -3705,7 +3778,7 @@ body.with-option-line .board {
 }
 
 .group-header:hover {
-  background: var(--color-surface-container-high);
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
 .group-name {
@@ -4284,6 +4357,22 @@ fieldset.setting legend {
   margin: 0;
 }
 
+/* K4: a search that matches nothing on the flat board is ONE message above the columns (with Clear search), not one per
+   column. It spans the grid as its own row; the columns keep the rest of the height and show 0. */
+.board.flat.search-none {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.search-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* With that message up, the columns carry no empty text of their own: their counters say 0. */
+.board.flat.search-none .column .empty-state {
+  display: none;
+}
+
 /* The last fetch is over one minute old. The warning surface (amber) and its own text, not just the color. */
 .status.stale {
   padding: 0 var(--distance-sm);
@@ -4307,6 +4396,14 @@ fieldset.setting legend {
 
 /* Forced colors (Windows contrast mode) remove surfaces and shadows, so the highlights get an edge or outline. */
 @media (forced-colors: active) {
+  /* The hover and press layers go: the system colors carry hover there. */
+  :root {
+    --state-hover: transparent;
+    --state-press: transparent;
+    --state-hover-filled: transparent;
+    --state-press-filled: transparent;
+  }
+
   .toggles-button[aria-pressed='true'],
   .toggles-button[aria-selected='true'],
   .view-option[aria-current='true'] {

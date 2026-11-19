@@ -413,7 +413,8 @@ describe('B23: the checkbox is visible by default', () => {
     expect(base.body).toMatch(/left:\s*var\(--distance-xs\)/);
     const header = rules().find((r) => r.sel === '.summary[data-markable] .summary-header');
     expect(header).toBeDefined();
-    expect(header!.body).toMatch(/padding-left:\s*var\(--distance-/);
+    // From the spacing tokens (a calc of two since B7 gave the card 12 px padding).
+    expect(header!.body).toMatch(/padding-left:\s*(calc\()?var\(--distance-/);
   });
 
   it('the target stays 24 x 36 on a mouse and 44 on touch', () => {

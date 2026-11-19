@@ -46,7 +46,8 @@ dark mode; the gear lets you pick one.
 wait to be packed into one track), **In progress** and **Review**. Each card shows the id, domain, class (the risk
 level K, D, D+ or U, see [task classes](full-mode.md#agents-skip-security-and-edge-cases)), estimate and how many tasks
 it unlocks. **Next up** shows what the orchestrator starts in the next free slot; a task with an open blocker that needs
-action (the Blocked column) is not in it until `ravenseat unblock`. Click a card for its mission, owned
+action (the Blocked column) is not in it until `ravenseat unblock`. While you search, Next up shows only the tasks the
+search keeps and says how many it hides ("1 hidden by the search"). Click a card for its mission, owned
 files, cost and the actions for its status (see [task detail](guide.md#task-detail)).
 
 <p align="center"><img src="../../assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
@@ -123,7 +124,10 @@ The Queue workspace has these tabs:
   search), "hidden by the filter" (Remove filter), "outside the selection" (Show all), "older than 7 days in Built"
   (Show more), or "not shown in this view". Column and group headings are in sentence case; the In progress header
   keeps its name on one line, and the agents badge ends in an ellipsis in a narrow column (the full text is in its
-  tooltip).
+  tooltip). An empty column says in one line what goes there ("Nothing to review. Delivered tasks wait here for review
+  and merge."). A search that matches nothing shows one message above the columns, "Nothing matches" with **Clear
+  search**, and the columns show 0; a column the search empties while others still match says "No matches here." The
+  chosen card keeps its shape: its ring shows it, and "selected" is read by a screen reader only.
 - **Blocked** (off by default): with **Blocked as its own column** on in the gear (General), a column right after
   **In queue** holds every open task with an open blocker that needs action: the blocker codes `owner-question`,
   `merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `silent`, `no-agent`, `context`, `quota` and `other`
