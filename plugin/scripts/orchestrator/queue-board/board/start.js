@@ -205,7 +205,8 @@ window.QueueBoard = {
 // ---- Start ----
 setTheme(themeSelected());
 setView(t.view);
-drawViewButton();
+// The Filter button's label from the start (QA-1d: it also names a quick or saved filter in use).
+drawFilter();
 t.key = getKey();
 if (!t.key) showKeyBanner();
 drawStatus();

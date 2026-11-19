@@ -183,8 +183,10 @@ describe('the top: the markup in the top', () => {
     const row2 = top.slice(top.indexOf('top-row2'));
     for (const id of ['status', 'inbox', 'settings']) expect(row1).toContain(`id="${id}"`);
     expect(row1).toContain('class="title"');
-    for (const id of ['tabs', 'search', 'filter-button', 'views', 'grouping'])
+    for (const id of ['tabs', 'search', 'filter-button', 'grouping'])
       expect(row2).toContain(`id="${id}"`);
+    // QA-1d: the Selection button (id="views") and "Select all matches" (id="mark-match") are folded into Filter.
+    for (const id of ['views', 'mark-match']) expect(row2).not.toContain(`id="${id}"`);
   });
 
   it('help and theme are out of the top, and board.js does not look up the buttons that are gone', () => {

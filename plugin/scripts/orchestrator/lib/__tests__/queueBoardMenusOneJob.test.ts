@@ -10,14 +10,14 @@
 //     /api/action). The Filter menu points to the lane header with a view switch, never a command.
 //   - M2: a Filter section with nothing to choose (Plan entry with no plan entries) is not drawn, so no lone
 //     "Select all"; it comes back once there is something under it.
-//   - M3: every built-in row in the Selection menu has a short visible explanation as a second line (not only a
-//     tooltip), tied to the row with aria-describedby; the rows are 36 px on a mouse and 44 px on touch, in the
-//     on-surface text color like the B23 selection menu, in a 240 px menu. The heading of your own selections is
-//     "Saved" and the empty line has the menu's side padding.
-//   - X3: "Waiting on me" is out of the Selection menu (the "Waiting on you" button at the top opens Decisions).
+//   - M3: every quick filter (a built-in row, in the Filter menu since QA-1d; before that in the Selection menu) has a
+//     short visible explanation as a second line (not only a tooltip), tied to the row with aria-describedby; the rows
+//     are 36 px on a mouse and 44 px on touch, in the on-surface text color like the B23 selection menu. The heading
+//     of your own saved filters is "Saved" and the empty line has the menu's side padding.
+//   - X3: "Waiting on me" is not a quick filter (the "Waiting on you" button at the top opens Decisions).
 //   - C2: the Checks header has one action ("Read again"); "Turn this tab off" is gone from it. A quiet line at the end
 //     of the view opens Settings on the existing Checks switch, which is where the tab is turned off.
-//   - The arrow keys move between the Selection rows, and Esc closes both menus with focus back on their button.
+//   - The arrow keys move between the quick filter rows, and Esc closes the menu with focus back on Filter.
 // CSS rules are read from board.css (render tests do not work in jsdom); the behaviour runs the whole board in jsdom.
 // =============================================================
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -172,11 +172,12 @@ function openFilter() {
   if ($('filter-menu').hidden) $('filter-button').click();
   return $('filter-menu');
 }
+/** QA-1d: the quick filters and saved filters are the first two sections of the Filter menu (no Selection menu). */
 function openSelection() {
-  closeFilter();
-  if ($('views-menu').hidden) $('views').click();
-  return $('views-menu');
+  return openFilter();
 }
+/** The Quick filters section (the old Selection menu's built-in rows). */
+const quickSection = (menu: HTMLElement) => menu.querySelectorAll('.filter-section')[0] as HTMLElement;
 
 describe('M2: a Filter section with nothing under it is not drawn', () => {
   it('no plan entries: no "Plan entry" section and no lone "Select all"', () => {
@@ -186,7 +187,10 @@ describe('M2: a Filter section with nothing under it is not drawn', () => {
     expect(titles).toContain('Projects');
     expect(titles).not.toContain('Plan entry');
     expect(menu.querySelector('[data-focus="all:plan"]')).toBeNull();
-    for (const s of menu.querySelectorAll('.filter-section')) expect(s.querySelectorAll('input[type="checkbox"]').length).toBeGreaterThan(0);
+    // QA-1d: the first two sections are Quick filters and Saved (rows, not checkboxes); the filter sections follow.
+    const filterSections = [...menu.querySelectorAll('.filter-section')].slice(2);
+    expect(filterSections.length).toBeGreaterThan(0);
+    for (const s of filterSections) expect(s.querySelectorAll('input[type="checkbox"]').length).toBeGreaterThan(0);
     closeFilter();
   });
 });
@@ -239,10 +243,10 @@ describe('M2: the hidden section comes back', () => {
   });
 });
 
-describe('M3 / X3: the Selection menu says what each row does, in the B23 menu style', () => {
+describe('M3 / X3: the quick filters say what each row does, in the B23 menu style', () => {
   it('every built-in row has a visible explanation line tied to it', () => {
     const menu = openSelection();
-    const rows = [...menu.querySelectorAll('.view-option')] as HTMLElement[];
+    const rows = [...quickSection(menu).querySelectorAll('.view-option')] as HTMLElement[];
     const byName = new Map(rows.map((r) => [r.querySelector('.view-name')?.textContent, r]));
     for (const name of ['Sort', 'Outside focus, ready', 'On hold']) {
       const row = byName.get(name);
@@ -259,15 +263,14 @@ describe('M3 / X3: the Selection menu says what each row does, in the B23 menu s
     const menu = openSelection();
     expect(menu.textContent).not.toMatch(/Waiting on me/);
     const titles = [...menu.querySelectorAll('.filter-section h3')].map((h) => h.textContent);
-    expect(titles).toEqual(['Built in', 'Saved']);
-    expect(menu.querySelector('.empty')?.textContent).toBe('No saved selections yet.');
+    expect(titles.slice(0, 2)).toEqual(['Quick filters', 'Saved']);
+    expect(menu.querySelector('.empty')?.textContent).toBe('No saved filters yet.');
     const empty = base('.filter-menu .empty');
     expect(empty.padding ?? empty['padding-left']).toMatch(/var\(--distance-md\)/);
   });
 
-  it('the rows are 36 px on a mouse and 44 px on touch, in the on-surface text color, in a 240 px menu', () => {
-    expect(html).toMatch(/id="views-menu"\s+class="filter-menu selection-menu"/);
-    expect(base('.selection-menu').width).toMatch(/240px/);
+  it('the rows are 36 px on a mouse and 44 px on touch, in the on-surface text color, in the Filter menu', () => {
+    expect(html).not.toMatch(/id="views-menu"/);
     const row = base('.view-option');
     expect(row['min-height']).toBe('36px');
     expect(row.color).toBe('var(--color-on-surface)');
@@ -275,9 +278,9 @@ describe('M3 / X3: the Selection menu says what each row does, in the B23 menu s
     expect(base('.view-explain').color).toBe('var(--color-on-surface-variant)');
   });
 
-  it('the arrow keys move between the rows and Esc closes with focus back on Selection', () => {
+  it('the arrow keys move between the rows and Esc closes with focus back on Filter', () => {
     const menu = openSelection();
-    const rows = [...menu.querySelectorAll('.view-option')] as HTMLElement[];
+    const rows = [...quickSection(menu).querySelectorAll('.view-option')] as HTMLElement[];
     rows[0].focus();
     key(rows[0], 'ArrowDown');
     expect(document.activeElement).toBe(rows[1]);
@@ -285,7 +288,7 @@ describe('M3 / X3: the Selection menu says what each row does, in the B23 menu s
     expect(document.activeElement).toBe(rows[0]);
     key(rows[0], 'Escape');
     expect(menu.hidden).toBe(true);
-    expect(document.activeElement).toBe($('views'));
+    expect(document.activeElement).toBe($('filter-button'));
   });
 
   it('Esc in the Filter menu still closes it with focus back on Filter', () => {

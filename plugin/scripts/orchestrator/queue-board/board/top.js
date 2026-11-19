@@ -441,15 +441,9 @@ function setView(v) {
     closeFilter(false);
     getCloudQueue();
   }
-  if (v === 'checks') {
-    closeFilter(false);
-    closeViews(false);
-  }
-  // The plan shows areas and projects, not cards: the filter and view menus are closed.
-  if (v === 'plan') {
-    closeFilter(false);
-    closeViews(false);
-  }
+  // The plan shows areas and projects, and Checks has no cards: the Filter menu (with the quick and saved filters,
+  // QA-1d) is closed.
+  if (v === 'checks' || v === 'plan') closeFilter(false);
 }
 for (const x of VIEWS)
   $(`show-${x}`).addEventListener('click', () => {

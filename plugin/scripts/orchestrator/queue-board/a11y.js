@@ -17,6 +17,7 @@
 //   - The key from a link pasted in after a server restart.
 //   - Theme choice (System, Light, Dark).
 //   - Empty state and stale data, and the stale and error states: the banner, its live announcement, plain error text.
+//   - The focus line fit: how many focus steps fit on the one-row focus line beside "+N more" (focusFit, QA-1d).
 // =============================================================
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -216,9 +217,10 @@
    *   searchHides: the list has cards, but the search hides all of them
    *   search:      the search text (empty string when search is off)
    *   filters:     number of options in the Filter menu
-   *   selection:   the name of the selection in use, or null
+   *   selection:   the name of the quick filter or saved filter in use (Filter menu), or null. The key keeps its old
+   *                name for the callers; on screen it is called a filter, since "selection" means ticked cards (QA-1d).
    * Answer: { text, action: 'search' | 'filter' | 'selection' | null, label }. Search comes before the filter, and the
-   * filter before the selection: one action at a time, and whatever hides the cards here is named first.
+   * filter before the quick or saved filter: one action at a time, and whatever hides the cards here is named first.
    */
   function emptyReason({ text, searchHides = false, search = '', filters = 0, selection = null }) {
     if (searchHides && search)
@@ -231,7 +233,7 @@
       };
     if (selection)
       return {
-        text: `${text} Selection "${selection}" is in use.`,
+        text: `${text} Filter "${selection}" is in use.`,
         action: 'selection',
         label: 'Show all',
       };
@@ -244,7 +246,7 @@
    *   fold      n cards in the closed fold `name` (key = the fold's name on the board), action "fold:<key>" (Show)
    *   filter    the Filter menu hides them, action "filter" (Remove filter)
    *   search    the search hides them, action "search" (Clear search)
-   *   selection outside the selection `name` (the Selection menu), action "selection" (Show all)
+   *   selection outside the quick or saved filter `name` (the Filter menu), action "selection" (Show all)
    *   older     in Built but older than the 7 days shown, action "older" (Show more)
    *   elsewhere not shown in this view (no action)
    * Answer: [{ text, action, label, aria }] in the given order; a cause with n 0 is left out. `aria` names the action
@@ -268,7 +270,7 @@
         out.push({ text: `${n} hidden by the search`, action: 'search', label: 'Clear search', aria: null });
       else if (c.cause === 'selection')
         out.push({
-          text: `${n} outside the selection "${c.name}"`,
+          text: `${n} outside the filter "${c.name}"`,
           action: 'selection',
           label: 'Show all',
           aria: null,
@@ -283,6 +285,39 @@
       else out.push({ text: `${n} not shown in this view`, action: null, label: null, aria: null });
     }
     return out;
+  }
+
+  // ---- The focus line on one row (QA-1d, Q11) ----
+
+  /**
+   * How many focus steps fit on the one-row focus line. The board measures each step once (its width with the arrow
+   * before it), the space the step list has, and the "+N more" button, and asks this rule; the steps after the answer
+   * are hidden and counted in "+N more". Pure, so it is tested without a layout engine.
+   *   widths:    the width of each step, in order (bad numbers count as 0)
+   *   available: the width the step list has
+   *   more:      the width of the "+N more" button
+   *   gap:       the gap between two items in the list (default 0)
+   * Answer: a count from 0 to widths.length. When every step fits, no room is kept for "+N more" (it is not shown).
+   * Otherwise as many as fit beside the button, but always at least 1: the first step is the current one, and it
+   * stays visible (cut short with an ellipsis when even it does not fit).
+   */
+  function focusFit({ widths, available, more, gap = 0 }) {
+    const w = (widths ?? []).map((x) => (Number.isFinite(x) && x > 0 ? x : 0));
+    const n = w.length;
+    if (!n) return 0;
+    const g = Number.isFinite(gap) && gap > 0 ? gap : 0;
+    const room = Number.isFinite(available) ? available : 0;
+    const total = w.reduce((s, x) => s + x, 0) + g * (n - 1);
+    if (total <= room) return n;
+    const button = (Number.isFinite(more) && more > 0 ? more : 0) + g;
+    let used = 0;
+    let fit = 0;
+    for (let i = 0; i < n; i++) {
+      used += w[i] + (i ? g : 0);
+      if (used + button > room) break;
+      fit = i + 1;
+    }
+    return Math.max(1, fit);
   }
 
   // ---- Stale data ----
@@ -420,6 +455,7 @@
   return {
     emptyReason,
     chainHidden,
+    focusFit,
     STALE_MS,
     stale,
     staleText,

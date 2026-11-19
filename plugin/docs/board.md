@@ -114,21 +114,38 @@ The switch at the top left changes between two workspaces, **Queue** and **Plans
 rooms or views. Row 1 is the room tabs (Plans, Queue, Decisions, Checks, each with an icon), then **Waiting on you**,
 the project title, the status ("Updated at ...", the checks count or an error) and the gear. The status comes last
 and is cut short with an ellipsis when it is long; hover it for the full text. Row 2 is the view tabs, the search,
-Filter, Selection and the grouping; in Plans it stays empty. Below about 1200 px (a half-screen window) the top turns
+Filter and the grouping; in Plans it stays empty. Nothing in row 2 appears or changes width with a search or a
+filter: the Filter button has a fixed width and its label is cut with an ellipsis. Below about 1200 px (a half-screen window) the top turns
 compact: the room tabs drop their icons, the search starts narrower and the view tabs scroll sideways in their row
 instead of wrapping, and the columns narrow to 220 px so four fit at 1000 px. On a phone (720 px and below) the rows
 wrap as before. The focus line and the "Next up" strip keep their height: choosing a card puts its chain into the
 "Next up" row instead of adding a row, so the board does not move down.
 
-**Filter and Selection only change what you see.** Filter has the sections Show, Projects and Plan entry; a section
-with nothing to choose (Plan entry before any task has one) is left out. Pausing a project changes the queue for
+**The focus line is always one row.** Each step is cut with an ellipsis when its name is long (hover it for the full
+name, the type and its counts), and the steps that do not fit go into **+N more** right after the last one shown.
+**+N more** opens every step in a popover, in order, with Now or Next, what waits, what is ready and the time left,
+and the line's counts under them; the arrow keys, Home and End move between the steps, and Esc or a click outside
+closes it with focus back on the button. The first step (the current one) is always shown. **Edit focus** stays at
+the right end. What fits is measured again when the window or the line changes width.
+
+**Filter only changes what you see.** The Filter menu starts with **Quick filters**: the built-in ones (Focus now,
+Ready in focus, Outside focus ready, On hold, Sort, New since last visit), each with a short explanation under its
+name. A quick filter resets the search and the checked filters. Under them, **Saved** holds your own filters (the
+search, the checked filters, the grouping and the view), saved in this browser with **Save current as…** and removed
+with **Delete**; picking one brings all of that back. (They lived in a separate Selection menu before; the storage is
+the same, so filters saved there are still under Saved.) Then come the sections Show, Projects and Plan entry; a
+section with nothing to choose (Plan entry before any task has one) is left out. When anything narrows the board, the
+first row of the menu has **Select all N matches** (it selects every shown card that can be changed together, for the
+selection menu; **All N matches selected** when they are) and **Show all**, which clears the quick or saved filter,
+the checked filters and the search. The Filter button says what is in use: **Filter**, **Filter · 2** (two boxes
+checked) or **Filter · Ready in focus** (the name of a quick or saved filter, cut with an ellipsis, with the full text
+in its tooltip and the count in its accessible name). Pausing a project changes the queue for
 everyone, so it is not in Filter: **Pause** and **Continue** sit in each project's lane header (Project lanes), with
 the same warning as before when something is in progress, and the line under Projects in Filter has **Show project
 lanes**, which switches the view and puts focus on the first Pause. A paused project still says "paused" in Filter.
-**Selection** is a 240 px menu in the style of the selection menu: each built-in selection (Focus now, Ready in focus,
-Outside focus ready, On hold, Sort, New since last visit) has a short explanation under its name, and your own ones
-sit under **Saved**. Arrow up and down move between the selections and Esc closes either menu with focus back on its
-button. What waits on you is the **Waiting on you** button at the top, not a selection.
+Arrow up and down move between the quick filters, the saved filters and the checkboxes, Esc closes the menu with
+focus back on Filter (Esc in the name field closes only the field). What waits on you is the **Waiting on you**
+button at the top, not a filter. The word "selection" on the board means the ticked cards only.
 
 The Queue workspace has these tabs:
 - **Flat:** the columns **In queue** (ready now, blocked, proposed by agents and the batch queue), **In progress**,
@@ -141,7 +158,7 @@ The Queue workspace has these tabs:
   and the batch queue is open; your own choice holds for the rest of the visit. Clicking a card with a chain
   highlights the tasks before and after it, and the chain line above the columns says why any of them are not
   visible, with a button where one helps: "2 in the closed Blocked group" (Show), "hidden by the search" (Clear
-  search), "hidden by the filter" (Remove filter), "outside the selection" (Show all), "older than 7 days in Built"
+  search), "hidden by the filter" (Remove filter), "outside the filter" (Show all), "older than 7 days in Built"
   (Show more), or "not shown in this view". Column and group headings are in sentence case; the In progress header
   keeps its name on one line, and the agents badge ends in an ellipsis in a narrow column (the full text is in its
   tooltip). An empty column says in one line what goes there ("Nothing to review. Delivered tasks wait here for review
@@ -181,8 +198,8 @@ The Queue workspace has these tabs:
   **Move to top** and **Move to bottom** (into the draft; Home and End do the same for a step lifted with Space). A
   step whose task list holds more than 12 tasks shows about 12 at a time in its own scroll area, which is a tab stop
   with a label and a hint under it. On the cards, a task outside every step has **Add to focus** in the detail panel,
-  on its card right after the reason (which then leaves out the `ravenseat focus` hint) and, for several cards, in
-  Selection: each goes in as its own `task:<id>` step, last in the list, in one change. Beside each one,
+  on its card right after the reason (which then leaves out the `ravenseat focus` hint) and, for several ticked cards,
+  in the selection menu: each goes in as its own `task:<id>` step, last in the list, in one change. Beside each one,
   **Add to focus at …** (on the card the **at …** half of the button) opens the same picker with the task or tasks
   already chosen, so only the position is picked; it sends the same change with `at` (First is 1, after step k is
   k+1, Last leaves it out). A task that is its own step has **Remove from focus**, which
@@ -273,7 +290,7 @@ the panel shows `ravenseat set <id> cancelled --remark "<why>"` instead. In **De
 
 **Select several cards.** Every card in In queue, proposed and the batch queue has a checkbox at its top left.
 Select with the box, x on the card, Ctrl/Cmd-click, Shift-click (everything from the previous selected), Ctrl/Cmd+A
-or "Select all matches", or a whole group from its header. On a wide screen with a mouse the **selection menu** opens
+or **Select all N matches** at the top of the Filter menu, or a whole group from its header. On a wide screen with a mouse the **selection menu** opens
 next to the box you checked last, like a context menu: the count and the summed estimate on top (and how many are
 hidden by the filter), then **Move to project**, **Feature**, **Put on hold**, **Take off hold** (when one is on hold),
 **Move as block**, **Add to batch queue** / **Take out of batch queue**, **Pack into track** (two or more, all in the
@@ -376,7 +393,7 @@ Settings** at the end of the Checks view lands on **Show the Checks tab**, and a
 the legend; a link scrolls there and moves focus to the section's heading without changing the address (the key lives
 in the `#` part). The sections come in the order a new user needs them: What the board shows, Waiting on you and
 Decisions, Picking and running work, The task panel, Focus, Plans and Queue, Checks and Statistics, then the advanced
-parts: Selection, tabs and grouping, Bulk actions, Batch queue, The keyboard on the board, and Areas last, followed by
+parts: Filter, tabs and grouping, Bulk actions, Batch queue, The keyboard on the board, and Areas last, followed by
 the legend. Opened from Settings, the help has **Back to menu** first in its header, which goes back to Settings with
 focus on **How to use the board**; Esc and Close close the panel and focus goes back to the gear.
 

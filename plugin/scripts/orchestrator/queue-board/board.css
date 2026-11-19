@@ -281,8 +281,8 @@ textarea {
   font-weight: 600;
 }
 
-/* In the top the search is the part that gives way: 260 px, shrinking to 120 px before anything else (for example when
-   "Select all matches" appears), so row 2 never wraps. */
+/* In the top the search is the part that gives way: 260 px, shrinking to 120 px before anything else (on a medium
+   window), so row 2 never wraps. Nothing in row 2 appears or changes width with a search or filter (QA-1d). */
 .search {
   flex: 0 1 260px;
   min-width: 120px;
@@ -465,6 +465,21 @@ textarea {
   background: var(--color-secondary-container);
   color: var(--color-on-secondary-container);
   border-color: transparent;
+}
+
+/* QA-1d: the one Filter button has a fixed width, so its label ("Filter", "Filter · 2", "Filter · Ready in focus")
+   never moves the top bar. A long name is cut with an ellipsis; the full text is in the tooltip. */
+.filter-fixed {
+  flex: none;
+  width: 168px;
+  justify-content: center;
+}
+
+.filter-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .filter-menu {
@@ -2830,7 +2845,7 @@ body.with-option-line .toaster {
     max-width: 100%;
     flex: 1 1 160px;
   }
-  /* The Filter and Selection menus are pinned to the top at full width, so they never stick out past the right of the screen. */
+  /* The Filter menu is pinned to the top at full width, so it never sticks out past the right of the screen. */
   .top .filter {
     position: static;
   }
@@ -3422,14 +3437,6 @@ body.with-option-line .toaster {
   font-weight: 600;
 }
 
-.mark-match {
-  min-height: 40px;
-}
-
-.mark-match[hidden] {
-  display: none;
-}
-
 /* The selection bar (narrow screens and touch): fixed at the bottom, only when something is selected. It spans the
    width between the side gutters and centers its content (left: 50% with a transform let it shrink to half the
    screen on a phone). */
@@ -3476,7 +3483,7 @@ body.with-option-line .board {
 
 /* The selection menu (wide screens with a mouse): a short vertical list like a Windows context menu, next to the
    checkbox checked last. select.js sets top and left (placeOptionMenu) and keeps it inside the viewport. The surface,
-   frame, radius and shadow are the Filter and Selection menus' (.filter-menu). */
+   frame, radius and shadow are the Filter menu's (.filter-menu). */
 .optionLine.as-menu {
   right: auto;
   bottom: auto;
@@ -3758,6 +3765,7 @@ body.with-option-line .board {
 /* min-height: one row (36 px, the padding and the border) from the first paint, also before the first state, so
    the board does not jump down when the data arrives (B27). */
 .focusLine {
+  position: relative;
   flex: none;
   min-height: 45px;
   display: flex;
@@ -3779,30 +3787,89 @@ body.with-option-line .board {
   color: var(--color-on-error-container);
 }
 
+/* QA-1d: one row, always. The name and "Edit focus" keep their size, the step list takes the rest and hides what
+   does not fit (board/views.js fitFocusLine counts it into "+N more"), and the counts give way first. */
 .focus-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: var(--distance-sm) var(--distance-sm);
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: var(--distance-sm);
   min-height: 36px;
 }
 
+.focus-name {
+  flex: none;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .focus-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-on-surface-variant);
 }
 
 .focus-step-list {
-  display: inline-flex;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
   gap: var(--distance-xs);
 }
 
+/* One step and the arrow before it. The first (current) step may shrink and cut its name when it is alone and still
+   too wide; the others keep their width and are hidden instead. */
+.focus-item {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--distance-xs);
+  min-width: 0;
+}
+
+.focus-item:first-child {
+  flex: 0 1 auto;
+}
+
+.focus-step-list.is-measuring .focus-item {
+  flex: none;
+}
+
+.focus-item[hidden],
+.focus-more-button[hidden] {
+  display: none;
+}
+
 .focus-step {
-  padding: 2px var(--distance-sm);
+  min-width: 0;
+  max-width: 240px;
+  padding: var(--distance-2xs) var(--distance-sm);
   border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.focus-more-button {
+  flex: none;
+}
+
+.focus-edit {
+  flex: none;
+  margin-left: auto;
+}
+
+.focus-draft {
+  flex: none;
 }
 
 /* The steps in Now: the primary edge and bold text, no fill (B17: one meaning per color, a fill marks a selection). */
@@ -3816,9 +3883,97 @@ body.with-option-line .board {
 }
 
 .focus-tall {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
   display: inline-flex;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
+  gap: var(--distance-xs) var(--distance-sm);
+  color: var(--color-on-surface-variant);
+}
+
+/* The "+N more" popover: every step, in order, under the line (the filter menu's frame and shadow). */
+.focus-more {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% - var(--distance-xs));
+  left: var(--distance-lg);
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  padding: var(--distance-sm) 0;
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.16); /* shadow: black in both modes */
+  font-size: var(--text-sm);
+  line-height: 20px;
+}
+
+.focus-more[hidden] {
+  display: none;
+}
+
+.focus-more-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.focus-more-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--distance-sm);
+  padding: var(--distance-xs) var(--distance-md);
+  outline-offset: -2px;
+}
+
+.focus-more-row:hover,
+.focus-more-row:focus-visible {
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.focus-more-row:focus-visible {
+  outline: var(--focus);
+}
+
+.focus-more-num {
+  flex: none;
+  min-width: 2ch;
+  color: var(--color-on-surface-variant);
+  text-align: right;
+}
+
+.focus-more-row.now .focus-more-name {
+  font-weight: 600;
+}
+
+.focus-more-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.focus-more-name {
+  overflow-wrap: anywhere;
+}
+
+.focus-more-meta {
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
+.focus-more-counts {
+  display: flex;
   flex-wrap: wrap;
   gap: var(--distance-xs) var(--distance-sm);
+  margin: var(--distance-sm) 0 0;
+  padding: var(--distance-sm) var(--distance-md) 0;
+  border-top: 1px solid var(--color-outline-variant);
+  font-size: var(--text-xs);
   color: var(--color-on-surface-variant);
 }
 
@@ -3959,14 +4114,9 @@ body.with-option-line .board {
   color: var(--color-on-surface-variant);
 }
 
-/* The Selection menu (B28, UX review M3): the B23 selection menu's style. 240 px wide, rows 36 px on a mouse (44 px
-   on touch, in the coarse pointer block further down), the name in the on-surface text color with a short muted
-   explanation under it, the shared hover layer on the row itself. The narrow-screen rule for .top .filter-menu still
-   makes it full width. */
-.selection-menu {
-  width: min(240px, calc(100vw - 32px));
-}
-
+/* Quick filters and Saved at the top of the Filter menu (QA-1d; before that the Selection menu, B28, UX review M3):
+   the B23 menu style. Rows 36 px on a mouse (44 px on touch, in the coarse pointer block further down), the name in
+   the on-surface text color with a short muted explanation under it, the shared hover layer on the row itself. */
 .view-row {
   min-height: 0;
   padding: 0 var(--distance-xs);
@@ -4834,7 +4984,7 @@ body.with-option-line .board {
   color: inherit;
 }
 
-/* ---- The banner after a restart, the theme choice, the legend and "Show all" in Selection ---- */
+/* ---- The banner after a restart, the theme choice, the legend and the top row of the Filter menu ---- */
 
 /* The server has been restarted (401). A clear banner below the top, with the field for the link. */
 .key-banner {
@@ -4969,12 +5119,21 @@ fieldset.setting legend {
   color: var(--color-on-surface-variant);
 }
 
-/* "Show all" at the top of the Selection menu. */
-.show-all {
+/* The top row of the Filter menu (QA-1d): "Select all N matches" on the left and "Show all" on the right, with a
+   line under them instead of over them. */
+.filter-top {
+  justify-content: space-between;
+  gap: var(--distance-sm);
   margin-top: 0;
+  margin-bottom: var(--distance-sm);
+  padding-top: 0;
   padding-bottom: var(--distance-sm);
   border-top: 0;
   border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.filter-top > :only-child {
+  margin-left: auto;
 }
 
 /* ---- Empty state, stale status, reduced motion, forced colors and touch targets ---- */
@@ -5184,7 +5343,6 @@ body.stale .summary.stuck::before {
   .grouping,
   .button,
   .button-outline,
-  .mark-match,
   .link-button,
   .pause-button,
   .plan-expand,

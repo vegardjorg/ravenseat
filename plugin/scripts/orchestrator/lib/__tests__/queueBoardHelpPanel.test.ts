@@ -186,8 +186,8 @@ describe('3. B30: sections in the order of use', () => {
     expect(ids[ids.length - 1]).toBe('help-areas');
     // Every room with a "?" has its section.
     for (const id of ['help-focus', 'help-plans', 'help-checks', 'help-statistics']) expect(ids).toContain(id);
-    // The advanced parts come after the rooms.
-    for (const late of ['help-selection', 'help-bulk', 'help-batch', 'help-keyboard'])
+    // The advanced parts come after the rooms (QA-1d: the "Filter, tabs and grouping" section was "Selection, ...").
+    for (const late of ['help-filters', 'help-bulk', 'help-batch', 'help-keyboard'])
       expect(ids.indexOf(late)).toBeGreaterThan(ids.indexOf('help-statistics'));
     // The legend follows the sections, and is the last thing linked.
     const legend = $('help-legend');

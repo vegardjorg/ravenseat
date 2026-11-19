@@ -1,6 +1,6 @@
 // =============================================================
-// views.js: the wiring of the Focus view (plan.js), the focus line, grouping in Flat and Project lanes,
-// and the saved and built-in views.
+// views.js: the wiring of the Focus view (plan.js), the one-row focus line with "+N more", grouping in Flat and
+// Project lanes, and the quick and saved filters (drawn in the Filter menu, board/menus.js).
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md). They load in order with defer and
 // share the page's global scope, so a top-level name in one is visible in all of them, as when they were one
@@ -32,7 +32,7 @@ function planContext() {
 }
 
 // ---- Focus on the cards (B21) ----
-// "Add to focus" and "Remove from focus" in the detail panel, in Selection and on an outside-focus card. Every one goes
+// "Add to focus" and "Remove from focus" in the detail panel, in the selection menu and on an outside-focus card. Every one goes
 // through POST /api/focus { change } with the dry preview first (plan.js changeFocus, the same dialog as Save focus).
 
 /**
@@ -314,80 +314,20 @@ function focusHowBox() {
   return box;
 }
 
-function drawFocusLine() {
-  // Before the first state the line stays in the layout, empty, with its one-row height (B27): hiding it and showing
-  // it when the data arrived pushed the board 45 px down after the first paint.
-  focusLine.hidden = false;
-  if (!t.data) {
-    focusLine.replaceChildren();
-    return;
-  }
-  const f = t.data.focus;
-  drawFocusTab(f);
-  // "Set focus" / "Edit focus" opens the Focus tab, so on the Focus tab itself (where the focus is edited) it is
-  // hidden (B17): there it only switched to the tab already open.
-  const toPlan = (text, title) => {
-    if (t.view === 'plan') return null;
-    return el('button', {
-      type: 'button',
-      class: 'button button-outline button-small',
-      text,
-      title: title,
-      onclick: () => {
-        setView('plan');
-        draw();
-      },
-    });
-  };
-  const draft = window.QueuePlan?.hasDraft()
-    ? el('span', {
-        class: 'badge old',
-        text: 'unsaved draft',
-        title:
-          'The focus view has changes that are not saved. Open Focus and press "Save focus" or "Discard".',
-      })
-    : null;
-  if (!f) {
-    focusLine.className = 'focusLine';
-    focusLine.replaceChildren(
-      el(
-        'div',
-        { class: 'focus-row' },
-        el('span', { class: 'stripe-name', text: 'Focus' }),
-        el('span', {
-          class: 'focus-text',
-          text: 'No focus: the queue starts the most valuable work per minute first.',
-          title:
-            'With a focus you decide the order: "Auth first, then Payments" makes everything in Auth start before anything in Payments, ' +
-            'regardless of score.',
-        }),
-        draft,
-        toPlan('Set focus', 'Open Focus and drag areas or projects into In focus.'),
-      ),
-    );
-    return;
-  }
-  // The warning (B18): on the other tabs the red band shows "What happens now" with the buttons that settle it, never
-  // the CLI advice in focusStatus's notice (only without focusNow, from an older server, the notice text stands). On
-  // the Focus tab the same line stands in the view itself, so the band does not repeat it there.
-  const onPlan = t.view === 'plan';
-  const notice = onPlan ? null : (f.notice ?? null);
-  const warning = notice
-    ? (focusNowLine({ status: true }) ?? el('p', { class: 'focus-warning', role: 'status', text: notice }))
-    : null;
-  focusLine.className = `focusLine${notice ? ' notice' : ''}`;
-  const stage = (f.stage ?? []).flatMap((x, i) => [
-    i ? el('span', { class: 'focus-arrow', 'aria-hidden': 'true', text: '→' }) : null,
-    // The short name as the cards write it (B17): a project by its id, a feature as "pid › name"; the title in the tooltip.
-    el('span', {
-      class: `focus-step${i < f.now_count ? ' now' : ''}`,
-      text: `${i + 1} ${x.label ?? x.title}`,
-      title:
-        `Step ${i + 1} (${i < f.now_count ? 'Now' : 'Next'}): ${x.title}, ${x.type}. ` +
-        `${x.waiting} waiting, ${x.readyOnes} ready, ${duration(x.min_left)} left.`,
-    }),
-  ]);
-  const counts = [
+// ---- The focus line on one row (QA-1d, Q11) ----
+// The line used to wrap: with about 20 long-named steps it filled the screen and pushed the board down. Now it is
+// always one row: each step is cut with an ellipsis (the full name in its tooltip), the steps that do not fit go into
+// a "+N more" button that opens every step in a popover, and "Edit focus" stays at the right end. What fits is
+// measured after each draw and when the line changes size (ResizeObserver, or the window's resize event where there
+// is none), and decided by the pure rule QueueA11y.focusFit (a11y.js), which the tests run without a layout engine.
+
+/** Is the "+N more" popover open? Kept across redraws, so a poll does not close it under the owner. */
+let focusMoreOpen = false;
+
+/** The counts after the steps (rest, ready in focus, dragged along, the period, end badges). Drawn in the row and again
+ *  in the popover, so nothing is lost when the row is narrow. */
+function focusCounts(f) {
+  return [
     el('span', {
       text: f.rest === 'fill' ? 'rest fills free slots' : 'rest waits',
       title:
@@ -424,24 +364,249 @@ function drawFocusLine() {
       : null,
     f.not_started ? el('span', { class: 'badge', text: 'not started' }) : null,
   ].filter(Boolean);
+}
+
+/** The tooltip of one step: number, Now or Next, the full title, the type and the counts. */
+const focusStepTitle = (f, x, i) =>
+  `Step ${i + 1} (${i < f.now_count ? 'Now' : 'Next'}): ${x.title}, ${x.type}. ` +
+  `${x.waiting} waiting, ${x.readyOnes} ready, ${duration(x.min_left)} left.`;
+
+/**
+ * Hides the steps that do not fit and sets "+N more". Every step is shown once to measure it (one forced layout per
+ * call, about 20 small elements), then QueueA11y.focusFit decides; the first (current) step always stays.
+ */
+function fitFocusLine() {
+  const list = focusLine.querySelector('.focus-step-list');
+  const more = list?.querySelector('.focus-more-button');
+  if (!list || !more) return;
+  const items = [...list.querySelectorAll('.focus-item')];
+  // Measure at the natural widths: every step shown, none shrunk (is-measuring turns the first step's shrink off).
+  list.classList.add('is-measuring');
+  for (const item of items) item.hidden = false;
+  more.hidden = false;
+  more.textContent = `+${items.length} more`;
+  const widths = items.map((item) => item.offsetWidth);
+  const moreWidth = more.offsetWidth;
+  const style = window.getComputedStyle?.(list);
+  const gap = parseFloat(style?.columnGap ?? '') || 0;
+  const n = window.QueueA11y.focusFit({ widths, available: list.clientWidth, more: moreWidth, gap });
+  list.classList.remove('is-measuring');
+  items.forEach((item, i) => (item.hidden = i >= n));
+  const rest = items.length - n;
+  more.hidden = rest <= 0;
+  more.textContent = `+${rest} more`;
+  more.setAttribute('aria-label', `${rest} more focus steps: show all ${items.length}`);
+  if (rest <= 0) closeFocusMore(false);
+}
+
+const focusMoreParts = () => ({
+  pop: document.getElementById('focus-more'),
+  button: focusLine.querySelector('.focus-more-button'),
+});
+function openFocusMore() {
+  const { pop, button } = focusMoreParts();
+  if (!pop || !button) return;
+  focusMoreOpen = true;
+  pop.hidden = false;
+  button.setAttribute('aria-expanded', 'true');
+  pop.querySelector('.focus-more-row')?.focus();
+}
+function closeFocusMore(focusBack) {
+  const { pop, button } = focusMoreParts();
+  const wasOpen = focusMoreOpen;
+  focusMoreOpen = false;
+  if (pop) pop.hidden = true;
+  button?.setAttribute('aria-expanded', 'false');
+  if (wasOpen && focusBack) button?.focus();
+}
+
+/** The popover with every step in order (number, name, Now, the counts per step) and the line's counts under them. */
+function focusMorePopover(f) {
+  const rows = (f.stage ?? []).map((x, i) =>
+    el(
+      'li',
+      {
+        class: `focus-more-row${i < f.now_count ? ' now' : ''}`,
+        tabindex: '-1',
+        'data-focus': `focus-row:${i}`,
+        title: focusStepTitle(f, x, i),
+      },
+      el('span', { class: 'focus-more-num', text: `${i + 1}` }),
+      el(
+        'span',
+        { class: 'focus-more-text' },
+        el('span', { class: 'focus-more-name', text: x.label ?? x.title }),
+        el('span', {
+          class: 'focus-more-meta',
+          text:
+            `${i < f.now_count ? 'Now' : 'Next'} · ${x.waiting} waiting · ${x.readyOnes} ready · ` +
+            `${duration(x.min_left)} left`,
+        }),
+      ),
+    ),
+  );
+  const pop = el(
+    'div',
+    { id: 'focus-more', class: 'focus-more', role: 'group', 'aria-label': 'All focus steps' },
+    el('ol', { class: 'focus-more-list' }, rows),
+    el('p', { class: 'focus-more-counts' }, focusCounts(f)),
+  );
+  pop.hidden = !focusMoreOpen;
+  return pop;
+}
+
+// The keyboard in the popover: arrow keys, Home and End move between the steps, Esc closes it with focus back on
+// "+N more". Delegated on the line, which stays while its content is redrawn. stopPropagation keeps the board's own Esc
+// (closing the panel, clearing the selection) from running too.
+focusLine.addEventListener('keydown', (e) => {
+  const pop = document.getElementById('focus-more');
+  if (!pop || pop.hidden || !pop.contains(e.target)) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    closeFocusMore(true);
+    return;
+  }
+  const rows = [...pop.querySelectorAll('.focus-more-row')];
+  const i = rows.indexOf(document.activeElement);
+  const j = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: rows.length - 1 }[e.key];
+  if (j === undefined) return;
+  e.preventDefault();
+  rows[Math.max(0, Math.min(rows.length - 1, j))]?.focus();
+});
+// A click outside closes the popover (composedPath: the path when the click happened, also after a redraw).
+document.addEventListener('click', (e) => {
+  if (!focusMoreOpen) return;
+  const { pop, button } = focusMoreParts();
+  const path = e.composedPath();
+  if (!path.includes(pop) && !path.includes(button)) closeFocusMore(false);
+});
+// Focus leaving the popover (Tab past the last step) closes it, unless it goes to "+N more" (which toggles it).
+focusLine.addEventListener('focusout', (e) => {
+  const { pop, button } = focusMoreParts();
+  if (!focusMoreOpen || !pop?.contains(e.target)) return;
+  const to = e.relatedTarget;
+  if (to && (pop.contains(to) || to === button)) return;
+  if (to) closeFocusMore(false);
+});
+// Refit when the line changes width (the window, the panel beside the board, a zoom).
+if (typeof ResizeObserver === 'function') new ResizeObserver(() => fitFocusLine()).observe(focusLine);
+else window.addEventListener('resize', () => fitFocusLine());
+
+function drawFocusLine() {
+  // Before the first state the line stays in the layout, empty, with its one-row height (B27): hiding it and showing
+  // it when the data arrived pushed the board 45 px down after the first paint.
+  focusLine.hidden = false;
+  if (!t.data) {
+    focusLine.replaceChildren();
+    return;
+  }
+  const f = t.data.focus;
+  drawFocusTab(f);
+  // Where the focus was in the line, so a redraw (every poll) puts it back on the same control.
+  const had = focusLine.contains(document.activeElement) ? document.activeElement.dataset?.focus : null;
+  // "Set focus" / "Edit focus" opens the Focus tab, so on the Focus tab itself (where the focus is edited) it is
+  // hidden (B17): there it only switched to the tab already open. It is last in the row and never shrinks (QA-1d).
+  const toPlan = (text, title) => {
+    if (t.view === 'plan') return null;
+    return el('button', {
+      type: 'button',
+      class: 'button button-outline button-small focus-edit',
+      'data-focus': 'focus-edit',
+      text,
+      title: title,
+      onclick: () => {
+        setView('plan');
+        draw();
+      },
+    });
+  };
+  const draft = window.QueuePlan?.hasDraft()
+    ? el('span', {
+        class: 'badge old focus-draft',
+        text: 'unsaved draft',
+        title:
+          'The focus view has changes that are not saved. Open Focus and press "Save focus" or "Discard".',
+      })
+    : null;
+  if (!f) {
+    closeFocusMore(false);
+    focusLine.className = 'focusLine';
+    const none = 'No focus: the queue starts the most valuable work per minute first.';
+    focusLine.replaceChildren(
+      el(
+        'div',
+        { class: 'focus-row' },
+        el('span', { class: 'stripe-name', text: 'Focus' }),
+        el('span', {
+          class: 'focus-text',
+          text: none,
+          title:
+            `${none} With a focus you decide the order: "Auth first, then Payments" makes everything in Auth start ` +
+            'before anything in Payments, regardless of score.',
+        }),
+        draft,
+        toPlan('Set focus', 'Open Focus and drag areas or projects into In focus.'),
+      ),
+    );
+    return;
+  }
+  // The warning (B18): on the other tabs the red band shows "What happens now" with the buttons that settle it, never
+  // the CLI advice in focusStatus's notice (only without focusNow, from an older server, the notice text stands). On
+  // the Focus tab the same line stands in the view itself, so the band does not repeat it there.
+  const onPlan = t.view === 'plan';
+  const notice = onPlan ? null : (f.notice ?? null);
+  const warning = notice
+    ? (focusNowLine({ status: true }) ?? el('p', { class: 'focus-warning', role: 'status', text: notice }))
+    : null;
+  focusLine.className = `focusLine${notice ? ' notice' : ''}`;
+  // One item per step: the arrow before it (not before the first) and the step, so hiding an item hides both.
+  // The short name as the cards write it (B17): a project by its id, a feature as "pid › name"; the title in the tooltip.
+  const items = (f.stage ?? []).map((x, i) =>
+    el(
+      'span',
+      { class: 'focus-item' },
+      i ? el('span', { class: 'focus-arrow', 'aria-hidden': 'true', text: '→' }) : null,
+      el('span', {
+        class: `focus-step${i < f.now_count ? ' now' : ''}`,
+        text: `${i + 1} ${x.label ?? x.title}`,
+        title: focusStepTitle(f, x, i),
+      }),
+    ),
+  );
+  const more = el('button', {
+    type: 'button',
+    class: 'button button-outline button-small focus-more-button',
+    'data-focus': 'focus-more',
+    'aria-expanded': String(focusMoreOpen),
+    'aria-controls': 'focus-more',
+    text: '+0 more',
+    title: 'Show every focus step, with what waits, what is ready and the time left in each',
+    onclick: () => (focusMoreOpen ? closeFocusMore(true) : openFocusMore()),
+  });
+  more.hidden = true;
+  const name = f.name ? `Focus "${f.name}"` : 'Focus';
   // The DOM's replaceChildren turns null into the text "null", so the warning row is included only when it exists.
   focusLine.replaceChildren(
     ...[
       el(
         'div',
         { class: 'focus-row' },
-        el('span', { class: 'stripe-name', text: f.name ? `Focus "${f.name}"` : 'Focus' }),
-        el('span', { class: 'focus-step-list' }, stage),
-        el('span', { class: 'focus-tall' }, counts),
+        el('span', { class: 'stripe-name focus-name', text: name, title: name }),
+        el('span', { class: 'focus-step-list' }, items, more),
+        el('span', { class: 'focus-tall' }, focusCounts(f)),
         draft,
         toPlan(
           'Edit focus',
           'Open Focus: drag areas and projects between In focus, Not in focus and On pause.',
         ),
       ),
+      focusMorePopover(f),
       warning,
     ].filter(Boolean),
   );
+  fitFocusLine();
+  if (had) focusLine.querySelector(`[data-focus="${CSS.escape(had)}"]`)?.focus();
 }
 
 // Grouping in Flat and Project lanes. Closed groups are remembered in the browser.
@@ -588,7 +753,7 @@ groupingOption.addEventListener('change', () => {
   draw();
 });
 
-// Saved and built-in views: in the browser (localStorage) for now.
+// Quick filters (built in) and saved filters (your own, in the browser's localStorage), both in the Filter menu.
 const VIEWS_STORAGE = 'queue-board-views';
 const LAST_VISIT = 'queue-board-last-visit';
 t.lastVisit = Date.parse(store.getItem(LAST_VISIT) ?? '') || null;
@@ -605,10 +770,11 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /**
- * The built-in views (cannot be deleted). `special` is a filter on the cards in queue, proposed and the batch queue.
- * `explain` is the short line shown under the name in the menu (B28, UX review M3: not only in a tooltip); `title` is
- * the longer tooltip. "Waiting on me" is gone from here: it opened Decisions, which the "Waiting on you" button at the
- * top already does, and a selection only filters (X3).
+ * The quick filters: the built-in views, shown under "Quick filters" in the Filter menu (QA-1d), which cannot be
+ * deleted. `special` is a filter on the cards in queue, proposed and the batch queue. `explain` is the short line shown
+ * under the name in the menu (B28, UX review M3: not only in a tooltip); `title` is the longer tooltip. "Waiting on me"
+ * is gone from here: it opened Decisions, which the "Waiting on you" button at the top already does, and a quick
+ * filter only filters (X3).
  */
 const BUILT_IN = [
   {
@@ -672,11 +838,16 @@ function ownViews() {
   }
 }
 
+/**
+ * Applies a quick filter (built in) or a saved filter (your own) from the Filter menu (QA-1d, Q10: they lived in a
+ * "Selection" menu of their own, a word that also meant the ticked cards). The menu closes with focus back on the
+ * Filter button, whose label then names what is in use.
+ */
 function useView(v) {
-  closeViews(false);
+  closeFilter(true);
   t.special = v.special && SPECIAL[v.special] ? v.special : null;
   t.viewName = v.name;
-  // Your own views include search, filter, grouping and view; the built-in ones reset search and filter.
+  // Your own saved filters include search, filter, grouping and view; the quick filters reset search and filter.
   t.filter.search = typeof v.search === 'string' ? v.search.slice(0, 100) : '';
   $('search').value = t.filter.search;
   for (const [n, set] of Object.entries(t.filter.selected)) {
@@ -692,15 +863,22 @@ function useView(v) {
   const show = VIEWS.includes(v.view) ? v.view : null;
   if (show && ['flat', 'lanes', 'graph'].includes(show)) setView(show);
   else if (!['flat', 'lanes', 'graph'].includes(t.view)) setView('flat');
-  drawViewButton();
+  drawFilter();
   draw();
 }
 
+/** Is the "Save current as…" name field open in the Filter menu? Closed again each time the menu opens. */
+let saveAsOpen = false;
+
+/**
+ * Saves the search, filter, grouping and view under `name` in this browser, under the same storage key as before
+ * (VIEWS_STORAGE), so filters saved from the old Selection menu keep working.
+ */
 function saveView(name) {
   const n = name.trim().slice(0, 60);
-  if (!n) return message('Write a name for the selection.', true);
+  if (!n) return message('Write a name for the saved filter.', true);
   if (BUILT_IN.some((v) => v.name === n))
-    return message(`"${n}" is a built-in selection. Choose another name.`, true);
+    return message(`"${n}" is a quick filter. Choose another name.`, true);
   const fresh = {
     name: n,
     view: t.view,
@@ -712,39 +890,52 @@ function saveView(name) {
   const list = ownViews().filter((v) => v.name !== n);
   saveLocally(VIEWS_STORAGE, [...list, fresh].slice(-30));
   t.viewName = n;
-  message(`Selection "${n}" is saved in this browser.`);
-  drawViewButton();
-  drawViewMenu();
+  saveAsOpen = false;
+  message(`Filter "${n}" is saved in this browser.`);
+  drawFilter();
+  filterMenu.querySelector('[data-focus="save-as"]')?.focus();
 }
 
-const viewButton = $('views');
-const viewMenu = $('views-menu');
-function drawViewButton() {
-  const name = t.viewName;
-  // The saved filters are called "Selection", so they are not confused with the "View" tabs. "Show all"
-  // sits at the top of the Selection menu when a selection is in use.
-  viewButton.textContent = name ? `Selection: ${name}` : 'Selection';
-  viewButton.classList.toggle('active', !!t.special || !!name);
-  viewButton.setAttribute(
-    'aria-label',
-    name ? `Selection, selected: ${name}` : 'Selection: saved and built-in',
+/** Deletes one saved filter from this browser (the queue does not change). */
+function deleteView(v) {
+  saveLocally(
+    VIEWS_STORAGE,
+    ownViews().filter((x) => x.name !== v.name),
   );
+  if (t.viewName === v.name) t.viewName = null;
+  drawFilter();
+  filterMenu.querySelector('[data-focus="save-as"]')?.focus();
 }
-/** Removes the selection and shows all the cards again (search and filter stay as they are). */
+
+/**
+ * "Show all" at the top of the Filter menu (and the empty state's and chain line's Show all): removes the quick or
+ * saved filter, the checked filters and the search, so every card shows again. Focus goes to the Filter button, the
+ * control that changed.
+ */
 function showAll() {
-  closeViews(true);
+  closeFilter(false);
   t.special = null;
   t.viewName = null;
-  drawViewButton();
+  for (const set of Object.values(t.filter.selected)) set.clear();
+  saveFilter();
+  t.filter.search = '';
+  $('search').value = '';
+  drawFilter();
   draw();
+  filterButton.focus();
 }
-function drawViewMenu() {
+
+/**
+ * The Quick filters and Saved sections at the top of the Filter menu (drawFilterMenu in board/menus.js puts them
+ * before the filter sections). A row is the B23 menu style: the name, and under it a short explanation in muted text
+ * that is the row's description (aria-describedby), so the name stays the row's accessible name. Each control has a
+ * data-focus key, so a redraw of the open menu keeps the focus where it was.
+ */
+function presetSections() {
   const ownOnes = ownViews();
-  // A row in the B23 menu style: the name, and under it a short explanation in muted text that is the row's
-  // description (aria-describedby), so the name stays the row's accessible name.
-  const row = (v, removeIt, i) => {
-    const explainId = `view-explain-${removeIt ? 'own' : 'built'}-${i}`;
-    const explain = removeIt ? 'Your search, filter, grouping and view.' : v.explain;
+  const row = (v, own, i) => {
+    const explainId = `view-explain-${own ? 'own' : 'built'}-${i}`;
+    const explain = own ? 'Your search, filter, grouping and view.' : v.explain;
     return el(
       'li',
       { class: 'filter-row view-row' },
@@ -753,69 +944,78 @@ function drawViewMenu() {
         {
           type: 'button',
           class: 'view-option',
+          'data-focus': `view:${own ? 'own' : 'built'}:${i}`,
           'aria-label': v.name,
           'aria-describedby': explainId,
-          title: v.title ?? 'Your saved selection: search, filter, grouping and view.',
+          title: v.title ?? 'Your saved filter: search, filter, grouping and view.',
           'aria-current': t.viewName === v.name ? 'true' : null,
           onclick: () => useView(v),
         },
         el('span', { class: 'view-name', text: v.name }),
         el('span', { class: 'view-explain', id: explainId, text: explain }),
       ),
-      removeIt
+      own
         ? el('button', {
             type: 'button',
             class: 'pause-button',
+            'data-focus': `delete:${i}`,
             text: 'Delete',
-            title: `Delete selection "${v.name}" from this browser. The queue does not change.`,
-            onclick: () => {
-              saveLocally(
-                VIEWS_STORAGE,
-                ownViews().filter((x) => x.name !== v.name),
-              );
-              if (t.viewName === v.name) t.viewName = null;
-              drawViewButton();
-              drawViewMenu();
-            },
+            title: `Delete the saved filter "${v.name}" from this browser. The queue does not change.`,
+            onclick: () => deleteView(v),
           })
         : null,
     );
   };
-  const nameField = el('input', {
-    id: 'view-name',
-    type: 'text',
-    maxlength: 60,
-    placeholder: 'Name of the selection',
-    'aria-label': 'Name of the selection',
-    onkeydown: (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        saveView(e.target.value);
-      }
-    },
-  });
-  const inUse = !!t.special || !!t.viewName;
-  viewMenu.replaceChildren(
-    // replaceChildren() turns null into the text "null", so the button is added only when a selection is in use.
-    ...(inUse
-      ? [
-          el(
-            'div',
-            { class: 'filter-footer show-all' },
-            el('button', {
-              type: 'button',
-              class: 'button button-outline button-small',
-              text: 'Show all',
-              title: 'Remove the selection and show all cards again',
-              onclick: showAll,
-            }),
-          ),
-        ]
-      : []),
+  // "Save current as…" first opens a name field (Enter saves, Esc closes the field and not the menu).
+  const save = saveAsOpen
+    ? el(
+        'div',
+        { class: 'filter-footer view-save' },
+        el('input', {
+          id: 'view-name',
+          type: 'text',
+          maxlength: 60,
+          'data-focus': 'view-name',
+          placeholder: 'Name of the saved filter',
+          'aria-label': 'Name of the saved filter',
+          onkeydown: (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              saveView(e.target.value);
+            }
+          },
+        }),
+        el('button', {
+          type: 'button',
+          class: 'button button-outline button-small',
+          'data-focus': 'save',
+          text: 'Save',
+          title:
+            'Saves the search, the filter, the grouping and the view you see now under the name, in this browser. The queue does not change.',
+          onclick: () => saveView(filterMenu.querySelector('#view-name')?.value ?? ''),
+        }),
+      )
+    : el(
+        'div',
+        { class: 'filter-footer view-save' },
+        el('button', {
+          type: 'button',
+          class: 'link-button',
+          'data-focus': 'save-as',
+          text: 'Save current as…',
+          title: 'Save the search, the filter, the grouping and the view you see now under a name, in this browser.',
+          onclick: () => {
+            saveAsOpen = true;
+            drawFilterMenu();
+            filterMenu.querySelector('#view-name')?.focus();
+          },
+        }),
+      );
+  return [
     el(
       'section',
-      { class: 'filter-section' },
-      el('div', { class: 'filter-section-header' }, el('h3', { text: 'Built in' })),
+      { class: 'filter-section', 'aria-labelledby': 'filter-quick' },
+      el('div', { class: 'filter-section-header' }, el('h3', { id: 'filter-quick', text: 'Quick filters' })),
       el(
         'ul',
         { class: 'filter-list' },
@@ -824,63 +1024,16 @@ function drawViewMenu() {
     ),
     el(
       'section',
-      { class: 'filter-section' },
-      el('div', { class: 'filter-section-header' }, el('h3', { text: 'Saved' })),
+      { class: 'filter-section', 'aria-labelledby': 'filter-saved' },
+      el('div', { class: 'filter-section-header' }, el('h3', { id: 'filter-saved', text: 'Saved' })),
       ownOnes.length
         ? el(
             'ul',
             { class: 'filter-list' },
             ownOnes.map((v, i) => row(v, true, i)),
           )
-        : el('p', { class: 'empty', text: 'No saved selections yet.' }),
+        : el('p', { class: 'empty', text: 'No saved filters yet.' }),
+      save,
     ),
-    el(
-      'div',
-      { class: 'filter-footer view-save' },
-      nameField,
-      el('button', {
-        type: 'button',
-        class: 'button button-outline button-small',
-        text: 'Save current',
-        title:
-          'Saves the search, the filter, the grouping and the view you see now under the name, in this browser. The queue does not change.',
-        onclick: () => saveView(nameField.value),
-      }),
-    ),
-  );
+  ];
 }
-function openViews() {
-  closeFilter(false);
-  viewMenu.hidden = false;
-  viewButton.setAttribute('aria-expanded', 'true');
-  drawViewMenu();
-  viewMenu.querySelector('button')?.focus();
-}
-function closeViews(focusOn) {
-  if (viewMenu.hidden) return;
-  viewMenu.hidden = true;
-  viewButton.setAttribute('aria-expanded', 'false');
-  if (focusOn) viewButton.focus();
-}
-viewButton.addEventListener('click', () =>
-  viewMenu.hidden ? openViews() : closeViews(true),
-);
-viewMenu.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    e.stopPropagation();
-    closeViews(true);
-  } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target.classList?.contains('view-option')) {
-    // The arrow keys move between the selections (as in the Filter menu); Tab still reaches Delete, the name field and Save.
-    const rows = [...viewMenu.querySelectorAll('.view-option')];
-    const i = rows.indexOf(e.target);
-    const j = Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
-    e.preventDefault();
-    rows[j]?.focus();
-  }
-});
-document.addEventListener('click', (e) => {
-  if (viewMenu.hidden) return;
-  const filePath = e.composedPath();
-  if (!filePath.includes(viewMenu) && !filePath.includes(viewButton)) closeViews(false);
-});

@@ -8,7 +8,7 @@
 'use strict';
 
 // ---- Multi-select and bulk actions ----
-// The owner selects cards (checkbox, x, Ctrl/Cmd-click, Shift-click, Ctrl/Cmd+A, "Select all matches", group, lane,
+// The owner selects cards (checkbox, x, Ctrl/Cmd-click, Shift-click, Ctrl/Cmd+A, "Select all N matches" in the Filter menu, group, lane,
 // chain or feature) and does one thing with all of them from the selection menu. On a wide screen with a mouse the menu
 // is a short vertical list next to the checkbox checked last; on a narrow screen or touch it is a bar at the bottom.
 // Every action is previewed first
@@ -138,23 +138,26 @@ function updateMarking() {
   draw();
 }
 
-/** "Select all matches (N)" by the search: when search or filter is in use, and something can be selected. */
-function drawMarkMatch() {
-  const button = $('mark-match');
-  const search = !!t.filter.search || countFilters() > 0;
-  const ids = search && t.view !== 'statistics' && t.view !== 'cloud' ? visibleMarkable() : [];
-  button.hidden = !ids.length;
-  if (!ids.length) return;
-  const all = ids.every((id) => t.marked.has(id));
-  button.textContent = all
-    ? `All matches selected (${ids.length})`
-    : `Select all matches (${ids.length})`;
-  button.disabled = all;
-  button.title =
-    'Select all cards shown after the search and the filter that can be changed together (in queue, proposed and batch queue). ' +
-    'Shortcut: Ctrl/Cmd+A.';
+/**
+ * "Select all N matches" (QA-1d, Q9): what the first row of the Filter menu needs, or null when the row is not shown.
+ * It used to be a button in the top bar that appeared with a search or filter and changed its label, which pushed the
+ * whole right-aligned bar sideways; now it lives in the Filter menu, and Ctrl/Cmd+A does the same from the board.
+ * Shown when a search, a checked filter or a quick or saved filter is in use and at least one shown card can be
+ * selected. `all`: every match is already selected (the row is then disabled).
+ * @returns {{ n: number, all: boolean } | null}
+ */
+function markMatchState() {
+  const narrowed = !!t.filter.search || countFilters() > 0 || !!t.special;
+  if (!narrowed || t.view === 'statistics' || t.view === 'cloud') return null;
+  const ids = visibleMarkable();
+  if (!ids.length) return null;
+  return { n: ids.length, all: ids.every((id) => t.marked.has(id)) };
 }
-$('mark-match').addEventListener('click', markAllMatch);
+
+/** Keeps the "Select all N matches" row in an open Filter menu up to date (the count and whether all are selected). */
+function drawMarkMatch() {
+  if (!filterMenu.hidden) drawFilterMenu();
+}
 
 // What every action does (title, explanation in the dialog, tooltip on the row in the selection menu).
 const BULK_INFO = {

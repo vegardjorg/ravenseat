@@ -5,6 +5,25 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Board: the top bar and the focus line keep a fixed size (QA-1d).** Edge cases from the owner's QA. (1) "Select
+  all matches" appeared in the top bar with a search or filter, and its label changed length ("Select all matches
+  (N)", "All matches selected (N)"), so the right-aligned bar slid sideways. It is now the first row of the Filter
+  menu, **Select all N matches** (disabled as **All N matches selected**), beside **Show all**; Ctrl/Cmd+A works as
+  before. Row 2 of the top bar holds the same elements with and without a search or filter, and the Filter button
+  has a fixed width. (2) **The Selection button is gone; the presets moved into the Filter menu.** The menu starts
+  with **Quick filters** (the built-ins, each with its one-line explanation) and **Saved** (your own, with **Save
+  current as…** and **Delete**), then the filter sections as before. Saved presets use the same browser storage, so
+  the ones saved from Selection are under Saved. Quick filters still reset search and filter, saved ones still bring
+  back search, filter, grouping and view, and the arrow keys and Esc work as in the Filter menu. The Filter button
+  says what is in use ("Filter · 2", "Filter · Ready in focus", cut with an ellipsis, with the full text in its
+  tooltip and accessible name). "Selection" now means only ticked cards: the empty state, the chain line and the help
+  say "filter" for a preset. (3) The focus line wrapped onto many rows with about 20 long-named steps and pushed the
+  board down. It is one row now: each step is cut with an ellipsis (full name in the tooltip), the steps that do not
+  fit go into **+N more**, a popover with every step and its counts (arrow keys, Home, End, Esc, focus back on the
+  button), the current step always stays visible and **Edit focus** stays at the right end. The fit is measured again
+  when the line changes width. Friction: (1) and (3) are layout fixes that move nothing the owner uses daily out of
+  reach (the match action is one click into Filter, Ctrl/Cmd+A unchanged; every step is one click into +N more);
+  (2) removes one button and adds no step, since the presets open from the same place as the filters. No setting.
 - **Board: the side panel no longer reflows the board, and one focus step limit (QA-1c).** Edge cases from the
   owner's QA. (1) From 1200 px the side panel (a task, Settings, the help) docked: the body made room for it, so
   every open and close narrowed the work area, pushed "Edit focus" in the focus line to a new row and rewrapped the

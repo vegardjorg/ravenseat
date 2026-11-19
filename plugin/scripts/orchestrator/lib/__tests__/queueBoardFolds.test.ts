@@ -307,7 +307,7 @@ describe('B25: the chain line names the real cause', () => {
       '2 in the closed Blocked group',
       '1 hidden by the filter',
       '3 hidden by the search',
-      '1 outside the selection "On hold"',
+      '1 outside the filter "On hold"',
       '2 older than 7 days in Built',
       '1 not shown in this view',
     ]);

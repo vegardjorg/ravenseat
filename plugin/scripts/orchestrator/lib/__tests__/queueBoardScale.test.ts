@@ -264,10 +264,10 @@ describe('emptyState', () => {
     expect(g.text).toBe('Nothing here. The filter is on (3 selected).');
   });
 
-  it('only a selection: "Show all"', () => {
+  it('only a quick or saved filter: "Show all" (QA-1d: called a filter, "selection" means ticked cards)', () => {
     const g = U.emptyReason({ text: 'Nothing here.', selection: 'Ready D' });
     expect(g).toEqual({
-      text: 'Nothing here. Selection "Ready D" is in use.',
+      text: 'Nothing here. Filter "Ready D" is in use.',
       action: 'selection',
       label: 'Show all',
     });
@@ -299,10 +299,10 @@ describe('stale data', () => {
   });
 });
 
-describe('the Filter and Selection menus stay on screen', () => {
-  // The buttons sit at the right end of the top bar, so a 360 px menu anchored at the button's left edge stuck out
-  // past the right of a wide screen (1440 px: Selection ended at 1547 px). Anchored at the right edge it opens
-  // leftwards, inside the screen. Narrow screens keep their own full-width rule.
+describe('the Filter menu stays on screen', () => {
+  // The button sits at the right end of the top bar, so a 360 px menu anchored at the button's left edge stuck out
+  // past the right of a wide screen (1440 px: the old Selection menu ended at 1547 px). Anchored at the right edge it
+  // opens leftwards, inside the screen. Narrow screens keep their own full-width rule.
   it('the menu is anchored at the right edge of its button, not the left', () => {
     const r = ruleFor('.filter-menu');
     expect(r.right).toBe('0');

@@ -9,7 +9,7 @@
 
 // "How to use the board" (in the gear): short help in the side panel. The sections come in the order a new user needs
 // them (B30, UX review H1): what the board shows, Waiting on you and Decisions, and picking and running work first, then
-// the rooms, and the advanced parts last (selection, bulk actions, the batch queue, the keyboard, areas). Each section
+// the rooms, and the advanced parts last (filter, bulk actions, the batch queue, the keyboard, areas). Each section
 // has an id (help-<id>) that the contents list at the top and the "?" in each room header (roomHelp) jump to.
 const HELP = [
   {
@@ -118,21 +118,25 @@ const HELP = [
     ],
   },
   {
-    id: 'selection',
-    title: 'Selection, tabs and grouping',
+    // QA-1d: the presets moved from the old "Selection" button into the Filter menu ("selection" means ticked cards).
+    id: 'filters',
+    title: 'Filter, tabs and grouping',
     text: [
-      '"Selection" has built-in selections (Focus now, Ready in focus, On hold, Sort, New since last visit …) and your ' +
-        'own (search, filter, grouping and view), saved in this browser. "Show all" at the top of the menu removes ' +
-        'the selection. The tabs (Flat, Project lanes, Focus …) are the views; the arrow keys move between them, Enter ' +
-        'selects. The grouping beside the tabs splits the cards by area and project, project and feature, or focus step.',
+      'The Filter menu starts with Quick filters (Focus now, Ready in focus, On hold, Sort, New since last visit …) and ' +
+        'Saved: your own filters (search, filter, grouping and view), saved in this browser with "Save current as…". ' +
+        'Under them are the filter sections. The Filter button says what is in use ("Filter · 2", or the name of the ' +
+        'quick or saved filter), and "Show all" at the top of the menu clears it. With a search or filter on, the first ' +
+        'row is "Select all N matches". The tabs (Flat, Project lanes, Focus …) are the views; the arrow keys move ' +
+        'between them, Enter selects. The grouping beside the tabs splits the cards by area and project, project and ' +
+        'feature, or focus step.',
     ],
   },
   {
     id: 'bulk',
     title: 'Bulk actions',
     text: [
-      'Select cards with the checkbox, x on the card, Ctrl/Cmd-click or Shift-click, Ctrl/Cmd+A or "Select all ' +
-        'matches". The group header selects the whole group. The selection menu next to the box you checked last (a bar ' +
+      'Select cards with the checkbox, x on the card, Ctrl/Cmd-click or Shift-click, Ctrl/Cmd+A or "Select all N ' +
+        'matches" at the top of the Filter menu. The group header selects the whole group. The selection menu next to the box you checked last (a bar ' +
         'at the bottom on a narrow or touch screen) moves to a project, puts on hold, moves as a block, adds to the ' +
         'batch queue or sets a label.',
       'You always see what changes before it is saved, everything happens together or not at all, and "Undo" is ready ' +
@@ -496,13 +500,73 @@ function pauseButton(p) {
   });
 }
 
-/** The button shows the number of active filters; the menu is redrawn when it is open. */
+/**
+ * The Filter button says what is in use (QA-1d, Q10), and the menu is redrawn when it is open.
+ *   nothing                      "Filter"
+ *   checked filters only         "Filter · 2"
+ *   a quick or saved filter      "Filter · Ready in focus" (the name wins over the count; a saved filter usually
+ *                                brings its own checked filters, so the count is in the aria-label and tooltip)
+ * The button has a fixed width (.filter-fixed) and the label is cut with an ellipsis (.filter-label), so a long name
+ * never widens the top bar; the full text is in the tooltip. The search is not counted: it shows in its own box.
+ */
 function drawFilter() {
   const n = countFilters();
-  filterButton.textContent = n ? `Filter · ${n}` : 'Filter';
-  filterButton.setAttribute('aria-label', n ? `Filter, ${n} active` : 'Filter');
-  filterButton.classList.toggle('active', n > 0);
+  const name = t.viewName ?? null;
+  const text = name ? `Filter · ${name}` : n ? `Filter · ${n}` : 'Filter';
+  // replaceChildren also drops the whitespace text nodes around the label from index.html.
+  filterButton.replaceChildren(el('span', { class: 'filter-label', text }));
+  filterButton.setAttribute(
+    'aria-label',
+    ['Filter', name ? `${name} in use` : null, n ? `${n} active` : null].filter(Boolean).join(', '),
+  );
+  filterButton.title = name
+    ? `Filter: "${name}" is in use${n ? `, ${n} filters checked` : ''}. Quick filters, saved filters and the filter sections.`
+    : n
+      ? `Filter: ${n} checked. Quick filters, saved filters and the filter sections.`
+      : 'Quick filters, saved filters and the filter sections. They change what you see, not the queue.';
+  filterButton.classList.toggle('active', n > 0 || !!name || !!t.special);
   if (!filterMenu.hidden) drawFilterMenu();
+}
+
+/**
+ * The first row of the Filter menu when anything narrows the board: "Select all N matches" (Q9, it used to sit in the
+ * top bar) and "Show all" (clears the quick or saved filter, the checked filters and the search). Null otherwise.
+ */
+function filterTopRow() {
+  const mm = markMatchState();
+  const anything = !!t.special || !!t.viewName || countFilters() > 0 || !!t.filter.search;
+  if (!mm && !anything) return null;
+  return el(
+    'div',
+    { class: 'filter-footer filter-top' },
+    mm
+      ? el('button', {
+          type: 'button',
+          class: 'button button-outline button-small',
+          'data-focus': 'mark-match',
+          text: mm.all ? `All ${mm.n} matches selected` : `Select all ${mm.n} matches`,
+          disabled: mm.all,
+          title:
+            'Select every card shown after the search and the filter that can be changed together (in queue, proposed ' +
+            'and batch queue), for the selection menu. Shortcut: Ctrl/Cmd+A.',
+          onclick: () => {
+            // The menu closes first, with focus on Filter: the next step is the selection menu, not this menu.
+            closeFilter(true);
+            markAllMatch();
+          },
+        })
+      : null,
+    anything
+      ? el('button', {
+          type: 'button',
+          class: 'button button-outline button-small',
+          'data-focus': 'show-all',
+          text: 'Show all',
+          title: 'Remove the quick or saved filter, the checked filters and the search, and show every card again',
+          onclick: showAll,
+        })
+      : null,
+  );
 }
 
 function drawFilterMenu() {
@@ -596,9 +660,15 @@ function drawFilterMenu() {
       }),
     ),
   );
-  filterMenu.replaceChildren(...parts);
+  // QA-1d: the top row, then Quick filters and Saved (board/views.js), then the filter sections and Reset.
+  // replaceChildren() turns null into the text "null", so the top row is added only when it exists.
+  const top = filterTopRow();
+  filterMenu.replaceChildren(...(top ? [top] : []), ...presetSections(), ...parts);
   if (focus) filterMenu.querySelector(`[data-focus="${CSS.escape(focus)}"]`)?.focus();
 }
+
+/** The rows the arrow keys move between: the quick and saved filters, then the checkboxes, in menu order. */
+const filterRows = () => [...filterMenu.querySelectorAll('.view-option, input[type="checkbox"]')];
 
 /**
  * The line under Projects that says where Pause went: a view switch to Project lanes, never the command itself. The
@@ -630,10 +700,11 @@ function changedFilter() {
   draw();
 }
 function openFilter() {
+  saveAsOpen = false;
   filterMenu.hidden = false;
   filterButton.setAttribute('aria-expanded', 'true');
   drawFilterMenu();
-  filterMenu.querySelector('input')?.focus();
+  filterRows()[0]?.focus();
 }
 function closeFilter(focusOn) {
   if (filterMenu.hidden) return;
@@ -645,13 +716,21 @@ filterButton.addEventListener('click', () =>
   filterMenu.hidden ? openFilter() : closeFilter(true),
 );
 filterMenu.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' && e.target.id === 'view-name') {
+    // Esc in the name field closes the field, not the menu.
+    e.preventDefault();
+    e.stopPropagation();
+    saveAsOpen = false;
+    drawFilterMenu();
+    filterMenu.querySelector('[data-focus="save-as"]')?.focus();
+  } else if (e.key === 'Escape') {
     e.preventDefault();
     e.stopPropagation();
     closeFilter(true);
-  } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    // The arrow keys move between the rows (the checkboxes); Space checks.
-    const rows = [...filterMenu.querySelectorAll('input[type="checkbox"]')];
+  } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target.id !== 'view-name') {
+    // The arrow keys move between the rows (quick filters, saved filters, the checkboxes); Enter picks a filter,
+    // Space checks a box, and Tab still reaches Delete, "Save current as…" and the section buttons.
+    const rows = filterRows();
     const i = rows.indexOf(document.activeElement);
     const j = Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
     e.preventDefault();
