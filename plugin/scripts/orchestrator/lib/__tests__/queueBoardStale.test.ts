@@ -406,8 +406,12 @@ describe('the docs', () => {
     expect(doc).toMatch(/lost contact/);
     expect(doc).toMatch(/Changes are paused/);
     const log = readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8');
-    const unreleased = log.slice(log.indexOf('## Unreleased'), log.indexOf('\n## ', log.indexOf('## Unreleased') + 5));
-    expect(unreleased).toMatch(/stale/i);
-    expect(unreleased).not.toMatch(/\u2014/);
+    // The entry has been released since (it is no longer under "## Unreleased"), so it is found by its own heading
+    // wherever it sits; it only passed before because there was no Unreleased section at all.
+    const start = log.indexOf('**Board: stale data no longer looks live.**');
+    expect(start).toBeGreaterThan(0);
+    const entry = log.slice(start, log.indexOf('\n- **', start + 5));
+    expect(entry).toMatch(/stale/i);
+    expect(entry).not.toMatch(/\u2014/);
   });
 });

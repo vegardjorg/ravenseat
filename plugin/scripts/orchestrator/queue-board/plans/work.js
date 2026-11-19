@@ -786,6 +786,38 @@
     h.room.querySelector(`[data-focus="entry:${CSS.escape(id)}"]`)?.focus();
   }
 
+  /**
+   * The keys on the Roadmap (plans/roadmap.js): / goes to its search, j and k move focus between the plans in the order
+   * shown (the folded ones are skipped, as in the list), and Escape on a plan page goes back with focus on the plan's
+   * card. Enter is the card button's own click. The number keys and x/c are for the Plan entries list only.
+   */
+  function roadmapKey(h, t, e, tl, active) {
+    if (t.type === 'cancel') {
+      if (!tl.entry) return;
+      e.preventDefault();
+      h.use({ entry: null }, { focus: `roadmap:${tl.entry}` });
+      return;
+    }
+    if (tl.entry) return;
+    if (t.type === 'search') {
+      e.preventDefault();
+      const f = h.room.querySelector('[data-focus="search"]');
+      f?.focus();
+      f?.select?.();
+      return;
+    }
+    if (t.type !== 'move') return;
+    const cards = [...h.room.querySelectorAll('[data-roadmap-entry]')];
+    const ids = cards.map((c) => c.dataset.roadmapEntry);
+    const now = active?.closest?.('[data-roadmap-entry]')?.dataset.roadmapEntry ?? null;
+    const next = V.neighborEntry(ids, now, t.direction);
+    if (!next) return;
+    e.preventDefault();
+    const button = cards[ids.indexOf(next)]?.querySelector('.roadmap-card-link');
+    button?.focus();
+    button?.scrollIntoView?.({ block: 'nearest' });
+  }
+
   function keyPress(h, e) {
     const t = V.keyAction(e, {
       inputField: inputField(document.activeElement),
@@ -803,6 +835,10 @@
     const active = document.activeElement;
     if (active && active !== document.body && !h.room.contains(active)) return;
     const tl = h.state();
+    if (tl.surface === 'roadmap') {
+      roadmapKey(h, t, e, tl, active);
+      return;
+    }
     if (t.type === 'cancel') {
       if (a.marked.size) {
         e.preventDefault();

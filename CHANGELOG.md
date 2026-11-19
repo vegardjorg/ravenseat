@@ -3,6 +3,23 @@
 All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queue before that). The version is in
 `plugin/.claude-plugin/plugin.json` and `package.json`.
 
+## Unreleased
+
+- **Plans: the room opens on a Roadmap that reads top to bottom, and a plan opens as a page with its document first.**
+  Usability hardening and edge cases. The overview with bars and the maps read as tools for plan work, and a plan
+  without a summary showed nothing to read. Plans now opens on the Roadmap (`plans.startView`, default `roadmap`; the
+  overview and the list are the other choices): the plans in horizons (Inbox, Waiting on you, Now, Next, Later, Done),
+  each a title, one plain sentence and its status and next step in words, never only a symbol or a color. A wide
+  screen shows the horizons as columns and a narrow one as a list (`plans.roadmapLayout`, default `auto`; a phone
+  always gets the list, so nothing scrolls sideways), and a viewer's own choice is kept in the browser, with storage
+  errors caught. With 300+ plans a long section folds after 8 (`plans.roadmapFoldAfter`), Done and Dropped stay folded
+  until opened, and a search shows every match. A plan without a summary shows the lead of its plan document, marked
+  as such (`plans.leadFromDocument`, on; read on the server only inside the document folders, at most 512 KB, cached
+  per file). The plan page puts the title, status, summary, the plan document and the tasks first and the technical
+  facts last under Details (closed by default, remembered); the CLI lines are chips under More. The Overview,
+  Priority map, Tree map and Dependencies are under More views; nothing was removed, and a link to the old views
+  still works. Escape and Back return focus to the card you came from.
+
 ## 0.20.0 (2026-11-19)
 
 **The board holds up with large queues and keeps its layout still, test runs pick only what a change touches and are logged, tracks read less of large files, and on Windows no console window opens per git call below a detached run.**

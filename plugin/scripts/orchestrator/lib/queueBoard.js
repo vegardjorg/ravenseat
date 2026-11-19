@@ -2613,8 +2613,55 @@ function readDocument(root, filePath, io, { max } = {}) {
   }
 }
 
+/** A plan document larger than this gives no lead (P3): the lead is a convenience, the reader still opens it. */
+const LEAD_READ_MAX = 512 * 1024;
+
+/**
+ * The lead of a plan without a summary, from its plan document (P3 of plans/plans-tab-ux-review-2026-11-19.md). Returns
+ * leadFor(entry) for queuePlanView.plansData: it picks the source the plan page reads first (queuePlanView.planSource,
+ * so only paths in the document folders), reads it through readDocument (the same guard as /api/doc: no symlinks, no
+ * other file types, a size cap) and applies queuePlanView.documentLead at the source's anchor. Each file is read once
+ * while its time and size stay the same; the cache keeps only the short leads, never the text. Any error gives null, so
+ * a broken or missing document never breaks /api/plans.
+ * @param {string} root the folder the sources are relative to (the server's SOURCE_ROOT)
+ * @param {{ fs: typeof import('fs'), path: typeof import('path') }} io
+ * @param {{ max?: number }} [option]
+ * @returns {(entry: { sources?: object[] }) => ({ text: string, path: string, anchor: string|null } | null)}
+ */
+function planLeadReader(root, io, { max = LEAD_READ_MAX } = {}) {
+  const PRIVACY = require('./queuePlanView.js');
+  const cache = new Map(); // path -> { stamp, leads: Map(anchor -> text|null) }
+  return (entry) => {
+    const k = PRIVACY.planSource(entry);
+    if (!k) return null;
+    const anchor = k.anchor ?? null;
+    let stamp;
+    try {
+      const st = io.fs.statSync(io.path.join(root, ...k.path.split('/')));
+      if (!st.isFile() || st.size > max) return null;
+      stamp = `${st.mtimeMs}|${st.size}`;
+    } catch {
+      return null;
+    }
+    let c = cache.get(k.path);
+    if (!c || c.stamp !== stamp) {
+      c = { stamp, leads: new Map() };
+      cache.set(k.path, c);
+    }
+    if (!c.leads.has(anchor)) {
+      const r = readDocument(root, k.path, io, { max });
+      if (!r.ok) return null;
+      c.leads.set(anchor, PRIVACY.documentLead(r.text, anchor));
+    }
+    const text = c.leads.get(anchor);
+    return text ? { text, path: k.path, anchor } : null;
+  };
+}
+
 module.exports = {
   readDocument,
+  planLeadReader,
+  LEAD_READ_MAX,
   STEP,
   RECENT_MS,
   NEXT_WHEN_FULL,

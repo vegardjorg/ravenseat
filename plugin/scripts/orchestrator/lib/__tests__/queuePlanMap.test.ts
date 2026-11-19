@@ -541,7 +541,13 @@ describe('the wiring in the board', () => {
   });
 
   it('plans.js switches between List and Priority map and shows the deadline band above the panes', () => {
-    expect(plans).toContain("['map', 'Priority map']");
+    // The Priority map is under More views (V.MORE_VIEWS) since the Roadmap became the start page; nothing removed.
+    expect(plans).toContain('V.MORE_VIEWS');
+    expect(V.MORE_VIEWS.find((v: { id: string }) => v.id === 'map')).toEqual({
+      id: 'map',
+      text: 'Priority map',
+      state: { surface: 'entries', show: 'map' },
+    });
     expect(plans).toContain('window.QueuePlanMap.deadlineBand(');
     expect(plans).toContain('V.mapEntries(d.entries, t.filter, t.search)');
   });
