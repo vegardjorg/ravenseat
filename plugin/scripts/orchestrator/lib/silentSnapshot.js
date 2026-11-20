@@ -15,7 +15,9 @@
 //   - Redaction BEFORE writing (redactCommand, redactText): a flag named like a key, token, secret or password loses
 //     its value; an env assignment keeps its name and loses its value; a URL loses its user info and query string; an
 //     inline script (-e, -c, -Command, --eval, /c) is dropped with everything after it; a long token-like argument is
-//     dropped. When unsure, the argument is dropped.
+//     dropped. When unsure, the argument is dropped. The password-flag rule is shared with the doctor row for approved
+//     commands (lib/commandSecrets.js: also `sshpass -p x`, `mysql -px`), and the values of the project's own .env
+//     files are removed as literals first (lib/secretLiterals.js, redact.envValues).
 //   - Size-capped (silentSnapshot.maxKB, 64): the oldest transcript rows are left out first.
 //   - One file per silence: the name carries the track id and the last sign of life, so the next pulse in the same
 //     silence reuses the file (and lists no processes again).
@@ -43,8 +45,16 @@ const MAX_PROCESSES = 40;
 
 // ---- Redaction ----------------------------------------------------------------------------------------------------
 
+/**
+ * The password-flag rule lives in lib/commandSecrets.js (shared with the doctor row for approved commands, roadmap 1c
+ * SEC-T): the secret name, the tokenizer and the values it finds (also `sshpass -p x`, `mysql -px`). The rules below
+ * are wider on top of it (every env value, every value of a secret-named flag, inline scripts, token-like arguments).
+ */
+const CS = require('./commandSecrets.js');
+/** The project's own secret values removed as literals first (lib/secretLiterals.js, redact.envValues). Never throws. */
+const literals = (s) => require('./secretLiterals.js').redactLiterals(String(s ?? '')).text;
 /** A name that marks its value as secret (a flag, an env name, a key in free text). */
-const SECRET_NAME = /(pass(word|wd)?|pwd|secret|token|api[-_]?key|apikey|access[-_]?key|private[-_]?key|key|auth|credential|cookie|session|signature|bearer)/i;
+const SECRET_NAME = CS.SECRET_NAME;
 /** Flags whose value (and everything after it) is a script: dropped whole. */
 const SCRIPT_FLAG = /^(-e|-c|--eval|--command|-command|-encodedcommand|-enc|-ec|\/c|\/k)$/i;
 const ENV_ASSIGN = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s;
@@ -81,7 +91,9 @@ function redactValue(v) {
  * on what stays. Never throws.
  */
 function redactCommand(cmd) {
-  const tokens = String(cmd ?? '').match(/(?:[^\s"']+|"[^"]*"?|'[^']*'?)+/g) ?? [];
+  const tokens = CS.tokenize(literals(cmd));
+  // The values the shared password-flag rule finds (lib/commandSecrets.js): replaced whatever the wider rules say.
+  const shared = new Map(CS.secretValuesOf(tokens).map((h) => [h.index, h]));
   const out = [];
   let dropNext = false;
   for (let i = 0; i < tokens.length; i++) {
@@ -89,6 +101,11 @@ function redactCommand(cmd) {
     if (dropNext) {
       out.push(R);
       dropNext = false;
+      continue;
+    }
+    const hit = shared.get(i);
+    if (hit) {
+      out.push(`${hit.keep}${R}`);
       continue;
     }
     if (SCRIPT_FLAG.test(t)) {
@@ -128,7 +145,7 @@ function redactCommand(cmd) {
 
 /** Free text (a transcript line) with the same kinds of secrets removed. Never throws. */
 function redactText(text) {
-  return String(text ?? '')
+  return literals(text)
     .replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@"'<>]+@/gi, `$1${R}@`)
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]+)\?[^\s"'<>)]+/gi, `$1?${R}`)
     .replace(/\b(bearer|basic)\s+[^\s"'<>]+/gi, `$1 ${R}`)

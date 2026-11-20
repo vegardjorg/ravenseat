@@ -13,7 +13,9 @@
 //
 // The secret redaction reuses the provider patterns of lib/secretScan.js (PATTERNS) and adds a generic
 // "name = long value" rule plus JWTs and Bearer headers. It replaces the value with [REDACTED:<rule>] and never keeps
-// the matched text anywhere (not in the bundle, not in the counts).
+// the matched text anywhere (not in the bundle, not in the counts). Before the patterns, the values of the project's
+// own .env files are removed as literals (lib/secretLiterals.js, redact.envValues, roadmap 1c SEC-T): the one place
+// that reads files, in memory only, so redact() stays pure for its callers.
 // =============================================================
 'use strict';
 
@@ -70,6 +72,13 @@ function redact(text) {
   const hit = (id) => {
     rules[id] = (rules[id] ?? 0) + 1;
   };
+  // The project's own secret values first, as literals (lib/secretLiterals.js, redact.envValues): a short database
+  // password has no pattern. Counted as env-value, never named.
+  const lit = require('./secretLiterals.js').redactLiterals(s);
+  if (lit.count) {
+    s = lit.text;
+    rules['env-value'] = lit.count;
+  }
   // A whole private key block goes, not only the BEGIN line (a lone BEGIN line is caught by the pattern below).
   s = s.replace(/-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----[\s\S]{0,10000}?-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----/g, () => {
     hit('private-key');

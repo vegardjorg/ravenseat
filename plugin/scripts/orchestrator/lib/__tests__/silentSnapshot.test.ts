@@ -63,6 +63,13 @@ describe('redaction before writing (harmless fake values)', () => {
     expect(S.redactCommand('git log -1 --format=%ct refs/heads/queue/A')).toBe('git log -1 --format=%ct refs/heads/queue/A');
   });
 
+  it('the short password flags of the tools that take one lose their value too (lib/commandSecrets.js, shared)', () => {
+    expect(S.redactCommand('sshpass -p fakepw7 ssh host')).toBe(`sshpass -p ${R} ssh host`);
+    expect(S.redactCommand('mysql -u tester -pfakepw7 db')).toBe(`mysql -u tester -p${R} db`);
+    expect(S.redactCommand('redis-cli -a fakepw7 ping')).toBe(`redis-cli -a ${R} ping`);
+    expect(S.redactCommand('mkdir -p build')).toBe('mkdir -p build');
+  });
+
   it('free text (the transcript tail) gets the same treatment', () => {
     const t = S.redactText('set password=not-a-real-pass then Authorization: Bearer FAKE_BEARER and https://u:p@example.invalid/x');
     expect(t).not.toContain('not-a-real-pass');

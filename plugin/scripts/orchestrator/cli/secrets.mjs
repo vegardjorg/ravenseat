@@ -3,7 +3,8 @@
 //
 //   ravenseat secrets clean [--dry-run] [--yes]
 //        Finds the rules in permissions.allow, ask and deny of .claude/settings.json and .claude/settings.local.json (main
-//        tree and agent worktrees) that lib/allowlistSecrets.js finds a key in, the same reading as `ravenseat doctor`.
+//        tree and every worktree git lists, also outside the main tree) that lib/allowlistSecrets.js finds a key in
+//        (ruleOf: the patterns and the password-flag rule), the same reading as `ravenseat doctor`.
 //        --dry-run: names each one as <file>: permissions.allow[3] (rule id) and changes nothing.
 //        Without --yes: the same list, nothing changed, exit 1.
 //        --yes: copies each file to <dataFolder>/secrets-backup/<time>/ first (ignored by git with the data folder), then
@@ -24,7 +25,6 @@ import { a, CLI, die, FOLDER, MAIN_TREE, require, TIME_LOG } from './context.mjs
 import { trackBranchHere } from './settings.mjs';
 
 const AS = require('./lib/allowlistSecrets.js');
-const { matchLine } = require('./lib/secretScan.js');
 
 /** The indentation of a JSON text (the first indented line), default two spaces. */
 function indentOf(text) {
@@ -48,7 +48,8 @@ function cleaned(text, file) {
   let removed = 0;
   for (const list of AS.LISTS) {
     if (!Array.isArray(p[list])) continue;
-    const keep = p[list].filter((rule) => !(typeof rule === 'string' && matchLine(rule, file)));
+    // The same reading as the scan (lib/allowlistSecrets.js ruleOf: the patterns, then the password-flag rule).
+    const keep = p[list].filter((rule) => !(typeof rule === 'string' && AS.ruleOf(rule, file)));
     removed += p[list].length - keep.length;
     p[list] = keep;
   }
@@ -79,7 +80,8 @@ function clean() {
   const backup = path.join(FOLDER, 'secrets-backup', stamp);
   let total = 0;
   for (const file of files) {
-    const abs = path.join(MAIN_TREE, ...file.split('/'));
+    // The hit's own absolute path: a worktree outside the main tree is named by its absolute path (lib/allowlistSecrets.js).
+    const abs = hits.find((h) => h.file === file)?.abs ?? path.resolve(MAIN_TREE, ...file.split('/'));
     let text;
     try {
       text = fs.readFileSync(abs, 'utf8');
@@ -92,7 +94,7 @@ function clean() {
     // The copy first: without it nothing is changed in this file.
     try {
       fs.mkdirSync(backup, { recursive: true });
-      fs.writeFileSync(path.join(backup, file.replace(/[\\/]/g, '__')), text);
+      fs.writeFileSync(path.join(backup, file.replace(/[\\/:]/g, '__')), text);
     } catch (e) {
       die(`secrets clean: could not copy ${file} to ${backup} (${e.message}). ${file} was not changed.`);
     }

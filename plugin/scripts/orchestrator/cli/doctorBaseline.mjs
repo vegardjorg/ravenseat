@@ -8,8 +8,10 @@
 //              WARN). The same file on disk, untracked and NOT ignored: WARN (one `git add .` puts it in git).
 //              An ignored local .env is fine.
 //   allowlist  a secret in an approved command (permissions.allow, ask, deny in .claude/settings.json and
-//              .claude/settings.local.json, main tree and .claude/worktrees/*; lib/allowlistSecrets.js): FAIL in a
-//              tracked file, WARN in an untracked one. Shown as `<file>: permissions.allow[3]`, never the rule's text.
+//              .claude/settings.local.json, main tree and every worktree git lists, also outside the main tree, plus
+//              .claude/worktrees/*; lib/allowlistSecrets.js, a password of any length by lib/commandSecrets.js): FAIL in
+//              a tracked file, WARN in an untracked one. Shown as `<file>: permissions.allow[3]`, never the rule's text.
+//              The fix says to rotate the key: it is also in the session's transcript (~/.claude/projects).
 //   mcp        a key in .mcp.json (env, headers, args, url of each MCP server, main tree and .claude/worktrees/*;
 //              lib/mcpSecrets.js): FAIL in a tracked file, WARN in an untracked one, shown as
 //              `.mcp.json: mcpServers.github.env.GITHUB_TOKEN`, never the value. Same setting as allowlist
@@ -35,6 +37,9 @@
 //   ci         no CI config for the common hosts (GitHub, GitLab, Bitbucket, Azure, CircleCI, Jenkins): INFO.
 //   lockfile   a tracked dependency manifest in the root whose lockfile is missing (INFO) or present but not
 //              tracked (WARN).
+//   dockerignore  a Dockerfile, *.Dockerfile or Containerfile in the root whose .dockerignore is missing or does not
+//              exclude .claude/ and the data folder (when it is inside the tree; lib/dockerIgnore.js): WARN, advice only.
+//              No container file: no row.
 //   prod       productionBranch equal to baseBranch: WARN (every batch push goes live). Not set: nothing.
 //   largefile  tracked files at HEAD larger than largeFileMb: WARN.
 //   instructions      the instructions Claude Code loads in every session, track and subagent (lib/instructionSize.js):
@@ -156,10 +161,13 @@ export function checkSecrets() {
   return out;
 }
 
-/** Is `inTree` tracked by git in the tree `tree` (relative to the main tree, '' for the main tree)? */
+/**
+ * Is `inTree` tracked by git in the tree `tree` (relative to the main tree, '' for the main tree, or absolute for a
+ * worktree outside it: path.resolve keeps an absolute one as it is)?
+ */
 function trackedIn(tree, inTree) {
   try {
-    const out = execFileSync('git', ['-C', path.join(MAIN_TREE, tree || '.'), 'ls-files', '-z', '--', inTree], {
+    const out = execFileSync('git', ['-C', path.resolve(MAIN_TREE, tree || '.'), 'ls-files', '-z', '--', inTree], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
       windowsHide: true,
@@ -173,7 +181,7 @@ function trackedIn(tree, inTree) {
 /** Is `inTree` ignored in the tree `tree` (by any rule, the global one too)? On any git error: not ignored. */
 function ignoredIn(tree, inTree) {
   try {
-    execFileSync('git', ['-C', path.join(MAIN_TREE, tree || '.'), 'check-ignore', '-q', '--no-index', '--', inTree], {
+    execFileSync('git', ['-C', path.resolve(MAIN_TREE, tree || '.'), 'check-ignore', '-q', '--no-index', '--', inTree], {
       stdio: 'ignore',
       windowsHide: true,
     });
@@ -229,6 +237,13 @@ function offRow(key, gap) {
   return [OI.offShown(c, { gap }) ? row : { ...row, onRequest: true }];
 }
 
+/**
+ * Said with every allowlist hit (roadmap 1c SEC-T): the command that put the key in the rule was also written to the
+ * session's transcript, which Claude Code keeps (cleanupPeriodDays, 30 by default). Removing the rule is not enough.
+ */
+const TRANSCRIPT_NOTE =
+  'The key is also in the transcripts of the session that ran the command (~/.claude/projects, kept 30 days by default), so rotating it is the fix, not only removing the rule';
+
 export function checkAllowlistSecrets() {
   const AS = require('./lib/allowlistSecrets.js');
   // Off by default (secretScan.allowlist). Off, it still reads quietly, so the INFO line can say an important gap
@@ -243,7 +258,7 @@ export function checkAllowlistSecrets() {
       fail(
         'allowlist',
         `a secret in an approved command, in a file git tracks: ${list(tracked.map(AS.where))}. Anyone with the repo can read it`,
-        'change the key first (it stays in the history), then remove the rule from the file and commit; removing it does not clean the history',
+        `change the key first (rotate it: it stays in the history), then remove the rule from the file and commit; removing it does not clean the history. ${TRANSCRIPT_NOTE}`,
       ),
     );
   if (local.length) {
@@ -253,7 +268,8 @@ export function checkAllowlistSecrets() {
         'allowlist',
         `a secret in an approved command, in clear text on disk: ${list(local.map(AS.where))}` +
           `${loose.length ? `. Not even ignored: ${list(loose)}` : ''}. Backups and screen sharing copy it too`,
-        'remove the rule, change the key if it may have been seen, and pass it as an environment variable or from a password manager instead of typing it in the command',
+        'rotate the key, remove the rule, and pass it as an environment variable or from a password manager instead of typing it in the command. ' +
+          TRANSCRIPT_NOTE,
       ),
     );
   }
@@ -627,6 +643,43 @@ export function checkLockfile() {
   return out;
 }
 
+/**
+ * A container build in the main tree's root (Dockerfile, *.Dockerfile, Containerfile) whose .dockerignore is missing or
+ * does not keep .claude/ and the data folder out (lib/dockerIgnore.js): WARN, advice only. `docker build .` with
+ * `COPY . .` puts them in the image. The data folder counts only when it is inside the main tree. No container file:
+ * no row. No setting: the row only appears in a project that builds images, and it never stops anything.
+ */
+export function checkDockerignore() {
+  let names;
+  try {
+    names = fs.readdirSync(MAIN_TREE);
+  } catch {
+    return []; // error-ignored: doctor shows the other rows
+  }
+  const read = (f) => {
+    try {
+      return fs.readFileSync(path.join(MAIN_TREE, f), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  const data = path.relative(MAIN_TREE, FOLDER).split(path.sep).join('/');
+  const folders = ['.claude', ...(data && !data.startsWith('..') && !path.isAbsolute(data) ? [data] : [])];
+  const facts = require('./lib/dockerIgnore.js').facts({ names, dockerignore: read('.dockerignore'), folders });
+  if (!facts) return [];
+  const built = facts.files.join(', ');
+  if (!facts.missing.length) return [ok('dockerignore', `.dockerignore keeps ${folders.map((d) => `${d}/`).join(' and ')} out of the build context (${built})`)];
+  const lines = facts.missing.map((d) => `${d}/`);
+  const what = facts.hasIgnore ? `its .dockerignore does not exclude ${lines.join(' or ')}` : 'there is no .dockerignore';
+  return [
+    warn(
+      'dockerignore',
+      `${built} builds from this folder but ${what}:\`docker build .\` with \`COPY . .\` puts ${lines.join(' and ')} (personal settings, worktrees, the queue's data) in the image`,
+      `add these lines to .dockerignore: ${lines.join(' ')} (git's .gitignore does not count for docker)`,
+    ),
+  ];
+}
+
 /** Prod: productionBranch equal to baseBranch means every batch push goes live. */
 export function checkProductionBranch() {
   const prod = CONFIG.productionBranch;
@@ -724,4 +777,4 @@ export function checkInstructions() {
 }
 
 /** The baseline checks in the order doctor prints them. */
-export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkAllowlistSecrets, checkMcpSecrets, checkBroadPermissions, checkGitignore, checkShare, checkGates, checkCi, checkLockfile, checkProductionBranch, checkLargeFiles, checkInstructions];
+export const BASELINE_CHECKS = [checkBaseBranch, checkIdentity, checkSecrets, checkAllowlistSecrets, checkMcpSecrets, checkBroadPermissions, checkGitignore, checkShare, checkGates, checkCi, checkLockfile, checkDockerignore, checkProductionBranch, checkLargeFiles, checkInstructions];

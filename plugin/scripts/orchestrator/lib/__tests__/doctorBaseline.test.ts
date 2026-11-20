@@ -487,3 +487,24 @@ describe('ravenseat doctor: approved commands and the project gitignore', () => 
     expect(p.run('--all').checks.filter((c) => c.name === 'allowlist').map((c) => c.status)).toEqual(['INFO']);
   }, 60_000);
 });
+
+describe('ravenseat doctor: a container build and its .dockerignore (roadmap 1c SEC-T item 3)', () => {
+  it('no container file: no row; a Dockerfile without .dockerignore WARNs (never FAIL); one that keeps .claude/ out is OK', () => {
+    const p = project({ files: { '.gitignore': '.claude/\n' } });
+    expect(p.lines('dockerignore')).toEqual([]);
+    fs.writeFileSync(path.join(p.root, 'Dockerfile'), 'FROM scratch\nCOPY . .\n');
+    let rows = p.lines('dockerignore');
+    expect(rows.map((c) => c.status)).toEqual(['WARN']);
+    expect(rows[0].message).toContain('Dockerfile');
+    expect(rows[0].message).toContain('no .dockerignore');
+    expect(rows[0].fix).toContain('.claude/');
+    fs.writeFileSync(path.join(p.root, '.dockerignore'), 'node_modules\n');
+    rows = p.lines('dockerignore');
+    expect(rows.map((c) => c.status)).toEqual(['WARN']);
+    expect(rows[0].message).toContain('.claude/');
+    fs.writeFileSync(path.join(p.root, '.dockerignore'), 'node_modules\n.claude/\n');
+    rows = p.lines('dockerignore');
+    expect(rows.map((c) => c.status)).toEqual(['OK']);
+    expect(p.run().code).toBe(0);
+  }, 60_000);
+});

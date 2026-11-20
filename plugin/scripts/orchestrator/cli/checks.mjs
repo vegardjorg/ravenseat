@@ -289,7 +289,25 @@ function makeReport(queue) {
   } catch {
     // error-ignored: the board shows the checks without the guards
   }
+  report.secretReads = secretReadFacts();
   return report;
+}
+
+/**
+ * Secret reads by guarded agents in the last 7 days (lib/secretReads.js, guards.secretReads): per track, from the
+ * time log's guard rows. null when the setting is "off" or the log cannot be read. Never a command or a path: the
+ * rows only carry the rule.
+ */
+function secretReadFacts() {
+  try {
+    const SR = require('./lib/secretReads.js');
+    const mode = SR.modeOf(CONFIG);
+    if (mode === 'off') return null;
+    const rows = require('./lib/timeCost.js').readRows(require('./lib/timeLogArchive.js').readText(KK.timeLog()));
+    return { mode, days: 7, ...SR.counts(rows, { from: Date.now() - 7 * 86_400_000 }) };
+  } catch {
+    return null; // error-ignored: the Checks tab shows the rest without this section
+  }
 }
 
 /**
