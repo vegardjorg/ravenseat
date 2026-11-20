@@ -4,7 +4,8 @@
 // the conversation grows too long. See docs/orchestration.md.
 //
 // Why: every turn reads the whole context again. A message above 500k costs nearly three times as much as at
-// 100-200k, and a pause of over an hour in a long session pays for the whole conversation again (the cache expires).
+// 100-200k, and a pause longer than the cache lifetime (1 h on a subscription main session, 5 min with an API key) in a
+// long session pays for the whole conversation again (the cache expires).
 // A hard stop in the middle of orchestration costs more than it saves, so the active orchestrator gets a wind-down step.
 //
 // How it works (the thresholds and rules live in lib/contextGuard.js, with tests):
@@ -51,8 +52,8 @@
 //
 // PAUSE ADVICE: when the owner's message says they are leaving the machine ("have to go", "be back", "good night",
 // "pause" and so on, whole words, English and Norwegian) and the active orchestrator session is over 150k
-// (CONTEXT_PAUSE overrides), one line is added: run /compact before the break (a pause of over 1 h writes the whole
-// context to the cache again). Advice only, never block. The rules: contextGuard.pauseAdvice/isPauseMessage, with tests.
+// (CONTEXT_PAUSE overrides), one line is added: run /compact before the break (a pause longer than the cache lifetime,
+// 1 h on a subscription main session and 5 min with an API key, writes the whole context to the cache again). Advice only, never block. The rules: contextGuard.pauseAdvice/isPauseMessage, with tests.
 
 //
 // INSTRUCTION NOTICE: when Claude's always-loaded instructions (CLAUDE.md, rules without paths:, their imports) first pass

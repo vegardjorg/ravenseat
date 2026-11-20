@@ -126,16 +126,18 @@ function topFigures({ queue, events, inOutPerDay, responseTime, observed, now })
   };
 }
 
-/** USD per token kind for one usage event (its tokens priced at its model; cache writes at the 5-minute price). */
+/**
+ * USD per token kind for one usage event, priced as costOf prices the row (PC-1): each model's growth at its own price
+ * when the event has byModel, else the tokens at the event's model; cache writes at the 5 min or 1 h price by their
+ * split (writes without a split count as 5 min). Before PC-1 every write was priced at 5 min and the whole event at one
+ * model, so with 1 h writes the bars did not add up to the measured cost.
+ */
 function kindCost(h) {
-  const p = TK.priceFor(h.model).price;
-  const t = h.tokens ?? {};
-  return {
-    input: ((t.input ?? 0) * p.input) / 1e6,
-    output: ((t.output ?? 0) * p.output) / 1e6,
-    cache_read: ((t.cache_read ?? 0) * p.cache_read) / 1e6,
-    cache_write: ((t.cache_written ?? 0) * p.cache_5m) / 1e6,
-  };
+  const by = h.byModel && typeof h.byModel === 'object' ? Object.entries(h.byModel) : [];
+  const parts = by.length ? by.map(([m, v]) => TK.costByKind(v?.tokens, m)) : [TK.costByKind(h.tokens, h.model ?? undefined)];
+  const out = { input: 0, output: 0, cache_read: 0, cache_write: 0 };
+  for (const p of parts) for (const k of Object.keys(out)) out[k] += p[k];
+  return out;
 }
 
 /** Section A: cost and tokens. */

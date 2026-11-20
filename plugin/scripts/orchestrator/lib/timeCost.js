@@ -148,6 +148,25 @@ function costUsd(tokens, model) {
 }
 
 /**
+ * PC-1: the cost of a token set split by kind (input, output, cache read, cache write), by the same rules as costUsd
+ * (the 5 min and 1 h writes at their own prices; writes without a split count as 5 min), so the four parts add up to
+ * costUsd(tokens, model).
+ * @returns {{ input: number, output: number, cache_read: number, cache_write: number }} USD
+ */
+function costByKind(tokens, model) {
+  const t = tokens ?? {};
+  return {
+    input: costUsd({ input: t.input }, model),
+    output: costUsd({ output: t.output }, model),
+    cache_read: costUsd({ cache_read: t.cache_read }, model),
+    cache_write: costUsd(
+      { cache_written: t.cache_written, cache_written_5m: t.cache_written_5m, cache_written_1h: t.cache_written_1h },
+      model,
+    ),
+  };
+}
+
+/**
  * The cost of a done row (or anything with tokens, model and byModel): the sum over `byModel` when the row has it (each
  * model at its own price), else the row's tokens at the price of its one `model` (older rows).
  * @returns {number} USD
@@ -404,10 +423,13 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
     const ttl = (hour ?? 0) > 0 ? CACHE_TTL_S['1h'] : CACHE_TTL_S['5m'];
     if (ts !== null && previousTs !== null && ts - previousTs > ttl * 1000 && written > read) {
       cacheExpiry++;
-      // S8: what the expiry cost, the cache write of this turn at the turn's model price (the reads and output would have
-      // been paid anyway). Without a split the write counts as 5 min, as in addCounts.
+      // S8, PC-5: what the expiry cost EXTRA: the cache write of this turn at the turn's model price, minus the cache
+      // read the turn would have paid for the same tokens with a warm cache (the reads and output were paid anyway).
+      // 200k at 5 min on Opus 5.5: $1.00 written, $0.04 it would have read, so $0.96 extra. Without a split the write
+      // counts as 5 min, as in addCounts.
       const five = u.cache5m ?? (hour == null ? written : 0);
-      cacheExpiryUsd += costUsd({ cache_written: written, cache_written_5m: five, cache_written_1h: hour ?? 0 }, key);
+      const write = costUsd({ cache_written: written, cache_written_5m: five, cache_written_1h: hour ?? 0 }, key);
+      cacheExpiryUsd += Math.max(0, write - costUsd({ cache_read: written }, key));
     }
     if (ts !== null) previousTs = ts;
   }
@@ -529,13 +551,16 @@ const agentKey = (r) => r.agent_id ?? `${r.track ?? '?'}|${r.time}`;
 /**
  * The usage split into events: one per "done" row with tokens, with the GROWTH since the previous row for the same agent
  * (the rows are cumulative). The sum over all events = last row per agent.
- * `tokens` is the growth in raw tokens (input, output, cache_read, cache_written) the same way, for
- * the weekly quota model in lib/queueCapacity.js. `round` is the fix-round number when the label is `<id>-r<N>`
- * (roundOf), else null. `model` is the row's main model (the Statistics token mix prices the tokens at it), and
- * `cache_expiry_usd` the growth of the cache write cost of the turns that came after an expiry (rows from S8 on).
+ * `tokens` is the growth in raw tokens (input, output, cache_read, cache_written, cache_written_5m, cache_written_1h)
+ * the same way, for the weekly quota model in lib/queueCapacity.js and the Statistics token mix. `byModel` (PC-1, when
+ * the agent's rows have it) is the same growth per model, so the token mix can price each model and each cache write
+ * type at its own price. `round` is the fix-round number when the label is `<id>-r<N>` (roundOf), else null. `model`
+ * is the row's main model (the price for an event without byModel), and `cache_expiry_usd` the growth of the extra
+ * cost of the turns that came after an expiry (rows from S8 on; from PC-5 the write minus the read it replaced).
  * @returns {{ agent: string, type: string, track: string, round: number|null, time: string, day: string, usd: number, turns: number,
  *   cache_expiry: number, cache_expiry_usd: number, model: string|null, assumed: boolean, tokens: { input: number, output: number, cache_read: number,
- *   cache_written: number } }[]}
+ *   cache_written: number, cache_written_5m: number, cache_written_1h: number },
+ *   byModel?: Record<string, { tokens: object }> }[]}
  */
 function usageEvents(rows, tz = TZ) {
   const perAgent = new Map();
@@ -549,13 +574,32 @@ function usageEvents(rows, tz = TZ) {
   for (const [agent, list] of perAgent) {
     list.sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
     let previous = { usd: 0, turns: 0, expiry: 0, expiryUsd: 0 };
-    const previousTok = { input: 0, output: 0, cache_read: 0, cache_written: 0 };
-    for (const r of list) {
+    // The growth of one token set against the highest seen so far (the rows are cumulative), updating `seen`.
+    const grow = (tokens, seen) => {
       const growth = {};
-      for (const k of Object.keys(previousTok)) {
-        const v = Number(r.tokens?.[k] ?? 0) || 0;
-        growth[k] = Math.max(0, v - previousTok[k]);
-        previousTok[k] = Math.max(previousTok[k], v);
+      for (const k of Object.keys(seen)) {
+        const v = Number(tokens?.[k] ?? 0) || 0;
+        growth[k] = Math.max(0, v - seen[k]);
+        seen[k] = Math.max(seen[k], v);
+      }
+      return growth;
+    };
+    const previousTok = emptyTokens();
+    // PC-1: the highest tokens seen per model. `perModel` stays true while every row so far had byModel: a row with
+    // byModel after one without would count the earlier usage again, so such an event falls back to tokens + model.
+    const previousByModel = new Map();
+    let perModel = true;
+    for (const r of list) {
+      const growth = grow(r.tokens, previousTok);
+      const hasBy = r.byModel && typeof r.byModel === 'object' && Object.keys(r.byModel).length > 0;
+      perModel = perModel && hasBy;
+      let byModel;
+      if (perModel) {
+        byModel = {};
+        for (const [m, v] of Object.entries(r.byModel)) {
+          if (!previousByModel.has(m)) previousByModel.set(m, emptyTokens());
+          byModel[m] = { tokens: grow(v?.tokens, previousByModel.get(m)) };
+        }
       }
       const now = {
         usd: costOf(r),
@@ -577,6 +621,7 @@ function usageEvents(rows, tz = TZ) {
         model: r.model ?? null,
         assumed: costAssumed(r),
         tokens: growth,
+        ...(byModel ? { byModel } : {}),
       });
       // A row without full analysis (transcript too large) can be lower than the previous one: keep the highest.
       previous = {
@@ -751,6 +796,7 @@ module.exports = {
   priceFor,
   setPriceOverrides,
   costUsd,
+  costByKind,
   costOf,
   costAssumed,
   apiErrorKind,

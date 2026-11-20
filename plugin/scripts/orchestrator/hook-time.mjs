@@ -8,8 +8,8 @@
 //   start:  { time, wave, track, event: "start", agent_id, agent_type }
 //   done: { ..., event: "done", cumulative: true, duration_s, active_s, idle_gaps, toolCall, modelTurns, model,
 //             byModel { <model>: { turns, tokens, cost_usd } }, tools { <name>: { calls, errors } },
-//             api_errors { rate_limit, overloaded, other }, cache_expiry, cache_expiry_usd (the cache write cost of
-//             the turns that came after an expiry),
+//             api_errors { rate_limit, overloaded, other }, cache_expiry, cache_expiry_usd (the extra cost of the
+//             turns that came after an expiry: their cache write minus the read it replaced),
 //             cost_usd, tokens { input, output, cache_read, cache_written, cache_written_5m, cache_written_1h },
 //             context {...}, first_change_s, call_for_first_change, remark,
 //             thinking_tokens (null when the transcript reports none: unknown, not 0), thinking_turns, cc_version }

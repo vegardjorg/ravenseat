@@ -110,6 +110,12 @@ describe('pause words and pause advice', () => {
     expect(KV.pauseAdvice({ prompt: 'pause', n: 300_000, orchestrator: false })).toBeNull();
     expect(KV.pauseAdvice({ prompt: 'pause', n: null, orchestrator: true })).toBeNull();
   });
+  it('the tip names both cache lifetimes: 1 h on a subscription main session, 5 min otherwise', () => {
+    expect(KV.PAUSE_TIP).toMatch(/1 h/);
+    expect(KV.PAUSE_TIP).toMatch(/subscription/);
+    expect(KV.PAUSE_TIP).toMatch(/5 min/);
+    expect(KV.PAUSE_TIP).toMatch(/API key/);
+  });
 });
 
 describe('the SubagentStop end gate', () => {
