@@ -447,7 +447,37 @@ function receiveGates(o, { branch, scratch, reuse = true, step = 'receive' }) {
     },
     ...(tampered ? { tampered } : {}),
     check: { run: { tail, exit: r.status }, file },
+    // Kept in memory only (never written to the task): "the gate cannot run" reads the per-command sections.
+    log: text,
+    commands,
   };
+}
+
+/**
+ * "The gate cannot run" (lib/gateBroken.js, gates.brokenVerdict, default on): a red quick gate whose own first program
+ * is missing on the tip, and the same command fails the same way on the base (the main checkout, a short budget, the
+ * scrubbed environment). The verdict, with `resolved` when the owner has answered its question, or null.
+ */
+function brokenGate(o, gateCheck) {
+  const GBR = require('./lib/gateBroken.js');
+  if (!GBR.on(CONFIG) || !gateCheck?.log) return null;
+  const found = GBR.candidates(gateCheck.log, gateCheck.commands);
+  if (!found.length) return null;
+  const GE = require('./lib/gateEvidence.js');
+  const TR = require('./lib/treeRun.js');
+  const spawn = require('./lib/gateEnv.js').trackCodeSpawn(process.env, { storeFile: GE.storeFile(FOLDER), root: CONFIG.root });
+  const baseRuns = {};
+  for (const c of found) {
+    console.log(`The gate's program \`${c.program}\` was not found; checking the base (${GIT_ROOT}) for the same: ${c.command}`);
+    const r = TR.runBounded(c.command, { cwd: GIT_ROOT, timeoutMs: GBR.BASE_CHECK_SEC * 1000, spawn });
+    baseRuns[c.command] = { exit: r.status ?? null, output: `${r.stdout ?? ''}${r.stderr ?? ''}`, timedOut: !!r.timedOut };
+  }
+  const v = GBR.verdict({ id: o.id, found, baseRuns, setupHash: GE.setupHash(CONFIG.gates) });
+  if (!v) {
+    console.log('The base runs it, so the missing program is the track\'s change: a fix round as usual.');
+    return null;
+  }
+  return { ...v, resolved: (read().resolved ?? []).includes(v.question) };
 }
 
 /**
@@ -867,6 +897,9 @@ export function cmdReceive() {
     });
   };
   if (gateCheck.status === 'red') {
+    // The gate cannot run (lib/gateBroken.js): a missing program on this machine is the owner's, not a fix round.
+    const broken = brokenGate(o0, gateCheck);
+    const { resolved: brokenResolved = false, ...brokenVerdict } = broken ?? {};
     edit((queue) => {
       const o = queue.tasks.find((x) => x.id === id);
       if (o.status !== 'review') {
@@ -882,10 +915,31 @@ export function cmdReceive() {
       }
       o.t_receive ??= new Date().toISOString();
       L.openBlock(o, 'gate-red', { note: `quick gates red at receive (exit ${gateCheck.record.exit ?? '?'})` });
+      if (broken) o.gate_broken = brokenVerdict;
+      else delete o.gate_broken;
+      if (broken && !brokenResolved) {
+        // The same setup asks once: the question id carries the setup hash, so a second receive finds it registered.
+        if (!queue.question?.[broken.question]) {
+          const s = L.setQuestion(queue, require('./lib/gateBroken.js').question(o, brokenVerdict, { cli: CLI }));
+          if (s.error.length) die(`Could not register the owner question: ${s.error.join('; ')}`);
+        }
+        if (!(o.waiting_on ?? []).includes(broken.question)) o.waiting_on = [...(o.waiting_on ?? []), broken.question];
+        L.openBlock(o, 'owner-question', { note: `the gate cannot run: ${broken.program} not found (${broken.question})` });
+      }
       recordAttempt(o, { gateRed: true });
       return o;
     });
     if (!o0.picked_by) pulseCursor(`receive ${id} gates red`);
+    if (broken && !brokenResolved) {
+      console.log(
+        `GATE CANNOT RUN: ${id}'s quick gate ${broken.commands.map((c) => `\`${c}\``).join(', ')} needs \`${broken.program}\`, ` +
+          'which is not found here, on the delivered tip and on the base. A setup problem, so no fix round was started.\n' +
+          `Owner question ${broken.question} registered (ravenseat question; blocker owner-question). Install the tool or fix ` +
+          `gates.quick, then ${CLI} receive ${id} again (a changed gates setup forgets this verdict). A fix round anyway: ` +
+          `${CLI} resolve ${broken.question} --answer "…", then ${CLI} receive ${id}. Off: "gates": { "brokenVerdict": false }.`,
+      );
+      process.exit(8);
+    }
     doneCommandRed(id, gateCheck.check, { scratch, what: 'quick gate run (ravenseat receive, on the delivered tip)' });
   }
   // The done command (lib/doneCheck.js), BEFORE any reviewer is started: a red one is not a delivery but a fix round.
@@ -1140,6 +1194,8 @@ export function cmdReceive() {
     if (result?.status === 'PARTIAL') o.delivered_partial = true;
     else delete o.delivered_partial;
     if (gateCheck.record) o.gate_check = gateCheck.record;
+    // A green or skipped gate: an old "cannot run" verdict has nothing to say.
+    if (gateCheck.status !== 'red') delete o.gate_broken;
     // The project no longer has quick gates: an old red result has nothing to say, and must not stop the merge for good.
     else if (result?.status !== 'PARTIAL') delete o.gate_check;
     if (doneCheck) o.done_check = doneCheck.record;

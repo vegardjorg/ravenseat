@@ -443,6 +443,12 @@ const SETTINGS = Object.freeze([
     'windows, so a test run opens no console window per git call. Off: the windows show as before.'),
   row('gates.flakyRerun', 'gates', 'onoff', 'Rerun red gate commands once',
     'A red gate in a track reruns only its red commands once on the same commit. Green then counts as flaky.'),
+  // Friction: it stops a fix round, but only one that could never help (the gate's own program is missing on this
+  // machine, on the tip and on the base), and replaces it with one owner question. On by default for that reason; the
+  // rule is narrow (first program only, never "Cannot find module"), so a code failure still gets its fix round.
+  row('gates.brokenVerdict', 'gates', 'onoff', 'Ask when a gate cannot run',
+    'A red quick gate whose own program is not installed here (also on the base branch) is a setup problem: receive ' +
+    'asks you once instead of starting a fix round. A changed gates setup forgets the verdict. Off: a fix round as before.'),
   row('gateEvidence.mode', 'gates', 'choice', 'Gate evidence',
     'Who is trusted that the checks passed: Ravenseat running them itself (own), your CI (external), or the track\'s own ' +
     'word (off). Own is the default, because a track could write a green result it never got. Own: receive and merge ' +
