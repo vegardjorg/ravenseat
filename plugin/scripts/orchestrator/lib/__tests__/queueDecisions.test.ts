@@ -178,6 +178,22 @@ describe('the writes', () => {
     });
     expect(D.boardCall({ type: 'keep' })).toBeNull();
   });
+
+  it('decline with keep (roadmap 0f): cancel --keep on the command line, keep: true to the board server', () => {
+    expect(D.cliArgs({ type: 'decline', id: 'T-5', reason: 'too noisy', keep: true })).toEqual([
+      'cancel',
+      'T-5',
+      '--remark',
+      'declined: too noisy',
+      '--keep',
+      '--by',
+      'owner',
+    ]);
+    expect(D.boardCall({ type: 'decline', id: 'T-5', keep: true })).toEqual({
+      path: '/api/task-edit',
+      body: { type: 'decline', id: 'T-5', keep: true },
+    });
+  });
 });
 
 describe('decided today', () => {

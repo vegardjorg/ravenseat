@@ -38,9 +38,27 @@ const path = require('node:path');
 
 /** The folder, relative to the project root (also the protected path entry). */
 const DIR = 'docs/queue/catalog';
-const STATUSES = Object.freeze(['proposed', 'accepted', 'superseded']);
-/** The frontmatter fields of a design choice. accepted_by and accepted are written by `catalog accept`. */
-const FIELDS = Object.freeze(['id', 'title', 'status', 'paths', 'invariant', 'check', 'supersedes', 'plan', 'accepted_by', 'accepted']);
+const STATUSES = Object.freeze(['proposed', 'accepted', 'superseded', 'not-building']);
+/**
+ * The frontmatter fields of a design choice. accepted_by and accepted are written by `catalog accept`. kind, keywords,
+ * revisit and source are for a "Not building" entry (roadmap 0f, lib/notBuilding.js): what the project deliberately does
+ * not build, with the words a new proposal is matched against, when to look at it again, and where the no came from.
+ */
+const FIELDS = Object.freeze([
+  'id', 'title', 'status', 'kind', 'paths', 'invariant', 'check', 'keywords', 'revisit', 'source', 'supersedes', 'plan',
+  'accepted_by', 'accepted',
+]);
+/**
+ * choice: a design choice (the default). not-building: a rejection, roadmap 0f. Its draft is status proposed with kind
+ * not-building; the owner's accept writes status not-building (never accepted). A file that says status not-building
+ * is of that kind without the line.
+ */
+const KINDS = Object.freeze(['choice', 'not-building']);
+/** A not-building entry's keywords: at most this many, each at most KEYWORD_MAX characters. */
+const KEYWORDS_MAX = 12;
+const KEYWORD_MAX = 40;
+/** The revisit condition and the source of a not-building entry: one line each. */
+const NOTE_MAX = 200;
 const ID_PATTERN = /^D-\d{4}$/;
 const FILE_PATTERN = /^(D-\d{4})-[a-z0-9][a-z0-9-]*\.md$/;
 /** The plan entry id shape (lib/queuePlan.js ID_PATTERN, a looser copy: the register checks its own ids). */
@@ -242,16 +260,37 @@ function parseDecision(name, source) {
   if (!text(d.title)) e('title missing');
   else if (d.title.length > TITLE_MAX) e(`title is over ${TITLE_MAX} characters`);
   if (!STATUSES.includes(d.status)) e(`status must be one of ${STATUSES.join(', ')}`);
-  if (!Array.isArray(d.paths) || !d.paths.length) e('paths must be a list of at least one path pattern, e.g. ["app/**"]');
-  else for (const p of d.paths) {
-    const pe = typeof p === 'string' ? pathPatternError(p) : 'not text';
-    if (pe) e(`paths: ${pe}`);
+  // A "Not building" entry (roadmap 0f): kind not-building, or status not-building without the line.
+  if (d.kind != null && !KINDS.includes(d.kind)) e(`kind must be one of ${KINDS.join(', ')} (or left out: a design choice)`);
+  if (d.status === 'not-building' && d.kind != null && d.kind !== 'not-building') e('status not-building needs kind not-building (or no kind line)');
+  const nb = d.kind === 'not-building' || d.status === 'not-building';
+  if (nb && d.status === 'accepted') e('a not-building entry is accepted as status not-building, not accepted (ravenseat catalog accept writes it)');
+  // What a rejection does not need: an invariant and paths (it binds no code). When it has them, they are checked.
+  if (!nb || d.paths != null) {
+    if (!Array.isArray(d.paths) || (!nb && !d.paths.length)) e('paths must be a list of at least one path pattern, e.g. ["app/**"]');
+    else for (const p of d.paths) {
+      const pe = typeof p === 'string' ? pathPatternError(p) : 'not text';
+      if (pe) e(`paths: ${pe}`);
+    }
   }
-  if (!text(d.invariant)) e('invariant missing (one sentence that can be checked)');
-  else if (/[\u0000-\u001f]/.test(d.invariant)) e('invariant must be one line');
-  else if (d.invariant.length > INVARIANT_MAX) e(`invariant is over ${INVARIANT_MAX} characters; keep it to one sentence`);
+  if (!nb || d.invariant != null) {
+    if (!text(d.invariant)) e('invariant missing (one sentence that can be checked)');
+    else if (/[\u0000-\u001f]/.test(d.invariant)) e('invariant must be one line');
+    else if (d.invariant.length > INVARIANT_MAX) e(`invariant is over ${INVARIANT_MAX} characters; keep it to one sentence`);
+  }
+  if (nb && d.check != null) e('a not-building entry has no check rule (it binds no code)');
+  if (d.keywords != null) {
+    if (!Array.isArray(d.keywords) || d.keywords.some((k) => !text(k) || /[\u0000-\u001f]/.test(k) || k.length > KEYWORD_MAX))
+      e(`keywords must be a list of words or short phrases (each at most ${KEYWORD_MAX} characters), e.g. ["keepalive", "idle ping"]`);
+    else if (d.keywords.length > KEYWORDS_MAX) e(`keywords: at most ${KEYWORDS_MAX}`);
+  }
+  for (const f of ['revisit', 'source'])
+    if (d[f] != null && (typeof d[f] !== 'string' || /[\u0000-\u001f]/.test(d[f]) || d[f].length > NOTE_MAX))
+      e(`${f} must be one line of text, at most ${NOTE_MAX} characters`);
+  if (nb && d.status !== 'superseded' && !(Array.isArray(d.keywords) && d.keywords.length))
+    warnings.push(`${where}: a not-building entry without keywords is never matched against a new proposal`);
   // The check rule (bolk B6): its shape, and its examples run through the same line test a delivery gets.
-  if (d.check != null) for (const t of require('./catalogChecks.js').ruleOf(d.check).errors) e(t);
+  if (d.check != null && !nb) for (const t of require('./catalogChecks.js').ruleOf(d.check).errors) e(t);
   if (d.supersedes != null && !(typeof d.supersedes === 'string' && ID_PATTERN.test(d.supersedes)))
     e('supersedes must be a design choice id (D-0001) or null');
   if (d.plan != null && !(typeof d.plan === 'string' && PLAN_PATTERN.test(d.plan))) e('plan must be a plan entry id (PL-...) or null');
@@ -263,9 +302,13 @@ function parseDecision(name, source) {
     id: typeof d.id === 'string' ? d.id : fileId,
     title: typeof d.title === 'string' ? d.title : null,
     status: d.status ?? null,
+    kind: nb ? 'not-building' : 'choice',
     paths: Array.isArray(d.paths) ? d.paths.filter((p) => typeof p === 'string') : [],
     invariant: typeof d.invariant === 'string' ? d.invariant : null,
     check: d.check ?? null,
+    keywords: Array.isArray(d.keywords) ? d.keywords.filter((k) => typeof k === 'string') : [],
+    revisit: typeof d.revisit === 'string' ? d.revisit : null,
+    source: typeof d.source === 'string' ? d.source : null,
     supersedes: d.supersedes ?? null,
     plan: d.plan ?? null,
     accepted_by: d.accepted_by ?? null,
@@ -444,15 +487,28 @@ function parseLedger(source) {
 function fingerprint(d) {
   const canon = (v) =>
     Array.isArray(v) ? v.map(canon) : isObject(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v;
-  const what = JSON.stringify(canon([d?.id ?? null, d?.invariant ?? null, d?.paths ?? [], d?.check ?? null]));
+  // A not-building entry (roadmap 0f) binds no code, but its keywords decide what a new proposal is matched against, so
+  // they are part of it. A design choice keeps the fingerprint it always had (its records stay valid).
+  const parts = [d?.id ?? null, d?.invariant ?? null, d?.paths ?? [], d?.check ?? null];
+  if (isNotBuilding(d)) parts.push('not-building', d?.keywords ?? []);
+  const what = JSON.stringify(canon(parts));
   return crypto.createHash('sha256').update(what).digest('hex');
 }
 
+/** Whether a parsed entry is a "Not building" entry (roadmap 0f): kind not-building, or status not-building. */
+function isNotBuilding(d) {
+  return d?.kind === 'not-building' || d?.status === 'not-building';
+}
+
 /**
- * The status that counts: `accepted` only with the owner's record of this exact version, else `unconfirmed`. A proposed
- * or superseded choice is what it says.
+ * The status that counts: `accepted` (or `not-building` for a rejection, roadmap 0f) only with the owner's record of
+ * this exact version, else `unconfirmed`. A proposed or superseded choice is what it says.
  */
 function effectiveStatus(d, ledger) {
+  if (d?.status === 'not-building') {
+    const rec = ledger?.decisions?.[d.id];
+    return rec && rec.fingerprint === fingerprint(d) ? 'not-building' : 'unconfirmed';
+  }
   if (d?.status !== 'accepted') return d?.status ?? null;
   const rec = ledger?.decisions?.[d.id];
   return rec && rec.fingerprint === fingerprint(d) ? 'accepted' : 'unconfirmed';
@@ -480,7 +536,9 @@ function acceptText(source, { by, now = new Date().toISOString() } = {}) {
   const end = fm.bodyStart - 1;
   const head = all.slice(1, end).filter((l) => !/^(accepted_by|accepted):/.test(l));
   const at = head.findIndex((l) => /^status:/.test(l));
-  const stamp = ['status: accepted', `accepted_by: ${who}`, `accepted: ${String(now).slice(0, 10)}`];
+  // A rejection's accept (roadmap 0f) writes status not-building: the owner decided not to build it.
+  const status = isNotBuilding(fm.data) ? 'not-building' : 'accepted';
+  const stamp = [`status: ${status}`, `accepted_by: ${who}`, `accepted: ${String(now).slice(0, 10)}`];
   if (at >= 0) head.splice(at, 1, ...stamp);
   else head.push(...stamp);
   return { text: [all[0], ...head, ...all.slice(end)].join('\n'), error: null };
@@ -563,13 +621,26 @@ function proposalFile(p) {
   const title = one(p.title);
   const name = `${p.id}-${slugOf(title)}.md`;
   const why = String(p.why ?? '').replace(/\r\n/g, '\n').trim();
+  // A "Not building" draft (roadmap 0f, lib/notBuilding.js draft): kind not-building, its keywords, revisit and source;
+  // paths and invariant only when given (it binds no code). A design choice is written exactly as before.
+  const nb = p.kind === 'not-building';
+  const paths = Array.isArray(p.paths) ? p.paths : [];
+  const fields = nb
+    ? [
+        'kind: not-building',
+        ...(paths.length ? [`paths: ${JSON.stringify(paths)}`] : []),
+        ...(one(p.invariant) ? [`invariant: ${frontValue(one(p.invariant))}`] : []),
+        `keywords: ${JSON.stringify(Array.isArray(p.keywords) ? p.keywords : [])}`,
+        `revisit: ${one(p.revisit) ? frontValue(one(p.revisit)) : 'null'}`,
+        `source: ${one(p.source) ? frontValue(one(p.source)) : 'null'}`,
+      ]
+    : [`paths: ${JSON.stringify(paths)}`, `invariant: ${frontValue(one(p.invariant))}`];
   const text = [
     '---',
     `id: ${p.id}`,
     `title: ${frontValue(title)}`,
     'status: proposed',
-    `paths: ${JSON.stringify(Array.isArray(p.paths) ? p.paths : [])}`,
-    `invariant: ${frontValue(one(p.invariant))}`,
+    ...fields,
     `supersedes: ${p.supersedes ? p.supersedes : 'null'}`,
     `plan: ${p.plan ? p.plan : 'null'}`,
     '---',
@@ -686,7 +757,12 @@ function checkCatalog(cat, ctx = {}) {
   }
   for (const d of ds) {
     const st = effectiveStatus(d, ctx.ledger ?? emptyLedger());
-    if (st === 'unconfirmed')
+    if (st === 'unconfirmed' && d.status === 'not-building')
+      errors.push(
+        `${d.id} says not-building, but the owner did not accept this version (the keywords differ, or the line was set by hand). ` +
+          `If the owner decided it: ${cli} catalog accept ${d.id} --by owner. Until then no proposal is matched against it.`,
+      );
+    else if (st === 'unconfirmed')
       errors.push(
         `${d.id} says accepted, but the owner did not accept this version (the invariant, paths or check differ, or the line was set by hand). ` +
           `If it is the owner's choice: ${cli} catalog accept ${d.id} --by owner. Until then it counts as proposed.`,
@@ -838,6 +914,10 @@ module.exports = {
   DIR,
   STATUSES,
   FIELDS,
+  KINDS,
+  KEYWORDS_MAX,
+  KEYWORD_MAX,
+  isNotBuilding,
   ID_PATTERN,
   BLOCK_BEGIN,
   BLOCK_END,

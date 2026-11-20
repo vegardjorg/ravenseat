@@ -39,6 +39,8 @@ t.decide = {
   draft: new Map(), // key → text written so far
   keep: new Set(), // keys with "Keep as design choice" pressed (catalog.captureAnswers, roadmap 0z Z-A)
   doneOpen: false, // "Decided today" is open
+  nbOpen: false, // "Not building" is open (roadmap 0f)
+  nbQuery: '', // its search, kept across the redraws
   queueView: VIEWS.includes(savedView) && savedView !== 'decisions' ? savedView : 'flat',
   landed: false,
 };
@@ -172,10 +174,13 @@ function scheduleDecision(item, option, text) {
     else if (write.type === 'qa-deviation' || write.type === 'track-answer') write.text = text;
     else if (write.type === 'decline') write.reason = text;
   }
-  // "Keep as design choice" pressed on this card: resolve --keep (a proposed draft the owner accepts later).
-  const keep = write.type === 'resolve' && keepOffered(item) && t.decide.keep.has(item.key);
+  // "Keep as design choice" pressed on this card: resolve --keep (a proposed draft the owner accepts later). On a
+  // proposal, "Keep as not building" (roadmap 0f) goes with Decline only: cancel --keep, the reason as its text.
+  const kind = keepOffered(item);
+  const keep = t.decide.keep.has(item.key) && ((kind === 'design' && write.type === 'resolve') || (kind === 'not-building' && write.type === 'decline'));
   if (keep) write.keep = true;
-  const label = `${D.doneText(item, option, text)}${keep ? ', kept as a proposed design choice' : ''}`;
+  const kept = kind === 'not-building' ? ', kept as a proposed "not building" entry' : ', kept as a proposed design choice';
+  const label = `${D.doneText(item, option, text)}${keep ? kept : ''}`;
   // The next card gets focus before this one leaves (j/k order).
   const order = D.walkOrder(decisionItems()).map((x) => x.key);
   const i = order.indexOf(item.key);
@@ -308,12 +313,17 @@ function decisionButtons(item) {
 }
 
 /**
- * Whether a card offers "Keep as design choice" (roadmap 0z Z-A): catalog.captureAnswers explicit or suggest (the state's
- * captureAnswers), on a plain owner question. A condition, a lawyer's word or an owner task is no lasting rule.
+ * Which keep a card offers, or null: 'design' ("Keep as design choice", roadmap 0z Z-A) on a plain owner question, and
+ * 'not-building' ("Keep as not building", roadmap 0f) on a proposal, which goes with Decline. Both need
+ * catalog.captureAnswers explicit or suggest (the state's captureAnswers). A condition, a lawyer's word or an owner task
+ * is no lasting rule.
  */
 function keepOffered(item) {
   const mode = t.data?.captureAnswers;
-  return (mode === 'explicit' || mode === 'suggest') && item.verb === 'decide' && item.kind === 'question';
+  if (mode !== 'explicit' && mode !== 'suggest') return null;
+  if (item.verb === 'decide' && item.kind === 'question') return 'design';
+  if (item.verb === 'approve' && item.kind === 'proposed') return 'not-building';
+  return null;
 }
 
 /**
@@ -322,10 +332,12 @@ function keepOffered(item) {
  * itself; with suggest, a question that reads like a lasting rule gets a short hint beside it.
  */
 function keepRow(item) {
-  if (!keepOffered(item)) return null;
+  const kind = keepOffered(item);
+  if (!kind) return null;
   const on = t.decide.keep.has(item.key);
   const hintId = `decide-keep-hint-${item.key.replace(/[^A-Za-z0-9_-]/g, '-')}`;
-  const hint = t.data.captureAnswers === 'suggest' && item.keepSuggested;
+  const hint = kind === 'design' && t.data.captureAnswers === 'suggest' && item.keepSuggested;
+  const nb = kind === 'not-building';
   return el(
     'div',
     { class: 'decide-keep' },
@@ -335,8 +347,10 @@ function keepRow(item) {
       'aria-pressed': on ? 'true' : 'false',
       'aria-describedby': hint ? hintId : null,
       'data-focus': `keep:${item.key}`,
-      title: 'Also writes the answer as a proposed design choice in the project catalog. You accept it yourself later.',
-      text: 'Keep as design choice',
+      title: nb
+        ? 'If you decline it, also writes a proposed "not building" entry in the project catalog, your reason as its text. You accept it yourself later.'
+        : 'Also writes the answer as a proposed design choice in the project catalog. You accept it yourself later.',
+      text: nb ? 'Keep as not building' : 'Keep as design choice',
       onclick: () => {
         if (t.decide.keep.has(item.key)) t.decide.keep.delete(item.key);
         else t.decide.keep.add(item.key);
@@ -604,6 +618,114 @@ function decidedPart() {
   return box;
 }
 
+/** The words an entry is searched on: its id, title, reason, keywords, revisit line and source. */
+function notBuildingText(e) {
+  return [e.id, e.title, e.why, ...(e.keywords ?? []), e.revisit, e.source].filter(Boolean).join(' ').toLowerCase();
+}
+
+/** Whether an entry matches the search: every word of the query is somewhere in its text (case does not matter). */
+function notBuildingMatch(e, query) {
+  const words = String(query ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+  const text = notBuildingText(e);
+  return words.every((w) => text.includes(w));
+}
+
+/** The count line under the search ("4 entries", "1 of 4 match"), read out by a screen reader as it changes. */
+function notBuildingCount(shown, all) {
+  if (shown === all) return `${all} ${all === 1 ? 'entry' : 'entries'}`;
+  return shown ? `${shown} of ${all} match` : `None of ${all} match`;
+}
+
+/** One entry: id, title, state, when and by whom, why, the revisit line, the keywords and how to reopen or accept it. */
+function notBuildingItem(e) {
+  const draft = e.status !== 'not-building';
+  const when = draft
+    ? 'Draft, not accepted yet'
+    : `Chosen not to build${e.decided ? ` ${e.decided}` : ''}${e.by ? ` by ${e.by}` : ''}`;
+  const note =
+    e.state === 'due'
+      ? 'The revisit date has passed: is the reason still true?'
+      : e.state === 'old'
+        ? 'Decided a long time ago: is the reason still true?'
+        : null;
+  return el(
+    'li',
+    { class: 'decide-nb-item', 'data-nb': notBuildingText(e) },
+    el(
+      'p',
+      { class: 'decide-nb-title' },
+      el('span', { class: 'sp-id', text: e.id }),
+      el('span', { class: draft ? 'badge decide-nb-draft' : 'badge', text: draft ? 'Draft' : 'Not building' }),
+      el('span', { class: 'decide-nb-name', text: e.title }),
+    ),
+    el('p', { class: 'decide-nb-when', text: when }),
+    e.why ? el('p', { class: 'decide-nb-why', text: e.why }) : null,
+    e.revisit ? el('p', { class: 'decide-nb-meta', text: `Revisit when: ${e.revisit}` }) : null,
+    note ? el('p', { class: 'decide-nb-due', text: note }) : null,
+    e.keywords?.length ? el('p', { class: 'decide-nb-meta', text: `Keywords: ${e.keywords.join(', ')}` }) : null,
+    el('p', {
+      class: 'decide-nb-meta',
+      text: draft
+        ? `Accept it with: ravenseat catalog accept ${e.id} --by owner`
+        : `Reopen it with: ravenseat catalog propose --title "..." --supersedes ${e.id} (it is set superseded on accept)`,
+    }),
+  );
+}
+
+/**
+ * "Not building" (roadmap 0f): the catalog's entries for what the owner chose not to build, at the bottom of the room,
+ * folded like "Decided today", with a search that filters in place. Display only: the entries are written with
+ * `cancel --keep`, `checks dismiss --keep` or `catalog propose --not-building`, and accepted with `catalog accept`.
+ */
+function notBuildingPart() {
+  const list = t.data?.notBuilding ?? [];
+  if (!list.length) return null;
+  const query = t.decide.nbQuery ?? '';
+  const shown = list.filter((e) => notBuildingMatch(e, query)).length;
+  const count = el('p', { id: 'decide-nb-count', class: 'decide-nb-count', role: 'status', 'aria-live': 'polite', text: notBuildingCount(shown, list.length) });
+  const items = list.map((e) => {
+    const li = notBuildingItem(e);
+    li.hidden = !notBuildingMatch(e, query);
+    return li;
+  });
+  const search = el('input', {
+    type: 'search',
+    id: 'decide-nb-search',
+    class: 'search decide-nb-search', // the Tasks room's search field
+    value: query,
+    placeholder: 'Search title, reason or keyword',
+    'aria-describedby': 'decide-nb-count',
+    'data-focus': 'nb-search',
+    autocomplete: 'off',
+  });
+  // Filters in place (no redraw), so the caret and the focus stay where they are.
+  search.addEventListener('input', () => {
+    t.decide.nbQuery = search.value;
+    let n = 0;
+    list.forEach((e, i) => {
+      const hit = notBuildingMatch(e, search.value);
+      items[i].hidden = !hit;
+      if (hit) n += 1;
+    });
+    count.textContent = notBuildingCount(n, list.length);
+  });
+  const box = el(
+    'details',
+    { class: 'decide-done decide-nb', open: t.decide.nbOpen },
+    el('summary', { text: `Not building (${list.length})` }),
+    el('p', {
+      class: 'decide-hint',
+      text: 'What you chose not to build, with the reason. A new proposal that reads like one gets an INFO line; nothing is stopped.',
+    }),
+    el('label', { class: 'decide-nb-label', for: 'decide-nb-search', text: 'Search' }),
+    search,
+    count,
+    el('ul', { class: 'decide-nb-list' }, items),
+  );
+  box.addEventListener('toggle', () => (t.decide.nbOpen = box.open));
+  return box;
+}
+
 /** Answers given but not entered in the decision log yet (the orchestrator does that). */
 function unloggedLine() {
   const list = t.data?.inbox?.unlogged ?? [];
@@ -624,7 +746,8 @@ function drawDecisions(fresh) {
   if (t.view !== 'decisions') return;
   const D = DV();
   const active = document.activeElement;
-  if (!fresh && main.contains(active) && active.tagName === 'TEXTAREA') return;
+  // A text field with focus is not redrawn under the owner's hands (the answer, and the "Not building" search).
+  if (!fresh && main.contains(active) && (active.tagName === 'TEXTAREA' || active.id === 'decide-nb-search')) return;
   const hadFocus = fresh || main.contains(active);
   const focusData = main.contains(active) ? active.dataset?.focus : null;
   const scroll = main.scrollTop;
@@ -704,7 +827,7 @@ function drawDecisions(fresh) {
       ),
     );
   }
-  parts.push(sortPart(t.data.inbox?.sort), unloggedLine(), decidedPart());
+  parts.push(sortPart(t.data.inbox?.sort), unloggedLine(), decidedPart(), notBuildingPart());
   main.append(el('section', { class: 'decide', 'aria-labelledby': 'decide-title' }, parts));
   main.scrollTop = scroll;
   if (!hadFocus) return;

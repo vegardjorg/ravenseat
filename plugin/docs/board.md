@@ -355,7 +355,10 @@ button that answers with the recommendation's text. **Other decision** opens the
 under its answers: pressed, the answer is sent with `keep: true` (`resolve --keep`) and also written as a proposed
 design choice, which you accept yourself later (see [From an owner answer to a design
 choice](catalog.md#from-an-owner-answer-to-a-design-choice)). With `suggest`, "Reads like a lasting rule" stands beside
-it when the question reads that way; it never presses the toggle. A question's
+it when the question reads that way; it never presses the toggle. A proposal has a **Keep as not building** toggle the
+same way: pressed, a Decline also writes a proposed [not-building entry](catalog.md#not-building) with the reason as its
+text (`cancel --keep`), and a Checks card has **Set aside, keep as not building**. **Not building (n)** at the bottom of
+Decisions lists those entries, drafts first, with a search that filters as you type. A question's
 optional `context` (`ravenseat question <id> --context "…"`, why it is asked) shows under the recommendation, and its
 `source` is a link when it names a task or a plan entry. A line under the title says
 "Orchestrator listening" while `ravenseat wait` runs in the orchestrator session (its heartbeat is under 90 s old), so an

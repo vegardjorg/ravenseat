@@ -20,6 +20,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **`ravenseat catalog propose` writes the next free design choice as proposed, accepting one that supersedes another
   marks the old one superseded, and an owner answer can become a proposed choice.** Through `resolve --keep` or the
   board's **Keep as design choice** (`catalog.captureAnswers`, `explicit`).
+- **"Not building": a declined proposal or a set-aside Checks card can be kept in the catalog, and new proposals that
+  match one get an INFO line.** Advice only (`notBuilding.match`, on).
 ### Changed
 - **Plans: the room opens on a Roadmap, and a plan opens as a page with its document first.** Horizons (Inbox, Waiting
   on you, Now, Next, Later, Done) as columns on a wide screen and a list on a phone; the old views are under More views.

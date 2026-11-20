@@ -20,6 +20,8 @@ commands cover them.
 | QA deviation | `/api/action` `qa-deviation` | `ravenseat qa deviation <id> "<what is wrong>"` (same command); `/ravenseat:decide` |
 | Approve a proposal (one or many) | `/api/action` `approve` | `ravenseat approve <id...> --by owner` (same command); `/ravenseat:decide` |
 | Decline a proposal | `/api/task-edit` `decline` | `ravenseat cancel <id> --remark "declined[: reason]" --by owner`; `/ravenseat:decide` |
+| Keep a declined proposal or a set-aside Checks card as not building (**Keep as not building**, **Set aside, keep as not building**) | `/api/task-edit` `decline` with `keep: true`; `/api/checks` `dismiss` with `keep: true` | `ravenseat cancel <id> --remark "declined: ..." --keep --by owner`; `ravenseat checks dismiss <key> --keep [--why "..."]` (`catalog.captureAnswers`) |
+| The Not building list in Decisions | the state's `notBuilding` | `ravenseat catalog show` (the "Not building" part) |
 | Release an old pick | `/api/action` `release` | `ravenseat release <id>` (same command); `/ravenseat:decide` |
 | Flag stuck work for the orchestrator (new) | `/api/action` `flag-stuck` | `ravenseat block <id> other --note "owner: looks stuck, please check"` (same command); `/ravenseat:decide` |
 | Put a task started without an agent back in the queue | `/api/action` `requeue` | `ravenseat set <id> waiting` (same command) |

@@ -670,7 +670,8 @@
       case 'approve':
         return ['approve', a.id, '--by', 'owner'];
       case 'decline':
-        return ['cancel', a.id, '--remark', declineRemark(a.reason), '--by', 'owner'];
+        // keep (roadmap 0f): the declined proposal also becomes a proposed "Not building" entry (cancel --keep).
+        return ['cancel', a.id, '--remark', declineRemark(a.reason), ...(a.keep === true ? ['--keep'] : []), '--by', 'owner'];
       case 'release':
         return ['release', a.id];
       case 'requeue':
@@ -719,7 +720,7 @@
       case 'track-answer':
         return { path: '/api/action', body: { type: 'track-answer', id: a.id, text: String(a.text ?? '') } };
       case 'decline':
-        return { path: '/api/task-edit', body: { type: 'decline', id: a.id, ...(a.reason ? { reason: a.reason } : {}) } };
+        return { path: '/api/task-edit', body: { type: 'decline', id: a.id, ...(a.reason ? { reason: a.reason } : {}), ...(a.keep === true ? { keep: true } : {}) } };
       default:
         return null;
     }

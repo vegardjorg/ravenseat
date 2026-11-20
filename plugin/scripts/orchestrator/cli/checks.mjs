@@ -44,6 +44,7 @@ import { ciParityFacts, guardById, guardRecord, guardsBoard, ledgerScan } from '
 import { allowlistFacts, broadFacts, gitignoreFacts, lockfileFacts, mcpFacts } from './doctorBaseline.mjs';
 import { guardWeakening, trackBranchHere } from './settings.mjs';
 import { enableShare } from './share.mjs';
+import { keepAsNotBuilding, keepRefused } from './notBuilding.mjs';
 
 const SCAN = require('./lib/checksScan.js');
 const CATALOG = require('./lib/checksCatalog.js');
@@ -709,11 +710,19 @@ export function cmdChecks() {
   }
   if (sub === 'dismiss' || sub === 'restore') {
     needsQueue();
+    // dismiss --keep [--why "..."] (roadmap 0f): the card set aside also becomes a proposed "Not building" entry, the
+    // reason as its text. Refused before anything changes when catalog.captureAnswers is off or from a track.
+    const keep = sub === 'dismiss' && a.includes('--keep');
+    if (keep) keepRefused('checks dismiss');
     const s = suggestion(makeReport(read()), a[2]);
     setDismissed(a[2], sub === 'dismiss');
     // A card set aside that no longer applies is restored too; it shows again once its condition holds.
     const back = s.applies === false ? `${a[2]} is no longer set aside. It does not apply to this project now, and shows among the suggestions once it does.` : `${a[2]} is back among the suggestions.`;
     console.log(sub === 'dismiss' ? `${a[2]} is set aside. ${CLI} checks restore ${a[2]} brings it back.` : back);
+    if (keep) {
+      const why = a.includes('--why') ? (a[a.indexOf('--why') + 1] ?? null) : null;
+      console.log(keepAsNotBuilding({ title: s.title ?? a[2], why, source: `Checks card ${a[2]}` }).line);
+    }
     return undefined;
   }
   if (sub && sub !== '--json') return die(`Use: ${CLI} checks [--json] | show <key> | plan <key> [--approved] | dismiss <key> | restore <key> | packs [--apply] | turn-on <key> | build-gate <class>@<area> | quick-add <G-n> | recipe <id> show|damp|auto | marker on|off | on | off`);

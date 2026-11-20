@@ -361,6 +361,17 @@ function checksSuggestionCard(s, categories, { grouped = false } = {}) {
             text: 'Set aside',
             onclick: () => checksWrite({ action: 'dismiss', key: s.key }, 'Set aside'),
           }),
+      // "Not building" (roadmap 0f): set aside and also write a proposed entry in the project catalog, which the owner
+      // accepts later. Only while catalog.captureAnswers is not off (the state's captureAnswers).
+      under || !['explicit', 'suggest'].includes(t.data?.captureAnswers)
+        ? null
+        : el('button', {
+            type: 'button',
+            class: 'button button-outline',
+            text: 'Set aside, keep as not building',
+            title: 'Sets the card aside and writes a proposed "not building" entry in the project catalog. You accept it yourself later.',
+            onclick: () => checksWrite({ action: 'dismiss', key: s.key, keep: true }, 'Set aside, kept as a proposed "not building" entry'),
+          }),
       s.action || under ? null : el('span', { class: 'checks-source', text: `About ${s.contentMin} min of agent work` }),
     ),
   );

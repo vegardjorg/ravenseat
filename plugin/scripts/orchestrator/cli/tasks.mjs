@@ -25,6 +25,7 @@ import {
 import { highestMigr } from './tracks.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
 import { linkProblems, linkProblemsJson, printLinkWarning } from './taskLinksCheck.mjs';
+import { notBuildingLines } from './notBuilding.mjs';
 
 const FSRC = require('./lib/findingSources.js');
 // The task's short human summary (`description`): its stored form and the soft-limit WARNING (lib/taskDescription.js).
@@ -440,6 +441,9 @@ export function cmdAdd() {
   const links = linkProblems(newOnes);
   // A description over the soft limit (lib/taskDescription.js): one WARNING line per task; it is stored anyway.
   const descriptionWarning = newOnes.map((n) => DESC.descriptionWarning(n.id, n.description)).filter(Boolean);
+  // "Not building" (roadmap 0f, notBuilding.match): a new task that reads like an entry the owner chose not to build
+  // gets one INFO line. Advice only: the task is added either way.
+  const notBuilding = notBuildingLines(newOnes.map((n) => ({ id: n.id, text: [n.title, n.description].filter(Boolean).join(' ') })));
   // --answer-json (the board and scripts): one JSON line instead of the text, with the link problems in it.
   if (a.includes('--answer-json')) {
     console.log(
@@ -452,6 +456,7 @@ export function cmdAdd() {
         ...(missionMoved.length ? { missionMoved: missionMovedJson(missionMoved) } : {}),
         // Only when a description is over the soft limit, for the same reason.
         ...(descriptionWarning.length ? { descriptionWarning } : {}),
+        ...(notBuilding.length ? { notBuilding } : {}),
       }),
     );
     return;
@@ -492,6 +497,7 @@ export function cmdAdd() {
   for (const n of newOnes)
     for (const u of TF.unknownFields(n, Object.keys(WRONG_NAMES))) console.log(TF.unknownFieldWarning(n.id, u));
   for (const line of descriptionWarning) console.log(line);
+  for (const line of notBuilding) console.log(line);
   // Owning a protected path is what lets a change there past the merge guard, so it should not happen unnoticed.
   const protectedPaths = autoAcceptContext(read()).protectedPaths;
   for (const n of newOnes) {

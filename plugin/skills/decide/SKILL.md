@@ -55,6 +55,8 @@ Then act on the answer:
 - **An option with `needsText`** (a QA deviation, for example): ask in plain text for the text (one short question),
   then run the `cli` with `<text>` replaced by it, quoted for the shell. `optionalText` (a decline reason): offer to
   add one; with a reason, change `--remark declined` to `--remark "declined: <reason>"`; without, run `cli` as it is.
+  When the owner says the idea should not come back, add `--keep`: the decline also writes a proposed "not building"
+  entry in the catalog, which the owner accepts later with `catalog accept <D-id> --by owner`.
 - **The owner's own words** (the free-text field) on an item with `free`: run `free.cli` with `<text>` replaced by
   their answer, quoted for the shell. On an item without `free`, read it as a choice of option if it clearly names one;
   otherwise ask once what they meant.
