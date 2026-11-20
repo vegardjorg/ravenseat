@@ -27,6 +27,8 @@
 //      finished; spend (the usage events) by its own time.
 //   5. THE BREAKDOWN (unknownSources, breakdownLines): the orchestrator session as its own line, and the "unknown"
 //      share split by why it could not be attributed.
+//   6. EXPECTED AGAINST MEASURED (COST_MEASURES, measureEffects, effectLines): each cost measure's expected effect as
+//      data, and the measured median before and after it shipped, "not enough runs yet" under MIN_N on either side.
 //
 // Pure functions without I/O. Must not require queueLogic.js (logic/results.js requires this file). Tested in
 // lib/__tests__/costMeasures.test.ts.
@@ -492,7 +494,202 @@ function weekLines(w) {
   ];
 }
 
+// ---- 6. Expected against measured effect of the cost measures (roadmap 0y Y3) -----------------------------------
+//
+// WHY: the cost measures below were shipped as design choices ("what they save is not measured yet", docs/costs.md).
+// Each now carries its EXPECTED effect as data, and `ravenseat cost` prints the MEASURED effect beside it, so a measure
+// that does not deliver can be seen and dropped. The measured effect is the median of the measure's metric for the
+// runs in the EFFECT_DAYS days before it shipped against the runs in the EFFECT_DAYS days after (tasks by start date,
+// agents by their last done row). With fewer than MIN_N runs on either side it prints "not enough runs yet" and the
+// counts, never a number. Before and after is no controlled test: other changes in the same days count too, and the
+// two measures of 0.12.0 shipped together. Display only, so no setting (it changes nothing and stops nothing).
+//
+// A new measure: add a row with its ship date (the CHANGELOG version date), the setting that turns it off (or null),
+// one metric from EFFECT_METRICS, and the expected change in percent with where that figure comes from.
+
+/** How many days before and after a measure's ship date are compared. */
+const EFFECT_DAYS = 14;
+
+const TRACK_TYPES = new Set(['track', 'track-d']);
+const doneTasks = (queue) =>
+  (queue?.tasks ?? []).filter((o) => o?.status === 'done' && !o.cloud && o.external !== true && o.cost?.phases);
+
+/**
+ * The metrics a measure can name: each gives the samples { t (ms), v } from the queue and the time log.
+ * unit 'usd' prints $1.23, 'turns' prints "12 turns".
+ */
+const EFFECT_METRICS = Object.freeze({
+  // USD per fix round: a finished task's fix cost divided by its fix rounds (tasks without a fix round give no sample).
+  fix_usd_per_round: {
+    unit: 'usd',
+    text: 'USD per fix round',
+    samples: ({ queue }) =>
+      doneTasks(queue)
+        .filter((o) => num(o.cost.phases.fix_rounds) > 0 && num(o.cost.phases.fix) != null)
+        .map((o) => ({ t: Date.parse(o.started ?? ''), v: Number(o.cost.phases.fix) / Number(o.cost.phases.fix_rounds) })),
+  },
+  // The review cost of a finished task that had at least one fix round (the first review plus the ones after fixes).
+  review_usd_fixed: {
+    unit: 'usd',
+    text: 'review USD per task with a fix round',
+    samples: ({ queue }) =>
+      doneTasks(queue)
+        .filter((o) => num(o.cost.phases.fix_rounds) > 0 && num(o.cost.phases.review) != null)
+        .map((o) => ({ t: Date.parse(o.started ?? ''), v: Number(o.cost.phases.review) })),
+  },
+  // Model turns per track agent (track and track-d), from the last done row per agent in the time log.
+  track_turns: {
+    unit: 'turns',
+    text: 'turns per track agent',
+    samples: ({ rows }) =>
+      agentTurnStats(rows)
+        .filter((s) => TRACK_TYPES.has(s.type))
+        .map((s) => ({ t: Date.parse(s.time), v: s.turns })),
+  },
+});
+
+/**
+ * The cost measures with their expected effect. `expected.change_pct` is the change of the metric's median the measure
+ * was meant to give (negative = cheaper); `basis` says where the figure comes from. They are rough targets from the
+ * design, not measurements: that is what the measured column is for.
+ */
+const COST_MEASURES = Object.freeze([
+  {
+    id: 'fix-continue',
+    title: 'A fix round continues the warm agent, else a short fix mission',
+    since: '2026-11-13',
+    setting: 'fixRound.continueWithinMin',
+    metric: 'fix_usd_per_round',
+    expected: {
+      change_pct: -30,
+      basis: 'a rough target from the design: the fix list is read on a cached context instead of the whole build context',
+    },
+  },
+  {
+    id: 'delta-review',
+    title: 'The review after a fix round reads only the new commits',
+    since: '2026-11-13',
+    setting: null,
+    metric: 'review_usd_fixed',
+    expected: {
+      change_pct: -20,
+      basis: 'a rough target from the design: the second review reads the fix diff, not the whole package',
+    },
+  },
+  {
+    id: 'read-outline',
+    title: 'A refused whole-file Read lists the file outline',
+    since: '2026-11-19',
+    setting: 'readGuard.outline',
+    metric: 'track_turns',
+    expected: {
+      change_pct: -2,
+      basis: 'a rough target: about one Grep turn saved per refused read, a few per track',
+    },
+  },
+]);
+
+/** Is a setting's value "on"? A number over 0 or true; false, 0, null and the word off are off. */
+function settingIsOn(v) {
+  if (typeof v === 'number') return v > 0;
+  if (typeof v === 'string') return !['off', 'false', '0', ''].includes(v.trim().toLowerCase());
+  return v === true;
+}
+
+/**
+ * Expected against measured per measure.
+ * @param {{ measures?: object[], queue?: object, rows?: object[], now?: number, days?: number, minN?: number,
+ *   settingOn?: (key: string) => boolean }} x
+ * @returns {{ id: string, title: string, since: string, setting: string|null, metric: string, unit: string,
+ *   metric_text: string, expected: { change_pct: number, basis: string }, status: 'measured'|'too-few'|'off',
+ *   before: { n: number, median: number|null }, after: { n: number, median: number|null }, change_pct: number|null,
+ *   days: number, min_n: number }[]}
+ */
+function measureEffects({
+  measures = COST_MEASURES,
+  queue = null,
+  rows = [],
+  now = Date.now(),
+  days = EFFECT_DAYS,
+  minN = MIN_N,
+  settingOn = () => true,
+} = {}) {
+  const cache = new Map();
+  const samplesOf = (metric) => {
+    if (!cache.has(metric)) cache.set(metric, EFFECT_METRICS[metric]?.samples({ queue, rows }) ?? []);
+    return cache.get(metric);
+  };
+  return (measures ?? []).map((m) => {
+    const def = EFFECT_METRICS[m.metric];
+    const since = Date.parse(m.since);
+    const side = (from, to) => {
+      const vs = samplesOf(m.metric)
+        .filter((s) => Number.isFinite(s.t) && s.t >= from && s.t < to && Number.isFinite(s.v))
+        .map((s) => s.v);
+      const md = median(vs);
+      return { n: vs.length, median: md == null ? null : def?.unit === 'usd' ? round2(md) : round1(md) };
+    };
+    const off = m.setting ? !settingOn(m.setting) : false;
+    const before = off ? { n: 0, median: null } : side(since - days * DAY_MS, since);
+    const after = off ? { n: 0, median: null } : side(since, Math.min(since + days * DAY_MS, now));
+    const enough = before.n >= minN && after.n >= minN && before.median > 0;
+    return {
+      id: m.id,
+      title: m.title,
+      since: m.since,
+      setting: m.setting ?? null,
+      metric: m.metric,
+      unit: def?.unit ?? 'usd',
+      metric_text: def?.text ?? m.metric,
+      expected: m.expected,
+      status: off ? 'off' : enough ? 'measured' : 'too-few',
+      before,
+      after,
+      change_pct: enough ? Math.round(((after.median - before.median) / before.median) * 100) : null,
+      days,
+      min_n: minN,
+    };
+  });
+}
+
+/** The "Cost measures" lines for `ravenseat cost`; empty without measures. */
+function effectLines(effects) {
+  if (!effects?.length) return [];
+  const pct = (x) => `${x > 0 ? '+' : ''}${x} %`;
+  const val = (e, v) => (v == null ? '?' : e.unit === 'usd' ? usd(v) : `${round1(v)} turns`);
+  const days = effects[0].days;
+  const out = [
+    `Cost measures, expected against measured (the median in the ${days} days before each measure shipped against ` +
+      `the ${days} days after; n = runs):`,
+  ];
+  for (const e of effects) {
+    out.push(`  ${e.title} (since ${e.since}${e.setting ? `, ${e.setting}` : ''})`);
+    out.push(`    expected: ${e.metric_text} ${pct(e.expected.change_pct)} (${e.expected.basis})`);
+    if (e.status === 'off') out.push(`    measured: off here (${e.setting}), nothing to measure.`);
+    else if (e.status === 'too-few')
+      out.push(
+        `    measured: not enough runs yet (n ${e.before.n} before, ${e.after.n} after; needs ${e.min_n} on each side).`,
+      );
+    else
+      out.push(
+        `    measured: ${val(e, e.before.median)} (n ${e.before.n}) -> ${val(e, e.after.median)} (n ${e.after.n}): ` +
+          `${pct(e.change_pct)}`,
+      );
+  }
+  out.push(
+    '  Before and after, not a controlled test: other changes in the same days count too (measures shipped the same day ' +
+      'are measured together).',
+  );
+  return out;
+}
+
 module.exports = {
+  EFFECT_DAYS,
+  EFFECT_METRICS,
+  COST_MEASURES,
+  settingIsOn,
+  measureEffects,
+  effectLines,
   BASELINE_DAYS,
   MIN_N,
   FACTOR,

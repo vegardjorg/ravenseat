@@ -241,6 +241,9 @@ const STANDARD = Object.freeze({
   // continueWithinMin minutes ago (its prompt cache is still warm; 0 = always a new agent) and its context at the last
   // stop is at most continueMaxContextK thousand tokens (0 = no cap). Otherwise a new agent with a short fix mission.
   fixRound: { continueWithinMin: 60, continueMaxContextK: 200 },
+  // Evidence snapshot when a track turns SILENT (lib/silentSnapshot.js, roadmap 0y Y4): one local, redacted, capped
+  // file per silence in <dataFolder>/silent-snapshots/, the newest `keep` kept. It never stops work, so it is on.
+  silentSnapshot: { enabled: true, keep: 20, maxKB: 64 },
   // Read ownership (task field reads, lib/logic/conflicts.js): a task that reads a file an active task changes, or
   // that would change a file an active task reads. "wait" = it waits until the other is done; "warn" = it starts, and
   // start, fill, explain and the mission name the overlap. Two readers never block each other.

@@ -174,6 +174,17 @@ causes apart while it happens. They are measurements only: none of them stops th
   no queue task, or no agent type. Then week over week: subagent spend by usage time, the orchestrator, and the tasks
   started each week with n and their median cost.
 
+### Cost measures: expected against measured
+
+`ravenseat cost` (and `--json`, field `measures`) lists each cost measure with the effect it was expected to have and
+the effect measured so far: a warm fix round, the review that reads only the new commits, and the outline in a read
+denial. The expected figure is a rough target from the design, written next to the measure in `lib/costMeasures.js`
+(`COST_MEASURES`). The measured figure is the median of the measure's metric for the runs in the 14 days before it
+shipped against the 14 days after (tasks by start date, agents by their last time log row). With fewer than 5 runs on
+either side it says `not enough runs yet` and gives the counts, never a number. A measure whose setting is off says
+`off here`. Before and after is no controlled test: other changes in the same days count too, and measures shipped
+the same day are measured together. No setting: it is a view only and changes nothing.
+
 ### Turns and tools
 
 `ravenseat cost` (and `--json`, field `turnsAndTools`) has a "Turns and tools" block that says how the turns were
