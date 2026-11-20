@@ -253,6 +253,46 @@ function openBackgroundJobs(text) {
 const norm = (s) => String(s ?? '').toLowerCase().replace(/\\/g, '/');
 
 /**
+ * The 8.3 short form of a Windows path (C:\Users\RUNNER~1\...), or null. `for %I in (...) do echo %~sI` is the one
+ * built-in way to ask for it; the path comes from git, never from a user, and is quoted. Fails open, short timeout.
+ */
+function shortPathWin(p) {
+  try {
+    const { spawnSync } = require('node:child_process');
+    const r = spawnSync('cmd', ['/d', '/s', '/c', `for %I in ("${String(p).replace(/\//g, '\\')}") do @echo %~sI`], {
+      encoding: 'utf8',
+      timeout: 3000,
+      windowsVerbatimArguments: true,
+    });
+    const out = String(r.stdout ?? '').trim().split(/\r?\n/)[0];
+    return r.status === 0 && out ? out : null;
+  } catch {
+    return null; // error-ignored: the short form only widens the process filter; the long form still works
+  }
+}
+
+/**
+ * Every form of `p` a command line can use: as given, the resolved long form, and on Windows the 8.3 short form (a CI
+ * runner's temp folder is C:\Users\RUNNER~1\... in a command line while git reports C:/Users/runneradmin/...).
+ * Duplicates (after norm) are dropped. `short` and `real` are seams for tests.
+ */
+function pathForms(p, { platform = process.platform, short = shortPathWin, real = (x) => fs.realpathSync.native(x) } = {}) {
+  if (!p) return [];
+  const out = [p];
+  const add = (f) => {
+    try {
+      const v = f();
+      if (v && !out.some((o) => norm(o) === norm(v))) out.push(v);
+    } catch {
+      // error-ignored: a form that cannot be computed is left out
+    }
+  };
+  add(() => real(p));
+  if (platform === 'win32') add(() => short(p));
+  return out;
+}
+
+/**
  * The processes whose command line names one of `needles` (the worktree path, the branch; slashes either way, any
  * case) and their descendants, in list order, at most `max`, each with its command line redacted.
  * @param {{ pid: number, ppid: number, name?: string, cmd?: string }[]} list
@@ -478,7 +518,7 @@ function capture({ dataFolder, hit, worktree = null, transcript = null, agent = 
         now,
         tail: text ? transcriptTail(text) : [],
         jobs: text ? openBackgroundJobs(text) : [],
-        processes: relevantProcesses(procs.list, { needles: [worktree, hit.branch] }),
+        processes: relevantProcesses(procs.list, { needles: [...pathForms(worktree), hit.branch] }),
         processNote: procs.note,
       },
       { keep: s.keep, maxKB: s.maxKB },
@@ -491,6 +531,7 @@ function capture({ dataFolder, hit, worktree = null, transcript = null, agent = 
 module.exports = {
   DEFAULTS,
   FOLDER_NAME,
+  pathForms,
   redactCommand,
   redactText,
   transcriptTail,

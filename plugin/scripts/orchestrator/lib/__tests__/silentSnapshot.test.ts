@@ -116,6 +116,29 @@ describe('the transcript: tail and background jobs', () => {
   });
 });
 
+describe('the worktree path in every form a command line can use (Windows short names)', () => {
+  // On a CI runner the temp folder is C:\Users\RUNNER~1\... in a command line, while git reports the worktree as
+  // C:/Users/runneradmin/...: the filter must treat both as the same folder.
+  it('pathForms adds the 8.3 short form the platform reports, without duplicates', () => {
+    const long = 'C:/Users/runneradmin/AppData/Local/Temp/q/wt-A';
+    const forms = S.pathForms(long, { platform: 'win32', short: () => 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\q\\wt-A', real: (p: string) => p });
+    expect(forms).toContain(long);
+    expect(forms).toContain('C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\q\\wt-A');
+    expect(S.pathForms(long, { platform: 'linux', short: () => 'x', real: (p: string) => p })).toEqual([long]);
+    expect(S.pathForms(null)).toEqual([]);
+  });
+
+  it('a process that names the short form is found', () => {
+    const list = [{ pid: 10, ppid: 1, name: 'node', cmd: 'node C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\q\\wt-A\\run.mjs' }];
+    const needles = S.pathForms('C:/Users/runneradmin/AppData/Local/Temp/q/wt-A', {
+      platform: 'win32',
+      short: () => 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\q\\wt-A',
+      real: (p: string) => p,
+    });
+    expect(S.relevantProcesses(list, { needles }).map((p: any) => p.pid)).toEqual([10]);
+  });
+});
+
 describe('the processes: only those that name the worktree or the branch, and their children', () => {
   const list = [
     { pid: 10, ppid: 1, name: 'node', cmd: 'node C:\\work\\wt-A\\run.mjs --api-key FAKEKEY' },
