@@ -147,33 +147,28 @@ const cut = (s, n) => {
   return x.length > n ? `${x.slice(0, n - 1)}…` : x;
 };
 
+/** The client's transcript reader (lib/clients/claude/entries.js): the core never reads the row format itself. */
+const entries = () => require('./clients/index.js').clientFor().entries;
+
+/** The transcript rows as the adapter's events; a line that is not JSON (a cut first line) is left out. */
 function parseRows(text) {
+  const E = entries();
   const rows = [];
   for (const line of String(text ?? '').split('\n')) {
     if (!line.trim()) continue;
-    try {
-      const r = JSON.parse(line);
-      if (r && typeof r === 'object') rows.push(r);
-    } catch {
-      // error-ignored: a broken or cut row (the first row after a partial read) is left out
-    }
+    const raw = E.parse(line);
+    if (raw && typeof raw === 'object') rows.push(E.entry(raw));
   }
   return rows;
 }
 
-/** The blocks of a row's message: a string content is one text block. */
-function blocksOf(r) {
-  const c = r?.message?.content;
-  if (typeof c === 'string') return [{ type: 'text', text: c }];
-  return Array.isArray(c) ? c.filter((b) => b && typeof b === 'object') : [];
+/** The parts of an event: a string content is one text part. */
+function partsOf(e) {
+  if (e.parts) return e.parts.filter((p) => p && typeof p === 'object');
+  return e.text ? [{ kind: 'text', text: e.text }] : [];
 }
 
-const resultText = (b) =>
-  typeof b.content === 'string'
-    ? b.content
-    : Array.isArray(b.content)
-      ? b.content.map((x) => (typeof x?.text === 'string' ? x.text : '')).join(' ')
-      : '';
+const resultText = (p) => entries().resultText(p.content);
 
 /** A short, redacted summary of a tool call's input. */
 function inputSummary(input) {
@@ -200,13 +195,13 @@ const clock = (r) => {
  */
 function transcriptTail(text, { maxRows = 40, maxChars = 240 } = {}) {
   const lines = [];
-  for (const r of parseRows(text)) {
-    const who = r.message?.role ?? r.type ?? 'row';
-    for (const b of blocksOf(r)) {
-      if (b.type === 'text' && typeof b.text === 'string' && b.text.trim())
-        lines.push(`${clock(r)} ${who}: ${cut(redactText(b.text), maxChars)}`);
-      else if (b.type === 'tool_use') lines.push(`${clock(r)} tool ${b.name ?? '?'} ${cut(inputSummary(b.input), maxChars)}`);
-      else if (b.type === 'tool_result') lines.push(`${clock(r)} result: ${cut(redactText(resultText(b)), maxChars)}`);
+  for (const e of parseRows(text)) {
+    const who = e.kind === 'unknown' ? (e.type ?? 'row') : e.kind;
+    for (const p of partsOf(e)) {
+      if (p.kind === 'text' && typeof p.text === 'string' && p.text.trim())
+        lines.push(`${clock(e)} ${who}: ${cut(redactText(p.text), maxChars)}`);
+      else if (p.kind === 'tool') lines.push(`${clock(e)} tool ${p.name ?? '?'} ${cut(inputSummary(p.input), maxChars)}`);
+      else if (p.kind === 'result') lines.push(`${clock(e)} result: ${cut(redactText(resultText(p)), maxChars)}`);
     }
   }
   return lines.slice(-maxRows);
@@ -224,25 +219,26 @@ function openBackgroundJobs(text) {
   const started = new Map(); // tool_use id -> job
   const order = [];
   const heard = [];
-  for (const r of parseRows(text)) {
-    for (const b of blocksOf(r)) {
-      if (b.type === 'tool_use') {
-        if (b.input?.run_in_background === true && b.id) {
-          const job = { id: b.id, use: b.id, tool: String(b.name ?? '?'), time: r.timestamp ?? null, command: cut(inputSummary(b.input), 200) };
-          started.set(b.id, job);
+  for (const e of parseRows(text)) {
+    if (e.notification && e.text) heard.push(e.text);
+    for (const p of partsOf(e)) {
+      if (p.kind === 'tool') {
+        if (p.input?.run_in_background === true && p.id) {
+          const job = { id: p.id, use: p.id, tool: String(p.name ?? '?'), time: e.timestamp ?? null, command: cut(inputSummary(p.input), 200) };
+          started.set(p.id, job);
           order.push(job);
-        } else if (/kill|stop/i.test(String(b.name ?? ''))) {
+        } else if (/kill|stop/i.test(String(p.name ?? ''))) {
           try {
-            heard.push(JSON.stringify(b.input ?? {}));
+            heard.push(JSON.stringify(p.input ?? {}));
           } catch {
             // error-ignored: an input that cannot be read stops nothing
           }
         }
-      } else if (b.type === 'tool_result' && started.has(b.tool_use_id)) {
-        const m = /\b(?:ID|agentId|task id):\s*([A-Za-z0-9_-]+)/i.exec(resultText(b));
-        if (m) started.get(b.tool_use_id).id = m[1];
-      } else if (b.type === 'text' && typeof b.text === 'string' && isNotification(b.text)) heard.push(b.text);
-      else if (b.type === 'tool_result' && isNotification(resultText(b))) heard.push(resultText(b));
+      } else if (p.kind === 'result' && started.has(p.id)) {
+        const m = /\b(?:ID|agentId|task id):\s*([A-Za-z0-9_-]+)/i.exec(resultText(p));
+        if (m) started.get(p.id).id = m[1];
+      } else if (p.kind === 'text' && typeof p.text === 'string' && isNotification(p.text)) heard.push(p.text);
+      else if (p.kind === 'result' && isNotification(resultText(p))) heard.push(resultText(p));
     }
   }
   const all = heard.join('\n');
