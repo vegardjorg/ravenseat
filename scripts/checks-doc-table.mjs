@@ -91,7 +91,7 @@ export const KIND_PHRASES = {
   'ledger-due': (any) => `the finding log has ${any} due for a guard`,
   'ledger-guard-failed': (any) => `the finding log shows ${any} back where a guard was in place`,
   'ledger-recent': (any) => `the finding log shows ${any} 3 times in one area within 30 days (never in lite mode)`,
-  stack: (any) => `the project's stack is ${any} (a word of a stack found, such as typescript in Node/TypeScript, or a stack pack found)`,
+  stack: (any) => `the project's stack is ${any} (a word of a stack found, such as typescript in Node/TypeScript, or a stack pack found, or a word an accepted [stack entry](catalog.md#stack-entries) in the catalog declares, with \`catalog.stackFacts\` on)`,
   'local-db': (any) => `the local database found runs ${any}`,
   'guard-not-in-ci': (any, each) => orJoin(each.map((k) => `a gate guard runs ${k} but CI does not`), ', '),
 };
