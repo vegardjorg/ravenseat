@@ -89,9 +89,15 @@ const FIELD = [
   // `ravenseat plan capture` and the board's "+ New plan" (lib/planInbox.js): { at, by }, while the plan waits in the
   // Inbox to be sorted. editEntry removes it when the priority or maturity changes, or with inbox=null.
   'inbox',
+  // `ravenseat plan propose` (lib/planProposal.js, P7): Claude's suggestion for an Inbox item, { at, by, fields, merge?,
+  // outline? }. Never applied by itself: the owner's Accept applies it (plan accept). editEntry removes it when the
+  // entry is sorted another way (a new priority or maturity, or the inbox marker removed).
+  'proposal',
+  // The owner's own captured text, kept when an accepted proposal rewrote the summary (plan accept).
+  'original_text',
 ];
 /** Fields the tool owns: cannot be set with `plan new` or `plan edit` (inbox can only be removed, with null). */
-const TOOL_FIELD = new Set(['id', 'created', 'agent_boost', 'merged_from', 'finding', 'inbox']);
+const TOOL_FIELD = new Set(['id', 'created', 'agent_boost', 'merged_from', 'finding', 'inbox', 'proposal', 'original_text']);
 /** Derived from queue.json (task.plan); never saved in the register. */
 const DERIVED_FIELD = new Set(['queue_tasks']);
 
@@ -407,6 +413,16 @@ function validateEntry(entry, ctx = {}) {
   // A captured plan (`ravenseat plan capture`): when and by whom; the shape only, the tool writes it.
   if (entry.inbox != null && (!isObject(entry.inbox) || typeof entry.inbox.at !== 'string' || typeof entry.inbox.by !== 'string'))
     f('inbox must be { at, by } (set by ravenseat plan capture)');
+  // A proposal (`ravenseat plan propose`): the shape only; lib/planProposal.js checks what it suggests.
+  if (
+    entry.proposal != null &&
+    (!isObject(entry.proposal) ||
+      typeof entry.proposal.at !== 'string' ||
+      typeof entry.proposal.by !== 'string' ||
+      !isObject(entry.proposal.fields))
+  )
+    f('proposal must be { at, by, fields } (set by ravenseat plan propose)');
+  if (entry.original_text != null && typeof entry.original_text !== 'string') f('original_text must be text');
 
   if (entry.size != null && !SIZES.includes(entry.size))
     f(`size must be one of ${SIZES.join(', ')}`);
@@ -659,6 +675,12 @@ function editEntry(reg, id, field, ctx = {}) {
   }
   // A new priority or maturity is sorting a captured plan: it leaves the Inbox (lib/planInbox.js).
   if (fresh.inbox && (fresh.priority !== old.priority || fresh.maturity !== old.maturity)) delete fresh.inbox;
+  // Sorted another way (a new priority or maturity, or the marker removed): Claude's proposal is stale (lib/planProposal.js).
+  if (
+    fresh.proposal &&
+    (fresh.priority !== old.priority || fresh.maturity !== old.maturity || (old.inbox && !fresh.inbox))
+  )
+    delete fresh.proposal;
   // If the priority changes away from now or drop, the category or the drop reason goes with it (unless the caller
   // has set them itself).
   if (fresh.priority !== 'now' && !('now_category' in field)) delete fresh.now_category;

@@ -1234,6 +1234,28 @@ const SETTINGS = Object.freeze([
   row('plans.searchDocuments', 'plans', 'onoff', 'Search the plan documents',
     'On: the plan search also looks in each plan\'s document and shows the matching sentence under the row, after the ' +
     'plans whose title or summary match. Off: the search covers the register only (for a very large document folder).'),
+  // P7 (plans-tab-ux-review-2026-11-19.md section 8, owner answer 5 "as recommended"). Sorting costs tokens, so it is
+  // not automatic by default.
+  // Friction: on-request means a captured idea waits until someone runs /plans inbox (the INBOX line in the pulse and
+  // show reminds). idle lets the orchestrator spend free slots on it; off stops new proposals (the owner sorts by hand
+  // on the board with Edit). Nothing here changes a plan: a proposal still waits for the owner's Accept.
+  row('plans.inboxTriage', 'plans', 'choice', 'When Claude sorts the inbox',
+    'on-request (default): Claude writes proposals for the Inbox only when /plans runs or you ask. idle: the ' +
+    'orchestrator also does it when the queue has free slots (costs tokens). off: no proposals; you sort on the board.',
+    { choices: ['on-request', 'idle', 'off'] }),
+  // Friction: off (default) means one click per Inbox item (Accept, with Undo). On saves that click for the quiet ones,
+  // but it changes plans without the owner seeing them first, so it is off; even on, only a captured plan whose proposal
+  // keeps the priority later and names no merge is applied, anything else still waits.
+  row('plans.inboxAutoApply', 'plans', 'onoff', 'Apply quiet proposals by themselves',
+    'Off (default): every proposal for the Inbox waits for your Accept on the board. On: a proposal that keeps a ' +
+    'captured plan at Later and merges nothing is applied at once (it still shows in the plan\'s History, and plan ' +
+    'undo takes it back).',
+    {
+      weakens: onWeakens,
+      protects: 'A plan changed by Claude without the owner seeing the change first.',
+      whyNot: 'Claude\'s project, maturity and summary for your idea go in unseen, and a wrong guess is only found later.',
+      changes: 'Proposals that keep Later are applied without your Accept. Doctor will report it.',
+    }),
   row('focus.continueWhenEmpty', 'plans', 'onoff', 'Continue when the focus ends',
     'Off: the queue pauses and asks you when a focus has ended. On: it continues with the regular queue.',
     { fullWhy: 'lite has no focus steps to end' }),

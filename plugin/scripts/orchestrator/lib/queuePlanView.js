@@ -1175,9 +1175,16 @@
             : QF.isNewFinding(p, queue?.tasks ?? [])
               ? { by: 'track', at: p.finding?.reported ?? null }
               : null,
+        // P7: Claude's proposal for an Inbox item ({ at, by, fields, merge?, outline? }, lib/planProposal.js), only
+        // while the item is in the Inbox (a stale one on a sorted plan is never offered), and the owner's original
+        // text when an accepted proposal rewrote the summary.
+        proposal: null,
+        original_text: typeof p.original_text === 'string' ? p.original_text : null,
         // The lead from the plan document, only when nobody wrote a summary: { text, path, anchor } or null.
         lead: !p.summary && leadFor ? (leadFor(p) ?? null) : null,
       };
+      if (out.inbox && p.proposal && typeof p.proposal === 'object' && p.proposal.fields)
+        out.proposal = JSON.parse(JSON.stringify(p.proposal));
       return out;
     });
     return {
@@ -3106,6 +3113,65 @@
    */
   const CAPTURE = Object.freeze({ TITLE_MAX: 160, TEXT_SOFT: 2000, TEXT_MAX: 4000 });
 
+  /**
+   * P7, enrichment: what a proposal for an Inbox item may suggest (lib/planProposal.js checks it, the board's Edit form
+   * offers the same fields). Never the title (the owner's own words) and never drop (dropping is the owner's Decline).
+   * One set for the CLI, the server and the board.
+   */
+  const PROPOSAL = Object.freeze({
+    FIELDS: Object.freeze(['project', 'priority', 'now_category', 'priority_reason', 'maturity', 'size', 'summary', 'sources']),
+    PRIORITIES: Object.freeze(['now', 'owner', 'later']),
+    MATURITIES: Object.freeze(['idea', 'investigated', 'planned', 'ready']),
+    SIZES: Object.freeze(['S', 'M', 'L', 'XL']),
+    CATEGORIES: Object.freeze(['security', 'for-prod', 'important']),
+    SUMMARY_MAX: 400,
+    REASON_MAX: 400,
+    OUTLINE_MAX: 6000,
+    MERGE_MAX: 5,
+  });
+
+  /**
+   * The proposal on an Inbox row in words ("Claude suggests: App · Later · Investigated · size M"), the reason, the
+   * suggested summary, the merge candidates with their titles and the outline. null without a proposal. Pure, so the
+   * board, the CLI and the tests read the same words.
+   * @param {object} p the plan as /api/plans sends it (proposal: { at, by, fields, merge?, outline? })
+   * @param {{ projects?: object, entries?: object[] }} d the payload (project titles, the other plans' titles)
+   */
+  function proposalText(p, d = {}) {
+    const x = p?.proposal;
+    if (!x || typeof x !== 'object' || !x.fields || typeof x.fields !== 'object') return null;
+    const f = x.fields;
+    const parts = [];
+    if (typeof f.project === 'string') parts.push(d?.projects?.[f.project]?.title ?? f.project);
+    if (typeof f.priority === 'string') {
+      const cat =
+        Array.isArray(f.now_category) && f.now_category.length
+          ? ` (${f.now_category.map((k) => CATEGORY[k] ?? k).join(', ')})`
+          : '';
+      parts.push(`${PRIORITY[f.priority]?.text ?? f.priority}${cat}`);
+    }
+    if (typeof f.maturity === 'string') parts.push(MATURITY[f.maturity] ?? f.maturity);
+    if (typeof f.size === 'string') parts.push(`size ${f.size}`);
+    const titles = new Map((d?.entries ?? []).map((q) => [q.id, q.title ?? q.id]));
+    const merge = (Array.isArray(x.merge) ? x.merge : [])
+      .filter((id) => typeof id === 'string')
+      .map((id) => ({ id, title: titles.get(id) ?? null }));
+    const reason = typeof f.priority_reason === 'string' ? f.priority_reason.trim() : '';
+    const summary = typeof f.summary === 'string' ? f.summary.trim() : '';
+    return {
+      text: parts.length ? `Claude suggests: ${parts.join(' · ')}` : 'Claude suggests a new summary',
+      because: reason || null,
+      summary: summary || null,
+      sources: Array.isArray(f.sources)
+        ? f.sources.filter((k) => k && typeof k.path === 'string').map((k) => k.path)
+        : [],
+      merge,
+      outline: typeof x.outline === 'string' && x.outline.trim() ? x.outline : null,
+      at: typeof x.at === 'string' ? x.at : null,
+      by: typeof x.by === 'string' ? x.by : null,
+    };
+  }
+
   // ---- Keyboard ----
 
   /**
@@ -4447,6 +4513,8 @@
     changedEntries,
     keyAction,
     CAPTURE,
+    PROPOSAL,
+    proposalText,
     neighborEntry,
     priorityFromKey,
     paletteCandidates,

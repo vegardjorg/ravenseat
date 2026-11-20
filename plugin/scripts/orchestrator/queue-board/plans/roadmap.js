@@ -171,6 +171,8 @@
       h.el('p', { class: 'roadmap-card-line', id: lineId, text: cardLine(p, d) }),
       bar,
       hit,
+      // P7: an Inbox row carries Claude's proposal with Accept, Edit, Decline and Merge (plans/triage.js); null otherwise
+      h.triageBlock?.(p) ?? null,
     );
   }
 
@@ -537,6 +539,8 @@
         'div',
         { class: 'plans-page-main' },
         head(h, p),
+        // P7: the proposal for a plan still in the Inbox, right under the title (plans/triage.js)
+        h.triageBlock?.(p) ?? null,
         summary(h, p),
         actions(h, d, p),
         questions(h, d, p),

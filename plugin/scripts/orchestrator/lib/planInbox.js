@@ -95,28 +95,53 @@ function isInInbox(entry, tasks = []) {
   return !tasks.some((o) => o?.plan === entry.id);
 }
 
-/** The captured plans in the Inbox: { new, ids } (oldest first). */
+/**
+ * The captured plans in the Inbox: { new, ids, proposals } (oldest first). `proposals` counts those with Claude's
+ * proposal (P7, lib/planProposal.js) that wait for the owner's Accept.
+ */
 function inboxSummary(reg, tasks = []) {
   const list = (reg?.entries ?? []).filter((p) => isInInbox(p, tasks));
   list.sort((x, y) => String(x.inbox.at ?? '').localeCompare(String(y.inbox.at ?? '')));
-  return { new: list.length, ids: list.map((p) => p.id) };
+  return { new: list.length, ids: list.map((p) => p.id), proposals: list.filter((p) => p.proposal).length };
 }
 
-/** The line for `orchestrator pulse` and `show`, or null when the Inbox has no captured plan. */
-function inboxLine(summary, ravenseat = 'ravenseat') {
+/**
+ * The line for `orchestrator pulse` and `show`, or null when the Inbox has no captured plan. With plans.inboxTriage
+ * idle (P7) it asks the orchestrator to sort the ones without a proposal when a slot is free.
+ */
+function inboxLine(summary, ravenseat = 'ravenseat', { triage = 'on-request' } = {}) {
   if (!summary?.new) return null;
   const ids = summary.ids.slice(0, 5).join(', ') + (summary.ids.length > 5 ? ', ...' : '');
   const what = summary.new === 1 ? 'captured plan' : 'captured plans';
-  return `INBOX: ${summary.new} ${what} not sorted yet (${ids}): ${ravenseat} plan inbox`;
+  const waiting = summary.proposals
+    ? `; ${summary.proposals} with a proposal waiting on the owner (Accept on the board)`
+    : '';
+  const idle =
+    triage === 'idle' && summary.new > (summary.proposals ?? 0)
+      ? '; plans.inboxTriage idle: sort them when a slot is free (/plans inbox)'
+      : '';
+  return `INBOX: ${summary.new} ${what} not sorted yet (${ids}): ${ravenseat} plan inbox${waiting}${idle}`;
 }
 
-/** The rows for `ravenseat plan inbox`, oldest first. */
-function inboxRows(reg, tasks = []) {
+/**
+ * The rows for `ravenseat plan inbox`, oldest first. `proposal` says whether Claude's proposal waits, `suggests` is
+ * its line in words (queuePlanView.proposalText, with the project titles from `projects`).
+ */
+function inboxRows(reg, tasks = [], projects = {}) {
   const order = inboxSummary(reg, tasks).ids;
   const byId = new Map((reg?.entries ?? []).map((p) => [p.id, p]));
   return order.map((id) => {
     const p = byId.get(id);
-    return { id, title: p.title, summary: p.summary ?? null, at: p.inbox.at ?? null, by: p.inbox.by ?? 'owner' };
+    const t = V.proposalText(p, { projects, entries: reg?.entries ?? [] });
+    return {
+      id,
+      title: p.title,
+      summary: p.summary ?? null,
+      at: p.inbox.at ?? null,
+      by: p.inbox.by ?? 'owner',
+      proposal: Boolean(t),
+      suggests: t ? `${t.text}${t.because ? `, because ${t.because}` : ''}` : null,
+    };
   });
 }
 

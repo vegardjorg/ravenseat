@@ -394,6 +394,9 @@ describe('the settings: plans.* in queue.config.json (queueConfig.plansView)', (
       roadmapFoldAfter: 8,
       leadFromDocument: true,
       searchDocuments: true,
+      // P7: proposals only on request, and never applied without the owner
+      inboxTriage: 'on-request',
+      inboxAutoApply: false,
     });
     expect(KK.plansView({})).toEqual(KK.STANDARD.plans);
   });
@@ -401,7 +404,15 @@ describe('the settings: plans.* in queue.config.json (queueConfig.plansView)', (
   it('a valid value is kept, an unknown one falls back to the default', () => {
     expect(
       KK.plansView({ plans: { startView: 'overview', roadmapLayout: 'list', roadmapFoldAfter: 0, leadFromDocument: false } }),
-    ).toEqual({ startView: 'overview', roadmapLayout: 'list', roadmapFoldAfter: 0, leadFromDocument: false, searchDocuments: true });
+    ).toEqual({
+      startView: 'overview',
+      roadmapLayout: 'list',
+      roadmapFoldAfter: 0,
+      leadFromDocument: false,
+      searchDocuments: true,
+      inboxTriage: 'on-request',
+      inboxAutoApply: false,
+    });
     expect(
       KK.plansView({ plans: { startView: 'x', roadmapLayout: 'tiles', roadmapFoldAfter: -3, leadFromDocument: 'yes' } }),
     ).toEqual(KK.STANDARD.plans);

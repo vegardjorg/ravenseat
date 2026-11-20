@@ -50,6 +50,10 @@ undo.
 | `plan check` | Unregistered documents, dead paths, anchors without a heading (the file exists, but the source's `anchor` finds no heading, with the same lookup as the mission; `anchor_misses` in `--json`), stale entries |
 | `plan capture "<title>" [--text "…"]` / `--file f.json` | Quick capture into the Inbox (see Inbox) |
 | `plan inbox` | The captured plans nobody has sorted yet |
+| `plan propose <id> --file f.json` | Claude's proposal for an Inbox item; applies nothing (see Inbox) |
+| `plan accept <id> [--file edits.json] --set-by owner` | The owner accepts the proposal, optionally with edits |
+| `plan decline <id> [--reason "…"] --set-by owner` | The owner drops an Inbox item |
+| `plan merge <id> --into <to-id> --set-by owner` | The owner merges an Inbox item into an existing plan |
 | `plan undo` | Undo |
 | `plan backup` | Runs the script in `planBackup` (optional; for example a private backup repo) |
 | `plan doc …` | Optional register of controlled documents (versions, revisions, links) |
@@ -80,6 +84,26 @@ estimate, owned files), while a finding is an observation nobody has looked at y
 - The same title again while it still waits in the Inbox writes nothing. A sorted plan with the same title gives a warning.
 - `orchestrator pulse` and `ravenseat show` print an `INBOX:` line with the count; `plan inbox` lists them. `plan undo` takes a capture back.
 - Off with `features.plans.inbox` (the board then has no **+ New plan**, and `POST /api/plan-capture` answers 403).
+
+### Proposals (sorting the Inbox)
+
+`/plans inbox` has Claude write one proposal per Inbox item with `plan propose <id> --file f.json`: suggested
+`project`, `priority` (anything but `later` needs a one-sentence `priority_reason`), `now_category`, `maturity`, `size`,
+`summary` and `sources`, plus `merge` (plan ids it looks like) and `outline` (shown only). The title is never proposed
+and neither is drop. The proposal is stored in the tool-owned field `proposal: { at, by, fields, merge?, outline? }`
+and changes nothing else; `plan undo` takes it back.
+
+- The owner decides each item: `plan accept` (with optional edits in a file), `plan decline` (a drop with a reason,
+  default "Declined in the inbox.") or `plan merge --into <id>`, each with `--set-by owner`, one change and one undo.
+  On the board these are **Accept**, **Edit**, **Decline** and **Merge** on the row (keys 1 to 4).
+- Accept writes the fields as the owner's choice and clears the inbox marker; an accepted finding gets
+  `priority_set_by: owner`. A changed summary keeps the owner's own text in the tool-owned field `original_text`.
+- A new priority or maturity set another way, or the item leaving the Inbox, removes the proposal.
+- `plans.inboxTriage` (`on-request`): when Claude sorts. `idle` adds a hint to the `INBOX:` line to sort when a slot is
+  free; `off` refuses `plan propose`.
+- `plans.inboxAutoApply` (`false`): on, `plan propose` applies a proposal at once for a captured plan that stays at
+  `later` and has no merge (never a finding, never a priority). Off by default because it changes plans without the
+  owner.
 
 ## Rules that keep it useful
 
