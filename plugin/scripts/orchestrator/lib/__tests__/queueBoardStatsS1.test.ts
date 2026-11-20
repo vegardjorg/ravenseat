@@ -26,6 +26,8 @@ import { clientSource } from './boardClient';
 const T = require('../queueBoard.js') as { board: (queue: unknown, option?: unknown) => any };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const S = require('../queueStatistics.js');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const SX = require('../statisticsSections.js');
 
 const CLIENT = join(__dirname, '..', '..', 'queue-board');
 const cssText = readFileSync(join(CLIENT, 'board.css'), 'utf8');
@@ -80,8 +82,14 @@ beforeAll(async () => {
       return {
         ok: true,
         status: 200,
-        json: async () => ({ version: 's1', data: { ...S.statistics(queue, rows), guards: null, timeLogError: null } }),
+        json: async () => {
+          const stat = S.statistics(queue, rows);
+          return { version: 's1', data: { ...stat, sections: SX.sections({ queue, rows, statistics: stat }), guards: null, timeLogError: null } };
+        },
       };
+    // Settings is only opened by the advice button; its content is not in this test.
+    if (filePath.startsWith('/api/settings'))
+      return { ok: true, status: 200, json: async () => ({ error: 'not in this test' }) };
     if (filePath.startsWith('/api/state'))
       return {
         ok: true,
@@ -133,10 +141,11 @@ function statRule(selector: string): Record<string, string> {
 const cards = () => [...document.querySelectorAll('.board.statistics .graphs > .graph')] as HTMLElement[];
 
 describe('Statistics S1: no style from another view leaks into the chart cards', () => {
-  it('draws the five chart cards with their legends', () => {
-    expect(cards()).toHaveLength(5);
+  it('draws the chart cards with their legends (S2: five in Cost and tokens, two in Flow, three in Machine)', () => {
+    expect(cards()).toHaveLength(10);
     expect(cards().every((c) => c.querySelector('ul.explanation'))).toBe(true);
-    expect(cards().filter((c) => c.querySelector('svg.graph-svg'))).toHaveLength(5);
+    // No phases measured and no timed gate run: those two cards say so instead of drawing an empty chart.
+    expect(cards().filter((c) => c.querySelector('svg.graph-svg'))).toHaveLength(8);
   });
 
   it('no rule from Dependencies, or for the help legend or a legend sample outside Statistics, matches in a card', () => {
@@ -175,13 +184,13 @@ describe('Statistics S1: no style from another view leaks into the chart cards',
     expect(statRule('.graph .draw-line.draw-solid')['border-top-style']).toBe('solid');
   });
 
-  it('a legend sample is drawn like its line: solid for Added, dashed for Done, the estimate and the cap', () => {
+  it('a legend sample is drawn like its line: solid for Added, dashed for the estimate and the cap', () => {
     const sample = (text: string) =>
       [...document.querySelectorAll('.board.statistics .graph .explanation li')]
         .find((li) => li.textContent === text)
         ?.querySelector('span');
     expect(sample('Added')?.classList.contains('draw-solid')).toBe(true);
-    for (const t of ['Done', 'Estimated average', 'Cap approx. 300k']) {
+    for (const t of ['Estimated average', 'Cap 300k']) {
       expect(sample(t)?.classList.contains('draw-line')).toBe(true);
       expect(sample(t)?.classList.contains('draw-solid')).toBe(false);
     }
@@ -195,10 +204,12 @@ describe('Statistics S1: the value texts give way to the lines', () => {
   const horizontal = () =>
     cards()
       .map((c) => c.querySelector('svg.graph-svg') as SVGSVGElement)
+      .filter(Boolean)
       .filter((svg) => svg.querySelector('line[class^="line-"]') && svg.querySelector('text.value'));
 
   it('every value text is marked, and no vertical line runs through one (text width about 7.2 units a character)', () => {
-    expect(horizontal().length).toBe(2);
+    // Time per class (the estimate line); the context is a point strip since S4.
+    expect(horizontal().length).toBe(1);
     for (const svg of horizontal()) {
       for (const t of [...svg.querySelectorAll('text.value')]) {
         const x0 = Number(t.getAttribute('x'));
@@ -220,17 +231,70 @@ describe('Statistics S1: the value texts give way to the lines', () => {
     }
   });
 
-  it('the context axis ends at 1.1 times the larger of max and cap, so 288k and the cap have room', () => {
-    const card = cards().find((c) => c.querySelector('figcaption')?.textContent?.startsWith('Context at end'));
+  it('the context strip ends at 1.1 times the larger of max and cap, with one point per track and the cap labelled', () => {
+    const card = cards().find((c) => c.querySelector('figcaption')?.textContent === 'Do the tracks come near the cap?');
     const svg = card?.querySelector('svg.graph-svg') as SVGSVGElement;
-    const axis = [...svg.querySelectorAll('line.axis')].map((l) => Number(l.getAttribute('x1')));
-    const left = Math.min(...axis);
-    const right = Math.max(...axis);
-    const cap = Number(svg.querySelector('line.line-quota')?.getAttribute('x1'));
-    // 300k of 330k: the cap sits at about 91 % of the axis, not at 60 % (axis to 500k) and not on the edge.
+    const axis = svg.querySelector('line.axis') as SVGLineElement;
+    const left = Number(axis.getAttribute('x1'));
+    const right = Number(axis.getAttribute('x2'));
+    const cap = Number(svg.querySelector('line.line-cap')?.getAttribute('x1'));
+    // 300k of 330k: the cap sits at about 91 % of the axis, not on the edge.
     expect((cap - left) / (right - left)).toBeCloseTo(300 / 330, 3);
-    const ticks = [...svg.querySelectorAll('text')].map((t) => t.textContent);
-    expect(ticks).toContain('330k');
-    expect(ticks).toContain('288k');
+    expect([...svg.querySelectorAll('text')].map((t) => t.textContent)).toContain('cap 300k');
+    const dots = [...svg.querySelectorAll('circle.dot')];
+    expect(dots).toHaveLength(2);
+    // 288k is over 80 % of the cap: marked near, the 150k one not.
+    expect(dots.filter((c) => c.classList.contains('s-near'))).toHaveLength(1);
+  });
+});
+
+// The rework (S2 to S7 of the same review): the order, the questions, the advice lines and the colors.
+describe('Statistics S2 to S7: the top row, the sections and the advice', () => {
+  const tab = () => document.querySelector('.board.statistics') as HTMLElement;
+
+  it('the top row has the five numbers in order, and the legend for the classes is gone from the tab', () => {
+    const names = [...tab().querySelectorAll('.keyFigures .tile-name')].map((x) => x.textContent);
+    expect(names).toEqual(['Cost per merged change', 'Finished against new', 'Right first time', 'Waiting on you', 'Weekly quota']);
+    // Too few answers is said, not hidden.
+    expect(tab().querySelectorAll('.keyFigures .tile-value')[3].textContent).toBe('too few answers yet');
+    expect(tab().querySelector('.legend')).toBeNull();
+  });
+
+  it('four sections as folds with a heading each, in the order of the review', () => {
+    const titles = [...tab().querySelectorAll('details.stat-section > summary h3')].map((h) => h.textContent);
+    expect(titles).toEqual(['Cost and tokens', 'Flow', 'Quality', 'Machine']);
+    expect(statRule('.stat-section-title')['text-transform'] ?? '').not.toBe('uppercase');
+  });
+
+  it('every chart asks one question and has a "Does this look bad?" line', () => {
+    for (const c of cards()) {
+      expect(c.querySelector('figcaption')?.textContent).toMatch(/\?$/);
+      expect(c.querySelector('.graph-advice')?.textContent).toMatch(/^Does this look bad\? /);
+    }
+  });
+
+  it('a setting button opens the gear', async () => {
+    const button = [...tab().querySelectorAll('.graph-advice button')].find((b) => b.textContent === 'limits.dailyBudget') as HTMLButtonElement;
+    expect(button.getAttribute('aria-label')).toBe('Open the setting limits.dailyBudget');
+    button.click();
+    await flush();
+    expect(document.getElementById('settings')?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('night is a muted blue and Added a neutral: purple is for D+ only', () => {
+    expect(cssText).toMatch(/\.s-night \{\s*--s: var\(--color-category-slate\)/);
+    expect(cssText).not.toMatch(/\.s-in \{\s*--s: var\(--color-category-plum\)/);
+  });
+
+  // Last in the file: it narrows the board. A window that turns narrow gets its charts drawn again at the new width.
+  it('a resize to phone width draws the charts again at the card width', async () => {
+    const width = () => Number(cards()[0].querySelector('svg.graph-svg')?.getAttribute('viewBox')?.split(' ')[2]);
+    expect(width()).toBe(560);
+    const main = document.getElementById('board') as HTMLElement;
+    Object.defineProperty(main, 'clientWidth', { configurable: true, get: () => 390 });
+    window.dispatchEvent(new Event('resize'));
+    await new Promise((r) => setTimeout(r, 200));
+    await flush();
+    expect(width()).toBe(390 - 66);
   });
 });

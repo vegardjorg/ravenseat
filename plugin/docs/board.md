@@ -105,8 +105,9 @@ until you bring it back. The guard registry and the failures that repeat are on 
 
 <p align="center"><img src="../../assets/screenshots/light-04-statistics.jpg" alt="Statistics: throughput, cycle time, estimate accuracy and cost" width="800"></p>
 
-**Statistics and cost.** Done per day, cycle time, how good the estimates are, cost per day (API-equivalent), time per
-class, and how large the agents' contexts got. This is where you see whether the queue earns its keep.
+**Statistics and cost.** Five numbers on top (cost per merged change, finished against new, right first time, waiting
+on you, weekly quota), then four folds: Cost and tokens, Flow, Quality and Machine. Each chart asks one question and
+has a "Does this look bad?" line that opens the matching setting. This is where you see whether the queue earns its keep.
 
 The plan register, the priority map, dark mode and the settings panel are shown in
 [the board in detail](guide.md#the-board-in-detail).
@@ -237,18 +238,33 @@ The Queue workspace has these tabs:
   suggestion is open (`checksPanel.marker`). Read from files, nothing is run. Off with the link on the tab, in Settings or with `ravenseat checks off`
   (see [the Checks tab](checks.md)).
 - **Cloud:** tasks that can run in a cloud session, and the cloud sessions (off by default, see [Modules](#modules)).
-- **Statistics:** done per day, added versus finished, time per class, cost per day (API-equivalent USD), context at
-  the end of tracks, key figures (first **Cost per merged change**: all measured cost in the last 14 days divided by
-  the tasks merged in them, with where the cost went and, as a secondary estimate-based figure, the cost per content
-  minute; see [Cost estimates and calibration](queue.md#cost-estimates-and-calibration); then usage today), the forecast line, the table **Blockers last 7 days** (per
-  blocker code: count and blocked time, the same numbers as `ravenseat blockers`), the section **Agents last 14 days: models,
-  tools and errors** (cost and share per model, the top tools with their error rate, API errors, active time and
-  killed agents, the same numbers as `ravenseat cost`), the box **Flow last 14 days** (first pass, fix rounds, merge
-  conflicts, base red, pushes and triage, then right first time, post-merge defects and owner interventions per 10
-  merged, the autonomy figures (verified tasks per owner intervention, the longest stretch without the owner, failures
-  corrected without the owner), inflow by source with added/done for the last 3 weeks, the reviewer hit rate table
-  and the hints; see
-  [Flow and quality](queue.md#cost-estimates-and-calibration)), and the legend for the badges on the cards.
+- **Statistics:** first a row of five numbers: **Cost per merged change** (the last 14 days, with this week against the week before;
+  the estimate-based cost per content minute is its detail, see
+  [Cost estimates and calibration](queue.md#cost-estimates-and-calibration)), **Finished against new** (it warns when
+  more came in than was finished two weeks running), **Right first time**, **Waiting on you** (the median answer time
+  of owner questions and the oldest open one; with too few answers it says so) and **Weekly quota** (the
+  share of the 7-day limit used against the share of the week gone, from the status line's reading). Then the forecast
+  line and four folds, each with a heading (open on a wide screen; on a narrow one only Cost and tokens is open, and
+  the board remembers what you open or close):
+  - **Cost and tokens:** cost per day, the token mix per day in USD (input, output, cache read, cache write, priced
+    per model), the cost per phase and class with the fix share, the cache expiry per day (writes in turns after a
+    pause longer than the cache lifetime), the five most expensive tasks, context at the end of tracks as one point per
+    track against the compaction cap (it follows `autoCompactWindow` in the Claude Code settings, 300k when unset), the
+    usage today and the section **Agents last 14 days: models, tools and errors** (only tools with an error rate over
+    5 %, the same numbers as `ravenseat cost`).
+  - **Flow:** done per day (day and night; night is a muted blue, purple is only for D+), added versus finished, time
+    per class against the estimate, the table **Blockers last 7 days** (the same numbers as `ravenseat blockers`)
+    and **How much runs without you?** (owner interventions per 10 merged, verified tasks per intervention, the longest
+    stretch without the owner, failures corrected without the owner, pushes per week).
+  - **Quality:** **Is it right the first time?** (first pass, fix rounds, merge conflicts, base red, triage, right
+    first time, post-merge defects, inflow, the reviewer hit rate table and the hints; see
+    [Flow and quality](queue.md#cost-estimates-and-calibration)), the gate health per command (runs, red, flaky, p50
+    and p95; the gates that never went red), and the findings log per source and severity with the deferred findings
+    and how many of them were fixed.
+  - **Machine:** free memory and limited or stopped starts per day from the load rows, the gate queue wait per day
+    (p50 and p95), the gate time against how many tracks ran at once, and at the bottom the guard decisions.
+  Every chart has a caption that is a question and a line **Does this look bad?** with a button per setting that
+  changes it; the button opens the gear on that setting.
 - A running card gets the badge **silent** when the track has an agent worktree but no sign of life for
   `limits.silentMin` minutes (the same rule as `SILENT` in `ravenseat show`; the server measures it at most once a minute).
   After 60 minutes it also gets a card under Decisions. A track or a prepared round no agent took gets a card at once.

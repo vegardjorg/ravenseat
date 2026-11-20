@@ -332,7 +332,7 @@ of track cost + overhead; other main sessions are listed apart. Without the stat
 the line says so. The payload has no cumulative token counts (only the tokens in the context now), so the rows hold the
 cost, the durations, the context size and the model.
 
-**Flow** (`ravenseat cost`, `flow` in `--json`, the "Flow" box in the board's Statistics) counts rows that the commands append
+**Flow** (`ravenseat cost`, `flow` in `--json`, the cards "Is it right the first time?" and "How much runs without you?" in the board's Statistics) counts rows that the commands append
 to the time log (`lib/eventRows.js`, one JSON line each, never failing the command): `fixRound` (ravenseat resume, also when
 receive or merge resumes), `mergeConflict` (ravenseat merge stopped in the merge step, with the conflicted file count),
 `baseGate` (every recorded base verdict, with the skip rule and the run time), `flakyGate` (a base gate or track gate command red, then green on a rerun on the same sha; a track's has its id as `task`), `ciWatch` (each CI watch verdict), `triage` (ravenseat triage --verdict), `push`

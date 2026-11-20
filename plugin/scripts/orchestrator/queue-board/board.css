@@ -1857,8 +1857,43 @@ code {
 .s-day {
   --s: var(--color-category-ocean-blue);
 }
+/* Night in a muted blue (S2): purple is kept for D+ only (design language). */
 .s-night {
-  --s: var(--color-category-violet);
+  --s: var(--color-category-slate);
+}
+/* The reworked sections (S3 to S5): no purple, no raw colors; a stop is the only red. */
+.s-fix,
+.s-cache-write,
+.s-limited,
+.s-p95 {
+  --s: var(--color-category-ocean-blue);
+}
+.s-input {
+  --s: var(--color-category-slate);
+}
+.s-output,
+.s-p50 {
+  --s: var(--color-category-teal);
+}
+.s-cache-read {
+  --s: var(--color-category-moss);
+}
+.s-expiry,
+.s-gate {
+  --s: var(--color-category-petrol);
+}
+.s-stopped {
+  --s: var(--color-error);
+}
+/* Near the cap is a state, not an error: the strong neutral, and the cap line in the quiet one, dashed. */
+.s-near {
+  --s: var(--color-on-surface);
+}
+.line-cap {
+  --s: var(--color-on-surface-variant);
+  stroke: var(--s);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
 }
 .s-context {
   --s: var(--color-category-petrol);
@@ -1906,6 +1941,112 @@ code {
   margin: var(--distance-sm) 0 0;
   font-size: var(--text-xs);
   color: var(--color-on-surface-variant);
+}
+
+/* The context strip: one point per track, with a ring in the card color so close points stay apart. */
+.graph-svg circle.dot {
+  fill: var(--s);
+  stroke: var(--color-surface-container-lowest);
+  stroke-width: 1.5;
+}
+
+/* "Does this look bad?": one quiet line under a chart, the setting buttons inline (the gear's deep link). */
+.graph-advice {
+  margin: var(--distance-sm) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.graph-advice-q {
+  font-weight: 600;
+}
+.graph-advice .graph-setting {
+  min-height: 28px;
+  margin: 0 var(--distance-xs) 0 0;
+  padding: 0 var(--distance-xs);
+  font-family: ui-monospace, monospace;
+  font-size: var(--text-xs);
+}
+
+/* A key figure past its limit: the warn tone; the detail line says why in words. */
+.tile.tile-warn {
+  background: var(--color-tone-warn);
+  border-color: var(--color-tone-warn);
+}
+.tile.tile-warn .tile-name,
+.tile.tile-warn .tile-under,
+.tile.tile-warn .tile-value {
+  color: var(--color-on-tone-warn);
+}
+
+/* A section of the tab (S2, S7): a fold with a 14/600 heading, no capitals. */
+.stat-section {
+  margin-top: var(--distance-lg);
+}
+.stat-section > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--distance-sm);
+  min-height: 36px;
+  margin-bottom: var(--distance-md);
+  cursor: pointer;
+}
+.stat-section > summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+.stat-section-title {
+  display: inline;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+/* A table card in a section: the blocker table's card. */
+.stat-card {
+  margin-top: var(--distance-md);
+  padding: var(--distance-md);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-outline-variant);
+}
+.stat-card-title {
+  margin: 0 0 var(--distance-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+/* A table scrolls inside its card on a narrow screen, never the page. */
+.stat-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+/* The names of the figures are words, not ids: the ID font is only for codes (the blocker reason). */
+.blocker-stat:not([aria-labelledby='blocker-stat-title']) .blocker-table tbody th {
+  font-family: inherit;
+}
+/* A code or a task id never breaks over two lines; the five most expensive tasks are short, so no cell there wraps. */
+.blocker-stat[aria-labelledby='blocker-stat-title'] .blocker-table tbody th,
+[aria-labelledby='expensive-stat-title'] .blocker-table :is(th, td) {
+  white-space: nowrap;
+}
+.stat-fold {
+  margin-top: var(--distance-md);
+}
+.stat-fold > summary {
+  min-height: 36px;
+  font-size: var(--text-sm);
+  color: var(--color-on-surface-variant);
+  cursor: pointer;
+}
+@media (max-width: 720px) {
+  .keyFigures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tile-value {
+    font-size: var(--text-lg);
+    line-height: 28px;
+  }
 }
 
 /* ---- Settings (the gear, in the side panel) ---- */
@@ -2724,8 +2865,9 @@ body.with-option-line .toaster {
   fill: var(--s);
 }
 
+/* "Added" over the finished bars: the strong neutral (purple is for D+ only). */
 .s-in {
-  --s: var(--color-category-plum);
+  --s: var(--color-on-surface);
 }
 
 .s-out {

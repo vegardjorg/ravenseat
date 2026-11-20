@@ -24,7 +24,7 @@ const CE = require('./costEstimate.js');
 /** The charts show the last 14 days; "finished" in the key figures the last 7. */
 const WINDOW_DAYS = 14;
 const DONE_DAYS = 7;
-/** The context cap for a track (the mission template: handover and PARTIAL at about 300k). */
+/** The context cap for a track when no Claude Code settings file sets autoCompactWindow (setup --settings writes 300k). */
 const CONTEXT_CAP = 300_000;
 /** The classes in fixed order (the charts are stacked in this order). */
 const CLASSES = ['K', 'D', 'D+', 'U'];
@@ -133,9 +133,10 @@ function batchQueueNumber(queue) {
  * The whole statistics for the board.
  * @param {object} queue the queue (queue.json)
  * @param {object[]} rows the time log (timeCost.readRows); the "done" rows are enough
- * @param {{ now?: number, tz?: string }} [option]
+ * @param {{ now?: number, tz?: string, cap?: number }} [option]  cap: the context cap (the compaction window,
+ *   statisticsSections.compactWindow); CONTEXT_CAP without it
  */
-function statistics(queue, rows, { now = Date.now(), tz = TK.TZ } = {}) {
+function statistics(queue, rows, { now = Date.now(), tz = TK.TZ, cap = CONTEXT_CAP } = {}) {
   const g = { ...L.DEFAULT_LIMITS, ...(queue?.limits ?? {}) };
   const days = daysBackward(now, WINDOW_DAYS, tz);
   const inWindow = new Set(days);
@@ -298,7 +299,7 @@ function statistics(queue, rows, { now = Date.now(), tz = TK.TZ } = {}) {
       count: contexts.length,
       median: contexts.length ? round(median(contexts)) : null,
       max: contexts.length ? Math.max(...contexts) : null,
-      cap: CONTEXT_CAP,
+      cap: Number(cap) > 0 ? Number(cap) : CONTEXT_CAP,
     },
     excluded: {
       cycle: excludedCycle,

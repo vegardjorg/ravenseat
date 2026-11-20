@@ -127,9 +127,10 @@ describe('the board in jsdom', () => {
   it('the Statistics view has the table "Blockers last 7 days", top first', async () => {
     (document.getElementById('show-statistics') as HTMLButtonElement).click();
     await flush();
-    const section = document.querySelector('.blocker-stat') as HTMLElement;
+    // Since S2 the table is a card in the Flow section, with an h4 under the section's h3.
+    const section = document.querySelector('[aria-labelledby="blocker-stat-title"]') as HTMLElement;
     expect(section).not.toBeNull();
-    expect(section.querySelector('h3')?.textContent).toBe('Blockers last 7 days');
+    expect(section.querySelector('h4')?.textContent).toBe('Blockers last 7 days');
     const rows = [...section.querySelectorAll('tbody tr')].map((tr) =>
       [...tr.children].map((c) => c.textContent),
     );

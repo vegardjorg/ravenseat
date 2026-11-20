@@ -127,6 +127,10 @@ const T = require('./lib/queueBoard.js');
 const G = require('./lib/queueGit.js');
 const L = require('./lib/queueLogic.js');
 const S = require('./lib/queueStatistics.js');
+// The reworked Statistics sections (top row, Cost and tokens, Machine, Quality), the finding log and the quota reading.
+const SX = require('./lib/statisticsSections.js');
+const FL = require('./lib/findingLog.js');
+const RL = require('./lib/rateLimits.js');
 const TK = require('./lib/timeCost.js');
 // The flow rows (fixRound, mergeConflict, baseGate, triage, push, load) and their figures for the Statistics tab.
 const ER = require('./lib/eventRows.js');
@@ -1151,7 +1155,15 @@ function timeLogRows() {
     const events = all.filter((r) => ER.EVENTS.has(r?.event));
     // The guards' decisions and the overrides (lib/guardLog.js), for "Guard decisions last 7 days".
     const guards = all.filter((r) => GL.OVERRIDES.includes(r?.event) || r?.event === GL.EVENTS.deny || r?.event === GL.EVENTS.ask);
-    logCache = { key, rows, events, guards, error: null };
+    // S3: the gate and flakyGate rows in a slim form (the numbers only, never an excerpt), for the Machine and Quality
+    // sections; the compaction rows only as time and scope.
+    const gates = [];
+    const compacts = [];
+    for (const r of all) {
+      if (r?.event === 'gate' || r?.event === 'flakyGate') gates.push(SX.slimGateRow(r));
+      else if (r?.event === 'compact' && r.scope !== 'session') compacts.push({ time: r.time });
+    }
+    logCache = { key, rows, events, guards, gates, compacts, error: null };
   }
   return logCache;
 }
@@ -1203,22 +1215,82 @@ function boardFlow(queue, events) {
   }
 }
 
+// The Claude Code settings files that may set autoCompactWindow (the context cap), in precedence order.
+const COMPACT_FILES = [
+  ['.claude/settings.local.json', path.join(ROOT, '.claude', 'settings.local.json')],
+  ['.claude/settings.json', path.join(ROOT, '.claude', 'settings.json')],
+  ['~/.claude/settings.json', path.join(os.homedir(), '.claude', 'settings.json')],
+];
+const FINDINGS_FILE = path.join(FOLDER, 'findings.jsonl');
+const RATE_FILE = path.join(FOLDER, RL.FILE);
+/** A file's mtime for a cache key, 0 when it is missing. */
+function mtimeOf(file) {
+  try {
+    return fs.statSync(file).mtimeMs;
+  } catch {
+    return 0; // not there (yet)
+  }
+}
+/** A JSON file, or null when it is missing or broken (a settings file the owner is editing, say). */
+function jsonOrNull(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null; // error-ignored: the figure then falls back (300k cap, no quota reading)
+  }
+}
+
+/**
+ * The reworked sections (lib/statisticsSections.js: top row, Cost and tokens, Machine, Quality); an error leaves them
+ * out and the older charts still show.
+ */
+function boardSections(queue, log, stat, cap) {
+  try {
+    let findings = [];
+    try {
+      findings = FL.read(null, { since: Date.now() - S.WINDOW_DAYS * 86_400_000, includeArchive: true }).rows;
+    } catch {
+      findings = []; // error-ignored: no finding log yet, or a data folder without one
+    }
+    const out = SX.sections({
+      queue,
+      rows: log.rows,
+      gateRows: log.gates ?? [],
+      loadRows: (log.events ?? []).filter((r) => r?.event === 'load'),
+      findings,
+      observed: jsonOrNull(RATE_FILE),
+      cap: cap.cap,
+      statistics: stat,
+    });
+    const from = Date.now() - S.WINDOW_DAYS * 86_400_000;
+    out.cost.context.source = cap.source;
+    out.cost.context.compactions = (log.compacts ?? []).filter((c) => Date.parse(c.time) >= from).length;
+    // Which settings are on now, for the "Does this look bad?" lines (no figure, only the advice text).
+    const cfg = KK.config({ fresh: true });
+    out.settings = { machineSampleMin: Number(cfg.metrics?.machineSampleMin) || 0 };
+    return out;
+  } catch (e) {
+    console.error(`the statistics sections failed: ${e?.message ?? e}`);
+    return null;
+  }
+}
+
 let statCache = null;
 function statistics() {
   const log = timeLogRows();
-  // plans.json is in the key too: a new finding with --cause changes the right-first-time figure.
-  let plansMt = 0;
-  try {
-    plansMt = fs.statSync(PLAN_FILE).mtimeMs;
-  } catch {
-    plansMt = 0; // no register yet
-  }
-  const key = `${log.key}|${fs.statSync(FILE).mtimeMs}|${archiveMtime()}|${plansMt}|${TK.dayFor(new Date().toISOString())}`;
+  // plans.json is in the key too: a new finding with --cause changes the right-first-time figure. So are the quota
+  // reading, the finding log and the settings files that set the context cap.
+  const extra = [PLAN_FILE, RATE_FILE, FINDINGS_FILE, ...COMPACT_FILES.map((f) => f[1])].map(mtimeOf).join('|');
+  const key = `${log.key}|${fs.statSync(FILE).mtimeMs}|${archiveMtime()}|${extra}|${TK.dayFor(new Date().toISOString())}`;
   if (statCache?.key === key) return statCache;
   // With the archived tasks, so no figure changes when a task moves to the archive.
   const queue = QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER);
+  // The context cap follows the compaction window (roadmap B13) instead of a fixed 300k.
+  const cap = SX.compactWindow(COMPACT_FILES.map(([name, file]) => ({ name, settings: jsonOrNull(file) })));
+  const stat = S.statistics(queue, log.rows, { cap: cap.cap });
   const data = {
-    ...S.statistics(queue, log.rows),
+    ...stat,
+    sections: boardSections(queue, log, stat, cap),
     // "Blockers last 7 days" (queueLogic.blockerSummary, the same numbers as ravenseat blockers).
     blockers: L.blockerSummary(queue, { days: 7 }),
     // "Guard decisions last 7 days" (lib/guardLog.js counts, the same numbers as the doctor's decisions row).
