@@ -19,7 +19,8 @@ jobs:
   test:
     name: test (${{ matrix.os }}, node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # The full suite takes about 30 min on a Windows runner (about 9 on Ubuntu): Windows gets 45, Ubuntu keeps 30.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 30 }}
     strategy:
       fail-fast: false
       matrix:
