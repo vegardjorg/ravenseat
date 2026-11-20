@@ -268,6 +268,15 @@ const STANDARD = Object.freeze({
   // time log (guard, rule, agent type, task, never the command). doctor and the board count them per track. false =
   // no such rows (a weakened guard: the decisions can no longer be seen afterwards).
   guardLog: { enabled: true },
+  // A guarded agent reading secrets in a shell command (lib/secretReads.js, roadmap 1c SEC-T): cat/type/Get-Content/
+  // head/tail/less of .env* or *.pem/*.key, printenv, env or set with no arguments, Get-ChildItem env:. "log" = allowed,
+  // one row in the time log (rule only, never the command), shown on the Checks tab. "block" = denied, with the hint to
+  // reference the variable instead. "off" = nothing. Block is not the default because it can stop work.
+  guards: { secretReads: 'log' },
+  // The values of the project's own .env files (main tree; never .env.example and the like) removed as literals from
+  // everything Ravenseat stores from transcripts and commands (lib/secretLiterals.js, SP-1): held in memory only. It
+  // only removes text, stops nothing, so it is on. false = the pattern redaction alone (a weakened setting).
+  redact: { envValues: true },
   // The main session's overrides (lib/approvalAsk.js): ask, Claude Code's own permission dialog, before a merge with
   // --allow-* or --force*, --i-understand, --by owner, surface/owner-log accept, helpers approve, a call to the board's
   // API and a direct write of a main tree control file. A deny in dontAsk and bypassPermissions. false = no question

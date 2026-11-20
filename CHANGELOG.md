@@ -48,6 +48,10 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Queue columns fit from 1200 to 1440 px without sideways scroll, also with five columns or the panel beside the board.**
 - **On a phone the mascot bubble takes its own row under the top instead of lying over a button at the bottom.**
 - **A fresh `catalog init` gives 0 warnings in `catalog check`: the Prefer intro sentence is no longer read as a prefer line.**
+### Hardened
+- **Secrets in transcripts: the key scan reads every worktree git lists and passwords of any length, an agent printing a
+  .env file or the environment is logged on the Checks tab, the project's .env values are redacted in stored text, and
+  doctor warns about a .dockerignore that lets .claude/ into an image.** `guards.secretReads` (`log`), `redact.envValues` (on).
 
 ## 0.20.0 (2026-11-19)
 

@@ -35,6 +35,9 @@
 // scans the added lines of `<remote>/<baseBranch>..<baseBranch>` (gitleaks when on PATH, else built-in patterns) and
 // asks with file:line on a hit. A first push scans the branch. A scan that does not finish (over secretScan.maxBytes, a
 // timeout, an error) asks too, and says so.
+// Secret reads (lib/secretReads.js, guards.secretReads, roadmap 1c SEC-T): a guarded agent's cat/type/Get-Content/head/
+// tail/less of a .env or key file, or a bare printenv/env/set/Get-ChildItem env:, is logged (default, allowed, one
+// guard-log row with the rule only) or denied (block) with the hint to reference the variable instead.
 // deployCommands: a command that starts with one of them gets "ask" (agents and the main session).
 // The main tree's control files (lib/controlFiles.js, controlFiles.guard): a queue agent's shell line that writes the main
 // tree's queue.config.json, .claude/, CLAUDE*.md, .git/hooks/, .git/config or the plugin's scripts, and a git config or git
@@ -304,10 +307,10 @@ process.stdin.on('end', () => {
     // pushes, runs only the allowed queue commands, has no network).
     // The answer, and its row in the time log (lib/guardLog.js, guardLog.enabled): the guard and the rule, never the
     // command. The append is synchronous, so it is done before the exit.
-    const answerWith = (decision, reason, rule) => {
+    const answerWith = (decision, reason, rule, guard = 'push') => {
       process.stdout.write(JSON.stringify(HK.decision('PreToolUse', decision, reason)));
       try {
-        require('./lib/guardLog.js').recordHook({ guard: 'push', rule, decision, input: p }, { cfg: k });
+        require('./lib/guardLog.js').recordHook({ guard, rule, decision, input: p }, { cfg: k });
       } catch {
         // error-ignored: the decision is written; the row is measurement only
       }
@@ -317,6 +320,21 @@ process.stdin.on('end', () => {
       const answer = require('./lib/configGuard.js').answerForHook(command, k.configError, guarded);
       if (answer) answerWith(answer.decision, `push-guard: ${answer.reason}`, 'config-error');
       if (!guarded) process.exit(0);
+    }
+    // A guarded agent printing secrets (lib/secretReads.js, guards.secretReads): "log" (default) records one row and
+    // lets the command go on through the rules below; "block" denies it with the hint to reference the variable.
+    if (guarded) {
+      const SR = require('./lib/secretReads.js');
+      const mode = SR.modeOf(k);
+      const rule = mode === 'off' ? null : SR.readRule(command);
+      if (rule && mode === 'block') answerWith('deny', `push-guard: ${SR.blockReason(rule)}`, rule, 'secrets');
+      if (rule) {
+        try {
+          require('./lib/guardLog.js').recordHook({ guard: 'secrets', rule, decision: 'log', input: p }, { cfg: k });
+        } catch {
+          // error-ignored: the row is measurement only; the command is allowed either way
+        }
+      }
     }
     const gitContext = canHit(command, k);
     // The main session's overrides ask (lib/approvalAsk.js, approvals.ask): only a line that can hold one is read on.

@@ -594,6 +594,39 @@ function checksGuardsSection(guards) {
   ].filter(Boolean);
 }
 
+/** The readable name of a secret-read rule (lib/secretReads.js RULES). */
+const SECRET_READ_RULES = { 'env-file-read': 'printed a .env file', 'key-file-read': 'printed a key file', 'env-dump': 'printed the environment' };
+
+/**
+ * Secret reads by agents (report.secretReads, cli/checks.mjs secretReadFacts, guards.secretReads): per track, how often
+ * a guarded agent printed a .env or key file or the whole environment in the last days. Text only; the rows carry the
+ * rule, never the command or a path. Not shown when the setting is off.
+ */
+function checksSecretReadsSection(s) {
+  if (!s) return [];
+  const list = s.byTrack ?? [];
+  const what = s.mode === 'block' ? 'are blocked' : 'are allowed and logged';
+  const hint =
+    `Printing a secret puts the value in the agent's transcript, which is kept on disk. These reads ${what} ` +
+    '(guards.secretReads). Ask the track to reference the variable instead, for example psql "$DATABASE_URL", and rotate a key that was printed.';
+  const row = (x) =>
+    el(
+      'li',
+      {},
+      el('span', { class: 'checks-where', text: `${x.track}: ` }),
+      el('span', {
+        text: `${checksPlural(x.count, 'read')}${x.blocked ? `, ${x.blocked} blocked` : ''} (${x.rules.map((r) => SECRET_READ_RULES[r] ?? r).join(', ')}).`,
+      }),
+    );
+  return [
+    el('h3', { class: 'decide-group-title', text: `Secret reads by agents (last ${s.days} days)` }),
+    el('p', { class: 'decide-hint', text: hint }),
+    list.length
+      ? el('ul', { class: 'checks-places' }, ...list.map(row))
+      : el('p', { class: 'checks-text', text: 'No agent printed a secret file or the environment in this window.' }),
+  ];
+}
+
 /**
  * Recipe precision (report.recipePrecision, lib/recipePrecision.js): per recipe its gate proposals, how many were
  * accepted out of the decided ones, and whether it is damped. Text only. Shown only once a recipe has a proposal or an
@@ -823,7 +856,7 @@ function drawChecks() {
   const known = r.knownBugs ?? {};
   if (known.open || known.done)
     wrap.append(el('p', { class: 'checks-source', text: `Gates from known bugs: ${known.proposed} waiting for your yes, ${known.open - known.proposed} approved, ${known.done} done.` }));
-  wrap.append(...checksGuardsSection(r.guards), ...checksInspectionSection(r.inspection));
+  wrap.append(...checksGuardsSection(r.guards), ...checksSecretReadsSection(r.secretReads), ...checksInspectionSection(r.inspection));
   const open = r.suggestions.filter((s) => s.state !== 'dismissed');
   const aside = r.suggestions.filter((s) => s.state === 'dismissed');
   const filter = checksFilter(r, open);

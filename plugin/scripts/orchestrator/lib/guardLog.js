@@ -5,10 +5,12 @@
 // often the guards stop or ask before deciding on approval with presence (bolk 10), and a track that keeps hitting a
 // guard is worth a look whatever the reason. So every deny and ask from the push guard (hook-push-guard.mjs), the write
 // guard (hook-write-guard.mjs) and the read guard (hook-read-guard.mjs) appends one row to the time log:
-//   { time, wave: "guard", track: <task id or null>, event: "guard-deny"|"guard-ask", guard: "push"|"write"|"read",
-//     rule, agent_type ("main" for the main session), agent_id? }
+//   { time, wave: "guard", track: <task id or null>, event: "guard-deny"|"guard-ask"|"guard-log",
+//     guard: "push"|"write"|"read"|"secrets", rule, agent_type ("main" for the main session), agent_id? }
+// guard-log is an allowed read of secrets that is logged (guards.secretReads "log", lib/secretReads.js).
 // Never the command, a path or a file's content: the rule is a short word the guard sets, cut to [a-z0-9-] here, so a
-// command text cannot ride along even by mistake.
+// command text cannot ride along even by mistake. That is also why the literal redaction of the project's .env values
+// (lib/secretLiterals.js) has nothing to remove here: no agent text is in a row.
 // Where: the time log (config().timeLog, in the data folder, gitignored), so the rows rotate with it once a month
 // (lib/timeLogArchive.js, history.rotateTimeLog) and every reader of the log can count them. A row is about 150 bytes;
 // a busy day with a hundred denials adds 15 KB.
@@ -21,8 +23,10 @@
 // =============================================================
 'use strict';
 
-const GUARDS = new Set(['push', 'write', 'read']);
-const EVENTS = Object.freeze({ deny: 'guard-deny', ask: 'guard-ask' });
+const GUARDS = new Set(['push', 'write', 'read', 'secrets']);
+// guard-log: an allowed decision that is logged on purpose (guard "secrets", lib/secretReads.js: an agent printed a
+// secret file or the environment). Not counted as deny or ask; lib/secretReads.js counts it for the Checks tab.
+const EVENTS = Object.freeze({ deny: 'guard-deny', ask: 'guard-ask', log: 'guard-log' });
 
 /** A short word: lower case, [a-z0-9-] only, at most 40 characters. Anything else becomes "other". */
 function word(x) {

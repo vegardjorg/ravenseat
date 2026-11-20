@@ -8,6 +8,7 @@
 // doctor output and the transcript would otherwise copy the key around. The fake keys are joined at run time, so this
 // file holds none of them literally.
 // =============================================================
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -117,6 +118,60 @@ describe('settingsFiles and scanTrees (a temporary project)', () => {
     ]);
     expect(hits[1]).toMatchObject({ tree: '.claude/worktrees/agent-A', inTree: '.claude/settings.local.json' });
     expect(JSON.stringify(hits)).not.toContain(AWS);
+  });
+
+  it('a tree from io.worktrees outside the main tree is read too, named by its own path; a listed .claude/worktrees folder once', () => {
+    const root = tree();
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-allowlist-outside-'));
+    temporary.push(outside);
+    fs.mkdirSync(path.join(outside, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(outside, '.claude', 'settings.local.json'), settings({ allow: [`Bash(echo ${GH})`] }));
+    const worktrees = () => [root, outside, path.join(root, '.claude', 'worktrees', 'agent-A')];
+    const files = settingsFiles(root, { worktrees });
+    const outsideTree = outside.replace(/\\/g, '/');
+    expect(files.filter((f) => f.tree === '.claude/worktrees/agent-A')).toHaveLength(2);
+    expect(files.filter((f) => f.tree === outsideTree).map((f) => f.inTree)).toEqual(['.claude/settings.json', '.claude/settings.local.json']);
+    const hits = scanTrees(root, { worktrees });
+    const hit = hits.find((h) => h.tree === outsideTree);
+    expect(hit).toMatchObject({ file: `${outsideTree}/.claude/settings.local.json`, list: 'allow', index: 0, rule: 'github-token' });
+    expect(hit?.abs).toBe(path.join(outside, '.claude', 'settings.local.json'));
+  });
+
+  it('a password of any length in an approved command is a hit (password-flag, secret-env), placeholders are not', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-allowlist-short-'));
+    temporary.push(root);
+    const pw = ['fake', 'pw', '7'].join('');
+    fs.mkdirSync(path.join(root, '.claude'));
+    fs.writeFileSync(
+      path.join(root, '.claude', 'settings.local.json'),
+      settings({
+        allow: [`Bash(psql --password ${pw} -h db)`, `Bash(PGPASSWORD=${pw} psql:*)`, 'Bash(PGPASSWORD=$PGPASSWORD psql)', 'Bash(tool --password ***)', `Bash(sshpass -p ${pw} ssh host)`],
+      }),
+    );
+    const hits = scanTrees(root, { worktrees: () => [] });
+    expect(hits.map((h) => [h.index, h.rule])).toEqual([
+      [0, 'password-flag'],
+      [1, 'secret-env'],
+      [4, 'password-flag'],
+    ]);
+    expect(JSON.stringify(hits)).not.toContain(pw);
+  });
+
+  it('reads the worktrees git lists, also outside the main tree (a real repo)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-allowlist-git-'));
+    temporary.push(root);
+    const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: root, stdio: 'pipe' });
+    git('init', '-q', '-b', 'main');
+    fs.writeFileSync(path.join(root, 'README.md'), 'x\n');
+    git('add', '.');
+    git('commit', '-q', '-m', 'start');
+    const outside = `${root}-track`;
+    temporary.push(outside);
+    git('worktree', 'add', '-q', outside, '-b', 'track');
+    fs.mkdirSync(path.join(outside, '.claude'));
+    fs.writeFileSync(path.join(outside, '.claude', 'settings.local.json'), settings({ allow: [`Bash(echo ${AWS})`] }));
+    const hits = scanTrees(root);
+    expect(hits.map((h) => [h.tree, h.rule])).toEqual([[outside.replace(/\\/g, '/'), 'aws-access-key']]);
   });
 
   it('a project without .claude gives nothing', () => {

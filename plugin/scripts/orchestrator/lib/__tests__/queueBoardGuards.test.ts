@@ -82,6 +82,15 @@ let report: Record<string, unknown> = {
       { id: 'sig000000002', name: 'ci: CI / lint', excerpt: 'rule x', count: 2, incidents: 2, firstSeen: iso, lastSeen: iso, sources: ['ci'], status: 'built', proposal: 'INSP-3', snoozedUntil: null, unregistered: true },
     ],
   },
+  secretReads: {
+    mode: 'log',
+    days: 7,
+    total: 3,
+    byTrack: [
+      { track: 'EX-1', count: 2, blocked: 0, rules: ['env-dump', 'env-file-read'] },
+      { track: 'EX-2', count: 1, blocked: 1, rules: ['key-file-read'] },
+    ],
+  },
 };
 
 const flush = async () => {
@@ -143,6 +152,15 @@ describe('the Guards and Repeated failures sections', () => {
     expect(text).toContain('guards add --from-task INSP-3');
   });
 
+  it('lists the secret reads by agents per track with the rule in words and the hint (guards.secretReads)', () => {
+    const s = section('Secret reads by agents (last 7 days)');
+    expect(s).toContain('EX-1: ');
+    expect(s).toContain('2 reads (printed the environment, printed a .env file)');
+    expect(s).toContain('1 read, 1 blocked (printed a key file)');
+    expect(s).toContain('psql "$DATABASE_URL"');
+    expect(s).toContain('allowed and logged');
+  });
+
   it('says so when there is nothing yet, and inspection off is named', async () => {
     report = { ...baseReport, guards: { file: '.ravenseat/guards.json', error: null, guards: [] }, inspection: { mode: 'off', minRepeats: 2, windowDays: 30, entries: [] } };
     $('show-checks').click();
@@ -151,5 +169,6 @@ describe('the Guards and Repeated failures sections', () => {
     const text = document.body.textContent ?? '';
     expect(text).toContain('No guards in the registry yet');
     expect(text).toContain('The inspection queue is off');
+    expect(text).not.toContain('Secret reads by agents');
   });
 });

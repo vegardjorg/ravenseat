@@ -810,6 +810,31 @@ const SETTINGS = Object.freeze([
       whyNot: 'Without the rows a track that hits a guard again and again leaves no trace, and the overrides cannot be measured.',
       changes: 'The guards still decide, but their decisions are no longer logged. Doctor will report it.',
     }),
+  // Friction: none at "log" (the default): the read goes on and one row lands in the time log. "block" can stop work
+  // (a track that needs a value to debug a connection), so it is a choice, never the default (roadmap 1c SEC-T).
+  row('guards.secretReads', 'guards', 'choice', 'Agents reading secrets',
+    'A guarded agent that prints secrets in a shell command (cat, type, Get-Content, head, tail or less of a .env file or ' +
+    'a .pem/.key file, printenv, env or set with no arguments, Get-ChildItem env:): log (allowed, one row in the time ' +
+    'log, shown on the Checks tab), block (denied, the agent is told to reference the variable instead, for example ' +
+    'psql "$DATABASE_URL"), or off. The value would also land in the transcript (~/.claude/projects).', {
+      choices: ['block', 'log', 'off'],
+      weakens: rankWeakens(['block', 'log', 'off']),
+      protects: 'A key printed into an agent\'s transcript without anyone seeing that it happened.',
+      whyNot: 'Off leaves no trace when an agent prints a .env file or the environment into its transcript.',
+      changes: 'Agents can print secrets into their transcripts and nothing is logged.',
+    }),
+  // Friction: a false hit replaces harmless text with [REDACTED:env-value] in a stored log; values under 6 characters
+  // and plain ones (true, localhost, numbers) are skipped to keep that rare. It stops nothing, so it is on (SP-1).
+  row('redact.envValues', 'guards', 'onoff', 'Redact the project\'s own .env values',
+    'Everything Ravenseat stores from transcripts and commands (gate and done tails, the review package, the SILENT ' +
+    'snapshot, the time log\'s remark) also loses the exact values in the main tree\'s .env files (.env, .env.local, ' +
+    '.env.*; never .env.example), held in memory only. Catches a short password no pattern knows.', {
+      level: 'basic',
+      weakens: offWeakens,
+      protects: 'A database password or short token from your .env printed in a gate log or a transcript and stored by Ravenseat.',
+      whyNot: 'The pattern redaction misses values without a known format or shorter than 16 characters.',
+      changes: 'Only the patterns redact stored text; your own .env values can be stored in clear text.',
+    }),
   // Friction: one click per override from the main session, which is rare (0 such rows in 312 when measured); the
   // orchestrator's ordinary commands never ask. On by default by the owner's decision of 16.11.2026 (bolk 3): the one
   // cheap thing that tells the owner apart from a misled model on the usual path (lib/approvalAsk.js).

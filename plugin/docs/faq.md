@@ -157,7 +157,10 @@ token typed in it sits in clear text in `.claude/settings.local.json`, or in the
 Ravenseat can do is find it, once you turn the check on (`ravenseat settings set secretScan.allowlist on`, or
 "Turn on" on the Checks tab). `ravenseat doctor` then reads the approved commands in both files, also in the agents'
 worktrees, and names the file and the index (never the key): FAIL when git tracks the file, WARN when it is only on
-disk. With `gitignoreCheck.enabled` on it also checks that your project's own `.gitignore`, not only your global one,
+disk. A password flag counts at any length (`--password x`, `-p x`, `PGPASSWORD=x`; `$PGPASSWORD`, `<password>` and
+`***` do not), and the worktrees are all the ones git lists, also outside the project folder. The key is also in the
+transcript of the session that ran the command (`~/.claude/projects`, kept 30 days by default), so the fix is to change
+the key. With `gitignoreCheck.enabled` on it also checks that your project's own `.gitignore`, not only your global one,
 ignores the personal settings and the queue's data, and with `secretScan.atReceive` on a key a track commits is found
 at `receive`, and the merge stops on it until the track takes it out. With `permissionsCheck.enabled` on, doctor also
 names broad rules in the tracked `.claude/settings.json` (any shell command, `git push`, `bypassPermissions` and the

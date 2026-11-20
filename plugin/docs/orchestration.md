@@ -1135,6 +1135,21 @@ Windows, so there are four layers:
   `setting-weakened` row explains (`queue.config.json` edited by hand). `ravenseat doctor` (row `decisions`, and
   `config-cli` for the second) and the board's Statistics tab ("Guard decisions last 7 days") count them per track.
   The rows rotate with the time log's monthly archives.
+- **Secrets an agent prints.** `cat .env`, `Get-Content .env.local`, `head` of a `*.pem` or `*.key` file, a bare
+  `printenv`, `env` or `set`, and `Get-ChildItem env:` put the values in the agent's transcript, which Claude Code keeps
+  on disk (`~/.claude/projects`, 30 days by default). The push guard sees them in a guarded agent's shell command
+  (`lib/secretReads.js`). With `guards.secretReads` `log` (default) the command runs and one `guard-log` row (guard
+  `secrets`, the rule `env-file-read`, `key-file-read` or `env-dump`, never the command or the path) is counted per
+  track on the Checks tab ("Secret reads by agents"). `block` denies it and tells the agent to reference the variable
+  instead (`psql "$DATABASE_URL"`); `off` does nothing. The main session is never touched. A read inside `bash -c` or a
+  script is not seen: a log, not a wall.
+- **The project's own .env values are redacted as literals.** With `redact.envValues` (on) the values in the main
+  tree's `.env`, `.env.local` and `.env.*` (never `.example`, `.sample` or `.template`) are read into memory only and
+  replaced by `[REDACTED:env-value]` wherever Ravenseat stores agent text: silent snapshots, ask bundles, reports and
+  the other stored texts (`lib/secretLiterals.js`, through `askBundle.redact`). Values under 6 characters and plain
+  values (true, false, localhost, numbers) are left alone. A password typed in a command (`--password x`, `-p x`,
+  `PGPASSWORD=x`, of any length) is redacted and found in approved commands by one shared rule
+  (`lib/commandSecrets.js`).
 - **Limits.** `maxTurns` is 400 for `track` and 600 for `track-d`, and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`
   (`env` in `settings.queue.json`, set by `setup --settings`) stops a track from starting agents of its own. A plugin's
   `hooks.json` cannot set environment variables, so this one lives in the project settings.
