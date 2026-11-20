@@ -561,7 +561,8 @@ function assessTrackContext({
 const PAUSE_THRESHOLD = 150_000;
 
 const PAUSE_TIP =
-  'Tip: run /compact before the break. A pause of over 1 h writes the whole context to the cache again.';
+  'Tip: run /compact before the break. A pause longer than the cache lifetime (1 h on a subscription main session, ' +
+  '5 min with an API key or for subagents set to 5 min) writes the whole context to the cache again.';
 
 /**
  * Phrases that say the owner is leaving the machine, in English and Norwegian (the queue's first users). Whole words

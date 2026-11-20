@@ -281,6 +281,8 @@ In 10 orchestrator sessions with about 6,000 turns (late September to early Octo
   point near 150k (about 15 % cheaper, at about 17 resets a day). So smaller windows do save tokens, by compaction or by
   a new chat. Setup writes 300k; a lower `autoCompactWindow` in `.claude/settings.json` is your call.
 - **Units:** this study counted weighted tokens (input 1, cache read 0.1, 1-hour cache write 2, output 5), not USD.
+  Those weights fit the Opus 4.x models of the time. On Opus 5.5 a cache read weighs 0.05, so reads are cheaper and the
+  best reset point is probably somewhat higher than 150k; that is not measured.
 - **When:** compaction started at about 268k tokens of context (the median of 122 compactions in the 14 days from
   2026-10-28), not at 300k.
 - **Limit:** the compaction call itself is not in the transcript, so its cost is an estimate. It assumes the call reads
@@ -300,9 +302,14 @@ parallel and a 5-minute subagent cache. The changes went in together, so how muc
   after compaction and at takeover. A status line (`ravenseat setup --settings`) shows context, cost, quota and running
   tracks while you work.
 - Prompt cache expiry while waiting was about 23% of the spend in the first measured day (29 to 30 September, with a
-  5-minute subagent cache). So there are no sleep or polling loops, and subagents use a 1-hour cache.
-- A fix round continues the agent that delivered while its prompt cache is warm (within an hour), so it reads the fix
-  list on a cached context. Otherwise a new agent gets a short mission (the fix list and a pointer to the original
+  5-minute subagent cache). So there are no sleep or polling loops, and setup gives subagents a 1-hour cache. That
+  choice is from the polling era: with the loops gone, few waits pass 5 minutes, and a 1-hour write costs 2x the input
+  price against 1.25x for 5 minutes. So 5 minutes can be cheaper. Measure your own mix with `ravenseat cost` before you
+  choose (`subagentPromptCacheTtl`).
+- How long the cache lasts depends on the account: 1 hour for the main session on a subscription, 5 minutes with an API
+  key, and for subagents what `subagentPromptCacheTtl` says.
+- A fix round continues the agent that delivered within `fixRound.continueWithinMin` (60 minutes), so it reads the fix
+  list on its existing context. That context is still cached only with a 1-hour subagent cache. Otherwise a new agent gets a short mission (the fix list and a pointer to the original
   mission), so a fix does not pay for the whole build context again. The review after it reads only the new commits.
   These are design choices; what they save is not measured yet.
 - Fixed overhead per track (setup, reading, checks, report) was about 60% of a small K task and 30 to 40% of a D or

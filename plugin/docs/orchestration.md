@@ -308,7 +308,8 @@ context size. The system keeps both small:
   open: an unknown task, branch or git error lets the track stop.
 - **Pause advice.** When the owner writes that they are leaving ("have to go", "good night", "pause") and the
   orchestrator is over 150k (`CONTEXT_PAUSE`), `hook-context.mjs` suggests `/compact` before the break, because a
-  pause of over an hour writes the whole context to the cache again.
+  pause longer than the cache lifetime (1 h on a subscription main session, 5 min with an API key) writes the whole
+  context to the cache again.
 - **Orchestrator compaction.** `hook-context.mjs` warns, then winds down, then stops the orchestrator chat as it
   grows; `/compact` with a focus is the normal path, and `hook-after-compact.mjs` re-injects the queue state after
   compaction, so the summary does not have to carry it. `autoCompactWindow` is set to 300000. Automatic compaction is
@@ -333,8 +334,10 @@ context size. The system keeps both small:
   Claude Code sends by itself (an agent is done) are never stopped. The limits can be changed with the environment
   variables `CONTEXT_WARNING`, `CONTEXT_STOP`, `CONTEXT_WIND_DOWN`, `CONTEXT_STOP_ORCHESTRATOR` and `CONTEXT_COMPACT`
   (tokens).
-- **Cache-friendly waiting.** No sleep or poll loops. Subagent prompt cache TTL is set to 1 hour
-  (`subagentPromptCacheTtl`), so a reviewer started a while later still hits the cache.
+- **Cache-friendly waiting.** No sleep or poll loops. Setup sets the subagent prompt cache TTL to 1 hour
+  (`subagentPromptCacheTtl`), so a track that waits a while still hits its own cache. A reviewer has its own system
+  prompt, so it does not reuse the track's cache. 5 minutes can be cheaper now that waits are short; see
+  [costs.md](costs.md) and measure with `ravenseat cost`.
 - **Reading guard.** `hook-read-guard.mjs` stops tracks and reviewers from re-reading files that are already loaded
   automatically, or reading huge files in full. A denial of a large or long file carries the file's outline (Markdown
   headings, JS/TS top-level declarations and exports, SQL `create` statements, with line numbers, at most 60), so the

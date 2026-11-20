@@ -978,7 +978,7 @@ function costSectionOf(d) {
         [['s-expiry', 'Cache expiries']],
         (() => {
           const u = c.cacheExpiry.reduce((a, r) => a + r.usd, 0);
-          return u > 0 ? `About ${usd(u)} written again after a pause.` : 'A pause longer than the cache lifetime writes the whole context again.';
+          return u > 0 ? `About ${usd(u)} extra cost when the cache had expired.` : 'A pause longer than the cache lifetime writes the whole context again.';
         })(),
         adviceLine('Many expiries: agents wait, on a gate slot or on an answer from you.', ['gateQueue.slots']),
       ),

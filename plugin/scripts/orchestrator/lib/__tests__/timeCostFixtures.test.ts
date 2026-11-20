@@ -66,8 +66,9 @@ const ANALYSIS: Record<string, object> = {
     api_errors: { rate_limit: 3, overloaded: 1, other: 0 },
     // The Sonnet turn came after the idle gap (over the 5 min TTL) and wrote more than it read.
     cache_expiry: 1,
-    // S8: that turn's write, 3000 tokens without a split (5 min) at Sonnet's 2.5 per MTok.
-    cache_expiry_usd: 0.0075,
+    // S8, PC-5: that turn's extra cost, 3000 tokens without a split (5 min) at Sonnet's 2.5 per MTok minus the 0.2 read
+    // price it replaced: 3000 x 2.3 = 6,900 per MTok.
+    cache_expiry_usd: 0.0069,
     thinking_tokens: null,
     thinking_turns: 0,
     cc_version: '2.1.300',

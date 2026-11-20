@@ -170,11 +170,12 @@ describe('transcriptAnalysis', () => {
     expect(T.analyzeTranscript(transcript).cache_expiry).toBe(1);
   });
 
-  it('S8: cache_expiry_usd is the cache write cost of the turn that expired (m3: 31,000 written, 5 min)', () => {
+  it('PC-5: cache_expiry_usd is the EXTRA cost of the expired turn: the write minus the read it replaced (m3: 31,000 written, 5 min)', () => {
     const a = T.analyzeTranscript(transcript) as unknown as { cache_expiry_usd: number };
-    const expected = T.costUsd({ cache_written: 31_000, cache_written_5m: 31_000, cache_written_1h: 0 }, 'claude-opus-5-5');
-    expect(expected).toBeGreaterThan(0);
-    expect(a.cache_expiry_usd).toBeCloseTo(expected, 4);
+    // 31,000 x ($5 write - $0.20 read) per MTok = $0.1488. Before PC-5 the whole write ($0.155) was counted.
+    expect(a.cache_expiry_usd).toBeCloseTo(0.1488, 4);
+    const whole = T.costUsd({ cache_written: 31_000, cache_written_5m: 31_000, cache_written_1h: 0 }, 'claude-opus-5-5');
+    expect(a.cache_expiry_usd).toBeLessThan(whole);
   });
 
   it('cost_usd matches the prices', () => {
@@ -245,6 +246,31 @@ describe('deduplicated usage rows', () => {
 
   it('broken lines (concurrent writers) are skipped', () => {
     expect(T.readRows('{"a":1}\n{"half\n\n{"b":2}\n')).toEqual([{ a: 1 }, { b: 2 }]);
+  });
+});
+
+describe('PC-1: usageEvents carries the cache write split and the per-model growth', () => {
+  // One agent, two cumulative rows, two models, 1 h writes. The second row adds 1M 1 h writes on Opus only.
+  const by = (o1h: number, s1h: number) => ({
+    'claude-opus-5-5': { turns: 1, tokens: { output: MILL, cache_written: o1h, cache_written_5m: 0, cache_written_1h: o1h } },
+    'claude-sonnet-5-5': { turns: 1, tokens: { cache_written: s1h, cache_written_5m: 0, cache_written_1h: s1h } },
+  });
+  const rows = [
+    { time: '2026-09-30T10:00:00Z', event: 'done', agent_id: 'a', agent_type: 'track', model: 'claude-opus-5-5', tokens: { output: MILL, cache_written: 1.5 * MILL, cache_written_5m: 0, cache_written_1h: 1.5 * MILL }, byModel: by(MILL, 0.5 * MILL) },
+    { time: '2026-09-30T11:00:00Z', event: 'done', agent_id: 'a', agent_type: 'track', model: 'claude-opus-5-5', tokens: { output: MILL, cache_written: 2.5 * MILL, cache_written_5m: 0, cache_written_1h: 2.5 * MILL }, byModel: by(2 * MILL, 0.5 * MILL) },
+  ];
+  type Ev = { tokens: Tokens; byModel?: Record<string, { tokens: Tokens }> };
+  const ev = T.usageEvents(rows as unknown as Row[]) as unknown as Ev[];
+
+  it('the growth keeps cache_written_5m and cache_written_1h', () => {
+    expect(ev[0].tokens).toMatchObject({ cache_written: 1.5 * MILL, cache_written_5m: 0, cache_written_1h: 1.5 * MILL });
+    expect(ev[1].tokens).toMatchObject({ cache_written: MILL, cache_written_5m: 0, cache_written_1h: MILL });
+  });
+
+  it('the growth per model: the second event grew on Opus only', () => {
+    expect(ev[0].byModel?.['claude-sonnet-5-5'].tokens.cache_written_1h).toBe(0.5 * MILL);
+    expect(ev[1].byModel?.['claude-opus-5-5'].tokens).toMatchObject({ output: 0, cache_written_1h: MILL });
+    expect(ev[1].byModel?.['claude-sonnet-5-5'].tokens.cache_written_1h ?? 0).toBe(0);
   });
 });
 

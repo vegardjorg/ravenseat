@@ -48,6 +48,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Queue columns fit from 1200 to 1440 px without sideways scroll, also with five columns or the panel beside the board.**
 - **On a phone the mascot bubble takes its own row under the top instead of lying over a button at the bottom.**
 - **A fresh `catalog init` gives 0 warnings in `catalog check`: the Prefer intro sentence is no longer read as a prefer line.**
+- **Statistics: the token mix prices 1-hour cache writes at the 1-hour price and each model at its own, so it adds up to the measured cost.**
+- **Statistics: the cache expiry cost is the extra cost (the write minus the read it replaced), not the whole rewrite.**
 ### Hardened
 - **Secrets in transcripts: the key scan reads every worktree git lists and passwords of any length, an agent printing a
   .env file or the environment is logged on the Checks tab, the project's .env values are redacted in stored text, and

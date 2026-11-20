@@ -104,6 +104,31 @@ describe('cost section', () => {
     expect(out.cost.cacheWriteShare).toBe(91);
   });
 
+  it('PC-1: 1 h writes on two models are priced at the 1 h price per model, and the mix adds up to the measured USD', () => {
+    // Agent m1: two cumulative rows, Opus 5.5 and Sonnet 5.5, all writes 1 h. Agent m2: an older row with the split but
+    // no byModel. Before PC-1 every write was priced at Opus's 5 min price: (2.5M + 1M) x $5 = $17.50.
+    const mt = (cw1h: number, out = 0) => ({ output: out, cache_written: cw1h, cache_written_5m: 0, cache_written_1h: cw1h });
+    const r2 = [
+      { time: iso(90), event: 'done', agent_id: 'm1', agent_type: 'track', track: 'M', model: 'claude-opus-5-5', tokens: mt(1_500_000, 100_000),
+        byModel: { 'claude-opus-5-5': { turns: 1, tokens: mt(1_000_000, 100_000) }, 'claude-sonnet-5-5': { turns: 1, tokens: mt(500_000) } } },
+      { time: iso(60), event: 'done', agent_id: 'm1', agent_type: 'track', track: 'M', model: 'claude-opus-5-5', tokens: mt(2_500_000, 100_000),
+        byModel: { 'claude-opus-5-5': { turns: 2, tokens: mt(2_000_000, 100_000) }, 'claude-sonnet-5-5': { turns: 1, tokens: mt(500_000) } } },
+      { time: iso(30), event: 'done', agent_id: 'm2', agent_type: 'track', track: 'N', model: 'claude-opus-5-5', tokens: mt(1_000_000) },
+    ];
+    const q2 = { tasks: [] };
+    const o2 = X.sections({ queue: q2, rows: r2, cap: 300000, statistics: S.statistics(q2, r2, { now }), now });
+    const sum = (k: string) => o2.cost.tokenMix.reduce((s: number, r: Record<string, number>) => s + (r[k] ?? 0), 0);
+    // Opus 2M x $8 + Sonnet 0.5M x $4 + the older row 1M x $8 = $26.
+    expect(sum('cache_write')).toBeCloseTo(26, 2);
+    expect(sum('output')).toBeCloseTo(2, 2);
+    // The bars add up to the measured cost (costOf of the last row per agent).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const TK = require('../timeCost.js');
+    const measured = TK.costOf(r2[1]) + TK.costOf(r2[2]);
+    expect(sum('input') + sum('output') + sum('cache_read') + sum('cache_write')).toBeCloseTo(measured, 2);
+    expect(o2.cost.cacheWriteShare).toBe(93);
+  });
+
   it('sums the phases per class and the fix share', () => {
     expect(out.cost.phases.map((p: { class: string; fix: number }) => [p.class, p.fix])).toEqual([
       ['K', 0.5],
