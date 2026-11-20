@@ -13,6 +13,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   default (`plans.searchDocuments`, on).
 - **Plans: `/plans inbox` has Claude propose how to sort each Inbox item, and you Accept, Edit, Decline or Merge it
   (keys 1 to 4).** Nothing applies by itself (`plans.inboxTriage`, `on-request`; `plans.inboxAutoApply`, off).
+- **`ravenseat cost` shows each cost measure's expected effect beside the measured one.** With too few runs it says
+  `not enough runs yet`.
 ### Changed
 - **Plans: the room opens on a Roadmap, and a plan opens as a page with its document first.** Horizons (Inbox, Waiting
   on you, Now, Next, Later, Done) as columns on a wide screen and a list on a phone; the old views are under More views.

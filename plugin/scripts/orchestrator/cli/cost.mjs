@@ -9,7 +9,8 @@
 // dispatch on the command word) plus the modules in cli/. The code was moved as it was: same output, exit codes and files.
 //
 // Used by: queue.mjs (dispatch).
-// Tested in: lib/__tests__/queueForecast.test.ts, queueLoadLimit.test.ts, queueNight.test.ts, costEstimate.test.ts, queuePlan.test.ts.
+// Tested in: lib/__tests__/queueForecast.test.ts, queueLoadLimit.test.ts, queueNight.test.ts, costEstimate.test.ts, queuePlan.test.ts,
+//   costMeasureEffects.test.ts (the expected against measured block).
 // =============================================================
 
 import fs from 'node:fs';
@@ -258,6 +259,8 @@ export function cmdCost() {
     });
     // Per turn: the last 24 h against the 14 days before, per agent type (the 2x warning; measurement only).
     const turns = CM.turnCheck(rows);
+    // Expected against measured effect per cost measure (lib/costMeasures.js COST_MEASURES): display only.
+    const measures = CM.measureEffects({ queue, rows, settingOn: (key) => CM.settingIsOn(configValue(key)) });
     // The plan register gives the findings' causes (post-merge defects); an unreadable one only leaves them out.
     let plans = null;
     try {
@@ -281,6 +284,7 @@ export function cmdCost() {
             breakdown: where,
             weeks,
             turns,
+            measures,
             turnsAndTools: turnsTools,
             flow,
             perTask,
@@ -301,6 +305,7 @@ export function cmdCost() {
     for (const l of CM.breakdownLines(where, label)) console.log(cut(l, WIDTH));
     for (const l of CM.weekLines(weeks)) console.log(cut(l, WIDTH));
     for (const l of CM.turnCheckLines(turns)) console.log(cut(l, WIDTH));
+    for (const l of CM.effectLines(measures)) console.log(cut(l, WIDTH));
     for (const l of TT.turnsToolsLines(turnsTools, label)) console.log(cut(l, WIDTH));
     for (const l of ES.flowLines(flow, label)) console.log(cut(l, WIDTH));
     for (const l of TM().metricsLines(metrics)) console.log(cut(l, WIDTH));
@@ -334,6 +339,9 @@ export function cmdCost() {
     }
   }
 }
+
+/** A dotted key's value in queue.config.json (defaults included), e.g. `fixRound.continueWithinMin`. */
+const configValue = (key) => String(key).split('.').reduce((x, k) => (x == null ? undefined : x[k]), CONFIG);
 
 // ---- Transcript metrics (lib/transcriptMetrics.js): per model, tools and errors, API errors, active time ----
 const TM = () => require('./lib/transcriptMetrics.js');
