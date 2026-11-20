@@ -102,6 +102,8 @@ const { config } = require('./lib/queueConfig.js');
 const { firstErrorLine, gateType, resultLine } = require('./lib/orchestratorHelp.js');
 const TL = require('./lib/timeLogRows.js');
 const TR = require('./lib/treeRun.js');
+// The per-process memo for git path questions (git() and commonGitDir below).
+const GF = require('./lib/gitFacts.js');
 const { hiddenWindowsEnv } = require('./lib/hideWindows.cjs');
 const { timeLog } = require('./lib/queueConfig.js');
 
@@ -176,8 +178,10 @@ require('./lib/queueConfig.js').stopIfConfigUnreadable(K);
 
 /** The repo's shared git folder as seen from `dir` (the same for the main checkout and all its worktrees), or null. */
 function commonGitDir(dir) {
-  const r = spawnSync('git', ['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' });
-  return r.status === 0 && r.stdout.trim() ? path.resolve(r.stdout.trim()).toLowerCase() : null;
+  return GF.run(dir, ['rev-parse', '--path-format=absolute', '--git-common-dir'], (list) => {
+    const r = spawnSync('git', ['-C', dir, ...list], { encoding: 'utf8' });
+    return r.status === 0 && r.stdout.trim() ? path.resolve(r.stdout.trim()).toLowerCase() : null;
+  });
 }
 /**
  * Is `path` the project root, a folder under it (<root>/.claude/worktrees/<name>/...), or a linked worktree of the same
@@ -199,7 +203,8 @@ const cwd = option('--cwd') ? path.resolve(option('--cwd')) : inProject(process.
  */
 function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSec = null, minFreeMemoryPct = null, startFreeMemoryPct = null, flaky = [], durations = null, errors = null }) {
   try {
-    const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
+    const head = headNow();
+    const branch = head.branch;
     const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
     const file = timeLog();
     let text = null;
@@ -211,7 +216,7 @@ function logRun({ kind, ran, failed, durationSec, exit, timedOut = false, waitSe
     }
     const attempt = TL.gateAttempt(text, { kind, track, branch });
     // A commit made during the run means the run checked neither commit exactly: no sha then.
-    const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
+    const sha = START.sha && head.sha === START.sha ? START.sha : null;
     const row = TL.gateRow({ track, branch, kind, gates: ran, failed, durationSec, exit, timedOut, attempt, sha, clean: START.clean, waitSec, minFreeMemoryPct, startFreeMemoryPct, flaky, durations, errors });
     TL.appendRows(file, row);
     // The finding log (lib/findingSources.js): one row per red command, from the row just built (no extra run). A
@@ -360,8 +365,9 @@ function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, befor
     const GE = require('./lib/gateEvidence.js');
     const file = evidenceFile();
     if (!file) return { recorded: false, tampered: false };
-    const sha = START.sha && (git('rev-parse', 'HEAD') || '').trim() === START.sha ? START.sha : null;
-    const branch = (git('rev-parse', '--abbrev-ref', 'HEAD') || '').trim() || null;
+    const head = headNow();
+    const sha = START.sha && head.sha === START.sha ? START.sha : null;
+    const branch = head.branch;
     const track = option('--track') ?? TL.trackFromBranch(branch, K.branchPrefix);
     const entry = GE.entry({
       kind,
@@ -439,10 +445,24 @@ if (precheck) process.exit(await precheckMode());
 
 // ---- --precheck: the cheapest checks first, stop at the first red one (lib/gatePrecheck.js) ----------------------------
 
-/** git in the gate folder; stdout, or null when the command failed. */
+/**
+ * git in the gate folder; stdout, or null when the command failed. A path question (rev-parse --git-dir, --show-toplevel)
+ * is asked once per run (lib/gitFacts.js): inMainTree() is asked before the commands, at the evidence lock and after.
+ */
 function git(...a) {
-  const r = spawnSync('git', ['-C', cwd, ...a], { encoding: 'utf8', maxBuffer: 64 << 20 });
-  return r.status === 0 ? r.stdout : null;
+  return GF.run(cwd, a, (list) => {
+    const r = spawnSync('git', ['-C', cwd, ...list], { encoding: 'utf8', maxBuffer: 64 << 20 });
+    return r.status === 0 ? r.stdout : null;
+  });
+}
+
+/**
+ * HEAD's sha and branch in ONE git call (`git rev-parse HEAD --abbrev-ref HEAD`: two lines). Both null when git failed
+ * (no commit yet fails both, as the two single calls did). The branch is "HEAD" on a detached HEAD, as before.
+ */
+function headNow() {
+  const [sha, branch] = (git('rev-parse', 'HEAD', '--abbrev-ref', 'HEAD') ?? '').split(/\r?\n/).map((l) => l.trim());
+  return { sha: sha || null, branch: branch || null };
 }
 
 /** Lines of git output (paths with "/"), or [] for null. */

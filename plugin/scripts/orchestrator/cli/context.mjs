@@ -110,16 +110,21 @@ export const cut = (s, n) => {
 };
 // ---- Git (the queue branches) --------------------------------------------------------------------------------
 // core.quotepath=off: a path with non-ASCII characters comes out as it is, not quoted (review 2026-11-11, S1).
+// A path question (rev-parse --git-dir, --git-path MERGE_HEAD, ...) is asked once per process (lib/gitFacts.js), and a
+// layout command (worktree, checkout, switch, a config write) run through here forgets those answers.
+const GF = require('./lib/gitFacts.js');
 export function git(args) {
-  try {
-    return execFileSync('git', ['-c', 'core.quotepath=off', ...args], {
-      cwd: GIT_ROOT,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return null;
-  }
+  return GF.run(GIT_ROOT, args, (list) => {
+    try {
+      return execFileSync('git', ['-c', 'core.quotepath=off', ...list], {
+        cwd: GIT_ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      return null;
+    }
+  });
 }
 /** Does the branch exist, how many commits is it ahead of baseBranch, and when was the last one? */
 export function branchInfo(branch) {

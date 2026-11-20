@@ -40,6 +40,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const GX = require('./gitExecSurface.js');
+const GF = require('./gitFacts.js');
 
 const FILE_NAME = 'git-surface.json';
 /** The values of the gitSurface setting. */
@@ -145,31 +146,57 @@ function toBaseline(surface, { real = realPath } = {}) {
   return { hooksDir: surface?.hooksDir ? real(surface.hooksDir) : null, hooks: surface?.hooks ?? null, config };
 }
 
-/** The main checkout of the repository `cwd` belongs to; `cwd` itself when git cannot say or it is a bare repo. */
+/**
+ * The main checkout of the repository `cwd` belongs to; `cwd` itself when git cannot say or it is a bare repo.
+ * Where the main checkout is cannot change while one command runs, so the answer from `git worktree list` is kept for the
+ * process (lib/gitFacts.js; the worktree's branches and HEADs in that output are not used). Whether the folder still
+ * exists is checked every time.
+ */
 function mainCheckout(cwd) {
-  const text = GX.gitOut(cwd, ['worktree', 'list', '--porcelain']);
-  if (text == null) return cwd;
-  const [first] = text.split(/\r?\n\r?\n/);
-  const lines = first.split(/\r?\n/);
-  const main = lines[0]?.startsWith('worktree ') ? lines[0].slice('worktree '.length) : null;
-  return main && !lines.includes('bare') && fs.existsSync(main) ? main : cwd;
+  const main = GF.remember(cwd, ['gitSurfaceBaseline main checkout'], () => {
+    const text = GX.gitOut(cwd, ['worktree', 'list', '--porcelain']);
+    if (text == null) return null; // not kept: asked again next time
+    const [first] = text.split(/\r?\n\r?\n/);
+    const lines = first.split(/\r?\n/);
+    const found = lines[0]?.startsWith('worktree ') ? lines[0].slice('worktree '.length) : null;
+    return found && !lines.includes('bare') ? found : '';
+  });
+  return main && fs.existsSync(main) ? main : cwd;
 }
 
-/** The surface now, in the baseline's form, and the folder it was read in. */
-function current(cwd) {
+/** Are two folders the same place (resolved; case does not count on Windows)? */
+function samePlace(a, b) {
+  const norm = (p) => (process.platform === 'win32' ? path.resolve(p).toLowerCase() : path.resolve(p));
+  return norm(a) === norm(b);
+}
+
+/**
+ * The surface now, in the baseline's form, and the folder it was read in. `known` is a surface the caller read a moment
+ * ago with nothing in between (watch's read after the run): when it was read in the main checkout itself, it is used
+ * instead of reading the same thing again.
+ * @param {string} cwd
+ * @param {{ known?: { cwd: string, surface: object } }} [o]
+ */
+function current(cwd, { known = null } = {}) {
   const main = mainCheckout(cwd);
-  return { main, now: toBaseline(GX.readSurface(main)) };
+  const surface = known && samePlace(known.cwd, main) ? known.surface : GX.readSurface(main);
+  return { main, now: toBaseline(surface) };
 }
 
-/** Trust on first use: writes the current state when there is no file. Silent; a repo git cannot read writes nothing. */
+/**
+ * Trust on first use: writes the current state when there is no file. Silent; a repo git cannot read writes nothing.
+ * @returns {boolean} true when it wrote the baseline just now (from the state it just read, so there is no difference to look for)
+ */
 function ensure(folder, cwd) {
   try {
-    if (readText(folder) != null) return;
+    if (readText(folder) != null) return false;
     const { now } = current(cwd);
-    if (!now.hooksDir || !now.hooks || !now.config) return;
+    if (!now.hooksDir || !now.hooks || !now.config) return false;
     writeText(folder, `${JSON.stringify({ v: 1, ...now, accepted_at: new Date().toISOString(), by: 'first use' }, null, 2)}\n`);
+    return true;
   } catch {
     // error-ignored: no baseline means no drift stop yet; the next command tries again
+    return false;
   }
 }
 
@@ -191,12 +218,12 @@ function accept(folder, cwd, by) {
 
 const UNREADABLE = 'the file that holds the accepted baseline cannot be read';
 
-/** The phrases for what differs from the baseline ([] when it matches or there is none). Names only. */
-function changesNow(folder, cwd) {
+/** The phrases for what differs from the baseline ([] when it matches or there is none). Names only. `o`: as current(). */
+function changesNow(folder, cwd, o = {}) {
   const b = read(folder);
   if (!b) return [];
   if (b.unreadable) return [UNREADABLE];
-  return GX.surfaceChanges(b, current(cwd).now);
+  return GX.surfaceChanges(b, current(cwd, o).now);
 }
 
 /** The reason text for a drifted surface when the mode is "stop", or null (also null when there is no baseline). Names only. */
@@ -226,7 +253,8 @@ function watch(folder, cwd) {
     finish({ drift = true } = {}) {
       const parts = [];
       if (startMode === 'stop' && modeInFile() !== 'stop') parts.push('git hooks or config: the gitSurface setting was weakened during the run');
-      const during = GX.surfaceChanges(before, GX.readSurface(cwd));
+      const after = GX.readSurface(cwd);
+      const during = GX.surfaceChanges(before, after);
       if (during.length) parts.push(`git hooks or config changed during the run (${during.join('; ')})`);
       if (readText(folder) !== textBefore) {
         let back = 'the old text was written back';
@@ -243,7 +271,9 @@ function watch(folder, cwd) {
         return null;
       }
       if (drift) {
-        const left = changesNow(folder, cwd).filter((c) => !during.includes(c));
+        // A run in the main checkout: the read just above is the main checkout's surface now (no git command and no
+        // process ran since), so the drift check uses it instead of reading it a second time.
+        const left = changesNow(folder, cwd, { known: { cwd, surface: after } }).filter((c) => !during.includes(c));
         if (left.length) parts.push(`${DRIFT_PREFIX} (${left.join('; ')})`);
       }
       return parts.length ? parts.join('; ') : null;

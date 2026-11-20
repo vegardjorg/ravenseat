@@ -35,6 +35,7 @@
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const GF = require('./gitFacts.js');
 
 const WIN = process.platform === 'win32';
 /** The statuses in which a task owns its branch and worktree (lib/logic/base.js ACTIVE, copied so this file loads no config). */
@@ -54,6 +55,8 @@ function gitIn(cwd) {
       windowsHide: true,
       env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
     });
+    // `worktree prune` (after a folder was removed): the path answers kept for this process go (lib/gitFacts.js).
+    if (GF.changesFacts(args)) GF.invalidate();
     return { ok: r.status === 0, out: (r.stdout || '').trim(), error: (r.stderr || '').trim() };
   };
 }

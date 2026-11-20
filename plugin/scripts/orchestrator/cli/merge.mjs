@@ -62,7 +62,8 @@ const FSRC = require('./lib/findingSources.js');
  * owner removes the difference or accepts it, or sets config gitSurface to warn or off (GB.stopDetail).
  */
 function stopOnDrift(again, extra = () => []) {
-  GB.ensure(FOLDER, GIT_ROOT);
+  // A baseline written just now is the state just read: there is nothing to compare, so it is not read a second time.
+  if (GB.ensure(FOLDER, GIT_ROOT)) return;
   const detail = GB.stopDetail(FOLDER, GIT_ROOT, { ravenseat: CLI });
   if (detail) die([GB.driftMessage({ ...detail, ravenseat: CLI, again }), ...extra()].join('\n'));
 }
@@ -558,6 +559,8 @@ function redOnBaseCheck(o, { branch }) {
   } finally {
     // Back to the tip: receive checked the worktree was clean there, so this undoes only the check's own changes.
     g(['reset', '-q', '--hard', 'HEAD']);
+    // A checkout ran here (paths only, but the rule is simple): the path answers kept for this process go (lib/gitFacts.js).
+    require('./lib/gitFacts.js').invalidate();
   }
   const head = (g(['rev-parse', 'HEAD']).stdout ?? '').trim();
   const dirty = (g(['status', '--porcelain', '--untracked-files=no']).stdout ?? '').trim();
@@ -1368,11 +1371,19 @@ const ML = require('./lib/mergeLock.js');
 const containsCommit = (ancestor, ref) =>
   !!ancestor && !!ref && git(['merge-base', '--is-ancestor', ancestor, ref]) !== null;
 
-/** The absolute path of a file in the main checkout's git directory (MERGE_HEAD, rebase-merge, ...). */
-const gitPathOf = (name) => {
-  const p = git(['rev-parse', '--git-path', name]);
-  return p ? path.resolve(GIT_ROOT, p) : null;
+/**
+ * The absolute paths of files in the main checkout's git directory, from ONE `git rev-parse --git-path a --git-path b ...`
+ * (one line per name, in order). A path, not whether the file exists, so the answer is kept for the process
+ * (lib/gitFacts.js) and gitInProgress asks git once, not once per marker. A name maps to null when git failed.
+ */
+const gitPaths = (names) => {
+  const out = git(['rev-parse', ...names.flatMap((n) => ['--git-path', n])]);
+  const found = out == null ? [] : out.split(/\r?\n/).map((l) => l.trim());
+  return new Map(names.map((n, i) => [n, found[i] ? path.resolve(GIT_ROOT, found[i]) : null]));
 };
+const MARKERS = ML.IN_PROGRESS.map((x) => x.marker);
+/** The absolute path of a file in the main checkout's git directory (MERGE_HEAD, rebase-merge, ...). */
+const gitPathOf = (name) => gitPaths(MARKERS.includes(name) ? MARKERS : [name]).get(name) ?? null;
 
 /**
  * The merge commit that brought `tip` into `base`: the first commit on base's first-parent line that descends from
@@ -2001,7 +2012,9 @@ export async function cmdMerge() {
         // And exactly that tip (G2): the merge commit's second parent is the checked commit. A merge of a branch that
         // moved after the checks also contains the tip, with commits that had no receive and no review on top.
         const second = git(['rev-parse', '-q', '--verify', `${head}^2`]);
-        if (containsCommit(trackTip, head) && second !== trackTip) {
+        // Asked once: both are commit shas here, so the answer cannot change between the two branches below.
+        const tipInHead = containsCommit(trackTip, head);
+        if (tipInHead && second !== trackTip) {
           notAsChecked = true;
           r = {
             code: 1,
@@ -2012,7 +2025,7 @@ export async function cmdMerge() {
               `git log -3 ${BASE}, undo the merge (git revert -m 1 ${short(head)}, or git reset --keep HEAD~1 when nothing ` +
               `came after it and it is not pushed), then ${CLI} receive ${id} and merge again. ${id} is not marked done.`,
           };
-        } else if (!containsCommit(trackTip, head)) {
+        } else if (!tipInHead) {
           r = {
             code: 1,
             out:

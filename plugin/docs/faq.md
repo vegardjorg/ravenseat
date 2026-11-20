@@ -312,6 +312,7 @@ process start per hook and nothing else. In a project with the queue, one hook r
 once unless the agent is a track; the push, read and write guards run before shell, Read and Write or Edit calls. The
 hooks run node directly, without a shell, so Windows does not start Git Bash for each one. Other plugins weigh more than
 before: a plugin's start hook runs once per agent session, so four tracks and an orchestrator run it five times.
+Each git call is a process too (about 35 ms on Windows), so a command asks git where the repository is only once.
 
 **Verified by:** [`projectRoot`](../scripts/orchestrator/lib/__tests__/projectRoot.test.ts),
 [`writeGuard`](../scripts/orchestrator/lib/__tests__/writeGuard.test.ts) (inert outside a queue project).
