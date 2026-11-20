@@ -2025,6 +2025,11 @@ code {
 .blocker-stat:not([aria-labelledby='blocker-stat-title']) .blocker-table tbody th {
   font-family: inherit;
 }
+/* A code or a task id never breaks over two lines; the five most expensive tasks are short, so no cell there wraps. */
+.blocker-stat[aria-labelledby='blocker-stat-title'] .blocker-table tbody th,
+[aria-labelledby='expensive-stat-title'] .blocker-table :is(th, td) {
+  white-space: nowrap;
+}
 .stat-fold {
   margin-top: var(--distance-md);
 }

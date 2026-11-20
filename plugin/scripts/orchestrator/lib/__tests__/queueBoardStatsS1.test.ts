@@ -285,4 +285,16 @@ describe('Statistics S2 to S7: the top row, the sections and the advice', () => 
     expect(cssText).toMatch(/\.s-night \{\s*--s: var\(--color-category-slate\)/);
     expect(cssText).not.toMatch(/\.s-in \{\s*--s: var\(--color-category-plum\)/);
   });
+
+  // Last in the file: it narrows the board. A window that turns narrow gets its charts drawn again at the new width.
+  it('a resize to phone width draws the charts again at the card width', async () => {
+    const width = () => Number(cards()[0].querySelector('svg.graph-svg')?.getAttribute('viewBox')?.split(' ')[2]);
+    expect(width()).toBe(560);
+    const main = document.getElementById('board') as HTMLElement;
+    Object.defineProperty(main, 'clientWidth', { configurable: true, get: () => 390 });
+    window.dispatchEvent(new Event('resize'));
+    await new Promise((r) => setTimeout(r, 200));
+    await flush();
+    expect(width()).toBe(390 - 66);
+  });
 });

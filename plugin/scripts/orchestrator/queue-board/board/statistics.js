@@ -52,6 +52,16 @@ function graphWidth() {
   // The board's side padding (16 px each side under 720 px), the card's padding (16 each side) and its border.
   return w > 0 && w < 720 ? Math.max(280, Math.min(560, w - 66)) : 560;
 }
+// A turned phone or a narrowed window gets charts at its new width: the tab is drawn again (the folds are remembered)
+// when graphWidth changes, at most once per 150 ms while the window is dragged.
+let statResizeTimer = 0;
+window.addEventListener('resize', () => {
+  if (statResizeTimer) return;
+  statResizeTimer = setTimeout(() => {
+    statResizeTimer = 0;
+    if (t.view === 'statistics' && t.stat?.data && graphWidth() !== GW) draw();
+  }, 150);
+});
 /** Every how many days a date label is drawn: every second at full width, every fourth on a phone. */
 const labelStep = () => (GW < 450 ? 4 : 2);
 
@@ -1147,7 +1157,7 @@ function machineSectionOf(d) {
         class: 'graph-remark',
         text: d.sections.settings?.machineSampleMin
           ? `Machine samples every ${d.sections.settings.machineSampleMin} min while the board runs.`
-          : 'Readings come from fill, start and gate runs; a periodic machine sample is off (metrics.machineSampleMin).',
+          : 'Readings come from fill, start and gate runs.',
       }),
     );
   }
