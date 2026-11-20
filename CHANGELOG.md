@@ -39,7 +39,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   `plans.leadFromDocument` (on).
 - **Plans: Filter and Sort menus like the Tasks room replace the left column; plans show their progress in words.**
 - **Plans: polish: clearer empty states, sticky Roadmap column headers, start lines in one Copy menu, and the deadline
-  band only when there is a deadline.** On a phone the room tabs stay on one line and the mascot bubble sits at the bottom.
+  band only when there is a deadline.** On a phone the room tabs stay on one line.
 ### Fixed
 - **Missions: a section pointer on a Windows short path (`RUNNER~1`) keeps its line range.**
 - **Silent snapshot: a process that names the worktree by its Windows short path is found too.**
