@@ -3503,16 +3503,32 @@ ol.overview-list > .overview-row.overview-question > * {
   padding: 0;
 }
 
+/* One row per task: the title left, its status right in the same row (a long status wraps inside its own cell), a
+   divider between rows, so a status never reads as a heading for the next task. */
 .plans-page-task-list li {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 0 var(--distance-sm);
+  gap: 0 var(--distance-md);
+  padding: var(--distance-xs) 0;
+  border-top: 1px solid var(--color-outline-variant);
+}
+
+.plans-page-task-list li:last-child {
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.plans-page-task-list li > .link-button {
+  justify-self: start;
+  text-align: start;
+  overflow-wrap: anywhere;
 }
 
 .plans-page-task-status {
+  max-width: 22ch;
   color: var(--color-on-surface-variant);
   font-size: var(--text-sm);
+  text-align: end;
 }
 
 @media (max-width: 699px) {
@@ -3709,11 +3725,12 @@ ol.overview-list > .overview-row.overview-question > * {
 }
 
 /* Wide (from 1200 px): the document in the main column at a readable width, the tasks and Details in a side column
-   that stays in view while the document scrolls. */
+   that stays in view while the document scrolls. The side column takes the free width (up to a readable cap), so a
+   1440 px screen has no large empty area beside it. */
 @media (min-width: 1200px) {
   .plans-page {
     display: grid;
-    grid-template-columns: minmax(0, 80ch) minmax(280px, 360px);
+    grid-template-columns: minmax(0, 80ch) minmax(300px, 1fr);
     gap: 0 var(--distance-lg);
     align-items: start;
     max-width: none;
@@ -3722,8 +3739,13 @@ ol.overview-list > .overview-row.overview-question > * {
   .plans-page-side {
     position: sticky;
     top: 0;
+    max-width: 44rem;
     padding-left: var(--distance-lg);
     border-left: 1px solid var(--color-outline-variant);
+  }
+
+  .plans-page-task-status {
+    max-width: 30ch;
   }
 
   .plans-page-side > :first-child {

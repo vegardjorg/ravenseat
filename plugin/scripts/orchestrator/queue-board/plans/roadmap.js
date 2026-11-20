@@ -341,20 +341,24 @@
         ? h.el(
             'ul',
             { class: 'plans-page-task-list' },
-            q.map((o) =>
-              h.el(
+            // One row per task: the title on the left, its status on the right in the same row (plans.css), a divider
+            // between rows, so a status never reads as a heading for the next task. The status describes its button.
+            q.map((o) => {
+              const statusId = `plans-page-task-status-${String(o.id).replace(/[^A-Za-z0-9_-]/g, '-')}`;
+              return h.el(
                 'li',
-                null,
+                { class: 'plans-page-task' },
                 h.el('button', {
                   type: 'button',
                   class: 'link-button',
                   text: `${o.id} ${o.title ?? ''}`.trim(),
                   title: 'Show in the Queue',
+                  'aria-describedby': statusId,
                   onclick: () => h.showInQueue(o.id),
                 }),
-                h.el('span', { class: 'plans-page-task-status', text: V.queueStatusText(o) }),
-              ),
-            ),
+                h.el('span', { class: 'plans-page-task-status', id: statusId, text: V.queueStatusText(o) }),
+              );
+            }),
           )
         : null,
     );
