@@ -80,7 +80,15 @@ const DEFAULTS = Object.freeze({
   checks: true,
   checkStop: false,
   gateAfter: 3,
+  captureAnswers: 'explicit',
 });
+/**
+ * The settings with a fixed list of values. captureAnswers (roadmap 0z Z-A): whether an owner's answer can become a
+ * proposed design choice. off: never (resolve --keep, the board's button and catalog propose all refuse); explicit: only
+ * when the owner asks (resolve --keep, the button); suggest: also a hint when the question looks like a lasting rule
+ * (looksLasting). Never an accept: only the owner accepts. Default explicit: asking costs nothing, the hint can be noise.
+ */
+const CHOICES = Object.freeze({ captureAnswers: Object.freeze(['off', 'explicit', 'suggest']) });
 /** The range of catalog.excerptTokens: under 200 not even one design choice fits, over 6000 it is no excerpt. */
 const EXCERPT_TOKENS = Object.freeze({ min: 200, max: 6000 });
 const isTokens = (v) => Number.isInteger(v) && v >= EXCERPT_TOKENS.min && v <= EXCERPT_TOKENS.max;
@@ -108,6 +116,8 @@ function setupProblems(own) {
     if (!Object.hasOwn(DEFAULTS, k)) out.push(`catalog.${k} is not a catalog setting (${Object.keys(DEFAULTS).join(', ')})`);
     else if (WHOLE[k]) {
       if (!WHOLE[k].ok(v)) out.push(`catalog.${k} must be a whole number from ${WHOLE[k].range.min} to ${WHOLE[k].range.max}`);
+    } else if (CHOICES[k]) {
+      if (!CHOICES[k].includes(v)) out.push(`catalog.${k} must be one of ${CHOICES[k].join(', ')}`);
     } else if (typeof v !== 'boolean') out.push(`catalog.${k} must be true or false`);
   }
   return out;
@@ -118,7 +128,11 @@ function setupOf(config) {
   const own = isObject(config?.catalog) ? config.catalog : {};
   const out = {};
   for (const [k, d] of Object.entries(DEFAULTS))
-    out[k] = WHOLE[k] ? (WHOLE[k].ok(own[k]) ? own[k] : d) : typeof own[k] === 'boolean' ? own[k] : d;
+    out[k] = WHOLE[k]
+      ? WHOLE[k].ok(own[k]) ? own[k] : d
+      : CHOICES[k]
+        ? CHOICES[k].includes(own[k]) ? own[k] : d
+        : typeof own[k] === 'boolean' ? own[k] : d;
   return out;
 }
 
@@ -472,6 +486,150 @@ function acceptText(source, { by, now = new Date().toISOString() } = {}) {
   return { text: [all[0], ...head, ...all.slice(end)].join('\n'), error: null };
 }
 
+/**
+ * The file text with status: superseded; every other line stays as it was (also accepted_by and accepted: they say who
+ * accepted it while it held). Used by `catalog accept` of the choice that supersedes it (roadmap 0z Z-C), so the two
+ * manual edits the format note asks for are one step. Only the owner's accept calls it.
+ * @returns {{ text: string|null, error: string|null }}
+ */
+function supersededText(source) {
+  const fm = parseFrontmatter(source);
+  if (!fm.data) return { text: null, error: fm.errors.join('; ') };
+  const all = lines(source);
+  const at = all.findIndex((l, i) => i > 0 && i < fm.bodyStart - 1 && /^status:/.test(l));
+  if (at < 0) all.splice(fm.bodyStart - 1, 0, 'status: superseded');
+  else all[at] = 'status: superseded';
+  return { text: all.join('\n'), error: null };
+}
+
+// ---- propose (roadmap 0z Z-B) ---------------------------------------------------------------------------------------
+
+/**
+ * The next free design choice id: one above the highest number in the file names and in the owner's record. The record
+ * counts too, so an id whose file was deleted is still never handed out again.
+ */
+function nextDecisionId(names, ledger) {
+  let top = 0;
+  for (const n of names ?? []) {
+    const m = /^D-(\d{4})-/.exec(String(n));
+    if (m) top = Math.max(top, Number(m[1]));
+  }
+  for (const id of Object.keys(ledger?.decisions ?? {})) {
+    const m = /^D-(\d{4})$/.exec(id);
+    if (m) top = Math.max(top, Number(m[1]));
+  }
+  return `D-${String(top + 1).padStart(4, '0')}`;
+}
+
+/** Letters a slug spells out (Norwegian and a few others); the rest of the non-ASCII letters lose their accent. */
+const SLUG_LETTERS = Object.freeze({ æ: 'ae', ø: 'o', å: 'a', ß: 'ss', œ: 'oe' });
+const SLUG_MAX = 48;
+
+/** The slug of a file name from a title: lower-case ASCII letters, digits and hyphens, at most SLUG_MAX, never empty. */
+function slugOf(title) {
+  const s = String(title ?? '')
+    .toLowerCase()
+    .replace(/[æøåßœ]/g, (c) => SLUG_LETTERS[c])
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, SLUG_MAX)
+    .replace(/-+$/, '');
+  return s || 'choice';
+}
+
+/**
+ * A frontmatter value as text parseFrontmatter reads back the same: plain where that is safe, else JSON (a value that
+ * starts like JSON or a quote, reads as true, false or null, holds a " #" that would be cut as a comment, or has spaces
+ * at an end).
+ */
+function frontValue(v) {
+  if (v == null) return 'null';
+  if (Array.isArray(v)) return JSON.stringify(v);
+  const s = String(v);
+  const plain = s.trim() === s && s !== '' && !/^[[{"'~]/.test(s) && !/^(true|false|null)$/.test(s) && !/\s#/.test(s);
+  return plain ? s : JSON.stringify(s);
+}
+
+/**
+ * A proposed design choice as a file: { name, text, errors }. The text is what `catalog propose` writes; errors are
+ * parseDecision's on that text, so nothing broken is ever written. The status is always proposed: only the owner accepts.
+ * @param {{ id: string, title: string, invariant: string, paths: string[], supersedes?: string|null, plan?: string|null,
+ *   why?: string|null }} p
+ */
+function proposalFile(p) {
+  const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+  const title = one(p.title);
+  const name = `${p.id}-${slugOf(title)}.md`;
+  const why = String(p.why ?? '').replace(/\r\n/g, '\n').trim();
+  const text = [
+    '---',
+    `id: ${p.id}`,
+    `title: ${frontValue(title)}`,
+    'status: proposed',
+    `paths: ${JSON.stringify(Array.isArray(p.paths) ? p.paths : [])}`,
+    `invariant: ${frontValue(one(p.invariant))}`,
+    `supersedes: ${p.supersedes ? p.supersedes : 'null'}`,
+    `plan: ${p.plan ? p.plan : 'null'}`,
+    '---',
+    why || 'Context, the choice and what follows from it, in at most 30 lines.',
+    '',
+  ].join('\n');
+  const r = parseDecision(name, text);
+  return { name, text, errors: r.errors, warnings: r.warnings };
+}
+
+// ---- an owner's answer as a draft (roadmap 0z Z-A) -------------------------------------------------------------------
+
+const oneLine = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+const cutTo = (s, n) => (s.length <= n ? s : `${s.slice(0, n - 3).replace(/\s+\S*$/, '')}...`);
+/** At most this many paths a draft takes from the waiting tasks; more is no longer a narrow choice. */
+const DRAFT_PATHS = 10;
+
+/**
+ * The fields of a proposed design choice from an owner's answer: the title from the question, the invariant from the
+ * answer (both one line, cut to their caps), the paths from the owned_files of the tasks that wait on the question (a
+ * folder "lib/" as "lib/**"; "**" when they name none), and the plan when they all share one. Only the question and the
+ * answer go in, never a conversation. The owner sharpens it before the accept; the file says so.
+ * @param {{ sp: string, question?: { text?: string }|null, answer: string, tasks?: object[] }} x
+ */
+function answerDraft({ sp, question = null, answer, tasks = [] }) {
+  const q = oneLine(question?.text);
+  const title = cutTo(q || `The owner's answer to ${sp}`, TITLE_MAX);
+  const invariant = cutTo(oneLine(answer), INVARIANT_MAX);
+  const paths = [];
+  for (const t of tasks ?? [])
+    for (const f of Array.isArray(t?.owned_files) ? t.owned_files : []) {
+      if (typeof f !== 'string' || pathPatternError(f)) continue;
+      const p = f.endsWith('/') ? `${f}**` : f;
+      if (!paths.includes(p)) paths.push(p);
+    }
+  const plans = [...new Set((tasks ?? []).map((t) => t?.plan).filter((p) => typeof p === 'string' && PLAN_PATTERN.test(p)))];
+  const why = [
+    `From the owner's answer to ${sp}${q ? `: "${cutTo(q, 200)}"` : ''}.`,
+    'A draft: make the invariant one sentence that can be checked and narrow the paths before you accept it.',
+  ].join('\n');
+  return { title, invariant, paths: paths.length ? paths.slice(0, DRAFT_PATHS) : ['**'], plan: plans.length === 1 ? plans[0] : null, why };
+}
+
+/**
+ * Whether a text reads like a lasting rule (catalog.captureAnswers suggest, plugin/docs/catalog.md "What belongs in the
+ * catalog"): a word that reaches past the task (always, never, from now on, every time, by default; the same in
+ * Norwegian), and no word that limits it to now (this time, for now, just once). A bare pick ("Vendor B") is not one.
+ * A hint only: it never writes anything.
+ */
+function looksLasting(textIn) {
+  const t = oneLine(textIn).toLowerCase();
+  if (!t) return false;
+  // A whole word or phrase: no letter or digit right before or after (\b does not see the Norwegian letters as letters).
+  const has = (phrase) => new RegExp(`(?<![\\p{L}\\p{N}])${phrase}(?![\\p{L}\\p{N}])`, 'u').test(t);
+  const now = ['this time', 'for now', 'just once', 'only (?:here|now|today)', 'denne gangen', 'foreløpig', 'bare nå', 'i dag'];
+  if (now.some(has)) return false;
+  const lasting = ['always', 'never', 'from now on', 'every time', 'by default', 'in general', 'alltid', 'aldri', 'fra nå av', 'hver gang', 'som standard'];
+  return lasting.some(has);
+}
+
 // ---- check ----------------------------------------------------------------------------------------------------------
 
 /** At most this many files of a choice's paths are read for treeHits, and none over TREE_FILE_BYTES. */
@@ -671,7 +829,7 @@ const DECISIONS_README = [
   '  names it as an error, and it counts as proposed until the owner accepts it.',
   '- `invariant`: one sentence that can be checked. It is the only text a track gets.',
   '- `paths`: the files the choice applies to.',
-  '- To change an accepted choice, write a new one with `supersedes: D-0001` and set the old one to `superseded`.',
+  '- To change an accepted choice, write a new one with `supersedes: D-0001`; its accept sets the old one to `superseded`.',
   '- `plan`: the plan entry with the long version, if there is one. A plan entry links back with `decisions`.',
   '',
 ].join('\n');
@@ -685,6 +843,7 @@ module.exports = {
   BLOCK_END,
   LEDGER_FILE,
   DEFAULTS,
+  CHOICES,
   EXCERPT_TOKENS,
   OWNER_BY,
   REUSE_TEMPLATE,
@@ -702,6 +861,12 @@ module.exports = {
   effectiveStatus,
   recordAccept,
   acceptText,
+  supersededText,
+  nextDecisionId,
+  slugOf,
+  proposalFile,
+  answerDraft,
+  looksLasting,
   checkCatalog,
   stackBlock,
   jobsOf,

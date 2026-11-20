@@ -5662,6 +5662,19 @@ body.stale .summary.stuck::before {
   gap: var(--distance-sm);
   margin-top: var(--distance-xs);
 }
+/* "Keep as design choice" under a question's answers (roadmap 0z Z-A, catalog.captureAnswers). */
+.decide-keep {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+  margin-top: var(--distance-xs);
+}
+.decide-keep-hint {
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+  overflow-wrap: anywhere;
+}
 .decide-key {
   display: inline-block;
   min-width: 1.4em;

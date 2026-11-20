@@ -15,6 +15,7 @@ commands cover them.
 | Board action | Endpoint | Claude Code |
 | --- | --- | --- |
 | Answer an owner question (a choice, or your own words) | `/api/action` `resolve` | `ravenseat resolve <id> --choice <n> --by owner` or `--answer "<text>"` (same command); `/ravenseat:decide` |
+| Keep an answer as a proposed design choice (the **Keep as design choice** toggle) | `/api/action` `resolve` with `keep: true` | the same `resolve` with `--keep` (`catalog.captureAnswers`); later `ravenseat catalog propose --from-answer <id>` |
 | QA ok (one or many) | `/api/action` `qa-ok` | `ravenseat qa ok <id...> --by owner` (same command); `/ravenseat:decide` |
 | QA deviation | `/api/action` `qa-deviation` | `ravenseat qa deviation <id> "<what is wrong>"` (same command); `/ravenseat:decide` |
 | Approve a proposal (one or many) | `/api/action` `approve` | `ravenseat approve <id...> --by owner` (same command); `/ravenseat:decide` |

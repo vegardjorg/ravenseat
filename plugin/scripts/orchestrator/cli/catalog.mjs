@@ -13,6 +13,9 @@
 //                                                 it as a gate when it wants to (it is none by default)
 //   ravenseat catalog accept <D-id> --by owner    the owner accepts a design choice: status accepted in the file and
 //                                                 the owner's record in <dataFolder>/catalog-accepted.json
+//   ravenseat catalog propose --title --invariant --paths [--supersedes] [--plan] [--why] [--json]
+//                                                 writes the next free D-id as status proposed into the main tree's
+//                                                 decisions/ and runs check on it (roadmap 0z Z-B); refused from a track
 //   ravenseat catalog find <word...> [--json]     searches the code index (exports and @shared blocks), the reuse
 //                                                 rows, the design choices and the prefer lines; at most 10 short lines
 //   ravenseat catalog index [--json]              builds or refreshes the code index (lib/catalogIndex.js, bolk B5) in
@@ -46,7 +49,7 @@ const CI = require('./lib/catalogIndex.js');
 const K = require('./lib/kickstart.js');
 const RP = require('./lib/reviewPacks.js');
 
-const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | find <word...> [--json] | index [--json]`;
+const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose (--title "..." --invariant "..." --paths "<glob>" | --from-answer <question>) [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | find <word...> [--json] | index [--json]`;
 const json = a.includes('--json');
 
 /** The catalog folder in a tree (the main tree for a write, the current one for a read). */
@@ -153,7 +156,7 @@ export function checkTree(root = ROOT) {
 }
 
 /** Refuses a write from inside a track worktree, whatever --by says. */
-function notFromTrack(what) {
+export function notFromTrack(what) {
   const track = trackBranchHere() ?? queueBranchId();
   if (track) die(`${CLI} catalog ${what} cannot be run from inside a track worktree (${track}): the catalog is the owner's. Ask the owner (ravenseat question).`);
 }
@@ -293,12 +296,137 @@ function accept() {
   if (r.error) die(`${CLI} catalog accept: ${r.error}. Nothing was changed.`);
   const after = C.parseDecision(hit.name, r.text);
   if (after.errors.length || !after.decision) die(`${CLI} catalog accept: ${after.errors.join('; ')}. Nothing was changed.`);
+  // Z-C (roadmap 0z): a choice with supersedes marks the old one superseded in the same step. Checked before anything is
+  // written, so a supersedes that points nowhere changes nothing.
+  const sup = after.decision.supersedes;
+  let old = null;
+  if (sup) {
+    old = cat.decisions.find((x) => x.decision?.id === sup) ?? null;
+    if (!old) die(`${id} supersedes ${sup}, which is not in ${C.DIR}/decisions. Fix the supersedes line first. Nothing was changed.`);
+    if (old.decision.status !== 'superseded') {
+      const s = C.supersededText(old.source);
+      if (s.error) die(`${sup} cannot be marked superseded: ${s.error}. Nothing was changed.`);
+      old = { ...old, text: s.text };
+    } else old = null; // already superseded: nothing to write
+  }
   // The record first: a file that says accepted with no record reads as unconfirmed, which is the safe side.
   writeLedger(C.recordAccept(readLedger(), after.decision, { by }));
   fs.writeFileSync(path.join(catalogDir(MAIN_TREE), 'decisions', hit.name), r.text);
+  if (old) fs.writeFileSync(path.join(catalogDir(MAIN_TREE), 'decisions', old.name), old.text);
   console.log(
     `Accepted ${id} (${after.decision.title}). The file says status: accepted, and the record in ${C.LEDGER_FILE} holds ` +
       'this invariant, these paths and this check: a later change to them needs a new accept. Commit the file yourself.',
+  );
+  if (old) console.log(`${sup} is now superseded (decisions/${old.name}): ${id} replaces it. Commit that file too.`);
+}
+
+// ---- propose (roadmap 0z Z-B) -------------------------------------------------------------------------------------
+
+/**
+ * Writes a proposed design choice into the MAIN tree's catalog under the next free id, then runs check on the tree.
+ * Never accepts and never writes over a file. Throws an Error with the reason when the proposal is broken (nothing is
+ * written then). Used by `catalog propose` and by `resolve --keep` (cli/owner.mjs). The caller refuses a track first.
+ * @returns {{ id: string, file: string, errors: string[], warnings: string[] }} file relative to the tree; errors and
+ *   warnings are check's lines about this choice
+ */
+export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null }) {
+  const dir = catalogDir(MAIN_TREE);
+  const decisionsDir = path.join(dir, 'decisions');
+  let names = [];
+  try {
+    names = fs.readdirSync(decisionsDir);
+  } catch {
+    names = []; // error-ignored: no folder yet, the first id is D-0001
+  }
+  const id = C.nextDecisionId(names, readLedger());
+  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why });
+  if (r.errors.length) throw new Error(r.errors.join('; '));
+  fs.mkdirSync(decisionsDir, { recursive: true });
+  const readme = path.join(decisionsDir, 'README.md');
+  if (!fs.existsSync(readme)) fs.writeFileSync(readme, C.DECISIONS_README);
+  // wx: a file of that name that came in meanwhile is never written over.
+  fs.writeFileSync(path.join(decisionsDir, r.name), r.text, { flag: 'wx' });
+  const file = `${C.DIR}/decisions/${r.name}`;
+  const mine = (line) => line.includes(id) || line.includes(`decisions/${r.name}`);
+  const c = checkTree(MAIN_TREE);
+  return { id, file, errors: c.errors.filter(mine), warnings: c.warnings.filter(mine), allErrors: c.errors.length };
+}
+
+/**
+ * The draft of a design choice from the owner's stored answer to `sp` (roadmap 0z Z-A, lib/catalog.js answerDraft):
+ * the question's text, the answer in `resolutions`, and the tasks that wait on the question. Throws when there is no
+ * answer to keep. `over` replaces fields (the flags of `catalog propose --from-answer`).
+ */
+export function draftFromAnswer(queue, sp, over = {}) {
+  const answer = queue.resolutions?.[sp]?.answer;
+  if (answer == null || !String(answer).trim()) throw new Error(`${sp} has no stored answer to keep (${CLI} resolve ${sp} --answer "..." first)`);
+  const tasks = (queue.tasks ?? []).filter((t) => (t.waiting_on ?? []).includes(sp));
+  const d = C.answerDraft({ sp, question: queue.question?.[sp] ?? null, answer, tasks });
+  for (const [k, v] of Object.entries(over)) if (v != null && !(Array.isArray(v) && !v.length)) d[k] = v;
+  return d;
+}
+
+/** Dies when catalog.captureAnswers is off: then nothing turns an answer, or a request, into a draft. */
+export function captureOn(what) {
+  if (C.setupOf(CONFIG).captureAnswers === 'off')
+    die(`${what} is off: catalog.captureAnswers is off in queue.config.json (${CLI} settings set catalog.captureAnswers explicit turns it on). Nothing was written.`);
+}
+
+/** The values of a repeated flag, each also split on commas (`--paths a/**,b/**` or `--paths a/** --paths b/**`). */
+const listFlag = (flag) =>
+  a
+    .flatMap((x, i) => (x === flag ? [a[i + 1] ?? ''] : []))
+    .flatMap((v) => String(v).split(','))
+    .map((v) => v.trim())
+    .filter(Boolean);
+const flag = (name) => (a.includes(name) ? String(a[a.indexOf(name) + 1] ?? '') : null);
+
+function propose() {
+  notFromTrack('propose');
+  captureOn(`${CLI} catalog propose`);
+  let title = flag('--title');
+  let invariant = flag('--invariant');
+  let paths = listFlag('--paths');
+  const supersedes = flag('--supersedes');
+  let plan = flag('--plan');
+  let why = flag('--why');
+  const fromAnswer = flag('--from-answer');
+  if (fromAnswer) {
+    // Z-A: the owner's stored answer as the draft; the other flags replace its fields.
+    let d;
+    try {
+      d = draftFromAnswer(read(), fromAnswer, { title, invariant, paths, plan, why });
+    } catch (e) {
+      die(`${CLI} catalog propose: ${e.message}. Nothing was written.`);
+    }
+    ({ title, invariant, paths, plan, why } = d);
+  }
+  if (!title || invariant == null || (!paths.length && !supersedes))
+    die(`${CLI} catalog propose --title "..." --invariant "<one sentence that can be checked>" --paths "<glob>[,<glob>]" [--supersedes D-0001] [--plan PL-...] [--why "..."]`);
+  if (supersedes) {
+    // Idea C: a choice that replaces another starts from its paths and plan; the owner narrows them before the accept.
+    const old = C.readCatalog(catalogDir(MAIN_TREE)).decisions.find((x) => x.decision?.id === supersedes)?.decision;
+    if (!old) die(`${supersedes} is not in ${C.DIR}/decisions, so nothing can supersede it. Nothing was written.`);
+    if (!paths.length) paths = old.paths;
+    plan ??= old.plan;
+  }
+  let r;
+  try {
+    r = writeProposal({ title, invariant, paths, supersedes, plan, why });
+  } catch (e) {
+    die(`${CLI} catalog propose: ${e.message}. Nothing was written.`);
+  }
+  if (json) {
+    console.log(JSON.stringify({ ok: true, id: r.id, file: r.file, errors: r.errors, warnings: r.warnings }, null, 2));
+    return;
+  }
+  console.log(`Proposed ${r.id}: ${r.file} (status: proposed; it binds nothing until the owner accepts it).`);
+  for (const e of r.errors) console.log(`ERROR  ${e}`);
+  for (const w of r.warnings) console.log(`WARN   ${w}`);
+  console.log(`catalog check: ${r.errors.length} error(s), ${r.warnings.length} warning(s) for ${r.id}.`);
+  console.log(
+    `Next: read it and sharpen the invariant and the paths, then ${CLI} catalog accept ${r.id} --by owner. ` +
+      'The folder is a protected path: commit the file yourself.',
   );
 }
 
@@ -347,6 +475,7 @@ export function cmdCatalog() {
   if (sub === 'show') return show();
   if (sub === 'check') return check();
   if (sub === 'accept') return accept();
+  if (sub === 'propose') return propose();
   if (sub === 'find') return find();
   if (sub === 'index') return index();
   die(USAGE);

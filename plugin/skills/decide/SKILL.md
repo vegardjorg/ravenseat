@@ -87,3 +87,7 @@ Do not start tracks, merge, or run other queue commands after the summary; that 
 - `ravenseat decide` without `--json` prints the list for a human; `ravenseat decide --today` prints what was decided today.
 - Owner questions that are answered here still need to be entered in the decision log by the orchestrator
   (`ravenseat resolutions --unlogged`); that is not part of this walk.
+- When the owner says an answer is a rule that should hold later too ("keep it", "always"), add `--keep` to the
+  `resolve` command (before `--by owner`). It also writes a proposed design choice in the catalog; tell the owner its
+  id and that they accept it themselves with `ravenseat catalog accept <id> --by owner`. Never add `--keep` unasked,
+  and never accept it (`catalog.captureAnswers` `off` refuses it).

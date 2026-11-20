@@ -79,7 +79,8 @@ Context, the choice and what follows from it, in at most 30 lines.
 - `paths`: the files the choice applies to, as globs from the project root. No `..` and no absolute paths.
   `catalog check` warns when they match no tracked file.
 - `supersedes`: the id of the choice this one replaces. To change an accepted choice, write a new one with
-  `supersedes: D-0001` and set the old one to `superseded`.
+  `supersedes: D-0001` (`catalog propose --supersedes D-0001` does it). The owner's accept of the new one sets the old
+  one to `superseded` in the same step.
 - `plan`: the plan entry with the long version, if there is one.
 - `check`: an optional rule that receive runs against the delivery's added lines, with examples that prove it:
   see [Check rules](#check-rules).
@@ -94,7 +95,8 @@ A body over 30 lines gives a warning: the plan register holds the long text.
 | `catalog init` | Creates `stack.md` with the generated block, `reuse.md` and `decisions/README.md` where they are missing, in the main tree. Never writes over a file that is there, except the generated block in `stack.md`. Refused from a track worktree |
 | `catalog show [<D-id>] [--json]` | The prefer lines, the reuse rows and the design choices with the status that counts. With an id: that choice in full, and the plan entries that link to it |
 | `catalog check [--json]` | Shape, ids, status, the owner lock, `supersedes`, the paths, the reuse rows and the generated block. Exit 1 on an error, 0 on warnings only, 0 without a catalog. Read only |
-| `catalog accept <D-id> --by owner` | The owner accepts a design choice: `status: accepted`, `accepted_by` and `accepted` in the file, and the owner's record in the data folder. Refused from a track worktree whatever `--by` says |
+| `catalog accept <D-id> --by owner` | The owner accepts a design choice: `status: accepted`, `accepted_by` and `accepted` in the file, and the owner's record in the data folder. A choice with `supersedes` sets the old one to `superseded` in the same step (refused, with nothing changed, when the old one is not there). Refused from a track worktree whatever `--by` says |
+| `catalog propose --title "..." --invariant "..." --paths "<glob>[,<glob>]" [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--from-answer <question>] [--json]` | Writes the next free id (one above the highest in the file names and the owner's record) as `status: proposed` in the main tree, then runs `catalog check` and prints what it says about the new choice. With `--supersedes` and no `--paths` or `--plan`, it takes them from the old choice. Writes nothing when the choice would be broken, never over a file. Refused from a track worktree |
 | `catalog find <word...> [--json]` | Searches the code index, the reuse rows, the design choices and the prefer lines. Every word must match; at most ten short lines. Builds the code index first (from the cache) |
 | `catalog index [--json]` | Builds or refreshes the code index and says how many files it read and how many came from the cache. Names a `@shared` tag that is not on an export |
 
@@ -308,6 +310,49 @@ times in one area within 30 days in the finding log, with the count on the card.
 important, and the two guard cards are not shown, since a lite task names no files. Every card, and the rule
 behind "three times in one area within 30 days": [The Checks tab](checks.md#three-thresholds-for-repeats).
 
+## From an owner answer to a design choice
+
+An answer to an owner question is stored in the decision log and is gone from view once the task is done. When the
+answer is a rule that should hold later too, it can become a proposed design choice in the same step:
+
+- **CLI:** `ravenseat resolve <id> --choice <n> --keep --by owner` (or `--answer "..." --keep`). The answer is stored
+  as before, then a draft is written with `catalog propose`: the question as the title, the answer as the invariant,
+  the files of the tasks that wait on the question as the paths (`**` when they name none), and the plan entry when
+  they share one. The line `KEEP: proposed D-000N ...` names the file. When the draft cannot be written, the answer
+  still stands and the line says how to try again.
+- **Board:** in Decisions, a plain owner question has a **Keep as design choice** toggle under its answers (a button
+  with `aria-pressed`). Pressed, the next answer goes with `keep: true`, and the undo toast says it will be kept.
+  Conditions, the lawyer's word and owner tasks have no toggle.
+- **Later:** `ravenseat catalog propose --from-answer <id>` writes the same draft from a stored answer. Other flags
+  (`--title`, `--invariant`, `--paths`, `--plan`, `--why`) replace the draft's fields.
+
+The draft is `proposed` and binds nothing. Sharpen the invariant into one sentence that can be checked, narrow the
+paths, commit the file, then run `catalog accept <D-id> --by owner`. Nothing accepts it by itself.
+
+`catalog.captureAnswers` sets this: `explicit` (the default) offers the flag and the toggle and does nothing unless
+asked; `suggest` also prints a `KEEP?:` line after `resolve` and shows "Reads like a lasting rule" beside the toggle
+when the question or answer uses words such as always, never, from now on or by default (and none such as this time
+or for now). It never presses the toggle. `off` hides the toggle and refuses `--keep` and `catalog propose`.
+
+### What belongs in the catalog
+
+A design choice is a **lasting rule** about the code or the product: it should still hold for the next task that
+touches the same files, and someone can check a change against it ("Buttons in the board use the shared button
+classes"). Ask: would I want a track that never saw this answer to follow it?
+
+Not a design choice:
+
+- **A one-time requirement:** "Use vendor B for this release", "Skip the migration this time". It belongs to the task
+  or the answer in the decision log, and is done when the task is done.
+- **A loose idea or a vague displeasure:** "This feels slow", "Maybe a darker header". Make it a plan entry or a task
+  first; it can become a rule once it is decided.
+- **A quote:** store the rule in your own short words, never conversation excerpts, and never secrets or personal
+  data. The files are committed and read by every track.
+
+**The catalog or Claude's memory.** Preferences about how you work (how Claude reports, when to push, which words to
+avoid) belong in Claude's memory or in `queue.config.json`, not here. The catalog holds code and product choices that
+the tracks and reviewers check against, in the repository, under your accept.
+
 ## Friction
 
 Anything that can stop work is off by default, with one deliberate exception: the protected path, by owner decision.
@@ -323,6 +368,8 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Checks card | Low priority, can be set aside | No setting: it only proposes |
 | Agent access | `catalog show`, `catalog check` and `catalog find` allowed for queue agents | No setting |
 | Code index at receive and in the missions | One git listing per tree and a read of each changed file (the first build of about 300 files took under half a second here); a file in the data folder; more lines in the excerpt, inside the same cap. It stops nothing | `catalog.index`, off: the plan puts it on the opt-in list, since it builds and stores a file and its worth grows with the project |
+| `catalog propose` | Only when someone runs it; writes a `proposed` file that binds nothing until the owner accepts it | No own setting: a write on request that decides nothing. `catalog.captureAnswers` `off` refuses it too (one switch) |
+| Owner answer into the catalog | Only on request: one toggle per question on the board, `--keep` on `resolve`. The draft binds nothing until the owner accepts it. `suggest` adds a hint line, which can be noisy | `catalog.captureAnswers`, `explicit`: offered but never done unasked; `suggest` is opt-in, `off` turns it off |
 | `catalog find` | Only when someone runs it; it builds the index from the cache first | No setting: it is a read on request, and works with `catalog.index` off |
 | Near names (V1b) | Up to five lines for the reviewer, which may lead to a `duplication` finding after the reviewer weighs the code. Never to the owner alone, never a stop | Follows `catalog.index` and `catalog.reviewExcerpt` |
 | `@shared` problems | Printed by `catalog index` only; no gate, no doctor row | No setting |

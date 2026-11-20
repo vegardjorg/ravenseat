@@ -77,7 +77,8 @@
 //     unregistered documents (queue.mjs plan check), and POST /api/plan-new and /api/plan-source run `queue.mjs plan new`
 //     and `plan edit <id> --set {sources}` with --set-by owner, --dry and --expect-changed.
 //     The Legal, Decisions and Launch views read the same data. An answer to an owner question goes via
-//     POST /api/action { type: 'resolve' } (= `queue.mjs resolve`; { choice: <n> } from a choice button = resolve --choice),
+//     POST /api/action { type: 'resolve' } (= `queue.mjs resolve`; { choice: <n> } from a choice button = resolve --choice;
+//     { keep: true } from "Keep as design choice" = resolve --keep, refused when catalog.captureAnswers is off),
 //     and POST /api/lawyerPackage writes a draft locally (dry = preview; never sent).
 //     POST /api/plan-bulk runs `queue.mjs plan prioritize|edit|combine` (dry = preview, otherwise
 //     --expect-changed, all or nothing), POST /api/plan-capture { title, text? } adds a plan to the Inbox at once
@@ -146,6 +147,8 @@ const F = require('./lib/queueFollow.js');
 const U = require('./lib/queueUpdate.js');
 // `ravenseat wait`'s heartbeat (lib/ownerWait.js): "Orchestrator listening" in "Waiting on you" while it is fresh.
 const OW = require('./lib/ownerWait.js');
+// The project catalog's settings (catalog.captureAnswers: "Keep as design choice" in Decisions, roadmap 0z Z-A).
+const CATALOG = require('./lib/catalog.js');
 // Cancel, decline and edit one task from the detail panel (the rules; queue.mjs cancel / edit write).
 const TE = require('./lib/queueTaskEdit.js');
 // The base gate's verdict (lib/baseHealth.js; ravenseat merge writes base-health.json, the board only reads it).
@@ -889,10 +892,14 @@ function state() {
   // How the side panel sits on a wide screen (board.panelMode, QA-1c Q5): read fresh and part of the cache key, so a
   // change in the gear reaches the open board on its next poll without a restart.
   const panelMode = KK.boardPanelMode(fresh);
+  // catalog.captureAnswers (roadmap 0z Z-A): read fresh and part of the cache key like panelMode, so `settings set`
+  // shows or hides "Keep as design choice" on the next poll.
+  const captureAnswers = CATALOG.setupOf(fresh).captureAnswers;
   if (
     quick &&
     quick.listening === listening &&
     quick.panelMode === panelMode &&
+    quick.captureAnswers === captureAnswers &&
     quick.mtime === mtime &&
     quick.updateKey === updateKey &&
     quick.baseKey === baseKey &&
@@ -925,6 +932,7 @@ function state() {
   }
   const data = {
     ...T.board(showQueue, {
+      captureAnswers,
       // The Blocked column (board.blockedColumn): the server moves the stuck tasks there, so no card is in two columns.
       blockedColumn: KK.boardSwitches(CONFIG, queue).blockedColumn,
       uncommitted: g.uncommitted,
@@ -1013,6 +1021,7 @@ function state() {
     stat: s?.version ?? null,
     listening,
     panelMode,
+    captureAnswers,
     updateKey,
     baseKey,
     version,
@@ -2602,6 +2611,11 @@ async function write(filePath, b) {
           (queue.tasks ?? []).some((o) => (o.waiting_on ?? []).includes(sp)));
       if (!known) return no('unknown question');
       const answer = cleanText(b.answer, 4000);
+      // "Keep as design choice" (roadmap 0z Z-A): resolve --keep, only while catalog.captureAnswers is not off (read
+      // fresh, as the state is). queue.mjs checks the setting again and writes only a proposed draft.
+      const keep = b.keep === true ? ['--keep'] : [];
+      if (keep.length && CATALOG.setupOf(KK.config({ fresh: true })).captureAnswers === 'off')
+        return no('catalog.captureAnswers is off: the answer is not kept as a design choice');
       // A choice button ({ choice: <1-based number> }): the server checks that the question has that choice, and
       // queue.mjs resolve --choice stores the choice's text (with the free text field as a note, when filled in).
       if (b.choice != null) {
@@ -2613,14 +2627,14 @@ async function write(filePath, b) {
         if (v.stop) return v.stop;
         info = v.info;
         return run(
-          ['resolve', sp, '--choice', String(n), ...(answer ? ['--answer', answer] : []), '--by', 'owner'],
+          ['resolve', sp, '--choice', String(n), ...(answer ? ['--answer', answer] : []), ...keep, '--by', 'owner'],
           `resolve ${sp} (choice ${n})`,
         );
       }
       const v = guard(queue, { type, sp, text: answer }, {}, b);
       if (v.stop) return v.stop;
       info = v.info;
-      return run(['resolve', sp, '--answer', answer, '--by', 'owner'], `resolve ${sp}`);
+      return run(['resolve', sp, '--answer', answer, ...keep, '--by', 'owner'], `resolve ${sp}`);
     }
     // QA ok and approve for several at once (queue.mjs takes lists; all or nothing).
     if ((type === 'qa-ok' || type === 'approve') && Array.isArray(b.ids)) {

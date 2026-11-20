@@ -98,6 +98,8 @@
 //                                                                  the question's choices, by number from 1 or by its text;
 //                                                                  the answer stored is the choice's text, plus
 //                                                                  " (note: ...)" when --answer is given; one question only)
+//   resolve ... --keep   (with --answer or --choice: also writes the answer as a proposed design choice in the catalog,
+//                         catalog.captureAnswers; never accepted, the owner runs `catalog accept` later)
 //   `waiting_on` takes ONLY registered question ids (letters, digits, ".", "_", "-", at most 40 chars, no
 //   whitespace) with text and type in `question`. add and edit REJECT (all or nothing) a new id that is not
 //   registered, unless the add file registers it in { tasks, question }; free text is stopped. edit-many and the board
@@ -443,6 +445,9 @@
 //                                                                  in docs/queue/catalog/: stack, reuse and design choices.
 //                                                                  init writes a draft, check exits 1 on an error, accept is
 //                                                                  the owner's and refused from a track worktree. lib/catalog.js)
+//   node scripts/orchestrator/queue.mjs catalog propose --title "..." --invariant "..." --paths "<glob>" [--supersedes <D-id>]
+//                                                                  [--plan <PL-id>] [--why "..."]   (the next free D-id as
+//                                                                  proposed, then check; refused from a track worktree)
 //   node scripts/orchestrator/queue.mjs catalog find <word...> | index   (find: search the code index, the reuse rows, the
 //                                                                  design choices and the prefer lines, at most 10 lines;
 //                                                                  index: build the code index of exports and @shared

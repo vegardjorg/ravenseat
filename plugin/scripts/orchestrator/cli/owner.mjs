@@ -15,10 +15,14 @@ import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 import {
-  a, autoAcceptContext, autoAcceptRules, autoCleanFocus, CLI, cut, die, edit, FOLDER, focusCleanOut, GIT_ROOT, L, positional,
+  a, autoAcceptContext, autoAcceptRules, autoCleanFocus, CLI, CONFIG, cut, die, edit, FOLDER, focusCleanOut, GIT_ROOT, L, positional,
   PR, read, require, val, WIDTH,
 } from './context.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
+import { captureOn, draftFromAnswer, notFromTrack, writeProposal } from './catalog.mjs';
+
+// catalog.captureAnswers (roadmap 0z Z-A): an answer can become a proposed design choice (resolve --keep).
+const CAT = require('./lib/catalog.js');
 
 // The intake triage's owner questions (close, keep, rewrite) are acted on in resolve.
 const T = require('./lib/queueTriage.js');
@@ -31,7 +35,14 @@ const repeated = (flag) => a.flatMap((x, i) => (x === flag ? [a[i + 1] ?? ''] : 
 /** `ravenseat resolve` (the usage is at the top of queue.mjs). */
 export function cmdResolve() {
   const sp = positional(1, ['--answer', '--by', '--choice']);
-  if (!sp.length) die('resolve <question> [...] [--answer "..."] [--choice <n|text>] [--by "..."]');
+  if (!sp.length) die('resolve <question> [...] [--answer "..."] [--choice <n|text>] [--keep] [--by "..."]');
+  // --keep: the answer also becomes a proposed design choice in the main tree's catalog. Checked before anything is
+  // resolved, so a refusal (setting off, a track worktree) changes nothing.
+  const keep = a.includes('--keep');
+  if (keep) {
+    captureOn(`${CLI} resolve --keep`);
+    notFromTrack('propose (resolve --keep)');
+  }
   // With a timestamp (and the answer, when given) in `resolutions`; the ids are in `resolved` as before. --choice picks
   // one of the question's choices (number or text); --answer is then a note after the choice.
   const answer = a.includes('--answer') ? (val('--answer') ?? '') : null;
@@ -63,6 +74,39 @@ export function cmdResolve() {
     else if (t.action === 'rewrite')
       console.log(`Triage ${t.id}: parked for a rewrite. Rewrite the mission (ravenseat edit ${t.id} --json '{"mission": "..."}'), then ravenseat continue ${t.id}.`);
     else console.log(`Triage ${t.id}: the answer is not one of the choices; act on it by hand (cancel, edit or continue).`);
+  }
+  keepAnswers(sp, { keep, answered: r.stored != null });
+}
+
+/**
+ * After resolve: with --keep, each answered question becomes a proposed design choice (never accepted; the owner does
+ * that). With catalog.captureAnswers suggest and no --keep, a question that reads like a lasting rule gets the line that
+ * keeps it. A failed draft is one line: the answer is stored either way.
+ */
+function keepAnswers(sp, { keep, answered }) {
+  const mode = CAT.setupOf(CONFIG).captureAnswers;
+  if (!answered) {
+    if (keep) console.log('KEEP: nothing to keep: resolve was given no answer.');
+    return;
+  }
+  const queue = read();
+  for (const q of sp) {
+    if (!keep) {
+      const words = [queue.question?.[q]?.text, queue.resolutions?.[q]?.answer].join(' ');
+      if (mode === 'suggest' && CAT.looksLasting(words))
+        console.log(`KEEP?: the answer to ${q} reads like a lasting rule. To keep it as a proposed design choice: ${CLI} catalog propose --from-answer ${q}`);
+      continue;
+    }
+    try {
+      const w = writeProposal(draftFromAnswer(queue, q));
+      console.log(
+        `KEEP: proposed ${w.id} from the answer to ${q} (${w.file}). Sharpen the invariant and the paths, then ` +
+          `${CLI} catalog accept ${w.id} --by owner. Commit the file yourself.`,
+      );
+      for (const e of w.errors) console.log(`  ERROR  ${e}`);
+    } catch (e) {
+      console.log(`KEEP: the draft for ${q} was not written (${e?.message ?? e}); the answer is stored. ${CLI} catalog propose --from-answer ${q} tries again.`);
+    }
   }
 }
 
