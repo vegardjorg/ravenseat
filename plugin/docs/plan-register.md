@@ -5,6 +5,8 @@ investigations and decisions, with priority and maturity, and links to the docum
 stored in `scripts/.queue/plans.json` (gitignored) and only written through `ravenseat plan …`, with a change log and
 undo.
 
+<p align="center"><img src="../../assets/screenshots/light-08-plans-roadmap.jpg" alt="The plan register on the board: the Roadmap with its columns" width="800"></p>
+
 ## A plan entry
 
 ```json
@@ -33,6 +35,8 @@ undo.
   `["D-0001"]`, for the choices the plan builds on or changes. The shape is always checked; while
   `catalog.planLinks` is on, an id the catalog does not have gives a warning. `plan get` prints them, and `ravenseat
   catalog show D-0001` lists the plan entries that link to a choice.
+
+<p align="center"><img src="../../assets/screenshots/light-32-plan-entries.jpg" alt="Plan entries on the board, with the details of the selected entry" width="800"></p>
 
 ## Commands
 
@@ -78,6 +82,8 @@ estimate, owned files), while a finding is an observation nobody has looked at y
 ## Inbox (quick capture)
 
 `ravenseat plan capture "<title>" [--text "…"]` and the board's **+ New plan** write down an idea in one step: a title (up to 160 characters) and, if wanted, a text in the owner's own words (up to 4000). Nothing else is asked.
+
+<p align="center"><img src="../../assets/screenshots/light-35-new-plan.jpg" alt="The + New plan form on the board, which adds to the Inbox" width="800"></p>
 
 - The entry is a normal plan entry: an id from the title (`PL-DARK-MODE-1`), `summary` = the text, project `general` (created on first use), `priority: later` and `maturity: idea` set by the owner.
 - The tool-owned field `inbox: { at, by }` marks it as captured. It is removed when the entry is sorted: a new priority or maturity, or `plan edit <id> --field inbox=null`. A queue task with `--plan <id>` or a drop also takes it out of the Inbox.

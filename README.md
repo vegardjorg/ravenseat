@@ -12,11 +12,28 @@
 
 <p align="center"><img src="assets/media/explanation.gif" alt="A 44 second loop: a project spread over many chats, then the queue where each agent starts fresh, builds, checks and merges while you step away and come back to the decisions" width="800"></p>
 
-When a Claude Code project outgrows one chat:
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dark-01-queue.jpg">
+    <img src="assets/screenshots/light-01-queue.jpg" alt="The board's Queue room: cards in In queue, In progress, Review and Built, the focus line with three steps and the next task to start" width="800">
+  </picture>
+</p>
 
-- the one long chat grows toward its 1M-token window, and every turn pays for all of it;
-- findings, plans and half-built work are spread over many chats, and two chats undo each other's work;
-- rules written in `CLAUDE.md` are followed most of the time, which is not the same as always.
+One chat can carry a feature. A project of weeks needs more, and without help you become the memory, the merge order
+and the one who checks whether "done" is true.
+
+| The pain | Without Ravenseat | With Ravenseat |
+|---|---|---|
+| The plan lives in a chat that ends | Close it or crash, and the plan is gone | The queue and the plans are **[plain files](#the-plan-lives-in-files-not-in-the-chat)** in your repo |
+| Two chats, one checkout | They edit the same files and undo each other | Each task gets **[its own worktree](#several-agents-build-at-once-and-merges-stay-safe)**; merges go one at a time |
+| "Tests passed," says the agent | You take its word, or check every run yourself | Ravenseat **[runs your checks](#guarantees-and-limits)** on the exact commit |
+| Rules in `CLAUDE.md` hold most of the time | Now and then an agent pushes or skips a test | Key rules are **[enforced by code](#the-rules-that-matter-run-as-code)**, not by asking |
+| You are asked about everything, or nothing | Small things interrupt you, big ones pass silently | Only what **[needs a person](#what-you-come-back-to)** reaches you, with a recommendation |
+| The long chat is the memory | Every turn pays for all of it | Each task gets a **[fresh agent](#it-costs-about-the-same-and-the-setup-makes-every-turn-cheaper)** and a short mission |
+
+Why outside the chat: a model forgets at compaction and a new chat starts empty. A file does not forget, and an agent
+that reads a short task costs a fraction of one that reads the whole history. The full list is in the
+[guide](plugin/docs/guide.md#what-it-solves).
 
 Ravenseat is a Claude Code plugin for that stage. You tell one chat what to build. It writes the work down as tasks,
 hands each task to a fresh agent in its own git worktree, runs your tests on exactly the commit the agent delivered,
@@ -209,7 +226,7 @@ price; on a subscription they are quota, not dollars. Run `ravenseat cost` to se
   your yes ([the Checks tab](plugin/docs/checks.md)).
 - **From your phone.** Queue the work, step away, and follow along with Claude Code's Remote Control.
 
-<p align="center"><img src="assets/screenshots/light-01-queue.jpg" alt="The queue board: in queue, in progress, review and built" width="800"></p>
+<p align="center"><img src="assets/screenshots/light-08-plans-roadmap.jpg" alt="The Plans room: the roadmap with Waiting on you, Now, Next, Later and Done" width="800"></p>
 
 ## Documentation
 

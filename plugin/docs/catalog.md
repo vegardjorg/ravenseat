@@ -417,6 +417,8 @@ A "no" to an idea is a decision too. Without a record, the same idea comes back 
 gone. A **not-building entry** is a file in `decisions/` like a design choice, with `kind: not-building`: what, why,
 who decided and when, where it came from, keywords and when to look at it again. It gets no file or folder of its own.
 
+<p align="center"><img src="../../assets/screenshots/light-20-decisions-catalog.jpg" alt="The project catalog in Decisions: the design language, design choices and the Not building list" width="800"></p>
+
 ```
 ---
 id: D-0004

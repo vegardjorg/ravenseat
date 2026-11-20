@@ -90,6 +90,8 @@ From the top down:
    project now (marked "does not apply now").
 9. **A suggestion file has a mistake**, in red, when a card file cannot be read. That card is left out; the rest show.
 
+<p align="center"><img src="../../assets/screenshots/light-22-checks-suggestions.jpg" alt="Suggestions by category: one card per suggestion with its priority and button" width="800"></p>
+
 The order of the suggestions: one group per category, in the order of the categories (Using what you have, Tests, CI,
 Code quality, Security, Dependencies, Database, Claude's instructions, Claude Code); inside a group high first, then
 medium, then low, then by key. `ravenseat checks` in the terminal and `--json` keep the flat order: high first, then
@@ -316,6 +318,8 @@ one card per guard, with its kind (gate, instruction, review point, or none), wh
 gate, the task that built it and the date. For a gate with a command the card says "Caught N times since built (M
 runs)" and the last red, counted from the gate rows in the time log when the tab is read. A retired guard has a badge.
 With no entries the section says so; a built inspection proposal adds one.
+
+<p align="center"><img src="../../assets/screenshots/light-21-checks-guards.jpg" alt="The Guards and Repeated failures sections of the Checks tab" width="800"></p>
 
 **Repeated failures** lists the entries of the inspection queue that are more than "watching": due, proposed, approved,
 built, rejected or snoozed, each with the error line, how many red runs and incidents, where (gates or CI) and when it
