@@ -123,12 +123,17 @@
   /** A labelled select (id from the row, so labels and focus are unique per plan). */
   function select(h, p, name, label, options, value, onchange) {
     const id = `triage-${safeId(p.id)}-${name}`;
+    // label and select in one cell, so the grid never puts a label beside another field's select
     return [
-      h.el('label', { class: 'plans-triage-label', for: id, text: label }),
       h.el(
-        'select',
-        { id, name, class: 'plans-triage-input', 'data-focus': `triage:${p.id}:${name}`, onchange: (e) => onchange(e.target.value) },
-        options.map(([v, t]) => h.el('option', { value: v, text: t, selected: v === value ? true : null })),
+        'div',
+        { class: 'plans-triage-field' },
+        h.el('label', { class: 'plans-triage-label', for: id, text: label }),
+        h.el(
+          'select',
+          { id, name, class: 'plans-triage-input', 'data-focus': `triage:${p.id}:${name}`, onchange: (e) => onchange(e.target.value) },
+          options.map(([v, t]) => h.el('option', { value: v, text: t, selected: v === value ? true : null })),
+        ),
       ),
     ];
   }

@@ -4059,8 +4059,14 @@ ol.overview-list > .overview-row.overview-question > * {
   align-items: end;
 }
 
-.plans-triage-grid .plans-triage-label {
-  grid-column: auto;
+.plans-triage-field {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plans-triage-decline > .link-button {
+  justify-self: start;
 }
 
 .plans-triage-label {
