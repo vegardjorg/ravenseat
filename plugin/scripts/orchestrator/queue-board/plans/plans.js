@@ -763,6 +763,11 @@
         ? window.QueuePlanRead.planDocument(readHelp, p)
         : tabContent('doc', p, s.data),
     showInQueue: (id) => showInQueue(id),
+    // P8: "See tasks" opens the Queue filtered on the plan (plan:<id> in the Queue search, board/start.js).
+    showPlanTasks: (id) => {
+      useState({ ...s.state, room: 'queue' });
+      window.QueueBoard?.showPlan?.(id);
+    },
     // P4: the Filter and Sort controls in the Roadmap's toolbar (plans/filter.js), and the Sort in use.
     filterControls: (opts) =>
       window.QueuePlanFilter ? window.QueuePlanFilter.controls(filterHelp, s.data, opts) : null,

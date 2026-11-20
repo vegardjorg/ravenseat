@@ -307,12 +307,70 @@
     ];
   }
 
-  /** The actions: open the entry in the full Plan entries view; the CLI lines are chips under More. */
+  /** The id of the Turn into tasks hand-off (the button's aria-controls). */
+  const handoffId = (p) => `plans-page-handoff-${String(p.id).replace(/[^A-Za-z0-9_-]/g, '-')}`;
+
+  /**
+   * P8, from plan to tasks (section 7.4): "See tasks" when the plan has tasks (the Queue filtered on the plan), or
+   * "Turn into tasks" when it is shaped and has none. Turn into tasks writes nothing: it opens one line on how Claude
+   * splits the plan and the /add-to-queue line to copy, since the board cannot start a session. Its open state is the
+   * roadmap's fold state (h.isExpanded), so a redraw from the 15 second poll keeps it open.
+   */
+  function toTasksButton(h, p, step) {
+    if (step.kind === 'see')
+      return h.el('button', {
+        type: 'button',
+        class: 'toggles-button',
+        text: 'See tasks',
+        title: `Opens the Queue with only the tasks of ${p.id} (plan:${p.id} in the search)`,
+        'data-focus': `plan-see-tasks:${p.id}`,
+        onclick: () => h.showPlanTasks?.(p.id),
+      });
+    if (step.kind !== 'turn') return null;
+    const key = `turn:${p.id}`;
+    const open = h.isExpanded(key);
+    return h.el('button', {
+      type: 'button',
+      class: 'toggles-button',
+      text: 'Turn into tasks',
+      'aria-expanded': open ? 'true' : 'false',
+      'aria-controls': handoffId(p),
+      // the roadmap's fold toggle puts the focus back on `roadmap-more:<key>` after its redraw
+      'data-focus': `roadmap-more:${key}`,
+      onclick: () => h.toggleExpanded(key),
+    });
+  }
+
+  /** The opened Turn into tasks: what happens, the line for Claude Code, and the checks before packing. */
+  function handoff(h, p, step) {
+    if (step.kind !== 'turn' || !h.isExpanded(`turn:${p.id}`)) return null;
+    return h.el(
+      'div',
+      { class: 'plans-page-handoff', id: handoffId(p), role: 'region', 'aria-label': 'Turn into tasks' },
+      h.el('p', {
+        text:
+          'Claude splits the plan into queue tasks in Claude Code. Nothing is added from here; tasks Claude proposes ' +
+          'wait for your approval in Decisions.',
+      }),
+      h.cliChip(step.line),
+      step.warnings.length
+        ? h.el(
+            'ul',
+            { class: 'plans-page-warnings' },
+            step.warnings.map((w) => h.el('li', { text: w })),
+          )
+        : null,
+    );
+  }
+
+  /** The actions: from plan to tasks (P8), open the entry in the full Plan entries view; the CLI lines are chips under More. */
   function actions(h, d, p) {
     const prep = V.prepare(p, d);
+    const step = V.planToTasks(p, d);
     return h.el(
       'div',
       { class: 'plans-page-actions' },
+      toTasksButton(h, p, step),
       h.el('button', {
         type: 'button',
         class: 'toggles-button',
@@ -335,6 +393,7 @@
             )
           : null,
       ),
+      handoff(h, p, step),
     );
   }
 
@@ -347,13 +406,24 @@
     );
   }
 
-  function tasks(h, p) {
+  /** P8: why a plan without tasks has none yet, and what turns it into tasks. */
+  const NO_TASKS_HINT = {
+    turn: 'The plan is shaped: Turn into tasks hands it to Claude, which splits it into queue tasks.',
+    shape: 'It becomes tasks once it is shaped: work on the plan with Claude first (under More).',
+  };
+
+  function tasks(h, d, p) {
     const q = (p.queue ?? []).filter((o) => o.status !== 'cancelled');
+    const step = V.planToTasks(p, d);
+    const focus = V.planFocus(p);
     return h.el(
       'section',
       { class: 'plans-page-tasks', 'aria-label': 'Tasks' },
       h.el('h3', { text: 'Tasks' }),
       h.el('p', { text: V.tasksSentence(p) }),
+      // P8: focus stays a Queue concept; the page only says which step covers the plan (the Focus tab changes it).
+      focus ? h.el('p', { class: 'plans-page-focus', text: focus.text }) : null,
+      NO_TASKS_HINT[step.kind] ? h.el('p', { class: 'plans-page-hint', text: NO_TASKS_HINT[step.kind] }) : null,
       q.length
         ? h.el(
             'ul',
@@ -429,7 +499,7 @@
         questions(h, d, p),
         documentSection(h, p),
       ),
-      h.el('div', { class: 'plans-page-side' }, tasks(h, p), details(h, d, p)),
+      h.el('div', { class: 'plans-page-side' }, tasks(h, d, p), details(h, d, p)),
     );
   }
 

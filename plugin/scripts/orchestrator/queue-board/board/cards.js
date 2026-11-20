@@ -16,6 +16,10 @@ function visible(k, col) {
 /** The search alone (the search hides cards with `hidden`, while the filters decide what is built). */
 function searchMatch(k) {
   if (!t.filter.search) return true;
+  // P8: the shared rule (lib/queuePlanView.js) also understands plan:<id> ("See tasks" on a plan page uses it). It loads
+  // after the board scripts, so the plain search below covers the moment before it is there.
+  const V = window.QueuePlanView;
+  if (V?.cardMatchesSearch) return V.cardMatchesSearch(k, t.filter.search);
   return `${k.id} ${k.title} ${k.feature ?? ''} ${k.project}`
     .toLowerCase()
     .includes(t.filter.search);

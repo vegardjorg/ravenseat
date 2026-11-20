@@ -810,6 +810,68 @@
     return o.status === 'cancelled' ? 'Cancelled' : String(o.status ?? 'unknown');
   }
 
+  /**
+   * P8 (plan to tasks): the Queue search split into `plan:<id>` parts and the plain words, both lowercased. A lone
+   * "plan:" is just a word. The Queue's search box (board/cards.js) uses it, so "plan:PL-AUTH sessions" shows the
+   * cards of that plan whose text has "sessions".
+   * @returns {{ plans: string[], text: string }}
+   */
+  function searchParts(search) {
+    const plans = [];
+    const words = [];
+    for (const w of String(search ?? '').toLowerCase().split(/\s+/).filter(Boolean)) {
+      const m = /^plan:(\S+)$/.exec(w);
+      if (m) plans.push(m[1]);
+      else words.push(w);
+    }
+    return { plans, text: words.join(' ') };
+  }
+
+  /**
+   * Does a Queue card match the search? The plan parts are "or" (any of them), the words must appear in the card's id,
+   * title, feature or project (the Queue's plain search, unchanged).
+   */
+  function cardMatchesSearch(k, search) {
+    const { plans, text } = searchParts(search);
+    if (plans.length && !plans.includes(String(k?.plan ?? '').toLowerCase())) return false;
+    if (!text) return true;
+    return `${k?.id} ${k?.title} ${k?.feature ?? ''} ${k?.project}`.toLowerCase().includes(text);
+  }
+
+  /**
+   * P8: which step from a plan to tasks the plan page offers (section 7.4: plan work and building stay apart, the board
+   * adds no task itself):
+   *   'see'   the plan has tasks (cancelled ones not counted): See tasks opens the Queue on the plan,
+   *   'turn'  shaped (maturity ready) and no tasks yet: Turn into tasks hands off to Claude Code with the /add-to-queue
+   *           line and the checks before packing (prepare),
+   *   'shape' not shaped yet (an idea, investigated, planned, or still in the inbox): it must be shaped first,
+   *   'none'  dropped, or built without tasks: nothing to offer.
+   */
+  function planToTasks(p, data = {}) {
+    const q = (p?.queue ?? []).filter((o) => o.status !== 'cancelled');
+    if (q.length) return { kind: 'see', count: q.length };
+    const h = horizonFor(p);
+    if (h === 'dropped' || h === 'done') return { kind: 'none' };
+    if (h === 'inbox' || p?.maturity !== 'ready') return { kind: 'shape' };
+    const prep = prepare(p, data);
+    return { kind: 'turn', line: prep.line, warnings: prep.warnings };
+  }
+
+  /**
+   * P8: the first focus step that covers a task of the plan, from the same placement the Queue cards use (the server's
+   * queueInfo: L.focusSpace per task). Only tasks waiting in the queue have a step; null without a focus or outside it.
+   * @returns {{ step: number, title: string|null, text: string }|null}
+   */
+  function planFocus(p) {
+    let best = null;
+    for (const o of p?.queue ?? []) {
+      if (o?.column !== 'queue' || !o.applies || o.outside || !Number.isInteger(o.step)) continue;
+      if (!best || o.step < best.step) best = { step: o.step, title: o.step_title ?? null };
+    }
+    if (!best) return null;
+    return { ...best, text: `In focus through step T${best.step + 1}${best.title ? `: ${best.title}` : ''}.` };
+  }
+
   // ---- Done views ----------------------------------------------------------------------------------
 
   /**
@@ -4124,6 +4186,10 @@
     entryLine,
     prepare,
     queueStatusText,
+    searchParts,
+    cardMatchesSearch,
+    planToTasks,
+    planFocus,
     sameView,
     cleanOwnView,
     projectInfo,
