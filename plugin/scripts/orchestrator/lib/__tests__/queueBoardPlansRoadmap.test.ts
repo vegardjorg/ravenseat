@@ -302,8 +302,9 @@ describe('empty states', () => {
   it('no match names the search and offers to clear it', () => {
     const { node, calls } = draw(MIX, { width: 1000, state: { search: 'zzz' } });
     expect(node.querySelector('.empty p')?.textContent).toBe('No plans match "zzz".');
+    // P9: Clear search clears only the search (Clear filter is its own button, shown when a filter is on)
     (node.querySelector('.empty button') as HTMLElement).click();
-    expect(calls.use.at(-1)).toEqual({ search: '', filter: V.emptyFilter() });
+    expect(calls.use.at(-1)).toEqual({ search: '' });
   });
 });
 
@@ -461,9 +462,9 @@ describe('the plan document on the plan page (read.js planDocument)', () => {
     const node = R.planDocument(h, p);
     expect(fetched[0]).toContain(encodeURIComponent('docs/plans/auth.md'));
     expect(node.querySelector('.read-path')?.textContent).toBe('docs/plans/auth.md');
+    // P9: the source open in the reader is not offered again under "Also"
     expect([...node.querySelectorAll('.plans-page-also button')].map((b: any) => b.textContent)).toEqual([
       'docs/design/auth.md',
-      'docs/plans/auth.md § 1',
     ]);
     // the page has no Close: the document is what it is about
     expect([...node.querySelectorAll('button')].some((b: any) => b.textContent === 'Close')).toBe(false);
@@ -471,10 +472,11 @@ describe('the plan document on the plan page (read.js planDocument)', () => {
 
   it('without a readable source it says so', () => {
     const { R, h } = reader();
-    expect(R.planDocument(h, entry('PL-N')).textContent).toBe('The plan has no document yet.');
+    // P9: the same words as the plan page's empty state (V.planDocEmpty)
+    expect(R.planDocument(h, entry('PL-N')).textContent).toBe('No plan document yet');
     expect(
       R.planDocument(h, entry('PL-O', { sources: [{ path: '../secret.md' }] })).textContent,
-    ).toMatch(/cannot show here/);
+    ).toMatch(/not shown here/);
   });
 });
 

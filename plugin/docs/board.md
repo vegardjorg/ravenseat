@@ -394,7 +394,14 @@ progress in words with a small bar, the summary, **Open in Plan
 entries** and **More** (the start line and the `/add-to-queue` line as CLI chips), the plan document itself (its plan
 source at its anchor, other sources under "Also"), the tasks, and last **Details** with the priority, maturity, size,
 id and history (closed by default, remembered). From 1200 px the document keeps a readable line length and the tasks
-and Details sit in a column beside it. Escape or **Back to the roadmap** returns to the same card.
+and Details sit in a column beside it. Escape or **Back to the roadmap** returns to the same card. "Also" lists only
+the sources that are not open. A plan without a document says so in a short box, with what to do next.
+
+Small things: the column headers of the Roadmap stay in view while you scroll the columns; a search or filter with
+no match says what is in use and offers **Clear search** and **Clear filter**, and a screen reader hears the new
+count. The start lines for the area, project and plan sit in one **Copy start line** menu at the end of the
+breadcrumb. The deadline band shows only when a plan has a deadline. Below 700 px the room tabs
+stay on one line and scroll sideways inside their row.
 
 From plan to tasks: a plan with tasks has **See tasks**, which opens the Queue with `plan:<id>` in its search (the
 search takes `plan:<id>` next to plain words; clear the search to see all cards again). A shaped plan (maturity
@@ -592,6 +599,8 @@ The mascot in the upper-left corner now and then says something in a speech bubb
 between 00:00 and 05:00, encouragement, a statistic from the queue (the priciest task today, the oldest card in
 Review, proposals waiting, and so on), and events between two polls (merged, queue empty, new owner question, high
 finding, weekly quota over 90 %). Click the mascot for a line; five clicks within ten seconds gives another one.
+On a phone (720 px or less) the bubble sits at the bottom of the screen, at most three lines, so it never covers
+the room tabs.
 
 Timing rules: a night line at most every 30 minutes, random chat at most every 10 minutes, events at most one per
 minute. A line is never repeated within the last 8. The bubble stays 10 seconds (longer while the mouse is over it)

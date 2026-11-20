@@ -252,16 +252,34 @@
     }
     // P5: while the plan documents are still being searched the status line says so; "No plans match" waits for it.
     if (h.docSearch?.()?.busy) return null;
+    // P9 (section 7.6): the words name the search and the filter as the Filter button does, and each has its own
+    // Clear button, shown only when it applies, so clearing one keeps the other.
+    const n = V.countFilters(t.filter);
     return h.el(
       'div',
       { class: 'empty' },
-      h.el('p', { text: t.search ? `No plans match "${t.search}".` : 'No plans match the filters.' }),
-      h.el('button', {
-        type: 'button',
-        class: 'link-button',
-        text: 'Clear the search and filters',
-        onclick: () => h.use({ search: '', filter: V.emptyFilter() }),
-      }),
+      h.el('p', { text: V.noMatchText(t.search, n) }),
+      h.el(
+        'div',
+        { class: 'roadmap-empty-actions' },
+        t.search
+          ? h.el('button', {
+              type: 'button',
+              class: 'button button-outline',
+              text: 'Clear search',
+              'data-focus': 'search',
+              onclick: () => h.use({ search: '' }),
+            })
+          : null,
+        n
+          ? h.el('button', {
+              type: 'button',
+              class: 'button button-outline',
+              text: 'Clear filter',
+              onclick: () => h.use({ filter: V.emptyFilter() }),
+            })
+          : null,
+      ),
     );
   }
 
@@ -303,7 +321,11 @@
     wrap.append(
       h.el(
         'div',
-        { class: `roadmap-body roadmap-${layout}${compact ? ' compact' : ''}` },
+        {
+          class: `roadmap-body roadmap-${layout}${compact ? ' compact' : ''}`,
+          // P9: the columns are their own scroll box (sticky headers), so plans.js keeps their place across a redraw
+          'data-scroll': layout === 'columns' ? 'roadmap-columns' : null,
+        },
         sections.map((sec) => section(h, d, sec, { compact, active, foldAfter })),
       ),
     );
@@ -443,11 +465,21 @@
   }
 
   function documentSection(h, p) {
+    // P9 (section 7.6): a plan without a document the board can show gets a short empty state (a title and what
+    // happens next) instead of a line of small text under the heading.
+    const none = V.planDocEmpty(p);
     return h.el(
       'section',
       { class: 'plans-page-doc', 'aria-label': 'The plan document' },
       h.el('h3', { text: 'The plan document' }),
-      h.planDocument(p),
+      none
+        ? h.el(
+            'div',
+            { class: 'plans-page-empty' },
+            h.el('p', { class: 'plans-page-empty-title', text: none.title }),
+            h.el('p', { class: 'plans-page-empty-text', text: none.text }),
+          )
+        : h.planDocument(p),
     );
   }
 
@@ -550,5 +582,6 @@
     );
   }
 
-  window.QueuePlanRoadmap = { cells, page, docHit };
+  // `empty` is also used by the Plan entries list (plans.js), so both surfaces say the same thing (P9).
+  window.QueuePlanRoadmap = { cells, page, docHit, empty };
 })();

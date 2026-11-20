@@ -410,34 +410,28 @@
   function planDocument(h, p) {
     const context = `page:${p.id}`;
     const first = V.planSource(p);
-    if (!first)
-      return h.el('p', {
-        class: 'empty',
-        text: (p.sources ?? []).length
-          ? 'The plan points to documents the board cannot show here (outside the document folders).'
-          : 'The plan has no document yet.',
-      });
+    // the plan page draws its own empty state (V.planDocEmpty, roadmap.js); this short line is for any other caller.
+    if (!first) return h.el('p', { class: 'empty', text: V.planDocEmpty(p)?.title ?? 'No plan document yet' });
     if (!s.show[context]) {
       s.show[context] = { path: first.path, anchor: first.anchor ?? null, back: [] };
       if (first.anchor && !s.doc.has(first.path)) s.scroll = { context, anchor: first.anchor };
     }
     const selected = s.show[context];
-    const others = (p.sources ?? []).filter((k) => k?.path && !V.readPathError(k.path));
+    // P9: only the sources that are not open in the reader; the open one is named in the reader's own toolbar.
+    const others = V.otherSources(p, selected);
     return h.el(
       'div',
       { class: 'plans-page-reader' },
-      others.length > 1
+      others.length
         ? h.el(
             'p',
             { class: 'plans-page-also' },
             'Also: ',
             ...others.map((k) => {
-              const isSel = selected?.path === k.path && (selected.anchor ?? null) === (k.anchor ?? null);
               return h.el('button', {
                 type: 'button',
                 class: 'button-small button-outline',
                 text: `${k.path}${k.anchor ? ` ${k.anchor}` : ''}`,
-                'aria-pressed': isSel ? 'true' : 'false',
                 'aria-label': `Read ${k.path}${k.anchor ? ` at ${k.anchor}` : ''}`,
                 onclick: () => openOnes(h, context, k.path, k.anchor, { back: false }),
               });
