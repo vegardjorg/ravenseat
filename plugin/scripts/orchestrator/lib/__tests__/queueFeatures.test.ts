@@ -31,6 +31,8 @@ describe('features (pure)', () => {
       'plans.legal': false,
       'plans.launch': false,
       'plans.documents': false,
+      // P6: quick capture ("+ New plan" and the Inbox) is on, since it only adds a button and a section
+      'plans.inbox': true,
       focus: true,
       statistics: true,
       cloud: false,

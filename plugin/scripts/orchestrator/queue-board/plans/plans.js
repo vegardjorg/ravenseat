@@ -73,6 +73,8 @@
     menu: null,
     saveAsOpen: false,
     saveName: '',
+    // P6: the "+ New plan" form (plans/capture.js): open, what is typed, busy while it saves, the last error.
+    capture: { open: false, title: '', text: '', busy: false, error: null },
     closed: new Set(readList(CLOSED_STORAGE)), // closed document groups (open by default)
     roadmap: readObject(ROADMAP_STORAGE), // the viewer's Roadmap choices
     roadmapOpen: new Set(), // the Roadmap sections opened past the fold (this visit only)
@@ -426,6 +428,7 @@
       pathEl(d, { drawer: docSurface }),
       surfaceOptionEl(d),
       docSurface ? null : entriesToolbarEl(d, match, { sort: sortable }),
+      docSurface ? null : (window.QueuePlanCapture?.form(captureHelp) ?? null),
       docSurface || !window.QueuePlanMap
         ? null
         : window.QueuePlanMap.deadlineBand(mapHelp, d, pickedOut ? match.map((p) => p.id) : null),
@@ -705,6 +708,8 @@
     // P4: `f` opens the Filter menu; while one is open the room's own keys wait (work.js).
     openFilter: () => openFilter(),
     filterMenuOpen: () => !!s.menu,
+    // P6: `n` opens "+ New plan" (plans/capture.js).
+    openCapture: () => window.QueuePlanCapture?.open(captureHelp),
   };
 
   /** Saves one of the viewer's Roadmap choices (layout, group, compact, details) and redraws. */
@@ -762,6 +767,32 @@
     filterControls: (opts) =>
       window.QueuePlanFilter ? window.QueuePlanFilter.controls(filterHelp, s.data, opts) : null,
     sort: () => currentSort(),
+    // P6: "+ New plan" and its form (plans/capture.js); null while features.plans.inbox is off.
+    newPlanButton: () => window.QueuePlanCapture?.button(captureHelp) ?? null,
+    captureForm: () => window.QueuePlanCapture?.form(captureHelp) ?? null,
+  };
+
+  /**
+   * The helpers plans/capture.js gets. The form's state lives in `s.capture`, so a live redraw keeps what is typed;
+   * typing itself does not redraw (redraw: false), only opening, closing, an error or a save does. The writing (POST)
+   * lives in capture.js, as it does in work.js and legal.js: the room itself only reads.
+   */
+  const captureHelp = {
+    el,
+    featureOn: () => featureOn('plans') && featureOn('plans.inbox'),
+    capture: () => s.capture,
+    setCapture: (change, { redraw = true, focus = null } = {}) => {
+      Object.assign(s.capture, change);
+      if (redraw) draw({ focus });
+    },
+    message,
+    // the board's toast with Undo (board/bulk.js roomUndoToast); a plain message when it is not there
+    undoToast: (text, onUndo, title) =>
+      window.QueueBoard?.undoToast ? window.QueueBoard.undoToast(text, onUndo, title) : message(text),
+    refresh: async () => {
+      await get(true);
+      draw();
+    },
   };
 
   // The Roadmap's layout follows the width (columns from 1200 px, always a list below 700 px): redraw when the window
@@ -983,6 +1014,8 @@
       { class: 'plans-toolbar' },
       searchFieldEl(),
       window.QueuePlanFilter ? window.QueuePlanFilter.controls(filterHelp, d, { sort }) : null,
+      // P6: "+ New plan" (plans/capture.js) is in this toolbar too, so `n` works on Plan entries as well.
+      window.QueuePlanCapture?.button(captureHelp) ?? null,
       el('p', {
         class: 'plans-match',
         role: 'status',

@@ -1105,10 +1105,14 @@
         active: activeOnes[p.id] ?? null,
         created: p.created ?? null, // "Recently registered"
         history: (history.get(p.id) ?? []).slice(-20).reverse(),
-        // Inbox: { by, at } while the plan waits to be sorted (today only findings, by 'track'), else null.
-        inbox: QF.isNewFinding(p, queue?.tasks ?? [])
-          ? { by: 'track', at: p.finding?.reported ?? null }
-          : null,
+        // Inbox: { by, at } while the plan waits to be sorted, else null: a captured plan (P6, lib/planInbox.js, by
+        // 'owner') or a finding nobody has triaged (by 'track'). A queue task that points to it has sorted it.
+        inbox:
+          p.inbox && p.priority !== 'drop' && !(queue?.tasks ?? []).some((o) => o?.plan === p.id)
+            ? { by: typeof p.inbox.by === 'string' ? p.inbox.by : 'owner', at: p.inbox.at ?? null }
+            : QF.isNewFinding(p, queue?.tasks ?? [])
+              ? { by: 'track', at: p.finding?.reported ?? null }
+              : null,
         // The lead from the plan document, only when nobody wrote a summary: { text, path, anchor } or null.
         lead: !p.summary && leadFor ? (leadFor(p) ?? null) : null,
       };
@@ -3034,14 +3038,20 @@
     return out.filter((x) => x.by !== 'theBoard');
   }
 
+  /**
+   * The limits of quick capture ("+ New plan", P6), one set for the form, the server and the CLI (lib/planInbox.js
+   * reads them from here): the title is a heading; the text has a soft limit the form shows and a hard one it refuses.
+   */
+  const CAPTURE = Object.freeze({ TITLE_MAX: 160, TEXT_SOFT: 2000, TEXT_MAX: 4000 });
+
   // ---- Keyboard ----
 
   /**
    * What a key press does in the Plans room. Ctrl+K (Cmd+K) works everywhere; the others only outside input fields and menus and
    * without Ctrl, Cmd or Alt (so the browser's own shortcuts work as before).
    * @param {{ key: string, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean, shiftKey?: boolean }} e
-   * @returns {{ type: 'palette'|'move'|'opened'|'search'|'filter'|'priority'|'copy'|'mark'|'cancel', direction?: number,
-   *   val?: string }|null}
+   * @returns {{ type: 'palette'|'move'|'opened'|'search'|'filter'|'new'|'priority'|'copy'|'mark'|'cancel',
+   *   direction?: number, val?: string }|null}
    */
   function keyAction(e, { inputField = false, busy = false } = {}) {
     const k = e?.key;
@@ -3054,6 +3064,8 @@
     if (k === '/') return { type: 'search' };
     // f opens the Filter menu (P4, plan section 7.7)
     if (k === 'f') return { type: 'filter' };
+    // n opens "+ New plan" (P6, quick capture)
+    if (k === 'n') return { type: 'new' };
     if (Object.hasOwn(PRIORITY_KEY, k)) return { type: 'priority', val: PRIORITY_KEY[k] };
     if (k === 'c') return { type: 'copy' };
     if (k === 'x') return { type: 'mark' };
@@ -4222,6 +4234,7 @@
     workingNow,
     changedEntries,
     keyAction,
+    CAPTURE,
     neighborEntry,
     priorityFromKey,
     paletteCandidates,

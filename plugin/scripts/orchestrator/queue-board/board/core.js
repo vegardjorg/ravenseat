@@ -61,6 +61,7 @@ const FEATURE_LABEL = {
   'plans.legal': 'Plans: Legal',
   'plans.launch': 'Plans: Launch',
   'plans.documents': 'Plans: Documents and agreements',
+  'plans.inbox': 'Plans: + New plan (quick capture)',
   focus: 'Focus tab',
   statistics: 'Statistics tab',
   cloud: 'Cloud',

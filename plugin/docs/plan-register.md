@@ -48,6 +48,8 @@ undo.
 | `plan rules` | The priority rules |
 | `plan active <id>` | "Working now" marker shown on the board |
 | `plan check` | Unregistered documents, dead paths, anchors without a heading (the file exists, but the source's `anchor` finds no heading, with the same lookup as the mission; `anchor_misses` in `--json`), stale entries |
+| `plan capture "<title>" [--text "…"]` / `--file f.json` | Quick capture into the Inbox (see Inbox) |
+| `plan inbox` | The captured plans nobody has sorted yet |
 | `plan undo` | Undo |
 | `plan backup` | Runs the script in `planBackup` (optional; for example a private backup repo) |
 | `plan doc …` | Optional register of controlled documents (versions, revisions, links) |
@@ -68,6 +70,16 @@ estimate, owned files), while a finding is an observation nobody has looked at y
   A title that matches an entry that is not a finding changes nothing.
 - A finding is new until it is triaged: a new priority or maturity, a drop, or a queue task with `--plan <id>`.
   `orchestrator pulse` and `ravenseat show` print a `FINDINGS:` line with the count, and `ravenseat state` has `findings`.
+
+## Inbox (quick capture)
+
+`ravenseat plan capture "<title>" [--text "…"]` and the board's **+ New plan** write down an idea in one step: a title (up to 160 characters) and, if wanted, a text in the owner's own words (up to 4000). Nothing else is asked.
+
+- The entry is a normal plan entry: an id from the title (`PL-DARK-MODE-1`), `summary` = the text, project `general` (created on first use), `priority: later` and `maturity: idea` set by the owner.
+- The tool-owned field `inbox: { at, by }` marks it as captured. It is removed when the entry is sorted: a new priority or maturity, or `plan edit <id> --field inbox=null`. A queue task with `--plan <id>` or a drop also takes it out of the Inbox.
+- The same title again while it still waits in the Inbox writes nothing. A sorted plan with the same title gives a warning.
+- `orchestrator pulse` and `ravenseat show` print an `INBOX:` line with the count; `plan inbox` lists them. `plan undo` takes a capture back.
+- Off with `features.plans.inbox` (the board then has no **+ New plan**, and `POST /api/plan-capture` answers 403).
 
 ## Rules that keep it useful
 

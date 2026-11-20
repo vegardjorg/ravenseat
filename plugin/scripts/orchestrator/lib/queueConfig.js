@@ -25,6 +25,7 @@ const FEATURES = Object.freeze({
   'plans.legal': false, // the Legal surface in Plans
   'plans.launch': false, // the Launch surface in Plans
   'plans.documents': false, // the Documents and agreements surface in Plans
+  'plans.inbox': true, // quick capture in Plans: "+ New plan" and POST /api/plan-capture (P6; it only adds)
   focus: true, // the Focus tab on the board
   statistics: true, // the Statistics tab on the board
   cloud: false, // cloud sessions: the Cloud tab, the cloud filter and detail row, and the cloud commands

@@ -86,9 +86,12 @@ const FIELD = [
   'agent_boost',
   // `ravenseat finding` (lib/queueFindings.js): { tasks, files, reported, last, count }, the tracks that reported it.
   'finding',
+  // `ravenseat plan capture` and the board's "+ New plan" (lib/planInbox.js): { at, by }, while the plan waits in the
+  // Inbox to be sorted. editEntry removes it when the priority or maturity changes, or with inbox=null.
+  'inbox',
 ];
-/** Fields the tool owns: cannot be set with `plan new` or `plan edit`. */
-const TOOL_FIELD = new Set(['id', 'created', 'agent_boost', 'merged_from', 'finding']);
+/** Fields the tool owns: cannot be set with `plan new` or `plan edit` (inbox can only be removed, with null). */
+const TOOL_FIELD = new Set(['id', 'created', 'agent_boost', 'merged_from', 'finding', 'inbox']);
 /** Derived from queue.json (task.plan); never saved in the register. */
 const DERIVED_FIELD = new Set(['queue_tasks']);
 
@@ -401,6 +404,9 @@ function validateEntry(entry, ctx = {}) {
       if (!Array.isArray(fi.files) || fi.files.some((x) => typeof x !== 'string')) f('finding.files must be a list of paths');
     }
   }
+  // A captured plan (`ravenseat plan capture`): when and by whom; the shape only, the tool writes it.
+  if (entry.inbox != null && (!isObject(entry.inbox) || typeof entry.inbox.at !== 'string' || typeof entry.inbox.by !== 'string'))
+    f('inbox must be { at, by } (set by ravenseat plan capture)');
 
   if (entry.size != null && !SIZES.includes(entry.size))
     f(`size must be one of ${SIZES.join(', ')}`);
@@ -640,6 +646,8 @@ function editEntry(reg, id, field, ctx = {}) {
   const warnings = [];
   for (const k of Object.keys(field)) {
     if (DERIVED_FIELD.has(k)) error.push(`${id}: ${k} is derived from the queue and is not changed here`);
+    // inbox=null takes a captured plan out of the Inbox (sorted); setting it is the tool's (plan capture).
+    else if (k === 'inbox' && field[k] === null) continue;
     else if (TOOL_FIELD.has(k) || k === 'priority_set_by')
       error.push(`${id}: ${k} is set by the tool`);
   }
@@ -649,6 +657,8 @@ function editEntry(reg, id, field, ctx = {}) {
     if (v === null || v === undefined) delete fresh[k];
     else fresh[k] = cloneJson(v);
   }
+  // A new priority or maturity is sorting a captured plan: it leaves the Inbox (lib/planInbox.js).
+  if (fresh.inbox && (fresh.priority !== old.priority || fresh.maturity !== old.maturity)) delete fresh.inbox;
   // If the priority changes away from now or drop, the category or the drop reason goes with it (unless the caller
   // has set them itself).
   if (fresh.priority !== 'now' && !('now_category' in field)) delete fresh.now_category;

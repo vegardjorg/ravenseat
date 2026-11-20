@@ -23,6 +23,7 @@ import { activityFor, costEstimateState, dailyUsageFor, findSilent, findWithoutA
 import { batchGroupLine } from './batch.mjs';
 import { followLines } from './orchestrator.mjs';
 import { findingsLineNow, findingsStateNow } from './finding.mjs';
+import { inboxLineNow } from './planInbox.mjs';
 import { baseHealthLine } from './baseHealth.mjs';
 import { installInfo, showUpdateLine } from './update.mjs';
 
@@ -101,6 +102,9 @@ export function cmdShowSummary() {
   // Findings from the tracks (ravenseat finding) that nobody has triaged yet.
   const fl = findingsLineNow();
   if (fl) console.log(fl);
+  // Plans the owner captured (ravenseat plan capture, the board's "+ New plan") that nobody has sorted yet.
+  const il = inboxLineNow();
+  if (il) console.log(il);
 }
 
 /** `ravenseat show` (the usage is at the top of queue.mjs). */
