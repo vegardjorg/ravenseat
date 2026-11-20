@@ -1,5 +1,7 @@
 # CI for Ravenseat: the full test suite on Linux and Windows, on every push to main and every pull request.
 # Actions are pinned by commit SHA (the tag in the comment), so a moved tag cannot change what runs here.
+# Windows node 22 runs as 3 shards (the whole suite in one Windows job took about 25 min); `shards-complete` fails
+# unless every test file ran in one of them and every shard passed. Windows node 20 runs weekly (ci-weekly.yml).
 name: CI
 
 on:
@@ -19,12 +21,12 @@ jobs:
   test:
     name: test (${{ matrix.os }}, node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
-    # The full suite takes about 30 min on a Windows runner (about 9 on Ubuntu): Windows gets 45, Ubuntu keeps 30.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 30 }}
+    # The full suite takes about 9 min on Ubuntu.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         node: [20, 22]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -41,3 +43,66 @@ jobs:
           git config --global user.email "ravenseat-ci@example.invalid"
       - run: npm ci
       - run: npm test
+
+  test-windows:
+    name: test (windows-latest, node 22, shard ${{ matrix.shard }}/3)
+    runs-on: windows-latest
+    # One shard is about a third of the Windows suite (about 10 min); the limit stays the one the whole suite had.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Git identity for test repos
+        run: |
+          git config --global user.name "ravenseat-ci"
+          git config --global user.email "ravenseat-ci@example.invalid"
+      - run: npm ci
+      # The normal output, plus a JSON report that shards-complete reads to see which files this shard ran.
+      - run: npm test -- --shard=${{ matrix.shard }}/3 --reporter=default --reporter=json --outputFile.json=vitest-shard-${{ matrix.shard }}.json
+      # Also when the tests failed: the check below must see what ran. A shard that left no report fails it.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: vitest-shard-${{ matrix.shard }}
+          path: vitest-shard-${{ matrix.shard }}.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The coverage guard for the split: every test file vitest finds ran in one of the shards, and every shard passed.
+  shards-complete:
+    name: shards complete (windows, node 22)
+    needs: test-windows
+    # Runs also when a shard failed or was cancelled, so the reason is named here; it is red then.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The files as vitest itself finds them (vitest.config.mjs include), without running them.
+      - run: npx vitest list --filesOnly --json=vitest-files.json
+      # No report at all must not stop the job here: the check below names what is missing and fails.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        continue-on-error: true
+        with:
+          pattern: vitest-shard-*
+          path: shard-reports
+      - name: Every test file ran in a shard, every shard green
+        run: >-
+          node scripts/ci-shard-coverage.mjs --list vitest-files.json --root . --reports shard-reports --shards 3
+          --needs-result ${{ needs.test-windows.result }}
