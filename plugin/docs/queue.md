@@ -1174,6 +1174,7 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 |---|---|---|---|
 | `stateSnapshots.enabled`, `stateSnapshots.tiers` | `true`, `["1h","5h","1d","2d","7d"]` | Rolling copies of queue.json at a few ages, kept in the data folder | Advanced |
 | `metrics.idleGapMin` | `5` | A gap longer than this between two transcript entries is idle and not counted as active time | Advanced |
+| `metrics.machineSampleMin` | `0` | While the board runs, a `load` row with command `sample` (free memory, CPU, running tracks) every this many minutes, for the Machine section of Statistics. `0` = off: the load rows at fill and start already answer how many tracks fit, and a sample only while the board runs has gaps. A measurement only, it never limits or stops work | Advanced |
 | `history.rotateTimeLog` | `"monthly"` | `monthly` moves the time log to one archive per UTC month next to it on the first write of a new month; `off` keeps one file | Advanced |
 | `history.archiveDoneAfterDays` | `30` | Done and cancelled tasks untouched for this many days move from queue.json to `queue-archive.json` in the data folder; `null` keeps them all in queue.json | Advanced |
 | `queue.missionInlineMax` | `16000` | `add` and `edit` move an inline mission longer than this many characters to `mission/<id>.md` in the data folder and store the path (see the `mission` field), so queue.json stays small; the agent reads the file as before. It stops nothing, so `0` (every mission stays inline) weakens no guard | Advanced |

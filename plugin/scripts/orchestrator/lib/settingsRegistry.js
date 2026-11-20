@@ -1358,6 +1358,11 @@ const SETTINGS = Object.freeze([
     'further back after a bad change.'),
   row('metrics.idleGapMin', 'history', 'integer', 'Idle gap (minutes)',
     'A gap longer than this between two transcript entries is idle and not counted as active time.'),
+  // Friction: low, a CPU reading twice per sample and one time log row; only while the board runs. Off by default: the
+  // load rows at fill and start and the gate rows' memory samples already answer how many tracks and gate slots fit.
+  row('metrics.machineSampleMin', 'history', 'integer', 'Machine sample (minutes)',
+    'While the board runs, free memory and CPU are written to the time log every this many minutes, for the Machine ' +
+    'section of Statistics. 0 = off. A measurement only: it never limits or stops work.'),
   // Owner decision B5: performance, not a guard (lib/timeLogArchive.js, lib/queueArchive.js).
   // Private and sharing (H3, H4: lib/queueShare.js, lib/privatePaths.js). share.queueData and share.publicOk are read
   // only here: turning sharing on is `ravenseat share on`, which explains what becomes visible and needs --yes (and

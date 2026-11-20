@@ -263,7 +263,9 @@ The Queue workspace has these tabs:
     and p95; the gates that never went red), and the findings log per source and severity with the deferred findings
     and how many of them were fixed.
   - **Machine:** free memory and limited or stopped starts per day from the load rows, the gate queue wait per day
-    (p50 and p95), the gate time against how many tracks ran at once, and at the bottom the guard decisions.
+    (p50 and p95), the gate time against how many tracks ran at once, and at the bottom the guard decisions. With
+    `metrics.machineSampleMin` above 0 (default `0`, off) the board also writes a machine sample (free memory, CPU,
+    running tracks) every that many minutes while it runs, and the lowest free memory per day counts those too.
   Every chart has a caption that is a question and a line **Does this look bad?** with a button per setting that
   changes it; the button opens the gear on that setting.
 - A running card gets the badge **silent** when the track has an agent worktree but no sign of life for

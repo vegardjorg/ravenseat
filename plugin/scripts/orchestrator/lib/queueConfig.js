@@ -356,8 +356,10 @@ const STANDARD = Object.freeze({
   // cache write prices default to 1.25x and 2x the input price. Example: { "opus-4-1": { input: 15, output: 75, cache_read: 1.5 } }.
   prices: null,
   // The transcript metrics in the time log (hook-time.mjs): idleGapMin = a gap longer than this many minutes between
-  // two transcript entries is idle and not counted in active_s.
-  metrics: { idleGapMin: 5 },
+  // two transcript entries is idle and not counted in active_s. machineSampleMin (S9, lib/machineSample.js) = while the
+  // board runs, a load row with free memory and CPU every this many minutes; 0 = off (the default: the fill/start load
+  // rows and the gate rows' memory readings answer how many tracks fit, and a sample only while the board runs has gaps).
+  metrics: { idleGapMin: 5, machineSampleMin: 0 },
   // The "Turns and tools" block in `ravenseat cost` (lib/turnTools.js): contextThresholdK = the context (thousands of
   // tokens) a turn's cost is counted above or below. A measurement only.
   cost: { contextThresholdK: 200 },
