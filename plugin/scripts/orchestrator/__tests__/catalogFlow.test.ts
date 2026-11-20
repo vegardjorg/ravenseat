@@ -256,6 +256,31 @@ describe('ravenseat catalog propose', () => {
     expect(PG.assess('ravenseat catalog propose --title X --invariant Y --paths a', { agentType: 'track', branch: 'queue/A', environment: null })?.decision).toBe('deny');
   });
 
+  it('Z-C: propose --supersedes takes the old paths and plan, and its accept marks the old one superseded', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION);
+    expect(p.run(['catalog', 'accept', 'D-0001', '--by', 'owner']).code).toBe(0);
+    const nowhere = p.run(['catalog', 'propose', '--title', 'X', '--invariant', 'Y.', '--supersedes', 'D-0042']);
+    expect(nowhere.code).toBe(1);
+    expect(nowhere.err).toMatch(/D-0042 is not in/);
+    const r = p.run(['catalog', 'propose', '--title', 'Dates with the platform', '--invariant', 'Code under lib/ handles dates with Temporal.', '--supersedes', 'D-0001']);
+    expect(r.code, r.all).toBe(0);
+    const text = p.read(`${CAT}/decisions/D-0002-dates-with-the-platform.md`);
+    expect(text).toMatch(/\npaths: \["lib\/\*\*"\]\n/);
+    expect(text).toMatch(/\nsupersedes: D-0001\nplan: PL-DATES\n/);
+    // Until the accept, the old one holds; the accept of the new one sets it to superseded in the same step.
+    expect(p.run(['catalog', 'show']).out).toMatch(/D-0001\s+accepted/);
+    const ok = p.run(['catalog', 'accept', 'D-0002', '--by', 'owner']);
+    expect(ok.code, ok.all).toBe(0);
+    expect(ok.out).toMatch(/D-0001 is now superseded/);
+    expect(p.read(`${CAT}/decisions/D-0001-dates.md`)).toMatch(/\nstatus: superseded\n/);
+    const check = p.run(['catalog', 'check']);
+    expect(check.code, check.all).toBe(0);
+    expect(check.all).not.toMatch(/is not marked status: superseded/);
+    expect(p.run(['catalog', 'show']).out).toMatch(/D-0001\s+superseded/);
+  });
+
   it('works before catalog init: it makes the decisions folder', () => {
     const p = project();
     const r = p.run(['catalog', 'propose', '--title', 'One', '--invariant', 'Code under lib/ stays small.', '--paths', 'lib/**', '--json']);

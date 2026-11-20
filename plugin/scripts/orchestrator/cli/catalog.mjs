@@ -296,13 +296,28 @@ function accept() {
   if (r.error) die(`${CLI} catalog accept: ${r.error}. Nothing was changed.`);
   const after = C.parseDecision(hit.name, r.text);
   if (after.errors.length || !after.decision) die(`${CLI} catalog accept: ${after.errors.join('; ')}. Nothing was changed.`);
+  // Z-C (roadmap 0z): a choice with supersedes marks the old one superseded in the same step. Checked before anything is
+  // written, so a supersedes that points nowhere changes nothing.
+  const sup = after.decision.supersedes;
+  let old = null;
+  if (sup) {
+    old = cat.decisions.find((x) => x.decision?.id === sup) ?? null;
+    if (!old) die(`${id} supersedes ${sup}, which is not in ${C.DIR}/decisions. Fix the supersedes line first. Nothing was changed.`);
+    if (old.decision.status !== 'superseded') {
+      const s = C.supersededText(old.source);
+      if (s.error) die(`${sup} cannot be marked superseded: ${s.error}. Nothing was changed.`);
+      old = { ...old, text: s.text };
+    } else old = null; // already superseded: nothing to write
+  }
   // The record first: a file that says accepted with no record reads as unconfirmed, which is the safe side.
   writeLedger(C.recordAccept(readLedger(), after.decision, { by }));
   fs.writeFileSync(path.join(catalogDir(MAIN_TREE), 'decisions', hit.name), r.text);
+  if (old) fs.writeFileSync(path.join(catalogDir(MAIN_TREE), 'decisions', old.name), old.text);
   console.log(
     `Accepted ${id} (${after.decision.title}). The file says status: accepted, and the record in ${C.LEDGER_FILE} holds ` +
       'this invariant, these paths and this check: a later change to them needs a new accept. Commit the file yourself.',
   );
+  if (old) console.log(`${sup} is now superseded (decisions/${old.name}): ${id} replaces it. Commit that file too.`);
 }
 
 // ---- propose (roadmap 0z Z-B) -------------------------------------------------------------------------------------

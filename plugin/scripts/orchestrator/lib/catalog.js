@@ -472,6 +472,22 @@ function acceptText(source, { by, now = new Date().toISOString() } = {}) {
   return { text: [all[0], ...head, ...all.slice(end)].join('\n'), error: null };
 }
 
+/**
+ * The file text with status: superseded; every other line stays as it was (also accepted_by and accepted: they say who
+ * accepted it while it held). Used by `catalog accept` of the choice that supersedes it (roadmap 0z Z-C), so the two
+ * manual edits the format note asks for are one step. Only the owner's accept calls it.
+ * @returns {{ text: string|null, error: string|null }}
+ */
+function supersededText(source) {
+  const fm = parseFrontmatter(source);
+  if (!fm.data) return { text: null, error: fm.errors.join('; ') };
+  const all = lines(source);
+  const at = all.findIndex((l, i) => i > 0 && i < fm.bodyStart - 1 && /^status:/.test(l));
+  if (at < 0) all.splice(fm.bodyStart - 1, 0, 'status: superseded');
+  else all[at] = 'status: superseded';
+  return { text: all.join('\n'), error: null };
+}
+
 // ---- propose (roadmap 0z Z-B) ---------------------------------------------------------------------------------------
 
 /**
@@ -749,7 +765,7 @@ const DECISIONS_README = [
   '  names it as an error, and it counts as proposed until the owner accepts it.',
   '- `invariant`: one sentence that can be checked. It is the only text a track gets.',
   '- `paths`: the files the choice applies to.',
-  '- To change an accepted choice, write a new one with `supersedes: D-0001` and set the old one to `superseded`.',
+  '- To change an accepted choice, write a new one with `supersedes: D-0001`; its accept sets the old one to `superseded`.',
   '- `plan`: the plan entry with the long version, if there is one. A plan entry links back with `decisions`.',
   '',
 ].join('\n');
@@ -780,6 +796,7 @@ module.exports = {
   effectiveStatus,
   recordAccept,
   acceptText,
+  supersededText,
   nextDecisionId,
   slugOf,
   proposalFile,

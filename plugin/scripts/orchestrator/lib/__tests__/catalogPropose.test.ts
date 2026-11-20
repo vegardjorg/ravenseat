@@ -63,3 +63,16 @@ describe('Z-B: catalog propose', () => {
     expect(C.proposalFile({ id: 'D-0001', title: 'X', invariant: 'Y.', paths: [] }).errors.join('\n')).toMatch(/paths must be a list/);
   });
 });
+
+describe('Z-C: accept of a choice that supersedes another', () => {
+  const OLD = ['---', 'id: D-0001', 'title: Old', 'status: accepted', 'paths: ["lib/**"]', 'invariant: Old rule.', 'accepted_by: owner', 'accepted: 2026-11-01', '---', 'Body stays.', ''].join('\n');
+
+  it('the old file gets status superseded, every other line byte for byte', () => {
+    const r = C.supersededText(OLD);
+    expect(r.error).toBeNull();
+    expect(r.text).toBe(OLD.replace('status: accepted', 'status: superseded'));
+    expect(C.parseDecision('D-0001-old.md', r.text).decision.status).toBe('superseded');
+    expect(C.supersededText(r.text).text).toBe(r.text);
+    expect(C.supersededText('no frontmatter').error).toMatch(/frontmatter/);
+  });
+});
