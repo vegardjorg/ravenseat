@@ -293,15 +293,48 @@ function pathForms(p, { platform = process.platform, short = shortPathWin, real 
 }
 
 /**
+ * The long forms of the Windows paths in `cmd` that hold an 8.3 short name (a `~`), joined by spaces, or ''. A command
+ * line can mix short and long folder names (C:\Users\RUNNER~1\...\Temp\queue-snap-x\wt-A after mkdtemp under a short
+ * TEMP), so no single form of the worktree path matches it as written. Each such path is resolved from its longest
+ * existing prefix (the file at the end may not exist), and the rest is kept as written. Fails open per path; only
+ * used for matching, never shown.
+ */
+function expandShortNames(cmd, real = (x) => fs.realpathSync.native(x)) {
+  const s = String(cmd ?? '');
+  if (!s.includes('~')) return '';
+  const out = [];
+  for (const m of s.match(/[A-Za-z]:[\\/][^\s"'<>|]*~[^\s"'<>|]*/g) ?? []) {
+    const parts = m.split(/[\\/]/);
+    for (let n = parts.length; n > 1; n -= 1) {
+      try {
+        const head = real(parts.slice(0, n).join('\\'));
+        out.push([head, ...parts.slice(n)].join('\\'));
+        break;
+      } catch {
+        // error-ignored: this prefix does not exist; try the shorter one
+      }
+    }
+  }
+  return out.join(' ');
+}
+
+/**
  * The processes whose command line names one of `needles` (the worktree path, the branch; slashes either way, any
- * case) and their descendants, in list order, at most `max`, each with its command line redacted.
+ * case, 8.3 short names expanded) and their descendants, in list order, at most `max`, each with its command line
+ * redacted. `real` is a seam for tests.
  * @param {{ pid: number, ppid: number, name?: string, cmd?: string }[]} list
  */
-function relevantProcesses(list, { needles = [], max = MAX_PROCESSES, self = process.pid } = {}) {
+function relevantProcesses(list, { needles = [], max = MAX_PROCESSES, self = process.pid, real } = {}) {
   const ns = needles.filter(Boolean).map(norm);
   if (!ns.length) return [];
   const keep = new Set();
-  for (const p of list ?? []) if (p?.pid !== self && ns.some((n) => norm(p.cmd).includes(n))) keep.add(p.pid);
+  const names = (p) => {
+    const hay = norm(p.cmd);
+    if (ns.some((n) => hay.includes(n))) return true;
+    const long = norm(expandShortNames(p.cmd, real));
+    return long !== '' && ns.some((n) => long.includes(n));
+  };
+  for (const p of list ?? []) if (p?.pid !== self && names(p)) keep.add(p.pid);
   let grew = true;
   while (grew) {
     grew = false;

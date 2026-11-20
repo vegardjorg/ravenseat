@@ -137,6 +137,26 @@ describe('the worktree path in every form a command line can use (Windows short 
     });
     expect(S.relevantProcesses(list, { needles }).map((p: any) => p.pid)).toEqual([10]);
   });
+
+  it('a command line that mixes short and long folder names is found (short parent, long child folder)', () => {
+    // mkdtemp under a short TEMP gives C:\Users\RUNNER~1\...\Temp\queue-snap-x\wt-A: neither the long form git reports
+    // nor the fully shortened form (QUEUE-~1) appears as is, so the short names in the command line are expanded.
+    const long = 'C:/Users/runneradmin/AppData/Local/Temp/queue-snap-x/wt-A';
+    const mixed = 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\queue-snap-x\\wt-A';
+    const list = [
+      { pid: 10, ppid: 1, name: 'node', cmd: `node ${mixed}\\run.mjs --flag` },
+      { pid: 20, ppid: 1, name: 'node', cmd: 'node C:\\Users\\RUNNER~1\\other\\run.mjs' },
+    ];
+    // The fake resolver knows only the worktree folder; run.mjs does not exist, so the existing prefix is expanded.
+    const real = (p: string) => {
+      if (p.toLowerCase() === mixed.toLowerCase()) return long.replace(/\//g, '\\');
+      if (p.toLowerCase() === 'c:\\users\\runner~1\\other') return 'C:\\Users\\runneradmin\\other';
+      throw new Error('ENOENT');
+    };
+    const got = S.relevantProcesses(list, { needles: [long], real });
+    expect(got.map((p: any) => p.pid)).toEqual([10]);
+    expect(got[0].cmd).toBe(`node ${mixed}\\run.mjs --flag`); // the shown line stays as the process wrote it
+  });
 });
 
 describe('the processes: only those that name the worktree or the branch, and their children', () => {
