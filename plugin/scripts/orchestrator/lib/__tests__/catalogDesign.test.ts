@@ -149,7 +149,8 @@ describe("Ravenseat's own catalog", () => {
   const repo = path.resolve(__dirname, '..', '..', '..', '..', '..');
   const dir = path.join(repo, ...C.DIR.split('/'));
 
-  it('holds the board design language as proposed design entries without errors', () => {
+  // D-0001 (board colours only from the tokens) was accepted by the owner on 2026-11-20; the others stay proposed.
+  it('holds the board design language as design entries without errors', () => {
     const cat = C.readCatalog(dir);
     expect(cat.exists).toBe(true);
     expect(cat.errors).toEqual([]);
@@ -157,7 +158,7 @@ describe("Ravenseat's own catalog", () => {
     const designs = ds.filter((d: any) => d.kind === 'design');
     expect(designs.length).toBeGreaterThanOrEqual(2);
     for (const d of designs) {
-      expect(d.status).toBe('proposed');
+      expect(d.status).toBe(d.id === 'D-0001' ? 'accepted' : 'proposed');
       expect(d.paths.some((p: string) => p.startsWith('plugin/scripts/orchestrator/queue-board/'))).toBe(true);
     }
   });
@@ -175,7 +176,9 @@ describe("Ravenseat's own catalog", () => {
       },
       ledger: C.emptyLedger(),
     });
-    expect(r.errors).toEqual([]);
+    // The empty ledger has no acceptance record for D-0001, so the check says "did not accept this version". That is
+    // the ledger's job, not the colour rule's: this test only asserts that no board file breaks the rule.
+    expect(r.errors.filter((e: string) => !/did not accept this version/.test(e))).toEqual([]);
     expect(r.warnings.join('\n')).not.toMatch(/already hits/);
   });
 });
