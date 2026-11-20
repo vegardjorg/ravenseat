@@ -1267,7 +1267,7 @@ function boardSections(queue, log, stat, cap) {
     out.cost.context.compactions = (log.compacts ?? []).filter((c) => Date.parse(c.time) >= from).length;
     // Which settings are on now, for the "Does this look bad?" lines (no figure, only the advice text).
     const cfg = KK.config({ fresh: true });
-    out.settings = { machineSampleMin: Number(cfg.metrics?.machineSampleMin) || 0 };
+    out.settings = { machineSampleMin: require('./lib/machineSample.js').minutesFrom(cfg) };
     return out;
   } catch (e) {
     console.error(`the statistics sections failed: ${e?.message ?? e}`);
@@ -3558,4 +3558,16 @@ server.listen(PORT, HOST, () => {
   // The update check: once now and then once a day (the cache keeps it to one fetch per 24 hours, also across restarts).
   refreshLatest().catch(() => {});
   setInterval(() => refreshLatest().catch(() => {}), U.MAX_AGE_MS).unref();
+  // S9: the periodic machine sample (metrics.machineSampleMin, 0 = off by default). The setting is read once a minute,
+  // so the gear turns it on or off without a restart; a sample is one `load` row with command "sample".
+  try {
+    const MSAMPLE = require('./lib/machineSample.js');
+    MSAMPLE.startMachineSample({
+      minutes: () => MSAMPLE.minutesFrom(KK.config({ fresh: true })),
+      append: (row) => require('./lib/timeLogRows.js').appendRows(TIME_LOG, row),
+      running: () => (JSON.parse(fs.readFileSync(FILE, 'utf8')).tasks ?? []).filter((o) => o?.status === 'running').length,
+    });
+  } catch (e) {
+    console.error(`the machine sample could not start: ${e?.message ?? e}`); // measurement only, the board runs on
+  }
 });

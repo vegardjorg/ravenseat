@@ -1726,6 +1726,13 @@ code {
   color: var(--color-primary);
 }
 
+/* A value in words ("too few answers yet"): smaller than a number, so it stays on one or two short lines. Two classes,
+   so it also wins over the phone size of .tile-value below. */
+.tile-value.tile-value-text {
+  font-size: var(--text-md);
+  line-height: 24px;
+}
+
 .tile-under {
   font-size: var(--text-xs);
   color: var(--color-on-surface-variant);

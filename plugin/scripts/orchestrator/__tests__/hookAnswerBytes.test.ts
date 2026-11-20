@@ -149,6 +149,8 @@ describe('the status line and tool trouble readings', () => {
       api_duration_s: 30,
       context_tokens: 142_000,
       model: 'm1',
+      five_hour_pct: 23.4,
+      seven_day_pct: 41,
       time: '1970-01-01T00:00:00.000Z',
     });
     expect(ER.sessionReading({ ...payload, session_id: '' }, 0)).toBeNull();

@@ -66,6 +66,8 @@ const ANALYSIS: Record<string, object> = {
     api_errors: { rate_limit: 3, overloaded: 1, other: 0 },
     // The Sonnet turn came after the idle gap (over the 5 min TTL) and wrote more than it read.
     cache_expiry: 1,
+    // S8: that turn's write, 3000 tokens without a split (5 min) at Sonnet's 2.5 per MTok.
+    cache_expiry_usd: 0.0075,
     thinking_tokens: null,
     thinking_turns: 0,
     cc_version: '2.1.300',
@@ -97,6 +99,7 @@ const ANALYSIS: Record<string, object> = {
     // usage limit was 'other' before W2b2; it is a rate limit as in the entry form (see claudeFormatContract.test.ts).
     api_errors: { rate_limit: 3, overloaded: 1, other: 0 },
     cache_expiry: 0,
+    cache_expiry_usd: 0,
     thinking_tokens: 25,
     thinking_turns: 1,
     cc_version: '2.1.317',

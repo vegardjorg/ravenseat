@@ -247,7 +247,8 @@ The Queue workspace has these tabs:
   line and four folds, each with a heading (open on a wide screen; on a narrow one only Cost and tokens is open, and
   the board remembers what you open or close):
   - **Cost and tokens:** cost per day, the token mix per day in USD (input, output, cache read, cache write, priced
-    per model), the cost per phase and class with the fix share, the cache expiry per day (writes in turns after a
+    per model), the cost per phase and class with the fix share, the cache expiry per day with its cost in USD (the
+    cache write of the turns that came after a
     pause longer than the cache lifetime), the five most expensive tasks, context at the end of tracks as one point per
     track against the compaction cap (it follows `autoCompactWindow` in the Claude Code settings, 300k when unset), the
     usage today and the section **Agents last 14 days: models, tools and errors** (only tools with an error rate over
@@ -262,7 +263,9 @@ The Queue workspace has these tabs:
     and p95; the gates that never went red), and the findings log per source and severity with the deferred findings
     and how many of them were fixed.
   - **Machine:** free memory and limited or stopped starts per day from the load rows, the gate queue wait per day
-    (p50 and p95), the gate time against how many tracks ran at once, and at the bottom the guard decisions.
+    (p50 and p95), the gate time against how many tracks ran at once, and at the bottom the guard decisions. With
+    `metrics.machineSampleMin` above 0 (default `0`, off) the board also writes a machine sample (free memory, CPU,
+    running tracks) every that many minutes while it runs, and the lowest free memory per day counts those too.
   Every chart has a caption that is a question and a line **Does this look bad?** with a button per setting that
   changes it; the button opens the gear on that setting.
 - A running card gets the badge **silent** when the track has an agent worktree but no sign of life for

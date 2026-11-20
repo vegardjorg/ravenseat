@@ -27,7 +27,8 @@
 //                                                            tracking ref (see pushesFromReflog), at ravenseat fill
 //   load          { command, free_memory_pct, cpu_pct, slots, max_slots, running, limited_by, reason, stopped,
 //                   stop_reason? }                           one per ravenseat fill and ravenseat start (cli/events.mjs logLoad)
-//   session       { session_id, usd, duration_s, api_duration_s, context_tokens, model, orchestrator, trigger }
+//   session       { session_id, usd, duration_s, api_duration_s, context_tokens, model, five_hour_pct, seven_day_pct,
+//                   orchestrator, trigger }
 //                                                            the main session's cost from the status line payload;
 //                                                            CUMULATIVE per session_id (see sessionDecision)
 //
@@ -173,6 +174,12 @@ function sessionReading(input, now = Date.now()) {
   if (!id || usd == null) return null;
   const ms = num(s?.cost?.total_duration_ms);
   const api = num(s?.cost?.total_api_duration_ms);
+  // S8: the quota reading at this moment (rate_limits in the payload, only on a subscription), so the time log keeps a
+  // history of when the quota burns; rate-limits.json holds only the last reading.
+  const pct = (x) => {
+    const v = num(x);
+    return v == null ? null : round1(v);
+  };
   return {
     session_id: id,
     usd: round2(usd),
@@ -180,6 +187,8 @@ function sessionReading(input, now = Date.now()) {
     api_duration_s: api == null ? null : Math.round(api / 1000),
     context_tokens: num(s?.context?.total_input_tokens),
     model: s?.model?.id ?? null,
+    five_hour_pct: pct(s?.limits?.five_hour?.used_percentage),
+    seven_day_pct: pct(s?.limits?.seven_day?.used_percentage),
     time: new Date(now).toISOString(),
   };
 }
@@ -212,6 +221,8 @@ function sessionRow({ time, reading, orchestrator = false, trigger }) {
     api_duration_s: reading.api_duration_s ?? null,
     context_tokens: reading.context_tokens ?? null,
     model: reading.model ?? null,
+    five_hour_pct: reading.five_hour_pct ?? null,
+    seven_day_pct: reading.seven_day_pct ?? null,
     orchestrator: orchestrator === true,
     trigger,
   };

@@ -330,7 +330,8 @@ their usage in the window (their transcripts are under the session's `subagents/
 for the sessions bound as the orchestrator, is divided by the same merged changes as the headline and shown as a share
 of track cost + overhead; other main sessions are listed apart. Without the status line no session row is written and
 the line says so. The payload has no cumulative token counts (only the tokens in the context now), so the rows hold the
-cost, the durations, the context size and the model.
+cost, the durations, the context size, the model and the quota used at that moment (`five_hour_pct`, `seven_day_pct`,
+null without a subscription), so the time log keeps a history of when the quota burns.
 
 **Flow** (`ravenseat cost`, `flow` in `--json`, the cards "Is it right the first time?" and "How much runs without you?" in the board's Statistics) counts rows that the commands append
 to the time log (`lib/eventRows.js`, one JSON line each, never failing the command): `fixRound` (ravenseat resume, also when
@@ -1173,6 +1174,7 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 |---|---|---|---|
 | `stateSnapshots.enabled`, `stateSnapshots.tiers` | `true`, `["1h","5h","1d","2d","7d"]` | Rolling copies of queue.json at a few ages, kept in the data folder | Advanced |
 | `metrics.idleGapMin` | `5` | A gap longer than this between two transcript entries is idle and not counted as active time | Advanced |
+| `metrics.machineSampleMin` | `0` | While the board runs, a `load` row with command `sample` (free memory, CPU, running tracks) every this many minutes, for the Machine section of Statistics. `0` = off: the load rows at fill and start already answer how many tracks fit, and a sample only while the board runs has gaps. A measurement only, it never limits or stops work | Advanced |
 | `history.rotateTimeLog` | `"monthly"` | `monthly` moves the time log to one archive per UTC month next to it on the first write of a new month; `off` keeps one file | Advanced |
 | `history.archiveDoneAfterDays` | `30` | Done and cancelled tasks untouched for this many days move from queue.json to `queue-archive.json` in the data folder; `null` keeps them all in queue.json | Advanced |
 | `queue.missionInlineMax` | `16000` | `add` and `edit` move an inline mission longer than this many characters to `mission/<id>.md` in the data folder and store the path (see the `mission` field), so queue.json stays small; the agent reads the file as before. It stops nothing, so `0` (every mission stays inline) weakens no guard | Advanced |

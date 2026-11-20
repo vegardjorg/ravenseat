@@ -170,6 +170,13 @@ describe('transcriptAnalysis', () => {
     expect(T.analyzeTranscript(transcript).cache_expiry).toBe(1);
   });
 
+  it('S8: cache_expiry_usd is the cache write cost of the turn that expired (m3: 31,000 written, 5 min)', () => {
+    const a = T.analyzeTranscript(transcript) as unknown as { cache_expiry_usd: number };
+    const expected = T.costUsd({ cache_written: 31_000, cache_written_5m: 31_000, cache_written_1h: 0 }, 'claude-opus-5-5');
+    expect(expected).toBeGreaterThan(0);
+    expect(a.cache_expiry_usd).toBeCloseTo(expected, 4);
+  });
+
   it('cost_usd matches the prices', () => {
     const a = T.analyzeTranscript(transcript);
     expect(a.cost_usd).toBeCloseTo(Math.round(T.costUsd(a.tokens, 'claude-opus-5-5') * 100) / 100);
