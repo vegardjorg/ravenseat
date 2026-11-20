@@ -2865,11 +2865,9 @@ body.with-option-line .toaster {
     left: var(--distance-md);
     right: var(--distance-md);
     max-width: none;
-    max-height: calc(3 * 18px + 2 * 8px + 2px);
+    /* three lines of the bubble's own 20px line height, its 10px padding top and bottom, and the 1px border */
+    max-height: calc(3 * 20px + 2 * 10px + 2px);
     overflow: hidden;
-    padding: 8px 12px;
-    font-size: 13px;
-    line-height: 18px;
   }
   .bubble::before {
     display: none;
