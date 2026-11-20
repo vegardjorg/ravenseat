@@ -477,7 +477,7 @@ function ownerAnswerBonus(queue, ids, answer, now = new Date().toISOString()) {
  * The block in the track file with the owner's answer to what the task waited on (`waiting_on` that is resolved), so the track sees
  * the decision and does not build without it. null when the task did not wait on anything resolved.
  */
-function answerBlock(o, queue) {
+function answerBlock(o, queue, { mark = null } = {}) {
   const resolved = new Set(queue.resolved ?? []);
   const sp = (o.waiting_on ?? []).filter((x) => resolved.has(x));
   if (!sp.length) return null;
@@ -491,7 +491,10 @@ function answerBlock(o, queue) {
     return `- ${id}${what} ${word}: "${a.answer}" (${a.by ?? '?'}, ${utcText(a.time)}).`;
   });
   return [
-    '**Owner answer to what the task waited on** (binding; from `ravenseat resolve`, entered in the decision log by the orchestrator):',
+    require('../ownerMark.js').tag(
+      '**Owner answer to what the task waited on** (binding; from `ravenseat resolve`, entered in the decision log by the orchestrator):',
+      mark,
+    ),
     ...lines,
   ].join('\n');
 }

@@ -6,8 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
-- **`receive` asks the owner at once when a quick gate's own program is missing here and on the base, instead of a
-  fix round.** On by default (`gates.brokenVerdict`, on).
+- **A gate that cannot run, SPINNING tracks and an owner mark on missions.** `receive` asks instead of a fix round,
+  stored track text is redacted or withheld, and `SPINNING` and `SUSPICIOUS CONTENT` lines only warn.
 - **Plans: "+ New plan" (key `n`) and `ravenseat plan capture` put an idea in the Inbox with only a title.** On by
   default (`features.plans.inbox`, on).
 - **Plans: a plan page offers Turn into tasks or See tasks, and the Queue search takes `plan:<id>`.**

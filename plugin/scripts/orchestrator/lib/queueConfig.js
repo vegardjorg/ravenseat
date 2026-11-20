@@ -190,6 +190,9 @@ const STANDARD = Object.freeze({
   // atReceive and allowlist are OFF by default (owner decision 2026-11-15: a new check is opt-in): setup tips about each
   // once, the Checks tab has a "Turn on" card, and doctor shows one INFO line while it is off (lib/optInChecks.js).
   secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000, atReceive: false, allowlist: false },
+  // The owner mark (lib/ownerMark.js, roadmap 0æ N4): a token new for each mission on the owner's words in it, and a
+  // Suspicious content line at receive for a report that claims owner approval without it. A warning, never a stop.
+  injection: { ownerMark: true },
   // enabled: `ravenseat doctor` checks that the project's OWN .gitignore (the global one switched off) ignores what
   // Ravenseat keeps local, and that git tracks none of it. Off by default like the two above (lib/optInChecks.js).
   gitignoreCheck: { enabled: false },

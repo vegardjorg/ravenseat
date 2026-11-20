@@ -651,6 +651,11 @@ export function logStart(r) {
  * The track blocks (make-mission.mjs format) for running or picked tasks, with the warning about changes outside
  * the queue. Shared by `trackFile` and `fill`.
  */
+/** The owner mark for the task's current mission (lib/ownerMark.js, roadmap 0æ N4): its attempt's round. */
+export function missionMark(o, round = AT.current(o)?.round ?? 0) {
+  return require('./lib/ownerMark.js').markFor(o.id, round, { folder: FOLDER, config: CONFIG });
+}
+
 export function makeTrackBlocks(queue, idList) {
   // Have the owned files changed outside the queue since the task was added? Then the track block gets a warning, so the track
   // reads the diff before it builds on an outdated mission.
@@ -688,7 +693,7 @@ export function makeTrackBlocks(queue, idList) {
       `BRANCH: ${o.branch}`,
       ...(links.get(o.id) ?? []),
       '',
-      L.trackBlock(o, queue, { text, warning: notices.get(o.id)?.warning ?? null }),
+      L.trackBlock(o, queue, { text, warning: notices.get(o.id)?.warning ?? null, mark: missionMark(o) }),
     ].join('\n');
   });
   const withWarning = [...notices].filter(([, v]) => v.warning).map(([id]) => id);

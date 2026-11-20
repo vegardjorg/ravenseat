@@ -331,13 +331,15 @@ function readsLines(o, queue) {
   return out;
 }
 
-function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = defaultAddendum, catalog } = {}) {
+// `mark`: the owner mark for this mission (lib/ownerMark.js, roadmap 0æ N4); null = none, the block as before.
+function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = defaultAddendum, catalog, mark = null } = {}) {
   const list = (x) => (Array.isArray(x) && x.length ? x.join(', ') : 'none');
   // The part of the project catalog that meets the task's files (bolk B4 of the scope drift plan): empty and free
   // without a catalog, capped with a catalog, and the same text for every client.
   const excerpt = catalog === undefined ? (require('../catalogExcerpt.js').forTask(o, { which: 'mission' })?.lines ?? []) : catalog || [];
   const reportFrom = addendum({ cloud }).reportOutside;
-  const answer = answerBlock(o, queue);
+  const answer = answerBlock(o, queue, { mark });
+  const bonus = bonusBlock(o, { mark });
   // The done command (lib/doneCheck.js): the track runs it itself before it reports, the orchestrator runs it again.
   const done = require('../doneCheck.js').doneWhenBlock(o);
   // The acceptance criteria (fixed before the start; the gap reviewer checks each one).
@@ -345,6 +347,7 @@ function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = 
   return [
     `## TRACK ${o.id} (${o.title}; source: ${o.source ?? 'see the mission'}; class ${o.class}, estimate ${estimate(o)} min)`,
     '',
+    ...require('../ownerMark.js').frameLines(mark),
     `**Ownership in the queue:** files ${list(o.owned_files)}; DB ${list(o.owner_db)}; shared patch ${list(o.shared_patch)}. Do not touch anything other tasks in the queue own; ${reportFrom}`,
     // Read ownership (logic/conflicts.js): what the task builds on but does not change. In "warn" mode an active task
     // can be changing one of them right now, and the track should know before it relies on the old version.
@@ -364,7 +367,7 @@ function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = 
     ...(answer ? [answer, ''] : []),
     String(text ?? '').trim(),
     // `queue.mjs edit <id> --bonus "…"` (instead of node -e against queue.json).
-    ...(bonusBlock(o) ? ['', bonusBlock(o)] : []),
+    ...(bonus ? ['', bonus] : []),
     '',
   ].join('\n');
 }

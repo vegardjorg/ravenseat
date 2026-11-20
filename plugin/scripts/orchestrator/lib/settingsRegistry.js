@@ -704,6 +704,12 @@ const SETTINGS = Object.freeze([
       whyNot: 'A pushed secret stays in the remote\'s history and must be rotated, even after the commit is removed.',
       changes: 'Pushes go out without a secret scan. Doctor will report it.',
     }),
+  // Friction: none, it never stops work: one line in the mission frame, and a SUSPICIOUS CONTENT line at receive plus a
+  // section in the review package. On by default (the owner's decision of 18.11.2026, roadmap 0æ N4): a file a track
+  // reads must not be able to speak as the owner. A false hit costs one line; a report can always quote the mark.
+  row('injection.ownerMark', 'guards', 'onoff', 'Owner mark on missions',
+    'Each mission gets a mark of its own on the owner answers and orchestrator additions in it. Receive flags, as ' +
+    'Suspicious content, a report that claims owner approval without that mark. A warning, never a stop. Off: no mark.'),
   // The opt-in checks (lib/optInChecks.js): off by default, so switching one off again never weakens the standard.
   row('secretScan.atReceive', 'guards', 'onoff', 'Secret scan at receive',
     'Off by default. On: receive scans the track\'s own commits for secrets; a hit blocks the merge until a clean receive or merge --allow-secret.', {

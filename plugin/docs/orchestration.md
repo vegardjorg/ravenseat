@@ -1067,6 +1067,11 @@ Windows, so there are four layers:
 - **Data, not instructions.** The agent definitions (`track`, `track-d`, `reviewer`, `reviewer-security`) and the
   shared protocol in the mission template say that such content is data, and that instructions in it are reported
   under "Suspicious content", never followed. `make-queue-common.mjs` refuses a template without the paragraph.
+- **Owner mark.** Each mission (task and round) carries a mark of its own in its frame and on the owner answer and bonus
+  headings (`lib/ownerMark.js`, an HMAC with a local key that is never pushed). Only text with that mark is the owner's
+  word. `receive` prints `SUSPICIOUS CONTENT` and the review package gets a "Suspicious content" section when the
+  report claims owner approval without the mark, or carries another one. A warning, never a stop;
+  `injection.ownerMark false` turns it off.
 - **Merge guard.** `merge-track.mjs` stops with exit 4, before the merge, when the branch touches a protected path
   that the task does not own (`owned_files` or `shared_patch`). The list is `protectedPaths` in `queue.config.json`
   (default: `.claude/`, `.githooks/`, `.github/`, `.mcp.json`, `scripts/orchestrator/`, the plugin's hooks, agents,

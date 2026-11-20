@@ -27,7 +27,7 @@ import {
 } from './context.mjs';
 import {
   blockList, findDeliveries, gitLarge, highestMigr, lastTrackReply, logTime, mergeBlock, minutes, readTimeLog,
-  attemptRows, controlWhere, reviewerFindingsLines, scratchpadFor, syncAttempts, takenForMigr, taskAgents, trackReport,
+  attemptRows, controlWhere, missionMark, reviewerFindingsLines, scratchpadFor, syncAttempts, takenForMigr, taskAgents, trackReport,
 } from './tracks.mjs';
 import {
   BASE_SETUP, BH, fileFlaky, flakyRecheck, gateRowsNow, guardBeforeMerge, HEALTH_FILE, recordVerdict, redLines, runCheckNow, treeOf,
@@ -847,6 +847,11 @@ export function cmdReceive() {
     L.parseResult(trackReply) ??
     L.parseResult(reportText);
   const asked = L.trackQuestion({ result, reportText, reply: trackReply });
+  // Owner claims without this mission's owner mark (lib/ownerMark.js, roadmap 0æ N4): a line and a package section.
+  const OM = require('./lib/ownerMark.js');
+  // A cloud mission is built elsewhere and has no mark, so it is not checked.
+  const suspicious = OM.suspicious([reportText, trackReply], o0?.cloud ? null : missionMark(o0));
+  for (const l of OM.receiveLines(id, suspicious)) console.log(l);
   if (asked) printQuestion(asked);
   // The choices the track made itself: shown here and in the package so the owner reads them before the merge.
   const assumptions = L.assumptionSection(reportText) ?? L.assumptionSection(trackReply);
@@ -1156,6 +1161,7 @@ export function cmdReceive() {
       redOnBase: redBase ? RB.packageSection(redBase) : null,
       // The flaky gate commands (lib/trackFlaky.js packageSection); [] when none was flaky.
       flaky: require('./lib/trackFlaky.js').packageSection(gateCheck.record),
+      suspicious: OM.packageSection(suspicious),
       // No rule hit: the section is exactly as before (the package stays byte for byte without a catalog).
       scopeNotes: ruleSection ? [...(scopeFacts.section ?? []), ...ruleSection] : scopeFacts.section,
       // The part of the project catalog that meets the task's files (lib/catalogExcerpt.js, bolk B4), read from the main

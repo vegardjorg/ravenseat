@@ -24,7 +24,7 @@ import {
 } from './context.mjs';
 import {
   attemptRows, dailyUsageFor, findTranscript, loadSlotsLine, logStart, makeTrackBlocks, markStarted, measureLoad, readTimeLog,
-  reserveAttempt, runningAttempt, scratchpadFor, takenForMigr, trackReport, trackRoots,
+  missionMark, reserveAttempt, runningAttempt, scratchpadFor, takenForMigr, trackReport, trackRoots,
 } from './tracks.mjs';
 import { askedLine, triageReason, triageState, writeTriageSteps } from './triage.mjs';
 import { detectPushes, logEvent, logLoad } from './events.mjs';
@@ -869,8 +869,11 @@ export function cmdResume() {
   }
   if (reason === 'fix') console.log(`Fix round ${round} for ${id}: new agent: ${mode.why}.`);
   const sourcePath = missionFile(o);
+  // The round's own owner mark (lib/ownerMark.js): the attempt reserved below gets this round, and receive checks it.
+  const mark = missionMark(o, round);
   const fullOriginal = L.trackBlock(o, queue, {
     text: sourcePath ? fs.readFileSync(sourcePath, 'utf8') : o.mission,
+    mark,
   });
   // A fix round's mission is short: the fix list, the ownership and the gates, and a pointer to the whole original mission
   // (mission-<id>.md) instead of its text. A continuation (context) keeps the whole mission: it carries on the build.
@@ -880,7 +883,7 @@ export function cmdResume() {
     missionPath = path.join(scratch, `mission-${id}.md`);
     fs.writeFileSync(missionPath, fullOriginal);
     // The short fix-round mission leaves the catalog excerpt out: it is in mission-<id>.md, which the round points to.
-    original = L.trackBlock(o, queue, { text: '', catalog: null });
+    original = L.trackBlock(o, queue, { text: '', catalog: null, mark });
   }
   const trackId = `${id}-r${round}`;
   const head = git(['rev-parse', BASE]);

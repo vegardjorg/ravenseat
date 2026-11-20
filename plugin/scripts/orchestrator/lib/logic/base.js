@@ -223,12 +223,12 @@ function addToBonus(o, text, now) {
   ];
   return null;
 }
-/** The additions as a separate section in the track block (null when there are none). */
-function bonusBlock(o) {
+/** The additions as a separate section in the track block (null when there are none); `mark` = the owner mark (N4). */
+function bonusBlock(o, { mark = null } = {}) {
   const t = Array.isArray(o?.bonus) ? o.bonus : [];
   if (!t.length) return null;
   return [
-    '**Bonus from the orchestrator (binding, newest last):**',
+    require('../ownerMark.js').tag('**Bonus from the orchestrator (binding, newest last):**', mark),
     ...t.map((x) => `- ${x.time}: ${x.text}`),
   ].join('\n');
 }
