@@ -43,4 +43,26 @@ function trackChangedFiles({ git, trackBase, trackTip, changed }) {
   return [...new Set([...files, ...changed])];
 }
 
-module.exports = { trackArgs, trackChangedFiles };
+/**
+ * The commit a gate command can diff against, given to --quick/--full commands as QUEUE_GATE_BASE (gates.mjs), so a
+ * gate such as `node scripts/test-changed.mjs --gate` runs only the tests the change can reach.
+ * With `trackBase` (the merge step, after the merge): that commit; the diff trackBase...HEAD then also holds tracks merged
+ * after the fork point, which only adds tests. Otherwise the fork point of HEAD against the base branch (or the remote's
+ * copy of it). null when HEAD is the fork point (no own commits, e.g. the main checkout) or git cannot tell: then there
+ * is nothing to diff against, and a gate that needs a base runs everything.
+ * @param {{ git: (...args: string[]) => string | null, trackBase?: string | null, head: string | null,
+ *   baseBranch: string, remote?: string | null }} k
+ * @returns {string | null}
+ */
+function gateBase({ git, trackBase, head, baseBranch, remote }) {
+  if (trackBase) return trackBase;
+  if (!head || !baseBranch) return null;
+  for (const ref of [baseBranch, remote ? `${remote}/${baseBranch}` : null]) {
+    if (!ref) continue;
+    const fork = (git('merge-base', 'HEAD', ref) || '').trim();
+    if (fork) return fork === head ? null : fork;
+  }
+  return null;
+}
+
+module.exports = { trackArgs, trackChangedFiles, gateBase };

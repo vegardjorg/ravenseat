@@ -52,15 +52,22 @@
 // A test file is picked when it changed itself or depends, transitively, on a changed file.
 //
 // FULL (the whole suite, with the reason) when a changed file is vitest.config.mjs, package.json, package-lock.json, a
-// setup file from the config, queue.mjs, lib/queueLogic.js or cli/context.mjs (every command loads those); when an
+// setup file from the config, scripts/test-env.mjs (the config's test environment), queue.mjs, lib/queueLogic.js or
+// cli/context.mjs (every command loads those); when a changed file is of a type the pick has no rule for (not code,
+// data, a shim or a doc, and not under a __tests__ or fixtures folder: .gitattributes, .npmrc, .nvmrc, .gitignore,
+// LICENSE); when an
 // affected source file has an import()/require() with a computed argument (it can load anything); when the config's
 // include list cannot be read; when git cannot give the change; or when the pick is over 60 % of the test files.
 // Known seam, not FULL: `import(pathToFileURL(path.resolve(process.env.X)).href)` loads a module a test supplies
 // (QUEUE_CI_GH, QUEUE_MERGE_RUNNING), never a repo file.
 //
 // Usage: npm run test:changed [-- <ref>] [--list]
+//        node scripts/test-changed.mjs --gate [--list]
 //        node scripts/test-changed.mjs --stats [--days N]
 //   <ref>   what to compare with (default origin/main): `git diff <ref>...HEAD` plus uncommitted changes (tracked and new)
+//   --gate  as a quick gate (queue.config.json gates.quick): the ref is QUEUE_GATE_BASE, which gates.mjs gives its
+//           commands (lib/trackDiff.js gateBase: the fork point in a track's worktree, the merge step's --track-base
+//           after a merge). Without it (no own commits, or not run by gates.mjs): FULL, never a guess.
 //   --list  print the pick (one path per line) and do not run vitest
 //   --stats the local test run log over the last N days (default 14): runs, full/some/none, median picked share, times
 // Exit code: vitest's; 0 when no test is affected; 2 for a usage error.
@@ -88,6 +95,7 @@ const FULL_FILES = {
   'vitest.config.mjs': 'the vitest config',
   'package.json': 'package.json',
   'package-lock.json': 'package-lock.json',
+  'scripts/test-env.mjs': 'scripts/test-env.mjs (the test environment the vitest config sets)',
   'plugin/scripts/orchestrator/queue.mjs': 'queue.mjs (the dispatch every command goes through)',
   'plugin/scripts/orchestrator/lib/queueLogic.js': 'lib/queueLogic.js (the facade every command loads)',
   'plugin/scripts/orchestrator/cli/context.mjs': 'cli/context.mjs (the shared state every command loads)',
@@ -108,6 +116,13 @@ const SHIM = /(^|\/)bin\/[^/.]+$/;
 const DOC_EXT = /\.(md|txt|png|jpe?g|gif|svg|webp|ico)$/i;
 /** A doc: text or an image outside plugin/scripts (where md files can be data the scripts read, e.g. review packs). */
 const isDoc = (p) => DOC_EXT.test(p) && !p.startsWith('plugin/scripts/');
+/**
+ * A file type the pick has no rule for: not code, data, a shim or a doc (md, txt, images), and not under a __tests__
+ * or fixtures folder (the folder rule covers those: the tests that name the folder). Such a file can change how every
+ * test runs (.gitattributes, .npmrc, .nvmrc, .gitignore), so a change to it gives FULL.
+ */
+const unknownKind = (p) =>
+  !CODE_EXT.test(p) && !DATA_EXT.test(p) && !SHIM.test(p) && !DOC_EXT.test(p) && !/(^|\/)(__tests__|fixtures)\//.test(p);
 /** Resolution order for an import without an extension (TS helpers are imported as './redteam/project'). */
 const RESOLVE_EXT = ['', '.ts', '.tsx', '.mjs', '.js', '.cjs', '.json', '/index.ts', '/index.mjs', '/index.js'];
 /** Folder names too general to say "this test reads that folder". */
@@ -936,6 +951,7 @@ export function selectTests({ changed, files, maxShare = FULL_SHARE }) {
   for (const c of changed) {
     if (FULL_FILES[c.path]) return full(`${FULL_FILES[c.path]} changed`, tests);
     if (setupFiles.has(c.path)) return full(`the setup file ${c.path} changed`, tests);
+    if (unknownKind(c.path)) return full(`${c.path} changed, a file type the pick has no rule for (it cannot tell what it affects)`, tests);
   }
   const changedTests = changed.filter((c) => isTest(c.path) && c.status !== 'D').map((c) => c.path);
   const changedOther = changed.filter((c) => !isTest(c.path));
@@ -1333,22 +1349,29 @@ function repoFiles() {
 }
 
 const USAGE = 'Use: npm run test:changed [-- <ref>] [--list]   (ref default origin/main)\n' +
+  '     node scripts/test-changed.mjs --gate [--list]   (as a quick gate: the ref is QUEUE_GATE_BASE from gates.mjs)\n' +
   '     node scripts/test-changed.mjs --stats [--days N]   (the local test run log)';
 
 function main(argv) {
   if (argv.includes('--stats')) return stats(argv);
   const list = argv.includes('--list');
-  const rest = argv.filter((a) => a !== '--list');
-  if (rest.some((a) => a.startsWith('-'))) {
+  const gate = argv.includes('--gate');
+  const rest = argv.filter((a) => a !== '--list' && a !== '--gate');
+  // --gate takes its base from gates.mjs only (QUEUE_GATE_BASE): a ref beside it would be a second, conflicting answer.
+  if (rest.some((a) => a.startsWith('-')) || (gate && rest.length)) {
     console.error(USAGE);
     return 2;
   }
-  const ref = rest[0] ?? 'origin/main';
+  const gateBase = gate ? (process.env.QUEUE_GATE_BASE || '').trim() || null : null;
+  const ref = gate ? gateBase ?? '(none)' : rest[0] ?? 'origin/main';
   const t0 = Date.now();
-  const files = repoFiles();
+  // As a gate without a base (no own commits, or not run by gates.mjs): the whole suite, without asking git.
+  const noBase = gate && !gateBase;
+  const files = noBase ? null : repoFiles();
   const changed = files ? changedFiles(ref) : null;
   let pick;
-  if (!files) pick = full('git cannot list the repo files', []);
+  if (noBase) pick = full('no gate base (QUEUE_GATE_BASE): no own commits to compare, or not run by gates.mjs', []);
+  else if (!files) pick = full('git cannot list the repo files', []);
   else if (!changed) pick = full(`git cannot give the change against ${ref}`, []);
   else pick = selectTests({ changed, files });
   const pickS = (Date.now() - t0) / 1000;
@@ -1365,6 +1388,7 @@ function main(argv) {
     changed: changed?.length,
     pick_s: Math.round(pickS * 10) / 10,
     list: list || undefined,
+    gate: gate || undefined,
   };
   if (pick.mode === 'full') {
     console.log(`test:changed: FULL: ${pick.reason} (${secs} s)`);

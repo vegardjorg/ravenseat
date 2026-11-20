@@ -25,6 +25,13 @@ const SD = require('../trackDiff') as {
     trackTip?: string | null;
     changed: string[];
   }) => string[] | null;
+  gateBase: (k: {
+    git: (...args: string[]) => string | null;
+    trackBase?: string | null;
+    head: string | null;
+    baseBranch: string;
+    remote?: string | null;
+  }) => string | null;
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -130,6 +137,40 @@ describe('trackChangedFiles after merge', () => {
         changed: [],
       }),
     ).toBeNull();
+  });
+});
+
+// gateBase: the commit the gate commands get as QUEUE_GATE_BASE (gates.mjs), so a gate such as
+// `node scripts/test-changed.mjs --gate` can diff against what the track forked from.
+describe('gateBase', () => {
+  it('with track-base (the merge step) it is the track-base, without a git call', () => {
+    const git = () => {
+      throw new Error('no git call expected');
+    };
+    expect(SD.gateBase({ git, trackBase: 'abc123', head: 'def', baseBranch: 'main', remote: 'origin' })).toBe('abc123');
+  });
+
+  it('on a branch with its own commits it is the fork point against the base branch', () => {
+    const { gitFn } = makeRepo();
+    // makeRepo ends on main (both tracks merged); a new track forks from there and commits.
+    const fork = (gitFn('rev-parse', 'HEAD') ?? '').trim();
+    expect(gitFn('switch', '-q', '-c', 'track/c')).not.toBeNull();
+    expect(gitFn(...ID, 'commit', '-q', '--allow-empty', '-m', 'C')).not.toBeNull();
+    const head = (gitFn('rev-parse', 'HEAD') ?? '').trim();
+    expect(head).not.toBe(fork);
+    expect(SD.gateBase({ git: gitFn, head, baseBranch: 'main', remote: 'origin' })).toBe(fork);
+  });
+
+  it('with no own commits (HEAD is the fork point, e.g. the main checkout) it is null: nothing to diff against', () => {
+    const { gitFn } = makeRepo();
+    const head = (gitFn('rev-parse', 'HEAD') ?? '').trim();
+    expect(SD.gateBase({ git: gitFn, head, baseBranch: 'main', remote: 'origin' })).toBeNull();
+  });
+
+  it('an unknown base branch, or an unknown HEAD, gives null', () => {
+    const { gitFn } = makeRepo();
+    expect(SD.gateBase({ git: gitFn, head: 'x', baseBranch: 'exists-not', remote: 'origin' })).toBeNull();
+    expect(SD.gateBase({ git: gitFn, head: null, baseBranch: 'main', remote: 'origin' })).toBeNull();
   });
 });
 

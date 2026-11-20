@@ -231,6 +231,10 @@ npm test                # the whole suite; run it before every push
 npm run test:changed    # only the tests your change can reach; run it before each commit
 ```
 
+- CI runs Ubuntu node 20 and 22 whole, and Windows node 22 in 3 shards; `shards complete` fails unless every test file ran.
+- Windows node 20 runs weekly and on demand (`ci-weekly.yml`), not on every push.
+- As this repo's quick gate, `node scripts/test-changed.mjs --gate` runs only the changed tests; the full gate and CI run all.
+
 ## License
 
 MIT. See [LICENSE](LICENSE). The helper agents `reviewer-design`, `reviewer-tests`, `reviewer-gap` and

@@ -308,7 +308,14 @@ function gateCommandEnv() {
   if (gateEnvNow) return gateEnvNow;
   const GT = require('./lib/gateTemp.js');
   gateTempDir = K.gateTemp?.enabled === false ? null : GT.create();
-  gateEnvNow = GT.withTemp(CHILD_ENV, gateTempDir);
+  gateEnvNow = { ...GT.withTemp(CHILD_ENV, gateTempDir) };
+  // QUEUE_GATE_BASE (lib/trackDiff.js gateBase): the commit a --quick/--full command can diff against, so a gate such as
+  // `node scripts/test-changed.mjs --gate` runs only what the change can reach. Never the caller's value: set here or not at all.
+  delete gateEnvNow.QUEUE_GATE_BASE;
+  if (quick || full) {
+    const gb = require('./lib/trackDiff.js').gateBase({ git, trackBase: option('--track-base'), head: START.sha, baseBranch: K.baseBranch, remote: K.remote });
+    if (gb) gateEnvNow.QUEUE_GATE_BASE = gb;
+  }
   return gateEnvNow;
 }
 /** Housekeeping: it never changes the result of the run, and a folder it leaves is swept by a later run. */
