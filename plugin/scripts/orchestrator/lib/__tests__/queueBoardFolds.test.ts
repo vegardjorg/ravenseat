@@ -176,7 +176,7 @@ describe('B5: headings in sentence case', () => {
   });
 
   it('the flat columns have a maximum width', () => {
-    expect(rule(css, '.board.flat')).toMatch(/minmax\(280px,\s*\d+px\)/);
+    expect(rule(css, '.board.flat')).toMatch(/min\(280px,[^;]*\),\s*\d+px\)\s*\)/);
   });
 
   it('the ready heading and the column counter read as text, the full badge text stays in the title', async () => {

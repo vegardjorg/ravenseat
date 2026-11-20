@@ -343,12 +343,18 @@ describe('the layout (plans.css, board.css)', () => {
     expect(rule(css, '.plans-path-copy-list')).toMatch(/var\(--color-surface/);
   });
 
-  it('on a phone the mascot bubble sits at the bottom, never over the tabs and the breadcrumb', () => {
+  it('on a phone the mascot bubble takes its own row in the top, never over a control (tabs, breadcrumb, buttons)', () => {
     const phone = boardCss.slice(boardCss.indexOf('@media (max-width: 720px) {\n  /* The only place'));
     const r = rule(phone, '  .bubble');
-    expect(r).toMatch(/position: fixed/);
-    expect(r).toMatch(/bottom:/);
-    expect(r).toMatch(/top: auto/);
+    // In the flow of the top's grid, its own full-width row below the two rows: it pushes the board down while it
+    // shows instead of lying over it. Fixed or absolute would cover whatever is under it (fx0: a toast at the bottom
+    // covered a button, and a click on it closes the bubble instead of pressing the button).
+    expect(r).toMatch(/position: static/);
+    expect(r).toMatch(/grid-column: 1 \/ -1/);
+    expect(r).toMatch(/grid-row: 3/);
+    expect(r).not.toMatch(/position: (fixed|absolute)/);
+    // still clipped at three lines
+    expect(r).toMatch(/max-height:/);
   });
 
   it('no raw hex in the new P9 CSS', () => {

@@ -127,6 +127,30 @@ describe('ravenseat catalog init, show and check', () => {
     expect(again.out).toMatch(/kept reuse\.md/);
   });
 
+  it('a fresh init gives no warnings in check (its own template is a valid stack.md)', () => {
+    const p = project();
+    expect(p.run(['catalog', 'init']).code).toBe(0);
+    const r = JSON.parse(p.run(['catalog', 'check', '--json']).out);
+    expect(r.errors).toEqual([]);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('an older init with the intro sentence as plain text does not warn either', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    const stack = p.read(`${CAT}/stack.md`);
+    // The template before this fix had the intro as a plain line under ## Prefer.
+    p.write(
+      `${CAT}/stack.md`,
+      stack.replace(
+        /## Prefer\n/,
+        '## Prefer\n\nOne line per job: what to use, and what not to add. A track gets these lines before it picks a library.\n',
+      ),
+    );
+    const r = JSON.parse(p.run(['catalog', 'check', '--json']).out);
+    expect(r.warnings).toEqual([]);
+  });
+
   it('check is fine without a catalog, exits 1 on an error and 0 on warnings only', () => {
     const p = project();
     const none = p.run(['catalog', 'check']);

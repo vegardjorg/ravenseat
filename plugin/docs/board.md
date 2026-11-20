@@ -125,7 +125,9 @@ and is cut short with an ellipsis when it is long; hover it for the full text. R
 Filter and the grouping; in Plans it stays empty. Nothing in row 2 appears or changes width with a search or a
 filter: the Filter button has a fixed width and its label is cut with an ellipsis. Below about 1200 px (a half-screen window) the top turns
 compact: the room tabs drop their icons, the search starts narrower and the view tabs scroll sideways in their row
-instead of wrapping, and the columns narrow to 220 px so four fit at 1000 px. On a phone (720 px and below) the rows
+instead of wrapping, and the columns narrow to 220 px so four fit at 1000 px. From 1200 px a column is 280 px
+(240 px in Project lanes) when there is room and otherwise gives way to its share of the board, down to 120 px, so
+five columns or the panel beside the board never make the columns scroll sideways. On a phone (720 px and below) the rows
 wrap as before. The focus line and the "Next up" strip keep their height: choosing a card puts its chain into the
 "Next up" row instead of adding a row, so the board does not move down.
 
@@ -628,8 +630,8 @@ The mascot in the upper-left corner now and then says something in a speech bubb
 between 00:00 and 05:00, encouragement, a statistic from the queue (the priciest task today, the oldest card in
 Review, proposals waiting, and so on), and events between two polls (merged, queue empty, new owner question, high
 finding, weekly quota over 90 %). Click the mascot for a line; five clicks within ten seconds gives another one.
-On a phone (720 px or less) the bubble sits at the bottom of the screen, at most three lines, so it never covers
-the room tabs.
+On a phone (720 px or less) the bubble takes its own row under the top, at most three lines, and pushes the board
+down while it shows, so it never covers a tab or a button.
 
 Timing rules: a night line at most every 30 minutes, random chat at most every 10 minutes, events at most one per
 minute. A line is never repeated within the last 8. The bubble stays 10 seconds (longer while the mouse is over it)
