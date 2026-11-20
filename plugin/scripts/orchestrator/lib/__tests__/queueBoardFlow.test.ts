@@ -84,12 +84,15 @@ describe('Statistics: the quality figures in the Flow box', () => {
     expect(rows.some((r) => r.startsWith('First pass90 %'))).toBe(true);
     expect(rows.some((r) => r.startsWith('Right first time90 %9 of 10 merged'))).toBe(true);
     expect(rows.some((r) => r.startsWith('Post-merge defects per 10 merged0'))).toBe(true);
-    expect(rows.some((r) => r.startsWith('Owner interventions per 10 merged0'))).toBe(true);
-    // The autonomy rows: no owner edit while the tasks ran, one hour of work, D0's fix round corrected alone.
-    expect(rows.some((r) => r.startsWith('Verified tasks per owner intervention' + 'no interventions10 merged'))).toBe(true);
-    expect(rows.some((r) => r.startsWith('Longest stretch without the owner1 h'))).toBe(true);
-    expect(rows.some((r) => r.startsWith('Corrected without the owner1 of 1fix rounds 1/1'))).toBe(true);
     expect(rows.some((r) => /^Inflow10owner 10; added\/done last 3 weeks 0\/0, 0\/0, 10\/10$/.test(r))).toBe(true);
+    // Since S2 the autonomy rows are their own card ("How much runs without you?"): no owner edit while the tasks
+    // ran, one hour of work, D0's fix round corrected alone.
+    const autonomy = document.querySelector('[aria-labelledby="autonomy-stat-title"]') as HTMLElement;
+    const own = [...autonomy.querySelectorAll('tbody tr')].map((r) => r.textContent ?? '');
+    expect(own.some((r) => r.startsWith('Owner interventions per 10 merged0'))).toBe(true);
+    expect(own.some((r) => r.startsWith('Verified tasks per owner intervention' + 'no interventions10 merged'))).toBe(true);
+    expect(own.some((r) => r.startsWith('Longest stretch without the owner1 h'))).toBe(true);
+    expect(own.some((r) => r.startsWith('Corrected without the owner1 of 1fix rounds 1/1'))).toBe(true);
     // The reviewer table: a caption, column headers, one row per type.
     expect(tables[1].querySelector('caption')?.textContent).toBe('Reviewer hit rate: fix rounds attributed 1 of 1');
     expect([...tables[1].querySelectorAll('thead th')].map((t) => t.textContent)).toEqual([

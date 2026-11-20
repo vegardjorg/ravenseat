@@ -28,6 +28,9 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   Decisions lists them by kind as Project catalog.** Design entries reach missions and reviewer-design, and accepted
   stack entries reach the Checks tab and the dependency notes (`catalog.stackFacts`, on).
 ### Changed
+- **Statistics: five numbers on top, then Cost and tokens, Flow, Quality and Machine as folds, each chart asking one
+  question with a "Does this look bad?" line to its setting.** Token mix, cache expiry, gate health, gate wait and the
+  findings now show, and the context cap follows `autoCompactWindow`.
 - **Plans: the room opens on a Roadmap, and a plan opens as a page with its document first.** Horizons (Inbox, Waiting
   on you, Now, Next, Later, Done) as columns on a wide screen and a list on a phone; the old views are under More views.
   Settings `plans.startView` (default `roadmap`), `plans.roadmapLayout` (`auto`), `plans.roadmapFoldAfter` (8) and

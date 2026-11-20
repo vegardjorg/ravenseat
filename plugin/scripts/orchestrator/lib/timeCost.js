@@ -524,9 +524,10 @@ const agentKey = (r) => r.agent_id ?? `${r.track ?? '?'}|${r.time}`;
  * (the rows are cumulative). The sum over all events = last row per agent.
  * `tokens` is the growth in raw tokens (input, output, cache_read, cache_written) the same way, for
  * the weekly quota model in lib/queueCapacity.js. `round` is the fix-round number when the label is `<id>-r<N>`
- * (roundOf), else null.
+ * (roundOf), else null. `model` is the row's main model (the Statistics token mix prices the tokens at it), and
+ * `cache_expiry_usd` the growth of the cache write cost of the turns that came after an expiry (rows from S8 on).
  * @returns {{ agent: string, type: string, track: string, round: number|null, time: string, day: string, usd: number, turns: number,
- *   cache_expiry: number, assumed: boolean, tokens: { input: number, output: number, cache_read: number,
+ *   cache_expiry: number, cache_expiry_usd: number, model: string|null, assumed: boolean, tokens: { input: number, output: number, cache_read: number,
  *   cache_written: number } }[]}
  */
 function usageEvents(rows, tz = TZ) {
@@ -540,7 +541,7 @@ function usageEvents(rows, tz = TZ) {
   const out = [];
   for (const [agent, list] of perAgent) {
     list.sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
-    let previous = { usd: 0, turns: 0, expiry: 0 };
+    let previous = { usd: 0, turns: 0, expiry: 0, expiryUsd: 0 };
     const previousTok = { input: 0, output: 0, cache_read: 0, cache_written: 0 };
     for (const r of list) {
       const growth = {};
@@ -553,6 +554,7 @@ function usageEvents(rows, tz = TZ) {
         usd: costOf(r),
         turns: Number(r.modelTurns ?? 0),
         expiry: Number(r.cache_expiry ?? 0),
+        expiryUsd: Number(r.cache_expiry_usd ?? 0) || 0,
       };
       out.push({
         agent,
@@ -564,6 +566,8 @@ function usageEvents(rows, tz = TZ) {
         usd: Math.max(0, now.usd - previous.usd),
         turns: Math.max(0, now.turns - previous.turns),
         cache_expiry: Math.max(0, now.expiry - previous.expiry),
+        cache_expiry_usd: Math.max(0, Math.round((now.expiryUsd - previous.expiryUsd) * 10000) / 10000),
+        model: r.model ?? null,
         assumed: costAssumed(r),
         tokens: growth,
       });
@@ -572,6 +576,7 @@ function usageEvents(rows, tz = TZ) {
         usd: Math.max(previous.usd, now.usd),
         turns: Math.max(previous.turns, now.turns),
         expiry: Math.max(previous.expiry, now.expiry),
+        expiryUsd: Math.max(previous.expiryUsd, now.expiryUsd),
       };
     }
   }
