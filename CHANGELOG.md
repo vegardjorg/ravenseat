@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **Statistics measures the cost of each cache expiry, keeps a quota history and can sample the machine while the board
+  runs.** The machine sample is off by default (`metrics.machineSampleMin`, `0`).
 - **A gate that cannot run, SPINNING tracks and an owner mark on missions.** `receive` asks instead of a fix round,
   stored track text is redacted or withheld, and `SPINNING` and `SUSPICIOUS CONTENT` lines only warn.
 - **Plans: "+ New plan" (key `n`) and `ravenseat plan capture` put an idea in the Inbox with only a title.** On by

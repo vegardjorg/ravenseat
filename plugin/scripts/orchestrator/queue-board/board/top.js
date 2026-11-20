@@ -423,6 +423,20 @@ function onboardingCard() {
   );
 }
 
+/**
+ * Scrolls a tab into sight inside its own tab row, when the row scrolls sideways (below 1200 px the view tabs scroll in
+ * their row, and at 390 px Statistics sat past the right edge with only its underline in view). Only the row moves:
+ * scrollIntoView could also scroll the page. A margin of 8 px keeps the focus ring in view.
+ */
+function tabIntoView(tab) {
+  const row = tab?.parentElement;
+  if (!row || !(row.scrollWidth > row.clientWidth)) return;
+  const r = row.getBoundingClientRect();
+  const b = tab.getBoundingClientRect();
+  if (b.left < r.left) row.scrollLeft -= r.left - b.left + 8;
+  else if (b.right > r.right) row.scrollLeft += b.right - r.right + 8;
+}
+
 function setView(v) {
   t.view = v;
   // 'decisions' (board/decide.js) and 'checks' (board/checks.js) are not VIEWS tabs and are not saved: the board picks
@@ -440,6 +454,7 @@ function setView(v) {
     tab.setAttribute('aria-selected', x === v ? 'true' : 'false');
     tab.tabIndex = x === stop ? 0 : -1;
   }
+  tabIntoView($(`show-${stop}`));
   if (v === 'statistics') {
     closeFilter(false);
     getStatistics();

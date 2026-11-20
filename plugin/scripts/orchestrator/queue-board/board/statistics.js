@@ -43,8 +43,11 @@ function roundUp(x) {
 }
 
 /**
- * The drawing width of a chart (S7): the width the card really has on a narrow screen, so a 12 unit text stays about 12
- * px instead of shrinking with a fixed 560 unit drawing; 560 from 720 px up (two cards per row). Read once per drawing.
+ * The drawing width of a chart (S7): a first guess before the cards are on the page, the width of a card on a narrow
+ * screen and 560 from 720 px up. The builders read GW while they draw. After the tab is on the page, fitCharts draws
+ * every chart again at the width its own card really has (st1), so a 12 unit text stays about 12 px at every screen
+ * width: a 560 unit drawing in a 430 px card (three cards per row at 1440) made it about 9 px, and in a 690 px card
+ * (two per row) about 15.
  */
 let GW = 560;
 function graphWidth() {
@@ -52,16 +55,71 @@ function graphWidth() {
   // The board's side padding (16 px each side under 720 px), the card's padding (16 each side) and its border.
   return w > 0 && w < 720 ? Math.max(280, Math.min(560, w - 66)) : 560;
 }
-// A turned phone or a narrowed window gets charts at its new width: the tab is drawn again (the folds are remembered)
-// when graphWidth changes, at most once per 150 ms while the window is dragged.
+/** The narrowest and widest drawing fitCharts makes (a full-width card on a wide screen stops at the widest). */
+const GW_MIN = 280;
+const GW_MAX = 1400;
+
+/**
+ * A chart builder that remembers how it was called, so fitCharts can draw the same chart again at another width. The
+ * builder and its arguments ride on the SVG element itself (the chart is dropped with it).
+ */
+function fitted(build) {
+  const make = (o) => {
+    const svg = build(o);
+    svg._fit = { make, o, at: GW };
+    return svg;
+  };
+  return make;
+}
+const barGraph = fitted(barGraphAt);
+const horizontalGraph = fitted(horizontalGraphAt);
+const lineGraph = fitted(lineGraphAt);
+const dotStrip = fitted(dotStripAt);
+
+/**
+ * Draws every chart under `root` again at the width its card has on screen, when that differs from the width it was
+ * drawn at. A chart with no width (in a closed fold, or not laid out) is left as it is; it is fitted when its fold opens.
+ */
+function fitCharts(root) {
+  if (!root) return;
+  for (const svg of [...root.querySelectorAll('svg.graph-svg')]) {
+    const fit = svg._fit;
+    if (!fit) continue;
+    const w = Math.round(svg.getBoundingClientRect().width);
+    if (!(w > 0)) continue;
+    const at = Math.max(GW_MIN, Math.min(GW_MAX, w));
+    if (at === fit.at) continue;
+    const keep = GW;
+    GW = at;
+    try {
+      svg.replaceWith(fit.make(fit.o));
+    } finally {
+      GW = keep;
+    }
+  }
+}
+// A turned phone or a narrowed window gets charts at its new width, at most once per 150 ms while the window is
+// dragged: the whole tab again when the first guess changes (the fold defaults follow it; what was opened or closed
+// is remembered), otherwise only the charts whose card changed width.
 let statResizeTimer = 0;
 window.addEventListener('resize', () => {
   if (statResizeTimer) return;
   statResizeTimer = setTimeout(() => {
     statResizeTimer = 0;
-    if (t.view === 'statistics' && t.stat?.data && graphWidth() !== GW) draw();
+    if (t.view !== 'statistics' || !t.stat?.data) return;
+    if (graphWidth() !== GW) draw();
+    else fitCharts(main);
   }, 150);
 });
+// A fold that opens shows charts that had no width while it was closed. The toggle event does not bubble, so the
+// listener is on the capture side.
+document.addEventListener(
+  'toggle',
+  (e) => {
+    if (t.view === 'statistics' && e.target?.open) fitCharts(e.target);
+  },
+  true,
+);
 /** Every how many days a date label is drawn: every second at full width, every fourth on a phone. */
 const labelStep = () => (GW < 450 ? 4 : 2);
 
@@ -69,7 +127,7 @@ const labelStep = () => (GW < 450 ? 4 : 2);
  * Stacked bars per day. `series`: [{ key, css }]; `stroke`: horizontal line (quota); `line` (optional): one more
  * series drawn as a solid line with points over the bars ({ key, css }), such as "Added" over the finished bars.
  */
-function barGraph({ rows, series, tipsFor, format, stroke, summary, line }) {
+function barGraphAt({ rows, series, tipsFor, format, stroke, summary, line }) {
   const B = GW;
   const H = 200;
   const V = 52;
@@ -161,7 +219,7 @@ function valuePlace(barEnd, text, lineXs, edge) {
  * is the end of the axis; without it the axis ends at a round number at or above `max`. The value texts are drawn
  * last, so a text lies on top of the lines, and they move past a line that would cross them.
  */
-function horizontalGraph({ groups, max, axisEnd, strokes = [], summary, format }) {
+function horizontalGraphAt({ groups, max, axisEnd, strokes = [], summary, format }) {
   const B = GW;
   const V = GW < 450 ? 72 : 96;
   const HO = GW < 450 ? 64 : 84;
@@ -252,7 +310,7 @@ function horizontalGraph({ groups, max, axisEnd, strokes = [], summary, format }
  * Lines per day (In versus out). `series`: [{ key, css }]; every series becomes a line with a point per
  * day, and every day has a tooltip over the whole height (like the bar chart).
  */
-function lineGraph({ rows, series, tipsFor, format, summary }) {
+function lineGraphAt({ rows, series, tipsFor, format, summary }) {
   const B = GW;
   const H = 200;
   const V = 52;
@@ -348,7 +406,9 @@ function tile(name, val, under, detail, tone) {
     'div',
     { class: tone ? `tile tile-${tone}` : 'tile' },
     el('p', { class: 'tile-name', text: name }),
-    el('p', { class: 'tile-value', text: val }),
+    // A value in words ("too few answers yet", "no reading") has no digit: the smaller text style, so it does not wrap
+    // over two big lines next to the numbers.
+    el('p', { class: /\d/.test(String(val)) ? 'tile-value' : 'tile-value tile-value-text', text: val }),
     under ? el('p', { class: 'tile-under', text: under }) : null,
     detail ? el('p', { class: 'tile-under tile-detail', text: detail }) : null,
   );
@@ -518,7 +578,13 @@ function flowTable(f, part = 'quality') {
       .join(', ');
     rows.push(['Inflow', v(i.added), `${by || 'nothing added'}; added/done last ${i.weeks.length} weeks ${i.weeks.map((w) => `${w.in}/${w.out}`).join(', ')}`]);
   }
-  own.push(['Pushes per week', v(f.pushes.per_week), `${f.pushes.count} push(es), ${v(f.pushes.tasks_per_push)} tasks per push`]);
+  own.push([
+    'Pushes per week',
+    v(f.pushes.per_week),
+    f.pushes.count
+      ? `${f.pushes.count} push(es), ${v(f.pushes.tasks_per_push)} tasks per push`
+      : 'no push in the window, so no tasks per push yet',
+  ]);
   const auto = part === 'autonomy';
   const hints = auto ? [] : [...(f.reviewers?.hints ?? []), ...(i?.hint ? [i.hint] : [])];
   const id = auto ? 'autonomy-stat-title' : 'flow-stat-title';
@@ -673,7 +739,7 @@ const scrollBox = (table) => el('div', { class: 'stat-scroll' }, table);
  * One point per track agent against the cap (the context strip, S4): the points on one axis, a dashed cap line in the
  * neutral tone (near the cap is a state, not an error), and the points over 80 % of the cap marked.
  */
-function dotStrip({ points, cap, summary }) {
+function dotStripAt({ points, cap, summary }) {
   const B = GW;
   const V = 12;
   const HO = 12;
@@ -1195,4 +1261,6 @@ function drawStatistics() {
       ? [el('p', { class: 'graph-remark', text: `Could not find the time log (${d.timeLogError}); cost and context missing.` })]
       : []),
   );
+  // Now that the cards are on the page: each chart at its own card's width.
+  fitCharts(main);
 }
