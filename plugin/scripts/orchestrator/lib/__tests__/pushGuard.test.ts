@@ -333,6 +333,100 @@ describe('network guard (agent_type track/track-d)', () => {
   });
 });
 
+describe('GitHub CLI guard (gh-cli, guarded agents only)', () => {
+  const track = { agentType: 'track' };
+  it('allows the short read-only allowlist', () => {
+    for (const k of [
+      'gh run list --limit 5',
+      'gh run view 123 --log-failed',
+      'gh run watch 123',
+      'gh pr list --state open',
+      'gh pr view 12 --json title',
+      'gh pr diff 12',
+      'gh pr checks 12',
+      'gh pr status',
+      'gh issue list',
+      'gh issue view 4 --comments',
+      'gh repo view owner/repo',
+      'gh release list',
+      'gh release view v1.0.0',
+      'gh workflow list',
+      'gh workflow view ci.yml',
+      'gh search issues "flaky test"',
+      'gh search prs --repo o/r guard',
+      'gh.exe run list',
+      '/usr/bin/gh pr view 1',
+      'git status && gh run list',
+      'gh run view 1 | head -20',
+      'bash -c "gh pr checks 3"',
+    ])
+      expect(decision(k, track), k).toBeNull();
+  });
+  it('denies every other subcommand, every gh api call and every unknown word', () => {
+    for (const k of [
+      'gh api repos/o/r',
+      'gh api -X POST repos/o/r/issues',
+      'gh auth token',
+      'gh auth status',
+      'gh auth login --with-token',
+      'gh gist create a.txt',
+      'gh gist list',
+      'gh secret set TOKEN',
+      'gh secret list',
+      'gh variable set X',
+      'gh extension install x/y',
+      'gh alias set co "pr checkout"',
+      'gh codespace ssh',
+      'gh ssh-key add k.pub',
+      'gh gpg-key add k.asc',
+      'gh config set editor vim',
+      'gh issue create --title x',
+      'gh issue comment 4 --body x',
+      'gh issue close 4',
+      'gh pr create --fill',
+      'gh pr comment 12 --body x',
+      'gh pr merge 12',
+      'gh pr edit 12 --add-label x',
+      'gh pr checkout 12',
+      'gh release create v2',
+      'gh release delete v1',
+      'gh release download v1',
+      'gh repo clone o/r',
+      'gh repo delete o/r --yes',
+      'gh run rerun 123',
+      'gh run cancel 123',
+      'gh run download 123',
+      'gh workflow run ci.yml',
+      'gh workflow enable ci.yml',
+      'gh search',
+      'gh search everything x',
+      'gh browse',
+      'gh co 12',
+      'gh myextension',
+      'gh',
+      'gh --version',
+      'gh run',
+      'gh pr',
+    ])
+      expect(decision(k, track), k).toBe('deny');
+  });
+  it('denies --web (and -w) on an allowed command: it opens a browser', () => {
+    for (const k of ['gh pr view 12 --web', 'gh pr view 12 -w', 'gh repo view --web', 'gh run view 1 --web', 'gh search issues x --web', 'gh pr view 1 -cw'])
+      expect(decision(k, track), k).toBe('deny');
+  });
+  it('gives the gh-cli rule and a reason that names the allowlist', () => {
+    const a = assess('gh gist create a.txt', { ...STD, ...track });
+    expect(a?.rule).toBe('gh-cli');
+    expect(a?.reason).toMatch(/GitHub CLI/);
+    expect(a?.reason).toMatch(/gh run list\|view\|watch/);
+  });
+  it('the orchestrator is not affected, and text that only mentions gh passes', () => {
+    for (const k of ['gh api -X POST /gists', 'gh auth token', 'gh pr merge 1']) expect(decision(k, {}), k).toBeNull();
+    for (const k of ['grep -n "gh api" lib/x.js', 'git commit -m "gh gist create is denied" -- a.js', 'echo gh auth token'])
+      expect(decision(k, track), k).toBeNull();
+  });
+});
+
 describe('segments and helpers', () => {
   it('respects quotes and marks a pipe', () => {
     expect(segments('a "b | c" | d && e')).toEqual([

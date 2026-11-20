@@ -1087,7 +1087,12 @@ Windows, so there are four layers:
   the lockfiles, `pyproject.toml`, `Cargo.toml` and similar) also only warn (`dependencyFiles`, see queue.md).
 - **Network guard.** For every queue agent, `hook-push-guard.mjs` denies `curl`, `wget`, `iwr`/`irm`,
   `Start-BitsTransfer` and a pipe into a shell (`| sh`, `| iex` …), also behind `eval`, `wsl`, `timeout` and nested shells
-  (the same reading as the push guard). It denies installs and removals through npm, pnpm, yarn and bun and deleting
+  (the same reading as the push guard). The GitHub CLI runs with the owner's login, so `gh` is an allowlist for them
+  (rule `gh-cli`): only `gh run list|view|watch`, `gh pr list|view|diff|checks|status`, `gh issue list|view`,
+  `gh repo view`, `gh release list|view`, `gh workflow list|view` and `gh search` pass, never with `--web`; every
+  `gh api`, `gh auth`, `gh gist`, `gh secret`, alias, extension, unknown word and anything that creates, comments,
+  merges, closes, deletes or runs is denied. A track can still read CI. It denies installs and removals through npm,
+  pnpm, yarn and bun and deleting
   `node_modules`, since `node_modules` in a worktree is a link into the main tree, and asks before `npx` with a
   package that is not in `package.json`. The queue agents are `track`, `track-d` and every reviewer and helper agent,
   builtin or custom (the same list as the read guard, `queueAgentTypes` in `lib/trackGuard.js`, also with the plugin

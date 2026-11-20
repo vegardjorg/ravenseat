@@ -42,6 +42,8 @@
 //         `powershell -c "…"`, `bash -c "…"`, `$(…)`, `eval` and runners such as `wsl` and `timeout`: the line is read with
 //         shellCommands.js, as for the push guard), a pipe into a shell (`| sh`, `| bash`, `| iex` …), and a
 //         variable as the command word with an address after it.
+//   deny  `gh` (the GitHub CLI, the owner's login) except a read-only allowlist (GH_READ: run, pr, issue, repo, release,
+//         workflow and search reads, never --web), rule gh-cli. Same reading as above, so chains and nested shells too.
 //   deny  npm/pnpm/yarn/bun install, ci, add, update, rebuild, uninstall and the like, and deleting node_modules:
 //         node_modules in a worktree is a link into the main tree, so it would change the main tree and every track.
 //   ask   npx/npm exec with a package name that is not in package.json (and not in node_modules/.bin): it fetches and
@@ -247,6 +249,39 @@ const NETWORK_COMMANDS = new Set([
   'start-bitstransfer',
 ]);
 
+// The GitHub CLI (GH-0): `gh` runs with the owner's login, so a misled agent could send data out (`gh gist create`,
+// `gh api -X POST`), act as the owner (`gh issue create`, `gh pr merge`, `gh workflow run`) or print the token
+// (`gh auth token`). For guarded agents it is an allowlist, not a blocklist: only these read-only group/subcommand
+// pairs pass, everything else (every `gh api`, `gh auth`, `gh gist`, `gh secret`, aliases, extensions, unknown words)
+// is denied, and so is `--web`/`-w` on an allowed one (it opens a browser). Ravenseat's own gh calls (ciWatch.js,
+// branchProtection.js) run in its own processes, not through this hook.
+const GH_READ = {
+  run: ['list', 'view', 'watch'],
+  pr: ['list', 'view', 'diff', 'checks', 'status'],
+  issue: ['list', 'view'],
+  repo: ['view'],
+  release: ['list', 'view'],
+  workflow: ['list', 'view'],
+  search: ['repos', 'issues', 'prs', 'commits', 'code'],
+};
+const GH_ALLOWED_TEXT = 'gh run list|view|watch, gh pr list|view|diff|checks|status, gh issue list|view, gh repo view, ' +
+  'gh release list|view, gh workflow list|view, gh search repos|issues|prs|commits|code (without --web)';
+const GH_REASON = `The GitHub CLI runs with the owner's login, so queue agents may only read with it: ${GH_ALLOWED_TEXT}. ` +
+  'Ask the orchestrator for anything else.';
+/** Does a flag open the browser? --web, --web=…, -w, or a short flag group with w in it (-cw). */
+const opensWeb = (x) => /^--web(=|$)/.test(x) || /^-[a-zA-Z]*w[a-zA-Z]*$/.test(x);
+
+/** The gh-cli finding for one simple command whose word is `gh`, or null when it is on the read-only allowlist. */
+function ghFinding(t, i0) {
+  const args = t.slice(i0 + 1).map((x) => String(x));
+  const group = String(args[0] ?? '').toLowerCase();
+  const sub = String(args[1] ?? '').toLowerCase();
+  const allowed = Object.hasOwn(GH_READ, group) && GH_READ[group].includes(sub) && !args.some(opensWeb);
+  if (allowed) return null;
+  const shown = ['gh', ...args.slice(0, 2)].join(' ');
+  return { decision: 'deny', rule: 'gh-cli', reason: `\`${shown}\`: ${GH_REASON}` };
+}
+
 /** The name in an npm package spec: "@scope/name@1.2" gives "@scope/name", "name@^1" gives "name". null = path/URL/git. */
 function packageName(spec) {
   const s = String(spec || '');
@@ -332,7 +367,7 @@ function writesNodeModules(t, i0) {
 }
 
 /** Words that suggest a network call, for a line the reading could not see all of. */
-const NETWORK_SHAPED = /curl|wget|invoke-(webrequest|restmethod)|\biwr\b|\birm\b|https?:\/\//i;
+const NETWORK_SHAPED = /curl|wget|invoke-(webrequest|restmethod)|\biwr\b|\birm\b|\bgh(\.exe)?\s|https?:\/\//i;
 
 /**
  * Assess the network guard for one command (called only for guarded agents, isGuardedAgent). Returns a list of findings.
@@ -351,6 +386,11 @@ function assessNetwork(command, context) {
     const { t, i0, word } = c;
     if (NETWORK_COMMANDS.has(word)) {
       findings.push({ decision: 'deny', rule: 'network-call', reason: `\`${t[i0]}\`: ${NETWORK_REASON}` });
+      continue;
+    }
+    if (word === 'gh') {
+      const g = ghFinding(t, i0);
+      if (g) findings.push(g);
       continue;
     }
     if (c.opaque) {
