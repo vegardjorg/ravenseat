@@ -54,6 +54,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Statistics: the token mix prices 1-hour cache writes at the 1-hour price and each model at its own, so it adds up to the measured cost.**
 - **Statistics: the cache expiry cost is the extra cost (the write minus the read it replaced), not the whole rewrite.**
 ### Hardened
+- **Queue agents may only read with the GitHub CLI: `gh api`, `gh auth`, `gh gist` and every write are denied (rule `gh-cli`).**
 - **Secrets in transcripts: the key scan reads every worktree git lists and passwords of any length, an agent printing a
   .env file or the environment is logged on the Checks tab, the project's .env values are redacted in stored text, and
   doctor warns about a .dockerignore that lets .claude/ into an image.** `guards.secretReads` (`log`), `redact.envValues` (on).

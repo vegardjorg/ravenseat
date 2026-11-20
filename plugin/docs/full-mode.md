@@ -107,7 +107,8 @@ A track cannot grade its own work:
   (`ravenseat merge <ID> --allow-guard` overrides).
 - **The queue-agent guard.** Tracks, reviewers and helpers cannot push in any form and may run only an allow-list of
   queue commands (no merge, set, edit, approve or resolve). They treat what they read as data, not instructions, and
-  cannot run `curl`, `wget`, `iwr` or a pipe into a shell
+  cannot run `curl`, `wget`, `iwr`, a pipe into a shell or `gh` beyond a short read-only list (CI runs, pull requests,
+  issues)
   ([hardening against prompt injection](orchestration.md#hardening-against-prompt-injection)).
 - **Every repeatable mistake becomes a check.** After a defect, the orchestrator proposes a `Gate:` task that adds a
   check to your own CI, shown red on the original bug before the fix and green after.
