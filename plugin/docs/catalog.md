@@ -76,8 +76,15 @@ Context, the choice and what follows from it, in at most 30 lines.
 - `status`: `proposed`, `accepted` or `superseded`. Anyone may propose.
 - `invariant`: one sentence that can be checked, at most 300 characters. It is the only text of a choice a track
   gets, so it must stand on its own.
+- `kind`: what sort of entry it is. `decision` (the default when the line is missing), `design` (a rule of the design
+  language), `stack` (which tool does a job), `dependency` (a decision about one library) or `not-building` (see [Not
+  building](#not-building)). One field, one set of values. `catalog show` and **Project catalog** in Decisions group
+  the entries by it.
 - `paths`: the files the choice applies to, as globs from the project root. No `..` and no absolute paths.
   `catalog check` warns when they match no tracked file.
+- `except`: optional globs inside `paths` the choice does not apply to (the globs have no negation), such as the token
+  file of a colour rule. The check rules, `catalog check` and the excerpt all skip them. `catalog check` warns about an
+  `except` that matches no tracked file inside `paths`.
 - `supersedes`: the id of the choice this one replaces. To change an accepted choice, write a new one with
   `supersedes: D-0001` (`catalog propose --supersedes D-0001` does it). The owner's accept of the new one sets the old
   one to `superseded` in the same step.
@@ -86,17 +93,18 @@ Context, the choice and what follows from it, in at most 30 lines.
   see [Check rules](#check-rules).
 - `accepted_by` and `accepted`: written by `catalog accept`, never by hand.
 
-A body over 30 lines gives a warning: the plan register holds the long text.
+A body over 30 lines gives a warning: the plan register holds the long text. `kind` and `except` bind like the
+invariant: changing either after the accept needs a new accept. An entry without them keeps the fingerprint it had.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `catalog init` | Creates `stack.md` with the generated block, `reuse.md` and `decisions/README.md` where they are missing, in the main tree. Never writes over a file that is there, except the generated block in `stack.md`. Refused from a track worktree |
-| `catalog show [<D-id>] [--json]` | The prefer lines, the reuse rows and the design choices with the status that counts. With an id: that choice in full, and the plan entries that link to it |
+| `catalog show [<D-id>] [--json]` | The prefer lines, the reuse rows and the entries with the status that counts, grouped by `kind` (Design language, Stack, Dependencies, Design choices, Not building). With an id: that entry in full, and the plan entries that link to it |
 | `catalog check [--json]` | Shape, ids, status, the owner lock, `supersedes`, the paths, the reuse rows and the generated block. Exit 1 on an error, 0 on warnings only, 0 without a catalog. Read only |
 | `catalog accept <D-id> --by owner` | The owner accepts a design choice: `status: accepted`, `accepted_by` and `accepted` in the file, and the owner's record in the data folder. A choice with `supersedes` sets the old one to `superseded` in the same step (refused, with nothing changed, when the old one is not there). Refused from a track worktree whatever `--by` says |
-| `catalog propose --title "..." --invariant "..." --paths "<glob>[,<glob>]" [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--from-answer <question>] [--json]` | Writes the next free id (one above the highest in the file names and the owner's record) as `status: proposed` in the main tree, then runs `catalog check` and prints what it says about the new choice. With `--supersedes` and no `--paths` or `--plan`, it takes them from the old choice. Writes nothing when the choice would be broken, never over a file. Refused from a track worktree |
+| `catalog propose --title "..." --invariant "..." --paths "<glob>[,<glob>]" [--kind design\|stack\|dependency] [--except "<glob>"] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--from-answer <question>] [--json]` | Writes the next free id (one above the highest in the file names and the owner's record) as `status: proposed` in the main tree, then runs `catalog check` and prints what it says about the new choice. `--kind` and `--except` write those fields. With `--supersedes` and no `--paths` or `--plan`, it takes them from the old choice. Writes nothing when the choice would be broken, never over a file. Refused from a track worktree |
 | `catalog find <word...> [--json]` | Searches the code index, the reuse rows, the design choices and the prefer lines. Every word must match; at most ten short lines. Builds the code index first (from the cache) |
 | `catalog index [--json]` | Builds or refreshes the code index and says how many files it read and how many came from the cache. Names a `@shared` tag that is not on an export |
 
@@ -112,7 +120,7 @@ version with `ravenseat catalog accept <id> --by owner` (or from the board) in t
 
 The accept writes two things: the status lines in the choice's file, and a record in
 `<dataFolder>/catalog-accepted.json` with a fingerprint of what binds (the id, the invariant, the paths and the
-`check` rules). The record file is gitignored and written by the queue only: the write guard keeps queue agents' file
+`check` rules, and `kind` and `except` when the entry has them). The record file is gitignored and written by the queue only: the write guard keeps queue agents' file
 writes off it, and the push guard denies a queue agent's shell command that names it.
 
 A choice that says `accepted` without a matching record reads as `unconfirmed`. That covers a track that set the line

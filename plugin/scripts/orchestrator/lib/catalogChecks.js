@@ -141,8 +141,8 @@ function assess({ decisions = [], ledger, diff = '', setup, glob } = {}) {
     if (!d || d.check == null || d.status === 'superseded') continue;
     const { rule, errors } = ruleOf(d.check);
     if (!rule || errors.length) continue;
-    const paths = Array.isArray(d.paths) ? d.paths : [];
-    const hits = lines.filter((l) => paths.some((p) => match(p, l.file)) && lineHits(rule, l.text));
+    // In the choice's paths and not in its except (roadmap 0å KD-0: the token file of a colour rule).
+    const hits = lines.filter((l) => C.covers(d, l.file, match) && lineHits(rule, l.text));
     if (!hits.length) continue;
     const status = C.effectiveStatus(d, ledger ?? C.emptyLedger());
     const level = status === 'accepted' ? (rule.mode === 'stop' && s.checkStop ? 'stop' : 'warn') : 'info';

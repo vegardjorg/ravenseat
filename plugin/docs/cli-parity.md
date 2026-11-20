@@ -22,6 +22,7 @@ commands cover them.
 | Decline a proposal | `/api/task-edit` `decline` | `ravenseat cancel <id> --remark "declined[: reason]" --by owner`; `/ravenseat:decide` |
 | Keep a declined proposal or a set-aside Checks card as not building (**Keep as not building**, **Set aside, keep as not building**) | `/api/task-edit` `decline` with `keep: true`; `/api/checks` `dismiss` with `keep: true` | `ravenseat cancel <id> --remark "declined: ..." --keep --by owner`; `ravenseat checks dismiss <key> --keep [--why "..."]` (`catalog.captureAnswers`) |
 | The Not building list in Decisions | the state's `notBuilding` | `ravenseat catalog show` (the "Not building" part) |
+| The Project catalog list in Decisions (grouped by kind) | the state's `catalogGroups` | `ravenseat catalog show` (the parts by kind) |
 | Release an old pick | `/api/action` `release` | `ravenseat release <id>` (same command); `/ravenseat:decide` |
 | Flag stuck work for the orchestrator (new) | `/api/action` `flag-stuck` | `ravenseat block <id> other --note "owner: looks stuck, please check"` (same command); `/ravenseat:decide` |
 | Put a task started without an agent back in the queue | `/api/action` `requeue` | `ravenseat set <id> waiting` (same command) |

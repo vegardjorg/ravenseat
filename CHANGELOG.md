@@ -22,6 +22,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   board's **Keep as design choice** (`catalog.captureAnswers`, `explicit`).
 - **"Not building": a declined proposal or a set-aside Checks card can be kept in the catalog, and new proposals that
   match one get an INFO line.** Advice only (`notBuilding.match`, on).
+- **Catalog entries have a `kind` (decision, design, stack, dependency, not-building) and `except` paths, and
+  Decisions lists them by kind as Project catalog.**
 ### Changed
 - **Plans: the room opens on a Roadmap, and a plan opens as a page with its document first.** Horizons (Inbox, Waiting
   on you, Now, Next, Later, Done) as columns on a wide screen and a list on a phone; the old views are under More views.

@@ -40,20 +40,30 @@ const path = require('node:path');
 const DIR = 'docs/queue/catalog';
 const STATUSES = Object.freeze(['proposed', 'accepted', 'superseded', 'not-building']);
 /**
- * The frontmatter fields of a design choice. accepted_by and accepted are written by `catalog accept`. kind, keywords,
- * revisit and source are for a "Not building" entry (roadmap 0f, lib/notBuilding.js): what the project deliberately does
- * not build, with the words a new proposal is matched against, when to look at it again, and where the no came from.
+ * The frontmatter fields of a design choice. accepted_by and accepted are written by `catalog accept`. kind says what
+ * sort of entry it is (KINDS). except (roadmap 0å KD-0) is the paths the entry does not apply to, inside its paths (the
+ * globs have no negation). keywords, revisit and source are for a "Not building" entry (roadmap 0f,
+ * lib/notBuilding.js): what the project deliberately does not build, with the words a new proposal is matched against,
+ * when to look at it again, and where the no came from.
  */
 const FIELDS = Object.freeze([
-  'id', 'title', 'status', 'kind', 'paths', 'invariant', 'check', 'keywords', 'revisit', 'source', 'supersedes', 'plan',
-  'accepted_by', 'accepted',
+  'id', 'title', 'status', 'kind', 'paths', 'except', 'invariant', 'check', 'keywords', 'revisit', 'source', 'supersedes',
+  'plan', 'accepted_by', 'accepted',
 ]);
 /**
- * choice: a design choice (the default). not-building: a rejection, roadmap 0f. Its draft is status proposed with kind
- * not-building; the owner's accept writes status not-building (never accepted). A file that says status not-building
- * is of that kind without the line.
+ * One field, one set of values (roadmap 0å KD-0, plans/katalog-design-stack-avhengigheter-2026-11-18.md § 2):
+ *   decision      a design choice (the default when the line is missing)
+ *   design        a rule of the project's design language (colours from tokens, the type scale); KD-1
+ *   stack         a stack choice: which tool does a job, with the reason; KD-2
+ *   dependency    a decision about one library (a risk acceptance, roadmap KD-4)
+ *   not-building  a rejection, roadmap 0f. Its draft is status proposed with kind not-building; the owner's accept writes
+ *                 status not-building (never accepted). A file that says status not-building is of that kind without
+ *                 the line.
+ * The kind is part of the fingerprint (fingerprint), so a track cannot turn a binding entry into another sort.
  */
-const KINDS = Object.freeze(['choice', 'not-building']);
+const KINDS = Object.freeze(['decision', 'design', 'stack', 'dependency', 'not-building']);
+/** The board's and `catalog show`'s heading per kind, in the order they are shown (not-building has its own view). */
+const KIND_TITLES = Object.freeze({ design: 'Design language', stack: 'Stack', dependency: 'Dependencies', decision: 'Design choices' });
 /** A not-building entry's keywords: at most this many, each at most KEYWORD_MAX characters. */
 const KEYWORDS_MAX = 12;
 const KEYWORD_MAX = 40;
@@ -264,6 +274,7 @@ function parseDecision(name, source) {
   if (d.kind != null && !KINDS.includes(d.kind)) e(`kind must be one of ${KINDS.join(', ')} (or left out: a design choice)`);
   if (d.status === 'not-building' && d.kind != null && d.kind !== 'not-building') e('status not-building needs kind not-building (or no kind line)');
   const nb = d.kind === 'not-building' || d.status === 'not-building';
+  const kind = nb ? 'not-building' : KINDS.includes(d.kind) ? d.kind : 'decision';
   if (nb && d.status === 'accepted') e('a not-building entry is accepted as status not-building, not accepted (ravenseat catalog accept writes it)');
   // What a rejection does not need: an invariant and paths (it binds no code). When it has them, they are checked.
   if (!nb || d.paths != null) {
@@ -271,6 +282,14 @@ function parseDecision(name, source) {
     else for (const p of d.paths) {
       const pe = typeof p === 'string' ? pathPatternError(p) : 'not text';
       if (pe) e(`paths: ${pe}`);
+    }
+  }
+  // except (KD-0): the paths inside `paths` the entry does not apply to, such as the token file of a colour rule.
+  if (d.except != null) {
+    if (!Array.isArray(d.except)) e('except must be a list of path patterns, e.g. ["ui/tokens.css"]');
+    else for (const p of d.except) {
+      const pe = typeof p === 'string' ? pathPatternError(p) : 'not text';
+      if (pe) e(`except: ${pe}`);
     }
   }
   if (!nb || d.invariant != null) {
@@ -302,8 +321,9 @@ function parseDecision(name, source) {
     id: typeof d.id === 'string' ? d.id : fileId,
     title: typeof d.title === 'string' ? d.title : null,
     status: d.status ?? null,
-    kind: nb ? 'not-building' : 'choice',
+    kind,
     paths: Array.isArray(d.paths) ? d.paths.filter((p) => typeof p === 'string') : [],
+    except: Array.isArray(d.except) ? d.except.filter((p) => typeof p === 'string') : [],
     invariant: typeof d.invariant === 'string' ? d.invariant : null,
     check: d.check ?? null,
     keywords: Array.isArray(d.keywords) ? d.keywords.filter((k) => typeof k === 'string') : [],
@@ -491,6 +511,10 @@ function fingerprint(d) {
   // they are part of it. A design choice keeps the fingerprint it always had (its records stay valid).
   const parts = [d?.id ?? null, d?.invariant ?? null, d?.paths ?? [], d?.check ?? null];
   if (isNotBuilding(d)) parts.push('not-building', d?.keywords ?? []);
+  // The kind and except (roadmap 0å KD-0) bind too: a track must not turn an accepted stack entry into a plain note, or
+  // widen what a rule skips. Only when they say something, so an entry without them keeps its fingerprint.
+  else if (d?.kind != null && d.kind !== 'decision') parts.push({ kind: d.kind });
+  if (Array.isArray(d?.except) && d.except.length) parts.push({ except: d.except });
   const what = JSON.stringify(canon(parts));
   return crypto.createHash('sha256').update(what).digest('hex');
 }
@@ -498,6 +522,43 @@ function fingerprint(d) {
 /** Whether a parsed entry is a "Not building" entry (roadmap 0f): kind not-building, or status not-building. */
 function isNotBuilding(d) {
   return d?.kind === 'not-building' || d?.status === 'not-building';
+}
+
+/**
+ * Does an entry apply to a file: one of its paths matches and none of its except patterns does (roadmap 0å KD-0). The
+ * one test the check rules, `catalog check` and the excerpt use, so except means the same everywhere.
+ */
+function covers(d, file, glob = require('./mergeGuard.js').globMatch) {
+  const paths = Array.isArray(d?.paths) ? d.paths : [];
+  const except = Array.isArray(d?.except) ? d.except : [];
+  return paths.some((p) => glob(p, file)) && !except.some((p) => glob(p, file));
+}
+
+/**
+ * The board's catalog list (Decisions, roadmap 0å KD-0): the entries grouped by kind in the order of KIND_TITLES, each
+ * with the status that counts. Not-building entries have their own view (lib/notBuilding.js boardEntries) and a
+ * superseded entry binds nothing, so both are left out. Empty groups are left out too.
+ */
+function boardGroups(cat, ledger = emptyLedger()) {
+  if (!cat?.exists) return [];
+  const ds = (cat.decisions ?? []).map((x) => x?.decision).filter((d) => d?.id && !isNotBuilding(d) && d.status !== 'superseded');
+  const out = [];
+  for (const [kind, title] of Object.entries(KIND_TITLES)) {
+    const entries = ds
+      .filter((d) => (d.kind ?? 'decision') === kind)
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((d) => ({
+        id: d.id,
+        title: d.title ?? '',
+        status: effectiveStatus(d, ledger),
+        invariant: d.invariant ?? null,
+        paths: d.paths ?? [],
+        except: d.except ?? [],
+        file: d.file ?? null,
+      }));
+    if (entries.length) out.push({ kind, title, entries });
+  }
+  return out;
 }
 
 /**
@@ -634,7 +695,13 @@ function proposalFile(p) {
         `revisit: ${one(p.revisit) ? frontValue(one(p.revisit)) : 'null'}`,
         `source: ${one(p.source) ? frontValue(one(p.source)) : 'null'}`,
       ]
-    : [`paths: ${JSON.stringify(paths)}`, `invariant: ${frontValue(one(p.invariant))}`];
+    : [
+        // A kind other than decision, and except (roadmap 0å KD-0), only when given: a plain choice is written as before.
+        ...(KINDS.includes(p.kind) && p.kind !== 'decision' ? [`kind: ${p.kind}`] : []),
+        `paths: ${JSON.stringify(paths)}`,
+        ...(Array.isArray(p.except) && p.except.length ? [`except: ${JSON.stringify(p.except)}`] : []),
+        `invariant: ${frontValue(one(p.invariant))}`,
+      ];
   const text = [
     '---',
     `id: ${p.id}`,
@@ -719,7 +786,7 @@ function treeHits(d, { files, readFile, glob }) {
   if (!rule || errors.length) return null;
   let count = 0;
   let first = null;
-  const mine = files.filter((f) => !RS.isTestPath(f) && d.paths.some((p) => glob(p, f))).slice(0, TREE_FILES);
+  const mine = files.filter((f) => !RS.isTestPath(f) && covers(d, f, glob)).slice(0, TREE_FILES);
   for (const f of mine) {
     const body = readFile(f);
     if (typeof body !== 'string' || body.length > TREE_FILE_BYTES || body.includes('\u0000')) continue;
@@ -769,6 +836,11 @@ function checkCatalog(cat, ctx = {}) {
       );
     if (files && d.paths.length && !files.some((f) => d.paths.some((p) => glob(p, f))))
       warnings.push(`${d.id} (${d.file}): its paths match no tracked file: ${d.paths.join(', ')}`);
+    else if (files && d.paths.length && !files.some((f) => covers(d, f, glob)))
+      warnings.push(`${d.id} (${d.file}): its except leaves no tracked file of its paths: ${d.except.join(', ')}`);
+    for (const p of files && d.except?.length ? d.except : [])
+      if (!files.some((f) => d.paths.some((q) => glob(q, f)) && glob(p, f)))
+        warnings.push(`${d.id} (${d.file}): except ${p} matches no tracked file inside its paths`);
     if (d.supersedes && !byId.has(d.supersedes)) errors.push(`${d.id} supersedes ${d.supersedes}, which is not in the catalog`);
     else if (d.supersedes && byId.get(d.supersedes).status !== 'superseded')
       warnings.push(`${d.id} supersedes ${d.supersedes}, but ${d.supersedes} is not marked status: superseded`);
@@ -904,7 +976,8 @@ const DECISIONS_README = [
   '  `ravenseat catalog accept D-0001 --by owner`. A status set to accepted by hand is unconfirmed: `catalog check`',
   '  names it as an error, and it counts as proposed until the owner accepts it.',
   '- `invariant`: one sentence that can be checked. It is the only text a track gets.',
-  '- `paths`: the files the choice applies to.',
+  '- `paths`: the files the choice applies to. `except` (optional): files inside them it does not apply to.',
+  '- `kind` (optional): `decision` (the default), `design`, `stack`, `dependency` or `not-building`.',
   '- To change an accepted choice, write a new one with `supersedes: D-0001`; its accept sets the old one to `superseded`.',
   '- `plan`: the plan entry with the long version, if there is one. A plan entry links back with `decisions`.',
   '',
@@ -915,9 +988,12 @@ module.exports = {
   STATUSES,
   FIELDS,
   KINDS,
+  KIND_TITLES,
   KEYWORDS_MAX,
   KEYWORD_MAX,
   isNotBuilding,
+  covers,
+  boardGroups,
   ID_PATTERN,
   BLOCK_BEGIN,
   BLOCK_END,

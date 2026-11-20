@@ -108,7 +108,9 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
     const status = C.effectiveStatus(d, ledger);
     if (status !== 'accepted' && status !== 'proposed' && status !== 'unconfirmed') continue;
     if (status !== 'accepted' && noFiles) continue;
-    if (!noFiles && !d.paths.some((p) => scope.some((e) => meets(p, e, glob)))) continue;
+    // A file the entry's except names does not count (roadmap 0å KD-0); a folder still does, it may hold other files.
+    const excepted = (e) => !e.endsWith('/') && (d.except ?? []).some((x) => glob(normPath(x), e));
+    if (!noFiles && !d.paths.some((p) => scope.some((e) => !excepted(e) && meets(p, e, glob)))) continue;
     (status === 'accepted' ? binding : proposed).push({ d, status });
   }
   const cut = { binding: 0, proposed: 0, prefer: 0, reuse: 0, near: 0, shared: 0 };

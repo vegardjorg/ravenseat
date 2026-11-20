@@ -160,6 +160,25 @@ describe('ravenseat catalog init, show and check', () => {
     expect(one.out).toMatch(/linked from plan entries: PL-DATES/);
     expect(p.run(['catalog', 'show', 'D-0099']).code).toBe(1);
   });
+
+  it('KD-0: propose --kind and --except write the fields, and show groups the entries by kind', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION);
+    const r = p.run(['catalog', 'propose', '--kind', 'design', '--title', 'Colours from tokens', '--invariant', 'Only tokens.', '--paths', 'lib/**', '--except', 'lib/a.js']);
+    expect(r.code, r.all).toBe(0);
+    const text = p.read(`${CAT}/decisions/D-0002-colours-from-tokens.md`);
+    expect(text).toMatch(/\nkind: design\n/);
+    expect(text).toMatch(/\nexcept: \["lib\/a\.js"\]\n/);
+    const list = p.run(['catalog', 'show']).out;
+    expect(list).toMatch(/Design language \(decisions\/\):\s*\n\s+D-0002\s+proposed\s+Colours from tokens/);
+    expect(list).toMatch(/Design choices \(decisions\/\):\s*\n\s+D-0001\s+proposed/);
+    expect(p.run(['catalog', 'show', 'D-0002']).out).toMatch(/kind: design[\s\S]*except: lib\/a\.js/);
+    expect(JSON.parse(p.run(['catalog', 'show', '--json']).out).decisions.map((d: { kind: string }) => d.kind)).toEqual(['decision', 'design']);
+    const wrong = p.run(['catalog', 'propose', '--kind', 'theme', '--title', 'X', '--invariant', 'Y.', '--paths', 'lib/**']);
+    expect(wrong.code).toBe(1);
+    expect(wrong.err).toMatch(/--kind must be one of decision, design, stack, dependency/);
+  });
 });
 
 describe('the owner lock on accepted', () => {
