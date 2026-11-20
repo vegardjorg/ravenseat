@@ -5,6 +5,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
+- **Plans: Filter and Sort menus like the Tasks room replace the left column, and plans show their progress in words.**
+  Usability hardening: a narrow tray below 600 px, and the plan page keeps the document at a readable width.
 - **Missions: a section pointer on a Windows short path gets its line range.** Edge case hardening. A pointer like
   `C:/Users/RUNNER~1/.../plan.md § 2` (an 8.3 short name, as in some temp folders) was cut at the `~`, so the file
   was not found and the "(line A-B)" range was left out. The `~` now counts as part of the path. A docs test that

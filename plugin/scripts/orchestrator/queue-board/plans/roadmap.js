@@ -45,9 +45,23 @@
     );
   }
 
-  /** The toolbar: search, group by, layout (not on a phone, see plans.css), density and the count. */
+  /**
+   * The toolbar: search, Filter and Sort (P4, plans/filter.js through h.filterControls), group by, layout (not on a
+   * phone, see plans.css), density and the count. Below the tray width (600 px) Group by and Compact move into the one
+   * "Filter and sort" tray, so the toolbar stays one short row.
+   */
   function toolbar(h, d, match, layout, prefs) {
     const t = h.state();
+    const narrow = h.width() < (window.QueuePlanFilter?.TRAY_BELOW ?? 600);
+    const group = () =>
+      toggles(h, 'Group by', 'roadmap-group', [
+        { text: 'Horizon', pressed: prefs.group !== 'area', onclick: () => h.setPref({ group: 'horizon' }) },
+        { text: 'Area', pressed: prefs.group === 'area', onclick: () => h.setPref({ group: 'area' }) },
+      ]);
+    const density = () =>
+      toggles(h, 'Density', 'roadmap-density', [
+        { text: 'Compact', pressed: Boolean(prefs.compact), onclick: () => h.setPref({ compact: !prefs.compact }) },
+      ]);
     return h.el(
       'div',
       { class: 'roadmap-toolbar' },
@@ -60,17 +74,13 @@
         value: t.search ?? '',
         oninput: (e) => h.search(e.target.value),
       }),
-      toggles(h, 'Group by', 'roadmap-group', [
-        { text: 'Horizon', pressed: prefs.group !== 'area', onclick: () => h.setPref({ group: 'horizon' }) },
-        { text: 'Area', pressed: prefs.group === 'area', onclick: () => h.setPref({ group: 'area' }) },
-      ]),
+      h.filterControls?.({ sort: true, trayExtra: narrow ? [group(), density()] : [] }) ?? null,
+      narrow ? null : group(),
       toggles(h, 'Layout', 'roadmap-layout', [
         { text: 'Columns', pressed: layout === 'columns', onclick: () => h.setPref({ layout: 'columns' }) },
         { text: 'List', pressed: layout === 'list', onclick: () => h.setPref({ layout: 'list' }) },
       ]),
-      toggles(h, 'Density', 'roadmap-density', [
-        { text: 'Compact', pressed: Boolean(prefs.compact), onclick: () => h.setPref({ compact: !prefs.compact }) },
-      ]),
+      narrow ? null : density(),
       // the count leaves out the dropped ones (as the Roadmap tab does); they are folded at the bottom.
       h.el('span', {
         class: 'roadmap-count',
@@ -85,10 +95,32 @@
     return [s.text, V.areaTitle(p, d.modules ?? []), s.next, ...V.planNotes(p)].filter(Boolean).join(' · ');
   }
 
+  /**
+   * The progress of a plan with tasks: a small bar (decoration, aria-hidden) and the percent in words beside it, so it
+   * never rests on color or length alone. `full` gives the whole sentence ("43% done, 3 of 7 tasks"), else "43% done".
+   */
+  function progress(h, p, { id = null, full = false, cls = '' } = {}) {
+    const g = V.planProgress(p);
+    if (!g) return null;
+    return h.el(
+      'p',
+      { class: `plans-progress ${cls}`.trim(), id },
+      h.el(
+        'span',
+        { class: 'plans-progress-bar', 'aria-hidden': 'true' },
+        h.el('span', { class: 'plans-progress-fill', '--progress': `${g.percent}%` }),
+      ),
+      h.el('span', { class: 'plans-progress-text', text: full ? g.text : `${g.percent}% done` }),
+    );
+  }
+
   /** One plan on the roadmap: the title is the button (opens the plan page), the line describes it. */
   function card(h, d, p, compact) {
     const lineId = `roadmap-line-${p.id}`;
+    const progressId = `roadmap-progress-${p.id}`;
     const sentence = V.planSentence(p);
+    // the progress row only in the normal density (Compact keeps one line per plan)
+    const bar = compact ? null : progress(h, p, { id: progressId, cls: 'roadmap-card-progress' });
     return h.el(
       'li',
       { class: `roadmap-card h-${V.horizonFor(p)}`, 'data-roadmap-entry': p.id },
@@ -97,7 +129,7 @@
         class: 'roadmap-card-link',
         text: p.title || p.id,
         'data-focus': `roadmap:${p.id}`,
-        'aria-describedby': lineId,
+        'aria-describedby': bar ? `${lineId} ${progressId}` : lineId,
         onclick: () => h.use({ entry: p.id }),
       }),
       compact
@@ -108,6 +140,7 @@
             text: sentence.text ?? 'No summary yet',
           }),
       h.el('p', { class: 'roadmap-card-line', id: lineId, text: cardLine(p, d) }),
+      bar,
     );
   }
 
@@ -202,6 +235,8 @@
       group: prefs.group === 'area' ? 'area' : 'horizon',
       modules: d.modules ?? [],
       keepEmpty: layout === 'columns' && !active,
+      // P4: with a Sort other than Roadmap order, the plans keep the sorted order inside each section
+      order: V.cleanSort(h.sort?.()) === 'roadmap' ? 'horizon' : 'given',
     });
     wrap.append(
       h.el(
@@ -230,7 +265,8 @@
       }),
       // tabindex -1: plans.js moves focus here when the page opens, so a screen reader starts at the title.
       h.el('h2', { tabindex: '-1', 'data-focus': 'page-title', text: p.title || p.id }),
-      h.el('p', { class: 'plans-page-status', text: s.next ? `${s.text}. Next step: ${s.next}.` : `${s.text}.` }),
+      h.el('p', { class: 'plans-page-status', text: s.next ? `${s.text}. Next: ${s.next}.` : `${s.text}.` }),
+      progress(h, p, { full: true, cls: 'plans-page-progress' }),
       notes.length ? h.el('p', { class: 'plans-page-notes', text: notes.join(' · ') }) : null,
     );
   }
@@ -357,16 +393,22 @@
    * @param p the entry
    */
   function page(h, d, p) {
+    // The reading order stays the plan first: head, summary, actions, questions, the document, then tasks and Details.
+    // On a wide screen (plans.css, from 1200 px) the tasks and Details sit in a side column beside the document, so
+    // the document keeps a readable line length and the space beside it is used.
     return h.el(
       'article',
       { class: 'plans-page', 'aria-label': p.title || p.id },
-      head(h, p),
-      summary(h, p),
-      actions(h, d, p),
-      questions(h, d, p),
-      documentSection(h, p),
-      tasks(h, p),
-      details(h, d, p),
+      h.el(
+        'div',
+        { class: 'plans-page-main' },
+        head(h, p),
+        summary(h, p),
+        actions(h, d, p),
+        questions(h, d, p),
+        documentSection(h, p),
+      ),
+      h.el('div', { class: 'plans-page-side' }, tasks(h, p), details(h, d, p)),
     );
   }
 

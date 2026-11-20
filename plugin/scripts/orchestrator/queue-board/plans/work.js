@@ -4,7 +4,8 @@
 //
 //   - Keyboard in the list: j and k move, Enter opens the panel, / jumps to the search, 1 to 4 set the priority (Now,
 //     Later, Owner, Drop; Now asks for a category and Drop for a reason in the row menu), c copies the start line (for
-//     all chosen when something is selected), x marks the row for multi select, Esc clears the selection.
+//     all chosen when something is selected), x marks the row for multi select, Esc clears the selection, f opens
+//     the Filter menu (also on the Roadmap; P4, plans/filter.js).
 //   - Ctrl+K (Cmd+K): the command line. Jumps to a module, project or entry (the matches show the breadcrumb, recently
 //     used at the top) and runs actions such as "Copy start line for all chosen" and "Prepare for queue".
 //   - Multi select: the action bar at the bottom (priority, project, maturity, merge and copy) with a preview before
@@ -821,7 +822,8 @@
   function keyPress(h, e) {
     const t = V.keyAction(e, {
       inputField: inputField(document.activeElement),
-      busy: a.palette.open || !!a.menu,
+      // an open Filter or Sort menu (plans/filter.js) has its own keys
+      busy: a.palette.open || !!a.menu || !!h.filterMenuOpen?.(),
     });
     if (!t) return;
     if (t.type === 'palette') {
@@ -835,6 +837,14 @@
     const active = document.activeElement;
     if (active && active !== document.body && !h.room.contains(active)) return;
     const tl = h.state();
+    // f opens the Filter menu (P4) where there is one: the Roadmap and Plan entries, not on a plan page.
+    if (t.type === 'filter') {
+      if ((tl.surface === 'roadmap' && !tl.entry) || tl.surface === 'entries') {
+        e.preventDefault();
+        h.openFilter?.();
+      }
+      return;
+    }
     if (tl.surface === 'roadmap') {
       roadmapKey(h, t, e, tl, active);
       return;
