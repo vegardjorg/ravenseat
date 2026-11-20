@@ -223,20 +223,33 @@ describe('the top: the markup in the top', () => {
 });
 
 describe('the top: grid and phone', () => {
-  it('the top is a grid with the mascot over both rows, in one line that switches sides', () => {
+  it('the top is a grid with the logo in row 1 only and row 2 from the left edge (hdr)', () => {
     const top = rules.find((r) => r.media === null && r.selectors.includes('.top'));
     expect(top?.decl.display).toBe('grid');
     // Two fixed rows (B16, see queueBoardTopStable.test.ts): the same height in every room.
     expect(top?.decl['grid-template']).toMatch(
-      /'mascot row1' 50px\s+'mascot row2' 50px \/ auto minmax\(0, 1fr\)/,
+      /'mascot row1' 40px\s+'row2 row2' 40px \/ auto minmax\(0, 1fr\)/,
     );
   });
 
-  it('the mascot is 52 × 104 on a wide screen and 56 px high on a phone', () => {
+  it('in mascot mode (.top.figure-mascot) the zone spans both rows again, with only the areas changed', () => {
+    const m = rules.find((r) => r.media === null && r.selectors.includes('.top.figure-mascot'));
+    expect(m?.decl['grid-template-areas']).toMatch(/'mascot row1'\s+'mascot row2'/);
+    // Only the areas: the tracks (and so the top's height) stay the same when the switch flips.
+    expect(Object.keys(m?.decl ?? {})).toEqual(['grid-template-areas']);
+  });
+
+  it('the logo is 32 × 40 (row 1 high), the mascot 41 × 82 (both rows and the gap), and both stay small on a phone', () => {
     const wide = rules.find((r) => r.media === null && r.selectors.includes('.mascot'));
-    expect(wide?.decl.width).toBe('52px');
-    expect(wide?.decl.height).toBe('104px');
-    expect(valueAt375('mascot', 'height')).toBe('56px');
+    expect(wide?.decl.width).toBe('32px');
+    expect(wide?.decl.height).toBe('40px');
+    const mascot = rules.find((r) => r.media === null && r.selectors.includes('.top.figure-mascot .mascot'));
+    expect(mascot?.decl.width).toBe('41px');
+    expect(mascot?.decl.height).toBe('82px');
+    const phone = (sel: string) =>
+      rules.find((r) => r.media?.includes('max-width: 720px') && r.selectors.includes(sel))?.decl.height;
+    expect(phone('.mascot')).toBe('40px');
+    expect(phone('.top.figure-mascot .mascot')).toBe('56px');
   });
 
   it('the tabs scroll in their own row on a phone (overflow-x on the row, not on the page)', () => {

@@ -1177,8 +1177,12 @@ const SETTINGS = Object.freeze([
   row('guidance', 'board', 'choice', 'Guidance',
     'guided: advice about CI, gates and checks. quiet: no advice; guards and facts stay. Only for you.',
     { ...BASIC, ...QUEUE, choices: ['guided', 'quiet'] }),
+  // Track hdr. Friction: bubbles show only when a viewer switches the mascot on (the gear); the default logo never talks,
+  // which removes a talking element from the default view. No guard is weakened, and the default (chatty) is unchanged
+  // for people who turn the mascot on.
   row('board.mascot', 'board', 'choice', 'Mascot bubbles',
-    'chatty, events (only events and clicks) or off for every viewer.', { ...BASIC, choices: ['chatty', 'events', 'off'] }),
+    'How much the mascot talks once it is switched on in the gear (the logo never talks): chatty, events (only ' +
+    'events and clicks) or off, for every viewer.', { ...BASIC, choices: ['chatty', 'events', 'off'] }),
   row('board.blockedColumn', 'board', 'onoff', 'Blocked column',
     'Tasks with an open blocker that needs action get a column after In queue.', { ...BASIC, ...QUEUE }),
   // QA-1c Q5. Friction: float removes the reflow, since a docked panel narrowed the board and rewrapped the focus line

@@ -107,9 +107,9 @@ function themeSection() {
 }
 
 /**
- * The picture in the top corner and how much it says. A switch picks the Ravenseat logo (the default; the raven on the
- * right talks) or the mascot. The speech choice, Chatty, Events only or Off (stored in localStorage by mascot.js),
- * applies to both. When the server has turned the mascot off (board.mascot "off" in queue.config.json, or
+ * The picture in the top corner and how much it says. A switch picks the Ravenseat logo (the default, which never
+ * talks) or the mascot. The speech choice, Chatty, Events only or Off (stored in localStorage by mascot.js), applies
+ * to the mascot only. When the server has turned the mascot off (board.mascot "off" in queue.config.json, or
  * --mascot off), the speech choice is locked.
  */
 function mascotSection() {
@@ -125,7 +125,9 @@ function mascotSection() {
     figureSwitch(),
     el('p', {
       class: 'setting-explanation',
-      text: 'How often the speech bubbles show. Off keeps the picture and turns the bubbles off.',
+      text:
+        'Speech bubbles show only with the mascot; the logo never talks. How often the mascot talks: ' +
+        'Off keeps the picture and turns the bubbles off.',
     }),
     m.MODE_OPTIONS.map(({ val, text }) =>
       el(
