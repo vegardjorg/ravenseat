@@ -251,7 +251,8 @@ function missionOf(description: string | null) {
   if (description != null) t.description = description;
   fs.writeFileSync(path.join(data, 'queue.json'), JSON.stringify({ projects: { p: { name: 'p' } }, tasks: [t] }));
   const configFile = path.join(root, 'queue.config.json');
-  fs.writeFileSync(configFile, JSON.stringify({ mode: 'lite', baseBranch: 'main', loadGuard: { minFreeMemoryPct: null } }));
+// The owner mark (lib/ownerMark.js) is new per project key; this test compares whole missions, so it is off here.
+  fs.writeFileSync(configFile, JSON.stringify({ mode: 'lite', baseBranch: 'main', loadGuard: { minFreeMemoryPct: null }, injection: { ownerMark: false } }));
   const common = path.join(out, 'common.md');
   fs.writeFileSync(common, 'Protocol: branch __BRANCH__ from __HEAD__, track __TRACK__, block __BLOCK__.\n');
   const env = {

@@ -15,7 +15,7 @@
 
 import { baseRedLine } from './baseHealth.mjs';
 import { a, branchFor, branchInfo, CLI, cut, FOLDER, L, PREFIX, read, require, S, uncommittedPaths, val, WIDTH } from './context.mjs';
-import { findSilent, findWithoutAgent } from './tracks.mjs';
+import { findSilent, findSpinning, findWithoutAgent } from './tracks.mjs';
 
 const T = require('./lib/queueBoard.js');
 const DEC = require('./lib/queueDecisions.js');
@@ -43,7 +43,13 @@ export function currentInbox(queue, { now = Date.now() } = {}) {
   } catch {
     /* no time history: no aging */
   }
-  return T.board(showQueue, { now, branches, branchPrefix: PREFIX, ageLimits, withoutAgent: findWithoutAgent(queue), silent: findSilent(queue), baseRed: !!baseRedLine() }).inbox;
+  return T.board(showQueue, { now, branches, branchPrefix: PREFIX, ageLimits, withoutAgent: findWithoutAgent(queue), ...silentAndSpinning(queue), baseRed: !!baseRedLine() }).inbox;
+}
+
+/** SILENT and SPINNING for the board inbox (a SILENT track is never also SPINNING). */
+function silentAndSpinning(queue) {
+  const silent = findSilent(queue);
+  return { silent, spinning: findSpinning(queue, { silent }) };
 }
 
 /** The JSON shape for the skill: each item with its impact line and the command per option. */

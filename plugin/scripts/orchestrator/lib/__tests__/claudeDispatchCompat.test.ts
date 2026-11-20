@@ -54,7 +54,8 @@ function setup() {
   };
   fs.writeFileSync(path.join(folder, 'queue.json'), JSON.stringify(queue));
   const configFile = path.join(folder, 'queue.config.json');
-  fs.writeFileSync(configFile, JSON.stringify({ loadGuard: { minFreeMemoryPct: 10, allSlotsFreeMemoryPct: 40 } }));
+  // The owner mark (lib/ownerMark.js) is new per project key; this test compares whole missions, so it is off here.
+  fs.writeFileSync(configFile, JSON.stringify({ loadGuard: { minFreeMemoryPct: 10, allSlotsFreeMemoryPct: 40 }, injection: { ownerMark: false } }));
   fs.mkdirSync(path.join(folder, 'docs'));
   fs.copyFileSync(path.join(ROOT, 'docs', 'mission-template.md'), path.join(folder, 'docs', 'mission-template.md'));
   const scratch = path.join(folder, 'scratch');

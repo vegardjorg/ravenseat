@@ -98,6 +98,7 @@ function limitStandard(name, config) {
   if (name === 'parallelThreshold') return require('./queueDiagnose.js').DEFAULT_THRESHOLD;
   if (name === 'silentMin') return L.SILENT_DEFAULT_MIN;
   if (name === 'noAgentMin') return L.NO_AGENT_GRACE_MIN;
+  if (name === 'spinMin') return require('./trackSpin.js').SPIN_DEFAULT_MIN;
   return undefined;
 }
 

@@ -174,9 +174,14 @@ function doneCheckSetup(cfg = {}) {
   };
 }
 
-/** The last `n` lines of the text (trailing empty lines dropped), each cut to LINE_MAX characters. */
+/**
+ * The last `n` lines of the text (trailing empty lines dropped), each cut to LINE_MAX characters. Redacted FIRST
+ * (lib/storeText.js, the shared route for agent text that is stored: the tail goes to a file and into the fix brief),
+ * then cut, so a cut never keeps the prefix of a secret; a redaction that fails gives one withheld line, never raw text.
+ */
 function tailOf(text, n = DEFAULT_TAIL_LINES) {
-  const lines = String(text ?? '')
+  const lines = require('./storeText.js')
+    .storeText(text)
     .replace(/\r\n?/g, '\n')
     .replace(/\s+$/, '')
     .split('\n');

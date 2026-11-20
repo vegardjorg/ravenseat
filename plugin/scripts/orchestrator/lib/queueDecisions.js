@@ -422,6 +422,33 @@
     };
   }
 
+  /** Busy without real work for so long (lib/trackSpin.js): the same choices as SILENT, nothing was stopped. */
+  function spinningItem(h) {
+    const options = [
+      { label: 'Seen', recommended: true, action: { type: 'keep', id: h.id } },
+      { label: 'Put it back in the queue', recommended: false, action: { type: 'requeue', id: h.id } },
+    ];
+    return {
+      key: `unstick:${h.id}`,
+      verb: 'unstick',
+      heading: 'SPINNING',
+      kind: 'stuck-spinning',
+      kindName: 'Spinning',
+      id: h.id,
+      title: h.title || h.id,
+      text: null,
+      context: [
+        `Busy, but no write, command or commit for ${minutesText(h.long_spinning.minutes)}: ${h.long_spinning.calls} call(s) of bookkeeping, waiting or repeated reads. Nothing was stopped.`,
+        `The orchestrator checks it: ravenseat explain ${h.id}, and if it is stuck ravenseat resume ${h.id} --reason context.`,
+      ],
+      recommendation: options[0].label,
+      impact: taskImpact(0, h),
+      options,
+      free: null,
+      open: h.id,
+    };
+  }
+
   /** Silent for so long that it is no longer a short stop. */
   function silentItem(h) {
     const options = [
@@ -527,6 +554,7 @@
     if (h.no_agent_round) return noAgentRoundItem(h);
     if (h.without_agent) return noAgentItem(h);
     if (h.long_silent) return silentItem(h);
+    if (h.long_spinning) return spinningItem(h);
     const picked = h.status === 'picked';
     const flagged = !!h.open_block;
     const context = [

@@ -131,4 +131,8 @@ module.exports = {
   get canary() {
     return require('./canary.js');
   },
+  // Which tool calls are real work and which are bookkeeping, waiting or reads (SPINNING, lib/trackSpin.js): ./work.js.
+  get work() {
+    return require('./work.js');
+  },
 };

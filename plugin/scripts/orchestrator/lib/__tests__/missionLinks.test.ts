@@ -250,6 +250,7 @@ function project() {
       baseBranch: 'main',
       loadGuard: { minFreeMemoryPct: null },
       privatePaths: [{ path: 'docs/private', read: false }],
+      injection: { ownerMark: false }, // the mark is new per project key; the golden missions here have none
     }),
   );
   const common = path.join(root, 'out', 'common.md');

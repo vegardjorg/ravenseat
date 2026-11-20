@@ -496,6 +496,47 @@ export function findSilent(queue) {
     return [];
   }
 }
+/**
+ * SPINNING tracks (lib/trackSpin.js): running with an agent worktree, busy, but no real work for limits.spinMin minutes
+ * (only bookkeeping, waiting or repeated reads in the agent's newest transcript, and no commit). `silent` is the
+ * caller's findSilent list (a SILENT track is not SPINNING). Read-only; an error never stops the command.
+ */
+export function findSpinning(queue, { silent = [] } = {}) {
+  try {
+    const SP = require('./lib/trackSpin.js');
+    const limitMin = SP.spinMinFor(queue);
+    if (!(limitMin > 0)) return [];
+    const worktreeBranches = new Set(G.readWorktrees(gitRead).map((w) => w.branch).filter(Boolean));
+    const candidates = L.silentCandidates(queue, worktreeBranches);
+    if (!candidates.length) return [];
+    const ACT = require('./lib/trackActivity.js');
+    const agents = ACT.agentsByTask(readTimeLog({ from: activeFrom(candidates) }), candidates.map((o) => o.id));
+    const measures = {};
+    const lastCommit = {};
+    const skip = new Set((silent ?? []).map((x) => x.id));
+    for (const o of candidates) {
+      if (skip.has(o.id)) continue;
+      if (L.reportSinceStart(o, trackReport(o).report)) {
+        skip.add(o.id);
+        continue;
+      }
+      // The agent's newest transcript (a fix round's agent is newer than the first one).
+      const newest = [...(agents.get(o.id)?.agents ?? [])]
+        .map((id) => findTranscript(id))
+        .filter(Boolean)
+        .map((p) => ({ p, ms: fs.statSync(p).mtimeMs }))
+        .sort((p, q) => q.ms - p.ms)[0];
+      const m = newest ? SP.measure(newest.p) : null;
+      if (!m) continue;
+      measures[o.id] = m;
+      lastCommit[o.id] = lastCommitMs(o);
+    }
+    return SP.spinningTracks(queue, { candidates, measures, lastCommit, skip, limitMin });
+  } catch (e) {
+    console.error(`(The spinning check failed: ${e?.message ?? e})`);
+    return [];
+  }
+}
 /** `merge` stopped: open the blocker reason on the task (queueLogic.openBlock). Never stops the merge's own output. */
 export function mergeBlock(id, code, note) {
   try {
@@ -610,6 +651,11 @@ export function logStart(r) {
  * The track blocks (make-mission.mjs format) for running or picked tasks, with the warning about changes outside
  * the queue. Shared by `trackFile` and `fill`.
  */
+/** The owner mark for the task's current mission (lib/ownerMark.js, roadmap 0æ N4): its attempt's round. */
+export function missionMark(o, round = AT.current(o)?.round ?? 0) {
+  return require('./lib/ownerMark.js').markFor(o.id, round, { folder: FOLDER, config: CONFIG });
+}
+
 export function makeTrackBlocks(queue, idList) {
   // Have the owned files changed outside the queue since the task was added? Then the track block gets a warning, so the track
   // reads the diff before it builds on an outdated mission.
@@ -647,7 +693,7 @@ export function makeTrackBlocks(queue, idList) {
       `BRANCH: ${o.branch}`,
       ...(links.get(o.id) ?? []),
       '',
-      L.trackBlock(o, queue, { text, warning: notices.get(o.id)?.warning ?? null }),
+      L.trackBlock(o, queue, { text, warning: notices.get(o.id)?.warning ?? null, mark: missionMark(o) }),
     ].join('\n');
   });
   const withWarning = [...notices].filter(([, v]) => v.warning).map(([id]) => id);

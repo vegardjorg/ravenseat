@@ -85,6 +85,10 @@ const STANDARD = Object.freeze({
     // its red commands once on the same commit (never in the main checkout, never on a dirty tree). Green then is green
     // with `flaky` (a flakyGate row, and at receive a finding); red twice is red. false = no rerun.
     flakyRerun: true,
+    // "The gate cannot run" (lib/gateBroken.js): a red quick gate at receive whose own first program is missing here,
+    // and the same on the base, gives one owner question tied to the gates setup hash instead of a fix round. On by
+    // default: it only replaces a round that cannot help. false = a fix round as before.
+    brokenVerdict: true,
     // The time budget (seconds) for the whole list when a track runs its own gates (`ravenseat gates --quick|--full` in
     // its worktree, without --timeout-sec): a gate over it is red. null = baseGate.timeoutSec (900), 0 = no budget.
     // receive and merge pass baseGate.timeoutSec themselves; the main checkout has no budget unless one is passed.
@@ -186,6 +190,9 @@ const STANDARD = Object.freeze({
   // atReceive and allowlist are OFF by default (owner decision 2026-11-15: a new check is opt-in): setup tips about each
   // once, the Checks tab has a "Turn on" card, and doctor shows one INFO line while it is off (lib/optInChecks.js).
   secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000, atReceive: false, allowlist: false },
+  // The owner mark (lib/ownerMark.js, roadmap 0æ N4): a token new for each mission on the owner's words in it, and a
+  // Suspicious content line at receive for a report that claims owner approval without it. A warning, never a stop.
+  injection: { ownerMark: true },
   // enabled: `ravenseat doctor` checks that the project's OWN .gitignore (the global one switched off) ignores what
   // Ravenseat keeps local, and that git tracks none of it. Off by default like the two above (lib/optInChecks.js).
   gitignoreCheck: { enabled: false },

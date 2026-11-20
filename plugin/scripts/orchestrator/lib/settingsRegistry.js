@@ -401,6 +401,12 @@ const SETTINGS = Object.freeze([
     'The most one SILENT snapshot may hold; the oldest transcript rows are left out first (64 by default).'),
   row('limits.noAgentMin', 'load', 'integer', 'No agent after (minutes)',
     'Minutes before a track marked running, with no agent on its branch and no report, counts as NO AGENT. 0 = off.', QUEUE),
+  // Friction: none, it never stops work: a line in show and the pulse, and after an hour a Decisions card with the
+  // same choices as SILENT. On by default (the owner's decision of 18.11.2026, roadmap 0æ N3): a track that burns
+  // tokens without progress is the costliest quiet failure, and SILENT cannot see it.
+  row('limits.spinMin', 'load', 'integer', 'Spinning after (minutes)',
+    'Minutes a busy track may go without real work (only to-do lists, tool loading, sleeps or the same reads again, no ' +
+    'write, command or commit) before it counts as SPINNING. Shown only; after an hour also a Decisions card. 0 = off.', QUEUE),
 
   // ---- 4. Gates ----
   row('gates.quick', 'gates', 'list', 'Quick gate',
@@ -443,6 +449,12 @@ const SETTINGS = Object.freeze([
     'windows, so a test run opens no console window per git call. Off: the windows show as before.'),
   row('gates.flakyRerun', 'gates', 'onoff', 'Rerun red gate commands once',
     'A red gate in a track reruns only its red commands once on the same commit. Green then counts as flaky.'),
+  // Friction: it stops a fix round, but only one that could never help (the gate's own program is missing on this
+  // machine, on the tip and on the base), and replaces it with one owner question. On by default for that reason; the
+  // rule is narrow (first program only, never "Cannot find module"), so a code failure still gets its fix round.
+  row('gates.brokenVerdict', 'gates', 'onoff', 'Ask when a gate cannot run',
+    'A red quick gate whose own program is not installed here (also on the base branch) is a setup problem: receive ' +
+    'asks you once instead of starting a fix round. A changed gates setup forgets the verdict. Off: a fix round as before.'),
   row('gateEvidence.mode', 'gates', 'choice', 'Gate evidence',
     'Who is trusted that the checks passed: Ravenseat running them itself (own), your CI (external), or the track\'s own ' +
     'word (off). Own is the default, because a track could write a green result it never got. Own: receive and merge ' +
@@ -692,6 +704,12 @@ const SETTINGS = Object.freeze([
       whyNot: 'A pushed secret stays in the remote\'s history and must be rotated, even after the commit is removed.',
       changes: 'Pushes go out without a secret scan. Doctor will report it.',
     }),
+  // Friction: none, it never stops work: one line in the mission frame, and a SUSPICIOUS CONTENT line at receive plus a
+  // section in the review package. On by default (the owner's decision of 18.11.2026, roadmap 0æ N4): a file a track
+  // reads must not be able to speak as the owner. A false hit costs one line; a report can always quote the mark.
+  row('injection.ownerMark', 'guards', 'onoff', 'Owner mark on missions',
+    'Each mission gets a mark of its own on the owner answers and orchestrator additions in it. Receive flags, as ' +
+    'Suspicious content, a report that claims owner approval without that mark. A warning, never a stop. Off: no mark.'),
   // The opt-in checks (lib/optInChecks.js): off by default, so switching one off again never weakens the standard.
   row('secretScan.atReceive', 'guards', 'onoff', 'Secret scan at receive',
     'Off by default. On: receive scans the track\'s own commits for secrets; a hit blocks the merge until a clean receive or merge --allow-secret.', {

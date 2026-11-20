@@ -20,7 +20,7 @@ import {
   KV, L, missionRef, parallelWarning, positional, pulseCursor, read, readCursor, require, val, values, WIDTH, withLock, write,
 } from './context.mjs';
 import { cloudPulseLines } from './cloud.mjs';
-import { deliveryWarning, findSilent, findWithoutAgent } from './tracks.mjs';
+import { deliveryWarning, findSilent, findSpinning, findWithoutAgent } from './tracks.mjs';
 import { findingsLineNow } from './finding.mjs';
 import { inboxLineNow } from './planInbox.mjs';
 import { baseHealthLine } from './baseHealth.mjs';
@@ -280,7 +280,10 @@ export function cmdOrchestrator() {
     // Tracks fill marked running whose agent was never started (fill run where nobody read the output).
     for (const l of L.withoutAgentLines(findWithoutAgent(read()))) console.log(l);
     // Tracks with an agent worktree but no sign of life for limits.silentMin minutes.
-    for (const l of L.silentLines(findSilent(read()))) console.log(l);
+    const silentList = findSilent(read());
+    for (const l of L.silentLines(silentList)) console.log(l);
+    // Busy without real work (lib/trackSpin.js): shown, never stopped.
+    for (const l of require('./lib/trackSpin.js').spinLines(findSpinning(read(), { silent: silentList }), { cli: CLI })) console.log(l);
     // Follow up: the pulse repeats due entries every time, until the report is written (ravenseat follow report).
     for (const l of followLines({ pulse: true })) console.log(l);
     // Findings the tracks reported outside their scope (ravenseat finding) that nobody has triaged yet.
