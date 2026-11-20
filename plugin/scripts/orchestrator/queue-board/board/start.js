@@ -199,6 +199,18 @@ window.QueueBoard = {
       .querySelector(`.summary[data-id="${CSS.escape(id)}"]`)
       ?.scrollIntoView({ block: 'nearest' });
   },
+  /**
+   * P8 "See tasks" on a plan page: the cards of one plan, as `plan:<id>` in the search box (visible, and Clear search
+   * or emptying the box removes it; the viewer's saved filters stay as they were).
+   */
+  showPlan(id) {
+    if (!['flat', 'lanes'].includes(t.view)) setView('flat');
+    const box = $('search');
+    box.value = `plan:${id}`;
+    t.filter.search = box.value.trim().toLowerCase();
+    draw();
+    box.focus();
+  },
   message: (text, error) => message(text, error),
   // The board's "Undo" toast for a change the Plans room saved (board/bulk.js roomUndoToast).
   undoToast: (text, onUndo, title) => roomUndoToast(text, onUndo, title),

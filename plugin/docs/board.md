@@ -387,6 +387,13 @@ source at its anchor, other sources under "Also"), the tasks, and last **Details
 id and history (closed by default, remembered). From 1200 px the document keeps a readable line length and the tasks
 and Details sit in a column beside it. Escape or **Back to the roadmap** returns to the same card.
 
+From plan to tasks: a plan with tasks has **See tasks**, which opens the Queue with `plan:<id>` in its search (the
+search takes `plan:<id>` next to plain words; clear the search to see all cards again). A shaped plan (maturity
+ready) without tasks has **Turn into tasks**: it adds nothing itself, but says that Claude splits the plan into queue
+tasks and gives the `/add-to-queue` line to copy, with the checks before packing (open questions, legal points). A plan
+that is not shaped yet says so under Tasks. When a task of the plan sits in a focus step, the tasks say **In focus
+through step Tn**.
+
 **More views**, at the end of the tab row, holds the **Overview** and the maps. **Overview** has one card per area,
 what is being worked on now and what waits on you. An area card shows its entry count, a priority bar and a maturity bar, how much is built and the
 warning counts that are over 0. Each bar segment carries a symbol and its count (the word is in the tooltip), and one

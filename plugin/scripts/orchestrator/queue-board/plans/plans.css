@@ -3455,11 +3455,32 @@ ol.overview-list > .overview-row.overview-question > * {
   cursor: pointer;
 }
 
+/* P8: the opened Turn into tasks takes its own line under the buttons, like an open More */
+.plans-page-handoff {
+  flex-basis: 100%;
+  max-width: 70ch;
+  padding: var(--distance-sm) var(--distance-md);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-container-low);
+}
+
+.plans-page-handoff > p {
+  margin: 0 0 var(--distance-sm);
+}
+
+.plans-page-focus {
+  margin: var(--distance-xs) 0 var(--distance-sm);
+  color: var(--color-on-surface-variant);
+}
+
+.plans-page-handoff .cli-chip,
 .plans-page-more .cli-chip {
   max-width: 100%;
   flex-wrap: wrap;
 }
 
+.plans-page-handoff code,
 .plans-page-more code {
   overflow-wrap: anywhere;
 }
