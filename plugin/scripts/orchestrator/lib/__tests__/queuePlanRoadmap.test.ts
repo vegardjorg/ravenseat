@@ -393,6 +393,7 @@ describe('the settings: plans.* in queue.config.json (queueConfig.plansView)', (
       roadmapLayout: 'auto',
       roadmapFoldAfter: 8,
       leadFromDocument: true,
+      searchDocuments: true,
     });
     expect(KK.plansView({})).toEqual(KK.STANDARD.plans);
   });
@@ -400,7 +401,7 @@ describe('the settings: plans.* in queue.config.json (queueConfig.plansView)', (
   it('a valid value is kept, an unknown one falls back to the default', () => {
     expect(
       KK.plansView({ plans: { startView: 'overview', roadmapLayout: 'list', roadmapFoldAfter: 0, leadFromDocument: false } }),
-    ).toEqual({ startView: 'overview', roadmapLayout: 'list', roadmapFoldAfter: 0, leadFromDocument: false });
+    ).toEqual({ startView: 'overview', roadmapLayout: 'list', roadmapFoldAfter: 0, leadFromDocument: false, searchDocuments: true });
     expect(
       KK.plansView({ plans: { startView: 'x', roadmapLayout: 'tiles', roadmapFoldAfter: -3, leadFromDocument: 'yes' } }),
     ).toEqual(KK.STANDARD.plans);

@@ -3299,6 +3299,51 @@ ol.overview-list > .overview-row.overview-question > * {
   margin: 0;
 }
 
+/* P5: the matching sentence of a plan found in its plan document, under the row. The match is bold as well as
+   tinted, so it never rests on color alone; tokens only, so light and dark both work. */
+.plans-doc-hit {
+  margin: var(--distance-xs) 0 0;
+  padding-left: var(--distance-sm);
+  border-left: 2px solid var(--color-outline-variant);
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.plans-doc-hit-where {
+  font-style: italic;
+}
+
+.plans-doc-hit mark {
+  background: var(--color-secondary-container);
+  color: var(--color-on-secondary-container);
+  font-weight: 600;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.roadmap-body.compact .plans-doc-hit {
+  flex-basis: 100%;
+  margin-bottom: var(--distance-xs);
+}
+
+/* In the Plan entries list the row is a flex line: the snippet wraps onto its own line under the button. */
+.plans-entry.has-doc-hit {
+  flex-wrap: wrap;
+}
+
+.plans-entry .plans-doc-hit {
+  flex-basis: 100%;
+  margin: 0 var(--distance-sm) var(--distance-xs) calc(var(--distance-sm) + 4px);
+}
+
+.roadmap-doc-status {
+  margin: var(--distance-xs) 0 0;
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-xs);
+}
+
 .roadmap-section-empty {
   margin: var(--distance-sm) 0 0;
   color: var(--color-on-surface-variant);

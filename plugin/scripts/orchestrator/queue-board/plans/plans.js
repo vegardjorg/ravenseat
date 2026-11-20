@@ -81,6 +81,9 @@
     moreViews: false, // the More views disclosure is open
     roadmapTop: 0, // where the Roadmap was scrolled, so Back from a plan page lands in the same place
     startPending: false, // Plans was opened before the register came; plans.startView is applied when it does
+    // P5: the last answer from /api/plan-search: for which search and register version, the hits by plan id, the search
+    // on its way (busy) and whether the server stopped at its limit (partial).
+    docSearch: { q: '', version: null, hits: new Map(), busy: null, partial: false },
   };
 
   // ---- Helpers ----
@@ -314,6 +317,54 @@
     }
   }
 
+  // ---- Full-text search in the plan documents (P5) ----
+  // The search box filters the register here in the browser at once; for a search of at least V.DOC_SEARCH_MIN
+  // characters the server also looks in the plan documents (GET /api/plan-search, read only, cached per file there).
+  // The answer is kept per search and register version, so a redraw from the poll does not ask again; the plans it adds
+  // come after the plans whose own words match (V.searchWithDocuments). Off with plans.searchDocuments false.
+  const docSearchOn = () => featureOn('plans') && s.data?.view?.searchDocuments !== false;
+
+  /** The hits for the search in use (a Map by plan id), asking the server when they are missing or old; null when off. */
+  function docHitsFor(search) {
+    const q = String(search ?? '');
+    if (!docSearchOn() || q.length < V.DOC_SEARCH_MIN) return null;
+    const ds = s.docSearch;
+    if (ds.q !== q || ds.version !== s.version) fetchDocHits(q);
+    // an answer for the same search from an older version still shows until the fresh one comes
+    return ds.q === q ? ds.hits : null;
+  }
+
+  /** The state roadmap.js shows in its status line, or null when the documents are not part of this search. */
+  function docSearchState() {
+    const q = s.state.search ?? '';
+    if (!docSearchOn() || q.length < V.DOC_SEARCH_MIN) return null;
+    return { busy: s.docSearch.busy === q, partial: s.docSearch.q === q && s.docSearch.partial };
+  }
+
+  async function fetchDocHits(q) {
+    const key = sessionStorage.getItem(KEY);
+    if (!key || s.docSearch.busy === q) return;
+    const version = s.version;
+    s.docSearch.busy = q;
+    let hits = new Map();
+    let partial = false;
+    try {
+      const res = await fetch(`/api/plan-search?q=${encodeURIComponent(q)}`, { headers: { 'X-Queue-Key': key } });
+      const answer = await res.json().catch(() => null);
+      if (res.ok && answer?.enabled !== false)
+        for (const x of Array.isArray(answer?.hits) ? answer.hits : [])
+          if (x && typeof x.id === 'string' && typeof x.match === 'string') hits.set(x.id, x);
+      partial = answer?.partial === true;
+    } catch {
+      hits = new Map(); // the register's own matches still show; the documents are a bonus
+    }
+    if (s.docSearch.busy === q) s.docSearch.busy = null;
+    // the search moved on while this one was on its way: its answer is not used
+    if ((s.state.search ?? '') !== q) return;
+    s.docSearch = { q, version, hits, busy: s.docSearch.busy, partial };
+    if (isPlans() && !window.QueuePlanMap?.busy() && !window.QueuePlanWork?.busy()) draw();
+  }
+
   // ---- Drawing ----
   /**
    * Redraws the whole room. Focus and scrolling are kept (the element with the same data-focus gets focus back,
@@ -364,7 +415,10 @@
       room.classList.remove('has-selected', 'drawer-open');
       const p = t.entry ? entryFor(t.entry) : null;
       // P4: the Roadmap's plans in the chosen Sort (Roadmap order by default).
-      const sorted = p ? [] : V.sortPlans(V.filter(d.entries, t.filter, t.search), currentSort());
+      // P5: with a search, the plans found in their plan document come after the ones whose own words match.
+      const sorted = p
+        ? []
+        : V.searchWithDocuments(d.entries, t.filter, t.search, docHitsFor(t.search), { sort: currentSort() });
       const body = p
         ? window.QueuePlanRoadmap.page(roadmapHelp, d, p)
         : window.QueuePlanRoadmap.cells(roadmapHelp, d, sorted);
@@ -416,7 +470,7 @@
     const match = docSurface
       ? []
       : sortable
-        ? V.sortPlans(V.filter(d.entries, t.filter, t.search), currentSort())
+        ? V.searchWithDocuments(d.entries, t.filter, t.search, docHitsFor(t.search), { sort: currentSort() })
         : V.filter(d.entries, t.filter, t.search);
     const selected = !docSurface && t.entry ? entryFor(t.entry) : null;
     const selectedDoc = docSurface && t.doc ? (d.documents ?? []).some((x) => x.id === t.doc) : false;
@@ -739,6 +793,8 @@
       const v = String(value).slice(0, 120);
       searchTime = setTimeout(() => useState({ ...s.state, search: v.trim(), entry: null }, { push: false }), 200);
     },
+    // P5: the document search's state for the status line (null when the documents are not part of the search).
+    docSearch: () => docSearchState(),
     // the window's width, the same measure as the CSS media queries (the layout toggle hides below 700 px).
     width: () => window.innerWidth,
     prefs: () => ({
@@ -999,7 +1055,7 @@
       el('input', {
         type: 'search',
         class: 'search plans-search',
-        placeholder: 'Search in id, title, sources',
+        placeholder: 'Search plans',
         autocomplete: 'off',
         value: s.state.search,
         'data-focus': 'search',
@@ -1280,9 +1336,15 @@
     // multi select (x), "changed by session" and the pulse for "Working now" (work.js).
     const A = window.QueuePlanWork;
     const extra = A ? A.rowClasses(p) : '';
+    // P5: a plan found in its plan document shows the matching sentence under the row (roadmap.js docHit).
+    const hitId = `plans-entry-hit-${String(p.id).replace(/[^A-Za-z0-9_-]/g, '-')}`;
+    const hit = window.QueuePlanRoadmap?.docHit ? window.QueuePlanRoadmap.docHit(el, p, hitId) : null;
     return el(
       'li',
-      { class: `plans-entry${isSelected ? ' selected' : ''}${extra}`, 'data-entry': p.id },
+      {
+        class: `plans-entry${isSelected ? ' selected' : ''}${hit ? ' has-doc-hit' : ''}${extra}`,
+        'data-entry': p.id,
+      },
       A ? A.markEl(workHelp, p) : null,
       el(
         'button',
@@ -1290,6 +1352,7 @@
           type: 'button',
           class: 'plans-entry-button',
           'aria-current': isSelected ? 'true' : null,
+          'aria-describedby': hit ? hitId : null,
           'data-focus': `entry:${p.id}`,
           onclick: () =>
             useState({ ...s.state, entry: p.id, tab: s.state.tab }, { push: true }),
@@ -1325,6 +1388,7 @@
       A ? A.changedBadge(p) : null,
       A ? A.rowMenuEl(workHelp, p, d) : null,
       copyButton(V.entryLine(p, d), `Copy the start line for ${p.id}`),
+      hit,
     );
   }
 

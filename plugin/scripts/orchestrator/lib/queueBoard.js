@@ -2658,10 +2658,105 @@ function planLeadReader(root, io, { max = LEAD_READ_MAX } = {}) {
   };
 }
 
+/** P5: how much passage text the document search keeps in memory in all (the oldest file goes first beyond it). */
+const DOC_SEARCH_CACHE_CHARS = 32 * 1024 * 1024;
+/** P5: the most plans one search returns, and the time it may spend reading before it answers with what it has. */
+const DOC_SEARCH_LIMIT = 200;
+const DOC_SEARCH_BUDGET_MS = 2000;
+
+/**
+ * Full-text search in the plan documents (P5 of plans/plans-tab-ux-review-2026-11-19.md). Returns
+ * search(entries, text, { limit }) for GET /api/plan-search: for each plan it takes the same source as the lead
+ * (queuePlanView.planSource, so only paths in the document folders), reads it through readDocument (the /api/doc
+ * guard: no symlinks, only .md, at most `max` bytes, the P3 cap), keeps its passages (queuePlanView.documentPassages)
+ * while the file's time and size stay the same, and looks for the text in the section of the source's anchor
+ * (passagesAt). A file shared by many plans is read once. The cache holds the plain text up to `cacheChars` in all;
+ * a file beyond that is searched but not kept (the setting plans.searchDocuments is for such a folder). A search stops
+ * at `limit` hits or after `budgetMs` and says so (partial). Any error for one file only skips that plan.
+ * Measured (1000 plan documents, 49 MB): the first search after start about 1.6 s, then about 30 ms.
+ * @param {string} root the folder the sources are relative to (the server's SOURCE_ROOT)
+ * @param {{ fs: typeof import('fs'), path: typeof import('path') }} io
+ * @param {{ max?: number, cacheChars?: number, budgetMs?: number, now?: () => number }} [option]
+ * @returns {(entries: object[], text: string, o?: { limit?: number }) =>
+ *   { hits: { id: string, path: string, heading: string|null, before: string, match: string, after: string }[],
+ *     partial: boolean }}
+ */
+function planDocSearcher(
+  root,
+  io,
+  { max = LEAD_READ_MAX, cacheChars = DOC_SEARCH_CACHE_CHARS, budgetMs = DOC_SEARCH_BUDGET_MS, now = Date.now } = {},
+) {
+  const PRIVACY = require('./queuePlanView.js');
+  const cache = new Map(); // path -> { stamp, all, level, under, chars }
+  let held = 0;
+  const passagesFor = (filePath) => {
+    let stamp;
+    try {
+      const st = io.fs.statSync(io.path.join(root, ...filePath.split('/')));
+      if (!st.isFile() || st.size > max) return null;
+      stamp = `${st.mtimeMs}|${st.size}`;
+    } catch {
+      return null;
+    }
+    const old = cache.get(filePath);
+    if (old) {
+      if (old.stamp === stamp) return old;
+      cache.delete(filePath); // changed since: read again
+      held -= old.chars;
+    }
+    const r = readDocument(root, filePath, io, { max });
+    if (!r.ok) return null;
+    const passages = PRIVACY.documentPassages(r.text);
+    // Kept compact: `all` is the passages in one string (a passage never holds a line break, its whitespace is
+    // folded), so a file without the text is passed over with one test, and the passages are rebuilt from it only for
+    // a file that matches. `level` and `under` (the index of the heading a passage sits under) are small number arrays.
+    const all = passages.map((p) => p.text).join('\n');
+    const level = Uint8Array.from(passages, (p) => p.level);
+    const under = new Int32Array(passages.length).fill(-1);
+    let h = -1;
+    passages.forEach((p, i) => {
+      under[i] = h;
+      if (p.level) h = i;
+    });
+    const c = { stamp, all, level, under, chars: all.length };
+    // Over the cap the file is used but not kept: a search reads the plans in the same order every time, so dropping
+    // the oldest would make every file miss (each search would read them all); this way the first files stay fast.
+    if (held + c.chars <= cacheChars) {
+      cache.set(filePath, c);
+      held += c.chars;
+    }
+    return c;
+  };
+  return (entries, text, { limit = DOC_SEARCH_LIMIT } = {}) => {
+    const hits = [];
+    const re = PRIVACY.docSearchPattern(text);
+    if (!re) return { hits, partial: false };
+    const start = now();
+    for (const p of entries ?? []) {
+      if (hits.length >= limit || now() - start > budgetMs) return { hits, partial: true };
+      const k = PRIVACY.planSource(p);
+      if (!k) continue;
+      const c = passagesFor(k.path);
+      if (!c || !c.all || !re.test(c.all)) continue;
+      const texts = c.all.split('\n');
+      const passages = texts.map((t, i) => ({
+        text: t,
+        level: c.level[i],
+        heading: c.under[i] >= 0 ? texts[c.under[i]] : null,
+      }));
+      const hit = PRIVACY.documentHit(PRIVACY.passagesAt(passages, k.anchor ?? null), re);
+      if (hit) hits.push({ id: p.id, path: k.path, ...hit });
+    }
+    return { hits, partial: false };
+  };
+}
+
 module.exports = {
   readDocument,
   planLeadReader,
+  planDocSearcher,
   LEAD_READ_MAX,
+  DOC_SEARCH_LIMIT,
   STEP,
   RECENT_MS,
   NEXT_WHEN_FULL,

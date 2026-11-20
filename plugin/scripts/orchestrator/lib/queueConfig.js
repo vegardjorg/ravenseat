@@ -393,7 +393,11 @@ const STANDARD = Object.freeze({
   //   roadmapFoldAfter  rows a long section shows before "Show n more" (0 = never fold); Done is folded until opened.
   //   leadFromDocument  a plan without a summary shows the lead of its plan document (the server reads it, cached per
   //                     file). false reads no document for the roadmap; the reader still opens them.
-  plans: { startView: 'roadmap', roadmapLayout: 'auto', roadmapFoldAfter: 8, leadFromDocument: true },
+  //   searchDocuments   P5: the Roadmap and Plan entries search also looks in the plan documents (the server reads them
+  //                     through the /api/doc guard, cached per file) and shows the matching sentence under the row. On
+  //                     by default (owner answer 8, "as recommended"); false for a very large document folder, where
+  //                     the first search after a change has to read every plan document.
+  plans: { startView: 'roadmap', roadmapLayout: 'auto', roadmapFoldAfter: 8, leadFromDocument: true, searchDocuments: true },
   // Read guard (hook-read-guard.mjs): in addition to the built-in lists.
   readGuard: {
     agentTypes: [], // more agent types the guard applies to (track, track-d and the reviewers are already included)
@@ -926,7 +930,8 @@ const ROADMAP_FOLD_MAX = 500;
  * The Roadmap settings (plans.* in queue.config.json), each checked on its own: a value of the wrong kind falls back to
  * its default, so a hand-edited file never breaks the board. The board gets this object with /api/plans.
  * @param {object} [cfg] the configuration (default: config())
- * @returns {{ startView: string, roadmapLayout: string, roadmapFoldAfter: number, leadFromDocument: boolean }}
+ * @returns {{ startView: string, roadmapLayout: string, roadmapFoldAfter: number, leadFromDocument: boolean,
+ *   searchDocuments: boolean }}
  */
 function plansView(cfg = config()) {
   const own = isObject(cfg?.plans) ? cfg.plans : {};
@@ -938,6 +943,7 @@ function plansView(cfg = config()) {
     roadmapFoldAfter:
       Number.isInteger(fold) && fold >= 0 ? Math.min(fold, ROADMAP_FOLD_MAX) : std.roadmapFoldAfter,
     leadFromDocument: typeof own.leadFromDocument === 'boolean' ? own.leadFromDocument : std.leadFromDocument,
+    searchDocuments: typeof own.searchDocuments === 'boolean' ? own.searchDocuments : std.searchDocuments,
   };
 }
 

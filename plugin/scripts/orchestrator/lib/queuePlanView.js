@@ -4038,6 +4038,150 @@
     );
   }
 
+  // ---- Full-text search in the plan documents (P5) ---------------------------------------------------------------
+  // The server (lib/queueBoard.js planDocSearcher) reads the plan document through the /api/doc guard, turns it into
+  // passages once per file change, and asks documentHit for the snippet. The board gets the hits from
+  // /api/plan-search and adds the plans found only in their document after the plans whose own words match
+  // (searchWithDocuments). The snippet is plain text in three parts, so the view marks the match with textContent only.
+
+  /** A shorter search finds a match in nearly every document, so it is not sent to the documents. */
+  const DOC_SEARCH_MIN = 3;
+  /** The most characters a snippet shows on each side of the match (then "…"). */
+  const DOC_HIT_SIDE = 90;
+
+  /**
+   * A markdown document as plain passages for the search: headings, paragraphs, quotes, each list point and each
+   * table row, with the inline markup removed and the whitespace folded. Code blocks and front matter are skipped.
+   * `heading` is the heading the passage sits under (null before the first), `level` the heading level when the
+   * passage is a heading itself (0 otherwise), so a source's anchor can pick its section.
+   * @param {string} text the markdown
+   * @returns {{ text: string, heading: string|null, level: number }[]}
+   */
+  function documentPassages(text) {
+    const out = [];
+    let heading = null;
+    const add = (s, level = 0) => {
+      const t = cleanText(s).replace(/\s+/g, ' ').trim();
+      if (t) out.push({ text: t, heading, level });
+      return t;
+    };
+    for (const b of markdownBlocks(text)) {
+      if (b.type === 'heading') {
+        const t = add(b.text, b.level);
+        if (t) heading = t;
+      } else if (b.type === 'paragraph' || b.type === 'quote') add(b.text);
+      else if (b.type === 'list') for (const p of b.points) add(p.text);
+      else if (b.type === 'table')
+        for (const r of [b.header, ...b.rows]) add((r ?? []).filter(Boolean).join(' · '));
+    }
+    return out;
+  }
+
+  /**
+   * The passages of one source: the section its anchor points to (the heading and everything under it, as
+   * documentLead reads it), or the whole document when there is no anchor or it is not found.
+   */
+  function passagesAt(passages, anchor = null) {
+    if (!anchor) return passages;
+    const at = anchorIndex(
+      passages.map((p) => (p.level ? { type: 'heading', text: p.text } : { type: 'text' })),
+      anchor,
+    );
+    if (at < 0) return passages;
+    const level = passages[at].level;
+    const end = passages.findIndex((p, i) => i > at && p.level && p.level <= level);
+    return passages.slice(at, end < 0 ? passages.length : end);
+  }
+
+  /** The search as a case-insensitive pattern that matches the text literally (no pattern characters). */
+  function docSearchPattern(search) {
+    const s = String(search ?? '')
+      .trim()
+      .slice(0, 120);
+    if (s.length < DOC_SEARCH_MIN) return null;
+    return new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu');
+  }
+
+  /**
+   * The first passage that contains the search, as a snippet: the sentence with the match, cut near DOC_HIT_SIDE
+   * characters on each side (with "…"), and the match itself in its own casing. null without a match, or when the
+   * search is shorter than DOC_SEARCH_MIN.
+   * @param {{ text: string, heading: string|null }[]} passages from documentPassages (or passagesAt)
+   * @param {string|RegExp} search
+   * @returns {{ heading: string|null, before: string, match: string, after: string } | null}
+   */
+  function documentHit(passages, search) {
+    const re = search instanceof RegExp ? search : docSearchPattern(search);
+    if (!re) return null;
+    for (const p of passages ?? []) {
+      const m = re.exec(p.text);
+      if (!m) continue;
+      const t = p.text;
+      const from = m.index;
+      const to = from + m[0].length;
+      // the sentence: after the last ". " before the match, up to and including the first end mark after it.
+      let start = 0;
+      const ends = /[.!?]\s+/g;
+      let e;
+      while ((e = ends.exec(t)) && e.index + e[0].length <= from) start = e.index + e[0].length;
+      const after = /[.!?](?=\s|$)/g;
+      after.lastIndex = to;
+      const close = after.exec(t);
+      const stop = close ? close.index + 1 : t.length;
+      let before = t.slice(start, from);
+      let rest = t.slice(to, stop);
+      if (before.length > DOC_HIT_SIDE) {
+        before = before.slice(before.length - DOC_HIT_SIDE);
+        const space = before.indexOf(' ');
+        if (space >= 0 && space < DOC_HIT_SIDE / 2) before = before.slice(space + 1);
+        before = `…${before}`;
+      }
+      if (rest.length > DOC_HIT_SIDE) {
+        rest = rest.slice(0, DOC_HIT_SIDE);
+        const space = rest.lastIndexOf(' ');
+        if (space > DOC_HIT_SIDE / 2) rest = rest.slice(0, space);
+        rest = `${rest.replace(/[\s,;:]+$/, '')}…`;
+      }
+      return { heading: p.heading, before, match: m[0], after: rest };
+    }
+    return null;
+  }
+
+  /**
+   * The status line under the search: "Searching the plan documents…" while the first answer is on its way, then how
+   * many plans the documents added (null when none), with a note when the server stopped at its limit or time.
+   */
+  function docSearchText(found, { busy = false, partial = false } = {}) {
+    if (busy && !found) return 'Searching the plan documents…';
+    if (!found) return null;
+    const n = `${found} more ${found === 1 ? 'plan' : 'plans'} found in the plan documents`;
+    return partial ? `${n} (the search stopped early; a longer search finds the rest)` : n;
+  }
+
+  /**
+   * The plans for a search with the document hits: first the plans whose own words match (applyFilter, in the chosen
+   * sort), then the plans found only in their plan document that also fit the filters (in the same sort), each a copy
+   * with `docHit`. Title and summary matches always rank first. Without a search or hits it is filter plus sort.
+   * @param {object[]} entries
+   * @param {object} filter
+   * @param {string} search
+   * @param {Map<string, object>|null} hits plan id -> the hit from /api/plan-search
+   * @param {{ sort?: string, now?: Date }} [option]
+   */
+  function searchWithDocuments(entries, filter, search, hits, { sort = 'roadmap', now = new Date() } = {}) {
+    const match = applyFilter(entries, filter, search, { now });
+    const own = sortPlans(match, sort);
+    if (!String(search ?? '').trim() || !hits?.size) return own;
+    const seen = new Set(match.map((p) => p.id));
+    const extra = applyFilter(
+      (entries ?? []).filter((p) => !seen.has(p.id) && hits.has(p.id)),
+      filter,
+      '',
+      { now },
+    ).map((p) => ({ ...p, docHit: hits.get(p.id) }));
+    return own.concat(sortPlans(extra, sort));
+  }
+
   /**
    * The sections of the roadmap. group 'horizon': one per horizon in roadmap order (keepEmpty keeps Waiting on you, Now,
    * Next, Later and Done for the columns). group 'area': one per area (the register's order, then "Without area"), the
@@ -4048,7 +4192,9 @@
     const list = entries ?? [];
     if (group === 'area') {
       // order 'given' (P4): a sort other than Roadmap order was chosen, so the plans keep the order they came in.
-      const rank = order === 'given' ? () => 0 : (p) => HORIZON_IDS.indexOf(horizonFor(p));
+      // P5: a plan found only in its document (docHit) stays below the plans whose own words match.
+      const hz = order === 'given' ? () => 0 : (p) => HORIZON_IDS.indexOf(horizonFor(p));
+      const rank = (p) => (p.docHit ? HORIZON_IDS.length + 1 : 0) + hz(p);
       const ids = [...modules.map((m) => m.oid), WITHOUT_MODULE];
       return ids
         .map((oid) => {
@@ -4347,6 +4493,15 @@
     planSentence,
     documentLead,
     planSource,
+    // Full-text search in the plan documents (P5)
+    DOC_SEARCH_MIN,
+    DOC_HIT_SIDE,
+    documentPassages,
+    passagesAt,
+    docSearchPattern,
+    documentHit,
+    docSearchText,
+    searchWithDocuments,
     roadmapSections,
     sectionShown,
     roadmapLayout,

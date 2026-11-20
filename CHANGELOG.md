@@ -9,6 +9,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Plans: "+ New plan" (key `n`) and `ravenseat plan capture` put an idea in the Inbox with only a title.** On by
   default (`features.plans.inbox`, on).
 - **Plans: a plan page offers Turn into tasks or See tasks, and the Queue search takes `plan:<id>`.**
+- **Plans: the search also finds plans by the words in their plan document and shows the matching sentence.** On by
+  default (`plans.searchDocuments`, on).
 ### Changed
 - **Plans: the room opens on a Roadmap, and a plan opens as a page with its document first.** Horizons (Inbox, Waiting
   on you, Now, Next, Later, Done) as columns on a wide screen and a list on a phone; the old views are under More views.

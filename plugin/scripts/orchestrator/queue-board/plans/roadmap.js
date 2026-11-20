@@ -116,13 +116,40 @@
     );
   }
 
+  /**
+   * P5: why a plan found only in its plan document is in the search: the matching sentence under the row, with the
+   * match in a <mark> and the heading it sits under. Every part is a text node (el's text and plain string children),
+   * so HTML in a document stays text. Used by the Roadmap card here and the Plan entries row (plans.js).
+   * @param el the element helper
+   * @param p the plan, with `docHit` from V.searchWithDocuments
+   * @param id the element's id (the row's button points to it with aria-describedby)
+   */
+  function docHit(el, p, id) {
+    const x = p?.docHit;
+    if (!x || typeof x.match !== 'string' || !x.match) return null;
+    return el(
+      'p',
+      { class: 'plans-doc-hit', id },
+      el('span', {
+        class: 'plans-doc-hit-where',
+        text: x.heading ? `In the plan document, ${x.heading}: ` : 'In the plan document: ',
+      }),
+      String(x.before ?? ''),
+      el('mark', { text: x.match }),
+      String(x.after ?? ''),
+    );
+  }
+
   /** One plan on the roadmap: the title is the button (opens the plan page), the line describes it. */
   function card(h, d, p, compact) {
     const lineId = `roadmap-line-${p.id}`;
     const progressId = `roadmap-progress-${p.id}`;
+    const hitId = `roadmap-hit-${p.id}`;
     const sentence = V.planSentence(p);
     // the progress row only in the normal density (Compact keeps one line per plan)
     const bar = compact ? null : progress(h, p, { id: progressId, cls: 'roadmap-card-progress' });
+    // P5: a plan found in its document shows the matching sentence under the row, also in Compact (it explains the hit)
+    const hit = docHit(h.el, p, hitId);
     return h.el(
       'li',
       { class: `roadmap-card h-${V.horizonFor(p)}`, 'data-roadmap-entry': p.id },
@@ -131,7 +158,7 @@
         class: 'roadmap-card-link',
         text: p.title || p.id,
         'data-focus': `roadmap:${p.id}`,
-        'aria-describedby': bar ? `${lineId} ${progressId}` : lineId,
+        'aria-describedby': [lineId, bar ? progressId : null, hit ? hitId : null].filter(Boolean).join(' '),
         onclick: () => h.use({ entry: p.id }),
       }),
       compact
@@ -143,6 +170,7 @@
           }),
       h.el('p', { class: 'roadmap-card-line', id: lineId, text: cardLine(p, d) }),
       bar,
+      hit,
     );
   }
 
@@ -192,6 +220,17 @@
     );
   }
 
+  /**
+   * P5: one status line under the toolbar while a search reaches into the plan documents ("Searching the plan
+   * documents…", then "2 more plans found in the plan documents"). role status, so a screen reader hears it.
+   */
+  function docStatus(h, match) {
+    const ds = h.docSearch?.();
+    if (!ds) return null;
+    const text = V.docSearchText(match.filter((p) => p.docHit).length, ds);
+    return text ? h.el('p', { class: 'roadmap-doc-status', role: 'status', text }) : null;
+  }
+
   /** The empty states: no register, or nothing matches (names the search and offers to clear it). */
   function empty(h, d) {
     const t = h.state();
@@ -209,6 +248,8 @@
         add,
       );
     }
+    // P5: while the plan documents are still being searched the status line says so; "No plans match" waits for it.
+    if (h.docSearch?.()?.busy) return null;
     return h.el(
       'div',
       { class: 'empty' },
@@ -243,9 +284,11 @@
       toolbar(h, d, match, layout, prefs),
       h.captureForm?.() ?? null,
       h.activeFilters(),
+      docStatus(h, match),
     );
     if (!d.exists || !match.length) {
-      wrap.append(empty(h, d));
+      const none = empty(h, d);
+      if (none) wrap.append(none);
       return wrap;
     }
     const sections = V.roadmapSections(match, {
@@ -503,5 +546,5 @@
     );
   }
 
-  window.QueuePlanRoadmap = { cells, page };
+  window.QueuePlanRoadmap = { cells, page, docHit };
 })();
