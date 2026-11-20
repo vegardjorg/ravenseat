@@ -194,8 +194,26 @@ function init() {
       done.push(name);
     }
   }
+  // A first design entry from the token file (roadmap 0å KD-1, lib/catalog.js designDraft): only on the first init (the
+  // decisions/ format note was just written) and only when no design entry exists, so a draft the owner deleted is not
+  // written again. Always proposed; check runs on it, so a rule that already hits the tree is named right away.
+  let draft = null;
+  if (done.includes('decisions/README.md')) {
+    const cat = C.readCatalog(dir);
+    const hasDesign = cat.decisions.some((x) => x.decision?.kind === 'design');
+    const d = hasDesign ? null : C.designDraft({ files: trackedFiles(MAIN_TREE) ?? [], readFile: treeFs(MAIN_TREE).read });
+    if (d) {
+      try {
+        draft = writeProposal(d);
+        done.push(`${draft.file.slice(C.DIR.length + 1)} (a proposed design entry from ${d.source[0]})`);
+      } catch (e) {
+        kept.push(`no design draft (${e.message})`);
+      }
+    }
+  }
   const rel = path.relative(MAIN_TREE, dir).replace(/\\/g, '/');
   if (done.length) console.log(`Wrote in ${rel}/: ${done.join(', ')}.`);
+  for (const w of draft?.warnings ?? []) console.log(`  WARN ${w}`);
   for (const k of kept) console.log(`  kept ${k}`);
   console.log(
     `Next: write what to prefer per job in stack.md, the building blocks in reuse.md, and a design choice per file in ` +
@@ -238,6 +256,9 @@ function show() {
       console.log(`invariant: ${d.invariant ?? '(none)'}`);
       console.log(`paths: ${d.paths.join(', ')}`);
       if (d.except.length) console.log(`except: ${d.except.join(', ')}`);
+      // A design entry's source (KD-1): where its tokens live.
+      if (d.source) console.log(`source: ${[].concat(d.source).join(', ')}`);
+      if (d.check) console.log(`check: ${d.check.mode ?? 'warn'}, forbid ${JSON.stringify(d.check.forbid ?? '')}`);
     }
     if (d.supersedes) console.log(`supersedes: ${d.supersedes}`);
     if (d.plan) console.log(`plan: ${d.plan}`);
@@ -253,7 +274,7 @@ function show() {
           exists: cat.exists,
           prefer: cat.stack?.prefer ?? [],
           reuse: cat.reuse?.rows ?? [],
-          decisions: ds.map((d) => ({ id: d.id, kind: d.kind, title: d.title, status: d.status, status_counts: C.effectiveStatus(d, ledger), paths: d.paths, except: d.except, invariant: d.invariant })),
+          decisions: ds.map((d) => ({ id: d.id, kind: d.kind, title: d.title, status: d.status, status_counts: C.effectiveStatus(d, ledger), paths: d.paths, except: d.except, source: d.source, invariant: d.invariant })),
         },
         null,
         2,
@@ -366,7 +387,7 @@ function accept() {
  * @returns {{ id: string, file: string, errors: string[], warnings: string[] }} file relative to the tree; errors and
  *   warnings are check's lines about this choice
  */
-export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null, kind = null, keywords = null, revisit = null, source = null, except = null }) {
+export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null, kind = null, keywords = null, revisit = null, source = null, except = null, check = null }) {
   const dir = catalogDir(MAIN_TREE);
   const decisionsDir = path.join(dir, 'decisions');
   let names = [];
@@ -377,7 +398,7 @@ export function writeProposal({ title, invariant, paths, supersedes = null, plan
   }
   const id = C.nextDecisionId(names, readLedger());
   // kind not-building (roadmap 0f, lib/notBuilding.js draft): a rejection with its keywords, revisit and source.
-  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source, except });
+  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source, except, check });
   if (r.errors.length) throw new Error(r.errors.join('; '));
   fs.mkdirSync(decisionsDir, { recursive: true });
   const readme = path.join(decisionsDir, 'README.md');

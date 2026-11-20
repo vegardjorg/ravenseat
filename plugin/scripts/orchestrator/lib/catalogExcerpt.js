@@ -14,6 +14,9 @@
 //     the record, catalog.js effectiveStatus) is binding; a proposed one, and one that says accepted without the
 //     record (unconfirmed), is a suggestion. A superseded choice never. A task that names no files gets every binding
 //     choice and no suggestions: nothing says which proposals concern it.
+//   - design entries (kind design, roadmap 0å KD-1) under their own "Design language" heading, holding or proposed,
+//     each with its status and where its tokens live (source), at most MAX.design, the ones that hold first. They
+//     follow the binding choices in the room order. reviewer-design reads the same lines in the review package.
 //   - the prefer lines of stack.md, at most MAX.prefer (they apply to the whole project).
 //   - the reuse.md rows in the task's folders (the folder of an owned or read file, or inside an owned folder), at most
 //     MAX.reuse; a task that names no files gets the first rows.
@@ -40,7 +43,7 @@ const path = require('node:path');
 const C = require('./catalog.js');
 
 /** How many items of each kind at most, before the token cap: the plan's numbers (§ 2.5). */
-const MAX = Object.freeze({ decisions: 5, prefer: 10, reuse: 15, shared: 15, near: 5 });
+const MAX = Object.freeze({ decisions: 5, design: 3, prefer: 10, reuse: 15, shared: 15, near: 5 });
 /** Characters per token, as lib/instructionSize.js estimates. */
 const CHARS_PER_TOKEN = 4;
 /** How many of a choice's path patterns are shown (the rest is in the file). */
@@ -98,6 +101,7 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
   const noFiles = scope.length === 0;
   const binding = [];
   const proposed = [];
+  const design = [];
   const ds = (cat?.decisions ?? [])
     .map((x) => x?.decision)
     .filter((d) => d && typeof d.id === 'string' && typeof d.invariant === 'string' && d.invariant.trim())
@@ -111,9 +115,15 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
     // A file the entry's except names does not count (roadmap 0å KD-0); a folder still does, it may hold other files.
     const excepted = (e) => !e.endsWith('/') && (d.except ?? []).some((x) => glob(normPath(x), e));
     if (!noFiles && !d.paths.some((p) => scope.some((e) => !excepted(e) && meets(p, e, glob)))) continue;
-    (status === 'accepted' ? binding : proposed).push({ d, status });
+    // A design entry (roadmap 0å KD-1) gets its own section, holding or not: the status is on its line.
+    if (d.kind === 'design') design.push({ d, status });
+    else (status === 'accepted' ? binding : proposed).push({ d, status });
   }
-  const cut = { binding: 0, proposed: 0, prefer: 0, reuse: 0, near: 0, shared: 0 };
+  const cut = { binding: 0, design: 0, proposed: 0, prefer: 0, reuse: 0, near: 0, shared: 0 };
+  // At most MAX.design design entries, the ones that hold first.
+  design.sort((a, b) => (a.status === 'accepted') === (b.status === 'accepted') ? 0 : a.status === 'accepted' ? -1 : 1);
+  const keepDesign = design.slice(0, MAX.design);
+  cut.design = design.length - keepDesign.length;
   // At most MAX.decisions choices, the binding ones first.
   const keepBinding = binding.slice(0, MAX.decisions);
   cut.binding = binding.length - keepBinding.length;
@@ -135,6 +145,7 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
   cut.near = Math.max(0, nearList.length - MAX.near);
   return {
     binding: keepBinding,
+    design: keepDesign,
     proposed: keepProposed,
     prefer: prefer.slice(0, MAX.prefer),
     reuse: rows.slice(0, MAX.reuse),
@@ -150,6 +161,9 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
 const SECTIONS = Object.freeze({
   binding:
     '- **Design choices that hold** (accepted by the owner, binding: a change that would break one is an owner question, never your call):',
+  design:
+    "- **Design language** (the project's design rules for these files: take colours, type and spacing from where the " +
+    'tokens live, never a value of your own; one that holds binds, a proposed one is a suggestion):',
   proposed:
     '- **Proposed design choices** (suggestions, not binding yet: follow one unless the mission says otherwise, and say so under Assumptions when you do not):',
   prefer: '- **Prefer** (stack.md: a second library for one of these jobs is an owner question):',
@@ -167,8 +181,16 @@ function decisionLine({ d, status }) {
   return `  - ${d.id} (${shown}${mark}): ${d.invariant.trim()}`;
 }
 
+/** A design entry's line: its status and where its tokens live, then the rule. */
+function designLine({ d, status }) {
+  const word = status === 'accepted' ? 'holds' : status === 'unconfirmed' ? 'unconfirmed: it says accepted, but the owner has not accepted this version' : 'proposed';
+  const src = Array.isArray(d.source) ? d.source : typeof d.source === 'string' && d.source.trim() ? [d.source.trim()] : [];
+  return `  - ${d.id} (${word}${src.length ? `; tokens in ${src.join(', ')}` : ''}): ${d.invariant.trim()}`;
+}
+
 const ITEM = {
   binding: decisionLine,
+  design: designLine,
   proposed: decisionLine,
   prefer: (p) => `  - ${p.purpose}: ${p.use}`,
   reuse: (r) => `  - ${r.purpose}: \`${r.symbol}\` in \`${r.file}\``,
@@ -176,13 +198,14 @@ const ITEM = {
   near: (n) => `  - \`${n.name}\` (new in \`${n.file}\`) is close to \`${n.other}\` in \`${n.otherFile}:${n.line}\` (${n.why})`,
 };
 /** The order the parts are shown in, and the order they get room under the cap (the last ones are cut first). */
-const SHOWN = ['binding', 'near', 'proposed', 'prefer', 'reuse', 'shared'];
-const ROOM = ['binding', 'near', 'prefer', 'proposed', 'reuse', 'shared'];
+const SHOWN = ['binding', 'design', 'near', 'proposed', 'prefer', 'reuse', 'shared'];
+const ROOM = ['binding', 'design', 'near', 'prefer', 'proposed', 'reuse', 'shared'];
 
 /** "nothing cut", or "cut: 2 binding choices, 4 reuse rows; `ravenseat catalog show` lists them all". */
 function cutText(cut, cli) {
   const parts = [
     cut.binding && plural(cut.binding, 'binding choice'),
+    cut.design && plural(cut.design, 'design rule'),
     cut.proposed && plural(cut.proposed, 'proposed choice'),
     cut.prefer && plural(cut.prefer, 'prefer line'),
     cut.reuse && plural(cut.reuse, 'reuse row'),
@@ -210,7 +233,11 @@ function render(form, items, { tokens, cap, cut, cli, noFiles }) {
       `What the track's mission had from \`${C.DIR}/\` (${m}). Check the delivery against it: a helper or rule written ` +
         'again where a reuse row, a prefer line or the reuse notes show one is `duplication`; a change that breaks the ' +
         'invariant of a choice that holds is `scope-drift`, MEDIUM at least (it was an owner question). A proposed choice ' +
-        'binds nothing: not following it is no finding.',
+        'binds nothing: not following it is no finding.' +
+        (items.design?.length
+          ? ' reviewer-design checks the UI against the Design language lines: a colour, size or font set by hand where ' +
+            'a rule that holds says to take it from the tokens is `scope-drift`; against a proposed one it is a note.'
+          : ''),
       '',
       ...body,
     ];
@@ -250,6 +277,7 @@ function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form
   const chosen = choose(cat, task, { ledger, glob, index, near: form === 'review' ? near : [] });
   const all = {
     binding: chosen.binding,
+    design: chosen.design,
     proposed: chosen.proposed,
     prefer: chosen.prefer,
     reuse: chosen.reuse,
@@ -259,7 +287,7 @@ function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form
   if (!Object.values(all).some((l) => l.length)) return null;
   const cap = capTokens;
   const cut = { ...chosen.cut };
-  const items = { binding: [], proposed: [], prefer: [], reuse: [], near: [], shared: [] };
+  const items = { binding: [], design: [], proposed: [], prefer: [], reuse: [], near: [], shared: [] };
   const o = { cap, cut, cli, noFiles: chosen.noFiles };
   // Greedy in priority order: an item goes in when the whole text still fits; one that does not is counted as cut,
   // and a shorter one after it may still fit.

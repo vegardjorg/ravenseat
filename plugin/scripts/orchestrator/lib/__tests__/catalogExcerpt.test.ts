@@ -179,7 +179,7 @@ describe('the cap and the measurement line', () => {
     expect(r.tokens).toBe(Math.round(t.length / 4));
     expect(r.lines[0]).toContain(`about ${r.tokens} of at most 1500 tokens`);
     expect(r.lines[0]).toContain('nothing cut');
-    expect(r.cut).toEqual({ binding: 0, proposed: 0, prefer: 0, reuse: 0, near: 0, shared: 0 });
+    expect(r.cut).toEqual({ binding: 0, design: 0, proposed: 0, prefer: 0, reuse: 0, near: 0, shared: 0 });
   });
 
   it('over the cap, the reuse rows go before the binding choices, and the heading names what was cut', () => {

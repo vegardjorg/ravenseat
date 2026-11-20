@@ -626,7 +626,10 @@ function catalogBadge(status) {
   return { text: 'Proposed', hold: false };
 }
 
-/** One catalog entry: id, status, title, the invariant (the only text a track gets) and where it applies. */
+/**
+ * One catalog entry: id, status, title, the invariant (the only text a track gets), where it applies and, for a design
+ * entry, where its tokens live.
+ */
 function catalogItem(e) {
   const badge = catalogBadge(e.status);
   const where = `Applies to: ${(e.paths ?? []).join(', ')}${e.except?.length ? `; not ${e.except.join(', ')}` : ''}`;
@@ -642,6 +645,8 @@ function catalogItem(e) {
     ),
     e.invariant ? el('p', { class: 'decide-nb-why', text: e.invariant }) : null,
     el('p', { class: 'decide-nb-meta', text: where }),
+    // A design entry (KD-1) names where its tokens live; the catalog never copies them.
+    e.source ? el('p', { class: 'decide-nb-meta', text: `Tokens: ${[].concat(e.source).join(', ')}` }) : null,
     badge.hold
       ? null
       : el('p', { class: 'decide-nb-meta', text: `Accept it with: ravenseat catalog accept ${e.id} --by owner` }),

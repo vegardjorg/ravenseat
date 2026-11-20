@@ -303,8 +303,18 @@ function parseDecision(name, source) {
       e(`keywords must be a list of words or short phrases (each at most ${KEYWORD_MAX} characters), e.g. ["keepalive", "idle ping"]`);
     else if (d.keywords.length > KEYWORDS_MAX) e(`keywords: at most ${KEYWORDS_MAX}`);
   }
+  // source on a design entry (roadmap 0å KD-1) may be a list: where the tokens live, each a path with an optional
+  // #anchor (a file, or a name inside it). The catalog points at the token file; it never holds a copy of the tokens.
+  if (Array.isArray(d.source)) {
+    if (kind !== 'design') e('source as a list is for kind design (where its tokens live); other kinds take one line of text');
+    else for (const s of d.source) {
+      const one = typeof s === 'string' && !/[\u0000-\u001f]/.test(s) && s.length <= NOTE_MAX;
+      const pe = one ? pathPatternError(s.split('#')[0]) : `each item must be one line of text, at most ${NOTE_MAX} characters`;
+      if (pe) e(`source: ${pe}`);
+    }
+  }
   for (const f of ['revisit', 'source'])
-    if (d[f] != null && (typeof d[f] !== 'string' || /[\u0000-\u001f]/.test(d[f]) || d[f].length > NOTE_MAX))
+    if (d[f] != null && !(f === 'source' && Array.isArray(d[f])) && (typeof d[f] !== 'string' || /[\u0000-\u001f]/.test(d[f]) || d[f].length > NOTE_MAX))
       e(`${f} must be one line of text, at most ${NOTE_MAX} characters`);
   if (nb && d.status !== 'superseded' && !(Array.isArray(d.keywords) && d.keywords.length))
     warnings.push(`${where}: a not-building entry without keywords is never matched against a new proposal`);
@@ -328,7 +338,8 @@ function parseDecision(name, source) {
     check: d.check ?? null,
     keywords: Array.isArray(d.keywords) ? d.keywords.filter((k) => typeof k === 'string') : [],
     revisit: typeof d.revisit === 'string' ? d.revisit : null,
-    source: typeof d.source === 'string' ? d.source : null,
+    // A string for every kind; a list only on a design entry (KD-1).
+    source: typeof d.source === 'string' ? d.source : kind === 'design' && Array.isArray(d.source) ? d.source.filter((s) => typeof s === 'string') : null,
     supersedes: d.supersedes ?? null,
     plan: d.plan ?? null,
     accepted_by: d.accepted_by ?? null,
@@ -554,6 +565,7 @@ function boardGroups(cat, ledger = emptyLedger()) {
         invariant: d.invariant ?? null,
         paths: d.paths ?? [],
         except: d.except ?? [],
+        source: d.kind === 'design' ? d.source ?? null : null,
         file: d.file ?? null,
       }));
     if (entries.length) out.push({ kind, title, entries });
@@ -698,9 +710,15 @@ function proposalFile(p) {
     : [
         // A kind other than decision, and except (roadmap 0å KD-0), only when given: a plain choice is written as before.
         ...(KINDS.includes(p.kind) && p.kind !== 'decision' ? [`kind: ${p.kind}`] : []),
+        // A design entry's source (KD-1): where its tokens live, one path or a list.
+        ...(Array.isArray(p.source) && p.source.length
+          ? [`source: ${JSON.stringify(p.source)}`]
+          : one(p.source) ? [`source: ${frontValue(one(p.source))}`] : []),
         `paths: ${JSON.stringify(paths)}`,
         ...(Array.isArray(p.except) && p.except.length ? [`except: ${JSON.stringify(p.except)}`] : []),
         `invariant: ${frontValue(one(p.invariant))}`,
+        // A check rule (KD-1, the design draft's colour rule): one field per line, each value as JSON.
+        ...(isObject(p.check) ? ['check:', ...Object.entries(p.check).map(([k, v]) => `  ${k}: ${JSON.stringify(v)}`)] : []),
       ];
   const text = [
     '---',
@@ -766,6 +784,70 @@ function looksLasting(textIn) {
   if (now.some(has)) return false;
   const lasting = ['always', 'never', 'from now on', 'every time', 'by default', 'in general', 'alltid', 'aldri', 'fra nå av', 'hver gang', 'som standard'];
   return lasting.some(has);
+}
+
+// ---- a design draft (roadmap 0å KD-1) -------------------------------------------------------------------------------
+
+/**
+ * The colour rule a design draft proposes: a hex colour or rgb()/hsl() in code that should use tokens. Tuned so it does
+ * not hit what is not a colour: an issue number (#123 in the text), an anchor (href="#add"), an HTML entity (&#123456;),
+ * a CSS id selector (#fed {) and color-mix(in srgb, ...). A 6 or 8 digit hex counts anywhere a # starts a value; a 3 or
+ * 4 digit one only after a colon, comma, bracket or space and not before a selector character or a word.
+ * (The design doc's first rule hit its own miss examples #123 and href="#add"; this one is tested against them.)
+ */
+const COLOUR_RULE = Object.freeze({
+  forbid:
+    '(?<![\\w&/=?#])#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b|(?:^|[:,(]|\\s)#[0-9a-fA-F]{3,4}\\b(?![\\w-]|\\s*[{.:\\[>~+]|\\s+[A-Za-z])|\\b(?:rgb|hsl)a?\\(',
+  hit: ['  color: #1a73e8;', 'background: rgba(0,0,0,.4)', '  border: 1px solid #ccc;'],
+  miss: ['color: var(--color-primary);', 'see issue #123 in the tracker', '<a href="#add">', '#fed {', 'color-mix(in srgb, var(--color-on-surface) 8%, transparent)'],
+  mode: 'warn',
+});
+/** The files a draft looks at for CSS custom properties: at most this many, none over TREE_FILE_BYTES. */
+const DRAFT_CSS_FILES = 200;
+/** The UI files a token file at the project root covers (a folder's token file covers its folder). */
+const UI_GLOBS = Object.freeze(['**/*.css', '**/*.scss', '**/*.less', '**/*.tsx', '**/*.jsx', '**/*.vue', '**/*.svelte']);
+
+/**
+ * A proposed design entry from the project's token file (`catalog init`, KD-1), or null when there is none. The token
+ * file is the first of: a CSS file with :root and --color- custom properties, tailwind.config.*, a tokens.json, a
+ * theme.ts or theme.js. The entry names it in source (the tokens stay there), covers its folder (or the UI files when
+ * it is at the root), excepts the token file itself and carries COLOUR_RULE. It is a draft: status proposed, the owner
+ * narrows it and accepts it, or deletes it.
+ * @param {{ files: string[], readFile: (p: string) => string|null }} x
+ */
+function designDraft({ files, readFile }) {
+  const skip = (f) => /(^|\/)(node_modules|dist|build|vendor|\.git)\//.test(f) || require('./reviewSignals.js').isTestPath(f);
+  const all = (files ?? []).filter((f) => typeof f === 'string' && !skip(f));
+  const base = (f) => f.split('/').pop();
+  const cssTokens = () => {
+    for (const f of all.filter((x) => /\.(css|scss|less)$/.test(x)).slice(0, DRAFT_CSS_FILES)) {
+      const body = readFile(f);
+      if (typeof body === 'string' && body.length <= TREE_FILE_BYTES && /:root\b/.test(body) && /--color-/.test(body)) return f;
+    }
+    return null;
+  };
+  const token =
+    cssTokens() ??
+    all.find((f) => /^tailwind\.config\.(js|cjs|mjs|ts)$/.test(base(f))) ??
+    all.find((f) => /^(design-)?tokens\.json$|\.tokens\.json$/.test(base(f))) ??
+    all.find((f) => /^theme\.(ts|js|tsx|mjs)$/.test(base(f))) ??
+    null;
+  if (!token) return null;
+  const folder = token.includes('/') ? token.slice(0, token.lastIndexOf('/')) : '';
+  return {
+    kind: 'design',
+    title: 'Colours only from the design tokens',
+    source: [token],
+    paths: folder ? [`${folder}/**`] : [...UI_GLOBS],
+    except: [token],
+    invariant: `UI code takes its colours from the tokens in ${token}; a hex colour or rgb() stands only in the token file.`,
+    check: { ...COLOUR_RULE, hit: [...COLOUR_RULE.hit], miss: [...COLOUR_RULE.miss] },
+    why: [
+      `A draft from ravenseat catalog init: ${token} looks like the project's token file.`,
+      'Narrow the paths to the UI code, add more token files to source and except if there are any, run',
+      '`ravenseat catalog check` to see what the rule already hits, then accept it or delete the file.',
+    ].join('\n'),
+  };
 }
 
 // ---- check ----------------------------------------------------------------------------------------------------------
@@ -978,6 +1060,7 @@ const DECISIONS_README = [
   '- `invariant`: one sentence that can be checked. It is the only text a track gets.',
   '- `paths`: the files the choice applies to. `except` (optional): files inside them it does not apply to.',
   '- `kind` (optional): `decision` (the default), `design`, `stack`, `dependency` or `not-building`.',
+  '- `source` on a `design` entry: where its tokens live, a path or a list (`["ui/tokens.css", "lib/theme.js#PALETTE"]`).',
   '- To change an accepted choice, write a new one with `supersedes: D-0001`; its accept sets the old one to `superseded`.',
   '- `plan`: the plan entry with the long version, if there is one. A plan entry links back with `decisions`.',
   '',
@@ -994,6 +1077,8 @@ module.exports = {
   isNotBuilding,
   covers,
   boardGroups,
+  COLOUR_RULE,
+  designDraft,
   ID_PATTERN,
   BLOCK_BEGIN,
   BLOCK_END,

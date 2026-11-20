@@ -77,7 +77,7 @@ Context, the choice and what follows from it, in at most 30 lines.
 - `invariant`: one sentence that can be checked, at most 300 characters. It is the only text of a choice a track
   gets, so it must stand on its own.
 - `kind`: what sort of entry it is. `decision` (the default when the line is missing), `design` (a rule of the design
-  language), `stack` (which tool does a job), `dependency` (a decision about one library) or `not-building` (see [Not
+  language, see [Design language](#design-language)), `stack` (which tool does a job), `dependency` (a decision about one library) or `not-building` (see [Not
   building](#not-building)). One field, one set of values. `catalog show` and **Project catalog** in Decisions group
   the entries by it.
 - `paths`: the files the choice applies to, as globs from the project root. No `..` and no absolute paths.
@@ -96,11 +96,48 @@ Context, the choice and what follows from it, in at most 30 lines.
 A body over 30 lines gives a warning: the plan register holds the long text. `kind` and `except` bind like the
 invariant: changing either after the accept needs a new accept. An entry without them keeps the fingerprint it had.
 
+## Design language
+
+A `design` entry is one rule of the project's design language: colours only from the tokens, the type scale, the
+surface roles. It names where the tokens live in `source` (a path, or a list of paths, each with an optional `#name`
+inside the file, such as `lib/theme.js#PALETTE`) and never holds a copy of them, so the catalog cannot drift from the
+tokens. Put the token file in `except` when it is inside `paths`, so a colour rule does not hit the place the colours
+are defined.
+
+```markdown
+---
+id: D-0001
+title: Colours only from the tokens
+status: proposed
+kind: design
+source: ["ui/tokens.css"]
+paths: ["ui/**"]
+except: ["ui/tokens.css"]
+invariant: UI code takes its colours from the tokens in ui/tokens.css; a hex colour or rgb() stands only in the token file.
+check:
+  forbid: "..."
+  hit: ["  color: #1a73e8;"]
+  miss: ["color: var(--color-primary);", "see issue #123 in the tracker"]
+---
+```
+
+The first `catalog init` looks for a token file (a CSS file with `:root` and `--color-` properties,
+`tailwind.config.*`, a `tokens.json`, or a `theme.ts` or `theme.js`) and, when it finds one and the catalog has no
+design entry, writes a proposed entry like the one above with a colour rule. The rule hits a hex colour or `rgb()` and
+`hsl()` in a value, and not an issue number, an anchor (`href="#add"`), an HTML entity, a CSS id selector or
+`color-mix(in srgb, ...)`. Narrow its paths, run `catalog check` to see what it already hits, then accept it or delete
+the file: init does not write it again.
+
+A design entry goes into the mission and the review package under **Design language** (see the excerpt below), and
+`reviewer-design` checks the delivery against those lines. The board shows the entries in Decisions, **Project
+catalog**, with the token files. No setting of its own: the rules follow `catalog.checks`, and the excerpt follows
+`catalog.missionExcerpt` and `catalog.reviewExcerpt`.
+
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `catalog init` | Creates `stack.md` with the generated block, `reuse.md` and `decisions/README.md` where they are missing, in the main tree. Never writes over a file that is there, except the generated block in `stack.md`. Refused from a track worktree |
+| `catalog init` | Creates `stack.md` with the generated block, `reuse.md` and `decisions/README.md` where they are missing, in the main tree. On the first init it also proposes one design entry from the project's token file, when it finds one (see [Design language](#design-language)). Never writes over a file that is there, except the generated block in `stack.md`. Refused from a track worktree |
 | `catalog show [<D-id>] [--json]` | The prefer lines, the reuse rows and the entries with the status that counts, grouped by `kind` (Design language, Stack, Dependencies, Design choices, Not building). With an id: that entry in full, and the plan entries that link to it |
 | `catalog check [--json]` | Shape, ids, status, the owner lock, `supersedes`, the paths, the reuse rows and the generated block. Exit 1 on an error, 0 on warnings only, 0 without a catalog. Read only |
 | `catalog accept <D-id> --by owner` | The owner accepts a design choice: `status: accepted`, `accepted_by` and `accepted` in the file, and the owner's record in the data folder. A choice with `supersedes` sets the old one to `superseded` in the same step (refused, with nothing changed, when the old one is not there). Refused from a track worktree whatever `--by` says |
@@ -140,6 +177,9 @@ task's `owned_files`, `shared_patch` and `reads`:
   most five, the binding ones first, by id. Only a choice the owner accepted (with the record, see the owner lock) is
   under "Design choices that hold" and binding. A proposed choice, and one that says accepted without the owner's
   record (unconfirmed, so marked), is under "Proposed design choices" as a suggestion. A superseded choice never comes.
+- **Design language**: the `design` entries whose `paths` meet those files, holding or proposed, under their own
+  heading right after the choices that hold. Each line says its status (holds, proposed, unconfirmed) and where the
+  tokens live (`source`). At most three, the ones that hold first.
 - **Prefer lines** from `stack.md`, at most ten: they hold for the whole project.
 - **Reuse rows** from `reuse.md` in the task's folders (the folder of an owned or read file, or inside an owned
   folder), at most 15.

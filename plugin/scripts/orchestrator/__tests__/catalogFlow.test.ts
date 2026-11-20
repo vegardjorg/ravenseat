@@ -179,6 +179,27 @@ describe('ravenseat catalog init, show and check', () => {
     expect(wrong.code).toBe(1);
     expect(wrong.err).toMatch(/--kind must be one of decision, design, stack, dependency/);
   });
+
+  it('KD-1: the first init proposes a design entry from the token file; a deleted draft is not written again', () => {
+    const p = project();
+    p.write('web/tokens.css', ':root {\n  --color-primary: #1a73e8;\n}\n');
+    p.write('web/app.css', '.a { color: var(--color-primary); }\n');
+    execFileSync('git', ['-C', p.repo, 'add', '--', 'web/tokens.css', 'web/app.css'], { stdio: 'ignore' });
+    const r = p.run(['catalog', 'init']);
+    expect(r.code, r.all).toBe(0);
+    expect(r.out).toMatch(/D-0001-colours-only-from-the-design-tokens\.md \(a proposed design entry from web\/tokens\.css\)/);
+    const text = p.read(`${CAT}/decisions/D-0001-colours-only-from-the-design-tokens.md`);
+    expect(text).toMatch(/\nstatus: proposed\n/);
+    expect(text).toMatch(/\nkind: design\n/);
+    expect(text).toMatch(/\nexcept: \["web\/tokens\.css"\]\n/);
+    const one = p.run(['catalog', 'show', 'D-0001']).out;
+    expect(one).toMatch(/source: web\/tokens\.css/);
+    expect(one).toMatch(/check: warn/);
+    expect(p.run(['catalog', 'check']).code).toBe(0);
+    fs.rmSync(path.join(p.repo, CAT, 'decisions', 'D-0001-colours-only-from-the-design-tokens.md'));
+    expect(p.run(['catalog', 'init']).out).not.toMatch(/design entry/);
+    expect(fs.readdirSync(path.join(p.repo, CAT, 'decisions'))).toEqual(['README.md']);
+  });
 });
 
 describe('the owner lock on accepted', () => {
