@@ -5,6 +5,9 @@
 // tests pin each way a test can depend on a file (import, process by script name, command word through queue.mjs,
 // helper, text read, data file, folder reader) and each rule that falls back to the whole suite.
 // =============================================================
+import { spawnSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { commandMap, globToRegex, lex, parseNameStatus, pathValue, readConfig, scanCode, selectTests } from '../test-changed.mjs';
 
@@ -236,7 +239,7 @@ describe('pathValue: what a path expression points at', () => {
 });
 
 describe('the pick: FULL', () => {
-  for (const f of ['vitest.config.mjs', 'package.json', 'package-lock.json', `${O}/queue.mjs`, `${O}/lib/queueLogic.js`, `${O}/cli/context.mjs`, 'plugin/setup.mjs']) {
+  for (const f of ['vitest.config.mjs', 'package.json', 'package-lock.json', 'scripts/test-env.mjs', `${O}/queue.mjs`, `${O}/lib/queueLogic.js`, `${O}/cli/context.mjs`, 'plugin/setup.mjs']) {
     it(`${f} changed gives FULL with a reason`, () => {
       const r = pick([f]);
       expect(r.mode).toBe('full');
@@ -244,6 +247,24 @@ describe('the pick: FULL', () => {
       expect(r.tests.length).toBe(r.total);
     });
   }
+
+  // A file the pick has no rule for (not code, data, a shim or a doc) can change how every test runs: .gitattributes
+  // (line endings), .npmrc and .nvmrc (the install and the node version), .gitignore (what git lists). It cannot tell.
+  for (const f of ['.gitattributes', '.npmrc', '.nvmrc', '.gitignore', 'LICENSE', 'plugin/tools/settings.toml']) {
+    it(`${f} changed (a file type the pick has no rule for) gives FULL with a reason`, () => {
+      const r = pick([f, `${O}/lib/other.js`]);
+      expect(r.mode).toBe('full');
+      expect(r.reason).toContain(f);
+      expect(r.tests.length).toBe(r.total);
+    });
+  }
+
+  it('an unknown file type under a __tests__ or fixtures folder keeps the folder rule (not FULL)', () => {
+    const files = repo({ [`${O}/__tests__/data/case.bin`]: null, [`${O}/__tests__/dataRead.test.ts`]: "read(path.join(__dirname, 'data', 'case.bin'));" });
+    const r = pick([`${O}/__tests__/data/case.bin`], files);
+    expect(r.mode).toBe('some');
+    expect(names(r)).toContain('dataRead.test.ts');
+  });
 
   it('a computed import() in an affected source file gives FULL (it cannot be followed)', () => {
     const files = repo({ [`${O}/lib/loader.js`]: "const U = require('./util.js');\nmodule.exports = (n) => import(n);" });
@@ -329,6 +350,20 @@ describe('the parts', () => {
     expect(re.test('plugin/x/__tests__/deep/a.test.mjs')).toBe(true);
     expect(re.test('plugin/x/__tests__/helper.ts')).toBe(false);
     expect(readConfig('nothing here')).toBe(null);
+  });
+
+  it('--gate: the base is QUEUE_GATE_BASE from gates.mjs; without it the whole suite (FULL), never a guess', () => {
+    const SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'test-changed.mjs');
+    const env = { ...process.env, RAVENSEAT_TEST_RUNS: 'off' };
+    delete env.QUEUE_GATE_BASE;
+    const none = spawnSync(process.execPath, [SCRIPT, '--gate', '--list'], { encoding: 'utf8', env });
+    expect(none.status).toBe(0);
+    expect(none.stdout).toMatch(/FULL: no gate base \(QUEUE_GATE_BASE\)/);
+    const bogus = spawnSync(process.execPath, [SCRIPT, '--gate', '--list'], { encoding: 'utf8', env: { ...env, QUEUE_GATE_BASE: 'no-such-ref-x' } });
+    expect(bogus.status).toBe(0);
+    expect(bogus.stdout).toMatch(/FULL: git cannot give the change against no-such-ref-x/);
+    // --gate takes its base from the environment only: a ref beside it is a usage error.
+    expect(spawnSync(process.execPath, [SCRIPT, '--gate', 'main', '--list'], { encoding: 'utf8', env }).status).toBe(2);
   });
 
   it('parseNameStatus: a rename gives the old path as deleted and the new one as added', () => {

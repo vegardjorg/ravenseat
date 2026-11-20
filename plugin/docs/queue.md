@@ -970,7 +970,7 @@ board ("Protects against: ...") and in that view.
 
 | Key | Default | Used for | Marks |
 |---|---|---|---|
-| `gates.quick`, `gates.full` | `[]` | Commands `gates.mjs` runs (empty = green); set them up with `ravenseat kickstart gates` | Basic |
+| `gates.quick`, `gates.full` | `[]` | Commands `gates.mjs` runs (empty = green); set them up with `ravenseat kickstart gates`. Each command gets `QUEUE_GATE_BASE`, the commit to diff against: the fork point in a track's worktree, the merged track's fork point after `ravenseat merge`, unset with no own commits (a gate that needs it should then check everything) | Basic |
 | `maxFixRounds`, `fixPlateau` | `3`, `true` | At this many fix rounds a task becomes an owner question; a fix round that committed nothing or fails the same way asks first (see "The done command and the fix-round cap") | Advanced |
 | `fixRound.continueWithinMin`, `fixRound.continueMaxContextK` | `60`, `200` | A fix round continues the agent that delivered (SendMessage, only the fix list) when it was active within this many minutes and its context is under this many thousand tokens; else a new agent with a short mission. `0` minutes = always a new agent | Advanced |
 | `doneCheck.timeoutSec`, `doneCheck.tailLines` | `600`, `40` | The time budget of one run of the task's done command, and the last output lines kept for the fix brief | Advanced |
