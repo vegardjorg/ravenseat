@@ -410,6 +410,9 @@ function visibleLines(source) {
   return out;
 }
 
+/** The intro sentence init puts under "## Prefer" (inside a comment, so check never reads it as a prefer line). */
+const PREFER_INTRO = 'One line per job: what to use, and what not to add. A track gets these lines before it picks a library.';
+
 /**
  * stack.md: the generated block (text between the markers, trimmed) and the prefer lines under "## Prefer".
  * @returns {{ block: string|null, prefer: { purpose: string, use: string }[], errors: string[], warnings: string[] }}
@@ -434,6 +437,8 @@ function parseStack(source) {
       continue;
     }
     if (!inPrefer || !l.trim()) continue;
+    // An older init wrote this intro as plain text under the heading; it is the template's, not a broken line.
+    if (l.trim() === PREFER_INTRO) continue;
     const m = l.match(/^\s*[-*]\s+([^:]+?):\s+(.+?)\s*$/);
     if (m) prefer.push({ purpose: m[1].trim(), use: m[2] });
     else warnings.push(`stack.md: under ## Prefer, "${l.trim().slice(0, 60)}" is not a line "- <job>: <what to use>"`);
@@ -1124,7 +1129,7 @@ function stackWithBlock(existing, block) {
       '',
       '## Prefer',
       '',
-      'One line per job: what to use, and what not to add. A track gets these lines before it picks a library.',
+      `<!-- ${PREFER_INTRO} -->`,
       '',
       '<!-- - dates: use dayjs; do not add moment -->',
       '<!-- - HTTP: use the fetch wrapper in lib/http.ts; do not add axios -->',

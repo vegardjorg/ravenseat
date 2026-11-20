@@ -42,6 +42,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   band only when there is a deadline.** On a phone the room tabs stay on one line and the mascot bubble sits at the bottom.
 ### Fixed
 - **Missions: a section pointer on a Windows short path (`RUNNER~1`) keeps its line range.**
+- **A fresh `catalog init` gives 0 warnings in `catalog check`: the Prefer intro sentence is no longer read as a prefer line.**
 
 ## 0.20.0 (2026-11-19)
 
