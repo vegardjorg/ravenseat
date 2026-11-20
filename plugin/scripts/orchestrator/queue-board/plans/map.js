@@ -648,6 +648,9 @@
   function deadlineBand(h, d, ids) {
     const el = h.el;
     const all = V.deadlineElements(d.entries, d.documents, { ids });
+    // P9: the band is only drawn when there is a deadline (overdue or within the window); an empty band was noise
+    // on every surface. The callers leave a null out of the room.
+    if (!all.length) return null;
     const overdueOnes = all.filter((e) => e.overdue);
     const upcoming = all.filter((e) => !e.overdue);
     const { rows, hidden } = V.deadlineRows(upcoming);
@@ -703,12 +706,7 @@
         el('span', { text: recap }),
         ids ? el('span', { class: 'deadline-band-selection', text: '(selection)' }) : null,
       ),
-      !all.length
-        ? el('p', {
-            class: 'empty deadline-band-empty',
-            text: 'No deadlines in the selection in the next 90 days.',
-          })
-        : el(
+      el(
             'div',
             { class: 'deadline-band-content' },
             overdueOnes.length

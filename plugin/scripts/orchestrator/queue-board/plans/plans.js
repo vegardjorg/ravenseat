@@ -54,6 +54,8 @@
   // The Roadmap's choices per viewer (layout, group, compact, Details open on the plan page). Only a convenience: with
   // storage blocked the defaults apply (plans.roadmapLayout and the width).
   const ROADMAP_STORAGE = 'queue-board-plans-roadmap';
+  // The Roadmap's scroll boxes (data-scroll): the page part, and the columns on a wide screen (P9).
+  const ROADMAP_SCROLLS = ['roadmap', 'roadmap-columns'];
 
   const s = {
     data: null,
@@ -81,7 +83,11 @@
     roadmap: readObject(ROADMAP_STORAGE), // the viewer's Roadmap choices
     roadmapOpen: new Set(), // the Roadmap sections opened past the fold (this visit only)
     moreViews: false, // the More views disclosure is open
-    roadmapTop: 0, // where the Roadmap was scrolled, so Back from a plan page lands in the same place
+    pathCopyOpen: false, // P9: the breadcrumb's "Copy start line" menu is open
+    announced: null, // P9: the search and filter the live region last spoke about
+    // where the Roadmap (and its columns) was scrolled, [top, left] by data-scroll name, so Back from a plan page lands
+    // in the same place
+    roadmapScroll: {},
     startPending: false, // Plans was opened before the register came; plans.startView is applied when it does
     // P5: the last answer from /api/plan-search: for which search and register version, the hits by plan id, the search
     // on its way (busy) and whether the server stopped at its limit (partial).
@@ -174,6 +180,23 @@
       : d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
   };
   const entryFor = (id) => s.data?.entries.find((p) => p.id === id) ?? null;
+
+  // ---- P9: the live region ----
+  // One polite live region next to the room, outside it: the room is redrawn as a whole, and a live region created
+  // anew with its text already in it is often not read at all. It speaks only when the search or the filter changed
+  // (not on the first draw, not on a live update), with the number of plans that match.
+  const live = el('p', { class: 'hidden-for-eye', 'aria-live': 'polite', id: 'plans-live' });
+  room.after(live);
+  function announce(n) {
+    const t = s.state;
+    const key = `${t.search ?? ''}|${JSON.stringify(t.filter ?? {})}`;
+    if (s.announced === null || key === s.announced) {
+      s.announced = key;
+      return;
+    }
+    s.announced = key;
+    live.textContent = V.matchAnnouncement(n, Boolean(t.search) || V.countFilters(t.filter) > 0);
+  }
 
   // ---- The room and the url ----
   const isPlans = () => s.state.room === 'plans';
@@ -378,12 +401,15 @@
     // `focus` is the element that should have focus afterwards (e.g. the chip that was just moved).
     const focusKey = focus ?? (room.contains(active) ? active?.dataset?.focus : null);
     const cursor = active?.selectionStart ?? null;
+    // P9: the sideways position too (the Roadmap columns can be wider than the window between 1200 and 1400 px).
     const scrolling = [...room.querySelectorAll('[data-scroll]')].map((e) => [
       e.dataset.scroll,
       e.scrollTop,
+      e.scrollLeft,
     ]);
-    // the Roadmap's scroll position survives a visit to a plan page (Back lands where you were).
-    for (const [n, top] of scrolling) if (n === 'roadmap') s.roadmapTop = top;
+    // the Roadmap's scroll position survives a visit to a plan page (Back lands where you were); P9: the columns'
+    // own scroll box too, up and down and sideways.
+    for (const [n, top, left] of scrolling) if (ROADMAP_SCROLLS.includes(n)) s.roadmapScroll[n] = [top, left];
 
     room.replaceChildren();
     if (!s.data) {
@@ -424,6 +450,8 @@
       const body = p
         ? window.QueuePlanRoadmap.page(roadmapHelp, d, p)
         : window.QueuePlanRoadmap.cells(roadmapHelp, d, sorted);
+      // the same count as the toolbar (the dropped ones are folded at the bottom and not counted)
+      if (!p) announce(sorted.filter((x) => x.priority !== 'drop').length);
       fillRoom(
         pathEl(d, { drawer: false }),
         surfaceOptionEl(d),
@@ -439,7 +467,9 @@
           body,
         ),
       );
-      if (!p && !scrolling.some(([n]) => n === 'roadmap')) scrolling.push(['roadmap', s.roadmapTop]);
+      if (!p)
+        for (const n of ROADMAP_SCROLLS)
+          if (s.roadmapScroll[n] && !scrolling.some(([x]) => x === n)) scrolling.push([n, ...s.roadmapScroll[n]]);
       afterDrawing(focusKey, cursor, scrolling, false);
       return;
     }
@@ -479,6 +509,7 @@
     room.classList.toggle('has-selected', docSurface ? selectedDoc : !!selected);
     room.classList.toggle('drawer-open', s.drawer);
     const pickedOut = V.countFilters(t.filter) > 0 || !!t.search;
+    if (!docSurface) announce(match.length);
     fillRoom(
       // Plan entries has no filter column any more (P4): its search, Filter and Sort sit in a toolbar, so no drawer.
       pathEl(d, { drawer: docSurface }),
@@ -510,9 +541,11 @@
 
   /** After drawing: scrolling, focus and cursor back, and the chosen row in view (with `scroll`). */
   function afterDrawing(focusKey, cursor, scrolling, scroll) {
-    for (const [n, top] of scrolling) {
+    for (const [n, top, left] of scrolling) {
       const e = room.querySelector(`[data-scroll="${n}"]`);
-      if (e) e.scrollTop = top;
+      if (!e) continue;
+      e.scrollTop = top;
+      if (left) e.scrollLeft = left;
     }
     if (focusKey) {
       const fresh = room.querySelector(`[data-focus="${CSS.escape(focusKey)}"]`);
@@ -600,7 +633,8 @@
           : !!window.QueuePlanStructure,
     );
     if (!views.length) return null;
-    const label = current ? `More views: ${views.find((v) => v.id === current)?.text ?? ''}` : 'More views';
+    // P9: " views" is a span that a phone hides ("More", "More: Priority map"), so the tab row keeps one line.
+    const currentText = current ? `: ${views.find((v) => v.id === current)?.text ?? ''}` : '';
     // The open state survives a redraw from a live update (s.moreViews), and closes when a view is chosen.
     return el(
       'details',
@@ -611,7 +645,13 @@
           s.moreViews = e.currentTarget.open;
         },
       },
-      el('summary', { 'data-focus': 'more-views' }, label),
+      el(
+        'summary',
+        { 'data-focus': 'more-views', 'aria-label': `More views${currentText}` },
+        'More',
+        el('span', { class: 'plans-more-views-word', text: ' views' }),
+        currentText,
+      ),
       el(
         'ul',
         { class: 'plans-more-views-list' },
@@ -935,16 +975,12 @@
                         )
                       : newFilter(l.filter, { entry: null, search: '' }),
                 }),
-            l.copy
-              ? copyButton(
-                  l.copy,
-                  `Copy the start line for ${l.text}`,
-                  'button-small button-outline',
-                )
-              : null,
           );
         }),
       ),
+      // P9: the start lines for Claude Code sit in one quiet menu after the trail instead of a Copy button per part
+      // (a rare action that made the trail loud and long).
+      pathCopyEl(part),
       // the Roadmap has no filter pane (its search is in its own toolbar), so no Filters button.
       !drawer
         ? null
@@ -974,6 +1010,58 @@
       ),
       // B30: the "?" for the Plans room, last in its one-line header (roomHelp is the board's, board/menus.js).
       typeof roomHelp === 'function' ? roomHelp('plans', 'Plans') : null,
+    );
+  }
+
+  /**
+   * P9: the breadcrumb's "Copy start line" menu: one button per part with a start line (V.pathCopyItems), each copies
+   * its line and closes the menu. A details element, so it opens with Enter or space and is announced as expandable;
+   * its open state survives a live redraw (s.pathCopyOpen). Null when no part has a start line (the Roadmap).
+   */
+  function pathCopyEl(parts) {
+    const items = V.pathCopyItems(parts);
+    if (!items.length) return null;
+    return el(
+      'details',
+      {
+        class: 'plans-path-copy',
+        open: s.pathCopyOpen || null,
+        ontoggle: (e) => {
+          s.pathCopyOpen = e.currentTarget.open;
+        },
+      },
+      el(
+        'summary',
+        { 'data-focus': 'path-copy', 'aria-label': 'Copy a start line for Claude Code' },
+        'Copy',
+        el('span', { class: 'plans-path-copy-more', text: ' start line' }),
+      ),
+      el(
+        'ul',
+        { class: 'plans-path-copy-list' },
+        items.map((x) =>
+          el(
+            'li',
+            null,
+            el(
+              'button',
+              {
+                type: 'button',
+                class: 'link-button',
+                title: x.line,
+                'data-focus': `path-copy:${x.label}`,
+                onclick: () => {
+                  s.pathCopyOpen = false;
+                  copy(x.line);
+                  draw({ focus: 'path-copy' });
+                },
+              },
+              el('span', { class: 'plans-path-copy-label', text: x.label }),
+              el('code', { class: 'plans-path-copy-line', text: x.line }),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1119,7 +1207,14 @@
     const tree = V.tree(match, d);
     const header = activeFiltersEl(d);
     let content;
-    if (!d.exists)
+    // P9: the same empty states as the Roadmap (no plans yet with + New plan; no match with Clear search and Clear
+    // filter), so the two surfaces say the same thing. The old wording stays when roadmap.js is not loaded.
+    const shared =
+      (!d.exists || !match.length) && window.QueuePlanRoadmap?.empty
+        ? window.QueuePlanRoadmap.empty(roadmapHelp, d)
+        : null;
+    if (shared) content = shared;
+    else if (!d.exists)
       content = el('p', {
         class: 'empty',
         text: 'The plan register does not exist yet (scripts/.queue/plans.json).',

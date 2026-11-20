@@ -1578,9 +1578,11 @@ body.room-plans #optionLine {
 }
 
 @media (max-width: 720px) {
+  /* P9: one row on a phone: the tabs scroll sideways inside it (below 700 px) and More views keeps its place */
   .plans-surfaces-row {
-    flex-wrap: wrap;
-    padding: 0 var(--distance-sm) var(--distance-xs);
+    flex-wrap: nowrap;
+    gap: var(--distance-xs);
+    padding: 0 var(--distance-sm) 0 0;
   }
 
   .map {
@@ -3186,14 +3188,16 @@ ol.overview-list > .overview-row.overview-question > * {
   margin-top: var(--distance-lg);
 }
 
-/* The columns: side by side, at least 220 px each; when they do not fit, the row scrolls inside itself, never the page. */
+/* The columns: side by side, at least 220 px each; when they do not fit, the row scrolls inside itself, never the page.
+   P9: the columns are the Roadmap's scroll box in both directions (the toolbar stays above them, as in the Queue room),
+   and every column is as tall as the tallest, so each column header can stick at the top while the cards scroll. */
 .roadmap-columns {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(220px, 1fr);
   gap: var(--distance-md);
-  align-items: start;
-  overflow-x: auto;
+  align-items: stretch;
+  overflow: auto;
   padding-bottom: var(--distance-xs);
 }
 
@@ -3204,9 +3208,15 @@ ol.overview-list > .overview-row.overview-question > * {
   background: var(--color-surface-container-low);
 }
 
+/* P9: the header sticks while its section scrolls (the columns' scroll box, or the list's), on the page's own surface
+   color, so the horizon and its count stay readable over the cards. */
 .roadmap-section .col-header {
-  padding: 0 0 var(--distance-xs);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--distance-xs) 0;
   border-bottom: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-container-low);
 }
 
 .roadmap-section-note {
@@ -3616,9 +3626,24 @@ ol.overview-list > .overview-row.overview-question > * {
     margin-left: 0;
   }
 
+  /* P9: a tab never wraps to a second line; the tab list scrolls sideways in its own row (as the top's tabs do), never
+     the page */
   .plans-surfaces {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
     padding: 0 var(--distance-sm);
+  }
+
+  .plans-surface {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* "More" instead of "More views", so the tabs keep the room (the name stays whole for a screen reader) */
+  .plans-more-views-word {
+    display: none;
   }
 
   /* the menu opens from the right edge, where the summary sits, and never wider than the screen */
@@ -4145,3 +4170,181 @@ textarea.plans-triage-input {
 }
 
 /* ---- end of Inbox proposals ---- */
+
+/* ---- P9 polish (plans/plans-tab-ux-review-2026-11-19.md, sections 7.6 and 7.7). Tokens only, light and dark alike. */
+
+/* The Roadmap with columns: the toolbar stays above, and the columns are the scroll box (both directions), so the
+   column headers can stick. The columns keep a useful height even with the + New plan form open; when the window is
+   too short for both, the page part scrolls as before. Without :has() the columns simply scroll as one long row. */
+.plans-roadmap-scroll:has(> .roadmap > .roadmap-columns) {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--distance-sm);
+}
+
+.plans-roadmap-scroll:has(> .roadmap > .roadmap-columns) > .roadmap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.plans-roadmap-scroll:has(> .roadmap > .roadmap-columns) .roadmap-columns {
+  flex: 1;
+  min-height: min(60vh, 480px);
+}
+
+/* The empty states: the words at reading size, the actions as buttons in one row that wraps. */
+.roadmap > .empty,
+.plans-middle > .empty {
+  max-width: 60ch;
+  margin: var(--distance-lg) 0;
+  color: var(--color-on-surface);
+  font-size: var(--text-sm);
+}
+
+.roadmap > .empty p,
+.plans-middle > .empty p {
+  margin: 0 0 var(--distance-sm);
+}
+
+.roadmap-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--distance-sm);
+}
+
+/* A plan without a plan document: a short state with a title and what happens next. */
+.plans-page-empty {
+  max-width: 60ch;
+  padding: var(--distance-md);
+  border: 1px dashed var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-container-lowest);
+}
+
+.plans-page-empty-title {
+  margin: 0;
+  color: var(--color-on-surface);
+  font-weight: 600;
+}
+
+.plans-page-empty-text {
+  margin: var(--distance-xs) 0 0;
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+}
+
+/* The breadcrumb's "Copy start line" menu: a quiet disclosure after the trail, the list drops down over the content. */
+.plans-path-copy {
+  position: relative;
+  flex: none;
+}
+
+.plans-path-copy > summary {
+  display: list-item;
+  min-height: 32px;
+  line-height: 32px;
+  padding: 0 var(--distance-sm);
+  border-radius: var(--radius-md);
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.plans-path-copy > summary:hover {
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+
+.plans-path-copy-list {
+  position: absolute;
+  z-index: 12;
+  right: 0;
+  min-width: 260px;
+  max-width: min(480px, calc(100vw - 2 * var(--distance-md)));
+  margin: var(--distance-xs) 0 0;
+  padding: var(--distance-xs);
+  list-style: none;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-container-lowest);
+}
+
+.plans-path-copy-list .link-button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  margin: 0;
+  padding: var(--distance-xs) var(--distance-sm);
+  text-align: left;
+}
+
+.plans-path-copy-label {
+  color: var(--color-on-surface);
+  font-weight: 600;
+}
+
+.plans-path-copy-line {
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+/* The Inbox buttons in the narrow Roadmap columns: smaller, without the key hint (the keys still work, and the title
+   and aria-keyshortcuts name them) and "Merge" without the plan id (named in the line above), so they sit in one row
+   that wraps instead of one button per row. The list layout keeps the full buttons. */
+.roadmap-columns .plans-triage {
+  padding: var(--distance-xs) var(--distance-sm);
+}
+
+.roadmap-columns .plans-triage-actions {
+  gap: var(--distance-xs);
+}
+
+.roadmap-columns .plans-triage-button {
+  min-height: 32px;
+  padding: 0 var(--distance-sm);
+  font-size: var(--text-sm);
+}
+
+.roadmap-columns .plans-triage-key {
+  display: none;
+}
+
+.roadmap-columns .plans-triage-target {
+  display: none;
+}
+
+@media (max-width: 699px) {
+  /* "Copy" instead of "Copy start line", so the trail keeps its room (the name stays whole for a screen reader) */
+  .plans-path-copy-more {
+    display: none;
+  }
+
+  .plans-path-copy-list {
+    position: fixed;
+    top: auto;
+    right: var(--distance-md);
+    left: var(--distance-md);
+    min-width: 0;
+    max-width: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .plans-path-copy > summary,
+  .plans-path-copy-list .link-button,
+  .roadmap-columns .plans-triage-button {
+    min-height: 44px;
+  }
+}
+
+@media (forced-colors: active) {
+  .plans-page-empty,
+  .plans-path-copy-list {
+    border: 1px solid CanvasText;
+  }
+}
+
+/* ---- end of P9 polish ---- */

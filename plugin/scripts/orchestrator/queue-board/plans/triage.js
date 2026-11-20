@@ -339,7 +339,9 @@
   // ---- The row ----
 
   /** One action button with its key, visible as a small hint and announced through aria-keyshortcuts. */
-  function action(h, p, name, text, key, onclick, first) {
+  // P9: `target` is the end of the label that the narrow Roadmap columns may hide ("Merge" + " into PL-X"), so the
+  // four buttons fit in a row there. The button's name stays whole (aria-label), and the plan is named just above it.
+  function action(h, p, name, text, key, onclick, first, target = '') {
     return h.el(
       'button',
       {
@@ -348,11 +350,13 @@
         'data-action': name,
         'data-focus': first ? `triage:${p.id}:first` : `triage:${p.id}:${name}`,
         'aria-keyshortcuts': key,
-        title: `${text} (key ${key})`,
+        'aria-label': target ? `${text}${target}` : null,
+        title: `${text}${target} (key ${key})`,
         disabled: st(h).busy ? true : null,
         onclick,
       },
       text,
+      target ? h.el('span', { class: 'plans-triage-target', text: target }) : null,
       h.el('span', { class: 'plans-triage-key', 'aria-hidden': 'true', text: key }),
     );
   }
@@ -399,7 +403,7 @@
         t ? action(h, p, 'accept', 'Accept', '1', () => accept(h, p), true) : null,
         action(h, p, 'edit', 'Edit', '2', () => openEdit(h, p), !t),
         action(h, p, 'decline', t ? 'Decline' : 'Drop', '3', () => openDecline(h, p)),
-        dup ? action(h, p, 'merge', `Merge into ${dup.id}`, '4', () => merge(h, p, dup.id)) : null,
+        dup ? action(h, p, 'merge', 'Merge', '4', () => merge(h, p, dup.id), false, ` into ${dup.id}`) : null,
       ),
     );
     if (s.edit?.id === p.id) kids.push(editForm(h, p));

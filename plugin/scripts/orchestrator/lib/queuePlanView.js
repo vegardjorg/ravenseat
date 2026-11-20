@@ -4104,6 +4104,66 @@
     );
   }
 
+  // ---- P9 polish: the plan page's other sources, its empty states, the breadcrumb menu and the live region ---------
+
+  /**
+   * The readable sources the plan page lists under "Also:": all of them except the one open in the reader (same path
+   * and anchor), so the open document is not offered a second time. A followed link is not a source, so then all show.
+   * @param p the plan entry
+   * @param shown {path, anchor} open in the reader, or null
+   */
+  function otherSources(p, shown) {
+    const same = (k) => shown && k.path === shown.path && (k.anchor ?? null) === (shown.anchor ?? null);
+    return (p?.sources ?? []).filter((k) => k?.path && !readPathError(k.path) && !same(k));
+  }
+
+  /**
+   * The empty state for the plan document on the plan page (section 7.6), or null when the plan has one the board can
+   * show. A short title and one line on what happens next, so it reads as a state, not as a stray remark.
+   */
+  function planDocEmpty(p) {
+    if (planSource(p)) return null;
+    if ((p?.sources ?? []).length)
+      return {
+        title: 'The plan document is not shown here',
+        text: 'Its documents are outside the document folders the board may read.',
+      };
+    return {
+      title: 'No plan document yet',
+      text: 'Claude writes one when the plan is shaped: open More, then work on the plan in Claude Code. Until then the summary is the plan.',
+    };
+  }
+
+  const PATH_LEVEL = { module: 'Area', project: 'Project', entry: 'Plan' };
+
+  /**
+   * The rows of the breadcrumb's "Copy start line" menu: one per part that has a start line, named by its level
+   * ("Area: Account", "Plan: Accounts and sign-in"). Empty when no part has one (the Roadmap), so no menu is drawn.
+   * @param parts the result of breadcrumbs()
+   * @returns {{label: string, line: string}[]}
+   */
+  function pathCopyItems(parts) {
+    return (parts ?? [])
+      .filter((x) => typeof x?.copy === 'string' && x.copy)
+      .map((x) => ({ label: `${PATH_LEVEL[x.level] ?? 'Part'}: ${x.text}`, line: x.copy }));
+  }
+
+  /** "No plans match ..." with the search and the filter count, as the Filter button says it (section 7.6). */
+  function noMatchText(search, filterCount) {
+    const q = String(search ?? '');
+    const f = Number(filterCount) > 0 ? `Filter · ${filterCount}` : '';
+    if (q && f) return `No plans match "${q}" with ${f}.`;
+    if (q) return `No plans match "${q}".`;
+    return f ? `No plans match ${f}.` : 'No plans match.';
+  }
+
+  /** The sentence the Plans live region says after a search or filter change (section 7.7). */
+  function matchAnnouncement(n, active) {
+    if (!active) return `Showing all ${n} ${n === 1 ? 'plan' : 'plans'}.`;
+    if (!n) return 'No plans match.';
+    return n === 1 ? '1 plan matches.' : `${n} plans match.`;
+  }
+
   // ---- Full-text search in the plan documents (P5) ---------------------------------------------------------------
   // The server (lib/queueBoard.js planDocSearcher) reads the plan document through the /api/doc guard, turns it into
   // passages once per file change, and asks documentHit for the snippet. The board gets the hits from
@@ -4561,6 +4621,12 @@
     planSentence,
     documentLead,
     planSource,
+    // P9 polish
+    otherSources,
+    planDocEmpty,
+    pathCopyItems,
+    noMatchText,
+    matchAnnouncement,
     // Full-text search in the plan documents (P5)
     DOC_SEARCH_MIN,
     DOC_HIT_SIDE,

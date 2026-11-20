@@ -2855,11 +2855,21 @@ body.with-option-line .toaster {
     left: var(--distance-md);
     width: calc(100% - 2 * var(--distance-md));
   }
+  /* P9: on a phone the bubble is a small toast at the bottom of the screen, not below the top: there it covered the
+     room tabs and the breadcrumb. It stays under the messages (z-index 9 < the toaster's 21), clips at three lines,
+     and a click still closes it. */
   .bubble {
-    top: calc(100% + var(--distance-sm));
+    position: fixed;
+    top: auto;
+    bottom: var(--distance-md);
     left: var(--distance-md);
     right: var(--distance-md);
     max-width: none;
+    max-height: calc(3 * 18px + 2 * 8px + 2px);
+    overflow: hidden;
+    padding: 8px 12px;
+    font-size: 13px;
+    line-height: 18px;
   }
   .bubble::before {
     display: none;
