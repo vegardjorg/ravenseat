@@ -72,6 +72,11 @@ language (what it is, why it came up, what yes and no mean) and a recommendation
   tracks (work on another branch, or uncommitted in a worktree).
 - **Capacity:** how many slots can be filled after receiving, and the three biggest owner questions blocking the queue.
 - **Unlogged answers:** answers from the board not yet in the decision log (`ravenseat resolutions --unlogged`).
+  An answer that is a lasting rule about the code or the product (it should hold for later tasks too) can be offered
+  as a proposed design choice (`ravenseat catalog propose --from-answer <id>`); a one-time requirement, a loose idea or
+  a preference about how the owner works is not one (that last belongs in your memory). Store the rule in short words,
+  never a quote, secrets or personal data, and never accept it yourself (the plugin's `docs/catalog.md`, "What
+  belongs in the catalog").
 - **Picked tasks:** who picked what and how long ago ("stale" after 72 h without commits; released only on the owner's
   word). Paused projects in one line.
 - **QA list:** visual tasks waiting for the owner's QA.

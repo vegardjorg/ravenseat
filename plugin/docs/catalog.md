@@ -334,6 +334,25 @@ asked; `suggest` also prints a `KEEP?:` line after `resolve` and shows "Reads li
 when the question or answer uses words such as always, never, from now on or by default (and none such as this time
 or for now). It never presses the toggle. `off` hides the toggle and refuses `--keep` and `catalog propose`.
 
+### What belongs in the catalog
+
+A design choice is a **lasting rule** about the code or the product: it should still hold for the next task that
+touches the same files, and someone can check a change against it ("Buttons in the board use the shared button
+classes"). Ask: would I want a track that never saw this answer to follow it?
+
+Not a design choice:
+
+- **A one-time requirement:** "Use vendor B for this release", "Skip the migration this time". It belongs to the task
+  or the answer in the decision log, and is done when the task is done.
+- **A loose idea or a vague displeasure:** "This feels slow", "Maybe a darker header". Make it a plan entry or a task
+  first; it can become a rule once it is decided.
+- **A quote:** store the rule in your own short words, never conversation excerpts, and never secrets or personal
+  data. The files are committed and read by every track.
+
+**The catalog or Claude's memory.** Preferences about how you work (how Claude reports, when to push, which words to
+avoid) belong in Claude's memory or in `queue.config.json`, not here. The catalog holds code and product choices that
+the tracks and reviewers check against, in the repository, under your accept.
+
 ## Friction
 
 Anything that can stop work is off by default, with one deliberate exception: the protected path, by owner decision.
