@@ -334,6 +334,48 @@ asked; `suggest` also prints a `KEEP?:` line after `resolve` and shows "Reads li
 when the question or answer uses words such as always, never, from now on or by default (and none such as this time
 or for now). It never presses the toggle. `off` hides the toggle and refuses `--keep` and `catalog propose`.
 
+## Not building
+
+A "no" to an idea is a decision too. Without a record, the same idea comes back as a new proposal, and the reason is
+gone. A **not-building entry** is a file in `decisions/` like a design choice, with `kind: not-building`: what, why,
+who decided and when, where it came from, keywords and when to look at it again. It gets no file or folder of its own.
+
+```
+---
+id: D-0004
+title: Keepalive ping for the board
+kind: not-building
+status: not-building
+keywords: ["keepalive", "ping"]
+revisit: when the board polls less than once a minute
+source: declined proposal A-12
+---
+Why: the 15 s poll already keeps the connection warm.
+```
+
+- **The way in:** `ravenseat cancel <id> --remark "declined: <reason>" --keep --by owner` (or **Keep as not building**
+  on a proposal in Decisions, then Decline), `ravenseat checks dismiss <key> --keep [--why "..."]` (or **Set aside, keep
+  as not building** on a Checks card), and by hand `ravenseat catalog propose --not-building --title "..." [--why]
+  [--keywords a,b] [--revisit "..."] [--source "..."]`. Each writes a `proposed` draft with the reason as its text and
+  keywords taken from the title. The decline or the set aside stands even when the draft cannot be written. These
+  follow `catalog.captureAnswers`: `off` refuses `--keep`, and a track cannot write a draft.
+- **The owner accepts it:** `catalog accept <D-id> --by owner` writes `status: not-building` under the owner lock, the
+  same record as for a design choice. A hand edit to `status: not-building` is unconfirmed until then.
+- **New proposals meet it:** a new task at `add`, a track's proposals at `receive` and a captured plan at `plan
+  capture` that contain one of an accepted entry's keywords (a whole word or phrase) get one line: `INFO not-building:
+  T-7 looks like D-0004 "Keepalive ping for the board" (keyword keepalive): chosen not to build 2026-11-20 because ...`.
+  At most three lines. It never stops anything and sets no exit code (`notBuilding.match`, on).
+- **Doctor:** one INFO row names the entries whose `revisit` names a date that has passed (always shown) and the ones
+  decided over 180 days ago (only with `doctor --all`). Quiet guidance hides it.
+- **Reopening:** propose the new design choice with `--supersedes <D-id>`. When the owner accepts it, the entry is set
+  `superseded` and stops matching.
+- **Board:** **Not building (n)** at the bottom of Decisions lists the drafts first, then the decided entries, newest
+  first, with a search over the title, reason, keywords and revisit line. It only shows; the writes go through the
+  commands above.
+
+`catalog show` lists the entries apart from the design choices. They never go into the excerpt in a mission or a review
+package, and they have no `check` rule.
+
 ### What belongs in the catalog
 
 A design choice is a **lasting rule** about the code or the product: it should still hold for the next task that
@@ -370,6 +412,10 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Code index at receive and in the missions | One git listing per tree and a read of each changed file (the first build of about 300 files took under half a second here); a file in the data folder; more lines in the excerpt, inside the same cap. It stops nothing | `catalog.index`, off: the plan puts it on the opt-in list, since it builds and stores a file and its worth grows with the project |
 | `catalog propose` | Only when someone runs it; writes a `proposed` file that binds nothing until the owner accepts it | No own setting: a write on request that decides nothing. `catalog.captureAnswers` `off` refuses it too (one switch) |
 | Owner answer into the catalog | Only on request: one toggle per question on the board, `--keep` on `resolve`. The draft binds nothing until the owner accepts it. `suggest` adds a hint line, which can be noisy | `catalog.captureAnswers`, `explicit`: offered but never done unasked; `suggest` is opt-in, `off` turns it off |
+| Not building: `--keep` drafts | Only on request: `--keep` on `cancel` and `checks dismiss`, one toggle and one button on the board. The draft binds nothing until the owner accepts it | Follows `catalog.captureAnswers` (`explicit`) |
+| Not building: INFO line | One line at `add`, `receive` and `plan capture` when a new item has an accepted entry's keyword; at most three. Never a stop or an exit code | `notBuilding.match`, on in lite and full: advice only, and off weakens no guard |
+| Not building: doctor row | One INFO row: a passed revisit date always, an old entry only with `--all` | Follows `notBuilding.match` |
+| Not building on the board | None: a list with a search, display only | No setting: it only shows what the catalog holds |
 | `catalog find` | Only when someone runs it; it builds the index from the cache first | No setting: it is a read on request, and works with `catalog.index` off |
 | Near names (V1b) | Up to five lines for the reviewer, which may lead to a `duplication` finding after the reviewer weighs the code. Never to the owner alone, never a stop | Follows `catalog.index` and `catalog.reviewExcerpt` |
 | `@shared` problems | Printed by `catalog index` only; no gate, no doctor row | No setting |

@@ -5742,6 +5742,78 @@ body.stale .summary.stuck::before {
   color: var(--color-on-surface);
   overflow-wrap: anywhere;
 }
+/* "Not building" at the bottom of Decisions (roadmap 0f): folded like "Decided today", with the Tasks room's search. */
+.decide-nb .decide-hint {
+  margin: var(--distance-sm) 0;
+}
+.decide-nb-label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+  margin-bottom: var(--distance-xs);
+}
+.decide-nb .search {
+  width: 100%;
+  max-width: 360px;
+}
+.decide-nb-count {
+  margin: var(--distance-xs) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.decide-nb-list {
+  list-style: none;
+  margin: var(--distance-sm) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-sm);
+}
+.decide-nb-item {
+  padding: var(--distance-sm) var(--distance-md);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-container-lowest);
+  min-width: 0;
+}
+.decide-nb-item[hidden] {
+  display: none;
+}
+.decide-nb-item p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.decide-nb-item p + p {
+  margin-top: var(--distance-xs);
+}
+.decide-nb-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+}
+.decide-nb-name {
+  font-weight: 600;
+  color: var(--color-on-surface);
+  min-width: 0;
+}
+.decide-nb-draft {
+  border-color: var(--color-outline);
+  border-style: dashed;
+}
+.decide-nb-when,
+.decide-nb-meta {
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.decide-nb-why {
+  font-size: var(--text-sm);
+  color: var(--color-on-surface);
+}
+.decide-nb-due {
+  font-size: var(--text-xs);
+  color: var(--color-error);
+}
 /* The checkbox on a Check or Approve card, and on a Sort row with a proposal (B24: what the side panel had). */
 .decide-check {
   width: 1.1rem;

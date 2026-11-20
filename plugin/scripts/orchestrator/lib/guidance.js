@@ -22,7 +22,7 @@ const QUIET_HELPERS = ['reviewer-light', 'triage'];
 /** The doctor lines that are advice. Only their WARN and INFO rows go: a FAIL is a real fault and always shows. */
 // `instructions` (the size of Claude's instructions) is advice; `instructions-cut` is not on the list: that a file is cut is a
 // fact of Claude Code, so it shows in quiet too.
-const ADVICE_CHECKS = ['ci', 'ci-cost', 'gates', 'lockfile', 'budget', 'instructions'];
+const ADVICE_CHECKS = ['ci', 'ci-cost', 'gates', 'lockfile', 'budget', 'instructions', 'not-building'];
 
 const modeOf = (queue) => (queue?.guidance === 'quiet' ? 'quiet' : 'guided');
 const isQuiet = (queue) => modeOf(queue) === 'quiet';

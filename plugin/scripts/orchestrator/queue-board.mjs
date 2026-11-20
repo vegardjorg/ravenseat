@@ -149,6 +149,8 @@ const U = require('./lib/queueUpdate.js');
 const OW = require('./lib/ownerWait.js');
 // The project catalog's settings (catalog.captureAnswers: "Keep as design choice" in Decisions, roadmap 0z Z-A).
 const CATALOG = require('./lib/catalog.js');
+// "Not building" in Decisions (roadmap 0f, lib/notBuilding.js boardEntries): the catalog's entries, read only.
+const NOT_BUILDING = require('./lib/notBuilding.js');
 // Cancel, decline and edit one task from the detail panel (the rules; queue.mjs cancel / edit write).
 const TE = require('./lib/queueTaskEdit.js');
 // The base gate's verdict (lib/baseHealth.js; ravenseat merge writes base-health.json, the board only reads it).
@@ -819,6 +821,44 @@ function checksNow() {
   return checksCache.data;
 }
 
+/**
+ * The "Not building" entries of the main tree's catalog (roadmap 0f) and a key for the state cache: the names and
+ * times of the decisions folder and of the owner's record. Read only, and [] on any trouble (the view is display only).
+ */
+let notBuildingCache = { key: null, list: [] };
+function notBuildingNow() {
+  try {
+    const dir = path.join(MAIN_TREE, ...CATALOG.DIR.split('/'));
+    const ledgerFile = path.join(FOLDER, CATALOG.LEDGER_FILE);
+    const stamp = (f) => {
+      try {
+        return fs.statSync(f).mtimeMs;
+      } catch {
+        return 0; // error-ignored: a missing file is part of the key as 0
+      }
+    };
+    let names = [];
+    try {
+      names = fs.readdirSync(path.join(dir, 'decisions')).sort();
+    } catch {
+      names = []; // error-ignored: no catalog, no entries
+    }
+    const key = JSON.stringify([names.map((n) => [n, stamp(path.join(dir, 'decisions', n))]), stamp(ledgerFile)]);
+    if (key === notBuildingCache.key) return notBuildingCache;
+    let ledger = CATALOG.emptyLedger();
+    try {
+      ledger = CATALOG.parseLedger(fs.readFileSync(ledgerFile, 'utf8'));
+    } catch {
+      ledger = CATALOG.emptyLedger(); // error-ignored: no record means every entry is unconfirmed
+    }
+    notBuildingCache = { key, list: NOT_BUILDING.boardEntries(CATALOG.readCatalog(dir), ledger) };
+    return notBuildingCache;
+  } catch (e) {
+    console.error(`the "not building" list failed: ${e?.message ?? e}`);
+    return { key: 'error', list: [] };
+  }
+}
+
 /** The Checks tab's switch. Unreadable queue: on, so the tab is not lost to a passing read error. */
 function checksPanelNow() {
   try {
@@ -895,8 +935,12 @@ function state() {
   // catalog.captureAnswers (roadmap 0z Z-A): read fresh and part of the cache key like panelMode, so `settings set`
   // shows or hides "Keep as design choice" on the next poll.
   const captureAnswers = CATALOG.setupOf(fresh).captureAnswers;
+  // The "Not building" list (roadmap 0f): the decisions folder's names and times and the owner's record are the key,
+  // so a new draft or an accept shows on the next poll.
+  const notBuilding = notBuildingNow();
   if (
     quick &&
+    quick.notBuildingKey === notBuilding.key &&
     quick.listening === listening &&
     quick.panelMode === panelMode &&
     quick.captureAnswers === captureAnswers &&
@@ -1012,6 +1056,8 @@ function state() {
       return { ...t, ...extra };
     });
   const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
+  // The "Not building" entries for Decisions (board/decide.js notBuildingPart): drafts first, then decided ones.
+  data.notBuilding = notBuilding.list;
   quick = {
     mtime,
     gitTime: g.time,
@@ -1022,6 +1068,7 @@ function state() {
     listening,
     panelMode,
     captureAnswers,
+    notBuildingKey: notBuilding.key,
     updateKey,
     baseKey,
     version,
@@ -1614,7 +1661,12 @@ async function taskEdit(b, queueNow) {
     if (f) return no(f === 'unknown task' ? `unknown task ${id}` : f);
     if (type === 'decline' && o.status !== 'proposed') return no(`${id} is not a proposal (it is ${o.status})`);
     const remark = TE.cancelRemark(b.reason, { declined: type === 'decline' });
-    args = ['cancel', id, '--remark', remark, '--by', 'theBoard', '--json', ...fv];
+    // "Keep as not building" (roadmap 0f): decline --keep, only while catalog.captureAnswers is not off (read fresh,
+    // as the state is). queue.mjs checks the setting again and writes only a proposed draft.
+    const keep = type === 'decline' && b.keep === true ? ['--keep'] : [];
+    if (keep.length && CATALOG.setupOf(KK.config({ fresh: true })).captureAnswers === 'off')
+      return no('catalog.captureAnswers is off: the proposal is not kept as a "not building" entry');
+    args = ['cancel', id, '--remark', remark, ...keep, '--by', 'theBoard', '--json', ...fv];
   } else if (type === 'edit') {
     const p = TE.editPlan(queue, id, b.form);
     if (p.error.length) return no(p.error.join('\n'));
@@ -1640,7 +1692,12 @@ async function taskEdit(b, queueNow) {
   }
   // A description over the soft limit is saved with a WARNING (lib/taskDescription.js); the board shows the line.
   const warning = Array.isArray(r.data.descriptionWarning) ? r.data.descriptionWarning.join(' ') : '';
-  return { status: 200, answer: { ok: true, log: r.data.log ?? null, ...(warning ? { warning } : {}) } };
+  // decline --keep: the KEEP line (the draft's id, or why it was not written) goes to the owner as an info line.
+  const keepLine = typeof r.data.keep?.line === 'string' ? [r.data.keep.line] : [];
+  return {
+    status: 200,
+    answer: { ok: true, log: r.data.log ?? null, ...(warning ? { warning } : {}), ...(keepLine.length ? { info: keepLine } : {}) },
+  };
 }
 
 /**
@@ -2526,6 +2583,16 @@ async function write(filePath, b) {
     const key =typeof b?.key === 'string' && /^[a-z0-9][a-z0-9-]{0,59}$/.test(b.key) ? b.key : null;
     if (!key) return no('invalid suggestion');
     if (b.action === 'plan') return run(['checks', 'plan', key, '--approved'], `checks plan ${key}`);
+    // "Set aside, keep as not building" (roadmap 0f): dismiss --keep, refused while catalog.captureAnswers is off.
+    if (b.action === 'dismiss' && b.keep === true) {
+      if (CATALOG.setupOf(KK.config({ fresh: true })).captureAnswers === 'off')
+        return no('catalog.captureAnswers is off: the card is not kept as a "not building" entry');
+      const r = await run(['checks', 'dismiss', key, '--keep'], `checks dismiss ${key} --keep`);
+      // The KEEP line (the draft's id, or why it was not written) goes to the owner as an info line.
+      const kept = String(r.answer.message ?? '').split(/\r?\n/).filter((l) => l.startsWith('KEEP:'));
+      if (r.answer.ok && kept.length) r.answer.info = [...(r.answer.info ?? []), ...kept];
+      return r;
+    }
     if (b.action === 'dismiss' || b.action === 'restore') return run(['checks', b.action, key], `checks ${b.action} ${key}`);
     // An opt-in check's "Turn on" (lib/optInChecks.js): queue.mjs resolves the card's own setting, never one from the body.
     if (b.action === 'setting') return run(['checks', 'turn-on', key], `checks turn-on ${key}`);

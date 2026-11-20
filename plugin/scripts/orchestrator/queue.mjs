@@ -69,10 +69,11 @@
 //        criteria; null in --json removes them. done_when and acceptance are LOCKED once the task has started: only
 //        --by owner (or the board, theBoard) changes them then, and never from inside a track worktree (the cwd on a
 //        queue/<id> branch), whatever --by says; undo follows the same rule. lib/doneCheck.js doneLockError)
-//   node scripts/orchestrator/queue.mjs cancel <id> [--remark "..."] [--by "..."] [--expect-changed <iso>] [--json]
+//   node scripts/orchestrator/queue.mjs cancel <id> [--remark "..."] [--keep] [--by "..."] [--expect-changed <iso>] [--json]
 //        (a waiting (also on hold or batched) or proposed task -> cancelled, the same result as set <id> cancelled
 //         --remark, but logged in the changelog so `undo` puts it back. Declining a proposal is cancel with the
-//         remark "declined: <reason>". Running, picked and review tasks are refused: use set <id> cancelled.)
+//         remark "declined: <reason>". Running, picked and review tasks are refused: use set <id> cancelled.
+//         --keep: the no also becomes a proposed "Not building" entry in the catalog, roadmap 0f.)
 //   node scripts/orchestrator/queue.mjs state                      (exit 3 when the queue is empty of work, also when
 //                                                                  the daily budget or the night pause stops new tasks;
 //                                                                  the field stop says which)
@@ -448,6 +449,9 @@
 //   node scripts/orchestrator/queue.mjs catalog propose --title "..." --invariant "..." --paths "<glob>" [--supersedes <D-id>]
 //                                                                  [--plan <PL-id>] [--why "..."]   (the next free D-id as
 //                                                                  proposed, then check; refused from a track worktree)
+//   node scripts/orchestrator/queue.mjs catalog propose --not-building --title "..." [--why "..."] [--keywords a,b]
+//                                                                  [--revisit "..."] [--source "..."]   (a "Not building"
+//                                                                  entry, roadmap 0f; its accept writes status not-building)
 //   node scripts/orchestrator/queue.mjs catalog find <word...> | index   (find: search the code index, the reuse rows, the
 //                                                                  design choices and the prefer lines, at most 10 lines;
 //                                                                  index: build the code index of exports and @shared

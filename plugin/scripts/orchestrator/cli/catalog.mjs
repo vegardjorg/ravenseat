@@ -16,6 +16,10 @@
 //   ravenseat catalog propose --title --invariant --paths [--supersedes] [--plan] [--why] [--json]
 //                                                 writes the next free D-id as status proposed into the main tree's
 //                                                 decisions/ and runs check on it (roadmap 0z Z-B); refused from a track
+//   ravenseat catalog propose --not-building --title [--why] [--keywords] [--revisit] [--source]
+//                                                 the same for a "Not building" entry (roadmap 0f, lib/notBuilding.js):
+//                                                 kind not-building, no invariant or paths; its accept writes status
+//                                                 not-building
 //   ravenseat catalog find <word...> [--json]     searches the code index (exports and @shared blocks), the reuse
 //                                                 rows, the design choices and the prefer lines; at most 10 short lines
 //   ravenseat catalog index [--json]              builds or refreshes the code index (lib/catalogIndex.js, bolk B5) in
@@ -47,9 +51,10 @@ const C = require('./lib/catalog.js');
 const CC = require('./lib/catalogChecks.js');
 const CI = require('./lib/catalogIndex.js');
 const K = require('./lib/kickstart.js');
+const NB = require('./lib/notBuilding.js');
 const RP = require('./lib/reviewPacks.js');
 
-const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose (--title "..." --invariant "..." --paths "<glob>" | --from-answer <question>) [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | find <word...> [--json] | index [--json]`;
+const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose (--title "..." --invariant "..." --paths "<glob>" | --from-answer <question>) [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | propose --not-building --title "..." [--why "..."] [--keywords a,b] [--revisit "..."] [--source "..."] | find <word...> [--json] | index [--json]`;
 const json = a.includes('--json');
 
 /** The catalog folder in a tree (the main tree for a write, the current one for a read). */
@@ -221,8 +226,16 @@ function show() {
     }
     console.log(`${d.id}: ${d.title ?? ''}  (${d.file})`);
     console.log(`status: ${status}${status !== d.status ? ` (the file says ${d.status})` : ''}${d.accepted ? `, accepted ${d.accepted} by ${d.accepted_by ?? '?'}` : ''}`);
-    console.log(`invariant: ${d.invariant ?? '(none)'}`);
-    console.log(`paths: ${d.paths.join(', ')}`);
+    if (C.isNotBuilding(d)) {
+      // A "Not building" entry (roadmap 0f): what a new proposal is matched against and when to look again.
+      console.log('kind: not building (it binds no code; a new proposal with a keyword gets an INFO line)');
+      console.log(`keywords: ${d.keywords.join(', ') || '(none)'}`);
+      console.log(`revisit: ${d.revisit ?? '(not said)'}`);
+      if (d.source) console.log(`source: ${d.source}`);
+    } else {
+      console.log(`invariant: ${d.invariant ?? '(none)'}`);
+      console.log(`paths: ${d.paths.join(', ')}`);
+    }
     if (d.supersedes) console.log(`supersedes: ${d.supersedes}`);
     if (d.plan) console.log(`plan: ${d.plan}`);
     if (linked.length) console.log(`linked from plan entries: ${linked.join(', ')}`);
@@ -255,8 +268,15 @@ function show() {
   const reuse = cat.reuse?.rows ?? [];
   console.log(`Reuse (reuse.md): ${reuse.length ? '' : 'none yet'}`);
   for (const r of reuse) console.log(`  ${r.purpose}: ${r.symbol} (${r.file})`);
-  console.log(`Design choices (decisions/): ${ds.length ? '' : 'none yet'}`);
-  for (const d of ds) console.log(row(d, ledger));
+  const choices = ds.filter((d) => !C.isNotBuilding(d));
+  const nb = ds.filter((d) => C.isNotBuilding(d));
+  console.log(`Design choices (decisions/): ${choices.length ? '' : 'none yet'}`);
+  for (const d of choices) console.log(row(d, ledger));
+  // Roadmap 0f: what the project deliberately does not build, from the same folder.
+  if (nb.length) {
+    console.log('Not building (decisions/):');
+    for (const d of nb) console.log(`${row(d, ledger)}${d.keywords.length ? `  [${d.keywords.join(', ')}]` : ''}`);
+  }
   const problems = cat.errors.length + cat.warnings.length;
   if (problems) console.log(`\n${problems} problem(s) in the files: ${CLI} catalog check.`);
 }
@@ -274,9 +294,11 @@ function check() {
   }
   for (const e of r.errors) console.log(`ERROR  ${e}`);
   for (const w of r.warnings) console.log(`WARN   ${w}`);
-  const n = r.cat.decisions.length;
+  // The not-building entries (roadmap 0f) are counted apart, so the design choices' count stays what it was.
+  const nb = r.cat.decisions.filter((x) => x?.decision && C.isNotBuilding(x.decision)).length;
+  const n = r.cat.decisions.length - nb;
   console.log(
-    `${r.errors.length} error(s), ${r.warnings.length} warning(s) in ${C.DIR}/ (${n} design choice(s)).${r.errors.length ? ' (exit 1)' : ''}`,
+    `${r.errors.length} error(s), ${r.warnings.length} warning(s) in ${C.DIR}/ (${n} design choice(s)${nb ? `, ${nb} not building` : ''}).${r.errors.length ? ' (exit 1)' : ''}`,
   );
   if (r.errors.length) process.exit(1);
 }
@@ -313,10 +335,16 @@ function accept() {
   writeLedger(C.recordAccept(readLedger(), after.decision, { by }));
   fs.writeFileSync(path.join(catalogDir(MAIN_TREE), 'decisions', hit.name), r.text);
   if (old) fs.writeFileSync(path.join(catalogDir(MAIN_TREE), 'decisions', old.name), old.text);
-  console.log(
-    `Accepted ${id} (${after.decision.title}). The file says status: accepted, and the record in ${C.LEDGER_FILE} holds ` +
-      'this invariant, these paths and this check: a later change to them needs a new accept. Commit the file yourself.',
-  );
+  if (C.isNotBuilding(after.decision))
+    console.log(
+      `Accepted ${id} as not building (${after.decision.title}). The file says status: not-building; a new proposal with ` +
+        `one of its keywords now gets an INFO line, never a stop. A later change to the keywords needs a new accept. Commit the file yourself.`,
+    );
+  else
+    console.log(
+      `Accepted ${id} (${after.decision.title}). The file says status: accepted, and the record in ${C.LEDGER_FILE} holds ` +
+        'this invariant, these paths and this check: a later change to them needs a new accept. Commit the file yourself.',
+    );
   if (old) console.log(`${sup} is now superseded (decisions/${old.name}): ${id} replaces it. Commit that file too.`);
 }
 
@@ -329,7 +357,7 @@ function accept() {
  * @returns {{ id: string, file: string, errors: string[], warnings: string[] }} file relative to the tree; errors and
  *   warnings are check's lines about this choice
  */
-export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null }) {
+export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null, kind = null, keywords = null, revisit = null, source = null }) {
   const dir = catalogDir(MAIN_TREE);
   const decisionsDir = path.join(dir, 'decisions');
   let names = [];
@@ -339,7 +367,8 @@ export function writeProposal({ title, invariant, paths, supersedes = null, plan
     names = []; // error-ignored: no folder yet, the first id is D-0001
   }
   const id = C.nextDecisionId(names, readLedger());
-  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why });
+  // kind not-building (roadmap 0f, lib/notBuilding.js draft): a rejection with its keywords, revisit and source.
+  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source });
   if (r.errors.length) throw new Error(r.errors.join('; '));
   fs.mkdirSync(decisionsDir, { recursive: true });
   const readme = path.join(decisionsDir, 'README.md');
@@ -391,6 +420,26 @@ function propose() {
   let plan = flag('--plan');
   let why = flag('--why');
   const fromAnswer = flag('--from-answer');
+  // --not-building (roadmap 0f): a rejection by hand, e.g. from a plan's "not now" list. No invariant or paths: it
+  // binds no code. The keywords default to the title's words; the owner accepts it like any choice.
+  if (a.includes('--not-building')) {
+    if (!title) die(`${CLI} catalog propose --not-building --title "<what we do not build>" [--why "..."] [--keywords a,b] [--revisit "<date or condition>"] [--source "..."] [--supersedes <D-id>]`);
+    const d = NB.draft({ title, why, source: flag('--source'), keywords: listFlag('--keywords'), revisit: flag('--revisit') });
+    let r;
+    try {
+      r = writeProposal({ ...d, supersedes, plan });
+    } catch (e) {
+      die(`${CLI} catalog propose: ${e.message}. Nothing was written.`);
+    }
+    if (json) {
+      console.log(JSON.stringify({ ok: true, id: r.id, file: r.file, errors: r.errors, warnings: r.warnings }, null, 2));
+      return;
+    }
+    console.log(`Proposed ${r.id} (not building): ${r.file}. Keywords: ${d.keywords.join(', ') || 'none'}. It matches nothing until the owner accepts it.`);
+    for (const e of r.errors) console.log(`ERROR  ${e}`);
+    console.log(`Next: sharpen the keywords and the revisit line, then ${CLI} catalog accept ${r.id} --by owner. Commit the file yourself.`);
+    return;
+  }
   if (fromAnswer) {
     // Z-A: the owner's stored answer as the draft; the other flags replace its fields.
     let d;

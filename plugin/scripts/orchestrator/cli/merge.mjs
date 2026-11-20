@@ -38,6 +38,7 @@ import { cleanupDetachedOf, cleanupWorktree } from '../cleanup-worktree.mjs';
 import { proposeGate } from './gate.mjs';
 import { registerQuietly, registerReviewItems, reviewReports } from './reviewItem.mjs';
 import { catalogRules, proposeRuleGates } from './catalog.mjs';
+import { notBuildingLines } from './notBuilding.mjs';
 
 const ER = require('./lib/eventRows.js');
 const CP = require('./lib/conflictPredict.js');
@@ -1067,6 +1068,12 @@ export function cmdReceive() {
   const catalogLines = CC.receiveLines(catalogCheck.result, { id, cli: CLI, all: allNotes });
   const enforced = catalogLines.filter((l) => !l.startsWith('NOTE '));
   for (const l of [...enforced, ...scopeFacts.lines, ...catalogCheck.lines, ...catalogLines.filter((l) => l.startsWith('NOTE '))]) console.log(l);
+  // "Not building" (roadmap 0f, notBuilding.match): the proposals this track added (added_by the track, a fix round
+  // too) that read like an entry the owner chose not to build get one INFO line each. Advice only, never a stop.
+  const fromTrack = (read().tasks ?? []).filter(
+    (x) => x.status === 'proposed' && String(x.added_by ?? '').replace(/-(?:r|round)\d+$/i, '') === id,
+  );
+  for (const l of notBuildingLines(fromTrack.map((x) => ({ id: x.id, text: [x.title, x.description].filter(Boolean).join(' ') })))) console.log(l);
   const ruleSection = CC.packageSection(catalogCheck.result);
   fs.writeFileSync(
     path.join(folder, '00-package.md'),

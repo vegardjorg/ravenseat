@@ -1096,6 +1096,13 @@ const SETTINGS = Object.freeze([
     'explicit: `resolve --keep` and "Keep as design choice" in Decisions turn your answer into a proposed design choice ' +
     'that you accept yourself. suggest: also marks the questions that read like a lasting rule. off: never, and ' +
     '`catalog propose` refuses too.', { choices: ['off', 'explicit', 'suggest'] }),
+  // "Not building" (roadmap 0f, lib/notBuilding.js). Friction: none; one INFO line at add, receive and plan capture when
+  // a new item reads like an entry the owner chose not to build, and a doctor row when a revisit date has passed. It
+  // stops nothing and asks for nothing, so it is on in lite and full. Off hides the lines; no guard reads it, so it is
+  // no weakening.
+  row('notBuilding.match', 'scope', 'onoff', 'Match new work against "not building"',
+    'A new task, a track\'s proposal or a captured plan that reads like an entry in the catalog you chose not to build ' +
+    'gets one INFO line with the date and the reason. Doctor names entries whose revisit date has passed. Advice only.'),
   row('catalog.gateAfter', 'scope', 'integer', 'Separate tasks before a lint proposal',
     'Only with learning.proposals on, which is off by default. Then a rule broken in this many separate tasks (2 to ' +
     '20, default 3) becomes one proposed gate task to put it in the project\'s own lint. It shares the cap of three ' +

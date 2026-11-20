@@ -40,6 +40,7 @@ import {
   a, byName, CLI, CONFIG, cut, die, editLogged, KK, L, readPlans, readQueueForPlan, require, val, WIDTH,
 } from './context.mjs';
 import { editPlans, existsSource, planAnswer, planError, planRole } from './planShared.mjs';
+import { notBuildingLines } from './notBuilding.mjs';
 
 const I = require('./lib/planInbox.js');
 const R = require('./lib/planProposal.js');
@@ -186,6 +187,9 @@ export function planCapture(json) {
       { projects: missing && dry ? { ...(q.projects ?? {}), [I.PROJECT]: I.PROJECT_FIELDS } : (q.projects ?? {}), question: q.question ?? {} },
     ),
   );
+  // "Not building" (roadmap 0f, notBuilding.match): a captured plan that reads like an entry the owner chose not to
+  // build gets one INFO line. Advice only: the plan is captured either way.
+  const notBuilding = r.entry ? notBuildingLines([{ id: r.entry.id, text: [c.title, c.text].filter(Boolean).join(' ') }]) : [];
   if (json) {
     console.log(
       JSON.stringify({
@@ -197,6 +201,7 @@ export function planCapture(json) {
         changed: r.version,
         entry: r.entry ? { id: r.entry.id, title: r.entry.title } : null,
         ...(r.duplicate ? { duplicate: r.duplicate } : {}),
+        ...(notBuilding.length ? { notBuilding } : {}),
       }),
     );
     return;
@@ -207,6 +212,7 @@ export function planCapture(json) {
   }
   console.log(`${r.dry ? 'Preview (nothing written): ' : ''}Added ${r.entry.id} to the inbox: ${r.entry.title}`);
   for (const x of r.warnings ?? []) console.log(`WARNING: ${x}`);
+  for (const x of notBuilding) console.log(x);
   if (r.log) console.log(`Changelog no. ${r.log} in plans.json; undo: ${CLI} plan undo`);
 }
 

@@ -621,7 +621,9 @@ function candidates(index, catalog, ledger) {
     const d = x?.decision;
     if (!d?.id) continue;
     const status = ledger ? C.effectiveStatus(d, ledger) : d.status;
-    out.push({ kind: 'decision', name: d.id, file: d.file ?? null, line: null, status, text: `${d.title ?? ''}: ${d.invariant ?? ''}` });
+    // A "Not building" entry (roadmap 0f) is found by its keywords too.
+    const what = C.isNotBuilding(d) ? `not building (${(d.keywords ?? []).join(', ')})` : (d.invariant ?? '');
+    out.push({ kind: 'decision', name: d.id, file: d.file ?? null, line: null, status, text: `${d.title ?? ''}: ${what}` });
   }
   for (const p of catalog?.stack?.prefer ?? []) out.push({ kind: 'prefer', name: p.purpose, file: null, line: null, text: p.use });
   return out;

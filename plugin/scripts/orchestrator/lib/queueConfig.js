@@ -585,6 +585,13 @@ const STANDARD = Object.freeze({
     gateAfter: 3,
     captureAnswers: 'explicit',
   },
+  // "Not building" (lib/notBuilding.js, roadmap 0f): the catalog's entries for what the owner chose not to build.
+  // match: a new task at add, a track's proposals at receive and a captured plan that read like such an entry (its
+  // keywords) get one INFO line with the date and the reason. Advice only, it stops nothing and costs nothing without a
+  // catalog, so it is on in lite and full. Doctor's revisit row follows it too. The drafts follow catalog.captureAnswers.
+  notBuilding: {
+    match: true,
+  },
   // Task links (lib/taskLinks.js, cli/taskLinksCheck.mjs, roadmap 0p2 step B2). addWarn: add and edit print one WARNING
   // line when a task link (a plan source, a `sources` entry, a path in `source`) is dead, its anchor finds no heading,
   // or the file is gitignored; the task is saved anyway. doctor: one INFO row with counts over the open tasks' links,

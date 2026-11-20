@@ -103,6 +103,8 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
     .filter((d) => d && typeof d.id === 'string' && typeof d.invariant === 'string' && d.invariant.trim())
     .sort((a, b) => a.id.localeCompare(b.id));
   for (const d of ds) {
+    // A "Not building" entry (roadmap 0f) binds no code: it is matched against new proposals, never sent to a track.
+    if (C.isNotBuilding(d)) continue;
     const status = C.effectiveStatus(d, ledger);
     if (status !== 'accepted' && status !== 'proposed' && status !== 'unconfirmed') continue;
     if (status !== 'accepted' && noFiles) continue;

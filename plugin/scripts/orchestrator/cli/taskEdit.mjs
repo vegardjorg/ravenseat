@@ -21,6 +21,7 @@ import {
 } from './context.mjs';
 import { logTime, measurementLine, measureTask, minutes, saveMeasurement, turnWarningLines } from './tracks.mjs';
 import { linkProblems, linkProblemsJson, printLinkWarning } from './taskLinksCheck.mjs';
+import { keepAsNotBuilding, keepRefused, remarkReason } from './notBuilding.mjs';
 
 // The lock on the finish line and the ownership (done_when, acceptance, owned_files, shared_patch, owner_db, migr_block;
 // lib/doneCheck.js LOCKED_FIELDS and doneLockError): edit and undo refuse a change after the start unless --by is owner
@@ -180,9 +181,14 @@ export function cmdCancel() {
   // Cancel (or decline) one waiting or proposed task, logged so `undo` can put it back (lib/queueTaskEdit.js).
   const TE = require('./lib/queueTaskEdit.js');
   const [, id] = a;
-  if (!id || id.startsWith('--')) die('cancel <id> [--remark "..."] [--by "..."] [--expect-changed <iso>] [--json]');
+  if (!id || id.startsWith('--')) die('cancel <id> [--remark "..."] [--keep] [--by "..."] [--expect-changed <iso>] [--json]');
   const json = a.includes('--json');
   const remark = val('--remark') ?? null;
+  // --keep (roadmap 0f): the no also becomes a proposed "Not building" entry in the catalog, the remark's reason as its
+  // text. Refused before anything is cancelled when catalog.captureAnswers is off or from a track worktree.
+  const keep = a.includes('--keep');
+  if (keep) keepRefused('cancel');
+  let title = null;
   editLogged('cancel', (queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     const r = TE.cancelTask(o, { remark, now: new Date().toISOString() });
@@ -192,11 +198,17 @@ export function cmdCancel() {
       if (hasLock) fs.rmSync(LOCK, { recursive: true, force: true });
       process.exit(1);
     }
+    title = o.title ?? id;
     autoCleanFocus(queue, `cancel ${id}`);
   });
-  if (json) console.log(JSON.stringify({ ok: true, id, log: lastEntry?.nr ?? null }));
+  const declined = /^\s*declined\b/i.test(String(remark ?? ''));
+  const kept = keep
+    ? keepAsNotBuilding({ title, why: remarkReason(remark), source: `${declined ? 'declined proposal' : 'cancelled task'} ${id}` })
+    : null;
+  if (json) console.log(JSON.stringify({ ok: true, id, log: lastEntry?.nr ?? null, ...(kept ? { keep: kept } : {}) }));
   else {
     console.log(`${id}: cancelled`);
+    if (kept) console.log(kept.line);
     focusCleanOut();
     if (undoHint()) console.log(undoHint());
   }
