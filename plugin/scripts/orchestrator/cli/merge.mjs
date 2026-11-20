@@ -1201,10 +1201,10 @@ export function cmdReceive() {
     if (result?.status === 'PARTIAL') o.delivered_partial = true;
     else delete o.delivered_partial;
     if (gateCheck.record) o.gate_check = gateCheck.record;
-    // A green or skipped gate: an old "cannot run" verdict has nothing to say.
-    if (gateCheck.status !== 'red') delete o.gate_broken;
     // The project no longer has quick gates: an old red result has nothing to say, and must not stop the merge for good.
     else if (result?.status !== 'PARTIAL') delete o.gate_check;
+    // A green or skipped gate: an old "cannot run" verdict has nothing to say.
+    if (gateCheck.status !== 'red') delete o.gate_broken;
     if (doneCheck) o.done_check = doneCheck.record;
     // Every receive sets it anew (a fix round's delivery replaces the old verdict).
     if (redBase) o.red_on_base = redBase;

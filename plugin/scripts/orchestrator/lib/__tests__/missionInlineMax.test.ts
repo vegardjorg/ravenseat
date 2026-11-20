@@ -131,7 +131,8 @@ function project(config: object = {}) {
     JSON.stringify({ created: '2026-11-01T00:00:00.000Z', limits: {}, resolved: [], tasks: [] }),
   );
   const configFile = path.join(folder, 'queue.config.json');
-  fs.writeFileSync(configFile, JSON.stringify(config));
+  // The owner mark (lib/ownerMark.js) is new per project key; this test compares whole missions, so it is off here.
+  fs.writeFileSync(configFile, JSON.stringify({ injection: { ownerMark: false }, ...config }));
   const env = {
     ...process.env,
     QUEUE_FOLDER: folder,
