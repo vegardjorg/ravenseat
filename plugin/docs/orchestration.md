@@ -445,6 +445,14 @@ started them. A new session adopts them without that notification:
   walk), the track folder in the scratchpad, and the agent transcript and time log rows tied to the task. `ravenseat show`
   (right after STARTED WITHOUT AGENT), `ravenseat state` (`silent`) and `ravenseat orchestrator pulse` print `SILENT`, and the board
   marks the card "silent". After 60 minutes it also gets a card in `ravenseat decide`. Check the track, then `ravenseat resume <ID> --reason context` and start the new agent, or stop it.
+- **Evidence snapshot:** the first `show`, `state` or pulse that sees a track SILENT writes one local file,
+  `<data folder>/silent-snapshots/<ID>-<last sign of life>.txt`, and the SILENT line names it (`evidence: <path>`). It holds
+  the tail of the agent's transcript, the background jobs it started that never reported back, and the processes whose
+  command line names the worktree or branch, with their children. Before writing, a flag named like a key, token,
+  secret or password loses its value, env assignments lose their value, URLs lose user info and query string, and an
+  inline script (`-e`, `-c`, `-Command`) is dropped; when unsure an argument is dropped. At most `silentSnapshot.maxKB`
+  (64), the newest `silentSnapshot.keep` (20) kept, never pushed. It never stops work; `silentSnapshot.enabled false`
+  turns it off.
 - **Blocker reasons:** `ravenseat block <ID> <code> [--note "…"]` / `ravenseat unblock <ID>` record why a task is stuck, with codes
   from one fixed table (`merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `context`, `quota`, `owner-question`, `track-question`, `dependency`, `no-agent`,
   `silent`, `other`). `ravenseat merge` opens `merge-conflict` (a real conflict), `merge-guard` (protected paths), `merge-stopped` (any other stop

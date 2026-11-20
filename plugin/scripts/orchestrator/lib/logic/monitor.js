@@ -373,7 +373,10 @@ function silentLines(list) {
       'while (the agent may have hung or run out of context). For each: check the track (its worktree and ' +
       'transcript), then ravenseat resume <id> --reason context and start the new agent, or stop it (ravenseat set <id> waiting; ' +
       'ravenseat block <id> silent records why).',
-    ...list.map((x) => `  ${x.id}  ${x.branch}  silent for ${ageText(x.silent_ms)}`),
+    // `snapshot`: the evidence file cli/tracks.mjs findSilent wrote for this silence (lib/silentSnapshot.js).
+    ...list.map(
+      (x) => `  ${x.id}  ${x.branch}  silent for ${ageText(x.silent_ms)}${x.snapshot ? `  evidence: ${x.snapshot}` : ''}`,
+    ),
   ];
 }
 

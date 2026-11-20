@@ -243,6 +243,9 @@ const REQUIRES = Object.freeze({
   'gateQueue.agingMin': ['gateQueue.enabled'],
   // lib/stateSnapshots.js tiersFrom: enabled false gives no tiers.
   'stateSnapshots.tiers': ['stateSnapshots.enabled'],
+  // lib/silentSnapshot.js: enabled false writes no snapshot, so neither the count nor the cap is read.
+  'silentSnapshot.keep': ['silentSnapshot.enabled'],
+  'silentSnapshot.maxKB': ['silentSnapshot.enabled'],
 });
 
 /** One row with the defaults filled in: advanced, both modes, queue.config.json, settable, no warning texts. */
@@ -383,6 +386,19 @@ const SETTINGS = Object.freeze([
     'The share of concurrent tracks below which fill, receive and pulse write a short queue diagnosis. 0 = off.', QUEUE),
   row('limits.silentMin', 'load', 'integer', 'Silent after (minutes)',
     'Minutes without a sign of life before a running track counts as silent. 0 = off.', QUEUE),
+  // Friction: none, it never stops work: when a track turns SILENT, the command that noticed it (show, state, pulse)
+  // writes one local file once per silence (the transcript tail, background jobs that never reported back, the
+  // processes that name the worktree), redacted before writing and size-capped; any failure is skipped. The process
+  // list costs a few seconds once per silence (about 4 s measured on a loaded Windows machine). On by default by the owner's decision of 16.11.2026 (roadmap 0y Y4,
+  // plans/projectarchitect-vurdering-2026-11-16.md): the evidence is gone by the time someone looks.
+  row('silentSnapshot.enabled', 'load', 'onoff', 'Evidence snapshot at SILENT',
+    'When a running track turns SILENT, write one local file (in the queue\'s data folder, never pushed) with the tail ' +
+    'of its transcript, background jobs that never reported back and the processes that name its worktree, with ' +
+    'secrets, env values and URL credentials redacted first. The SILENT line says where it is. Off: nothing is written.'),
+  row('silentSnapshot.keep', 'load', 'integer', 'Evidence snapshots kept',
+    'How many SILENT snapshots to keep; the oldest beyond this are removed when a new one is written (20 by default).'),
+  row('silentSnapshot.maxKB', 'load', 'integer', 'Evidence snapshot size (KB)',
+    'The most one SILENT snapshot may hold; the oldest transcript rows are left out first (64 by default).'),
   row('limits.noAgentMin', 'load', 'integer', 'No agent after (minutes)',
     'Minutes before a track marked running, with no agent on its branch and no report, counts as NO AGENT. 0 = off.', QUEUE),
 

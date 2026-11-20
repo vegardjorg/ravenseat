@@ -100,7 +100,8 @@ function hungItems(queue, scratch) {
   const silent = findSilent(queue).map(
     (x) =>
       `SILENT ${x.id}: no sign of life for ${L.ageText(x.silent_ms)} (limit ${limit} min). ` +
-      `Next: ${CLI} explain ${x.id}, then ${CLI} resume ${x.id} --reason context (or ${CLI} set ${x.id} waiting)`,
+      `Next: ${CLI} explain ${x.id}, then ${CLI} resume ${x.id} --reason context (or ${CLI} set ${x.id} waiting)` +
+      (x.snapshot ? `. Evidence: ${x.snapshot}` : ''),
   );
   return [...none, ...silent];
 }

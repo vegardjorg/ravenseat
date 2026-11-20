@@ -20,7 +20,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import {
-  branchFor, CE, CONFIG, CLI, die, edit, G, GIT_ROOT, gitRead, HERE, L, LS, MAIN_TREE, MIGR, missionFile, read, require,
+  branchFor, CE, CONFIG, CLI, die, edit, FOLDER, G, GIT_ROOT, gitRead, HERE, L, LS, MAIN_TREE, MIGR, missionFile, read, require,
   TIME_LOG, TK, val, values,
 } from './context.mjs';
 import { missionLinkLines } from './taskLinksCheck.mjs';
@@ -466,7 +466,31 @@ export function findSilent(queue) {
     if (!list.length) return list;
     // An old worktree can hold the branch of a track no agent took: that one has its own warning.
     const none = new Set(findWithoutAgent(queue).map((x) => x.id));
-    return list.filter((x) => !none.has(x.id));
+    const silent = list.filter((x) => !none.has(x.id));
+    // The evidence snapshot (lib/silentSnapshot.js, silentSnapshot.enabled): one local, redacted, capped file per
+    // silence, written by the first command that sees it; the SILENT line names it. It never stops the command.
+    const SNAP = require('./lib/silentSnapshot.js');
+    if (SNAP.settingsFrom(CONFIG).enabled)
+      for (const x of silent) {
+        const o = candidates.find((c) => c.id === x.id);
+        const ids = [...(agents.get(x.id)?.agents ?? [])];
+        const newest = ids
+          .map((id) => ({ id, p: findTranscript(id) }))
+          .filter((t) => t.p)
+          .map((t) => ({ ...t, ms: fs.statSync(t.p).mtimeMs }))
+          .sort((p, q) => q.ms - p.ms)[0];
+        const file = SNAP.capture({
+          dataFolder: FOLDER,
+          hit: x,
+          worktree: worktrees.find((w) => w.branch === o?.branch)?.path ?? null,
+          transcript: newest?.p ?? null,
+          agent: newest?.id ?? null,
+          config: CONFIG,
+          now,
+        });
+        if (file) x.snapshot = file;
+      }
+    return silent;
   } catch (e) {
     console.error(`(The silence check failed: ${e?.message ?? e})`);
     return [];
