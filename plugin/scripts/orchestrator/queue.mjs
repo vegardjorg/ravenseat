@@ -685,6 +685,11 @@
 //        Inbox with only a title; project general, later by the owner, idea, the inbox marker until it is sorted.
 //        lib/planInbox.js)
 //   node scripts/orchestrator/queue.mjs plan inbox [--json]                     (the captured plans not sorted yet)
+//   node scripts/orchestrator/queue.mjs plan propose <id> --file <json>         (Claude's proposal for an Inbox item:
+//        project, priority, maturity, size, summary, sources, merge, outline; applies nothing. lib/planProposal.js)
+//   node scripts/orchestrator/queue.mjs plan accept <id> [--file <edits json>] --set-by owner   (the owner's Accept)
+//   node scripts/orchestrator/queue.mjs plan decline <id> [--reason "..."] --set-by owner       (drop from the Inbox)
+//   node scripts/orchestrator/queue.mjs plan merge <id> --into <to-id> --set-by owner           (merge into a plan)
 //   node scripts/orchestrator/queue.mjs plan rules [--json]                     (the priority rules)
 //   node scripts/orchestrator/queue.mjs plan active [<id> [--end]] [--by "..."] [--json]   ("Working now" cursor
 //        active_session { entry, at, by } in plans.json; without an id the active ones are listed. No changelog, changed is not bumped,

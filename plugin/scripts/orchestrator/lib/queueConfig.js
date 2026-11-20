@@ -397,7 +397,21 @@ const STANDARD = Object.freeze({
   //                     through the /api/doc guard, cached per file) and shows the matching sentence under the row. On
   //                     by default (owner answer 8, "as recommended"); false for a very large document folder, where
   //                     the first search after a change has to read every plan document.
-  plans: { startView: 'roadmap', roadmapLayout: 'auto', roadmapFoldAfter: 8, leadFromDocument: true, searchDocuments: true },
+  //   inboxTriage       P7: when Claude sorts the Inbox (writes proposals with `ravenseat plan propose`): on-request
+  //                     (default: only when /plans runs or the owner asks; it costs tokens), idle (the INBOX line asks
+  //                     the orchestrator to sort when a slot is free) or off (plan propose refuses).
+  //   inboxAutoApply    P7: false (default): every proposal waits for the owner's Accept on the board. true: a
+  //                     proposal for a captured plan that keeps the priority later and names no merge is applied at
+  //                     once. Off by default because it changes plans without the owner.
+  plans: {
+    startView: 'roadmap',
+    roadmapLayout: 'auto',
+    roadmapFoldAfter: 8,
+    leadFromDocument: true,
+    searchDocuments: true,
+    inboxTriage: 'on-request',
+    inboxAutoApply: false,
+  },
   // Read guard (hook-read-guard.mjs): in addition to the built-in lists.
   readGuard: {
     agentTypes: [], // more agent types the guard applies to (track, track-d and the reviewers are already included)
@@ -931,7 +945,7 @@ const ROADMAP_FOLD_MAX = 500;
  * its default, so a hand-edited file never breaks the board. The board gets this object with /api/plans.
  * @param {object} [cfg] the configuration (default: config())
  * @returns {{ startView: string, roadmapLayout: string, roadmapFoldAfter: number, leadFromDocument: boolean,
- *   searchDocuments: boolean }}
+ *   searchDocuments: boolean, inboxTriage: string, inboxAutoApply: boolean }}
  */
 function plansView(cfg = config()) {
   const own = isObject(cfg?.plans) ? cfg.plans : {};
@@ -944,6 +958,9 @@ function plansView(cfg = config()) {
       Number.isInteger(fold) && fold >= 0 ? Math.min(fold, ROADMAP_FOLD_MAX) : std.roadmapFoldAfter,
     leadFromDocument: typeof own.leadFromDocument === 'boolean' ? own.leadFromDocument : std.leadFromDocument,
     searchDocuments: typeof own.searchDocuments === 'boolean' ? own.searchDocuments : std.searchDocuments,
+    inboxTriage: ['on-request', 'idle', 'off'].includes(own.inboxTriage) ? own.inboxTriage : std.inboxTriage,
+    // only a real true turns it on: anything else keeps the owner confirming each proposal
+    inboxAutoApply: own.inboxAutoApply === true,
   };
 }
 

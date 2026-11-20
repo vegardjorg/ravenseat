@@ -3960,3 +3960,182 @@ ol.overview-list > .overview-row.overview-question > * {
 }
 
 /* ---- end of Quick capture ---- */
+
+/* ---- Inbox proposals: Accept, Edit, Decline and Merge (plans/triage.js, P7). Tokens only, light and dark alike. ---- */
+.plans-triage {
+  display: grid;
+  gap: var(--distance-xs);
+  min-width: 0;
+  margin-top: var(--distance-sm);
+  padding: var(--distance-sm);
+  border: 1px solid var(--color-outline-variant);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font-size: var(--text-sm);
+}
+
+.plans-page .plans-triage {
+  max-width: 44rem;
+  margin: var(--distance-sm) 0 var(--distance-md);
+}
+
+.plans-triage p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.plans-triage-says {
+  font-weight: 600;
+}
+
+.plans-triage-says.none,
+.plans-triage-because,
+.plans-triage-sources,
+.plans-triage-merge {
+  color: var(--color-on-surface-variant);
+}
+
+.plans-triage-says.none {
+  font-weight: 400;
+}
+
+.plans-triage-outline summary {
+  cursor: pointer;
+  color: var(--color-primary);
+}
+
+.plans-triage-outline-text {
+  margin-top: var(--distance-xs);
+  white-space: pre-wrap;
+}
+
+.plans-triage-actions,
+.plans-triage-form-actions,
+.plans-triage-merge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs) var(--distance-sm);
+  min-width: 0;
+}
+
+.plans-triage-actions {
+  margin-top: var(--distance-xs);
+}
+
+.plans-triage-button {
+  min-height: 36px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* the key as a small hint after the word; aria-keyshortcuts says it to a screen reader */
+.plans-triage-key {
+  margin-left: var(--distance-xs);
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  font-size: var(--text-xs);
+  line-height: 1.3;
+  opacity: 0.8;
+}
+
+.plans-triage-form,
+.plans-triage-decline {
+  display: grid;
+  gap: var(--distance-xs);
+  min-width: 0;
+  margin-top: var(--distance-xs);
+  padding-top: var(--distance-sm);
+  border-top: 1px solid var(--color-outline-variant);
+}
+
+.plans-triage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--distance-xs) var(--distance-sm);
+  align-items: end;
+}
+
+.plans-triage-grid .plans-triage-label {
+  grid-column: auto;
+}
+
+.plans-triage-label {
+  font-weight: 600;
+}
+
+.plans-triage-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: var(--distance-xs) var(--distance-sm);
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font: inherit;
+}
+
+textarea.plans-triage-input {
+  resize: vertical;
+}
+
+.plans-triage-merge-row .plans-triage-label {
+  flex-basis: 100%;
+}
+
+.plans-triage-merge-row .plans-triage-input {
+  flex: 1 1 12rem;
+  width: auto;
+}
+
+.plans-triage-input:focus-visible,
+.plans-triage-button:focus-visible,
+.plans-triage-outline summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.plans-triage-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--distance-xs) var(--distance-sm);
+  margin: 0;
+  padding: var(--distance-xs) var(--distance-sm);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+}
+
+.plans-triage-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.plans-triage-error {
+  padding: var(--distance-xs) var(--distance-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-error-container);
+  color: var(--color-on-error-container);
+}
+
+@media (pointer: coarse) {
+  .plans-triage-button,
+  .plans-triage-input,
+  .plans-triage-form-actions .button,
+  .plans-triage-merge-row .button {
+    min-height: 44px;
+  }
+}
+
+@media (forced-colors: active) {
+  .plans-triage {
+    border-left-color: Highlight;
+  }
+}
+
+/* ---- end of Inbox proposals ---- */

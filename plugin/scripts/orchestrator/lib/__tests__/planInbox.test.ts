@@ -156,7 +156,8 @@ describe('the INBOX line and the rows', () => {
     I.capturePlan(reg, { title: 'B later' }, { projects: PROJECTS, now: '2026-11-20T09:00:00.000Z' });
     I.capturePlan(reg, { title: 'A first' }, { projects: PROJECTS, now: '2026-11-20T08:00:00.000Z' });
     const s = I.inboxSummary(reg, []);
-    expect(s).toEqual({ new: 2, ids: ['PL-A-FIRST-1', 'PL-B-LATER-1'] });
+    // proposals (P7) counts the ones with Claude's proposal waiting on the owner
+    expect(s).toEqual({ new: 2, ids: ['PL-A-FIRST-1', 'PL-B-LATER-1'], proposals: 0 });
     expect(I.inboxLine(s, 'ravenseat')).toBe(
       'INBOX: 2 captured plans not sorted yet (PL-A-FIRST-1, PL-B-LATER-1): ravenseat plan inbox',
     );

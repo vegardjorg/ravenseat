@@ -75,6 +75,8 @@
     saveName: '',
     // P6: the "+ New plan" form (plans/capture.js): open, what is typed, busy while it saves, the last error.
     capture: { open: false, title: '', text: '', busy: false, error: null },
+    // P7: the Inbox proposals (plans/triage.js): the open Edit form or Decline panel, the row that is saving, the error.
+    triage: { edit: null, decline: null, busy: null, error: null },
     closed: new Set(readList(CLOSED_STORAGE)), // closed document groups (open by default)
     roadmap: readObject(ROADMAP_STORAGE), // the viewer's Roadmap choices
     roadmapOpen: new Set(), // the Roadmap sections opened past the fold (this visit only)
@@ -764,6 +766,11 @@
     filterMenuOpen: () => !!s.menu,
     // P6: `n` opens "+ New plan" (plans/capture.js).
     openCapture: () => window.QueuePlanCapture?.open(captureHelp),
+    // P7: 1 to 4 on an Inbox row (plans/triage.js); true when the key did something.
+    triageKey: (id, key) => {
+      const p = entryFor(id);
+      return p && window.QueuePlanTriage ? window.QueuePlanTriage.key(triageHelp, p, key) : false;
+    },
   };
 
   /** Saves one of the viewer's Roadmap choices (layout, group, compact, details) and redraws. */
@@ -831,6 +838,8 @@
     // P6: "+ New plan" and its form (plans/capture.js); null while features.plans.inbox is off.
     newPlanButton: () => window.QueuePlanCapture?.button(captureHelp) ?? null,
     captureForm: () => window.QueuePlanCapture?.form(captureHelp) ?? null,
+    // P7: Claude's proposal on an Inbox row (plans/triage.js); null outside the Inbox or with features.plans.inbox off.
+    triageBlock: (p) => window.QueuePlanTriage?.block(triageHelp, p) ?? null,
   };
 
   /**
@@ -854,6 +863,24 @@
       await get(true);
       draw();
     },
+  };
+
+  /**
+   * The helpers plans/triage.js gets (P7), like captureHelp: the state lives in `s.triage`, so a live redraw keeps an
+   * open form and what is typed; the writing (POST) lives in triage.js, the room itself only reads.
+   */
+  const triageHelp = {
+    el,
+    featureOn: () => featureOn('plans') && featureOn('plans.inbox'),
+    data: () => s.data,
+    triage: () => s.triage,
+    setTriage: (change, { redraw = true, focus = null } = {}) => {
+      Object.assign(s.triage, change);
+      if (redraw) draw({ focus });
+    },
+    message,
+    undoToast: captureHelp.undoToast,
+    refresh: captureHelp.refresh,
   };
 
   // The Roadmap's layout follows the width (columns from 1200 px, always a list below 700 px): redraw when the window

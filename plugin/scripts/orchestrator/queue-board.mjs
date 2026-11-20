@@ -81,7 +81,9 @@
 //     and POST /api/lawyerPackage writes a draft locally (dry = preview; never sent).
 //     POST /api/plan-bulk runs `queue.mjs plan prioritize|edit|combine` (dry = preview, otherwise
 //     --expect-changed, all or nothing), POST /api/plan-capture { title, text? } adds a plan to the Inbox at once
-//     (`plan capture`, P6, no preview, Undo in the toast), POST /api/plan-undo undoes what the board just saved (`plan undo --nr`),
+//     (`plan capture`, P6, no preview, Undo in the toast), POST /api/plan-proposal { action, id, edits?, reason?, to?,
+//     expect } is the owner's Accept, Decline or Merge of an Inbox item (`plan accept|decline|merge --set-by owner`,
+//     P7, with --expect-changed, Undo in the toast), POST /api/plan-undo undoes what the board just saved (`plan undo --nr`),
 //     and GET /api/plans?wait=1 waits until plans.json or queue.json changes (live update, fs.watch).
 //   - FOLLOW UP: the read view /follow (its own page; the link is written in the terminal) with the follow-up entries from
 //     follow.json via GET /api/follow (behind the key). The rules (due date, statuses) are lib/queueFollow.js, the same
@@ -133,6 +135,7 @@ const ES = require('./lib/eventStatistics.js');
 const P = require('./lib/queuePlan.js');
 const PRIVACY = require('./lib/queuePlanView.js');
 const INBOX = require('./lib/planInbox.js');
+const PROPOSALS = require('./lib/planProposal.js');
 const KK = require('./lib/queueConfig.js');
 // The mascot's rules (the same file the browser gets at /queueMascot.js) and the weekly quota (the forecast).
 const M = require('./lib/queueMascot.js');
@@ -2075,6 +2078,38 @@ async function planCapture(b) {
   }
 }
 
+// ---- Confirming Claude's proposals (P7 of the Plans rework) ------------------------------------------------------
+// POST /api/plan-proposal { action: accept|decline|merge, id, edits?, reason?, to?, expect }. The owner's click on an
+// Inbox row: lib/planProposal.js boardCall checks the body and gives the call (queue.mjs plan accept|decline|merge with
+// --set-by owner and --by theBoard, so nothing is applied without the owner's click). Saved at once (one changelog
+// entry; the answer's `log` is what Undo sends to POST /api/plan-undo), with --expect-changed from the register the
+// owner looked at, so a session that changed it meanwhile gives 409 with outdated: true (planWriteAnswer). The edits
+// and the reason go in a temporary file, never on a command line. Off with features.plans.inbox.
+async function planProposal(b) {
+  const no = (message, status = 400) => ({ status, answer: { ok: false, message } });
+  if (!FEATURES.plans || !FEATURES['plans.inbox'])
+    return no('The Inbox is off (features.plans.inbox in queue.config.json).', 403);
+  const c = PROPOSALS.boardCall(b);
+  if (c.error.length) return no(c.error.join('\n'));
+  const tmp = c.file ? path.join(os.tmpdir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`) : null;
+  if (tmp) fs.writeFileSync(tmp, JSON.stringify(c.file));
+  const done = {
+    accept: `Accepted: ${c.id} has left the inbox.`,
+    decline: `Declined: ${c.id} is dropped.`,
+    merge: `Merged ${c.id} into ${b.to}.`,
+  };
+  try {
+    const r = await queueJson(c.args(tmp));
+    const out = planWriteAnswer(r, `plan ${c.action} ${c.id}`, done[c.action]);
+    // there is no preview here: the owner looked at the row, so the 409 says that
+    if (out.answer.outdated)
+      out.answer.message = 'The plan register has changed since you looked. The board shows it again; check the row and try once more.';
+    return out;
+  } finally {
+    if (tmp) fs.rmSync(tmp, { force: true });
+  }
+}
+
 // ---- Multi select and change in the row -----------------------------------------------------------
 // POST /api/plan-bulk { action, ids, priority?, category?, reason?, project?, maturity?, to?, dry, expect }.
 // The calls are made and checked by queuePlanView.planBulkCall (always queue.mjs, with the owner option and --by theBoard). dry =
@@ -2364,6 +2399,8 @@ async function write(filePath, b) {
   if (filePath === '/api/plan-source') return planSource(b);
   // "+ New plan": quick capture into the Inbox, saved at once with Undo.
   if (filePath === '/api/plan-capture') return planCapture(b);
+  // Accept, Decline and Merge on an Inbox row (P7): the owner confirms Claude's proposal, with Undo.
+  if (filePath === '/api/plan-proposal') return planProposal(b);
   // Multi select and change in the row, and undo what the board just saved.
   if (filePath === '/api/plan-bulk') return planBulk(b);
   if (filePath === '/api/plan-undo') return planUndo(b);
@@ -2944,6 +2981,8 @@ const STATIC = {
   '/plans/roadmap.js': [path.join('plans', 'roadmap.js'), 'text/javascript; charset=utf-8'],
   '/plans/filter.js': [path.join('plans', 'filter.js'), 'text/javascript; charset=utf-8'],
   '/plans/capture.js': [path.join('plans', 'capture.js'), 'text/javascript; charset=utf-8'],
+  // P7: Accept, Edit, Decline and Merge on an Inbox row.
+  '/plans/triage.js': [path.join('plans', 'triage.js'), 'text/javascript; charset=utf-8'],
   '/queuePlanView.js': [path.join('..', 'lib', 'queuePlanView.js'), 'text/javascript; charset=utf-8'],
 };
 

@@ -2,7 +2,7 @@
 // cli/plans.mjs: the plan command: the plan register (plans.json), see docs/plan-register.md.
 //
 // planCommand dispatches the plan sub-commands (show, get, new, edit, prioritize, prioritize-many, combine, drop,
-// verify, undo, capture, inbox, rules, check, modules, backup, active and doc); the rules are in lib/queuePlan.js.
+// verify, undo, capture, inbox, propose, accept, decline, merge, rules, check, modules, backup, active and doc); the rules are in lib/queuePlan.js.
 //
 // Why a module: queue.mjs was one file of about 6,300 lines. It is now a thin entry point (the usage comment and the
 // dispatch on the command word) plus the modules in cli/. The code was moved as it was: same output, exit codes and files.
@@ -21,7 +21,7 @@ import {
 } from './planShared.mjs';
 import { planActive, planBackup, planCheck, planModules } from './planCheck.mjs';
 import { planDoc } from './planDoc.mjs';
-import { planCapture, planInbox } from './planInbox.mjs';
+import { planAccept, planCapture, planDecline, planInbox, planMerge, planPropose } from './planInbox.mjs';
 import { catalogSetup, decisionIds } from './catalog.mjs';
 
 /** The design choice ids for the plan link warning (catalog.planLinks), or undefined: then only the shape is checked. */
@@ -306,6 +306,16 @@ export function planCommand() {
     planCapture(json);
   } else if (under === 'inbox') {
     planInbox(json);
+  } else if (under === 'propose') {
+    // P7: Claude's proposal for an Inbox item (lib/planProposal.js); it changes nothing else.
+    planPropose(json);
+  } else if (under === 'accept') {
+    // P7: the owner's Accept, Decline and Merge (refused without --set-by owner).
+    planAccept();
+  } else if (under === 'decline') {
+    planDecline();
+  } else if (under === 'merge') {
+    planMerge();
   } else if (under === 'active') {
     planActive(json);
   } else if (under === 'rules') {
@@ -325,7 +335,7 @@ export function planCommand() {
     planDoc(json);
   } else {
     die(
-      'Use: ravenseat plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|capture|inbox|active|rules|check|modules|backup|doc> ...  (see the top of the file)',
+      'Use: ravenseat plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|capture|inbox|propose|accept|decline|merge|active|rules|check|modules|backup|doc> ...  (see the top of the file)',
       under ? 1 : 0,
     );
   }

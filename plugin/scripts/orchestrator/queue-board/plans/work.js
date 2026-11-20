@@ -853,6 +853,17 @@
       }
       return;
     }
+    // P7: on the Roadmap and the plan page, 1 to 4 belong to the Inbox row with focus (plans/triage.js): 1 Accept,
+    // 2 Edit, 3 Decline, 4 Merge. The row is the card or the proposal block that holds focus, or the open plan page.
+    if (t.type === 'priority' && tl.surface === 'roadmap') {
+      const holder =
+        active?.closest?.('[data-triage]') ??
+        active?.closest?.('[data-roadmap-entry]')?.querySelector?.('[data-triage]') ??
+        (tl.entry ? h.room.querySelector('[data-triage]') : null);
+      const id = holder?.dataset?.triage ?? null;
+      if (id && h.triageKey?.(id, e.key)) e.preventDefault();
+      return;
+    }
     if (tl.surface === 'roadmap') {
       roadmapKey(h, t, e, tl, active);
       return;

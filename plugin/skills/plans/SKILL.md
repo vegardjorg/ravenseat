@@ -63,6 +63,28 @@ Stop after the report, unless the argument already had an instruction: then carr
 - **Verification:** `ravenseat plan verify <id> --findings "short finding" [--commit <sha>]` after checking against the
   code. It resets the stale warning.
 
+## Sort the inbox (`/plans inbox`)
+
+The Inbox holds plans captured with **+ New plan** or `plan capture`, and findings a track reported, that nobody has
+sorted. With `/plans inbox` (or when the owner asks you to sort it) you write one **proposal** per item; the owner
+confirms each one on the board (Accept, Edit, Decline or Merge). You never apply a proposal yourself.
+
+1. `ravenseat plan inbox --json`: the items, with what is already proposed. Check `plans.inboxTriage` in the `INBOX:`
+   line or the config: `off` means `plan propose` is refused, so stop; `idle` means sort them when a slot is free;
+   `on-request` (the default) means only when the owner asks.
+2. For each item: look for a duplicate (`ravenseat plan show --search "…" --json`), read `ravenseat plan rules`, and
+   decide project, priority (with a one-sentence `priority_reason` naming the rule, unless it stays `later`),
+   `now_category` for Now, maturity, size, a one-sentence summary, and `sources` if a plan document exists. Never a new
+   title and never drop: a duplicate goes in `merge`, a plan not worth keeping is said in `priority_reason`.
+3. Write the proposal as JSON to a file and run `ravenseat plan propose <id> --file <file>`. The fields are `project`,
+   `priority`, `now_category`, `priority_reason`, `maturity`, `size`, `summary`, `sources`, plus `merge` (up to 5
+   plan ids it looks like) and `outline` (a short suggested outline, shown folded, up to 6000 characters). Give only
+   what you would change. The owner's own text is kept: Accept stores it in `original_text` when the summary changes.
+4. Tell the owner how many proposals wait: "Accept them on the board (key 1), or Edit, Decline, Merge."
+5. `plan accept`, `plan decline` and `plan merge` (all with `--set-by owner`) are the owner's: run them only when the
+   owner says so in this session, for that item. `plans.inboxAutoApply` (off by default) lets `plan propose` apply a
+   proposal for a captured plan that stays at `later` with no merge; never turn it on yourself.
+
 ## 6. End of session
 
 - `plan active <entry-id> --end` for the entries you marked.
