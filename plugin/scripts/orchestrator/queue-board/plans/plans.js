@@ -67,8 +67,12 @@
     facetOpen: new Set(readList(FACET_STORAGE, ['module', 'pri'])),
     ownOnes: readList(VIEW_STORAGE).map(V.cleanOwnView).filter(Boolean),
     undo: [], // previous filter choices (search parts), for "Undo filter"
-    drawer: false, // narrow screen: the filters are open as a drawer
-    saves: false, // the "Save view" form is open
+    drawer: false, // narrow screen: the filters of Documents and Legal are open as a drawer
+    // P4: the open Filter, Sort or narrow "Filter and sort" menu (plans/filter.js), the "Save current as…" field and
+    // what is typed in it, so a redraw from a live update keeps them as they were.
+    menu: null,
+    saveAsOpen: false,
+    saveName: '',
     closed: new Set(readList(CLOSED_STORAGE)), // closed document groups (open by default)
     roadmap: readObject(ROADMAP_STORAGE), // the viewer's Roadmap choices
     roadmapOpen: new Set(), // the Roadmap sections opened past the fold (this visit only)
@@ -178,6 +182,9 @@
    */
   function useState(fresh, { push = true, scroll = false, focus = null } = {}) {
     if (isPlans() && fresh.room !== 'plans') s.lastPlans = s.state;
+    // an open Filter or Sort menu closes when you move to another surface, view or plan
+    if (fresh.room !== s.state.room || fresh.surface !== s.state.surface || fresh.show !== s.state.show || fresh.entry !== s.state.entry)
+      s.menu = null;
     s.state = fresh;
     const url = location.pathname + (fresh.room === 'plans' ? V.writeUrl(fresh) : '');
     if (url !== location.pathname + location.search) {
@@ -190,12 +197,12 @@
     if (isPlans()) draw({ scroll, focus });
   }
 
-  /** Filter change: the previous choice goes on the undo stack. */
-  function newFilter(filter, extra = {}) {
+  /** Filter change: the previous choice goes on the undo stack. `opts` goes to useState (for example the focus). */
+  function newFilter(filter, extra = {}, opts = {}) {
     const previous = V.writeUrl({ ...s.state, entry: null });
     s.undo.push(previous);
     if (s.undo.length > 20) s.undo.shift();
-    useState({ ...s.state, filter, ...extra });
+    useState({ ...s.state, filter, ...extra }, opts);
   }
 
   function showRoom() {
@@ -221,6 +228,7 @@
   window.addEventListener('popstate', () => {
     const fresh = V.readUrl(location.search);
     if (isPlans() && fresh.room !== 'plans') s.lastPlans = s.state;
+    s.menu = null;
     s.state = fresh;
     showRoom();
     if (isPlans()) draw({ scroll: true });
@@ -353,9 +361,11 @@
     if (t.surface === 'roadmap' && window.QueuePlanRoadmap) {
       room.classList.remove('has-selected', 'drawer-open');
       const p = t.entry ? entryFor(t.entry) : null;
+      // P4: the Roadmap's plans in the chosen Sort (Roadmap order by default).
+      const sorted = p ? [] : V.sortPlans(V.filter(d.entries, t.filter, t.search), currentSort());
       const body = p
         ? window.QueuePlanRoadmap.page(roadmapHelp, d, p)
-        : window.QueuePlanRoadmap.cells(roadmapHelp, d, V.filter(d.entries, t.filter, t.search));
+        : window.QueuePlanRoadmap.cells(roadmapHelp, d, sorted);
       fillRoom(
         pathEl(d, { drawer: false }),
         surfaceOptionEl(d),
@@ -399,15 +409,23 @@
     // tree map (show=treeMap) and dependencies (show=dep), with the same filters and selection as the list.
     const structure =
       !docSurface && (t.show === 'treeMap' || t.show === 'dep') && !!window.QueuePlanStructure;
-    const match = docSurface ? [] : V.filter(d.entries, t.filter, t.search);
+    // P4: the list follows the chosen Sort (within each project, since the list is grouped); the maps have their own order.
+    const sortable = !docSurface && !map && !structure;
+    const match = docSurface
+      ? []
+      : sortable
+        ? V.sortPlans(V.filter(d.entries, t.filter, t.search), currentSort())
+        : V.filter(d.entries, t.filter, t.search);
     const selected = !docSurface && t.entry ? entryFor(t.entry) : null;
     const selectedDoc = docSurface && t.doc ? (d.documents ?? []).some((x) => x.id === t.doc) : false;
     room.classList.toggle('has-selected', docSurface ? selectedDoc : !!selected);
     room.classList.toggle('drawer-open', s.drawer);
     const pickedOut = V.countFilters(t.filter) > 0 || !!t.search;
     fillRoom(
-      pathEl(d),
+      // Plan entries has no filter column any more (P4): its search, Filter and Sort sit in a toolbar, so no drawer.
+      pathEl(d, { drawer: docSurface }),
       surfaceOptionEl(d),
+      docSurface ? null : entriesToolbarEl(d, match, { sort: sortable }),
       docSurface || !window.QueuePlanMap
         ? null
         : window.QueuePlanMap.deadlineBand(mapHelp, d, pickedOut ? match.map((p) => p.id) : null),
@@ -417,8 +435,7 @@
         ? window.QueuePlanDoc.cells(docHelp, d)
         : el(
             'div',
-            { class: 'plans-grid' },
-            filtersEl(d, match),
+            { class: 'plans-grid plans-grid-wide' },
             map
               ? window.QueuePlanMap.middle(mapHelp, d, V.mapEntries(d.entries, t.filter, t.search), selected)
               : structure
@@ -685,6 +702,9 @@
     goToList: (change = {}) =>
       useState({ ...s.state, surface: 'entries', ...change }, { scroll: true }),
     selectRoom,
+    // P4: `f` opens the Filter menu; while one is open the room's own keys wait (work.js).
+    openFilter: () => openFilter(),
+    filterMenuOpen: () => !!s.menu,
   };
 
   /** Saves one of the viewer's Roadmap choices (layout, group, compact, details) and redraws. */
@@ -738,6 +758,10 @@
         ? window.QueuePlanRead.planDocument(readHelp, p)
         : tabContent('doc', p, s.data),
     showInQueue: (id) => showInQueue(id),
+    // P4: the Filter and Sort controls in the Roadmap's toolbar (plans/filter.js), and the Sort in use.
+    filterControls: (opts) =>
+      window.QueuePlanFilter ? window.QueuePlanFilter.controls(filterHelp, s.data, opts) : null,
+    sort: () => currentSort(),
   };
 
   // The Roadmap's layout follows the width (columns from 1200 px, always a list below 700 px): redraw when the window
@@ -750,6 +774,16 @@
       };
       if (typeof q.addEventListener === 'function') q.addEventListener('change', redraw);
     }
+  // P4: below 600 px Filter and Sort become one "Filter and sort" tray, on the Roadmap and on Plan entries alike.
+  if (typeof window.matchMedia === 'function') {
+    const q = window.matchMedia(`(min-width: ${window.QueuePlanFilter?.TRAY_BELOW ?? 600}px)`);
+    if (typeof q.addEventListener === 'function')
+      q.addEventListener('change', () => {
+        if (!isPlans() || !s.data) return;
+        s.menu = null;
+        draw();
+      });
+  }
 
   // ---- The breadcrumb ----
   function pathEl(d, { drawer = true } = {}) {
@@ -824,204 +858,135 @@
     );
   }
 
-  // ---- Left pane: search, views and facets ----
+  // ---- The toolbar: search, Filter and Sort (P4 of the Plans rework) ----
+  // The old left column (search, views and facet lists) is gone from Plan entries. The search, the Filter menu and the
+  // Sort menu sit in one toolbar above the list, like the Tasks room; plans/filter.js draws the two menus, and the
+  // Roadmap gets the same controls through roadmapHelp.filterControls. The saved views keep their storage key
+  // (VIEW_STORAGE), so views saved in the old column carry over.
   let searchTime = null;
-  function filtersEl(d, match) {
-    const t = s.state;
-    const facets = V.facetNumber(d.entries, t.filter, t.search, d);
-    const now = V.writeUrl({ ...t, entry: null });
-    const viewButton = (v, own) =>
-      el(
-        'li',
-        { class: 'plans-view' },
-        el('button', {
-          type: 'button',
-          class: 'link-button',
-          text: v.name,
-          'aria-pressed': V.sameView(v.search, now) ? 'true' : 'false',
-          'data-focus': `show:${own ? 'own' : 'done'}:${v.name}`,
-          onclick: () => {
-            const fresh = V.readUrl(v.search);
-            newFilter(fresh.filter, { search: fresh.search, entry: null });
-          },
-        }),
-        own
-          ? el('button', {
-              type: 'button',
-              class: 'button-icon plans-remove',
-              text: '✕',
-              'aria-label': `Delete the view ${v.name}`,
-              onclick: () => {
-                s.ownOnes = s.ownOnes.filter((x) => x !== v);
-                save(VIEW_STORAGE, s.ownOnes);
-                draw();
-              },
-            })
-          : null,
-      );
+
+  /** The Sort in use (a per-browser choice in the Roadmap prefs, plan section 8: a view convenience, not a setting). */
+  function currentSort() {
+    return V.cleanSort(s.roadmap.sort);
+  }
+
+  /** The button an open menu belongs to: the tray below 600 px, else Filter. */
+  const filterButtonKey = () =>
+    window.innerWidth < (window.QueuePlanFilter?.TRAY_BELOW ?? 600) ? 'plans-tray' : 'plans-filter';
+
+  /** The helpers plans/filter.js gets. Every change redraws the room with the focus on the control it belongs to. */
+  const filterHelp = {
+    el,
+    state: () => s.state,
+    data: () => s.data,
+    width: () => window.innerWidth,
+    menu: () => s.menu,
+    setMenu: (name, focus) => {
+      s.menu = name;
+      // a menu opens with the name field closed and empty
+      if (name) {
+        s.saveAsOpen = false;
+        s.saveName = '';
+      }
+      draw({ focus: focus ?? null });
+    },
+    ownViews: () => s.ownOnes,
+    saveAsOpen: () => s.saveAsOpen,
+    setSaveAsOpen: (open) => {
+      s.saveAsOpen = open === true;
+      if (!s.saveAsOpen) s.saveName = '';
+      draw({ focus: s.saveAsOpen ? 'pf-save-name' : 'pf-save-as' });
+    },
+    saveName: () => s.saveName,
+    // no redraw while typing: the field keeps what is typed, and a live update draws it again with the same text
+    setSaveName: (v) => {
+      s.saveName = String(v ?? '').slice(0, 60);
+    },
+    saveView: (name) => {
+      const n = String(name ?? '').trim();
+      if (!n) {
+        message('Give the saved filter a name first.', true);
+        return;
+      }
+      if (V.QUICK_FILTERS.some((q) => q.name.toLowerCase() === n.toLowerCase())) {
+        message(`"${n}" is already a quick filter. Pick another name.`, true);
+        return;
+      }
+      const fresh = V.cleanOwnView({ name: n, search: V.writeUrl({ ...s.state, entry: null }), sort: currentSort() });
+      if (!fresh) return;
+      // the same name replaces the old one; at most 30 saved filters, the oldest goes first
+      s.ownOnes = [...s.ownOnes.filter((x) => x.name !== fresh.name), fresh].slice(-30);
+      save(VIEW_STORAGE, s.ownOnes);
+      s.saveAsOpen = false;
+      s.saveName = '';
+      message(`The filter "${fresh.name}" is saved in this browser.`);
+      draw({ focus: 'pf-save-as' });
+    },
+    deleteView: (name) => {
+      s.ownOnes = s.ownOnes.filter((x) => x.name !== name);
+      save(VIEW_STORAGE, s.ownOnes);
+      message(`The saved filter "${name}" is deleted from this browser.`);
+      draw({ focus: 'pf-save-as' });
+    },
+    newFilter: (filter, extra) => newFilter(filter, extra),
+    // a quick or saved filter: the menu closes and the focus goes back to its button. A saved view also brings its sort.
+    applyView: (v) => {
+      s.menu = null;
+      if (v.sort) setRoadmapPref({ sort: V.cleanSort(v.sort) }, { redraw: false });
+      const fresh = V.readUrl(v.search);
+      newFilter(fresh.filter, { search: fresh.search, entry: null }, { focus: filterButtonKey() });
+    },
+    showAll: () => {
+      s.menu = null;
+      newFilter(V.emptyFilter(), { search: '', entry: null }, { focus: filterButtonKey() });
+    },
+    sort: () => currentSort(),
+    // no redraw here: filter.js closes the menu right after, and that draws
+    setSort: (id) => setRoadmapPref({ sort: V.cleanSort(id) }, { redraw: false }),
+  };
+
+  /** `f` (work.js): opens the Filter menu (the tray on a narrow screen) with the focus on its first row. */
+  function openFilter() {
+    if (!window.QueuePlanFilter) return;
+    s.menu = filterButtonKey() === 'plans-tray' ? 'tray' : 'filter';
+    s.saveAsOpen = false;
+    draw();
+    room.querySelector('.plans-filter-menu')?.querySelector('.view-option, input[type="checkbox"]')?.focus();
+  }
+
+  /** The search field on Plan entries (the Roadmap has its own in roadmap.js). `/` jumps here (data-focus "search"). */
+  function searchFieldEl() {
     return el(
-      'aside',
-      {
-        id: 'plans-filters',
-        class: 'plans-filters',
-        'aria-label': 'Filters',
-        'data-scroll': 'filters',
-      },
-      el(
-        'label',
-        { class: 'plans-search-label' },
-        el('span', { class: 'hidden-for-eye', text: 'Search in the plans' }),
-        el('input', {
-          type: 'search',
-          class: 'search plans-search',
-          placeholder: 'Search in id, title, sources',
-          autocomplete: 'off',
-          value: t.search,
-          'data-focus': 'search',
-          oninput: (e) => {
-            clearTimeout(searchTime);
-            const v = e.target.value.slice(0, 120);
-            searchTime = setTimeout(
-              () => useState({ ...s.state, search: v.trim() }, { push: false }),
-              200,
-            );
-          },
-        }),
-      ),
-      el(
-        'section',
-        { class: 'plans-views', 'aria-label': 'Saved views' },
-        el('h2', { class: 'plans-cell-title', text: 'Views' }),
-        el(
-          'ul',
-          { class: 'plans-view-list' },
-          ...V.DONE_VIEWS.map((v) => viewButton(v, false)),
-          ...s.ownOnes.map((v) => viewButton(v, true)),
-        ),
-        saveViewEl(now),
-      ),
-      ...facets
-        .filter((f) => f.option.length)
-        .map((f) => {
-          const open = s.facetOpen.has(f.id) || f.option.some((v) => v.selected);
-          return el(
-            'details',
-            {
-              class: 'plans-facet',
-              open: open,
-              ontoggle: (e) => {
-                if (e.target.open) s.facetOpen.add(f.id);
-                else s.facetOpen.delete(f.id);
-                save(FACET_STORAGE, [...s.facetOpen]);
-              },
-            },
-            el(
-              'summary',
-              { class: 'plans-facet-title', 'data-focus': `facet:${f.id}` },
-              el('span', { class: 'fold-chevron', 'aria-hidden': 'true' }),
-              `${f.title} (${f.option.length})`,
-            ),
-            el(
-              'ul',
-              { class: 'plans-facet-list' },
-              ...f.option.map((v) =>
-                el(
-                  'li',
-                  {},
-                  el(
-                    'label',
-                    { class: 'plans-facet-option' },
-                    el('input', {
-                      type: 'checkbox',
-                      checked: v.selected,
-                      'data-focus': `f:${f.id}:${v.val}`,
-                      onchange: (e) => {
-                        const fresh = { ...s.state.filter };
-                        const list = new Set(fresh[f.id]);
-                        if (e.target.checked) list.add(v.val);
-                        else list.delete(v.val);
-                        fresh[f.id] = [...list];
-                        newFilter(fresh);
-                      },
-                    }),
-                    f.id === 'pri'
-                      ? el('span', {
-                          class: `plans-pri pri-${v.val}`,
-                          'aria-hidden': 'true',
-                          text: V.PRIORITY[v.val]?.symbol ?? '',
-                        })
-                      : null,
-                    el('span', { class: 'plans-facet-text', text: v.text }),
-                    el('span', {
-                      class: 'plans-count',
-                      text: String(v.count),
-                      'aria-label': `${v.count} matches`,
-                    }),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-      el('p', {
-        class: 'plans-match',
-        role: 'status',
-        text: `${match.length} of ${d.entries.length} entries`,
+      'label',
+      { class: 'plans-search-label' },
+      el('span', { class: 'hidden-for-eye', text: 'Search in the plans' }),
+      el('input', {
+        type: 'search',
+        class: 'search plans-search',
+        placeholder: 'Search in id, title, sources',
+        autocomplete: 'off',
+        value: s.state.search,
+        'data-focus': 'search',
+        oninput: (e) => {
+          clearTimeout(searchTime);
+          const v = e.target.value.slice(0, 120);
+          searchTime = setTimeout(() => useState({ ...s.state, search: v.trim() }, { push: false }), 200);
+        },
       }),
     );
   }
 
-  function saveViewEl(now) {
-    if (!s.saves)
-      return el('button', {
-        type: 'button',
-        class: 'button-small button-outline',
-        text: 'Save this view',
-        'data-focus': 'save-view',
-        disabled: !V.countFilters(s.state.filter) && !s.state.search,
-        onclick: () => {
-          s.saves = true;
-          draw();
-          room.querySelector('.plans-save-name')?.focus();
-        },
-      });
+  /** The toolbar above the Plan entries list and maps: search, Filter, Sort (the list only) and the count. */
+  function entriesToolbarEl(d, match, { sort = true } = {}) {
     return el(
-      'form',
-      {
-        class: 'plans-save',
-        onsubmit: (e) => {
-          e.preventDefault();
-          const fresh = V.cleanOwnView({ name: e.target.elements.name.value, search: now });
-          if (!fresh) return;
-          s.ownOnes = [...s.ownOnes.filter((x) => x.name !== fresh.name), fresh];
-          save(VIEW_STORAGE, s.ownOnes);
-          s.saves = false;
-          message(`The view "${fresh.name}" is saved in this browser.`);
-          draw();
-        },
-      },
-      el(
-        'label',
-        {},
-        el('span', { class: 'hidden-for-eye', text: 'Name of the view' }),
-        el('input', {
-          name: 'name',
-          class: 'search plans-save-name',
-          type: 'text',
-          maxlength: '60',
-          placeholder: 'Name of the view',
-          'data-focus': 'save-name',
-        }),
-      ),
-      el('button', { type: 'submit', class: 'button-small button-filled', text: 'Save' }),
-      el('button', {
-        type: 'button',
-        class: 'button-small button-outline',
-        text: 'Cancel',
-        onclick: () => {
-          s.saves = false;
-          draw();
-        },
+      'div',
+      { class: 'plans-toolbar' },
+      searchFieldEl(),
+      window.QueuePlanFilter ? window.QueuePlanFilter.controls(filterHelp, d, { sort }) : null,
+      el('p', {
+        class: 'plans-match',
+        role: 'status',
+        text: `${match.length} of ${d.entries.length} entries`,
       }),
     );
   }
@@ -1750,6 +1715,7 @@
   // changes from a Claude Code session show without a reload. If it fails, it is retried shortly; the interval
   // below is the fallback.
   window.QueuePlanWork?.install(workHelp);
+  window.QueuePlanFilter?.install(filterHelp);
   async function listen() {
     if (isPlans() && !document.hidden && s.version && !s.listener) {
       await get(false, { wait: true });

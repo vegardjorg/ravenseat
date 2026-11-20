@@ -82,8 +82,23 @@
     later: 'Later',
     none: 'No deadline',
   };
-  /** Set by (for "Dropped by agent"). */
+  /** Set by (for "Dropped by Claude"). */
   const SET_BY = { agent: 'Agent', owner: 'The owner' };
+  /**
+   * The roadmap horizons as filter values (P4). HORIZONS further down is built from this, so the Filter menu and the
+   * Roadmap's sections always use the same words. Defined here because FACETS below needs it when the file loads.
+   */
+  const HORIZON_TEXT = {
+    inbox: 'Inbox',
+    waiting: 'Waiting on you',
+    now: 'Now',
+    next: 'Next',
+    later: 'Later',
+    done: 'Done',
+    dropped: 'Dropped',
+  };
+  /** Has tasks (P4): does the plan have queue tasks that are not cancelled? */
+  const HAS_TASKS = { yes: 'Yes', no: 'No' };
   /** Legal points with these statuses are open. */
   const LEGAL_OPEN = new Set(['open', 'ai-assessed', 'to-lawyer']);
   /** The tabs in the detail panel. */
@@ -167,8 +182,18 @@
    * The facets in the left cell, in order. `param` is the name in the url, `values` the valid values (null =
    * from the data: module and project), `by(entry, now)` the values an entry has (an entry can have several, e.g. categories).
    * Within a facet the choices are "or"; between the facets "and".
+   * P4: they are the sections of the Filter menu (the left column is gone), in the order the plan names: Horizon, Area,
+   * Project, Priority, Maturity, Waiting on, Deadline, Has tasks, Set by, Verification (Now category stays after
+   * Priority). The url parameter of each is unchanged, so old links and saved views keep working.
    */
   const FACETS = [
+    {
+      id: 'horizon',
+      title: 'Horizon',
+      param: 'hz',
+      values: HORIZON_TEXT,
+      by: (p) => [horizonFor(p)],
+    },
     {
       id: 'module',
       title: 'Area',
@@ -205,6 +230,13 @@
       param: 'deadline',
       values: DEADLINE,
       by: (p, now) => [deadlineBand(p.deadline, now)],
+    },
+    {
+      id: 'tasks',
+      title: 'Has tasks',
+      param: 'tasks',
+      values: HAS_TASKS,
+      by: (p) => [(p.queue ?? []).some((o) => o?.status !== 'cancelled') ? 'yes' : 'no'],
     },
     {
       id: 'set',
@@ -435,8 +467,10 @@
    */
   function applyFilter(entries, filter = {}, search = '', { now = new Date(), except = null } = {}) {
     const pri = filter.pri ?? [];
+    // The Horizon section's Dropped shows them too (P4), and its counts include them, so Dropped can be chosen.
+    const dropAsked = pri.includes('drop') || (filter.horizon ?? []).includes('dropped');
     return (entries ?? []).filter((p) => {
-      if (p.priority === 'drop' && !pri.includes('drop') && except !== 'pri') return false;
+      if (p.priority === 'drop' && !dropAsked && except !== 'pri' && except !== 'horizon') return false;
       for (const f of FACETS) {
         if (f.id === except) continue;
         if (!matchesFacet(p, f, filter[f.id], now)) return false;
@@ -778,14 +812,146 @@
 
   // ---- Done views ----------------------------------------------------------------------------------
 
-  /** The ready-made views as search parts. Own views are saved in the same form in the browser. */
-  const DONE_VIEWS = [
-    { id: 'for-prod', name: 'Before prod', search: '?room=plans&pri=now&cat=for-prod' },
-    { id: 'security', name: 'Security', search: '?room=plans&pri=now&cat=security' },
-    { id: 'waiting', name: 'Waiting on me', search: '?room=plans&waiting=owner' },
-    { id: 'stale', name: 'Stale', search: '?room=plans&stale=yes' },
-    { id: 'drop-agent', name: 'Dropped by agent', search: '?room=plans&pri=drop&set=agent' },
+  /**
+   * The Quick filters at the top of the Filter menu (P4, the Tasks room's QA-1d pattern): built in, cannot be deleted,
+   * each a search part with a short line that says what it shows. The ids of the older ready-made views are kept.
+   * Own views are saved in the same form in the browser ("Saved" in the menu).
+   */
+  const QUICK_FILTERS = [
+    {
+      id: 'waiting',
+      name: 'Waiting on you',
+      search: '?room=plans&waiting=owner',
+      explain: 'A question or a decision from you holds them.',
+    },
+    { id: 'inbox', name: 'Inbox', search: '?room=plans&hz=inbox', explain: 'Reported or captured, not sorted yet.' },
+    {
+      id: 'building',
+      name: 'Being built',
+      search: '?room=plans&hz=now',
+      explain: 'In the queue, partly built or worked on now.',
+    },
+    {
+      id: 'ready',
+      name: 'Ready to become tasks',
+      search: '?room=plans&mod=ready',
+      explain: 'Shaped plans that can be split into queue tasks.',
+    },
+    {
+      id: 'for-prod',
+      name: 'Before prod',
+      search: '?room=plans&pri=now&cat=for-prod',
+      explain: 'Now, and needed before going live.',
+    },
+    {
+      id: 'security',
+      name: 'Security',
+      search: '?room=plans&pri=now&cat=security',
+      explain: 'Now, and marked as security work.',
+    },
+    { id: 'stale', name: 'Stale', search: '?room=plans&stale=yes', explain: 'The check against the code is out of date.' },
+    {
+      id: 'drop-agent',
+      name: 'Dropped by Claude',
+      search: '?room=plans&pri=drop&set=agent',
+      explain: 'Dropped without your say, so you can look them over.',
+    },
   ];
+  /** The older name of the list (the overview and older code read it). */
+  const DONE_VIEWS = QUICK_FILTERS;
+
+  /**
+   * What the Filter button says (P4, as the Tasks room's drawFilter): "Filter", "Filter · 2" for checked filters, or
+   * "Filter · <name>" when a quick filter (its filters) or a saved view (its filters and search) is in use. `label` is
+   * for a screen reader, `active` paints the button as in use. The search is not counted: it shows in its own box.
+   * @param {object} state the room's state (readUrl)
+   * @param {{ name: string, search: string }[]} ownViews the viewer's saved views
+   * @returns {{ text: string, label: string, title: string, active: boolean, name: string|null, n: number }}
+   */
+  function filterButtonText(state, ownViews = []) {
+    const n = countFilters(state?.filter);
+    const now = writeUrl({ room: 'plans', filter: state?.filter ?? emptyFilter(), search: state?.search ?? '' });
+    const nowFilterOnly = writeUrl({ room: 'plans', filter: state?.filter ?? emptyFilter() });
+    let name = null;
+    if (n > 0 || state?.search) {
+      const own = ownViews.find((v) => v && typeof v.search === 'string' && sameView(v.search, now));
+      const quick = n > 0 ? QUICK_FILTERS.find((v) => sameView(v.search, nowFilterOnly)) : null;
+      name = own?.name ?? quick?.name ?? null;
+    }
+    const text = name ? `Filter · ${name}` : n ? `Filter · ${n}` : 'Filter';
+    const label = ['Filter', name ? `${name} in use` : null, n ? `${n} active` : null].filter(Boolean).join(', ');
+    const title = name
+      ? `Filter: "${name}" is in use${n ? `, ${n} filters checked` : ''}. Quick filters, saved filters and the filter sections.`
+      : n
+        ? `Filter: ${n} checked. Quick filters, saved filters and the filter sections.`
+        : 'Quick filters, saved filters and the filter sections. They change what you see, not the plans.';
+    return { text, label, title, active: n > 0 || !!name, name, n };
+  }
+
+  /**
+   * The sorts in the Sort menu (P4). Roadmap order is the default: the register is already sorted by horizon rank,
+   * priority, deadline and how many plans wait on it (queuePlan.sortEntries), so it keeps the order it was given.
+   * Within each section of the Roadmap the chosen sort applies; the sections stay.
+   */
+  const PLAN_SORTS = [
+    { id: 'roadmap', text: 'Roadmap order', explain: 'By horizon, then the priority rules and the deadline.' },
+    { id: 'changed', text: 'Recently changed', explain: 'The latest change in the register first.' },
+    { id: 'added', text: 'Recently added', explain: 'The newest plans first.' },
+    { id: 'deadline', text: 'Deadline', explain: 'The nearest deadline first, plans without one last.' },
+    { id: 'title', text: 'Title', explain: 'A to Z.' },
+    {
+      id: 'blocked',
+      text: 'Most blocked',
+      explain: 'Held by an open question first, then the plans most others wait on.',
+    },
+  ];
+  const PLAN_SORT_IDS = PLAN_SORTS.map((x) => x.id);
+
+  /** A sort id from storage or a saved view: a known one, else Roadmap order. */
+  function cleanSort(x) {
+    return PLAN_SORT_IDS.includes(x) ? x : 'roadmap';
+  }
+
+  /**
+   * The plans in the chosen order (a new list; ties keep the order they came in, so Roadmap order is the tie-break).
+   * @param {object[]} entries
+   * @param {string} sort an id from PLAN_SORTS
+   */
+  function sortPlans(entries, sort) {
+    const list = (entries ?? []).map((p, i) => ({ p, i }));
+    const by = cleanSort(sort);
+    if (by === 'roadmap') return list.map((x) => x.p);
+    const time = (iso) => {
+      const t = Date.parse(iso ?? '');
+      return Number.isNaN(t) ? null : t;
+    };
+    // newest first, unknown last
+    const newest = (a, b) => (a == null ? (b == null ? 0 : 1) : b == null ? -1 : b - a);
+    const changedAt = (p) => (p.history ?? []).reduce((m, h) => Math.max(m, time(h?.at) ?? -Infinity), -Infinity);
+    const held = (p) =>
+      p.priority === 'owner' || (p.ownerQuestions ?? []).some((q) => q && !q.resolved) || (p.legal_open ?? 0) > 0;
+    const compare = {
+      changed: (a, b) => {
+        const x = changedAt(a);
+        const y = changedAt(b);
+        return newest(Number.isFinite(x) ? x : null, Number.isFinite(y) ? y : null);
+      },
+      added: (a, b) => newest(time(a.created), time(b.created)),
+      deadline: (a, b) => {
+        const x = typeof a.deadline === 'string' ? a.deadline : null;
+        const y = typeof b.deadline === 'string' ? b.deadline : null;
+        return x == null ? (y == null ? 0 : 1) : y == null ? -1 : x.localeCompare(y);
+      },
+      title: (a, b) =>
+        String(a.title ?? a.id).localeCompare(String(b.title ?? b.id), undefined, { sensitivity: 'base' }),
+      blocked: (a, b) =>
+        Number(held(b)) - Number(held(a)) ||
+        (b.blocks ?? []).length - (a.blocks ?? []).length ||
+        (b.ownerQuestions ?? []).filter((q) => !q?.resolved).length -
+          (a.ownerQuestions ?? []).filter((q) => !q?.resolved).length,
+    }[by];
+    return list.sort((a, b) => compare(a.p, b.p) || a.i - b.i).map((x) => x.p);
+  }
 
   /** Same filters and search (the order in the lists does not count)? Used to mark the view that is in use. */
   function sameView(a, b) {
@@ -808,7 +974,7 @@
       .slice(0, 60);
     if (!name) return null;
     const t = readUrl(String(x.search ?? ''));
-    return {
+    const out = {
       name,
       search: writeUrl({
         ...t,
@@ -820,6 +986,9 @@
         doc: null,
       }),
     };
+    // P4: a view saved from the Filter menu also keeps the sort; views saved before have none and keep working.
+    if (PLAN_SORT_IDS.includes(x.sort)) out.sort = x.sort;
+    return out;
   }
 
   // ---- Data from the server (/api/plans) -----------------------------------------------------------------------------
@@ -2871,7 +3040,7 @@
    * What a key press does in the Plans room. Ctrl+K (Cmd+K) works everywhere; the others only outside input fields and menus and
    * without Ctrl, Cmd or Alt (so the browser's own shortcuts work as before).
    * @param {{ key: string, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean, shiftKey?: boolean }} e
-   * @returns {{ type: 'palette'|'move'|'opened'|'search'|'priority'|'copy'|'mark'|'cancel', direction?: number,
+   * @returns {{ type: 'palette'|'move'|'opened'|'search'|'filter'|'priority'|'copy'|'mark'|'cancel', direction?: number,
    *   val?: string }|null}
    */
   function keyAction(e, { inputField = false, busy = false } = {}) {
@@ -2883,6 +3052,8 @@
     if (k === 'k') return { type: 'move', direction: -1 };
     if (k === 'Enter') return { type: 'opened' };
     if (k === '/') return { type: 'search' };
+    // f opens the Filter menu (P4, plan section 7.7)
+    if (k === 'f') return { type: 'filter' };
     if (Object.hasOwn(PRIORITY_KEY, k)) return { type: 'priority', val: PRIORITY_KEY[k] };
     if (k === 'c') return { type: 'copy' };
     if (k === 'x') return { type: 'mark' };
@@ -3580,15 +3751,7 @@
   // no new stored field. The lead from the plan document (P3) is computed on the server (ctx.leadFor in plansData).
 
   /** The horizons in roadmap order. A plan is in exactly one (horizonFor). */
-  const HORIZONS = [
-    { id: 'inbox', text: 'Inbox' },
-    { id: 'waiting', text: 'Waiting on you' },
-    { id: 'now', text: 'Now' },
-    { id: 'next', text: 'Next' },
-    { id: 'later', text: 'Later' },
-    { id: 'done', text: 'Done' },
-    { id: 'dropped', text: 'Dropped' },
-  ];
+  const HORIZONS = Object.entries(HORIZON_TEXT).map(([id, text]) => ({ id, text }));
   const HORIZON_IDS = HORIZONS.map((h) => h.id);
   /** The horizons the column layout always shows, also when empty, so the columns do not jump about. */
   const HORIZON_CORE = ['waiting', 'now', 'next', 'later', 'done'];
@@ -3669,7 +3832,8 @@
     if (h === 'now') {
       const running = queue.find((o) => o.column === 'inProgress' || o.column === 'review');
       const waiting = queue.find((o) => o.column === 'queue' || o.column === 'batch');
-      const next = running ? `Running now: ${running.id}` : waiting ? `Next: ${waiting.id}` : null;
+      // A phrase that reads on its own, both after "Next:" on the plan page and in the card's muted line.
+      const next = running ? `${running.id} is running` : waiting ? `${waiting.id} is next in the queue` : null;
       if (p.maturity === 'partial')
         return { text: `Being built: ${p.finished ?? 0} of ${p.total ?? 0} tasks done`, next };
       if (p.maturity === 'in-queue') {
@@ -3682,6 +3846,19 @@
     // Later is a choice to wait, so it gets no nudge; Next says what moves it forward.
     if (h === 'later') return { text, next: null };
     return { text, next: p.maturity === 'ready' ? 'Turn into queue tasks' : 'Shape it with Claude' };
+  }
+
+  /**
+   * How far a plan has come: its queue tasks done of the total, as a whole percent and in words, so the bar beside it
+   * is never the only carrier. Null when the plan has no tasks yet (no bar then: 0 of 0 says nothing).
+   * @returns {{ done: number, total: number, percent: number, text: string }|null}
+   */
+  function planProgress(p) {
+    const total = Number.isInteger(p?.total) ? p.total : 0;
+    if (total <= 0) return null;
+    const done = Math.max(0, Math.min(total, Number.isInteger(p?.finished) ? p.finished : 0));
+    const percent = Math.round((done / total) * 100);
+    return { done, total, percent, text: `${percent}% done, ${done} of ${total} ${total === 1 ? 'task' : 'tasks'}` };
   }
 
   /** Warnings as words for the muted line (never only an icon): the deadline, a stale check, open legal points. */
@@ -3793,10 +3970,11 @@
    * plans in roadmap order, with the built share in words as the note.
    * @returns {{ id: string, title: string, entries: object[], count: number, note?: string }[]}
    */
-  function roadmapSections(entries, { group = 'horizon', modules = [], keepEmpty = false } = {}) {
+  function roadmapSections(entries, { group = 'horizon', modules = [], keepEmpty = false, order = 'horizon' } = {}) {
     const list = entries ?? [];
     if (group === 'area') {
-      const rank = (p) => HORIZON_IDS.indexOf(horizonFor(p));
+      // order 'given' (P4): a sort other than Roadmap order was chosen, so the plans keep the order they came in.
+      const rank = order === 'given' ? () => 0 : (p) => HORIZON_IDS.indexOf(horizonFor(p));
       const ids = [...modules.map((m) => m.oid), WITHOUT_MODULE];
       return ids
         .map((oid) => {
@@ -3909,6 +4087,12 @@
     WITHOUT_PROJECT,
     WITHOUT_MODULE,
     DONE_VIEWS,
+    QUICK_FILTERS,
+    PLAN_SORTS,
+    cleanSort,
+    sortPlans,
+    filterButtonText,
+    planProgress,
     emptyFilter,
     readUrl,
     writeUrl,

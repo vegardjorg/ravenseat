@@ -10,6 +10,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   on you, Now, Next, Later, Done) as columns on a wide screen and a list on a phone; the old views are under More views.
   Settings `plans.startView` (default `roadmap`), `plans.roadmapLayout` (`auto`), `plans.roadmapFoldAfter` (8) and
   `plans.leadFromDocument` (on).
+- **Plans: Filter and Sort menus like the Tasks room replace the left column; plans show their progress in words.**
 ### Fixed
 - **Missions: a section pointer on a Windows short path (`RUNNER~1`) keeps its line range.**
 

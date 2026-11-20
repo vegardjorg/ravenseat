@@ -3571,3 +3571,204 @@ ol.overview-list > .overview-row.overview-question > * {
     min-height: 44px;
   }
 }
+
+/* ---- The Filter and Sort menus (P4): the toolbar on the Roadmap and on Plan entries ----
+   The menus are the Tasks room's (.filter, .filter-button, .filter-menu and the rows from board.css); here is only
+   where they sit in the Plans room, the narrow tray, the two-column Plan entries grid, the progress bar and the
+   wide plan page. Tokens only, so light and dark both follow the theme. */
+
+/* Plan entries: the search, Filter, Sort and the count on one row above the list (the left column is gone). */
+.plans-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm) var(--distance-md);
+  padding: var(--distance-sm) var(--distance-md);
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.plans-toolbar .plans-search-label {
+  flex: 1 1 220px;
+  max-width: 360px;
+  min-width: 0;
+}
+
+.plans-toolbar .plans-match {
+  margin: 0 0 0 auto;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.plans-filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+  min-width: 0;
+}
+
+.plans-filter-controls .filter-button {
+  min-height: 36px;
+  font-size: var(--text-sm);
+}
+
+/* The buttons sit at the left of the toolbar, so the menus open rightwards from the button's left edge. */
+.plans-menu-wrap .filter-menu {
+  left: 0;
+  right: auto;
+  text-align: left;
+}
+
+/* The Sort button grows with its text ("Sort: Recently changed") but never past the screen. */
+.plans-sort-button .filter-label {
+  max-width: 28ch;
+}
+
+/* Plan entries without the filter column: the list and the panel. Below 1100 px the old two-column and one-column
+   rules apply as before. */
+@media (min-width: 1101px) {
+  .plans-grid.plans-grid-wide {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  }
+}
+
+/* Narrow (below 600 px): one "Filter and sort" button, and the tray at the full width under the toolbar. */
+.plans-filter-controls.narrow,
+.plans-filter-controls.narrow .plans-menu-wrap {
+  position: static;
+}
+
+.plans-tray-menu {
+  left: var(--distance-md);
+  right: var(--distance-md);
+  width: auto;
+  max-height: min(75vh, 620px);
+}
+
+.roadmap-toolbar,
+.plans-toolbar {
+  position: relative;
+}
+
+.plans-tray-view-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--distance-sm);
+  padding: 0 var(--distance-md) var(--distance-xs);
+}
+
+/* The progress of a plan with tasks: a small bar beside the percent in words (never color or length alone). */
+.plans-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--distance-sm);
+  margin: var(--distance-xs) 0 0;
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.plans-progress-bar {
+  flex: none;
+  position: relative;
+  width: 72px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--color-surface-container-high);
+  box-shadow: inset 0 0 0 1px var(--color-outline-variant);
+}
+
+.plans-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--progress, 0%);
+  border-radius: inherit;
+  background: var(--color-primary);
+}
+
+.plans-page-progress .plans-progress-bar {
+  width: 120px;
+}
+
+/* The plan page: one column at a readable measure; the document's prose keeps about 70 to 80 characters a line. */
+.plans-page {
+  max-width: 46rem;
+}
+
+.plans-page-doc .read-doc {
+  font-size: var(--text-md);
+}
+
+.plans-page-doc .read-doc :is(p, li, blockquote, .read-h) {
+  max-width: 72ch;
+}
+
+.plans-page-side > :first-child {
+  margin-top: var(--distance-lg);
+}
+
+/* Wide (from 1200 px): the document in the main column at a readable width, the tasks and Details in a side column
+   that stays in view while the document scrolls. */
+@media (min-width: 1200px) {
+  .plans-page {
+    display: grid;
+    grid-template-columns: minmax(0, 80ch) minmax(280px, 360px);
+    gap: 0 var(--distance-lg);
+    align-items: start;
+    max-width: none;
+  }
+
+  .plans-page-side {
+    position: sticky;
+    top: 0;
+    padding-left: var(--distance-lg);
+    border-left: 1px solid var(--color-outline-variant);
+  }
+
+  .plans-page-side > :first-child {
+    margin-top: 0;
+  }
+
+  .plans-page-side .plans-page-details {
+    margin-top: var(--distance-lg);
+  }
+}
+
+@media (forced-colors: active) {
+  .plans-progress-bar {
+    border: 1px solid CanvasText;
+  }
+
+  .plans-progress-fill {
+    background: CanvasText;
+  }
+}
+
+@media (pointer: coarse) {
+  .plans-filter-controls .filter-button {
+    min-height: 44px;
+  }
+}
+
+/* The sort in use: bold, a bar at its left edge and "(in use)" after its name, never color alone. Its button keeps
+   aria-pressed for a screen reader, and its aria-label stays the plain name. */
+.plans-filter-menu .view-option[aria-pressed='true'] {
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+.plans-filter-menu .view-option[aria-pressed='true'] .view-name::after {
+  content: ' (in use)';
+  font-weight: 400;
+  color: var(--color-on-surface-variant);
+}
+
+@media (forced-colors: active) {
+  .plans-filter-menu .view-option[aria-pressed='true'] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}
+
+/* ---- end of the Filter and Sort menus ---- */

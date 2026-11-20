@@ -167,8 +167,14 @@ describe('the roadmap reads top to bottom', () => {
     expect(card.tagName).toBe('LI');
     const button = card.querySelector('button.roadmap-card-link') as HTMLElement;
     expect(button.textContent).toBe('Title PL-AUTH');
-    const line = document.getElementById(String(button.getAttribute('aria-describedby')));
+    // P4: the card describes itself with its status line and, for a plan with tasks, its progress in words
+    const [lineId, progressId] = String(button.getAttribute('aria-describedby')).split(' ');
+    const line = document.getElementById(lineId);
     expect(line?.textContent).toBe('Being built: 3 of 7 tasks done · Account');
+    const progress = document.getElementById(progressId) as HTMLElement;
+    expect(progress.textContent).toBe('43% done');
+    expect(progress.querySelector('.plans-progress-bar')?.getAttribute('aria-hidden')).toBe('true');
+    expect((progress.querySelector('.plans-progress-fill') as HTMLElement).style.getPropertyValue('--progress')).toBe('43%');
     expect(card.querySelector('.roadmap-card-sentence')?.textContent).toBe(
       'Users get accounts so they keep their streaks when they change phones.',
     );
@@ -275,6 +281,8 @@ describe('300+ plans', () => {
     const { node } = draw(MIX, { width: 1000, prefs: { compact: true } });
     expect(node.querySelector('.roadmap-body')?.classList.contains('compact')).toBe(true);
     expect(node.querySelectorAll('.roadmap-card-sentence').length).toBe(0);
+    // P4: Compact keeps one line, so no progress row either
+    expect(node.querySelectorAll('.roadmap-card-progress').length).toBe(0);
     expect(node.querySelector('[aria-label="Density"] button')?.getAttribute('aria-pressed')).toBe('true');
   });
 
@@ -324,7 +332,7 @@ describe('the plan page: the plan first, the technical facts last', () => {
     const { node } = page(AUTH);
     expect(node.querySelector('h2')?.textContent).toBe('Title PL-AUTH');
     expect(node.querySelector('.plans-page-status')?.textContent).toBe(
-      'Being built: 3 of 7 tasks done. Next step: Running now: AUTH-3.',
+      'Being built: 3 of 7 tasks done. Next: AUTH-3 is running.',
     );
     expect(node.querySelector('.plans-page-summary')?.textContent).toBe('Users get accounts so they keep their streaks.');
     const order = [
@@ -341,6 +349,21 @@ describe('the plan page: the plan first, the technical facts last', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(node.querySelector('.plans-page-doc .stub-doc')?.textContent).toBe('doc of PL-AUTH');
     expect(node.querySelector('.plans-page-tasks p')?.textContent).toBe('2 tasks: 1 done, 1 running.');
+  });
+
+  it('P4: the progress in words with a small bar, and the document in the main column with tasks and Details beside it', () => {
+    const { node } = page(AUTH);
+    const g = node.querySelector('.plans-page-progress') as HTMLElement;
+    expect(g.textContent).toBe('43% done, 3 of 7 tasks');
+    expect(g.querySelector('.plans-progress-bar')?.getAttribute('aria-hidden')).toBe('true');
+    const main = node.querySelector('.plans-page-main') as HTMLElement;
+    const side = node.querySelector('.plans-page-side') as HTMLElement;
+    expect(main.querySelector('.plans-page-doc')).toBeTruthy();
+    expect(side.querySelector('.plans-page-tasks')).toBeTruthy();
+    expect(side.querySelector('.plans-page-details')).toBeTruthy();
+    // a plan without tasks shows no progress (no "0 of 0")
+    const bare = page(entry('PL-NEW', { total: 0, finished: 0 })).node;
+    expect(bare.querySelector('.plans-progress')).toBe(null);
   });
 
   it('Details is closed by default, shows the key facts on its row and remembers a toggle', () => {

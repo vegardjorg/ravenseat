@@ -361,16 +361,29 @@ bottom: one section per horizon, **Inbox** (findings a track reported that nobod
 **Now** (in the queue, partly built or worked on), **Next**, **Later** and **Done**, each with its count. A plan is its
 title, one plain sentence (the summary, or when there is none the lead of its plan document, in italics with "From the
 plan document" as the tooltip) and a muted line with the status in words, the area and the next step ("Being built: 3
-of 7 tasks done · Account · Running now: AUTH-3"). On a wide screen (from 1200 px) the horizons sit side by side as
+of 7 tasks done · Account · AUTH-3 is running"), and for a plan with tasks a small bar with the percent in words
+("43% done"). On a wide screen (from 1200 px) the horizons sit side by side as
 columns; below that they are one list, and below 700 px always a list. **Columns** and **List** override the width
 for you, **Area** groups by area instead of horizon, and **Compact** gives one line per plan; the board remembers these
 choices in your browser. A long section shows 8 plans and then **Show n more** (`plans.roadmapFoldAfter`), Done is
 folded until you open it, and a search shows every match. `/` goes to the search and `j`/`k` move between the plans.
 
-A click on a title opens the **plan page**: the title, the status with the next step, the summary, **Open in Plan
+The toolbar has the same **Filter** and **Sort** menus as the Tasks room, on the Roadmap and on Plan entries. The
+Filter button says what is in use ("Filter", "Filter · 2", "Filter · Inbox"); its menu has **Show all**, **Quick
+filters** (Waiting on you, Inbox, Being built, Ready to become tasks, Before prod, Security, Stale, Dropped by
+Claude), **Saved** (your own filters, with **Delete** and **Save current as…**, kept in this browser; views saved in
+the old left column carry over), then the sections with counts (Horizon, Area, Priority and the rest, Has tasks)
+and **Reset**. **Sort** offers Roadmap order (the default), Recently changed, Recently added, Deadline, Title and
+Most blocked; the choice is kept in your browser and a saved filter keeps its sort. Below 600 px the two become one
+**Filter and sort** button with a tray that also holds Group by and Compact. `f` opens the Filter menu, Escape
+closes it with focus back on its button, and the arrow keys move between its rows.
+
+A click on a title opens the **plan page**: the title, the status with the next step ("Next: AUTH-3 is running"), the
+progress in words with a small bar, the summary, **Open in Plan
 entries** and **More** (the start line and the `/add-to-queue` line as CLI chips), the plan document itself (its plan
 source at its anchor, other sources under "Also"), the tasks, and last **Details** with the priority, maturity, size,
-id and history (closed by default, remembered). Escape or **Back to the roadmap** returns to the same card.
+id and history (closed by default, remembered). From 1200 px the document keeps a readable line length and the tasks
+and Details sit in a column beside it. Escape or **Back to the roadmap** returns to the same card.
 
 **More views**, at the end of the tab row, holds the **Overview** and the maps. **Overview** has one card per area,
 what is being worked on now and what waits on you. An area card shows its entry count, a priority bar and a maturity bar, how much is built and the
@@ -379,7 +392,7 @@ shared legend above the cards explains the symbols and colors: priority is prima
 and neutral for Later (never red, which means an error), the same colors as in the list, the tree map and the
 dependencies of Plan entries. **Details** under each card lists every group with its word
 and count; a click on the card opens Plan entries filtered on the area. **Plan entries** shows the entries as a list (the Priority map, Tree map and Dependencies
-are under More views), with filters and the details of the selected entry, and **Open the plan page** for the reading
+are under More views), with the toolbar's search, Filter and Sort (no left filter column) and the details of the selected entry, and **Open the plan page** for the reading
 view of the same entry. **Documents and agreements**, **Legal**, **Decisions** and **Launch**
 show the documents, the legal points, the owner decisions and what stands between the plan and launch.
 

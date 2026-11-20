@@ -2902,6 +2902,7 @@ const STATIC = {
   '/plans/work.js': [path.join('plans', 'work.js'), 'text/javascript; charset=utf-8'],
   // The Roadmap (the start page) and the plan page.
   '/plans/roadmap.js': [path.join('plans', 'roadmap.js'), 'text/javascript; charset=utf-8'],
+  '/plans/filter.js': [path.join('plans', 'filter.js'), 'text/javascript; charset=utf-8'],
   '/queuePlanView.js': [path.join('..', 'lib', 'queuePlanView.js'), 'text/javascript; charset=utf-8'],
 };
 

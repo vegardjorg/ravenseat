@@ -122,7 +122,7 @@ describe('planStatus: status in words and the next step', () => {
         total: 3,
         queue: [{ id: 'AUTH-3', column: 'inProgress' }],
       }).next,
-    ).toBe('Running now: AUTH-3');
+    ).toBe('AUTH-3 is running');
     expect(st({ maturity: 'built' }).next).toBe('Verify against the code');
     expect(st({ maturity: 'verified' }).next).toBe(null);
     expect(st({ inbox: { by: 'track' } }).next).toBe('Sort it');
