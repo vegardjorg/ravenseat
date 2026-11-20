@@ -97,9 +97,6 @@ export function planPropose(json) {
   const r = editPlans('plan propose', (reg, q) =>
     R.writeProposal(reg, id, raw, { ...ruleCtx(q), triage: s.inboxTriage, autoApply: s.inboxAutoApply }),
   );
-  // "Not building" (roadmap 0f, notBuilding.match): a captured plan that reads like an entry the owner chose not to
-  // build gets one INFO line. Advice only: the plan is captured either way.
-  const notBuilding = r.entry ? notBuildingLines([{ id: r.entry.id, text: [c.title, c.text].filter(Boolean).join(' ') }]) : [];
   if (json) {
     console.log(
       JSON.stringify({
@@ -190,6 +187,9 @@ export function planCapture(json) {
       { projects: missing && dry ? { ...(q.projects ?? {}), [I.PROJECT]: I.PROJECT_FIELDS } : (q.projects ?? {}), question: q.question ?? {} },
     ),
   );
+  // "Not building" (roadmap 0f, notBuilding.match): a captured plan that reads like an entry the owner chose not to
+  // build gets one INFO line. Advice only: the plan is captured either way.
+  const notBuilding = r.entry ? notBuildingLines([{ id: r.entry.id, text: [c.title, c.text].filter(Boolean).join(' ') }]) : [];
   if (json) {
     console.log(
       JSON.stringify({

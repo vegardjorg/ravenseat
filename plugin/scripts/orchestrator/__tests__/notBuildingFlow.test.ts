@@ -198,6 +198,16 @@ describe('not building: the INFO line and doctor', () => {
     expect(p.run(['add', 'More agentSummaries', '--id', 'T-3']).out).not.toMatch(/INFO not-building/);
   });
 
+  it('plan capture: a captured plan with a keyword gets the INFO line, and is captured', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    decided(p, 'Live Linear sync', 'linear');
+    const r = p.run(['plan', 'capture', 'Two-way Linear sync', '--text', 'Mirror the queue.']);
+    expect(r.code, r.all).toBe(0);
+    expect(r.out).toMatch(/Added PL-/);
+    expect(r.out).toMatch(/INFO not-building: PL-\S+ looks like D-0001 "Live Linear sync" \(keyword linear\)/);
+  });
+
   it('doctor names a passed revisit date always, an old entry only with --all; catalog show lists them apart', () => {
     const p = project();
     p.run(['catalog', 'init']);
