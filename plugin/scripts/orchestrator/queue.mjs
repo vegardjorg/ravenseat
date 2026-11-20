@@ -435,6 +435,15 @@
 //                                                                  (a known bug that can happen again becomes a gate task: proposed,
 //                                                                  or by gates.fromKnownBugs auto or off; cli/gate.mjs)
 //   node scripts/orchestrator/queue.mjs gate list                   (the gate tasks and their status)
+//   node scripts/orchestrator/queue.mjs tidy [--execute [--yes]] [--demo] [--json]   (merged worktrees and branches left
+//                                                                  behind: lists every worktree git knows, wherever it
+//                                                                  lives, merged or not, clean or not, locked, active task;
+//                                                                  merged queue branches with no worktree; demo folders.
+//                                                                  Read only by default. --execute removes only merged,
+//                                                                  clean, unlocked worktrees no active task uses (links
+//                                                                  first, then the folder, git worktree prune, git branch
+//                                                                  -d) after y/N; no terminal and no --yes deletes nothing.
+//                                                                  --demo --execute removes the demo folders. lib/tidy.js)
 //   node scripts/orchestrator/queue.mjs unlock [--force --by owner]   (the queue lock: prints the holder; with both flags
 //                                                                  releases it. Refused from a track worktree; the guard
 //                                                                  denies it to queue agents. lib/queueLock.js)
@@ -927,6 +936,8 @@ if (command === 'init') {
   (await import('./cli/merge.mjs')).cmdBlock();
 } else if (command === 'unlock') {
   (await import('./cli/unlock.mjs')).cmdUnlock();
+} else if (command === 'tidy') {
+  await (await import('./cli/tidy.mjs')).cmdTidy();
 } else if (command === 'surface') {
   (await import('./cli/surface.mjs')).cmdSurface();
 } else if (command === 'catalog') {

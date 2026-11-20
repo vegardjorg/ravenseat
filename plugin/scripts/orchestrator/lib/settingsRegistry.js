@@ -318,6 +318,21 @@ const SETTINGS = Object.freeze([
     'Where the queue, the plan register and the logs live, relative to the project root (gitignored).', { edit: 'file' }),
   row('timeLog', 'project', 'text', 'Time log', 'The file the time hook writes usage per agent to.', { edit: 'file' }),
   row('largeFileMb', 'project', 'number', 'Large file limit (MB)', 'Doctor warns about tracked files larger than this.'),
+  // Tidy (lib/tidy.js, cli/tidy.mjs, roadmap 1b). Friction: none for doctor, display only (one INFO row when there is
+  // something to remove; never WARN or FAIL), so on. afterMerge deletes by itself after a merge, and a delete cannot be
+  // undone even when the branch is merged (an ignored file, a local note, a build left in the folder is gone), so it is
+  // off and the owner turns it on. minAgeHours: none in practice (a worktree waits a few hours longer); it keeps a fresh
+  // worktree with no commits yet, which looks merged, from being deleted.
+  row('tidy.doctor', 'project', 'onoff', 'Tidy row in doctor',
+    'Doctor shows one INFO row with how many merged, clean worktrees and merged branches ravenseat tidy --execute would ' +
+    'remove, their size and the command. Only when there is something; it never warns or stops anything.'),
+  row('tidy.afterMerge', 'project', 'onoff', 'Tidy after merge',
+    'After a merge, the task\'s worktrees anywhere on disk (not only .claude/worktrees) are removed by the tidy rules: ' +
+    'merged, clean, not locked, links first, then the folder, git worktree prune, git branch -d. Off by default, ' +
+    'because a delete cannot be undone, even when the branch is merged.'),
+  row('tidy.minAgeHours', 'project', 'number', 'Tidy minimum age (hours)',
+    'ravenseat tidy leaves a worktree changed more recently than this, since a new worktree with no commits yet looks ' +
+    'merged. 0 = no minimum.'),
 
   // ---- 2. Limits and cost ----
   row('limits.maxConcurrent', 'limits', 'integer', 'Concurrent tracks',

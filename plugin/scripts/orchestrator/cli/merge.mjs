@@ -39,6 +39,7 @@ import { proposeGate } from './gate.mjs';
 import { registerQuietly, registerReviewItems, reviewReports } from './reviewItem.mjs';
 import { catalogRules, proposeRuleGates, stackChoicesNow } from './catalog.mjs';
 import { notBuildingLines } from './notBuilding.mjs';
+import { tidyOptions } from './tidy.mjs';
 
 const ER = require('./lib/eventRows.js');
 const CP = require('./lib/conflictPredict.js');
@@ -2303,6 +2304,16 @@ function tidyAfterMerge(branch, { resume, start, keepTrack = false }) {
       console.log(`Worktree: ${r.status}: ${r.message}`);
     } catch (e) {
       console.log(`Worktree: the cleanup failed, the merge stands: ${e?.message ?? e}`);
+    }
+  }
+  // tidy.afterMerge (off by default: a delete cannot be undone): the branch's worktrees anywhere on disk, by the tidy
+  // rules (lib/tidy.js: merged, clean, unlocked, links first, never git worktree remove). No minimum age: the merge just
+  // proved the work is in the base. The branch itself goes below with git branch -d, as before.
+  if (CONFIG.tidy?.afterMerge === true) {
+    try {
+      for (const line of require('./lib/tidy.js').tidyBranch(branch, tidyOptions({ minAgeHours: 0 }))) console.log(line);
+    } catch (e) {
+      console.log(`Tidy: the cleanup failed, the merge stands: ${e?.message ?? e}`);
     }
   }
   // Claude Code leaves a worktree-agent-* branch per agent; once merged with no worktree, nothing is on it that the base lacks.

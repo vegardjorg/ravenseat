@@ -613,6 +613,16 @@ const STANDARD = Object.freeze({
     addWarn: true,
     doctor: true,
   },
+  // Tidy (lib/tidy.js, cli/tidy.mjs, roadmap 1b): merged worktrees and branches left behind, anywhere on disk.
+  // doctor: one INFO row with the count and size of what `ravenseat tidy --execute` would remove (only when there is
+  // something); display only, so on. afterMerge: after a merge, the task's worktrees outside .claude/worktrees go too,
+  // by the same rules; off, because deleting cannot be undone, even when the branch is merged. minAgeHours: a worktree
+  // changed more recently stays (a fresh worktree with no commits looks merged); 3, as cleanup-worktree --all.
+  tidy: {
+    doctor: true,
+    afterMerge: false,
+    minAgeHours: 3,
+  },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.

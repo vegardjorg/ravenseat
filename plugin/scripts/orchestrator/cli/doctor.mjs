@@ -14,6 +14,9 @@
 //   worktrees   folders under <mainTree>/.claude/worktrees without .git (a half-deleted worktree blocks agent starts),
 //               and git worktrees whose folder is gone (`git worktree list --porcelain`)
 //   branches    queue branches of done or cancelled tasks, and merged agent branches, still there (WARN only)
+//   tidy        only when there is something: one INFO row with how many merged, clean worktrees (anywhere on disk) and
+//               merged queue branches with no worktree `ravenseat tidy --execute` would remove, and their size
+//               (lib/tidy.js). Never WARN or FAIL; off with tidy.doctor false
 //   machine     cores and memory against maxConcurrent (lib/machineAdvice.js, an estimate): OK, or WARN when maxConcurrent
 //               is above the suggestion; never FAIL
 //   budget      WARN when no daily budget is set (`ravenseat limit dailyBudget <usd>`); never FAIL, quiet guidance
@@ -68,6 +71,7 @@ import { checkTree } from './catalog.mjs';
 import { doctorNotBuilding } from './notBuilding.mjs';
 import { doctorUpdateRows } from './update.mjs';
 import { checkLinks } from './taskLinksCheck.mjs';
+import { tidyOptions } from './tidy.mjs';
 
 const BOARD = require('./lib/queueBoard.js');
 const QL = require('./lib/queueLock.js');
@@ -85,7 +89,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates', 'notBuilding'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates', 'notBuilding', 'tidy'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -824,6 +828,17 @@ function checkNotBuilding() {
 }
 
 /**
+ * Tidy (lib/tidy.js, roadmap 1b): one INFO row with what `ravenseat tidy --execute` would remove, only when there is
+ * something. Never WARN or FAIL. Reads only (git with GIT_OPTIONAL_LOCKS=0); the size walks only the removable folders.
+ */
+function checkTidy() {
+  if (CONFIG.tidy?.doctor === false) return [];
+  const T = require('./lib/tidy.js');
+  const d = T.doctorText(T.scan(tidyOptions({ sizes: 'removable' })).totals, CLI);
+  return d ? [info('tidy', d.message, d.fix)] : [];
+}
+
+/**
  * `ravenseat doctor [--json] [--all] [--fix]` (the usage is at the top of queue.mjs).
  * --fix: the one thing doctor repairs itself, the project's .gitignore (setup.mjs writeGitignore: the fixed lines, the
  * data folder or its share pattern, the time log and the private paths), before the checks run. Nothing else changes.
@@ -835,7 +850,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkLinks, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkLinks, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {
