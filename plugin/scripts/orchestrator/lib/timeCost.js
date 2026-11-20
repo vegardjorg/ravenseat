@@ -378,6 +378,7 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
   const context = [];
   const models = new Map();
   let cacheExpiry = 0;
+  let cacheExpiryUsd = 0;
   let previousTs = null;
   let thinking = 0;
   let thinkingTurns = 0;
@@ -401,8 +402,13 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
     // Cache expiry: the turn came after a pause longer than the cache lifetime and wrote more than it read (the whole context
     // was written again). The investigation, section 2.1: about $2.25 per expiry for an agent at 450k, vs $0.09 for a normal turn.
     const ttl = (hour ?? 0) > 0 ? CACHE_TTL_S['1h'] : CACHE_TTL_S['5m'];
-    if (ts !== null && previousTs !== null && ts - previousTs > ttl * 1000 && written > read)
+    if (ts !== null && previousTs !== null && ts - previousTs > ttl * 1000 && written > read) {
       cacheExpiry++;
+      // S8: what the expiry cost, the cache write of this turn at the turn's model price (the reads and output would have
+      // been paid anyway). Without a split the write counts as 5 min, as in addCounts.
+      const five = u.cache5m ?? (hour == null ? written : 0);
+      cacheExpiryUsd += costUsd({ cache_written: written, cache_written_5m: five, cache_written_1h: hour ?? 0 }, key);
+    }
     if (ts !== null) previousTs = ts;
   }
   let costSum = 0;
@@ -426,6 +432,7 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
     tools,
     api_errors: apiErrors,
     cache_expiry: cacheExpiry,
+    cache_expiry_usd: Math.round(cacheExpiryUsd * 10000) / 10000,
     thinking_tokens: thinkingTurns ? thinking : null,
     thinking_turns: thinkingTurns,
     cc_version: ccVersion,

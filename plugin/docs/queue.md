@@ -330,7 +330,8 @@ their usage in the window (their transcripts are under the session's `subagents/
 for the sessions bound as the orchestrator, is divided by the same merged changes as the headline and shown as a share
 of track cost + overhead; other main sessions are listed apart. Without the status line no session row is written and
 the line says so. The payload has no cumulative token counts (only the tokens in the context now), so the rows hold the
-cost, the durations, the context size and the model.
+cost, the durations, the context size, the model and the quota used at that moment (`five_hour_pct`, `seven_day_pct`,
+null without a subscription), so the time log keeps a history of when the quota burns.
 
 **Flow** (`ravenseat cost`, `flow` in `--json`, the cards "Is it right the first time?" and "How much runs without you?" in the board's Statistics) counts rows that the commands append
 to the time log (`lib/eventRows.js`, one JSON line each, never failing the command): `fixRound` (ravenseat resume, also when

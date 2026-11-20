@@ -97,6 +97,22 @@ describe('session cost', () => {
     expect(ER.sessionReading({}, T0)).toBeNull();
   });
 
+  it('S8: the session row carries the quota percentages from the status line (null when the payload has none)', () => {
+    const withLimits = {
+      ...input(2),
+      rate_limits: { five_hour: { used_percentage: 41.26 }, seven_day: { used_percentage: 63 } },
+    };
+    const reading = ER.sessionReading(withLimits, T0);
+    expect(reading).toMatchObject({ five_hour_pct: 41.3, seven_day_pct: 63 });
+    expect(ER.sessionRow({ reading, trigger: 'statusline' })).toMatchObject({ five_hour_pct: 41.3, seven_day_pct: 63 });
+    const without = ER.sessionRow({ reading: ER.sessionReading(input(2), T0), trigger: 'statusline' });
+    expect(without.five_hour_pct).toBeNull();
+    expect(without.seven_day_pct).toBeNull();
+    // A saved reading from before S8 (no fields) gives null, not undefined, on the hook's row.
+    const old = { sessions: { S: { session_id: 'S', usd: 1, time: new Date(T0).toISOString() } } };
+    expect(ER.sessionRowFromState(old, 'S', { trigger: 'end' })).toMatchObject({ five_hour_pct: null, seven_day_pct: null });
+  });
+
   it('sessionDecision: first reading, the $0.50 step, the 10-minute step, a restart and no growth', () => {
     const r = (usd: number, at = T0) => ER.sessionReading(input(usd), at);
     expect(ER.sessionDecision(undefined, r(0))).toEqual({ log: false, save: true });
