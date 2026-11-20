@@ -82,7 +82,9 @@ function capturePlan(reg, input, ctx = {}) {
   // A plan with the same title that is already sorted: captured anyway (the owner meant to write it down), with a
   // pointer, so the sorting can merge them.
   const same = entries.filter((p) => p !== s.entry && FI.findingKey(p.title) === key).map((p) => p.id);
-  const warnings = [...s.warnings];
+  // "the project general has no module" is no news for a capture (the sorting picks the real project), so it is left
+  // out, as `ravenseat finding` does.
+  const warnings = s.warnings.filter((x) => !x.includes('has no module'));
   if (same.length) warnings.push(`${id}: the same title as ${same.join(', ')} (merge them when sorting if they are one plan)`);
   return { ...s, warnings, created: true };
 }

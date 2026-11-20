@@ -93,6 +93,12 @@ describe('a capture is a normal plan entry', () => {
     expect(r.entry.id).toBe('PL-DARK-MODE-2');
     expect(r.warnings.join(' ')).toMatch(/PL-DARK-MODE-1/);
   });
+  it('no "has no module" warning for the general project (the sorting picks the real one), as for findings', () => {
+    const reg = P.emptyRegister(NOW);
+    const r = I.capturePlan(reg, { title: 'Streak freeze' }, { projects: { general: { title: 'General' } }, now: NOW });
+    expect(r.created).toBe(true);
+    expect(r.warnings).toEqual([]);
+  });
   it('an invalid input changes nothing', () => {
     const reg = P.emptyRegister(NOW);
     expect(I.capturePlan(reg, { title: '' }, { projects: PROJECTS, now: NOW }).error.length).toBeGreaterThan(0);
