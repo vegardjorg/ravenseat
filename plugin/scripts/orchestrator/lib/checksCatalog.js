@@ -172,6 +172,32 @@ function quickGateLine(items) {
   return list.length ? `Not in gates.quick: ${list.join('; ')}.${more}` : null;
 }
 
+/**
+ * The audit command per declared stack word (roadmap 0å KD-2): the package manager or toolchain a stack entry the owner
+ * accepted names. The first word in this order wins, so pnpm beats a plain npm.
+ */
+const AUDIT = Object.freeze([
+  ['pnpm', 'pnpm audit'],
+  ['yarn', 'yarn npm audit'],
+  ['npm', 'npm audit'],
+  ['uv', 'pip-audit'],
+  ['poetry', 'pip-audit'],
+  ['pip', 'pip-audit'],
+  ['cargo', 'cargo audit'],
+  ['rust', 'cargo audit'],
+  ['go', 'govulncheck ./...'],
+]);
+
+/** The dep-audit card's line from the declared stack words (facts.declaredStacks), or null: nothing is guessed. */
+function auditLine(declared) {
+  const list = Array.isArray(declared) ? declared : [];
+  for (const [word, command] of AUDIT) {
+    const hit = list.find((x) => x?.word === word);
+    if (hit) return `For this project: \`${command}\` (${hit.id} in the catalog says ${word}).`;
+  }
+  return null;
+}
+
 /** The line a suggestion adds from the facts, so the card names the stacks. Null when it has none. */
 function detailOf(key, facts) {
   // The command for the project's test runner (lib/fixTests.js suggestCommand); none is made up for an unknown stack.
@@ -180,6 +206,7 @@ function detailOf(key, facts) {
       ? `For this project: \`${facts.redOnBaseCommand}\` (read from its own files). Check that it runs only the files it is given.`
       : null;
   if (key === 'guard-failed') return ledgerLine(facts.ledger?.guardFailed, { guard: true });
+  if (key === 'dep-audit') return auditLine(facts.declaredStacks);
   // The canary's own lines: the version and the row types with counts, never content (lib/clients/claude/canary.js news).
   if (key === 'client-format')
     return facts.clientCanary?.lines?.length ? `Seen in the newest transcript: ${facts.clientCanary.lines.join('; ')}.` : null;

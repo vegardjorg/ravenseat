@@ -358,7 +358,9 @@ choice](catalog.md#from-an-owner-answer-to-a-design-choice)). With `suggest`, "R
 it when the question reads that way; it never presses the toggle. A proposal has a **Keep as not building** toggle the
 same way: pressed, a Decline also writes a proposed [not-building entry](catalog.md#not-building) with the reason as its
 text (`cancel --keep`), and a Checks card has **Set aside, keep as not building**. **Not building (n)** at the bottom of
-Decisions lists those entries, drafts first, with a search that filters as you type. A question's
+Decisions lists those entries, drafts first, with a search that filters as you type. **Project catalog (n)** above it
+lists the other catalog entries grouped by kind (Design language, Stack, Design choices), each with its status, its
+invariant and where it applies; display only (see [the catalog](catalog.md)). A question's
 optional `context` (`ravenseat question <id> --context "…"`, why it is asked) shows under the recommendation, and its
 `source` is a link when it names a task or a plan entry. A line under the title says
 "Orchestrator listening" while `ravenseat wait` runs in the orchestrator session (its heartbeat is under 90 s old), so an

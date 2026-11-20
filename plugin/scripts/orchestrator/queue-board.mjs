@@ -851,11 +851,13 @@ function notBuildingNow() {
     } catch {
       ledger = CATALOG.emptyLedger(); // error-ignored: no record means every entry is unconfirmed
     }
-    notBuildingCache = { key, list: NOT_BUILDING.boardEntries(CATALOG.readCatalog(dir), ledger) };
+    const cat = CATALOG.readCatalog(dir);
+    // groups: the other entries by kind (roadmap 0å KD-0, lib/catalog.js boardGroups), for "Project catalog" in Decisions.
+    notBuildingCache = { key, list: NOT_BUILDING.boardEntries(cat, ledger), groups: CATALOG.boardGroups(cat, ledger) };
     return notBuildingCache;
   } catch (e) {
     console.error(`the "not building" list failed: ${e?.message ?? e}`);
-    return { key: 'error', list: [] };
+    return { key: 'error', list: [], groups: [] };
   }
 }
 
@@ -1058,6 +1060,8 @@ function state() {
   const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
   // The "Not building" entries for Decisions (board/decide.js notBuildingPart): drafts first, then decided ones.
   data.notBuilding = notBuilding.list;
+  // The other catalog entries grouped by kind (board/decide.js catalogPart, roadmap 0å KD-0); the same cache key.
+  data.catalogGroups = notBuilding.groups ?? [];
   quick = {
     mtime,
     gitTime: g.time,

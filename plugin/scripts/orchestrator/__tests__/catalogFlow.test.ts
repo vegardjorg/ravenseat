@@ -160,6 +160,64 @@ describe('ravenseat catalog init, show and check', () => {
     expect(one.out).toMatch(/linked from plan entries: PL-DATES/);
     expect(p.run(['catalog', 'show', 'D-0099']).code).toBe(1);
   });
+
+  it('KD-0: propose --kind and --except write the fields, and show groups the entries by kind', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION);
+    const r = p.run(['catalog', 'propose', '--kind', 'design', '--title', 'Colours from tokens', '--invariant', 'Only tokens.', '--paths', 'lib/**', '--except', 'lib/a.js']);
+    expect(r.code, r.all).toBe(0);
+    const text = p.read(`${CAT}/decisions/D-0002-colours-from-tokens.md`);
+    expect(text).toMatch(/\nkind: design\n/);
+    expect(text).toMatch(/\nexcept: \["lib\/a\.js"\]\n/);
+    const list = p.run(['catalog', 'show']).out;
+    expect(list).toMatch(/Design language \(decisions\/\):\s*\n\s+D-0002\s+proposed\s+Colours from tokens/);
+    expect(list).toMatch(/Design choices \(decisions\/\):\s*\n\s+D-0001\s+proposed/);
+    expect(p.run(['catalog', 'show', 'D-0002']).out).toMatch(/kind: design[\s\S]*except: lib\/a\.js/);
+    expect(JSON.parse(p.run(['catalog', 'show', '--json']).out).decisions.map((d: { kind: string }) => d.kind)).toEqual(['decision', 'design']);
+    const wrong = p.run(['catalog', 'propose', '--kind', 'theme', '--title', 'X', '--invariant', 'Y.', '--paths', 'lib/**']);
+    expect(wrong.code).toBe(1);
+    expect(wrong.err).toMatch(/--kind must be one of decision, design, stack, dependency/);
+  });
+
+  it('KD-2: propose --kind stack --uses --alternatives --stack writes a stack entry; check warns when the manifest disagrees once accepted', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    const r = p.run(['catalog', 'propose', '--kind', 'stack', '--title', 'Dates with dayjs', '--invariant', 'Dates use dayjs.', '--paths', 'package.json', '--uses', 'dates:dayjs', '--alternatives', 'moment,luxon', '--stack', 'npm']);
+    expect(r.code, r.all).toBe(0);
+    const text = p.read(`${CAT}/decisions/D-0001-dates-with-dayjs.md`);
+    expect(text).toMatch(/\nuses: \{"job":"dates","tool":"dayjs"\}\n/);
+    expect(text).toMatch(/\nalternatives: \["moment","luxon"\]\n/);
+    expect(p.run(['catalog', 'show', 'D-0001']).out).toMatch(/uses: dayjs for dates[\s\S]*alternatives: moment, luxon[\s\S]*stack: npm/);
+    expect(p.run(['catalog', 'propose', '--title', 'X', '--invariant', 'Y.', '--paths', 'lib/**', '--uses', 'a:b']).err).toMatch(/need --kind stack/);
+    expect(p.run(['catalog', 'propose', '--kind', 'stack', '--title', 'X', '--invariant', 'Y.', '--paths', 'lib/**', '--uses', 'nocolon']).err).toMatch(/--uses must be <job>:<tool>/);
+    // The fixture's package.json has dayjs: quiet. With moment in it, the accepted entry warns.
+    expect(p.run(['catalog', 'accept', 'D-0001', '--by', 'owner']).code).toBe(0);
+    expect(p.run(['catalog', 'check']).all).not.toMatch(/chose dayjs/);
+    p.write('package.json', JSON.stringify({ dependencies: { dayjs: '1.11.0', moment: '2.0.0' } }));
+    expect(p.run(['catalog', 'check']).all).toMatch(/D-0001: moment is in package\.json, but D-0001 chose dayjs for dates/);
+  });
+
+  it('KD-1: the first init proposes a design entry from the token file; a deleted draft is not written again', () => {
+    const p = project();
+    p.write('web/tokens.css', ':root {\n  --color-primary: #1a73e8;\n}\n');
+    p.write('web/app.css', '.a { color: var(--color-primary); }\n');
+    execFileSync('git', ['-C', p.repo, 'add', '--', 'web/tokens.css', 'web/app.css'], { stdio: 'ignore' });
+    const r = p.run(['catalog', 'init']);
+    expect(r.code, r.all).toBe(0);
+    expect(r.out).toMatch(/D-0001-colours-only-from-the-design-tokens\.md \(a proposed design entry from web\/tokens\.css\)/);
+    const text = p.read(`${CAT}/decisions/D-0001-colours-only-from-the-design-tokens.md`);
+    expect(text).toMatch(/\nstatus: proposed\n/);
+    expect(text).toMatch(/\nkind: design\n/);
+    expect(text).toMatch(/\nexcept: \["web\/tokens\.css"\]\n/);
+    const one = p.run(['catalog', 'show', 'D-0001']).out;
+    expect(one).toMatch(/source: web\/tokens\.css/);
+    expect(one).toMatch(/check: warn/);
+    expect(p.run(['catalog', 'check']).code).toBe(0);
+    fs.rmSync(path.join(p.repo, CAT, 'decisions', 'D-0001-colours-only-from-the-design-tokens.md'));
+    expect(p.run(['catalog', 'init']).out).not.toMatch(/design entry/);
+    expect(fs.readdirSync(path.join(p.repo, CAT, 'decisions'))).toEqual(['README.md']);
+  });
 });
 
 describe('the owner lock on accepted', () => {

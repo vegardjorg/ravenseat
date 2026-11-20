@@ -41,6 +41,7 @@ t.decide = {
   doneOpen: false, // "Decided today" is open
   nbOpen: false, // "Not building" is open (roadmap 0f)
   nbQuery: '', // its search, kept across the redraws
+  catOpen: false, // "Project catalog" is open (roadmap 0å KD-0)
   queueView: VIEWS.includes(savedView) && savedView !== 'decisions' ? savedView : 'flat',
   landed: false,
 };
@@ -618,6 +619,66 @@ function decidedPart() {
   return box;
 }
 
+/** The status of a catalog entry in words: the badge text and whether it holds. */
+function catalogBadge(status) {
+  if (status === 'accepted') return { text: 'Holds', hold: true };
+  if (status === 'unconfirmed') return { text: 'Unconfirmed', hold: false };
+  return { text: 'Proposed', hold: false };
+}
+
+/**
+ * One catalog entry: id, status, title, the invariant (the only text a track gets), where it applies and, for a design
+ * entry, where its tokens live.
+ */
+function catalogItem(e) {
+  const badge = catalogBadge(e.status);
+  const where = `Applies to: ${(e.paths ?? []).join(', ')}${e.except?.length ? `; not ${e.except.join(', ')}` : ''}`;
+  return el(
+    'li',
+    { class: 'decide-nb-item' },
+    el(
+      'p',
+      { class: 'decide-nb-title' },
+      el('span', { class: 'sp-id', text: e.id }),
+      el('span', { class: badge.hold ? 'badge' : 'badge decide-nb-draft', text: badge.text }),
+      el('span', { class: 'decide-nb-name', text: e.title }),
+    ),
+    e.invariant ? el('p', { class: 'decide-nb-why', text: e.invariant }) : null,
+    el('p', { class: 'decide-nb-meta', text: where }),
+    // A design entry (KD-1) names where its tokens live; the catalog never copies them.
+    e.source ? el('p', { class: 'decide-nb-meta', text: `Tokens: ${[].concat(e.source).join(', ')}` }) : null,
+    badge.hold
+      ? null
+      : el('p', { class: 'decide-nb-meta', text: `Accept it with: ravenseat catalog accept ${e.id} --by owner` }),
+  );
+}
+
+/**
+ * "Project catalog" (roadmap 0å KD-0): the design language, stack and design choices of docs/queue/catalog/, grouped by
+ * kind, folded like "Not building". Display only: the entries are written with `catalog propose` and accepted with
+ * `catalog accept`. Not-building entries have their own part below.
+ */
+function catalogPart() {
+  const groups = t.data?.catalogGroups ?? [];
+  const n = groups.reduce((s, g) => s + (g.entries?.length ?? 0), 0);
+  if (!n) return null;
+  const box = el(
+    'details',
+    { class: 'decide-done decide-nb', open: t.decide.catOpen },
+    el('summary', { text: `Project catalog (${n})` }),
+    el('p', {
+      class: 'decide-hint',
+      text: 'The rules a track works under, by kind. One that holds binds the tracks; a proposed one is a suggestion until you accept it.',
+    }),
+    ...groups.flatMap((g) => [
+      el('h3', { class: 'decide-cat-kind', text: `${g.title} (${g.entries.length})` }),
+      el('ul', { class: 'decide-nb-list', 'aria-label': g.title }, g.entries.map(catalogItem)),
+    ]),
+  );
+  box.addEventListener('toggle', () => (t.decide.catOpen = box.open));
+  return box;
+}
+
 /** The words an entry is searched on: its id, title, reason, keywords, revisit line and source. */
 function notBuildingText(e) {
   return [e.id, e.title, e.why, ...(e.keywords ?? []), e.revisit, e.source].filter(Boolean).join(' ').toLowerCase();
@@ -827,7 +888,7 @@ function drawDecisions(fresh) {
       ),
     );
   }
-  parts.push(sortPart(t.data.inbox?.sort), unloggedLine(), decidedPart(), notBuildingPart());
+  parts.push(sortPart(t.data.inbox?.sort), unloggedLine(), decidedPart(), catalogPart(), notBuildingPart());
   main.append(el('section', { class: 'decide', 'aria-labelledby': 'decide-title' }, parts));
   main.scrollTop = scroll;
   if (!hadFocus) return;

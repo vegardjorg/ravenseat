@@ -378,26 +378,51 @@ function depsOf(p, text) {
 /**
  * V3: per manifest { path, base, tip } (the texts; base null for a new manifest), the added dependencies whose purpose
  * group already has another package there (on the base, or added earlier in the same change).
- * @returns {{ manifest: string, added: string, purpose: string, title: string, existing: string[] }[]}
+ *
+ * choices (roadmap 0å KD-2): the catalog's stack entries (lib/catalog.js stackChoices: id, status, job, tool,
+ * alternatives). An added package the entry chose against (its alternatives, which also covers a job the purpose table
+ * does not know) or one in the tool's purpose group (not the tool itself) gets `decision` {id, status, tool, job}, also
+ * when the manifest has no other package for the job yet. A superseded entry never comes here.
+ * @returns {{ manifest: string, added: string, purpose: string, title: string, existing: string[],
+ *   decision?: { id: string, status: string, tool: string, job: string } }[]}
  */
-function dependencyFacts(manifests, purposes = PURPOSES) {
+function dependencyFacts(manifests, purposes = PURPOSES, choices = []) {
   const out = [];
+  const low = (s) => String(s ?? '').toLowerCase();
   for (const m of manifests ?? []) {
     const eco = ecosystemOf(m.path);
     const base = m.base == null ? [] : depsOf(m.path, m.base);
     const tip = depsOf(m.path, m.tip);
     if (!base || !tip) continue;
     const have = [...base];
+    const groupOf = (n) => purposes.find((p) => p.ecosystem === eco && p.packages.includes(n));
     for (const n of tip) {
       if (base.includes(n)) continue;
-      const group = purposes.find((p) => p.ecosystem === eco && p.packages.includes(n));
+      const group = groupOf(n);
       const existing = group ? have.filter((x) => x !== n && group.packages.includes(x)) : [];
-      if (group && existing.length) out.push({ manifest: m.path, added: n, purpose: group.id, title: group.title, existing });
+      const c = (choices ?? []).find(
+        (x) => x?.tool && low(x.tool) !== low(n) && ((x.alternatives ?? []).some((a) => low(a) === low(n)) || (group && groupOf(x.tool) === group)),
+      );
+      const decision = c ? { id: c.id, status: c.status, tool: c.tool, job: c.job ?? group?.title ?? 'this job' } : null;
+      if ((group && existing.length) || decision)
+        out.push({
+          manifest: m.path,
+          added: n,
+          purpose: group?.id ?? 'catalog',
+          title: group?.title ?? decision.job,
+          existing,
+          ...(decision ? { decision } : {}),
+        });
       have.push(n);
     }
   }
   return out;
 }
+
+/** Does the fact name a stack entry the owner accepted (a CATALOG line, never a stop)? */
+const catalogFact = (x) => x?.decision?.status === 'accepted';
+/** ", and D-0004 (proposed) chose dayjs for dates" for a fact with a choice the owner has not accepted. */
+const choiceText = (x) => (x.decision ? `${x.decision.id} (${x.decision.status}) chose ${x.decision.tool} for ${x.decision.job}` : '');
 
 /** The examples in the purpose table that do not behave, and a package listed twice in one ecosystem (texts). */
 function exampleProblems(purposes = PURPOSES) {
@@ -485,7 +510,7 @@ function writeOutside(rel, task, { migrations = null } = {}) {
  * All parts that are on. `io.findDefinitions(names)`, `io.dirExists(folder)` and `io.readFile(side, path)` ('base' or
  * 'tip') are the caller's look-ups. A part whose look-up throws is skipped, with a line in `errors`.
  */
-function assess({ diff, changedPaths = [], task = null, setup = setupOf({}), io = {}, migrations = null }) {
+function assess({ diff, changedPaths = [], task = null, setup = setupOf({}), io = {}, migrations = null, choices = [] }) {
   const files = parseDiff(diff);
   const r = { setup, reuse: [], folders: [], dependencies: [], drift: null, errors: [] };
   const part = (name, fn) => {
@@ -504,7 +529,8 @@ function assess({ diff, changedPaths = [], task = null, setup = setupOf({}), io 
         .map((f) => ({ path: f.to, base: f.status === 'A' ? null : io.readFile('base', f.from ?? f.to), tip: io.readFile('tip', f.to), status: f.status }))
         // A changed manifest the base side of which could not be read would make every dependency look new.
         .filter((m) => m.status === 'A' || m.base != null);
-      r.dependencies = dependencyFacts(manifests);
+      // choices: the catalog's stack entries (KD-2), so a note can name the one an added package goes against.
+      r.dependencies = dependencyFacts(manifests, PURPOSES, choices);
     });
   if (setup.drift) part('drift', () => (r.drift = driftFacts(changedPaths, task, { migrations })));
   return r;
@@ -531,7 +557,16 @@ function driftText(d) {
 
 /** The receive lines: one NOTE line per fact (at most MAX_LINES of a kind), never a stop. */
 function noteLines(r, { id = '?' } = {}) {
-  const out = [];
+  // A package added against a stack entry the owner accepted (KD-2): a CATALOG line first, as a broken check rule
+  // gets (lib/catalogChecks.js receiveLines). It asks for something, but never stops.
+  const out = r.dependencies
+    .filter(catalogFact)
+    .slice(0, MAX_LINES)
+    .map(
+      (x) =>
+        `CATALOG ${id}: ${x.added} added in ${x.manifest}, but ${x.decision.id} chose ${x.decision.tool} for ${x.decision.job} ` +
+        `(accepted by the owner). Use ${x.decision.tool}, or ask the owner to supersede ${x.decision.id}.`,
+    );
   const where = (o) => `${o.file}:${o.line}`;
   r.reuse.slice(0, MAX_LINES).forEach((x) => {
     const more = x.others.length > 3 ? ` and ${x.others.length - 3} more` : '';
@@ -542,9 +577,13 @@ function noteLines(r, { id = '?' } = {}) {
     const list = shortList(r.folders.map((f) => `${f.folder}/ (${plural(f.files, 'file')})`));
     out.push(`NOTE new folder (${id}): ${list} ${r.folders.length === 1 ? 'is' : 'are'} not on the base. A new module boundary is an architecture choice: was it an owner question?`);
   }
-  r.dependencies.slice(0, MAX_LINES).forEach((x) =>
-    out.push(`NOTE dependency (${id}): ${x.added} in ${x.manifest}, and the project already has ${x.existing.join(', ')} for ${x.title}.`),
-  );
+  r.dependencies
+    .filter((x) => !catalogFact(x))
+    .slice(0, MAX_LINES)
+    .forEach((x) => {
+      const facts = [x.existing.length ? `and the project already has ${x.existing.join(', ')} for ${x.title}` : null, choiceText(x) || null].filter(Boolean);
+      out.push(`NOTE dependency (${id}): ${x.added} in ${x.manifest}${x.existing.length ? ', ' : '; '}${facts.join('; ')}.`);
+    });
   const d = driftText(r.drift);
   if (d) out.push(`NOTE ${d.kind} (${id}): ${d.text}.`);
   return out;
@@ -557,12 +596,16 @@ function noteLines(r, { id = '?' } = {}) {
  * --all) gives the detail form of noteLines. The package section (packageSection) always has every fact.
  */
 function receiveLines(r, { id = '?', cli = 'ravenseat', all = false } = {}) {
-  const detail = noteLines(r, { id });
-  if (all || detail.length <= 1) return detail;
+  // The CATALOG lines (an accepted stack entry, KD-2) stay whole and first; the rest is summed up as before.
+  const all0 = noteLines(r, { id });
+  const catalog = all0.filter((l) => l.startsWith('CATALOG '));
+  const detail = all0.filter((l) => !l.startsWith('CATALOG '));
+  if (all || detail.length <= 1) return [...catalog, ...detail];
   const parts = [];
+  const deps = r.dependencies.filter((x) => !catalogFact(x)).length;
   if (r.reuse.length) parts.push(`${plural(r.reuse.length, 'name')} the base already defines (reuse)`);
   if (r.folders.length) parts.push(plural(r.folders.length, 'new folder'));
-  if (r.dependencies.length) parts.push(`${plural(r.dependencies.length, 'dependency', 'dependencies')} for a job the project already covers`);
+  if (deps) parts.push(`${plural(deps, 'dependency', 'dependencies')} for a job the project already covers`);
   const d = r.drift && driftText(r.drift);
   if (d)
     parts.push(
@@ -571,6 +614,7 @@ function receiveLines(r, { id = '?', cli = 'ravenseat', all = false } = {}) {
         : `${plural(r.drift.changed, 'file')} in ${r.drift.folders.length} folders, the task names none (scope)`,
     );
   return [
+    ...catalog,
     `NOTE scope (${id}): ${parts.join(', ')}. Facts for the reviewer, never a stop: each is in 00-package.md (Reuse and scope), ` +
       `or ${cli} receive ${id} --all prints them.`,
   ];
@@ -594,8 +638,14 @@ function packageSection(r) {
   for (const x of r.reuse)
     lines.push(`- reuse: ${tick(x.name)} (new in ${tick(x.file)}) is already defined in ${x.others.map((o) => tick(`${o.file}:${o.line}`)).join(', ')}`);
   for (const f of r.folders) lines.push(`- new folder: ${tick(`${f.folder}/`)} (${plural(f.files, 'file')}), not on the base`);
-  for (const x of r.dependencies)
-    lines.push(`- dependency: ${tick(x.added)} in ${tick(x.manifest)}, the project already has ${x.existing.map(tick).join(', ')} (${x.title})`);
+  for (const x of r.dependencies) {
+    // The stack entry it goes against (KD-2), with its status: one that holds makes a second tool an owner question.
+    const chose = x.decision
+      ? `${x.decision.id} chose ${tick(x.decision.tool)} for ${x.decision.job} (${x.decision.status === 'accepted' ? 'accepted' : x.decision.status})`
+      : null;
+    const has = x.existing.length ? `the project already has ${x.existing.map(tick).join(', ')} (${x.title})` : null;
+    lines.push(`- dependency: ${tick(x.added)} in ${tick(x.manifest)}, ${[has, chose].filter(Boolean).join('; ')}`);
+  }
   const d = driftText(r.drift);
   if (d) lines.push(`- ${d.kind}: ${d.text}`);
   for (const e of r.errors) lines.push(`- could not check ${e}`);

@@ -76,8 +76,16 @@ Context, the choice and what follows from it, in at most 30 lines.
 - `status`: `proposed`, `accepted` or `superseded`. Anyone may propose.
 - `invariant`: one sentence that can be checked, at most 300 characters. It is the only text of a choice a track
   gets, so it must stand on its own.
+- `kind`: what sort of entry it is. `decision` (the default when the line is missing), `design` (a rule of the design
+  language, see [Design language](#design-language)), `stack` (which tool does a job, see [Stack
+  entries](#stack-entries)), `dependency` (a decision about one library) or `not-building` (see [Not
+  building](#not-building)). One field, one set of values. `catalog show` and **Project catalog** in Decisions group
+  the entries by it.
 - `paths`: the files the choice applies to, as globs from the project root. No `..` and no absolute paths.
   `catalog check` warns when they match no tracked file.
+- `except`: optional globs inside `paths` the choice does not apply to (the globs have no negation), such as the token
+  file of a colour rule. The check rules, `catalog check` and the excerpt all skip them. `catalog check` warns about an
+  `except` that matches no tracked file inside `paths`.
 - `supersedes`: the id of the choice this one replaces. To change an accepted choice, write a new one with
   `supersedes: D-0001` (`catalog propose --supersedes D-0001` does it). The owner's accept of the new one sets the old
   one to `superseded` in the same step.
@@ -86,17 +94,83 @@ Context, the choice and what follows from it, in at most 30 lines.
   see [Check rules](#check-rules).
 - `accepted_by` and `accepted`: written by `catalog accept`, never by hand.
 
-A body over 30 lines gives a warning: the plan register holds the long text.
+A body over 30 lines gives a warning: the plan register holds the long text. `kind` and `except` bind like the
+invariant: changing either after the accept needs a new accept. An entry without them keeps the fingerprint it had.
+
+## Design language
+
+A `design` entry is one rule of the project's design language: colours only from the tokens, the type scale, the
+surface roles. It names where the tokens live in `source` (a path, or a list of paths, each with an optional `#name`
+inside the file, such as `lib/theme.js#PALETTE`) and never holds a copy of them, so the catalog cannot drift from the
+tokens. Put the token file in `except` when it is inside `paths`, so a colour rule does not hit the place the colours
+are defined.
+
+```markdown
+---
+id: D-0001
+title: Colours only from the tokens
+status: proposed
+kind: design
+source: ["ui/tokens.css"]
+paths: ["ui/**"]
+except: ["ui/tokens.css"]
+invariant: UI code takes its colours from the tokens in ui/tokens.css; a hex colour or rgb() stands only in the token file.
+check:
+  forbid: "..."
+  hit: ["  color: #1a73e8;"]
+  miss: ["color: var(--color-primary);", "see issue #123 in the tracker"]
+---
+```
+
+The first `catalog init` looks for a token file (a CSS file with `:root` and `--color-` properties,
+`tailwind.config.*`, a `tokens.json`, or a `theme.ts` or `theme.js`) and, when it finds one and the catalog has no
+design entry, writes a proposed entry like the one above with a colour rule. The rule hits a hex colour or `rgb()` and
+`hsl()` in a value, and not an issue number, an anchor (`href="#add"`), an HTML entity, a CSS id selector or
+`color-mix(in srgb, ...)`. Narrow its paths, run `catalog check` to see what it already hits, then accept it or delete
+the file: init does not write it again.
+
+A design entry goes into the mission and the review package under **Design language** (see the excerpt below), and
+`reviewer-design` checks the delivery against those lines. The board shows the entries in Decisions, **Project
+catalog**, with the token files. No setting of its own: the rules follow `catalog.checks`, and the excerpt follows
+`catalog.missionExcerpt` and `catalog.reviewExcerpt`.
+
+## Stack entries
+
+A `stack` entry says which tool does a job and why, with the owner lock a Prefer line does not have. Its fields:
+
+- `uses: {"job": "dates", "tool": "dayjs"}`: the job in a few words and the tool as its package name.
+- `alternatives: ["moment", "luxon"]`: the tools it was chosen against. They also make a group for a job the purpose
+  table of the dependency notes does not know.
+- `stack: ["pnpm"]`: words it declares for the checks (lower case). An entry needs `uses` or `stack`.
+
+The three fields are JSON (`{"job": ...}` with quotes) or the indented form (`uses:` and `  job: dates` under it).
+They bind like the invariant: a change needs a new accept. `catalog propose --kind stack --uses dates:dayjs
+--alternatives moment,luxon --stack pnpm` writes one.
+
+Once the owner has accepted it:
+
+- **The Checks tab** (`catalog.stackFacts`, on): the tool and the `stack` words join the stack the tab sees, so a
+  recipe's `stack:pnpm` holds and the dependency audit card names its command (`pnpm audit`, `npm audit`,
+  `pip-audit`, `cargo audit`, `govulncheck ./...`). A proposed entry declares nothing: a track cannot turn a card on or
+  off.
+- **The dependency notes at receive**: a package the delivery adds that the entry chose against (an alternative, or
+  another package in the tool's purpose group) gives a `CATALOG <task>:` line first, naming the entry and the tool. It
+  asks for something and stops nothing. Against a proposed entry the note is the usual `NOTE dependency` with the
+  entry's id. The review package names the entry either way.
+- **`catalog check`** warns when an alternative is in a manifest, when the tool is in none of the manifests the
+  entry's `paths` name, and when a Prefer line for the same job says another tool.
+
+A Prefer line stays the short form for small things. `catalog check` only asks that the two agree.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `catalog init` | Creates `stack.md` with the generated block, `reuse.md` and `decisions/README.md` where they are missing, in the main tree. Never writes over a file that is there, except the generated block in `stack.md`. Refused from a track worktree |
-| `catalog show [<D-id>] [--json]` | The prefer lines, the reuse rows and the design choices with the status that counts. With an id: that choice in full, and the plan entries that link to it |
+| `catalog init` | Creates `stack.md` with the generated block, `reuse.md` and `decisions/README.md` where they are missing, in the main tree. On the first init it also proposes one design entry from the project's token file, when it finds one (see [Design language](#design-language)). Never writes over a file that is there, except the generated block in `stack.md`. Refused from a track worktree |
+| `catalog show [<D-id>] [--json]` | The prefer lines, the reuse rows and the entries with the status that counts, grouped by `kind` (Design language, Stack, Dependencies, Design choices, Not building). With an id: that entry in full, and the plan entries that link to it |
 | `catalog check [--json]` | Shape, ids, status, the owner lock, `supersedes`, the paths, the reuse rows and the generated block. Exit 1 on an error, 0 on warnings only, 0 without a catalog. Read only |
 | `catalog accept <D-id> --by owner` | The owner accepts a design choice: `status: accepted`, `accepted_by` and `accepted` in the file, and the owner's record in the data folder. A choice with `supersedes` sets the old one to `superseded` in the same step (refused, with nothing changed, when the old one is not there). Refused from a track worktree whatever `--by` says |
-| `catalog propose --title "..." --invariant "..." --paths "<glob>[,<glob>]" [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--from-answer <question>] [--json]` | Writes the next free id (one above the highest in the file names and the owner's record) as `status: proposed` in the main tree, then runs `catalog check` and prints what it says about the new choice. With `--supersedes` and no `--paths` or `--plan`, it takes them from the old choice. Writes nothing when the choice would be broken, never over a file. Refused from a track worktree |
+| `catalog propose --title "..." --invariant "..." --paths "<glob>[,<glob>]" [--kind design\|stack\|dependency] [--except "<glob>"] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--from-answer <question>] [--json]` | Writes the next free id (one above the highest in the file names and the owner's record) as `status: proposed` in the main tree, then runs `catalog check` and prints what it says about the new choice. `--kind` and `--except` write those fields; with `--kind stack`, `--uses`, `--alternatives` and `--stack` write a [stack entry](#stack-entries). With `--supersedes` and no `--paths` or `--plan`, it takes them from the old choice. Writes nothing when the choice would be broken, never over a file. Refused from a track worktree |
 | `catalog find <word...> [--json]` | Searches the code index, the reuse rows, the design choices and the prefer lines. Every word must match; at most ten short lines. Builds the code index first (from the cache) |
 | `catalog index [--json]` | Builds or refreshes the code index and says how many files it read and how many came from the cache. Names a `@shared` tag that is not on an export |
 
@@ -112,7 +186,7 @@ version with `ravenseat catalog accept <id> --by owner` (or from the board) in t
 
 The accept writes two things: the status lines in the choice's file, and a record in
 `<dataFolder>/catalog-accepted.json` with a fingerprint of what binds (the id, the invariant, the paths and the
-`check` rules). The record file is gitignored and written by the queue only: the write guard keeps queue agents' file
+`check` rules, and `kind` and `except` when the entry has them). The record file is gitignored and written by the queue only: the write guard keeps queue agents' file
 writes off it, and the push guard denies a queue agent's shell command that names it.
 
 A choice that says `accepted` without a matching record reads as `unconfirmed`. That covers a track that set the line
@@ -132,6 +206,9 @@ task's `owned_files`, `shared_patch` and `reads`:
   most five, the binding ones first, by id. Only a choice the owner accepted (with the record, see the owner lock) is
   under "Design choices that hold" and binding. A proposed choice, and one that says accepted without the owner's
   record (unconfirmed, so marked), is under "Proposed design choices" as a suggestion. A superseded choice never comes.
+- **Design language**: the `design` entries whose `paths` meet those files, holding or proposed, under their own
+  heading right after the choices that hold. Each line says its status (holds, proposed, unconfirmed) and where the
+  tokens live (`source`). At most three, the ones that hold first.
 - **Prefer lines** from `stack.md`, at most ten: they hold for the whole project.
 - **Reuse rows** from `reuse.md` in the task's folders (the folder of an owned or read file, or inside an owned
   folder), at most 15.
@@ -408,6 +485,9 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Doctor row | One WARN row, only when `catalog check` finds an error | `catalog.doctor`, on |
 | Plan link warning | A warning at `plan new` and `plan edit` only | `catalog.planLinks`, on |
 | Checks card | Low priority, can be set aside | No setting: it only proposes |
+| Design entries and the init draft | One proposed file on the first init when a token file is found; a Design language part in the excerpt, inside the same cap. Stops nothing | No setting of its own: the rules follow `catalog.checks`, the excerpt `catalog.missionExcerpt` and `catalog.reviewExcerpt`; a deleted draft is not written again |
+| Stack words in the Checks tab | Can change which cards show; stops nothing; only accepted stack entries count | `catalog.stackFacts`, on; off gives the cards from the manifests alone |
+| Stack choice in the dependency notes | A CATALOG line at receive for a package an accepted stack entry chose against; never a stop | Follows `scopeNotes.dependencies` |
 | Agent access | `catalog show`, `catalog check` and `catalog find` allowed for queue agents | No setting |
 | Code index at receive and in the missions | One git listing per tree and a read of each changed file (the first build of about 300 files took under half a second here); a file in the data folder; more lines in the excerpt, inside the same cap. It stops nothing | `catalog.index`, off: the plan puts it on the opt-in list, since it builds and stores a file and its worth grows with the project |
 | `catalog propose` | Only when someone runs it; writes a `proposed` file that binds nothing until the owner accepts it | No own setting: a write on request that decides nothing. `catalog.captureAnswers` `off` refuses it too (one switch) |

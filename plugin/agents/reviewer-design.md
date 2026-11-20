@@ -36,7 +36,9 @@ unclear, say so as an open question.
    has a label), visible focus, the whole flow by keyboard in a sensible order, no keyboard trap, contrast in both
    themes, text that is not only colour, target sizes, and motion that respects reduced motion.
 4. **Light and dark mode.** Colours from the project's tokens, not hard-coded values; nothing that vanishes or loses
-   contrast in one of the themes.
+   contrast in one of the themes. When `00-package.md` has a **Design language** part (from the project catalog), its
+   lines are the project's own rules and say where the tokens live: check the delivery against them. Breaking one that
+   holds is `scope-drift`; a proposed one is a note, never a finding by itself.
 5. **Consistency.** The same words, components and patterns as the rest of the project (its design system, its
    existing screens). A new pattern where an old one exists is a finding.
 6. **Cognitive load.** Is the screen readable at a glance, with the important thing first and details on demand? No

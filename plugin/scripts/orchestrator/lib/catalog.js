@@ -40,20 +40,42 @@ const path = require('node:path');
 const DIR = 'docs/queue/catalog';
 const STATUSES = Object.freeze(['proposed', 'accepted', 'superseded', 'not-building']);
 /**
- * The frontmatter fields of a design choice. accepted_by and accepted are written by `catalog accept`. kind, keywords,
- * revisit and source are for a "Not building" entry (roadmap 0f, lib/notBuilding.js): what the project deliberately does
- * not build, with the words a new proposal is matched against, when to look at it again, and where the no came from.
+ * The frontmatter fields of a design choice. accepted_by and accepted are written by `catalog accept`. kind says what
+ * sort of entry it is (KINDS). except (roadmap 0å KD-0) is the paths the entry does not apply to, inside its paths (the
+ * globs have no negation). keywords, revisit and source are for a "Not building" entry (roadmap 0f,
+ * lib/notBuilding.js): what the project deliberately does not build, with the words a new proposal is matched against,
+ * when to look at it again, and where the no came from.
  */
 const FIELDS = Object.freeze([
-  'id', 'title', 'status', 'kind', 'paths', 'invariant', 'check', 'keywords', 'revisit', 'source', 'supersedes', 'plan',
-  'accepted_by', 'accepted',
+  'id', 'title', 'status', 'kind', 'paths', 'except', 'invariant', 'check', 'keywords', 'revisit', 'source', 'uses',
+  'alternatives', 'stack', 'supersedes', 'plan', 'accepted_by', 'accepted',
 ]);
 /**
- * choice: a design choice (the default). not-building: a rejection, roadmap 0f. Its draft is status proposed with kind
- * not-building; the owner's accept writes status not-building (never accepted). A file that says status not-building
- * is of that kind without the line.
+ * A stack entry's fields (roadmap 0å KD-2): uses {job, tool} says which tool does a job, alternatives the tools it was
+ * chosen against (a package name each), stack the words it declares for the checks (stack:<word> in recipes.json).
+ * Only on kind stack; all three bind (fingerprint).
  */
-const KINDS = Object.freeze(['choice', 'not-building']);
+const STACK_FIELDS = Object.freeze(['uses', 'alternatives', 'stack']);
+/** A tool, an alternative: a package name (npm with a scope, PyPI, a crate, a Go module path). */
+const PACKAGE_PATTERN = /^@?[A-Za-z0-9][\w.@/+-]*$/;
+/** A declared stack word: what stackWords in lib/checksCatalog.js keeps of a word. */
+const STACK_WORD = /^[a-z0-9][a-z0-9.+#-]*$/;
+const STACK_MAX = 12;
+const JOB_MAX = 60;
+/**
+ * One field, one set of values (roadmap 0å KD-0, plans/katalog-design-stack-avhengigheter-2026-11-18.md § 2):
+ *   decision      a design choice (the default when the line is missing)
+ *   design        a rule of the project's design language (colours from tokens, the type scale); KD-1
+ *   stack         a stack choice: which tool does a job, with the reason; KD-2
+ *   dependency    a decision about one library (a risk acceptance, roadmap KD-4)
+ *   not-building  a rejection, roadmap 0f. Its draft is status proposed with kind not-building; the owner's accept writes
+ *                 status not-building (never accepted). A file that says status not-building is of that kind without
+ *                 the line.
+ * The kind is part of the fingerprint (fingerprint), so a track cannot turn a binding entry into another sort.
+ */
+const KINDS = Object.freeze(['decision', 'design', 'stack', 'dependency', 'not-building']);
+/** The board's and `catalog show`'s heading per kind, in the order they are shown (not-building has its own view). */
+const KIND_TITLES = Object.freeze({ design: 'Design language', stack: 'Stack', dependency: 'Dependencies', decision: 'Design choices' });
 /** A not-building entry's keywords: at most this many, each at most KEYWORD_MAX characters. */
 const KEYWORDS_MAX = 12;
 const KEYWORD_MAX = 40;
@@ -87,6 +109,9 @@ const LEDGER_FILE = 'catalog-accepted.json';
  * (checks, on: only the owner writes a rule, and a hit is a line, never a stop); a rule in mode stop of an accepted
  * choice stops the merge only with checkStop on (off: what can stop work is opt-in); a rule broken in gateAfter
  * separate tasks becomes a gate proposal, only with learning.proposals on.
+ * stackFacts (roadmap 0å KD-2): the stack words of accepted stack entries go into the Checks tab's facts.stacks, so a
+ * recipe's `stack:<word>` holds and the dep-audit card names the audit command. On: it can change which cards show and
+ * stops nothing, and only the owner's accepted entries count; off gives the cards from the manifests alone.
  */
 const DEFAULTS = Object.freeze({
   doctor: true,
@@ -99,6 +124,7 @@ const DEFAULTS = Object.freeze({
   checkStop: false,
   gateAfter: 3,
   captureAnswers: 'explicit',
+  stackFacts: true,
 });
 /**
  * The settings with a fixed list of values. captureAnswers (roadmap 0z Z-A): whether an owner's answer can become a
@@ -264,6 +290,7 @@ function parseDecision(name, source) {
   if (d.kind != null && !KINDS.includes(d.kind)) e(`kind must be one of ${KINDS.join(', ')} (or left out: a design choice)`);
   if (d.status === 'not-building' && d.kind != null && d.kind !== 'not-building') e('status not-building needs kind not-building (or no kind line)');
   const nb = d.kind === 'not-building' || d.status === 'not-building';
+  const kind = nb ? 'not-building' : KINDS.includes(d.kind) ? d.kind : 'decision';
   if (nb && d.status === 'accepted') e('a not-building entry is accepted as status not-building, not accepted (ravenseat catalog accept writes it)');
   // What a rejection does not need: an invariant and paths (it binds no code). When it has them, they are checked.
   if (!nb || d.paths != null) {
@@ -271,6 +298,14 @@ function parseDecision(name, source) {
     else for (const p of d.paths) {
       const pe = typeof p === 'string' ? pathPatternError(p) : 'not text';
       if (pe) e(`paths: ${pe}`);
+    }
+  }
+  // except (KD-0): the paths inside `paths` the entry does not apply to, such as the token file of a colour rule.
+  if (d.except != null) {
+    if (!Array.isArray(d.except)) e('except must be a list of path patterns, e.g. ["ui/tokens.css"]');
+    else for (const p of d.except) {
+      const pe = typeof p === 'string' ? pathPatternError(p) : 'not text';
+      if (pe) e(`except: ${pe}`);
     }
   }
   if (!nb || d.invariant != null) {
@@ -284,8 +319,34 @@ function parseDecision(name, source) {
       e(`keywords must be a list of words or short phrases (each at most ${KEYWORD_MAX} characters), e.g. ["keepalive", "idle ping"]`);
     else if (d.keywords.length > KEYWORDS_MAX) e(`keywords: at most ${KEYWORDS_MAX}`);
   }
+  // source on a design entry (roadmap 0å KD-1) may be a list: where the tokens live, each a path with an optional
+  // #anchor (a file, or a name inside it). The catalog points at the token file; it never holds a copy of the tokens.
+  if (Array.isArray(d.source)) {
+    if (kind !== 'design') e('source as a list is for kind design (where its tokens live); other kinds take one line of text');
+    else for (const s of d.source) {
+      const one = typeof s === 'string' && !/[\u0000-\u001f]/.test(s) && s.length <= NOTE_MAX;
+      const pe = one ? pathPatternError(s.split('#')[0]) : `each item must be one line of text, at most ${NOTE_MAX} characters`;
+      if (pe) e(`source: ${pe}`);
+    }
+  }
+  // A stack entry (roadmap 0å KD-2): uses, alternatives and stack, only on kind stack; it needs uses or stack.
+  const given = STACK_FIELDS.filter((f) => d[f] != null);
+  if (given.length && kind !== 'stack') e('uses, alternatives and stack are for kind stack');
+  if (kind === 'stack') {
+    if (d.uses == null && d.stack == null) e('a stack entry needs uses {job, tool} or a stack list (the words it declares for the checks)');
+    const line = (v, max) => text(v) && !/[\u0000-\u001f]/.test(v) && v.length <= max;
+    if (d.uses != null && !(isObject(d.uses) && Object.keys(d.uses).every((k) => k === 'job' || k === 'tool') && line(d.uses.job, JOB_MAX) && line(d.uses.tool, 100) && PACKAGE_PATTERN.test(d.uses.tool)))
+      e('uses must be {"job": "...", "tool": "..."}: the job in a few words, the tool as its package name');
+    if (d.alternatives != null && !(Array.isArray(d.alternatives) && d.alternatives.every((x) => typeof x === 'string' && x.length <= 100 && PACKAGE_PATTERN.test(x))))
+      e('alternatives must be a list of package names, e.g. ["moment", "luxon"]');
+    if (d.stack != null) {
+      if (!Array.isArray(d.stack)) e('stack must be a list of words, e.g. ["pnpm", "vitest"]');
+      else if (d.stack.length > STACK_MAX) e(`stack: at most ${STACK_MAX} words`);
+      else for (const w of d.stack) if (!(typeof w === 'string' && STACK_WORD.test(w))) e(`stack: each word in lower case, letters, digits and . + # - (${JSON.stringify(w)})`);
+    }
+  }
   for (const f of ['revisit', 'source'])
-    if (d[f] != null && (typeof d[f] !== 'string' || /[\u0000-\u001f]/.test(d[f]) || d[f].length > NOTE_MAX))
+    if (d[f] != null && !(f === 'source' && Array.isArray(d[f])) && (typeof d[f] !== 'string' || /[\u0000-\u001f]/.test(d[f]) || d[f].length > NOTE_MAX))
       e(`${f} must be one line of text, at most ${NOTE_MAX} characters`);
   if (nb && d.status !== 'superseded' && !(Array.isArray(d.keywords) && d.keywords.length))
     warnings.push(`${where}: a not-building entry without keywords is never matched against a new proposal`);
@@ -302,13 +363,19 @@ function parseDecision(name, source) {
     id: typeof d.id === 'string' ? d.id : fileId,
     title: typeof d.title === 'string' ? d.title : null,
     status: d.status ?? null,
-    kind: nb ? 'not-building' : 'choice',
+    kind,
     paths: Array.isArray(d.paths) ? d.paths.filter((p) => typeof p === 'string') : [],
+    except: Array.isArray(d.except) ? d.except.filter((p) => typeof p === 'string') : [],
     invariant: typeof d.invariant === 'string' ? d.invariant : null,
     check: d.check ?? null,
     keywords: Array.isArray(d.keywords) ? d.keywords.filter((k) => typeof k === 'string') : [],
     revisit: typeof d.revisit === 'string' ? d.revisit : null,
-    source: typeof d.source === 'string' ? d.source : null,
+    // A string for every kind; a list only on a design entry (KD-1).
+    source: typeof d.source === 'string' ? d.source : kind === 'design' && Array.isArray(d.source) ? d.source.filter((s) => typeof s === 'string') : null,
+    // A stack entry's fields (KD-2); null and [] on every other kind.
+    uses: kind === 'stack' && isObject(d.uses) && text(d.uses.job) && text(d.uses.tool) ? { job: d.uses.job.trim(), tool: d.uses.tool.trim() } : null,
+    alternatives: kind === 'stack' && Array.isArray(d.alternatives) ? d.alternatives.filter((x) => typeof x === 'string') : [],
+    stack: kind === 'stack' && Array.isArray(d.stack) ? d.stack.filter((x) => typeof x === 'string') : [],
     supersedes: d.supersedes ?? null,
     plan: d.plan ?? null,
     accepted_by: d.accepted_by ?? null,
@@ -491,6 +558,13 @@ function fingerprint(d) {
   // they are part of it. A design choice keeps the fingerprint it always had (its records stay valid).
   const parts = [d?.id ?? null, d?.invariant ?? null, d?.paths ?? [], d?.check ?? null];
   if (isNotBuilding(d)) parts.push('not-building', d?.keywords ?? []);
+  // The kind and except (roadmap 0å KD-0) bind too: a track must not turn an accepted stack entry into a plain note, or
+  // widen what a rule skips. Only when they say something, so an entry without them keeps its fingerprint.
+  else if (d?.kind != null && d.kind !== 'decision') parts.push({ kind: d.kind });
+  if (Array.isArray(d?.except) && d.except.length) parts.push({ except: d.except });
+  // A stack entry's choice (KD-2): the tool, what it was chosen against and the words it declares.
+  if (d?.kind === 'stack' && (d.uses || d.alternatives?.length || d.stack?.length))
+    parts.push({ uses: d.uses ?? null, alternatives: d.alternatives ?? [], stack: d.stack ?? [] });
   const what = JSON.stringify(canon(parts));
   return crypto.createHash('sha256').update(what).digest('hex');
 }
@@ -498,6 +572,125 @@ function fingerprint(d) {
 /** Whether a parsed entry is a "Not building" entry (roadmap 0f): kind not-building, or status not-building. */
 function isNotBuilding(d) {
   return d?.kind === 'not-building' || d?.status === 'not-building';
+}
+
+/**
+ * Does an entry apply to a file: one of its paths matches and none of its except patterns does (roadmap 0å KD-0). The
+ * one test the check rules, `catalog check` and the excerpt use, so except means the same everywhere.
+ */
+function covers(d, file, glob = require('./mergeGuard.js').globMatch) {
+  const paths = Array.isArray(d?.paths) ? d.paths : [];
+  const except = Array.isArray(d?.except) ? d.except : [];
+  return paths.some((p) => glob(p, file)) && !except.some((p) => glob(p, file));
+}
+
+/**
+ * The board's catalog list (Decisions, roadmap 0å KD-0): the entries grouped by kind in the order of KIND_TITLES, each
+ * with the status that counts. Not-building entries have their own view (lib/notBuilding.js boardEntries) and a
+ * superseded entry binds nothing, so both are left out. Empty groups are left out too.
+ */
+function boardGroups(cat, ledger = emptyLedger()) {
+  if (!cat?.exists) return [];
+  const ds = (cat.decisions ?? []).map((x) => x?.decision).filter((d) => d?.id && !isNotBuilding(d) && d.status !== 'superseded');
+  const out = [];
+  for (const [kind, title] of Object.entries(KIND_TITLES)) {
+    const entries = ds
+      .filter((d) => (d.kind ?? 'decision') === kind)
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((d) => ({
+        id: d.id,
+        title: d.title ?? '',
+        status: effectiveStatus(d, ledger),
+        invariant: d.invariant ?? null,
+        paths: d.paths ?? [],
+        except: d.except ?? [],
+        source: d.kind === 'design' ? d.source ?? null : null,
+        file: d.file ?? null,
+      }));
+    if (entries.length) out.push({ kind, title, entries });
+  }
+  return out;
+}
+
+/**
+ * The stack entries (roadmap 0å KD-2) that are not superseded, with the status that counts: what V3 (lib/scopeNotes.js
+ * dependencyFacts) and `catalog check` compare a manifest against.
+ * @returns {{ id: string, title: string, status: string, job: string|null, tool: string|null, alternatives: string[],
+ *   stack: string[], paths: string[] }[]}
+ */
+function stackChoices(cat, ledger = emptyLedger()) {
+  if (!cat?.exists) return [];
+  return (cat.decisions ?? [])
+    .map((x) => x?.decision)
+    .filter((d) => d?.id && d.kind === 'stack' && d.status !== 'superseded')
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((d) => ({
+      id: d.id,
+      title: d.title ?? '',
+      status: effectiveStatus(d, ledger),
+      job: d.uses?.job ?? null,
+      tool: d.uses?.tool ?? null,
+      alternatives: d.alternatives ?? [],
+      stack: d.stack ?? [],
+      paths: d.paths ?? [],
+    }));
+}
+
+/**
+ * The stack words the accepted stack entries declare (the tool of uses, and the stack list), lower case, each once with
+ * the first entry that declares it. Only accepted: the owner lock keeps a track from turning check cards on or off.
+ * @returns {{ word: string, id: string }[]}
+ */
+function declaredStacks(cat, ledger = emptyLedger()) {
+  const out = [];
+  for (const c of stackChoices(cat, ledger)) {
+    if (c.status !== 'accepted') continue;
+    for (const w of [c.tool, ...c.stack]) {
+      const word = String(w ?? '').trim().toLowerCase();
+      if (word && !out.some((x) => x.word === word)) out.push({ word, id: c.id });
+    }
+  }
+  return out;
+}
+
+/**
+ * The checks' facts with the declared words in facts.stacks (once each) and the list in facts.declaredStacks, so a
+ * recipe's `stack:<word>` holds and a card can name the command for it (lib/checksCatalog.js). catalog.stackFacts.
+ */
+function withDeclaredStacks(facts, declared) {
+  const stacks = Array.isArray(facts?.stacks) ? [...facts.stacks] : [];
+  const have = new Set(stacks.map((s) => String(s).toLowerCase()));
+  for (const x of declared ?? []) if (!have.has(x.word)) stacks.push(x.word), have.add(x.word);
+  return { ...facts, stacks, declaredStacks: [...(declared ?? [])] };
+}
+
+/** At most this many manifests are read for a stack entry's check. */
+const STACK_MANIFESTS = 50;
+
+/** The warnings for the accepted stack entries against the manifests and the Prefer lines (`catalog check`, KD-2). */
+function stackWarnings(cat, { files, readFile, ledger, glob }) {
+  const out = [];
+  const SN = require('./scopeNotes.js');
+  const low = (s) => String(s ?? '').toLowerCase();
+  const prefer = cat.stack?.prefer ?? [];
+  for (const c of stackChoices(cat, ledger)) {
+    if (c.status !== 'accepted') continue;
+    if (files && readFile) {
+      const all = files.filter((f) => SN.isManifest(f));
+      const named = all.filter((f) => c.paths.some((p) => glob(p, f)));
+      const read = (named.length ? named : all).slice(0, STACK_MANIFESTS).map((f) => ({ f, deps: (SN.depsOf(f, readFile(f)) ?? []).map(low) }));
+      for (const alt of c.alternatives)
+        for (const m of read)
+          if (m.deps.includes(low(alt))) out.push(`${c.id}: ${alt} is in ${m.f}, but ${c.id} chose ${c.tool ?? 'another tool'}${c.job ? ` for ${c.job}` : ''}`);
+      if (c.tool && named.length && !read.some((m) => m.deps.includes(low(c.tool))))
+        out.push(`${c.id}: ${c.tool} (the tool for ${c.job}) is in none of the manifests its paths name (${named.slice(0, 3).join(', ')})`);
+    }
+    if (c.tool && c.job)
+      for (const p of prefer)
+        if (low(p.purpose) === low(c.job) && !new RegExp(`(^|[^\\w@/.-])${c.tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\w/-])`, 'i').test(p.use))
+          out.push(`stack.md: the Prefer line for ${c.job} says "${p.use}", but ${c.id} chose ${c.tool}; make them agree (the Prefer line is the short form)`);
+  }
+  return out;
 }
 
 /**
@@ -634,7 +827,23 @@ function proposalFile(p) {
         `revisit: ${one(p.revisit) ? frontValue(one(p.revisit)) : 'null'}`,
         `source: ${one(p.source) ? frontValue(one(p.source)) : 'null'}`,
       ]
-    : [`paths: ${JSON.stringify(paths)}`, `invariant: ${frontValue(one(p.invariant))}`];
+    : [
+        // A kind other than decision, and except (roadmap 0å KD-0), only when given: a plain choice is written as before.
+        ...(KINDS.includes(p.kind) && p.kind !== 'decision' ? [`kind: ${p.kind}`] : []),
+        // A design entry's source (KD-1): where its tokens live, one path or a list.
+        ...(Array.isArray(p.source) && p.source.length
+          ? [`source: ${JSON.stringify(p.source)}`]
+          : one(p.source) ? [`source: ${frontValue(one(p.source))}`] : []),
+        // A stack entry's fields (KD-2), as JSON, only when given.
+        ...(p.kind === 'stack' && isObject(p.uses) ? [`uses: ${JSON.stringify({ job: one(p.uses.job), tool: one(p.uses.tool) })}`] : []),
+        ...(p.kind === 'stack' && Array.isArray(p.alternatives) && p.alternatives.length ? [`alternatives: ${JSON.stringify(p.alternatives)}`] : []),
+        ...(p.kind === 'stack' && Array.isArray(p.stack) && p.stack.length ? [`stack: ${JSON.stringify(p.stack)}`] : []),
+        `paths: ${JSON.stringify(paths)}`,
+        ...(Array.isArray(p.except) && p.except.length ? [`except: ${JSON.stringify(p.except)}`] : []),
+        `invariant: ${frontValue(one(p.invariant))}`,
+        // A check rule (KD-1, the design draft's colour rule): one field per line, each value as JSON.
+        ...(isObject(p.check) ? ['check:', ...Object.entries(p.check).map(([k, v]) => `  ${k}: ${JSON.stringify(v)}`)] : []),
+      ];
   const text = [
     '---',
     `id: ${p.id}`,
@@ -701,6 +910,70 @@ function looksLasting(textIn) {
   return lasting.some(has);
 }
 
+// ---- a design draft (roadmap 0å KD-1) -------------------------------------------------------------------------------
+
+/**
+ * The colour rule a design draft proposes: a hex colour or rgb()/hsl() in code that should use tokens. Tuned so it does
+ * not hit what is not a colour: an issue number (#123 in the text), an anchor (href="#add"), an HTML entity (&#123456;),
+ * a CSS id selector (#fed {) and color-mix(in srgb, ...). A 6 or 8 digit hex counts anywhere a # starts a value; a 3 or
+ * 4 digit one only after a colon, comma, bracket or space and not before a selector character or a word.
+ * (The design doc's first rule hit its own miss examples #123 and href="#add"; this one is tested against them.)
+ */
+const COLOUR_RULE = Object.freeze({
+  forbid:
+    '(?<![\\w&/=?#])#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b|(?:^|[:,(]|\\s)#[0-9a-fA-F]{3,4}\\b(?![\\w-]|\\s*[{.:\\[>~+]|\\s+[A-Za-z])|\\b(?:rgb|hsl)a?\\(',
+  hit: ['  color: #1a73e8;', 'background: rgba(0,0,0,.4)', '  border: 1px solid #ccc;'],
+  miss: ['color: var(--color-primary);', 'see issue #123 in the tracker', '<a href="#add">', '#fed {', 'color-mix(in srgb, var(--color-on-surface) 8%, transparent)'],
+  mode: 'warn',
+});
+/** The files a draft looks at for CSS custom properties: at most this many, none over TREE_FILE_BYTES. */
+const DRAFT_CSS_FILES = 200;
+/** The UI files a token file at the project root covers (a folder's token file covers its folder). */
+const UI_GLOBS = Object.freeze(['**/*.css', '**/*.scss', '**/*.less', '**/*.tsx', '**/*.jsx', '**/*.vue', '**/*.svelte']);
+
+/**
+ * A proposed design entry from the project's token file (`catalog init`, KD-1), or null when there is none. The token
+ * file is the first of: a CSS file with :root and --color- custom properties, tailwind.config.*, a tokens.json, a
+ * theme.ts or theme.js. The entry names it in source (the tokens stay there), covers its folder (or the UI files when
+ * it is at the root), excepts the token file itself and carries COLOUR_RULE. It is a draft: status proposed, the owner
+ * narrows it and accepts it, or deletes it.
+ * @param {{ files: string[], readFile: (p: string) => string|null }} x
+ */
+function designDraft({ files, readFile }) {
+  const skip = (f) => /(^|\/)(node_modules|dist|build|vendor|\.git)\//.test(f) || require('./reviewSignals.js').isTestPath(f);
+  const all = (files ?? []).filter((f) => typeof f === 'string' && !skip(f));
+  const base = (f) => f.split('/').pop();
+  const cssTokens = () => {
+    for (const f of all.filter((x) => /\.(css|scss|less)$/.test(x)).slice(0, DRAFT_CSS_FILES)) {
+      const body = readFile(f);
+      if (typeof body === 'string' && body.length <= TREE_FILE_BYTES && /:root\b/.test(body) && /--color-/.test(body)) return f;
+    }
+    return null;
+  };
+  const token =
+    cssTokens() ??
+    all.find((f) => /^tailwind\.config\.(js|cjs|mjs|ts)$/.test(base(f))) ??
+    all.find((f) => /^(design-)?tokens\.json$|\.tokens\.json$/.test(base(f))) ??
+    all.find((f) => /^theme\.(ts|js|tsx|mjs)$/.test(base(f))) ??
+    null;
+  if (!token) return null;
+  const folder = token.includes('/') ? token.slice(0, token.lastIndexOf('/')) : '';
+  return {
+    kind: 'design',
+    title: 'Colours only from the design tokens',
+    source: [token],
+    paths: folder ? [`${folder}/**`] : [...UI_GLOBS],
+    except: [token],
+    invariant: `UI code takes its colours from the tokens in ${token}; a hex colour or rgb() stands only in the token file.`,
+    check: { ...COLOUR_RULE, hit: [...COLOUR_RULE.hit], miss: [...COLOUR_RULE.miss] },
+    why: [
+      `A draft from ravenseat catalog init: ${token} looks like the project's token file.`,
+      'Narrow the paths to the UI code, add more token files to source and except if there are any, run',
+      '`ravenseat catalog check` to see what the rule already hits, then accept it or delete the file.',
+    ].join('\n'),
+  };
+}
+
 // ---- check ----------------------------------------------------------------------------------------------------------
 
 /** At most this many files of a choice's paths are read for treeHits, and none over TREE_FILE_BYTES. */
@@ -719,7 +992,7 @@ function treeHits(d, { files, readFile, glob }) {
   if (!rule || errors.length) return null;
   let count = 0;
   let first = null;
-  const mine = files.filter((f) => !RS.isTestPath(f) && d.paths.some((p) => glob(p, f))).slice(0, TREE_FILES);
+  const mine = files.filter((f) => !RS.isTestPath(f) && covers(d, f, glob)).slice(0, TREE_FILES);
   for (const f of mine) {
     const body = readFile(f);
     if (typeof body !== 'string' || body.length > TREE_FILE_BYTES || body.includes('\u0000')) continue;
@@ -769,6 +1042,11 @@ function checkCatalog(cat, ctx = {}) {
       );
     if (files && d.paths.length && !files.some((f) => d.paths.some((p) => glob(p, f))))
       warnings.push(`${d.id} (${d.file}): its paths match no tracked file: ${d.paths.join(', ')}`);
+    else if (files && d.paths.length && !files.some((f) => covers(d, f, glob)))
+      warnings.push(`${d.id} (${d.file}): its except leaves no tracked file of its paths: ${d.except.join(', ')}`);
+    for (const p of files && d.except?.length ? d.except : [])
+      if (!files.some((f) => d.paths.some((q) => glob(q, f)) && glob(p, f)))
+        warnings.push(`${d.id} (${d.file}): except ${p} matches no tracked file inside its paths`);
     if (d.supersedes && !byId.has(d.supersedes)) errors.push(`${d.id} supersedes ${d.supersedes}, which is not in the catalog`);
     else if (d.supersedes && byId.get(d.supersedes).status !== 'superseded')
       warnings.push(`${d.id} supersedes ${d.supersedes}, but ${d.supersedes} is not marked status: superseded`);
@@ -796,6 +1074,8 @@ function checkCatalog(cat, ctx = {}) {
       if (!word.test(body)) warnings.push(`reuse.md:${r.line}: ${r.symbol} is not in ${r.file}`);
     }
   }
+  // An accepted stack entry against the manifests and the Prefer lines (roadmap 0å KD-2), like the block below.
+  warnings.push(...stackWarnings(cat, { files, readFile: ctx.readFile ?? null, ledger: ctx.ledger ?? emptyLedger(), glob }));
   if (cat.stack?.block != null && ctx.stackBlock != null && cat.stack.block.trim() !== ctx.stackBlock.trim())
     warnings.push(`stack.md: the generated block is out of step with the manifests; ${cli} catalog init refreshes it`);
   return { errors, warnings };
@@ -904,7 +1184,11 @@ const DECISIONS_README = [
   '  `ravenseat catalog accept D-0001 --by owner`. A status set to accepted by hand is unconfirmed: `catalog check`',
   '  names it as an error, and it counts as proposed until the owner accepts it.',
   '- `invariant`: one sentence that can be checked. It is the only text a track gets.',
-  '- `paths`: the files the choice applies to.',
+  '- `paths`: the files the choice applies to. `except` (optional): files inside them it does not apply to.',
+  '- `kind` (optional): `decision` (the default), `design`, `stack`, `dependency` or `not-building`.',
+  '- `source` on a `design` entry: where its tokens live, a path or a list (`["ui/tokens.css", "lib/theme.js#PALETTE"]`).',
+  '- On a `stack` entry: `uses: {"job": "dates", "tool": "dayjs"}`, `alternatives: ["moment"]` (chosen against) and',
+  '  `stack: ["pnpm"]` (words for the checks). Accepted, they reach the Checks tab and the dependency notes at receive.',
   '- To change an accepted choice, write a new one with `supersedes: D-0001`; its accept sets the old one to `superseded`.',
   '- `plan`: the plan entry with the long version, if there is one. A plan entry links back with `decisions`.',
   '',
@@ -915,9 +1199,18 @@ module.exports = {
   STATUSES,
   FIELDS,
   KINDS,
+  KIND_TITLES,
   KEYWORDS_MAX,
   KEYWORD_MAX,
   isNotBuilding,
+  covers,
+  boardGroups,
+  COLOUR_RULE,
+  designDraft,
+  STACK_FIELDS,
+  stackChoices,
+  declaredStacks,
+  withDeclaredStacks,
   ID_PATTERN,
   BLOCK_BEGIN,
   BLOCK_END,
