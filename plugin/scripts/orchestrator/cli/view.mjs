@@ -19,7 +19,7 @@ import {
   a, branchFor, branchInfo, CE, CLI, cut, D, die, FOLDER, FX, HERE, L, MAIN_TREE, positional, read, readCursor, require,
   uncommittedPaths, val, WIDTH,
 } from './context.mjs';
-import { activityFor, costEstimateState, dailyUsageFor, findSilent, findWithoutAgent, measureLoad, nextCostUsd } from './tracks.mjs';
+import { activityFor, costEstimateState, dailyUsageFor, findSilent, findSpinning, findWithoutAgent, measureLoad, nextCostUsd } from './tracks.mjs';
 import { batchGroupLine } from './batch.mjs';
 import { followLines } from './orchestrator.mjs';
 import { findingsLineNow, findingsStateNow } from './finding.mjs';
@@ -67,8 +67,12 @@ export function cmdShowSummary() {
   const withoutAgent = L.withoutAgentLines(findWithoutAgent(queue));
   if (withoutAgent.length) console.log(`${withoutAgent.join('\n')}\n`);
   // Silent tracks (an agent worktree, but no sign of life), right after.
-  const silent = L.silentLines(findSilent(queue));
+  const silentList = findSilent(queue);
+  const silent = L.silentLines(silentList);
   if (silent.length) console.log(`${silent.join('\n')}\n`);
+  // SPINNING (lib/trackSpin.js): busy, but no real work. Shown only; nothing is stopped.
+  const spinning = require('./lib/trackSpin.js').spinLines(findSpinning(queue, { silent: silentList }), { cli: CLI });
+  if (spinning.length) console.log(`${spinning.join('\n')}\n`);
   const onCancelled = L.waitingOnCancelledLines(L.waitingOnCancelled(queue));
   if (onCancelled.length) console.log(`${onCancelled.join('\n')}\n`);
   // The base branch's health (lib/baseHealth.js): one line, also first, since a red base stops every merge.
@@ -148,8 +152,12 @@ export function cmdShow() {
   // First, so it survives when the after-compact hook trims the show output.
   const withoutAgent = L.withoutAgentLines(findWithoutAgent(queue));
   if (withoutAgent.length) console.log(`${withoutAgent.join('\n')}\n`);
-  const silent = L.silentLines(findSilent(queue));
+  const silentList = findSilent(queue);
+  const silent = L.silentLines(silentList);
   if (silent.length) console.log(`${silent.join('\n')}\n`);
+  // SPINNING (lib/trackSpin.js): busy, but no real work. Shown only; nothing is stopped.
+  const spinning = require('./lib/trackSpin.js').spinLines(findSpinning(queue, { silent: silentList }), { cli: CLI });
+  if (spinning.length) console.log(`${spinning.join('\n')}\n`);
   if (a.includes('--grouped')) {
     // Tree: project -> feature -> tasks, narrow enough for a narrow terminal window.
     for (const p of L.groups(
@@ -281,6 +289,8 @@ export function cmdState() {
   t.withoutAgent = findWithoutAgent(queue);
   // Silent tracks: an agent worktree, but no sign of life for limits.silentMin (always included; empty when all is well).
   t.silent = findSilent(queue);
+  // SPINNING tracks: busy without real work (lib/trackSpin.js; always included, empty when all is well).
+  t.spinning = findSpinning(queue, { silent: t.silent });
   // The parallelism (active ones, max, share, threshold, low) always; the findings only when it is low.
   const par = D.parallelDiagnose(queue);
   t.parallel = { ...par, findings: par.low ? par.findings : [] };

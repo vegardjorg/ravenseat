@@ -401,6 +401,12 @@ const SETTINGS = Object.freeze([
     'The most one SILENT snapshot may hold; the oldest transcript rows are left out first (64 by default).'),
   row('limits.noAgentMin', 'load', 'integer', 'No agent after (minutes)',
     'Minutes before a track marked running, with no agent on its branch and no report, counts as NO AGENT. 0 = off.', QUEUE),
+  // Friction: none, it never stops work: a line in show and the pulse, and after an hour a Decisions card with the
+  // same choices as SILENT. On by default (the owner's decision of 18.11.2026, roadmap 0æ N3): a track that burns
+  // tokens without progress is the costliest quiet failure, and SILENT cannot see it.
+  row('limits.spinMin', 'load', 'integer', 'Spinning after (minutes)',
+    'Minutes a busy track may go without real work (only to-do lists, tool loading, sleeps or the same reads again, no ' +
+    'write, command or commit) before it counts as SPINNING. Shown only; after an hour also a Decisions card. 0 = off.', QUEUE),
 
   // ---- 4. Gates ----
   row('gates.quick', 'gates', 'list', 'Quick gate',

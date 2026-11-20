@@ -750,6 +750,53 @@ function silentNow(queue) {
   return list;
 }
 
+// ---- SPINNING tracks (the Decisions card after an hour): the same rule as ravenseat show (lib/trackSpin.js), cached 60 s.
+let spinCache = { time: 0, key: null, list: [] };
+function spinningNow(queue, silent) {
+  const SP = require('./lib/trackSpin.js');
+  const limitMin = SP.spinMinFor(queue);
+  const running = (queue.tasks ?? []).filter((o) => L.silentWatched(o));
+  const key = `${limitMin}|${running.map((o) => `${o.id}:${o.started ?? ''}`).join(',')}|${(silent ?? []).map((x) => x.id).join(',')}`;
+  if (spinCache.key === key && Date.now() - spinCache.time < 60_000) return spinCache.list;
+  let list = [];
+  try {
+    const worktreeBranches = new Set(G.readWorktrees(gitRead).map((w) => w.branch).filter(Boolean));
+    const candidates = limitMin > 0 ? L.silentCandidates(queue, worktreeBranches) : [];
+    if (candidates.length) {
+      const ACT = require('./lib/trackActivity.js');
+      let rows = [];
+      try {
+        rows = TK.readRows(TA.readText(TIME_LOG, { from: TA.activeFrom(candidates) }));
+      } catch {
+        /* no time log: no agents to measure */
+      }
+      const agents = ACT.agentsByTask(rows, candidates.map((o) => o.id));
+      const root = ACT.transcriptsRoot(MAIN_TREE);
+      const skip = new Set((silent ?? []).map((x) => x.id));
+      const measures = {};
+      const lastCommit = {};
+      for (const o of candidates) {
+        if (skip.has(o.id) || L.reportSinceStart(o, L.findTrackReport(o.id, o.scratchpad ? [o.scratchpad] : []).report)) continue;
+        const newest = [...(agents.get(o.id)?.agents ?? [])]
+          .map((id) => ACT.findTranscript(root, id))
+          .filter(Boolean)
+          .map((p) => ({ p, ms: fs.statSync(p).mtimeMs }))
+          .sort((p, q) => q.ms - p.ms)[0];
+        const m = newest ? SP.measure(newest.p) : null;
+        if (!m) continue;
+        measures[o.id] = m;
+        const s = String(gitRead(['log', '-1', '--format=%ct', `refs/heads/${o.branch}`, '--']) ?? '').trim();
+        lastCommit[o.id] = /^\d+$/.test(s) ? Number(s) * 1000 : null;
+      }
+      list = SP.spinningTracks(queue, { candidates, measures, lastCommit, skip, limitMin });
+    }
+  } catch (e) {
+    console.error(`the spinning check failed: ${e?.message ?? e}`);
+  }
+  spinCache = { time: Date.now(), key, list };
+  return list;
+}
+
 // ---- The base health (the base gate's verdict for the current base tip) ------------------------------------------
 const BASE_SETUP = BH.baseGateSetup(CONFIG);
 let baseTipCache = { time: 0, tip: null };
@@ -988,6 +1035,8 @@ function state() {
       ageLimits: S.ageBounds(queue),
       // SILENT tracks (the badge on the card; cached 60 s).
       silent: silentNow(queue),
+      // SPINNING tracks (a Decisions card after an hour; cached 60 s, as the silent ones).
+      spinning: spinningNow(queue, silentNow(queue)),
       // "reviews k/n" on a card in Review: the merge gate's verdict (cached on the agents and the receive).
       reviews: reviewsNow(queue),
       withoutAgent: withoutAgentNow(queue),

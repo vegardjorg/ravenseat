@@ -453,6 +453,12 @@ started them. A new session adopts them without that notification:
   inline script (`-e`, `-c`, `-Command`) is dropped; when unsure an argument is dropped. At most `silentSnapshot.maxKB`
   (64), the newest `silentSnapshot.keep` (20) kept, never pushed. It never stops work; `silentSnapshot.enabled false`
   turns it off.
+- **Spinning:** a running track that is NOT silent (its transcript keeps growing) but whose newest real work is older than
+  `limits.spinMin` minutes (default 15, 0 = off), with at least 3 calls since. Real work is a write, an edit, a command,
+  the first read of a file or command, or a commit; to-do lists, tool loading, sleeps and the same read again are not
+  (the client adapter decides which calls are which). `show`, `state` (`spinning`), the pulse and `pulse-check`
+  (`SPINNING <id>`) print it; after 60 minutes it also gets a card in `ravenseat decide`. It never stops anything. Check
+  the transcript (`ravenseat explain <ID>`); if it is stuck, `ravenseat resume <ID> --reason context`.
 - **Blocker reasons:** `ravenseat block <ID> <code> [--note "…"]` / `ravenseat unblock <ID>` record why a task is stuck, with codes
   from one fixed table (`merge-conflict`, `merge-guard`, `merge-stopped`, `gate-red`, `context`, `quota`, `owner-question`, `track-question`, `dependency`, `no-agent`,
   `silent`, `other`). `ravenseat merge` opens `merge-conflict` (a real conflict), `merge-guard` (protected paths), `merge-stopped` (any other stop

@@ -245,6 +245,8 @@ function buildBoard(
     cloud,
     branchPrefix = BRANCH_PREFIX,
     silent = [],
+    // SPINNING tracks (lib/trackSpin.js, measured by the caller): a card only after SPIN_CARD_MIN.
+    spinning = [],
     reviews = [],
     withoutAgent = [],
     baseRed = false,
@@ -445,7 +447,7 @@ function buildBoard(
   columns.built.sort((a, b) => time(b.done) - time(a.done) || a.id.localeCompare(b.id));
   const next = nextUp(queue, { now, uncommitted, dailyUsage });
   // "Waiting on you" reads the columns as they are without the Blocked column, so it is the same with the switch on or off.
-  const inboxNow = inbox(queue, columns, { map, context: fk, now, withoutAgent, silent, baseRed, approval, toolTrouble });
+  const inboxNow = inbox(queue, columns, { map, context: fk, now, withoutAgent, silent, spinning, baseRed, approval, toolTrouble });
   // catalog.captureAnswers suggest (roadmap 0z Z-A): a plain question whose text, recommendation or choices read like a
   // lasting rule gets keep_suggested, and the Decisions room marks its "Keep as design choice" button. A hint only.
   if (captureAnswers === 'suggest') {
@@ -619,7 +621,7 @@ function nextUp(queue, { now = Date.now(), uncommitted = [], dailyUsage } = {}) 
 function inbox(
   queue,
   columns,
-  { map = chainMap(queue.tasks ?? []), context = null, now = Date.now(), withoutAgent = [], silent = [], baseRed = false, approval = [], toolTrouble = [] } = {},
+  { map = chainMap(queue.tasks ?? []), context = null, now = Date.now(), withoutAgent = [], silent = [], spinning = [], baseRed = false, approval = [], toolTrouble = [] } = {},
 ) {
   const tasks = queue.tasks ?? [];
   const register = queue.projects ?? {};
@@ -741,6 +743,12 @@ function inbox(
   const longSilent = new Map(
     (silent ?? []).filter((x) => x.silent_ms >= L.SILENT_CARD_MIN * 60_000).map((x) => [x.id, x.silent_ms / 60_000]),
   );
+  // Busy without real work for so long that the owner should know (as SILENT: shorter spins stay in show and the pulse).
+  const longSpinning = new Map(
+    (spinning ?? [])
+      .filter((x) => x.spinning_ms >= require('./trackSpin.js').SPIN_CARD_MIN * 60_000)
+      .map((x) => [x.id, { minutes: x.spinning_ms / 60_000, calls: x.empty_calls ?? 0 }]),
+  );
   // A track agent that stands still on a permission prompt (lib/approvalWait.js, found by the caller): only the owner
   // can answer it, in the session that started the agent.
   const onApproval = new Map((approval ?? []).map((x) => [x.id, { tool: x.tool, since: x.since }]));
@@ -751,7 +759,7 @@ function inbox(
   const stuck = [...(columns.inProgress ?? []), ...(columns.review ?? [])]
     .filter(
       (k) =>
-        onApproval.has(k.id) || onTrouble.has(k.id) || noAgent.has(k.id) || longSilent.has(k.id) || longInReview(k) || (k.status === 'picked' && k.old) || stopInfo(k),
+        onApproval.has(k.id) || onTrouble.has(k.id) || noAgent.has(k.id) || longSilent.has(k.id) || longSpinning.has(k.id) || longInReview(k) || (k.status === 'picked' && k.old) || stopInfo(k),
     )
     .map((k) => ({
       id: k.id,
@@ -770,6 +778,7 @@ function inbox(
       without_agent: noAgent.has(k.id),
       no_agent_round: noAgent.get(k.id)?.prepared ? { round: noAgent.get(k.id).round, reason: noAgent.get(k.id).reason } : null,
       long_silent: longSilent.get(k.id) ?? null,
+      long_spinning: longSpinning.get(k.id) ?? null,
       awaiting_approval: onApproval.get(k.id) ?? null,
       tool_trouble: onTrouble.get(k.id) ?? null,
     }));

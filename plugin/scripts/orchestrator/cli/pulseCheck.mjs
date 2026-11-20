@@ -43,7 +43,7 @@ import { cloudPulseItems } from './cloud.mjs';
 import { conflictPulseItems } from './conflicts.mjs';
 import { a, autoAcceptIn, CLI, FOLDER, L, pulseCursor, read, readCursor, require, uncommittedPaths } from './context.mjs';
 import { inspectionDue } from './inspection.mjs';
-import { dailyUsageFor, findDeliveries, findSilent, findWithoutAgent, measureLoad } from './tracks.mjs';
+import { dailyUsageFor, findDeliveries, findSilent, findSpinning, findWithoutAgent, measureLoad } from './tracks.mjs';
 import { triageState } from './triage.mjs';
 
 /** The exit code when something needs the orchestrator (0-7, 10-12 and 75 are taken; see the usage in queue.mjs). */
@@ -97,13 +97,20 @@ function hungItems(queue, scratch) {
         `Next: ${CLI} set ${x.id} waiting, then ${CLI} fill --ids ${x.id} --scratchpad ${scratch}`,
   );
   const limit = L.silentMinFor(queue);
-  const silent = findSilent(queue).map(
+  const silentList = findSilent(queue);
+  const silent = silentList.map(
     (x) =>
       `SILENT ${x.id}: no sign of life for ${L.ageText(x.silent_ms)} (limit ${limit} min). ` +
       `Next: ${CLI} explain ${x.id}, then ${CLI} resume ${x.id} --reason context (or ${CLI} set ${x.id} waiting)` +
       (x.snapshot ? `. Evidence: ${x.snapshot}` : ''),
   );
-  return [...none, ...silent];
+  // SPINNING (lib/trackSpin.js): busy without real work for limits.spinMin minutes. A line to look at, never a stop.
+  const spinning = findSpinning(queue, { silent: silentList }).map(
+    (x) =>
+      `SPINNING ${x.id}: no real work for ${L.ageText(x.spinning_ms)} (${x.empty_calls} calls of bookkeeping, waiting or repeated reads). ` +
+      `Next: ${CLI} explain ${x.id}; if it is stuck, ${CLI} resume ${x.id} --reason context`,
+  );
+  return [...none, ...silent, ...spinning];
 }
 
 /** Free slots with tasks that can start, as at most one line. Nothing while a start guard stops new starts. */
