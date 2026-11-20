@@ -641,8 +641,15 @@ textarea {
 /* --columns is 4, or 5 with the Blocked column (board.blockedColumn; draw.js sets it on the board). */
 .board.flat {
   display: grid;
-  /* At most 480 px per column (B5): on a wide screen the cards keep a readable width and the rest stays canvas. */
-  grid-template-columns: repeat(var(--columns, 4), minmax(280px, 480px));
+  /* At most 480 px per column (B5): on a wide screen the cards keep a readable width and the rest stays canvas.
+     At least 280 px when there is room; when there is not (1200 to 1440 px with five columns, or with the panel beside
+     the board), a column gives way to its fair share of the board (the content width less the gaps, divided by the
+     columns), so the columns fit without sideways scroll (fx0). Below a 120 px floor the board scrolls instead of
+     crushing the cards. 100% here is the board's content width. Below 1200 px the fixed 220 px rule further down holds. */
+  grid-template-columns: repeat(
+    var(--columns, 4),
+    minmax(max(120px, min(280px, calc((100% - (var(--columns, 4) - 1) * var(--distance-md)) / var(--columns, 4)))), 480px)
+  );
   gap: var(--distance-md);
   padding: var(--distance-md) var(--distance-lg);
   overflow: auto hidden;
@@ -1158,10 +1165,14 @@ details[open] > summary > .fold-chevron::before {
   padding: 0 var(--distance-lg) var(--distance-lg);
 }
 
+/* At least 240 px a column when there is room, else its fair share of the lane (floor 120 px), as in .board.flat (fx0). */
 .lane-headers,
 .lane-row {
   display: grid;
-  grid-template-columns: repeat(var(--columns, 4), minmax(240px, 1fr));
+  grid-template-columns: repeat(
+    var(--columns, 4),
+    minmax(max(120px, min(240px, calc((100% - (var(--columns, 4) - 1) * var(--distance-md)) / var(--columns, 4)))), 1fr)
+  );
   gap: var(--distance-md);
 }
 
@@ -3004,15 +3015,16 @@ body.with-option-line .toaster {
     left: var(--distance-md);
     width: calc(100% - 2 * var(--distance-md));
   }
-  /* P9: on a phone the bubble is a small toast at the bottom of the screen, not below the top: there it covered the
-     room tabs and the breadcrumb. It stays under the messages (z-index 9 < the toaster's 21), clips at three lines,
-     and a click still closes it. */
+  /* On a phone the bubble never lies over anything: it takes its own full-width row at the bottom of the top (row 3 of
+     the top's grid), so it pushes the board down while it shows. Lying over the page covered a control each time:
+     below the top it covered the room tabs and the breadcrumb (P9), and as a toast at the bottom it covered a button,
+     which a tap then missed, since a click on the bubble closes it (fx0). It clips at three lines (the clip would cut
+     the arrow, so there is none here) and a click still closes it. */
   .bubble {
-    position: fixed;
-    top: auto;
-    bottom: var(--distance-md);
-    left: var(--distance-md);
-    right: var(--distance-md);
+    position: static;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin: var(--distance-xs) 0 var(--distance-sm);
     max-width: none;
     /* three lines of the bubble's own 20px line height, its 10px padding top and bottom, and the 1px border */
     max-height: calc(3 * 20px + 2 * 10px + 2px);

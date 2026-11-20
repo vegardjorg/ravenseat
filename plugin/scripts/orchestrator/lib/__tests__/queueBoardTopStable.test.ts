@@ -311,7 +311,47 @@ describe('B26: medium width (1000 to 1199 px)', () => {
     });
 
   it('on a wide screen the columns keep the B5 width', () => {
-    expect(valueAt('.board.flat', 'grid-template-columns', 1440)).toMatch(/minmax\(280px,\s*480px\)/);
+    // 280 px each when there is room, at most 480 px (the fit below lets them give way only when there is not).
+    expect(oneLine(valueAt('.board.flat', 'grid-template-columns', 1440))).toMatch(/min\(280px,.*\), 480px\)\)$/);
+  });
+});
+
+/** A multi-line CSS value on one line: single spaces, none just inside the parentheses. */
+const oneLine = (v: string | null) =>
+  (v ?? '').replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')').trim();
+
+// ---- fx0: the columns fit from 1200 to 1440 px, with and without the side panel ---------------------------------------
+
+describe('fx0: no sideways scroll for the columns from 1200 to 1440 px', () => {
+  // A column's minimum is max(<floor>, min(<B5 width>, its fair share of the board)): the fair share is the board's
+  // content width less the gaps, divided by the number of columns, so the columns always fit unless the share falls
+  // below the floor (then the board scrolls sideways rather than crushing the cards).
+  const minTrack = (template: string | null, content: number, n: number) => {
+    const m = /^repeat\(var\(--columns, 4\), minmax\(max\((\d+)px, min\((\d+)px, calc\(\(100% - \(var\(--columns, 4\) - 1\) \* var\(--distance-md\)\) \/ var\(--columns, 4\)\)\)\), (?:480px|1fr)\)\)$/.exec(
+      oneLine(template),
+    );
+    if (!m) return Infinity; // not the fitting form: counts as not fitting
+    const [floor, cap] = [Number(m[1]), Number(m[2])];
+    return Math.max(floor, Math.min(cap, (content - (n - 1) * 16) / n));
+  };
+  // The side panel beside the board takes clamp(420px, 36vw, 560px); floating, it leaves the board its full width.
+  const panelSide = (w: number) => Math.min(560, Math.max(420, 0.36 * w));
+  for (const w of [1200, 1280, 1366, 1440])
+    for (const n of [4, 5])
+      for (const beside of [false, true])
+        it(`${n} columns at ${w} px${beside ? ' with the panel beside the board' : ''}`, () => {
+          const board = w - (beside ? panelSide(w) : 0);
+          const content = board - 2 * 24; // the board's side padding (flat and lanes)
+          for (const sel of ['.board.flat', '.lane-headers', '.lane-row']) {
+            const min = minTrack(valueAt(sel, 'grid-template-columns', w), content, n);
+            expect(n * min + (n - 1) * 16, `${sel} at ${w}`).toBeLessThanOrEqual(content + 0.01); // float rounding
+            // and the cards keep a usable width
+            expect(min, `${sel} at ${w}`).toBeGreaterThanOrEqual(120);
+          }
+        });
+  it('below 1200 px the columns keep their fixed 220 px minimum (the phone and half-screen layouts are unchanged)', () => {
+    expect(valueAt('.board.flat', 'grid-template-columns', 1000)).toMatch(/minmax\(220px,\s*480px\)/);
+    expect(valueAt('.lane-row', 'grid-template-columns', 390)).toMatch(/minmax\(220px,\s*1fr\)/);
   });
 });
 
