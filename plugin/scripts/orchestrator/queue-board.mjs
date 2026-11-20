@@ -71,7 +71,9 @@
 //     POST /api/plan-prioritize (dry = preview), which runs one `queue.mjs plan prioritize-many --file …
 //     --set-by owner` with --expect-changed (one save is one changelog entry and one undo).
 //     GET /api/doc?path=… reads one markdown document for the reading view (the allowlist is in queuePlanView.readPathError,
-//     the path guard against .., hidden files, symlinks and other file types in queueBoard.readDocument). GET /api/plan-check gives the
+//     the path guard against .., hidden files, symlinks and other file types in queueBoard.readDocument). GET /api/plan-search?q=…
+//     gives the plans whose plan document contains the search, with the matching sentence (queueBoard.planDocSearcher, P5;
+//     off with plans.searchDocuments false). GET /api/plan-check gives the
 //     unregistered documents (queue.mjs plan check), and POST /api/plan-new and /api/plan-source run `queue.mjs plan new`
 //     and `plan edit <id> --set {sources}` with --set-by owner, --dry and --expect-changed.
 //     The Legal, Decisions and Launch views read the same data. An answer to an owner question goes via
@@ -1125,6 +1127,9 @@ let planCache = null;
 // queueBoard.planLeadReader: the /api/doc guard, cached per file by time and size). One reader for the process, so the
 // cache lives as long as the board.
 const planLead = T.planLeadReader(SOURCE_ROOT, { fs, path });
+// P5: the full-text search in the plan documents (queueBoard.planDocSearcher: the same source, guard and cap as the
+// lead, passages cached per file by time and size). One searcher for the process, like the lead reader.
+const planSearch = T.planDocSearcher(SOURCE_ROOT, { fs, path });
 function plans() {
   const mt = (f) => {
     try {
@@ -3125,6 +3130,23 @@ const server = http.createServer(async (req, res) => {
         return json(res, 503, {
           ok: false,
           message: `Could not read the plan register (${e?.code ?? e?.message ?? 'unknown error'}).`,
+        });
+      }
+    }
+    // P5: the plans whose plan document contains the search, with the matching sentence (read only). Only the plan
+    // source of each entry (the document folders), through the /api/doc guard; nothing is read while the Plans room or
+    // plans.searchDocuments is off. The search text is never logged and never part of an error message.
+    if (req.method === 'GET' && filePath === '/api/plan-search') {
+      try {
+        const pl = plans();
+        if (!FEATURES.plans || pl.data.view?.searchDocuments === false)
+          return json(res, 200, { ok: true, enabled: false, hits: [], partial: false });
+        const r = planSearch(pl.data.entries ?? [], String(url.searchParams.get('q') ?? '').slice(0, 120));
+        return json(res, 200, { ok: true, enabled: true, version: pl.version, ...r });
+      } catch (e) {
+        return json(res, 503, {
+          ok: false,
+          message: `Could not search the plan documents (${e?.code ?? 'unknown error'}).`,
         });
       }
     }

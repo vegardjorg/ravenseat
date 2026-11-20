@@ -231,6 +231,7 @@ const REQUIRES = Object.freeze({
   'plans.roadmapLayout': ['features.plans'],
   'plans.roadmapFoldAfter': ['features.plans'],
   'plans.leadFromDocument': ['features.plans'],
+  'plans.searchDocuments': ['features.plans'],
   // lib/loadSlots.js: adaptive off keeps every slot open, so the scaling numbers are not read.
   'loadGuard.minSlots': ['loadGuard.adaptive'],
   'loadGuard.allSlotsFreeMemoryPct': ['loadGuard.adaptive'],
@@ -1225,6 +1226,14 @@ const SETTINGS = Object.freeze([
   row('plans.leadFromDocument', 'plans', 'onoff', 'Lead from the plan document',
     'A plan without a summary shows the first lines of its plan document on the roadmap, marked "From the plan ' +
     'document". Off: no document is read for the roadmap; the reader still opens them.'),
+  // P5. Friction: none; it only adds plans to a search, below the ones whose title or summary match, with the matching
+  // sentence under the row. The server reads each plan document once per change (the /api/doc guard, at most 512 KB,
+  // passages cached per file by time and size), so a repeated search costs a stat per plan. On by default (owner answer
+  // 8 of the plan, "as recommended"). Off for a very large document folder, where the first search after many changes
+  // has to read every plan document; the search then covers the register's own words only.
+  row('plans.searchDocuments', 'plans', 'onoff', 'Search the plan documents',
+    'On: the plan search also looks in each plan\'s document and shows the matching sentence under the row, after the ' +
+    'plans whose title or summary match. Off: the search covers the register only (for a very large document folder).'),
   row('focus.continueWhenEmpty', 'plans', 'onoff', 'Continue when the focus ends',
     'Off: the queue pauses and asks you when a focus has ended. On: it continues with the regular queue.',
     { fullWhy: 'lite has no focus steps to end' }),

@@ -368,6 +368,13 @@ for you, **Area** groups by area instead of horizon, and **Compact** gives one l
 choices in your browser. A long section shows 8 plans and then **Show n more** (`plans.roadmapFoldAfter`), Done is
 folded until you open it, and a search shows every match. `/` goes to the search and `j`/`k` move between the plans.
 
+The search (**Search plans**, on the Roadmap and on Plan entries) matches the id, title, summary, lead, project and
+source paths at once. From three characters it also looks in each plan's own document (only the plan source in the
+document folders, through the same guard as the reader, at most 512 KB, cached per file until the file changes):
+plans found that way come after the ones whose own words match, with the matching sentence under the row, the match
+marked and the heading it sits under. A line under the toolbar says how many the documents added.
+`plans.searchDocuments` (on) turns this off for a very large document folder.
+
 **+ New plan** (key `n`, on the Roadmap and on Plan entries; `features.plans.inbox`, on) opens a small form: **Title** (required, up to 160 characters) and **What and why, in your own words** (optional; a note past about 2000 characters, saved as written). **Add to inbox** saves at once, without a preview, and the toast offers **Undo**. Claude sorts the Inbox the next time plans are worked on. An empty register shows the same button.
 
 The toolbar has the same **Filter** and **Sort** menus as the Tasks room, on the Roadmap and on Plan entries. The
