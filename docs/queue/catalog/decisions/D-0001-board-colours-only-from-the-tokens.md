@@ -1,7 +1,9 @@
 ---
 id: D-0001
 title: Board colours only from the tokens
-status: proposed
+status: accepted
+accepted_by: owner
+accepted: 2026-11-20
 kind: design
 source: ["plugin/scripts/orchestrator/lib/queueBoard.js#PALETTE","plugin/scripts/orchestrator/queue-board/board.css"]
 paths: ["plugin/scripts/orchestrator/queue-board/**"]
