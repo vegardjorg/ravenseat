@@ -151,6 +151,30 @@ function guidanceSection(d) {
   );
 }
 
+/**
+ * Tidy (Settings > Project, roadmap 1b): the doctor's count of merged, clean worktrees and merged branches that
+ * `ravenseat tidy --execute` would remove, and the command to copy. The board never deletes anything itself: deleting
+ * cannot be undone, so it stays a command you run and confirm. null for an older server without the field.
+ */
+function tidySection(x) {
+  if (!x) return null;
+  let text;
+  if (x.off) text = 'The count is off (tidy.doctor). The command lists merged worktrees and branches left behind.';
+  else if (x.error) text = `Could not count them: ${x.error}.`;
+  else if (!x.worktrees && !x.branches) text = 'Nothing to tidy: no merged, clean worktrees or merged branches are left behind.';
+  else
+    text =
+      `${x.worktrees} merged, clean worktree(s) (${x.size}) and ${x.branches} merged branch(es) with no worktree can be ` +
+      'removed. The command lists them first; add --execute to remove them after a yes.';
+  return el(
+    'section',
+    { class: 'setting', 'aria-labelledby': 'setting-tidy', 'data-part': 'tidy' },
+    el('h3', { id: 'setting-tidy', class: 'setting-title', text: 'Tidy' }),
+    el('p', { class: 'setting-explanation' }, text, ' ', cliChip(x.command)),
+    x.at ? el('p', { class: 'setting-meta', text: `Counted ${age(x.at)} ago, also by ravenseat doctor.` }) : null,
+  );
+}
+
 /** The opt-out for the Checks tab (`ravenseat checks on|off`). It is not a guard: gates and guards run as before. */
 function checksSwitchSection(d) {
   const error = el('p', { class: 'setting-error', role: 'alert', hidden: true });
@@ -263,7 +287,7 @@ const SETTINGS_TABS = [
   { id: 'checks', text: 'Checks', parts: ['cat:gates', 'cat:tests', 'checks', 'cat:learning'] },
   { id: 'guards', text: 'Guards', parts: ['cat:files', 'cat:guards', 'cat:push', 'cat:scope', 'cat:private'] },
   { id: 'helpers', text: 'Agents', parts: ['helpers', 'cat:review', 'helperAdd'] },
-  { id: 'project', text: 'Project', parts: ['cat:project', 'cat:plans', 'modules', 'setup', 'rules'] },
+  { id: 'project', text: 'Project', parts: ['cat:project', 'tidy', 'cat:plans', 'modules', 'setup', 'rules'] },
   { id: 'board', text: 'Board', parts: ['theme', 'guidance', 'blocked', 'cat:board', 'cloud', 'cat:cloud', 'mascot'] },
 ];
 
@@ -286,6 +310,7 @@ const OWN_PARTS = {
   helperAdd: { draw: () => helperAddForm() },
   // A module with its own registry row (features.<name>, with a real switch) is not listed again.
   modules: { draw: (d) => modulesSection((name) => !!registryRow(d, `features.${name}`)) },
+  tidy: { draw: (d) => tidySection(d.tidy) },
   setup: {
     draw: (d) =>
       el(

@@ -1425,6 +1425,41 @@ function readJson(filePath) {
   }
 }
 
+/**
+ * The tidy line in Settings > Project (lib/tidy.js, roadmap 1b): the same count as doctor's tidy row, with the command
+ * to copy. Read only. Kept for five minutes, since it runs git status in every worktree; null value fields = unknown.
+ * tidy.doctor false hides the count (the line still shows the command).
+ */
+const TIDY_CACHE_MS = 5 * 60_000;
+let tidyCache = null;
+function tidySummary(queue, config) {
+  const command = `${require('./lib/projectRoot.js').cliCommand()} tidy`;
+  if (config.tidy?.doctor === false) return { off: true, command };
+  if (tidyCache && Date.now() - tidyCache.at < TIDY_CACHE_MS) return tidyCache.value;
+  let value;
+  try {
+    const TIDY = require('./lib/tidy.js');
+    const minAge = Number(config.tidy?.minAgeHours);
+    const t = TIDY.scan({
+      main: GIT_ROOT,
+      base: String(config.baseBranch ?? 'main'),
+      prefix: config.branchPrefix ?? 'queue/',
+      tasks: queue.tasks ?? [],
+      minAgeHours: Number.isFinite(minAge) && minAge >= 0 ? minAge : 3,
+      sharedLinks: config.sharedLinks,
+      production: config.productionBranch ?? null,
+      exclude: config.excludeBranches ?? [],
+      dataFolder: FOLDER,
+      sizes: 'removable',
+    }).totals;
+    value = { worktrees: t.worktrees, branches: t.branches, size: TIDY.sizeText(t.worktreeBytes, t.capped), command, at: new Date().toISOString() };
+  } catch (e) {
+    value = { error: String(e?.message ?? e).split('\n')[0], command };
+  }
+  tidyCache = { at: Date.now(), value };
+  return value;
+}
+
 /** The setup in the settings panel (read only, from the real sources). */
 function setup(queue, stat) {
   // The migrations are shown only when the project has turned on the migration flow (config().migrations.folder).
@@ -3430,6 +3465,8 @@ const server = http.createServer(async (req, res) => {
           usageToday: stat.keyFigures.usageToday,
           night: L.nightGuard(queue),
           setup: setup(queue, stat),
+          // Settings > Project: what `ravenseat tidy --execute` would remove (the doctor's count) and the command.
+          tidy: tidySummary(queue, config),
           // The "Helper agents" tab: one row per helper with the switch, when it runs and the measurement.
           // A custom helper is checked against its approved sha256 (Needs review, Changed since approval).
           helpers: HELP.helperRows(CONFIG, queue, { hashes: HF.currentHashes(CONFIG, queue, MAIN_TREE) }),

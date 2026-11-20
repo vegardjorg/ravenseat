@@ -64,6 +64,8 @@ ravenseat machine [--measure]       # cores, memory, free memory and a suggested
 ravenseat surface                   # git hooks and config that run code, against what was accepted; changes nothing
 ravenseat surface accept --by owner # accept the current state (after installing a hook tool, changing git config)
 ravenseat unlock                    # who holds the queue lock; changes nothing (--force --by owner releases it)
+ravenseat tidy                      # merged worktrees (anywhere on disk) and branches left behind, with sizes; changes nothing
+ravenseat tidy --execute            # removes only the merged, clean, unlocked ones no active task uses, after y/N (--yes skips it)
 ravenseat attempt list <ID>         # the task's attempts; `ravenseat attempt close <ID> --outcome <...>` closes a stuck one
 ravenseat guidance [guided|quiet]   # one switch for advice about CI, gates, lockfiles and the budget; never a guard
 ravenseat controls [dismiss|restore] # no CI config or no gates: dismiss stops the push question for this project until something else goes missing
