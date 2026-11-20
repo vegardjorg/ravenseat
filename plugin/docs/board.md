@@ -157,6 +157,8 @@ Arrow up and down move between the quick filters, the saved filters and the chec
 focus back on Filter (Esc in the name field closes only the field). What waits on you is the **Waiting on you**
 button at the top, not a filter. The word "selection" on the board means the ticked cards only.
 
+<p align="center"><img src="../../assets/screenshots/light-19-filter-menu.jpg" alt="The Filter menu: quick filters with a line each, saved filters, and the Show and Projects sections" width="800"></p>
+
 The Queue workspace has these tabs:
 - **Flat:** the columns **In queue** (ready now, blocked, proposed by agents and the batch queue), **In progress**,
   **Review** and **Built**. Each card shows class, estimate, value, blockers and owner questions. Click a card for
@@ -188,6 +190,9 @@ The Queue workspace has these tabs:
 - **Project lanes:** the same cards with one row per project; drag a lane to change the project's priority. With the
   Blocked column on, each lane has a Blocked cell too. A card keeps its project short name and color dot here, and in
   Flat grouped by area or feature, so a card looks the same in every view.
+
+<p align="center"><img src="../../assets/screenshots/light-02-project-lanes.jpg" alt="Project lanes: the same cards with one row per project" width="800"></p>
+
 - **Focus:** the order the queue takes work in, as one ordered list **In focus** (step 1 first; each step row has a
   **Tasks** fold that lists the step's tasks with a status per task: ready, blocked, waits on an answer, QA waiting on
   you and so on; a done step keeps its "done" badge), then **Not in focus** (the rest) and **On pause** (projects on
@@ -281,6 +286,13 @@ The Queue workspace has these tabs:
 - A built card gets the badge **Merged, not verified** when no gates, done command or agent review ran, and **Audited**
   when only an agent review ran ([When a project has no checks](queue.md#when-a-project-has-no-checks)).
 
+<p align="center"><img src="../../assets/screenshots/light-16-statistics-flow.jpg" alt="Statistics, Flow: done per day, added against finished, time per class and the blockers table" width="800"></p>
+
+<p align="center">
+  <img src="../../assets/screenshots/light-17-statistics-quality.jpg" alt="Statistics, Quality: right the first time, gate health and the findings log" width="400">
+  <img src="../../assets/screenshots/light-18-statistics-machine.jpg" alt="Statistics, Machine: free memory, gate queue wait and the guard decisions" width="400">
+</p>
+
 **The task panel.** A click on a card (or Enter on its title) opens its panel. It reads top down: the title, a short
 line on what the task is about, the actions, the full mission, and last the technical facts (status, project, class,
 placement and score, dependencies, owner files, branch, cloud, migrations, QA, verification, source and remarks) under
@@ -289,6 +301,8 @@ in this browser. The short line is the first paragraph under a heading such as "
 "Purpose", "Background" or "Summary" (or a bold `**Goal:**` label) in the mission; without one it is the first plain
 paragraph, skipping generated lines such as the `=====ID=====` marker, `TITLE:` and `BRANCH:` lines, headings and
 `**Ownership in the queue:**` blocks, and last the first list item. It is clipped at about 320 characters.
+
+<p align="center"><img src="../../assets/screenshots/light-05-task-detail.jpg" alt="A task opened in the side panel: the short line, the actions, the mission and Details" width="800"></p>
 
 **Where the side panel sits.** The task panel, Settings and the help share one side panel. From about 1200 px wide it
 is not modal (no scrim, nothing on the board is made inert, Tab can leave it) and starts below the top bar, which
@@ -400,6 +414,10 @@ for you, **Area** groups by area instead of horizon, and **Compact** gives one l
 choices in your browser. A long section shows 8 plans and then **Show n more** (`plans.roadmapFoldAfter`), Done is
 folded until you open it, and a search shows every match. `/` goes to the search and `j`/`k` move between the plans.
 
+<p align="center"><img src="../../assets/screenshots/light-08-plans-roadmap.jpg" alt="The Plans room on the Roadmap: Waiting on you, Now, Next, Later and Done as columns" width="800"></p>
+
+<p align="center"><img src="../../assets/screenshots/light-30-roadmap-area-list.jpg" alt="The Roadmap grouped by area as a list, with progress per plan" width="800"></p>
+
 The search (**Search plans**, on the Roadmap and on Plan entries) matches the id, title, summary, lead, project and
 source paths at once. From three characters it also looks in each plan's own document (only the plan source in the
 document folders, through the same guard as the reader, at most 512 KB, cached per file until the file changes):
@@ -408,6 +426,8 @@ marked and the heading it sits under. A line under the toolbar says how many the
 `plans.searchDocuments` (on) turns this off for a very large document folder.
 
 **+ New plan** (key `n`, on the Roadmap and on Plan entries; `features.plans.inbox`, on) opens a small form: **Title** (required, up to 160 characters) and **What and why, in your own words** (optional; a note past about 2000 characters, saved as written). **Add to inbox** saves at once, without a preview, and the toast offers **Undo**. Claude sorts the Inbox the next time plans are worked on. An empty register shows the same button.
+
+<p align="center"><img src="../../assets/screenshots/light-35-new-plan.jpg" alt="The + New plan form: a title and what and why in your own words, added to the Inbox" width="800"></p>
 
 **Inbox proposals** (`features.plans.inbox`): after `/plans inbox`, each Inbox row on the Roadmap and on its plan page says what Claude suggests ("Claude suggests: App · Now (important) · Investigated · size M"), why, the new summary, the plan it looks like and a folded **Suggested outline**. Nothing is applied until you choose: **Accept** (key `1`, saves at once), **Edit** (key `2`, a small form with the proposal's values, then Accept), **Decline** (key `3`, drops it with an optional reason, or merges it into any other plan) and **Merge into PL-…** (key `4`, when a duplicate was found). The keys work on the row with focus and on the open plan page. Each save goes through the board's write guard, a register changed since you looked answers in words (409), and the toast offers **Undo**. A row without a proposal offers Edit and Drop. `plans.inboxTriage` (`on-request`) and `plans.inboxAutoApply` (off) are in Settings.
 
@@ -428,6 +448,8 @@ source at its anchor, other sources under "Also"), the tasks, and last **Details
 id and history (closed by default, remembered). From 1200 px the document keeps a readable line length and the tasks
 and Details sit in a column beside it. Escape or **Back to the roadmap** returns to the same card. "Also" lists only
 the sources that are not open. A plan without a document says so in a short box, with what to do next.
+
+<p align="center"><img src="../../assets/screenshots/light-31-plan-page.jpg" alt="A plan page: status and progress, the plan document beside the tasks" width="800"></p>
 
 Small things: the column headers of the Roadmap stay in view while you scroll the columns; a search or filter with
 no match says what is in use and offers **Clear search** and **Clear filter**, and a screen reader hears the new
@@ -453,6 +475,20 @@ are under More views), with the toolbar's search, Filter and Sort (no left filte
 view of the same entry. **Documents and agreements**, **Legal**, **Decisions** and **Launch**
 show the documents, the legal points, the owner decisions and what stands between the plan and launch.
 
+<p align="center"><img src="../../assets/screenshots/light-32-plan-entries.jpg" alt="Plan entries with the details of the selected entry: priority, maturity and the start line" width="800"></p>
+
+<p align="center">
+  <img src="../../assets/screenshots/light-07-plans-overview.jpg" alt="More views, Overview: one card per area with priority and maturity bars" width="400">
+  <img src="../../assets/screenshots/light-09-priority-map.jpg" alt="More views, Priority map: plan entries per area and priority column" width="400">
+</p>
+
+<p align="center">
+  <img src="../../assets/screenshots/light-10-plan-tree-map.jpg" alt="More views, Tree map: areas sized by the estimate and filled by how much is built" width="400">
+  <img src="../../assets/screenshots/light-33-plan-dependencies.jpg" alt="More views, Dependencies: the selected entry with its neighbors" width="400">
+</p>
+
+<p align="center"><img src="../../assets/screenshots/light-34-plans-decisions.jpg" alt="Plans, Decisions: the owner questions with filters, and the selected one with its recommendation and answers" width="800"></p>
+
 The gear holds the settings and the help. A second click on the gear while Settings is open closes the panel, as
 Close does. **How to use the board**, the mode line and the banner for weakened guards
 sit at the top, seen from every tab; under them the settings are in six tabs, so no tab is much longer than two
@@ -466,6 +502,23 @@ screens:
 | **Agents** | **Helper agents**, Review and agents, **Add a custom helper** |
 | **Project** | Project and git, Plans and focus, the read-only **Modules** (only modules without a row of their own), **Setup** and **Rules from the skill** |
 | **Board** | Theme, **Guidance**, **Columns**, Board and advice, **Cloud**, and **Logo and mascot** last, at the very bottom of Settings |
+
+<p align="center"><img src="../../assets/screenshots/light-11-settings.jpg" alt="Settings on the Queue and context tab: limits and cost, with Save per row" width="800"></p>
+
+<p align="center">
+  <img src="../../assets/screenshots/light-23-settings-checks.jpg" alt="Settings, Checks tab: gates, tests and evidence" width="400">
+  <img src="../../assets/screenshots/light-24-settings-guards.jpg" alt="Settings, Guards tab: file, read, command and secret guards" width="400">
+</p>
+
+<p align="center">
+  <img src="../../assets/screenshots/light-25-settings-agents.jpg" alt="Settings, Agents tab: the helper agents and review" width="400">
+  <img src="../../assets/screenshots/light-26-settings-project.jpg" alt="Settings, Project tab: project and git, plans and focus" width="400">
+</p>
+
+<p align="center">
+  <img src="../../assets/screenshots/light-27-settings-tidy.jpg" alt="Settings, Project tab: the Tidy rows for merged worktrees and branches" width="400">
+  <img src="../../assets/screenshots/light-28-settings-board.jpg" alt="Settings, Board tab: theme, guidance and columns" width="400">
+</p>
 
 The tabs are a real tab list: one tab stop, the arrow keys, Home and End move between them, and the board remembers
 the last one per browser (an old saved General opens Queue and context, an old Helper agents opens Agents; without
@@ -492,6 +545,8 @@ Decisions, Picking and running work, The task panel, Focus, Plans and Queue, Che
 parts: Filter, tabs and grouping, Bulk actions, Batch queue, The keyboard on the board, and Areas last, followed by
 the legend. Opened from Settings, the help has **Back to menu** first in its header, which goes back to Settings with
 focus on **How to use the board**; Esc and Close close the panel and focus goes back to the gear.
+
+<p align="center"><img src="../../assets/screenshots/light-29-settings-help.jpg" alt="How to use the board: the help with its contents list, opened from Settings" width="800"></p>
 
 Each room has a small **?** in its own header that opens the help at that room's section, with focus on its heading;
 closing the help puts focus back on the **?**. It sits after the heading in Decisions, Checks and Statistics, first in

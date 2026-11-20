@@ -4,6 +4,24 @@ Install options, lite mode in detail, the first run in full mode, daily use, how
 board's detail panel and settings, the full safety baseline, guarantees and limits, and what is not included. The
 [README](../../README.md) has the short version and links here. What full mode adds and why: [full mode](full-mode.md).
 
+## What it solves
+
+One chat can carry a feature. A project of weeks needs more, and without help you become the memory, the merge order
+and the one who checks whether "done" is true. Each row names a pain, what happens without Ravenseat, what it does
+instead, and the part that does it.
+
+| The pain | Without Ravenseat | With Ravenseat | Feature |
+|---|---|---|---|
+| The long chat is the memory | It grows toward 1M tokens, every turn pays for all of it, and a compaction keeps a summary, not the plan | Each task gets a **fresh agent** and a short mission; the main chat compacts at 300k and reloads the queue from files (about 6 turns back to work, against 17 from a handover note) | [Missions](mission-template.md), [compaction](costs.md) |
+| The plan lives in a chat that ends | Close it, crash, or start a second chat, and the plan is gone or split in two | The queue, each task, the plan register and accepted design choices are **plain files** in your repo | `queue.json`, [plan register](plan-register.md), [catalog](catalog.md) |
+| Two chats, one checkout | They edit the same files and undo each other | Each task has its **own worktree and branch**; merges go one at a time | [Worktrees and merge order](orchestration.md) |
+| "Tests passed," says the agent | You take its word, or check every run yourself | Ravenseat **runs your checks itself** on the exact commit, and only that record opens a merge | [Gates](queue.md), [guarantees](#guarantees-and-limits) |
+| Rules in `CLAUDE.md` hold most of the time | Now and then an agent pushes, edits its own config or skips a test | The rules that matter are **enforced by code**: agents cannot push, write control files or mark their own work tested | [Guards](#safety-baseline-in-full), [red team tests](redteam.md) |
+| You are asked about everything, or about nothing | Small things interrupt you, big things are decided silently | Only what **needs a person** reaches you, with a recommendation and the work it blocks; each delivery lists what the agent assumed | [Decisions](board.md#a-tour) |
+| A red run is your evening | You debug each failure by hand | A **fresh agent** gets the findings and fixes it; still blocked, it becomes one decision while other tasks go on | [Fix rounds](orchestration.md) |
+| Last month's decision is forgotten | An agent brings back the library you rejected | Accepted choices go into every mission, and a proposal that matches something you **chose not to build** gets a note | [Catalog, Not building](catalog.md#not-building) |
+| The bill comes later | You learn the cost at the end of the week | `ravenseat cost` shows it per task, and a **daily budget** stops new tasks | [Costs](costs.md), `limits.dailyBudget` |
+
 ## Install
 
 As a Claude Code plugin (recommended). In Claude Code:
