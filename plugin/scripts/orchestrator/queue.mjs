@@ -443,6 +443,9 @@
 //                                                                  in docs/queue/catalog/: stack, reuse and design choices.
 //                                                                  init writes a draft, check exits 1 on an error, accept is
 //                                                                  the owner's and refused from a track worktree. lib/catalog.js)
+//   node scripts/orchestrator/queue.mjs catalog propose --title "..." --invariant "..." --paths "<glob>" [--supersedes <D-id>]
+//                                                                  [--plan <PL-id>] [--why "..."]   (the next free D-id as
+//                                                                  proposed, then check; refused from a track worktree)
 //   node scripts/orchestrator/queue.mjs catalog find <word...> | index   (find: search the code index, the reuse rows, the
 //                                                                  design choices and the prefer lines, at most 10 lines;
 //                                                                  index: build the code index of exports and @shared

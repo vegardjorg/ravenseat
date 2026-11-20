@@ -13,6 +13,9 @@
 //                                                 it as a gate when it wants to (it is none by default)
 //   ravenseat catalog accept <D-id> --by owner    the owner accepts a design choice: status accepted in the file and
 //                                                 the owner's record in <dataFolder>/catalog-accepted.json
+//   ravenseat catalog propose --title --invariant --paths [--supersedes] [--plan] [--why] [--json]
+//                                                 writes the next free D-id as status proposed into the main tree's
+//                                                 decisions/ and runs check on it (roadmap 0z Z-B); refused from a track
 //   ravenseat catalog find <word...> [--json]     searches the code index (exports and @shared blocks), the reuse
 //                                                 rows, the design choices and the prefer lines; at most 10 short lines
 //   ravenseat catalog index [--json]              builds or refreshes the code index (lib/catalogIndex.js, bolk B5) in
@@ -46,7 +49,7 @@ const CI = require('./lib/catalogIndex.js');
 const K = require('./lib/kickstart.js');
 const RP = require('./lib/reviewPacks.js');
 
-const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | find <word...> [--json] | index [--json]`;
+const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose --title "..." --invariant "..." --paths "<glob>" [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | find <word...> [--json] | index [--json]`;
 const json = a.includes('--json');
 
 /** The catalog folder in a tree (the main tree for a write, the current one for a read). */
@@ -302,6 +305,83 @@ function accept() {
   );
 }
 
+// ---- propose (roadmap 0z Z-B) -------------------------------------------------------------------------------------
+
+/**
+ * Writes a proposed design choice into the MAIN tree's catalog under the next free id, then runs check on the tree.
+ * Never accepts and never writes over a file. Throws an Error with the reason when the proposal is broken (nothing is
+ * written then). Used by `catalog propose` and by `resolve --keep` (cli/owner.mjs). The caller refuses a track first.
+ * @returns {{ id: string, file: string, errors: string[], warnings: string[] }} file relative to the tree; errors and
+ *   warnings are check's lines about this choice
+ */
+export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null }) {
+  const dir = catalogDir(MAIN_TREE);
+  const decisionsDir = path.join(dir, 'decisions');
+  let names = [];
+  try {
+    names = fs.readdirSync(decisionsDir);
+  } catch {
+    names = []; // error-ignored: no folder yet, the first id is D-0001
+  }
+  const id = C.nextDecisionId(names, readLedger());
+  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why });
+  if (r.errors.length) throw new Error(r.errors.join('; '));
+  fs.mkdirSync(decisionsDir, { recursive: true });
+  const readme = path.join(decisionsDir, 'README.md');
+  if (!fs.existsSync(readme)) fs.writeFileSync(readme, C.DECISIONS_README);
+  // wx: a file of that name that came in meanwhile is never written over.
+  fs.writeFileSync(path.join(decisionsDir, r.name), r.text, { flag: 'wx' });
+  const file = `${C.DIR}/decisions/${r.name}`;
+  const mine = (line) => line.includes(id) || line.includes(`decisions/${r.name}`);
+  const c = checkTree(MAIN_TREE);
+  return { id, file, errors: c.errors.filter(mine), warnings: c.warnings.filter(mine), allErrors: c.errors.length };
+}
+
+/** The values of a repeated flag, each also split on commas (`--paths a/**,b/**` or `--paths a/** --paths b/**`). */
+const listFlag = (flag) =>
+  a
+    .flatMap((x, i) => (x === flag ? [a[i + 1] ?? ''] : []))
+    .flatMap((v) => String(v).split(','))
+    .map((v) => v.trim())
+    .filter(Boolean);
+const flag = (name) => (a.includes(name) ? String(a[a.indexOf(name) + 1] ?? '') : null);
+
+function propose() {
+  notFromTrack('propose');
+  const title = flag('--title');
+  const invariant = flag('--invariant');
+  let paths = listFlag('--paths');
+  const supersedes = flag('--supersedes');
+  let plan = flag('--plan');
+  if (!title || invariant == null || (!paths.length && !supersedes))
+    die(`${CLI} catalog propose --title "..." --invariant "<one sentence that can be checked>" --paths "<glob>[,<glob>]" [--supersedes D-0001] [--plan PL-...] [--why "..."]`);
+  if (supersedes) {
+    // Idea C: a choice that replaces another starts from its paths and plan; the owner narrows them before the accept.
+    const old = C.readCatalog(catalogDir(MAIN_TREE)).decisions.find((x) => x.decision?.id === supersedes)?.decision;
+    if (!old) die(`${supersedes} is not in ${C.DIR}/decisions, so nothing can supersede it. Nothing was written.`);
+    if (!paths.length) paths = old.paths;
+    plan ??= old.plan;
+  }
+  let r;
+  try {
+    r = writeProposal({ title, invariant, paths, supersedes, plan, why: flag('--why') });
+  } catch (e) {
+    die(`${CLI} catalog propose: ${e.message}. Nothing was written.`);
+  }
+  if (json) {
+    console.log(JSON.stringify({ ok: true, id: r.id, file: r.file, errors: r.errors, warnings: r.warnings }, null, 2));
+    return;
+  }
+  console.log(`Proposed ${r.id}: ${r.file} (status: proposed; it binds nothing until the owner accepts it).`);
+  for (const e of r.errors) console.log(`ERROR  ${e}`);
+  for (const w of r.warnings) console.log(`WARN   ${w}`);
+  console.log(`catalog check: ${r.errors.length} error(s), ${r.warnings.length} warning(s) for ${r.id}.`);
+  console.log(
+    `Next: read it and sharpen the invariant and the paths, then ${CLI} catalog accept ${r.id} --by owner. ` +
+      'The folder is a protected path: commit the file yourself.',
+  );
+}
+
 /** The code index of the tree the command runs in, refreshed from the cache; dies when git cannot list the tree. */
 function indexHere() {
   const r = CI.refresh(ROOT, { dataFolder: FOLDER, fresh: true });
@@ -347,6 +427,7 @@ export function cmdCatalog() {
   if (sub === 'show') return show();
   if (sub === 'check') return check();
   if (sub === 'accept') return accept();
+  if (sub === 'propose') return propose();
   if (sub === 'find') return find();
   if (sub === 'index') return index();
   die(USAGE);

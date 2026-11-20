@@ -472,6 +472,84 @@ function acceptText(source, { by, now = new Date().toISOString() } = {}) {
   return { text: [all[0], ...head, ...all.slice(end)].join('\n'), error: null };
 }
 
+// ---- propose (roadmap 0z Z-B) ---------------------------------------------------------------------------------------
+
+/**
+ * The next free design choice id: one above the highest number in the file names and in the owner's record. The record
+ * counts too, so an id whose file was deleted is still never handed out again.
+ */
+function nextDecisionId(names, ledger) {
+  let top = 0;
+  for (const n of names ?? []) {
+    const m = /^D-(\d{4})-/.exec(String(n));
+    if (m) top = Math.max(top, Number(m[1]));
+  }
+  for (const id of Object.keys(ledger?.decisions ?? {})) {
+    const m = /^D-(\d{4})$/.exec(id);
+    if (m) top = Math.max(top, Number(m[1]));
+  }
+  return `D-${String(top + 1).padStart(4, '0')}`;
+}
+
+/** Letters a slug spells out (Norwegian and a few others); the rest of the non-ASCII letters lose their accent. */
+const SLUG_LETTERS = Object.freeze({ æ: 'ae', ø: 'o', å: 'a', ß: 'ss', œ: 'oe' });
+const SLUG_MAX = 48;
+
+/** The slug of a file name from a title: lower-case ASCII letters, digits and hyphens, at most SLUG_MAX, never empty. */
+function slugOf(title) {
+  const s = String(title ?? '')
+    .toLowerCase()
+    .replace(/[æøåßœ]/g, (c) => SLUG_LETTERS[c])
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, SLUG_MAX)
+    .replace(/-+$/, '');
+  return s || 'choice';
+}
+
+/**
+ * A frontmatter value as text parseFrontmatter reads back the same: plain where that is safe, else JSON (a value that
+ * starts like JSON or a quote, reads as true, false or null, holds a " #" that would be cut as a comment, or has spaces
+ * at an end).
+ */
+function frontValue(v) {
+  if (v == null) return 'null';
+  if (Array.isArray(v)) return JSON.stringify(v);
+  const s = String(v);
+  const plain = s.trim() === s && s !== '' && !/^[[{"'~]/.test(s) && !/^(true|false|null)$/.test(s) && !/\s#/.test(s);
+  return plain ? s : JSON.stringify(s);
+}
+
+/**
+ * A proposed design choice as a file: { name, text, errors }. The text is what `catalog propose` writes; errors are
+ * parseDecision's on that text, so nothing broken is ever written. The status is always proposed: only the owner accepts.
+ * @param {{ id: string, title: string, invariant: string, paths: string[], supersedes?: string|null, plan?: string|null,
+ *   why?: string|null }} p
+ */
+function proposalFile(p) {
+  const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+  const title = one(p.title);
+  const name = `${p.id}-${slugOf(title)}.md`;
+  const why = String(p.why ?? '').replace(/\r\n/g, '\n').trim();
+  const text = [
+    '---',
+    `id: ${p.id}`,
+    `title: ${frontValue(title)}`,
+    'status: proposed',
+    `paths: ${JSON.stringify(Array.isArray(p.paths) ? p.paths : [])}`,
+    `invariant: ${frontValue(one(p.invariant))}`,
+    `supersedes: ${p.supersedes ? p.supersedes : 'null'}`,
+    `plan: ${p.plan ? p.plan : 'null'}`,
+    '---',
+    why || 'Context, the choice and what follows from it, in at most 30 lines.',
+    '',
+  ].join('\n');
+  const r = parseDecision(name, text);
+  return { name, text, errors: r.errors, warnings: r.warnings };
+}
+
 // ---- check ----------------------------------------------------------------------------------------------------------
 
 /** At most this many files of a choice's paths are read for treeHits, and none over TREE_FILE_BYTES. */
@@ -702,6 +780,9 @@ module.exports = {
   effectiveStatus,
   recordAccept,
   acceptText,
+  nextDecisionId,
+  slugOf,
+  proposalFile,
   checkCatalog,
   stackBlock,
   jobsOf,

@@ -220,6 +220,51 @@ describe('the owner lock on accepted', () => {
   });
 });
 
+// Roadmap 0z Z-B: `catalog propose` writes the next free id as proposed and runs check, from the main tree only.
+describe('ravenseat catalog propose', () => {
+  it('writes the next free id as proposed, runs check, and is refused from a track worktree', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    p.write(`${CAT}/decisions/D-0001-dates.md`, DECISION);
+    const args = ['catalog', 'propose', '--title', 'Paths with forward slashes', '--invariant', 'Code under lib/ joins paths with path.posix.', '--paths', 'lib/**'];
+    const inTrack = p.run(args, p.worktree);
+    expect(inTrack.code).toBe(1);
+    expect(inTrack.err).toMatch(/track worktree/);
+    expect(fs.existsSync(path.join(p.worktree, CAT, 'decisions', 'D-0002-paths-with-forward-slashes.md'))).toBe(false);
+
+    const r = p.run([...args, '--plan', 'PL-DATES', '--why', 'One join for every platform.']);
+    expect(r.code, r.all).toBe(0);
+    const file = `${CAT}/decisions/D-0002-paths-with-forward-slashes.md`;
+    const text = p.read(file);
+    expect(text).toMatch(/^---\nid: D-0002\n/);
+    expect(text).toMatch(/\nstatus: proposed\n/);
+    expect(text).toMatch(/\npaths: \["lib\/\*\*"\]\n/);
+    expect(text).toMatch(/One join for every platform\./);
+    expect(r.out).toMatch(/Proposed D-0002/);
+    expect(r.out).toMatch(/catalog check: 0 error\(s\)/);
+    expect(r.out).toMatch(/catalog accept D-0002 --by owner/);
+    expect(p.run(['catalog', 'show']).out).toMatch(/D-0002\s+proposed\s+Paths with forward slashes/);
+
+    // A bad proposal writes nothing; the push guard denies it to a queue agent.
+    const bad = p.run(['catalog', 'propose', '--title', 'X', '--invariant', 'Y.', '--paths', '../up']);
+    expect(bad.code).toBe(1);
+    expect(bad.err).toMatch(/Nothing was written/);
+    expect(fs.readdirSync(path.join(p.repo, CAT, 'decisions')).filter((n) => n.startsWith('D-0003'))).toEqual([]);
+    expect(p.run(['catalog', 'propose', '--title', 'X']).code).toBe(1);
+    /* eslint-disable-next-line @typescript-eslint/no-require-imports */
+    const PG = require('../lib/pushGuard.js');
+    expect(PG.assess('ravenseat catalog propose --title X --invariant Y --paths a', { agentType: 'track', branch: 'queue/A', environment: null })?.decision).toBe('deny');
+  });
+
+  it('works before catalog init: it makes the decisions folder', () => {
+    const p = project();
+    const r = p.run(['catalog', 'propose', '--title', 'One', '--invariant', 'Code under lib/ stays small.', '--paths', 'lib/**', '--json']);
+    expect(r.code, r.all).toBe(0);
+    expect(JSON.parse(r.out)).toMatchObject({ ok: true, id: 'D-0001', file: `${CAT}/decisions/D-0001-one.md`, errors: [] });
+    expect(fs.existsSync(path.join(p.repo, CAT, 'decisions', 'README.md'))).toBe(true);
+  });
+});
+
 // Bolk B5: the generated index (lib/catalogIndex.js) and `catalog find`.
 describe('ravenseat catalog index and find', () => {
   const TAGGED = [
