@@ -135,6 +135,7 @@ const row = { time: new Date().toISOString(), wave, track, event };
 const v = val('--duration-s');
 if (v) row.duration_s = Number(v);
 const m = val('--remark');
-if (m) row.remark = m;
+// The remark is agent text (any agent can call this): redacted before it is stored, withheld if that fails (lib/storeText.js).
+if (m) row.remark = require('./lib/storeText.js').storeText(m);
 TA.appendText(LOG, JSON.stringify(row) + '\n');
 console.log('logged', JSON.stringify(row));

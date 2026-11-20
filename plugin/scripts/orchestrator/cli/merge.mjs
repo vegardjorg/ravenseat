@@ -824,7 +824,8 @@ export function cmdReceive() {
   const trackReply = lastTrackReply(agents);
   const files = {};
   if (trackReply) {
-    fs.writeFileSync(path.join(folder, 'trackReply.md'), trackReply);
+    // Agent text: redacted before it is stored, withheld if that fails (lib/storeText.js, lib/sinkRegister.js).
+    fs.writeFileSync(path.join(folder, 'trackReply.md'), require('./lib/storeText.js').storeText(trackReply));
     files.trackReply = true;
   }
   // Adoption: the newest report in the orchestrator's and the task's scratchpad, also from a fix round (<id>-r<N>/).

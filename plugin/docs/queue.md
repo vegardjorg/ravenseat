@@ -160,7 +160,9 @@ stored.
   is handled as in receive, and nothing is merged.
 - **Only the tail is kept** (`doneCheck.tailLines`, default 40 lines, each cut to 400 characters) in
   `<scratchpad>/done-<id>.md` and the fix brief; the full output is never stored, so a secret printed early in a
-  long run is not copied around. `doneCheck.timeoutSec` (default 600) is the time budget per run. On Windows a
+  long run is not copied around. The tail is redacted before it is cut (`lib/storeText.js`, the shared route for agent
+  text on disk; a redaction that fails stores `[withheld: ...]`, never the raw text). Every module that stores agent
+  text is listed in `lib/sinkRegister.js`, and a guard test fails when a new one is not. `doneCheck.timeoutSec` (default 600) is the time budget per run. On Windows a
   timeout stops cmd.exe; a process it started can live on until it ends by itself.
 
 **The fix-round cap.** Every `ravenseat resume <id> --reason fix` counts (the task's `resumed` list; a `context`
