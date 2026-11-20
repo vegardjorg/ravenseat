@@ -37,7 +37,7 @@ import { logEvent } from './events.mjs';
 import { cleanupDetachedOf, cleanupWorktree } from '../cleanup-worktree.mjs';
 import { proposeGate } from './gate.mjs';
 import { registerQuietly, registerReviewItems, reviewReports } from './reviewItem.mjs';
-import { catalogRules, proposeRuleGates } from './catalog.mjs';
+import { catalogRules, proposeRuleGates, stackChoicesNow } from './catalog.mjs';
 import { notBuildingLines } from './notBuilding.mjs';
 
 const ER = require('./lib/eventRows.js');
@@ -615,7 +615,15 @@ function scopeNotesFor(o, { branch, base, diff, changedNames, all = false }) {
         return t == null ? null : String(t);
       },
     };
-    const r = SN.assess({ diff, changedPaths: changedNames, task: o, setup, io, migrations: CONFIG.migrations ?? null });
+    // The catalog's stack entries (roadmap 0å KD-2): a dependency note names the one an added package goes against, and
+    // an accepted one gives a CATALOG line. A catalog that cannot be read gives the notes as before.
+    let choices = [];
+    try {
+      choices = setup.dependencies ? stackChoicesNow() : [];
+    } catch {
+      choices = []; // error-ignored: the notes are facts for the reviewer; without the catalog they are as before
+    }
+    const r = SN.assess({ diff, changedPaths: changedNames, task: o, setup, io, migrations: CONFIG.migrations ?? null, choices });
     return { lines: SN.receiveLines(r, { id: o.id, cli: CLI, all }), section: SN.packageSection(r) };
   } catch (e) {
     return { lines: [`NOTE scope notes (${o.id}): could not be made (${e?.message ?? e}); nothing is blocked on it.`], section: null };

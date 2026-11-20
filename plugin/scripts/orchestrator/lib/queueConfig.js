@@ -573,6 +573,9 @@ const STANDARD = Object.freeze({
   // captureAnswers (roadmap 0z Z-A): off | explicit | suggest. explicit: an owner's answer becomes a proposed design
   // choice only when the owner asks (resolve --keep, the board's button); suggest also marks the questions that read like
   // a lasting rule (noise, so not the default); off: never, and catalog propose refuses. Only the owner accepts.
+  // stackFacts (roadmap 0å KD-2): the stack words of the owner's accepted stack entries join facts.stacks on the Checks
+  // tab, so `stack:<word>` recipes hold and the dep-audit card names the audit command. On: it can change which cards
+  // show and stops nothing, and only accepted entries count; off gives the cards from the manifests alone.
   catalog: {
     doctor: true,
     planLinks: true,
@@ -584,6 +587,7 @@ const STANDARD = Object.freeze({
     checkStop: false,
     gateAfter: 3,
     captureAnswers: 'explicit',
+    stackFacts: true,
   },
   // "Not building" (lib/notBuilding.js, roadmap 0f): the catalog's entries for what the owner chose not to build.
   // match: a new task at add, a track's proposals at receive and a captured plan that read like such an entry (its

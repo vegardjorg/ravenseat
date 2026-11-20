@@ -1103,6 +1103,13 @@ const SETTINGS = Object.freeze([
   row('notBuilding.match', 'scope', 'onoff', 'Match new work against "not building"',
     'A new task, a track\'s proposal or a captured plan that reads like an entry in the catalog you chose not to build ' +
     'gets one INFO line with the date and the reason. Doctor names entries whose revisit date has passed. Advice only.'),
+  // Stack entries into the Checks tab (roadmap 0å KD-2). Friction: it can change which cards show (a `stack:<word>`
+  // recipe, the dep-audit card's command) and stops nothing. Only the owner's accepted stack entries count, so a track
+  // cannot turn a card on or off. Off gives today's cards from the manifests alone. No guard reads it: no weakening.
+  row('catalog.stackFacts', 'scope', 'onoff', 'Stack entries in the Checks tab',
+    'The tools and words of the stack entries you accepted in the catalog join the stack the Checks tab sees, so ' +
+    'recipes for that stack apply and the dependency audit card names its command (pnpm audit, cargo audit). Off: ' +
+    'the cards follow the manifests alone.'),
   row('catalog.gateAfter', 'scope', 'integer', 'Separate tasks before a lint proposal',
     'Only with learning.proposals on, which is off by default. Then a rule broken in this many separate tasks (2 to ' +
     '20, default 3) becomes one proposed gate task to put it in the project\'s own lint. It shares the cap of three ' +

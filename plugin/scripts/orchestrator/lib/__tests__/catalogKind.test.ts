@@ -67,7 +67,8 @@ describe('one kind field', () => {
     expect(C.KINDS).toEqual(['decision', 'design', 'stack', 'dependency', 'not-building']);
     expect(C.parseDecision('D-0003-x.md', entry()).decision.kind).toBe('decision');
     for (const k of ['decision', 'design', 'stack', 'dependency']) {
-      const r = C.parseDecision('D-0003-x.md', entry([`kind: ${k}`]));
+      // A stack entry needs uses or stack (KD-2, lib/__tests__/catalogStack.test.ts).
+      const r = C.parseDecision('D-0003-x.md', entry([`kind: ${k}`, ...(k === 'stack' ? ['uses: {"job": "tests", "tool": "vitest"}'] : [])]));
       expect(r.errors, k).toEqual([]);
       expect(r.decision.kind).toBe(k);
     }
@@ -189,7 +190,7 @@ describe('boardGroups', () => {
     const root = folder({
       'decisions/D-0001-a.md': entry(['kind: design']).replace('D-0003', 'D-0001'),
       'decisions/D-0002-b.md': entry([]).replace('D-0003', 'D-0002'),
-      'decisions/D-0003-c.md': entry(['kind: stack']),
+      'decisions/D-0003-c.md': entry(['kind: stack', 'uses: {"job": "tests", "tool": "vitest"}']),
       'decisions/D-0004-d.md': entry([]).replace('D-0003', 'D-0004').replace('status: proposed', 'status: superseded'),
       'decisions/D-0005-e.md': ['---', 'id: D-0005', 'title: No keepalive', 'status: proposed', 'kind: not-building', 'keywords: ["keepalive"]', '---', 'Why.', ''].join('\n'),
     });

@@ -180,6 +180,24 @@ describe('ravenseat catalog init, show and check', () => {
     expect(wrong.err).toMatch(/--kind must be one of decision, design, stack, dependency/);
   });
 
+  it('KD-2: propose --kind stack --uses --alternatives --stack writes a stack entry; check warns when the manifest disagrees once accepted', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    const r = p.run(['catalog', 'propose', '--kind', 'stack', '--title', 'Dates with dayjs', '--invariant', 'Dates use dayjs.', '--paths', 'package.json', '--uses', 'dates:dayjs', '--alternatives', 'moment,luxon', '--stack', 'npm']);
+    expect(r.code, r.all).toBe(0);
+    const text = p.read(`${CAT}/decisions/D-0001-dates-with-dayjs.md`);
+    expect(text).toMatch(/\nuses: \{"job":"dates","tool":"dayjs"\}\n/);
+    expect(text).toMatch(/\nalternatives: \["moment","luxon"\]\n/);
+    expect(p.run(['catalog', 'show', 'D-0001']).out).toMatch(/uses: dayjs for dates[\s\S]*alternatives: moment, luxon[\s\S]*stack: npm/);
+    expect(p.run(['catalog', 'propose', '--title', 'X', '--invariant', 'Y.', '--paths', 'lib/**', '--uses', 'a:b']).err).toMatch(/need --kind stack/);
+    expect(p.run(['catalog', 'propose', '--kind', 'stack', '--title', 'X', '--invariant', 'Y.', '--paths', 'lib/**', '--uses', 'nocolon']).err).toMatch(/--uses must be <job>:<tool>/);
+    // The fixture's package.json has dayjs: quiet. With moment in it, the accepted entry warns.
+    expect(p.run(['catalog', 'accept', 'D-0001', '--by', 'owner']).code).toBe(0);
+    expect(p.run(['catalog', 'check']).all).not.toMatch(/chose dayjs/);
+    p.write('package.json', JSON.stringify({ dependencies: { dayjs: '1.11.0', moment: '2.0.0' } }));
+    expect(p.run(['catalog', 'check']).all).toMatch(/D-0001: moment is in package\.json, but D-0001 chose dayjs for dates/);
+  });
+
   it('KD-1: the first init proposes a design entry from the token file; a deleted draft is not written again', () => {
     const p = project();
     p.write('web/tokens.css', ':root {\n  --color-primary: #1a73e8;\n}\n');

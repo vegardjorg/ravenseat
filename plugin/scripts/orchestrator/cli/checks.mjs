@@ -205,9 +205,33 @@ function canaryFacts() {
   }
 }
 
+/**
+ * The facts with the stack words the accepted stack entries of the project catalog declare (roadmap 0å KD-2,
+ * lib/catalog.js withDeclaredStacks), so a recipe's `stack:<word>` holds and the dep-audit card names its command.
+ * Only with catalog.stackFacts on (the default); off, no catalog or an error: the facts as the manifests give them.
+ */
+function declaredStackFacts(facts) {
+  try {
+    const C = require('./lib/catalog.js');
+    if (!C.setupOf(CONFIG).stackFacts) return facts;
+    const cat = C.readCatalog(path.join(PROJECT, ...C.DIR.split('/')));
+    if (!cat.exists) return facts;
+    let ledger = C.emptyLedger();
+    try {
+      ledger = C.parseLedger(fs.readFileSync(path.join(FOLDER, C.LEDGER_FILE), 'utf8'));
+    } catch {
+      // error-ignored: no record means nothing is accepted, so nothing is declared
+    }
+    const declared = C.declaredStacks(cat, ledger);
+    return declared.length ? C.withDeclaredStacks(facts, declared) : facts;
+  } catch {
+    return facts; // error-ignored: the cards from the manifests alone
+  }
+}
+
 /** Everything the report needs, read fresh. */
 function makeReport(queue) {
-  const facts = readFacts();
+  const facts = declaredStackFacts(readFacts());
   const list = (dir) => {
     try {
       return fs.readdirSync(path.join(PROJECT, dir));

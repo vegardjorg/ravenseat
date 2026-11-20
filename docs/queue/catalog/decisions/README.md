@@ -36,5 +36,7 @@ check:
 - `paths`: the files the choice applies to. `except` (optional): files inside them it does not apply to.
 - `kind` (optional): `decision` (the default), `design`, `stack`, `dependency` or `not-building`.
 - `source` on a `design` entry: where its tokens live, a path or a list (`["ui/tokens.css", "lib/theme.js#PALETTE"]`).
+- On a `stack` entry: `uses: {"job": "dates", "tool": "dayjs"}`, `alternatives: ["moment"]` (chosen against) and
+  `stack: ["pnpm"]` (words for the checks). Accepted, they reach the Checks tab and the dependency notes at receive.
 - To change an accepted choice, write a new one with `supersedes: D-0001`; its accept sets the old one to `superseded`.
 - `plan`: the plan entry with the long version, if there is one. A plan entry links back with `decisions`.
