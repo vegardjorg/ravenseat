@@ -232,7 +232,8 @@ describe('counting against a temporary repo', () => {
     expect(r.read()).toMatchObject({ taskCount: 0, commits: 0 });
     r.queueMerge('B-1', 1);
     expect(r.read()).toMatchObject({ tasks: ['B-1'], taskCount: 1, commits: 2 });
-  }, 60_000);
+    // About 20 git calls against a temporary repo: a loaded Windows CI runner took 73 s, so this one gets 180 s.
+  }, 180_000);
   it('null when the remote ref does not exist (no push yet)', () => {
     const r = makeRepo();
     expect(PB.readBatch(G.makeGit(r.dir), { from: 'origin/nothing', to: 'main', prefix: 'queue/' })).toBeNull();
