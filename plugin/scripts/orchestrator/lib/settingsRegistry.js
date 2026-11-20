@@ -225,6 +225,7 @@ const REQUIRES = Object.freeze({
   'features.plans.legal': ['features.plans'],
   'features.plans.launch': ['features.plans'],
   'features.plans.documents': ['features.plans'],
+  'features.plans.inbox': ['features.plans'],
   // The Roadmap rows: without the Plans room there is no roadmap, and queue-board.mjs plans() reads no plan document.
   'plans.startView': ['features.plans'],
   'plans.roadmapLayout': ['features.plans'],
@@ -1186,6 +1187,14 @@ const SETTINGS = Object.freeze([
   row('features.plans.documents', 'plans', 'onoff', 'Documents surface',
     'The Documents and agreements surface in Plans, with the documents the plan register tracks. Off by default; it ' +
     'shows only while features.plans is on.', { fullWhy: WHY_PLANS }),
+  // Quick capture (plans-tab-ux-review-2026-11-19.md P6, owner decision 2026-11-19 "as recommended").
+  // Friction: none added; it removes the step of writing a plan entry file for an idea (only a title is asked for, and
+  // Undo takes a capture back). It stops nothing and weakens no guard. Default on, because it only adds a button and
+  // the Inbox section; off for a board where nobody should add plans (ravenseat plan capture still works).
+  row('features.plans.inbox', 'plans', 'onoff', 'New plan (quick capture)',
+    'The "+ New plan" button and form in Plans: a title (and, if you like, a few sentences) goes straight into the ' +
+    'Inbox, with Undo. On by default; it shows only while features.plans is on. The CLI ravenseat plan capture ' +
+    'always works.'),
   // The Roadmap (plans/plans-tab-ux-review-2026-11-19.md P1 to P3, owner decision 2026-11-19: concept B "as
   // recommended", with columns on a wide screen). None of the four can stop work or weaken a guard: they choose what the
   // board shows first, so none has a weakening value.

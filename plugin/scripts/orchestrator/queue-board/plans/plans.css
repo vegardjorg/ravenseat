@@ -3503,16 +3503,32 @@ ol.overview-list > .overview-row.overview-question > * {
   padding: 0;
 }
 
+/* One row per task: the title left, its status right in the same row (a long status wraps inside its own cell), a
+   divider between rows, so a status never reads as a heading for the next task. */
 .plans-page-task-list li {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 0 var(--distance-sm);
+  gap: 0 var(--distance-md);
+  padding: var(--distance-xs) 0;
+  border-top: 1px solid var(--color-outline-variant);
+}
+
+.plans-page-task-list li:last-child {
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.plans-page-task-list li > .link-button {
+  justify-self: start;
+  text-align: start;
+  overflow-wrap: anywhere;
 }
 
 .plans-page-task-status {
+  max-width: 22ch;
   color: var(--color-on-surface-variant);
   font-size: var(--text-sm);
+  text-align: end;
 }
 
 @media (max-width: 699px) {
@@ -3709,11 +3725,12 @@ ol.overview-list > .overview-row.overview-question > * {
 }
 
 /* Wide (from 1200 px): the document in the main column at a readable width, the tasks and Details in a side column
-   that stays in view while the document scrolls. */
+   that stays in view while the document scrolls. The side column takes the free width (up to a readable cap), so a
+   1440 px screen has no large empty area beside it. */
 @media (min-width: 1200px) {
   .plans-page {
     display: grid;
-    grid-template-columns: minmax(0, 80ch) minmax(280px, 360px);
+    grid-template-columns: minmax(0, 80ch) minmax(300px, 1fr);
     gap: 0 var(--distance-lg);
     align-items: start;
     max-width: none;
@@ -3722,8 +3739,13 @@ ol.overview-list > .overview-row.overview-question > * {
   .plans-page-side {
     position: sticky;
     top: 0;
+    max-width: 44rem;
     padding-left: var(--distance-lg);
     border-left: 1px solid var(--color-outline-variant);
+  }
+
+  .plans-page-task-status {
+    max-width: 30ch;
   }
 
   .plans-page-side > :first-child {
@@ -3772,3 +3794,103 @@ ol.overview-list > .overview-row.overview-question > * {
 }
 
 /* ---- end of the Filter and Sort menus ---- */
+
+/* ---- Quick capture: "+ New plan" and its form (plans/capture.js, P6). Tokens only, light and dark alike. ---- */
+.plans-capture-open {
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.plans-capture {
+  display: grid;
+  gap: var(--distance-xs);
+  max-width: 44rem;
+  margin: 0 0 var(--distance-md);
+  padding: var(--distance-md);
+  border: 1px solid var(--color-outline-variant);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+}
+
+.plans-capture-heading {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.plans-capture-hint,
+.plans-capture-count {
+  margin: 0;
+  color: var(--color-on-surface-variant);
+  font-size: var(--text-sm);
+}
+
+.plans-capture-label {
+  margin-top: var(--distance-xs);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.plans-capture-title,
+.plans-capture-text {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: var(--distance-xs) var(--distance-sm);
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font: inherit;
+}
+
+.plans-capture-title {
+  min-height: 40px;
+}
+
+.plans-capture-text {
+  min-height: 6.5em;
+  resize: vertical;
+}
+
+.plans-capture-title:focus-visible,
+.plans-capture-text:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.plans-capture-title[aria-invalid='true'] {
+  border-color: var(--color-error);
+}
+
+.plans-capture-error {
+  margin: 0;
+  padding: var(--distance-xs) var(--distance-sm);
+  border-radius: var(--radius-md);
+  background: var(--color-error-container);
+  color: var(--color-on-error-container);
+  font-size: var(--text-sm);
+}
+
+.plans-capture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--distance-sm);
+  margin-top: var(--distance-xs);
+}
+
+@media (pointer: coarse) {
+  .plans-capture-open,
+  .plans-capture-actions .button {
+    min-height: 44px;
+  }
+}
+
+@media (forced-colors: active) {
+  .plans-capture {
+    border-left-color: Highlight;
+  }
+}
+
+/* ---- end of Quick capture ---- */

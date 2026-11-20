@@ -681,6 +681,10 @@
 //   node scripts/orchestrator/queue.mjs plan combine <to-id> <from-id...>     (the others are moved to the archive)
 //   node scripts/orchestrator/queue.mjs plan verify <id> --findings "..." [--commit <sha>]
 //   node scripts/orchestrator/queue.mjs plan undo [--show] [--nr <n>]
+//   node scripts/orchestrator/queue.mjs plan capture "<title>" [--text "..."] [--file <json>]   (quick capture: a plan in the
+//        Inbox with only a title; project general, later by the owner, idea, the inbox marker until it is sorted.
+//        lib/planInbox.js)
+//   node scripts/orchestrator/queue.mjs plan inbox [--json]                     (the captured plans not sorted yet)
 //   node scripts/orchestrator/queue.mjs plan rules [--json]                     (the priority rules)
 //   node scripts/orchestrator/queue.mjs plan active [<id> [--end]] [--by "..."] [--json]   ("Working now" cursor
 //        active_session { entry, at, by } in plans.json; without an id the active ones are listed. No changelog, changed is not bumped,

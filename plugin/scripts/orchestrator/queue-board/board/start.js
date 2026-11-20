@@ -200,6 +200,8 @@ window.QueueBoard = {
       ?.scrollIntoView({ block: 'nearest' });
   },
   message: (text, error) => message(text, error),
+  // The board's "Undo" toast for a change the Plans room saved (board/bulk.js roomUndoToast).
+  undoToast: (text, onUndo, title) => roomUndoToast(text, onUndo, title),
 };
 
 // ---- Start ----

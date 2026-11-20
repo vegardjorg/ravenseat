@@ -357,7 +357,7 @@ optional `context` (`ravenseat question <id> --context "…"`, why it is asked) 
 answer starts the next round at once; otherwise "Answers are picked up the next time the orchestrator runs".
 
 The **Plans** workspace is the plan register. It opens on the **Roadmap** (`plans.startView`), which reads top to
-bottom: one section per horizon, **Inbox** (findings a track reported that nobody has sorted), **Waiting on you**,
+bottom: one section per horizon, **Inbox** (plans captured with **+ New plan** and findings a track reported, that nobody has sorted), **Waiting on you**,
 **Now** (in the queue, partly built or worked on), **Next**, **Later** and **Done**, each with its count. A plan is its
 title, one plain sentence (the summary, or when there is none the lead of its plan document, in italics with "From the
 plan document" as the tooltip) and a muted line with the status in words, the area and the next step ("Being built: 3
@@ -367,6 +367,8 @@ columns; below that they are one list, and below 700 px always a list. **Columns
 for you, **Area** groups by area instead of horizon, and **Compact** gives one line per plan; the board remembers these
 choices in your browser. A long section shows 8 plans and then **Show n more** (`plans.roadmapFoldAfter`), Done is
 folded until you open it, and a search shows every match. `/` goes to the search and `j`/`k` move between the plans.
+
+**+ New plan** (key `n`, on the Roadmap and on Plan entries; `features.plans.inbox`, on) opens a small form: **Title** (required, up to 160 characters) and **What and why, in your own words** (optional; a note past about 2000 characters, saved as written). **Add to inbox** saves at once, without a preview, and the toast offers **Undo**. Claude sorts the Inbox the next time plans are worked on. An empty register shows the same button.
 
 The toolbar has the same **Filter** and **Sort** menus as the Tasks room, on the Roadmap and on Plan entries. The
 Filter button says what is in use ("Filter", "Filter · 2", "Filter · Inbox"); its menu has **Show all**, **Quick

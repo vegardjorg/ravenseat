@@ -845,6 +845,14 @@
       }
       return;
     }
+    // n opens "+ New plan" (P6, plans/capture.js) where its button is: the Roadmap and Plan entries.
+    if (t.type === 'new') {
+      if ((tl.surface === 'roadmap' && !tl.entry) || tl.surface === 'entries') {
+        e.preventDefault();
+        h.openCapture?.();
+      }
+      return;
+    }
     if (tl.surface === 'roadmap') {
       roadmapKey(h, t, e, tl, active);
       return;

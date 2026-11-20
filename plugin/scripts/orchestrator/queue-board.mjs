@@ -78,7 +78,8 @@
 //     POST /api/action { type: 'resolve' } (= `queue.mjs resolve`; { choice: <n> } from a choice button = resolve --choice),
 //     and POST /api/lawyerPackage writes a draft locally (dry = preview; never sent).
 //     POST /api/plan-bulk runs `queue.mjs plan prioritize|edit|combine` (dry = preview, otherwise
-//     --expect-changed, all or nothing), POST /api/plan-undo undoes what the board just saved (`plan undo --nr`),
+//     --expect-changed, all or nothing), POST /api/plan-capture { title, text? } adds a plan to the Inbox at once
+//     (`plan capture`, P6, no preview, Undo in the toast), POST /api/plan-undo undoes what the board just saved (`plan undo --nr`),
 //     and GET /api/plans?wait=1 waits until plans.json or queue.json changes (live update, fs.watch).
 //   - FOLLOW UP: the read view /follow (its own page; the link is written in the terminal) with the follow-up entries from
 //     follow.json via GET /api/follow (behind the key). The rules (due date, statuses) are lib/queueFollow.js, the same
@@ -129,6 +130,7 @@ const ES = require('./lib/eventStatistics.js');
 // The Plans space. The register is read with queuePlan.js, and what the board needs is made by queuePlanView.js (read only).
 const P = require('./lib/queuePlan.js');
 const PRIVACY = require('./lib/queuePlanView.js');
+const INBOX = require('./lib/planInbox.js');
 const KK = require('./lib/queueConfig.js');
 // The mascot's rules (the same file the browser gets at /queueMascot.js) and the weekly quota (the forecast).
 const M = require('./lib/queueMascot.js');
@@ -2037,6 +2039,37 @@ async function planSource(b) {
   return planWriteAnswer(r, `plan edit ${id} (source)`, `${b.path} is added as a source on ${id}.`);
 }
 
+// ---- Quick capture ("+ New plan", P6 of the Plans rework) ----------------------------------------------------
+// POST /api/plan-capture { title, text? }. Saved at once, without a preview: a capture only adds an entry to the Inbox
+// (lib/planInbox.js), and the answer's `log` is what "Undo" sends to POST /api/plan-undo { nr }. The write goes via
+// queue.mjs plan capture (same lock, changelog and undo), with the text in a temporary file so it never goes on a
+// command line. The same title again while it waits in the Inbox writes nothing (`duplicate`). No --expect-changed:
+// adding never conflicts with a change made meanwhile, and the CLI picks a free id under the lock; a refusal still
+// comes back as 409 (planWriteAnswer). Off with features.plans.inbox.
+async function planCapture(b) {
+  const no = (message, status = 400) => ({ status, answer: { ok: false, message } });
+  if (!FEATURES.plans || !FEATURES['plans.inbox'])
+    return no('Quick capture is off (features.plans.inbox in queue.config.json).', 403);
+  const c = INBOX.captureInput(b);
+  if (c.error.length) return no(c.error.join('\n'));
+  const tmp = path.join(os.tmpdir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
+  fs.writeFileSync(tmp, JSON.stringify({ title: c.title, text: c.text }));
+  try {
+    const r = await queueJson(['plan', 'capture', '--file', tmp, '--json', '--by', 'theBoard']);
+    const id = r.data?.entry?.id ?? null;
+    const dup = r.data?.duplicate ?? null;
+    const out = planWriteAnswer(
+      r,
+      `plan capture ${id ?? ''}`.trim(),
+      dup ? `Already in the inbox as ${dup}.` : 'Added to the inbox. Claude sorts it the next time plans are worked on.',
+    );
+    if (out.answer.ok) Object.assign(out.answer, { id, duplicate: dup });
+    return out;
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
+}
+
 // ---- Multi select and change in the row -----------------------------------------------------------
 // POST /api/plan-bulk { action, ids, priority?, category?, reason?, project?, maturity?, to?, dry, expect }.
 // The calls are made and checked by queuePlanView.planBulkCall (always queue.mjs, with the owner option and --by theBoard). dry =
@@ -2324,6 +2357,8 @@ async function write(filePath, b) {
   // The Unregistered box ("New entry" and "Add as source").
   if (filePath === '/api/plan-new') return planNew(b);
   if (filePath === '/api/plan-source') return planSource(b);
+  // "+ New plan": quick capture into the Inbox, saved at once with Undo.
+  if (filePath === '/api/plan-capture') return planCapture(b);
   // Multi select and change in the row, and undo what the board just saved.
   if (filePath === '/api/plan-bulk') return planBulk(b);
   if (filePath === '/api/plan-undo') return planUndo(b);
@@ -2903,6 +2938,7 @@ const STATIC = {
   // The Roadmap (the start page) and the plan page.
   '/plans/roadmap.js': [path.join('plans', 'roadmap.js'), 'text/javascript; charset=utf-8'],
   '/plans/filter.js': [path.join('plans', 'filter.js'), 'text/javascript; charset=utf-8'],
+  '/plans/capture.js': [path.join('plans', 'capture.js'), 'text/javascript; charset=utf-8'],
   '/queuePlanView.js': [path.join('..', 'lib', 'queuePlanView.js'), 'text/javascript; charset=utf-8'],
 };
 

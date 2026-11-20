@@ -582,6 +582,35 @@ function undoToast(nr, text, info) {
   clearTimeout(undoTime);
   undoTime = setTimeout(closeUndoToast, 30_000);
 }
+/**
+ * The same "Undo" toast for a change another room has saved (the Plans room's "+ New plan", P6): the text, Undo that
+ * runs `onUndo` (which does its own call, such as POST /api/plan-undo), and Close. 30 seconds, like the bulk one.
+ */
+function roomUndoToast(text, onUndo, title = 'Takes this change back') {
+  if (typeof closeDecisionToast === 'function') closeDecisionToast();
+  const box = $('undo-message');
+  box.replaceChildren(
+    el('span', { class: 'undo-text', text }),
+    el('button', {
+      type: 'button',
+      class: 'button button-muted button-small',
+      text: 'Undo',
+      title,
+      onclick: () => {
+        closeUndoToast();
+        onUndo();
+      },
+    }),
+    el(
+      'button',
+      { type: 'button', class: 'button-icon', 'aria-label': 'Close the message', title: 'Close the message', onclick: closeUndoToast },
+      icon('close'),
+    ),
+  );
+  showToast('undo');
+  clearTimeout(undoTime);
+  undoTime = setTimeout(closeUndoToast, 30_000);
+}
 function closeUndoToast() {
   clearTimeout(undoTime);
   const box = $('undo-message');

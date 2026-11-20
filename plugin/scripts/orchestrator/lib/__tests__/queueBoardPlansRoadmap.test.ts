@@ -366,6 +366,28 @@ describe('the plan page: the plan first, the technical facts last', () => {
     expect(bare.querySelector('.plans-progress')).toBe(null);
   });
 
+  it('each task is one row with its own status attached (never a line that reads as a heading for the next task)', () => {
+    const { node } = page(AUTH);
+    const rows = [...node.querySelectorAll('.plans-page-task-list > li')] as HTMLElement[];
+    expect(rows).toHaveLength(2);
+    for (const li of rows) {
+      expect(li.classList.contains('plans-page-task')).toBe(true);
+      const button = li.querySelector('button') as HTMLElement;
+      const status = li.querySelector('.plans-page-task-status') as HTMLElement;
+      expect(status.parentElement).toBe(li);
+      // the status is read with its own task
+      expect(button.getAttribute('aria-describedby')).toBe(status.id);
+    }
+    expect(rows[0].querySelector('.plans-page-task-status')?.textContent).toBe('In progress');
+    // CSS: a grid row per task (title left, status right in the same row, a divider between rows), no wrapping flex
+    const rule = css.match(/\.plans-page-task-list li \{[^}]*\}/)?.[0] ?? '';
+    expect(rule).toMatch(/display: grid/);
+    expect(rule).not.toMatch(/flex-wrap/);
+    expect(rule).toMatch(/border-top/);
+    // the wide side column takes the free width instead of stopping at 360 px
+    expect(css).toMatch(/grid-template-columns: minmax\(0, 80ch\) minmax\(300px, 1fr\)/);
+  });
+
   it('Details is closed by default, shows the key facts on its row and remembers a toggle', () => {
     const { node, calls } = page(AUTH);
     const det = node.querySelector('details.plans-page-details') as HTMLDetailsElement;

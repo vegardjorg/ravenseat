@@ -75,6 +75,8 @@
         oninput: (e) => h.search(e.target.value),
       }),
       h.filterControls?.({ sort: true, trayExtra: narrow ? [group(), density()] : [] }) ?? null,
+      // P6: "+ New plan" (plans/capture.js), null while features.plans.inbox is off.
+      h.newPlanButton?.() ?? null,
       narrow ? null : group(),
       toggles(h, 'Layout', 'roadmap-layout', [
         { text: 'Columns', pressed: layout === 'columns', onclick: () => h.setPref({ layout: 'columns' }) },
@@ -193,12 +195,20 @@
   /** The empty states: no register, or nothing matches (names the search and offers to clear it). */
   function empty(h, d) {
     const t = h.state();
-    if (!d.exists || !(d.entries ?? []).length)
+    if (!d.exists || !(d.entries ?? []).length) {
+      // P6: with quick capture the first plan is one click away; without it, Claude registers plans with /plans.
+      const add = h.newPlanButton?.() ?? null;
       return h.el(
         'div',
         { class: 'empty' },
-        h.el('p', { text: 'No plans yet. Ask Claude to register a plan with /plans, and it shows up here.' }),
+        h.el('p', {
+          text: add
+            ? 'No plans yet. Add the first one: a title and a few sentences are enough.'
+            : 'No plans yet. Ask Claude to register a plan with /plans, and it shows up here.',
+        }),
+        add,
       );
+    }
     return h.el(
       'div',
       { class: 'empty' },
@@ -226,7 +236,14 @@
     const active = filterActive(t);
     const foldAfter = Number.isInteger(view.roadmapFoldAfter) ? view.roadmapFoldAfter : V.ROADMAP_FOLD_AFTER;
     const compact = Boolean(prefs.compact);
-    const wrap = h.el('div', { class: 'roadmap' }, toolbar(h, d, match, layout, prefs), h.activeFilters());
+    // P6: the "+ New plan" form opens right under the toolbar (plans/capture.js; null while it is closed).
+    const wrap = h.el(
+      'div',
+      { class: 'roadmap' },
+      toolbar(h, d, match, layout, prefs),
+      h.captureForm?.() ?? null,
+      h.activeFilters(),
+    );
     if (!d.exists || !match.length) {
       wrap.append(empty(h, d));
       return wrap;
@@ -341,20 +358,24 @@
         ? h.el(
             'ul',
             { class: 'plans-page-task-list' },
-            q.map((o) =>
-              h.el(
+            // One row per task: the title on the left, its status on the right in the same row (plans.css), a divider
+            // between rows, so a status never reads as a heading for the next task. The status describes its button.
+            q.map((o) => {
+              const statusId = `plans-page-task-status-${String(o.id).replace(/[^A-Za-z0-9_-]/g, '-')}`;
+              return h.el(
                 'li',
-                null,
+                { class: 'plans-page-task' },
                 h.el('button', {
                   type: 'button',
                   class: 'link-button',
                   text: `${o.id} ${o.title ?? ''}`.trim(),
                   title: 'Show in the Queue',
+                  'aria-describedby': statusId,
                   onclick: () => h.showInQueue(o.id),
                 }),
-                h.el('span', { class: 'plans-page-task-status', text: V.queueStatusText(o) }),
-              ),
-            ),
+                h.el('span', { class: 'plans-page-task-status', id: statusId, text: V.queueStatusText(o) }),
+              );
+            }),
           )
         : null,
     );

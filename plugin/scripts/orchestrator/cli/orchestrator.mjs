@@ -22,6 +22,7 @@ import {
 import { cloudPulseLines } from './cloud.mjs';
 import { deliveryWarning, findSilent, findWithoutAgent } from './tracks.mjs';
 import { findingsLineNow } from './finding.mjs';
+import { inboxLineNow } from './planInbox.mjs';
 import { baseHealthLine } from './baseHealth.mjs';
 import { conflictLinesNow, ownershipLinesNow } from './conflicts.mjs';
 import { inspectionPulseLines } from './inspection.mjs';
@@ -285,6 +286,9 @@ export function cmdOrchestrator() {
     // Findings the tracks reported outside their scope (ravenseat finding) that nobody has triaged yet.
     const fl = findingsLineNow();
     if (fl) console.log(fl);
+    // Plans the owner captured (ravenseat plan capture, the board's "+ New plan") that nobody has sorted yet.
+    const il = inboxLineNow();
+    if (il) console.log(il);
     // The usage limit: new starts are paused until the reset, and after it the tracks that were running need a look.
     for (const l of usageLimitLines()) console.log(l);
     // Cloud tracks that have finished or stopped: one read of the remote, at most every 5 minutes, and never a stop for the pulse.
