@@ -32,6 +32,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   Decisions lists them by kind as Project catalog.** Design entries reach missions and reviewer-design, and accepted
   stack entries reach the Checks tab and the dependency notes (`catalog.stackFacts`, on).
 ### Changed
+- **CI runs the Windows suite in 3 shards with a check that every test file ran, and Windows node 20 weekly.** The
+  quick gate can run only the changed tests (`node scripts/test-changed.mjs --gate`, with `QUEUE_GATE_BASE`).
 - **Statistics: five numbers on top, then Cost and tokens, Flow, Quality and Machine as folds, each chart asking one
   question with a "Does this look bad?" line to its setting.** Token mix, cache expiry, gate health, gate wait and the
   findings now show, and the context cap follows `autoCompactWindow`.

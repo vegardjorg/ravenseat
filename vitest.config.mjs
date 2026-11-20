@@ -21,6 +21,11 @@ if (!process.env.QUEUE_ROOT) {
   process.env.QUEUE_ROOT = emptyRoot;
   process.on('exit', () => fs.rmSync(emptyRoot, { recursive: true, force: true }));
 }
+// Faster child processes, for this test run only (scripts/test-env.mjs): a node compile cache (node 22.1+) and git
+// settings through GIT_CONFIG_COUNT (no gc, no maintenance, no signing). Never a git config file; a value you set wins;
+// RAVENSEAT_TEST_ENV=off turns it off.
+import { testEnv } from './scripts/test-env.mjs';
+Object.assign(process.env, testEnv(process.env));
 import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
