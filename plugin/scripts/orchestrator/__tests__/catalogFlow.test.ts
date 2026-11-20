@@ -256,6 +256,59 @@ describe('ravenseat catalog propose', () => {
     expect(PG.assess('ravenseat catalog propose --title X --invariant Y --paths a', { agentType: 'track', branch: 'queue/A', environment: null })?.decision).toBe('deny');
   });
 
+  const withQuestion = (p: ReturnType<typeof project>) =>
+    fs.writeFileSync(
+      path.join(p.folder, 'queue.json'),
+      JSON.stringify({
+        limits: {},
+        resolved: [],
+        projects: { p: { title: 'P' } },
+        question: { 'Q-1': { type: 'question', text: 'Which date library?' }, 'Q-2': { type: 'question', text: 'Which vendor this time?' } },
+        tasks: [{ id: 'A-1', title: 'Dates', status: 'waiting', waiting_on: ['Q-1'], owned_files: ['lib/'], plan: 'PL-DATES', project: 'p' }],
+      }),
+    );
+  const queueFile = (p: ReturnType<typeof project>) => JSON.parse(fs.readFileSync(path.join(p.folder, 'queue.json'), 'utf8'));
+
+  it('Z-A: resolve --keep stores the answer and writes a proposed draft; never accepted', () => {
+    const p = project();
+    withQuestion(p);
+    const r = p.run(['resolve', 'Q-1', '--answer', 'Always dayjs, never moment.', '--keep', '--by', 'owner']);
+    expect(r.code, r.all).toBe(0);
+    expect(queueFile(p).resolutions['Q-1']).toMatchObject({ answer: 'Always dayjs, never moment.' });
+    expect(r.out).toMatch(/KEEP: proposed D-0001 from the answer to Q-1/);
+    const text = p.read(`${CAT}/decisions/D-0001-which-date-library.md`);
+    expect(text).toMatch(/\nstatus: proposed\n/);
+    expect(text).toMatch(/\npaths: \["lib\/\*\*"\]\n/);
+    expect(text).toMatch(/\ninvariant: Always dayjs, never moment\.\n/);
+    expect(text).toMatch(/\nplan: PL-DATES\n/);
+    expect(fs.existsSync(p.ledger)).toBe(false);
+    expect(p.run(['catalog', 'show']).out).toMatch(/D-0001\s+proposed/);
+    // Without --keep, explicit says nothing; a resolve without an answer has nothing to keep.
+    const plain = p.run(['resolve', 'Q-2', '--answer', 'Vendor B', '--by', 'owner']);
+    expect(plain.out).not.toMatch(/KEEP/);
+  });
+
+  it('Z-A: captureAnswers off refuses resolve --keep and propose before anything changes; suggest prints the line', () => {
+    const p = project({ catalog: { captureAnswers: 'off' } });
+    withQuestion(p);
+    const off = p.run(['resolve', 'Q-1', '--answer', 'Always dayjs.', '--keep']);
+    expect(off.code).toBe(1);
+    expect(off.err).toMatch(/catalog\.captureAnswers is off/);
+    expect(queueFile(p).resolutions ?? {}).toEqual({});
+    expect(p.run(['catalog', 'propose', '--title', 'X', '--invariant', 'Y.', '--paths', 'lib/**']).err).toMatch(/captureAnswers is off/);
+    expect(p.run(['resolve', 'Q-1', '--answer', 'Always dayjs.', '--keep'], p.worktree).code).toBe(1);
+
+    p.setConfig({ catalog: { captureAnswers: 'suggest' } });
+    const hint = p.run(['resolve', 'Q-1', '--answer', 'Always dayjs, never moment.']);
+    expect(hint.code, hint.all).toBe(0);
+    expect(hint.out).toMatch(/KEEP\?: the answer to Q-1 reads like a lasting rule\. .*catalog propose --from-answer Q-1/);
+    expect(p.run(['resolve', 'Q-2', '--answer', 'Vendor B']).out).not.toMatch(/KEEP/);
+    const kept = p.run(['catalog', 'propose', '--from-answer', 'Q-1', '--paths', 'lib/dates/**']);
+    expect(kept.code, kept.all).toBe(0);
+    expect(p.read(`${CAT}/decisions/D-0001-which-date-library.md`)).toMatch(/\npaths: \["lib\/dates\/\*\*"\]\n/);
+    expect(p.run(['catalog', 'propose', '--from-answer', 'Q-9']).err).toMatch(/no stored answer/);
+  });
+
   it('Z-C: propose --supersedes takes the old paths and plan, and its accept marks the old one superseded', () => {
     const p = project();
     p.run(['catalog', 'init']);

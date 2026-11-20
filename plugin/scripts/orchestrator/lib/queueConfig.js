@@ -570,6 +570,9 @@ const STANDARD = Object.freeze({
   // lines at receive (on: a line, never a stop, and a rule exists only when the owner writes one); mode stop stops the
   // merge only with checkStop on (off: what can stop work is opt-in); a rule broken in gateAfter (2 to 20) separate tasks
   // becomes a gate proposal for the project's own lint, only with learning.proposals on.
+  // captureAnswers (roadmap 0z Z-A): off | explicit | suggest. explicit: an owner's answer becomes a proposed design
+  // choice only when the owner asks (resolve --keep, the board's button); suggest also marks the questions that read like
+  // a lasting rule (noise, so not the default); off: never, and catalog propose refuses. Only the owner accepts.
   catalog: {
     doctor: true,
     planLinks: true,
@@ -580,6 +583,7 @@ const STANDARD = Object.freeze({
     checks: true,
     checkStop: false,
     gateAfter: 3,
+    captureAnswers: 'explicit',
   },
   // Task links (lib/taskLinks.js, cli/taskLinksCheck.mjs, roadmap 0p2 step B2). addWarn: add and edit print one WARNING
   // line when a task link (a plan source, a `sources` entry, a path in `source`) is dead, its anchor finds no heading,

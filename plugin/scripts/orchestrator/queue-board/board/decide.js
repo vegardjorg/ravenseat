@@ -37,6 +37,7 @@ t.decide = {
   hidden: new Set(), // keys taken out of the list on this page: waiting to be written, or "keep"
   form: null, // { key, option: index or 'free' } the open text field
   draft: new Map(), // key → text written so far
+  keep: new Set(), // keys with "Keep as design choice" pressed (catalog.captureAnswers, roadmap 0z Z-A)
   doneOpen: false, // "Decided today" is open
   queueView: VIEWS.includes(savedView) && savedView !== 'decisions' ? savedView : 'flat',
   landed: false,
@@ -171,7 +172,10 @@ function scheduleDecision(item, option, text) {
     else if (write.type === 'qa-deviation' || write.type === 'track-answer') write.text = text;
     else if (write.type === 'decline') write.reason = text;
   }
-  const label = D.doneText(item, option, text);
+  // "Keep as design choice" pressed on this card: resolve --keep (a proposed draft the owner accepts later).
+  const keep = write.type === 'resolve' && keepOffered(item) && t.decide.keep.has(item.key);
+  if (keep) write.keep = true;
+  const label = `${D.doneText(item, option, text)}${keep ? ', kept as a proposed design choice' : ''}`;
   // The next card gets focus before this one leaves (j/k order).
   const order = D.walkOrder(decisionItems()).map((x) => x.key);
   const i = order.indexOf(item.key);
@@ -212,8 +216,10 @@ async function commitDecision() {
   const call = DV()?.boardCall(p.action);
   try {
     const answer = call ? await writeWithGuard(call.path, call.body) : { info: [] };
-    if (answer) messageWithInfo(p.label, answer);
-    else t.decide.hidden.delete(p.item.key); // the owner cancelled at the guard: the card comes back
+    if (answer) {
+      messageWithInfo(p.label, answer);
+      t.decide.keep.delete(p.item.key);
+    } else t.decide.hidden.delete(p.item.key); // the owner cancelled at the guard: the card comes back
   } catch (e) {
     message(`${p.item.id}: ${e.message}`, true);
     t.decide.hidden.delete(p.item.key);
@@ -301,6 +307,46 @@ function decisionButtons(item) {
   });
 }
 
+/**
+ * Whether a card offers "Keep as design choice" (roadmap 0z Z-A): catalog.captureAnswers explicit or suggest (the state's
+ * captureAnswers), on a plain owner question. A condition, a lawyer's word or an owner task is no lasting rule.
+ */
+function keepOffered(item) {
+  const mode = t.data?.captureAnswers;
+  return (mode === 'explicit' || mode === 'suggest') && item.verb === 'decide' && item.kind === 'question';
+}
+
+/**
+ * The "Keep as design choice" toggle under a question's answers: pressed, the answer is also written as a proposed
+ * design choice in the catalog (resolve --keep), which the owner accepts later with `catalog accept`. Never pressed by
+ * itself; with suggest, a question that reads like a lasting rule gets a short hint beside it.
+ */
+function keepRow(item) {
+  if (!keepOffered(item)) return null;
+  const on = t.decide.keep.has(item.key);
+  const hintId = `decide-keep-hint-${item.key.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+  const hint = t.data.captureAnswers === 'suggest' && item.keepSuggested;
+  return el(
+    'div',
+    { class: 'decide-keep' },
+    el('button', {
+      type: 'button',
+      class: `button button-small ${on ? 'button-filled' : 'button-outline'}`,
+      'aria-pressed': on ? 'true' : 'false',
+      'aria-describedby': hint ? hintId : null,
+      'data-focus': `keep:${item.key}`,
+      title: 'Also writes the answer as a proposed design choice in the project catalog. You accept it yourself later.',
+      text: 'Keep as design choice',
+      onclick: () => {
+        if (t.decide.keep.has(item.key)) t.decide.keep.delete(item.key);
+        else t.decide.keep.add(item.key);
+        drawDecisions(true);
+      },
+    }),
+    hint ? el('span', { id: hintId, class: 'decide-keep-hint', text: 'Reads like a lasting rule' }) : null,
+  );
+}
+
 /** One option: straight to the undo window, or the text field first when the answer needs text. */
 function pickOption(item, i) {
   const o = item.options[i];
@@ -386,6 +432,7 @@ function decisionCard(item, focusKey, { check = false } = {}) {
           ...item.context.slice(0, 2).map((c) => el('p', { class: 'decide-context', text: c })),
         ]),
     open ? decisionForm(item) : decisionButtons(item),
+    keepRow(item),
   );
 }
 
@@ -664,7 +711,7 @@ function drawDecisions(fresh) {
   const again = focusData ? main.querySelector(`[data-focus="${CSS.escape(focusData)}"]`) : null;
   if (again && !fresh) again.focus();
   else if (again && focusData.startsWith('select:')) again.focus(); // a checkbox keeps focus while ticking
-  else if (again && (focusData.startsWith('bulk') || focusData.startsWith('sort'))) again.focus();
+  else if (again && (focusData.startsWith('bulk') || focusData.startsWith('sort') || focusData.startsWith('keep:'))) again.focus();
   else if (t.decide.form) main.querySelector('#decide-text')?.focus();
   else main.querySelector(`.decide-card[data-key="${CSS.escape(focusKey ?? '')}"]`)?.focus();
 }

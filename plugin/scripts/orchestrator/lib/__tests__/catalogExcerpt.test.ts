@@ -220,8 +220,8 @@ describe('the cap and the measurement line', () => {
 
 describe('the settings', () => {
   it('catalog.missionExcerpt and catalog.reviewExcerpt are on and the cap is 1500 tokens by default', () => {
-    expect(QC.STANDARD.catalog).toEqual({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500, index: false, checks: true, checkStop: false, gateAfter: 3 });
-    expect(C.setupOf({})).toEqual({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500, index: false, checks: true, checkStop: false, gateAfter: 3 });
+    expect(QC.STANDARD.catalog).toEqual({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500, index: false, checks: true, checkStop: false, gateAfter: 3, captureAnswers: 'explicit' });
+    expect(C.setupOf({})).toEqual({ doctor: true, planLinks: true, missionExcerpt: true, reviewExcerpt: true, excerptTokens: 1500, index: false, checks: true, checkStop: false, gateAfter: 3, captureAnswers: 'explicit' });
     expect(C.setupOf({ catalog: { excerptTokens: 800, missionExcerpt: false } })).toMatchObject({ excerptTokens: 800, missionExcerpt: false });
     // A broken value reads as its default.
     expect(C.setupOf({ catalog: { excerptTokens: 'many' } }).excerptTokens).toBe(1500);

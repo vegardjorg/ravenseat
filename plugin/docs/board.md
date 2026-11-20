@@ -350,7 +350,12 @@ An owner question with `choices` shows one button per choice; the one equal to t
 answers it through the same `POST /api/action { type: 'resolve' }` with `{ choice: <n> }`. With the text field open,
 **Choose with this note** under it sends a choice with the text as its note. The choices stay in the order they were
 written, so the number on a button is the `--choice` number. A question whose recommendation is not one of its choices gets an **As recommended**
-button that answers with the recommendation's text. **Other decision** opens the free text answer. A question's
+button that answers with the recommendation's text. **Other decision** opens the free text answer. With
+`catalog.captureAnswers` on (`explicit`, the default), a plain question also has a **Keep as design choice** toggle
+under its answers: pressed, the answer is sent with `keep: true` (`resolve --keep`) and also written as a proposed
+design choice, which you accept yourself later (see [From an owner answer to a design
+choice](catalog.md#from-an-owner-answer-to-a-design-choice)). With `suggest`, "Reads like a lasting rule" stands beside
+it when the question reads that way; it never presses the toggle. A question's
 optional `context` (`ravenseat question <id> --context "…"`, why it is asked) shows under the recommendation, and its
 `source` is a link when it names a task or a plan entry. A line under the title says
 "Orchestrator listening" while `ravenseat wait` runs in the orchestrator session (its heartbeat is under 90 s old), so an

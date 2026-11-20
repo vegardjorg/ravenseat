@@ -251,6 +251,7 @@ function buildBoard(
     approval = [],
     toolTrouble = [],
     blockedColumn = false,
+    captureAnswers = null,
   } = {},
 ) {
   // SILENT tracks per id, for the small badge on the card (queueLogic.silentTracks, measured by the server).
@@ -445,6 +446,14 @@ function buildBoard(
   const next = nextUp(queue, { now, uncommitted, dailyUsage });
   // "Waiting on you" reads the columns as they are without the Blocked column, so it is the same with the switch on or off.
   const inboxNow = inbox(queue, columns, { map, context: fk, now, withoutAgent, silent, baseRed, approval, toolTrouble });
+  // catalog.captureAnswers suggest (roadmap 0z Z-A): a plain question whose text, recommendation or choices read like a
+  // lasting rule gets keep_suggested, and the Decisions room marks its "Keep as design choice" button. A hint only.
+  if (captureAnswers === 'suggest') {
+    const CAT = require('./catalog.js');
+    for (const q of inboxNow.question ?? [])
+      if (q.type === 'question' && CAT.looksLasting([q.text, q.recommendation, ...(q.choices ?? []).map((c) => c.label)].join(' ')))
+        q.keep_suggested = true;
+  }
   if (blockedColumn) columns.blocked = takeBlocked(columns, map, now);
   const line = focusLine(queue, { now, context: fk, canStart: next.startable.map((v) => v.id) });
 
@@ -477,6 +486,9 @@ function buildBoard(
     undo: undoSummary(queue),
     // Tasks that are not done or cancelled. 0 = nothing open: the board shows the first-run card instead of empty columns.
     openTasks: tasks.filter((o) => o.status !== 'done' && o.status !== 'cancelled').length,
+    // catalog.captureAnswers (off | explicit | suggest, roadmap 0z Z-A): whether Decisions offers "Keep as design choice".
+    // null when the caller did not say (tests, old callers): no button.
+    captureAnswers,
   };
 }
 

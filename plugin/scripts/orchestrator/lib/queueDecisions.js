@@ -186,6 +186,9 @@
       ];
     const waiting = Array.isArray(s.direct) ? s.direct : [];
     return {
+      // catalog.captureAnswers suggest (roadmap 0z Z-A): the question reads like a lasting rule, so the board marks its
+      // "Keep as design choice" button. Only a plain question; a condition, a lawyer's word or an owner task is no rule.
+      keepSuggested: (s.type ?? 'question') === 'question' && s.keep_suggested === true,
       key: `decide:${s.sp}`,
       verb: 'decide',
       kind: s.type ?? 'question',
@@ -654,9 +657,12 @@
   function cliArgs(action) {
     const a = action ?? {};
     switch (a.type) {
-      case 'resolve':
-        if (a.choice != null) return ['resolve', a.sp, '--choice', String(a.choice), ...(a.answer ? ['--answer', a.answer] : []), '--by', 'owner'];
-        return ['resolve', a.sp, '--answer', String(a.answer ?? ''), '--by', 'owner'];
+      case 'resolve': {
+        // keep (roadmap 0z Z-A): the answer also becomes a proposed design choice (resolve --keep).
+        const keep = a.keep === true ? ['--keep'] : [];
+        if (a.choice != null) return ['resolve', a.sp, '--choice', String(a.choice), ...(a.answer ? ['--answer', a.answer] : []), ...keep, '--by', 'owner'];
+        return ['resolve', a.sp, '--answer', String(a.answer ?? ''), ...keep, '--by', 'owner'];
+      }
       case 'qa-ok':
         return ['qa', 'ok', a.id, '--by', 'owner'];
       case 'qa-deviation':
@@ -695,10 +701,12 @@
       case 'resolve':
         return {
           path: '/api/action',
-          body:
-            a.choice != null
+          body: {
+            ...(a.choice != null
               ? { type: 'resolve', sp: a.sp, choice: a.choice, ...(a.answer ? { answer: a.answer } : {}) }
-              : { type: 'resolve', sp: a.sp, answer: String(a.answer ?? '') },
+              : { type: 'resolve', sp: a.sp, answer: String(a.answer ?? '') }),
+            ...(a.keep === true ? { keep: true } : {}),
+          },
         };
       case 'qa-ok':
       case 'approve':

@@ -1088,6 +1088,14 @@ const SETTINGS = Object.freeze([
     'A rule with `mode: stop` of a choice the owner accepted stops the merge when an added line breaks it ' +
     '(`merge --allow-catalog` overrides, logged). Off by default: the rule is then a warning.',
     { protects: 'A merged line that breaks a catalog rule you accepted with mode stop.' }),
+  // The way into the catalog (roadmap 0z Z-A, plans/decision-keeper-vurdering-2026-11-17.md). Friction: none at the
+  // default; explicit writes a draft only when the owner asks (resolve --keep, the board's button), and a draft is only
+  // proposed, never accepted. suggest adds a hint on questions that read like a lasting rule, which can be noise, so it is
+  // not the default. off makes resolve --keep, the button and catalog propose refuse. No guard reads it: no weakening.
+  row('catalog.captureAnswers', 'scope', 'choice', 'Owner answers into the catalog',
+    'explicit: `resolve --keep` and "Keep as design choice" in Decisions turn your answer into a proposed design choice ' +
+    'that you accept yourself. suggest: also marks the questions that read like a lasting rule. off: never, and ' +
+    '`catalog propose` refuses too.', { choices: ['off', 'explicit', 'suggest'] }),
   row('catalog.gateAfter', 'scope', 'integer', 'Separate tasks before a lint proposal',
     'Only with learning.proposals on, which is off by default. Then a rule broken in this many separate tasks (2 to ' +
     '20, default 3) becomes one proposed gate task to put it in the project\'s own lint. It shares the cap of three ' +

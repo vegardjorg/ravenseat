@@ -98,6 +98,8 @@
 //                                                                  the question's choices, by number from 1 or by its text;
 //                                                                  the answer stored is the choice's text, plus
 //                                                                  " (note: ...)" when --answer is given; one question only)
+//   resolve ... --keep   (with --answer or --choice: also writes the answer as a proposed design choice in the catalog,
+//                         catalog.captureAnswers; never accepted, the owner runs `catalog accept` later)
 //   `waiting_on` takes ONLY registered question ids (letters, digits, ".", "_", "-", at most 40 chars, no
 //   whitespace) with text and type in `question`. add and edit REJECT (all or nothing) a new id that is not
 //   registered, unless the add file registers it in { tasks, question }; free text is stopped. edit-many and the board

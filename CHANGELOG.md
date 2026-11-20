@@ -17,8 +17,9 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   `not enough runs yet`.
 - **A SILENT track gets a local evidence snapshot, redacted before writing, and the SILENT line says where.** On by
   default (`silentSnapshot.enabled`, on).
-- **`ravenseat catalog propose` writes the next free design choice as proposed, and accepting one that supersedes
-  another marks the old one superseded.**
+- **`ravenseat catalog propose` writes the next free design choice as proposed, accepting one that supersedes another
+  marks the old one superseded, and an owner answer can become a proposed choice.** Through `resolve --keep` or the
+  board's **Keep as design choice** (`catalog.captureAnswers`, `explicit`).
 ### Changed
 - **Plans: the room opens on a Roadmap, and a plan opens as a page with its document first.** Horizons (Inbox, Waiting
   on you, Now, Next, Later, Done) as columns on a wide screen and a list on a phone; the old views are under More views.

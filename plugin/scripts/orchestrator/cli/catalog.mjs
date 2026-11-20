@@ -49,7 +49,7 @@ const CI = require('./lib/catalogIndex.js');
 const K = require('./lib/kickstart.js');
 const RP = require('./lib/reviewPacks.js');
 
-const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose --title "..." --invariant "..." --paths "<glob>" [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | find <word...> [--json] | index [--json]`;
+const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose (--title "..." --invariant "..." --paths "<glob>" | --from-answer <question>) [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | find <word...> [--json] | index [--json]`;
 const json = a.includes('--json');
 
 /** The catalog folder in a tree (the main tree for a write, the current one for a read). */
@@ -156,7 +156,7 @@ export function checkTree(root = ROOT) {
 }
 
 /** Refuses a write from inside a track worktree, whatever --by says. */
-function notFromTrack(what) {
+export function notFromTrack(what) {
   const track = trackBranchHere() ?? queueBranchId();
   if (track) die(`${CLI} catalog ${what} cannot be run from inside a track worktree (${track}): the catalog is the owner's. Ask the owner (ravenseat question).`);
 }
@@ -352,6 +352,26 @@ export function writeProposal({ title, invariant, paths, supersedes = null, plan
   return { id, file, errors: c.errors.filter(mine), warnings: c.warnings.filter(mine), allErrors: c.errors.length };
 }
 
+/**
+ * The draft of a design choice from the owner's stored answer to `sp` (roadmap 0z Z-A, lib/catalog.js answerDraft):
+ * the question's text, the answer in `resolutions`, and the tasks that wait on the question. Throws when there is no
+ * answer to keep. `over` replaces fields (the flags of `catalog propose --from-answer`).
+ */
+export function draftFromAnswer(queue, sp, over = {}) {
+  const answer = queue.resolutions?.[sp]?.answer;
+  if (answer == null || !String(answer).trim()) throw new Error(`${sp} has no stored answer to keep (${CLI} resolve ${sp} --answer "..." first)`);
+  const tasks = (queue.tasks ?? []).filter((t) => (t.waiting_on ?? []).includes(sp));
+  const d = C.answerDraft({ sp, question: queue.question?.[sp] ?? null, answer, tasks });
+  for (const [k, v] of Object.entries(over)) if (v != null && !(Array.isArray(v) && !v.length)) d[k] = v;
+  return d;
+}
+
+/** Dies when catalog.captureAnswers is off: then nothing turns an answer, or a request, into a draft. */
+export function captureOn(what) {
+  if (C.setupOf(CONFIG).captureAnswers === 'off')
+    die(`${what} is off: catalog.captureAnswers is off in queue.config.json (${CLI} settings set catalog.captureAnswers explicit turns it on). Nothing was written.`);
+}
+
 /** The values of a repeated flag, each also split on commas (`--paths a/**,b/**` or `--paths a/** --paths b/**`). */
 const listFlag = (flag) =>
   a
@@ -363,11 +383,24 @@ const flag = (name) => (a.includes(name) ? String(a[a.indexOf(name) + 1] ?? '') 
 
 function propose() {
   notFromTrack('propose');
-  const title = flag('--title');
-  const invariant = flag('--invariant');
+  captureOn(`${CLI} catalog propose`);
+  let title = flag('--title');
+  let invariant = flag('--invariant');
   let paths = listFlag('--paths');
   const supersedes = flag('--supersedes');
   let plan = flag('--plan');
+  let why = flag('--why');
+  const fromAnswer = flag('--from-answer');
+  if (fromAnswer) {
+    // Z-A: the owner's stored answer as the draft; the other flags replace its fields.
+    let d;
+    try {
+      d = draftFromAnswer(read(), fromAnswer, { title, invariant, paths, plan, why });
+    } catch (e) {
+      die(`${CLI} catalog propose: ${e.message}. Nothing was written.`);
+    }
+    ({ title, invariant, paths, plan, why } = d);
+  }
   if (!title || invariant == null || (!paths.length && !supersedes))
     die(`${CLI} catalog propose --title "..." --invariant "<one sentence that can be checked>" --paths "<glob>[,<glob>]" [--supersedes D-0001] [--plan PL-...] [--why "..."]`);
   if (supersedes) {
@@ -379,7 +412,7 @@ function propose() {
   }
   let r;
   try {
-    r = writeProposal({ title, invariant, paths, supersedes, plan, why: flag('--why') });
+    r = writeProposal({ title, invariant, paths, supersedes, plan, why });
   } catch (e) {
     die(`${CLI} catalog propose: ${e.message}. Nothing was written.`);
   }
