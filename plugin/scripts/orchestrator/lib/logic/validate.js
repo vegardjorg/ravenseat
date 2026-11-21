@@ -46,6 +46,8 @@ function validate(o, existing = [], register) {
   error.push(...require('../queuePlan.js').sourceListErrors(o.sources, { strict: true, label: 'sources' }));
   // `done_when` (the shell command that must exit 0 for the track to count as done) and `max_fix_rounds` (lib/doneCheck.js).
   error.push(...require('../doneCheck.js').doneWhenErrors(o));
+  // `issue` (GH-2): the link to a GitHub issue, { repo: "owner/name", number } and nothing else (lib/issueLink.js).
+  error.push(...require('../issueLink.js').issueErrors(o.issue));
   const emptyRegister = !register || Object.keys(register).length === 0;
   error.push(...validateNewField(o, register, { stringProject: !emptyRegister }));
   return error;

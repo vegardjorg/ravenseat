@@ -20,7 +20,8 @@
 //     a track change hooks, settings or the orchestrator scripts without the merge guard stopping it,
 //   - never a task whose auto-accept the owner has undone before,
 //   - never a proposal from the inspection queue (added_by "inspection agent"; lib/inspection.js): the owner decides whether
-//     a repeated failure is worth a guard.
+//     a repeated failure is worth a guard,
+//   - never an imported GitHub issue (added_by "issue import agent"; lib/githubIssues.js): issue text is anyone's.
 // Applied by `queue.mjs add` (the new proposals) and `queue.mjs orchestrator pulse` (older ones). Pure functions without I/O;
 // tested in lib/__tests__/queueProposals.test.ts.
 // =============================================================
@@ -148,6 +149,10 @@ function autoAcceptDecision(task, rules, ctx = {}) {
   // added_by "inspection agent" (an agent label, so `add` makes it proposed); the label "inspection" alone counts too.
   if (/^inspection\b/i.test(String(task.added_by ?? '')))
     return no('a proposal from the inspection queue: the owner decides whether a guard is worth building');
+  // An imported GitHub issue (GH-1, added_by "issue import agent", lib/githubIssues.js): its title is written by anyone
+  // who can open an issue, so only the owner accepts it.
+  if (/^issue import\b/i.test(String(task.added_by ?? '')))
+    return no('an imported GitHub issue: its text comes from the issue tracker, so the owner accepts it');
   // ---- The owner's rules ----
   const r = rules ?? DEFAULT_RULES;
   if (!r.enabled) return no('auto-accept is off');
