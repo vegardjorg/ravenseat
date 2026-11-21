@@ -56,6 +56,15 @@ Link it as a source with role `decision` and the section as anchor (with the sav
 `ready` past a missing section yourself: tell the owner, who can set it or skip with
 `plan edit <id> --skip-decision "<reason>"`. Small plans get nothing.
 
+## 3c. Devil's advocate (only when `plans.devilsAdvocate` is on)
+
+When the section is written and `ravenseat plan challenge <id> --json` gives a `brief` (an XL plan or a sensitive zone),
+offer the owner one challenger run in the report; it costs one agent run. On a yes: start one `reviewer-challenger`
+agent with exactly that brief (it holds the decision section and the code paths, never the investigation; give it no
+other document), save its answer to a file in your scratchpad, and run `ravenseat plan challenge <id> --answer <file>`.
+That checks three objections and one cheapest test and appends them under the section. Report them; change nothing
+else because of them. Off, or `brief: null`: say nothing.
+
 ## 4. Wait for instruction
 
 Stop after the report, unless the argument already had an instruction: then carry it out (still only plan work).

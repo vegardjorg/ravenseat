@@ -66,6 +66,8 @@ undo.
 | `plan edit <id> --skip-decision "<reason>"` | Record that a large plan skips its decision section (see Decide before you build) |
 | `plan shape --tasks <n> [--zones D-0001,…]` | The shape-first question for a request of n tasks, or "no question" (read-only) |
 | `plan checkpoint [--plan <id>] [--smallest] [--stage a,b] [--success "…"] [--json]` | The staging offer and the checkpoint question (see Staged queueing; read-only) |
+| `plan postcheck [--json]` | Built plans against their estimates, and the record per size (see Follow-up after building; read-only) |
+| `plan challenge <id> [--answer <file>] [--json]` | The devil's advocate brief for a plan, or with `--answer` the checked objections appended under its decision section (see Devil's advocate) |
 
 ## Decide before you build
 
@@ -99,6 +101,23 @@ the rest start, Adjust parks the rest for a mission rewrite, Stop parks them (ca
 shows "Waiting on checkpoint" on those cards. `offer` asks before staging, `always` stages without asking, `off` queues
 everything at once (the smallest version then registers the rest as a plan entry, as before). `plan checkpoint` prints
 the offer and the question.
+
+### Follow-up after building
+
+`plans.postCheck` on. When every queue task of a plan is done, Statistics (Flow, **Did the plans hold?**) shows one
+row for it: the size estimate in tracks (S 1, M 2, L 7, XL 15; "no estimate" without a size) against the tasks plus
+their fix rounds, the summed task estimate against the measured time (start to done per task), and the cost from the
+time log. Below it, the record per size. For a plan with a decision section that names a success measure, the last
+`set <id> done` also registers one question, `PC-<plan>`: "Success measure: … Met, partly, not met?". No task waits on
+it, so it stops nothing; the answer goes into the record. `plan postcheck` prints the same. `false` turns both off.
+
+### Devil's advocate
+
+`plans.devilsAdvocate` off. On, `/plans` offers one challenger run for an XL or zone plan: a `reviewer-challenger`
+agent gets only the decision section and the code, not the investigation, and answers with the three strongest
+objections and the cheapest test that would show the plan is wrong. `plan challenge <id>` prints the brief, and
+`plan challenge <id> --answer <file>` checks the shape and appends it under the section. It costs one agent run per
+use, so it is off; the "strongest case against" in the decision section comes first.
 
 ## Findings
 

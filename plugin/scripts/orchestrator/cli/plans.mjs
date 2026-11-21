@@ -2,8 +2,9 @@
 // cli/plans.mjs: the plan command: the plan register (plans.json), see docs/plan-register.md.
 //
 // planCommand dispatches the plan sub-commands (show, get, new, edit, prioritize, prioritize-many, combine, drop,
-// verify, undo, capture, inbox, propose, accept, decline, merge, rules, check, modules, backup, active, doc, shape and
-// checkpoint); the rules are in lib/queuePlan.js (the plan gate in lib/planGate.js and lib/checkpoint.js).
+// verify, undo, capture, inbox, propose, accept, decline, merge, rules, check, modules, backup, active, doc, shape,
+// checkpoint, postcheck and challenge); the rules are in lib/queuePlan.js (the plan gate in lib/planGate.js,
+// lib/checkpoint.js, lib/planPostCheck.js and lib/devilsAdvocate.js).
 //
 // Why a module: queue.mjs was one file of about 6,300 lines. It is now a thin entry point (the usage comment and the
 // dispatch on the command word) plus the modules in cli/. The code was moved as it was: same output, exit codes and files.
@@ -13,12 +14,13 @@
 // =============================================================
 
 import fs from 'node:fs';
+import path from 'node:path';
 
 import {
-  a, byName, cut, die, gitRead, P, readPlans, readQueueForPlan, require, val, values, WIDTH, withLock, writePlans,
+  a, byName, CLI, cut, die, gitRead, P, readPlans, readQueueForPlan, require, val, values, WIDTH, withLock, writePlans,
 } from './context.mjs';
 import {
-  editPlans, existsSource, forFlag, planAnswer, planDiffLines, planError, planRole, planRow, readDoc,
+  editPlans, existsSource, forFlag, planAnswer, planDiffLines, planError, planRole, planRow, readDoc, SOURCE_ROOT,
 } from './planShared.mjs';
 import { planActive, planBackup, planCheck, planModules } from './planCheck.mjs';
 import { planDoc } from './planDoc.mjs';
@@ -158,6 +160,71 @@ function planPostcheck(json) {
         (g.time_ratio == null ? '' : `; time ${g.time_ratio} x the estimate`) +
         (g.asked ? `; success met ${g.met}, partly ${g.partly}, not met ${g.not_met} of ${g.asked}` : ''),
     );
+}
+
+/**
+ * `plan challenge <id> [--answer <file>] [--json]` (PG-7, lib/devilsAdvocate.js): with plans.devilsAdvocate on and an
+ * XL or zone plan, the brief for one reviewer-challenger run (the decision section and the code, not the
+ * investigation). With --answer, the agent's answer is checked (three objections, one cheapest test) and appended under
+ * the decision section in the plan's document. Off, or a plan that is not XL and meets no zone: nothing.
+ */
+function planChallenge(json) {
+  const DA = require('./lib/devilsAdvocate.js');
+  const id = a[2];
+  if (!id || id.startsWith('--')) die('plan challenge <id> [--answer <file>] [--json]');
+  const { on } = DA.setup(require('./lib/queueConfig.js').config());
+  const entry = (readPlans().entries ?? []).find((p) => p.id === id) ?? null;
+  if (!entry) die(`plan challenge: unknown plan entry ${id} (ravenseat plan show)`);
+  const tasks = readQueueForPlan().tasks ?? [];
+  const o = DA.offer({ on, entry, zones: decisionGateNow().zonesOf(entry, tasks) });
+  if (!o.offer) {
+    if (json) console.log(JSON.stringify({ ok: true, on, offer: o, brief: null }));
+    else console.log(o.text);
+    return;
+  }
+  const source = (entry.sources ?? []).find((k) => k?.role === G.ROLE);
+  const text = source ? readDoc(source.path) : null;
+  const part = typeof text === 'string' ? G.sectionLines(text, source.anchor) : null;
+  if (!part)
+    die(
+      `plan challenge: ${id} has no readable decision section (a source with role decision; ${CLI} plan get ${id}). ` +
+        'Write it first (/plans, step 3b).',
+    );
+  const answerFile = val('--answer');
+  if (!answerFile) {
+    // The code the plan's tasks change, so the challenger reads the same code the plan would touch.
+    const code = [...new Set(P.queueTasksFor(entry, tasks).flatMap((t) => [...(t.owned_files ?? []), ...(t.shared_patch ?? [])]))].slice(0, 30);
+    const b = DA.brief({ entry, section: part.lines.join('\n'), code });
+    if (json) {
+      console.log(JSON.stringify({ ok: true, on, offer: o, agent: DA.AGENT, brief: b }));
+      return;
+    }
+    console.log(o.text);
+    console.log(`\nBrief for one ${DA.AGENT} agent (read only). Save its answer to a file, then: ${CLI} plan challenge ${id} --answer <file>\n`);
+    console.log(b);
+    return;
+  }
+  let raw;
+  try {
+    raw = fs.readFileSync(answerFile, 'utf8');
+  } catch (e) {
+    die(`plan challenge: cannot read ${answerFile} (${e.message})`);
+  }
+  const answer = DA.parseAnswer(raw);
+  if (answer.error.length) die(`plan challenge: the answer is not usable: ${answer.error.join('; ')}. Nothing was written.`);
+  const r = DA.appendBlock(text, source.anchor ?? null, answer);
+  if (r.error) die(`plan challenge: ${r.error}. Nothing was written.`);
+  // The same guard as the reading (planShared.readDoc): a source path inside the source root, never a symlink.
+  const full = path.resolve(SOURCE_ROOT, source.path);
+  if (P.sourcePathError(source.path) || path.relative(SOURCE_ROOT, full).startsWith('..') || fs.lstatSync(full).isSymbolicLink())
+    die(`plan challenge: ${source.path} cannot be written. Nothing was written.`);
+  fs.writeFileSync(full, r.text);
+  if (json) {
+    console.log(JSON.stringify({ ok: true, on, written: source.path, objections: answer.objections, test: answer.test }));
+    return;
+  }
+  console.log(`Appended the devil's advocate (3 objections and the cheapest test) under ${source.path}${source.anchor ? ` ${source.anchor}` : ''}.`);
+  console.log('It changes nothing by itself: weigh it with the owner before the plan goes to ready.');
 }
 
 export function planCommand() {
@@ -493,6 +560,8 @@ export function planCommand() {
     planCheckpoint(json);
   } else if (under === 'postcheck') {
     planPostcheck(json);
+  } else if (under === 'challenge') {
+    planChallenge(json);
   } else {
     die(
       'Use: ravenseat plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|capture|inbox|propose|accept|decline|merge|active|rules|check|modules|backup|doc|shape|checkpoint|postcheck|challenge> ...  (see the top of the file)',

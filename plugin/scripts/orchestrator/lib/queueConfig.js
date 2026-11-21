@@ -1097,6 +1097,10 @@ function plansView(cfg = config()) {
     readyCheck: ['off', 'advisory', 'block'].includes(own.readyCheck) ? own.readyCheck : std.readyCheck,
     // PG-4 (lib/checkpoint.js checkpointSetup has the same fallback)
     checkpoint: ['off', 'offer', 'always'].includes(own.checkpoint) ? own.checkpoint : std.checkpoint,
+    // PG-6 (lib/planPostCheck.js postCheckSetup has the same fallback): on unless a real false
+    postCheck: typeof own.postCheck === 'boolean' ? own.postCheck : std.postCheck,
+    // PG-7 (lib/devilsAdvocate.js setup): only a real true turns it on, since a run costs an agent
+    devilsAdvocate: own.devilsAdvocate === true,
   };
 }
 
