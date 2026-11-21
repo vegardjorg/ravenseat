@@ -8,7 +8,7 @@
 <h1 align="center">Ravenseat</h1>
 <p align="center"><a href="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml"><img src="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI: tests on Linux and Windows"></a></p>
 <p align="center"><b>Stop managing agents. Start managing decisions.</b></p>
-<p align="center">Ravenseat is a control center for autonomous development with Claude Code. You supervise the exceptions while Ravenseat handles the routine work: the plan, parallel agents, checks, fixes and merges.</p>
+<p align="center">Ravenseat is a persistent orchestrator for Claude Code. You supervise the exceptions while Ravenseat handles the routine work: the plan, parallel agents, checks, fixes and merges.</p>
 <p align="center">You control: <b>decisions</b> · <b>dependencies</b> · <b>quality gates</b> · <b>cost</b> · <b>what agents may do</b>. From Claude Code, or from the local board.</p>
 <p align="center"><sub>Open source · Local-first · Runs inside Claude Code · Your Git repository</sub></p>
 
@@ -24,7 +24,7 @@ results, and decide what happens next.
 
 Without orchestration, **that someone is you.**
 
-Ravenseat is a persistent orchestrator for Claude Code. It plans and coordinates parallel agents, verifies their work,
+Ravenseat takes over that role. It plans and coordinates parallel agents, verifies their work,
 recovers from failures, and merges passing changes. When something needs your judgment, it pauses that branch of work,
 not the project. Independent work keeps moving.
 
@@ -97,10 +97,10 @@ You decide. Ravenseat continues.
 The point isn't that AI never needs you. **It's that you shouldn't need to be present for every transition between
 tasks.**
 
-**Built for unattended work.** Leave Claude Code running and Ravenseat can keep dispatching, checking, fixing and
-merging eligible tasks for hours. When a task needs your input, only that task and the work depending on it are parked; other eligible
-work keeps going. If nothing independent is left, it waits without consuming tokens. Answer through Claude Code,
-Remote Control or the board, and the parked work continues. Your machine must remain awake for local execution.
+**Built for unattended work.** Leave Claude Code running and step away: Ravenseat can keep dispatching, checking,
+fixing and merging eligible tasks for hours. A question does not end the session. Answer when you are back, through
+Claude Code, Remote Control or the board, and the work picks up. When nothing is left to run, it waits without
+consuming tokens. Your machine must remain awake for local execution.
 
 ## What needs your attention?
 
@@ -228,9 +228,7 @@ wrong.
 
 1. **The project survives interruptions, not just conversations.** Plans, tasks and decisions persist in plain files.
    Ravenseat can recover interrupted merges, detect abandoned agents and resume unfinished work after a restart, while
-   protecting your uncommitted changes during merges. After compaction, the main chat resumed starting agents in about
-   6 turns, compared with about 17 for a new chat reading a handover note.
-   [What it solves](plugin/docs/guide.md#what-it-solves)
+   protecting your uncommitted changes during merges. [What it solves](plugin/docs/guide.md#what-it-solves)
 2. **Agents work independently.** Each track has its own worktree and branch, dependencies decide what starts, and
    merges go one at a time: about 1,200 tasks were finished this way during three weeks of October 2026, in a larger
    private project. Queue updates and merges are designed to survive concurrent operations and interruptions without
