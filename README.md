@@ -7,8 +7,9 @@
 
 <h1 align="center">Ravenseat</h1>
 <p align="center"><a href="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml"><img src="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI: tests on Linux and Windows"></a></p>
-<p align="center"><b>Stop managing agents. Start managing decisions.</b></p>
-<p align="center">Ravenseat gives Claude Code a persistent task queue. Parallel agents work in separate Git worktrees. Ravenseat runs your configured checks against their delivered commits before merging passing changes locally. When a task needs your judgment, it parks that task and its dependents while other work continues.</p>
+<p align="center"><b>Run your whole project from one Claude Code conversation.</b></p>
+<p align="center">Every task gets a fresh agent with fresh context.</p>
+<p align="center">Ravenseat keeps your plan and task queue in files that survive compaction and restarts. Parallel agents work in separate Git worktrees, and Ravenseat runs your checks on each delivered commit before merging passing changes locally. When a task needs your judgment, only that task and its dependents wait. Everything else continues.</p>
 <p align="center"><sub>Open source · Local-first · Runs inside Claude Code · Your Git repository</sub></p>
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/media/explanation-dark.gif"><img src="assets/media/explanation.gif" alt="A 44-second explanation of Ravenseat: instead of babysitting agents, the plan lives in plain files in the repo, each agent works in its own worktree, your checks run on every delivery with a fix round for a failure, a decision pauses only the work that waits on it, and Claude Code and the board show the same state" width="800"></picture></p>
@@ -25,6 +26,8 @@ Without orchestration, **that someone is you.**
 
 Ravenseat takes over that role: it keeps the plan, picks what runs next, and sends failed checks back for a fix round
 before anything is merged.
+
+<p align="center"><b>Stop managing agents. Start managing decisions.</b></p>
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/infographics/workflow-shift-dark.webp"><img src="assets/infographics/workflow-shift.webp" width="640" alt="Two panels. Left, the traditional agent workflow: a loop of prompt, monitor, fix and repeat, where the developer is the workflow. Right, with Ravenseat: the developer sets objectives, Ravenseat orchestrates the queue, agents, checks and recovery, and work moves through build, verify, and fix or merge, with a fix round for a failed check, local merges for verified work and no push until the developer says so. Exceptions and consequential decisions return to the developer."></picture></p>
 
