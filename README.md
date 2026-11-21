@@ -24,11 +24,9 @@ results, and decide what happens next.
 
 Without orchestration, **that someone is you.**
 
-Ravenseat takes over much of that coordination. You describe what you want built in one Claude Code conversation.
-Ravenseat maintains a persistent plan and task queue, dispatches independent work to agents with focused missions, runs
-your configured checks, coordinates merges, and handles recoverable failures.
-
-When something requires human judgment, it asks. Independent work keeps moving.
+Ravenseat is a persistent orchestrator for Claude Code. It plans and coordinates parallel agents, verifies their work,
+recovers from failures, and merges passing changes. When something needs your judgment, it pauses that branch of work,
+not the project. Independent work keeps moving.
 
 **You manage the project. Ravenseat manages the workflow.**
 
@@ -58,10 +56,11 @@ Ravenseat doesn't replace Claude Code. It provides the persistent coordination l
 4. **Verify independently.** Ravenseat runs your configured checks against the exact delivered commit.
 5. **Recover or merge.** Passing work is merged locally. Failing work gets a fix round on the same branch and another
    check run, up to three rounds by default.
-6. **Escalate exceptions.** A task that is blocked, needs approval or needs your judgment becomes a decision. Other
-   eligible tasks continue.
-7. **Keep going.** Completed tasks unlock their dependents. When only your decisions are left, the queue waits and
-   picks up as soon as you answer.
+6. **Park blockers, keep working.** When a task needs your judgment, Ravenseat parks that task and anything depending
+   on it. Unrelated tasks continue running, and the queue keeps dispatching eligible work. Your answer unlocks the
+   blocked branch.
+7. **Keep going.** Completed tasks unlock their dependents. The queue only waits when no independent work remains.
+   Answer a decision, and its dependent tasks become eligible again.
 
 The plan and execution state live outside the conversation. A compaction, restart, or new Claude Code session doesn't
 require you to reconstruct the project from memory. [How the orchestration loop works](plugin/docs/orchestration.md#the-loop).
@@ -98,6 +97,10 @@ You decide. Ravenseat continues.
 The point isn't that AI never needs you. **It's that you shouldn't need to be present for every transition between
 tasks.**
 
+**Built for unattended work.** Leave Claude Code running and Ravenseat can keep dispatching, checking, fixing and
+merging eligible tasks for hours. When it needs your input, it waits without consuming tokens. Answer through Claude
+Code, Remote Control or the board, and execution can continue. Your machine must remain awake for local execution.
+
 ## What needs your attention?
 
 <p align="center"><img src="assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
@@ -112,6 +115,10 @@ Decisions collect the things Ravenseat cannot or should not resolve on its own. 
 - tasks that remain blocked after the fix rounds;
 - tasks agents propose, and pushes or overrides that your settings route to you;
 - work that looks stuck or runs long.
+
+**A decision doesn't stop the queue.** Only the affected task and its downstream dependencies wait. Ravenseat continues
+working through everything else that's eligible. You can answer later, and the blocked work becomes eligible again
+without restarting the project.
 
 Decisions come with context and a recommendation. Ravenseat shows which work is blocked and what your answer would
 unlock, most impact first. You can answer through Claude Code (`/ravenseat:decide`) or the optional board.
@@ -218,12 +225,16 @@ Ravenseat is not just a wrapper that launches multiple Claude Code agents. The d
 development is coordinating their work, maintaining state, validating results, and recovering safely when things go
 wrong.
 
-1. **The project outlives the conversation.** The queue, missions, plans and accepted design choices are plain files:
-   after a compaction the main chat was starting agents again in about 6 turns, against about 17 for a new chat that
-   read a handover note. [What it solves](plugin/docs/guide.md#what-it-solves)
+1. **The project survives interruptions, not just conversations.** Plans, tasks and decisions persist in plain files.
+   Ravenseat can recover interrupted merges, detect abandoned agents and resume unfinished work after a restart, while
+   protecting your uncommitted changes during merges. After compaction, the main chat resumed starting agents in about
+   6 turns, compared with about 17 for a new chat reading a handover note.
+   [What it solves](plugin/docs/guide.md#what-it-solves)
 2. **Agents work independently.** Each track has its own worktree and branch, dependencies decide what starts, and
    merges go one at a time: about 1,200 tasks were finished this way during three weeks of October 2026, in a larger
-   private project. [Orchestration](plugin/docs/orchestration.md)
+   private project. Queue updates and merges are designed to survive concurrent operations and interruptions without
+   losing tasks, merging the same work twice, or silently marking unfinished work as complete.
+   [Orchestration](plugin/docs/orchestration.md)
 3. **Agents don't certify their own work.** Checks run on the exact delivered commit and are recorded with its SHA by
    the orchestrator, not by the agent being evaluated. [Guarantees and limits](#guarantees-and-limits)
 4. **Failures become work, not dead ends.** A failed check sends the findings back to a fix agent on the same branch
@@ -333,15 +344,18 @@ managing each step.**
 
 ## Going further
 
-- **Lite and full mode.** Setup recommends lite mode for a first run: a task needs only a title.
-  [Full mode](plugin/docs/full-mode.md) adds file ownership per task, risk classes, focus areas and helper reviewers
-  for larger projects.
+- **Lite and full mode.** Start with a simple queue. [Full mode](plugin/docs/full-mode.md) adds focus-driven
+  execution, file ownership, risk classes and specialist reviewers. Security-sensitive changes can trigger additional
+  review even in ordinary tasks, and serious findings can block merges.
 - **Planning and priorities.** Areas, plans and features in a plan register, with a roadmap of Waiting on you, Now,
   Next and Later. [Plan register](plugin/docs/plan-register.md)
 - **Machine-aware concurrency.** Fewer agents start as free memory drops, and heavy check runs take turns.
   [Machine load](plugin/docs/full-mode.md#my-pc-chokes-on-parallel-builds)
 - **Work from your phone.** Queue the work, step away, and follow along with Claude Code's Remote Control (a Claude
   Code feature, not part of Ravenseat).
+- **Optional cloud execution.** Eligible tasks can run in Claude Code cloud sessions while your local machine is off.
+  Returned changes are verified locally before merging. Disabled by default and requires additional security setup.
+  [FAQ](plugin/docs/faq.md#are-cloud-sessions-safe-to-turn-on)
 
 <p align="center"><img src="assets/screenshots/light-08-plans-roadmap.jpg" alt="The Plans room on the Roadmap: Waiting on you, Now, Next, Later and Done as columns" width="800"></p>
 
