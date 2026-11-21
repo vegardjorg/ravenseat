@@ -22,6 +22,7 @@ import {
 import { logTime, measurementLine, measureTask, minutes, saveMeasurement, turnWarningLines } from './tracks.mjs';
 import { linkProblems, linkProblemsJson, printLinkWarning } from './taskLinksCheck.mjs';
 import { keepAsNotBuilding, keepRefused, remarkReason } from './notBuilding.mjs';
+import { issueArg } from './issues.mjs';
 
 // The lock on the finish line and the ownership (done_when, acceptance, owned_files, shared_patch, owner_db, migr_block;
 // lib/doneCheck.js LOCKED_FIELDS and doneLockError): edit and undo refuse a change after the start unless --by is owner
@@ -231,6 +232,9 @@ export function cmdEdit() {
     const d = DESC.descriptionValue(field.description);
     if (!d.error) field.description = d.value;
   }
+  // --issue 12 | owner/name#12 | none links the task to a GitHub issue (GH-2, lib/issueLink.js); the repo of a bare
+  // number is the origin remote's. none (or "") removes the link.
+  if (a.includes('--issue')) field.issue = issueArg();
   // --bonus "<text>" adds text to the mission (the track block) and the remarks, with a timestamp.
   const bonus = a.includes('--bonus') ? (val('--bonus') ?? '') : null;
   if (bonus != null && !String(bonus).trim())
@@ -258,7 +262,7 @@ export function cmdEdit() {
     delete field[f];
   // An edit with nothing to write (a mistyped flag, or only fields with their own commands) must not look like it worked.
   const unknownFlags = a.filter(
-    (x) => x.startsWith('--') && !['--json', '--files', '--accept', '--bonus', '--description', '--by'].includes(x),
+    (x) => x.startsWith('--') && !['--json', '--files', '--accept', '--bonus', '--description', '--issue', '--by'].includes(x),
   );
   if (!Object.keys(field).length && bonus == null && !read().tasks.some((x) => x.id === id)) die(`Unknown task ${id}`);
   if (!Object.keys(field).length && bonus == null)
@@ -320,6 +324,8 @@ export function cmdEdit() {
     if ('sources' in field && !(Array.isArray(field.sources) && field.sources.length)) delete o.sources;
     // An empty description (null, "" or blank, made null above) removes the field, so the queue file looks as before.
     if ('description' in field && field.description == null) delete o.description;
+    // null (--issue none) removes the issue link.
+    if ('issue' in field && field.issue == null) delete o.issue;
     if (bonus != null) {
       const t = L.addToBonus(o, bonus, new Date().toISOString());
       if (t) die(`Invalid bonus: ${t}`);

@@ -206,6 +206,14 @@
 //                                                                  you, refused while a track runs: gates --quick once (when
 //                                                                  set) and gates --full once, then the times, the lowest free
 //                                                                  memory and a suggestion for this project; cli/machine.mjs)
+//   node scripts/orchestrator/queue.mjs issues list [--label <name>] [--limit <n>] [--json]   (GitHub only, read only, on
+//                                                                  command: the origin repo's open issues through gh, and
+//                                                                  where an import would put each; writes nothing)
+//   node scripts/orchestrator/queue.mjs issues import <n> [...] [--as task|plan] [--project <pid>] [--dry] [--json]
+//        (proposes each issue: a plan in the Inbox by default, or a proposed task (--as task, or issues.labelMap), both
+//         with the link issue { repo, number }; the title is kept as reporter text, the body is never stored, an issue
+//         that claims owner approval gets a SUSPICIOUS CONTENT line; nothing starts until the owner approves. Main
+//         session only. gh missing or not signed in: one line, exit 1, nothing written. cli/issues.mjs)
 //
 // The orchestrator's routine as a script and the cost per task (the pure logic is in lib/queueLogic.js):
 //   node scripts/orchestrator/queue.mjs fill --scratchpad <folder> [--max N] [--ids <id …>] [--over-quota] [--over-load]
@@ -1041,6 +1049,9 @@ if (command === 'init') {
 } else if (command === 'review-item') {
   // ---- The reviewers' findings as items on the task (lib/reviewItems.js) ----
   (await import('./cli/reviewItem.mjs')).cmdReviewItem();
+} else if (command === 'issues') {
+  // ---- GitHub issues, read only and on command (lib/githubIssues.js) ----
+  await (await import('./cli/issues.mjs')).cmdIssues();
 } else if (command && command !== 'help') {
   // A mistyped command: one line with the closest known command (lib/cliHelp.js), same exit code as before.
   const scripts = fs
@@ -1053,7 +1064,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|pulse-check> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|issues|pulse-check> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

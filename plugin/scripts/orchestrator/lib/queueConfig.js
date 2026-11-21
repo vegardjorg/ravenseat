@@ -632,6 +632,14 @@ const STANDARD = Object.freeze({
     afterMerge: false,
     minAgeHours: 3,
   },
+  // GitHub issues (GH-1 and GH-2: cli/issues.mjs, lib/githubIssues.js, lib/issueLink.js). refsTrailer: a task linked to
+  // an issue gets "Refs: #12" in its merge commit; local, no network, and it never closes the issue, so on. labelMap:
+  // `ravenseat issues import` routes an issue by its labels ({ "ready-for-agent": "task", "needs-info": "plan",
+  // "bug": "K" }); empty = off, so every import is a plan in the Inbox unless --as task says otherwise.
+  issues: {
+    refsTrailer: true,
+    labelMap: {},
+  },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`
   // sets the value for the queue and wins over this one.

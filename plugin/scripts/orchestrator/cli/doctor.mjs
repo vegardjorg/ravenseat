@@ -89,7 +89,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates', 'notBuilding', 'tidy'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates', 'notBuilding', 'tidy', 'issues'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -839,6 +839,37 @@ function checkTidy() {
 }
 
 /**
+ * The gh row (TH-1, lib/ghStatus.js): whether gh is missing, not signed in, or a GH_TOKEN / GITHUB_TOKEN is the one
+ * GitHub rejects. Zero rows, and no gh call at all, when no gh feature is in use. A crash is no row: gh is optional.
+ */
+async function doctorGhRows() {
+  try {
+    const GS = require('./lib/ghStatus.js');
+    let issueLinks = 0;
+    try {
+      issueLinks += (JSON.parse(fs.readFileSync(FILE, 'utf8')).tasks ?? []).filter((o) => o?.issue).length;
+    } catch {
+      // error-ignored: no queue yet
+    }
+    try {
+      issueLinks += (JSON.parse(fs.readFileSync(path.join(FOLDER, 'plans.json'), 'utf8')).entries ?? []).filter((p) => p?.issue).length;
+    } catch {
+      // error-ignored: no plan register yet
+    }
+    const features = GS.featuresInUse(CONFIG, {
+      branchProtectionCache: fs.existsSync(path.join(FOLDER, require('./lib/branchProtection.js').CACHE_FILE ?? 'branch-protection.json')),
+      issueLinks,
+    });
+    if (!features.length) return [];
+    const { ghRunner } = await import('./ghRun.mjs');
+    const run = await ghRunner();
+    return GS.doctorRows({ features, run: (args, o) => run(args, { ...o, timeoutMs: 8000 }), env: process.env });
+  } catch {
+    return [];
+  }
+}
+
+/**
  * `ravenseat doctor [--json] [--all] [--fix]` (the usage is at the top of queue.mjs).
  * --fix: the one thing doctor repairs itself, the project's .gitignore (setup.mjs writeGitignore: the fixed lines, the
  * data folder or its share pattern, the time log and the private paths), before the checks run. Nothing else changes.
@@ -861,6 +892,8 @@ export async function cmdDoctor() {
   // A newer ravenseat (cli/update.mjs): one INFO row, never WARN or FAIL. It may check GitHub with a 3 s timeout when
   // the cache is old; quiet in --json and in agent or CI context.
   every.push(...(await doctorUpdateRows()));
+  // The GitHub CLI (TH-1, lib/ghStatus.js): only when a gh feature is in use; never FAIL.
+  every.push(...(await doctorGhRows()));
   // Quiet guidance (lib/guidance.js) drops the advice rows, never a FAIL, and says how many went. --all shows everything.
   const { rows: checks, hidden } = require('./lib/guidance.js').filterDoctor(every, require('./lib/guidance.js').readQuiet(FOLDER), {
     all: a.includes('--all'),

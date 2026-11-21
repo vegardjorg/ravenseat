@@ -333,6 +333,16 @@ const SETTINGS = Object.freeze([
   row('tidy.minAgeHours', 'project', 'number', 'Tidy minimum age (hours)',
     'ravenseat tidy leaves a worktree changed more recently than this, since a new worktree with no commits yet looks ' +
     'merged. 0 = no minimum.'),
+  // GitHub issues (GH-1, GH-2: cli/issues.mjs, lib/issueLink.js). Friction: none for refsTrailer, one local line in a
+  // merge commit, no network call, and it never closes the issue (Refs, not Closes), so on. labelMap: none while empty
+  // (every import is a plan in the Inbox); a map only changes where an import lands, and an imported task is still
+  // proposed and never auto-accepted, so it cannot start work. Empty by default, the owner fills it.
+  row('issues.refsTrailer', 'project', 'onoff', 'Refs trailer on merge',
+    'A task linked to a GitHub issue gets a "Refs: #12" line in its merge commit. Local only: it never closes the ' +
+    'issue and makes no network call.'),
+  row('issues.labelMap', 'project', 'object', 'Issue label map',
+    'Routes `ravenseat issues import` by label, for example { "ready-for-agent": "task", "bug": "K" }. Empty = off: ' +
+    'every import is a plan in the Inbox. An imported task is always proposed, never accepted for you.'),
 
   // ---- 2. Limits and cost ----
   row('limits.maxConcurrent', 'limits', 'integer', 'Concurrent tracks',

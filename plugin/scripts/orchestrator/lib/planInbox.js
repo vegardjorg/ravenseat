@@ -59,7 +59,8 @@ function captureInput(raw) {
  * Captures a plan into the Inbox (mutates `reg` only when it is valid and new).
  * @param {object} reg the plan register (normalized)
  * @param {{ title: string, text?: string|null }} input
- * @param {{ projects?: object, question?: object, now?: string }} ctx  queue.json projects (must hold `general`)
+ * @param {{ projects?: object, question?: object, now?: string, issue?: object, by?: string }} ctx  queue.json projects
+ *   (must hold `general`); `issue` and `by` come from `ravenseat issues import` (GH-1): the issue link and who captured it
  * @returns {{ error: string[], warnings: string[], entry?: object, created?: boolean, duplicate?: string }}
  */
 function capturePlan(reg, input, ctx = {}) {
@@ -74,11 +75,19 @@ function capturePlan(reg, input, ctx = {}) {
   const { id } = V.entrySuggestion(c.title, used);
   const s = P.newEntry(
     reg,
-    { id, title: c.title, ...(c.text ? { summary: c.text } : {}), project: PROJECT, priority: 'later', maturity: 'idea' },
+    {
+      id,
+      title: c.title,
+      ...(c.text ? { summary: c.text } : {}),
+      ...(ctx.issue ? { issue: ctx.issue } : {}),
+      project: PROJECT,
+      priority: 'later',
+      maturity: 'idea',
+    },
     { role: 'owner', projects: ctx.projects ?? {}, question: ctx.question ?? {}, now },
   );
   if (s.error.length) return s;
-  s.entry.inbox = { at: now, by: 'owner' };
+  s.entry.inbox = { at: now, by: ctx.by ?? 'owner' };
   // A plan with the same title that is already sorted: captured anyway (the owner meant to write it down), with a
   // pointer, so the sorting can merge them.
   const same = entries.filter((p) => p !== s.entry && FI.findingKey(p.title) === key).map((p) => p.id);

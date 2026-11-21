@@ -179,7 +179,10 @@ function missionFor(issue, repo) {
   ].join('\n');
 }
 
-/** The task an import proposes. `added_by` makes it a proposal at add. */
+/**
+ * The task an import proposes. `added_by` makes it a proposal at add. No `content_min`: an issue says nothing about
+ * size, so the owner sizes it when they accept (a made-up size would also trip the small-task guard at add).
+ */
 function taskFor(issue, { repo, id, project = null, klass = 'K' }) {
   return {
     id,
@@ -188,7 +191,6 @@ function taskFor(issue, { repo, id, project = null, klass = 'K' }) {
     class: klass,
     mission: missionFor(issue, repo),
     value: 5,
-    content_min: 30,
     ...(project ? { project } : {}),
     feature: 'GitHub issues',
     issue: { repo, number: issue.number },

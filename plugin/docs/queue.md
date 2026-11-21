@@ -938,6 +938,8 @@ board ("Protects against: ...") and in that view.
 | `tidy.doctor` | `true` | `ravenseat doctor` shows one INFO row `tidy` with how many merged, clean worktrees and merged branches `ravenseat tidy --execute` would remove, and their size. Only when there is something; display only, never WARN or FAIL | Advanced |
 | `tidy.afterMerge` | `false` | After a merge, the task's worktrees anywhere on disk go too, by the tidy rules. Off because a delete cannot be undone, even when the branch is merged | Advanced |
 | `tidy.minAgeHours` | `3` | `ravenseat tidy` keeps a worktree changed more recently than this (a new worktree with no commits looks merged). `0` = no minimum | Advanced |
+| `issues.refsTrailer` | `true` | A task linked to a GitHub issue gets `Refs: #12` in its merge commit. Local, no network call, and never `Closes`, so it is on | Advanced |
+| `issues.labelMap` | `{}` | Routes `ravenseat issues import` by label (`task`, `plan`, `K`, `U`, `D`, `D+`). Empty = off: every import is a plan in the Inbox; an imported task is still proposed | Advanced |
 
 ### Limits and cost
 
