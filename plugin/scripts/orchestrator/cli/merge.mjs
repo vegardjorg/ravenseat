@@ -408,6 +408,9 @@ function receiveGates(o, { branch, scratch, reuse = true, step = 'receive' }) {
   // or the store could not be written) is no evidence.
   if (r.status === 0 && entry?.ok === true) {
     console.log(`Gates GREEN at ${String(tip).slice(0, 12)} (${durationSec} s), recorded as evidence for that commit${covered ? `; ${covered}` : ''}.`);
+    // Ignored files or a shared folder from another lockfile in a run in place: the one hint (lib/gateClean.js).
+    const cleanHint = require('./lib/gateClean.js').hint(entry, require('./lib/gateClean.js').setup(CONFIG));
+    if (cleanHint) console.log(cleanHint);
     const record = withZeroTests(
       withFlaky(
         o,
@@ -475,9 +478,17 @@ function receiveGates(o, { branch, scratch, reuse = true, step = 'receive' }) {
 function brokenGate(o, gateCheck) {
   const GBR = require('./lib/gateBroken.js');
   if (!GBR.on(CONFIG) || !gateCheck?.log) return null;
+  const GE = require('./lib/gateEvidence.js');
+  // A clean copy that could not be set up (gates.runner clean, lib/gateClean.js): no gate command ran, so there is no
+  // base to compare with. The question id also carries the clean setup, so changing it forgets the verdict.
+  const setupReason = GBR.setupRed(gateCheck.log);
+  if (setupReason) {
+    const hash = require('./lib/gateClean.js').verdictHash(GE.setupHash(CONFIG.gates), CONFIG);
+    const v = GBR.setupVerdict({ id: o.id, reason: setupReason, setupHash: hash });
+    return { ...v, resolved: (read().resolved ?? []).includes(v.question) };
+  }
   const found = GBR.candidates(gateCheck.log, gateCheck.commands);
   if (!found.length) return null;
-  const GE = require('./lib/gateEvidence.js');
   const TR = require('./lib/treeRun.js');
   const spawn = require('./lib/gateEnv.js').trackCodeSpawn(process.env, { storeFile: GE.storeFile(FOLDER), root: CONFIG.root });
   const baseRuns = {};
@@ -956,12 +967,27 @@ export function cmdReceive() {
           if (s.error.length) die(`Could not register the owner question: ${s.error.join('; ')}`);
         }
         if (!(o.waiting_on ?? []).includes(broken.question)) o.waiting_on = [...(o.waiting_on ?? []), broken.question];
-        L.openBlock(o, 'owner-question', { note: `the gate cannot run: ${broken.program} not found (${broken.question})` });
+        L.openBlock(o, 'owner-question', {
+          note: broken.setup
+            ? `the gate cannot run: the clean copy could not be set up (${broken.question})`
+            : `the gate cannot run: ${broken.program} not found (${broken.question})`,
+        });
       }
       recordAttempt(o, { gateRed: true });
       return o;
     });
     if (!o0.picked_by) pulseCursor(`receive ${id} gates red`);
+    if (broken && !brokenResolved && broken.setup) {
+      // The clean copy could not be set up (lib/gateClean.js): no gate command ran.
+      console.log(
+        `GATE CANNOT RUN: ${id}'s gate could not start in a clean copy of the commit (gates.runner clean): ${broken.setup}. ` +
+          'A setup problem, so no fix round was started.\n' +
+          `Owner question ${broken.question} registered (ravenseat question; blocker owner-question). Fix the setup (or list ` +
+          `the file in gates.clean.include, or set gates.runner worktree), then ${CLI} receive ${id} again. A fix round ` +
+          `anyway: ${CLI} resolve ${broken.question} --answer "…", then ${CLI} receive ${id}. Off: "gates": { "brokenVerdict": false }.`,
+      );
+      process.exit(8);
+    }
     if (broken && !brokenResolved) {
       console.log(
         `GATE CANNOT RUN: ${id}'s quick gate ${broken.commands.map((c) => `\`${c}\``).join(', ')} needs \`${broken.program}\`, ` +

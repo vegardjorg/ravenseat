@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **The full gate before merge can run in a clean copy of the exact commit.** `gates.runner` (default `worktree`); try
+  it once with `ravenseat gates --full --clean`.
 - **`ravenseat issues list` and `issues import` propose GitHub issues as plans or tasks, and a linked task shows
   "Issue #12" and gets `Refs: #12` at merge.** Read only, on command only, `--with-body` keeps the body as framed data;
   `issues.refsTrailer` on, `issues.labelMap` off.

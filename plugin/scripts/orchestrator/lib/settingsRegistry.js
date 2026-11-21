@@ -168,6 +168,12 @@ const REQUIRES = Object.freeze({
   'fixRound.continueMaxContextK': ['fixRound.continueWithinMin'],
   // lib/gateEvidence.js: the names are read only in mode external.
   'gateEvidence.external': ['gateEvidence.mode=external'],
+  // lib/gateClean.js decide: with gates.runner worktree no run uses a clean copy (only a one-off --clean reads them).
+  'gates.clean.dependencies': ['gates.runner=clean'],
+  'gates.clean.copy': ['gates.runner=clean'],
+  'gates.clean.include': ['gates.runner=clean'],
+  'gates.clean.kinds': ['gates.runner=clean'],
+  'gates.clean.keepOnRed': ['gates.runner=clean'],
   // lib/baseHealth.js setup: enabled false turns the base gate off, with its commands, output tail and rerun.
   'baseGate.commands': ['baseGate.enabled'],
   'baseGate.tailLines': ['baseGate.enabled'],
@@ -489,6 +495,51 @@ const SETTINGS = Object.freeze([
   row('gates.brokenVerdict', 'gates', 'onoff', 'Ask when a gate cannot run',
     'A red quick gate whose own program is not installed here (also on the base branch) is a setup problem: receive ' +
     'asks you once instead of starting a fix round. A changed gates setup forgets the verdict. Off: a fix round as before.'),
+  // Friction: off by default, since clean can stop work: a project whose tests need an ignored local file (a .env, a
+  // local config) is red in the copy until that file is listed in gates.clean.include. On: about 2 s more per full gate
+  // with linked dependencies (measured 2026-11-20, plans/gos1-clean-gate-analyse-2026-11-20.md), no extra model tokens
+  // beyond a wait turn now and then. Only the full gate before merge uses it, never the quick checks.
+  row('gates.runner', 'tests', 'choice', 'Where the full gate runs',
+    'Worktree: the full gate before merge runs in the track\'s worktree, where untracked and ignored files and the shared ' +
+    'node_modules can change the result (the evidence line says so). Clean: it runs in a fresh copy of the exact commit ' +
+    'with dependencies linked (or installed) from the lockfile, so a green gate means this commit passed. Clean adds ' +
+    'about 2 seconds with linked dependencies and can turn red when tests need an ignored local file; list those in ' +
+    'gates.clean.include.', {
+      choices: ['worktree', 'clean'],
+      protects: 'A green full gate that passed only because of files or packages the commit does not have.',
+    }),
+  // Friction: none while gates.runner is worktree. Link is the default: about 2 s, and no install script runs at the
+  // orchestrator's gate. Install closes the lockfile gap too but takes 25 to 60 s and runs postinstall scripts; auto
+  // installs only when the commit's lockfile differs from the linked folder's.
+  row('gates.clean.dependencies', 'tests', 'choice', 'Dependencies in the clean copy',
+    'Link: the shared folders (sharedLinks, such as node_modules) are linked into the copy, about 2 seconds. Install: ' +
+    'a frozen install from the commit\'s lockfile (npm ci, pnpm, yarn or bun), 25 to 60 seconds, and it runs install ' +
+    'scripts. Auto: install only when the commit\'s lockfile differs from the one the linked folder was installed from.', {
+      choices: ['link', 'install', 'auto'],
+    }),
+  // Friction: none while gates.runner is worktree. A git worktree copy keeps .git, so tests that call git still work;
+  // archive is for a project that wants no .git in the copy.
+  row('gates.clean.copy', 'tests', 'choice', 'How the clean copy is made',
+    'Worktree: git worktree add --detach, which keeps .git for tests that call git and handles Git LFS. Archive: git ' +
+    'archive, a plain copy of the files with no .git.', { choices: ['worktree', 'archive'] }),
+  // Friction: it removes friction (the escape hatch for a false red). Empty by default: nothing outside the commit.
+  row('gates.clean.include', 'tests', 'list', 'Ignored files copied into the clean copy',
+    'Ignored files or folders the tests need, copied from the worktree into the clean copy (for example .env.test). ' +
+    'Never an absolute path, .., .git, a key or token file, or an env file that may hold real keys: the gate runs with ' +
+    'secrets taken out of its environment, and a file must not bring them back.'),
+  // Friction: none while gates.runner is worktree. Only the full gate before merge by default, never a track's quick
+  // checks: base and push add the same 2 s to the merge and the push checks.
+  row('gates.clean.kinds', 'tests', 'list', 'Which gate runs use the clean copy',
+    'full: the gate on the delivered tip before merge (receive). base: the gate on the merge commit. push: the full gate ' +
+    'in the main checkout before a batch push. A track\'s own run in its worktree never uses it.'),
+  // Friction: off: a kept copy takes disk until the sweep. On only while you look into a red clean run.
+  row('gates.clean.keepOnRed', 'tests', 'onoff', 'Keep a red clean copy',
+    'Keep the copy of a red clean run for inspection. The next clean run or the doctor removes it after ' +
+    'gates.clean.sweepAfterHours.'),
+  // Friction: none. One hour, as for the gate temp folders: a running gate is never touched (its process is alive).
+  row('gates.clean.sweepAfterHours', 'tests', 'integer', 'Remove old clean copies after (hours)',
+    'A clean copy whose run has ended is removed after this many hours by the next clean run or the doctor, links ' +
+    'first. A copy that cannot be removed stays and the doctor warns.'),
   row('gateEvidence.mode', 'gates', 'choice', 'Gate evidence',
     'Who is trusted that the checks passed: Ravenseat running them itself (own), your CI (external), or the track\'s own ' +
     'word (off). Own is the default, because a track could write a green result it never got. Own: receive and merge ' +

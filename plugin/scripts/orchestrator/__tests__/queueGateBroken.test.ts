@@ -165,6 +165,30 @@ describe('ravenseat receive: the gate cannot run', () => {
     expect(p.find().gate_broken).toBeUndefined();
   });
 
+  it('a clean copy that cannot be set up (gates.runner clean) is one owner question too, and changing the clean setup forgets it', () => {
+    // install with no lockfile in the commit: the copy cannot get its dependencies, and no gate command runs.
+    const clean = { runner: 'clean', clean: { dependencies: 'install' } };
+    const p = project({ gates: { quick: ['node -e "process.exit(0)"'], ...clean } });
+    p.report();
+    const r = p.run('receive', 'A');
+    expect(r.out).toContain('GATE CANNOT RUN');
+    expect(r.out).toContain('clean copy');
+    expect(r.out).not.toContain('RESUME A-r1');
+    expect(r.code).toBe(8);
+    const broken = p.find().gate_broken as { setup: string; question: string; program: unknown };
+    expect(broken.setup).toMatch(/no lockfile/);
+    expect(broken.program).toBeNull();
+    expect(p.queue().question?.[broken.question]?.text).toContain('clean copy');
+    expect(openBlocks(p.find())).toContain('owner-question');
+    // No copy is left in the data folder, and git knows only the main checkout and the track's worktree.
+    expect(fs.readdirSync(path.join(p.folder, 'clean-gate')).filter((n) => /^\d+-/.test(n))).toEqual([]);
+
+    p.writeConfig({ gates: { quick: ['node -e "process.exit(0)"'], runner: 'clean', clean: { dependencies: 'link' } } });
+    const r2 = p.run('receive', 'A');
+    expect(r2.out).not.toContain('GATE CANNOT RUN');
+    expect(r2.out).toContain('ran in a clean copy of');
+  });
+
   it('gates.brokenVerdict false keeps the old behaviour: a fix round', () => {
     const p = project({ gates: { quick: [MISSING], brokenVerdict: false } });
     p.report();

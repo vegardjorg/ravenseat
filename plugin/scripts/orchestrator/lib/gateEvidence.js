@@ -45,7 +45,7 @@
 // lib/gitExecSurface.js): the run is then red with `tampered: true` and `tamper_reason` naming what changed.
 //
 // What the evidence covers (coverage, coverageLine): a sha names the commit, but the commands can read more than it. An
-// entry says where it ran (`runner`: only "local-worktree" today, later "clean-checkout" and "sandbox") and what it could
+// entry says where it ran (`runner`: "local-worktree", or "clean-checkout" with gates.runner clean, lib/gateClean.js) and what it could
 // see beyond the commit (`shared_links`, `untracked`, `ignored_present`, read by lib/gateCoverage.js before the first
 // command). Same sha, different result is possible with "local-worktree". Untracked files are not forbidden; they are
 // shown. These fields do not decide anything yet. Entries from before them stay readable and have no coverage.
@@ -61,7 +61,7 @@
 //   entry = { id, time, by: "gates.mjs", writer: "orchestrator", sha, setup_hash, kind: "quick"|"full", ok, exit, clean,
 //             gates: [commands], failed: [commands], flaky?: [commands], timed_out?, tampered?, tamper_reason?, track?,
 //             branch?, main_tree, runner, shared_links?: [{ path, lock_hash?, target_lock_hash? }], untracked?: count,
-//             ignored_present?: count }
+//             ignored_present?: count, clean_copy?: { copy, dependencies } (runner clean-checkout only) }
 //   flaky = the commands that were red, then green on a rerun on the same commit (lib/trackFlaky.js); the entry is then
 //   green with `failed` empty.
 //   legacy entry = the same without id, writer, setup_hash and runner.
@@ -92,6 +92,8 @@ const RUNNER_LOCAL = 'local-worktree';
  * for the names it was recorded with; never for receive's quick gates.
  */
 const RUNNER_EXTERNAL = 'external-ci';
+/** A fresh copy of exactly the commit (gates.runner clean, lib/gateClean.js): no untracked or ignored file of the worktree. */
+const RUNNER_CLEAN = 'clean-checkout';
 /** gateEvidence.mode: own (the default), external, off. */
 const MODES = ['own', 'external', 'off'];
 
@@ -199,7 +201,10 @@ function entry(r) {
   if (r.track) e.track = String(r.track);
   if (r.branch) e.branch = String(r.branch);
   e.main_tree = r.mainTree === true;
-  e.runner = RUNNER_LOCAL;
+  e.runner = r.runner === 'clean' ? RUNNER_CLEAN : RUNNER_LOCAL;
+  // How the clean copy was made (lib/gateClean.js): git worktree or archive, dependencies linked or installed.
+  if (e.runner === RUNNER_CLEAN && r.cleanCopy)
+    e.clean_copy = { copy: String(r.cleanCopy.copy ?? 'worktree'), dependencies: String(r.cleanCopy.dependencies ?? 'link') };
   const c = r.coverage;
   if (Array.isArray(c?.sharedLinks)) e.shared_links = c.sharedLinks;
   if (Number.isInteger(c?.untracked)) e.untracked = c.untracked;
@@ -379,7 +384,11 @@ function coverageLine(e) {
   const c = coverage(e);
   if (!c) return '';
   const parts = [
-    c.runner === RUNNER_LOCAL ? `ran locally in ${c.mainTree ? 'the main checkout' : "the track's worktree"}` : `ran in ${c.runner}`,
+    c.runner === RUNNER_LOCAL
+      ? `ran locally in ${c.mainTree ? 'the main checkout' : "the track's worktree"}`
+      : c.runner === RUNNER_CLEAN
+        ? `ran in a clean copy of ${String(e.sha ?? '?').slice(0, 12)}, dependencies ${e.clean_copy?.dependencies === 'install' ? 'installed' : 'linked'}`
+        : `ran in ${c.runner}`,
   ];
   if (c.untracked) parts.push(`${c.untracked} untracked`);
   if (c.ignored) parts.push(`${c.ignored} ignored`);
@@ -627,6 +636,7 @@ module.exports = {
   WRITER,
   RUNNER_LOCAL,
   RUNNER_EXTERNAL,
+  RUNNER_CLEAN,
   MODES,
   modeOf,
   externalNames,
