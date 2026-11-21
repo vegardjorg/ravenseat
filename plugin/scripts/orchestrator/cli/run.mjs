@@ -420,8 +420,6 @@ export function cmdFill() {
   const queue = read();
   for (const v of selected.filter((x) => x.new)) logStart(queue.tasks.find((x) => x.id === v.id));
   for (const v of selected) for (const l of readsWarningLines(queue.tasks.find((x) => x.id === v.id), queue.tasks)) console.log(l);
-  // The checks before a task starts (PS-1..3, lib/startChecks.js) for the new starts: warnings only, as at add.
-  for (const v of selected.filter((x) => x.new)) for (const l of startCheckLines(queue.tasks.find((x) => x.id === v.id))) console.log(l);
   pulseCursor(`fill ${selected.map((v) => v.id).join(' ')}`);
   fs.mkdirSync(scratch, { recursive: true });
   const trackFile = path.join(scratch, 'queue-track-fill.md');
@@ -482,7 +480,8 @@ export function cmdFill() {
   const fillModel = CE.costModel(queue);
   const fillEstimate = (id) => {
     const o = queue.tasks.find((x) => x.id === id);
-    return `${SC.estimateText(o, L.estimate(o))} ${CE.costText(CE.calibratedCost(o, fillModel))}`;
+    // The track line keeps its plain "N min" (the dispatch output is locked); "size not set" is in the WARNING below.
+    return `${L.estimate(o)} min ${CE.costText(CE.calibratedCost(o, fillModel))}`;
   };
   for (const d of descriptors)
     console.log(
@@ -510,6 +509,9 @@ export function cmdFill() {
         `Catalog excerpt in the mission (tokens, cap ${sizes[0].cap}): ${sizes.map((s) => `${s.id} ${s.tokens}`).join(', ')}.`,
       );
   }
+  // The checks before a task starts (PS-1..3, lib/startChecks.js) for the new starts: warnings only, as at add. After
+  // the FILLED line and the track lines, so merge's fill excerpt (lib/logic/merge.js fillExcerpt) still shows them.
+  for (const v of selected.filter((x) => x.new)) for (const l of startCheckLines(queue.tasks.find((x) => x.id === v.id))) console.log(l);
   for (const l of triageOut.lines) console.log(l);
   if (waitLine) console.log(waitLine);
   resolveWarning();
