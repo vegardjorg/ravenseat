@@ -329,7 +329,7 @@ function show() {
           prefer: cat.stack?.prefer ?? [],
           reuse: cat.reuse?.rows ?? [],
           dependencies: cat.stack?.deps ?? [],
-          decisions: ds.map((d) => ({ id: d.id, kind: d.kind, title: d.title, status: d.status, status_counts: C.effectiveStatus(d, ledger), paths: d.paths, except: d.except, applies: d.applies, source: d.source, uses: d.uses, alternatives: d.alternatives, stack: d.stack, invariant: d.invariant })),
+          decisions: ds.map((d) => ({ id: d.id, kind: d.kind, title: d.title, status: d.status, status_counts: C.effectiveStatus(d, ledger), paths: d.paths, except: d.except, applies: d.applies, source: d.source, uses: d.uses, alternatives: d.alternatives, stack: d.stack, invariant: d.invariant, ...(d.kind === 'zone' ? { keywords: d.keywords, reason: d.reason } : {}) })),
         },
         null,
         2,
@@ -361,6 +361,10 @@ function show() {
     console.log(`${title} (decisions/): ${mine.length ? '' : choices.length ? 'none' : 'none yet'}`);
     for (const d of mine) console.log(`${row(d, ledger)}${d.applies ? `  (applies to: ${C.appliesWords(d.applies)})` : ''}`);
   }
+  // Sensitive zones (PG-5 step 0): only when there is one, so a catalog without zones shows as before.
+  const zones = choices.filter((d) => d.kind === 'zone');
+  if (zones.length) console.log('Sensitive zones (decisions/):');
+  for (const d of zones) console.log(`${row(d, ledger)}${d.reason ? `  (${d.reason})` : ''}`);
   // Roadmap 0f: what the project deliberately does not build, from the same folder.
   if (nb.length) {
     console.log('Not building (decisions/):');

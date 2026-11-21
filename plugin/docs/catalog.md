@@ -105,8 +105,8 @@ Context, the choice and what follows from it, in at most 30 lines.
   gets, so it must stand on its own.
 - `kind`: what sort of entry it is. `decision` (the default when the line is missing), `design` (a rule of the design
   language, see [Design language](#design-language)), `stack` (which tool does a job, see [Stack
-  entries](#stack-entries)), `dependency` (a decision about one library) or `not-building` (see [Not
-  building](#not-building)). One field, one set of values. `catalog show` and **Project catalog** in Decisions group
+  entries](#stack-entries)), `dependency` (a decision about one library), `not-building` (see [Not
+  building](#not-building)) or `zone` (see [Sensitive zones](#sensitive-zones)). One field, one set of values. `catalog show` and **Project catalog** in Decisions group
   the entries by it.
 - `paths`: the files the choice applies to, as globs from the project root. No `..` and no absolute paths.
   `catalog check` warns when they match no tracked file.
@@ -543,6 +543,36 @@ Not a design choice:
 avoid) belong in Claude's memory or in `queue.config.json`, not here. The catalog holds code and product choices that
 the tracks and reviewers check against, in the repository, under your accept.
 
+## Sensitive zones
+
+A **zone** is a part of the project where a change is expensive to undo: sign-in and permissions, tenant isolation,
+the data model's foundations, a public contract or file format, encryption and keys. A zone entry is a file in
+`decisions/` with `kind: zone`, a one-line `reason` and what is in it: `paths` (and `except`), `applies` and/or
+`keywords` (whole words or phrases, any case, matched against the task's title and mission). It binds no code: no
+`invariant`, no `check`, and it never goes into the excerpt.
+
+```
+---
+id: D-0007
+title: Sign-in and sessions
+kind: zone
+status: proposed
+paths: ["src/auth/**"]
+keywords: ["session", "sign-in"]
+reason: Users and other services rely on the session format; changing it means a migration.
+---
+```
+
+- **Empty by default.** Ravenseat ships no zones; a project without one behaves as before. Only the owner's accept
+  counts (`catalog accept <D-id> --by owner`), and `kind`, `paths`, `except`, `applies` and `keywords` are in the
+  fingerprint, so a track cannot widen or narrow an accepted zone. The `reason` may be reworded.
+- **What reads it:** a task is in a zone when its `owned_files` or `shared_patch` meet the zone's paths (`files`), its
+  `applies` matches (`category`), or a keyword is in its title or mission (`keyword`). The pre-start plan review
+  (`planReview.mode`, [queue.md](queue.md#plan-review-before-a-risky-task)) counts a zone task as risky, and a zone task
+  without `risk_first` is told to prove first that the choice can be reversed.
+- Later work (not built yet): a starter scan that proposes zones, a card badge, `zone_skip` and an owner's yes before
+  an irreversible zone change (that one off by default, since it stops work).
+
 ## Friction
 
 Anything that can stop work is off by default, with one deliberate exception: the protected path, by owner decision.
@@ -562,6 +592,7 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Versions from the lockfiles | A read of the lockfile; a broken or unknown one gives no versions and never an error | No setting: local metadata only, it decides nothing |
 | `## Dependencies` table | `catalog check` errors on a row without four cells and warns on a docs cell that is not a link, over 40 rows, or a row in no manifest. `catalog init` writes rows only into a new `stack.md` | No setting: a check on request and a draft that binds nothing |
 | Stack card on the board | None: "Uses" and "Chosen over" lines, display only | No setting |
+| Sensitive zones | None while there are none (the default). An accepted zone marks a task as risky for the plan review, which is advisory by default | No setting of its own: data the owner accepts; what reads it follows `planReview.mode` and `mission.riskFirst` |
 | Stack choice in the dependency notes | A CATALOG line at receive for a package an accepted stack entry chose against; never a stop | Follows `scopeNotes.dependencies` |
 | Agent access | `catalog show`, `catalog check` and `catalog find` allowed for queue agents | No setting |
 | Code index at receive and in the missions | One git listing per tree and a read of each changed file (the first build of about 300 files took under half a second here); a file in the data folder; more lines in the excerpt, inside the same cap. It stops nothing | `catalog.index`, off: the plan puts it on the opt-in list, since it builds and stores a file and its worth grows with the project |
