@@ -219,6 +219,26 @@ describe('ravenseat doctor', () => {
     expect(p.run().out).toMatch(/wrong type in queue\.config\.json: gates\.flakyRerun is string, expected boolean/);
   }, 60_000);
 
+  it('issues.labelMap: a valid map is OK; a wrong shape or an unknown target is a WARN with the fix, never a FAIL', () => {
+    const base = { loadGuard: { minFreeMemoryPct: null } };
+    let p = project({ config: { ...base, issues: { labelMap: { bug: 'K', 'ready-for-agent': 'task', idea: 'plan' } } } });
+    let checks = p.json().checks;
+    expect(checks.filter((c) => c.name === 'issues')).toEqual([]);
+    expect(checks.find((c) => c.name === 'config')?.status).toBe('OK');
+    for (const labelMap of ['bug=K', ['bug', 'K'], { bug: 'big', docs: 3 }]) {
+      p = project({ config: { ...base, issues: { labelMap } } });
+      const r = p.run('--json');
+      checks = JSON.parse(r.out).checks;
+      const row = checks.find((c) => c.name === 'issues');
+      expect(row?.status, JSON.stringify(labelMap)).toBe('WARN');
+      expect(row?.message).toMatch(/issues\.labelMap/);
+      expect(row?.fix).toMatch(/task, plan, K, U, D or D\+/);
+      expect(checks.some((c) => c.status === 'FAIL' && /labelMap/.test(c.message)), JSON.stringify(labelMap)).toBe(false);
+    }
+    // An unknown target names the label and what it was.
+    expect(checks.find((c) => c.name === 'issues')?.message).toMatch(/issues\.labelMap\.bug is "big".*issues\.labelMap\.docs is 3/);
+  }, 120_000);
+
   it('taxonomy: nothing while the project files are fine, one WARN naming a broken one', () => {
     const p = project({ config: { loadGuard: { minFreeMemoryPct: null } } });
     expect(p.run().out).not.toMatch(/taxonomy/);

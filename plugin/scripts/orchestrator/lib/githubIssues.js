@@ -140,7 +140,8 @@ function labelMapSetup(cfg = {}) {
   if (isObject(own))
     for (const [label, target] of Object.entries(own)) {
       if (!Object.hasOwn(TARGETS, target)) {
-        problems.push(`issues.labelMap.${label} is "${target}", expected task, plan, K, U, D or D+`);
+        // JSON for a value that is not a string (a number, a list), so the problem shows what was written.
+        problems.push(`issues.labelMap.${label} is ${typeof target === 'string' ? `"${target}"` : JSON.stringify(target)}, expected task, plan, K, U, D or D+`);
         continue;
       }
       map.push({ label, key: label.toLowerCase(), target: TARGETS[target] });
