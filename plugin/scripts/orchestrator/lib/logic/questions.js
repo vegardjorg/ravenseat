@@ -92,10 +92,27 @@ function approve(queue, ids, now = new Date().toISOString()) {
 // with one click on the board or `ravenseat resolve <id> --choice <n|text>`; a question without choices works as before.
 // `context` (optional) is the background: why it is asked, kept apart from the question itself so the board can show the
 // question first and the background under the recommendation. A question without it works as before.
+// `after` (optional, PG-4): the stage tasks a checkpoint question waits for; it stays hidden until they are done
+// (questionHidden), so the owner is asked about a result only once the result exists.
 
 /** The types an owner question can have. `condition` is answered with how the condition is fulfilled. */
 const QUESTION_TYPES = ['question', 'condition', 'lawyer', 'owner-task'];
-const QUESTION_FIELD = new Set(['type', 'text', 'recommendation', 'context', 'source', 'choices', 'added_at']);
+const QUESTION_FIELD = new Set(['type', 'text', 'recommendation', 'context', 'source', 'choices', 'after', 'added_at']);
+/**
+ * `after` (optional, PG-4 checkpoint, lib/checkpoint.js): the task ids the question waits for before the owner sees it.
+ * While any of them is not done (or cancelled), the question is hidden: not on "Waiting on you", not in `decide`, and
+ * resolve refuses it unless asked to answer early. A list of 1 to AFTER_MAX task ids.
+ */
+const AFTER_MAX = 20;
+const AFTER_ID = /^[A-Za-z0-9ÆØÅæøå][A-Za-z0-9ÆØÅæøå._-]{0,59}$/;
+/** The errors for an `after` value: a list of 1 to AFTER_MAX task ids, no two the same. */
+function afterError(list) {
+  const bad = [`after must be a list of 1-${AFTER_MAX} task ids (the tasks the question waits for)`];
+  if (!Array.isArray(list) || !list.length || list.length > AFTER_MAX) return bad;
+  if (list.some((x) => typeof x !== 'string' || !AFTER_ID.test(x))) return bad;
+  if (new Set(list).size !== list.length) return ['after names the same task twice'];
+  return [];
+}
 const QUESTION_MAX_TEXT = 4000;
 /** The limits for `choices`: 2-4 options, each at most 60 characters (a button label, not an essay). */
 const CHOICES_MIN = 2;
@@ -217,6 +234,7 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
         f.push(`${k} must be text (at most ${QUESTION_MAX_TEXT} characters)`);
     }
     if (s.choices != null) f.push(...choicesError(s.choices));
+    if (s.after != null) f.push(...afterError(s.after));
     if (f.length) {
       error.push(`${id}: ${f.join('; ')}`);
       continue;
@@ -228,6 +246,8 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
     }
     const choices = s.choices !== undefined ? s.choices : previous.choices;
     if (Array.isArray(choices) && choices.length) fresh.choices = choices.map((c) => String(c).trim());
+    const after = s.after !== undefined ? s.after : previous.after;
+    if (Array.isArray(after) && after.length) fresh.after = [...after];
     fresh.added_at = previous.added_at ?? now;
     newOnes[id] = fresh;
   }
@@ -244,12 +264,23 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
  * the choice's text, with `answer` as a note when given (choiceAnswer).
  * @returns {{ resolved: string[], error: string[], answer: string|null }} `answer` = the answer that was stored
  */
-function resolve(queue, ids, { answer = null, choice = null, by = null, now = new Date().toISOString() } = {}) {
+function resolve(queue, ids, { answer = null, choice = null, by = null, early = false, now = new Date().toISOString() } = {}) {
   const list = [...new Set(ids ?? [])];
   const error = list
     .filter((id) => !validQuestionId(id))
     .map((id) => `invalid question id ${JSON.stringify(id)}`);
   if (!list.length) error.push('resolve requires at least one question id');
+  // A checkpoint (PG-4, `after`) is answered once its stage is done: before that the owner has not seen the result it
+  // asks about. `early` (resolve --early) answers it anyway.
+  if (!early)
+    for (const id of list) {
+      const pending = questionHidden(queue, id) ? questionPending(queue, id) : [];
+      if (pending.length)
+        error.push(
+          `${id} opens when ${pending.join(', ')} ${pending.length === 1 ? 'is' : 'are'} done (its stage); answer it then, ` +
+            'or now with --early',
+        );
+    }
   let s = answer == null ? null : String(answer).trim();
   if (choice != null) {
     // A choice belongs to one question: picking "2" for several at once would be a guess.
@@ -331,6 +362,9 @@ function questionOverview(queue) {
         resolved: resolved.has(sp),
         answer: queue.resolutions?.[sp]?.answer ?? null,
         tasks: waiting.get(sp) ?? [],
+        // PG-4: a checkpoint waiting for its stage is not shown to the owner yet; the tasks it waits for.
+        hidden: questionHidden(queue, sp),
+        opens_after: questionPending(queue, sp),
       };
     })
     .sort(
@@ -339,6 +373,32 @@ function questionOverview(queue) {
         y.tasks.length - x.tasks.length ||
         x.sp.localeCompare(y.sp),
     );
+}
+
+/** A stage task counts as finished when done or cancelled, or when it is no longer in the list (archived). */
+const FINISHED = new Set(['done', 'cancelled']);
+
+/**
+ * The tasks in a question's `after` (PG-4) that are not finished yet, in the order given. Empty for a question without
+ * `after`.
+ */
+function questionPending(queue, sp) {
+  const q = Object.hasOwn(queue?.question ?? {}, sp) ? queue.question[sp] : null;
+  if (!Array.isArray(q?.after) || !q.after.length) return [];
+  const perId = new Map((queue?.tasks ?? []).map((o) => [o.id, o]));
+  return q.after.filter((id) => {
+    const o = perId.get(id);
+    return o != null && !FINISHED.has(o.status);
+  });
+}
+
+/**
+ * Is the question hidden from the owner (PG-4)? Only an unresolved question with `after`, while one of those tasks is
+ * still open: "Waiting on you", `decide` and the open-question lists leave it out until the stage is done.
+ */
+function questionHidden(queue, sp) {
+  if ((queue?.resolved ?? []).includes(sp)) return false;
+  return questionPending(queue, sp).length > 0;
 }
 
 /** The ids a task waits on that have no text in `question` (add warns about them). */
@@ -527,6 +587,9 @@ module.exports = {
   markLogged,
   questionOverview,
   questionWithoutText,
+  questionPending,
+  questionHidden,
+  AFTER_MAX,
   QUESTION_ID_PATTERN,
   questionRegistered,
   waitingOnError,

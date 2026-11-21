@@ -65,6 +65,7 @@ undo.
 | `finding list [--all]` | The findings nobody has triaged yet (`--all`: every one) |
 | `plan edit <id> --skip-decision "<reason>"` | Record that a large plan skips its decision section (see Decide before you build) |
 | `plan shape --tasks <n> [--zones D-0001,…]` | The shape-first question for a request of n tasks, or "no question" (read-only) |
+| `plan checkpoint [--plan <id>] [--smallest] [--stage a,b] [--success "…"] [--json]` | The staging offer and the checkpoint question (see Staged queueing; read-only) |
 
 ## Decide before you build
 
@@ -84,6 +85,20 @@ A light gate that asks WHETHER and HOW MUCH before a large build. None of it sto
   menu) on such a plan without a complete section prints one WARNING naming what is missing. `block` refuses the edit
   (off by default: for a solo owner a block they lift alone becomes a self-stamp); `off` says nothing. A skip recorded
   with `--skip-decision "<reason>"` lets it through in every mode and stays visible on the plan.
+- **Large batch line at add** (`add.largeBatchWarn` `5`). An `add` of 5 or more tasks with no plan entry and no
+  shaping answer, or of fewer whose estimate is over a week at the pace of the last 28 days, prints one WARNING line
+  with the estimate in hours. Nothing is refused; `0` turns the line off.
+
+### Staged queueing
+
+`plans.checkpoint` `offer`. For a large plan (L or XL, or in a zone), and for "the smallest version first",
+`/add-to-queue` queues stage 1 now and the rest waiting on one question, `CP-<plan>` (or `CP-<first task>` without a
+plan): "Stage 1 is done. Success measure: … Continue, adjust or stop?". The question lists stage 1 in `after` and stays
+out of the inbox until those tasks are done or cancelled; `resolve` refuses it earlier unless `--early`. Continue lets
+the rest start, Adjust parks the rest for a mission rewrite, Stop parks them (cancelling stays your call). The board
+shows "Waiting on checkpoint" on those cards. `offer` asks before staging, `always` stages without asking, `off` queues
+everything at once (the smallest version then registers the rest as a plan entry, as before). `plan checkpoint` prints
+the offer and the question.
 
 ## Findings
 

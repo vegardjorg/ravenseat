@@ -26,6 +26,8 @@ const CAT = require('./lib/catalog.js');
 
 // The intake triage's owner questions (close, keep, rewrite) are acted on in resolve.
 const T = require('./lib/queueTriage.js');
+// The checkpoint questions of staged plans (PG-4): Adjust and Stop park the rest.
+const CP = require('./lib/checkpoint.js');
 // A QA deviation is a defect after merge: a row in the finding log (lib/findingSources.js).
 const FSRC = require('./lib/findingSources.js');
 
@@ -35,7 +37,7 @@ const repeated = (flag) => a.flatMap((x, i) => (x === flag ? [a[i + 1] ?? ''] : 
 /** `ravenseat resolve` (the usage is at the top of queue.mjs). */
 export function cmdResolve() {
   const sp = positional(1, ['--answer', '--by', '--choice']);
-  if (!sp.length) die('resolve <question> [...] [--answer "..."] [--choice <n|text>] [--keep] [--by "..."]');
+  if (!sp.length) die('resolve <question> [...] [--answer "..."] [--choice <n|text>] [--keep] [--early] [--by "..."]');
   // --keep: the answer also becomes a proposed design choice in the main tree's catalog. Checked before anything is
   // resolved, so a refusal (setting off, a track worktree) changes nothing.
   const keep = a.includes('--keep');
@@ -49,14 +51,18 @@ export function cmdResolve() {
   const choice = a.includes('--choice') ? (val('--choice') ?? '') : null;
   const r = edit((queue) => {
     const now = new Date().toISOString();
-    const s = L.resolve(queue, sp, { answer, choice, by: val('--by') ?? null, now });
+    // --early: answer a checkpoint (PG-4) before its stage is done; without it resolve refuses one that is still hidden.
+    const s = L.resolve(queue, sp, { answer, choice, by: val('--by') ?? null, early: a.includes('--early'), now });
     if (s.error.length) die(`Nothing resolved:\n  ${s.error.join('\n  ')}`);
     // The answer (with a choice: the choice's text and the note) is written into the mission of every task that waits
     // on the question (idempotent).
     const added = L.ownerAnswerBonus(queue, sp, s.answer, now);
     // An answer to an intake triage question (lib/queueTriage.js): close, keep or rewrite, as the owner chose.
     const triage = s.answer == null ? [] : sp.map((q) => T.ownerChoice(queue, q, s.answer, { by: val('--by') ?? null, now })).filter(Boolean);
-    return { stored: s.answer, added, triage };
+    // An answer to a checkpoint (lib/checkpoint.js): Continue lets the rest start, Adjust and Stop park it.
+    const checkpoint =
+      s.answer == null ? [] : sp.map((q) => CP.ownerChoice(queue, q, s.answer, { by: val('--by') ?? null, now })).filter(Boolean);
+    return { stored: s.answer, added, triage, checkpoint };
   });
   const added = r.added;
   console.log(
@@ -74,6 +80,17 @@ export function cmdResolve() {
     else if (t.action === 'rewrite')
       console.log(`Triage ${t.id}: parked for a rewrite. Rewrite the mission (ravenseat edit ${t.id} --json '{"mission": "..."}'), then ravenseat continue ${t.id}.`);
     else console.log(`Triage ${t.id}: the answer is not one of the choices; act on it by hand (cancel, edit or continue).`);
+  }
+  for (const c of r.checkpoint) {
+    const list = c.ids.join(', ');
+    if (c.error) console.log(`Checkpoint ${c.sp}: ${c.error}`);
+    else if (!c.ids.length) console.log(`Checkpoint ${c.sp}: no waiting task holds on it.`);
+    else if (c.action === 'continue') console.log(`Checkpoint ${c.sp}: continue; ${list} can start (the next fill).`);
+    else if (c.action === 'adjust')
+      console.log(`Checkpoint ${c.sp}: parked for a rewrite: ${list}. Rewrite each mission (${CLI} edit <id> --json '{"mission": "..."}'), then ${CLI} continue <id>.`);
+    else if (c.action === 'stop')
+      console.log(`Checkpoint ${c.sp}: stopped; ${list} parked. Cancel them (${CLI} set <id> cancelled), or ${CLI} continue <id> to go on after all.`);
+    else console.log(`Checkpoint ${c.sp}: the answer is not Continue, Adjust or Stop, so ${list} can start; park or cancel them by hand if that was not meant.`);
   }
   keepAnswers(sp, { keep, answered: r.stored != null });
 }
@@ -186,9 +203,13 @@ export function cmdQuestion() {
     const rows = L.questionOverview(queue);
     if (!rows.length) console.log('No owner questions in the queue.');
     for (const r of rows) {
+      const waitingText = `${r.tasks.length} ${r.tasks.length === 1 ? 'task waiting' : 'tasks waiting'}`;
+      // A checkpoint whose stage is not done (PG-4) is not shown to the owner yet.
       const status = r.resolved
         ? 'resolved'
-        : `open, ${r.tasks.length} ${r.tasks.length === 1 ? 'task waiting' : 'tasks waiting'}`;
+        : r.hidden
+          ? `checkpoint, opens when ${r.opens_after.join(', ')} ${r.opens_after.length === 1 ? 'is' : 'are'} done; ${waitingText}`
+          : `open, ${waitingText}`;
       console.log(cut(`${r.sp}  [${r.type}; ${status}]`, WIDTH));
       console.log(
         `  ${cut(r.text ?? '(missing text: ravenseat question <id> --text "...")', WIDTH - 2)}`,

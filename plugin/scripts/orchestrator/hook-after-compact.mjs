@@ -190,7 +190,8 @@ async function main() {
   }
 
   const queue = readJson(QUEUE_FILE);
-  const question = queue ? L.questionOverview(queue).filter((r) => !r.resolved) : [];
+  // A checkpoint whose stage is not done yet (PG-4) is not an open question for the owner yet.
+  const question = queue ? L.questionOverview(queue).filter((r) => !r.resolved && !r.hidden) : [];
   const text = KV.afterCompactText({
     show: queueShow(),
     question,

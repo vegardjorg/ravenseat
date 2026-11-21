@@ -1513,6 +1513,21 @@ const SETTINGS = Object.freeze([
     'Setting a large plan to ready without a complete decision section: advisory (default) prints one warning naming ' +
     'what is missing; block refuses the edit; off says nothing. plan edit <id> --skip-decision "<reason>" records a ' +
     'skip, shown on the plan, and lets it through.', { choices: ['advisory', 'block', 'off'] }),
+  // PG-4 (lib/checkpoint.js). Friction: the rest of a staged plan waits for one owner answer (Continue, Adjust or Stop)
+  // once stage 1 is merged. That stops work, so the default only offers it, as the recommended answer for a gated plan
+  // (L, XL or a zone) and for "smallest version first"; nothing is held without that choice. always stages every gated
+  // plan without asking; off queues it all startable, as before.
+  // The board says "step" only for a focus step (queueFocusB17.test.ts), so this text says "first part".
+  row('plans.checkpoint', 'plans', 'choice', 'Queue large plans in parts',
+    'A large plan (L, XL or a sensitive zone), or "smallest version first": /add-to-queue offers to queue the first ' +
+    'part and the rest waiting on one checkpoint question, which opens when the first part is done (Continue, Adjust ' +
+    'or Stop). offer (default): offered, you choose per plan. always: without asking. off: all tasks start as usual.',
+    { choices: ['offer', 'always', 'off'] }),
+  // PG-8 (lib/planGate.js largeBatchLine). Friction: one WARNING line at add, never a stop. Default 5: the same size the
+  // shape-first question starts at (shape.threshold), so a batch that skipped /add-to-queue still hears it once.
+  row('add.largeBatchWarn', 'plans', 'integer', 'Warn about a large unplanned batch',
+    'ravenseat add with at least this many tasks that have no plan entry (or fewer, whose estimate is over a week at ' +
+    'the measured pace) prints one warning to consider /plans first. Nothing is refused. 0: no warning.'),
   row('focus.continueWhenEmpty', 'plans', 'onoff', 'Continue when the focus ends',
     'Off: the queue pauses and asks you when a focus has ended. On: it continues with the regular queue.',
     { fullWhy: 'lite has no focus steps to end' }),

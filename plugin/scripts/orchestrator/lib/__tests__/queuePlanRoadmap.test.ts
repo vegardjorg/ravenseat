@@ -400,8 +400,12 @@ describe('the settings: plans.* in queue.config.json (queueConfig.plansView)', (
       // PG-1/PG-3: the decision section expected for large plans, an advisory check at ready
       decisionNote: true,
       readyCheck: 'advisory',
+      // PG-4: staged queueing offered for gated plans, never applied without a choice
+      checkpoint: 'offer',
     });
     expect(KK.plansView({})).toEqual(KK.STANDARD.plans);
+    expect(KK.plansView({ plans: { checkpoint: 'always' } }).checkpoint).toBe('always');
+    expect(KK.plansView({ plans: { checkpoint: 'maybe' } }).checkpoint).toBe('offer');
   });
 
   it('a valid value is kept, an unknown one falls back to the default', () => {
@@ -417,6 +421,7 @@ describe('the settings: plans.* in queue.config.json (queueConfig.plansView)', (
       inboxAutoApply: false,
       decisionNote: true,
       readyCheck: 'advisory',
+      checkpoint: 'offer',
     });
     expect(
       KK.plansView({ plans: { startView: 'x', roadmapLayout: 'tiles', roadmapFoldAfter: -3, leadFromDocument: 'yes' } }),

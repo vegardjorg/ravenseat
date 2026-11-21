@@ -89,7 +89,8 @@ const {
   MAX_OPEN_PER_TRACK, asTrackProposal, trackLimitError,
   isAgentSource, statusAtAdd, approve, QUESTION_TYPES, validQuestionId, setQuestion, resolve, unlogged, markLogged,
   choicesError, choiceLines, isRecommendedChoice, pickChoice,
-  questionOverview, questionWithoutText, QUESTION_ID_PATTERN, questionRegistered, waitingOnError, resolveWaits,
+  questionOverview, questionWithoutText, questionPending, questionHidden, QUESTION_ID_PATTERN, questionRegistered,
+  waitingOnError, resolveWaits,
   resolveWaitsLines, ownerAnswerBonus, answerBlock, migrBlockText,
 } = require('./logic/questions.js');
 const {
@@ -351,6 +352,8 @@ module.exports = {
   markLogged,
   questionOverview,
   questionWithoutText,
+  questionPending,
+  questionHidden,
   answerBlock,
   // Owner answers cannot be lost
   QUESTION_ID_PATTERN,

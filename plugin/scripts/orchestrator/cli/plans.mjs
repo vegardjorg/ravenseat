@@ -2,7 +2,8 @@
 // cli/plans.mjs: the plan command: the plan register (plans.json), see docs/plan-register.md.
 //
 // planCommand dispatches the plan sub-commands (show, get, new, edit, prioritize, prioritize-many, combine, drop,
-// verify, undo, capture, inbox, propose, accept, decline, merge, rules, check, modules, backup, active and doc); the rules are in lib/queuePlan.js.
+// verify, undo, capture, inbox, propose, accept, decline, merge, rules, check, modules, backup, active, doc, shape and
+// checkpoint); the rules are in lib/queuePlan.js (the plan gate in lib/planGate.js and lib/checkpoint.js).
 //
 // Why a module: queue.mjs was one file of about 6,300 lines. It is now a thin entry point (the usage comment and the
 // dispatch on the command word) plus the modules in cli/. The code was moved as it was: same output, exit codes and files.
@@ -71,6 +72,44 @@ function planShape(json) {
   }
   console.log(q.mode === 'always-shape' ? `Shape it first (shape.nudge always-shape): ${q.why}.` : q.text);
   q.choices.forEach((c, i) => console.log(`  ${i + 1}. ${c.label}${c.record ? ` (tasks get "shaped": "${c.record}")` : ''}`));
+}
+
+/**
+ * `plan checkpoint [--plan <id>] [--smallest] [--stage <id,id>] [--success "<measure>"] [--json]` (PG-4,
+ * lib/checkpoint.js): whether /add-to-queue should stage the work (a gated plan, or the "smallest version first"
+ * answer), and with --stage the CP-<plan> question to put under "question" in the add file. Read-only.
+ */
+function planCheckpoint(json) {
+  const CP = require('./lib/checkpoint.js');
+  const { mode } = CP.checkpointSetup(require('./lib/queueConfig.js').config());
+  const planId = val('--plan') ?? null;
+  let entry = null;
+  let zones = [];
+  if (planId) {
+    entry = (readPlans().entries ?? []).find((p) => p.id === planId) ?? null;
+    if (!entry) die(`plan checkpoint: unknown plan entry ${planId} (ravenseat plan show)`);
+    zones = decisionGateNow().zonesOf(entry, readQueueForPlan().tasks ?? []);
+  }
+  const offer = CP.stagingOffer({ mode, entry, zones, smallest: a.includes('--smallest') });
+  const stage = String(val('--stage') ?? '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const cp = offer.offer && stage.length ? CP.checkpointQuestion({ plan: planId, stage, success: val('--success') ?? null }) : null;
+  if (cp?.error.length) die(`plan checkpoint: ${cp.error.join('; ')}`);
+  if (json) {
+    console.log(JSON.stringify({ ok: true, mode, offer, checkpoint: cp ? { id: cp.id, question: cp.question } : null }));
+    return;
+  }
+  console.log(offer.text);
+  offer.choices.forEach((c, i) => console.log(`  ${i + 1}. ${c.label}`));
+  if (!offer.offer) return;
+  if (!cp) {
+    console.log('Then: ravenseat plan checkpoint --stage <stage-1 ids> [--plan <id>] [--success "..."] --json gives the question.');
+    return;
+  }
+  console.log(`Register under "question" in the add file, and put "${cp.id}" in waiting_on of every task after stage 1:`);
+  console.log(JSON.stringify({ [cp.id]: cp.question }, null, 2));
 }
 
 export function planCommand() {
@@ -402,9 +441,11 @@ export function planCommand() {
     planDoc(json);
   } else if (under === 'shape') {
     planShape(json);
+  } else if (under === 'checkpoint') {
+    planCheckpoint(json);
   } else {
     die(
-      'Use: ravenseat plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|capture|inbox|propose|accept|decline|merge|active|rules|check|modules|backup|doc|shape> ...  (see the top of the file)',
+      'Use: ravenseat plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|capture|inbox|propose|accept|decline|merge|active|rules|check|modules|backup|doc|shape|checkpoint> ...  (see the top of the file)',
       under ? 1 : 0,
     );
   }

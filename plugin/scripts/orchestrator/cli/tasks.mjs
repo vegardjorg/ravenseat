@@ -465,6 +465,9 @@ export function cmdAdd() {
   // "Not building" (roadmap 0f, notBuilding.match): a new task that reads like an entry the owner chose not to build
   // gets one INFO line. Advice only: the task is added either way.
   const notBuilding = notBuildingLines(newOnes.map((n) => ({ id: n.id, text: [n.title, n.description].filter(Boolean).join(' ') })));
+  // A large batch with no plan entry (PG-8, lib/planGate.js, add.largeBatchWarn): one WARNING line that backs up the
+  // shape-first question when /add-to-queue was not used. Never for a track's proposals; never stops the add.
+  const largeBatch = track ? null : largeBatchWarning(newOnes);
   // --answer-json (the board and scripts): one JSON line instead of the text, with the link problems in it.
   if (a.includes('--answer-json')) {
     console.log(
@@ -478,6 +481,7 @@ export function cmdAdd() {
         // Only when a description is over the soft limit, for the same reason.
         ...(descriptionWarning.length ? { descriptionWarning } : {}),
         ...(notBuilding.length ? { notBuilding } : {}),
+        ...(largeBatch ? { largeBatch } : {}),
       }),
     );
     return;
@@ -519,6 +523,7 @@ export function cmdAdd() {
     for (const u of TF.unknownFields(n, Object.keys(WRONG_NAMES))) console.log(TF.unknownFieldWarning(n.id, u));
   for (const line of descriptionWarning) console.log(line);
   for (const line of notBuilding) console.log(line);
+  if (largeBatch) console.log(largeBatch);
   // Owning a protected path is what lets a change there past the merge guard, so it should not happen unnoticed.
   const protectedPaths = autoAcceptContext(read()).protectedPaths;
   for (const n of newOnes) {
@@ -559,6 +564,23 @@ export function cmdAdd() {
       `WARNING: question without text (shown without text in "Waiting on you"): ${added.withoutText.join(', ')}. ` +
         'Add them in "question" in the add file, or: ravenseat question <id> --text "..." --type <type>.',
     );
+}
+
+/**
+ * The PG-8 line for the tasks just added, or null (lib/planGate.js largeBatchLine). The pace is the estimate done per
+ * week in the last 28 days, when at least five tasks were done there. A failure costs the line, never the add.
+ */
+function largeBatchWarning(added) {
+  try {
+    const G = require('./lib/planGate.js');
+    const { min } = G.largeBatchSetup(CONFIG);
+    if (!(min > 0)) return null;
+    const pace = G.weekPace(read().tasks ?? [], { estimate: L.estimate });
+    return G.largeBatchLine(added, { min, pace, estimate: L.estimate });
+  } catch {
+    // error-ignored: the warning is advice; the tasks are already added
+    return null;
+  }
 }
 
 /** `ravenseat classify` (the usage is at the top of queue.mjs). */

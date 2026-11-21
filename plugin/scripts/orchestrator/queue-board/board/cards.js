@@ -175,12 +175,18 @@ function footerFor(k, col) {
   } else if (col === 'queue') {
     if (k.ready) footer.push(el('span', { class: 'badge ready-badge', text: 'Ready now' }));
     else {
+      // PG-4: the rest of a staged plan waits on one checkpoint question. The badge says so in words; the question's
+      // own blocker line ("waiting on answer: CP-…") is then left out, the other blockers stay.
+      const cp = k.checkpoint;
+      const others = cp ? k.blockers.filter((b) => !String(b).endsWith(`: ${cp.sp}`)) : k.blockers;
+      if (cp) footer.push(checkpointBadge(cp));
       // B21: an outside-focus card shows its reason without the CLI hint, and "Add to focus" right after it.
-      const h = boardReason(k.blockers[0] ?? '');
-      const more = k.blockers.length > 1 ? ` (+${k.blockers.length - 1})` : '';
-      footer.push(
-        el('span', { class: 'blocker', text: h + more, title: k.blockers.map(boardReason).join('\n') }),
-      );
+      const h = boardReason(others[0] ?? '');
+      const more = others.length > 1 ? ` (+${others.length - 1})` : '';
+      if (others.length)
+        footer.push(
+          el('span', { class: 'blocker', text: h + more, title: others.map(boardReason).join('\n') }),
+        );
       if (focusCover(k).kind === 'outside')
         footer.push(
           el('button', {
@@ -283,6 +289,20 @@ function footerFor(k, col) {
     if (k.done) footer.push(el('span', { text: `done ${age(k.done)} ago` }));
   }
   return footer;
+}
+
+/**
+ * "Waiting on checkpoint" (PG-4, lib/checkpoint.js): a neutral badge, since nothing is wrong. The tooltip says whether
+ * the question is open (answer it under Waiting on you) or opens when the named stage tasks are done.
+ */
+function checkpointText(cp) {
+  if (cp.open) return `${cp.sp} is open: answer it under Waiting on you (Continue, Adjust or Stop).`;
+  const n = cp.pending.length;
+  return `${cp.sp} opens when ${cp.pending.join(', ')} ${n === 1 ? 'is' : 'are'} done (the first part).`;
+}
+
+function checkpointBadge(cp) {
+  return el('span', { class: 'badge checkpoint-badge', text: 'Waiting on checkpoint', title: checkpointText(cp) });
 }
 
 /**
