@@ -32,6 +32,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   Decisions lists them by kind as Project catalog.** Design entries reach missions and reviewer-design, and accepted
   stack entries reach the Checks tab and the dependency notes (`catalog.stackFacts`, on).
 ### Changed
+- **Faster commands on Windows: one `ravenseat merge` starts about a quarter fewer git processes (66 to 48).**
 - **CI runs the Windows suite in 3 shards with a check that every test file ran, and Windows node 20 weekly.** The
   quick gate can run only the changed tests (`node scripts/test-changed.mjs --gate`, with `QUEUE_GATE_BASE`).
 - **New screenshots of every board screen in the docs; a board picture and a pain-points table open the README.**

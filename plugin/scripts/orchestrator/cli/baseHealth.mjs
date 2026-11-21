@@ -439,8 +439,10 @@ export function guardBeforeMerge({ id, force, folder }) {
   if (!tip) return null; // no base branch: the merge itself says so
   let state = readHealth();
   if (BH.verdict(state, tip) === 'unknown') {
-    const head = git(['rev-parse', '--abbrev-ref', 'HEAD']);
-    const headSha = git(['rev-parse', 'HEAD']);
+    // HEAD's sha and branch in one git call (two lines); both null when git cannot say (no commit fails both).
+    const [shaLine, branchLine] = (git(['rev-parse', 'HEAD', '--abbrev-ref', 'HEAD']) ?? '').split(/\r?\n/).map((l) => l.trim());
+    const head = branchLine || null;
+    const headSha = shaLine || null;
     if (head !== BASE || headSha !== tip)
       die(
         `The base gate cannot check ${BASE}: the main checkout ${GIT_ROOT} is on ${head ?? 'an unknown branch'}` +

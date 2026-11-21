@@ -297,6 +297,7 @@ module.exports = {
   acquire,
   release,
   heldMessage,
+  IN_PROGRESS,
   gitInProgress,
   inProgressMessage,
   stateFile,
