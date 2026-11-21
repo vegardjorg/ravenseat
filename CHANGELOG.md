@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **A large plan can be queued in stages: stage 1 now, the rest waiting on one checkpoint question that opens when
+  stage 1 is done; a large unplanned batch at `add` gets one warning line.** `plans.checkpoint` `offer`, `add.largeBatchWarn` `5`.
 - **A large request is offered shaping first, a large plan gets a one-page decision section, and setting it to ready
   without one warns.** `shape.nudge` `offer`, `plans.decisionNote` on, `plans.readyCheck` `advisory`.
 - **`add` and `start` warn about paths the mission names outside the task's files, a K/D/D+ task with no files and a

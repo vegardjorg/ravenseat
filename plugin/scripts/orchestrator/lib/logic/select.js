@@ -15,7 +15,7 @@ const { cfg, estimate, hasMigr, isBatched, inBatchQueue } = require('./base.js')
 const { projectFor } = require('./projects.js');
 const { conflict, blockers } = require('./conflicts.js');
 const { blockersWithPause, parkedNow, rankingContext, ranking, compareRanking } = require('./ranking.js');
-const { migrBlockText } = require('./questions.js');
+const { migrBlockText, questionHidden } = require('./questions.js');
 const { uncommittedCollision } = require('./commits.js');
 const { spaceUse, startGuard, loadSlotsFor } = require('./guards.js');
 const { focusStatus } = require('./focus.js');
@@ -300,11 +300,12 @@ function state(
       };
     });
   const parked = waiting.filter((o) => parkedNow(o, now)).length;
-  // The owner question that unlocks the most tasks first.
+  // The owner question that unlocks the most tasks first. A checkpoint whose stage is not done (PG-4) is not asked yet.
   const question = new Map();
   for (const o of waiting) {
     for (const sp of o.waiting_on ?? []) {
-      if (!(queue.resolved ?? []).includes(sp)) question.set(sp, (question.get(sp) ?? 0) + 1);
+      if (!(queue.resolved ?? []).includes(sp) && !questionHidden(queue, sp))
+        question.set(sp, (question.get(sp) ?? 0) + 1);
     }
   }
   return {

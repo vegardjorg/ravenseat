@@ -461,6 +461,11 @@ const STANDARD = Object.freeze({
   //   readyCheck        PG-3: setting such a plan to ready without a complete section. advisory (default): one
   //                     WARNING naming what is missing. block: the edit is refused (off by default, it stops work).
   //                     off: nothing. A skip with a reason (plan edit --skip-decision) lets it through in every mode.
+  //   checkpoint        PG-4 (lib/checkpoint.js): staged queueing. A gated plan (L, XL or a zone), or the "smallest
+  //                     version first" answer, queues stage 1 and the rest waiting on one question CP-<plan> that
+  //                     opens when stage 1 is done. offer (default): /add-to-queue offers it as the recommended answer
+  //                     for a gated plan; always: stages a gated plan without asking; off: queues it all, as before.
+  //                     The rest waits for one owner answer, which stops work, so it is never applied without a choice.
   plans: {
     startView: 'roadmap',
     roadmapLayout: 'auto',
@@ -471,7 +476,12 @@ const STANDARD = Object.freeze({
     inboxAutoApply: false,
     decisionNote: true,
     readyCheck: 'advisory',
+    checkpoint: 'offer',
   },
+  // The large batch line at add (PG-8, lib/planGate.js largeBatchLine): `ravenseat add` with at least largeBatchWarn
+  // tasks that have no plan entry (or fewer, whose estimate is over a week at the measured pace) prints one WARNING to
+  // consider /plans first. It never stops the add; 0 turns it off.
+  add: { largeBatchWarn: 5 },
   // The shape-first question (PG-2, lib/planGate.js): when a request with no plan entry splits into more than
   // `threshold` tasks, or meets an accepted sensitive zone, /add-to-queue asks once: shape it first (recommended), the
   // smallest version first, or all now. nudge: offer (default: the question, never a stop), always-shape (shape
@@ -1051,7 +1061,8 @@ const ROADMAP_FOLD_MAX = 500;
  * its default, so a hand-edited file never breaks the board. The board gets this object with /api/plans.
  * @param {object} [cfg] the configuration (default: config())
  * @returns {{ startView: string, roadmapLayout: string, roadmapFoldAfter: number, leadFromDocument: boolean,
- *   searchDocuments: boolean, inboxTriage: string, inboxAutoApply: boolean, decisionNote: boolean, readyCheck: string }}
+ *   searchDocuments: boolean, inboxTriage: string, inboxAutoApply: boolean, decisionNote: boolean, readyCheck: string,
+ *   checkpoint: string }}
  */
 function plansView(cfg = config()) {
   const own = isObject(cfg?.plans) ? cfg.plans : {};
@@ -1070,6 +1081,8 @@ function plansView(cfg = config()) {
     // PG-1/PG-3 (lib/planGate.js gateSetup has the same fallbacks): part of the board's cache key, so a change shows
     decisionNote: typeof own.decisionNote === 'boolean' ? own.decisionNote : std.decisionNote,
     readyCheck: ['off', 'advisory', 'block'].includes(own.readyCheck) ? own.readyCheck : std.readyCheck,
+    // PG-4 (lib/checkpoint.js checkpointSetup has the same fallback)
+    checkpoint: ['off', 'offer', 'always'].includes(own.checkpoint) ? own.checkpoint : std.checkpoint,
   };
 }
 

@@ -73,7 +73,8 @@ function openQuestions(queue) {
     for (const sp of o.waiting_on ?? []) if (!resolved.has(sp)) note(sp, o.added_at);
   }
   for (const [sp, q] of Object.entries(queue?.question ?? {})) if (!resolved.has(sp)) note(sp, q?.added_at);
-  return [...since.entries()].map(([id, ms]) => ({ id, since: ms }));
+  // A checkpoint whose stage is not done yet (PG-4) is not waiting on the owner yet.
+  return [...since.entries()].filter(([id]) => !L.questionHidden(queue, id)).map(([id, ms]) => ({ id, since: ms }));
 }
 
 /**

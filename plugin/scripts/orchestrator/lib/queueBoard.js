@@ -291,6 +291,17 @@ function buildBoard(
     };
   };
 
+  /** { checkpoint: { sp, open, pending } } for the first unresolved checkpoint the task waits on, or {}. */
+  const resolvedIds = new Set(queue.resolved ?? []);
+  const checkpointOf = (o) => {
+    const sp = (o.waiting_on ?? []).find(
+      (x) => !resolvedIds.has(x) && Array.isArray(queue.question?.[x]?.after) && queue.question[x].after.length,
+    );
+    if (!sp) return {};
+    const pending = L.questionPending(queue, sp);
+    return { checkpoint: { sp, open: pending.length === 0, pending } };
+  };
+
   const summary = (o) => {
     const pid = L.projectFor(o, register);
     const waiting = o.status === 'waiting';
@@ -358,6 +369,9 @@ function buildBoard(
       // The plan review before the start (lib/planReview.js) and the riskiest assumption (DR-2); only when set.
       ...(o.plan_review ? { plan_review: PR.summary(o) } : {}),
       ...(typeof o.risk_first === 'string' && o.risk_first.trim() ? { risk_first: o.risk_first.trim() } : {}),
+      // PG-4: a waiting task held by a checkpoint question (one with `after`): the "Waiting on checkpoint" badge, with
+      // whether the question is open yet and the stage tasks it still waits for. Only when there is one.
+      ...(waiting ? checkpointOf(o) : {}),
       // The wiring spec's open items (lib/wiringItems.js), read-only; only when there are some. Done waits for them.
       ...(WI.openItems(o).length ? { wiring_open: WI.openItems(o).map(WI.itemLine) } : {}),
       remarks: remarksFor(o),
@@ -642,16 +656,22 @@ function inbox(
   const fk = context ?? L.rankingContext(queue);
   const countStep = fk.applies ? (queue.focus?.order?.length ?? 0) : 0;
   const direct = new Map();
+  // A checkpoint whose stage is not done yet (PG-4, lib/checkpoint.js) is not waiting on the owner yet: left out.
+  const hidden = new Map();
+  const isHidden = (sp) => {
+    if (!hidden.has(sp)) hidden.set(sp, L.questionHidden(queue, sp));
+    return hidden.get(sp);
+  };
   for (const o of tasks) {
     if (o.status !== 'waiting') continue;
     for (const sp of o.waiting_on ?? []) {
-      if (resolved.has(sp)) continue;
+      if (resolved.has(sp) || isHidden(sp)) continue;
       if (!direct.has(sp)) direct.set(sp, new Set());
       direct.get(sp).add(o.id);
     }
   }
   for (const sp of Object.keys(queue.question ?? {}))
-    if (!resolved.has(sp) && !direct.has(sp)) direct.set(sp, new Set());
+    if (!resolved.has(sp) && !direct.has(sp) && !isHidden(sp)) direct.set(sp, new Set());
   const question = [...direct.entries()]
     .map(([sp, ids]) => {
       const all = new Set(ids);

@@ -25,6 +25,10 @@
 // plans.decisionNote (default on), plans.readyCheck (off / advisory / block, default advisory). gateSetup reads them
 // each with its own fallback, so a hand-edited config never breaks a command.
 //
+//   PG-8  largeBatchLine  `ravenseat add` with add.largeBatchWarn (default 5) or more tasks without a plan entry, or an
+//                         estimate over a week at the measured pace, prints one WARNING. Never stops; 0 is off.
+//   (PG-4, staged queueing with a checkpoint question, is lib/checkpoint.js.)
+//
 // Pure: no I/O. The caller passes readDoc (the text of a source path, or null) and the zone hits. Used by
 // lib/queuePlan.js (editEntry's ctx.decisionGate, the decision_skip shape) and cli/plans.mjs (plan edit, plan get,
 // plan shape). Tested in lib/__tests__/planGate.test.ts.
@@ -279,7 +283,73 @@ function planZones(entry, tasks, zonesFor) {
   return [...ids].sort();
 }
 
+// ---- PG-8: the large unplanned batch line at add ------------------------------------------------------------------
+//
+// `ravenseat add` with at least `add.largeBatchWarn` tasks (default 5) that have no plan entry, or fewer whose estimate
+// sum is over a week at the measured pace, prints ONE warning: "large batch without a plan entry; consider /plans
+// first". It backs up PG-2 when /add-to-queue was not used. Tasks with `shaped` set already answered the shape-first
+// question, so they do not count. It never stops the add. 0 turns it off.
+
+const LARGE_BATCH = 5;
+/** The pace window: the estimate of the tasks done in the last 28 days, per week. */
+const PACE_DAYS = 28;
+/** Fewer done tasks than this in the window: the pace is not known (queueForecast.MIN_DONE). */
+const PACE_MIN_DONE = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** add.largeBatchWarn from the configuration: a whole number, 0 or more (0 = off); anything else falls back to 5. */
+function largeBatchSetup(cfg = {}) {
+  const v = isObject(cfg?.add) ? cfg.add.largeBatchWarn : undefined;
+  return { min: Number.isInteger(v) && v >= 0 ? v : LARGE_BATCH };
+}
+
+/**
+ * The estimate minutes done per week over the last 28 days, or null when fewer than 5 tasks were done in that window.
+ * @param {object[]} tasks the queue tasks
+ * @param {{ now?: number, estimate: (o: object) => number }} o estimate: queueLogic.estimate
+ */
+function weekPace(tasks, { now = Date.now(), estimate } = {}) {
+  const from = now - PACE_DAYS * DAY_MS;
+  const done = (tasks ?? []).filter((o) => {
+    const t = o?.status === 'done' && o.done ? Date.parse(o.done) : NaN;
+    return Number.isFinite(t) && t >= from && t <= now && o.status !== 'external';
+  });
+  if (done.length < PACE_MIN_DONE) return null;
+  return done.reduce((s, o) => s + Number(estimate(o) || 0), 0) / (PACE_DAYS / 7);
+}
+
+/** "about 7 h" or "about 2 days" (8-hour days are not assumed: hours up to 48). */
+function hoursText(min) {
+  const h = Math.round(min / 60);
+  return h <= 48 ? `about ${h} h` : `about ${Math.round(h / 24)} days of work`;
+}
+
+/**
+ * The one WARNING line for a large batch with no plan entry, or null.
+ * @param {object[]} added the tasks being added
+ * @param {{ min: number, pace?: number|null, estimate: (o: object) => number }} o min: add.largeBatchWarn; pace: the
+ *   minutes done per week (weekPace), null when not known
+ */
+function largeBatchLine(added, { min = LARGE_BATCH, pace = null, estimate } = {}) {
+  if (!(min > 0)) return null;
+  const loose = (added ?? []).filter((o) => o && !o.plan && o.shaped == null);
+  if (!loose.length) return null;
+  const sum = loose.reduce((s, o) => s + Number(estimate(o) || 0), 0);
+  const many = loose.length >= min;
+  const long = loose.length >= 2 && Number.isFinite(pace) && pace > 0 && sum > pace;
+  if (!many && !long) return null;
+  const what = `${loose.length} tasks, ${hoursText(sum)}${long ? ', over a week at the current pace' : ''}`;
+  return (
+    `WARNING: large batch without a plan entry (${what}); consider /plans first, or link the tasks with --plan <id>. ` +
+    'Nothing was refused (add.largeBatchWarn).'
+  );
+}
+
 module.exports = {
+  LARGE_BATCH,
+  largeBatchSetup,
+  weekPace,
+  largeBatchLine,
   NUDGES,
   READY_CHECKS,
   SHAPED,

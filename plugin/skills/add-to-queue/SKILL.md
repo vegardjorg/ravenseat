@@ -25,13 +25,22 @@ Before adding, do step 0b when there are more than a few things. Then do step 7.
    (otherwise tasks that must wait get them in `waiting_on`), and that content only found in gitignored notes is lifted
    into the mission (worktree agents cannot see gitignored files). Every task gets `"plan": "<entry-id>"` and `project`
    from the entry. `add` refuses an unknown entry, and the entry becomes `in-queue` by itself.
+   **Staged queueing:** run `ravenseat plan checkpoint --plan <id> --json`. `offer.offer` false: add as usual. With
+   `offer.ask` true, ask the user once: stage it (recommended) or all now. With `always`, stage without asking. To stage: pick
+   stage 1 (1-2 tasks, the riskiest assumption first, `risk_first` set), run
+   `ravenseat plan checkpoint --plan <id> --stage <stage-1 ids> --success "<the plan's success measure>" --json`, put
+   its `checkpoint.question` under its `checkpoint.id` in the add file's `question`, and give every other task
+   `"waiting_on": ["<checkpoint.id>"]`. The question stays hidden until stage 1 is done.
 0b. **Shape first (large requests only).** When the work has no plan entry, count the tasks the split would give and run
    `ravenseat plan shape --tasks <n>` (add `--zones <ids>` for accepted catalog zones the work touches). "No question":
    go on as asked. Otherwise ask the user that ONE question with its three answers, shaping marked recommended:
    - **Shape it first:** ask up to three short questions (who has the problem, what does done look like, what is
      out), write a one-page note (the plugin's `docs/decision-note.md` headings) and register it with `plan new` (step 8).
      Add tasks only when the user says go.
-   - **Smallest version first:** add only stage 1 (1-2 tasks, a thin slice), with `"shaped": "smallest"`; register
+   - **Smallest version first:** stage 1 is a thin slice (1-2 tasks, `risk_first` set), every task with
+     `"shaped": "smallest"`. Run `ravenseat plan checkpoint --smallest --stage <stage-1 ids> --json`; with a
+     `checkpoint`, add the rest now with `"waiting_on": ["<checkpoint.id>"]` and the question in the add file (it
+     opens when stage 1 is done). With `checkpoint: null` (`plans.checkpoint` `off`), add only stage 1 and register
      the rest as a plan entry to queue later.
    - **Build it all now:** add as usual, every task with `"shaped": "skipped"`. Never argue; this is a fine answer.
    `always-shape` in the output: go straight to shaping (the user may still say "all now"). It never stops work.

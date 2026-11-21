@@ -101,6 +101,8 @@
 //                                                                  the question's choices, by number from 1 or by its text;
 //                                                                  the answer stored is the choice's text, plus
 //                                                                  " (note: ...)" when --answer is given; one question only)
+//   resolve ... --early   (answers a checkpoint question, CP-<plan>, before its stage tasks are done; without it resolve
+//                         refuses one that is still hidden. Adjust and Stop park the tasks waiting on it, lib/checkpoint.js)
 //   resolve ... --keep   (with --answer or --choice: also writes the answer as a proposed design choice in the catalog,
 //                         catalog.captureAnswers; never accepted, the owner runs `catalog accept` later)
 //   `waiting_on` takes ONLY registered question ids (letters, digits, ".", "_", "-", at most 40 chars, no
@@ -724,6 +726,9 @@
 //        refused (block)
 //   node scripts/orchestrator/queue.mjs plan shape --tasks <n> [--zones D-0001,...] [--plan <PL-id>] [--json]
 //        (the shape-first question for a request that splits into more than shape.threshold tasks; read-only)
+//   node scripts/orchestrator/queue.mjs plan checkpoint [--plan <PL-id>] [--smallest] [--stage <id,id>] [--success "..."]
+//        [--json]   (PG-4, lib/checkpoint.js: stage a gated plan? With --stage, the CP-<plan> question for the add file:
+//        the rest waits on it, and it stays hidden until the stage tasks are done; read-only)
 //   node scripts/orchestrator/queue.mjs plan prioritize <id…> <now|owner|later|drop> [--category security for-prod important]
 //        [--reason "Rule 3: ..."]   (all or nothing; drop requires --reason)
 //   node scripts/orchestrator/queue.mjs plan prioritize-many --file <json>   ([{ id, priority, category?, reason? }], all
