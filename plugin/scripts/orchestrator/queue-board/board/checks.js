@@ -399,7 +399,8 @@ function checksGroups(list, categories) {
       const id = `checks-group-${checksIdPart(key)}`;
       return el(
         'section',
-        { class: 'checks-group', 'aria-labelledby': id },
+        // a group with more than one card takes the whole row (board.css .checks-group-wide); one card takes a column
+        { class: cards.length > 1 ? 'checks-group checks-group-wide' : 'checks-group', 'aria-labelledby': id },
         el('h4', { id, class: 'checks-group-title', text: c?.title ?? key }),
         c?.text ? el('p', { class: 'checks-source', text: c.text }) : null,
         el('ul', { class: 'checks-grid' }, ...cards.map((s) => checksSuggestionCard(s, categories, { grouped: true }))),
