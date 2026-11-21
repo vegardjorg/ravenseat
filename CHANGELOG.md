@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **The catalog excerpt names the installed version of each library a task imports, from the lockfile, with its local
+  types and docs.** `catalog.depsExcerpt`, on.
 - **The full gate before merge can run in a clean copy of the exact commit.** `gates.runner` (default `worktree`); try
   it once with `ravenseat gates --full --clean`.
 - **`ravenseat issues list` and `issues import` propose GitHub issues as plans or tasks, and a linked task shows

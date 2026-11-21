@@ -40,6 +40,33 @@ Under `## Prefer`, one line per job says what to use and, if you like, what not 
 Keep it to at most 10 lines. They go into every mission's [catalog excerpt](#the-excerpt-in-the-mission-and-the-review-package),
 so a track reads them before it writes code.
 
+#### Dependencies
+
+Under `## Dependencies`, one row per library you want to say something about:
+
+```markdown
+## Dependencies
+
+| Package | Purpose | Docs | Note |
+|---|---|---|---|
+| zod | validation of all input | https://zod.dev | v3 API; no v4 yet |
+| serde | serialization | https://docs.rs/serde/{version} | |
+```
+
+A row needs four cells. The docs cell is a link or empty, and `{major}`, `{minor}` and `{version}` in it are filled
+with the version installed here. At most 40 rows. The version is never written in the table: the queue reads it from
+the lockfile (`package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `uv.lock`,
+`poetry.lock`, `Cargo.lock`, `go.sum`) each time, so it never goes stale. Without a lockfile it reads the installed
+package (`node_modules`, a `.venv` or `venv`, `vendor/`), and an exact pin in the manifest last. A broken or unknown
+lockfile gives no versions and stops nothing. The manifests it reads are `package.json`, `pyproject.toml`
+(PEP 621 and Poetry), `requirements*.txt`, `Cargo.toml` and `go.mod` in the project root.
+
+`catalog init` proposes rows from local metadata only, never the network: the direct dependencies the code imports,
+with the purpose from the dependency notes' purpose groups or the package description, and the docs link from the
+package's own metadata (the npm `homepage` or `repository`, the Python `Project-URL`, `docs.rs` for Rust and
+`pkg.go.dev` for Go). A new `stack.md` gets the table. For a `stack.md` that is there, init only prints the rows you
+could add and never changes your text. `catalog check` warns when a row names a package that is in no manifest.
+
 ### reuse.md
 
 A table of building blocks a track would not find by itself. Keep it to at most 40 rows; the
@@ -157,6 +184,8 @@ Once the owner has accepted it:
   another package in the tool's purpose group) gives a `CATALOG <task>:` line first, naming the entry and the tool. It
   asks for something and stops nothing. Against a proposed entry the note is the usual `NOTE dependency` with the
   entry's id. The review package names the entry either way.
+- **Project catalog** in Decisions shows the entry's card with "Uses: dayjs for dates" and "Chosen over: moment,
+  luxon", for a proposed entry too.
 - **`catalog check`** warns when an alternative is in a manifest, when the tool is in none of the manifests the
   entry's `paths` name, and when a Prefer line for the same job says another tool.
 
@@ -166,8 +195,8 @@ A Prefer line stays the short form for small things. `catalog check` only asks t
 
 | Command | What it does |
 |---|---|
-| `catalog init` | Creates `stack.md` with the generated block, `reuse.md` and `decisions/README.md` where they are missing, in the main tree. On the first init it also proposes one design entry from the project's token file, when it finds one (see [Design language](#design-language)). Never writes over a file that is there, except the generated block in `stack.md`. Refused from a track worktree |
-| `catalog show [<D-id>] [--json]` | The prefer lines, the reuse rows and the entries with the status that counts, grouped by `kind` (Design language, Stack, Dependencies, Design choices, Not building). With an id: that entry in full, and the plan entries that link to it |
+| `catalog init` | Creates `stack.md` with the generated block, `reuse.md` and `decisions/README.md` where they are missing, in the main tree. On the first init it also proposes one design entry from the project's token file, when it finds one (see [Design language](#design-language)). A new `stack.md` gets [Dependencies](#dependencies) rows proposed from local metadata; for one that is there, init prints the rows you could add. Never writes over a file that is there, except the generated block in `stack.md`. Refused from a track worktree |
+| `catalog show [<D-id>] [--json]` | The prefer lines, the Dependencies rows, the reuse rows and the entries with the status that counts, grouped by `kind` (Design language, Stack, Dependencies, Design choices, Not building). With an id: that entry in full, and the plan entries that link to it |
 | `catalog check [--json]` | Shape, ids, status, the owner lock, `supersedes`, the paths, the reuse rows and the generated block. Exit 1 on an error, 0 on warnings only, 0 without a catalog. Read only |
 | `catalog accept <D-id> --by owner` | The owner accepts a design choice: `status: accepted`, `accepted_by` and `accepted` in the file, and the owner's record in the data folder. A choice with `supersedes` sets the old one to `superseded` in the same step (refused, with nothing changed, when the old one is not there). Refused from a track worktree whatever `--by` says |
 | `catalog propose --title "..." --invariant "..." --paths "<glob>[,<glob>]" [--kind design\|stack\|dependency] [--except "<glob>"] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--from-answer <question>] [--json]` | Writes the next free id (one above the highest in the file names and the owner's record) as `status: proposed` in the main tree, then runs `catalog check` and prints what it says about the new choice. `--kind` and `--except` write those fields; with `--kind stack`, `--uses`, `--alternatives` and `--stack` write a [stack entry](#stack-entries). With `--supersedes` and no `--paths` or `--plan`, it takes them from the old choice. Writes nothing when the choice would be broken, never over a file. Refused from a track worktree |
@@ -212,14 +241,20 @@ task's `owned_files`, `shared_patch` and `reads`:
 - **Prefer lines** from `stack.md`, at most ten: they hold for the whole project.
 - **Reuse rows** from `reuse.md` in the task's folders (the folder of an owned or read file, or inside an owned
   folder), at most 15.
+- **Dependencies these files import** (`catalog.depsExcerpt`, on): one row per library the task's files import, at
+  most eight, the [Dependencies](#dependencies) rows first. A row gives the version installed here and how it is known
+  (locked, installed, pinned), the local types or README to read, the docs link and the table's purpose and note, and
+  the section says to read the installed types or README, not memory, when unsure of the API in this version. A
+  library with no known version and no table row is left out.
 - One line on how to look for a helper before writing one, and `catalog show <D-id>` for a choice in full.
 
 A task that names no files gets every choice that holds and no proposed one (nothing says which proposals concern it),
 the prefer lines and the first reuse rows. Nothing that meets the task, or no catalog, gives no block at all.
 
 **The cap and the measurement.** The excerpt stays within `catalog.excerptTokens` (default 1500, a token counted as four
-characters). Items go in in the order binding choices, prefer lines, proposed choices, reuse rows while the whole text
-still fits, so the reuse rows are cut first. The heading says what it used and what was cut:
+characters). Items go in in the order binding choices, prefer lines, proposed choices, reuse rows, dependency rows
+while the whole text still fits, so the dependency rows are cut before the reuse rows (only the index's tagged
+blocks, with `catalog.index` on, go before them). The heading says what it used and what was cut:
 
 ```
 **From the project catalog** (`docs/queue/catalog/`, chosen for this task's files; about 209 of at most 1500 tokens; nothing cut):
@@ -489,6 +524,10 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Checks card | Low priority, can be set aside | No setting: it only proposes |
 | Design entries and the init draft | One proposed file on the first init when a token file is found; a Design language part in the excerpt, inside the same cap. Stops nothing | No setting of its own: the rules follow `catalog.checks`, the excerpt `catalog.missionExcerpt` and `catalog.reviewExcerpt`; a deleted draft is not written again |
 | Stack words in the Checks tab | Can change which cards show; stops nothing; only accepted stack entries count | `catalog.stackFacts`, on; off gives the cards from the manifests alone |
+| Dependency rows in the excerpt | Text only, inside the same cap and cut before the reuse rows; it reads the lockfile and the installed packages on disk each time, never the network. Stops nothing | `catalog.depsExcerpt`, on: it costs only text, and off weakens no guard |
+| Versions from the lockfiles | A read of the lockfile; a broken or unknown one gives no versions and never an error | No setting: local metadata only, it decides nothing |
+| `## Dependencies` table | `catalog check` errors on a row without four cells and warns on a docs cell that is not a link, over 40 rows, or a row in no manifest. `catalog init` writes rows only into a new `stack.md` | No setting: a check on request and a draft that binds nothing |
+| Stack card on the board | None: "Uses" and "Chosen over" lines, display only | No setting |
 | Stack choice in the dependency notes | A CATALOG line at receive for a package an accepted stack entry chose against; never a stop | Follows `scopeNotes.dependencies` |
 | Agent access | `catalog show`, `catalog check` and `catalog find` allowed for queue agents | No setting |
 | Code index at receive and in the missions | One git listing per tree and a read of each changed file (the first build of about 300 files took under half a second here); a file in the data folder; more lines in the excerpt, inside the same cap. It stops nothing | `catalog.index`, off: the plan puts it on the opt-in list, since it builds and stores a file and its worth grows with the project |

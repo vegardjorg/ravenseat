@@ -711,9 +711,9 @@ NOTE drift (A): 7 of 9 changed files are outside owned_files, shared_patch and r
   `scopeNotes.ignoreNames` adds your own. At most 30 names are looked up per receive.
 - **New folder** (`scopeNotes.newFolders`): a file added in a folder the base does not have, at depth 1 or 2
   (`scopeNotes.folderDepth`, 1 to 3). Only the shallowest new folder of a path is named.
-- **Dependency** (`scopeNotes.dependencies`): a new package in `package.json` or `requirements*.txt` whose job the same
-  manifest already has a package for. The groups (dates, HTTP, validation, helpers, test runner, logging, ids and
-  more) are data in `dependency-purposes.json`, each with examples a test runs. It also sees a manifest the task owns,
+- **Dependency** (`scopeNotes.dependencies`): a new package in `package.json`, `requirements*.txt`, `pyproject.toml`,
+  `Cargo.toml` or `go.mod` whose job the same manifest already has a package for. The groups (dates, HTTP,
+  validation, helpers, test runner, logging, ids, Rust HTTP, dates and arguments, Go routers and logging) are data in `dependency-purposes.json`, each with examples a test runs. It also sees a manifest the task owns,
   which the dependency file guard does not.
 - **Drift** (`scopeNotes.drift`): how many changed files lie outside `owned_files`, `shared_patch` and `reads`, and the
   folders among them the task does not name. A task that names no files gets the number of folders it touches
