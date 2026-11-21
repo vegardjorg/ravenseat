@@ -397,7 +397,10 @@ function summaryEl(k, col) {
               'aria-label': window.QueueA11y.classLabel(k.class),
             })
           : null,
-        el('span', { class: 'summary-estimate', text: `${k.estimate} min`, title: 'Estimated work minutes for an agent, not wall-clock time' }),
+        // A proposal with no size of its own (an imported GitHub issue): the owner sizes it at approval.
+        k.status === 'proposed' && k.content_min == null
+          ? el('span', { class: 'summary-estimate', text: 'size not set', title: 'No content minutes set; it counts as 30 min until you set it (Edit)' })
+          : el('span', { class: 'summary-estimate', text: `${k.estimate} min`, title: 'Estimated work minutes for an agent, not wall-clock time' }),
         // "visual" as an eye icon. The word stays as hidden text, so the screen reader says the same as before.
         k.visual
           ? el(

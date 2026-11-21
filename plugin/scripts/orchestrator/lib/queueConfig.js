@@ -172,7 +172,11 @@ const STANDARD = Object.freeze({
   // controlsWarning: a plain push asks when the project has no CI config or no gates (lib/controls.js); false = no question.
   // ownerAsk: in mode "owner" every plain push of baseBranch by the main session asks (lib/pushBatch.js ownerQuestion),
   // a deny in the permission modes dontAsk and bypassPermissions; false = only the batch questions (a weakened guard).
-  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90, controlsWarning: true, ownerAsk: true, allowBranches: [] },
+  // pr (GH-4, cli/ghWrite.mjs): "draft" lets `ravenseat pr` open one draft pull request per batch from the branch
+  // ravenseat/batch-<date> (which must be in allowBranches; the main session pushes it through the push guard as any
+  // other branch). "off" = the command refuses. Off by default: it sends data out. A separate key, not a push.mode value,
+  // so the push guard's reading of push.mode does not change.
+  push: { mode: 'owner', minTasks: 10, warnTasks: 50, maxAgeHours: null, ciWatch: 'off', ciWatchIntervalSec: 60, ciWatchTimeoutMin: 90, controlsWarning: true, ownerAsk: true, allowBranches: [], pr: 'off' },
   // The branch that goes live (production). null = unknown. `ravenseat doctor` warns when it is the same as baseBranch: every
   // batch push would then go straight to production. Nothing else reads it yet.
   productionBranch: null,
@@ -636,9 +640,13 @@ const STANDARD = Object.freeze({
   // an issue gets "Refs: #12" in its merge commit; local, no network, and it never closes the issue, so on. labelMap:
   // `ravenseat issues import` routes an issue by its labels ({ "ready-for-agent": "task", "needs-info": "plan",
   // "bug": "K" }); empty = off, so every import is a plan in the Inbox unless --as task says otherwise.
+  // onPush (GH-3, cli/ghWrite.mjs): what `ravenseat issues report --post` does to a linked issue after a push: "off"
+  // (nothing; the command refuses), "comment" or "close", with a fixed template, after a preview and the owner's y/N.
+  // Off by default: it sends data out, often to a public repo.
   issues: {
     refsTrailer: true,
     labelMap: {},
+    onPush: 'off',
   },
   // Load guard (queueLogic.loadGuard): `next`, `start` and `fill` refuse new starts (exit 7) while free memory
   // (os.freemem / os.totalmem, percent) is below minFreeMemoryPct. null = off. `queue.mjs limit minFreeMemoryPct`

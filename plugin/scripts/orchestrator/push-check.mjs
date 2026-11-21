@@ -285,5 +285,19 @@ function batchLines() {
     ...(CI.enabled
       ? [`CI watch (${CI.mode}): after the push, start ravenseat push-check --watch-ci ${toSha} in the background (run_in_background); exit 9 = a check failed (fix task CI-${toSha.slice(0, 7)}), 0 = green or an owner question, 10 = timeout.`]
       : []),
+    // The optional GitHub writes after the push (cli/ghWrite.mjs; issues.onPush and push.pr, both off by default).
+    ...ghWriteLines(),
   ];
+}
+
+/** One hint line per GitHub write that is on: the preview command, then --post, which asks first. */
+function ghWriteLines() {
+  const GO = require('./lib/ghOutbound.js');
+  const out = [];
+  const onPush = GO.onPushOf(K);
+  if (onPush !== 'off')
+    out.push(`Issues (${onPush}): after the push, run ravenseat issues report (a preview), then ravenseat issues report --post (asks you first).`);
+  if (GO.prModeOf(K) === 'draft')
+    out.push('PR (draft): ravenseat pr moves the batch branch to this tip and prints its push; then ravenseat pr --post opens one draft pull request (asks you first).');
+  return out;
 }

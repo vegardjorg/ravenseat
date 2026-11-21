@@ -957,6 +957,12 @@ commit. Projects with gates and the harness as their safety net push 20 to 500+ 
   question off; the red-base question stays. Tracks never push, and nothing changes for them. The guard costs one
   `git log` and only for a push of the base branch; any error lets the push through.
 - **Where it shows.** push-check, and the board's status line next to the base health (`Push: 4 of 10 tasks, NOT YET`).
+- **After the push (optional, off by default).** With `issues.onPush` on, push-check prints the hint to run
+  `ravenseat issues report` (a preview) and then `--post`, which comments on or closes the linked issues. With
+  `push.pr: "draft"`, the batch can go out as one draft pull request instead: `ravenseat pr` moves
+  `ravenseat/batch-<date>` to the base tip and prints its push (the branch must be in `push.allowBranches`, so the push
+  guard judges it), then `ravenseat pr --post` opens the PR. Ravenseat never runs `git push` itself, every `--post`
+  asks first, and a failed post never fails the push. The details: [GitHub issues](queue.md#github-issues).
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -966,6 +972,7 @@ commit. Projects with gates and the harness as their safety net push 20 to 500+ 
 | `push.maxAgeHours` | `null` | When set, unpushed work older than this makes the batch `READY` below `minTasks` |
 | `push.ciWatch` | `"off"` | `"github"`: the optional CI watch after a batch push (`ravenseat push-check --watch-ci <sha>`, needs `gh`) |
 | `push.ciWatchIntervalSec`, `push.ciWatchTimeoutMin` | `60`, `90` | The CI watch's poll interval and its cap (exit 10 after it) |
+| `push.pr` | `"off"` | `"draft"`: `ravenseat pr` opens one draft pull request per batch from `ravenseat/batch-<date>` |
 
 **The CI watch (optional).** The local gates are the rule (a push needs a green `ravenseat gates --full` on the tip), but CI
 can still go red on what a batch push sent. `push.ciWatch: "github"` (default `"off"`, needs the `gh` CLI) turns on

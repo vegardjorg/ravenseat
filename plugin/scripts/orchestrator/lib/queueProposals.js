@@ -304,7 +304,20 @@ function boardArgs(b) {
   };
 }
 
+/**
+ * A task with no size of its own (content_min missing), such as an imported GitHub issue (GH-1): its estimate counts
+ * the default 30 minutes. The proposal views say "size not set" so the owner sizes it at approval.
+ */
+const SIZE_NOT_SET = 'size not set';
+const sizeNotSet = (o) => o != null && o.content_min == null;
+/** The hint after an approval of tasks without a size. */
+const sizeHint = (ids, cli = 'ravenseat') =>
+  ids.map((id) => `${id} has no size set (content_min), so it counts as 30 min until you set one: ${cli} edit ${id} --json '{"content_min":60}'.`);
+
 module.exports = {
+  SIZE_NOT_SET,
+  sizeNotSet,
+  sizeHint,
   boardData,
   boardArgs,
   DEFAULT_RULES,

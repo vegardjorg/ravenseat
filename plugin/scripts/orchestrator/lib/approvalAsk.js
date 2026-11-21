@@ -18,6 +18,8 @@
 //   - a line the reading cannot see into that names the queue CLI and an override token  rule override-unread
 //   - writes a main tree control file with Write, Edit or NotebookEdit (the same set as
 //     lib/controlFiles.js; the plugin's scripts only when they live outside the project)  rule override-control-file
+//   - posts to GitHub: `issues report --post`, `pr --post`, `release-notes --github --post`
+//     (cli/ghWrite.mjs; the reason is the saved preview's summary, lib/ghOutbound.js)    rule outbound-github
 //   - pushes the base branch while push.mode is "owner" (push.ownerAsk; lib/pushBatch.js) rule push-questions
 // The dialog's reason (permissionDecisionReason) names the command, the task ids, the flags and, for merge, the track
 // branch's tip: never a flag's value (an --answer text, a --remark), so nothing secret or long rides along.
@@ -153,7 +155,37 @@ function overrideOf(call) {
   if (Object.hasOwn(OWNER_ONLY, name) && OWNER_ONLY[name].includes(sub)) return { rule: 'override-owner-command', flags: [] };
   // The board's key in a file the session can read (0l bolk 5): the key otherwise only reaches the browser.
   if (BOARD.has(name) && args.some((x) => flagName(x) === '--key-file')) return { rule: 'override-board-key', flags: ['--key-file'] };
+  // A GitHub write (cli/ghWrite.mjs): the --post of `issues report`, `pr` and `release-notes`. The previews never ask.
+  const kind = outboundKind(name, sub, args);
+  if (kind) return { rule: 'outbound-github', flags: ['--post'], kind };
   return null;
+}
+
+/** The preview kinds (lib/ghOutbound.js) of the commands that post to GitHub with --post, or null. */
+function outboundKind(name, sub, args) {
+  if (!args.some((x) => flagName(x) === '--post')) return null;
+  if (name === 'issues' && sub === 'report') return 'issues-report';
+  if (name === 'pr') return 'pr';
+  if (name === 'release-notes') return 'release';
+  return null;
+}
+
+/**
+ * The reason for a GitHub write: what the saved preview lists (targets, and whether the repo is public), or that there
+ * is no matching preview, so the command will refuse. Never a body: the preview file holds targets and a hash only.
+ */
+function outboundText(call, o, outboundPreview) {
+  const shown = `\`${NAMES.CLI_NAME} ${call.name === 'issues' ? 'issues report' : call.name} --post\``;
+  let p = null;
+  try {
+    p = typeof outboundPreview === 'function' ? outboundPreview() : null;
+  } catch {
+    p = null; // no summary; the question stays
+  }
+  if (!p || p.kind !== o.kind) {
+    return `${shown}: a write to GitHub, from the main session. There is no preview to match, so the command will refuse; run it without --post first and read what it lists.`;
+  }
+  return `${shown}: a write to GitHub, from the main session. It ${require('./ghOutbound.js').dialogSummary(p)}`;
 }
 
 /** The text of the reason for one override. */
@@ -173,7 +205,7 @@ function callText(call, o, tip) {
 }
 
 /** A line that names the queue CLI and an override token, for the parts the reading cannot see into. */
-const OVERRIDE_TOKEN = /--allow-|--force|--i-understand|--key-file|--(?:set-)?by[\s=]+["']?(?:owner|theboard)\b|\b(?:surface|owner-log)\s+accept\b|\bhelpers\s+approve\b/i;
+const OVERRIDE_TOKEN = /--allow-|--force|--i-understand|--key-file|--post\b|--(?:set-)?by[\s=]+["']?(?:owner|theboard)\b|\b(?:surface|owner-log)\s+accept\b|\bhelpers\s+approve\b/i;
 const QUEUE_SHAPED = new RegExp(`(^|[\\s"'\`(;&|\\\\/])((?:${NAMES.CLI_PATTERN})(?:\\.mjs|\\.cmd)?|queue\\.mjs|queue-board\\.mjs|merge-track\\.mjs)\\b`, 'i');
 
 /**
@@ -193,7 +225,7 @@ function boardApi(command, boardPort = 2000) {
  * @param {string} command
  * @param {{ boardPort?: number, tipOf?: (id: string) => string|null }} [o] tipOf: the short tip of a track's branch
  */
-function overrideFinding(command, { boardPort = 2000, tipOf } = {}) {
+function overrideFinding(command, { boardPort = 2000, tipOf, outboundPreview } = {}) {
   const read = SC.commandList(String(command ?? ''));
   const texts = [];
   let rule = null;
@@ -209,7 +241,7 @@ function overrideFinding(command, { boardPort = 2000, tipOf } = {}) {
     } catch {
       tip = null; // no tip in the reason; the question stays
     }
-    texts.push(callText(call, o, tip));
+    texts.push(o.rule === 'outbound-github' ? outboundText(call, o, outboundPreview) : callText(call, o, tip));
   }
   if (boardApi(command, boardPort)) {
     rule = rule ?? 'override-board-api';

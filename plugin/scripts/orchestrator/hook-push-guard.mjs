@@ -239,7 +239,8 @@ function git(cwd, args) {
  * A line that can hold an override of the main session (lib/approvalAsk.js): a cheap test before the reading, so an
  * ordinary command costs nothing more. A false hit only means the line is read.
  */
-const OVERRIDE_SHAPED = /--allow-|--force|--i-understand|--(?:set-)?by\b|\baccept\b|\bapprove\b|\/api\/|x-queue-key/i;
+// --post: a GitHub write (issues report, pr, release-notes; lib/approvalAsk.js rule outbound-github).
+const OVERRIDE_SHAPED = /--allow-|--force|--i-understand|--(?:set-)?by\b|\baccept\b|\bapprove\b|\/api\/|x-queue-key|--post\b/i;
 
 /** Main tree for an agent worktree (<root>/.claude/worktrees/<name>), otherwise the path itself. */
 function mainTree(top) {
@@ -386,7 +387,19 @@ process.stdin.on('end', () => {
       mainSession,
       // The track branch's tip in the reason: one git call, only when an override of a merge is found.
       approvals: approvalsOn
-        ? { ask: true, boardPort: Number(k.board?.port ?? 2000), tipOf: (id) => git(cwd, ['rev-parse', '-q', '--verify', '--short=7', `refs/heads/${k.branchPrefix}${id}`]) }
+        ? {
+            ask: true,
+            boardPort: Number(k.board?.port ?? 2000),
+            tipOf: (id) => git(cwd, ['rev-parse', '-q', '--verify', '--short=7', `refs/heads/${k.branchPrefix}${id}`]),
+            // A GitHub write's --post (cli/ghWrite.mjs): the saved preview's targets and visibility for the question.
+            outboundPreview: () => {
+              try {
+                return require('./lib/ghOutbound.js').readPreview(dataFolder());
+              } catch {
+                return null;
+              }
+            },
+          }
         : null,
       ownerPushQuestion: mainSession ? () => ownerPushQuestion(cwd, k) : undefined,
     });

@@ -213,9 +213,15 @@ export function cmdApprove() {
     if (answer.error.length) die(`Nothing approved:\n  ${answer.error.join('\n  ')}`);
     // Who approved (the board and /ravenseat:decide pass --by owner), next to the time in `approved`.
     if (by) for (const o of queue.tasks) if (answer.approved.includes(o.id)) o.approved_by = by;
-    return { ...answer, batched: queue.tasks.filter((o) => answer.approved.includes(o.id) && L.isBatched(o)).map((o) => o.id) };
+    return {
+      ...answer,
+      batched: queue.tasks.filter((o) => answer.approved.includes(o.id) && L.isBatched(o)).map((o) => o.id),
+      unsized: queue.tasks.filter((o) => answer.approved.includes(o.id) && PR.sizeNotSet(o)).map((o) => o.id),
+    };
   });
   console.log(`Approved (waiting now): ${r.approved.join(', ')}`);
+  // An imported issue has no size (lib/githubIssues.js taskFor): say so, with the command that sets one.
+  for (const line of PR.sizeHint(r.unsized ?? [], CLI)) console.log(line);
   for (const id of r.batched)
     console.log(`${id} is in the batch queue, so it does not start alone: ravenseat batch packs it, ravenseat edit ${id} --json '{"batched":false}' lets it start by itself.`);
 }
@@ -231,7 +237,11 @@ export function cmdProposals() {
     const open = (queue.tasks ?? []).filter((o) => o.status === 'proposed');
     if (open.length) {
       console.log(`Proposals waiting (${open.length}; ravenseat approve <id> lets one start, ravenseat set <id> cancelled declines it):`);
-      for (const o of open) console.log(`  ${o.id.padEnd(14)} ${o.added_by ? `from ${o.added_by}  ` : ''}${L.isBatched(o) ? '[batch queue]  ' : ''}${o.title ?? ''}`);
+      for (const o of open)
+        console.log(
+          `  ${o.id.padEnd(14)} ${o.added_by ? `from ${o.added_by}  ` : ''}${L.isBatched(o) ? '[batch queue]  ' : ''}` +
+            `${PR.sizeNotSet(o) ? `[${PR.SIZE_NOT_SET}]  ` : ''}${o.title ?? ''}`,
+        );
     }
     const fit = (queue.tasks ?? []).filter(
       (o) => o.status === 'proposed' && PR.autoAcceptDecision(o, { ...rules, enabled: true }, ctx).accept,

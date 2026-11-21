@@ -217,7 +217,8 @@ export function cmdShow() {
           costCol(o).padEnd(6),
           `value ${o.value ?? 5}`.padEnd(9),
           `from ${o.added_by ?? '?'}`.padEnd(16),
-          o.title,
+          // No content_min (an imported issue): the estimate is the default, so say it (lib/queueProposals.js).
+          `${o.content_min == null ? '[size not set] ' : ''}${o.title}`,
         ].join(' '),
       );
     }
