@@ -47,9 +47,18 @@ const STATUSES = Object.freeze(['proposed', 'accepted', 'superseded', 'not-build
  * when to look at it again, and where the no came from.
  */
 const FIELDS = Object.freeze([
-  'id', 'title', 'status', 'kind', 'paths', 'except', 'invariant', 'check', 'keywords', 'revisit', 'source', 'uses',
-  'alternatives', 'stack', 'supersedes', 'plan', 'accepted_by', 'accepted',
+  'id', 'title', 'status', 'kind', 'paths', 'except', 'applies', 'invariant', 'check', 'keywords', 'revisit', 'source',
+  'uses', 'alternatives', 'stack', 'supersedes', 'plan', 'accepted_by', 'accepted',
 ]);
+/**
+ * applies (roadmap 0å KD-6): the task categories an entry reaches besides its paths, each dimension a list of values.
+ * Only fields a task already has: class, domain, project (the task's project, as the register gives it), feature and
+ * label (one of the task's labels). OR inside a dimension, AND between them: {"class": ["D"], "label": ["visual"]} is a
+ * D task with the label visual. An entry reaches a task when its paths OR its applies match (lib/catalogExcerpt.js).
+ * Generic on purpose: any kind of entry can carry it.
+ */
+const APPLIES_DIMS = Object.freeze(['class', 'domain', 'project', 'feature', 'label']);
+const APPLIES_VALUE_MAX = 60;
 /**
  * A stack entry's fields (roadmap 0å KD-2): uses {job, tool} says which tool does a job, alternatives the tools it was
  * chosen against (a package name each), stack the words it declares for the checks (stack:<word> in recipes.json).
@@ -270,6 +279,100 @@ function pathPatternError(p) {
   return null;
 }
 
+// ---- applies: the task categories an entry reaches (roadmap 0å KD-6) ------------------------------------------------
+
+/**
+ * The applies field checked and cleaned: { dimension: [values] } with only the dimensions that hold a value, or null
+ * when it is missing or says nothing. Each problem goes to `e`. `function` is named apart: the task field is feature.
+ */
+function appliesProblems(raw, e = () => {}) {
+  if (raw == null) return null;
+  if (!isObject(raw)) {
+    e(`applies must be an object of lists, e.g. {"class": ["D"], "label": ["visual"]} (dimensions: ${APPLIES_DIMS.join(', ')})`);
+    return null;
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (!APPLIES_DIMS.includes(k)) {
+      e(`applies: unknown dimension ${k} (${APPLIES_DIMS.join(', ')}${k === 'function' ? '; the task field is feature' : ''})`);
+      continue;
+    }
+    if (!Array.isArray(v) || v.some((x) => !text(x) || /[\u0000-\u001f]/.test(x) || x.length > APPLIES_VALUE_MAX)) {
+      e(`applies.${k} must be a list of values, each one line of at most ${APPLIES_VALUE_MAX} characters, e.g. ["D"]`);
+      continue;
+    }
+    const vals = [...new Set(v.map((x) => x.trim()))];
+    if (vals.length) out[k] = vals;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** A task's values in one dimension (applies), as text; the project through the register when the task has none. */
+function taskValues(dim, task, register) {
+  const one = (v) => (typeof v === 'string' && v.trim() ? [v.trim()] : []);
+  if (dim === 'class') return one(task?.class);
+  if (dim === 'domain') return one(task?.domain);
+  if (dim === 'feature') return one(task?.feature);
+  if (dim === 'label') return Array.isArray(task?.labels) ? task.labels.filter((l) => typeof l === 'string' && l) : [];
+  if (dim === 'project') {
+    if (one(task?.project).length) return one(task.project);
+    if (!register || !task?.id) return [];
+    const p = require('./logic/projects.js').projectFor(task, register);
+    return p && p !== require('./logic/base.js').WITHOUT_PROJECT ? [p] : [];
+  }
+  return [];
+}
+
+/**
+ * Does an entry's applies match a task: every dimension it names has one of its values on the task (compared without
+ * case)? Returns the reason in words ("class D, label visual") or null. An empty or missing applies never matches.
+ * @param {object|null} applies the parsed field
+ * @param {object} task the queue task
+ * @param {{ register?: object|null }} [o] register: the queue's projects, for a task without an explicit project
+ */
+function appliesMatch(applies, task, { register = null } = {}) {
+  if (!isObject(applies)) return null;
+  const parts = [];
+  for (const dim of APPLIES_DIMS) {
+    const want = Array.isArray(applies[dim]) ? applies[dim] : [];
+    if (!want.length) continue;
+    const have = taskValues(dim, task, register).map((v) => v.toLowerCase());
+    const hit = want.find((w) => have.includes(String(w).toLowerCase()));
+    if (hit == null) return null;
+    parts.push(`${dim} ${hit}`);
+  }
+  return parts.length ? parts.join(', ') : null;
+}
+
+/** applies in plain words for the board ("D tasks, visual"; "D or K tasks, project api"), or null. */
+function appliesWords(applies) {
+  if (!isObject(applies)) return null;
+  const or = (l) => l.join(' or ');
+  const parts = [];
+  for (const dim of APPLIES_DIMS) {
+    const v = Array.isArray(applies[dim]) ? applies[dim] : [];
+    if (!v.length) continue;
+    if (dim === 'class') parts.push(`${or(v)} tasks`);
+    else if (dim === 'label') parts.push(or(v));
+    else parts.push(`${dim} ${or(v)}`);
+  }
+  return parts.length ? parts.join(', ') : null;
+}
+
+/**
+ * The values the queue knows per applies dimension (for `catalog check`): the classes, the values on the tasks and the
+ * archived tasks, and the project list. A value outside them in an entry's applies is most likely a typo.
+ * @returns {{ class: Set<string>, domain: Set<string>, project: Set<string>, feature: Set<string>, label: Set<string> }}
+ */
+function knownValues(queue, archived = []) {
+  const k = Object.fromEntries(APPLIES_DIMS.map((d) => [d, new Set()]));
+  for (const c of require('./logic/base.js').CLASSES) k.class.add(c);
+  for (const p of Object.keys(isObject(queue?.projects) ? queue.projects : {})) k.project.add(p);
+  for (const t of [...(Array.isArray(queue?.tasks) ? queue.tasks : []), ...(Array.isArray(archived) ? archived : [])])
+    for (const dim of APPLIES_DIMS) for (const v of taskValues(dim, t, null)) k[dim].add(v);
+  return k;
+}
+
 /**
  * One design choice file. `name` is the file name in decisions/.
  * @returns {{ decision: object|null, errors: string[], warnings: string[] }}
@@ -297,9 +400,13 @@ function parseDecision(name, source) {
   const nb = d.kind === 'not-building' || d.status === 'not-building';
   const kind = nb ? 'not-building' : KINDS.includes(d.kind) ? d.kind : 'decision';
   if (nb && d.status === 'accepted') e('a not-building entry is accepted as status not-building, not accepted (ravenseat catalog accept writes it)');
+  // applies (KD-6): the task categories the entry reaches; with one, paths may be left out.
+  const applies = appliesProblems(d.applies, e);
+  if (applies && nb) e('a not-building entry has no applies (it binds no code)');
   // What a rejection does not need: an invariant and paths (it binds no code). When it has them, they are checked.
-  if (!nb || d.paths != null) {
-    if (!Array.isArray(d.paths) || (!nb && !d.paths.length)) e('paths must be a list of at least one path pattern, e.g. ["app/**"]');
+  if ((!nb || d.paths != null) && !(applies && d.paths == null)) {
+    if (!Array.isArray(d.paths) || (!nb && !applies && !d.paths.length))
+      e('paths must be a list of at least one path pattern, e.g. ["app/**"] (or leave it out and say applies)');
     else for (const p of d.paths) {
       const pe = typeof p === 'string' ? pathPatternError(p) : 'not text';
       if (pe) e(`paths: ${pe}`);
@@ -371,6 +478,8 @@ function parseDecision(name, source) {
     kind,
     paths: Array.isArray(d.paths) ? d.paths.filter((p) => typeof p === 'string') : [],
     except: Array.isArray(d.except) ? d.except.filter((p) => typeof p === 'string') : [],
+    // The categories (KD-6): only the dimensions that say something, or null.
+    applies: nb ? null : applies,
     invariant: typeof d.invariant === 'string' ? d.invariant : null,
     check: d.check ?? null,
     keywords: Array.isArray(d.keywords) ? d.keywords.filter((k) => typeof k === 'string') : [],
@@ -579,6 +688,8 @@ function fingerprint(d) {
   // widen what a rule skips. Only when they say something, so an entry without them keeps its fingerprint.
   else if (d?.kind != null && d.kind !== 'decision') parts.push({ kind: d.kind });
   if (Array.isArray(d?.except) && d.except.length) parts.push({ except: d.except });
+  // applies (KD-6) widens which tasks an entry reaches, so it binds too; only when it says something.
+  if (isObject(d?.applies) && Object.keys(d.applies).length) parts.push({ applies: d.applies });
   // A stack entry's choice (KD-2): the tool, what it was chosen against and the words it declares.
   if (d?.kind === 'stack' && (d.uses || d.alternatives?.length || d.stack?.length))
     parts.push({ uses: d.uses ?? null, alternatives: d.alternatives ?? [], stack: d.stack ?? [] });
@@ -621,6 +732,8 @@ function boardGroups(cat, ledger = emptyLedger()) {
         invariant: d.invariant ?? null,
         paths: d.paths ?? [],
         except: d.except ?? [],
+        // The task categories it reaches (KD-6) in plain words ("D tasks, visual"), or null.
+        applies: appliesWords(d.applies),
         source: d.kind === 'design' ? d.source ?? null : null,
         // A stack entry's choice (roadmap 0å KD-3): the tool for the job and what it was chosen over, so the card says
         // it. Null and [] on the other kinds.
@@ -861,6 +974,8 @@ function proposalFile(p) {
         ...(p.kind === 'stack' && Array.isArray(p.stack) && p.stack.length ? [`stack: ${JSON.stringify(p.stack)}`] : []),
         `paths: ${JSON.stringify(paths)}`,
         ...(Array.isArray(p.except) && p.except.length ? [`except: ${JSON.stringify(p.except)}`] : []),
+        // The task categories (KD-6), only when given: a plain choice is written as before.
+        ...(isObject(p.applies) && Object.keys(p.applies).length ? [`applies: ${JSON.stringify(p.applies)}`] : []),
         `invariant: ${frontValue(one(p.invariant))}`,
         // A check rule (KD-1, the design draft's colour rule): one field per line, each value as JSON.
         ...(isObject(p.check) ? ['check:', ...Object.entries(p.check).map(([k, v]) => `  ${k}: ${JSON.stringify(v)}`)] : []),
@@ -1068,6 +1183,14 @@ function checkCatalog(cat, ctx = {}) {
     for (const p of files && d.except?.length ? d.except : [])
       if (!files.some((f) => d.paths.some((q) => glob(q, f)) && glob(p, f)))
         warnings.push(`${d.id} (${d.file}): except ${p} matches no tracked file inside its paths`);
+    // applies (KD-6): a value no task, archived task or project has is most likely a typo; it reaches nothing.
+    if (ctx.known && d.applies && d.status !== 'superseded')
+      for (const [dim, vals] of Object.entries(d.applies))
+        for (const v of vals) {
+          const have = [...(ctx.known[dim] ?? [])].map((x) => String(x).toLowerCase());
+          if (!have.includes(v.toLowerCase()))
+            warnings.push(`${d.id} (${d.file}): applies ${dim} ${v} is on no task and in no project list (a typo?); it reaches no task until one has it`);
+        }
     if (d.supersedes && !byId.has(d.supersedes)) errors.push(`${d.id} supersedes ${d.supersedes}, which is not in the catalog`);
     else if (d.supersedes && byId.get(d.supersedes).status !== 'superseded')
       warnings.push(`${d.id} supersedes ${d.supersedes}, but ${d.supersedes} is not marked status: superseded`);
@@ -1218,6 +1341,8 @@ const DECISIONS_README = [
   '  names it as an error, and it counts as proposed until the owner accepts it.',
   '- `invariant`: one sentence that can be checked. It is the only text a track gets.',
   '- `paths`: the files the choice applies to. `except` (optional): files inside them it does not apply to.',
+  '- `applies` (optional): the tasks it reaches besides its paths, e.g. `{"class": ["D"], "label": ["visual"]}` (a D task',
+  '  with the label visual; dimensions class, domain, project, feature, label). With it, `paths` may be left out.',
   '- `kind` (optional): `decision` (the default), `design`, `stack`, `dependency` or `not-building`.',
   '- `source` on a `design` entry: where its tokens live, a path or a list (`["ui/tokens.css", "lib/theme.js#PALETTE"]`).',
   '- On a `stack` entry: `uses: {"job": "dates", "tool": "dayjs"}`, `alternatives: ["moment"]` (chosen against) and',
@@ -1237,6 +1362,11 @@ module.exports = {
   KEYWORD_MAX,
   isNotBuilding,
   covers,
+  APPLIES_DIMS,
+  appliesProblems,
+  appliesMatch,
+  appliesWords,
+  knownValues,
   boardGroups,
   COLOUR_RULE,
   designDraft,

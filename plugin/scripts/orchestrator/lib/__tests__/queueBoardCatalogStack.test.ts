@@ -42,7 +42,16 @@ const state = {
     boardSwitches: KK.boardSwitches(KK.STANDARD, null),
     catalogGroups: [
       { kind: 'stack', title: 'Stack', entries: [entry({ id: 'D-0002', title: 'Validation with zod', uses: { job: 'validation', tool: 'zod' }, alternatives: ['yup', 'joi'] })] },
-      { kind: 'decision', title: 'Design choices', entries: [entry({ id: 'D-0003', title: 'Paths are normalized' })] },
+      {
+        kind: 'decision',
+        title: 'Design choices',
+        entries: [
+          entry({ id: 'D-0003', title: 'Paths are normalized' }),
+          // KD-6: applies in plain words (lib/catalog.js appliesWords), alone and next to paths.
+          entry({ id: 'D-0004', title: 'Visual tasks use tokens', paths: [], applies: 'D tasks, visual' }),
+          entry({ id: 'D-0005', title: 'Both', applies: 'K tasks' }),
+        ],
+      },
     ],
   },
 };
@@ -92,5 +101,13 @@ describe('the stack card in the project catalog', () => {
 
   it('a decision card has neither line', () => {
     expect(metas('D-0003').some((m) => /^Uses:|^Chosen over:/.test(m ?? ''))).toBe(false);
+  });
+});
+
+describe('the task categories on a card (roadmap 0å KD-6)', () => {
+  it('says which tasks an entry reaches in plain words, alone or after its paths, and a paths-only card as before', () => {
+    expect(metas('D-0003')).toContain('Applies to: src/**');
+    expect(metas('D-0004')).toContain('Applies to: D tasks, visual');
+    expect(metas('D-0005')).toContain('Applies to: src/**; and to K tasks');
   });
 });

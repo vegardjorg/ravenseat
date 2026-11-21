@@ -204,6 +204,24 @@ describe('ravenseat catalog init, show and check', () => {
     expect(wrong.err).toMatch(/--kind must be one of decision, design, stack, dependency/);
   });
 
+  it('KD-6: propose --applies writes the categories, show names them in plain words, check warns on an unknown value', () => {
+    const p = project();
+    p.run(['catalog', 'init']);
+    const r = p.run(['catalog', 'propose', '--kind', 'design', '--title', 'Visual tasks use tokens', '--invariant', 'Only tokens.', '--applies', 'class:D,label:visaul']);
+    expect(r.code, r.all).toBe(0);
+    const text = p.read(`${CAT}/decisions/D-0001-visual-tasks-use-tokens.md`);
+    expect(text).toMatch(/\napplies: \{"class":\["D"\],"label":\["visaul"\]\}\n/);
+    expect(text).toMatch(/\npaths: \[\]\n/);
+    expect(p.run(['catalog', 'show']).out).toMatch(/D-0001\s+proposed\s+Visual tasks use tokens\s+\(applies to: D tasks, visaul\)/);
+    expect(p.run(['catalog', 'show', 'D-0001']).out).toMatch(/applies: class D, label visaul \(D tasks, visaul\)/);
+    // The queue has no task with the label visaul: a typo, a warning (exit 0); class D is a class the queue knows.
+    const c = p.run(['catalog', 'check']);
+    expect(c.code, c.all).toBe(0);
+    expect(c.all).toMatch(/D-0001 .*applies label visaul is on no task/);
+    expect(c.all).not.toMatch(/applies class D is on no task/);
+    expect(p.run(['catalog', 'propose', '--title', 'X', '--invariant', 'Y.', '--applies', 'colour:red']).err).toMatch(/--applies takes <dimension>:<value>/);
+  });
+
   it('KD-2: propose --kind stack --uses --alternatives --stack writes a stack entry; check warns when the manifest disagrees once accepted', () => {
     const p = project();
     p.run(['catalog', 'init']);

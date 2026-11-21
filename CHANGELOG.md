@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **Catalog entries can reach tasks by class, domain, project, feature or label, not only by files.** `applies` on the
+  entry, `catalog propose --applies class:D,label:visual`; no new setting.
 - **The catalog excerpt names the installed version of each library a task imports, from the lockfile, with its local
   types and docs.** `catalog.depsExcerpt`, on.
 - **The full gate before merge can run in a clean copy of the exact commit.** `gates.runner` (default `worktree`); try
