@@ -874,6 +874,26 @@ It cannot deadlock with the other locks: the merge lock never waits (a second me
 held only for short edits and never around a gate run, and a process in a slot takes neither. `ravenseat merge` does hold the
 merge lock while its gate step waits for a slot, so other merges in that project are refused during the wait.
 
+### The clean copy
+
+By default the full gate before merge (`receive`'s run on the delivered tip) runs in the track's worktree. Untracked and
+ignored files there, and the shared `node_modules`, can make it green when the commit alone would be red. With
+`gates.runner: "clean"` that run happens in a fresh copy of the exact commit under `<dataFolder>/clean-gate`, and the
+evidence line says `ran in a clean copy of <sha>, dependencies linked|installed`. `ravenseat gates --full --clean` tries it
+once without changing the config.
+
+- Dependencies: `link` (the default) links the `sharedLinks` folders into the copy, about 2 s more; `install` runs a frozen
+  install from the commit's lockfile; `auto` installs only when the lockfile differs from the linked one.
+- An ignored file the tests need (for example `.env.test`) goes in `gates.clean.include`. Keys, tokens and other env files
+  are refused.
+- When the copy cannot be set up (no lockfile for `install`, a failed install, a broken worktree add), no gate command runs.
+  `receive` turns that into one owner question, as for a missing program (`gates.brokenVerdict`), not a fix round.
+- The copy is removed when the run ends, links first and never through a link. A link that points out of the copy keeps the
+  folder. A left copy (a killed run, `gates.clean.keepOnRed`) is swept by the next clean run and by `ravenseat doctor`
+  after `gates.clean.sweepAfterHours`.
+- In worktree mode a green run that saw ignored files or a differing lockfile prints a hint line about `gates.runner clean`.
+- Tools that walk the main checkout should skip the data folder: it can hold a full copy of the repository for a while.
+
 ### Git hooks and config
 
 A git hook, and git settings such as an alias or `core.sshCommand`, run code at the next git command, with your
@@ -1090,6 +1110,13 @@ board ("Protects against: ...") and in that view.
 | `qa.evidenceTypes`, `qa.autoTypes`, `qa.manualTypes` | `screenshot`, `test`, `manual`; auto `test`; manual `manual` | QA evidence types a track writes as `EVIDENCE <type>[=<ref>]`; auto types are closed by `qa auto --run`, manual ones gathered in one round | Advanced |
 | `qa.autoCommand` | `null` | Shell command for auto evidence, e.g. `npx vitest run {refs}` (`{refs}`, `{id}`; or `{ "<type>": "<command>" }`); `null` = `qa auto` only lists | Advanced |
 | `qa.evidenceLabels` | `["visual"]` | Labels for which `receive` warns when the `EVIDENCE` line is missing | Advanced |
+| `gates.runner` | `worktree` | [The clean copy](#the-clean-copy): `worktree` = the full gate before merge runs in the track's worktree, where untracked and ignored files and the shared node_modules can change the result; `clean` = it runs in a fresh copy of the exact commit, about 2 s more with linked dependencies, and can turn red when tests need an ignored local file. Off by default since it can stop work | Advanced |
+| `gates.clean.dependencies` | `link` | `link` = the `sharedLinks` folders linked into the copy (about 2 s); `install` = a frozen install from the commit's lockfile (npm ci, pnpm, yarn or bun; 25 to 60 s, runs install scripts); `auto` = install only when the commit's lockfile differs from the linked folder's | Advanced |
+| `gates.clean.copy` | `worktree` | `worktree` = `git worktree add --detach` (keeps `.git`, Git LFS works); `archive` = `git archive`, no `.git` | Advanced |
+| `gates.clean.include` | `[]` | Ignored files or folders copied from the worktree into the copy (for example `.env.test`). Never an absolute path, `..`, `.git`, a key or token file, or an env file other than `.env.test`, `.env.testing` and `.env.ci` | Advanced |
+| `gates.clean.kinds` | `["full"]` | Which runs use the copy: `full` (`receive`'s run on the delivered tip), `base` (the merge commit), `push` (`ravenseat gates --full` in the main checkout). A track's own run never | Advanced |
+| `gates.clean.keepOnRed` | `false` | Keep the copy of a red clean run for inspection; the sweep removes it later | Advanced |
+| `gates.clean.sweepAfterHours` | `1` | A copy whose run has ended is removed after this many hours by the next clean run or `ravenseat doctor`, links first | Advanced |
 
 ### Checks tab and learning
 

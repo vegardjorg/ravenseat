@@ -80,8 +80,19 @@
 //
 //   --evidence  record evidence also outside the main checkout (the push guard denies it to queue agents).
 //   --cwd <folder>  run in that folder (ravenseat receive: the track's worktree).
+//   --clean  (--quick/--full) run the gate commands in a clean copy of the HEAD commit this once, whatever gates.runner
+//            says (`ravenseat gates --full --clean`: try clean before switching it on).
 //
-// Use: node scripts/orchestrator/gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>] [--evidence] [--cwd <folder>]
+// The clean copy (lib/gateClean.js, gates.runner clean, off by default): the runs gates.clean.kinds lists (default the
+// full gate before merge, ravenseat receive's run on the delivered tip) run their commands in a fresh copy of exactly the
+// commit under <dataFolder>/clean-gate, with sharedLinks linked (or installed from the lockfile), and none of the
+// worktree's untracked or ignored files except gates.clean.include. A track's own run never uses it. The copy is made
+// after the wait in the gate queue and removed when the run ends (links first, never through a link); a red run keeps it
+// with gates.clean.keepOnRed. A copy that cannot be set up runs no command: one CLEAN COPY SETUP RED line, exit 1, and
+// receive asks the owner through the "gate cannot run" path (lib/gateBroken.js). The evidence line says which runner ran;
+// a worktree run that saw ignored files or a shared folder from another lockfile gets one hint about gates.runner clean.
+//
+// Use: node scripts/orchestrator/gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>] [--evidence] [--cwd <folder>] [--clean]
 //      node scripts/orchestrator/gates.mjs --precheck [--json] [--base <ref>] [--track <id>] [--log <file>]
 //      node scripts/orchestrator/gates.mjs --health [--json]
 //
@@ -159,7 +170,7 @@ if (args.includes('--health')) {
 }
 if ([quick, full, precheck].filter(Boolean).length !== 1) {
   console.error(
-    'use: gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>] [--evidence] [--cwd <folder>]\n' +
+    'use: gates.mjs --quick|--full [--track <id>] [--log <file>] [--timeout-sec <n>] [--evidence] [--cwd <folder>] [--clean]\n' +
       '     gates.mjs --precheck [--json] [--base <ref>] [--track-base <sha> --track-tip <sha>] [--track <id>] [--log <file>]\n' +
       '     gates.mjs --health [--json]',
   );
@@ -196,6 +207,13 @@ function inProject(filePath) {
 }
 // --cwd <folder>: run there (ravenseat receive runs the quick gate in the track's worktree, which need not be under the root).
 const cwd = option('--cwd') ? path.resolve(option('--cwd')) : inProject(process.cwd()) ? process.cwd() : K.root;
+// Where the gate commands run: `cwd`, or the clean copy of the commit (lib/gateClean.js). git questions still go to `cwd`.
+let runCwd = cwd;
+// The clean copy while it exists ({ base, name, folder }), for the removal at the end, on exit and on a signal.
+let cleanCopy = null;
+let keepCopy = false;
+// How this run's clean copy was made ({ copy, dependencies }), for the evidence entry; null for a run in place.
+let cleanRun = null;
 
 /**
  * Appends this run's `gate` row to the time log (lib/timeLogRows.js). Fail open: every error is swallowed, so the log
@@ -373,7 +391,9 @@ function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, befor
       kind,
       sha,
       setupHash: GE.setupHash(K.gates),
-      clean: START.clean,
+      // A clean copy holds exactly the commit, whatever the worktree had uncommitted (lib/gateClean.js).
+      clean: cleanRun ? true : START.clean,
+      ...(cleanRun ? { runner: 'clean', cleanCopy: cleanRun } : {}),
       exit,
       gates: ran,
       failed,
@@ -386,7 +406,7 @@ function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, befor
       coverage,
     });
     const result = GE.recordRun({ file, before: before ?? null, entry, tamperReason });
-    return { ...result, covered: result.recorded ? GE.coverageLine(entry) : '' };
+    return { ...result, covered: result.recorded ? GE.coverageLine(entry) : '', entry: result.recorded ? entry : null };
   } catch {
     // error-ignored: no evidence is the safe direction (receive runs the gate again, the push check asks)
     return { recorded: false, tampered: false };
@@ -422,6 +442,28 @@ const releaseSlot = () => {
 };
 process.on('exit', releaseSlot);
 process.on('exit', removeGateTemp);
+process.on('exit', removeCleanCopy);
+
+/**
+ * Removes the clean copy (lib/gateClean.js removeCopy: links first, never through a link), or keeps it when a red run
+ * asked for that (gates.clean.keepOnRed). Housekeeping: one line when something stays, never a change of the verdict.
+ */
+function removeCleanCopy() {
+  if (!cleanCopy) return;
+  const c = cleanCopy;
+  cleanCopy = null;
+  try {
+    const GC = require('./lib/gateClean.js');
+    if (keepCopy) {
+      console.log(`CLEAN COPY: ${c.folder} kept for inspection (gates.clean.keepOnRed); a later clean run or the doctor sweeps it after ${GC.setup(K).sweepAfterHours} h.`);
+      return;
+    }
+    const r = GC.removeCopy({ base: c.base, name: c.name, gitCwd: cwd });
+    if (!r.removed) console.log(`CLEAN COPY: ${r.reason}.`);
+  } catch {
+    // error-ignored: housekeeping; the sweep takes what is left
+  }
+}
 /**
  * Ends the running gate command and gives the slot back, then ends as the signal asks, so a caller (ravenseat merge) still
  * sees an interrupted child and never a red gate: on POSIX by the signal itself, on Windows with the Ctrl-C exit status.
@@ -430,6 +472,7 @@ function onSignal(sig) {
   if (runningChild) killTree(runningChild);
   releaseSlot();
   removeGateTemp(); // ending by the signal below fires no 'exit' on POSIX
+  removeCleanCopy(); // after the tree is killed, so no process holds its files
   if (process.platform === 'win32') process.exit(3221225786);
   process.removeAllListeners(sig);
   process.kill(process.pid, sig);
@@ -531,7 +574,7 @@ function runShell(command, { timeoutMs = null } = {}) {
     // Detached: its own group on POSIX (so killTree ends the guard and the command together), and outside this process's
     // job object on Windows (which would end the guard with this process, but never what the shell started).
     const child = spawn(process.execPath, TR.guardShellArgs(command), {
-      cwd,
+      cwd: runCwd, // the gate folder, or the clean copy (lib/gateClean.js)
       detached: true,
       // Hidden windows passed on to the gate command and its children (lib/hideWindows.cjs: windowsHide here does not reach what the run starts).
       env: hiddenWindowsEnv(gateCommandEnv()), // scrubbed (lib/gateEnv.js): the check runs the track's code. With its own temp folder (lib/gateTemp.js)
@@ -772,10 +815,114 @@ if (evidenceWanted().wanted && evidenceFile() && process.env.QUEUE_EVIDENCE_LOCK
 }
 
 if (logFile) fs.writeFileSync(logFile, `gates --${mode} in ${cwd}\n`);
+
+// ---- The clean copy (lib/gateClean.js, gates.runner clean, GOS-1) ----
+// After the waits above, so a run waiting for a slot holds no copy. Everything is set up before the first command; a
+// failure runs none of them and says so in one line, which receive reads (lib/gateBroken.js setupRed).
+const GC = require('./lib/gateClean.js');
+const CLEAN_SETUP = GC.setup(K);
+const CLEAN = GC.decide({
+  setup: CLEAN_SETUP,
+  kind: GC.runKind({ mode, mainTree: inMainTree(), evidence: args.includes('--evidence') }),
+  forced: args.includes('--clean'),
+});
+if (CLEAN.clean) await setUpCleanCopy();
+
+/** Makes the clean copy and points the gate commands at it, or ends the run red with the one setup line. */
+async function setUpCleanCopy() {
+  const setupRed = (reason) => {
+    const text = `${GC.SETUP_RED} ${reason}`;
+    console.log(text);
+    console.log(
+      'No gate command ran. Fix the setup, list an ignored file the tests need in gates.clean.include, or set gates.runner ' +
+        'worktree (the run in place).',
+    );
+    if (logFile) fs.appendFileSync(logFile, `\n${text}\n`);
+    removeCleanCopy();
+    process.exit(1);
+  };
+  const { dataFolder } = require('./lib/queueConfig.js');
+  const base = path.join(dataFolder(), GC.FOLDER);
+  // Old copies first (a killed run's, a kept red one past its time): our names only, the process gone, links first.
+  const swept = GC.sweep({ base, gitCwd: cwd, afterHours: CLEAN_SETUP.sweepAfterHours });
+  if (swept.removed) console.log(`CLEAN COPY: swept ${swept.removed} old cop${swept.removed === 1 ? 'y' : 'ies'} from earlier runs.`);
+  for (const k of swept.kept) console.log(`CLEAN COPY: an old copy stays: ${k.reason}.`);
+  if (!START.sha) setupRed('no commit to copy (git rev-parse HEAD failed)');
+  if (START.clean === false)
+    console.log(`NOTE: ${cwd} has uncommitted tracked changes; the clean copy checks the commit ${START.sha.slice(0, 12)} only.`);
+  const made = GC.make({ base, cwd, sha: START.sha, copy: CLEAN_SETUP.copy });
+  if (made.name) cleanCopy = { base, name: made.name, folder: made.folder };
+  if (!made.ok) setupRed(made.error);
+  const folder = made.folder;
+  const inc = GC.copyIncluded({ folder, from: cwd, include: CLEAN_SETUP.include });
+  if (!inc.ok) setupRed(inc.error);
+  if (inc.absent.length) console.log(`CLEAN COPY: gates.clean.include lists ${inc.absent.join(', ')}, which is not in ${cwd}; the copy goes without it.`);
+  // Dependencies: linked to the folder the worktree uses (link), installed from the copy's lockfile (install), or
+  // installed only when that lockfile differs from the one beside the linked folder (auto).
+  const GCOV = require('./lib/gateCoverage.js');
+  const links = require('./lib/orchestratorHelp.js').trackLinks(K.sharedLinks);
+  const from = [cwd, K.root];
+  const isModules = (rel) => rel.split('/').pop() === 'node_modules';
+  let linkedLock = null;
+  for (const root of from) {
+    try {
+      linkedLock = GCOV.lockHash(path.dirname(fs.realpathSync(path.join(root, 'node_modules'))));
+      break;
+    } catch {
+      // not here
+    }
+  }
+  const install = GC.wantsInstall({ dependencies: CLEAN_SETUP.dependencies, copyLock: GCOV.lockHash(folder), linkedLock });
+  const linked = GC.linkShared({ base, name: made.name, folder, links, from, skip: (rel) => install && isModules(rel) });
+  if (!linked.ok) setupRed(linked.error);
+  runCwd = folder;
+  if (install) {
+    const command = GC.installCommand(folder);
+    if (!command) setupRed('the dependencies are to be installed, but the commit has no lockfile (package-lock.json, pnpm-lock.yaml, yarn.lock or bun.lock)');
+    console.log(`CLEAN COPY: installing the dependencies from the commit's lockfile: ${command}`);
+    // The track's code (its postinstall scripts) runs here: the scrubbed environment, as for every gate command.
+    const r = await runShell(command, { timeoutMs: (Number(K.baseGate?.timeoutSec) || 900) * 1000 });
+    if (logFile) fs.appendFileSync(logFile, `\n===== clean copy install: ${command} (exit ${r.status ?? 'unknown'}) =====\n${r.out}`);
+    if (r.status !== 0 || r.timedOut) {
+      const program = require('./lib/gateBroken.js').cannotRun({ command, exit: r.status ?? 1, output: r.out, timedOut: false });
+      setupRed(
+        program
+          ? `the program ${program} is not found, so the dependencies cannot be installed`
+          : `the install failed (${command}, ${r.timedOut ? 'over its time budget' : `exit ${r.status ?? 'unknown'}`})`,
+      );
+    }
+  }
+  cleanRun = { copy: CLEAN_SETUP.copy, dependencies: install ? 'install' : 'link' };
+  console.log(
+    `CLEAN COPY: ${START.sha.slice(0, 12)} in ${folder} (${CLEAN_SETUP.copy === 'worktree' ? 'git worktree' : 'git archive'}, ` +
+      `dependencies ${install ? 'installed' : 'linked'}${CLEAN.source === '--clean' ? ', --clean for this run' : ''}); the gate commands run there.`,
+  );
+}
+
+/** What the clean copy could see beyond the commit (lib/gateCoverage.js), when this run records evidence. */
+function cleanCoverageNow(want) {
+  if (!want.wanted || !cleanRun) return null;
+  try {
+    const GCOV = require('./lib/gateCoverage.js');
+    const links = require('./lib/orchestratorHelp.js').trackLinks(K.sharedLinks);
+    if (CLEAN_SETUP.copy !== 'worktree') return { sharedLinks: GCOV.sharedLinksIn(runCwd, links), untracked: null, ignoredPresent: null };
+    return GCOV.readCoverage({
+      top: runCwd,
+      links,
+      git: (...a) => {
+        const r = spawnSync('git', ['-C', runCwd, '-c', 'core.fsmonitor=false', ...a], { encoding: 'utf8', maxBuffer: 64 << 20 });
+        return r.status === 0 ? r.stdout : null;
+      },
+    });
+  } catch {
+    return null; // error-ignored: the entry is then without the counts, which reads as unknown
+  }
+}
+
 // Before the first gate command: does this run record evidence, and the store's text for the tamper check.
 const WANT = evidenceWanted();
 const BEFORE = evidenceBefore(WANT);
-const COVERAGE = coverageNow(WANT);
+const COVERAGE = cleanRun ? cleanCoverageNow(WANT) : coverageNow(WANT);
 // The hooks and the executing config, also for a track's own run: what is planted in the shared .git reaches every run.
 const GX = require('./lib/gitExecSurface.js');
 const GB = require('./lib/gitSurfaceBaseline.js');
@@ -849,7 +996,7 @@ for (const command of gates) {
     failedCount++;
     failedGates.push(command);
     try {
-      errors[command] = require('./lib/failureSignature.js').gateExcerpt({ command, output: r.out, timedOut, roots: [cwd, K.root] });
+      errors[command] = require('./lib/failureSignature.js').gateExcerpt({ command, output: r.out, timedOut, roots: [...new Set([runCwd, cwd, K.root])] });
     } catch {
       // error-ignored: the excerpt is for measurement only
     }
@@ -860,7 +1007,7 @@ for (const command of gates) {
         name: command,
         status: green ? 'GREEN' : 'RED',
         sec,
-        first: green ? '' : firstErrorLine(gateType(command), out, cwd),
+        first: green ? '' : firstErrorLine(gateType(command), out, runCwd),
       },
       width,
     ),
@@ -909,7 +1056,7 @@ if (RERUN.commands.length) {
     else noteZeroTests(command, r.out);
     console.log(
       resultLine(
-        { name: `${command} (rerun)`, status: green ? 'GREEN' : 'RED', sec, first: green ? '' : firstErrorLine(gateType(command), out, cwd) },
+        { name: `${command} (rerun)`, status: green ? 'GREEN' : 'RED', sec, first: green ? '' : firstErrorLine(gateType(command), out, runCwd) },
         width,
       ),
     );
@@ -983,6 +1130,12 @@ if (loadRemark) {
   if (logFile) fs.appendFileSync(logFile, `\n${loadRemark}\n`);
 }
 if (recorded.covered) console.log(`Evidence for ${String(START.sha).slice(0, 12)}: ${recorded.covered}.`);
+// A run in place that saw ignored files or a shared folder from another lockfile: the one hint (lib/gateClean.js).
+const cleanHint = recorded.entry ? GC.hint(recorded.entry, CLEAN_SETUP) : null;
+if (cleanHint) console.log(cleanHint);
+// The commands are done and the evidence is recorded: the clean copy goes now (kept for a red run with keepOnRed).
+keepCopy = CLEAN_SETUP.keepOnRed && exitCode !== 0;
+removeCleanCopy();
 // A run in a linked worktree without --evidence (a track's own run) records nothing, by design (lib/gateEvidence.js):
 // said here, so a green result is not taken for one that receive or merge will reuse.
 if (!WANT.wanted && WANT.mainTree === false)

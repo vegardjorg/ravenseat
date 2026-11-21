@@ -15,6 +15,9 @@
 // The verdict is tied to the hash of the gates setup (lib/gateEvidence.js setupHash): the question id carries it, so a
 // changed gates setup forgets the old verdict by itself, and the same setup asks only once.
 // With the question resolved by the owner, a fix round runs as before (the owner's answer allows it).
+// The same path takes a clean copy that could not be set up (gates.runner clean, lib/gateClean.js: git or tar missing,
+// the copy, a link or the install failing): setupRed reads gates.mjs's one line in the log, setupVerdict needs no base
+// check (no gate command ran), and the question says so.
 //
 // Setting: gates.brokenVerdict (default true; false = every red gate gives a fix round, as before).
 // Pure, no I/O: cli/merge.mjs reads the gate log, runs the base check and registers the question.
@@ -161,8 +164,44 @@ function verdict({ id, found, baseRuns, setupHash, now = new Date().toISOString(
   };
 }
 
+/**
+ * The clean copy could not be set up (gates.runner clean, lib/gateClean.js): the reason from the line gates.mjs wrote
+ * into the log ("CLEAN COPY SETUP RED: <reason>"), or null. No gate command ran then, so there is no section to read.
+ */
+function setupRed(logText) {
+  const { SETUP_RED } = require('./gateClean.js');
+  for (const line of String(logText ?? '').split(/\r?\n/))
+    if (line.startsWith(SETUP_RED)) return line.slice(SETUP_RED.length).trim() || 'the clean copy could not be set up';
+  return null;
+}
+
+/**
+ * The verdict for a clean copy that could not be set up. No base check: the copy is made on this machine, from the
+ * commit, before any gate command runs, so the base would only repeat the same step. `setupHash` should also cover the
+ * clean setup, so changing gates.runner or gates.clean forgets the verdict.
+ */
+function setupVerdict({ id, reason, setupHash, now = new Date().toISOString() }) {
+  return { commands: [], program: null, setup: String(reason), setup_hash: setupHash, question: questionId(id, setupHash), at: now };
+}
+
 /** The owner question (the input for queueLogic.setQuestion). */
 function question(o, v, { cli = 'ravenseat' } = {}) {
+  if (v.setup)
+    return {
+      [v.question]: {
+        type: 'question',
+        text:
+          `${o.id} (${o.title ?? ''}): the gate could not start in a clean copy of the commit (gates.runner clean): ` +
+          `${v.setup}. No gate command ran, so no fix round was started: a setup problem on this machine or in the ` +
+          'copy is not something the track can fix. Fix the setup, or switch gates.runner back to worktree?',
+        recommendation:
+          'Fix the setup (install the missing program, list an ignored file the tests need in gates.clean.include, or ' +
+          `set gates.clean.dependencies link), or set gates.runner worktree, then ${cli} receive ${o.id} again: a changed ` +
+          'gates setup forgets this verdict. If the track\'s own lockfile change broke the install, let a fix round run: ' +
+          `${cli} resolve ${v.question} --answer "…", then ${cli} receive ${o.id}.`,
+        source: `gate cannot run (${o.id})`,
+      },
+    };
   const list = v.commands.map((c) => `\`${c}\``).join(', ');
   return {
     [v.question]: {
@@ -180,4 +219,4 @@ function question(o, v, { cli = 'ravenseat' } = {}) {
   };
 }
 
-module.exports = { BASE_CHECK_SEC, on, normalizeProgram, firstProgram, missingPrograms, cannotRun, logSections, candidates, questionId, verdict, question };
+module.exports = { BASE_CHECK_SEC, on, normalizeProgram, firstProgram, missingPrograms, cannotRun, logSections, candidates, questionId, verdict, setupRed, setupVerdict, question };

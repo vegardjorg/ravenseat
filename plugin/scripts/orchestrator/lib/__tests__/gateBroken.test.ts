@@ -106,3 +106,24 @@ describe('gateBroken', () => {
     expect(GB.questionId('X'.repeat(60), HASH)).toHaveLength(40);
   });
 });
+
+describe('a clean copy that could not be set up (gates.runner clean)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const G = require('../gateBroken.js');
+
+  it('reads the setup line gates.mjs writes into the log, and nothing from an ordinary red log', () => {
+    const log = ['gates --quick in /x', 'CLEAN COPY SETUP RED: the install failed (npm ci, exit 1)', ''].join('\n');
+    expect(G.setupRed(log)).toBe('the install failed (npm ci, exit 1)');
+    expect(G.setupRed('===== npm test (exit 1, 3 s) =====\n1 failed\n')).toBeNull();
+  });
+
+  it('is one owner question tied to the setup hash, with no base check and no fix round', () => {
+    const v = G.setupVerdict({ id: 'T1', reason: 'the program git is not found', setupHash: HASH });
+    expect(v).toMatchObject({ commands: [], program: null, setup: 'the program git is not found', setup_hash: HASH, question: 'T1.nogateabcdef01' });
+    const q = G.question({ id: 'T1', title: 'A task' }, v)[v.question];
+    expect(q.text).toContain('clean copy');
+    expect(q.text).toContain('the program git is not found');
+    expect(q.recommendation).toContain('gates.clean.include');
+    expect(q.recommendation).toContain('gates.runner worktree');
+  });
+});

@@ -93,6 +93,18 @@ const STANDARD = Object.freeze({
     // its worktree, without --timeout-sec): a gate over it is red. null = baseGate.timeoutSec (900), 0 = no budget.
     // receive and merge pass baseGate.timeoutSec themselves; the main checkout has no budget unless one is passed.
     timeoutSec: null,
+    // Where the full gate runs (lib/gateClean.js, GOS-1): 'worktree' = in place, as always; 'clean' = the runs in
+    // clean.kinds run in a fresh copy of the exact commit under <dataFolder>/clean-gate. Off by default: clean can stop
+    // work (a project whose tests need an ignored local file is red there until clean.include lists it). About 2 s
+    // more per full gate with linked dependencies (measured 2026-11-20).
+    runner: 'worktree',
+    // The clean copy. dependencies: 'link' (sharedLinks as links, ~2 s), 'install' (frozen install from the lockfile,
+    // 25 to 60 s, runs postinstall scripts) or 'auto' (install only when the lockfile differs from the linked folder's).
+    // copy: 'worktree' (git worktree add --detach, keeps .git) or 'archive' (git archive, no .git). include: ignored
+    // files copied in (an .env.test; never a key file or an env file that may hold real keys). kinds: which runs use
+    // it: 'full' (receive's run on the delivered tip), 'base' (the merge commit), 'push' (the main checkout's full run).
+    // keepOnRed: keep a red run's copy for inspection. sweepAfterHours: old copies of dead runs are removed after this.
+    clean: { dependencies: 'link', copy: 'worktree', include: [], kinds: ['full'], keepOnRed: false, sweepAfterHours: 1 },
   },
   // Whose gate evidence receive and merge rely on (lib/gateEvidence.js, lib/ownerLog.js, owner decision B2).
   // mode: "own" = receive and merge run the gates themselves (a run already recorded on the same tip and setup is

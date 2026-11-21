@@ -136,6 +136,8 @@ export function baselineProblems(own) {
     }
   }
   // gateEvidence (owner decision B2): an unknown mode reads as own, so it is named here rather than silently ignored.
+  // gates.runner and gates.clean (lib/gateClean.js): a broken value reads as its default, so it is named here.
+  out.push(...require('./lib/gateClean.js').problems(own));
   const gm = own.gateEvidence?.mode;
   if (gm !== undefined && !['own', 'external', 'off'].includes(gm)) out.push('gateEvidence.mode must be "own", "external" or "off"');
   const ge = own.gateEvidence?.external;
@@ -711,6 +713,25 @@ function checkTemp() {
 }
 
 /**
+ * Clean gate copies (gates.runner clean, lib/gateClean.js): sweeps what a killed or kept run left under
+ * <dataFolder>/clean-gate after gates.clean.sweepAfterHours, links first. Nothing while the folder does not exist, so a
+ * project that never used the clean copy gets no new line.
+ */
+function checkCleanCopies() {
+  const GC = require('./lib/gateClean.js');
+  const base = path.join(FOLDER, GC.FOLDER);
+  if (!fs.existsSync(base)) return [];
+  let result;
+  try {
+    result = GC.sweep({ base, gitCwd: GIT_ROOT, afterHours: GC.setup(CONFIG).sweepAfterHours });
+  } catch (e) {
+    return [warn('clean-gate', `the clean gate copies cannot be swept: ${e.message}`, `look in ${base}`)];
+  }
+  const line = GC.doctorLine(result, { cli: CLI });
+  return [line.status === 'WARN' ? warn('clean-gate', line.message, line.fix) : ok('clean-gate', line.message)];
+}
+
+/**
  * The project's failure classes and rules (docs/queue/failure-classes.json, failure-rules.json): nothing while they are
  * fine or absent, so a healthy doctor run prints no new line. A broken or invalid entry never stops a row (the core list
  * applies), so without this line nobody would learn that the project's own rules are not used.
@@ -910,7 +931,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkLinks, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkLinks, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {
