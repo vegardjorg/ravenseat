@@ -198,5 +198,13 @@ describe('boardGroups', () => {
     expect(g.map((x: any) => x.kind)).toEqual(['design', 'stack', 'decision']);
     expect(g[0]).toMatchObject({ title: 'Design language', entries: [{ id: 'D-0001', status: 'proposed' }] });
     expect(g[2].entries.map((e: any) => e.id)).toEqual(['D-0002']);
+    // KD-3: the stack card gets the choice; the other kinds get none.
+    expect(g[1].entries[0]).toMatchObject({ id: 'D-0003', uses: { job: 'tests', tool: 'vitest' }, alternatives: [] });
+    expect(g[0].entries[0]).toMatchObject({ uses: null, alternatives: [] });
+  });
+
+  it('a stack entry carries what it was chosen over', () => {
+    const root = folder({ 'decisions/D-0003-c.md': entry(['kind: stack', 'uses: {"job": "tests", "tool": "vitest"}', 'alternatives: ["jest", "mocha"]']) });
+    expect(C.boardGroups(C.readCatalog(root), C.emptyLedger())[0].entries[0].alternatives).toEqual(['jest', 'mocha']);
   });
 });

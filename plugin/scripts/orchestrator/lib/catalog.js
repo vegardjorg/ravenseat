@@ -112,6 +112,10 @@ const LEDGER_FILE = 'catalog-accepted.json';
  * stackFacts (roadmap 0å KD-2): the stack words of accepted stack entries go into the Checks tab's facts.stacks, so a
  * recipe's `stack:<word>` holds and the dep-audit card names the audit command. On: it can change which cards show and
  * stops nothing, and only the owner's accepted entries count; off gives the cards from the manifests alone.
+ * depsExcerpt (roadmap 0å KD-3, lib/catalogDeps.js): the excerpt gets a row per dependency the task's files import, with
+ * the locked version, the local types or README and the docs link from stack.md's Dependencies table. On: it is only
+ * text inside the same cap (cut before the reuse rows), read from the lockfile with no network, and it fixes a known
+ * problem (code written for another major version than the one installed). Off: the excerpt as before.
  */
 const DEFAULTS = Object.freeze({
   doctor: true,
@@ -125,6 +129,7 @@ const DEFAULTS = Object.freeze({
   gateAfter: 3,
   captureAnswers: 'explicit',
   stackFacts: true,
+  depsExcerpt: true,
 });
 /**
  * The settings with a fixed list of values. captureAnswers (roadmap 0z Z-A): whether an owner's answer can become a
@@ -414,8 +419,10 @@ function visibleLines(source) {
 const PREFER_INTRO = 'One line per job: what to use, and what not to add. A track gets these lines before it picks a library.';
 
 /**
- * stack.md: the generated block (text between the markers, trimmed) and the prefer lines under "## Prefer".
- * @returns {{ block: string|null, prefer: { purpose: string, use: string }[], errors: string[], warnings: string[] }}
+ * stack.md: the generated block (text between the markers, trimmed), the prefer lines under "## Prefer" and the rows of
+ * the "## Dependencies" table (KD-3).
+ * @returns {{ block: string|null, prefer: { purpose: string, use: string }[], deps: object[], errors: string[],
+ *   warnings: string[] }}
  */
 function parseStack(source) {
   const errors = [];
@@ -445,7 +452,12 @@ function parseStack(source) {
   }
   if (prefer.length > PREFER_LINES)
     warnings.push(`stack.md: ${prefer.length} prefer lines; a mission gets the first ${PREFER_LINES}`);
-  return { block, prefer, errors, warnings };
+  // The hand-written "## Dependencies" table (roadmap 0å KD-3, lib/catalogDeps.js): purpose, docs and a note per
+  // package; the version is never in it (it comes from the lockfile).
+  const deps = require('./catalogDeps.js').parseDepsTable(source);
+  errors.push(...deps.errors);
+  warnings.push(...deps.warnings);
+  return { block, prefer, deps: deps.rows, errors, warnings };
 }
 
 /** The cells of a table row "| a | b | c |" (escaped \| kept as |). */
@@ -610,6 +622,10 @@ function boardGroups(cat, ledger = emptyLedger()) {
         paths: d.paths ?? [],
         except: d.except ?? [],
         source: d.kind === 'design' ? d.source ?? null : null,
+        // A stack entry's choice (roadmap 0å KD-3): the tool for the job and what it was chosen over, so the card says
+        // it. Null and [] on the other kinds.
+        uses: d.kind === 'stack' && d.uses?.tool ? { job: d.uses.job ?? null, tool: d.uses.tool } : null,
+        alternatives: d.kind === 'stack' && Array.isArray(d.alternatives) ? d.alternatives.filter((a) => typeof a === 'string' && a) : [],
         file: d.file ?? null,
       }));
     if (entries.length) out.push({ kind, title, entries });
@@ -1081,6 +1097,15 @@ function checkCatalog(cat, ctx = {}) {
   }
   // An accepted stack entry against the manifests and the Prefer lines (roadmap 0å KD-2), like the block below.
   warnings.push(...stackWarnings(cat, { files, readFile: ctx.readFile ?? null, ledger: ctx.ledger ?? emptyLedger(), glob }));
+  // A Dependencies row (roadmap 0å KD-3) for a package that is in no manifest: a removed library, or a typo.
+  if (files && ctx.readFile && cat.stack?.deps?.length) {
+    const SN = require('./scopeNotes.js');
+    const key = (s) => String(s ?? '').toLowerCase().replace(/[-_.]+/g, '-');
+    const named = new Set();
+    for (const f of files.filter((x) => SN.isManifest(x)).slice(0, STACK_MANIFESTS)) for (const n of SN.depsOf(f, ctx.readFile(f)) ?? []) named.add(key(n));
+    for (const r of cat.stack.deps)
+      if (!named.has(key(r.package))) warnings.push(`stack.md: the Dependencies row ${r.package} names a package that is in no manifest`);
+  }
   if (cat.stack?.block != null && ctx.stackBlock != null && cat.stack.block.trim() !== ctx.stackBlock.trim())
     warnings.push(`stack.md: the generated block is out of step with the manifests; ${cli} catalog init refreshes it`);
   return { errors, warnings };
@@ -1102,12 +1127,15 @@ function stackBlock(facts = {}) {
   return out.join('\n');
 }
 
-/** The libraries by job a manifest already has (the purpose groups of dependency-purposes.json). */
+/**
+ * The libraries by job a manifest already has (the purpose groups of dependency-purposes.json). Any manifest
+ * lib/manifests.js reads: package.json, requirements*.txt and, since roadmap 0å KD-3, pyproject.toml, Cargo.toml, go.mod.
+ */
 function jobsOf(manifests, purposes = require('./scopeNotes.js').PURPOSES) {
   const SN = require('./scopeNotes.js');
   const out = [];
   for (const m of manifests ?? []) {
-    const eco = m.path.split('/').pop() === 'package.json' ? 'npm' : 'python';
+    const eco = require('./manifests.js').ecosystemOf(m.path);
     const deps = SN.depsOf(m.path, m.text) ?? [];
     for (const p of purposes) {
       if (p.ecosystem !== eco) continue;
@@ -1232,6 +1260,8 @@ module.exports = {
   parseDecision,
   parseStack,
   parseReuse,
+  visibleLines,
+  cells,
   readCatalog,
   emptyLedger,
   parseLedger,

@@ -647,6 +647,11 @@ function catalogItem(e) {
     el('p', { class: 'decide-nb-meta', text: where }),
     // A design entry (KD-1) names where its tokens live; the catalog never copies them.
     e.source ? el('p', { class: 'decide-nb-meta', text: `Tokens: ${[].concat(e.source).join(', ')}` }) : null,
+    // A stack entry (KD-3) says the tool for the job and what it was chosen over.
+    e.uses?.tool
+      ? el('p', { class: 'decide-nb-meta', text: `Uses: ${e.uses.tool}${e.uses.job ? ` for ${e.uses.job}` : ''}` })
+      : null,
+    e.alternatives?.length ? el('p', { class: 'decide-nb-meta', text: `Chosen over: ${e.alternatives.join(', ')}` }) : null,
     badge.hold
       ? null
       : el('p', { class: 'decide-nb-meta', text: `Accept it with: ravenseat catalog accept ${e.id} --by owner` }),

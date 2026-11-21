@@ -20,6 +20,11 @@
 //   - the prefer lines of stack.md, at most MAX.prefer (they apply to the whole project).
 //   - the reuse.md rows in the task's folders (the folder of an owned or read file, or inside an owned folder), at most
 //     MAX.reuse; a task that names no files gets the first rows.
+//   - the dependencies the task's files import (roadmap 0å KD-3, lib/catalogDeps.js depRows, catalog.depsExcerpt on):
+//     the installed version from the lockfile, the local file to read (types, README or the installed folder) and the
+//     docs link from stack.md's Dependencies table, at most catalogDeps.MAX_ROWS, under one rule: read the installed
+//     types, not memory. A track has no network, so the files on disk are the docs it can read. Cut before the reuse
+//     rows. None found: no section, the text byte for byte as before.
 //   - with the generated index (lib/catalogIndex.js, bolk B5, catalog.index on): the building blocks tagged `@shared`
 //     in the task's folders (the same folder rule as the reuse rows, a reuse row for the same symbol wins), at most
 //     MAX.shared; and in the review form only, the near names (V1b): a name the delivery defines that is close to one
@@ -96,7 +101,7 @@ function rowInScope(file, scope) {
  * @returns {{ binding: object[], proposed: object[], prefer: object[], reuse: object[], shared: object[], near: object[],
  *   noFiles: boolean, cut: { binding: number, proposed: number, prefer: number, reuse: number, near: number, shared: number } }}
  */
-function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGuard.js').globMatch, index = null, near = [] } = {}) {
+function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGuard.js').globMatch, index = null, near = [], deps = null } = {}) {
   const scope = scopeOf(task);
   const noFiles = scope.length === 0;
   const binding = [];
@@ -119,7 +124,10 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
     if (d.kind === 'design') design.push({ d, status });
     else (status === 'accepted' ? binding : proposed).push({ d, status });
   }
-  const cut = { binding: 0, design: 0, proposed: 0, prefer: 0, reuse: 0, near: 0, shared: 0 };
+  const cut = { binding: 0, design: 0, proposed: 0, prefer: 0, reuse: 0, near: 0, shared: 0, deps: 0 };
+  // The dependency rows (KD-3): already chosen and capped by lib/catalogDeps.js depRows, which counts what it cut.
+  const depList = Array.isArray(deps?.rows) ? deps.rows : [];
+  cut.deps = Number.isInteger(deps?.cut) ? deps.cut : 0;
   // At most MAX.design design entries, the ones that hold first.
   design.sort((a, b) => (a.status === 'accepted') === (b.status === 'accepted') ? 0 : a.status === 'accepted' ? -1 : 1);
   const keepDesign = design.slice(0, MAX.design);
@@ -151,6 +159,7 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
     reuse: rows.slice(0, MAX.reuse),
     shared: shared.slice(0, MAX.shared),
     near: nearList.slice(0, MAX.near),
+    deps: depList,
     noFiles,
     cut,
   };
@@ -173,7 +182,19 @@ const SECTIONS = Object.freeze({
   near:
     '- **Near names** (V1b: a name the delivery defines is close to one the code exports elsewhere. Maybe the same helper ' +
     'written again, maybe a deliberate variant: weigh it with the code, it is no finding by itself):',
+  deps:
+    '- **Dependencies these files import** (the versions installed here. When you are unsure of the API in this version, ' +
+    'read the installed types or README, not your memory: it may know another major version):',
 });
+
+/** A dependency row (KD-3): name, version and how it is known, the local file to read, the docs; then purpose and note. */
+function depLine(r) {
+  const p = r.path ? String(r.path) : '';
+  const local = !p ? null : /\.d\.[cm]?ts$/.test(p) ? `types in \`${p}\`` : /readme(\.\w+)?$/i.test(p) ? `README in \`${p}\`` : `installed in \`${p}\``;
+  const facts = [r.version ? r.how ?? 'locked' : 'no locked version', local, r.docs ? `docs ${r.docs}` : null].filter(Boolean);
+  const about = [r.purpose, r.note].map((s) => String(s ?? '').trim()).filter(Boolean).join('; ');
+  return `  - ${r.name}${r.version ? ` ${r.version}` : ''} (${facts.join('; ')})${about ? `: ${about}` : ''}`;
+}
 
 function decisionLine({ d, status }) {
   const shown = d.paths.slice(0, SHOWN_PATHS).join(', ') + (d.paths.length > SHOWN_PATHS ? ', ...' : '');
@@ -196,10 +217,14 @@ const ITEM = {
   reuse: (r) => `  - ${r.purpose}: \`${r.symbol}\` in \`${r.file}\``,
   shared: (r) => `  - ${r.purpose}: \`${r.symbol}\` in \`${r.file}\``,
   near: (n) => `  - \`${n.name}\` (new in \`${n.file}\`) is close to \`${n.other}\` in \`${n.otherFile}:${n.line}\` (${n.why})`,
+  deps: depLine,
 };
-/** The order the parts are shown in, and the order they get room under the cap (the last ones are cut first). */
-const SHOWN = ['binding', 'design', 'near', 'proposed', 'prefer', 'reuse', 'shared'];
-const ROOM = ['binding', 'design', 'near', 'prefer', 'proposed', 'reuse', 'shared'];
+/**
+ * The order the parts are shown in, and the order they get room under the cap (the last ones are cut first). The
+ * dependency rows (KD-3) are shown after the prefer lines and cut before the reuse rows (the plan's § 5.2).
+ */
+const SHOWN = ['binding', 'design', 'near', 'proposed', 'prefer', 'deps', 'reuse', 'shared'];
+const ROOM = ['binding', 'design', 'near', 'prefer', 'proposed', 'reuse', 'deps', 'shared'];
 
 /** "nothing cut", or "cut: 2 binding choices, 4 reuse rows; `ravenseat catalog show` lists them all". */
 function cutText(cut, cli) {
@@ -210,6 +235,7 @@ function cutText(cut, cli) {
     cut.prefer && plural(cut.prefer, 'prefer line'),
     cut.reuse && plural(cut.reuse, 'reuse row'),
     cut.near && plural(cut.near, 'near name'),
+    cut.deps && plural(cut.deps, 'dependency row'),
     cut.shared && plural(cut.shared, 'tagged block'),
   ].filter(Boolean);
   return parts.length ? `cut: ${parts.join(', ')}; \`${cli} catalog show\` lists them all` : 'nothing cut';
@@ -272,9 +298,9 @@ function settle(form, items, o) {
  * @returns {{ lines: string[], tokens: number, cap: number, cut: { binding: number, proposed: number, prefer: number,
  *   reuse: number, near: number, shared: number }, counts: object } | null}
  */
-function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form = 'mission', cli = 'ravenseat', glob, index = null, near = [] } = {}) {
+function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form = 'mission', cli = 'ravenseat', glob, index = null, near = [], deps = null } = {}) {
   if (!cat?.exists && !index) return null;
-  const chosen = choose(cat, task, { ledger, glob, index, near: form === 'review' ? near : [] });
+  const chosen = choose(cat, task, { ledger, glob, index, near: form === 'review' ? near : [], deps });
   const all = {
     binding: chosen.binding,
     design: chosen.design,
@@ -283,11 +309,12 @@ function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form
     reuse: chosen.reuse,
     near: chosen.near,
     shared: chosen.shared,
+    deps: chosen.deps,
   };
   if (!Object.values(all).some((l) => l.length)) return null;
   const cap = capTokens;
   const cut = { ...chosen.cut };
-  const items = { binding: [], design: [], proposed: [], prefer: [], reuse: [], near: [], shared: [] };
+  const items = { binding: [], design: [], proposed: [], prefer: [], reuse: [], near: [], shared: [], deps: [] };
   const o = { cap, cut, cli, noFiles: chosen.noFiles };
   // Greedy in priority order: an item goes in when the whole text still fits; one that does not is counted as cut,
   // and a shorter one after it may still fit.
@@ -335,6 +362,8 @@ function forTask(task, { which = 'mission', root, dataFolder, config, cli, fsLik
     const CI = require('./catalogIndex.js');
     const index = setup.index ? (CI.refresh(tree, { dataFolder: data, fsLike })?.index ?? null) : null;
     const near = index && which === 'review' && Array.isArray(newNames) ? CI.nearNames(newNames, index) : [];
+    // The dependency rows (roadmap 0å KD-3, catalog.depsExcerpt): read from the same tree, never the network.
+    const deps = setup.depsExcerpt ? depsFor(task, tree, cat, fsLike) : null;
     return excerpt(cat, task, {
       ledger,
       capTokens: setup.excerptTokens,
@@ -342,9 +371,41 @@ function forTask(task, { which = 'mission', root, dataFolder, config, cli, fsLik
       cli: cli ?? require('./projectRoot.js').cliCommand(),
       index,
       near,
+      deps,
     });
   } catch {
     // error-ignored: the excerpt is guidance; the mission and the package are made without it
+    return null;
+  }
+}
+
+/**
+ * The dependency rows for a task from a tree on disk (lib/catalogDeps.js depRows with the stack.md table), or null when
+ * anything fails: the rows are guidance, the excerpt is made without them.
+ */
+function depsFor(task, tree, cat, fsLike = fs) {
+  try {
+    const at = (p) => path.join(tree, ...String(p).split('/').filter(Boolean));
+    const io = {
+      read: (p) => {
+        try {
+          return fsLike.readFileSync(at(p), 'utf8');
+        } catch {
+          return null;
+        }
+      },
+      exists: (p) => fsLike.existsSync(at(p)),
+      list: (d) => {
+        try {
+          return fsLike.readdirSync(at(d || '.'));
+        } catch {
+          return [];
+        }
+      },
+    };
+    return require('./catalogDeps.js').depRows(task, io, { table: cat?.stack?.deps ?? [] });
+  } catch {
+    // error-ignored: no dependency rows rather than a lost excerpt
     return null;
   }
 }

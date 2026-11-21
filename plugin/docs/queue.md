@@ -711,9 +711,9 @@ NOTE drift (A): 7 of 9 changed files are outside owned_files, shared_patch and r
   `scopeNotes.ignoreNames` adds your own. At most 30 names are looked up per receive.
 - **New folder** (`scopeNotes.newFolders`): a file added in a folder the base does not have, at depth 1 or 2
   (`scopeNotes.folderDepth`, 1 to 3). Only the shallowest new folder of a path is named.
-- **Dependency** (`scopeNotes.dependencies`): a new package in `package.json` or `requirements*.txt` whose job the same
-  manifest already has a package for. The groups (dates, HTTP, validation, helpers, test runner, logging, ids and
-  more) are data in `dependency-purposes.json`, each with examples a test runs. It also sees a manifest the task owns,
+- **Dependency** (`scopeNotes.dependencies`): a new package in `package.json`, `requirements*.txt`, `pyproject.toml`,
+  `Cargo.toml` or `go.mod` whose job the same manifest already has a package for. The groups (dates, HTTP,
+  validation, helpers, test runner, logging, ids, Rust HTTP, dates and arguments, Go routers and logging) are data in `dependency-purposes.json`, each with examples a test runs. It also sees a manifest the task owns,
   which the dependency file guard does not.
 - **Drift** (`scopeNotes.drift`): how many changed files lie outside `owned_files`, `shared_patch` and `reads`, and the
   folders among them the task does not name. A task that names no files gets the number of folders it touches
@@ -1239,6 +1239,7 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 | `catalog.gateAfter` | `3` | When the same accepted rule is broken in this many separate tasks (2 to 20), receive proposes a GATE task to make it a real lint, inside the shared proposal cap. Only with `learning.proposals` on | Advanced |
 | `catalog.captureAnswers` | `explicit` | [Owner answers into the catalog](catalog.md#from-an-owner-answer-to-a-design-choice): `explicit` lets `resolve --keep` and "Keep as design choice" in Decisions turn an answer into a proposed design choice, which you accept yourself. `suggest` also marks the questions that read like a lasting rule (and `resolve` prints the line to keep one); it can be noise, so it is not the default. `off`: never, and `catalog propose` refuses too. Nothing is ever accepted by it | Advanced |
 | `catalog.stackFacts` | `true` | [Stack entries](catalog.md#stack-entries): the tool and the `stack` words of each stack entry you accepted join the stack the Checks tab sees, so a recipe's `stack:<word>` holds and the dependency audit card names its command (`pnpm audit`, `cargo audit`). It can change which cards show and stops nothing; only accepted entries count. Off: the cards follow the manifests alone | Advanced |
+| `catalog.depsExcerpt` | `true` | [Dependencies](catalog.md#dependencies): each task's excerpt lists the libraries its files import, with the version locked here, the local types or README and the docs link from the `## Dependencies` table in `stack.md`. Only text inside the same cap, cut before the reuse rows, no network. Off: the excerpt without those rows | Advanced |
 | `notBuilding.match` | `true` | [Not building](catalog.md#not-building): a new task at `add`, a track's proposals at `receive` and a captured plan that contain a keyword of an entry you chose not to build get one `INFO not-building:` line with the date and the reason, and doctor names entries whose revisit date has passed. Advice only: it stops nothing, and off weakens no guard | Advanced |
 | `catalog.planLinks` | `true` | `plan new` and `plan edit` check a plan entry's `decisions` against [the project catalog](catalog.md) and warn about an id the catalog does not have. The shape (`D-0001`) is always checked; `false` turns the lookup off and weakens no guard | Advanced |
 

@@ -1247,6 +1247,13 @@ const SETTINGS = Object.freeze([
     'The tools and words of the stack entries you accepted in the catalog join the stack the Checks tab sees, so ' +
     'recipes for that stack apply and the dependency audit card names its command (pnpm audit, cargo audit). Off: ' +
     'the cards follow the manifests alone.'),
+  // Dependency rows in the excerpt (roadmap 0å KD-3). Friction: only text, inside the same token cap, and cut before
+  // the reuse rows, so it never pushes out a binding decision; versions come from the lockfile and the installed
+  // packages on disk, never the network. Off gives the excerpt as before. No guard reads it: no weakening.
+  row('catalog.depsExcerpt', 'scope', 'onoff', 'Dependency versions in the catalog excerpt',
+    'Each task\'s catalog excerpt lists the libraries its files import, with the version locked here, the local ' +
+    'types or README to read and the docs link from the Dependencies table in stack.md, so the model writes code for ' +
+    'the version you have, not one it remembers. Off: the excerpt without those rows.'),
   row('catalog.gateAfter', 'scope', 'integer', 'Separate tasks before a lint proposal',
     'Only with learning.proposals on, which is off by default. Then a rule broken in this many separate tasks (2 to ' +
     '20, default 3) becomes one proposed gate task to put it in the project\'s own lint. It shares the cap of three ' +

@@ -222,6 +222,29 @@ describe('ravenseat catalog init, show and check', () => {
     expect(p.run(['catalog', 'check']).all).toMatch(/D-0001: moment is in package\.json, but D-0001 chose dayjs for dates/);
   });
 
+  it('KD-3: a new stack.md gets Dependencies rows from local metadata; an existing one only gets them printed', () => {
+    const p = project();
+    p.write('lib/when.js', "const dayjs = require('dayjs');\nmodule.exports = { dayjs };\n");
+    p.write('node_modules/dayjs/package.json', JSON.stringify({ name: 'dayjs', version: '1.11.10', homepage: 'https://day.js.org' }));
+    execFileSync('git', ['-C', p.repo, 'add', '--', 'lib/when.js'], { stdio: 'ignore' });
+    const r = p.run(['catalog', 'init']);
+    expect(r.code, r.all).toBe(0);
+    expect(r.out).toMatch(/stack\.md \(with 1 proposed Dependencies rows\)/);
+    const stack = p.read(`${CAT}/stack.md`);
+    expect(stack).toMatch(/## Dependencies\n/);
+    expect(stack).toMatch(/\| dayjs \| dates and times \| https:\/\/day\.js\.org \| \|/);
+    const check = JSON.parse(p.run(['catalog', 'check', '--json']).out);
+    expect(check.errors).toEqual([]);
+    expect(check.warnings).toEqual([]);
+    expect(p.run(['catalog', 'show']).out).toMatch(/Dependencies \(stack\.md\):\n {2}dayjs: dates and times \(https:\/\/day\.js\.org\)/);
+    // The owner's file without the table: init leaves the text and prints the rows to copy.
+    p.write(`${CAT}/stack.md`, stack.replace(/## Dependencies[\s\S]*$/, ''));
+    const again = p.run(['catalog', 'init']);
+    expect(again.out).toMatch(/Rows you could add under ## Dependencies/);
+    expect(again.out).toMatch(/\| dayjs \| dates and times \| https:\/\/day\.js\.org \| \|/);
+    expect(p.read(`${CAT}/stack.md`)).not.toMatch(/## Dependencies/);
+  });
+
   it('KD-1: the first init proposes a design entry from the token file; a deleted draft is not written again', () => {
     const p = project();
     p.write('web/tokens.css', ':root {\n  --color-primary: #1a73e8;\n}\n');

@@ -610,6 +610,9 @@ const STANDARD = Object.freeze({
   // stackFacts (roadmap 0å KD-2): the stack words of the owner's accepted stack entries join facts.stacks on the Checks
   // tab, so `stack:<word>` recipes hold and the dep-audit card names the audit command. On: it can change which cards
   // show and stops nothing, and only accepted entries count; off gives the cards from the manifests alone.
+  // depsExcerpt (roadmap 0å KD-3): the excerpt gets a row per dependency the task's files import, with the locked
+  // version, the local types or README and the docs link. On: only text inside the same cap, cut before the reuse rows,
+  // no network; it fixes code written for another major version than the one installed. Off: the excerpt as before.
   catalog: {
     doctor: true,
     planLinks: true,
@@ -622,6 +625,7 @@ const STANDARD = Object.freeze({
     gateAfter: 3,
     captureAnswers: 'explicit',
     stackFacts: true,
+    depsExcerpt: true,
   },
   // "Not building" (lib/notBuilding.js, roadmap 0f): the catalog's entries for what the owner chose not to build.
   // match: a new task at add, a track's proposals at receive and a captured plan that read like such an entry (its
