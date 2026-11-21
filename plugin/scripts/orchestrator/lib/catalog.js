@@ -112,6 +112,10 @@ const LEDGER_FILE = 'catalog-accepted.json';
  * stackFacts (roadmap 0å KD-2): the stack words of accepted stack entries go into the Checks tab's facts.stacks, so a
  * recipe's `stack:<word>` holds and the dep-audit card names the audit command. On: it can change which cards show and
  * stops nothing, and only the owner's accepted entries count; off gives the cards from the manifests alone.
+ * depsExcerpt (roadmap 0å KD-3, lib/catalogDeps.js): the excerpt gets a row per dependency the task's files import, with
+ * the locked version, the local types or README and the docs link from stack.md's Dependencies table. On: it is only
+ * text inside the same cap (cut before the reuse rows), read from the lockfile with no network, and it fixes a known
+ * problem (code written for another major version than the one installed). Off: the excerpt as before.
  */
 const DEFAULTS = Object.freeze({
   doctor: true,
@@ -125,6 +129,7 @@ const DEFAULTS = Object.freeze({
   gateAfter: 3,
   captureAnswers: 'explicit',
   stackFacts: true,
+  depsExcerpt: true,
 });
 /**
  * The settings with a fixed list of values. captureAnswers (roadmap 0z Z-A): whether an owner's answer can become a
