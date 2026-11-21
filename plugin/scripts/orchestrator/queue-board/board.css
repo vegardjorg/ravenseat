@@ -6565,7 +6565,7 @@ body.stale .summary.stuck::before {
   min-height: 28px;
   padding: 0 var(--distance-sm);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .quick-filter.active {
