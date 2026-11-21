@@ -23,6 +23,7 @@ import { logTime, measurementLine, measureTask, minutes, saveMeasurement, turnWa
 import { linkProblems, linkProblemsJson, printLinkWarning } from './taskLinksCheck.mjs';
 import { keepAsNotBuilding, keepRefused, remarkReason } from './notBuilding.mjs';
 import { issueArg } from './issues.mjs';
+import { readDoc } from './planShared.mjs';
 
 // The lock on the finish line and the ownership (done_when, acceptance, owned_files, shared_patch, owner_db, migr_block;
 // lib/doneCheck.js LOCKED_FIELDS and doneLockError): edit and undo refuse a change after the start unless --by is owner
@@ -63,6 +64,28 @@ const lockError = (o, changes) =>
     inTrack: D.LOCKED_FIELDS.some((f) => Object.hasOwn(changes, f)) ? trackBranchHere() : null,
   });
 
+/**
+ * The success question for the plan of task `id` (PG-6), or null: plans.postCheck off, no plan, no decision section
+ * with a success measure, or anything unreadable. Read-only; fail open, since it must never stop a done.
+ * @returns {null | { entry: object, id: string, question: object }}
+ */
+function postCheckFor(id) {
+  try {
+    const PC = require('./lib/planPostCheck.js');
+    if (!PC.postCheckSetup(CONFIG).on) return null;
+    const o = read().tasks.find((x) => x.id === id);
+    if (!o?.plan) return null;
+    const reg = readPlans();
+    // A task may point at an entry that was merged into another: the surviving entry owns it.
+    const entry = (reg.entries ?? []).find((p) => p.id === o.plan || (p.merged_from ?? []).includes(o.plan));
+    if (!entry) return null;
+    const q = PC.postCheckQuestion(entry, PC.decisionMeasure(entry, readDoc));
+    return q ? { entry, ...q } : null;
+  } catch {
+    return null; // error-ignored: the follow-up only asks; the done goes through without it
+  }
+}
+
 /** `ravenseat set` (the usage is at the top of queue.mjs). */
 export function cmdSet() {
   const [, id, status] = a;
@@ -85,6 +108,10 @@ export function cmdSet() {
       );
     }
   }
+  // PG-6 (lib/planPostCheck.js): the plan's success question, read before the lock (the register and the decision
+  // section); registered under the lock below once this done makes the plan built.
+  const postCheck = status === 'done' ? postCheckFor(id) : null;
+  let postCheckAdded = null;
   // Done by hand without proof (red team, plans/redteam-plan.md finding 9): allowed, since a picked or outside task is done
   // that way, but said out loud, with the tasks it frees. Never a stop.
   let unproven = null;
@@ -122,6 +149,11 @@ export function cmdSet() {
     if (val('--remark')) o.remarks = [...(o.remarks ?? []), `${now} ${val('--remark')}`];
     if (measurement) saveMeasurement(o, measurement);
     if (status === 'done' || status === 'cancelled') autoCleanFocus(queue, `set ${id} ${status}`);
+    if (postCheck && require('./lib/planPostCheck.js').due(queue, postCheck.entry)) {
+      const s = L.setQuestion(queue, { [postCheck.id]: postCheck.question }, now);
+      // A question the queue refuses is left out: the follow-up never stops a done.
+      if (!s.error?.length) postCheckAdded = postCheck;
+    }
     return o;
   });
   if (measurement) {
@@ -141,6 +173,11 @@ export function cmdSet() {
   console.log(
     `${id}: ${status}${qa ? ' · label visual: now in the owner QA list (ravenseat qa)' : ''}`,
   );
+  if (postCheckAdded)
+    console.log(
+      `${postCheckAdded.entry.id} is built: owner question ${postCheckAdded.id} asks whether its success measure was met ` +
+        `(no task waits on it; ${CLI} plan postcheck shows the estimate record; plans.postCheck).`,
+    );
   if (wiringOff) console.error(wiringOff);
   if (reviewOff) console.error(reviewOff);
   if (unproven) {

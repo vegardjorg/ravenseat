@@ -363,6 +363,7 @@ module.exports = {
   shapedErrors,
   skipErrors,
   needWhy,
+  sectionLines,
   decisionState,
   decisionLine,
   readyGate,

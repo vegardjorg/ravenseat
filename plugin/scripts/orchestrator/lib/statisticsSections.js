@@ -16,7 +16,9 @@
 //   - machine: per day the fills and starts the load guard limited or stopped, the lowest free memory, the gate queue
 //     wait p50/p95, and the gate time p50 against how many tracks ran at the same time (1, 2, 3, 4+);
 //   - quality: the gate health (lib/gateHealth.js) and the finding log per source and severity, with how many deferred
-//     findings were fixed.
+//     findings were fixed;
+//   - plans (PG-6, only when the server passes the register): the built plans' estimate against the outcome and the
+//     accuracy record per size (lib/planPostCheck.js section).
 // The context cap is the compaction window from Claude Code's settings files (`compactWindow`), 300k when none sets it.
 // Pure functions without I/O. Tested in lib/__tests__/statisticsSections.test.ts.
 // =============================================================
@@ -348,7 +350,7 @@ function slimGateRow(r) {
  *   observed?: object|null, cap?: number, statistics: object, now?: number, tz?: string }} input  `statistics` is
  *   queueStatistics.statistics' answer (inOutPerDay and responseTime are read from it)
  */
-function sections({ queue, rows, gateRows = [], loadRows = [], findings = [], observed = null, cap = S.CONTEXT_CAP, statistics, now = Date.now(), tz = TK.TZ }) {
+function sections({ queue, rows, gateRows = [], loadRows = [], findings = [], observed = null, cap = S.CONTEXT_CAP, statistics, plans = null, now = Date.now(), tz = TK.TZ }) {
   const days = S.daysBackward(now, S.WINDOW_DAYS, tz);
   const events = TK.usageEvents(rows ?? [], tz);
   return {
@@ -356,6 +358,9 @@ function sections({ queue, rows, gateRows = [], loadRows = [], findings = [], ob
     cost: costSection({ queue, rows, events, days, cap, tz, now }),
     machine: machineSection({ queue, gateRows, loadRows, days, tz, now }),
     quality: qualitySection({ gateRows, findings, from: now - S.WINDOW_DAYS * DAY_MS }),
+    // PG-6 (lib/planPostCheck.js): the built plans against their estimates. Only when the caller passes the register
+    // ({ entries, measureFor }) with plans.postCheck on; all time, not the window, since a plan spans weeks.
+    ...(plans ? { plans: require('./planPostCheck.js').section({ entries: plans.entries ?? [], queue, events, measureFor: plans.measureFor }) } : {}),
   };
 }
 

@@ -24,6 +24,7 @@ import { planActive, planBackup, planCheck, planModules } from './planCheck.mjs'
 import { planDoc } from './planDoc.mjs';
 import { planAccept, planCapture, planDecline, planInbox, planMerge, planPropose } from './planInbox.mjs';
 import { catalogSetup, decisionIds } from './catalog.mjs';
+import { readTimeLog } from './tracks.mjs';
 
 /** The design choice ids for the plan link warning (catalog.planLinks), or undefined: then only the shape is checked. */
 const linkIds = () => (catalogSetup().planLinks ? (decisionIds() ?? undefined) : undefined);
@@ -110,6 +111,53 @@ function planCheckpoint(json) {
   }
   console.log(`Register under "question" in the add file, and put "${cp.id}" in waiting_on of every task after stage 1:`);
   console.log(JSON.stringify({ [cp.id]: cp.question }, null, 2));
+}
+
+/**
+ * `plan postcheck [--json]` (PG-6, lib/planPostCheck.js): the built plans with the size estimate against the tasks and
+ * fix rounds, the estimate against the measured time and the cost, and the accuracy record per size. Read-only; the
+ * success question itself is registered by `set <id> done`.
+ */
+function planPostcheck(json) {
+  const PC = require('./lib/planPostCheck.js');
+  if (!PC.postCheckSetup(require('./lib/queueConfig.js').config()).on) {
+    if (json) console.log(JSON.stringify({ ok: true, on: false, rows: [], accuracy: [] }));
+    else console.log('The plan follow-up is off (plans.postCheck false).');
+    return;
+  }
+  const TK = require('./lib/timeCost.js');
+  const queue = readQueueForPlan();
+  const s = PC.section({
+    entries: readPlans().entries ?? [],
+    queue,
+    events: TK.usageEvents(readTimeLog()),
+    measureFor: (e) => PC.decisionMeasure(e, readDoc),
+  });
+  if (json) {
+    console.log(JSON.stringify({ ok: true, on: true, ...s }));
+    return;
+  }
+  if (!s.rows.length) {
+    console.log('No built plan yet: a plan shows here once every queue task of it is done.');
+    return;
+  }
+  const h = (m) => (m == null ? '-' : `${Math.round((m / 60) * 10) / 10} h`);
+  console.log(`Built plans (${s.total}), the last finished first:`);
+  for (const r of s.rows)
+    console.log(
+      `  ${r.id} ${r.size ?? 'no size'}: ${r.estimate_tasks == null ? 'no estimate' : `estimated ${r.estimate_tasks} tracks`}, ` +
+        `${r.tasks} tasks + ${r.fix_rounds} fix rounds; estimate ${h(r.estimate_min)}, measured ${h(r.measured_min)}; ` +
+        `${r.usd == null ? 'no cost measured' : `$${r.usd.toFixed(2)}`}` +
+        (r.question ? `; success: ${r.success ?? `not answered (${r.question})`}` : ''),
+    );
+  console.log('Per size:');
+  for (const g of s.accuracy)
+    console.log(
+      `  ${g.size ?? 'no size'}: ${g.plans} plan(s), ` +
+        (g.estimate_tasks == null ? 'no estimate' : `estimated ${g.estimate_tasks}, actual ${g.actual_avg} on average (${g.ratio} x)`) +
+        (g.time_ratio == null ? '' : `; time ${g.time_ratio} x the estimate`) +
+        (g.asked ? `; success met ${g.met}, partly ${g.partly}, not met ${g.not_met} of ${g.asked}` : ''),
+    );
 }
 
 export function planCommand() {
@@ -443,9 +491,11 @@ export function planCommand() {
     planShape(json);
   } else if (under === 'checkpoint') {
     planCheckpoint(json);
+  } else if (under === 'postcheck') {
+    planPostcheck(json);
   } else {
     die(
-      'Use: ravenseat plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|capture|inbox|propose|accept|decline|merge|active|rules|check|modules|backup|doc|shape|checkpoint> ...  (see the top of the file)',
+      'Use: ravenseat plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|capture|inbox|propose|accept|decline|merge|active|rules|check|modules|backup|doc|shape|checkpoint|postcheck|challenge> ...  (see the top of the file)',
       under ? 1 : 0,
     );
   }

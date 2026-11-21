@@ -1273,6 +1273,19 @@ function boardSections(queue, log, stat, cap) {
     } catch {
       findings = []; // error-ignored: no finding log yet, or a data folder without one
     }
+    // PG-6 (lib/planPostCheck.js): the built plans against their estimates, with plans.postCheck on. The success
+    // measure is read through the /api/doc guard (queueBoard.readDocument), only for a plan with a decision source.
+    const fresh = KK.config({ fresh: true });
+    let postCheck = null;
+    if (require('./lib/planPostCheck.js').postCheckSetup(fresh).on) {
+      const reg = flowPlans();
+      const readDoc = (p) => {
+        const r = T.readDocument(SOURCE_ROOT, p, { fs, path });
+        return r.ok ? r.text : null;
+      };
+      if (reg?.entries?.length)
+        postCheck = { entries: reg.entries, measureFor: (e) => require('./lib/planPostCheck.js').decisionMeasure(e, readDoc) };
+    }
     const out = SX.sections({
       queue,
       rows: log.rows,
@@ -1282,13 +1295,13 @@ function boardSections(queue, log, stat, cap) {
       observed: jsonOrNull(RATE_FILE),
       cap: cap.cap,
       statistics: stat,
+      plans: postCheck,
     });
     const from = Date.now() - S.WINDOW_DAYS * 86_400_000;
     out.cost.context.source = cap.source;
     out.cost.context.compactions = (log.compacts ?? []).filter((c) => Date.parse(c.time) >= from).length;
     // Which settings are on now, for the "Does this look bad?" lines (no figure, only the advice text).
-    const cfg = KK.config({ fresh: true });
-    out.settings = { machineSampleMin: require('./lib/machineSample.js').minutesFrom(cfg) };
+    out.settings = { machineSampleMin: require('./lib/machineSample.js').minutesFrom(fresh) };
     return out;
   } catch (e) {
     console.error(`the statistics sections failed: ${e?.message ?? e}`);
