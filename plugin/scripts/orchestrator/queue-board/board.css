@@ -6326,16 +6326,25 @@ body.stale .summary.stuck::before {
   outline-offset: 2px;
 }
 
-/* The suggestions in category groups (B10): a group heading, its one line, then the cards. */
+/* The suggestions in category groups (B10): a group heading, its one line, then the cards. The groups sit in the same
+   grid as the cards (owner QA 21.11: stacked one under the other, the one-card groups left a narrow column in a wide
+   view). A one-card group takes one column; a group with more cards (checks-group-wide) takes the whole row and lays
+   its cards out in its own grid. No fixed width, so a phone gets one column and no sideways scroll. */
 .checks-groups {
-  display: flex;
-  flex-direction: column;
-  gap: var(--distance-lg);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  column-gap: var(--distance-sm);
+  row-gap: var(--distance-lg);
+  align-items: start;
 }
 .checks-group {
   display: flex;
   flex-direction: column;
   gap: var(--distance-xs);
+  min-width: 0;
+}
+.checks-group-wide {
+  grid-column: 1 / -1;
 }
 .checks-group-title {
   margin: 0;

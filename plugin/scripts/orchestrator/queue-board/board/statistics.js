@@ -41,6 +41,36 @@ function roundUp(x) {
   for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= x) return m * p;
   return 10 * p;
 }
+/**
+ * The axis top for the three ticks 0, top/2 and top, read through the chart's own `format`. roundUp(max) when its ticks
+ * read well; otherwise the smallest top from 1, 2, 2.5, 4, 5, 6, 8 × 10^n at least max whose three labels are distinct
+ * and say their value (a "1 s" for 0.5 or a "3 s" for 2.5 does not). A small range in whole seconds read "1 s, 1 s, 0 s"
+ * before; now it reads "2 s, 1 s, 0 s". A label that is no plain number with a unit ("1k", "1 h 38 min") is checked for
+ * distinctness only. Self-contained on purpose: lib/__tests__/queueBoardStatsAxis.test.ts runs this function alone.
+ */
+function axisTop(max, format) {
+  const plain = /^-?[\d,]*\.?\d+(?: [A-Za-z%]+)?$/;
+  const reads = (top) => {
+    const values = [0, top / 2, top];
+    const labels = values.map((v) => String(format(v)));
+    if (new Set(labels).size < 3) return false;
+    return labels.every((l, i) => !plain.test(l) || Math.abs(Number(l.split(' ')[0].replace(/,/g, '')) - values[i]) < 1e-9);
+  };
+  const x = max > 0 ? max : 0;
+  let first = 1;
+  if (x > 0) {
+    const p = 10 ** Math.floor(Math.log10(x));
+    first = [1, 2, 2.5, 5, 10].map((m) => m * p).find((t) => t >= x) ?? 10 * p;
+  }
+  if (reads(first)) return first;
+  const start = x > 0 ? Math.floor(Math.log10(x)) : 0;
+  for (let e = start; e <= start + 4; e++)
+    for (const m of [1, 2, 2.5, 4, 5, 6, 8]) {
+      const top = m * 10 ** e;
+      if (top >= x && reads(top)) return top;
+    }
+  return first;
+}
 
 /**
  * The drawing width of a chart (S7): a first guess before the cards are on the page, the width of a card on a narrow
@@ -140,7 +170,7 @@ function barGraphAt({ rows, series, tipsFor, format, stroke, summary, line }) {
     ...rows.map((r) => series.reduce((sum, se) => sum + (r[se.key] ?? 0), 0)),
     ...(line ? rows.map((r) => r[line.key] ?? 0) : []),
   );
-  const top = roundUp(Math.max(max, stroke?.val ?? 0));
+  const top = axisTop(Math.max(max, stroke?.val ?? 0), format);
   const y = (v) => TO + ph - (v / top) * ph;
   const svg = s('svg', {
     viewBox: `0 0 ${B} ${H}`,
@@ -230,7 +260,7 @@ function horizontalGraphAt({ groups, max, axisEnd, strokes = [], summary, format
   const GROUP = 14;
   const height = (g) => g.rows.length * (ROW + BETWEEN) - BETWEEN;
   const H = TO + groups.reduce((sum, g) => sum + height(g) + GROUP, 0) - GROUP + BU;
-  const top = axisEnd > 0 ? axisEnd : roundUp(max);
+  const top = axisEnd > 0 ? axisEnd : format ? axisTop(max, format) : roundUp(max);
   const pw = B - V - HO;
   const x = (v) => V + (Math.min(v, top) / top) * pw;
   // The value texts wait until every line is drawn (they go on top).
@@ -319,7 +349,7 @@ function lineGraphAt({ rows, series, tipsFor, format, summary }) {
   const BU = 24;
   const ph = H - TO - BU;
   const max = Math.max(0, ...rows.flatMap((r) => series.map((se) => r[se.key] ?? 0)));
-  const top = roundUp(max);
+  const top = axisTop(max, format);
   const y = (v) => TO + ph - (v / top) * ph;
   const step = (B - V - HO) / rows.length;
   const x = (i) => V + i * step + step / 2;

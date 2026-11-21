@@ -552,6 +552,8 @@ function drawPanel(fresh) {
       facts('Migrations', k.migr_block),
       facts('QA', k.qa_status ? `${k.qa_status}${k.qa_note ? `: ${k.qa_note}` : ''}` : null),
       facts('Verification', k.verification ? `${k.verification}${k.verification_checks?.length ? ` (${k.verification_checks.join(', ')})` : ''}` : null),
+      // Green, but no tests ran (GS-1): which gate and which signal, the same words as the card's tooltip.
+      facts('Tests', k.zero_tests ? k.zero_tests.fact : null),
       facts(
         'Source',
         [k.source, k.added_by ? `added by ${k.added_by}` : null]

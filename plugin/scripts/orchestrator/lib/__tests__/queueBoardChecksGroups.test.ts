@@ -72,6 +72,8 @@ const suggestions = [
   card('first-test', 'tests', 'high'),
   card('lint', 'quality', 'medium'),
   card('dep-audit', 'dependencies', 'medium', { state: 'queued', taskId: 'KS-PLAN-DEP-AUDIT' }),
+  // a second card in one group: that group takes the whole row (the width), the one-card groups sit side by side.
+  card('dep-pin', 'dependencies', 'low'),
   card('secret-scan-receive', 'security', 'low', { action: 'setting', setting: 'secretScan.atReceive' }),
   card('formatter', 'quality', 'low', { quiet: true }),
 ];
@@ -173,6 +175,22 @@ describe('B10: the suggestions grouped by category', () => {
     const titles = [...group.querySelectorAll('.checks-card-title')];
     expect(titles.map((h) => h.textContent)).toEqual(['Card lint']);
     expect(titles[0].tagName).toBe('H5');
+  });
+
+  // Owner QA 21.11: most groups hold one card, so each group stacked under the last left one narrow column in a wide
+  // view. The groups now sit in the same grid as the cards: one-card groups side by side, a group with more cards
+  // takes the whole row and lays its cards out in its own grid. Nothing has a fixed width, so 390 px is one column.
+  it('the groups use the width: one-card groups side by side, a larger group across the row', () => {
+    const groups = [...view().querySelectorAll('.checks-group')] as HTMLElement[];
+    const wide = groups.filter((g) => g.classList.contains('checks-group-wide')).map((g) => g.querySelector('h4')?.textContent);
+    expect(wide).toEqual([categories.find((c) => c.key === 'dependencies')?.title]);
+    const rule = (sel: string) => new RegExp(`(^|[},])\\s*${sel.replace(/[.\\-]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(css)?.[2] ?? '';
+    const groupsRule = rule('.checks-groups');
+    expect(groupsRule).toMatch(/display:\s*grid/);
+    expect(groupsRule).toMatch(/grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(min\(100%,\s*320px\),\s*1fr\)\)/);
+    expect(rule('.checks-group-wide')).toMatch(/grid-column:\s*1\s*\/\s*-1/);
+    // a group is a grid item that may shrink below its content, so a long word never scrolls the page sideways
+    expect(rule('.checks-group')).toMatch(/min-width:\s*0/);
   });
 
   it('a quiet card stays in the More ideas fold, not in a group', () => {

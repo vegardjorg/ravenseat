@@ -359,7 +359,7 @@ function evidenceBefore(want) {
  * Fail open: a write error only means no evidence, so the caller runs the gate again or asks.
  * @returns {{ recorded: boolean, tampered: boolean, reason?: string, covered?: string }}
  */
-function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, before, coverage = null, tamperReason = null, flaky = [] }) {
+function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, before, coverage = null, tamperReason = null, flaky = [], zeroTests = [] }) {
   try {
     if (!want?.wanted) return { recorded: false, tampered: false };
     const GE = require('./lib/gateEvidence.js');
@@ -379,6 +379,7 @@ function recordEvidence({ kind, ran, failed, exit, timedOut = false, want, befor
       failed,
       timedOut,
       flaky,
+      zeroTests,
       track,
       branch,
       mainTree: want.mainTree,
@@ -820,6 +821,19 @@ function dbRefusal(command) {
   return require('./lib/dbGuard.js').refusal(command, { env: gateCommandEnv(), scripts: PACKAGE_SCRIPTS, cli: require('./lib/projectRoot.js').cliCommand() });
 }
 
+// "Green, but no tests ran" (lib/zeroTests.js, GS-1): a green command whose output tail says no test ran. A caveat on
+// screen and in the evidence entry (zero_tests), never a stop: receive shows it, the board puts it on the card.
+const ZT = require('./lib/zeroTests.js');
+const zeroTests = [];
+function noteZeroTests(command, output) {
+  const hit = ZT.detect(output);
+  if (!hit || zeroTests.some((z) => z.command === command)) return;
+  zeroTests.push({ command, runner: hit.runner, signal: hit.signal });
+  const text = `NOTE: green, but no tests ran in \`${command}\` (${hit.runner}: "${hit.signal}"). A caveat, not a stop.`;
+  console.log(text);
+  if (logFile) fs.appendFileSync(logFile, `\n${text}\n`);
+}
+
 for (const command of gates) {
   const t0 = Date.now();
   const refused = dbRefusal(command);
@@ -853,6 +867,8 @@ for (const command of gates) {
   );
   if (logFile)
     fs.appendFileSync(logFile, `\n===== ${command} (exit ${r.status ?? 'unknown'}, ${Math.round(sec)} s) =====\n${out}`);
+  // Green, but did any test run (lib/zeroTests.js, GS-1)? Only the tail of this command's own output is read.
+  if (green) noteZeroTests(command, r.out);
 }
 
 // ---- The flaky check on a track's gate (lib/trackFlaky.js, gates.flakyRerun) ----
@@ -890,6 +906,7 @@ if (RERUN.commands.length) {
     const out = `${r.out}${r.timedOut ? `\n(stopped after the time budget of ${budgetSec} s: ${budgetSource})` : ''}`;
     const green = r.status === 0 && !r.timedOut;
     if (!green) stillRed.push(command);
+    else noteZeroTests(command, r.out);
     console.log(
       resultLine(
         { name: `${command} (rerun)`, status: green ? 'GREEN' : 'RED', sec, first: green ? '' : firstErrorLine(gateType(command), out, cwd) },
@@ -939,6 +956,7 @@ const recorded = recordEvidence({
   coverage: COVERAGE,
   tamperReason: surfaceChange,
   flaky: flakyGates,
+  zeroTests,
 });
 // The store or the git surface changed while the gate commands ran: the run is red whatever the gates said.
 const exitCode = failedCount === 0 && !recorded.tampered && !surfaceChange ? 0 : 1;

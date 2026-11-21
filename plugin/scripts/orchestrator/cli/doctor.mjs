@@ -7,6 +7,7 @@
 //   hooks       the hooks file (plugin: <plugin>/hooks/hooks.json, vendored: .claude/settings.json) parses, lists every
 //               queue hook under its events (queueBoard.hooksCoverage) and every hook script it names exists
 //   config      queue.config.json parses, has no unknown keys (WARN) and no value of the wrong type (FAIL)
+//   issues      only when issues.labelMap is set and wrong: one WARN with the expected shape (never FAIL)
 //   queue       queue.json (and plans.json, follow.json when they exist) parse
 //   surface     the git hooks and config that run code against the accepted baseline (lib/gitSurfaceBaseline.js): WARN on
 //               a difference; no baseline yet is OK (the first command that runs code records it, doctor never does)
@@ -291,6 +292,9 @@ function checkConfig() {
         if (CLOSED.includes(k)) unknown.push(`${k}.${n}`);
         continue;
       }
+      // issues.labelMap's shape is checked by checkIssues (a WARN with the fix, never a FAIL): a broken map only turns
+      // the routing off, it stops nothing.
+      if (k === 'issues' && n === 'labelMap') continue;
       const wantN = kind(S[k][n]);
       // A default of "auto" also takes true or false (baseGate.enabled: false is the documented way to turn it off).
       if (S[k][n] === 'auto' && typeof w === 'boolean') continue;
@@ -323,6 +327,31 @@ function checkConfig() {
     out.push(warn('config', `unknown key(s) ignored: ${unknown.join(', ')}`, 'check the spelling against queue.config.example.json'));
   if (!out.length) out.push(ok('config', `${path.basename(file)} parses, keys and types valid`));
   return out;
+}
+
+/**
+ * issues.labelMap (lib/githubIssues.js labelMapSetup): an object of label to task, plan, K, U, D or D+. A wrong shape
+ * or an unknown target is one WARN row with the fix, never a FAIL: the import then leaves that label unmapped (an
+ * issue becomes a plan in the Inbox), which stops nothing. No row while the map is fine or not set.
+ */
+function checkIssues() {
+  const file = KK.configFile(MAIN_TREE);
+  let own;
+  try {
+    own = KK.parseConfigText(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return []; // checkConfig names a missing or broken file
+  }
+  if (kind(own) !== 'object' || kind(own.issues) !== 'object' || !Object.hasOwn(own.issues, 'labelMap')) return [];
+  const { problems } = require('./lib/githubIssues.js').labelMapSetup(own);
+  if (!problems.length) return [];
+  return [
+    warn(
+      'issues',
+      `${problems.join('; ')} (the import leaves such a label unmapped, so the issue becomes a plan in the Inbox)`,
+      `write it as "issues": { "labelMap": { "<label>": "task" } } with one of task, plan, K, U, D or D+ per label, or remove it`,
+    ),
+  ];
 }
 
 /** One JSON state file: OK, missing (null), or the parse error. */
@@ -881,7 +910,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkLinks, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkLinks, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

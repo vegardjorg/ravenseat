@@ -37,6 +37,8 @@ describe('a track with the GitHub CLI', () => {
       'bash -c "gh gist create x.txt"',
       '"C:/Program Files/GitHub CLI/gh.exe" api user',
       '& "C:/Program Files/GitHub CLI/gh.exe" gist create x.txt',
+      // Backslash-escaped spaces (the gap the first RT-37 run named, closed 2026-11-21).
+      'C:/Program\\ Files/GitHub\\ CLI/gh.exe gist create x.txt',
       'env GH_PAGER= gh auth token',
     ])
       expect(decision(k), k).toBe('deny');

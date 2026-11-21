@@ -259,6 +259,10 @@ describe('network guard (agent_type track/track-d)', () => {
       /Network calls are blocked for queue agents; ask the orchestrator to fetch it\./,
     );
   });
+  it('a path with backslash-escaped spaces to curl is still curl (RT-37 gap closed)', () => {
+    for (const k of ['C:/Program\\ Files/curl\\ tools/curl.exe https://x', '/opt/my\\ tools/curl -s https://x'])
+      expect(decision(k, track), k).toBe('deny');
+  });
   it('reviewers and helper agents (builtin and custom, also with the plugin prefix) are guarded too', () => {
     // The builtin review agents are in the default list (the read guard's), without any config.
     for (const agentType of ['reviewer', 'ravenseat:reviewer', 'reviewer-security', 'ravenseat:reviewer-security']) {
@@ -409,6 +413,14 @@ describe('GitHub CLI guard (gh-cli, guarded agents only)', () => {
       'gh pr',
     ])
       expect(decision(k, track), k).toBe('deny');
+  });
+  it('a path with backslash-escaped spaces to gh is still gh (RT-37 gap closed)', () => {
+    const gh = 'C:/Program\\ Files/GitHub\\ CLI/gh.exe';
+    for (const k of [`${gh} gist create a.txt`, `${gh} api -X POST /gists`, `git status && ${gh} auth token`])
+      expect(decision(k, track), k).toBe('deny');
+    expect(assess(`${gh} gist create a.txt`, { ...STD, ...track })?.rule).toBe('gh-cli');
+    // The read-only allowlist still passes through such a path.
+    expect(decision(`${gh} run view 123`, track)).toBeNull();
   });
   it('denies --web (and -w) on an allowed command: it opens a browser', () => {
     for (const k of ['gh pr view 12 --web', 'gh pr view 12 -w', 'gh repo view --web', 'gh run view 1 --web', 'gh search issues x --web', 'gh pr view 1 -cw'])
