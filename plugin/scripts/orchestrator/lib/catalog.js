@@ -622,6 +622,10 @@ function boardGroups(cat, ledger = emptyLedger()) {
         paths: d.paths ?? [],
         except: d.except ?? [],
         source: d.kind === 'design' ? d.source ?? null : null,
+        // A stack entry's choice (roadmap 0å KD-3): the tool for the job and what it was chosen over, so the card says
+        // it. Null and [] on the other kinds.
+        uses: d.kind === 'stack' && d.uses?.tool ? { job: d.uses.job ?? null, tool: d.uses.tool } : null,
+        alternatives: d.kind === 'stack' && Array.isArray(d.alternatives) ? d.alternatives.filter((a) => typeof a === 'string' && a) : [],
         file: d.file ?? null,
       }));
     if (entries.length) out.push({ kind, title, entries });
