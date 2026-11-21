@@ -632,7 +632,10 @@ function catalogBadge(status) {
  */
 function catalogItem(e) {
   const badge = catalogBadge(e.status);
-  const where = `Applies to: ${(e.paths ?? []).join(', ')}${e.except?.length ? `; not ${e.except.join(', ')}` : ''}`;
+  // Where it applies: its paths (minus except) and, with applies (KD-6), the tasks it reaches in plain words
+  // ("D tasks, visual"). Either one is enough for a task to get the entry.
+  const files = (e.paths ?? []).length ? `${e.paths.join(', ')}${e.except?.length ? `; not ${e.except.join(', ')}` : ''}` : '';
+  const where = `Applies to: ${[files, e.applies ?? ''].filter(Boolean).join(e.applies && files ? '; and to ' : '')}`;
   return el(
     'li',
     { class: 'decide-nb-item' },

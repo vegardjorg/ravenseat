@@ -5,7 +5,7 @@
 // Locks: (1) the choice of what goes in: design choices whose paths meet the task's owned_files, shared_patch and reads
 // (a file or a folder), the prefer lines, and the reuse rows in the task's folders; a superseded choice never; (2) only a
 // choice the owner accepted (with the record) is binding, a proposed or unconfirmed one is marked as a suggestion; (3) a
-// task that names no files gets the accepted choices only, never the proposed ones; (4) the cap: the text stays within
+// task that names no files gets the accepted choices for the whole project only, never the proposed ones; (4) the cap: the text stays within
 // the token cap, accepted choices are kept before the reuse rows, and the heading says how many tokens it used and what
 // was cut; (5) nothing relevant, or no catalog, gives no block at all; (6) the settings (catalog.missionExcerpt,
 // catalog.reviewExcerpt, catalog.excerptTokens) and that off gives nothing; (7) the track block and the review package
@@ -152,14 +152,23 @@ describe('what the excerpt holds', () => {
     expect(t).not.toContain('`norm`');
   });
 
-  it('a task that names no files gets every accepted choice and no proposed one', () => {
-    const r = X.excerpt(CAT, task({ owned_files: [], reads: [] }), { ledger: LEDGER });
+  // Roadmap 0å KD-6: no longer every accepted choice. A choice for some files says nothing about a task that names none;
+  // the accepted ones for the whole project ("**") come along, and the category hits (lib/__tests__/catalogApplies.test.ts).
+  it('a task that names no files gets the accepted choices for the whole project and no proposed one', () => {
+    const all = catalog({
+      ...Object.fromEntries(CAT.decisions.map((x: any) => [x.name, x.source])),
+      'D-0006-all.md': decision('D-0006', 'accepted', ['**'], 'No secret is ever written to a log.'),
+      'D-0007-all-prop.md': decision('D-0007', 'proposed', ['**'], 'Every log line has a level.'),
+    });
+    const r = X.excerpt(all, task({ owned_files: [], reads: [] }), { ledger: ledgerFor(all, ['D-0001', 'D-0005', 'D-0006']) });
     const t = text(r);
-    expect(t).toContain('D-0001');
-    expect(t).toContain('D-0005');
+    expect(t).toContain('D-0006');
+    expect(t).not.toContain('D-0001');
+    expect(t).not.toContain('D-0005');
     expect(t).not.toContain('D-0002');
     expect(t).not.toContain('D-0004');
-    expect(r.lines[0]).toContain('names no files');
+    expect(t).not.toContain('D-0007');
+    expect(r.lines[0]).toContain('names no files, so the choices that hold for the whole project');
   });
 
   it('nothing relevant, or no catalog, gives no block at all', () => {

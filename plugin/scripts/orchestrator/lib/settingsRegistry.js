@@ -1192,7 +1192,8 @@ const SETTINGS = Object.freeze([
     'plan edit. The shape of the link is always checked. It stops nothing.'),
   // The catalog excerpt (lib/catalogExcerpt.js, bolk B4). On in both modes by owner decision 16.11: it is only text,
   // nothing without a catalog, capped, and its heading says what it cost. Off is no weakening: no guard reads it, and
-  // the owner lock and the protected path stay.
+  // the owner lock and the protected path stay. Roadmap 0å KD-6 (entries by category, `applies`) adds no setting:
+  // Friction: none, a wrong hit costs a few lines inside the same cap and category hits are cut before file hits.
   row('catalog.missionExcerpt', 'scope', 'onoff', 'Catalog excerpt in the mission',
     'A track\'s mission gets the part of docs/queue/catalog/ that meets its files: the design choices that hold, the ' +
     'proposed ones as suggestions, the prefer lines and the reuse rows in its folders, under catalog.excerptTokens. ' +

@@ -13,11 +13,12 @@
 //                                                 it as a gate when it wants to (it is none by default)
 //   ravenseat catalog accept <D-id> --by owner    the owner accepts a design choice: status accepted in the file and
 //                                                 the owner's record in <dataFolder>/catalog-accepted.json
-//   ravenseat catalog propose --title --invariant --paths [--kind] [--except] [--supersedes] [--plan] [--why] [--json]
+//   ravenseat catalog propose --title --invariant --paths|--applies [--kind] [--except] [--supersedes] [--plan] [--why] [--json]
 //                                                 writes the next free D-id as status proposed into the main tree's
 //                                                 decisions/ and runs check on it (roadmap 0z Z-B); refused from a track.
 //                                                 --kind design|stack|dependency and --except (roadmap 0å KD-0);
-//                                                 with --kind stack: --uses job:tool, --alternatives, --stack (KD-2)
+//                                                 with --kind stack: --uses job:tool, --alternatives, --stack (KD-2);
+//                                                 --applies class:D,label:visual: the task categories it reaches (KD-6)
 //   ravenseat catalog propose --not-building --title [--why] [--keywords] [--revisit] [--source]
 //                                                 the same for a "Not building" entry (roadmap 0f, lib/notBuilding.js):
 //                                                 kind not-building, no invariant or paths; its accept writes status
@@ -58,7 +59,7 @@ const CD = require('./lib/catalogDeps.js');
 const NB = require('./lib/notBuilding.js');
 const RP = require('./lib/reviewPacks.js');
 
-const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose (--title "..." --invariant "..." --paths "<glob>" | --from-answer <question>) [--kind design|stack|dependency] [--except "<glob>"] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | propose --not-building --title "..." [--why "..."] [--keywords a,b] [--revisit "..."] [--source "..."] | find <word...> [--json] | index [--json]`;
+const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose (--title "..." --invariant "..." --paths "<glob>" | --from-answer <question>) [--kind design|stack|dependency] [--except "<glob>"] [--applies class:D,label:visual] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | propose --not-building --title "..." [--why "..."] [--keywords a,b] [--revisit "..."] [--source "..."] | find <word...> [--json] | index [--json]`;
 const json = a.includes('--json');
 
 /** The catalog folder in a tree (the main tree for a write, the current one for a read). */
@@ -157,10 +158,31 @@ export function decisionIds(root = ROOT) {
   return new Set(cat.decisions.map((d) => d.decision?.id).filter(Boolean));
 }
 
+/**
+ * The values the queue knows per applies dimension (roadmap 0å KD-6, lib/catalog.js knownValues): the tasks, the
+ * archive and the project list. null when there is no queue, so the applies values are then not checked.
+ */
+function knownApplies() {
+  try {
+    if (!fs.existsSync(FILE)) return null;
+    let archived = [];
+    try {
+      archived = require('./lib/queueArchive.js').load(FOLDER).tasks ?? [];
+    } catch {
+      archived = []; // error-ignored: the live tasks and the project list still count
+    }
+    // Read here, not with read(): a broken queue.json must not stop catalog check.
+    return C.knownValues(JSON.parse(fs.readFileSync(FILE, 'utf8')), archived);
+  } catch {
+    return null;
+  }
+}
+
 /** Everything check says about a tree's catalog. */
 export function checkTree(root = ROOT) {
   const cat = C.readCatalog(catalogDir(root));
   const r = C.checkCatalog(cat, {
+    known: cat.exists && cat.decisions.some((x) => x.decision?.applies) ? knownApplies() : null,
     files: trackedFiles(root),
     readFile: treeFs(root).read,
     ledger: readLedger(),
@@ -282,6 +304,8 @@ function show() {
       console.log(`invariant: ${d.invariant ?? '(none)'}`);
       console.log(`paths: ${d.paths.join(', ')}`);
       if (d.except.length) console.log(`except: ${d.except.join(', ')}`);
+      // The task categories it reaches besides its paths (KD-6), as written and in plain words.
+      if (d.applies) console.log(`applies: ${Object.entries(d.applies).map(([k, v]) => `${k} ${v.join(' or ')}`).join(', ')} (${C.appliesWords(d.applies)})`);
       // A design entry's source (KD-1): where its tokens live.
       if (d.source) console.log(`source: ${[].concat(d.source).join(', ')}`);
       if (d.check) console.log(`check: ${d.check.mode ?? 'warn'}, forbid ${JSON.stringify(d.check.forbid ?? '')}`);
@@ -305,7 +329,7 @@ function show() {
           prefer: cat.stack?.prefer ?? [],
           reuse: cat.reuse?.rows ?? [],
           dependencies: cat.stack?.deps ?? [],
-          decisions: ds.map((d) => ({ id: d.id, kind: d.kind, title: d.title, status: d.status, status_counts: C.effectiveStatus(d, ledger), paths: d.paths, except: d.except, source: d.source, uses: d.uses, alternatives: d.alternatives, stack: d.stack, invariant: d.invariant })),
+          decisions: ds.map((d) => ({ id: d.id, kind: d.kind, title: d.title, status: d.status, status_counts: C.effectiveStatus(d, ledger), paths: d.paths, except: d.except, applies: d.applies, source: d.source, uses: d.uses, alternatives: d.alternatives, stack: d.stack, invariant: d.invariant })),
         },
         null,
         2,
@@ -335,7 +359,7 @@ function show() {
     const mine = choices.filter((d) => d.kind === kind);
     if (!mine.length && kind !== 'decision') continue;
     console.log(`${title} (decisions/): ${mine.length ? '' : choices.length ? 'none' : 'none yet'}`);
-    for (const d of mine) console.log(row(d, ledger));
+    for (const d of mine) console.log(`${row(d, ledger)}${d.applies ? `  (applies to: ${C.appliesWords(d.applies)})` : ''}`);
   }
   // Roadmap 0f: what the project deliberately does not build, from the same folder.
   if (nb.length) {
@@ -422,7 +446,7 @@ function accept() {
  * @returns {{ id: string, file: string, errors: string[], warnings: string[] }} file relative to the tree; errors and
  *   warnings are check's lines about this choice
  */
-export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null, kind = null, keywords = null, revisit = null, source = null, except = null, check = null, uses = null, alternatives = null, stack = null }) {
+export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null, kind = null, keywords = null, revisit = null, source = null, except = null, check = null, uses = null, alternatives = null, stack = null, applies = null }) {
   const dir = catalogDir(MAIN_TREE);
   const decisionsDir = path.join(dir, 'decisions');
   let names = [];
@@ -433,7 +457,7 @@ export function writeProposal({ title, invariant, paths, supersedes = null, plan
   }
   const id = C.nextDecisionId(names, readLedger());
   // kind not-building (roadmap 0f, lib/notBuilding.js draft): a rejection with its keywords, revisit and source.
-  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source, except, check, uses, alternatives, stack });
+  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source, except, check, uses, alternatives, stack, applies });
   if (r.errors.length) throw new Error(r.errors.join('; '));
   fs.mkdirSync(decisionsDir, { recursive: true });
   const readme = path.join(decisionsDir, 'README.md');
@@ -515,13 +539,30 @@ function propose() {
     }
     ({ title, invariant, paths, plan, why } = d);
   }
-  if (!title || invariant == null || (!paths.length && !supersedes))
-    die(`${CLI} catalog propose --title "..." --invariant "<one sentence that can be checked>" --paths "<glob>[,<glob>]" [--supersedes D-0001] [--plan PL-...] [--why "..."]`);
+  // --applies class:D,label:visual (roadmap 0å KD-6): the task categories it reaches besides its paths; a value per
+  // item, the same dimension again is OR (class:D,class:K), different dimensions are AND.
+  let applies = null;
+  const appliesItems = listFlag('--applies');
+  if (appliesItems.length) {
+    applies = {};
+    for (const item of appliesItems) {
+      const at = item.indexOf(':');
+      const dim = at > 0 ? item.slice(0, at).trim() : '';
+      const value = at > 0 ? item.slice(at + 1).trim() : '';
+      if (!C.APPLIES_DIMS.includes(dim) || !value)
+        die(`${CLI} catalog propose --applies takes <dimension>:<value> items, e.g. --applies class:D,label:visual (dimensions: ${C.APPLIES_DIMS.join(', ')}). Nothing was written.`);
+      applies[dim] ??= [];
+      if (!applies[dim].includes(value)) applies[dim].push(value);
+    }
+  }
+  if (!title || invariant == null || (!paths.length && !supersedes && !applies))
+    die(`${CLI} catalog propose --title "..." --invariant "<one sentence that can be checked>" --paths "<glob>[,<glob>]" [--applies class:D,label:visual] [--supersedes D-0001] [--plan PL-...] [--why "..."]`);
   if (supersedes) {
     // Idea C: a choice that replaces another starts from its paths and plan; the owner narrows them before the accept.
     const old = C.readCatalog(catalogDir(MAIN_TREE)).decisions.find((x) => x.decision?.id === supersedes)?.decision;
     if (!old) die(`${supersedes} is not in ${C.DIR}/decisions, so nothing can supersede it. Nothing was written.`);
-    if (!paths.length) paths = old.paths;
+    if (!paths.length && !applies) paths = old.paths;
+    applies ??= old.applies ?? null;
     plan ??= old.plan;
   }
   // --kind and --except (roadmap 0å KD-0): a design or stack entry, and the paths inside --paths it does not apply to.
@@ -543,7 +584,7 @@ function propose() {
     die(`${CLI} catalog propose: --uses, --alternatives and --stack need --kind stack. Nothing was written.`);
   let r;
   try {
-    r = writeProposal({ title, invariant, paths, supersedes, plan, why, kind, except, uses, alternatives, stack: stackWords });
+    r = writeProposal({ title, invariant, paths, supersedes, plan, why, kind, except, uses, alternatives, stack: stackWords, applies });
   } catch (e) {
     die(`${CLI} catalog propose: ${e.message}. Nothing was written.`);
   }

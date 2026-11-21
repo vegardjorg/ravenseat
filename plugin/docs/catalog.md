@@ -113,6 +113,13 @@ Context, the choice and what follows from it, in at most 30 lines.
 - `except`: optional globs inside `paths` the choice does not apply to (the globs have no negation), such as the token
   file of a colour rule. The check rules, `catalog check` and the excerpt all skip them. `catalog check` warns about an
   `except` that matches no tracked file inside `paths`.
+- `applies`: optional, the tasks the entry reaches besides its files, by fields a task already has:
+  `{"class": ["D"], "label": ["visual"]}`. The dimensions are `class`, `domain`, `project` (the task's project, from its
+  `project` field or the register's id prefixes), `feature` and `label` (one of the task's `labels`), each a list. OR
+  inside a dimension, AND between them: the example is a D task with the label `visual`. An entry reaches a task when
+  its `paths` OR its `applies` match, so with `applies` the `paths` may be left out (`paths: []`). Any `kind` can carry
+  it. `catalog check` warns about a value no task, archived task or project has (most likely a typo). See [By
+  category](#by-category).
 - `supersedes`: the id of the choice this one replaces. To change an accepted choice, write a new one with
   `supersedes: D-0001` (`catalog propose --supersedes D-0001` does it). The owner's accept of the new one sets the old
   one to `superseded` in the same step.
@@ -121,8 +128,8 @@ Context, the choice and what follows from it, in at most 30 lines.
   see [Check rules](#check-rules).
 - `accepted_by` and `accepted`: written by `catalog accept`, never by hand.
 
-A body over 30 lines gives a warning: the plan register holds the long text. `kind` and `except` bind like the
-invariant: changing either after the accept needs a new accept. An entry without them keeps the fingerprint it had.
+A body over 30 lines gives a warning: the plan register holds the long text. `kind`, `except` and `applies` bind like
+the invariant: changing one after the accept needs a new accept. An entry without them keeps the fingerprint it had.
 
 ## Design language
 
@@ -196,10 +203,10 @@ A Prefer line stays the short form for small things. `catalog check` only asks t
 | Command | What it does |
 |---|---|
 | `catalog init` | Creates `stack.md` with the generated block, `reuse.md` and `decisions/README.md` where they are missing, in the main tree. On the first init it also proposes one design entry from the project's token file, when it finds one (see [Design language](#design-language)). A new `stack.md` gets [Dependencies](#dependencies) rows proposed from local metadata; for one that is there, init prints the rows you could add. Never writes over a file that is there, except the generated block in `stack.md`. Refused from a track worktree |
-| `catalog show [<D-id>] [--json]` | The prefer lines, the Dependencies rows, the reuse rows and the entries with the status that counts, grouped by `kind` (Design language, Stack, Dependencies, Design choices, Not building). With an id: that entry in full, and the plan entries that link to it |
+| `catalog show [<D-id>] [--json]` | The prefer lines, the Dependencies rows, the reuse rows and the entries with the status that counts, grouped by `kind` (Design language, Stack, Dependencies, Design choices, Not building), with "applies to: D tasks, visual" after an entry that has `applies`. With an id: that entry in full, and the plan entries that link to it |
 | `catalog check [--json]` | Shape, ids, status, the owner lock, `supersedes`, the paths, the reuse rows and the generated block. Exit 1 on an error, 0 on warnings only, 0 without a catalog. Read only |
 | `catalog accept <D-id> --by owner` | The owner accepts a design choice: `status: accepted`, `accepted_by` and `accepted` in the file, and the owner's record in the data folder. A choice with `supersedes` sets the old one to `superseded` in the same step (refused, with nothing changed, when the old one is not there). Refused from a track worktree whatever `--by` says |
-| `catalog propose --title "..." --invariant "..." --paths "<glob>[,<glob>]" [--kind design\|stack\|dependency] [--except "<glob>"] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--from-answer <question>] [--json]` | Writes the next free id (one above the highest in the file names and the owner's record) as `status: proposed` in the main tree, then runs `catalog check` and prints what it says about the new choice. `--kind` and `--except` write those fields; with `--kind stack`, `--uses`, `--alternatives` and `--stack` write a [stack entry](#stack-entries). With `--supersedes` and no `--paths` or `--plan`, it takes them from the old choice. Writes nothing when the choice would be broken, never over a file. Refused from a track worktree |
+| `catalog propose --title "..." --invariant "..." --paths "<glob>[,<glob>]" [--applies class:D,label:visual] [--kind design\|stack\|dependency] [--except "<glob>"] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--from-answer <question>] [--json]` | Writes the next free id (one above the highest in the file names and the owner's record) as `status: proposed` in the main tree, then runs `catalog check` and prints what it says about the new choice. `--kind` and `--except` write those fields; `--applies` writes [applies](#by-category) (`dimension:value` items, the same dimension again is OR, and then `--paths` may be left out); with `--kind stack`, `--uses`, `--alternatives` and `--stack` write a [stack entry](#stack-entries). With `--supersedes` and no `--paths` or `--plan`, it takes them from the old choice. Writes nothing when the choice would be broken, never over a file. Refused from a track worktree |
 | `catalog find <word...> [--json]` | Searches the code index, the reuse rows, the design choices and the prefer lines. Every word must match; at most ten short lines. Builds the code index first (from the cache) |
 | `catalog index [--json]` | Builds or refreshes the code index and says how many files it read and how many came from the cache. Names a `@shared` tag that is not on an export |
 
@@ -215,7 +222,7 @@ version with `ravenseat catalog accept <id> --by owner` (or from the board) in t
 
 The accept writes two things: the status lines in the choice's file, and a record in
 `<dataFolder>/catalog-accepted.json` with a fingerprint of what binds (the id, the invariant, the paths and the
-`check` rules, and `kind` and `except` when the entry has them). The record file is gitignored and written by the queue only: the write guard keeps queue agents' file
+`check` rules, and `kind`, `except` and `applies` when the entry has them). The record file is gitignored and written by the queue only: the write guard keeps queue agents' file
 writes off it, and the push guard denies a queue agent's shell command that names it.
 
 A choice that says `accepted` without a matching record reads as `unconfirmed`. That covers a track that set the line
@@ -248,8 +255,35 @@ task's `owned_files`, `shared_patch` and `reads`:
   library with no known version and no table row is left out.
 - One line on how to look for a helper before writing one, and `catalog show <D-id>` for a choice in full.
 
-A task that names no files gets every choice that holds and no proposed one (nothing says which proposals concern it),
-the prefer lines and the first reuse rows. Nothing that meets the task, or no catalog, gives no block at all.
+A task that names no files gets its category hits (see below) and the choices that hold for the whole project (no
+`applies`, `paths: ["**"]`), not every choice that holds: nothing says a rule for some files concerns it. It gets no
+other proposed choice, the prefer lines and the first reuse rows. Nothing that meets the task, or no catalog, gives no
+block at all.
+
+### By category
+
+An entry with [`applies`](#decisionsd-0001-slugmd) reaches a task by its class, domain, project, feature or labels,
+whatever files the task names: a UI task in a new folder still gets the design rules for `label: visual`. A category
+hit on a proposed entry is a suggestion, like a file hit. The order they get room in, under the per-kind maxima and the
+cap: file hits first, then category hits, then the entries for the whole project, the binding ones before the proposed
+ones. So a tight cap cuts the category hits before the file hits.
+
+When the catalog uses `applies` at all, each entry line says why it came, and the heading counts them, so the cost
+reports and the review findings can show whether the category hits help:
+
+```
+**From the project catalog** (`docs/queue/catalog/`, chosen for this task's files and category (1 by files, 2 by category); about 240 of at most 1500 tokens; nothing cut):
+- **Design choices that hold** (...):
+  - D-0002 (files; **): No secret is ever written to a log.
+  - D-0004 (class K): A K task keeps its change under one folder.
+- **Design language** (...):
+  - D-0010 (label visual; holds): UI takes colours, type and spacing from the tokens.
+```
+
+The review package gets the same lines. A catalog without `applies` anywhere gives the text byte for byte as before.
+No setting of its own: it is only text, inside the same cap, under `catalog.missionExcerpt` and
+`catalog.reviewExcerpt`. **Project catalog** in Decisions says it in plain words on the card: "Applies to: D tasks,
+visual".
 
 **The cap and the measurement.** The excerpt stays within `catalog.excerptTokens` (default 1500, a token counted as four
 characters). Items go in in the order binding choices, prefer lines, proposed choices, reuse rows, dependency rows
@@ -543,6 +577,7 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Index cache guard | A queue agent cannot write `catalog-index.json` (write guard) or name it in a shell command (push guard) | No setting, on purpose: a forged entry would reach other missions |
 | Excerpt in the mission | Text only: up to `catalog.excerptTokens` more context in every turn of the track (1500 tokens over about 100 turns is about 150,000 cached input tokens). It stops nothing, and a project without a catalog pays nothing | `catalog.missionExcerpt`, on by owner decision: the track needs it to reuse, and the heading measures its cost |
 | Excerpt in the review package | Text only, read once per reviewer; it can lead to a `duplication` or `scope-drift` finding, which is the point | `catalog.reviewExcerpt`, on: the reviewer judges against what the track was given |
+| Entries by category (`applies`) | None: a wrong hit costs a few lines in the mission, bounded by the cap, and category hits are cut before file hits. A task with no files now gets its category hits and the whole-project entries instead of every binding entry. `catalog check` warns on an unknown value; never a stop | No setting of its own: text only, under `catalog.missionExcerpt` and `catalog.reviewExcerpt` (on) |
 | Excerpt cap | None; it only narrows. Too low cuts the reuse rows first, and the heading says so | `catalog.excerptTokens`, 1500 (200 to 6000) |
 | Check rules at receive | One line per broken rule (accepted: `CATALOG`, proposed: `NOTE`), a package line and a small record on the task. Stops nothing. A project without `check` fields pays nothing: the output is byte for byte the same | `catalog.checks`, on: it only shows what an accepted choice already says, and off weakens the protection |
 | Rule at merge (`mode: stop`) | Stops `merge` (exit 1) when an accepted choice's stop rule matches the merge's diff; `--allow-catalog` on the owner's word, logged | `catalog.checkStop`, off: it can stop work, so the owner turns it on |

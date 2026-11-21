@@ -12,8 +12,14 @@
 //   - design choices whose `paths` meet the task's owned_files, shared_patch or reads (a file the glob matches, or a
 //     folder the glob can reach), at most MAX.decisions, the binding ones first. Only a choice the owner accepted (with
 //     the record, catalog.js effectiveStatus) is binding; a proposed one, and one that says accepted without the
-//     record (unconfirmed), is a suggestion. A superseded choice never. A task that names no files gets every binding
-//     choice and no suggestions: nothing says which proposals concern it.
+//     record (unconfirmed), is a suggestion. A superseded choice never.
+//   - by category (roadmap 0å KD-6): an entry whose `applies` matches the task's class, domain, project, feature or
+//     labels (OR inside a dimension, AND between them, lib/catalog.js appliesMatch) reaches it too, whatever its files;
+//     on a proposed entry it is a suggestion. File hits rank first, then category hits, then the rest, so under the cap
+//     the category hits are cut before the file hits. A task that names no files gets its category hits and the binding
+//     entries for the whole project (no applies, paths "**"), not every binding choice: nothing says a file rule
+//     concerns it. When the catalog uses applies at all, each entry line says why it came ("files", "class D", "whole
+//     project") and the heading counts them per reason; without applies anywhere the text is byte for byte as before.
 //   - design entries (kind design, roadmap 0å KD-1) under their own "Design language" heading, holding or proposed,
 //     each with its status and where its tokens live (source), at most MAX.design, the ones that hold first. They
 //     follow the binding choices in the room order. reviewer-design reads the same lines in the review package.
@@ -101,7 +107,18 @@ function rowInScope(file, scope) {
  * @returns {{ binding: object[], proposed: object[], prefer: object[], reuse: object[], shared: object[], near: object[],
  *   noFiles: boolean, cut: { binding: number, proposed: number, prefer: number, reuse: number, near: number, shared: number } }}
  */
-function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGuard.js').globMatch, index = null, near = [], deps = null } = {}) {
+/** A path list that names the whole tree ("**", "**\/*"): such an entry is for the whole project (KD-6). */
+const WHOLE_TREE = new Set(['**', '**/*', '*/**']);
+const wholeProject = (paths) => Array.isArray(paths) && paths.length > 0 && paths.every((p) => WHOLE_TREE.has(normPath(p)));
+/** The reasons an entry reaches a task, in the order they get room (KD-6): its files, its category, the whole project. */
+const RANK = Object.freeze({ files: 0, category: 1, project: 2 });
+
+/** Does the catalog use applies at all (KD-6)? Only then the lines carry their reason, so a catalog without it is unchanged. */
+function usesApplies(cat) {
+  return (cat?.decisions ?? []).some((x) => x?.decision?.applies && x.decision.status !== 'superseded' && !C.isNotBuilding(x.decision));
+}
+
+function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGuard.js').globMatch, index = null, near = [], deps = null, register = null } = {}) {
   const scope = scopeOf(task);
   const noFiles = scope.length === 0;
   const binding = [];
@@ -116,20 +133,31 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
     if (C.isNotBuilding(d)) continue;
     const status = C.effectiveStatus(d, ledger);
     if (status !== 'accepted' && status !== 'proposed' && status !== 'unconfirmed') continue;
-    if (status !== 'accepted' && noFiles) continue;
     // A file the entry's except names does not count (roadmap 0å KD-0); a folder still does, it may hold other files.
     const excepted = (e) => !e.endsWith('/') && (d.except ?? []).some((x) => glob(normPath(x), e));
-    if (!noFiles && !d.paths.some((p) => scope.some((e) => !excepted(e) && meets(p, e, glob)))) continue;
+    const byFiles = !noFiles && (d.paths ?? []).some((p) => scope.some((e) => !excepted(e) && meets(p, e, glob)));
+    // KD-6: an entry reaches a task by its paths OR its applies (the task's class, domain, project, feature, labels).
+    const byCategory = byFiles ? null : C.appliesMatch(d.applies, task, { register });
+    // A task that names no files: nothing says which file rules concern it, so only the binding entries for the whole
+    // project (no applies, paths "**") come along with its category hits, never every binding entry.
+    const byProject = noFiles && !byCategory && status === 'accepted' && !d.applies && wholeProject(d.paths);
+    if (!byFiles && !byCategory && !byProject) continue;
+    const reason = byFiles ? 'files' : byCategory ? 'category' : 'project';
+    const x = { d, status, reason, why: byFiles ? 'files' : byCategory ?? 'whole project' };
     // A design entry (roadmap 0å KD-1) gets its own section, holding or not: the status is on its line.
-    if (d.kind === 'design') design.push({ d, status });
-    else (status === 'accepted' ? binding : proposed).push({ d, status });
+    if (d.kind === 'design') design.push(x);
+    else (status === 'accepted' ? binding : proposed).push(x);
   }
+  // File hits first, then category hits, then the whole project (KD-6); by id inside each (the sort is stable).
+  const byRank = (a, b) => RANK[a.reason] - RANK[b.reason];
+  binding.sort(byRank);
+  proposed.sort(byRank);
   const cut = { binding: 0, design: 0, proposed: 0, prefer: 0, reuse: 0, near: 0, shared: 0, deps: 0 };
   // The dependency rows (KD-3): already chosen and capped by lib/catalogDeps.js depRows, which counts what it cut.
   const depList = Array.isArray(deps?.rows) ? deps.rows : [];
   cut.deps = Number.isInteger(deps?.cut) ? deps.cut : 0;
-  // At most MAX.design design entries, the ones that hold first.
-  design.sort((a, b) => (a.status === 'accepted') === (b.status === 'accepted') ? 0 : a.status === 'accepted' ? -1 : 1);
+  // At most MAX.design design entries, the ones that hold first, file hits before category hits.
+  design.sort((a, b) => ((a.status === 'accepted') === (b.status === 'accepted') ? byRank(a, b) : a.status === 'accepted' ? -1 : 1));
   const keepDesign = design.slice(0, MAX.design);
   cut.design = design.length - keepDesign.length;
   // At most MAX.decisions choices, the binding ones first.
@@ -161,6 +189,7 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
     near: nearList.slice(0, MAX.near),
     deps: depList,
     noFiles,
+    reasons: usesApplies(cat),
     cut,
   };
 }
@@ -196,17 +225,23 @@ function depLine(r) {
   return `  - ${r.name}${r.version ? ` ${r.version}` : ''} (${facts.join('; ')})${about ? `: ${about}` : ''}`;
 }
 
-function decisionLine({ d, status }) {
-  const shown = d.paths.slice(0, SHOWN_PATHS).join(', ') + (d.paths.length > SHOWN_PATHS ? ', ...' : '');
+/**
+ * A choice's line: its paths, then the rule. With reasons on (the catalog uses applies, KD-6) the parenthesis starts with
+ * why it reached the task: "files", the category ("class D, label visual") or "whole project".
+ */
+function decisionLine({ d, status, why }, o = {}) {
+  const paths = d.paths ?? [];
+  const shown = paths.slice(0, SHOWN_PATHS).join(', ') + (paths.length > SHOWN_PATHS ? ', ...' : '');
   const mark = status === 'unconfirmed' ? '; unconfirmed: it says accepted, but the owner has not accepted this version' : '';
-  return `  - ${d.id} (${shown}${mark}): ${d.invariant.trim()}`;
+  const head = o.reasons ? [why, shown].filter(Boolean).join('; ') : shown;
+  return `  - ${d.id} (${head}${mark}): ${d.invariant.trim()}`;
 }
 
-/** A design entry's line: its status and where its tokens live, then the rule. */
-function designLine({ d, status }) {
+/** A design entry's line: its status and where its tokens live, then the rule (with reasons on, why it came first). */
+function designLine({ d, status, why }, o = {}) {
   const word = status === 'accepted' ? 'holds' : status === 'unconfirmed' ? 'unconfirmed: it says accepted, but the owner has not accepted this version' : 'proposed';
   const src = Array.isArray(d.source) ? d.source : typeof d.source === 'string' && d.source.trim() ? [d.source.trim()] : [];
-  return `  - ${d.id} (${word}${src.length ? `; tokens in ${src.join(', ')}` : ''}): ${d.invariant.trim()}`;
+  return `  - ${d.id} (${o.reasons ? `${why}; ` : ''}${word}${src.length ? `; tokens in ${src.join(', ')}` : ''}): ${d.invariant.trim()}`;
 }
 
 const ITEM = {
@@ -241,16 +276,35 @@ function cutText(cut, cli) {
   return parts.length ? `cut: ${parts.join(', ')}; \`${cli} catalog show\` lists them all` : 'nothing cut';
 }
 
-/** The size and what was cut, the same words in both forms. */
-function measure(tokens, cap, cut, cli, noFiles) {
-  const what = noFiles ? 'the task names no files, so every choice that holds' : "chosen for this task's files";
-  return `${what}; about ${tokens} of at most ${cap} tokens; ${cutText(cut, cli)}`;
+/** How many of the shown entries came by each reason (KD-6): { files, category, project }. */
+function reasonCounts(items) {
+  const n = { files: 0, category: 0, project: 0 };
+  for (const kind of ['binding', 'design', 'proposed']) for (const x of items[kind] ?? []) n[x.reason]++;
+  return n;
 }
 
-function render(form, items, { tokens, cap, cut, cli, noFiles }) {
-  const m = measure(tokens, cap, cut, cli, noFiles);
+/**
+ * The size and what was cut, the same words in both forms. With reasons on (KD-6) it also counts the entries per
+ * reason, so the cost reports and the review findings can show whether the category hits help.
+ */
+function measure(tokens, cap, cut, cli, noFiles, counts = null) {
+  const what = counts
+    ? noFiles
+      ? 'the task names no files, so the choices for its category and the whole project'
+      : "chosen for this task's files and category"
+    : noFiles
+      ? 'the task names no files, so the choices that hold for the whole project'
+      : "chosen for this task's files";
+  const hits = counts
+    ? ` (${counts.files} by files, ${counts.category} by category${counts.project ? `, ${counts.project} for the whole project` : ''})`
+    : '';
+  return `${what}${hits}; about ${tokens} of at most ${cap} tokens; ${cutText(cut, cli)}`;
+}
+
+function render(form, items, { tokens, cap, cut, cli, noFiles, reasons = false }) {
+  const m = measure(tokens, cap, cut, cli, noFiles, reasons ? reasonCounts(items) : null);
   const body = [];
-  for (const kind of SHOWN) if (items[kind]?.length) body.push(SECTIONS[kind], ...items[kind].map(ITEM[kind]));
+  for (const kind of SHOWN) if (items[kind]?.length) body.push(SECTIONS[kind], ...items[kind].map((x) => ITEM[kind](x, { reasons })));
   if (form === 'review')
     return [
       '',
@@ -298,9 +352,9 @@ function settle(form, items, o) {
  * @returns {{ lines: string[], tokens: number, cap: number, cut: { binding: number, proposed: number, prefer: number,
  *   reuse: number, near: number, shared: number }, counts: object } | null}
  */
-function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form = 'mission', cli = 'ravenseat', glob, index = null, near = [], deps = null } = {}) {
+function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form = 'mission', cli = 'ravenseat', glob, index = null, near = [], deps = null, register = null } = {}) {
   if (!cat?.exists && !index) return null;
-  const chosen = choose(cat, task, { ledger, glob, index, near: form === 'review' ? near : [], deps });
+  const chosen = choose(cat, task, { ledger, glob, index, near: form === 'review' ? near : [], deps, register });
   const all = {
     binding: chosen.binding,
     design: chosen.design,
@@ -315,7 +369,7 @@ function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form
   const cap = capTokens;
   const cut = { ...chosen.cut };
   const items = { binding: [], design: [], proposed: [], prefer: [], reuse: [], near: [], shared: [], deps: [] };
-  const o = { cap, cut, cli, noFiles: chosen.noFiles };
+  const o = { cap, cut, cli, noFiles: chosen.noFiles, reasons: chosen.reasons };
   // Greedy in priority order: an item goes in when the whole text still fits; one that does not is counted as cut,
   // and a shorter one after it may still fit.
   for (const kind of ROOM)
@@ -328,6 +382,8 @@ function excerpt(cat, task, { ledger, capTokens = C.DEFAULTS.excerptTokens, form
     }
   const { lines, tokens } = settle(form, items, o);
   const counts = Object.fromEntries(Object.entries(items).map(([k, l]) => [k, l.length]));
+  // The entries shown per reason (KD-6), also without applies in the catalog (then all are file or project hits).
+  counts.reasons = reasonCounts(items);
   return { lines, tokens, cap, cut, counts };
 }
 
@@ -364,7 +420,18 @@ function forTask(task, { which = 'mission', root, dataFolder, config, cli, fsLik
     const near = index && which === 'review' && Array.isArray(newNames) ? CI.nearNames(newNames, index) : [];
     // The dependency rows (roadmap 0å KD-3, catalog.depsExcerpt): read from the same tree, never the network.
     const deps = setup.depsExcerpt ? depsFor(task, tree, cat, fsLike) : null;
+    // The project register (KD-6), only when an entry's applies names a project and the task has none of its own: the
+    // project then comes from the register's id prefixes, as everywhere else in the queue.
+    let register = null;
+    const wantsProject = (cat.decisions ?? []).some((x) => x?.decision?.applies?.project);
+    if (wantsProject && !(typeof task?.project === 'string' && task.project))
+      try {
+        register = JSON.parse(fsLike.readFileSync(path.join(data, 'queue.json'), 'utf8'))?.projects ?? null;
+      } catch {
+        // error-ignored: without the register only an explicit project field matches
+      }
     return excerpt(cat, task, {
+      register,
       ledger,
       capTokens: setup.excerptTokens,
       form: which === 'review' ? 'review' : 'mission',
