@@ -1087,6 +1087,18 @@ details[open] > summary > .fold-chevron::before {
   font-weight: 600;
 }
 
+/* The GitHub issue link on a card (GH-2): a neutral badge with the control outline, like the plan badge, and an
+   underline so it reads as a link that leaves the board. */
+a.badge.issue-badge {
+  border-color: var(--color-outline);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a.badge.issue-badge:hover {
+  text-decoration-thickness: 2px;
+}
+
 .badge.ready-badge {
   background: var(--color-tone-info);
   color: var(--color-on-tone-info);

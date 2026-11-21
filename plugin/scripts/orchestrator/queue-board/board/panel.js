@@ -479,6 +479,20 @@ function drawPanel(fresh) {
             })
           : null,
       ),
+      // The GitHub issue (GH-2): a real link and a tab stop, opening in a new tab. The URL comes from the server
+      // (lib/issueLink.js issueView, the stored repo and number), never from issue text; only github.com is drawn.
+      facts(
+        'Issue',
+        k.issue && /^https:\/\/github\.com\//.test(k.issue.url)
+          ? el('a', {
+              class: 'issue-link',
+              href: k.issue.url,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              text: `${k.issue.label} on GitHub`,
+            })
+          : null,
+      ),
       // The task's own reading material, narrowing the plan entry: the path, then the anchor and the role as badges.
       // Text only (el with text), so a path or an anchor can never become markup.
       facts(

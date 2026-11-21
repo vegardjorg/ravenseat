@@ -161,6 +161,8 @@ describe('ravenseat issues import', () => {
     expect(e).toBeTruthy();
     expect(e.issue).toEqual({ repo: 'acme/tool', number: 12 });
     expect(e.inbox.by).toBe('issue import');
+    // plan get shows the link, built from the stored repo and number.
+    expect(p.rs(['plan', 'get', e.id]).out).toMatch(/Issue #12 https:\/\/github\.com\/acme\/tool\/issues\/12/);
     expect(p.plansText()).not.toContain('MUST-NOT-BE-STORED');
     expect(p.plansText()).not.toContain('evil.example');
   });
