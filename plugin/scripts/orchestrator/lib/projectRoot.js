@@ -24,10 +24,26 @@ const path = require('node:path');
 
 const WORKTREE_PART = `${path.sep}.claude${path.sep}worktrees${path.sep}`;
 
-/** Compares two paths; case-insensitive on Windows, where C:\X and c:\x are the same folder. */
-function samePath(a, b, platform = process.platform) {
-  const x = path.resolve(a);
-  const y = path.resolve(b);
+/** The long, real form of a path when it exists (a short 8.3 Windows name such as RUNNER~1 becomes the full name), else
+ *  the path as written. */
+function realOrSelf(p, realpath) {
+  try {
+    return path.resolve(realpath(p));
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+/**
+ * Compares two paths; case-insensitive on Windows, where C:\X and c:\x are the same folder. Existing paths are compared
+ * in their real form: git writes the long path into a worktree's .git file, while TEMP (and so QUEUE_ROOT) can hold the
+ * short 8.3 name, and the two must still count as one folder.
+ * @param {{ realpath?: (p: string) => string }} [o] realpath can be replaced in tests
+ */
+function samePath(a, b, platform = process.platform, o = {}) {
+  const realpath = o.realpath ?? fs.realpathSync.native;
+  const x = realOrSelf(a, realpath);
+  const y = realOrSelf(b, realpath);
   return platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y;
 }
 

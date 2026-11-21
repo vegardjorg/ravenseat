@@ -76,6 +76,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Plans: polish: clearer empty states, sticky Roadmap column headers, start lines in one Copy menu, and the deadline
   band only when there is a deadline.** On a phone the room tabs stay on one line.
 ### Fixed
+- **A worktree is recognised under a short Windows path** (an 8.3 name such as `RUNNER~1`): commands on a queue branch no longer act as if they ran in the main checkout.
 - The red team result no longer shows one unexplained skip: the report runs its own self-check right after writing the page.
 - **Missions: a section pointer on a Windows short path (`RUNNER~1`) keeps its line range.**
 - **Silent snapshot: a process that names the worktree by its Windows short path is found too, also when the path mixes short and long folder names.**

@@ -107,11 +107,14 @@ function project(gateArgs: string[] = [], gatesExtra: Record<string, unknown> = 
   return { folder, repo, data, deps, seen, outside, base, env, run, runs, copies, worktrees, g, writeConfig };
 }
 
-/** Is `p` (a folder that may be gone by now) under `root`? Only the root is resolved: the copy is removed after the run. */
+/** Is `p` (a folder that may be gone by now) under `root`? Only the root is resolved: the copy is removed after the run.
+ *  The root counts in both its written and its real form: a Windows TEMP can hold a short 8.3 name (RUNNER~1 on CI). */
 const under = (p: string, root: string) => {
   const low = (s: string) => (process.platform === 'win32' ? s.toLowerCase() : s);
-  const rel = path.relative(low(fs.realpathSync.native(root)), low(path.resolve(p)));
-  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+  return [fs.realpathSync.native(root), path.resolve(root)].some((r) => {
+    const rel = path.relative(low(r), low(path.resolve(p)));
+    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+  });
 };
 
 describe('gates.mjs --full --clean: a one-off run in a clean copy', () => {

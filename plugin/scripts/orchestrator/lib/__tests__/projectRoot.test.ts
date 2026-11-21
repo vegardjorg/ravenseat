@@ -125,6 +125,18 @@ describe('overrides and fallback', () => {
     expect(samePath('/a/B', '/a/b', 'win32')).toBe(true);
     expect(samePath('/a/B', '/a/b', 'linux')).toBe(false);
   });
+
+  it('samePath sees a short 8.3 Windows name and its long form as the same folder (RUNNER~1 on the CI runner)', () => {
+    // git writes the long path into a worktree's .git file, while TEMP (and so QUEUE_ROOT) can hold the short name.
+    const long = path.resolve('/Users/runneradmin/tmp/repo');
+    const short = path.resolve('/Users/RUNNER~1/tmp/repo');
+    const realpath = (p: string) => (path.resolve(p) === short ? long : path.resolve(p));
+    expect(samePath(short, long, 'win32', { realpath })).toBe(true);
+    expect(samePath(short, path.resolve('/Users/other/tmp/repo'), 'win32', { realpath })).toBe(false);
+    // A path that does not exist is compared as written.
+    const missing = () => { throw new Error('ENOENT'); };
+    expect(samePath('/a/B', '/a/b', 'win32', { realpath: missing })).toBe(true);
+  });
 });
 
 describe('queueActive (the hooks exit at once when it is false)', () => {
