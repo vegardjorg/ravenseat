@@ -361,6 +361,9 @@
 //         triage-<id> with the choices Close as done|stale, Keep and start anyway, Rewrite, in waiting_on; never closed
 //         without the owner. `resolve triage-<id> --choice <n>` then cancels, keeps or parks the task (Rewrite: edit the
 //         mission, then continue). Off: helpers off triage; off in lite mode unless switched on.)
+//   node scripts/orchestrator/queue.mjs triage <id> [--verdict ...] --plan ok|notes|ask [--plan-note "..."]
+//        (records the plan review's PLANREVIEW line, lib/planReview.js: notes and ask add the note to the mission; ask
+//         in block mode (planReview.mode) becomes the owner question planreview-<id>. A note without file:line counts as ok.)
 //   node scripts/orchestrator/queue.mjs triage <id> --prompt [--scratchpad <folder>]   (writes triage-<id>.md again and
 //                                                                  prints the agent line)
 //   The transcripts: ~/.claude/projects/<repo-slug>/<session>/subagents/agent-<id>.jsonl (QUEUE_TRANSCRIPTS overrides).

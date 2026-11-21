@@ -279,6 +279,35 @@ reviewer's verdict against criteria the track could not change).
 The lock is a guard against a track editing its own criteria, not an access control: a session in the main tree can
 still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who did.
 
+## Plan quality before and during a track
+
+### Plan review before a risky task
+
+A wrong data model or file boundary is cheapest to find before a 40 to 120 minute track starts on it. Before `fill`
+starts a risky task, the intake triage's step (see [orchestration.md](orchestration.md#intake-triage)) also checks the
+plan against the code with a fixed checklist, in one pass: data model and migrations, public interfaces and file
+formats, irreversible steps, file boundaries (a file the change needs that the task does not own), and assumptions the
+mission makes that the code contradicts. Only notes with `file:line` count.
+
+- **Risky:** the class is in `planReview.classes` (default `["D+"]`), or the task meets an accepted sensitive zone
+  ([catalog.md](catalog.md#sensitive-zones); none by default). Never a fix task or a continuation.
+- **The answer:** `PLANREVIEW ok|notes|ask`, recorded with `ravenseat triage <id> --plan <ok|notes|ask> --plan-note "..."`
+  (with or without `--verdict`). `notes` go into the mission as an addition; the task then starts.
+- **`planReview.mode`:** `advisory` (the default; an `ask` is a note too), `block` (an `ask` becomes the owner question
+  `planreview-<id>` before the start; off by default because it stops work) or `off`.
+- `ravenseat info` and the board's detail panel show the result (**Plan review**). Friction: one short read-only agent run
+  per risky task, and no other wait.
+
+### Riskiest assumption first
+
+`risk_first` (optional, one sentence) names the assumption that would sink the plan and how to check it. The mission
+then tells the track to check it first, in at most about 20 minutes, and to write `RISK held` or `RISK failed` in its
+report; if it failed, the track stops and delivers PARTIAL with one owner question instead of building on a guess. A
+task in an accepted sensitive zone without `risk_first` gets the default "prove the choice can be reversed before
+building on it". Set it with `ravenseat add ... --risk-first "..."` or `ravenseat edit <id> --risk-first "..."` (`""`
+removes it); it is locked after the start like `acceptance`. `mission.riskFirst` (on) turns the block off. Without the
+field (and outside a zone) the mission is unchanged.
+
 ## Everyday commands
 
 | Command | What it does |
@@ -291,7 +320,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `forecast [--project <pid>] [--days 28] [--json]` | When the remaining tasks are done at 50, 85 and 95 % (Monte Carlo, see below) |
 | `show` / `show --full` | Short view (under about 3,000 characters; names up to 5 proposals with the track they came from) / full table |
 | `next` | What can start now, without changing anything |
-| `triage` / `triage <id> --verdict ready\|done\|stale\|adjust [--note "…"]` / `triage <id> --prompt --scratchpad <dir>` | The tasks that need an intake verdict before they start / record the triage helper's verdict (done and stale become an owner question, adjust adds the note to the mission) / write the triage prompt again (see orchestration.md, Intake triage) |
+| `triage` / `triage <id> --verdict ready\|done\|stale\|adjust [--note "…"] [--plan ok\|notes\|ask --plan-note "…"]` / `triage <id> --prompt --scratchpad <dir>` | The tasks that need an intake verdict or a plan review before they start / record the triage helper's verdict (done and stale become an owner question, adjust adds the note to the mission) and its PLANREVIEW line (`--plan` alone works too; see [plan review](#plan-review-before-a-risky-task)) / write the triage prompt again (see orchestration.md, Intake triage) |
 | `fill --scratchpad <dir>` | Starts as many tasks as the limits allow and writes the mission prompts |
 | `receive <id> [--full-review] [--all]` | Receives a finished track: reads the RESULT line, builds the review package. After a fix round the package holds only the commits since the last review, with the previous findings; the same reviewers. `--full-review` gives the whole package. The scope facts and the proposed catalog choices are one summary line each, with the details in `00-package.md`; `--all` prints a line per fact |
 | `deliveries` | Tracks with a `track-result.md` (RESULT line on top) that is not received yet; the pulse prints new ones as `NEW DELIVERY` |
@@ -1220,6 +1249,8 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 | `review.signals` | `{}` (the built-ins `auth`, `secret`, `url-from-data`, `html-sink`) | Review signals: what the diff adds (code files only, never tests, comments or docs) lifts a reviewer in on top of the class, with one line of reason in the package. Per signal `enabled`, `reviewer`, `paths` and `words` (regular expressions, added to a built-in); a name of your own is a new signal. Switching a built-in off is a weakening. `ravenseat helpers` shows the hit rate per signal | Advanced |
 | `review.packs` | `[]` | Stack packs for the review signals: ids such as `core`, `nextjs`, `prisma`. A built-in pack is read from the plugin at run time, so it follows updates; an unknown id is ignored. The Checks tab suggests them from the manifests, and `ravenseat checks packs --apply` writes them ([orchestration](orchestration.md#stack-packs)) | Advanced |
 | `triage.minAgeDays`, `triage.agentAdded`, `triage.maxPerFill`, `triage.askAgainMin` | `3`, `true`, `3`, `60` | Intake triage before a task starts: tasks added or last edited this many days ago (`null` = off) and agent-added tasks get a `triage` verdict first (`ravenseat triage`); at most this many steps per fill, not asked again within this many minutes. Off with `ravenseat helpers off triage` and in lite mode (see orchestration.md) | Advanced, Full mode only |
+| `planReview.mode`, `planReview.classes` | `"advisory"`, `["D+"]` | The plan review before a risky task (a class in the list, or a task in an accepted sensitive zone): a fixed five-point checklist on the triage's step, notes with `file:line` into the mission. `block` makes an `ask` an owner question before the start (off by default, it stops work); `off` turns it off ([plan review](#plan-review-before-a-risky-task)) | Advanced |
+| `mission.riskFirst` | `true` | A task's `risk_first` is checked first in the track, which stops with PARTIAL and one owner question if it fails; a zone task without one is told to prove the choice can be reversed. The block appears only when it applies ([riskiest assumption](#riskiest-assumption-first)) | Advanced |
 | `proposals.autoAccept.enabled`, `proposals.autoAccept.classes`, `proposals.autoAccept.maxEstimateMin`, `proposals.autoAccept.maxValue` | `false`, `["K"]`, `60`, `null` | Auto-accept of agent proposals by the owner's rules (`ravenseat proposals`); the queue's own rules win; never D/D+, `waiting_on`, legal/owner labels, open legal points or protected paths. Switching it on weakens a guard: `ravenseat proposals auto on --i-understand --by owner` | Advanced, queue.json |
 | `architectureRules` | `[]` | Short rules copied into every mission | Advanced |
 | `attempts.reservationTtlMin` | `30` | A start reservation with no start for this long counts as expired | Advanced |

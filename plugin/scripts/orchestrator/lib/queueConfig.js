@@ -411,6 +411,14 @@ const STANDARD = Object.freeze({
   // maxPerFill triage steps per fill; a printed step is not printed again for askAgainMin minutes. Off: `ravenseat helpers
   // off triage` (or helpers.triage.enabled false). Lite mode: off unless switched on in the queue.
   triage: { minAgeDays: 3, agentAdded: true, maxPerFill: 3, askAgainMin: 60 },
+  // The plan review before a risky task starts (DR-1, lib/planReview.js): a fixed five-point checklist on the triage's
+  // step (one agent, one pass) for a task whose class is in `classes` or that meets an accepted sensitive zone (catalog
+  // kind zone). mode: advisory (the default: the notes go into the mission, the task starts), block (an "ask" becomes an
+  // owner question before the start; off by default since it stops work) or off.
+  planReview: { mode: 'advisory', classes: ['D+'] },
+  // The mission's optional blocks (DR-2): riskFirst = a task's `risk_first` (the riskiest assumption) is checked first,
+  // and a zone task without one is told to prove the choice can be reversed. The block appears only when it applies.
+  mission: { riskFirst: true },
   // When a focus has ended (every stage done, or its period `to` is over; lib/logic/ranking.js "When the focus has
   // ended"): continueWhenEmpty false (the default) pauses the queue (fill starts nothing) and asks the owner one
   // question in "Waiting on you": set a new focus or continue the regular queue. true = the queue continues by itself

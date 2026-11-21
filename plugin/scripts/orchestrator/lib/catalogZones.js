@@ -93,7 +93,8 @@ function hitWords(h) {
  * @returns {(task: object, o?: { missionText?: string|null, register?: object|null }) => object[]}
  */
 function zonesOnDisk({ root, dataFolder, fsLike = fs } = {}) {
-  const none = () => [];
+  // `empty` says the catalog has no zone at all, so a caller can skip reading the mission text.
+  const none = Object.assign(() => [], { empty: true });
   try {
     const QC = require('./queueConfig.js');
     const tree = root ?? QC.config().root;

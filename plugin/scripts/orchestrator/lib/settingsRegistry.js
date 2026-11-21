@@ -1129,6 +1129,25 @@ const SETTINGS = Object.freeze([
     { fullWhy: 'the intake triage is off in lite' }),
   row('triage.askAgainMin', 'review', 'integer', 'Triage asks again after (minutes)',
     'A printed triage step is not printed again for this long.', { fullWhy: 'the intake triage is off in lite' }),
+  // DR-1 (plans/drift-vurdering-2026-11-21.md). Friction: advisory adds no wait beyond one short read-only agent run on
+  // the triage's step, only for risky tasks (class D+ by default, or a task in an accepted zone, none by default); its
+  // notes go into the mission. Block can stop a start (an "ask" becomes an owner question), so it is off. Advisory is the
+  // default: D+ is rare, it is where a wrong plan costs most, and advisory never stops work.
+  row('planReview.mode', 'review', 'choice', 'Plan review before a risky task',
+    'Before a risky task starts, the triage step also checks the plan against the code: data model and migrations, ' +
+    'public interfaces, irreversible steps, file boundaries, assumptions the code contradicts (file:line or no note). ' +
+    'Advisory: the notes go into the mission and the task starts. Block: a point for you becomes a question before the ' +
+    'start. Off: no plan review.', { choices: ['block', 'advisory', 'off'] }),
+  row('planReview.classes', 'review', 'list', 'Plan review for classes',
+    'The task classes that get the plan review (default D+). A task in an accepted sensitive zone (catalog kind zone) ' +
+    'gets it whatever its class.'),
+  // DR-2. Friction: none for a task without risk_first (the mission is unchanged); with one, the track checks it first
+  // and stops with PARTIAL and one owner question when it fails, the PARTIAL path the owner already handles. On: the
+  // block appears only when the field is set (or the task is in an accepted zone, none by default).
+  row('mission.riskFirst', 'review', 'onoff', 'Riskiest assumption first',
+    'A task\'s risk_first (the assumption that would sink the plan) is checked first in the track, before other code; ' +
+    'if it fails, the track stops with PARTIAL and one question for you. A task in a sensitive zone without one is told ' +
+    'to prove the choice can be reversed. Off: no such block in the mission.'),
   row('proposals.autoAccept.enabled', 'review', 'onoff', 'Auto-accept proposals',
     'A proposal from an agent that fits the rules is approved by the queue itself, logged and can be undone.', {
       ...QUEUE,
