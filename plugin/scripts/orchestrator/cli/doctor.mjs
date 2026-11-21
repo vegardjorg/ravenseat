@@ -70,6 +70,7 @@ import { REPO_CHECKS } from './doctorRepo.mjs';
 import { idleGuardLines } from './inspection.mjs';
 import { checkTree } from './catalog.mjs';
 import { doctorNotBuilding } from './notBuilding.mjs';
+import { doctorDepsAudit } from './depsAudit.mjs';
 import { doctorUpdateRows } from './update.mjs';
 import { checkLinks } from './taskLinksCheck.mjs';
 import { tidyOptions } from './tidy.mjs';
@@ -90,7 +91,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates', 'notBuilding', 'tidy', 'issues'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates', 'notBuilding', 'deps', 'tidy', 'issues'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -321,6 +322,8 @@ function checkConfig() {
   // The project catalog's switches (lib/catalog.js setupProblems): doctor and planLinks, true or false.
   wrong.push(...require('./lib/catalog.js').setupProblems(own.catalog).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   // "Not building" (lib/notBuilding.js setupProblems): match, true or false.
+  // The dependency audit (lib/osv.js setupProblems): audit manual|off, privateScopes a list, auditStop true or false.
+  wrong.push(...require('./lib/osv.js').setupProblems(own.deps).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   wrong.push(...require('./lib/notBuilding.js').setupProblems(own.notBuilding).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   wrong.push(...baselineProblems(own).filter((p) => !wrong.some((w) => w.startsWith(p.split(' ')[0]))));
   const out = [];
@@ -878,6 +881,15 @@ function checkNotBuilding() {
 }
 
 /**
+ * The dependency audit (roadmap 0å KD-4, cli/depsAudit.mjs): from the cache only, never the network. The last audit is
+ * an INFO row with --all; a risk acceptance whose review date has passed is an INFO row always. Nothing before the first
+ * audit or with deps.audit off.
+ */
+function checkDepsAudit() {
+  return doctorDepsAudit();
+}
+
+/**
  * Tidy (lib/tidy.js, roadmap 1b): one INFO row with what `ravenseat tidy --execute` would remove, only when there is
  * something. Never WARN or FAIL. Reads only (git with GIT_OPTIONAL_LOCKS=0); the size walks only the removable folders.
  */
@@ -931,7 +943,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkLinks, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

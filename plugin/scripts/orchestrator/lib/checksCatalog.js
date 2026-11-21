@@ -22,7 +22,10 @@
 // whose kind of check CI does not run, 0i step 9b). It never changes the priority, so it never lights the red marker
 // (plans/feillogg-til-gater-2026-11-15.md section 3.9: the marker is for a guard that failed). `action: quick-gate` is
 // the card that offers to add a gate guard's command to gates.quick (`ravenseat checks quick-add <G-n>`, lib/quickGate.js):
-// the items come from the registry through facts.quickGate, never from the card's text.
+// the items come from the registry through facts.quickGate, never from the card's text. `action: dep-fix` is the card for
+// the dependency audit's findings (roadmap 0å KD-4): its facts are facts.depAudit (lib/osv.js summarize, read from the
+// cache by cli/checks.mjs, never the network), and its button proposes one update task (`ravenseat checks plan
+// dep-audit-found`, lib/osv.js fixTask), always as a proposal the owner approves.
 //
 // The same folders hold recipes.json: per failure class and stack, what would guard a class the finding log keeps seeing
 // (0i section 3.7). The card ledger-recipes shows the due classes with the first recipe whose `when` holds; see the
@@ -46,7 +49,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const PRIORITIES = ['high', 'medium', 'low'];
-const ACTIONS = ['gates', 'ask', 'packs', 'setting', 'quick-gate'];
+const ACTIONS = ['gates', 'ask', 'packs', 'setting', 'quick-gate', 'dep-fix'];
+/** The card for the dependency audit's findings (action dep-fix, lib/osv.js): its button proposes one update task. */
+const DEP_AUDIT_CARD = 'dep-audit-found';
 /** The card that offers to add a gate guard's command to gates.quick (action quick-gate, lib/quickGate.js items). */
 const QUICK_GATE_CARD = 'quick-gate-add';
 const REPORT_VERSION = 1;
@@ -127,6 +132,10 @@ const CONDITIONS = {
   'client-format-changed': (f) => f.clientCanary?.signal === true,
   // A gate guard in the registry whose command is not in gates.quick (facts.quickGate.items, lib/quickGate.js items).
   'guard-not-in-quick': (f) => Array.isArray(f.quickGate?.items) && f.quickGate.items.length > 0,
+  // The dependency audit's cache (roadmap 0å KD-4, lib/osv.js summarize via cli/checks.mjs facts.depAudit): open findings
+  // (not accepted by a catalog entry), and a high or critical one in code that ships (dev not true). No cache: neither.
+  'audit-findings': (f) => (f.depAudit?.open ?? 0) > 0,
+  'audit-high-prod': (f) => (f.depAudit?.highProd ?? 0) > 0,
 };
 
 /** The classes of the finding log entries in `list` (facts.ledger.due or .guardFailed). */
@@ -198,6 +207,28 @@ function auditLine(declared) {
   return null;
 }
 
+/** The dep-audit card's pointer to the audit that needs no install (lib/osv.js, roadmap 0å KD-4). */
+const AUDIT_DRY = 'Without installing anything: `ravenseat catalog deps --audit --dry` shows what it would ask OSV.dev (public packages only: ecosystem, name, version), and `--yes` asks it.';
+
+/** One finding as text (lib/osv.js findingText; repeated here so this file needs no network module). */
+function auditFindingText(x) {
+  const to = x.fixed ? ` to ${x.fixed} or later` : ' (no fixed version published yet)';
+  return `${x.name} ${x.version}${to} (${x.id}, ${x.severity}${x.dev === true ? ', development only' : ''})`;
+}
+
+/** The dep-audit-found card's line: the age, the counts, the accepted and lapsed acceptances and the worst three. */
+function depAuditLine(d) {
+  if (!isPlainObject(d)) return null;
+  const age = d.ageDays == null ? 'at an unknown time' : d.ageDays === 0 ? 'today' : d.ageDays === 1 ? '1 day ago' : `${d.ageDays} days ago`;
+  const counts = ['critical', 'high', 'moderate', 'low', 'unknown'].filter((k) => d.counts?.[k]).map((k) => `${d.counts[k]} ${k}`).join(', ');
+  const parts = [`Last audit ${age} (ravenseat catalog deps --audit): ${counts || 'none open'}.`];
+  if (d.accepted) parts.push(`${d.accepted} accepted by a catalog entry.`);
+  for (const l of Array.isArray(d.lapsed) ? d.lapsed : []) parts.push(`${l.id} was due for review on ${l.reviewBy}, so its holes count again.`);
+  const worst = Array.isArray(d.worst) ? d.worst : [];
+  if (worst.length) parts.push(`Worst: ${worst.map(auditFindingText).join('; ')}.`);
+  return parts.join(' ');
+}
+
 /** The line a suggestion adds from the facts, so the card names the stacks. Null when it has none. */
 function detailOf(key, facts) {
   // The command for the project's test runner (lib/fixTests.js suggestCommand); none is made up for an unknown stack.
@@ -206,7 +237,8 @@ function detailOf(key, facts) {
       ? `For this project: \`${facts.redOnBaseCommand}\` (read from its own files). Check that it runs only the files it is given.`
       : null;
   if (key === 'guard-failed') return ledgerLine(facts.ledger?.guardFailed, { guard: true });
-  if (key === 'dep-audit') return auditLine(facts.declaredStacks);
+  if (key === 'dep-audit') return joinDetail(auditLine(facts.declaredStacks), AUDIT_DRY);
+  if (key === DEP_AUDIT_CARD) return depAuditLine(facts.depAudit);
   // The canary's own lines: the version and the row types with counts, never content (lib/clients/claude/canary.js news).
   if (key === 'client-format')
     return facts.clientCanary?.lines?.length ? `Seen in the newest transcript: ${facts.clientCanary.lines.join('; ')}.` : null;
@@ -696,6 +728,12 @@ function buildReport({ facts, catalog, tasks = [], dismissed = [], knownBugs = n
   }
   // The guards whose command is not in gates.quick, on the one card that offers to add them (the command from the
   // registry, through facts.quickGate; the board posts only the guard id).
+  // The dependency audit's summary on its card, for the board's list (counts, the worst three, the acceptances).
+  const auditCard = suggestions.find((s) => s.key === DEP_AUDIT_CARD && s.applies);
+  if (auditCard) {
+    const d = facts.depAudit;
+    auditCard.depAudit = { checkedAt: d.checkedAt ?? null, ageDays: d.ageDays ?? null, counts: d.counts ?? {}, open: d.open, highProd: d.highProd ?? 0, worst: d.worst ?? [], accepted: d.accepted ?? 0, lapsed: d.lapsed ?? [] };
+  }
   const quickCard = suggestions.find((s) => s.key === QUICK_GATE_CARD && s.applies);
   if (quickCard) quickCard.quickGate = facts.quickGate.items;
   return {
@@ -753,4 +791,4 @@ function planTask(s, found, tasks) {
   };
 }
 
-module.exports = { PRIORITIES, ACTIONS, CONDITIONS, holds, parseTemplate, mergeCatalog, loadCatalog, buildReport, planTask, planTasks, recipeFor, dampedFor, recipeExampleProblems };
+module.exports = { DEP_AUDIT_CARD, PRIORITIES, ACTIONS, CONDITIONS, holds, parseTemplate, mergeCatalog, loadCatalog, buildReport, planTask, planTasks, recipeFor, dampedFor, recipeExampleProblems };

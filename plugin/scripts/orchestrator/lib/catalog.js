@@ -48,8 +48,20 @@ const STATUSES = Object.freeze(['proposed', 'accepted', 'superseded', 'not-build
  */
 const FIELDS = Object.freeze([
   'id', 'title', 'status', 'kind', 'paths', 'except', 'applies', 'invariant', 'check', 'keywords', 'revisit', 'source',
-  'uses', 'alternatives', 'stack', 'reason', 'supersedes', 'plan', 'accepted_by', 'accepted',
+  'uses', 'alternatives', 'stack', 'reason', 'accepts', 'review_by', 'supersedes', 'plan', 'accepted_by', 'accepted',
 ]);
+/**
+ * A risk acceptance (roadmap 0å KD-4, lib/osv.js): on kind dependency, `accepts` lists the advisory ids the owner has
+ * judged not to apply (GHSA-..., CVE-..., PYSEC-..., RUSTSEC-..., GO-...) and `review_by` (YYYY-MM-DD) when to look again.
+ * Both bind (fingerprint), so a track cannot widen the list or move the date: like every entry, it counts only once the
+ * owner accepts it, and it hides those advisories on the Checks card only until review_by has passed. paths may be left
+ * out: it binds no code.
+ */
+const DEPENDENCY_FIELDS = Object.freeze(['accepts', 'review_by']);
+const ADVISORY_ID = /^[A-Z][A-Z0-9]{1,15}-[A-Za-z0-9][A-Za-z0-9._:-]{1,60}$/;
+const ACCEPTS_MAX = 20;
+/** A real calendar date YYYY-MM-DD. */
+const isDay = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
 /**
  * applies (roadmap 0å KD-6): the task categories an entry reaches besides its paths, each dimension a list of values.
  * Only fields a task already has: class, domain, project (the task's project, as the register gives it), feature and
@@ -418,9 +430,22 @@ function parseDecision(name, source) {
   } else if (d.reason != null) e('reason is for kind zone (a design choice says why in its text)');
   if (d.reason != null && (typeof d.reason !== 'string' || /[\u0000-\u001f]/.test(d.reason) || d.reason.length > NOTE_MAX))
     e(`reason must be one line of text, at most ${NOTE_MAX} characters`);
+  // A risk acceptance (KD-4): accepts and review_by, only on kind dependency, each with the other.
+  const risk = kind === 'dependency' && d.accepts != null;
+  if (DEPENDENCY_FIELDS.some((f) => d[f] != null)) {
+    if (kind !== 'dependency') e('accepts and review_by are for kind dependency (a risk acceptance)');
+    else {
+      if (!(Array.isArray(d.accepts) && d.accepts.length && d.accepts.length <= ACCEPTS_MAX && d.accepts.every((x) => typeof x === 'string' && ADVISORY_ID.test(x))))
+        e(`accepts must be a list of 1 to ${ACCEPTS_MAX} advisory ids, e.g. ["GHSA-35jh-r3h4-6jhm", "CVE-2021-23337"]`);
+      if (d.review_by == null) e('a risk acceptance needs review_by: the date to look at it again (YYYY-MM-DD)');
+      else if (!isDay(String(d.review_by))) e('review_by must be a date, YYYY-MM-DD');
+      if (d.accepts == null) e('review_by needs accepts: the advisory ids it is about');
+    }
+  }
   // What a rejection does not need: an invariant and paths (it binds no code). When it has them, they are checked.
-  if (!(zn && d.paths == null) && (!nb || d.paths != null) && !(applies && d.paths == null)) {
-    if (!Array.isArray(d.paths) || (!nb && !applies && !d.paths.length))
+  // A risk acceptance binds no code either, so its paths may be left out or empty.
+  if (!(zn && d.paths == null) && (!nb || d.paths != null) && !(applies && d.paths == null) && !(risk && d.paths == null)) {
+    if (!Array.isArray(d.paths) || (!nb && !applies && !risk && !d.paths.length))
       e('paths must be a list of at least one path pattern, e.g. ["app/**"] (or leave it out and say applies)');
     else for (const p of d.paths) {
       const pe = typeof p === 'string' ? pathPatternError(p) : 'not text';
@@ -507,6 +532,9 @@ function parseDecision(name, source) {
     stack: kind === 'stack' && Array.isArray(d.stack) ? d.stack.filter((x) => typeof x === 'string') : [],
     // A zone's one line on why a change in it is expensive to undo (PG-5 step 0); null on every other kind.
     reason: zn && typeof d.reason === 'string' ? d.reason.trim() : null,
+    // A risk acceptance's advisory ids and review date (KD-4); [] and null on every other kind.
+    accepts: kind === 'dependency' && Array.isArray(d.accepts) ? d.accepts.filter((x) => typeof x === 'string') : [],
+    review_by: kind === 'dependency' && d.review_by != null ? String(d.review_by) : null,
     supersedes: d.supersedes ?? null,
     plan: d.plan ?? null,
     accepted_by: d.accepted_by ?? null,
@@ -707,6 +735,9 @@ function fingerprint(d) {
   // A zone's keywords decide which tasks it marks (PG-5 step 0), so they bind like a rejection's. Its reason is text.
   if (d?.kind === 'zone') parts.push({ keywords: d.keywords ?? [] });
   if (Array.isArray(d?.except) && d.except.length) parts.push({ except: d.except });
+  // A risk acceptance (KD-4): which advisories it hides and until when bind, so a track cannot widen or extend it.
+  if (d?.kind === 'dependency' && ((Array.isArray(d.accepts) && d.accepts.length) || d.review_by != null))
+    parts.push({ accepts: d.accepts ?? [], review_by: d.review_by ?? null });
   // applies (KD-6) widens which tasks an entry reaches, so it binds too; only when it says something.
   if (isObject(d?.applies) && Object.keys(d.applies).length) parts.push({ applies: d.applies });
   // A stack entry's choice (KD-2): the tool, what it was chosen against and the words it declares.
@@ -825,6 +856,21 @@ function declaredStacks(cat, ledger = emptyLedger()) {
     }
   }
   return out;
+}
+
+/**
+ * The risk acceptances the owner accepted (roadmap 0å KD-4): kind dependency with accepts, effectively accepted (the
+ * owner lock), not superseded. The dependency audit's summary (lib/osv.js summarize) hides their advisories until
+ * review_by. A proposed or unconfirmed one hides nothing.
+ * @returns {{ id: string, accepts: string[], reviewBy: string|null }[]}
+ */
+function acceptedAdvisories(cat, ledger = emptyLedger()) {
+  if (!cat?.exists) return [];
+  return (cat.decisions ?? [])
+    .map((x) => x?.decision)
+    .filter((d) => d?.id && d.kind === 'dependency' && Array.isArray(d.accepts) && d.accepts.length && effectiveStatus(d, ledger) === 'accepted')
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((d) => ({ id: d.id, accepts: [...d.accepts], reviewBy: d.review_by ?? null }));
 }
 
 /**
@@ -1024,6 +1070,9 @@ function proposalFile(p) {
         ...(p.kind === 'stack' && isObject(p.uses) ? [`uses: ${JSON.stringify({ job: one(p.uses.job), tool: one(p.uses.tool) })}`] : []),
         ...(p.kind === 'stack' && Array.isArray(p.alternatives) && p.alternatives.length ? [`alternatives: ${JSON.stringify(p.alternatives)}`] : []),
         ...(p.kind === 'stack' && Array.isArray(p.stack) && p.stack.length ? [`stack: ${JSON.stringify(p.stack)}`] : []),
+        // A risk acceptance (KD-4), only when given.
+        ...(p.kind === 'dependency' && Array.isArray(p.accepts) && p.accepts.length ? [`accepts: ${JSON.stringify(p.accepts)}`] : []),
+        ...(p.kind === 'dependency' && p.review_by ? [`review_by: ${p.review_by}`] : []),
         `paths: ${JSON.stringify(paths)}`,
         ...(Array.isArray(p.except) && p.except.length ? [`except: ${JSON.stringify(p.except)}`] : []),
         // The task categories (KD-6), only when given: a plain choice is written as before.
@@ -1427,6 +1476,8 @@ module.exports = {
   STACK_FIELDS,
   stackChoices,
   declaredStacks,
+  acceptedAdvisories,
+  DEPENDENCY_FIELDS,
   withDeclaredStacks,
   ID_PATTERN,
   BLOCK_BEGIN,

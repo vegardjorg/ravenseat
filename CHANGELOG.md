@@ -6,6 +6,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **`ravenseat catalog deps --audit` checks your lockfiles against OSV.dev, only when you run it.** `deps.audit` `manual`.
 - **Sensitive zones show at add and on the card, `catalog zones` proposes some, built plans are compared with their
   estimate, and a big plan can get a devil's advocate.** `zones.detect` on, `plans.postCheck` on, `plans.devilsAdvocate` off.
 - **The README shows four incognito AI reviews of Ravenseat, for fun.**

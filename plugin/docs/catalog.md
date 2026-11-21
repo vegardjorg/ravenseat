@@ -105,7 +105,8 @@ Context, the choice and what follows from it, in at most 30 lines.
   gets, so it must stand on its own.
 - `kind`: what sort of entry it is. `decision` (the default when the line is missing), `design` (a rule of the design
   language, see [Design language](#design-language)), `stack` (which tool does a job, see [Stack
-  entries](#stack-entries)), `dependency` (a decision about one library), `not-building` (see [Not
+  entries](#stack-entries)), `dependency` (a decision about one library, or a [risk acceptance](#the-dependency-audit) with `accepts` and
+  `review_by`), `not-building` (see [Not
   building](#not-building)) or `zone` (see [Sensitive zones](#sensitive-zones)). One field, one set of values. `catalog show` and **Project catalog** in Decisions group
   the entries by it.
 - `paths`: the files the choice applies to, as globs from the project root. No `..` and no absolute paths.
@@ -209,6 +210,7 @@ A Prefer line stays the short form for small things. `catalog check` only asks t
 | `catalog propose --title "..." --invariant "..." --paths "<glob>[,<glob>]" [--applies class:D,label:visual] [--kind design\|stack\|dependency] [--except "<glob>"] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--from-answer <question>] [--json]` | Writes the next free id (one above the highest in the file names and the owner's record) as `status: proposed` in the main tree, then runs `catalog check` and prints what it says about the new choice. `--kind` and `--except` write those fields; `--applies` writes [applies](#by-category) (`dimension:value` items, the same dimension again is OR, and then `--paths` may be left out); with `--kind stack`, `--uses`, `--alternatives` and `--stack` write a [stack entry](#stack-entries). With `--supersedes` and no `--paths` or `--plan`, it takes them from the old choice. Writes nothing when the choice would be broken, never over a file. Refused from a track worktree |
 | `catalog find <word...> [--json]` | Searches the code index, the reuse rows, the design choices and the prefer lines. Every word must match; at most ten short lines. Builds the code index first (from the cache) |
 | `catalog zones [--write] [--json]` | Lists the [sensitive zones](#sensitive-zones) the tree suggests and the catalog does not cover. `--write` writes each as a proposed zone in the main tree (refused from a track); none counts before `catalog accept` |
+| `catalog deps --audit [--dry] [--yes] [--anyway] [--json]` | [The dependency audit](#the-dependency-audit): asks OSV.dev about the public packages in the lockfiles and caches the answer. `--dry` sends nothing; the first real run needs `--yes`. Refused from a track worktree |
 | `catalog index [--json]` | Builds or refreshes the code index and says how many files it read and how many came from the cache. Names a `@shared` tag that is not on an export |
 
 A queue agent may run `catalog show`, `catalog check` and `catalog find` (the push guard allows them), and nothing
@@ -580,6 +582,41 @@ reason: Users and other services rely on the session format; changing it means a
 - **The switch:** `zones.detect` (on) turns all of the above off when false.
 - Not built: `zone_skip` and an owner's yes before an irreversible zone change.
 
+## The dependency audit
+
+`ravenseat catalog deps --audit` asks [OSV.dev](https://osv.dev) whether the packages in your lockfiles have known
+holes. It runs only when you run it; nothing checks on its own.
+
+- **What leaves:** the ecosystem, name and version of each public package, to `api.osv.dev`, and nothing else. A
+  workspace, `file:`, `link:` or git package, a local path, a package from another registry and every name in
+  `deps.privateScopes` stay on your machine.
+- **`--dry`** prints the count, the ecosystems, what is held back and the host, and sends nothing. `--dry --json` shows
+  every query.
+- **The first real run needs `--yes`.** After that the command runs without it.
+- **Your own audit tool first:** when your gates or CI already run one (such as `npm audit`), the command names it and
+  sends nothing. `--anyway` asks OSV.dev all the same.
+- **The answer** is cached in `<dataFolder>/deps-audit.json`. The Checks tab shows one card for it (*Known holes in your
+  libraries*), and its button proposes one update task. `doctor --all` shows the last audit. Neither of them uses the
+  network.
+- **A hole that does not apply to you:** a catalog entry with `kind: dependency`, `accepts` (the advisory ids) and
+  `review_by` (a date). It needs no `paths`. Once the owner accepts it, those holes stop counting until `review_by`.
+  After that date they count again, and `doctor` says so.
+
+```yaml
+---
+id: D-0012
+title: The lodash template hole does not apply
+status: proposed
+kind: dependency
+invariant: We never call lodash.template with input from users.
+accepts: ["GHSA-35jh-r3h4-6jhm"]
+review_by: 2027-03-01
+---
+```
+
+`catalog propose --kind dependency --accepts <id>[,<id>] --review-by YYYY-MM-DD --title "..." --invariant "..."` writes
+one. A queue agent cannot run the audit, and it is refused from a track worktree.
+
 ## Friction
 
 Anything that can stop work is off by default, with one deliberate exception: the protected path, by owner decision.
@@ -601,6 +638,8 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Stack card on the board | None: "Uses" and "Chosen over" lines, display only | No setting |
 | Sensitive zones | None while there are none (the default). An accepted zone marks a task as risky for the plan review, which is advisory by default, and gives a NOTE line at add and a card badge | `zones.detect`, on; what reads it follows `planReview.mode` and `mission.riskFirst`. `catalog zones` only proposes |
 | Stack choice in the dependency notes | A CATALOG line at receive for a package an accepted stack entry chose against; never a stop | Follows `scopeNotes.dependencies` |
+| Dependency audit | A network call to `api.osv.dev`, only when the owner runs `catalog deps --audit` (`--yes` the first time); ecosystem, name and version of public packages only. Stops nothing | `deps.audit`, `manual`; `off` refuses it and hides the card. `deps.privateScopes`, empty |
+| Audit card and doctor line | One card and one `doctor --all` line, read from the cache; a passed `review_by` shows in `doctor` always | Follows `deps.audit` |
 | Agent access | `catalog show`, `catalog check` and `catalog find` allowed for queue agents | No setting |
 | Code index at receive and in the missions | One git listing per tree and a read of each changed file (the first build of about 300 files took under half a second here); a file in the data folder; more lines in the excerpt, inside the same cap. It stops nothing | `catalog.index`, off: the plan puts it on the opt-in list, since it builds and stores a file and its worth grows with the project |
 | `catalog propose` | Only when someone runs it; writes a `proposed` file that binds nothing until the owner accepts it | No own setting: a write on request that decides nothing. `catalog.captureAnswers` `off` refuses it too (one switch) |

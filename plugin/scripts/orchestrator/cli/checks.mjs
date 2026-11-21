@@ -45,6 +45,7 @@ import { allowlistFacts, broadFacts, gitignoreFacts, lockfileFacts, mcpFacts } f
 import { guardWeakening, trackBranchHere } from './settings.mjs';
 import { enableShare } from './share.mjs';
 import { keepAsNotBuilding, keepRefused } from './notBuilding.mjs';
+import { depAuditSummary } from './depsAudit.mjs';
 
 const SCAN = require('./lib/checksScan.js');
 const CATALOG = require('./lib/checksCatalog.js');
@@ -55,6 +56,7 @@ const RS = require('./lib/reviewSignals.js');
 const OI = require('./lib/optInChecks.js');
 const RV = require('./lib/repoVisibility.js');
 const QG = require('./lib/quickGate.js');
+const OSV = require('./lib/osv.js');
 
 /** The cached visibility (any age, never a network call here): the share card is offered only in a private repo. */
 const cachedVisibility = () => RV.readCache(FOLDER, { any: true })?.visibility ?? null;
@@ -274,6 +276,8 @@ function makeReport(queue) {
       recipeDamped: precision?.damped ?? [],
       // CI parity for a built gate guard (0i step 9b): the card quick-gate-add and the lift of the CI cards.
       ...safeCiParity(readFile),
+      // The dependency audit's cache (roadmap 0å KD-4, cli/depsAudit.mjs): the card dep-audit-found. Never the network.
+      depAudit: safeDepAudit(),
     },
     catalog,
     tasks: queue?.tasks ?? [],
@@ -341,6 +345,15 @@ function packFacts(fsLike) {
   const missing = ['core', ...detected].filter((id) => !applied.includes(id));
   const titles = Object.fromEntries(['core', ...detected].map((id) => [id, data.packs[id]?.title ?? id]));
   return { data, problems: data.problems, facts: { detected, applied, missing, unpacked, titles } };
+}
+
+/** The dependency audit's summary from the cache, or null (no cache, deps.audit off, or it cannot be read). */
+function safeDepAudit() {
+  try {
+    return depAuditSummary();
+  } catch {
+    return null; // error-ignored: no card rather than no Checks tab
+  }
 }
 
 /** The project's files, read only, for the scans. */
@@ -439,6 +452,9 @@ ${CLI} checks dismiss ${s.key} sets it aside if you do it your own way.`);
   else if (s.action === 'quick-gate') console.log(`${s.detail ?? ''}
 
 This needs no agent: ${CLI} checks quick-add <G-n> adds that guard's command to gates.quick (nothing runs).`);
+  else if (s.action === 'dep-fix') console.log(`${s.detail ?? ''}
+
+${CLI} checks plan ${s.key} proposes one task that updates them, worst first (it waits for Approve). ${CLI} catalog deps --audit lists them all.`);
   else if (s.action) console.log(`This needs no agent: ${CLI} kickstart gates --apply.`);
   else console.log(`Investigate\n${s.investigate}\n\nPlan and build\n${s.plan}\n\nAbout ${s.contentMin} min of agent work for the investigation.`);
 }
@@ -454,6 +470,7 @@ ${s.ask}`);
   if (s.action === 'packs') die(`${key} needs no agent. Run: ${CLI} checks packs --apply`);
   if (s.action === 'setting') die(`${key} needs no agent. Run: ${CLI} checks turn-on ${key}`);
   if (s.action === 'quick-gate') die(`${key} needs no agent. Run: ${CLI} checks quick-add <G-n> (${CLI} checks show ${key} lists the guards)`);
+  if (s.action === 'dep-fix') return planDepFix(s, queue);
   if (s.action) die(`${key} needs no agent. Run: ${CLI} kickstart gates --apply`);
   if (s.state === 'queued' || s.state === 'planned') {
     console.log(`Not added: ${s.taskId} is already there.`);
@@ -471,6 +488,29 @@ ${s.ask}`);
     `About ${task.content_min} min of agent work, and it uses tokens. It delivers a plan with recommended steps, no code. ` +
       (approved ? `${CLI} set ${task.id} cancelled takes it out.` : `${CLI} approve ${task.id} (or Approve on the board) lets it run.`),
   );
+}
+
+/**
+ * The dependency audit's card (roadmap 0å KD-4): one task that updates the packages with known holes, worst first
+ * (lib/osv.js fixTask). Always a proposal, also with --approved from the board: the owner sees the list before an agent
+ * changes the lockfile. Its id KS-PLAN-DEP-AUDIT-FOUND(-n) lets the card show it as queued.
+ */
+function planDepFix(s, queue) {
+  if (s.state === 'queued') {
+    console.log(`Not added: ${s.taskId} is already there.`);
+    return;
+  }
+  const sum = depAuditSummary();
+  if (!sum?.open) die(`The last dependency audit has nothing open. ${CLI} catalog deps --audit asks OSV.dev again.`);
+  ensureProject();
+  const n = CATALOG.planTasks(s.key, queue.tasks).length;
+  const id = `KS-PLAN-${s.key.toUpperCase()}${n ? `-${n + 1}` : ''}`;
+  const task = { ...OSV.fixTask(sum, { id }), ...(LM.isLite(CONFIG) ? {} : { project: 'cicd' }) };
+  const r = addTask(task, { approved: false });
+  if (!r.ok) die(r.output);
+  if (s.state === 'dismissed') setDismissed(s.key, false);
+  console.log(r.output);
+  console.log(`Proposed, so nothing runs yet: ${CLI} approve ${task.id} (or Approve on the board) lets it run. About ${task.content_min} min of agent work.`);
 }
 
 function setDismissed(key, on) {

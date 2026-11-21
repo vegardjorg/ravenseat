@@ -686,6 +686,17 @@ const STANDARD = Object.freeze({
   notBuilding: {
     match: true,
   },
+  // The dependency audit against OSV.dev (lib/osv.js, roadmap 0å KD-4). audit: manual, so the network is used only when
+  // the owner runs `ravenseat catalog deps --audit` (the first real run also needs --yes); off refuses the command and
+  // hides the card and the doctor line. privateScopes: names or prefixes that are never sent, besides what the lockfile
+  // shows is private (workspace, file:, link:, git, a path, another registry); empty, since nothing else can be known.
+  // auditStop: a vulnerable package stopping a merge is KD-5; registered here, wired to nothing, and off, since it can
+  // stop work.
+  deps: {
+    audit: 'manual',
+    privateScopes: [],
+    auditStop: false,
+  },
   // Task links (lib/taskLinks.js, cli/taskLinksCheck.mjs, roadmap 0p2 step B2). addWarn: add and edit print one WARNING
   // line when a task link (a plan source, a `sources` entry, a path in `source`) is dead, its anchor finds no heading,
   // or the file is gitignored; the task is saved anyway. doctor: one INFO row with counts over the open tasks' links,

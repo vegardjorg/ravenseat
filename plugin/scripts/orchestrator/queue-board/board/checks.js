@@ -198,6 +198,16 @@ function checksButton(s) {
       title: `Sets ${s.setting} on in queue.config.json. Off again in Settings.`,
       onclick: () => checksWrite({ action: 'setting', key: s.key }, 'Turned on'),
     });
+  // The dependency audit's card (roadmap 0å KD-4): one update task, always proposed (cli/checks.mjs planDepFix).
+  if (s.action === 'dep-fix')
+    return el('button', {
+      type: 'button',
+      class: 'button button-filled',
+      text: busy ? 'Adding …' : 'Propose update task',
+      disabled: busy,
+      title: `Proposes one task that updates these packages, worst first (about ${s.contentMin} min of agent work). Nothing runs until you approve it.`,
+      onclick: () => checksWrite({ action: 'plan', key: s.key }, 'Proposed in the queue'),
+    });
   if (s.action === 'gates')
     return el('button', {
       type: 'button',
@@ -242,6 +252,39 @@ function checksBuildGate(i) {
  * The due classes on the card ledger-recipes (lib/checksCatalog.js ledgerItems), one line each: where, how often, the
  * places (paths only), the stack and the recipe. Text only, never HTML from the report.
  */
+/** One finding of the dependency audit as text (the same words as lib/osv.js findingText). */
+function checksFindingText(f) {
+  const to = f.fixed ? ` to ${f.fixed} or later` : ' (no fixed version published yet)';
+  return `${f.name} ${f.version}${to}`;
+}
+
+/**
+ * The dependency audit's card body (roadmap 0å KD-4, lib/checksCatalog.js depAudit): when it ran and the counts, then
+ * the worst three as a list. The severity is a word, never only a color.
+ */
+function checksDepAuditList(d) {
+  const age = d.ageDays == null ? 'at an unknown time' : d.ageDays === 0 ? 'today' : d.ageDays === 1 ? '1 day ago' : `${d.ageDays} days ago`;
+  const counts = ['critical', 'high', 'moderate', 'low', 'unknown'].filter((k) => d.counts?.[k]).map((k) => `${d.counts[k]} ${k}`).join(', ');
+  const notes = [`Last audit ${age}: ${counts || 'none open'}.`];
+  if (d.accepted) notes.push(`${d.accepted} accepted by a catalog entry.`);
+  for (const l of d.lapsed ?? []) notes.push(`${l.id} was due for review on ${l.reviewBy}, so its holes count again.`);
+  const worst = (d.worst ?? []).map((f) =>
+    el(
+      'li',
+      {},
+      el('span', { class: 'checks-where', text: `${f.severity}${f.dev === true ? ', development only' : ''}: ` }),
+      el('span', { text: `${checksFindingText(f)} (${f.id})` }),
+    ),
+  );
+  const more = d.open > worst.length ? [el('li', { text: `And ${d.open - worst.length} more: ravenseat catalog deps --audit lists them all.` })] : [];
+  return el(
+    'div',
+    {},
+    el('p', { class: 'checks-source', text: notes.join(' ') }),
+    worst.length ? el('ul', { class: 'checks-places', 'aria-label': 'Worst findings' }, ...worst, ...more) : null,
+  );
+}
+
 function checksLedgerList(ledger) {
   const items = (ledger?.items ?? []).map((i) => {
     const where = i.scope === 'project' ? 'across the project' : `in ${i.area}`;
@@ -338,7 +381,13 @@ function checksSuggestionCard(s, categories, { grouped = false } = {}) {
     ),
     el(title, { class: 'checks-card-title', text: s.title }),
     el('p', { class: 'checks-text', text: s.why }),
-    s.quickGate?.length ? checksQuickGateList(s.quickGate) : s.ledger?.items?.length ? checksLedgerList(s.ledger) : s.detail ? el('p', { class: 'checks-source', text: s.detail }) : null,
+    s.quickGate?.length
+      ? checksQuickGateList(s.quickGate)
+      : s.ledger?.items?.length
+        ? checksLedgerList(s.ledger)
+        : s.depAudit
+          ? checksDepAuditList(s.depAudit)
+          : s.detail ? el('p', { class: 'checks-source', text: s.detail }) : null,
     s.action === 'ask'
       ? el(
           'div',
