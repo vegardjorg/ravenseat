@@ -213,6 +213,8 @@ on the same branch. Stop the old session first, so two orchestrators do not rece
   `run_in_background` right after the push and go on with the loop: exit 9 = a check failed (the fix task
   `CI-<sha7>` is in the queue and the base is red), 0 = green or an owner question (`ci-<sha7>-infra`, nothing
   frozen), 10 = timeout (start it again later). Local gates stay the rule; the watch is a safety net.
+  When push-check prints an `Issues` or `PR` line (issues.onPush, push.pr; both off by default), run the preview
+  (`ravenseat issues report`, `ravenseat pr`) after the owner's push and show it; `--post` only on the owner's word.
 
 ## Cloud sessions (optional)
 

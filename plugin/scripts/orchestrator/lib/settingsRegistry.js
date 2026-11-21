@@ -343,6 +343,15 @@ const SETTINGS = Object.freeze([
   row('issues.labelMap', 'project', 'object', 'Issue label map',
     'Routes `ravenseat issues import` by label, for example { "ready-for-agent": "task", "bug": "K" }. Empty = off: ' +
     'every import is a plan in the Inbox. An imported task is always proposed, never accepted for you.'),
+  // Friction (GH-3): none while off. On, two commands after a push (the preview, then --post) and one y/N, with the
+  // approval dialog in a Claude Code session. Off by default: it posts on GitHub under your login, often in public, and a
+  // post stays. Not a weakening: it opens no guard, it adds an outbound write behind the outbound guard (lib/ghOutbound.js).
+  row('issues.onPush', 'project', 'choice', 'Issues after a push',
+    'What `ravenseat issues report --post` does to the issues your pushed tasks link to: off, comment (task, title, ' +
+    'merge commit, checks) or close (the same comment, then close). Always a preview first and your yes; a secret blocks it.', {
+      choices: ['off', 'comment', 'close'],
+      protects: 'Posts on GitHub, often public and permanent, that you did not see first.',
+    }),
 
   // ---- 2. Limits and cost ----
   row('limits.maxConcurrent', 'limits', 'integer', 'Concurrent tracks',
@@ -945,6 +954,15 @@ const SETTINGS = Object.freeze([
     'Unpushed work older than this makes the batch ready below the task count. Empty = off.'),
   row('push.allowBranches', 'push', 'list', 'Other branches the main session may push',
     'For pull request flows ("feat/*"). Queue agents never push.'),
+  // Friction (GH-4): none while off. On, one branch push and `ravenseat pr` (preview, then --post and a y/N) per batch;
+  // the branch must be in push.allowBranches ("ravenseat/batch-*"), so the push guard judges its push as any other.
+  // Off by default: it posts on GitHub. One PR per batch, never one per track.
+  row('push.pr', 'push', 'choice', 'Draft PR per batch',
+    'draft: `ravenseat pr` opens one draft pull request per batch from ravenseat/batch-<date>, after a preview and your ' +
+    'yes. The branch must be in push.allowBranches. off: the command refuses.', {
+      choices: ['off', 'draft'],
+      protects: 'A pull request on GitHub, with your login, that you did not see first.',
+    }),
   // Friction: one extra question per push while CI or gates are missing, and in owner mode it comes after the owner already
   // said push. Owner decision 18.11.2026: `ravenseat controls dismiss` stops it for this one project (state in queue.json,
   // lib/controls.js, not a setting), and it asks again if something else goes missing. The default stays on: a new user

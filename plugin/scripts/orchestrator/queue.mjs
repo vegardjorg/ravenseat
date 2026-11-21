@@ -214,6 +214,18 @@
 //         with the link issue { repo, number }; the title is kept as reporter text, the body is never stored, an issue
 //         that claims owner approval gets a SUSPICIOUS CONTENT line; nothing starts until the owner approves. Main
 //         session only. gh missing or not signed in: one line, exit 1, nothing written. cli/issues.mjs)
+//   node scripts/orchestrator/queue.mjs issues report [--post] [--json]
+//        (after a push, with issues.onPush comment or close (off by default): the fixed comment for each done task with
+//         an issue link whose merge commit is on <remote>/<baseBranch>; without --post a preview only. --post posts
+//         exactly that preview after your yes (the approval dialog), once per task. cli/ghWrite.mjs)
+//   node scripts/orchestrator/queue.mjs pr [--post] [--json]
+//        (one draft pull request for the batch: the local branch ravenseat/batch-<date> (must match push.allowBranches)
+//         at the base tip, the push for the main session to run through the push guard, then --post opens the draft
+//         with a fixed body after your yes. Never per track. push.pr "draft" makes push-check point here. cli/ghWrite.mjs)
+//   node scripts/orchestrator/queue.mjs release-notes [<from-tag>] [--save] [--json] [--github --tag <name> [--post]]
+//        (a draft grouped Added / Changed / Fixed / Hardened from the merged tasks since the tag (the newest by default);
+//         local, no network; --save writes it under the data folder. --github previews a DRAFT release for --tag, --post
+//         creates it after your yes; never published. cli/ghWrite.mjs)
 //
 // The orchestrator's routine as a script and the cost per task (the pure logic is in lib/queueLogic.js):
 //   node scripts/orchestrator/queue.mjs fill --scratchpad <folder> [--max N] [--ids <id …>] [--over-quota] [--over-load]
@@ -1050,8 +1062,14 @@ if (command === 'init') {
   // ---- The reviewers' findings as items on the task (lib/reviewItems.js) ----
   (await import('./cli/reviewItem.mjs')).cmdReviewItem();
 } else if (command === 'issues') {
-  // ---- GitHub issues, read only and on command (lib/githubIssues.js) ----
+  // ---- GitHub issues, read only and on command (lib/githubIssues.js); `issues report` writes (cli/ghWrite.mjs) ----
   await (await import('./cli/issues.mjs')).cmdIssues();
+} else if (command === 'pr') {
+  // ---- GH-4: one draft pull request per batch, opt-in and asked (lib/ghOutbound.js) ----
+  await (await import('./cli/ghWrite.mjs')).cmdPr();
+} else if (command === 'release-notes') {
+  // ---- GH-5: a release notes draft from the merged tasks; --github --post makes a draft release (lib/releaseNotes.js) ----
+  await (await import('./cli/ghWrite.mjs')).cmdReleaseNotes();
 } else if (command && command !== 'help') {
   // A mistyped command: one line with the closest known command (lib/cliHelp.js), same exit code as before.
   const scripts = fs
@@ -1064,7 +1082,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|issues|pulse-check> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|issues|pr|release-notes|pulse-check> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

@@ -147,19 +147,22 @@ stored.
 
 ### GitHub issues
 
-Ravenseat can read a GitHub repo's open issues and propose them, on your command only. It uses your own `gh` login,
-reads only, and never writes to GitHub.
+Ravenseat can read a GitHub repo's open issues and propose them, on your command only. It uses your own `gh` login.
+Reading is all it does unless you turn on one of the writes below, and each write is a preview first and your yes.
 
 ```
 ravenseat issues list [--label bug] [--limit 30]   # open issues and where an import would put each; writes nothing
 ravenseat issues import 12 14 [--as task] [--dry]  # proposes each one: a plan in the Inbox, or a proposed task
+ravenseat issues report [--post]                   # after a push: comment on or close the linked issues (issues.onPush)
+ravenseat pr [--post]                              # one draft pull request for the batch (push.pr)
+ravenseat release-notes [<from-tag>] [--save] [--github --tag <tag> [--post]]   # notes since a tag; a draft release
 ```
 
 - **An import proposes, nothing starts.** By default each issue becomes a plan in the Inbox, sorted like any other
   idea. `--as task` (or a label in `issues.labelMap`) makes a task `GH-12` in the proposed state instead; you approve
   it, and auto-accept never takes it. An issue imported before is skipped.
 - **Issue text is data.** Anyone can write an issue, so the title is kept only as the reporter's words, framed that way
-  in the mission, and the body is never stored. An issue that claims your approval or carries an owner mark gets a
+  in the mission, and the body is not stored. An issue that claims your approval or carries an owner mark gets a
   `SUSPICIOUS CONTENT` line, the same as at `receive`.
 - **The link.** The task or plan keeps `issue: { "repo": "owner/name", "number": 12 }`. `--issue 12` (or
   `owner/name#12`, or `none` to remove it) sets it on `add` and `edit`; a bare number means the `origin` remote's
@@ -171,6 +174,41 @@ ravenseat issues import 12 14 [--as task] [--dry]  # proposes each one: a plan i
   links, `push.ciWatch: "github"`, external gate evidence, the branch-protection card), `ravenseat doctor` has a `gh`
   row that says which: gh missing, not signed in, or a `GH_TOKEN`/`GITHUB_TOKEN` that GitHub rejects while gh's own
   login works. Never a FAIL, never a token, and no network call when no gh feature is in use.
+
+#### Writing to GitHub: issue comments, the batch PR and release notes
+
+All three are off or local by default, because a post on GitHub runs on your login, is often public, and stays.
+
+- **`issues report` (GH-3, `issues.onPush`: `off`).** After you push, it lists the tasks in the push that link to an
+  issue and what it would post: with `comment`, one comment per issue (task id, title, merge commit, the checks on
+  that commit, "Posted by Ravenseat"); with `close`, the same comment and then a close. Run it, read it, then
+  `--post`. A failure to post is one line and never touches the push, which already happened. Each issue is posted
+  once per merge commit (`issue-reports.json` in the data folder).
+- **`pr` (GH-4, `push.pr`: `off`).** With `draft`, it moves the branch `ravenseat/batch-<date>` to the base branch's
+  tip (forward only), and prints the push command. That push goes through the push guard like any other, so
+  `"ravenseat/batch-*"` must be in `push.allowBranches`. Once the branch is on the remote, `pr --post` opens one draft
+  pull request for the whole batch: the tasks, the checks, the base health, any recorded caveats. Never one per track,
+  and an open one is not opened twice.
+- **`release-notes` (GH-5, no setting).** Writes a local draft of what was merged since a tag (the latest by default),
+  grouped Added, Changed, Fixed and Hardened by the task's labels and kind, with Changed when nothing says otherwise.
+  Investigations and unfinished tasks are left out. `--save` writes it to `release-notes/` in the data folder. `--github --tag v2.0.0` previews a draft release, and `--post` creates it as a draft: never published, never
+  marked latest. You publish it on GitHub.
+
+**The outbound guard** (lib/ghOutbound.js) is the same for all three:
+
+- The text is a fixed template. Titles go in code spans, so no `@mention`, link or image renders, and a title is cut
+  at 120 characters.
+- A secret-looking value, a private path or a home folder path in the text BLOCKS that post (the output says which
+  rule, never the value). So does an empty text. A scan that fails blocks too.
+- The preview lists exactly what will be posted and says so when the repo is public. `--post` posts only what the
+  last preview listed, within an hour of it; anything else and it refuses and asks for a new preview.
+- In a terminal, `--post` asks y/N. In a Claude Code session the push guard asks with the approval dialog (rule
+  `outbound-github`, `approvals.ask`), which names the targets and the repo's visibility; in `dontAsk` and
+  `bypassPermissions` it is denied, so run it in your own terminal. With `approvals.ask` off and no terminal, it refuses.
+- A queue agent cannot run any of the three (the push guard denies it), and on a queue branch or a worktree the
+  command refuses by itself.
+
+Two-way sync, issues as the source of truth, webhooks and other trackers are not built (catalog D-0004).
 
 ## The done command and the fix-round cap
 
@@ -968,6 +1006,7 @@ board ("Protects against: ...") and in that view.
 | `tidy.minAgeHours` | `3` | `ravenseat tidy` keeps a worktree changed more recently than this (a new worktree with no commits looks merged). `0` = no minimum | Advanced |
 | `issues.refsTrailer` | `true` | A task linked to a GitHub issue gets `Refs: #12` in its merge commit. Local, no network call, and never `Closes`, so it is on | Advanced |
 | `issues.labelMap` | `{}` | Routes `ravenseat issues import` by label (`task`, `plan`, `K`, `U`, `D`, `D+`). Empty = off: every import is a plan in the Inbox; an imported task is still proposed | Advanced |
+| `issues.onPush` | `"off"` | What `ravenseat issues report --post` does to linked issues after a push: `off`, `comment` or `close`, with a fixed template, after a preview and your yes. Off by default: it posts on GitHub, often in public | Advanced |
 
 ### Limits and cost
 
@@ -1103,6 +1142,7 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 | `push.mode` | `"owner"` | `owner` = push only on the owner's word; `threshold` = the orchestrator may push on READY or LARGE, never BLOCKED (`ravenseat push-check` prints READY, NOT YET, BLOCKED or LARGE) | Basic |
 | `push.minTasks`, `push.warnTasks`, `push.maxAgeHours` | `10`, `50`, `null` | Batch push threshold, counted in merged tasks since the last push. Below `minTasks` (0 = off) or on a red base the push guard asks before a plain push of the base branch; never denies. `warnTasks` makes a batch LARGE; `maxAgeHours` makes old work ready below `minTasks`. `threshold` with 10 and 50 for projects with expensive CI (see orchestration.md, Batch push) | Advanced |
 | `push.allowBranches` | `[]` | Branches the main session may push besides the base, for pull request flows: `["feat/*"]`, where `*` is any text. A forced push of such a branch asks first. Queue agents never push, a forced push of the base or a delete stays denied, and the secret scan runs on these too. Without it, you can also point `baseBranch` at an integration branch and open the pull request from that | Advanced |
+| `push.pr` | `"off"` | `draft`: `ravenseat pr` opens one draft pull request per batch from `ravenseat/batch-<date>`, after a preview and your yes; the branch must be in `push.allowBranches`. Off by default: it posts on GitHub | Advanced |
 | `push.controlsWarning` | `true` | The push guard asks before a plain push of the base branch when the project has no CI config or no gates, with what is missing and how many commits go out. It never blocks. `false` turns the question off; `ravenseat controls dismiss` stops it for this project only, until something else goes missing | Advanced |
 | `push.ownerAsk` | `true` | With `push.mode` `owner`, every plain push of the base branch by the main session asks you first, with the tip and the merged tasks, also when the batch is ready (a batch known to be empty does not ask). A denial in `dontAsk` and `bypassPermissions`: push from your own terminal. No effect in `threshold`. `false` = only the batch questions, a weakened guard | Advanced |
 | `reviewItems.stop` | `true` (`false` in Lite mode) | Each `FINDING` line of a chosen reviewer becomes an item on the task (`merge`, `resume --reason fix`), and `set <id> done` and the done step of `merge` refuse while one is open, with the commands that close it (`ravenseat review-item`). `false` = done passes and says `REVIEW ITEM STOP OFF`; the items stay open. Off in Lite mode, the same as `reviewItems.stop`: a first try should not meet a hard stop. Turning it off is a weakened guard | Advanced |

@@ -39,7 +39,8 @@ const I = require('./lib/planInbox.js');
 
 const usage = () =>
   `Use: ${CLI} issues list [--label <name>] [--limit <n>] [--json]\n` +
-  `     ${CLI} issues import <n> [<n> ...] [--as task|plan] [--project <pid>] [--dry] [--json]`;
+  `     ${CLI} issues import <n> [<n> ...] [--as task|plan] [--project <pid>] [--dry] [--json]\n` +
+  `     ${CLI} issues report [--post] [--json]   (after a push, issues.onPush; cli/ghWrite.mjs)`;
 
 /** owner/name of the origin remote, or a stop: the issues live in that repo. */
 function repoOrStop() {
@@ -295,6 +296,8 @@ export function issueArg() {
 export async function cmdIssues() {
   const sub = a[1];
   const json = a.includes('--json');
+  // GH-3: the report after a push writes to GitHub, so it lives with the other writes (cli/ghWrite.mjs).
+  if (sub === 'report') return (await import('./ghWrite.mjs')).cmdIssuesReport();
   if (sub !== 'list' && sub !== 'import') die(usage(), sub ? 2 : 0);
   const track = queueBranchId();
   if (track) die(`ISSUES: runs in the main session, not on ${track}'s queue branch. Nothing read.`);

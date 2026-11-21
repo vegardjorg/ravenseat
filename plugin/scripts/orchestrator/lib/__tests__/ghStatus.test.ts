@@ -38,6 +38,9 @@ describe('featuresInUse', () => {
     expect(GS.featuresInUse({}, { branchProtectionCache: true })).toEqual(['the branch-protection card']);
     expect(GS.featuresInUse({}, { issueLinks: 2 })).toEqual(['issue links']);
     expect(GS.featuresInUse({ issues: { labelMap: { bug: 'K' } } }, {})).toEqual(['issues.labelMap']);
+    expect(GS.featuresInUse({ issues: { onPush: 'close' } }, {})).toEqual(['issues.onPush close']);
+    expect(GS.featuresInUse({ push: { pr: 'draft' } }, {})).toEqual(['push.pr draft']);
+    expect(GS.featuresInUse({ issues: { onPush: 'off' }, push: { pr: 'off' } }, {})).toEqual([]);
   });
 });
 

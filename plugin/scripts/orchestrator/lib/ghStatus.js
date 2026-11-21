@@ -9,7 +9,7 @@
 //
 // Only when a gh feature is in use (featuresInUse): push.ciWatch github, gateEvidence.mode external, the
 // branch-protection card (it has asked gh before: its cache exists), tasks or plans linked to an issue, or
-// issues.labelMap. Otherwise there is no row and gh is never run, so a project that uses none of it makes no call.
+// issues.labelMap, issues.onPush or push.pr. Otherwise there is no row and gh is never run, so a project that uses none of it makes no call.
 //
 // The steps: `gh --version` (local), then `gh auth status` (asks GitHub, short time limit). When that fails and a
 // token variable is set, `gh auth status` once more without the token variables: a pass then means the variable is the
@@ -37,6 +37,9 @@ function featuresInUse(cfg = {}, facts = {}) {
   if (facts.branchProtectionCache) out.push('the branch-protection card');
   if (facts.issueLinks) out.push('issue links');
   if (isObject(cfg?.issues?.labelMap) && Object.keys(cfg.issues.labelMap).length) out.push('issues.labelMap');
+  // The GitHub writes (cli/ghWrite.mjs): in use only when set away from "off".
+  if (['comment', 'close'].includes(cfg?.issues?.onPush)) out.push(`issues.onPush ${cfg.issues.onPush}`);
+  if (cfg?.push?.pr === 'draft') out.push('push.pr draft');
   return out;
 }
 

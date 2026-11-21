@@ -804,6 +804,8 @@ function readEnvironment(rotate, environmentFile) {
 
 module.exports = {
   assess,
+  // The pattern match of push.allowBranches, for cli/ghWrite.mjs (`ravenseat pr` checks its batch branch the same way).
+  allowedBranch,
   AGENT_PUSH_REASON,
   AGENT_QUEUE_COMMANDS,
   readEnvironment,
