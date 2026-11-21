@@ -53,6 +53,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   stack entries reach the Checks tab and the dependency notes (`catalog.stackFacts`, on).
 - **A green gate where no tests ran ("No test files found", "0 passing", "collected 0 items") gets a NOTE at receive, a line in the review package and a "no tests ran" badge on the card; never a stop.**
 ### Changed
+- **The README is rewritten around the board as a control center:** a before and after infographic (light and dark), a sharper with/without table, and a section on improving your checks.
 - **Faster commands on Windows: one `ravenseat merge` starts about a quarter fewer git processes (66 to 48).**
 - **The board's top is lower: a small logo as tall as the first row, and speech bubbles only with the mascot.**
   With the mascot on, `board.mascot` (`chatty`) still sets how much it talks.

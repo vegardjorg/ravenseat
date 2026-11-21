@@ -7,242 +7,347 @@
 
 <h1 align="center">Ravenseat</h1>
 <p align="center"><a href="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml"><img src="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI: tests on Linux and Windows"></a></p>
-<p align="center"><b>A work queue for Claude Code. Each task runs in a fresh agent in its own copy of the project, the plan lives in plain files, and only your checks decide what is merged.</b></p>
-<p align="center"><sub>Open source · Runs on your machine · Built for Claude Code · Board optional</sub></p>
+<p align="center"><b>Stop managing agents. Start managing decisions.</b></p>
+<p align="center">Ravenseat is a control center for autonomous development with Claude Code. You supervise the exceptions while Ravenseat handles the routine work: the plan, parallel agents, checks, fixes and merges.</p>
+<p align="center">You control: <b>decisions</b> · <b>dependencies</b> · <b>quality gates</b> · <b>cost</b> · <b>what agents may do</b>. From Claude Code, or from the local board.</p>
+<p align="center"><sub>Open source · Local-first · Runs inside Claude Code · Your Git repository</sub></p>
 
-<p align="center"><img src="assets/media/explanation.gif" alt="A 44 second loop: a project spread over many chats, then the queue where each agent starts fresh, builds, checks and merges while you step away and come back to the decisions" width="800"></p>
+<p align="center"><img src="assets/media/explanation.gif" alt="A 44-second explanation of Ravenseat: a project spread across many chats becomes a persistent workflow where agents build, checks verify, failures are handled, and the developer returns to decisions" width="800"></p>
+
+## Your project shouldn't depend on you babysitting agents
+
+Claude Code can build a feature in one conversation. But a project spanning days or weeks is a different problem.
+
+Tasks depend on other tasks. Agents need to work without overwriting each other. Tests fail. Fixes introduce
+regressions. Conversations grow, compact, or end. Someone has to remember the plan, coordinate the work, verify the
+results, and decide what happens next.
+
+Without orchestration, **that someone is you.**
+
+Ravenseat takes over much of that coordination. You describe what you want built in one Claude Code conversation.
+Ravenseat maintains a persistent plan and task queue, dispatches independent work to agents with focused missions, runs
+your configured checks, coordinates merges, and handles recoverable failures.
+
+When something requires human judgment, it asks. Independent work keeps moving.
+
+**You manage the project. Ravenseat manages the workflow.**
+
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/infographics/workflow-shift-dark.webp"><img src="assets/infographics/workflow-shift.webp" width="640" alt="Two panels. Left, the traditional agent workflow: a loop of prompt, monitor, fix and repeat, where the developer is the workflow. Right, with Ravenseat: the developer sets objectives, Ravenseat orchestrates the queue, agents, checks and recovery, and work moves through build, verify, and fix or merge, with a fix round for a failed check, local merges for verified work and no push until the developer says so. Exceptions and consequential decisions return to the developer."></picture></p>
+
+## What changes?
+
+| Without orchestration | With Ravenseat |
+|---|---|
+| You carry the plan from chat to chat | Plans, tasks, dependencies and decisions are [plain files](#why-the-architecture-matters) in your repo; the chat can compact or restart |
+| You pick what runs next | The queue starts eligible tasks by dependency, focus and priority |
+| Agents share one checkout | Each track gets [its own Git worktree and branch](#why-the-architecture-matters); merges go one at a time |
+| You trust the agent's "tests passed" | Ravenseat [runs your checks](#guarantees-and-limits) on the delivered commit, and only that record opens a merge |
+| You chase every red run | A failed check starts a fix round; still blocked, it becomes one decision |
+| Rules in `CLAUDE.md` hold most of the time | Agents cannot push, write control files or mark their own work tested; [weakening a guard is logged](#guarantees-and-limits) |
+| Small things interrupt you, big ones pass silently | [Decisions](#what-needs-your-attention) are collected, ranked by what they unblock, and come with a recommendation |
+| The bill arrives at the end of the week | [`ravenseat cost`](#what-about-cost) per task, and an optional daily budget stops new starts |
+
+Ravenseat doesn't replace Claude Code. It provides the persistent coordination layer around it.
+
+## How it works
+
+1. **Define the work.** Tasks, optionally with dependencies, completion criteria and priorities.
+2. **Dispatch agents.** Eligible tasks start in parallel, each with a focused mission in its own worktree.
+3. **Build and commit.** Each agent commits on its own branch. Detailed reports are written to files rather than
+   filling the main conversation.
+4. **Verify independently.** Ravenseat runs your configured checks against the exact delivered commit.
+5. **Recover or merge.** Passing work is merged locally. Failing work gets a fix round on the same branch and another
+   check run, up to three rounds by default.
+6. **Escalate exceptions.** A task that is blocked, needs approval or needs your judgment becomes a decision. Other
+   eligible tasks continue.
+7. **Keep going.** Completed tasks unlock their dependents. When only your decisions are left, the queue waits and
+   picks up as soon as you answer.
+
+The plan and execution state live outside the conversation. A compaction, restart, or new Claude Code session doesn't
+require you to reconstruct the project from memory. [How the orchestration loop works](plugin/docs/orchestration.md#the-loop).
+
+## What it feels like to use
+
+You don't have to learn a new interface or manually manage a collection of agent conversations. Talk to Claude Code.
+
+> **You:** Add dark mode in settings, a weekly streak on the habit card, and a CSV export once the streak is done.
+>
+> **Claude:** Added T-001, T-002 and T-003. T-003 depends on T-002. The independent work can start first.
+>
+> **You:** Start the queue.
+>
+> **Claude:** Starting eligible tasks. Each will run in its own worktree. I'll run the configured checks before merging
+> completed work.
+
+Then get on with something else. Later, from your computer or through Claude Code's Remote Control on your phone:
+
+> **You:** What happened while I was away?
+>
+> **Claude:** 6 tasks merged with passing checks. One task is blocked after its fix rounds. There are 3 decisions
+> waiting for you. Independent work is continuing. Nothing has been pushed.
+>
+> **You:** What's the most important decision?
+>
+> **Claude:** The CSV export format is blocking two downstream tasks. I recommend option B because it preserves the
+> existing API contract. Here are the tradeoffs.
+
+You decide. Ravenseat continues.
+
+*Illustrative conversation. Exact responses depend on the project, configuration, and work being performed.*
+
+The point isn't that AI never needs you. **It's that you shouldn't need to be present for every transition between
+tasks.**
+
+## What needs your attention?
+
+<p align="center"><img src="assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
+
+Decisions collect the things Ravenseat cannot or should not resolve on its own. These include:
+
+- unclear product requirements;
+- architecture and hard-to-reverse choices, such as the data model, a public API or file format, a new dependency, or
+  deleting data;
+- security or legal tradeoffs;
+- visual or functional acceptance of a delivery;
+- tasks that remain blocked after the fix rounds;
+- tasks agents propose, and pushes or overrides that your settings route to you;
+- work that looks stuck or runs long.
+
+Decisions come with context and a recommendation. Ravenseat shows which work is blocked and what your answer would
+unlock, most impact first. You can answer through Claude Code (`/ravenseat:decide`) or the optional board.
+
+The goal is to concentrate your attention where it has the greatest value, rather than asking you to supervise routine
+execution.
+
+**You remain responsible for the requirements, architecture, and delivered product.** Passing checks cannot prove that
+an agent understood what you wanted. Each delivery lists what the agent assumed: review assumptions and consequential
+changes before accepting them.
+
+## The board is optional
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/dark-01-queue.jpg">
-    <img src="assets/screenshots/light-01-queue.jpg" alt="The board's Queue room: cards in In queue, In progress, Review and Built, the focus line with three steps and the next task to start" width="800">
+    <img src="assets/screenshots/light-01-queue.jpg" alt="The board's Queue room: cards in In queue, In progress, Review and Built, the focus line and the next task to start" width="800">
   </picture>
 </p>
 
-One chat can carry a feature. A project of weeks needs more, and without help you become the memory, the merge order
-and the one who checks whether "done" is true.
+Ravenseat works entirely through Claude Code. The optional local board is a wider view of the same orchestrator, not a
+separate workflow or another system you need to keep synchronized. Open it with `/ravenseat:board`.
 
-| The pain | Without Ravenseat | With Ravenseat |
-|---|---|---|
-| The plan lives in a chat that ends | Close it or crash, and the plan is gone | The queue and the plans are **[plain files](#the-plan-lives-in-files-not-in-the-chat)** in your repo |
-| Two chats, one checkout | They edit the same files and undo each other | Each task gets **[its own worktree](#several-agents-build-at-once-and-merges-stay-safe)**; merges go one at a time |
-| "Tests passed," says the agent | You take its word, or check every run yourself | Ravenseat **[runs your checks](#guarantees-and-limits)** on the exact commit |
-| Rules in `CLAUDE.md` hold most of the time | Now and then an agent pushes or skips a test | Key rules are **[enforced by code](#the-rules-that-matter-run-as-code)**, not by asking |
-| You are asked about everything, or nothing | Small things interrupt you, big ones pass silently | Only what **[needs a person](#what-you-come-back-to)** reaches you, with a recommendation |
-| The long chat is the memory | Every turn pays for all of it | Each task gets a **[fresh agent](#it-costs-about-the-same-and-the-setup-makes-every-turn-cheaper)** and a short mission |
+| View | What it tells you |
+|---|---|
+| Decisions | What needs my attention, and what will my answer unblock? |
+| Queue | What's waiting, running, under review, or finished? |
+| Dependencies | What's holding up progress? |
+| Focus | Which areas and features should receive attention next? |
+| Checks | What validation is configured, and where might coverage be missing? |
+| Statistics | How much work is completing, at what cost, and with how much intervention? |
+| Plans | How does today's work fit the larger project? |
+| Settings | What are agents allowed to do, and which guards are weaker than their defaults? |
 
-Why outside the chat: a model forgets at compaction and a new chat starts empty. A file does not forget, and an agent
-that reads a short task costs a fraction of one that reads the whole history. The full list is in the
-[guide](plugin/docs/guide.md#what-it-solves).
+The board also provides controls for managing tasks, priorities, and decisions. Every board action has a matching
+`ravenseat` command and goes through the same code, lock and undo, on the same state. Weakening a guard from the board
+needs a deliberate confirmation, and is logged.
 
-The stage starts when a Claude Code project outgrows one chat. The long chat grows toward its 1M-token window, and
-every turn pays for all of it. Findings, plans and half-built work spread over many chats, and two chats undo each
-other's work. Rules in `CLAUDE.md` are followed most of the time, which is not the same as always.
+[Take the board tour](plugin/docs/board.md#a-tour) · [CLI parity](plugin/docs/cli-parity.md)
 
-Ravenseat is a Claude Code plugin for that stage. You tell one chat what to build. It writes the work down as tasks,
-hands each task to a fresh agent in its own git worktree, runs your tests on exactly the commit the agent delivered,
-merges what passes on your machine, and asks you only what a person has to decide.
+## Is Ravenseat for you?
 
-> **You:** Add dark mode in settings, a weekly streak on the habit card, and a CSV export once the streak is done.
->
-> **Claude:** Added T-001, T-002 and T-003. T-003 waits for T-002.
+**Yes, if:**
+- your project spans multiple sessions, days, or weeks;
+- you want agents to work independently without managing every handoff;
+- your project has meaningful automated checks;
+- you want parallel execution without manually coordinating Git worktrees and merges;
+- you want to return to progress reports and decisions rather than unfinished conversations.
 
-> **You:** How did dark mode go?
->
-> **Claude:** Merged into main. Your check passed on main before and on the result; branch and worktree are gone.
+**Probably not, if:**
+- your change is small and fits in one session;
+- you have no meaningful way to validate generated changes;
+- you don't need persistent planning, dependencies, or concurrent execution.
 
-> **You:** Push.
->
-> **Claude:** 2 merged tasks, 5 commits, nothing from outside the queue. Pushed: main went from e2a029d to 3dc10b6.
-
-It asks before it starts, merges only on your machine, and pushes nothing until you say "push".
-
-## Is it for you?
-
-**Yes** if you are one person or a small team with work that spans days or weeks, in a project that has automated
-tests.
-
-**No** for a single small change in one chat, or for a project without meaningful checks. There is little for it to
-verify there, and the extra steps do not pay off.
-
-**You need** Node.js 20 or newer, git 2.38 or newer, and Windows or Linux. macOS is not tested yet; if you try it
-there, an issue with what you find is very welcome.
+**Requirements:** Node.js 20+, Git 2.38+ (older Git works, but without the trial merge and the conflict prediction,
+so a conflicting merge can stop half done in your checkout), and Windows or Linux. macOS has not been tested yet. If
+you try it, reports of what works and what doesn't are welcome.
 
 ## Quick start
 
-**1. Install the plugin.** In Claude Code:
+**1. Install.** In Claude Code:
 
 ```
 /plugin marketplace add vegardjorg/ravenseat
 /plugin install ravenseat@ravenseat
 ```
 
-**2. Set up your project.** Ask Claude: *"Set up the queue."* (`/ravenseat:setup`). The guided setup finds your checks
-and asks before it changes any setting. Not sure yet? Ask Claude to run `ravenseat doctor` first: it shows what it
-finds and changes nothing.
+**2. Set up your project.** *"Set up the queue."* or `/ravenseat:setup`. The guided setup fills in your project's
+checks with you and asks before changing settings. Not sure yet? *"Run ravenseat doctor."* reports what it finds
+without making changes.
 
-**3. Add some work.** *"Add to the queue: fix the login bug and add a regression test."*
+**3. Add work.** *"Add to the queue: fix the login bug and add a regression test."* For larger features, describe the
+objective and ask Claude to break it into tasks with dependencies.
 
-**4. Start the queue.** *"Start the queue."* (`/ravenseat:queue`). It picks tasks, hands them to agents, runs the
-checks and merges what passes.
+**4. Start execution.** *"Start the queue."* or `/ravenseat:queue`. It reports and asks before starting, dispatches
+eligible tasks, runs the configured checks, and merges passing work locally.
 
-**5. Answer what waits on you.** *"What's waiting on me?"* (`/ravenseat:decide`). Each decision comes with a
-recommendation and the work it blocks.
+**5. Return to the decisions.** *"What's waiting on me?"* or `/ravenseat:decide`.
 
-Plain words work, and the commands are there when you want explicit control ([all commands](plugin/docs/commands.md)).
-More in the [guide](plugin/docs/guide.md).
+**Nothing is pushed until you explicitly ask for a push** (the default; a push threshold can be turned on).
 
-### What it changes in your project
+Natural language works throughout. Commands are available when you want more explicit control.
+[All commands](plugin/docs/commands.md) · [Full setup and usage guide](plugin/docs/guide.md)
 
-- `.claude/settings.json`: the recommended settings, after you say yes. One of them sets automatic compaction at 300k
-  for every Claude Code session in the project. An existing value of your own is kept.
-- `queue.config.json`, `CLAUDE.queue.md` and `docs/queue/` (the mission template and the project catalog), and the
-  queue, the tasks and the plan register in `scripts/.queue/` (gitignored by default), as plain files you can read.
-- One git worktree and one branch per running task, removed after the merge.
+### What setup changes
 
-To remove it, run `claude plugin uninstall ravenseat@ravenseat` and delete the files above, the `@CLAUDE.queue.md`
-line in `CLAUDE.md` if setup added it, and the settings you no longer want. Until then, the hooks do nothing in a
-project without `queue.config.json`.
+- `.claude/settings.json`: the recommended settings, after you approve them. One sets automatic compaction at 300k
+  for every Claude Code session in the project. Existing values are preserved.
+- `queue.config.json` and `CLAUDE.queue.md`.
+- `docs/queue/`: the mission template, the project catalog and a copy of the Ravenseat docs.
+- `scripts/.queue/`: tasks, queue state and the plan register.
+- `.gitignore`: lines for the queue data, the agents' worktrees, personal settings and `.env` files.
+- An `@CLAUDE.queue.md` reference in `CLAUDE.md`, if you approve it.
 
-## What you come back to
+Running tasks create separate branches and worktrees, removed after a successful merge.
 
-> **You:** What happened while I was away?
->
-> **Claude:** 6 tasks merged, all on green checks. 1 task is blocked after a fix attempt and waits on you, together
-> with 2 other decisions. Nothing is pushed.
+To uninstall, run `claude plugin uninstall ravenseat@ravenseat`, then remove the project files, the `.gitignore` lines
+and the settings above, including the `@CLAUDE.queue.md` reference. The hooks remain inactive in projects without
+`queue.config.json`.
 
-<p align="center"><img src="assets/screenshots/light-06-waiting-on-you.jpg" alt="Owner questions with recommendations and an Answer button" width="800"></p>
+## Why the architecture matters
 
-The goal is not to remove you from development. It is to stop interrupting you for what the system can handle itself.
-Typical decisions that reach you: unclear requirements, security tradeoffs, hard-to-reverse changes, visual approval,
-and tasks still blocked after a fix attempt.
+Ravenseat is not just a wrapper that launches multiple Claude Code agents. The difficult part of sustained agentic
+development is coordinating their work, maintaining state, validating results, and recovering safely when things go
+wrong.
 
-**Your part.** Each delivery lists what the agent assumed. Read the assumptions before the merge, because passing
-tests do not show that the agent understood you.
-
-## Why it holds up
-
-### Several agents build at once, and merges stay safe
-
-Each task runs in its own git worktree, so agents never share files on disk. Merges happen one at a time, each only on
-a green check run for that exact commit, and the base branch is checked again after every merge. About 1,200 tasks
-were finished this way in three weeks of October 2026, in a larger private project.
-
-### The rules that matter run as code
-
-Instructions in `CLAUDE.md` are advice, and text an agent reads can argue against them. Ravenseat enforces its rules
-on every action instead: an agent cannot push, cannot change the project's control files and cannot mark its own work
-as tested. 266 red team tests run on real git and real processes (all 266 passed on 2026-11-21). Run
-`npm run redteam` to check it yourself.
-
-### The plan lives in files, not in the chat
-
-The queue, each task's instructions, the plan register and your accepted design choices are plain files in your repo.
-A crash, a compaction or a second chat loses nothing that matters. After a compaction the main chat was back to
-starting agents after about 6 turns, against about 17 turns in a new chat that read a handover note.
-
-### It costs about the same, and the setup makes every turn cheaper
-
-Setup turns on compaction at 300k tokens. In the same project and on the same model, a main-chat turn then cost less
-than half as much as before: 0.065 against 0.157 USD. The queue itself is about cost-neutral for building and
-steering against one well-kept chat. Its value is the structure, the parallel work and the safety. Numbers are under [What it costs](#what-it-costs).
-
-### Why not subagents and worktrees by hand?
-
-You can, and for a few tasks it works well. What you carry yourself is the handover each time, the overview spread
-over many chats, the merge order, and trusting an agent's own "checks passed". Ravenseat does that bookkeeping and
-runs the checks itself.
-
-## How a task flows
-
-<p align="center"><img src="assets/infographics/task-flow.webp" alt="Pick the next task, a fresh agent builds it in an isolated worktree, checks run. Passing work is merged and the next task starts. Failing work gets a fix attempt by a fresh agent; if it is still blocked, it becomes your decision while independent tasks continue" width="800"></p>
-
-1. You describe the work. The main chat adds tasks with their dependencies.
-2. The queue picks the next task that can start and gives it to a fresh agent in a new worktree, with a short
-   instruction file.
-3. The agent builds and commits on its own branch. Its long report goes to a file, not into the chat.
-4. Ravenseat runs your quick checks on that exact commit and records the result.
-5. Green work is merged, one merge at a time. Red work gets a fix round; if it is still blocked, it becomes a question
-   to you while independent tasks continue. Work the agent itself called unfinished is merged only on your word.
-6. Nothing is pushed until you say "push". The push asks you first when the base branch is red, and commits from
-   outside the queue are listed before it.
-
-More in [how it works](plugin/docs/guide.md#how-it-works) and [orchestration](plugin/docs/orchestration.md#the-loop).
+1. **The project outlives the conversation.** The queue, missions, plans and accepted design choices are plain files:
+   after a compaction the main chat was starting agents again in about 6 turns, against about 17 for a new chat that
+   read a handover note. [What it solves](plugin/docs/guide.md#what-it-solves)
+2. **Agents work independently.** Each track has its own worktree and branch, dependencies decide what starts, and
+   merges go one at a time: about 1,200 tasks were finished this way during three weeks of October 2026, in a larger
+   private project. [Orchestration](plugin/docs/orchestration.md)
+3. **Agents don't certify their own work.** Checks run on the exact delivered commit and are recorded with its SHA by
+   the orchestrator, not by the agent being evaluated. [Guarantees and limits](#guarantees-and-limits)
+4. **Failures become work, not dead ends.** A failed check sends the findings back to a fix agent on the same branch
+   (the agent that delivered, when it stopped recently, otherwise a new one), and the checks run again. A task still
+   blocked after the fix rounds, or one that stops making progress, becomes a decision, while independent tasks keep
+   running.
+5. **Important rules are enforced by code.** `CLAUDE.md` holds instructions a model interprets; pushing, protected
+   files, check records and completion criteria are enforced on every action. 266 red team tests on real git and real
+   processes (266 of 266 passed on 2026-11-21); run `npm run redteam` to check it yourself.
+   [Red team](plugin/docs/redteam.md)
 
 ## Guarantees and limits
 
-Enforced by code, on every action:
+### Enforced safeguards
 
-- **Check results come from Ravenseat, not from the agent.** Each run is recorded with the commit sha, and merge and
-  push read only that record.
-- **Agents cannot push**, and cannot write `CLAUDE.md`, `.claude/`, git hooks, git config or the queue config.
-- **A focused test stops the merge.** A new `.only`, `fit` or `fdescribe` blocks it. Deleted tests and new skip
+- **Independent check records.** Each run is recorded by Ravenseat with the commit SHA, and merge and push read only
+  that record (the default; letting CI or the agent's own run count is a logged, weakened setting).
+- **Agents cannot push.**
+- **Protected control files.** Agents cannot write `CLAUDE*.md`, `.claude/`, git hooks, git config or the queue
+  config; a direct write from the main session asks you first.
+- **Focused-test protection.** A new `.only`, `fit` or `fdescribe` stops the merge. Deleted tests and new skip
   markers are flagged for review.
-- **Protected paths stop the merge.** A change to CI config, lockfiles or Ravenseat's own scripts needs the task to
-  own the file, or your yes. In lite mode, lockfiles and other dependency files only warn.
-- **Overrides ask you.** An override opens Claude Code's permission dialog, so a line in an agent's report cannot
-  approve it.
-- **The finish line is fixed.** A task's completion criteria are locked when it starts.
+- **Protected paths.** A change to CI config, lockfiles or Ravenseat's own scripts stops the merge unless the task
+  owns the file or you approve it. In lite mode, lockfiles and other dependency files only warn.
+- **Explicit overrides.** An override opens Claude Code's permission dialog, so an agent cannot approve one by writing
+  an approval into its report.
+- **A fixed finish line.** A task's completion criteria are locked when execution begins.
 
-Known limits:
+### What Ravenseat does not guarantee
 
-- **Guard rails, not a sandbox.** Agents run as your OS user, and a script an agent writes and then runs is not read
-  by the guards. Keep production credentials off the machine, and use Claude Code's permissions or sandbox when you
-  need a real boundary.
-- **Only as strong as your checks.** Without meaningful tests a green merge shows little. `ravenseat doctor` warns
-  when a project has no checks.
-- **Young.** Public since late October 2026 and released often. Developed on Windows, tested on Linux and Windows.
+- **It is not a security sandbox.** Agents run as your OS user, the guards do not read the contents of a script an
+  agent writes and then runs, and the guards let an action through if they themselves crash. Keep production
+  credentials off the machine, and use Claude Code's permissions or sandbox when you need a real boundary.
+- **Green checks do not guarantee correct software.** Without meaningful tests a green merge shows little;
+  `ravenseat doctor` warns when a project has no checks.
+- **It cannot replace architectural judgment.** That stays with you.
+- **It is a young project.** Public since late October 2026 and released often. Developed on Windows, tested on
+  Windows and Linux.
 
-The full list, with the test behind each guarantee, is on the [red team page](plugin/docs/redteam.md) and in
-[guarantees and limits](plugin/docs/guide.md#guarantees-and-limits).
+The full list, with the test behind each guarantee: [red team](plugin/docs/redteam.md) ·
+[guarantees and limits](plugin/docs/guide.md#guarantees-and-limits)
 
-## What it costs
+## What about cost?
 
-Every turn in Claude Code sends the whole conversation again, so a large chat pays for its size on every turn. The
-same project, on the same model, before and after setup:
+Ravenseat is designed to reduce coordination work, not to promise cheaper code generation. Two questions matter.
 
-| | Compacting near 1M | Compacting at 300k |
+### Smaller conversations reduce repeated context
+
+Every turn sends the whole conversation again, so a large chat pays for its size on every turn. Setup offers automatic
+compaction at 300k. The same project, on the same model, before and after:
+
+| Metric | Compaction near 1M | Compaction at 300k |
 |---|---|---|
 | Main chat: median context per turn | 464k | 183k |
-| Main chat: cost per turn | 0.157 USD | 0.065 USD |
-| Subagents: cost per turn | 0.109 USD | 0.056 USD |
+| Main chat: cost per turn | $0.157 | $0.065 |
+| Subagents: cost per turn | $0.109 | $0.056 |
 
-Against one chat that already compacts at 300k, the queue came out about the same: about 12 USD per 1,000 inserted
-lines for both in the last week measured, the queue's checks included. The checks cost what your tests cost. In the
-measured repo they were about a third of the queue's spend, from a very heavy test suite and a reviewer on almost
-every task.
+Main-chat cost per turn fell by more than half, and subagent cost per turn by about half.
 
-This is one developer, two repos and a few weeks: not a controlled benchmark. All amounts are API-equivalent at list
-price; on a subscription they are quota, not dollars. Run `ravenseat cost` to see the numbers in your own project, and
-`ravenseat limit dailyBudget <usd>` to stop new tasks when the day's spend is used.
-[The measurements and the method](plugin/docs/costs.md).
+### Orchestration itself is approximately cost-neutral
+
+Against one well-kept chat that also compacts at 300k, the queue came out about the same: about $12 per 1,000
+inserted lines for both in the last measured week, the queue's checks included. Over all 19 days measured the plain
+chat was cheaper per line; with checks and review taken out of both, the two were about cost-neutral. The checks cost
+what your tests cost: in the measured repo they were about a third of the queue's spending, from a very heavy test
+suite and a reviewer on almost every task.
+
+This is one developer, two repositories and a few weeks: not a controlled benchmark. Amounts are API-equivalent at
+list prices; on a subscription they are quota, not dollars. Run `ravenseat cost` to see the numbers in your own
+project, and `ravenseat limit dailyBudget <usd>` to stop new tasks once the day's spend is reached.
+
+**The primary benefit is not lower token cost. It's less manual coordination, safer parallel work, persistent
+execution, and fewer interruptions.** [The measurements and the method](plugin/docs/costs.md)
+
+## Why not just use subagents and worktrees manually?
+
+You can. For a handful of independent tasks, Claude Code's existing capabilities may be all you need. Ravenseat
+becomes useful when the coordination itself starts taking significant time.
+
+Without an orchestrator, you still need to maintain the plan, track dependencies, select work, manage handoffs,
+reconcile branches, verify delivered commits, recover from failures, and preserve state between sessions.
+
+**The distinction isn't how many agents you can launch. It's how much of the workflow can continue without you
+managing each step.**
 
 ## Going further
 
 - **Lite and full mode.** Setup recommends lite mode for a first run: a task needs only a title.
-  [Full mode](plugin/docs/full-mode.md) adds file ownership per task, risk classes, focus areas and helper reviewers for
-  larger projects.
-- **The board.** An optional local web page with the same state: the queue as columns, decisions, checks, plans and
-  cost. Open it with `/ravenseat:board` ([a tour](plugin/docs/board.md#a-tour)).
-- **Machine load.** Fewer agents start as free memory drops, and heavy check runs take turns
-  ([machine load](plugin/docs/full-mode.md#my-pc-chokes-on-parallel-builds)).
-- **Learning from repeated failures.** A failure that comes back becomes a proposal for a new check, built only on
-  your yes ([the Checks tab](plugin/docs/checks.md)).
-- **From your phone.** Queue the work, step away, and follow along with Claude Code's Remote Control.
+  [Full mode](plugin/docs/full-mode.md) adds file ownership per task, risk classes, focus areas and helper reviewers
+  for larger projects.
+- **Planning and priorities.** Areas, plans and features in a plan register, with a roadmap of Waiting on you, Now,
+  Next and Later. [Plan register](plugin/docs/plan-register.md)
+- **Machine-aware concurrency.** Fewer agents start as free memory drops, and heavy check runs take turns.
+  [Machine load](plugin/docs/full-mode.md#my-pc-chokes-on-parallel-builds)
+- **Work from your phone.** Queue the work, step away, and follow along with Claude Code's Remote Control (a Claude
+  Code feature, not part of Ravenseat).
 
-<p align="center"><img src="assets/screenshots/light-08-plans-roadmap.jpg" alt="The Plans room: the roadmap with Waiting on you, Now, Next, Later and Done" width="800"></p>
+<p align="center"><img src="assets/screenshots/light-08-plans-roadmap.jpg" alt="The Plans room on the Roadmap: Waiting on you, Now, Next, Later and Done as columns" width="800"></p>
+
+### Improving your project's checks
+
+Ravenseat doesn't just run your existing checks. It helps you improve them.
+
+The Checks system inspects your project's tests, CI, linting, security tools, and validation configuration to identify
+gaps and opportunities. Repeated failures can reveal weaknesses worth turning into permanent regression checks.
+
+Suggestions are prioritized. You can dismiss them, enable existing tools, or send an investigation to an agent. The
+agent proposes an implementation plan, and you decide what gets built.
+
+The goal is a project that becomes better at catching its own mistakes over time.
+
+[Explore the Checks system](plugin/docs/checks.md)
 
 ## Documentation
 
-- [Guide](plugin/docs/guide.md): install, lite mode, daily use, how the loop works, guarantees and limits.
-- [Full mode](plugin/docs/full-mode.md): risk classes, helper agents, focus, guards, load guard and recovery.
-- [The board](plugin/docs/board.md) and [commands](plugin/docs/commands.md), with [CLI parity](plugin/docs/cli-parity.md).
-- [The Checks tab](plugin/docs/checks.md): what the project has for checking its code, and what it lacks.
-- [Orchestration and agent safeguards](plugin/docs/orchestration.md), [queue configuration and reference](plugin/docs/queue.md),
-  [plan register](plugin/docs/plan-register.md), [catalog](plugin/docs/catalog.md).
-- [Red team](plugin/docs/redteam.md) and the [FAQ](plugin/docs/faq.md): what can go wrong and the tests that check it.
-- [What it costs in tokens](plugin/docs/costs.md) and [why I built it](plugin/docs/why-i-built-it.md).
-- [INSTALL.md](INSTALL.md) for a vendored install, and the [CHANGELOG](CHANGELOG.md) for changes per version.
+**Getting started:** [Guide](plugin/docs/guide.md) · [Commands](plugin/docs/commands.md) · [FAQ](plugin/docs/faq.md) ·
+[INSTALL.md](INSTALL.md) (vendored install)
+
+**Using Ravenseat:** [Board tour](plugin/docs/board.md#a-tour) · [CLI parity](plugin/docs/cli-parity.md) ·
+[Full mode](plugin/docs/full-mode.md) · [Plan register](plugin/docs/plan-register.md) · [The Checks tab](plugin/docs/checks.md)
+
+**Architecture and evidence:** [Orchestration](plugin/docs/orchestration.md) ·
+[Queue reference](plugin/docs/queue.md) · [Catalog](plugin/docs/catalog.md) · [Red team](plugin/docs/redteam.md) ·
+[Costs](plugin/docs/costs.md) · [Why I built it](plugin/docs/why-i-built-it.md) · [Changelog](CHANGELOG.md)
 
 ## Development
 
@@ -252,9 +357,10 @@ npm test                # the whole suite; run it before every push
 npm run test:changed    # only the tests your change can reach; run it before each commit
 ```
 
-- CI runs Ubuntu node 20 and 22 whole, and Windows node 22 in 3 shards; `shards complete` fails unless every test file ran.
-- Windows node 20 runs weekly and on demand (`ci-weekly.yml`), not on every push.
-- As this repo's quick gate, `node scripts/test-changed.mjs --gate` runs only the changed tests; the full gate and CI run all.
+- CI runs the full suite on Ubuntu with Node 20 and 22, and on Windows with Node 22 in three shards; a
+  `shards complete` check fails unless every test file ran.
+- Windows with Node 20 runs weekly and on demand (`ci-weekly.yml`).
+- This repo uses `node scripts/test-changed.mjs --gate` as its quick gate; the full gate and CI run the complete suite.
 
 ## License
 
@@ -264,10 +370,10 @@ Double, Inc.); the license text is in [NOTICE](NOTICE).
 
 ## The idea behind the name
 
-Ravenseat is named after Odin's high seat, Hliðskjálf, from which he could see every world while his ravens brought
-him the news. You sit in the seat. Your agents fly out, do the work and come back with the results.
+Ravenseat is named after Odin's high seat, Hliðskjálf, from which Odin could see every world while the ravens brought
+news. You sit in the seat. Your agents fly out, do the work, and return with the results.
 
-Ravenseat is the reusable part of a queue I built inside a real Claude Code project that had outgrown its chats.
-[The longer story](plugin/docs/why-i-built-it.md).
+Ravenseat grew out of a queue built inside a real Claude Code project that had become too large to manage through
+individual conversations. [The longer story](plugin/docs/why-i-built-it.md)
 
 Created by Vegard Cowie Jørgensen.
