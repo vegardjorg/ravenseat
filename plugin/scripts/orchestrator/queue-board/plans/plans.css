@@ -2896,6 +2896,19 @@ ol.overview-list > .overview-row.overview-question > * {
   font-size: var(--text-xs);
 }
 
+/* Each text line sits on a chip in the field's own color, only as wide as its text (never wider than the field, so
+   the ellipsis still works). The built fill's top line then stops at the text instead of running through it ("43 %
+   built" was struck through, owner QA 21.11), and the text keeps the field's own contrast in light and dark. */
+.tree-map-name,
+.tree-map-line {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0 2px;
+  margin-left: -2px;
+  border-radius: var(--radius);
+  background: var(--pri-surface);
+}
+
 .tree-map-name {
   font-size: var(--text-sm);
   font-weight: 600;
