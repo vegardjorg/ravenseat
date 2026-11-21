@@ -40,9 +40,15 @@ const { CLI_NAMES, isCliName } = require('./productNames.js');
 /** How deep the reading follows nested shells, eval and $( ). Deeper nesting is opaque. */
 const MAX_DEPTH = 4;
 
-/** Simple tokens: whitespace split, and quotes removed wherever they stand in a word, as the shell does (`g"i"t` is git). */
+/**
+ * Simple tokens: whitespace split, and quotes removed wherever they stand in a word, as the shell does (`g"i"t` is git).
+ * A backslash before a space or tab outside quotes keeps the word together and leaves the space
+ * (`C:/Program\ Files/GitHub\ CLI/gh.exe` is one word, so commandWord finds gh); inside quotes it stays as written.
+ */
 function tokens(chunk) {
-  return (String(chunk || '').match(/(?:"[^"]*"|'[^']*'|\S)+/g) || []).map((t) => t.replace(/"([^"]*)"|'([^']*)'/g, (_, a, b) => a ?? b));
+  return (String(chunk || '').match(/(?:"[^"]*"|'[^']*'|\\[ \t]|\S)+/g) || []).map((t) =>
+    t.replace(/"([^"]*)"|'([^']*)'|\\([ \t])/g, (_, a, b, c) => a ?? b ?? c),
+  );
 }
 
 /**

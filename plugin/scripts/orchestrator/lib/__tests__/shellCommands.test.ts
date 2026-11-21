@@ -57,6 +57,19 @@ describe('what stays as it was', () => {
     for (const p of ['C:\\Program Files\\Git\\git.exe', 'tools\\git.exe', '.\\git', '\\git'])
       expect(SC.commandWord(p)).toBe('git');
   });
+  it('a backslash-escaped space keeps the word together, so the path resolves to its program', () => {
+    expect(SC.tokens('C:/Program\\ Files/GitHub\\ CLI/gh.exe gist create a.txt')).toEqual([
+      'C:/Program Files/GitHub CLI/gh.exe',
+      'gist',
+      'create',
+      'a.txt',
+    ]);
+    expect(SC.commandWord(SC.tokens('C:/Program\\ Files/GitHub\\ CLI/gh.exe api')[0])).toBe('gh');
+    expect(SC.commandWord(SC.tokens('/opt/my\\ tools/curl -s https://x')[0])).toBe('curl');
+    // Inside quotes a backslash and a space stay as they are (no escape there).
+    expect(SC.tokens('echo "a\\ b" c')).toEqual(['echo', 'a\\ b', 'c']);
+    expect(agent('C:/Program\\ Files/Git/bin/git.exe push origin main')?.decision).toBe('deny');
+  });
   it('an ordinary push of a side branch is free for the owner', () => {
     expect(main('git status')).toBeNull();
     expect(main('git commit -m "push --force is only words here"')).toBeNull();

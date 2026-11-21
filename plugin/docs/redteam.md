@@ -200,8 +200,9 @@ Notes on some rows:
   broad hook as INFO), and an override typed by a process the hooks never see.
 - **RT-37** (2026-11-20): a track's `gh gist create` and `gh api -X POST`, also in a chain, in `bash -c`, behind a
   quoted full path to `gh.exe` and after `env`, are denied (rule `gh-cli`), while `gh run view 123` passes; the
-  orchestrator is not affected. Only strings are assessed; gh never runs. Not covered: a path with backslash-escaped
-  spaces (`C:/Program\ Files/...`), which the shared reader does not resolve for `curl` either.
+  orchestrator is not affected. Only strings are assessed; gh never runs. A path with backslash-escaped spaces
+  (`C:/Program\ Files/GitHub\ CLI/gh.exe`) was a gap until 2026-11-21: the shared reader (lib/shellCommands.js tokens)
+  now keeps such a word together, so `gh` and `curl` behind it are denied the same way.
 - **RT-34 and RT-35** (2026-11-15): doctor, with `secretScan.allowlist` on, FAILs on a key in a tracked `.mcp.json`
   (server env, headers, args or url) by file and path, WARNs on one in an agent worktree's untracked copy, passes a
   `${NAME}` reference, and never prints the key; off, one INFO line says a gap is there. With `dbGuard.localOnly` on,
