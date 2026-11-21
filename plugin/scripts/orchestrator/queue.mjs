@@ -38,6 +38,8 @@
 //        the mission and checked one by one by reviewer-gap.
 //        --description "<text>" (one task only): its short human summary (field description), shown by the board
 //        panel and info, never in the mission. Over 320 characters: one WARNING line, saved anyway.
+//        --risk-first "<assumption>" (one task only): its riskiest assumption (field risk_first, lib/riskFirst.js); the
+//        mission tells the track to test it first and stop with PARTIAL if it fails. Locked after the start.
 //   node scripts/orchestrator/queue.mjs approve <id> [...] [--by "<who>"]   (proposed -> waiting; --by is kept as approved_by)
 //   node scripts/orchestrator/queue.mjs proposals [auto [on|off] [--classes K,U] [--max-estimate <min|none>]
 //        [--max-value <1-10|none>]]   (auto-accept of agent proposals by the owner's rules, default off; applied by add
@@ -400,6 +402,8 @@
 //        shows the description, plan, sources with anchors and roles, and source)
 //   node scripts/orchestrator/queue.mjs edit <id> --description "<text>"   (sets or replaces the short human summary;
 //        "" removes it, as null in --json does. Over 320 characters: one WARNING line, saved anyway)
+//   node scripts/orchestrator/queue.mjs edit <id> --risk-first "<assumption>"   (sets or replaces the riskiest assumption;
+//        "" removes it. Locked after the start: only --by owner changes it then)
 //   node scripts/orchestrator/queue.mjs ask <id> ["<question>"] [--bundle] [--json] [--max-chars <n>] [--out <file>]
 //        [--scratchpad <dir>]   (a question about an earlier track without resuming its agent: a size-capped,
 //         secret-redacted bundle of the mission, track-result.md, handover.md, the queue's notes and owner answers, the

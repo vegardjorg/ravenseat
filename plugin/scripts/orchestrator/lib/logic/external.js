@@ -331,8 +331,27 @@ function readsLines(o, queue) {
   return out;
 }
 
+/**
+ * The riskiest-assumption block (lib/riskFirst.js, DR-2). `rf` left out: the setting from the config and, only when the
+ * task has no own value and the setting is on, the accepted zones read from the catalog (none: nothing more is read).
+ */
+function riskLines(o, rf) {
+  const RF = require('../riskFirst.js');
+  let v = rf;
+  if (v === undefined) {
+    const on = RF.enabled(require('../queueConfig.js').config());
+    const own = typeof o?.risk_first === 'string' && o.risk_first.trim();
+    // The mission text for a keyword zone is the task's own (a file mission is matched on its title and files).
+    const zones = on && !own ? require('../catalogZones.js').zonesOnDisk()(o) : [];
+    v = { on, zones };
+  }
+  const b = RF.riskFirstBlock(o, v ?? { on: false });
+  return b ? [b, ''] : [];
+}
+
 // `mark`: the owner mark for this mission (lib/ownerMark.js, roadmap 0æ N4); null = none, the block as before.
-function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = defaultAddendum, catalog, mark = null } = {}) {
+// `riskFirst`: { on, zones } for the riskiest-assumption block; left out, read from the config and the catalog.
+function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = defaultAddendum, catalog, mark = null, riskFirst } = {}) {
   const list = (x) => (Array.isArray(x) && x.length ? x.join(', ') : 'none');
   // The part of the project catalog that meets the task's files (bolk B4 of the scope drift plan): empty and free
   // without a catalog, capped with a catalog, and the same text for every client.
@@ -363,6 +382,8 @@ function trackBlock(o, queue, { text, warning = null, cloud = false, addendum = 
     '',
     ...(done ? [done, ''] : []),
     ...(accept ? [accept, ''] : []),
+    // The riskiest assumption first (DR-2): only with a risk_first value or a zone hit, and mission.riskFirst on.
+    ...riskLines(o, riskFirst),
     ...(warning ? [warning, ''] : []),
     ...(answer ? [answer, ''] : []),
     String(text ?? '').trim(),
