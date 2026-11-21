@@ -68,12 +68,12 @@ function ctx(extra: Record<string, unknown> = {}) {
 const paths = (links: { path: string }[]) => links.map((l) => l.path);
 
 describe('taskLinks: the plan entry', () => {
-  it('takes the sources with a readable role (plan, investigation, spec) and leaves history and reference out', () => {
+  it('takes the sources with a readable role (plan, investigation, spec, decision) and leaves history and reference out', () => {
     const r = TL.taskLinks({ id: 'A', plan: 'PL-AUTH' }, ctx());
     expect(r.plan).toEqual({ id: 'PL-AUTH', state: 'found' });
     expect(paths(r.links)).toEqual(['docs/auth-plan.md', 'docs/spec.md', 'docs/internal/study.md']);
     expect(r.links.every((l: { from: string; planId: string }) => l.from === 'plan' && l.planId === 'PL-AUTH')).toBe(true);
-    expect(TL.READABLE_ROLES).toEqual(['plan', 'investigation', 'spec']);
+    expect(TL.READABLE_ROLES).toEqual(['plan', 'investigation', 'spec', 'decision']);
   });
 
   it('counts a source without a role as the plan itself (plan check reads it for status too)', () => {

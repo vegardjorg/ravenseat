@@ -1484,6 +1484,35 @@ const SETTINGS = Object.freeze([
       whyNot: 'Claude\'s project, maturity and summary for your idea go in unseen, and a wrong guess is only found later.',
       changes: 'Proposals that keep Later are applied without your Accept. Doctor will report it.',
     }),
+  // The light plan gate (plans/plan-gate-vurdering-2026-11-21.md PG-1..PG-3, owner decision 2026-11-21 "as
+  // recommended"; lib/planGate.js). None of the defaults can stop work.
+  // PG-2. Friction: one question, only for a request with no plan entry that splits into more than shape.threshold tasks
+  // or meets an accepted zone; "Build it all now" is one answer and is recorded (shaped: skipped). About 50 tokens in the
+  // always-loaded instructions. Offer is the default: it never stops work and it reaches the user who would never open
+  // /plans. always-shape is for those who want to be asked more; off is today's behaviour.
+  row('shape.nudge', 'plans', 'choice', 'Shape large requests first',
+    'When a request with no plan entry would become more than shape.threshold tasks, or touches a sensitive zone, ' +
+    '/add-to-queue asks once: shape it first (recommended: up to three questions and a one-page note), the smallest ' +
+    'version first, or build it all now. offer (default): that question. always-shape: shape without asking first. ' +
+    'off: no question.', { choices: ['offer', 'always-shape', 'off'] }),
+  // Friction: none by itself; it sets where the question above starts. Default 5: about a week of tracks, and a request
+  // of up to five tasks is usually clear enough to build as asked.
+  row('shape.threshold', 'plans', 'integer', 'Tasks before the shape question',
+    'The shape-first question comes when a request would split into more than this many tasks (default 5). A zone ' +
+    'hit asks whatever the count.'),
+  // PG-1. Friction: 10 to 20 minutes of agent writing and a page of reading per large plan (L, XL or a zone); nothing for
+  // small ones. On by default: it is text the owner reads in the report anyway, with the parts people skip (non-goals,
+  // stop criteria, the case against) made explicit. Off: no section is expected and the ready check is silent.
+  row('plans.decisionNote', 'plans', 'onoff', 'Decision section for large plans',
+    'A plan of size L or XL, or one in a sensitive zone, gets a one-page decision section from /plans (need, success ' +
+    'measure, non-goals, alternatives, cost, stop criteria, the case against, the cheapest test), linked as a source ' +
+    'with role decision; plan get shows missing, skipped or done. Off: no section is expected.'),
+  // PG-3. Friction: one WARNING line in advisory mode, only when a large plan is set to ready without a complete
+  // section. Block stops the edit, so it is off by default: a solo owner who lifts their own block learns to lift it.
+  row('plans.readyCheck', 'plans', 'choice', 'Check at ready',
+    'Setting a large plan to ready without a complete decision section: advisory (default) prints one warning naming ' +
+    'what is missing; block refuses the edit; off says nothing. plan edit <id> --skip-decision "<reason>" records a ' +
+    'skip, shown on the plan, and lets it through.', { choices: ['advisory', 'block', 'off'] }),
   row('focus.continueWhenEmpty', 'plans', 'onoff', 'Continue when the focus ends',
     'Off: the queue pauses and asks you when a focus has ended. On: it continues with the regular queue.',
     { fullWhy: 'lite has no focus steps to end' }),

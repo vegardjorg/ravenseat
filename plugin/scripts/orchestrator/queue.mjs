@@ -719,6 +719,11 @@
 //   node scripts/orchestrator/queue.mjs plan new --file <json> (one entry or a list)
 //   node scripts/orchestrator/queue.mjs plan edit <id> [--field name=val ...] [--set '{"field":...}']   (null or name=
 //        removes the field)
+//        --skip-decision "<reason>" records that a large plan skips its decision section (decision_skip, lib/planGate.js);
+//        setting an L/XL or zone plan to ready without a complete section warns (plans.readyCheck advisory) or is
+//        refused (block)
+//   node scripts/orchestrator/queue.mjs plan shape --tasks <n> [--zones D-0001,...] [--plan <PL-id>] [--json]
+//        (the shape-first question for a request that splits into more than shape.threshold tasks; read-only)
 //   node scripts/orchestrator/queue.mjs plan prioritize <id…> <now|owner|later|drop> [--category security for-prod important]
 //        [--reason "Rule 3: ..."]   (all or nothing; drop requires --reason)
 //   node scripts/orchestrator/queue.mjs plan prioritize-many --file <json>   ([{ id, priority, category?, reason? }], all

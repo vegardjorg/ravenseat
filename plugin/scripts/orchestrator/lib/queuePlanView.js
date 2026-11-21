@@ -1117,6 +1117,7 @@
     // cached per file), so this function stays pure; without leadFor nothing is read.
     const QF = ctx.queueFindings ?? require('./queueFindings.js');
     const leadFor = typeof ctx.leadFor === 'function' ? ctx.leadFor : null;
+    const decisionFor = typeof ctx.decisionFor === 'function' ? ctx.decisionFor : null;
     const entries = P.sortEntries(all).map((p) => {
       const by = P.derivedMaturity(p, queue?.tasks, { now });
       const jur = p.legal && typeof p.legal === 'object' ? p.legal : null;
@@ -1184,6 +1185,9 @@
         original_text: typeof p.original_text === 'string' ? p.original_text : null,
         // The lead from the plan document, only when nobody wrote a summary: { text, path, anchor } or null.
         lead: !p.summary && leadFor ? (leadFor(p) ?? null) : null,
+        // The decision section (PG-1/PG-3): the server's ctx.decisionFor (queueBoard.planDecisionReader) gives the
+        // state for a plan that expects one, else null. Without decisionFor nothing is read.
+        decision: decisionFor ? (decisionFor(p, queue?.tasks ?? []) ?? null) : null,
       };
       if (out.inbox && p.proposal && typeof p.proposal === 'object' && p.proposal.fields)
         out.proposal = JSON.parse(JSON.stringify(p.proposal));
@@ -4051,6 +4055,23 @@
   const META_LINE = /^(?:[A-ZÆØÅ][A-ZÆØÅ0-9 _-]{1,30}:\s|=+[^=\s]*=+$)/;
 
   /**
+   * The decision section's state in words for the plan's detail panel (PG-1/PG-3, lib/planGate.js decisionState, from
+   * the server's planDecisionReader), or null when the plan expects none.
+   * @param {{ state: string, why?: string, missing?: string[], reason?: string, note?: string }|null} d
+   * @returns {string|null}
+   */
+  function decisionText(d) {
+    if (!d || typeof d !== 'object' || d.state === 'not-needed') return null;
+    if (d.state === 'done') return 'Done';
+    if (d.state === 'skipped') return `Skipped: ${d.reason ?? ''}`;
+    if (d.state === 'incomplete') return `Incomplete: missing ${(d.missing ?? []).join(', ')}`;
+    return (
+      `Missing (${d.why ?? 'large plan'}): a one-page decision section is expected, linked as a source with role ` +
+      `decision (the plugin's docs/decision-note.md)${d.note ? `. ${d.note}` : ''}`
+    );
+  }
+
+  /**
    * The lead of a plan document: the rule the task panel uses for a mission (board/panel.js missionSummary), on the
    * read view's own blocks (markdownBlocks), starting at the source's anchor when it finds one. In order: the block
    * right after a heading that names the purpose (What and why, Goal, Purpose, Background, Summary, ...), the text of a
@@ -4623,6 +4644,7 @@
     planSentence,
     documentLead,
     planSource,
+    decisionText,
     // P9 polish
     otherSources,
     planDocEmpty,

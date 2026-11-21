@@ -20,6 +20,7 @@ Import this file from your project's `CLAUDE.md` with a line `@CLAUDE.queue.md`.
 The owner does not need to type commands. Read ordinary requests, in any language, as queue actions and use the
 matching skill:
 - "add it to the queue", "put this on the queue", "queue it" → `add-to-queue`.
+- "build X" when X is bigger than one track → `add-to-queue`, which may first offer to shape it (one question).
 - "what's in the queue", "what is next" → `ravenseat show`; "start the queue", "take over" → `queue`.
 - "I'll do one myself", "give me something from the queue" → `pick`; "show the board" → `board`.
 - "what about plan X", "update the plan" → `plans`.

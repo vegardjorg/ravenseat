@@ -397,6 +397,9 @@ describe('the settings: plans.* in queue.config.json (queueConfig.plansView)', (
       // P7: proposals only on request, and never applied without the owner
       inboxTriage: 'on-request',
       inboxAutoApply: false,
+      // PG-1/PG-3: the decision section expected for large plans, an advisory check at ready
+      decisionNote: true,
+      readyCheck: 'advisory',
     });
     expect(KK.plansView({})).toEqual(KK.STANDARD.plans);
   });
@@ -412,6 +415,8 @@ describe('the settings: plans.* in queue.config.json (queueConfig.plansView)', (
       searchDocuments: true,
       inboxTriage: 'on-request',
       inboxAutoApply: false,
+      decisionNote: true,
+      readyCheck: 'advisory',
     });
     expect(
       KK.plansView({ plans: { startView: 'x', roadmapLayout: 'tiles', roadmapFoldAfter: -3, leadFromDocument: 'yes' } }),

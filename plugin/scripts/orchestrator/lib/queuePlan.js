@@ -97,6 +97,9 @@ const FIELD = [
   'proposal',
   // The owner's own captured text, kept when an accepted proposal rewrote the summary (plan accept).
   'original_text',
+  // The owner's recorded skip of the decision section (PG-3, lib/planGate.js): { reason, at, by }, set with
+  // `plan edit <id> --skip-decision "<reason>"` and shown in `plan get`.
+  'decision_skip',
 ];
 /** Fields the tool owns: cannot be set with `plan new` or `plan edit` (inbox can only be removed, with null). */
 const TOOL_FIELD = new Set(['id', 'created', 'agent_boost', 'merged_from', 'finding', 'inbox', 'proposal', 'original_text']);
@@ -426,6 +429,7 @@ function validateEntry(entry, ctx = {}) {
   )
     f('proposal must be { at, by, fields } (set by ravenseat plan propose)');
   if (entry.original_text != null && typeof entry.original_text !== 'string') f('original_text must be text');
+  for (const t of require('./planGate.js').skipErrors(entry.decision_skip)) f(t);
 
   if (entry.size != null && !SIZES.includes(entry.size))
     f(`size must be one of ${SIZES.join(', ')}`);
@@ -730,6 +734,12 @@ function editEntry(reg, id, field, ctx = {}) {
   error.push(...v.error);
   warnings.push(...v.warnings);
   if (error.length) return { error, warnings };
+  // The check at ready (PG-3, lib/planGate.js readyGate): one warning in advisory mode, a refusal in block mode.
+  if (typeof ctx.decisionGate === 'function') {
+    const g = ctx.decisionGate(old, fresh);
+    if (g?.error) return { error: [g.error], warnings };
+    if (g?.warning) warnings.push(g.warning);
+  }
   const changed = [...new Set([...Object.keys(old), ...Object.keys(fresh)])].filter(
     (k) => !equalValue(old[k], fresh[k]),
   );
@@ -1736,6 +1746,9 @@ function check(reg, queue, ctx = {}) {
       const noneQueue = by.total === 0;
       for (const k of p.sources ?? []) {
         if (SOURCE_ROLES_WITHOUT_STATUS.includes(k.role)) continue;
+        // The decision section (PG-1) is reading material, but its stop criteria ("if not started by …") say nothing
+        // about the build status, so it is not read for the deviation either.
+        if (k.role === 'decision') continue;
         if (sourcePathError(k.path) || (ctx.existsPath && !ctx.existsPath(k.path))) continue;
         const st = docStatus(ctx.readDoc(k.path), k.anchor ?? null);
         const where = `${k.path}${k.anchor ? ` ${k.anchor}` : ''}`;

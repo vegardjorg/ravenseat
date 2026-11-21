@@ -42,8 +42,10 @@ const PP = require('./privatePaths.js');
 /**
  * The source roles that are reading material. A source without a role counts as `plan` (the entry's own plan
  * document), as in plan check, which skips only history and reference (queuePlan.js SOURCE_ROLES_WITHOUT_STATUS).
+ * `decision` is a large plan's one-page decision section (PG-1, lib/planGate.js): a track reads its non-goals and stop
+ * criteria like any plan text.
  */
-const READABLE_ROLES = ['plan', 'investigation', 'spec'];
+const READABLE_ROLES = ['plan', 'investigation', 'spec', 'decision'];
 
 /** The most readable links one task gets: the same cap as the mission's read-first list, which they end up in. */
 const LINKS_MAX = READ_FIRST_MAX;
