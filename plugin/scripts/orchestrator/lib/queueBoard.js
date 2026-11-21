@@ -32,6 +32,8 @@ const L = require('./queueLogic.js');
 const DEC = require('./queueDecisions.js');
 // The wiring spec's open items on the card (wiring_open, read-only in the detail panel).
 const WI = require('./wiringItems.js');
+// Green, but no tests ran (GS-1): the small caveat on the card and in the panel.
+const ZT = require('./zeroTests.js');
 
 /** How far past the neighbor a card or a lane lands at the top or bottom (in priority points). */
 const STEP = 10;
@@ -398,6 +400,8 @@ function buildBoard(
       qa_note: o.qa_note ?? null,
       verification: o.verification?.status ?? null,
       verification_checks: o.verification?.checks ?? [],
+      // Green, but no tests ran (lib/zeroTests.js, GS-1): the badge, tooltip and panel text; only when there is one.
+      ...((z) => (z ? { zero_tests: z } : {}))(ZT.boardText(ZT.ofTask(o))),
       cloud: cloudSuitable,
       in_cloud: L.isCloud(o),
       cloud_session: o.cloud

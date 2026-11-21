@@ -97,6 +97,11 @@ const MODES = ['own', 'external', 'off'];
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const commandList = (v) => (Array.isArray(v) ? v.filter((g) => typeof g === 'string' && g.trim()).map((g) => g.trim()) : []);
+/** The zero-test hits of a run as stored in an entry (lib/zeroTests.js): { command, runner, signal }, short strings. */
+const zeroTestsList = (v) =>
+  (Array.isArray(v) ? v : [])
+    .filter((z) => z && typeof z.command === 'string' && z.command.trim() && typeof z.signal === 'string' && z.signal.trim())
+    .map((z) => ({ command: z.command.trim(), runner: String(z.runner ?? '?').slice(0, 40), signal: z.signal.trim().slice(0, 80) }));
 
 /**
  * The hash of the control setup: the configured quick and full gate commands (config().gates), trimmed, in order. The
@@ -186,6 +191,10 @@ function entry(r) {
   if (r.timedOut) e.timed_out = true;
   // Red, then green on a rerun on the same commit (lib/trackFlaky.js): only on a green entry.
   if (e.ok && commandList(r.flaky).length) e.flaky = commandList(r.flaky);
+  // Green, but no tests ran (lib/zeroTests.js, GS-1): which green command, which runner and which fixed signal. A caveat
+  // for receive and the board, never part of the verdict; only on a green entry.
+  const zero = zeroTestsList(r.zeroTests);
+  if (e.ok && zero.length) e.zero_tests = zero;
   if (r.tampered) e.tampered = true;
   if (r.track) e.track = String(r.track);
   if (r.branch) e.branch = String(r.branch);

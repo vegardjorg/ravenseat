@@ -523,6 +523,8 @@ function reviewPackageIndex({
   testWeakening = null,
   redOnBase = null,
   flaky = null,
+  // Green, but no tests ran (lib/zeroTests.js packageSection), as lines; [] or null = none.
+  zeroTests = null,
   // Suspicious owner claims in the report (lib/ownerMark.js packageSection), as lines; null = none.
   suspicious = null,
   // The reuse and scope facts (lib/scopeNotes.js packageSection), as lines; null = every part is off.
@@ -571,6 +573,7 @@ function reviewPackageIndex({
   if (Array.isArray(redOnBase)) lines.push(...redOnBase);
   // The flaky gate commands (lib/trackFlaky.js packageSection), as lines; [] or null = none was flaky.
   if (Array.isArray(flaky)) lines.push(...flaky);
+  if (Array.isArray(zeroTests)) lines.push(...zeroTests);
   if (Array.isArray(suspicious)) lines.push(...suspicious);
   if (Array.isArray(scopeNotes)) lines.push(...scopeNotes);
   if (Array.isArray(catalog)) lines.push(...catalog);

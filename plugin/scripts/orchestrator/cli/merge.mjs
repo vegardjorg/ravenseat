@@ -228,6 +228,12 @@ function runDoneCommand(o, { branch, scratch, step }) {
     duration_s: run.durationSec,
     file,
   };
+  // Green, but no tests ran (lib/zeroTests.js, GS-1): the kept tail of a green run says no test ran. A caveat only.
+  if (run.ok) {
+    const ZT = require('./lib/zeroTests.js');
+    const hit = ZT.detect(run.tail.join('\n'));
+    if (hit) record.zeroTests = ZT.clean([{ gate: 'done_when', command, runner: hit.runner, signal: hit.signal }]);
+  }
   // B2 follow-up: ravenseat's own evidence of the run, in the gate evidence store (not queue.json, which a track can
   // write). The merge's skip reads it under gateEvidence.mode own and external (mergeDoneKnown). Clean = git status ran
   // and showed no uncommitted tracked change; a run that also saw such changes never lets the merge skip.
@@ -326,11 +332,14 @@ function receiveGates(o, { branch, scratch, reuse = true, step = 'receive' }) {
     const covered = GE.coverageLine(known);
     console.log(`Gates green at ${String(tip).slice(0, 12)} (${known.kind}, ravenseat's own run at ${known.time}${covered ? `, ${covered}` : ''}); not run again.`);
     // The finding was filed by the receive that ran it; the lines say it again.
-    const record = withFlaky(
-      o,
-      { ok: true, kind: known.kind, tip, at: new Date().toISOString(), ran: false, evidence_at: known.time, evidence_id: known.id },
+    const record = withZeroTests(
+      withFlaky(
+        o,
+        { ok: true, kind: known.kind, tip, at: new Date().toISOString(), ran: false, evidence_at: known.time, evidence_id: known.id },
+        known,
+        { storeFile },
+      ),
       known,
-      { storeFile },
     );
     return { status: 'green', record };
   }
@@ -399,11 +408,14 @@ function receiveGates(o, { branch, scratch, reuse = true, step = 'receive' }) {
   // or the store could not be written) is no evidence.
   if (r.status === 0 && entry?.ok === true) {
     console.log(`Gates GREEN at ${String(tip).slice(0, 12)} (${durationSec} s), recorded as evidence for that commit${covered ? `; ${covered}` : ''}.`);
-    const record = withFlaky(
-      o,
-      { ok: true, kind: 'quick', tip, at: entry.time, ran: true, duration_s: durationSec, evidence_id: entry.id },
+    const record = withZeroTests(
+      withFlaky(
+        o,
+        { ok: true, kind: 'quick', tip, at: entry.time, ran: true, duration_s: durationSec, evidence_id: entry.id },
+        entry,
+        { storeFile, file: true },
+      ),
       entry,
-      { storeFile, file: true },
     );
     return { status: 'green', record };
   }
@@ -488,6 +500,16 @@ function brokenGate(o, gateCheck) {
  * `file: true` (a fresh run, not a reused entry) also files the finding per command (cli/baseHealth.mjs fileFlaky, the
  * base gate's title, so it is deduplicated on the command). The record unchanged when the entry has no `flaky`.
  */
+/**
+ * "Green, but no tests ran" (lib/zeroTests.js, GS-1): the evidence entry's zero_tests on the green record as
+ * `zeroTests` (which gate: the entry's kind, quick or full). The record as it was when there are none.
+ */
+function withZeroTests(record, entry) {
+  const ZT = require('./lib/zeroTests.js');
+  const list = ZT.clean((Array.isArray(entry?.zero_tests) ? entry.zero_tests : []).map((z) => ({ ...z, gate: entry.kind })));
+  return list.length ? { ...record, zeroTests: list } : record;
+}
+
 function withFlaky(o, record, entry, { storeFile, file = false }) {
   const flaky = Array.isArray(entry?.flaky) ? entry.flaky : [];
   if (!flaky.length) return record;
@@ -984,6 +1006,12 @@ export function cmdReceive() {
   // Nothing automatic looked at this delivery (lib/controls.js). A warning, never a stop; a PARTIAL track runs nothing anyway.
   if (result?.status !== 'PARTIAL' && !CONTROLS.commandsOf(CONFIG.gates?.quick).length && !doneCheck)
     console.log(CONTROLS.noChecksLine(id, { quiet: GUIDANCE.isQuiet(read()) }));
+  // Green, but no tests ran (lib/zeroTests.js, GS-1): one NOTE line for the quick gate and the done command together.
+  // A caveat, never a stop; the package gets a section and the board a small badge.
+  const ZT = require('./lib/zeroTests.js');
+  const zeroTests = ZT.ofTask({ gate_check: gateCheck.record, done_check: doneCheck?.record });
+  const zeroLine = ZT.receiveLine(id, zeroTests);
+  if (zeroLine) console.log(zeroLine);
   // The secret scan of the track's own commits (H5): a hit is recorded in the edit below (block secret-found), and the
   // merge stops on it. Said here, where the receive output is read.
   const secretScan = receiveSecretScan(branch);
@@ -1165,6 +1193,8 @@ export function cmdReceive() {
       redOnBase: redBase ? RB.packageSection(redBase) : null,
       // The flaky gate commands (lib/trackFlaky.js packageSection); [] when none was flaky.
       flaky: require('./lib/trackFlaky.js').packageSection(gateCheck.record),
+      // Green, but no tests ran (lib/zeroTests.js packageSection); [] when every green command ran tests.
+      zeroTests: ZT.packageSection(zeroTests),
       suspicious: OM.packageSection(suspicious),
       // No rule hit: the section is exactly as before (the package stays byte for byte without a catalog).
       scopeNotes: ruleSection ? [...(scopeFacts.section ?? []), ...ruleSection] : scopeFacts.section,

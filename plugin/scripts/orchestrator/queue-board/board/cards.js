@@ -268,6 +268,7 @@ function footerFor(k, col) {
     // The merge gate as progress (lib/reviewItems.js progress): the chosen reviewers that reported after receive.
     // Warn while one is missing or the newest report has a HIGH: merge stops on either.
     if (k.reviews) footer.push(el('span', reviewsBadge(k.reviews)));
+    if (k.zero_tests) footer.push(zeroTestsBadge(k));
   } else if (col === 'built') {
     if (k.qa_status === 'waiting')
       footer.push(el('span', { class: 'badge qa', text: 'Waiting for QA' }));
@@ -278,9 +279,18 @@ function footerFor(k, col) {
       footer.push(el('span', { class: 'badge deviation', title: 'No gates, no done command and no agent review ran', text: 'Merged, not verified' }));
     else if (k.verification === 'audited')
       footer.push(el('span', { class: 'badge qa', title: 'An agent reviewed the change, but no check ran', text: 'Audited' }));
+    if (k.zero_tests) footer.push(zeroTestsBadge(k));
     if (k.done) footer.push(el('span', { text: `done ${age(k.done)} ago` }));
   }
   return footer;
+}
+
+/**
+ * Green, but no tests ran (GS-1, lib/zeroTests.js): a small neutral badge, calm on purpose. It is a caveat, not a stop,
+ * so it gets no warning tone; the tooltip names the gate and the signal, and the panel says the same as a fact.
+ */
+function zeroTestsBadge(k) {
+  return el('span', { class: 'badge zero-tests-badge', text: k.zero_tests.badge, title: k.zero_tests.title });
 }
 
 function summaryEl(k, col) {

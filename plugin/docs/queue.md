@@ -61,7 +61,7 @@ a track adding a proposal) cannot corrupt the file. `ravenseat undo` undoes the 
 | `acceptance` | Optional: a list of 1 to 10 short criteria (one line each, at most 300 characters), set with `ravenseat add ... --accept "..." --accept "..."` (one task) or `ravenseat edit <id> --accept "..."` (replaces the list). The mission copies them under "Acceptance criteria (fixed, do not change)", `ravenseat info` and the board's detail panel show them, and `reviewer-gap` answers MET / NOT MET / UNCLEAR per criterion. Locked after the start, like `done_when` (see [the lock](#the-finish-line-is-locked-after-the-start)). `null` in `edit` removes it |
 | `max_fix_rounds` | Optional: this task's fix-round cap, a whole number 0 to 20 (0 = no fix round without the owner); overrides `maxFixRounds` in `queue.config.json` (default 3). `null` in `edit` removes it |
 | `fixes` | Optional: the task id (or a list of ids) this task fixes. `add` and `edit` refuse an id that is not in the queue (or in the same add) and a task naming itself; stored as a list, and `[]` or `null` in `edit` removes it. `ravenseat info <id>` shows `fixes` and `fixed by`, and `ravenseat state` lists the open fix tasks as `fixLinks`. `qa deviation` sets it on the fix task it creates. The benchmark (`bench/`) counts it as a defect after merge |
-| `gate_check` | Written by `receive`, never by hand: ravenseat's own quick gate run on the delivered tip (`ok`, `kind`, `tip`, `at`, `ran`, and `evidence_at` when a green gate evidence entry for that exact tip was reused; `flaky` and `flaky_times` when a command was green only on the rerun, see [Flaky gate commands](#flaky-gate-commands)). The track's own `RESULT gates=` is informational only; a red `gate_check` opens the blocker `gate-red` and a fix round (see orchestration.md, The gate evidence) |
+| `gate_check` | Written by `receive`, never by hand: ravenseat's own quick gate run on the delivered tip (`ok`, `kind`, `tip`, `at`, `ran`, and `evidence_at` when a green gate evidence entry for that exact tip was reused; `flaky` and `flaky_times` when a command was green only on the rerun, see [Flaky gate commands](#flaky-gate-commands); `zeroTests` when a green command ran no test, see [Green, but no tests ran](#green-but-no-tests-ran)). The track's own `RESULT gates=` is informational only; a red `gate_check` opens the blocker `gate-red` and a fix round (see orchestration.md, The gate evidence) |
 | `wiring` | Written by `receive`, never by hand: the wiring spec's items, one per `WIRE <file> \| <what>` line in `track-result.md` (`id` W1, W2 ..., `file`, `text`, `status` open, done or rejected, `added`, and when closed `commit` or `reason`, `closed`, `by`). `set <id> done` and the done step of `merge` refuse while one is open; `wiring` closes them (see orchestration.md, "The wiring spec stops done") |
 
 `add` warns about a field that is neither in this table nor one the queue writes itself, and names the nearest known
@@ -225,7 +225,7 @@ Two-way sync, issues as the source of truth, webhooks and other trackers are not
   root before it reports DONE.
 - **`ravenseat receive <id>`** runs it first, through the shell, in the worktree that has the track branch checked out
   (`--done-cwd <folder>` overrides; with no such worktree receive stops and changes nothing). A PARTIAL delivery is
-  not checked. Green: receive goes on as before and saves `done_check` (`ok`, `exit`, `tip`, `step`, `at`).
+  not checked. Green: receive goes on as before and saves `done_check` (`ok`, `exit`, `tip`, `step`, `at`, and `zeroTests` when its output says no test ran).
   Red, or over the time budget: no review package for reviewers, the blocker `gate-red`, and a fix round
   (`ravenseat resume <id> --reason fix`, run by receive) whose brief carries the command and its last output lines. Exit 1.
 - **`ravenseat merge <id>`** runs it again unless the last green run was on the same branch tip with the same command. Red
@@ -666,6 +666,21 @@ flaky on this track, keeps `flaky` and `flaky_times` in `gate_check`, files a fi
 the base gate's, so a command that is flaky again counts on the same finding) and adds a `Flaky gate commands` section
 to `00-package.md`. A command that was flaky on the same track before still counts as green; the count says so.
 `gates.flakyRerun: false` turns the rerun off.
+
+### Green, but no tests ran
+
+A green gate that ran nothing is the quietest false green: a test filter that matches no test, or a runner that exits 0
+when it finds no files. `ravenseat gates` reads the tail of each green quick or full gate command, and `receive` the tail
+of a green done command, for the zero-test line of the common runners (vitest and jest "No test files found" or a
+`Tests 0` summary, mocha "0 passing", pytest "no tests ran" or "collected 0 items", go "no test files", cargo "running 0
+tests", rspec "0 examples", unittest "Ran 0 tests"). A positive count in the same tail ("12 passed", a go `ok` line)
+cancels it, so a run where only some files or packages have no tests says nothing.
+
+A hit is a caveat, never a stop: a `NOTE: green, but no tests ran` line from the gate run and one `NOTE <id>:` line at
+receive, `zero_tests` in the gate evidence entry, `zeroTests` (which gate, which runner, which signal) in `gate_check`
+or `done_check`, a `Green, but no tests ran` section in `00-package.md`, and a small neutral "no tests ran" badge on
+the card in Review and Built with a `Tests` fact in the panel. There is no setting: it only adds text (a docs-only
+task can be green with no tests, and the owner decides what it means), and nothing here can stop work.
 
 ### Reuse and scope notes
 
