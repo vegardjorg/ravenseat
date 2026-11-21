@@ -309,6 +309,17 @@ building on it". Set it with `ravenseat add ... --risk-first "..."` or `ravensea
 removes it); it is locked after the start like `acceptance`. Setting `mission.riskFirst` (on by default) to false turns the block off. Without the
 field (and outside a zone) the mission is unchanged.
 
+### Checks before a task starts
+
+`add` and again `start` / `fill` print one WARNING line per task when something is cheap to fix now and expensive
+after a track: a repo path the mission names that the task does not own, share or read (at most five named, plus "and
+N more"; only real paths with an extension or in the tree, never links or prose), a K, D or D+ task with no
+`owned_files`, and a D or D+ task without `content_min`. Such a task is stored with `content_min: null`: the estimate
+still counts 30 minutes for planning, and `show`, `info`, `start`, `fill` and the board say "size not set". At
+`receive`, an `ownerQuestions=<n>` on the RESULT line that does not match the items under the report's owner question
+heading gives one NOTE. None of these ever stops a task; each has its own `planChecks.*` setting (all on). Lite mode
+skips the two ownership checks.
+
 ## Everyday commands
 
 | Command | What it does |
@@ -1253,6 +1264,8 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 | `triage.minAgeDays`, `triage.agentAdded`, `triage.maxPerFill`, `triage.askAgainMin` | `3`, `true`, `3`, `60` | Intake triage before a task starts: tasks added or last edited this many days ago (`null` = off) and agent-added tasks get a `triage` verdict first (`ravenseat triage`); at most this many steps per fill, not asked again within this many minutes. Off with `ravenseat helpers off triage` and in lite mode (see orchestration.md) | Advanced, Full mode only |
 | `planReview.mode`, `planReview.classes` | `"advisory"`, `["D+"]` | The plan review before a risky task (a class in the list, or a task in an accepted sensitive zone): a fixed five-point checklist on the triage's step, notes with `file:line` into the mission. `block` makes an `ask` an owner question before the start (off by default, it stops work); `off` turns it off ([plan review](#plan-review-before-a-risky-task)) | Advanced |
 | `mission.riskFirst` | `true` | A task's `risk_first` is checked first in the track, which stops with PARTIAL and one owner question if it fails; a zone task without one is told to prove the choice can be reversed. The block appears only when it applies ([riskiest assumption](#riskiest-assumption-first)) | Advanced |
+| `planChecks.missionPaths`, `planChecks.emptyOwnership`, `planChecks.sizeNotSet` | `true`, `true`, `true` | The checks before a task starts, each one line at add and start and never a stop: paths the mission names outside the task's files, a K/D/D+ with no `owned_files`, a D/D+ without `content_min` ("size not set") ([checks before a task starts](#checks-before-a-task-starts)) | Advanced, Full mode only |
+| `planChecks.ownerQuestionCount` | `true` | At receive, an `ownerQuestions` count on the RESULT line that does not match the report's owner question section gives one NOTE ([checks before a task starts](#checks-before-a-task-starts)) | Advanced |
 | `proposals.autoAccept.enabled`, `proposals.autoAccept.classes`, `proposals.autoAccept.maxEstimateMin`, `proposals.autoAccept.maxValue` | `false`, `["K"]`, `60`, `null` | Auto-accept of agent proposals by the owner's rules (`ravenseat proposals`); the queue's own rules win; never D/D+, `waiting_on`, legal/owner labels, open legal points or protected paths. Switching it on weakens a guard: `ravenseat proposals auto on --i-understand --by owner` | Advanced, queue.json |
 | `architectureRules` | `[]` | Short rules copied into every mission | Advanced |
 | `attempts.reservationTtlMin` | `30` | A start reservation with no start for this long counts as expired | Advanced |

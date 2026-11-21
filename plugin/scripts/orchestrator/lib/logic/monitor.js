@@ -80,7 +80,8 @@ function infoView(o, { fixedBy = [], costEstimate = null } = {}) {
   out.push(...extra.links);
   if (costEstimate && Number.isFinite(costEstimate.usd))
     out.push(
-      `estimate: ${estimate(o)} min · ~$${costEstimate.usd} (` +
+      // A D or D+ without its own size counts 30 content minutes: said as a guess (PS-3, lib/startChecks.js).
+      `estimate: ${require('../startChecks.js').estimateText(o, estimate(o))} · ~$${costEstimate.usd} (` +
         (costEstimate.source === 'measured'
           ? `measured, ${costEstimate.basis}, n=${costEstimate.n})`
           : 'model, too little measured data)'),

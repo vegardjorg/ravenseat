@@ -27,6 +27,9 @@ import { inboxLineNow } from './planInbox.mjs';
 import { baseHealthLine } from './baseHealth.mjs';
 import { installInfo, showUpdateLine } from './update.mjs';
 
+// The checks before a task starts (PS-3): a D or D+ without its own size is marked where the size is shown.
+const SC = require('./lib/startChecks.js');
+
 /** "picked by X 3 h ago · 2 commits · OLD" for a picked task. */
 function pickLine(o) {
   const g = branchInfo(o.branch ?? branchFor(o.id));
@@ -171,7 +174,8 @@ export function cmdShow() {
         for (const o of f.tasks) {
           const r = rows.find((x) => x.o === o);
           const col = `    ${o.id.padEnd(12)} ${o.status.padEnd(8)} ${String(o.class ?? '?').padEnd(2)} ${`${L.estimate(o)}m`.padEnd(5)} ${costCol(o).padEnd(6)} `;
-          console.log(col + cut(o.title, WIDTH - col.length));
+          // A D or D+ without its own size (PS-3, lib/startChecks.js): the 30-minute estimate is a guess, so say it.
+          console.log(col + cut(`${SC.sizeNotSet(o) ? `[${SC.SIZE_NOT_SET}] ` : ''}${o.title}`, WIDTH - col.length));
           if (o.status === 'picked') under(pickLine(o), 6);
           else if (r.h.length) under(r.h.join(' · '), 6);
         }
@@ -191,7 +195,7 @@ export function cmdShow() {
         ...(rk.applies
           ? [(r ? (r.parked ? 'parked' : L.stepText(r).split(' ')[0]) : '').padEnd(7)]
           : []),
-        o.title,
+        `${SC.sizeNotSet(o) ? `[${SC.SIZE_NOT_SET}] ` : ''}${o.title}`,
       ];
       console.log(col.join(' '));
       if (o.status === 'picked') console.log(`${' '.repeat(13)}↳ ${pickLine(o)}`);

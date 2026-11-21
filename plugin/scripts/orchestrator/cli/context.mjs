@@ -157,6 +157,21 @@ export function readMission(o) {
     return { error: `${o.id}: could not find the mission file ${s}` };
   return { text: s, path: null };
 }
+/**
+ * The checks before a task starts (PS-1..3, lib/startChecks.js) for `add`, `start` and `fill`: WARNING lines only, never
+ * a stop. The mission is read from its file first, so the file's own path is not taken for a path the mission names.
+ * A path "exists" when it is in the tree we run in or in the main tree. `skip`: paths another line already names.
+ */
+export function startCheckLines(o, { skip = [] } = {}) {
+  const SC = require('./lib/startChecks.js');
+  const m = o?.mission == null ? { text: '' } : readMission(o);
+  const roots = [...new Set([ROOT, MAIN_TREE, GIT_ROOT])];
+  const exists = (p) => roots.some((r) => fs.existsSync(path.resolve(r, p)));
+  return SC.warningLines(
+    { ...o, mission: m.text ?? '' },
+    { config: CONFIG, exists, skip, ravenseat: CLI, lite: LM.isLite(CONFIG) },
+  );
+}
 /** The `mission` field for a new mission file: relative to the main tree (<dataFolder>/mission/<id>.md), otherwise absolute. */
 export function missionRef(file) {
   const rel = path.relative(MAIN_TREE, file);

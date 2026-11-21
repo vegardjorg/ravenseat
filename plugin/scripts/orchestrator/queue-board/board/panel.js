@@ -515,7 +515,7 @@ function drawPanel(fresh) {
       ),
       facts(
         'Class',
-        `${k.class ?? '?'} · value ${k.value} · ${k.status === 'proposed' && k.content_min == null ? 'size not set (counts as 30 min; Edit sets it)' : `${k.estimate} min`}${k.domain ? ` · ${k.domain}` : ''}`,
+        `${k.class ?? '?'} · value ${k.value} · ${(k.status === 'proposed' || k.class === 'D' || k.class === 'D+') && k.content_min == null ? 'size not set (counts as 30 min; Edit sets it)' : `${k.estimate} min`}${k.domain ? ` · ${k.domain}` : ''}`,
       ),
       col === 'queue' && k.space ? placementFacts(k, idButton) : [],
       col === 'queue' && !k.space

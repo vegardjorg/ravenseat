@@ -1148,6 +1148,22 @@ const SETTINGS = Object.freeze([
     'A task\'s risk_first (the assumption that would sink the plan) is checked first in the track, before other code; ' +
     'if it fails, the track stops with PARTIAL and one question for you. A task in a sensitive zone without one is told ' +
     'to prove the choice can be reversed. Off: no such block in the mission.'),
+  // PS-1..4 (roadmap 3c, plans/drift-vurdering-2026-11-21.md). Friction: one line per task at add and at start, only when
+  // the check finds something, and never a stop, so all four are on. Off: the line is gone and add behaves as before.
+  row('planChecks.missionPaths', 'review', 'onoff', 'Warn about paths the mission names',
+    'At add and start, a repo path the mission names that the task does not own, share or read gets one warning line ' +
+    '(at most five paths named). Only real paths count: a file with an extension or something in the tree, not links ' +
+    'or prose. Off: only a protected path is named, and the rest shows up as drift at the merge.',
+    { fullWhy: 'lite has no task ownership' }),
+  row('planChecks.emptyOwnership', 'review', 'onoff', 'Warn about a task with no files',
+    'At add and start, a K, D or D+ task with no owned_files gets a warning: nothing is promised, so the merge reports ' +
+    'no drift and parallel tracks are not kept off its files.', { fullWhy: 'lite has no task ownership' }),
+  row('planChecks.sizeNotSet', 'review', 'onoff', 'Say when a D task has no size',
+    'A D or D+ task added without content_min gets a warning and shows "size not set"; the estimate still counts 30 ' +
+    'minutes for planning. Off: add fills in 30 without a word, as before.', { fullWhy: 'lite has one task type (class K)' }),
+  row('planChecks.ownerQuestionCount', 'review', 'onoff', 'Check the owner question count',
+    'At receive, the ownerQuestions number on the track\'s RESULT line is compared with the items under its owner ' +
+    'question heading; a mismatch is one note, so a question the count left out is still read.'),
   row('proposals.autoAccept.enabled', 'review', 'onoff', 'Auto-accept proposals',
     'A proposal from an agent that fits the rules is approved by the queue itself, logged and can be undone.', {
       ...QUEUE,

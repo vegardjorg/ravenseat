@@ -20,7 +20,7 @@ import path from 'node:path';
 import {
   a, autoAcceptContext, autoAcceptIn, byName, CONFIG, CLI, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
   missionMovedJson, missionMovedLine, moveLongMission, namedIds, positional, PR, queueBranchId, read, readPlans, restoreArchived, undoHint, val, values, withLock, write,
-  require,
+  require, startCheckLines,
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
@@ -31,6 +31,8 @@ import { issueArg } from './issues.mjs';
 const FSRC = require('./lib/findingSources.js');
 // The task's short human summary (`description`): its stored form and the soft-limit WARNING (lib/taskDescription.js).
 const DESC = require('./lib/taskDescription.js');
+// The checks before a task starts (PS-1..3): the size a D or D+ task lacks is stored as null (lib/startChecks.js).
+const SC = require('./lib/startChecks.js');
 
 /**
  * Adds the data folder and the agents' worktrees to the repo's .gitignore on a fresh init, so a new user does not have to.
@@ -392,7 +394,9 @@ export function cmdAdd() {
       }
       const stored = {
         value: 5,
-        content_min: 30,
+        // A D or D+ without its own size is stored as null, not 30 (PS-3, lib/startChecks.js): the estimate still counts
+        // 30 for planning, but the views can then say the size is a guess. planChecks.sizeNotSet false: 30 as before.
+        content_min: SC.setup(CONFIG).sizeNotSet && SC.sizeNotSet(n) ? null : 30,
         migr_tens: 0,
         depends_on: [],
         waiting_on: [],
@@ -528,6 +532,11 @@ export function cmdAdd() {
       console.log(
         `WARNING: ${n.id} names the protected path ${named} without owning it. If the task is to change it, add it with --files (ravenseat edit ${n.id} --files <files>): the agent will otherwise refuse, or the merge guard stops the change.`,
       );
+    // The checks before a task starts (PS-1..3, lib/startChecks.js): named paths it does not own, empty ownership on
+    // K/D/D+, a D/D+ without a size. Warnings only; start and fill say them again. The protected path has its own line.
+    // Not for a track's proposal: a track needs only id, title and mission, and the owner decides the rest on approval;
+    // the lines come at the start, where the orchestrator reads them.
+    if (!track) for (const l of startCheckLines(n, { skip: named ? [named] : [] })) console.log(l);
   }
   // Better ownership from the start: files earlier tasks changed together with the new task's files (lib/ownershipHints.js).
   {
