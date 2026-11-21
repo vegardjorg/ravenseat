@@ -423,7 +423,10 @@ function conditionText(h, config = null) {
   if (h.whenControlsMissing?.length) parts.push(`class ${h.whenControlsMissing.join(', ')} when the project has no CI config or no gates`);
   if (h.plan) parts.push('the task has a plan entry');
   if (h.minMissionItems) parts.push(`the mission has ${h.minMissionItems} or more numbered points`);
-  return parts.length ? `When: ${parts.join(' or ')}.` : 'When: no condition set, so it never runs.';
+  // DR-3: the acceptance lift also works while the helper is off, so it is said apart.
+  const also = h.acceptance ? ' Also, even while off: a task with acceptance criteria.' : '';
+  if (!parts.length) return also ? `When:${also}` : 'When: no condition set, so it never runs.';
+  return `When: ${parts.join(' or ')}.${also}`;
 }
 
 const round = (x, d = 2) => {

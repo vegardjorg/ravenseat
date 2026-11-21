@@ -40,6 +40,12 @@ describe('acceptance criteria lift the gap reviewer in', () => {
     expect(gap({ class: 'K', acceptance: ['One'] }, conf({ helpers: { 'reviewer-gap': { acceptance: false } } }))).toBe(undefined);
   });
 
+  it('the helper\'s condition text says it (the Helper agents tab, ravenseat helpers)', () => {
+    const h = H.helperSetup(conf())['reviewer-gap'];
+    expect(H.conditionText(h)).toMatch(/Also, even while off: a task with acceptance criteria\.$/);
+    expect(H.conditionText(H.helperSetup(conf())['reviewer-docs'])).not.toMatch(/acceptance/);
+  });
+
   it('adds the reason once when the helper already runs for another reason', () => {
     const c = conf({ helpers: { 'reviewer-gap': { enabled: true } } });
     const r = H.reviewersForTask({ class: 'K', plan: 'PL-3', acceptance: ['One'] }, { config: c }).filter((x: any) => x.type === 'reviewer-gap');
