@@ -155,6 +155,21 @@ const OW = require('./lib/ownerWait.js');
 const CATALOG = require('./lib/catalog.js');
 // "Not building" in Decisions (roadmap 0f, lib/notBuilding.js boardEntries): the catalog's entries, read only.
 const NOT_BUILDING = require('./lib/notBuilding.js');
+// The sensitive zones a task meets (PG-5, lib/catalogZones.js): the badge on the card and the panel fact.
+const ZONES = require('./lib/catalogZones.js');
+
+/**
+ * The accepted zones per task for the board (PG-5), or null when zones.detect is off or no zone exists. The board reads
+ * no mission files: the inline mission and the description stand in for the mission text.
+ */
+function zonesNow(fresh) {
+  const zf = ZONES.zonesOnDisk({ root: MAIN_TREE, dataFolder: FOLDER, cfg: fresh });
+  if (zf.empty) return null;
+  return (o) => {
+    const inline = typeof o.mission === 'string' && !/\.md$/i.test(o.mission.trim()) ? o.mission : '';
+    return zf(o, { missionText: [inline, o.description ?? ''].filter(Boolean).join('\n') });
+  };
+}
 // Cancel, decline and edit one task from the detail panel (the rules; queue.mjs cancel / edit write).
 const TE = require('./lib/queueTaskEdit.js');
 // The base gate's verdict (lib/baseHealth.js; ravenseat merge writes base-health.json, the board only reads it).
@@ -991,9 +1006,13 @@ function state() {
   // The "Not building" list (roadmap 0f): the decisions folder's names and times and the owner's record are the key,
   // so a new draft or an accept shows on the next poll.
   const notBuilding = notBuildingNow();
+  // zones.detect (PG-5): read fresh and part of the key. The zones themselves live in the decisions folder, whose names,
+  // times and the owner's record are already notBuilding.key.
+  const zonesDetect = ZONES.zonesSetup(fresh).detect;
   if (
     quick &&
     quick.notBuildingKey === notBuilding.key &&
+    quick.zonesDetect === zonesDetect &&
     quick.listening === listening &&
     quick.panelMode === panelMode &&
     quick.captureAnswers === captureAnswers &&
@@ -1030,6 +1049,7 @@ function state() {
   const data = {
     ...T.board(showQueue, {
       captureAnswers,
+      zonesFor: zonesNow(fresh),
       // The Blocked column (board.blockedColumn): the server moves the stuck tasks there, so no card is in two columns.
       blockedColumn: KK.boardSwitches(CONFIG, queue).blockedColumn,
       uncommitted: g.uncommitted,
@@ -1125,6 +1145,7 @@ function state() {
     listening,
     panelMode,
     captureAnswers,
+    zonesDetect,
     notBuildingKey: notBuilding.key,
     updateKey,
     baseKey,
@@ -1252,6 +1273,19 @@ function boardSections(queue, log, stat, cap) {
     } catch {
       findings = []; // error-ignored: no finding log yet, or a data folder without one
     }
+    // PG-6 (lib/planPostCheck.js): the built plans against their estimates, with plans.postCheck on. The success
+    // measure is read through the /api/doc guard (queueBoard.readDocument), only for a plan with a decision source.
+    const fresh = KK.config({ fresh: true });
+    let postCheck = null;
+    if (require('./lib/planPostCheck.js').postCheckSetup(fresh).on) {
+      const reg = flowPlans();
+      const readDoc = (p) => {
+        const r = T.readDocument(SOURCE_ROOT, p, { fs, path });
+        return r.ok ? r.text : null;
+      };
+      if (reg?.entries?.length)
+        postCheck = { entries: reg.entries, measureFor: (e) => require('./lib/planPostCheck.js').decisionMeasure(e, readDoc) };
+    }
     const out = SX.sections({
       queue,
       rows: log.rows,
@@ -1261,13 +1295,13 @@ function boardSections(queue, log, stat, cap) {
       observed: jsonOrNull(RATE_FILE),
       cap: cap.cap,
       statistics: stat,
+      plans: postCheck,
     });
     const from = Date.now() - S.WINDOW_DAYS * 86_400_000;
     out.cost.context.source = cap.source;
     out.cost.context.compactions = (log.compacts ?? []).filter((c) => Date.parse(c.time) >= from).length;
     // Which settings are on now, for the "Does this look bad?" lines (no figure, only the advice text).
-    const cfg = KK.config({ fresh: true });
-    out.settings = { machineSampleMin: require('./lib/machineSample.js').minutesFrom(cfg) };
+    out.settings = { machineSampleMin: require('./lib/machineSample.js').minutesFrom(fresh) };
     return out;
   } catch (e) {
     console.error(`the statistics sections failed: ${e?.message ?? e}`);

@@ -1056,6 +1056,59 @@ function costSectionOf(d) {
   return statSection('cost', 'Cost and tokens', ...list);
 }
 
+/**
+ * "Did the plans hold?" (PG-6, lib/planPostCheck.js): each built plan's size estimate against its tasks and fix rounds,
+ * the estimate against the measured time, the cost and the owner's success answer, then the record per size. Display
+ * only; null (nothing drawn) without built plans or with plans.postCheck off.
+ */
+function plansFollowUp(p) {
+  if (!p?.rows?.length) return null;
+  const hours = (m) => (m == null ? '-' : duration(m));
+  const success = (r) => (r.question ? r.success ?? 'not answered' : '-');
+  return el(
+    'section',
+    { class: 'stat-card', 'aria-labelledby': 'plans-stat-title' },
+    el('h4', { id: 'plans-stat-title', class: 'stat-card-title', text: 'Did the plans hold?' }),
+    scrollBox(
+      metricsTableOf(
+        ['Plan', 'Size', 'Estimate', 'Tasks + fix rounds', 'Estimated time', 'Measured time', 'Cost', 'Success'],
+        p.rows.map((r) => [
+          r.id,
+          r.size ?? '-',
+          r.estimate_tasks == null ? 'no estimate' : `${r.estimate_tasks} tracks`,
+          `${r.tasks} + ${r.fix_rounds}`,
+          hours(r.estimate_min),
+          hours(r.measured_min),
+          r.usd == null ? '-' : usd(r.usd),
+          success(r),
+        ]),
+      ),
+    ),
+    p.accuracy?.length
+      ? scrollBox(
+          metricsTableOf(
+            ['Size', 'Plans', 'Estimate', 'Actual on average', 'Time against estimate', 'Met, partly, not met'],
+            p.accuracy.map((g) => [
+              g.size ?? 'no size',
+              counts(g.plans),
+              g.estimate_tasks == null ? 'no estimate' : `${g.estimate_tasks} tracks`,
+              `${counts(g.actual_avg, 1)}${g.ratio == null ? '' : ` (${counts(g.ratio, 2)} ×)`}`,
+              g.time_ratio == null ? '-' : `${counts(g.time_ratio, 2)} ×`,
+              g.asked ? `${g.met}, ${g.partly}, ${g.not_met} of ${g.asked}` : '-',
+            ]),
+          ),
+        )
+      : null,
+    el('p', {
+      class: 'graph-remark',
+      text:
+        `${p.total} built plan(s), the last finished first. Actual is the tasks plus their fix rounds; 1.00 × is as ` +
+        'estimated. A plan with a decision section asks once whether its success measure was met.',
+    }),
+    adviceLine('Far over the estimate for one size again and again: size those plans one step up, or split them.', ['plans.postCheck']),
+  );
+}
+
 /** Section B: does the queue shrink, how long does a task take, do the estimates hold, what stops work. */
 function flowSectionOf(d) {
   const n = d.keyFigures;
@@ -1119,6 +1172,7 @@ function flowSectionOf(d) {
     'flow',
     'Flow',
     el('div', { class: 'graphs' }, shrink, time),
+    plansFollowUp(d.sections?.plans),
     blockerTable(d.blockers),
     // The batch queue is work status, not statistics: one quiet line here instead of a tile.
     n.batchQueue?.count

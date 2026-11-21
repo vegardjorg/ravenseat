@@ -7,8 +7,8 @@
 // (2) the kind, the paths, the applies and the keywords are in the fingerprint (a track cannot widen or narrow a zone
 // after the owner's accept); (3) zonesFor returns only accepted zones, each with why it matched: files (owned_files or
 // shared_patch meet its paths), category (its applies) or keyword (a whole word of the title or the mission, any case);
-// (4) a zone never reaches the mission excerpt or the board's catalog groups (those are later PG-5 work); (5) an empty
-// catalog gives no zones.
+// (4) a zone never reaches the mission excerpt; on the board it is only in its own catalog group (PG-5,
+// zoneBoard.test.ts); (5) an empty catalog gives no zones.
 // Pure.
 // =============================================================
 import { describe, expect, it } from 'vitest';
@@ -129,9 +129,9 @@ describe('zonesFor', () => {
     expect(Z.zonesFor({ id: 'T9', title: 'RLS', class: 'D+' }, null, {})).toEqual([]);
   });
 
-  it('a zone never reaches the mission excerpt or the board groups', () => {
+  it('a zone never reaches the mission excerpt, and is only in the zone group on the board', () => {
     const t = { id: 'T1', title: 'x', class: 'D+', owned_files: ['src/auth/session.ts'] };
     expect(X.excerpt(cat, t, { ledger })).toBe(null);
-    expect(C.boardGroups(cat, ledger)).toEqual([]);
+    expect(C.boardGroups(cat, ledger).map((g: any) => g.kind)).toEqual(['zone']);
   });
 });

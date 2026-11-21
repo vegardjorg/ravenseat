@@ -1523,6 +1523,25 @@ const SETTINGS = Object.freeze([
     'part and the rest waiting on one checkpoint question, which opens when the first part is done (Continue, Adjust ' +
     'or Stop). offer (default): offered, you choose per plan. always: without asking. off: all tasks start as usual.',
     { choices: ['offer', 'always', 'off'] }),
+  // PG-5 (lib/catalogZones.js). Friction: none while no zone is accepted (Ravenseat ships none; `catalog zones` only
+  // proposes). With accepted zones: one NOTE line at add and a card badge, never a stop. On by default for that reason.
+  row('zones.detect', 'plans', 'onoff', 'Match tasks against sensitive zones',
+    'Tasks are matched against the zones you accepted in the catalog (data model, public contracts, sign-in, keys): ' +
+    'a NOTE line at add, a badge on the card, and the plan gate, plan review and riskiest assumption cover them. It ' +
+    'does nothing until a zone is accepted. Off: no task is ever in a zone.'),
+  // PG-6 (lib/planPostCheck.js). Friction: one Statistics row per built plan (display), and for a plan with a decision
+  // section one owner question that holds no task, so nothing waits on it. On by default: it is the only way the
+  // estimates learn, and the question asks for one click.
+  row('plans.postCheck', 'plans', 'onoff', 'Follow up built plans',
+    'When every queue task of a plan is done: a Statistics row (size estimate against the tasks and fix rounds, ' +
+    'estimate against the measured time, cost), and for a plan with a decision section one question "Success measure: ' +
+    '... Met, partly, not met?" that holds no task. Off: neither.'),
+  // PG-7 (lib/devilsAdvocate.js). Friction: one agent run (tokens) per use and a few minutes of reading, so it is off by
+  // default; when on it is only offered for XL or zone plans, never run without a yes.
+  row('plans.devilsAdvocate', 'plans', 'onoff', 'Devil\'s advocate for big plans',
+    'On: /plans offers a challenger run for an XL or sensitive-zone plan. It reads only the decision section and the ' +
+    'code (not the investigation) and adds the three strongest objections and the cheapest test under the section. ' +
+    'Off (default): no offer.'),
   // PG-8 (lib/planGate.js largeBatchLine). Friction: one WARNING line at add, never a stop. Default 5: the same size the
   // shape-first question starts at (shape.threshold), so a batch that skipped /add-to-queue still hears it once.
   row('add.largeBatchWarn', 'plans', 'integer', 'Warn about a large unplanned batch',

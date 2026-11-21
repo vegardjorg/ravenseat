@@ -466,6 +466,13 @@ const STANDARD = Object.freeze({
   //                     opens when stage 1 is done. offer (default): /add-to-queue offers it as the recommended answer
   //                     for a gated plan; always: stages a gated plan without asking; off: queues it all, as before.
   //                     The rest waits for one owner answer, which stops work, so it is never applied without a choice.
+  //   postCheck         PG-6 (lib/planPostCheck.js): a plan whose queue tasks are all done gets a row in Statistics
+  //                     (size estimate against the tasks and fix rounds, estimate against the measured time, the cost)
+  //                     and, only when its decision section has a success measure, one owner question PC-<plan>
+  //                     ("Met, partly, not met?") that holds no task. true (default); false: neither.
+  //   devilsAdvocate    PG-7 (lib/devilsAdvocate.js): /plans offers a challenger run on the decision section of an XL or
+  //                     zone plan (three objections and the cheapest test, appended under the section). false
+  //                     (default): no offer; it costs one agent run per use, and the premortem lines come first.
   plans: {
     startView: 'roadmap',
     roadmapLayout: 'auto',
@@ -477,6 +484,8 @@ const STANDARD = Object.freeze({
     decisionNote: true,
     readyCheck: 'advisory',
     checkpoint: 'offer',
+    postCheck: true,
+    devilsAdvocate: false,
   },
   // The large batch line at add (PG-8, lib/planGate.js largeBatchLine): `ravenseat add` with at least largeBatchWarn
   // tasks that have no plan entry (or fewer, whose estimate is over a week at the measured pace) prints one WARNING to
@@ -487,6 +496,11 @@ const STANDARD = Object.freeze({
   // smallest version first, or all now. nudge: offer (default: the question, never a stop), always-shape (shape
   // without asking first; the user can still decline) or off (as before). `ravenseat plan shape --tasks <n>` prints it.
   shape: { nudge: 'offer', threshold: 5 },
+  // Sensitive zones (PG-5, lib/catalogZones.js): detect (on) matches tasks against the zones the owner accepted in the
+  // catalog (kind zone) for the plan gate, the plan review, the riskiest assumption, a NOTE line at add and a card
+  // badge. It only raises attention and does nothing while no zone is accepted (Ravenseat ships none; `catalog zones`
+  // proposes some). Off: no task is ever in a zone.
+  zones: { detect: true },
   // Read guard (hook-read-guard.mjs): in addition to the built-in lists.
   readGuard: {
     agentTypes: [], // more agent types the guard applies to (track, track-d and the reviewers are already included)
@@ -1083,6 +1097,10 @@ function plansView(cfg = config()) {
     readyCheck: ['off', 'advisory', 'block'].includes(own.readyCheck) ? own.readyCheck : std.readyCheck,
     // PG-4 (lib/checkpoint.js checkpointSetup has the same fallback)
     checkpoint: ['off', 'offer', 'always'].includes(own.checkpoint) ? own.checkpoint : std.checkpoint,
+    // PG-6 (lib/planPostCheck.js postCheckSetup has the same fallback): on unless a real false
+    postCheck: typeof own.postCheck === 'boolean' ? own.postCheck : std.postCheck,
+    // PG-7 (lib/devilsAdvocate.js setup): only a real true turns it on, since a run costs an agent
+    devilsAdvocate: own.devilsAdvocate === true,
   };
 }
 

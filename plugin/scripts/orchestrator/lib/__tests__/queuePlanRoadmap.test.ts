@@ -402,8 +402,13 @@ describe('the settings: plans.* in queue.config.json (queueConfig.plansView)', (
       readyCheck: 'advisory',
       // PG-4: staged queueing offered for gated plans, never applied without a choice
       checkpoint: 'offer',
+      // PG-6: built plans get the follow-up question; PG-7: the devil's advocate costs an agent, so off
+      postCheck: true,
+      devilsAdvocate: false,
     });
     expect(KK.plansView({})).toEqual(KK.STANDARD.plans);
+    expect(KK.plansView({ plans: { postCheck: false, devilsAdvocate: 'yes' } })).toMatchObject({ postCheck: false, devilsAdvocate: false });
+    expect(KK.plansView({ plans: { devilsAdvocate: true } }).devilsAdvocate).toBe(true);
     expect(KK.plansView({ plans: { checkpoint: 'always' } }).checkpoint).toBe('always');
     expect(KK.plansView({ plans: { checkpoint: 'maybe' } }).checkpoint).toBe('offer');
   });
@@ -422,6 +427,8 @@ describe('the settings: plans.* in queue.config.json (queueConfig.plansView)', (
       decisionNote: true,
       readyCheck: 'advisory',
       checkpoint: 'offer',
+      postCheck: true,
+      devilsAdvocate: false,
     });
     expect(
       KK.plansView({ plans: { startView: 'x', roadmapLayout: 'tiles', roadmapFoldAfter: -3, leadFromDocument: 'yes' } }),

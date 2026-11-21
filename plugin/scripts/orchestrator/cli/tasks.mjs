@@ -20,7 +20,7 @@ import path from 'node:path';
 import {
   a, autoAcceptContext, autoAcceptIn, byName, CONFIG, CLI, die, edit, editLogged, FILE, FOLDER, FX, KK, L, lastEntry, LM, MIGR, P,
   missionMovedJson, missionMovedLine, moveLongMission, namedIds, positional, PR, queueBranchId, read, readPlans, restoreArchived, undoHint, val, values, withLock, write,
-  require, startCheckLines,
+  require, startCheckLines, readMission,
 } from './context.mjs';
 import { highestMigr } from './tracks.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
@@ -468,6 +468,9 @@ export function cmdAdd() {
   // A large batch with no plan entry (PG-8, lib/planGate.js, add.largeBatchWarn): one WARNING line that backs up the
   // shape-first question when /add-to-queue was not used. Never for a track's proposals; never stops the add.
   const largeBatch = track ? null : largeBatchWarning(newOnes);
+  // A task in an accepted sensitive zone (PG-5, lib/catalogZones.js noteLine, zones.detect): one NOTE line each. Advice
+  // only; nothing is read while no zone is accepted.
+  const zoneNotes = zoneNoteLines(newOnes);
   // --answer-json (the board and scripts): one JSON line instead of the text, with the link problems in it.
   if (a.includes('--answer-json')) {
     console.log(
@@ -482,6 +485,7 @@ export function cmdAdd() {
         ...(descriptionWarning.length ? { descriptionWarning } : {}),
         ...(notBuilding.length ? { notBuilding } : {}),
         ...(largeBatch ? { largeBatch } : {}),
+        ...(zoneNotes.length ? { zones: zoneNotes } : {}),
       }),
     );
     return;
@@ -524,6 +528,7 @@ export function cmdAdd() {
   for (const line of descriptionWarning) console.log(line);
   for (const line of notBuilding) console.log(line);
   if (largeBatch) console.log(largeBatch);
+  for (const line of zoneNotes) console.log(line);
   // Owning a protected path is what lets a change there past the merge guard, so it should not happen unnoticed.
   const protectedPaths = autoAcceptContext(read()).protectedPaths;
   for (const n of newOnes) {
@@ -564,6 +569,30 @@ export function cmdAdd() {
       `WARNING: question without text (shown without text in "Waiting on you"): ${added.withoutText.join(', ')}. ` +
         'Add them in "question" in the add file, or: ravenseat question <id> --text "..." --type <type>.',
     );
+}
+
+/**
+ * The PG-5 NOTE lines for the tasks just added: one per task in an accepted sensitive zone (lib/catalogZones.js). The
+ * catalog is read once; a mission file is read only when a zone exists. A failure costs the lines, never the add.
+ */
+function zoneNoteLines(added) {
+  try {
+    const Z = require('./lib/catalogZones.js');
+    const zf = Z.zonesOnDisk();
+    if (zf.empty) return [];
+    const out = [];
+    const tasks = read().tasks ?? [];
+    for (const n of added) {
+      const stored = tasks.find((x) => x.id === n.id) ?? n;
+      const m = readMission(stored);
+      const line = Z.noteLine(n.id, zf(stored, { missionText: m.error ? null : m.text }));
+      if (line) out.push(line);
+    }
+    return out;
+  } catch {
+    // error-ignored: the note is advice; the tasks are already added
+    return [];
+  }
 }
 
 /**

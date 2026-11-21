@@ -288,7 +288,17 @@ function footerFor(k, col) {
     if (k.zero_tests) footer.push(zeroTestsBadge(k));
     if (k.done) footer.push(el('span', { text: `done ${age(k.done)} ago` }));
   }
+  // PG-5: a task in an accepted sensitive zone, on every open card (the server gives none for a done one).
+  if (k.zone) footer.push(zoneBadge(k.zone));
   return footer;
+}
+
+/**
+ * "Sensitive zone" or "May touch a zone" (PG-5, lib/catalogZones.js boardZone): a neutral badge, since nothing is wrong
+ * yet. It says a change here is expensive to undo; the tooltip names the zone, why it matched and its reason.
+ */
+function zoneBadge(z) {
+  return el('span', { class: 'badge zone-badge', text: z.badge, title: z.title });
 }
 
 /**

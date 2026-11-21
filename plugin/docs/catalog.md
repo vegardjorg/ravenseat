@@ -208,6 +208,7 @@ A Prefer line stays the short form for small things. `catalog check` only asks t
 | `catalog accept <D-id> --by owner` | The owner accepts a design choice: `status: accepted`, `accepted_by` and `accepted` in the file, and the owner's record in the data folder. A choice with `supersedes` sets the old one to `superseded` in the same step (refused, with nothing changed, when the old one is not there). Refused from a track worktree whatever `--by` says |
 | `catalog propose --title "..." --invariant "..." --paths "<glob>[,<glob>]" [--applies class:D,label:visual] [--kind design\|stack\|dependency] [--except "<glob>"] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--from-answer <question>] [--json]` | Writes the next free id (one above the highest in the file names and the owner's record) as `status: proposed` in the main tree, then runs `catalog check` and prints what it says about the new choice. `--kind` and `--except` write those fields; `--applies` writes [applies](#by-category) (`dimension:value` items, the same dimension again is OR, and then `--paths` may be left out); with `--kind stack`, `--uses`, `--alternatives` and `--stack` write a [stack entry](#stack-entries). With `--supersedes` and no `--paths` or `--plan`, it takes them from the old choice. Writes nothing when the choice would be broken, never over a file. Refused from a track worktree |
 | `catalog find <word...> [--json]` | Searches the code index, the reuse rows, the design choices and the prefer lines. Every word must match; at most ten short lines. Builds the code index first (from the cache) |
+| `catalog zones [--write] [--json]` | Lists the [sensitive zones](#sensitive-zones) the tree suggests and the catalog does not cover. `--write` writes each as a proposed zone in the main tree (refused from a track); none counts before `catalog accept` |
 | `catalog index [--json]` | Builds or refreshes the code index and says how many files it read and how many came from the cache. Names a `@shared` tag that is not on an export |
 
 A queue agent may run `catalog show`, `catalog check` and `catalog find` (the push guard allows them), and nothing
@@ -569,9 +570,15 @@ reason: Users and other services rely on the session format; changing it means a
 - **What reads it:** a task is in a zone when its `owned_files` or `shared_patch` meet the zone's paths (`files`), its
   `applies` matches (`category`), or a keyword is in its title or mission (`keyword`). The pre-start plan review
   (`planReview.mode`, [queue.md](queue.md#plan-review-before-a-risky-task)) counts a zone task as risky, and a zone task
-  without `risk_first` is told to prove first that the choice can be reversed.
-- Later work (not built yet): a starter scan that proposes zones, a card badge, `zone_skip` and an owner's yes before
-  an irreversible zone change (that one off by default, since it stops work).
+  without `risk_first` is told to prove first that the choice can be reversed. `ravenseat add` prints one NOTE line
+  per zone task, and the card gets a **Sensitive zone** badge (**May touch a zone** for a keyword alone) with the zone
+  and its reason as a fact in the detail panel. Decisions lists the zones under **Sensitive zones**.
+- **The starter scan:** `ravenseat catalog zones` lists candidates from the tracked files (the migrations folder, public
+  contracts such as OpenAPI, GraphQL, proto, JSON schemas and a published package's entry points, sign-in folders,
+  encryption code). `--write` writes them as proposed zones (never from a track). It never adds one by itself, and a
+  proposed zone changes nothing until you accept it.
+- **The switch:** `zones.detect` (on) turns all of the above off when false.
+- Not built: `zone_skip` and an owner's yes before an irreversible zone change.
 
 ## Friction
 
@@ -592,7 +599,7 @@ Anything that can stop work is off by default, with one deliberate exception: th
 | Versions from the lockfiles | A read of the lockfile; a broken or unknown one gives no versions and never an error | No setting: local metadata only, it decides nothing |
 | `## Dependencies` table | `catalog check` errors on a row without four cells and warns on a docs cell that is not a link, over 40 rows, or a row in no manifest. `catalog init` writes rows only into a new `stack.md` | No setting: a check on request and a draft that binds nothing |
 | Stack card on the board | None: "Uses" and "Chosen over" lines, display only | No setting |
-| Sensitive zones | None while there are none (the default). An accepted zone marks a task as risky for the plan review, which is advisory by default | No setting of its own: data the owner accepts; what reads it follows `planReview.mode` and `mission.riskFirst` |
+| Sensitive zones | None while there are none (the default). An accepted zone marks a task as risky for the plan review, which is advisory by default, and gives a NOTE line at add and a card badge | `zones.detect`, on; what reads it follows `planReview.mode` and `mission.riskFirst`. `catalog zones` only proposes |
 | Stack choice in the dependency notes | A CATALOG line at receive for a package an accepted stack entry chose against; never a stop | Follows `scopeNotes.dependencies` |
 | Agent access | `catalog show`, `catalog check` and `catalog find` allowed for queue agents | No setting |
 | Code index at receive and in the missions | One git listing per tree and a read of each changed file (the first build of about 300 files took under half a second here); a file in the data folder; more lines in the excerpt, inside the same cap. It stops nothing | `catalog.index`, off: the plan puts it on the opt-in list, since it builds and stores a file and its worth grows with the project |

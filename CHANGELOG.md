@@ -6,9 +6,11 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **Sensitive zones show at add and on the card, `catalog zones` proposes some, built plans are compared with their
+  estimate, and a big plan can get a devil's advocate.** `zones.detect` on, `plans.postCheck` on, `plans.devilsAdvocate` off.
 - **The README shows four incognito AI reviews of Ravenseat, for fun.**
-- **A large plan can be queued in stages: stage 1 now, the rest waiting on one checkpoint question that opens when
-  stage 1 is done; a large unplanned batch at `add` gets one warning line.** `plans.checkpoint` `offer`, `add.largeBatchWarn` `5`.
+- **A large plan can be queued in stages: the first part now, the rest waiting on one checkpoint question that opens
+  when the first part is done; a large unplanned batch at `add` gets one warning line.** `plans.checkpoint` `offer`, `add.largeBatchWarn` `5`.
 - **A large request is offered shaping first, a large plan gets a one-page decision section, and setting it to ready
   without one warns.** `shape.nudge` `offer`, `plans.decisionNote` on, `plans.readyCheck` `advisory`.
 - **`add` and `start` warn about paths the mission names outside the task's files, a K/D/D+ task with no files and a
