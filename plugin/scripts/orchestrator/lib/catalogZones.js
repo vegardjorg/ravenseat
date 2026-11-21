@@ -5,8 +5,13 @@
 // zone is a catalog entry of kind `zone` (lib/catalog.js): paths and/or applies and/or keywords, and a one-line reason.
 // It binds no code; it only raises attention. Ravenseat ships no zones: the set is empty until the owner accepts one, so
 // a project without zones behaves exactly as before. The readers: the pre-start plan review (DR-1, lib/planReview.js)
-// counts a zone hit as a risky task, and the riskiest assumption (DR-2) gets a default text for a zone task. The
-// starter scan, the board card, zone_skip and the owner's yes are later PG-5 work and not here.
+// counts a zone hit as a risky task, and the riskiest assumption (DR-2) gets a default text for a zone task. The rest of
+// PG-5 reads it too: one NOTE line per task at add (noteLine), and the card badge and the panel fact on the board
+// (boardZone). The starter scan that proposes zones is lib/zoneScan.js. zone_skip and the owner's yes before building
+// (zones.requireYes) are not built yet.
+//
+// The switch: zones.detect (zonesSetup, on by default). Off: zonesOnDisk gives no zones, so every reader above is as
+// before. On costs nothing while no zone is accepted.
 //
 // The match (only zones the owner accepted, lib/catalog.js effectiveStatus):
 //   files     the task's owned_files or shared_patch meet the zone's paths (the excerpt's matcher, except honoured)
@@ -85,6 +90,50 @@ function hitWords(h) {
   return `${h.id}${h.title ? ` ${h.title}` : ''} (${h.why}: ${h.detail})`;
 }
 
+/** zones.detect from the configuration: on unless it is false. */
+function zonesSetup(cfg = {}) {
+  const z = cfg?.zones != null && typeof cfg.zones === 'object' && !Array.isArray(cfg.zones) ? cfg.zones : {};
+  return { detect: z.detect !== false };
+}
+
+/** A keyword alone gives the softer "may touch" (the spec: keywords alone are a hint, files and categories are a hit). */
+const firm = (hits) => (hits ?? []).filter((h) => h.why !== 'keyword');
+
+/**
+ * The NOTE line at add for one task, or null without a hit. Advice only: the task is added either way.
+ * "NOTE: T-1 is in sensitive zone D-0001 Sign-in (files: src/auth/a.ts): <reason>" or "... may touch ...".
+ */
+function noteLine(id, hits) {
+  if (!hits?.length) return null;
+  const word = firm(hits).length ? 'is in' : 'may touch';
+  const one = hits.length === 1;
+  // The reason usually ends with its own full stop; the line adds one, so drop the reason's.
+  const what = hits
+    .map((h) => `${hitWords(h)}${one && h.reason ? `: ${String(h.reason).replace(/[.\s]+$/, '')}` : ''}`)
+    .join('; ');
+  return (
+    `NOTE: ${id} ${word} sensitive ${one ? 'zone' : 'zones'} ${what}. A change here is expensive to undo: ` +
+    'the plan review and the riskiest assumption cover it before the start (zones.detect).'
+  );
+}
+
+/**
+ * The board's words for a task's zone hits, or null: { badge, title, fact, ids }. badge "Sensitive zone" for a file
+ * or category hit, "May touch a zone" for keywords alone; title (the tooltip) and fact (the panel) name each zone, why
+ * it matched and its reason.
+ */
+function boardZone(hits) {
+  if (!hits?.length) return null;
+  const sure = firm(hits).length > 0;
+  const lines = hits.map((h) => `${hitWords(h)}${h.reason ? `: ${h.reason}` : ''}`);
+  return {
+    badge: sure ? 'Sensitive zone' : 'May touch a zone',
+    title: `${sure ? 'In a sensitive zone' : 'May touch a sensitive zone (keyword only)'}: ${lines.join('; ')}`,
+    fact: lines.join('\n'),
+    ids: hits.map((h) => h.id),
+  };
+}
+
 /**
  * The catalog of a tree read once, as a function task -> zonesFor(task). Without a catalog folder, or without any zone
  * in it, the function always gives [] and reads nothing more. Fail open: anything broken gives no zones.
@@ -92,11 +141,13 @@ function hitWords(h) {
  *   read (default the project root); dataFolder: where catalog-accepted.json is (default the queue's data folder)
  * @returns {(task: object, o?: { missionText?: string|null, register?: object|null }) => object[]}
  */
-function zonesOnDisk({ root, dataFolder, fsLike = fs } = {}) {
+function zonesOnDisk({ root, dataFolder, fsLike = fs, cfg = null } = {}) {
   // `empty` says the catalog has no zone at all, so a caller can skip reading the mission text.
   const none = Object.assign(() => [], { empty: true });
   try {
     const QC = require('./queueConfig.js');
+    // zones.detect off: no zones for any reader (the plan gate, DR-1, DR-2, the NOTE line and the board).
+    if (!zonesSetup(cfg ?? QC.config()).detect) return none;
     const tree = root ?? QC.config().root;
     const cat = C.readCatalog(path.join(tree, ...C.DIR.split('/')), fsLike);
     if (!cat.exists || !(cat.decisions ?? []).some((x) => x?.decision?.kind === 'zone')) return none;
@@ -120,4 +171,4 @@ function zonesOnDisk({ root, dataFolder, fsLike = fs } = {}) {
   }
 }
 
-module.exports = { hasWord, changedScope, zonesFor, hitWords, zonesOnDisk };
+module.exports = { hasWord, changedScope, zonesFor, hitWords, zonesSetup, noteLine, boardZone, zonesOnDisk };

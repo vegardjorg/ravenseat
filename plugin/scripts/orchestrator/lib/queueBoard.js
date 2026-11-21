@@ -258,6 +258,8 @@ function buildBoard(
     toolTrouble = [],
     blockedColumn = false,
     captureAnswers = null,
+    // PG-5: the accepted sensitive zones a task meets (catalogZones.zonesOnDisk()'s function); null: no zone badges.
+    zonesFor = null,
   } = {},
 ) {
   // SILENT tracks per id, for the small badge on the card (queueLogic.silentTracks, measured by the server).
@@ -300,6 +302,17 @@ function buildBoard(
     if (!sp) return {};
     const pending = L.questionPending(queue, sp);
     return { checkpoint: { sp, open: pending.length === 0, pending } };
+  };
+
+  /** { zone } for an open task in an accepted sensitive zone (PG-5), or {}. Fail open: a broken read gives no badge. */
+  const zoneOf = (o) => {
+    if (typeof zonesFor !== 'function' || zonesFor.empty || o.status === 'done' || o.status === 'cancelled') return {};
+    try {
+      const z = require('./catalogZones.js').boardZone(zonesFor(o));
+      return z ? { zone: z } : {};
+    } catch {
+      return {}; // error-ignored: a zone only raises attention
+    }
   };
 
   const summary = (o) => {
@@ -372,6 +385,9 @@ function buildBoard(
       // PG-4: a waiting task held by a checkpoint question (one with `after`): the "Waiting on checkpoint" badge, with
       // whether the question is open yet and the stage tasks it still waits for. Only when there is one.
       ...(waiting ? checkpointOf(o) : {}),
+      // PG-5: an open task in an accepted sensitive zone: the card badge and the panel fact (catalogZones.boardZone).
+      // Only when the server passed zonesFor and there is a hit; a done or cancelled task gets none.
+      ...zoneOf(o),
       // The wiring spec's open items (lib/wiringItems.js), read-only; only when there are some. Done waits for them.
       ...(WI.openItems(o).length ? { wiring_open: WI.openItems(o).map(WI.itemLine) } : {}),
       remarks: remarksFor(o),

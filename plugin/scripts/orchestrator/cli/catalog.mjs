@@ -25,6 +25,10 @@
 //                                                 not-building
 //   ravenseat catalog find <word...> [--json]     searches the code index (exports and @shared blocks), the reuse
 //                                                 rows, the design choices and the prefer lines; at most 10 short lines
+//   ravenseat catalog zones [--write] [--json]    the starter scan's sensitive zone candidates (PG-5, lib/zoneScan.js):
+//                                                 printed only; --write writes each as a proposed zone in the main
+//                                                 tree's decisions/ (refused from a track). Nothing counts until the
+//                                                 owner accepts one
 //   ravenseat catalog index [--json]              builds or refreshes the code index (lib/catalogIndex.js, bolk B5) in
 //                                                 <dataFolder>/catalog-index.json and names a @shared tag that is not on
 //                                                 an export
@@ -59,7 +63,7 @@ const CD = require('./lib/catalogDeps.js');
 const NB = require('./lib/notBuilding.js');
 const RP = require('./lib/reviewPacks.js');
 
-const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose (--title "..." --invariant "..." --paths "<glob>" | --from-answer <question>) [--kind design|stack|dependency] [--except "<glob>"] [--applies class:D,label:visual] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | propose --not-building --title "..." [--why "..."] [--keywords a,b] [--revisit "..."] [--source "..."] | find <word...> [--json] | index [--json]`;
+const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose (--title "..." --invariant "..." --paths "<glob>" | --from-answer <question>) [--kind design|stack|dependency] [--except "<glob>"] [--applies class:D,label:visual] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | propose --not-building --title "..." [--why "..."] [--keywords a,b] [--revisit "..."] [--source "..."] | find <word...> [--json] | index [--json] | zones [--write] [--json]`;
 const json = a.includes('--json');
 
 /** The catalog folder in a tree (the main tree for a write, the current one for a read). */
@@ -267,6 +271,17 @@ function init() {
     `Next: write what to prefer per job in stack.md, the building blocks in reuse.md, and a design choice per file in ` +
       `decisions/. The folder is a protected path: commit it yourself. ${CLI} catalog check checks it.`,
   );
+  // PG-5: one hint line when the starter scan sees zone candidates. Only a line: nothing is written for them here.
+  try {
+    const zc = zoneCandidatesIn(MAIN_TREE);
+    if (zc.length)
+      console.log(
+        `${zc.length} sensitive zone candidate(s) (${zc.map((c) => c.title).join(', ')}): ${CLI} catalog zones shows ` +
+          'them. None is added until you write and accept it.',
+      );
+  } catch {
+    // error-ignored: the hint is optional; init is done
+  }
 }
 
 /** One row of the overview: id, the status that counts, title. */
@@ -450,7 +465,7 @@ function accept() {
  * @returns {{ id: string, file: string, errors: string[], warnings: string[] }} file relative to the tree; errors and
  *   warnings are check's lines about this choice
  */
-export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null, kind = null, keywords = null, revisit = null, source = null, except = null, check = null, uses = null, alternatives = null, stack = null, applies = null }) {
+export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null, kind = null, keywords = null, revisit = null, source = null, except = null, check = null, uses = null, alternatives = null, stack = null, applies = null, reason = null }) {
   const dir = catalogDir(MAIN_TREE);
   const decisionsDir = path.join(dir, 'decisions');
   let names = [];
@@ -461,7 +476,7 @@ export function writeProposal({ title, invariant, paths, supersedes = null, plan
   }
   const id = C.nextDecisionId(names, readLedger());
   // kind not-building (roadmap 0f, lib/notBuilding.js draft): a rejection with its keywords, revisit and source.
-  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source, except, check, uses, alternatives, stack, applies });
+  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source, except, check, uses, alternatives, stack, applies, reason });
   if (r.errors.length) throw new Error(r.errors.join('; '));
   fs.mkdirSync(decisionsDir, { recursive: true });
   const readme = path.join(decisionsDir, 'README.md');
@@ -606,6 +621,75 @@ function propose() {
   );
 }
 
+// ---- zones (PG-5, lib/zoneScan.js) --------------------------------------------------------------------------------
+
+/** The starter scan's zone candidates for a tree, against the zones already in its catalog (any status). */
+export function zoneCandidatesIn(root) {
+  const ZS = require('./lib/zoneScan.js');
+  const existing = C.readCatalog(catalogDir(root))
+    .decisions.map((x) => x.decision)
+    .filter((d) => d?.kind === 'zone');
+  return ZS.zoneCandidates({
+    files: trackedFiles(root) ?? [],
+    readFile: treeFs(root).read,
+    migrationsFolder: CONFIG.migrations?.folder ?? null,
+    existing,
+  });
+}
+
+/**
+ * `catalog zones [--write] [--json]`: what the starter scan proposes. Without --write it only prints; with it, each
+ * candidate is written as a proposed zone in the main tree's catalog. Nothing counts until the owner accepts it.
+ */
+function zones() {
+  const ZS = require('./lib/zoneScan.js');
+  const write = a.includes('--write');
+  if (write) notFromTrack('zones --write');
+  const list = zoneCandidatesIn(write ? MAIN_TREE : ROOT);
+  if (!write) {
+    if (json) {
+      console.log(JSON.stringify({ ok: true, candidates: list }, null, 2));
+      return;
+    }
+    if (!list.length) {
+      console.log('No zone candidates: the scan found no migrations, public contracts, sign-in or encryption code that the catalog does not cover already.');
+      return;
+    }
+    console.log(`Zone candidates (${list.length}), from what the tree shows. Nothing is added yet:`);
+    for (const c of list) {
+      console.log(`  ${c.title}: ${c.paths.join(', ')}`);
+      console.log(`    why: ${c.reason}`);
+      console.log(`    keywords: ${c.keywords.join(', ')}`);
+    }
+    console.log(
+      `Next: ${CLI} catalog zones --write writes them as proposed entries. A proposed zone changes nothing until you ` +
+        `accept it (${CLI} catalog accept <D-id> --by owner); edit or delete the files you disagree with.`,
+    );
+    return;
+  }
+  const written = [];
+  for (const c of list) {
+    try {
+      written.push({ ...writeProposal(ZS.proposalOf(c)), title: c.title });
+    } catch (e) {
+      die(`${CLI} catalog zones --write: ${e.message}. ${written.length ? `Written so far: ${written.map((w) => w.id).join(', ')}.` : 'Nothing was written.'}`);
+    }
+  }
+  if (json) {
+    console.log(JSON.stringify({ ok: true, written: written.map((w) => ({ id: w.id, file: w.file, title: w.title, errors: w.errors })) }, null, 2));
+    return;
+  }
+  if (!written.length) {
+    console.log('No zone candidates to write.');
+    return;
+  }
+  for (const w of written) console.log(`Proposed ${w.id} (zone): ${w.title}, ${w.file}`);
+  console.log(
+    `They change nothing until you accept them: read each, narrow the paths and keywords, then ${CLI} catalog accept ` +
+      '<D-id> --by owner, or delete the file. The folder is a protected path: commit the files yourself.',
+  );
+}
+
 /** The code index of the tree the command runs in, refreshed from the cache; dies when git cannot list the tree. */
 function indexHere() {
   const r = CI.refresh(ROOT, { dataFolder: FOLDER, fresh: true });
@@ -654,6 +738,7 @@ export function cmdCatalog() {
   if (sub === 'propose') return propose();
   if (sub === 'find') return find();
   if (sub === 'index') return index();
+  if (sub === 'zones') return zones();
   die(USAGE);
 }
 

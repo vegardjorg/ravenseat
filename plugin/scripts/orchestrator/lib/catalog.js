@@ -762,6 +762,27 @@ function boardGroups(cat, ledger = emptyLedger()) {
       }));
     if (entries.length) out.push({ kind, title, entries });
   }
+  // Sensitive zones (PG-5): their own group, last, with the reason and the keywords instead of an invariant. A proposed
+  // one (the starter scan's, lib/zoneScan.js) shows as Proposed until the owner accepts it.
+  const zones = ds
+    .filter((d) => d.kind === 'zone')
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((d) => ({
+      id: d.id,
+      title: d.title ?? '',
+      status: effectiveStatus(d, ledger),
+      invariant: null,
+      reason: d.reason ?? null,
+      keywords: Array.isArray(d.keywords) ? d.keywords : [],
+      paths: d.paths ?? [],
+      except: d.except ?? [],
+      applies: appliesWords(d.applies),
+      source: null,
+      uses: null,
+      alternatives: [],
+      file: d.file ?? null,
+    }));
+  if (zones.length) out.push({ kind: 'zone', title: 'Sensitive zones', entries: zones });
   return out;
 }
 
@@ -971,7 +992,19 @@ function proposalFile(p) {
   // paths and invariant only when given (it binds no code). A design choice is written exactly as before.
   const nb = p.kind === 'not-building';
   const paths = Array.isArray(p.paths) ? p.paths : [];
-  const fields = nb
+  // A zone (PG-5, lib/zoneScan.js proposalOf): kind zone, its paths, keywords and one-line reason; no invariant (it
+  // binds no code).
+  const zn = p.kind === 'zone';
+  const fields = zn
+    ? [
+        'kind: zone',
+        ...(paths.length ? [`paths: ${JSON.stringify(paths)}`] : []),
+        ...(Array.isArray(p.except) && p.except.length ? [`except: ${JSON.stringify(p.except)}`] : []),
+        ...(isObject(p.applies) && Object.keys(p.applies).length ? [`applies: ${JSON.stringify(p.applies)}`] : []),
+        `keywords: ${JSON.stringify(Array.isArray(p.keywords) ? p.keywords : [])}`,
+        `reason: ${frontValue(one(p.reason))}`,
+      ]
+    : nb
     ? [
         'kind: not-building',
         ...(paths.length ? [`paths: ${JSON.stringify(paths)}`] : []),

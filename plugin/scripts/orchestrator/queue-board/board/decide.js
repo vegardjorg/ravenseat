@@ -635,7 +635,8 @@ function catalogItem(e) {
   // Where it applies: its paths (minus except) and, with applies (KD-6), the tasks it reaches in plain words
   // ("D tasks, visual"). Either one is enough for a task to get the entry.
   const files = (e.paths ?? []).length ? `${e.paths.join(', ')}${e.except?.length ? `; not ${e.except.join(', ')}` : ''}` : '';
-  const where = `Applies to: ${[files, e.applies ?? ''].filter(Boolean).join(e.applies && files ? '; and to ' : '')}`;
+  // A zone may name only keywords (PG-5): then there is no "Applies to" line.
+  const where = files || e.applies ? `Applies to: ${[files, e.applies ?? ''].filter(Boolean).join(e.applies && files ? '; and to ' : '')}` : null;
   return el(
     'li',
     { class: 'decide-nb-item' },
@@ -647,7 +648,10 @@ function catalogItem(e) {
       el('span', { class: 'decide-nb-name', text: e.title }),
     ),
     e.invariant ? el('p', { class: 'decide-nb-why', text: e.invariant }) : null,
-    el('p', { class: 'decide-nb-meta', text: where }),
+    // A sensitive zone (PG-5): why a change in it is expensive to undo, and the words that mark a task as near it.
+    e.reason ? el('p', { class: 'decide-nb-why', text: e.reason }) : null,
+    where ? el('p', { class: 'decide-nb-meta', text: where }) : null,
+    e.keywords?.length ? el('p', { class: 'decide-nb-meta', text: `Keywords: ${e.keywords.join(', ')}` }) : null,
     // A design entry (KD-1) names where its tokens live; the catalog never copies them.
     e.source ? el('p', { class: 'decide-nb-meta', text: `Tokens: ${[].concat(e.source).join(', ')}` }) : null,
     // A stack entry (KD-3) says the tool for the job and what it was chosen over.

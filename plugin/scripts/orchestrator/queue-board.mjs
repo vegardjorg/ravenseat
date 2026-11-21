@@ -155,6 +155,21 @@ const OW = require('./lib/ownerWait.js');
 const CATALOG = require('./lib/catalog.js');
 // "Not building" in Decisions (roadmap 0f, lib/notBuilding.js boardEntries): the catalog's entries, read only.
 const NOT_BUILDING = require('./lib/notBuilding.js');
+// The sensitive zones a task meets (PG-5, lib/catalogZones.js): the badge on the card and the panel fact.
+const ZONES = require('./lib/catalogZones.js');
+
+/**
+ * The accepted zones per task for the board (PG-5), or null when zones.detect is off or no zone exists. The board reads
+ * no mission files: the inline mission and the description stand in for the mission text.
+ */
+function zonesNow(fresh) {
+  const zf = ZONES.zonesOnDisk({ root: MAIN_TREE, dataFolder: FOLDER, cfg: fresh });
+  if (zf.empty) return null;
+  return (o) => {
+    const inline = typeof o.mission === 'string' && !/\.md$/i.test(o.mission.trim()) ? o.mission : '';
+    return zf(o, { missionText: [inline, o.description ?? ''].filter(Boolean).join('\n') });
+  };
+}
 // Cancel, decline and edit one task from the detail panel (the rules; queue.mjs cancel / edit write).
 const TE = require('./lib/queueTaskEdit.js');
 // The base gate's verdict (lib/baseHealth.js; ravenseat merge writes base-health.json, the board only reads it).
@@ -991,9 +1006,13 @@ function state() {
   // The "Not building" list (roadmap 0f): the decisions folder's names and times and the owner's record are the key,
   // so a new draft or an accept shows on the next poll.
   const notBuilding = notBuildingNow();
+  // zones.detect (PG-5): read fresh and part of the key. The zones themselves live in the decisions folder, whose names,
+  // times and the owner's record are already notBuilding.key.
+  const zonesDetect = ZONES.zonesSetup(fresh).detect;
   if (
     quick &&
     quick.notBuildingKey === notBuilding.key &&
+    quick.zonesDetect === zonesDetect &&
     quick.listening === listening &&
     quick.panelMode === panelMode &&
     quick.captureAnswers === captureAnswers &&
@@ -1030,6 +1049,7 @@ function state() {
   const data = {
     ...T.board(showQueue, {
       captureAnswers,
+      zonesFor: zonesNow(fresh),
       // The Blocked column (board.blockedColumn): the server moves the stuck tasks there, so no card is in two columns.
       blockedColumn: KK.boardSwitches(CONFIG, queue).blockedColumn,
       uncommitted: g.uncommitted,
@@ -1125,6 +1145,7 @@ function state() {
     listening,
     panelMode,
     captureAnswers,
+    zonesDetect,
     notBuildingKey: notBuilding.key,
     updateKey,
     baseKey,

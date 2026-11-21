@@ -542,6 +542,8 @@ function drawPanel(fresh) {
       col === 'queue' && k.blockers.length ? facts('Blockers', list2(k.blockers)) : [],
       // PG-4: the staged plan's checkpoint, the same words as the card's badge tooltip (cards.js checkpointText).
       facts('Checkpoint', k.checkpoint ? checkpointText(k.checkpoint) : null),
+      // PG-5: the sensitive zones the task meets, the same words as the card's badge tooltip (one line per zone).
+      facts('Sensitive zone', k.zone ? list2(k.zone.fact.split('\n')) : null),
       // The finish line, read-only (locked once the task has started; ravenseat edit --accept / --by owner changes it).
       facts('Acceptance', k.acceptance?.length ? list2(k.acceptance) : null),
       facts('Done command', k.done_when ? el('code', { text: k.done_when }) : null),
