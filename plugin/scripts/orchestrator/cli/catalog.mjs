@@ -53,6 +53,7 @@ const C = require('./lib/catalog.js');
 const CC = require('./lib/catalogChecks.js');
 const CI = require('./lib/catalogIndex.js');
 const K = require('./lib/kickstart.js');
+const MF = require('./lib/manifests.js');
 const NB = require('./lib/notBuilding.js');
 const RP = require('./lib/reviewPacks.js');
 
@@ -135,10 +136,17 @@ export function freshStackBlock(root) {
   } catch {
     packs = []; // error-ignored: the block names no framework rather than a wrong one
   }
-  const manifests = ['package.json', ...t.list('').filter((n) => /^requirements[\w.-]*\.txt$/i.test(n))]
+  return C.stackBlock({ stacks, packs, checks, jobs: C.jobsOf(rootManifests(t)) });
+}
+
+/**
+ * The manifests at a tree's root, with their text: package.json, requirements*.txt, pyproject.toml, Cargo.toml and
+ * go.mod (lib/manifests.js reads them all since roadmap 0å KD-3).
+ */
+function rootManifests(t) {
+  return [...MF.MANIFEST_NAMES, ...t.list('').filter((n) => /^requirements[\w.-]*\.txt$/i.test(n))]
     .filter((f) => t.exists(f))
     .map((f) => ({ path: f, text: t.read(f) }));
-  return C.stackBlock({ stacks, packs, checks, jobs: C.jobsOf(manifests) });
 }
 
 /** The ids of the design choices in a tree's catalog (for the plan link warning), or null without a catalog. */

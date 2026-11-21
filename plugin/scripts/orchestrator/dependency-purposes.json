@@ -98,6 +98,41 @@
       "ecosystem": "python",
       "packages": ["pytest", "nose2", "ward"],
       "examples": { "hit": [["pytest", "nose2"]], "miss": [["pytest", "coverage"]] }
+    },
+    {
+      "id": "rust-http",
+      "title": "HTTP client",
+      "ecosystem": "cargo",
+      "packages": ["reqwest", "ureq", "isahc", "surf", "attohttpc"],
+      "examples": { "hit": [["reqwest", "ureq"]], "miss": [["reqwest", "serde"]] }
+    },
+    {
+      "id": "rust-date",
+      "title": "dates and times",
+      "ecosystem": "cargo",
+      "packages": ["chrono", "time", "jiff"],
+      "examples": { "hit": [["chrono", "time"]], "miss": [["chrono", "serde"]] }
+    },
+    {
+      "id": "rust-cli-args",
+      "title": "command-line arguments",
+      "ecosystem": "cargo",
+      "packages": ["clap", "structopt", "argh", "pico-args", "lexopt"],
+      "examples": { "hit": [["clap", "argh"]], "miss": [["clap", "tokio"]] }
+    },
+    {
+      "id": "go-http-router",
+      "title": "HTTP router",
+      "ecosystem": "go",
+      "packages": ["github.com/gin-gonic/gin", "github.com/labstack/echo/v4", "github.com/go-chi/chi/v5", "github.com/gorilla/mux", "github.com/gofiber/fiber/v2"],
+      "examples": { "hit": [["github.com/gin-gonic/gin", "github.com/go-chi/chi/v5"]], "miss": [["github.com/gin-gonic/gin", "github.com/google/uuid"]] }
+    },
+    {
+      "id": "go-logging",
+      "title": "logging",
+      "ecosystem": "go",
+      "packages": ["github.com/sirupsen/logrus", "go.uber.org/zap", "github.com/rs/zerolog"],
+      "examples": { "hit": [["go.uber.org/zap", "github.com/rs/zerolog"]], "miss": [["go.uber.org/zap", "github.com/google/uuid"]] }
     }
   ]
 }

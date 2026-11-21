@@ -1102,12 +1102,15 @@ function stackBlock(facts = {}) {
   return out.join('\n');
 }
 
-/** The libraries by job a manifest already has (the purpose groups of dependency-purposes.json). */
+/**
+ * The libraries by job a manifest already has (the purpose groups of dependency-purposes.json). Any manifest
+ * lib/manifests.js reads: package.json, requirements*.txt and, since roadmap 0å KD-3, pyproject.toml, Cargo.toml, go.mod.
+ */
 function jobsOf(manifests, purposes = require('./scopeNotes.js').PURPOSES) {
   const SN = require('./scopeNotes.js');
   const out = [];
   for (const m of manifests ?? []) {
-    const eco = m.path.split('/').pop() === 'package.json' ? 'npm' : 'python';
+    const eco = require('./manifests.js').ecosystemOf(m.path);
     const deps = SN.depsOf(m.path, m.text) ?? [];
     for (const p of purposes) {
       if (p.ecosystem !== eco) continue;

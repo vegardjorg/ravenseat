@@ -19,7 +19,8 @@
 //                 names, all in one look-up.
 //   newFolders    V2. An added (or renamed-in) file in a folder at depth 1..folderDepth that the base does not have.
 //                 Only the shallowest new folder of a path is named.
-//   dependencies  V3. A dependency added to a manifest (package.json, requirements*.txt) whose purpose group in
+//   dependencies  V3. A dependency added to a manifest (package.json, requirements*.txt, pyproject.toml, Cargo.toml,
+//                 go.mod; lib/manifests.js reads them) whose purpose group in
 //                 dependency-purposes.json (data, with examples a test runs) already has another package in the same
 //                 manifest, or got one earlier in the same change. Also when the task owns the manifest, which the
 //                 dependency file guard does not look at.
@@ -75,6 +76,8 @@ const MAX_LINES = 5;
 
 /** The purpose groups for V3 (dependency-purposes.json next to the orchestrator). */
 const PURPOSES = Object.freeze(require('../dependency-purposes.json').purposes.map((p) => Object.freeze(p)));
+/** The manifest reader V3 shares with stack.md and the catalog excerpt (roadmap 0å KD-3). */
+const MF = require('./manifests.js');
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 /** Forward slashes, no leading ./ (the same as testWeakening's norm, so both read a diff path alike). */
@@ -338,41 +341,23 @@ function newFolderFacts(files, { dirExists, depth = DEFAULTS.folderDepth } = {})
 
 // ---- V3: a new dependency with the same purpose ---------------------------------------------------------------------
 
-/** Is the path a manifest V3 reads (package.json, requirements*.txt), outside node_modules? */
+/**
+ * Is the path a manifest V3 reads (package.json, requirements*.txt, and since roadmap 0å KD-3 pyproject.toml,
+ * Cargo.toml and go.mod), outside node_modules? One reader for all of them: lib/manifests.js.
+ */
 function isManifest(p) {
   const s = norm(p);
   if (!s || inNodeModules(s)) return false;
-  const name = s.split('/').pop();
-  return name === 'package.json' || /^requirements[\w.-]*\.txt$/i.test(name);
+  return MF.isManifestName(s);
 }
-const ecosystemOf = (p) => (norm(p).split('/').pop() === 'package.json' ? 'npm' : 'python');
+/** npm, python, cargo or go (lib/manifests.js ecosystemOf); the purpose groups are per ecosystem. */
+const ecosystemOf = (p) => MF.ecosystemOf(norm(p));
 
 /** The dependency names a manifest text holds, in order; null when it cannot be read. */
 function depsOf(p, text) {
   if (text == null) return null;
-  if (ecosystemOf(p) === 'npm') {
-    let j;
-    try {
-      j = JSON.parse(text);
-    } catch {
-      // error-ignored: an unreadable manifest gives no facts, never a wrong one
-      return null;
-    }
-    if (!isObject(j)) return null;
-    const out = [];
-    for (const k of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'])
-      if (isObject(j[k])) for (const n of Object.keys(j[k])) if (!out.includes(n)) out.push(n);
-    return out;
-  }
-  const out = [];
-  for (const raw of String(text).split(/\r?\n/)) {
-    const l = raw.replace(/#.*$/, '').trim();
-    if (!l || l.startsWith('-')) continue;
-    const m = l.match(/^([A-Za-z0-9][A-Za-z0-9._-]*)/);
-    const n = m ? m[1].toLowerCase().replace(/_/g, '-') : null;
-    if (n && !out.includes(n)) out.push(n);
-  }
-  return out;
+  const deps = MF.manifestDeps(norm(p), String(text));
+  return deps ? deps.map((d) => d.name) : null;
 }
 
 /**
@@ -428,10 +413,9 @@ const choiceText = (x) => (x.decision ? `${x.decision.id} (${x.decision.status})
 function exampleProblems(purposes = PURPOSES) {
   const out = [];
   const seen = new Map();
-  const text = (eco, names) =>
-    eco === 'npm' ? JSON.stringify({ dependencies: Object.fromEntries(names.map((n) => [n, '1'])) }) : names.join('\n');
+  const text = (eco, names) => MF.manifestText(eco, names).text;
   for (const p of purposes) {
-    const file = p.ecosystem === 'npm' ? 'package.json' : 'requirements.txt';
+    const file = MF.manifestText(p.ecosystem, []).path;
     for (const n of p.packages ?? []) {
       const key = `${p.ecosystem}:${n}`;
       if (seen.has(key)) out.push(`${p.id}: ${n} is also in ${seen.get(key)}`);
