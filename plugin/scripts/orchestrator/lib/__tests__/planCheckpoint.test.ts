@@ -124,7 +124,9 @@ describe('PG-4 the checkpoint question', () => {
     expect(cp.error).toEqual([]);
     expect(cp.id).toBe('CP-PL-EX-1');
     expect(cp.question.type).toBe('condition');
-    expect(cp.question.text).toMatch(/^Stage 1 is done\. Success measure: exports open in a spreadsheet\. Continue, adjust or stop\?$/);
+    expect(cp.question.text).toMatch(/^The first part is done\. Success measure: exports open in a spreadsheet\. Continue, adjust or stop\?$/);
+    // The board says step for a focus step and never stage (queueFocusB17.test.ts), so the question's texts say neither.
+    expect(` `).not.toMatch(/\bstages?\b/i);
     expect(cp.question.recommendation).toBe('Continue');
     expect(cp.question.choices).toEqual(['Continue', 'Adjust', 'Stop']);
     expect(cp.question.after).toEqual(['EX-1', 'EX-2']);
@@ -135,7 +137,7 @@ describe('PG-4 the checkpoint question', () => {
   it('without a plan the id follows the first stage task; without a measure the text says where to look', () => {
     const cp = CP.checkpointQuestion({ stage: ['AB-7'] });
     expect(cp.id).toBe('CP-AB-7');
-    expect(cp.question.text).toMatch(/Success measure: the stage-1 acceptance criteria/);
+    expect(cp.question.text).toMatch(/Success measure: the first part's acceptance criteria/);
   });
 
   it('refuses an empty stage and an id over the question id limit', () => {

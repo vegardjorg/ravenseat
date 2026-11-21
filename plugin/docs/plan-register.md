@@ -93,7 +93,7 @@ A light gate that asks WHETHER and HOW MUCH before a large build. None of it sto
 
 `plans.checkpoint` `offer`. For a large plan (L or XL, or in a zone), and for "the smallest version first",
 `/add-to-queue` queues stage 1 now and the rest waiting on one question, `CP-<plan>` (or `CP-<first task>` without a
-plan): "Stage 1 is done. Success measure: … Continue, adjust or stop?". The question lists stage 1 in `after` and stays
+plan): "The first part is done. Success measure: … Continue, adjust or stop?". The question lists stage 1 in `after` and stays
 out of the inbox until those tasks are done or cancelled; `resolve` refuses it earlier unless `--early`. Continue lets
 the rest start, Adjust parks the rest for a mission rewrite, Stop parks them (cancelling stays your call). The board
 shows "Waiting on checkpoint" on those cards. `offer` asks before staging, `always` stages without asking, `off` queues

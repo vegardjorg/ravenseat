@@ -4,7 +4,7 @@
 //
 // WHY: a large plan went into the queue as fifteen startable tracks before anyone had tried to shoot the idea down. PG-4
 // queues stage 1 (1-2 tracks, a thin slice or a spike, with `risk_first` set) and the rest waiting on ONE registered
-// question, CP-<plan>, of type condition: "Stage 1 is done. Success measure: …. Continue, adjust or stop?". The rest is
+// question, CP-<plan>, of type condition: "The first part is done. Success measure: …. Continue, adjust or stop?". The rest is
 // queued, not held back in a note, so the forecast, the graph and a one-answer start all keep working (owner question 3).
 //
 // The parts:
@@ -125,11 +125,11 @@ function checkpointQuestion({ plan = null, stage = [], success = null } = {}) {
     id,
     question: {
       type: 'condition',
-      text: `Stage 1 is done. Success measure: ${measure ?? 'the stage-1 acceptance criteria'}. Continue, adjust or stop?`,
+      text: `The first part is done. Success measure: ${measure ?? "the first part's acceptance criteria"}. Continue, adjust or stop?`,
       recommendation: 'Continue',
       choices: [...CHOICES],
       context:
-        `Stage 1 (${list.join(', ')}) is merged. Continue starts the rest with your answer in their missions. Adjust ` +
+        `The first part (${list.join(', ')}) is merged. Continue starts the rest with your answer in their missions. Adjust ` +
         'parks them so their missions can be rewritten (then ravenseat continue <id>). Stop parks them; cancel them ' +
         'yourself (ravenseat set <id> cancelled).',
       after: list,
