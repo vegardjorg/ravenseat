@@ -1128,7 +1128,7 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 | Key | Default | Used for | Marks |
 |---|---|---|---|
 | `guidance` | `guided` | `guided`: advice about CI, gates and checks; `quiet`: no advice, guards and facts stay (`ravenseat guidance quiet\|guided`) | queue.json |
-| `board.mascot` | `chatty` | `chatty`, `events` (only events and clicks) or `off`, for every viewer | Basic |
+| `board.mascot` | `chatty` | How much the mascot talks when a viewer has switched it on: `chatty`, `events` (only events and clicks) or `off`, for every viewer; the default logo never talks | Basic |
 | `board.panelMode` | `float` | How the side panel (a task, Settings, the help) sits on a wide screen: `float` over the board (nothing reflows, a click outside closes it) or `beside` (the board makes room for it); below 1200 px a modal sheet in both (see board.md, The task panel) | Basic |
 | `board.blockedColumn`, `limits.autocompact` | `false`, `true` | A Blocked column right after In queue for the tasks with an open blocker that needs action (see board.md, What it shows; `ravenseat board-setting blocked on\|off`); Claude Code compacts the orchestrator session itself and the queue continues | queue.json |
 | `board.port`, `board.title` | `2000`, `Queue board` | The board's local port and title | Advanced |

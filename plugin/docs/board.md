@@ -112,16 +112,17 @@ has a "Does this look bad?" line that opens the matching setting. This is where 
 The plan register, the priority map, dark mode and the settings panel are shown in
 [the board in detail](guide.md#the-board-in-detail).
 
-<p align="center"><img src="../../assets/screenshots/light-12-mascot-night.png" alt="The ravens at 02:47: the agents don't need sleep, you do" width="480"></p>
+<p align="center"><img src="../../assets/screenshots/light-12-mascot-night.png" alt="The mascot (switched on in the gear) at 02:47: the agents don't need sleep, you do" width="600"></p>
 
 ## What it shows
 
 The switch at the top left changes between two workspaces, **Queue** and **Plans**.
 
-**The top bar** has two rows of fixed height and looks the same in every room, so nothing in it moves when you switch
-rooms or views. Row 1 is the room tabs (Plans, Queue, Decisions, Checks, each with an icon), then **Waiting on you**,
+**The top bar** has two rows of fixed height (40 px each) and looks the same in every room, so nothing in it moves
+when you switch rooms or views. The Ravenseat logo sits in the left corner of row 1, as tall as the row. Row 1 is
+then the room tabs (Plans, Queue, Decisions, Checks, each with an icon), then **Waiting on you**,
 the project title, the status ("Updated at ...", the checks count or an error) and the gear. The status comes last
-and is cut short with an ellipsis when it is long; hover it for the full text. Row 2 is the view tabs, the search,
+and is cut short with an ellipsis when it is long; hover it for the full text. Row 2 starts at the left edge with the view tabs, then the search,
 Filter and the grouping; in Plans it stays empty. Nothing in row 2 appears or changes width with a search or a
 filter: the Filter button has a fixed width and its label is cut with an ellipsis. Below about 1200 px (a half-screen window) the top turns
 compact: the room tabs drop their icons, the search starts narrower and the view tabs scroll sideways in their row
@@ -682,7 +683,9 @@ condition (see "The name and the logo" in the README).
 
 ## The mascot
 
-The mascot in the upper-left corner now and then says something in a speech bubble: a night line when you work
+Speech bubbles come only from the mascot: the Ravenseat logo, the default picture, never talks and is not a button.
+With **Show the mascot instead of the logo** on (see Logo or mascot below), the mascot in the upper-left corner
+spans both rows of the top and now and then says something in a speech bubble: a night line when you work
 between 00:00 and 05:00, encouragement, a statistic from the queue (the priciest task today, the oldest card in
 Review, proposals waiting, and so on), and events between two polls (merged, queue empty, new owner question, high
 finding, weekly quota over 90 %). Click the mascot for a line; five clicks within ten seconds gives another one.
@@ -705,8 +708,10 @@ browser comes from `queue.config.json`:
 the flag, the mascot is off for every viewer: no bubbles, no click, nothing is computed on the server, and the choice
 in the gear is locked.
 
-**Logo or mascot.** The Ravenseat logo is the default picture; the raven on the right talks. **Show the mascot instead
-of the logo** under Logo and mascot (the last section of the gear's Board tab) switches to the mascot (`/logo`), per browser.
+**Logo or mascot.** The Ravenseat logo is the default picture: as tall as row 1 of the top, quiet, and row 2 runs
+from the left edge under it. **Show the mascot instead of the logo** under Logo and mascot (the last section of the
+gear's Board tab) switches to the mascot (`/logo`), per browser: it spans both rows (row 2 then starts after it, and
+the top keeps its height) and it is the only figure that talks. The modes above decide how much it talks.
 
 **Hiding the picture.** Off keeps the picture. To remove it completely in one browser, click **Hide the picture
 completely** in the gear. **Show the picture again** in the same place brings it back.

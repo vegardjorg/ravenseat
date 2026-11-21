@@ -168,15 +168,17 @@ beforeAll(async () => {
 // ---- B16 --------------------------------------------------------------------------------------------------------------
 
 describe('B16: one top height in every room', () => {
-  it('the two rows of the top are fixed tracks of the same height, and the mascot zone spans exactly both', () => {
+  it('the two rows of the top are fixed tracks of the same height; the logo fills row 1 and the mascot spans both', () => {
     const template = base('.top')['grid-template'] ?? '';
-    const m = /'mascot row1'\s+(\d+)px\s+'mascot row2'\s+(\d+)px/.exec(template);
+    const m = /'mascot row1'\s+(\d+)px\s+'row2 row2'\s+(\d+)px/.exec(template);
     expect(m, template).not.toBeNull();
     const [row1, row2] = [Number(m![1]), Number(m![2])];
     expect(row1).toBe(row2);
-    // Row gap 4 px: the mascot zone (104 px) is the two rows and the gap, so it never stretches a row.
-    expect(base('.top')['row-gap']).toBe('4px');
-    expect(base('.mascot').height).toBe(`${row1 + 4 + row2}px`);
+    // The logo (the default) is exactly row 1 high, so it never stretches a row.
+    expect(base('.mascot').height).toBe(`${row1}px`);
+    // Row gap 2 px: in mascot mode the zone is the two rows and the gap, so it never stretches a row either.
+    expect(base('.top')['row-gap']).toBe('2px');
+    expect(base('.top.figure-mascot .mascot').height).toBe(`${row1 + 2 + row2}px`);
     // Each row is that height and never wraps on a mouse-wide screen.
     expect(base('.top-row').height).toBe(`${row1}px`);
     expect(base('.top-row')['flex-wrap']).toBe('nowrap');
@@ -215,10 +217,11 @@ describe('B16: one top height in every room', () => {
     expect(top?.decl['margin-right']).toBe('calc(-1 * var(--panel-side))');
     const panel = rules.find((r) => r.selectors.includes('body.panel-beside .panel'));
     expect(panel?.decl.top).toBe('var(--top-height)');
-    // --top-height is the fixed top: padding 6 + two rows + gap 4 + padding 6 + the 1 px border.
+    // --top-height is the fixed top: padding 4 + two rows + gap 2 + padding 4 + the 1 px border.
     const row = Number(/'mascot row1'\s+(\d+)px/.exec(base('.top')['grid-template'])![1]);
+    expect(base('.top').padding).toBe('4px var(--distance-lg)');
     const root = base(':root')['--top-height'];
-    expect(root).toBe(`${6 + row + 4 + row + 6 + 1}px`);
+    expect(root).toBe(`${4 + row + 2 + row + 4 + 1}px`);
   });
 });
 

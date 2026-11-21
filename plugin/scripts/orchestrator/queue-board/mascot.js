@@ -3,6 +3,8 @@
 //
 // The rules (what, when and how often) live in lib/queueMascot.js (window.QueueMascot, tested with vitest). Only the
 // view lives here:
+//   - only the mascot figure talks (the switch "Show the mascot instead of the logo" in the gear). The Ravenseat logo,
+//     the default figure, never shows a bubble and is not a button (track hdr, owner 21.11);
 //   - the phrases are fetched from /mascot (your own <dataFolder>/mascot-phrases.json, otherwise the built-in default
 //     set), and again when the state's `mascot.file` changes;
 //   - board.js reports every new state (newState) and every owner action (ownerAction); a pulse of its own every 15 s
@@ -68,6 +70,15 @@
     return saved ?? serverMode ?? M.DEFAULT_MODE;
   }
 
+  // Bubbles only with the mascot figure (owner 21.11, track hdr). The Ravenseat logo, the default figure, never talks:
+  // no bubble on events, none on a click, and the zone is a plain picture. board/start.js sets data-talker in drawLogo()
+  // ('mascot' only when the mascot is switched on and its file exists) and calls figureChanged() when it flips.
+  // Friction: this removes a talking element from the default view; no guard is weakened (the bubble guards nothing),
+  // and for people who turn the mascot on the default is as before (board.mascot, Chatty).
+  const isMascot = () => zone.dataset.talker === 'mascot';
+  /** Whether the figure may talk now: the mascot is on, and the mode is not off. */
+  const talks = () => isMascot() && mode() !== 'off';
+
   function setMode(v) {
     const m = M.normalizeMode(v);
     if (!m || locked()) return;
@@ -78,7 +89,13 @@
       /* storage is blocked: the choice applies until the page is reloaded */
     }
     if (m === 'off') hide(true);
-    clickable(m !== 'off');
+    clickable(talks());
+  }
+
+  /** The figure switched (logo or mascot): the logo closes any bubble at once and is no button. */
+  function figureChanged() {
+    if (!isMascot()) hide(true);
+    clickable(talks());
   }
 
   async function fetchPhrases() {
@@ -133,7 +150,7 @@
 
   /** Says something after a choice from M.decide (or a click). */
   function say(choice, now = Date.now()) {
-    if (!choice || mode() === 'off') return;
+    if (!choice || !talks()) return;
     const r = M.choose({
       category: choice.category,
       event: choice.event,
@@ -157,7 +174,7 @@
     if (!data) return;
     const first = serverMode == null;
     serverMode = M.normalizeMode(data.mascot?.mode) ?? M.DEFAULT_MODE;
-    if (first) clickable(mode() !== 'off');
+    if (first) clickable(talks());
     if (locked()) {
       hide(true);
       return; // off on the server: no phrases, no events, nothing
@@ -191,24 +208,20 @@
   }
 
   function onClick() {
-    if (mode() === 'off') return;
+    if (!talks()) return;
     const now = Date.now();
     const r = M.click(s, now);
     s = r.s;
     say({ category: 'events', event: r.event }, now);
   }
 
-  // The mascot is a button (click, Enter and space) while it can talk. The zone is 52 × 104 px, above the 44 px
-  // touch target floor. With mode off it is a plain picture again.
+  // The mascot is a button (click, Enter and space) while it can talk. Its zone is 41 × 82 px, above the 44 px touch
+  // target floor in height. The logo, or the mascot with mode off, is a plain picture: no role, label, tab stop or cursor.
   function clickable(on) {
     if (on) {
       zone.setAttribute('role', 'button');
       zone.tabIndex = 0;
-      // Who talks: the raven on the right of the Ravenseat logo (the default) or the mascot (board/start.js sets it).
-      zone.setAttribute(
-        'aria-label',
-        zone.dataset.talker === 'mascot' ? 'The mascot: say something' : 'The raven: say something',
-      );
+      zone.setAttribute('aria-label', 'The mascot: say something');
     } else {
       zone.removeAttribute('role');
       zone.removeAttribute('tabindex');
@@ -218,7 +231,7 @@
   }
   zone.addEventListener('click', onClick);
   zone.addEventListener('keydown', (e) => {
-    if (mode() === 'off') return;
+    if (!talks()) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onClick();
@@ -227,7 +240,7 @@
 
   // The random chat: a pulse every 15 s (no network), only while the tab is visible.
   setInterval(() => {
-    if (document.hidden || !previous || mode() === 'off') return;
+    if (document.hidden || !previous || !talks()) return;
     const now = Date.now();
     say(M.decide({ s, mode: mode(), now, reason: 'pulse' }), now);
   }, PULSE_MS);
@@ -236,7 +249,7 @@
   function applyGone() {
     zone.classList.toggle('gone', gone);
     if (gone) hide(true);
-    clickable(mode() !== 'off');
+    clickable(talks());
   }
 
   /** Hides the whole mascot (picture and bubbles) in this browser. */
@@ -270,6 +283,7 @@
     setMode,
     locked,
     isHidden: () => gone,
+    figureChanged,
     hideMascot,
     showMascot,
     MODE_OPTIONS: M.MODE_OPTIONS,

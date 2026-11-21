@@ -77,16 +77,17 @@
   </head>
   <body>
     <!--
-      The top is a two-row grid with the mascot (the logo) in the left corner spanning both. Both rows have a fixed
-      height in every room (Plans hides row 2 but keeps its track), so the top never jumps. Row 1: the room tabs,
-      "Waiting on you" (a fixed place right after them), the title, then the status (text of varying length, last and
-      clipped) and the gear (help and theme live in the settings). Row 2: the view tabs, then search, Filter and
-      grouping. Which side the mascot sits on is controlled by one line in board.css (.top).
+      The top is a two-row grid with the figure in the left corner: the Ravenseat logo (the default) in row 1 only, as
+      tall as the row, or the mascot (a switch in the gear) spanning both rows. Both rows have a fixed height in every
+      room (Plans hides row 2 but keeps its track), so the top never jumps. Row 1: the room tabs, "Waiting on you" (a
+      fixed place right after them), the title, then the status (text of varying length, last and clipped) and the
+      gear (help and theme live in the settings). Row 2: the view tabs from the left edge, then search, Filter and
+      grouping. The layout is the grid areas in board.css (.top and .top.figure-mascot).
     -->
     <header class="top">
       <!-- The logo is inserted by drawLogo() in board/start.js when /logo exists; otherwise the zone stays empty as a placeholder. -->
       <div id="mascot" class="mascot empty"></div>
-      <!-- The speech bubble by the mascot (mascot.js). The text is always set with textContent. -->
+      <!-- The speech bubble by the mascot (mascot.js; only in mascot mode). The text is always set with textContent. -->
       <p id="bubble" class="bubble" role="note" hidden></p>
       <div class="top-row top-row1">
         <!-- The workspaces Plans and Queue. The choice is kept in the URL (?room=plans), and each room

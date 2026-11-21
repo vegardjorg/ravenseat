@@ -120,9 +120,9 @@ function drawUpdateBanner() {
 
 /**
  * The picture in the fixed mascot zone in the left corner of the top. The Ravenseat logo (two ravens on the high seat,
- * /ravenseat.svg) is the default; the raven on the right does the talking. The mascot (the queue folder's own logo file
- * or the bundled one, served at /logo) is a switch in the gear. Without a mascot file the zone falls back to the
- * Ravenseat logo, so it is never empty.
+ * /ravenseat.svg) is the default: as tall as row 1 of the top, and it never talks. The mascot (the queue folder's own
+ * logo file or the bundled one, served at /logo) is a switch in the gear; it spans both rows (for its feet) and is the
+ * only figure with speech bubbles. Without a mascot file the zone falls back to the Ravenseat logo, so it is never empty.
  */
 function drawLogo() {
   const zone = $('mascot');
@@ -140,9 +140,11 @@ function drawLogo() {
   }
   zone.classList.remove('empty');
   zone.classList.toggle('raven', !mascot);
-  zone.dataset.talker = mascot ? 'mascot' : 'raven'; // read by mascot.js for the button's label
-  if (zone.classList.contains('clickable'))
-    zone.setAttribute('aria-label', mascot ? 'The mascot: say something' : 'The raven: say something');
+  // Mascot mode: the zone spans both rows of the top again (board.css, .top.figure-mascot); the top keeps its height.
+  zone.closest('.top')?.classList.toggle('figure-mascot', mascot);
+  // mascot.js reads data-talker: only the mascot talks (bubbles, click); the logo is a plain picture.
+  zone.dataset.talker = mascot ? 'mascot' : 'raven';
+  window.QueueMascotView?.figureChanged?.();
 }
 
 // Which picture sits in the mascot zone: 'logo' (Ravenseat, the default) or 'mascot'. Remembered per browser; the

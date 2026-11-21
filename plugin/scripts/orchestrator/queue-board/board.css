@@ -40,9 +40,9 @@
      dark mode. */
   --state-hover-filled: color-mix(in srgb, var(--color-on-primary) 10%, transparent);
   --state-press-filled: color-mix(in srgb, var(--color-on-primary) 15%, transparent);
-  /* The top's fixed height from 721 px up (B16): padding 6 + row 50 + gap 4 + row 50 + padding 6 + the 1 px border.
-     The panel beside the board starts below it. */
-  --top-height: 117px;
+  /* The top's fixed height from 721 px up (B16): padding 4 + row 40 + gap 2 + row 40 + padding 4 + the 1 px border,
+     the same with the logo and with the mascot. The panel beside the board starts below it. */
+  --top-height: 91px;
   /* The elevation of a surface that floats over the board without a scrim (the floating side panel, QA-1c Q5): the
      same soft shadow as the menus, black in both modes. In dark mode the panel's outline-variant edge carries it, and
      forced colors drop the shadow and keep the edge. */
@@ -89,25 +89,36 @@ textarea {
 
 /* ---- The top: title, status, search, view, theme, filters ---- */
 
-/* A grid in two FIXED rows (6 + 50 + 4 + 50 + 6 + the 1 px border = 117 px, --top-height) with the mascot spanning both
-   rows. Fixed tracks, not auto (B16): Plans hides row 2, and with auto rows the mascot's 104 px were spread over one
-   row instead of two, so row 1 sat 1 px higher in Plans and the top changed height with what wrapped in each room.
+/* A grid in two FIXED rows (4 + 40 + 2 + 40 + 4 + the 1 px border = 91 px, --top-height). The logo (the default
+   figure) sits in row 1 only, exactly as tall as that row, and row 2 (view tabs, search, Filter, grouping) runs from
+   the left edge (owner 21.11, track hdr). With the mascot switched on, .top.figure-mascot changes only the areas: the
+   zone spans both rows again (the mascot needs the height for its feet) and row 2 starts after it. The tracks stay, so
+   flipping the switch moves row 2's left edge and nothing else; the top's height never changes.
+   Fixed tracks, not auto (B16): Plans hides row 2, and with auto rows a tall zone was spread over one row instead of
+   two, so row 1 moved in Plans and the top changed height with what wrapped in each room.
    The rows never wrap from 721 px up: what varies in length gives way (the title and the status clip, the search
    shrinks, the view tabs scroll in their row below 1200 px); only the phone rule (720 px) lets them grow.
-   The mascot sits in the LEFT corner. To move it right, change only `grid-template` below to
-   "row1 mascot" 50px "row2 mascot" 50px / minmax(0, 1fr) auto (the bubble does not follow automatically; see .bubble). */
+   The figure sits in the LEFT corner. To move it right, change the areas here and in .top.figure-mascot (and the
+   column order) to the mirror image (the bubble does not follow automatically; see .bubble). */
 .top {
   flex: none;
   position: relative; /* the anchor for the speech bubble */
   display: grid;
   grid-template:
-    'mascot row1' 50px
-    'mascot row2' 50px / auto minmax(0, 1fr);
+    'mascot row1' 40px
+    'row2 row2' 40px / auto minmax(0, 1fr);
   column-gap: var(--distance-md);
-  row-gap: 4px;
+  row-gap: 2px;
   background: var(--color-surface-container-lowest);
   border-bottom: 1px solid var(--color-outline-variant);
-  padding: 6px var(--distance-lg);
+  padding: 4px var(--distance-lg);
+}
+
+/* Mascot mode (board/start.js sets the class with the gear switch): the zone over both rows, the same tracks. */
+.top.figure-mascot {
+  grid-template-areas:
+    'mascot row1'
+    'mascot row2';
 }
 
 .top-row {
@@ -115,7 +126,7 @@ textarea {
   align-items: center;
   gap: var(--distance-md);
   flex-wrap: nowrap;
-  height: 50px;
+  height: 40px;
   min-width: 0;
 }
 
@@ -133,16 +144,22 @@ textarea {
   flex: 1 1 0;
 }
 
-/* The mascot zone: fixed space (52 × 104) even without a logo, so the top does not jump. The feet poke 8 px down past
-   the border (6 px gap + 1 px edge + 8 px), and sit above the focus line and the strip (below the menus and the panel). */
+/* The figure zone: fixed space even before the picture has loaded, so the top does not jump. With the logo (the
+   default) it is 32 × 40: as tall as row 1 and as wide as the logo's shape (about 3:4), centred in the row. In mascot
+   mode it is 41 × 82: both rows and the gap, the mascot standing on the bottom edge for its feet. It sits above the
+   focus line and the strip (below the menus and the panel). */
 .mascot {
   grid-area: mascot;
   position: relative;
   z-index: 3;
+  align-self: center;
+  width: 32px;
+  height: 40px;
+}
+.top.figure-mascot .mascot {
   align-self: end;
-  width: 52px;
-  height: 104px;
-  margin-bottom: 0px;
+  width: 41px;
+  height: 82px;
 }
 
 .mascot .logo {
@@ -153,19 +170,16 @@ textarea {
   object-position: bottom center;
 }
 
-/* The Ravenseat logo (the default in the zone; the mascot is a switch in the gear). It is drawn at 70 % of the zone's
-   height so the top is not cramped, centred both ways in the same 52 × 104 zone, and the zone itself is centred in the
-   top (the mascot stands on the bottom edge instead, for its feet), so nothing else moves. The raven on the right
-   talks; the bubble keeps its place and its arrow points at that raven. The shape is a mask and the color a theme
-   token, so it follows light and dark mode. */
+/* The Ravenseat logo (the default in the zone; the mascot is a switch in the gear). It fills the 32 × 40 zone, so its
+   height is the height of row 1. It never talks: no bubble, no button (mascot.js). The shape is a mask and the color
+   a theme token, so it follows light and dark mode. */
 .mascot.raven {
   display: flex;
   align-items: center;
   justify-content: center;
-  align-self: center;
 }
 .mascot .logo-raven {
-  height: 70%;
+  height: 100%;
   background: var(--color-on-surface);
   -webkit-mask: url('/ravenseat.svg') no-repeat center / contain;
   mask: url('/ravenseat.svg') no-repeat center / contain;
@@ -181,14 +195,15 @@ textarea {
   clear: left; /* the setting title floats left (as .theme-row) */
 }
 
-/* The speech bubble (the mascot fills it): right of the head, above the title row, with an arrow toward the mouth.
-   z-index 9 keeps it below the panel backdrop (10) and the panel (11). */
+/* The speech bubble (only in mascot mode; the mascot fills it): right of the head, over the title row, with an arrow
+   toward the mouth. z-index 9 keeps it below the panel backdrop (10) and the panel (11). */
 .bubble {
   position: absolute;
   z-index: 9;
-  top: 10px;
-  left: calc(var(--distance-lg) + 52px + 12px);
-  max-width: 340px;
+  top: 6px;
+  left: calc(var(--distance-lg) + 41px + 12px);
+  /* Wide enough that most lines take one line and the bubble stays over row 1, not over the view tabs in row 2. */
+  max-width: 560px;
   margin: 0;
   padding: 10px 14px;
   background: var(--color-surface-container-high);
@@ -228,7 +243,8 @@ textarea {
   }
 }
 
-/* The bubble fades out (200 ms, as OUT_MS in mascot.js), and the mascot is a button (a click gives a line). */
+/* The bubble fades out (200 ms, as OUT_MS in mascot.js), and the mascot is a button (a click gives a line). The logo
+   never gets .clickable, so it has the plain cursor. */
 .bubble {
   transition: opacity 200ms ease-in;
 }
@@ -2949,7 +2965,8 @@ body.with-option-line .toaster {
   }
 }
 
-/* The top on a phone (below 720 px): the mascot becomes 56 px high and sits at the top, the rows wrap, the tabs get
+/* The top on a phone (below 720 px): the logo stays 32 × 40 and the mascot becomes 28 × 56, both at the top; the rows
+   wrap, the tabs get
    their own row that scrolls sideways (overflow-x on the row, never on the page), and the bubble becomes a toast below the top.
    No part of the top is wider than the viewport at 375 px (checked in lib/__tests__/queueBoardTop.test.ts). */
 @media (max-width: 720px) {
@@ -2960,9 +2977,13 @@ body.with-option-line .toaster {
   }
   .mascot {
     align-self: start;
+    width: 32px;
+    height: 40px;
+  }
+  .top.figure-mascot .mascot {
+    align-self: start;
     width: 28px;
     height: 56px;
-    margin-bottom: 0;
   }
   .top-row {
     gap: var(--distance-sm);
