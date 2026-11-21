@@ -98,8 +98,9 @@ The point isn't that AI never needs you. **It's that you shouldn't need to be pr
 tasks.**
 
 **Built for unattended work.** Leave Claude Code running and Ravenseat can keep dispatching, checking, fixing and
-merging eligible tasks for hours. When it needs your input, it waits without consuming tokens. Answer through Claude
-Code, Remote Control or the board, and execution can continue. Your machine must remain awake for local execution.
+merging eligible tasks for hours. When a task needs your input, only that task and the work depending on it are parked; other eligible
+work keeps going. If nothing independent is left, it waits without consuming tokens. Answer through Claude Code,
+Remote Control or the board, and the parked work continues. Your machine must remain awake for local execution.
 
 ## What needs your attention?
 
