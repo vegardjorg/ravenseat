@@ -419,6 +419,12 @@ const STANDARD = Object.freeze({
   // The mission's optional blocks (DR-2): riskFirst = a task's `risk_first` (the riskiest assumption) is checked first,
   // and a zone task without one is told to prove the choice can be reversed. The block appears only when it applies.
   mission: { riskFirst: true },
+  // The checks before a task starts (PS-1..4, lib/startChecks.js), each a WARNING or NOTE only, never a stop (so all on):
+  // missionPaths = paths the mission names outside owned_files / shared_patch / reads (add and start), emptyOwnership = a
+  // K, D or D+ with no owned_files (add and start), sizeNotSet = a D or D+ without content_min is stored as null and
+  // shown as "size not set" (the estimate still counts 30), ownerQuestionCount = at receive, ownerQuestions=<n> against
+  // the items in the report's owner question section.
+  planChecks: { missionPaths: true, emptyOwnership: true, sizeNotSet: true, ownerQuestionCount: true },
   // When a focus has ended (every stage done, or its period `to` is over; lib/logic/ranking.js "When the focus has
   // ended"): continueWhenEmpty false (the default) pauses the queue (fill starts nothing) and asks the owner one
   // question in "Waiting on you": set a new focus or continue the regular queue. true = the queue continues by itself

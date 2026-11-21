@@ -808,6 +808,14 @@ export function cmdReceive() {
     console.log(`Owner question(s) from the track (${asked.count}), also in ${CLI} decide:`);
     console.log(asked.text ?? "  (no \"Owner questions\" section: read the track's report and answer)");
   };
+  /**
+   * PS-4 (lib/startChecks.js): ownerQuestions=<n> against the items in the report's owner question section. A mismatch
+   * is one NOTE line, never a stop; planChecks.ownerQuestionCount false turns it off.
+   */
+  const ownerQuestionNote = (v) => {
+    const note = require('./lib/startChecks.js').ownerQuestionNote({ ...v, config: CONFIG });
+    if (note) console.log(note);
+  };
   /** The card in ravenseat decide. The report's path goes with it, since the note holds only the start of the question. */
   const openQuestion = (o, asked, file) => {
     const opened = L.openBlock(o, 'track-question', { note: asked.note });
@@ -825,6 +833,7 @@ export function cmdReceive() {
     const said = fresh ? (L.parseResult(val('--result')) ?? L.parseResult(reply) ?? L.parseResult(reportText)) : null;
     if (said) console.log(`The track says: ${said.line}`);
     const asked = L.trackQuestion({ result: said, reportText, reply });
+    ownerQuestionNote({ result: said, reportText, reply });
     if (asked) {
       printQuestion(asked);
       edit((queue) => {
@@ -890,6 +899,7 @@ export function cmdReceive() {
   const suspicious = OM.suspicious([reportText, trackReply], o0?.cloud ? null : missionMark(o0));
   for (const l of OM.receiveLines(id, suspicious)) console.log(l);
   if (asked) printQuestion(asked);
+  ownerQuestionNote({ result, reportText, reply: trackReply });
   // The choices the track made itself: shown here and in the package so the owner reads them before the merge.
   const assumptions = L.assumptionSection(reportText) ?? L.assumptionSection(trackReply);
   if (assumptions)

@@ -19,7 +19,7 @@ import { execFileSync } from 'node:child_process';
 
 import {
   a, autoCleanFocus, BASE, branchFor, branchInfo, CE, CH, CONFIG, CLI, cut, die, edit, focusCleanOut, FOLDER, git, GIT_ROOT, HERE, L, MIGR,
-  missionFile, parallelWarning, positional, pulseCursor, read, readCursor, require, TK, uncommittedPaths, val, values,
+  missionFile, parallelWarning, positional, pulseCursor, read, readCursor, require, startCheckLines, TK, uncommittedPaths, val, values,
   WIDTH, writeExternalWarning,
 } from './context.mjs';
 import {
@@ -46,6 +46,8 @@ const CL = require('./lib/clients/index.js');
 const AT = require('./lib/logic/attempt.js');
 // The quick gate commands a fix round reruns (lib/controls.js commandsOf).
 const CONTROLS = require('./lib/controls.js');
+// The checks before a task starts (PS-1..3): the estimate of a D/D+ without a size is marked as a guess.
+const SC = require('./lib/startChecks.js');
 
 /**
  * READS WARNING lines for a started task in reads.mode "warn" (lib/logic/conflicts.js): the read files an active task
@@ -221,8 +223,10 @@ export function cmdStart() {
   });
   logStart(r);
   console.log(
-    `Started ${id}: branch ${r.branch}${r.migr_block ? `, migration block ${r.migr_block}` : ''}, estimate ${L.estimate(r)} min.`,
+    `Started ${id}: branch ${r.branch}${r.migr_block ? `, migration block ${r.migr_block}` : ''}, estimate ${SC.estimateText(r, L.estimate(r))}.`,
   );
+  // The checks before a task starts (PS-1..3, lib/startChecks.js), as at add: warnings only, the task has started.
+  for (const l of startCheckLines(r)) console.log(l);
   // The agent line from the descriptor: the effort by class (K and U medium, D and D+ high) and the adapter's agent.
   const d = MD.missionDescriptor(r, { client: adapterFor(r).id, baseSha: r.head_start ?? null, attemptId: AT.current(r)?.id });
   console.log(CL.clientFor(d.client).startLine(d));
@@ -416,6 +420,8 @@ export function cmdFill() {
   const queue = read();
   for (const v of selected.filter((x) => x.new)) logStart(queue.tasks.find((x) => x.id === v.id));
   for (const v of selected) for (const l of readsWarningLines(queue.tasks.find((x) => x.id === v.id), queue.tasks)) console.log(l);
+  // The checks before a task starts (PS-1..3, lib/startChecks.js) for the new starts: warnings only, as at add.
+  for (const v of selected.filter((x) => x.new)) for (const l of startCheckLines(queue.tasks.find((x) => x.id === v.id))) console.log(l);
   pulseCursor(`fill ${selected.map((v) => v.id).join(' ')}`);
   fs.mkdirSync(scratch, { recursive: true });
   const trackFile = path.join(scratch, 'queue-track-fill.md');
@@ -476,7 +482,7 @@ export function cmdFill() {
   const fillModel = CE.costModel(queue);
   const fillEstimate = (id) => {
     const o = queue.tasks.find((x) => x.id === id);
-    return `${L.estimate(o)} min ${CE.costText(CE.calibratedCost(o, fillModel))}`;
+    return `${SC.estimateText(o, L.estimate(o))} ${CE.costText(CE.calibratedCost(o, fillModel))}`;
   };
   for (const d of descriptors)
     console.log(

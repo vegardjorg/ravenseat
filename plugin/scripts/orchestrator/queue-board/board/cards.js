@@ -407,8 +407,9 @@ function summaryEl(k, col) {
               'aria-label': window.QueueA11y.classLabel(k.class),
             })
           : null,
-        // A proposal with no size of its own (an imported GitHub issue): the owner sizes it at approval.
-        k.status === 'proposed' && k.content_min == null
+        // A proposal with no size of its own (an imported GitHub issue): the owner sizes it at approval. A D or D+ task
+        // added without content_min (PS-3, lib/startChecks.js) says the same whatever its status.
+        (k.status === 'proposed' || k.class === 'D' || k.class === 'D+') && k.content_min == null
           ? el('span', { class: 'summary-estimate', text: 'size not set', title: 'No content minutes set; it counts as 30 min until you set it (Edit)' })
           : el('span', { class: 'summary-estimate', text: `${k.estimate} min`, title: 'Estimated work minutes for an agent, not wall-clock time' }),
         // "visual" as an eye icon. The word stays as hidden text, so the screen reader says the same as before.

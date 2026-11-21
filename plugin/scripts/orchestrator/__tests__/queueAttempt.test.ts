@@ -761,6 +761,23 @@ describe('what the track says reaches the owner (test round 2: M20, M21)', () =>
     expect(r.out).toMatch(/commits=0.*branch has/);
     expect(p.find('A').status).toBe('review');
     expect(JSON.parse(p.run(['decide', '--json']).out).items.find((x: { id: string }) => x.id === 'A').kind).toBe('stopped');
+    // The count matches the one item: no note (PS-4, lib/startChecks.js).
+    expect(r.out).not.toContain('NOTE: the RESULT line says ownerQuestions');
+  });
+  it('PS-4: a count that does not match the owner question section is a NOTE, with or without commits', () => {
+    const two = asks('A').replace('Recommended: yes.', 'Recommended: yes.\n- And may the name change? Recommended: no.');
+    const p = project([task('A')]);
+    p.run(['start', 'A']);
+    p.branch('A');
+    p.report('A', two);
+    const r = p.run(['receive', 'A']);
+    expect(r.code, r.error).toBe(0);
+    expect(r.out).toContain("NOTE: the RESULT line says ownerQuestions=1, but the report's owner question section has 2 item(s).");
+    const q = project([task('B')]);
+    q.run(['start', 'B']);
+    if (!q.g(['branch', '--list', 'queue/B'])) q.g(['branch', 'queue/B']);
+    q.report('B', asks('B').replace('ownerQuestions=1', 'ownerQuestions=0'));
+    expect(q.run(['receive', 'B']).out).toContain('NOTE: the RESULT line says ownerQuestions=0');
   });
   it('a DONE delivery without questions gets none of these lines', () => {
     const p = project([task('A')]);
