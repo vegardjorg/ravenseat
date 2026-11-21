@@ -14,6 +14,8 @@
 
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/media/explanation-dark.gif"><img src="assets/media/explanation.gif" alt="A 44-second explanation of Ravenseat: instead of babysitting agents, the plan lives in plain files in the repo, each agent works in its own worktree, your checks run on every delivery with a fix round for a failure, a decision pauses only the work that waits on it, and Claude Code and the board show the same state" width="800"></picture></p>
 
+<p align="center"><img src="assets/infographics/ai-reviews.webp" width="800" alt="For fun: Ravenseat as reviewed by four AIs in incognito mode (Fable 5.2, Gemini, ChatGPT and Grok), each given the README and docs and asked for a five-line review with stars and humor. All four gave 4 out of 5. A footnote says half of them could not count to five."></p>
+
 ## Your project shouldn't depend on you babysitting agents
 
 Claude Code can build a feature in one conversation. But a project spanning days or weeks is a different problem.
