@@ -12,7 +12,7 @@
 
 /**
  * The short help: a few key commands per group, one line each. `cmd` is the command word ravenseat dispatches on (a queue.mjs
- * command or a ravenseat script/alias); the test checks that every one really exists. Keep it between 10 and 14 commands.
+ * command or a ravenseat script/alias); the test checks that every one really exists. Keep it between 10 and 15 commands (15 since `issues`, owner 21.11.2026).
  */
 const GROUPS = [
   {
@@ -21,6 +21,7 @@ const GROUPS = [
       { cmd: 'setup', usage: 'setup', text: 'set this project up for the queue (run once)' },
       { cmd: 'add', usage: 'add --file task.json', text: 'add one task or a list' },
       { cmd: 'board', usage: 'board [open]', text: 'start the board (a local web page with the queue; it opens in your browser), or open it again' },
+      { cmd: 'issues', usage: 'issues list | import <n>', text: 'GitHub issues as proposals (your gh login; nothing starts until you approve)' },
     ],
   },
   {

@@ -67,7 +67,7 @@ ravenseat unlock                    # who holds the queue lock; changes nothing 
 ravenseat tidy                      # merged worktrees (anywhere on disk) and branches left behind, with sizes; changes nothing
 ravenseat tidy --execute            # removes only the merged, clean, unlocked ones no active task uses, after y/N (--yes skips it)
 ravenseat issues list [--label x]   # GitHub's open issues (your gh login, read only) and where an import would put each
-ravenseat issues import 12 14       # proposes each: a plan in the Inbox, or with --as task a proposed task; nothing starts
+ravenseat issues import 12 14       # proposes each: a plan in the Inbox, or with --as task a proposed task; nothing starts (--with-body keeps the body as a reference file)
 ravenseat issues report [--post]    # after a push: preview, then comment on or close the linked issues (issues.onPush, off); asks first
 ravenseat pr [--post]               # one draft pull request per batch from ravenseat/batch-<date> (push.pr, off); preview, then asks
 ravenseat release-notes [<tag>]     # local notes since a tag, Added/Changed/Fixed/Hardened; --github --tag <t> --post creates a draft release

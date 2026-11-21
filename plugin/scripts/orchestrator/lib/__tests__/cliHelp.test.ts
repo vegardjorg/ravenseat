@@ -43,10 +43,12 @@ describe('the command lists', () => {
     expect([...H.QUEUE_COMMANDS].sort()).toEqual([...DISPATCHED].sort());
   });
 
-  it('every command in the short help exists (a queue command, an alias or a script), 10 to 14 in all', () => {
+  // 15 since the owner's decision of 21.11.2026: `issues` is in the short help.
+  it('every command in the short help exists (a queue command, an alias or a script), 10 to 15 in all', () => {
     const all = H.GROUPS.flatMap((g) => g.commands);
     expect(all.length).toBeGreaterThanOrEqual(10);
-    expect(all.length).toBeLessThanOrEqual(14);
+    expect(all.length).toBeLessThanOrEqual(15);
+    expect(all.map((c) => c.cmd)).toContain('issues');
     for (const c of all) {
       const exists = DISPATCHED.has(c.cmd) || c.cmd in H.ALIASES || SCRIPTS.includes(c.cmd);
       expect(exists, c.cmd).toBe(true);

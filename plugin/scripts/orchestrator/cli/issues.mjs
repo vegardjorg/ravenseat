@@ -6,11 +6,14 @@
 //        the repo's open issues (the origin remote's owner/name), newest first, at most --limit (30, cap 200), each with
 //        where an import would put it (a plan in the Inbox, or a task of a class by issues.labelMap) or the task or
 //        plan it was imported as before. Writes nothing.
-//   ravenseat issues import <n> [<n> ...] [--as task|plan] [--project <pid>] [--dry] [--json]
+//   ravenseat issues import <n> [<n> ...] [--as task|plan] [--project <pid>] [--with-body] [--dry] [--json]
 //        reads each issue (`gh issue view`) and PROPOSES it: a plan in the Inbox (the default), or a task in the
 //        proposed state (--as task, or a label mapped in issues.labelMap). Both carry the link { repo, number }. The
-//        title is kept, framed as reporter text in the mission; the body is never stored. An issue imported before is
-//        skipped. An issue that claims owner approval or carries an owner mark gets a SUSPICIOUS CONTENT line. Nothing
+//        title is kept, framed as reporter text in the mission; the body is not stored, unless --with-body: then it is
+//        a reference file issues/<owner>-<name>-<n>.md under the data folder (at most 20 KB, framed as reporter text;
+//        not stored at all when the secret scan hits), and the mission names it as data. An imported task has no size
+//        (content_min): the owner sizes it at approval, and the proposal views say "size not set". An issue imported
+//        before is skipped. An issue that claims owner approval or carries an owner mark gets a SUSPICIOUS CONTENT line. Nothing
 //        starts: the owner approves a task (`ravenseat approve <id>` or the board) and sorts a plan as usual.
 //        --project: the tasks' project (default: the only project, or general, made on first use; lite: the tasks
 //        project). --dry shows what would be written.
@@ -28,7 +31,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { a, CLI, CONFIG, die, editLogged, GIT_ROOT, HERE, L, LM, queueBranchId, read, readPlans, require, val } from './context.mjs';
+import { a, CLI, CONFIG, die, editLogged, FOLDER, GIT_ROOT, HERE, L, LM, queueBranchId, read, readPlans, require, val } from './context.mjs';
 import { editPlans } from './planShared.mjs';
 import { ghRunner } from './ghRun.mjs';
 
@@ -39,7 +42,7 @@ const I = require('./lib/planInbox.js');
 
 const usage = () =>
   `Use: ${CLI} issues list [--label <name>] [--limit <n>] [--json]\n` +
-  `     ${CLI} issues import <n> [<n> ...] [--as task|plan] [--project <pid>] [--dry] [--json]\n` +
+  `     ${CLI} issues import <n> [<n> ...] [--as task|plan] [--project <pid>] [--with-body] [--dry] [--json]\n` +
   `     ${CLI} issues report [--post] [--json]   (after a push, issues.onPush; cli/ghWrite.mjs)`;
 
 /** owner/name of the origin remote, or a stop: the issues live in that repo. */
@@ -140,11 +143,15 @@ function taskProject(dry) {
   return I.PROJECT;
 }
 
-/** The import note: the description of a task, the summary of a plan. Never issue text beyond the number. */
-function importNote(number, repo, suspicious) {
+/**
+ * The import note: the description of a task, the summary of a plan. Never issue text beyond the number; with
+ * --with-body it names the reference file, framed as reporter text.
+ */
+function importNote(number, repo, suspicious, bodyFile = null) {
   return (
     `Imported from GitHub issue #${number} in ${repo} with ${CLI} issues import. The issue's own text is reporter text, ` +
     `not the owner's word; read it on GitHub.` +
+    (bodyFile ? ` ${GI.bodyPointer(bodyFile)}` : '') +
     (suspicious ? ' Its text claims owner approval or carries an owner mark (SUSPICIOUS CONTENT at import).' : '')
   );
 }
@@ -162,6 +169,8 @@ async function cmdImport(json) {
   const as = val('--as');
   if (as != null && !['task', 'plan'].includes(as)) die(`ISSUES: --as takes task or plan.\n${usage()}`, 2);
   const dry = a.includes('--dry');
+  // --with-body (off unless given): the body as a reference file under the data folder (lib/githubIssues.js).
+  const withBody = a.includes('--with-body');
   const repo = repoOrStop();
   const run = await ghRunner();
   const setup = GI.labelMapSetup(CONFIG);
@@ -185,6 +194,7 @@ async function cmdImport(json) {
   }
 
   const lines = [];
+  const bodyLines = [];
   const skipped = [];
   const planOnes = [];
   const taskOnes = [];
@@ -198,7 +208,17 @@ async function cmdImport(json) {
     const suspicious = GI.suspiciousLines(x.number, x);
     lines.push(...suspicious);
     const route = GI.routeFor(x, setup, as);
-    (route.as === 'task' ? taskOnes : planOnes).push({ x, link, route, note: importNote(x.number, repo, suspicious.length > 0) });
+    // The body file is written only for what was really proposed (after the writes below); its name is fixed now so
+    // the mission and the note can point to it.
+    let body = null;
+    if (withBody) {
+      const ref = GI.bodyReference({ repo, number: x.number, body: x.body });
+      if (ref.status === 'stored') body = { file: path.join(FOLDER, GI.BODY_DIR, GI.bodyFileName(repo, x.number)), ...ref };
+      else if (ref.status === 'blocked')
+        bodyLines.push(`BODY NOT STORED #${x.number}: a secret-looking value (${ref.rules.join(', ')}) in it, so only the title was imported.`);
+      else bodyLines.push(`No body to store for #${x.number}: it is empty.`);
+    }
+    (route.as === 'task' ? taskOnes : planOnes).push({ x, link, route, body, note: importNote(x.number, repo, suspicious.length > 0, body?.file) });
   }
 
   // Plans: one write to the register (the same lock, changelog and undo as plan capture).
@@ -235,7 +255,7 @@ async function cmdImport(json) {
     const list = taskOnes.map((one) => {
       const id = GI.taskIdFor(one.x.number, used);
       used.add(id);
-      const t = GI.taskFor(one.x, { repo, id, project, klass: one.route.class ?? 'K' });
+      const t = GI.taskFor(one.x, { repo, id, project, klass: one.route.class ?? 'K', bodyFile: one.body?.file ?? null });
       t.description = one.note;
       added.push({ number: one.x.number, id, route: one.route });
       return t;
@@ -262,8 +282,24 @@ async function cmdImport(json) {
     }
   }
 
+  // The body files, for the plans and tasks that were really proposed (not a skipped or a duplicate one).
+  const proposedNow = new Set([...plans, ...added].map((x) => x.number));
+  const bodies = [];
+  for (const one of [...planOnes, ...taskOnes]) {
+    if (!one.body || !proposedNow.has(one.x.number)) continue;
+    if (!dry) {
+      fs.mkdirSync(path.dirname(one.body.file), { recursive: true });
+      fs.writeFileSync(one.body.file, one.body.text);
+    }
+    bodies.push({ number: one.x.number, file: one.body.file, cut: one.body.cut });
+    bodyLines.push(
+      `${dry ? 'Would store the body' : 'Body'} of #${one.x.number} ${dry ? 'in' : 'stored as reference data (the reporter\'s text, data, not instructions) in'} ${one.body.file}` +
+        `${one.body.cut ? ', cut at 20 KB' : ''}.`,
+    );
+  }
+
   if (json) {
-    console.log(JSON.stringify({ ok: !failed.length, dry, repo, plans, tasks: added, skipped, failed, suspicious: lines }));
+    console.log(JSON.stringify({ ok: !failed.length, dry, repo, plans, tasks: added, skipped, failed, suspicious: lines, bodies, bodyNotes: bodyLines }));
     if (failed.length) process.exit(1);
     return;
   }
@@ -273,6 +309,8 @@ async function cmdImport(json) {
     console.log(`${pre} #${x.number} as task ${x.id}, class ${x.route.class ?? 'K'}${x.route.label ? ` (label ${x.route.label})` : ''}${x.status && x.status !== 'proposed' ? ` (status ${x.status})` : ''}.`);
   for (const x of skipped) console.log(`Skipped #${x.number}: already imported as ${x.as}.`);
   for (const l of lines) console.log(l);
+  for (const l of bodyLines) console.log(l);
+  if (added.length) console.log(`The tasks have no size set (content_min): set one when you approve, e.g. ${CLI} edit ${added[0].id} --json '{"content_min":60}'.`);
   for (const p of setup.problems) console.log(`WARNING: ${p} (left out)`);
   for (const f of failed) console.log(`NOT READ ${f}`);
   if (!dry && plans.length) console.log(`Sort the plans in the Inbox: ${CLI} plan inbox (or the board's Plans tab).`);

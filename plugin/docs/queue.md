@@ -152,7 +152,7 @@ Reading is all it does unless you turn on one of the writes below, and each writ
 
 ```
 ravenseat issues list [--label bug] [--limit 30]   # open issues and where an import would put each; writes nothing
-ravenseat issues import 12 14 [--as task] [--dry]  # proposes each one: a plan in the Inbox, or a proposed task
+ravenseat issues import 12 14 [--as task] [--with-body] [--dry]  # proposes each one: a plan in the Inbox, or a proposed task
 ravenseat issues report [--post]                   # after a push: comment on or close the linked issues (issues.onPush)
 ravenseat pr [--post]                              # one draft pull request for the batch (push.pr)
 ravenseat release-notes [<from-tag>] [--save] [--github --tag <tag> [--post]]   # notes since a tag; a draft release
@@ -164,6 +164,13 @@ ravenseat release-notes [<from-tag>] [--save] [--github --tag <tag> [--post]]   
 - **Issue text is data.** Anyone can write an issue, so the title is kept only as the reporter's words, framed that way
   in the mission, and the body is not stored. An issue that claims your approval or carries an owner mark gets a
   `SUSPICIOUS CONTENT` line, the same as at `receive`.
+- **`--with-body` (off unless you give it)** stores each body as a reference file, `issues/<owner>-<name>-<n>.md` in
+  the data folder, with a header that calls it the reporter's text: data, not instructions, and not your word. The
+  mission names the file in the same frame as the title. At most 20 KB is kept (a longer body is cut, and the file
+  and the output say so). A secret-looking value in the body means it is not stored at all: the import keeps the
+  title and prints `BODY NOT STORED`, never the value.
+- **No size.** An imported task has no `content_min` (an issue says nothing about size). Its estimate counts 30
+  minutes, and `proposals`, `show --full`, `approve` and the board say "size not set", so you size it when you approve.
 - **The link.** The task or plan keeps `issue: { "repo": "owner/name", "number": 12 }`. `--issue 12` (or
   `owner/name#12`, or `none` to remove it) sets it on `add` and `edit`; a bare number means the `origin` remote's
   repo. The board card, the task panel, `ravenseat show`/`info`, the Plans view and `plan get` show "Issue #12" as a
