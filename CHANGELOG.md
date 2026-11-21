@@ -63,6 +63,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Plans: polish: clearer empty states, sticky Roadmap column headers, start lines in one Copy menu, and the deadline
   band only when there is a deadline.** On a phone the room tabs stay on one line.
 ### Fixed
+- The red team result no longer shows one unexplained skip: the report runs its own self-check right after writing the page.
 - **Missions: a section pointer on a Windows short path (`RUNNER~1`) keeps its line range.**
 - **Silent snapshot: a process that names the worktree by its Windows short path is found too, also when the path mixes short and long folder names.**
 - **Queue columns fit from 1200 to 1440 px without sideways scroll, also with five columns or the panel beside the board.**

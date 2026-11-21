@@ -132,7 +132,7 @@ were finished this way in three weeks of October 2026, in a larger private proje
 
 Instructions in `CLAUDE.md` are advice, and text an agent reads can argue against them. Ravenseat enforces its rules
 on every action instead: an agent cannot push, cannot change the project's control files and cannot mark its own work
-as tested. 244 red team tests run on real git and real processes (243 passed and 1 was skipped on 2026-11-19). Run
+as tested. 266 red team tests run on real git and real processes (all 266 passed on 2026-11-21). Run
 `npm run redteam` to check it yourself.
 
 ### The plan lives in files, not in the chat
