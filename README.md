@@ -11,7 +11,7 @@
 <p align="center">Ravenseat gives Claude Code a persistent task queue. Parallel agents work in separate Git worktrees. Ravenseat runs your configured checks against their delivered commits before merging passing changes locally. When a task needs your judgment, it parks that task and its dependents while other work continues.</p>
 <p align="center"><sub>Open source · Local-first · Runs inside Claude Code · Your Git repository</sub></p>
 
-<p align="center"><img src="assets/media/explanation.gif" alt="A 44-second explanation of Ravenseat: a project spread across many chats becomes a persistent workflow where agents build, checks verify, failures are handled, and the developer returns to decisions" width="800"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/media/explanation-dark.gif"><img src="assets/media/explanation.gif" alt="A 44-second explanation of Ravenseat: instead of babysitting agents, the plan lives in plain files in the repo, each agent works in its own worktree, your checks run on every delivery with a fix round for a failure, a decision pauses only the work that waits on it, and Claude Code and the board show the same state" width="800"></picture></p>
 
 ## Your project shouldn't depend on you babysitting agents
 
