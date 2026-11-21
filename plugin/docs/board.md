@@ -112,7 +112,7 @@ has a "Does this look bad?" line that opens the matching setting. This is where 
 The plan register, the priority map, dark mode and the settings panel are shown in
 [the board in detail](guide.md#the-board-in-detail).
 
-<p align="center"><img src="../../assets/screenshots/light-12-mascot-night.png" alt="The ravens at 02:47: the agents don't need sleep, you do" width="480"></p>
+<p align="center"><img src="../../assets/screenshots/light-12-mascot-night.png" alt="The mascot (switched on in the gear) at 02:47: the agents don't need sleep, you do" width="600"></p>
 
 ## What it shows
 

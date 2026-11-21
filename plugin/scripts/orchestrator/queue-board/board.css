@@ -202,7 +202,8 @@ textarea {
   z-index: 9;
   top: 6px;
   left: calc(var(--distance-lg) + 41px + 12px);
-  max-width: 340px;
+  /* Wide enough that most lines take one line and the bubble stays over row 1, not over the view tabs in row 2. */
+  max-width: 560px;
   margin: 0;
   padding: 10px 14px;
   background: var(--color-surface-container-high);
