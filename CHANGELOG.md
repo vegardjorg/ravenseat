@@ -38,6 +38,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Catalog entries have a `kind` (decision, design, stack, dependency, not-building) and `except` paths, and
   Decisions lists them by kind as Project catalog.** Design entries reach missions and reviewer-design, and accepted
   stack entries reach the Checks tab and the dependency notes (`catalog.stackFacts`, on).
+- **A green gate where no tests ran ("No test files found", "0 passing", "collected 0 items") gets a NOTE at receive, a line in the review package and a "no tests ran" badge on the card; never a stop.**
 ### Changed
 - **Faster commands on Windows: one `ravenseat merge` starts about a quarter fewer git processes (66 to 48).**
 - **The board's top is lower: a small logo as tall as the first row, and speech bubbles only with the mascot.**
@@ -63,7 +64,12 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **A fresh `catalog init` gives 0 warnings in `catalog check`: the Prefer intro sentence is no longer read as a prefer line.**
 - **Statistics: the token mix prices 1-hour cache writes at the 1-hour price and each model at its own, so it adds up to the measured cost.**
 - **Statistics: the cache expiry cost is the extra cost (the write minus the read it replaced), not the whole rewrite.**
+- **`doctor` gives a WARN with the fix for an `issues.labelMap` of the wrong shape instead of a FAIL.**
+- **Statistics: the three y-axis ticks are always distinct, so a small range no longer reads "1 s, 1 s, 0 s".**
+- **Plans tree map: the built fill's line no longer runs through a label such as "43 % built", in light and dark.**
+- **Checks: suggestion groups with one card sit side by side and use the width instead of one narrow column.**
 ### Hardened
+- **The shell reader treats a backslash-escaped space as part of the word, so `C:/Program\ Files/GitHub\ CLI/gh.exe` is checked as `gh`.**
 - **Queue agents may only read with the GitHub CLI: `gh api`, `gh auth`, `gh gist` and every write are denied (rule `gh-cli`).**
 - **Secrets in transcripts: the key scan reads every worktree git lists and passwords of any length, an agent printing a
   .env file or the environment is logged on the Checks tab, the project's .env values are redacted in stored text, and
