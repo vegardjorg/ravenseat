@@ -155,8 +155,8 @@ Decisions collect the things Ravenseat cannot or should not resolve on its own. 
 - work that looks stuck or runs long.
 
 **A decision doesn't stop the queue.** Only the affected task and its downstream dependencies wait. Ravenseat continues
-working through everything else that's eligible. You can answer later, and the blocked work becomes eligible again
-without restarting the project.
+working through everything else that's eligible. You can answer later: your answer clears that blocker, and the work resumes once its remaining
+dependencies are satisfied, without restarting the project.
 
 Decisions come with context and a recommendation. Ravenseat shows which work is blocked and what your answer would
 unlock, most impact first. You can answer through Claude Code (`/ravenseat:decide`) or the optional board.
