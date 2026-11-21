@@ -1484,6 +1484,18 @@ code {
   background-image: linear-gradient(var(--state-hover), var(--state-hover));
 }
 
+/* The GitHub issue link in the task panel and the plan entry (GH-2): a real link, in the primary token in both modes
+   (not the browser's own link blue), underlined so it reads as leaving the board. */
+a.issue-link,
+a.issue-link:visited {
+  color: var(--color-primary);
+  text-underline-offset: 2px;
+}
+
+a.issue-link:hover {
+  text-decoration-thickness: 2px;
+}
+
 .link-button:active {
   background-image: linear-gradient(var(--state-press), var(--state-press));
 }
