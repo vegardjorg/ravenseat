@@ -31,6 +31,9 @@
 //                   orchestrator, trigger }
 //                                                            the main session's cost from the status line payload;
 //                                                            CUMULATIVE per session_id (see sessionDecision)
+//   queue-start   { command, running }                      the first start or fill after the queue was idle (AW-5)
+//   queue-idle    { since, duration_s }                     pulse-check answered SILENT with no running track while a
+//                                                            session was open (queueSessionStep; QUEUE_SESSION_FILE)
 //
 // Writing a row never changes what the caller does: lib/timeLogRows.js appendRows swallows every error, and the
 // callers wrap the building in try/catch too (cli/events.mjs).
@@ -42,7 +45,19 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /** The event names written here (readers that keep only some rows, such as the board, filter on this set). */
-const EVENTS = new Set(['fixRound', 'mergeConflict', 'baseGate', 'flakyGate', 'ciWatch', 'triage', 'push', 'load', 'session']);
+const EVENTS = new Set([
+  'fixRound',
+  'mergeConflict',
+  'baseGate',
+  'flakyGate',
+  'ciWatch',
+  'triage',
+  'push',
+  'load',
+  'session',
+  'queue-start',
+  'queue-idle',
+]);
 
 const iso = (t) => (t == null ? new Date().toISOString() : typeof t === 'number' ? new Date(t).toISOString() : t);
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
@@ -146,6 +161,39 @@ function loadRow({ time, command, load, slots, guard, running, override = false 
   if (guard?.stop) row.stop_reason = guard.summary ?? 'the machine is full';
   if (override) row.override = true;
   return row;
+}
+
+// ---- Queue session start and end (AW-5) -------------------------------------------------------------------------
+//
+// A session timeline needs a start and an end, and the time log had neither: the first load row was a guess. The rule:
+// start or fill ("active") opens a session once and writes queue-start; pulse-check answering SILENT with no running
+// track ("quiet") closes an open session once and writes queue-idle. Everything else writes nothing, so a fill every
+// few minutes gives one row. The open flag lives in QUEUE_SESSION_FILE in the data folder (cli/events.mjs).
+
+/** The state file in the data folder: { open, since } for the queue session (queueSessionStep). */
+const QUEUE_SESSION_FILE = 'queue-session.json';
+
+/**
+ * The next step of the queue session. `prev` is the stored state (anything else counts as no open session).
+ * @param {unknown} prev { open: boolean, since: string } or null
+ * @param {{ kind: 'active'|'quiet', command?: string, running?: number, time?: string|number }} x
+ * @returns {{ row: object|null, next: unknown }}
+ */
+function queueSessionStep(prev, { kind, command = null, running = null, time } = {}) {
+  const open = !!prev && typeof prev === 'object' && prev.open === true;
+  const at = iso(time);
+  const runningNow = Number.isInteger(running) ? running : null;
+  if (kind === 'active' && !open)
+    return { row: { time: at, event: 'queue-start', command, running: runningNow }, next: { open: true, since: at } };
+  if (kind === 'quiet' && open && runningNow === 0) {
+    const from = Date.parse(prev.since ?? '');
+    const duration = Number.isFinite(from) ? Math.max(0, Math.round((Date.parse(at) - from) / 1000)) : null;
+    return {
+      row: { time: at, event: 'queue-idle', since: prev.since ?? null, duration_s: duration },
+      next: { open: false, since: at },
+    };
+  }
+  return { row: null, next: prev };
 }
 
 // ---- Session cost (the status line payload) ---------------------------------------------------------------------
@@ -346,6 +394,8 @@ module.exports = {
   ciWatchRow,
   triageRow,
   loadRow,
+  QUEUE_SESSION_FILE,
+  queueSessionStep,
   SESSION_FILE,
   SESSION_STEP_USD,
   SESSION_INTERVAL_MS,
