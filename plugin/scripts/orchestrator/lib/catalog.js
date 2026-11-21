@@ -414,8 +414,10 @@ function visibleLines(source) {
 const PREFER_INTRO = 'One line per job: what to use, and what not to add. A track gets these lines before it picks a library.';
 
 /**
- * stack.md: the generated block (text between the markers, trimmed) and the prefer lines under "## Prefer".
- * @returns {{ block: string|null, prefer: { purpose: string, use: string }[], errors: string[], warnings: string[] }}
+ * stack.md: the generated block (text between the markers, trimmed), the prefer lines under "## Prefer" and the rows of
+ * the "## Dependencies" table (KD-3).
+ * @returns {{ block: string|null, prefer: { purpose: string, use: string }[], deps: object[], errors: string[],
+ *   warnings: string[] }}
  */
 function parseStack(source) {
   const errors = [];
@@ -445,7 +447,12 @@ function parseStack(source) {
   }
   if (prefer.length > PREFER_LINES)
     warnings.push(`stack.md: ${prefer.length} prefer lines; a mission gets the first ${PREFER_LINES}`);
-  return { block, prefer, errors, warnings };
+  // The hand-written "## Dependencies" table (roadmap 0å KD-3, lib/catalogDeps.js): purpose, docs and a note per
+  // package; the version is never in it (it comes from the lockfile).
+  const deps = require('./catalogDeps.js').parseDepsTable(source);
+  errors.push(...deps.errors);
+  warnings.push(...deps.warnings);
+  return { block, prefer, deps: deps.rows, errors, warnings };
 }
 
 /** The cells of a table row "| a | b | c |" (escaped \| kept as |). */
@@ -1081,6 +1088,15 @@ function checkCatalog(cat, ctx = {}) {
   }
   // An accepted stack entry against the manifests and the Prefer lines (roadmap 0å KD-2), like the block below.
   warnings.push(...stackWarnings(cat, { files, readFile: ctx.readFile ?? null, ledger: ctx.ledger ?? emptyLedger(), glob }));
+  // A Dependencies row (roadmap 0å KD-3) for a package that is in no manifest: a removed library, or a typo.
+  if (files && ctx.readFile && cat.stack?.deps?.length) {
+    const SN = require('./scopeNotes.js');
+    const key = (s) => String(s ?? '').toLowerCase().replace(/[-_.]+/g, '-');
+    const named = new Set();
+    for (const f of files.filter((x) => SN.isManifest(x)).slice(0, STACK_MANIFESTS)) for (const n of SN.depsOf(f, ctx.readFile(f)) ?? []) named.add(key(n));
+    for (const r of cat.stack.deps)
+      if (!named.has(key(r.package))) warnings.push(`stack.md: the Dependencies row ${r.package} names a package that is in no manifest`);
+  }
   if (cat.stack?.block != null && ctx.stackBlock != null && cat.stack.block.trim() !== ctx.stackBlock.trim())
     warnings.push(`stack.md: the generated block is out of step with the manifests; ${cli} catalog init refreshes it`);
   return { errors, warnings };
@@ -1235,6 +1251,8 @@ module.exports = {
   parseDecision,
   parseStack,
   parseReuse,
+  visibleLines,
+  cells,
   readCatalog,
   emptyLedger,
   parseLedger,

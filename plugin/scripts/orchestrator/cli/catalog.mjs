@@ -54,6 +54,7 @@ const CC = require('./lib/catalogChecks.js');
 const CI = require('./lib/catalogIndex.js');
 const K = require('./lib/kickstart.js');
 const MF = require('./lib/manifests.js');
+const CD = require('./lib/catalogDeps.js');
 const NB = require('./lib/notBuilding.js');
 const RP = require('./lib/reviewPacks.js');
 
@@ -189,13 +190,25 @@ function init() {
   };
   const stackFile = path.join(dir, 'stack.md');
   const existing = fs.existsSync(stackFile) ? fs.readFileSync(stackFile, 'utf8') : null;
-  const stack = C.stackWithBlock(existing, block);
+  // The Dependencies rows proposed from local metadata only (roadmap 0å KD-3, lib/catalogDeps.js proposals): the
+  // packages the tracked code imports, with the docs from node_modules, the venv, docs.rs or pkg.go.dev. A new stack.md
+  // gets them as its table; an existing one is the owner's, so they are only printed.
+  let proposed = [];
+  try {
+    proposed = CD.proposals({ files: trackedFiles(MAIN_TREE) ?? [], io: treeFs(MAIN_TREE) });
+  } catch {
+    proposed = []; // error-ignored: no proposals rather than a failed init
+  }
+  let stack = C.stackWithBlock(existing, block);
+  if (existing == null && stack != null) stack = `${stack.replace(/\n*$/, '\n')}\n${CD.tableText(proposed).join('\n')}`;
   if (stack == null) kept.push('stack.md (no generated block in it, so it is left as it is)');
   else if (stack === existing) kept.push('stack.md (the generated block is up to date)');
   else {
     put('stack.md', stack);
-    done.push(existing == null ? 'stack.md' : 'stack.md (the generated block refreshed)');
+    done.push(existing == null ? `stack.md${proposed.length ? ` (with ${proposed.length} proposed Dependencies rows)` : ''}` : 'stack.md (the generated block refreshed)');
   }
+  const inTable = new Set((existing == null ? [] : C.parseStack(existing).deps).map((r) => r.package.toLowerCase()));
+  const more = existing == null ? [] : proposed.filter((r) => !inTable.has(r.package.toLowerCase()));
   for (const [name, content] of [['reuse.md', C.REUSE_TEMPLATE], ['decisions/README.md', C.DECISIONS_README]]) {
     if (fs.existsSync(path.join(dir, ...name.split('/')))) kept.push(name);
     else {
@@ -224,6 +237,10 @@ function init() {
   if (done.length) console.log(`Wrote in ${rel}/: ${done.join(', ')}.`);
   for (const w of draft?.warnings ?? []) console.log(`  WARN ${w}`);
   for (const k of kept) console.log(`  kept ${k}`);
+  if (more.length) {
+    console.log(`Rows you could add under ## Dependencies in stack.md (from local metadata; init does not change your text):`);
+    for (const l of CD.tableText(more.slice(0, 10)).slice(4, -1)) console.log(`  ${l}`);
+  }
   console.log(
     `Next: write what to prefer per job in stack.md, the building blocks in reuse.md, and a design choice per file in ` +
       `decisions/. The folder is a protected path: commit it yourself. ${CLI} catalog check checks it.`,
@@ -287,6 +304,7 @@ function show() {
           exists: cat.exists,
           prefer: cat.stack?.prefer ?? [],
           reuse: cat.reuse?.rows ?? [],
+          dependencies: cat.stack?.deps ?? [],
           decisions: ds.map((d) => ({ id: d.id, kind: d.kind, title: d.title, status: d.status, status_counts: C.effectiveStatus(d, ledger), paths: d.paths, except: d.except, source: d.source, uses: d.uses, alternatives: d.alternatives, stack: d.stack, invariant: d.invariant })),
         },
         null,
@@ -305,6 +323,10 @@ function show() {
   const reuse = cat.reuse?.rows ?? [];
   console.log(`Reuse (reuse.md): ${reuse.length ? '' : 'none yet'}`);
   for (const r of reuse) console.log(`  ${r.purpose}: ${r.symbol} (${r.file})`);
+  // The Dependencies table (roadmap 0å KD-3); only when it has rows, so a catalog without one shows as before.
+  const deps = cat.stack?.deps ?? [];
+  if (deps.length) console.log('Dependencies (stack.md):');
+  for (const r of deps) console.log(`  ${r.package}${r.purpose ? `: ${r.purpose}` : ''}${r.docs ? ` (${r.docs})` : ''}`);
   const choices = ds.filter((d) => !C.isNotBuilding(d));
   const nb = ds.filter((d) => C.isNotBuilding(d));
   // Grouped by kind (roadmap 0å KD-0): design language, stack, dependencies, then the plain design choices. A kind with

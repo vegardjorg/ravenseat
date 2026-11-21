@@ -115,7 +115,7 @@
     },
     {
       "id": "rust-cli-args",
-      "title": "command-line arguments",
+      "title": "command line arguments",
       "ecosystem": "cargo",
       "packages": ["clap", "structopt", "argh", "pico-args", "lexopt"],
       "examples": { "hit": [["clap", "argh"]], "miss": [["clap", "tokio"]] }
