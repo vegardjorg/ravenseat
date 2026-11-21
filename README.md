@@ -35,6 +35,10 @@ Why outside the chat: a model forgets at compaction and a new chat starts empty.
 that reads a short task costs a fraction of one that reads the whole history. The full list is in the
 [guide](plugin/docs/guide.md#what-it-solves).
 
+The stage starts when a Claude Code project outgrows one chat. The long chat grows toward its 1M-token window, and
+every turn pays for all of it. Findings, plans and half-built work spread over many chats, and two chats undo each
+other's work. Rules in `CLAUDE.md` are followed most of the time, which is not the same as always.
+
 Ravenseat is a Claude Code plugin for that stage. You tell one chat what to build. It writes the work down as tasks,
 hands each task to a fresh agent in its own git worktree, runs your tests on exactly the commit the agent delivered,
 merges what passes on your machine, and asks you only what a person has to decide.
