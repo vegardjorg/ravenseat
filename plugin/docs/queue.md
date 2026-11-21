@@ -145,6 +145,33 @@ With `--answer-json` the line is in the answer's `descriptionWarning` (a list) i
 its confirmation. A description that is not text is refused (`description must be text`), and an empty one is not
 stored.
 
+### GitHub issues
+
+Ravenseat can read a GitHub repo's open issues and propose them, on your command only. It uses your own `gh` login,
+reads only, and never writes to GitHub.
+
+```
+ravenseat issues list [--label bug] [--limit 30]   # open issues and where an import would put each; writes nothing
+ravenseat issues import 12 14 [--as task] [--dry]  # proposes each one: a plan in the Inbox, or a proposed task
+```
+
+- **An import proposes, nothing starts.** By default each issue becomes a plan in the Inbox, sorted like any other
+  idea. `--as task` (or a label in `issues.labelMap`) makes a task `GH-12` in the proposed state instead; you approve
+  it, and auto-accept never takes it. An issue imported before is skipped.
+- **Issue text is data.** Anyone can write an issue, so the title is kept only as the reporter's words, framed that way
+  in the mission, and the body is never stored. An issue that claims your approval or carries an owner mark gets a
+  `SUSPICIOUS CONTENT` line, the same as at `receive`.
+- **The link.** The task or plan keeps `issue: { "repo": "owner/name", "number": 12 }`. `--issue 12` (or
+  `owner/name#12`, or `none` to remove it) sets it on `add` and `edit`; a bare number means the `origin` remote's
+  repo. The board card, the task panel, `ravenseat show`/`info`, the Plans view and `plan get` show "Issue #12" as a
+  link built from those two values, never from issue text.
+- **At merge** the commit gets a `Refs: #12` line (`issues.refsTrailer`, on). It is local and never `Closes`, so the
+  issue stays open until someone closes it on GitHub.
+- **gh missing or not signed in:** one clear line and exit 1, nothing written. When a gh feature is in use (issue
+  links, `push.ciWatch: "github"`, external gate evidence, the branch-protection card), `ravenseat doctor` has a `gh`
+  row that says which: gh missing, not signed in, or a `GH_TOKEN`/`GITHUB_TOKEN` that GitHub rejects while gh's own
+  login works. Never a FAIL, never a token, and no network call when no gh feature is in use.
+
 ## The done command and the fix-round cap
 
 `done_when` is a command the owner or the orchestrator picks, so "done" means more than the track's own RESULT line.
@@ -256,6 +283,7 @@ still pass `--by owner`, and the changelog (`ravenseat undo --show`) records who
 | `finding "<title>" [--detail] [--task] [--cause <id>] [--files a,b]` / `finding list [--all]` | A track reports something outside its scope: an idea in the plan register, linked to the task and deduplicated on the title ([plan-register.md](plan-register.md#findings)). `--cause` names the merged task it is a defect of. Pulse and `show` count the new ones |
 | `doctor [--json]` | Read-only health check, one OK/WARN/FAIL line each with a fix hint: Node and the `node` the hooks find on PATH, the hooks file and its scripts, `queue.config.json` keys and types, the state files, a stale lock, half-deleted worktree folders under `.claude/worktrees/` and git worktrees whose folder is gone, branches of finished tasks, CI cost, and the safety baseline (secret files in git or not ignored, empty gates or gates that check nothing (`exit 0`, `true`, an `echo`, also behind an npm script), a gate whose program is not found on PATH (`pytest -q` without pytest; a warning, the gate is never run), no CI config, a manifest without its lockfile, `productionBranch` equal to `baseBranch`, tracked files over `largeFileMb`; offline), no daily budget set (a WARN that only recommends `limit dailyBudget <usd>`; quiet guidance hides it), and the temp folder's entries per prefix. The `settings` row names in one WARN line every guard weaker than its default (the registry's weakening rule, the same list as the banner of `ravenseat settings`), with an INFO line for what lite softens (`gitSurface`, `dependencyFiles`) and one per `protectedPaths.remove` entry; quiet guidance never hides it. The row about `disableAllHooks` in a Claude Code settings file is called `hooks-off`. Exit 1 on any FAIL |
 | `tidy [--execute [--yes]] [--demo] [--json]` | Merged worktrees and branches left behind. Read only by default: every worktree `git worktree list` knows, wherever it lives (not only `.claude/worktrees/`), with merged or not, clean or not, locked, and the active task that uses it; the merged `<branchPrefix>` branches with no worktree; the demo folders (`*-demo`, `*-shots` next to the worktrees); counts and size per group. `--execute` removes only worktrees that are merged, clean, not locked, used by no active task and older than `tidy.minAgeHours`, plus the merged branches with no worktree, after a y/N question (`--yes` skips it; no terminal and no `--yes` deletes nothing). Per worktree: the shared links (`sharedLinks`) are removed as links, a folder with any other link inside is skipped and named, then the folder, `git worktree prune` and `git branch -d` (never `-D`, never `git worktree remove`). Never the main checkout or the worktree it runs in. `--demo --execute` removes the demo folders by the same rules. Clean-gate copies (GOS-1) are not built yet, so they are only counted |
+| `issues list [--label <name>] [--limit <n>]` / `issues import <n...> [--as task\|plan] [--project <pid>] [--dry]` | GitHub issues through your `gh` login, read only and on command only: list shows open issues and where an import would put each; import proposes each as a plan in the Inbox or a proposed task, with the issue link ([GitHub issues](#github-issues)). Main session only |
 | `machine [--measure]` | Cores, memory, free memory now and a suggested `maxConcurrent`, an estimate that changes nothing. `--measure`, started by you and refused while a track runs: `gates --full` once, then the time, the lowest free memory and a suggestion for this project |
 | `state` | Machine-readable state (exit 3 when there is nothing to do) |
 | `pulse-check [--session "<name>"] [--scratchpad <dir>] [--include-owner]` | The pulse in one read-only call, for a repeated or scheduled pulse: exactly `SILENT` (exit 0) when nothing needs the orchestrator, otherwise `ACTION: <n>` (exit 13) and one line per item with the exact next command (`RECEIVE`, `NO AGENT`, `SILENT`, `START`, `RUN`, `WIRING`, and what only `orchestrator pulse` acts on: `CLOUD`, `CONFLICTS`, `AUTO-ACCEPT`, `INSPECTION`). `--include-owner` adds `FOR THE OWNER:` (open questions, finished cloud tracks waiting on a yes), never ACTION. Writes only the orchestrator marker; exit 2 on a usage error (see orchestration.md, A repeated pulse) |

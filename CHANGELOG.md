@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **`ravenseat issues list` and `issues import` propose GitHub issues as plans or tasks, and a linked task shows
+  "Issue #12" and gets `Refs: #12` at merge.** Read only, on command only; `issues.refsTrailer` on, `issues.labelMap` off.
 - **`ravenseat tidy` lists merged worktrees and branches left behind anywhere on disk and removes them on request.**
   Doctor shows the count (`tidy.doctor`, on); removing after a merge is off (`tidy.afterMerge`, off).
 - **Statistics measures the cost of each cache expiry, keeps a quota history and can sample the machine while the board

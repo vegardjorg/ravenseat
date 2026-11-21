@@ -66,6 +66,8 @@ ravenseat surface accept --by owner # accept the current state (after installing
 ravenseat unlock                    # who holds the queue lock; changes nothing (--force --by owner releases it)
 ravenseat tidy                      # merged worktrees (anywhere on disk) and branches left behind, with sizes; changes nothing
 ravenseat tidy --execute            # removes only the merged, clean, unlocked ones no active task uses, after y/N (--yes skips it)
+ravenseat issues list [--label x]   # GitHub's open issues (your gh login, read only) and where an import would put each
+ravenseat issues import 12 14       # proposes each: a plan in the Inbox, or with --as task a proposed task; nothing starts
 ravenseat attempt list <ID>         # the task's attempts; `ravenseat attempt close <ID> --outcome <...>` closes a stuck one
 ravenseat guidance [guided|quiet]   # one switch for advice about CI, gates, lockfiles and the budget; never a guard
 ravenseat controls [dismiss|restore] # no CI config or no gates: dismiss stops the push question for this project until something else goes missing
