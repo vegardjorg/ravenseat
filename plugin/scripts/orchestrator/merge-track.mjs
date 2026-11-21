@@ -753,7 +753,24 @@ function resolveOne(file, stages, current) {
 }
 
 // ---- 1c) The real merge of TIP ---------------------------------------------------------------------------------------
-const m = gitOk('merge', '--no-ff', '-m', mergeMessage(now), TIP);
+// A task linked to a GitHub issue (GH-2) gets a local "Refs: #12" trailer on the merge commit, never "Closes": the
+// issue stays open until someone closes it on GitHub. issues.refsTrailer false leaves it out. The repo part comes from
+// the stored link and the origin remote, never from issue text (lib/issueLink.js withRefs). No queue: no trailer.
+const mergeSubject = (() => {
+  try {
+    const { dataFolder } = require('./lib/queueConfig.js');
+    const tasks = JSON.parse(fs.readFileSync(path.join(dataFolder(), 'queue.json'), 'utf8')).tasks || [];
+    const id = require('./lib/mergeGuard.js').taskIdFromBranch(branch, K.branchPrefix);
+    const task = tasks.find((o) => o.branch === branch) ?? (id ? tasks.find((o) => o.id === id) : null);
+    if (!task?.issue) return mergeMessage(now);
+    const IL = require('./lib/issueLink.js');
+    const origin = IL.originRepo(require('./lib/repoVisibility.js').remoteUrlOf(process.cwd(), K.remote ?? 'origin'));
+    return IL.withRefs(mergeMessage(now), task.issue, { originRepo: origin, config: K });
+  } catch {
+    return mergeMessage(now);
+  }
+})();
+const m = gitOk('merge', '--no-ff', '-m', mergeSubject, TIP);
 const conflicts = git('diff', '--name-only', '--diff-filter=U').split('\n').filter(Boolean);
 if (m.status !== 0 && !conflicts.length) {
   console.error(`git merge failed without conflicts:\n${m.stdout}${m.stderr}`);

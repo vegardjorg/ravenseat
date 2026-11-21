@@ -26,6 +26,7 @@ import { highestMigr } from './tracks.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
 import { linkProblems, linkProblemsJson, printLinkWarning } from './taskLinksCheck.mjs';
 import { notBuildingLines } from './notBuilding.mjs';
+import { issueArg } from './issues.mjs';
 
 const FSRC = require('./lib/findingSources.js');
 // The task's short human summary (`description`): its stored form and the soft-limit WARNING (lib/taskDescription.js).
@@ -195,7 +196,7 @@ export function cmdAdd() {
   // Lite: `add "<title>" [--mission ...] [--priority N] [--files a,b] [--depends a,b] [--id X] [--by ...]` builds the task from the flags.
   const quickTitle = val('--title') ?? positional(1, [
     '--file', '--json', '--title', '--mission', '--priority', '--files', '--depends', '--id', '--by', '--plan', '--accept',
-    '--description',
+    '--description', '--issue',
   ])[0];
   let source = val('--file') ? fs.readFileSync(val('--file'), 'utf8') : val('--json');
   if (!source && quickTitle != null) {
@@ -258,6 +259,14 @@ export function cmdAdd() {
       die('--description sets the description of one task; with several, put "description" in each task');
     if (newOnes[0]?.description != null) die('--description and "description" in the task both set it; use one');
     newOnes[0].description = val('--description') ?? '';
+  }
+  // --issue 12 | owner/name#12 (GH-2, lib/issueLink.js): the ONE task's link to a GitHub issue, the same rule as
+  // --description. A bare number takes the repo from the origin remote.
+  if (a.includes('--issue')) {
+    if (newOnes.length !== 1) die('--issue links one task; with several, put "issue": { "repo", "number" } in each task');
+    if (newOnes[0]?.issue != null) die('--issue and "issue" in the task both set it; use one');
+    const issue = issueArg();
+    if (issue) newOnes[0].issue = issue;
   }
   // The stored form: trimmed, and an empty one is not stored at all. Text only: anything else is left for validate
   // below, which refuses it with "description must be text".

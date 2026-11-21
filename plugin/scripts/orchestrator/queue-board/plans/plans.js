@@ -1748,6 +1748,19 @@
           field('Merged from', p.merged_from.join(', ')),
           field('Roadmap', p.roadmap.join(', ')),
           field('Remark', p.remark),
+          // The GitHub issue (GH-2): the URL comes from the server (lib/issueLink.js issueView), never from issue text.
+          field(
+            'Issue',
+            p.issue && /^https:\/\/github\.com\//.test(p.issue.url)
+              ? el('a', {
+                  class: 'issue-link',
+                  href: p.issue.url,
+                  target: '_blank',
+                  rel: 'noopener noreferrer',
+                  text: `${p.issue.label} on GitHub`,
+                })
+              : null,
+          ),
         ),
       );
     }

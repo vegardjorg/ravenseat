@@ -90,6 +90,7 @@ const ownSources = (task) =>
  * The info lines (`ravenseat info <id>`) for the human summary and the links (0p2 B5), each only when set:
  *   description: <text>         (as one line)
  *   plan: <plan entry id>
+ *   issue: Issue #12 https://github.com/<owner>/<name>/issues/12
  *   sources: <path anchor (role)>; ...
  *   source: <origin text>       (as one line)
  * The caller places `description` right after the title and the rest after the summary fields.
@@ -99,6 +100,9 @@ function infoLines(task) {
   const d = descriptionValue(task?.description).value;
   const links = [];
   if (typeof task?.plan === 'string' && task.plan) links.push(`plan: ${task.plan}`);
+  // The GitHub issue (GH-2): the link built from the stored repo and number (lib/issueLink.js), never from issue text.
+  const issue = require('./issueLink.js').issueView(task?.issue);
+  if (issue) links.push(`issue: ${issue.label} ${issue.url}`);
   const src = ownSources(task);
   if (src.length) links.push(`sources: ${src.map(sourceText).join('; ')}`);
   if (typeof task?.source === 'string' && task.source.trim()) links.push(`source: ${oneLine(task.source)}`);

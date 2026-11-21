@@ -1164,6 +1164,8 @@
         drop_reason: p.drop_reason ?? null,
         remark: p.remark ?? null,
         merged_from: p.merged_from ?? [],
+        // The GitHub issue (GH-2): { label, url } from the stored repo and number (lib/issueLink.js), or null.
+        issue: require('./issueLink.js').issueView(p.issue),
         active: activeOnes[p.id] ?? null,
         created: p.created ?? null, // "Recently registered"
         history: (history.get(p.id) ?? []).slice(-20).reverse(),

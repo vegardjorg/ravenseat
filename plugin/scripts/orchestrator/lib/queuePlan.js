@@ -81,6 +81,8 @@ const FIELD = [
   'remark',
   // Links to design choices in docs/queue/catalog/decisions (lib/catalog.js, ids D-0001); a choice links back with plan:.
   'decisions',
+  // The GitHub issue it came from (GH-2, lib/issueLink.js): { repo: "owner/name", number }, set by `ravenseat issues import`.
+  'issue',
   // Set by the tool:
   'created',
   'agent_boost',
@@ -349,6 +351,7 @@ function validateEntry(entry, ctx = {}) {
   else if (entry.title.length > 160) f('title is over 160 characters (summary is the place for more)');
   if (entry.summary != null && typeof entry.summary !== 'string') f('summary must be text');
   if (entry.remark != null && typeof entry.remark !== 'string') f('remark must be text');
+  for (const t of require('./issueLink.js').issueErrors(entry.issue)) f(t);
 
   // The project must exist (the module follows from the project's area).
   if (!text(entry.project))

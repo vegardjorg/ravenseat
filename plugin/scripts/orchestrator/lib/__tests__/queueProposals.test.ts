@@ -61,6 +61,8 @@ describe('autoAcceptDecision: the hard rules (no setting overrides them)', () =>
     ['a protected shared_patch', { shared_patch: ['scripts/orchestrator/queue.mjs'] }, /protected path/],
     // The inspection queue asks the owner whether a guard is worth building; its proposals never pass by a rule.
     ['a proposal from the inspection queue', { added_by: 'inspection agent' }, /inspection queue/],
+    // GH-1: an imported GitHub issue's text is anyone's, so only the owner accepts it.
+    ['an imported GitHub issue', { added_by: 'issue import agent' }, /imported GitHub issue/],
   ];
   for (const [name, extra, why] of cases)
     it(`never ${name}, even with the most permissive rules`, () => {

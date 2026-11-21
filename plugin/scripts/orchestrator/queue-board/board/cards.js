@@ -373,6 +373,21 @@ function summaryEl(k, col) {
               },
             })
           : null,
+        // The GitHub issue (GH-2) as a link that opens in a new tab. The server builds the URL from the stored repo and
+        // number (lib/issueLink.js issueView), never from issue text; only a github.com URL is drawn. Not a tab stop of
+        // its own (roving tabindex), like the plan badge; with the keyboard the panel has the same link.
+        k.issue && /^https:\/\/github\.com\//.test(k.issue.url)
+          ? el('a', {
+              class: 'badge issue-badge',
+              href: k.issue.url,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              tabindex: '-1',
+              text: k.issue.label,
+              title: `${k.issue.label} on GitHub (opens in a new tab)`,
+              onclick: (e) => e.stopPropagation(),
+            })
+          : null,
         // The class as plain text; only D+ is a badge (the heavy tone), since it counts against the D+ limit.
         k.class
           ? el('span', {

@@ -336,6 +336,9 @@ function buildBoard(
       feature: typeof o.feature === 'string' && o.feature.trim() ? o.feature.trim() : null,
       // The plan entry the task belongs to, for the marker on the card and the "Plan entry" filter.
       plan: typeof o.plan === 'string' && o.plan ? o.plan : null,
+      // The GitHub issue (GH-2): { label: 'Issue #12', url } built from the stored repo and number (lib/issueLink.js),
+      // never from issue text; null without a link.
+      issue: require('./issueLink.js').issueView(o.issue),
       labels: Array.isArray(o.labels) ? o.labels : [],
       visual: L.hasLabel(o, 'visual'),
       depends_on: o.depends_on ?? [],

@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 
 import {
-  a, byName, cut, die, gitRead, P, readPlans, readQueueForPlan, val, values, WIDTH, withLock, writePlans,
+  a, byName, cut, die, gitRead, P, readPlans, readQueueForPlan, require, val, values, WIDTH, withLock, writePlans,
 } from './context.mjs';
 import {
   editPlans, existsSource, forFlag, planAnswer, planDiffLines, planError, planRole, planRow,
@@ -95,6 +95,9 @@ export function planCommand() {
       if (p.priority_reason)
         console.log(`  Priority (${p.priority_set_by}): ${p.priority_reason}`);
       if (p.drop_reason) console.log(`  Dropped: ${p.drop_reason}`);
+      // The GitHub issue (GH-2), the link built from the stored repo and number (lib/issueLink.js).
+      const issue = require('./lib/issueLink.js').issueView(p.issue);
+      if (issue) console.log(`  ${issue.label} ${issue.url}`);
       if (p.agent_boost)
         console.log(`  Lifted by agent ${p.agent_boost.at} (was ${p.agent_boost.from.priority})`);
       if (p.measured_rule && p.measured_rule.priority !== p.priority)

@@ -26,6 +26,7 @@ const AUTHOR = [
   'done_when', 'acceptance', 'max_fix_rounds', 'fixes', 'plan', 'labels', 'requires', 'evidence', 'qa_status',
   'status', 'description', 'roadmap', 'priority_reason', 'priority_set_by', 'priority_bonus', 'bonus', 'deadline',
   'external', 'external_name', 'parallel', 'critical', 'migr_block', 'migr_tens', 'remarks', 'triage', 'own_track',
+  'issue',
 ];
 
 /** The fields the queue writes on a task itself (start, delivery, review, merge, QA, cloud, proposals, archive). */
