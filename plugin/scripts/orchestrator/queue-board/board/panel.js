@@ -167,6 +167,8 @@ function openPanel(id) {
   drawPanel(true);
   panel.querySelector('.button-icon')?.focus();
   if (!t.details.has(id)) getDetails(id);
+  // The open card stands in the address (J2, board/route.js).
+  if (typeof syncRoute === 'function') syncRoute();
 }
 /**
  * Closes the panel. `o.keepFocus` (the outside click, when the click focused something else) leaves focus where it is;
@@ -206,6 +208,7 @@ function closePanel(o) {
   if (!keepFocus && panelFrom?.isConnected) panelFrom.focus();
   panelFrom = null;
   if (typeof placeOptionMenu === 'function') placeOptionMenu();
+  if (typeof syncRoute === 'function') syncRoute();
 }
 async function getDetails(id) {
   try {

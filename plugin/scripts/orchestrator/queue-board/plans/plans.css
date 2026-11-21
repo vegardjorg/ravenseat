@@ -15,6 +15,7 @@
 body.room-plans .top-row2,
 body.room-plans #focusLine,
 body.room-plans #stripe,
+body.room-plans #quick-filters,
 body.room-plans #board,
 body.room-plans #optionLine {
   display: none !important;

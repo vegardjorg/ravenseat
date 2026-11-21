@@ -31,6 +31,8 @@ function visibleWithoutSearch(k, col) {
   // applies to all columns. t.special is null until the views are set up, so SPECIAL is never used before it exists.
   if (t.special && (MARKABLE_COLUMNS.has(col) || t.special === 'newEntry') && !SPECIAL[t.special](k))
     return false;
+  // The quick filter buttons over the columns (J4, board/views.js) apply to every column.
+  if (t.quick?.size && !quickMatch(k)) return false;
   for (const s of FILTER_SECTIONS) {
     const selected = t.filter.selected[s.key];
     if (!selected?.size) continue;

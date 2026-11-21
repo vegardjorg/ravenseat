@@ -14,9 +14,18 @@ function getKey() {
   const m = /[#&]key=([A-Za-z0-9_-]+)/.exec(location.hash);
   if (m) {
     sessionStorage.setItem(KEY, m[1]);
-    history.replaceState(null, '', location.pathname + location.search);
+    // The key leaves the address at once. The rest of the hash (a deep link, #view=…&task=…, board/route.js) stays.
+    history.replaceState(null, '', location.pathname + location.search + hashWithoutKey(location.hash));
   }
   return sessionStorage.getItem(KEY);
+}
+/** The hash without its key part ('#key=abc&task=X' gives '#task=X'; only a key gives ''). */
+function hashWithoutKey(hash) {
+  const rest = String(hash ?? '')
+    .replace(/^#/, '')
+    .split('&')
+    .filter((p) => p && !/^key=/.test(p));
+  return rest.length ? `#${rest.join('&')}` : '';
 }
 
 // ---- The banner after a restart ----
@@ -405,6 +414,8 @@ async function update(force) {
       drawWaitingButton();
       if (typeof drawDecisionsTab === 'function') drawDecisionsTab();
       if (typeof drawChecksTab === 'function') drawChecksTab();
+      // The first state applies the deep link that opened the board (J2, board/route.js).
+      if (typeof routeFirstState === 'function') routeFirstState();
     }
   } catch (e) {
     t.error = e.message;

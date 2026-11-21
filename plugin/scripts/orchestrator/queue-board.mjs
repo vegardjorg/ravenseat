@@ -3226,6 +3226,8 @@ const BOARD_SCRIPTS = [
   'interact.js',
   'top.js',
   'cloud.js',
+  'route.js',
+  'keys.js',
   'start.js',
 ];
 const STATIC = {

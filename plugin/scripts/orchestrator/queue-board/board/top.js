@@ -79,6 +79,17 @@ function helpSection() {
         openHelp({ fromSettings: true });
       },
     }),
+    // J3: the shortcut overview (board/keys.js), also when the shortcuts are off, so they can be turned on from there.
+    el('button', {
+      type: 'button',
+      class: 'button button-outline',
+      text: 'Keyboard shortcuts',
+      'aria-keyshortcuts': 'Shift+?',
+      onclick: () => {
+        closePanel();
+        window.QueueKeys?.open();
+      },
+    }),
   );
 }
 
@@ -468,6 +479,8 @@ function setView(v) {
   // The plan shows areas and projects, and Checks has no cards: the Filter menu (with the quick and saved filters,
   // QA-1d) is closed.
   if (v === 'checks' || v === 'plan') closeFilter(false);
+  // The view stands in the address (J2, board/route.js).
+  if (typeof syncRoute === 'function') syncRoute();
 }
 for (const x of VIEWS)
   $(`show-${x}`).addEventListener('click', () => {
