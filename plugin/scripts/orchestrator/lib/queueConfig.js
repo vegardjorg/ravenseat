@@ -397,7 +397,8 @@ const STANDARD = Object.freeze({
     'reviewer-challenger': { enabled: true, classes: ['U'], labels: ['bug'] },
     'reviewer-design': { enabled: true, labels: ['visual'], paths: [] },
     'reviewer-tests': { enabled: false, classes: ['D', 'D+'], labels: ['bug'] },
-    'reviewer-gap': { enabled: false, plan: true, minMissionItems: 8 },
+    // acceptance (DR-3): a task with acceptance criteria gets the gap reviewer even while it is off (one reason line).
+    'reviewer-gap': { enabled: false, plan: true, minMissionItems: 8, acceptance: true },
     'reviewer-docs': { enabled: false, mostlyPaths: ['docs/', '*.md'] },
     // The short review for a project with no gates or no CI (lib/controls.js). Off: `ravenseat helpers off reviewer-light`.
     'reviewer-light': { enabled: true, whenControlsMissing: ['K'] },

@@ -1092,6 +1092,12 @@ const SETTINGS = Object.freeze([
     'Optional reviewers on top of the fixed ones, switched with `ravenseat helpers on|off` (their conditions are in ' +
     'queue.config.json). In lite, reviewer-light reviews class K tasks when CI or gates are missing.',
     { ...BASIC, ...QUEUE, edit: 'set' }),
+  // DR-3 (plans/drift-vurdering-2026-11-21.md). Friction: one gap reviewer run per task that has acceptance criteria; a
+  // NOT MET leads to a normal fix round, never a stop. On: the owner opted in per task by writing the criteria, so the
+  // cost follows the owner's intent, and with reviewer-gap off by default the criteria were otherwise never checked.
+  row('helpers.reviewer-gap.acceptance', 'review', 'onoff', 'Gap review for acceptance criteria',
+    'A task with acceptance criteria gets the gap reviewer at receive, even while reviewer-gap is off, with one reason ' +
+    'line ("acceptance: 3 criteria"). It checks each criterion MET or NOT MET. Off: only the helper\'s own conditions.'),
   row('reviewers', 'review', 'object', 'Reviewers per class',
     'The fixed reviewer agents that run after receive for each class (none for K and U by default).', {
       fullWhy: 'lite has no reviewers per class (every lite task is class K)',
