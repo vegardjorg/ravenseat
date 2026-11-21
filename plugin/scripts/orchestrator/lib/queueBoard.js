@@ -32,6 +32,8 @@ const L = require('./queueLogic.js');
 const DEC = require('./queueDecisions.js');
 // The wiring spec's open items on the card (wiring_open, read-only in the detail panel).
 const WI = require('./wiringItems.js');
+// The pre-start plan review in one line (DR-1), for the detail panel.
+const PR = require('./planReview.js');
 // Green, but no tests ran (GS-1): the small caveat on the card and in the panel.
 const ZT = require('./zeroTests.js');
 
@@ -353,6 +355,9 @@ function buildBoard(
       // The finish line (lib/doneCheck.js), read-only in the detail panel; only when set, so other cards do not grow.
       ...(Array.isArray(o.acceptance) && o.acceptance.length ? { acceptance: o.acceptance.map(String) } : {}),
       ...(typeof o.done_when === 'string' && o.done_when.trim() ? { done_when: o.done_when.trim() } : {}),
+      // The plan review before the start (lib/planReview.js) and the riskiest assumption (DR-2); only when set.
+      ...(o.plan_review ? { plan_review: PR.summary(o) } : {}),
+      ...(typeof o.risk_first === 'string' && o.risk_first.trim() ? { risk_first: o.risk_first.trim() } : {}),
       // The wiring spec's open items (lib/wiringItems.js), read-only; only when there are some. Done waits for them.
       ...(WI.openItems(o).length ? { wiring_open: WI.openItems(o).map(WI.itemLine) } : {}),
       remarks: remarksFor(o),

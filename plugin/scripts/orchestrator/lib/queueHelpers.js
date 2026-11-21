@@ -14,6 +14,9 @@
 //       plan             (true) the task has a plan field (a plan register entry)
 //       minMissionItems  the mission file has at least this many numbered points
 //       whenControlsMissing  the task's class is in the list and the project has no CI config or no gates (lib/controls.js)
+//       acceptance       (true) the task has acceptance criteria. Unlike the others it lifts the helper in even while
+//                        the helper is off, like the drift signal (DR-3, plans/drift-vurdering-2026-11-21.md): the owner
+//                        wrote down what done means, so the MET / NOT MET check runs. reviewer-gap has it on by default.
 //     The register is open: a helper is `source: "builtin"` (one of the agents the plugin ships, CATALOG) or
 //     `source: "custom"` (an agent file of the project's own, with `path` and `sha256` of that file). Conditions, the
 //     switch and the measurement are the same for both.
@@ -130,6 +133,7 @@ function cleanHelper(h) {
     plan: x.plan === true,
     minMissionItems: Number.isInteger(n) && n > 0 ? n : null,
     whenControlsMissing: list(x.whenControlsMissing),
+    acceptance: x.acceptance === true,
   };
 }
 
@@ -339,6 +343,18 @@ function reviewersForTask(o, { config, queue = null, changedPaths = [], missionT
     if (there) there.reasons.push(...reasons.filter((r) => !there.reasons.includes(r)));
     else out.push({ type, fixed: false, reasons, ...(h.source === 'custom' ? { custom: true } : {}) });
   }
+  // DR-3: acceptance criteria lift a helper with `acceptance` in (reviewer-gap by default, helpers.reviewer-gap.acceptance),
+  // also while it is off: the owner opted in per task by writing the criteria, so the cost follows the owner's intent.
+  const criteria = require('./doneCheck.js').acceptanceList(o).length;
+  if (criteria)
+    for (const [type, h] of Object.entries(setup)) {
+      if (!h.acceptance || blocked(type)) continue;
+      const reason = `acceptance: ${criteria} ${criteria === 1 ? 'criterion' : 'criteria'}`;
+      const there = out.find((x) => x.type === type);
+      if (there) {
+        if (!there.reasons.includes(reason)) there.reasons.push(reason);
+      } else out.push({ type, fixed: false, acceptance: true, reasons: [reason], ...(h.source === 'custom' ? { custom: true } : {}) });
+    }
   // The review signals (lib/reviewSignals.js): what the diff ADDS can lift a reviewer in (sign-in flow, a secret, a URL
   // built from data, raw HTML). Only with the diff; the class stays the floor, a signal never removes a reviewer.
   if (diff != null) {
@@ -407,7 +423,10 @@ function conditionText(h, config = null) {
   if (h.whenControlsMissing?.length) parts.push(`class ${h.whenControlsMissing.join(', ')} when the project has no CI config or no gates`);
   if (h.plan) parts.push('the task has a plan entry');
   if (h.minMissionItems) parts.push(`the mission has ${h.minMissionItems} or more numbered points`);
-  return parts.length ? `When: ${parts.join(' or ')}.` : 'When: no condition set, so it never runs.';
+  // DR-3: the acceptance lift also works while the helper is off, so it is said apart.
+  const also = h.acceptance ? ' Also, even while off: a task with acceptance criteria.' : '';
+  if (!parts.length) return also ? `When:${also}` : 'When: no condition set, so it never runs.';
+  return `When: ${parts.join(' or ')}.${also}`;
 }
 
 const round = (x, d = 2) => {

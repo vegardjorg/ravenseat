@@ -196,7 +196,7 @@ export function cmdAdd() {
   // Lite: `add "<title>" [--mission ...] [--priority N] [--files a,b] [--depends a,b] [--id X] [--by ...]` builds the task from the flags.
   const quickTitle = val('--title') ?? positional(1, [
     '--file', '--json', '--title', '--mission', '--priority', '--files', '--depends', '--id', '--by', '--plan', '--accept',
-    '--description', '--issue',
+    '--description', '--issue', '--risk-first',
   ])[0];
   let source = val('--file') ? fs.readFileSync(val('--file'), 'utf8') : val('--json');
   if (!source && quickTitle != null) {
@@ -259,6 +259,14 @@ export function cmdAdd() {
       die('--description sets the description of one task; with several, put "description" in each task');
     if (newOnes[0]?.description != null) die('--description and "description" in the task both set it; use one');
     newOnes[0].description = val('--description') ?? '';
+  }
+  // --risk-first "<assumption>": the riskiest assumption of the ONE task added (lib/riskFirst.js, DR-2; locked once it
+  // starts), the same rule as --accept. The track tests it first and stops with PARTIAL when it fails.
+  if (a.includes('--risk-first')) {
+    if (newOnes.length !== 1) die('--risk-first sets the assumption of one task; with several, put "risk_first" in each task');
+    if (newOnes[0]?.risk_first != null) die('--risk-first and "risk_first" in the task both set it; use one');
+    const r = String(val('--risk-first') ?? '').trim();
+    if (r) newOnes[0].risk_first = r;
   }
   // --issue 12 | owner/name#12 (GH-2, lib/issueLink.js): the ONE task's link to a GitHub issue, the same rule as
   // --description. A bare number takes the repo from the origin remote.

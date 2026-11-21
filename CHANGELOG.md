@@ -6,6 +6,13 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **The catalog can mark sensitive zones (kind `zone`: paths, applies or keywords, and a reason).** None ship; an
+  accepted zone only raises attention.
+- **A task with acceptance criteria always gets the gap reviewer.** `helpers.reviewer-gap.acceptance`, on.
+- **A short plan review runs on the triage step before a class D+ task or a zone task starts.** `planReview.mode`,
+  `advisory`; the blocking mode is a setting.
+- **A task can name its riskiest assumption, and the track tests it first and stops with PARTIAL if it fails.**
+  `--risk-first`; `mission.riskFirst`, on.
 - **Catalog entries can reach tasks by class, domain, project, feature or label, not only by files.** `applies` on the
   entry, `catalog propose --applies class:D,label:visual`; no new setting.
 - **The catalog excerpt names the installed version of each library a task imports, from the lockfile, with its local

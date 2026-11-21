@@ -51,7 +51,8 @@ const ACCEPTANCE_TEXT_MAX = 300;
  * owner_db, migr_block; merge-track.mjs and lib/mergeGuard.js): a track that could widen its own ownership could make
  * the merge guard let a change to .claude/ or a hook through (review H2).
  */
-const LOCKED_FIELDS = Object.freeze(['done_when', 'acceptance', 'owned_files', 'shared_patch', 'owner_db', 'migr_block']);
+// risk_first (lib/riskFirst.js, DR-2): the track's own stop condition, so it must not soften it after the start.
+const LOCKED_FIELDS = Object.freeze(['done_when', 'acceptance', 'owned_files', 'shared_patch', 'owner_db', 'migr_block', 'risk_first']);
 const OWNER_BY = new Set(['owner', 'theBoard']);
 /** The statuses before the start; every other status (or a `started` time) locks the fields. */
 const BEFORE_START = new Set(['proposed', 'waiting']);
@@ -76,6 +77,8 @@ function doneWhenErrors(o) {
   if (m != null && !(Number.isInteger(m) && m >= 0 && m <= MAX_FIX_ROUNDS_LIMIT))
     error.push(`max_fix_rounds must be a whole number 0 to ${MAX_FIX_ROUNDS_LIMIT} (0 = no automatic fix round)`);
   error.push(...acceptanceErrors(o));
+  // The riskiest assumption (lib/riskFirst.js): checked here so add and edit both validate it.
+  error.push(...require('./riskFirst.js').riskFirstErrors(o));
   return error;
 }
 

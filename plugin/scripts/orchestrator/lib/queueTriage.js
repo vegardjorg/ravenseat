@@ -90,7 +90,7 @@ function ruleSetup(config) {
 }
 
 /** Is this bonus the queue's own triage bookkeeping (the adjust note, or the owner's answer to a triage question)? */
-const ownTriageText = (text) => /^(?:TRIAGE |OWNER_ANSWER triage-)/.test(String(text ?? ''));
+const ownTriageText = (text) => /^(?:TRIAGE |PLAN REVIEW |OWNER_ANSWER (?:triage|planreview)-)/.test(String(text ?? ''));
 
 /**
  * When the task's content was last changed (ms), or NaN when nothing says. The latest of: added, approved (a
@@ -155,22 +155,35 @@ function needsTriage(o, queue, { now = Date.now(), setup, missionMtimeMs = null 
  * The tasks that need a verdict and would otherwise be startable now (waiting, no blockers, not parked, paused or
  * outside the focus, no uncommitted owned file), in ranked order. `asked` = the step was printed less than
  * askAgainMin ago (the agent may be running); `fill` skips those in the print, but never starts them either.
- * @returns {{ id: string, reason: string, asked: boolean }[]}
+ * The plan review (DR-1, lib/planReview.js) shares the step: with `planSetup` (planReview's setup) a risky task that
+ * needs a review is a candidate too, also while the triage itself is off, and a task that needs both is ONE candidate
+ * (`triage` and `plan` say which parts its prompt asks for). `zonesOf(o)`: the accepted zones the task meets.
+ * @returns {{ id: string, reason: string, asked: boolean, triage: boolean, plan: boolean, zones: object[] }[]}
  */
-function triageCandidates(queue, { now = Date.now(), setup, uncommitted = [], missionMtimeMs = () => null } = {}) {
-  if (!setup?.on) return [];
+function triageCandidates(queue, { now = Date.now(), setup, uncommitted = [], missionMtimeMs = () => null, planSetup = null, zonesOf = () => [] } = {}) {
+  if (!setup?.on && !planSetup?.on) return [];
   const L = lazyL();
+  const PR = require('./planReview.js');
   const tasks = queue?.tasks ?? [];
   const k = L.rankingContext(queue, now);
+  const askAgainMin = setup?.askAgainMin ?? DEFAULTS.askAgainMin;
   return tasks
     .filter((o) => o.status === 'waiting' && L.blockers(o, tasks, queue.resolved).length === 0 && !L.uncommittedCollision(o, uncommitted))
-    .map((o) => ({ o, r: L.ranking(o, queue, k), t: needsTriage(o, queue, { now, setup, missionMtimeMs: missionMtimeMs(o) }) }))
-    .filter((x) => !x.r.out && x.t.need)
+    .map((o) => {
+      const mt = missionMtimeMs(o);
+      const t = needsTriage(o, queue, { now, setup, missionMtimeMs: mt });
+      const zones = planSetup?.on ? zonesOf(o) ?? [] : [];
+      const p = planSetup?.on ? PR.needsPlanReview(o, queue, { setup: planSetup, zones, missionMtimeMs: mt }) : { need: false };
+      return { o, r: L.ranking(o, queue, k), t, p, zones };
+    })
+    .filter((x) => !x.r.out && (x.t.need || x.p.need))
     .sort(L.compareRanking)
-    .map(({ o, t }) => ({
+    .map(({ o, t, p, zones }) => ({
       id: o.id,
-      reason: t.reason,
-      asked: Number.isFinite(ms(o.triage_asked)) && now - ms(o.triage_asked) < setup.askAgainMin * 60_000,
+      reason: [t.need ? t.reason : null, p.need ? p.reason : null].filter(Boolean).join('; '),
+      asked: Number.isFinite(ms(o.triage_asked)) && now - ms(o.triage_asked) < askAgainMin * 60_000,
+      // Only with a plan setup, so a caller without one gets the candidates exactly as before.
+      ...(planSetup ? { triage: !!t.need, plan: !!p.need, zones: p.need ? zones : [] } : {}),
     }));
 }
 
@@ -254,12 +267,19 @@ function recordVerdict(queue, id, { verdict, note = null, by = null, head = null
  */
 function ownerChoice(queue, questionId, answer, { by = null, now = new Date().toISOString() } = {}) {
   const L = lazyL();
-  const o = (queue?.tasks ?? []).find((x) => x?.triage?.question === questionId);
+  // The plan review's question in block mode (DR-1, lib/planReview.js) is answered the same way (keep or rewrite).
+  const o = (queue?.tasks ?? []).find((x) => x?.triage?.question === questionId || x?.plan_review?.question === questionId);
   if (!o) return null;
+  const plan = o.plan_review?.question === questionId;
   const s = String(answer ?? '').trim().toLowerCase();
   const done = () => L.closeBlock(o, { now: Date.parse(now) });
   if (o.status !== 'waiting') return { id: o.id, action: 'none', error: `${o.id} has status ${o.status}` };
-  if (s.startsWith('close as')) {
+  if (plan && s.startsWith('keep and start')) {
+    done();
+    o.plan_review = { ...o.plan_review, kept_at: now, ...(by ? { kept_by: String(by) } : {}) };
+    return { id: o.id, action: 'keep', error: null };
+  }
+  if (s.startsWith('close as') && !plan) {
     const st = L.setStatus(o, 'cancelled', now);
     if (st.error) return { id: o.id, action: 'none', error: st.error };
     done();
@@ -291,7 +311,10 @@ function triageMessage(id, promptPath) {
  * The triage prompt file: the task, its mission and owned files, and the answer format. `missionText` is the mission
  * (the file's text when the mission is a path); `head` the base branch's commit the check is against.
  */
-function triagePrompt(o, { reason, base, head = null, missionText = null, missionPath = null, ravenseat = 'ravenseat' } = {}) {
+// `planReview`: { zones } when the same step also does the plan review (DR-1, lib/planReview.js): the fixed checklist and
+// the PLANREVIEW line are added after the triage answer. Left out, the prompt is exactly as before.
+function triagePrompt(o, { reason, base, head = null, missionText = null, missionPath = null, ravenseat = 'ravenseat', planReview = null } = {}) {
+  const PR = require('./planReview.js');
   const list = (x) => (Array.isArray(x) && x.length ? x.map((f) => `- \`${f}\``).join('\n') : '- (none listed)');
   const bonus = (Array.isArray(o.bonus) ? o.bonus : []).map((b) => `- ${b.time}: ${b.text}`);
   return [
@@ -326,8 +349,17 @@ function triagePrompt(o, { reason, base, head = null, missionText = null, missio
     '- `TRIAGE adjust`: still needed, but the mission is off. Then a short corrected note: the moved file paths, the',
     '  part that is already done, what to do instead. It is added to the mission as it is, so write it for the track.',
     '',
-    'Then at most 5 short lines. The orchestrator records it:',
-    `\`${ravenseat} triage ${o.id} --verdict <ready|done|stale|adjust> --note "<your note>"\`.`,
+    ...(planReview
+      ? [
+          'Then the PLANREVIEW line and its notes (below). At most 5 short lines for each part. The orchestrator records both',
+          `in one command: ${PR.recordHint(ravenseat, o.id).replace('--verdict <...>', '--verdict <ready|done|stale|adjust> --note "<your note>"')}.`,
+          '',
+          ...PR.promptLines({ zones: planReview.zones ?? [] }),
+        ]
+      : [
+          'Then at most 5 short lines. The orchestrator records it:',
+          `\`${ravenseat} triage ${o.id} --verdict <ready|done|stale|adjust> --note "<your note>"\`.`,
+        ]),
   ].join('\n');
 }
 

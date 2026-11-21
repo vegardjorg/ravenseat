@@ -64,7 +64,8 @@ const entry = (extra: string[] = []) =>
 
 describe('one kind field', () => {
   it('has one set of values, with decision as the default and not-building from roadmap 0f', () => {
-    expect(C.KINDS).toEqual(['decision', 'design', 'stack', 'dependency', 'not-building']);
+    // zone: PG-5 step 0 (lib/__tests__/catalogZone.test.ts).
+    expect(C.KINDS).toEqual(['decision', 'design', 'stack', 'dependency', 'not-building', 'zone']);
     expect(C.parseDecision('D-0003-x.md', entry()).decision.kind).toBe('decision');
     for (const k of ['decision', 'design', 'stack', 'dependency']) {
       // A stack entry needs uses or stack (KD-2, lib/__tests__/catalogStack.test.ts).

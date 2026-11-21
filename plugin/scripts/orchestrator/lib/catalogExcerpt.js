@@ -115,7 +115,9 @@ const RANK = Object.freeze({ files: 0, category: 1, project: 2 });
 
 /** Does the catalog use applies at all (KD-6)? Only then the lines carry their reason, so a catalog without it is unchanged. */
 function usesApplies(cat) {
-  return (cat?.decisions ?? []).some((x) => x?.decision?.applies && x.decision.status !== 'superseded' && !C.isNotBuilding(x.decision));
+  return (cat?.decisions ?? []).some(
+    (x) => x?.decision?.applies && x.decision.status !== 'superseded' && !C.isNotBuilding(x.decision) && x.decision.kind !== 'zone',
+  );
 }
 
 function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGuard.js').globMatch, index = null, near = [], deps = null, register = null } = {}) {
@@ -131,6 +133,8 @@ function choose(cat, task, { ledger = C.emptyLedger(), glob = require('./mergeGu
   for (const d of ds) {
     // A "Not building" entry (roadmap 0f) binds no code: it is matched against new proposals, never sent to a track.
     if (C.isNotBuilding(d)) continue;
+    // A zone (PG-5 step 0) binds no code either: it raises attention through lib/catalogZones.js, not in the excerpt.
+    if (d.kind === 'zone') continue;
     const status = C.effectiveStatus(d, ledger);
     if (status !== 'accepted' && status !== 'proposed' && status !== 'unconfirmed') continue;
     // A file the entry's except names does not count (roadmap 0å KD-0); a folder still does, it may hold other files.
@@ -483,4 +487,4 @@ function tokensInMission(text) {
   return m ? { tokens: Number(m[1]), cap: Number(m[2]) } : null;
 }
 
-module.exports = { MAX, CHARS_PER_TOKEN, scopeOf, choose, excerpt, forTask, tokensInMission };
+module.exports = { MAX, CHARS_PER_TOKEN, normPath, meets, scopeOf, choose, excerpt, forTask, tokensInMission };

@@ -48,7 +48,7 @@ const STATUSES = Object.freeze(['proposed', 'accepted', 'superseded', 'not-build
  */
 const FIELDS = Object.freeze([
   'id', 'title', 'status', 'kind', 'paths', 'except', 'applies', 'invariant', 'check', 'keywords', 'revisit', 'source',
-  'uses', 'alternatives', 'stack', 'supersedes', 'plan', 'accepted_by', 'accepted',
+  'uses', 'alternatives', 'stack', 'reason', 'supersedes', 'plan', 'accepted_by', 'accepted',
 ]);
 /**
  * applies (roadmap 0å KD-6): the task categories an entry reaches besides its paths, each dimension a list of values.
@@ -80,9 +80,13 @@ const JOB_MAX = 60;
  *   not-building  a rejection, roadmap 0f. Its draft is status proposed with kind not-building; the owner's accept writes
  *                 status not-building (never accepted). A file that says status not-building is of that kind without
  *                 the line.
+ *   zone          a sensitive zone (PG-5 step 0, plans/plan-gate-vurdering-2026-11-21.md section 6): a part of the
+ *                 project where a change is expensive to undo. paths and/or applies and/or keywords say what is in it,
+ *                 `reason` (one line) why. It binds no code (no invariant, no check): it only raises attention, read by
+ *                 lib/catalogZones.js zonesFor. Ravenseat ships none; the owner accepts each one like any entry.
  * The kind is part of the fingerprint (fingerprint), so a track cannot turn a binding entry into another sort.
  */
-const KINDS = Object.freeze(['decision', 'design', 'stack', 'dependency', 'not-building']);
+const KINDS = Object.freeze(['decision', 'design', 'stack', 'dependency', 'not-building', 'zone']);
 /** The board's and `catalog show`'s heading per kind, in the order they are shown (not-building has its own view). */
 const KIND_TITLES = Object.freeze({ design: 'Design language', stack: 'Stack', dependency: 'Dependencies', decision: 'Design choices' });
 /** A not-building entry's keywords: at most this many, each at most KEYWORD_MAX characters. */
@@ -403,8 +407,19 @@ function parseDecision(name, source) {
   // applies (KD-6): the task categories the entry reaches; with one, paths may be left out.
   const applies = appliesProblems(d.applies, e);
   if (applies && nb) e('a not-building entry has no applies (it binds no code)');
+  // A zone (PG-5 step 0) binds no code either: it needs a reason and something to match (paths, applies or keywords).
+  const zn = kind === 'zone';
+  if (zn) {
+    if (!text(d.reason)) e('a zone needs a reason: one line on why a change here is expensive to undo');
+    if (d.invariant != null) e('a zone has no invariant (it binds no code); its reason says why it matters');
+    if (d.check != null) e('a zone has no check rule (it binds no code)');
+    const named = (Array.isArray(d.paths) && d.paths.length) || applies || (Array.isArray(d.keywords) && d.keywords.length);
+    if (!named) e('a zone needs paths, applies or keywords (what is in it)');
+  } else if (d.reason != null) e('reason is for kind zone (a design choice says why in its text)');
+  if (d.reason != null && (typeof d.reason !== 'string' || /[\u0000-\u001f]/.test(d.reason) || d.reason.length > NOTE_MAX))
+    e(`reason must be one line of text, at most ${NOTE_MAX} characters`);
   // What a rejection does not need: an invariant and paths (it binds no code). When it has them, they are checked.
-  if ((!nb || d.paths != null) && !(applies && d.paths == null)) {
+  if (!(zn && d.paths == null) && (!nb || d.paths != null) && !(applies && d.paths == null)) {
     if (!Array.isArray(d.paths) || (!nb && !applies && !d.paths.length))
       e('paths must be a list of at least one path pattern, e.g. ["app/**"] (or leave it out and say applies)');
     else for (const p of d.paths) {
@@ -420,7 +435,7 @@ function parseDecision(name, source) {
       if (pe) e(`except: ${pe}`);
     }
   }
-  if (!nb || d.invariant != null) {
+  if (!zn && (!nb || d.invariant != null)) {
     if (!text(d.invariant)) e('invariant missing (one sentence that can be checked)');
     else if (/[\u0000-\u001f]/.test(d.invariant)) e('invariant must be one line');
     else if (d.invariant.length > INVARIANT_MAX) e(`invariant is over ${INVARIANT_MAX} characters; keep it to one sentence`);
@@ -463,7 +478,7 @@ function parseDecision(name, source) {
   if (nb && d.status !== 'superseded' && !(Array.isArray(d.keywords) && d.keywords.length))
     warnings.push(`${where}: a not-building entry without keywords is never matched against a new proposal`);
   // The check rule (bolk B6): its shape, and its examples run through the same line test a delivery gets.
-  if (d.check != null && !nb) for (const t of require('./catalogChecks.js').ruleOf(d.check).errors) e(t);
+  if (d.check != null && !nb && !zn) for (const t of require('./catalogChecks.js').ruleOf(d.check).errors) e(t);
   if (d.supersedes != null && !(typeof d.supersedes === 'string' && ID_PATTERN.test(d.supersedes)))
     e('supersedes must be a design choice id (D-0001) or null');
   if (d.plan != null && !(typeof d.plan === 'string' && PLAN_PATTERN.test(d.plan))) e('plan must be a plan entry id (PL-...) or null');
@@ -490,6 +505,8 @@ function parseDecision(name, source) {
     uses: kind === 'stack' && isObject(d.uses) && text(d.uses.job) && text(d.uses.tool) ? { job: d.uses.job.trim(), tool: d.uses.tool.trim() } : null,
     alternatives: kind === 'stack' && Array.isArray(d.alternatives) ? d.alternatives.filter((x) => typeof x === 'string') : [],
     stack: kind === 'stack' && Array.isArray(d.stack) ? d.stack.filter((x) => typeof x === 'string') : [],
+    // A zone's one line on why a change in it is expensive to undo (PG-5 step 0); null on every other kind.
+    reason: zn && typeof d.reason === 'string' ? d.reason.trim() : null,
     supersedes: d.supersedes ?? null,
     plan: d.plan ?? null,
     accepted_by: d.accepted_by ?? null,
@@ -687,6 +704,8 @@ function fingerprint(d) {
   // The kind and except (roadmap 0å KD-0) bind too: a track must not turn an accepted stack entry into a plain note, or
   // widen what a rule skips. Only when they say something, so an entry without them keeps its fingerprint.
   else if (d?.kind != null && d.kind !== 'decision') parts.push({ kind: d.kind });
+  // A zone's keywords decide which tasks it marks (PG-5 step 0), so they bind like a rejection's. Its reason is text.
+  if (d?.kind === 'zone') parts.push({ keywords: d.keywords ?? [] });
   if (Array.isArray(d?.except) && d.except.length) parts.push({ except: d.except });
   // applies (KD-6) widens which tasks an entry reaches, so it binds too; only when it says something.
   if (isObject(d?.applies) && Object.keys(d.applies).length) parts.push({ applies: d.applies });
@@ -1343,7 +1362,9 @@ const DECISIONS_README = [
   '- `paths`: the files the choice applies to. `except` (optional): files inside them it does not apply to.',
   '- `applies` (optional): the tasks it reaches besides its paths, e.g. `{"class": ["D"], "label": ["visual"]}` (a D task',
   '  with the label visual; dimensions class, domain, project, feature, label). With it, `paths` may be left out.',
-  '- `kind` (optional): `decision` (the default), `design`, `stack`, `dependency` or `not-building`.',
+  '- `kind` (optional): `decision` (the default), `design`, `stack`, `dependency`, `not-building` or `zone`.',
+  '- A `zone` (a part where a change is expensive to undo): `reason` (one line), and `paths`, `applies` and/or `keywords`;',
+  '  no invariant or check. It only raises attention (the pre-start plan review); Ravenseat ships none.',
   '- `source` on a `design` entry: where its tokens live, a path or a list (`["ui/tokens.css", "lib/theme.js#PALETTE"]`).',
   '- On a `stack` entry: `uses: {"job": "dates", "tool": "dayjs"}`, `alternatives: ["moment"]` (chosen against) and',
   '  `stack: ["pnpm"]` (words for the checks). Accepted, they reach the Checks tab and the dependency notes at receive.',

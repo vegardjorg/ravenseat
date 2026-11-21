@@ -156,6 +156,16 @@ Settings, Agents tab) turns triage off entirely; in lite mode it is off unless s
 `ravenseat helpers` show its runs and cost (the agent message names the task, so the time log ties it to it) and its
 verdicts: how many were ready, done, stale and adjust, and how many tracks it saved (done plus stale).
 
+**The plan review on the same step** (DR-1, `lib/planReview.js`, `planReview.mode`, default `advisory`): a risky task
+(class in `planReview.classes`, default `["D+"]`, or a task in an accepted sensitive zone) also gets a fixed five-point
+checklist in the same prompt: data model and migrations, public interfaces and file formats, irreversible steps, file
+boundaries, and assumptions the code contradicts, each note with `file:line`. One agent, one pass, also while the
+triage itself is off. The second answer line is `PLANREVIEW ok|notes|ask`, recorded with the verdict:
+`ravenseat triage <id> --verdict ready --plan notes --plan-note "<notes>"` (`--plan` alone records only the review).
+`notes` go into the mission as `PLAN REVIEW notes (<date>): ...`; in advisory mode `ask` is a note too. In `block` mode
+(off by default, since it stops work) `ask` becomes the owner question `planreview-<id>` (Keep and start anyway,
+Rewrite). A note without `file:line` is dropped. See [queue.md](queue.md#plan-review-before-a-risky-task).
+
 ### Review signals
 
 The class decides the fixed reviewers, and the helpers above are chosen by class, label, paths and the plan. Neither

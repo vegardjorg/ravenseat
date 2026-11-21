@@ -235,6 +235,9 @@ export function cmdEdit() {
   // --issue 12 | owner/name#12 | none links the task to a GitHub issue (GH-2, lib/issueLink.js); the repo of a bare
   // number is the origin remote's. none (or "") removes the link.
   if (a.includes('--issue')) field.issue = issueArg();
+  // --risk-first "<assumption>" sets the riskiest assumption (lib/riskFirst.js, DR-2); --risk-first "" removes it.
+  // Locked after the start like --accept (lib/doneCheck.js LOCKED_FIELDS): only --by owner changes it then.
+  if (a.includes('--risk-first')) field.risk_first = String(val('--risk-first') ?? '').trim() || null;
   // --bonus "<text>" adds text to the mission (the track block) and the remarks, with a timestamp.
   const bonus = a.includes('--bonus') ? (val('--bonus') ?? '') : null;
   if (bonus != null && !String(bonus).trim())
@@ -258,11 +261,13 @@ export function cmdEdit() {
     'done_outside_queue',
     // The attempts are the queue's own record of what ran (lib/logic/attempt.js); only ravenseat attempt close changes one by hand.
     'attempts',
+    // The plan review (lib/planReview.js) is only recorded by triage --plan.
+    'plan_review',
   ])
     delete field[f];
   // An edit with nothing to write (a mistyped flag, or only fields with their own commands) must not look like it worked.
   const unknownFlags = a.filter(
-    (x) => x.startsWith('--') && !['--json', '--files', '--accept', '--bonus', '--description', '--issue', '--by'].includes(x),
+    (x) => x.startsWith('--') && !['--json', '--files', '--accept', '--bonus', '--description', '--issue', '--risk-first', '--by'].includes(x),
   );
   if (!Object.keys(field).length && bonus == null && !read().tasks.some((x) => x.id === id)) die(`Unknown task ${id}`);
   if (!Object.keys(field).length && bonus == null)
@@ -319,7 +324,8 @@ export function cmdEdit() {
     // `batched: false` takes the task out of the batch queue; the field is removed so the queue file looks as before.
     if (o.batched === false) delete o.batched;
     // null removes the done command, the criteria and the task's own fix-round cap (the config cap applies again).
-    for (const k of ['done_when', 'acceptance', 'max_fix_rounds']) if (k in field && field[k] == null) delete o[k];
+    // And null (--risk-first "") removes the riskiest assumption.
+    for (const k of ['done_when', 'acceptance', 'max_fix_rounds', 'risk_first']) if (k in field && field[k] == null) delete o[k];
     // `sources` is replaced as a whole; null or [] removes it (the task then reads its plan entry's sources again).
     if ('sources' in field && !(Array.isArray(field.sources) && field.sources.length)) delete o.sources;
     // An empty description (null, "" or blank, made null above) removes the field, so the queue file looks as before.

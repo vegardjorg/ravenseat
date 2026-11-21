@@ -55,7 +55,12 @@ function setup() {
   fs.writeFileSync(path.join(folder, 'queue.json'), JSON.stringify(queue));
   const configFile = path.join(folder, 'queue.config.json');
   // The owner mark (lib/ownerMark.js) is new per project key; this test compares whole missions, so it is off here.
-  fs.writeFileSync(configFile, JSON.stringify({ loadGuard: { minFreeMemoryPct: 10, allSlotsFreeMemoryPct: 40 }, injection: { ownerMark: false } }));
+  // The plan review (lib/planReview.js) holds the D+ task for a review step first; this test locks the dispatch of all
+  // classes, so it is off here too (its own tests: planReview.test.ts).
+  fs.writeFileSync(
+    configFile,
+    JSON.stringify({ loadGuard: { minFreeMemoryPct: 10, allSlotsFreeMemoryPct: 40 }, injection: { ownerMark: false }, planReview: { mode: 'off' } }),
+  );
   fs.mkdirSync(path.join(folder, 'docs'));
   fs.copyFileSync(path.join(ROOT, 'docs', 'mission-template.md'), path.join(folder, 'docs', 'mission-template.md'));
   const scratch = path.join(folder, 'scratch');
