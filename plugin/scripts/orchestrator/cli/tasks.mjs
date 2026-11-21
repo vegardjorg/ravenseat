@@ -534,7 +534,9 @@ export function cmdAdd() {
       );
     // The checks before a task starts (PS-1..3, lib/startChecks.js): named paths it does not own, empty ownership on
     // K/D/D+, a D/D+ without a size. Warnings only; start and fill say them again. The protected path has its own line.
-    for (const l of startCheckLines(n, { skip: named ? [named] : [] })) console.log(l);
+    // Not for a track's proposal: a track needs only id, title and mission, and the owner decides the rest on approval;
+    // the lines come at the start, where the orchestrator reads them.
+    if (!track) for (const l of startCheckLines(n, { skip: named ? [named] : [] })) console.log(l);
   }
   // Better ownership from the start: files earlier tasks changed together with the new task's files (lib/ownershipHints.js).
   {
