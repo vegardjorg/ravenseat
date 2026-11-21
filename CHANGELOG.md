@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **A large request is offered shaping first, a large plan gets a one-page decision section, and setting it to ready
+  without one warns.** `shape.nudge` `offer`, `plans.decisionNote` on, `plans.readyCheck` `advisory`.
 - **`add` and `start` warn about paths the mission names outside the task's files, a K/D/D+ task with no files and a
   D/D+ task with no size, and `receive` notes an owner question count that does not match the report.** `planChecks.*`, on.
 - **The catalog can mark sensitive zones (kind `zone`: paths, applies or keywords, and a reason).** None ship; an

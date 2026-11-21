@@ -2691,6 +2691,46 @@ function planLeadReader(root, io, { max = LEAD_READ_MAX } = {}) {
   };
 }
 
+/**
+ * The decision section's state for the plan's detail panel (PG-1/PG-3 of plans/plan-gate-vurdering-2026-11-21.md):
+ * decisionFor(entry, tasks) for queuePlanView.plansData. The source with role decision is read through readDocument
+ * (the /api/doc guard: only .md in the document folders, no symlinks, a size cap), each file once while its time and
+ * size stay the same. A plan that expects no section (not L, XL or a zone, or plans.decisionNote off) gives null and
+ * reads nothing. Any error gives "cannot be read", never a broken /api/plans.
+ * @param {string} root the folder the sources are relative to (the server's SOURCE_ROOT)
+ * @param {{ fs: typeof import('fs'), path: typeof import('path') }} io
+ * @param {{ on?: boolean, zonesFor?: (task: object) => object[], max?: number }} [option] on: plans.decisionNote;
+ *   zonesFor: catalogZones.zonesOnDisk()'s function (default: no zones)
+ * @returns {(entry: object, tasks: object[]) => object|null}
+ */
+function planDecisionReader(root, io, { on = true, zonesFor = null, max = LEAD_READ_MAX } = {}) {
+  const G = require('./planGate.js');
+  const cache = new Map(); // path -> { stamp, text }
+  const readDoc = (filePath) => {
+    try {
+      const st = io.fs.statSync(io.path.join(root, ...String(filePath).split('/')));
+      const stamp = `${st.mtimeMs}|${st.size}`;
+      const c = cache.get(filePath);
+      if (c && c.stamp === stamp) return c.text;
+      const r = readDocument(root, filePath, io, { max });
+      const text = r.ok ? r.text : null;
+      cache.set(filePath, { stamp, text });
+      return text;
+    } catch {
+      return null;
+    }
+  };
+  return (entry, tasks = []) => {
+    try {
+      const zones = G.planZones(entry, tasks, zonesFor);
+      const s = G.decisionState(entry, { readDoc, zones, on });
+      return s.state === 'not-needed' ? null : s;
+    } catch {
+      return null;
+    }
+  };
+}
+
 /** P5: how much passage text the document search keeps in memory in all (the oldest file goes first beyond it). */
 const DOC_SEARCH_CACHE_CHARS = 32 * 1024 * 1024;
 /** P5: the most plans one search returns, and the time it may spend reading before it answers with what it has. */
@@ -2787,6 +2827,7 @@ function planDocSearcher(
 module.exports = {
   readDocument,
   planLeadReader,
+  planDecisionReader,
   planDocSearcher,
   LEAD_READ_MAX,
   DOC_SEARCH_LIMIT,

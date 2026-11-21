@@ -43,6 +43,18 @@ Plain text, at most about 20 lines, for a non-technical reader:
 - **Blocking owner questions and legal points**, each in plain language with a recommendation.
 - **Priority:** what the rules give (`ravenseat plan rules`), and whether that differs from what is set.
 - **Proposed next step** ("ready for the queue", "needs an owner answer first", "merge with PL-…", "drop: …").
+- **Decision:** the `Decision:` line from `plan get`, when there is one (see 3b).
+
+## 3b. Decision section for a large plan
+
+When `plan get` prints a `Decision: missing` or `incomplete` line (size L or XL, or a sensitive zone, while
+`plans.decisionNote` is on), write the one-page section in the plan's investigation document with the headings of
+the plugin's `docs/decision-note.md`: need and evidence, success measure, non-goals, alternatives (at least: do not build, buy
+or integrate, smallest version), cost, stop criteria (a state plus a date), the strongest case against and the cheapest
+test, plus reversibility for a zone. Write the case against as a premortem: "assume this plan failed in 3 months; why?".
+Link it as a source with role `decision` and the section as anchor (with the save in step 5). Never set the plan to
+`ready` past a missing section yourself: tell the owner, who can set it or skip with
+`plan edit <id> --skip-decision "<reason>"`. Small plans get nothing.
 
 ## 4. Wait for instruction
 

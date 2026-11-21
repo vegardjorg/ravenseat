@@ -75,7 +75,7 @@ describe('validate: the shape of a task\'s sources', () => {
   it('refuses an unknown role, naming the known ones', () => {
     const e = L.validate(task({ sources: [{ path: 'docs/a.md', role: 'notes' }] }));
     expect(e.join('; ')).toContain('unknown role notes');
-    expect(e.join('; ')).toContain('plan, investigation, spec, history, reference');
+    expect(e.join('; ')).toContain('plan, investigation, spec, decision, history, reference');
   });
 
   it('refuses a value that is not a list, an entry that is not an object, and an unknown field', () => {

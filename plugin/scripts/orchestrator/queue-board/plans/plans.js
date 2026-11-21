@@ -1717,6 +1717,8 @@
             }`,
           ),
           field('Size', p.size ? `${p.size}: ${V.SIZE[p.size] ?? ''}` : null),
+          // PG-1/PG-3: only for a plan that expects a decision section (L, XL or a sensitive zone).
+          field('Decision', V.decisionText?.(p.decision) ?? null),
           field('Deadline', p.deadline),
           field(
             'Depends on',

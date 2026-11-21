@@ -79,6 +79,8 @@ function doneWhenErrors(o) {
   error.push(...acceptanceErrors(o));
   // The riskiest assumption (lib/riskFirst.js): checked here so add and edit both validate it.
   error.push(...require('./riskFirst.js').riskFirstErrors(o));
+  // The answer to the shape-first question (lib/planGate.js, PG-2): skipped or smallest.
+  error.push(...require('./planGate.js').shapedErrors(o));
   return error;
 }
 

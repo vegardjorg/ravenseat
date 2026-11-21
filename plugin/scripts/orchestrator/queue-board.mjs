@@ -1314,6 +1314,19 @@ const planLead = T.planLeadReader(SOURCE_ROOT, { fs, path });
 // P5: the full-text search in the plan documents (queueBoard.planDocSearcher: the same source, guard and cap as the
 // lead, passages cached per file by time and size). One searcher for the process, like the lead reader.
 const planSearch = T.planDocSearcher(SOURCE_ROOT, { fs, path });
+// PG-1/PG-3: the decision section's state for a large plan's detail panel (queueBoard.planDecisionReader: the same
+// guard, cached per file by time and size). The zones are read again with each new plans() answer, so an accepted zone
+// shows within a minute; plans.decisionNote off reads nothing (the caller passes no reader).
+const planDecisionFor = () => {
+  let zonesFor = null;
+  try {
+    zonesFor = require('./lib/catalogZones.js').zonesOnDisk();
+  } catch {
+    // error-ignored: a zone only raises attention; the size rule still applies
+  }
+  const read = T.planDecisionReader(SOURCE_ROOT, { fs, path }, { zonesFor });
+  return (entry, tasks) => read(entry, tasks);
+};
 function plans() {
   const mt = (f) => {
     try {
@@ -1360,6 +1373,7 @@ function plans() {
       donePerWeek,
       // No document is read while the Plans room is off or plans.leadFromDocument is false.
       leadFor: FEATURES.plans && view.leadFromDocument ? planLead : null,
+      decisionFor: FEATURES.plans && view.decisionNote ? planDecisionFor() : null,
     }),
     exists: fs.existsSync(PLAN_FILE),
     view,

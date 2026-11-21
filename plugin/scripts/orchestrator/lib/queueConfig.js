@@ -455,6 +455,12 @@ const STANDARD = Object.freeze({
   //   inboxAutoApply    P7: false (default): every proposal waits for the owner's Accept on the board. true: a
   //                     proposal for a captured plan that keeps the priority later and names no merge is applied at
   //                     once. Off by default because it changes plans without the owner.
+  //   decisionNote      PG-1 (lib/planGate.js): a plan of size L or XL, or one in an accepted sensitive zone, expects a
+  //                     one-page decision section (plugin docs/decision-note.md, a source with role decision); /plans
+  //                     writes it and plan get shows its state. false: no section is expected and readyCheck is silent.
+  //   readyCheck        PG-3: setting such a plan to ready without a complete section. advisory (default): one
+  //                     WARNING naming what is missing. block: the edit is refused (off by default, it stops work).
+  //                     off: nothing. A skip with a reason (plan edit --skip-decision) lets it through in every mode.
   plans: {
     startView: 'roadmap',
     roadmapLayout: 'auto',
@@ -463,7 +469,14 @@ const STANDARD = Object.freeze({
     searchDocuments: true,
     inboxTriage: 'on-request',
     inboxAutoApply: false,
+    decisionNote: true,
+    readyCheck: 'advisory',
   },
+  // The shape-first question (PG-2, lib/planGate.js): when a request with no plan entry splits into more than
+  // `threshold` tasks, or meets an accepted sensitive zone, /add-to-queue asks once: shape it first (recommended), the
+  // smallest version first, or all now. nudge: offer (default: the question, never a stop), always-shape (shape
+  // without asking first; the user can still decline) or off (as before). `ravenseat plan shape --tasks <n>` prints it.
+  shape: { nudge: 'offer', threshold: 5 },
   // Read guard (hook-read-guard.mjs): in addition to the built-in lists.
   readGuard: {
     agentTypes: [], // more agent types the guard applies to (track, track-d and the reviewers are already included)
@@ -1038,7 +1051,7 @@ const ROADMAP_FOLD_MAX = 500;
  * its default, so a hand-edited file never breaks the board. The board gets this object with /api/plans.
  * @param {object} [cfg] the configuration (default: config())
  * @returns {{ startView: string, roadmapLayout: string, roadmapFoldAfter: number, leadFromDocument: boolean,
- *   searchDocuments: boolean, inboxTriage: string, inboxAutoApply: boolean }}
+ *   searchDocuments: boolean, inboxTriage: string, inboxAutoApply: boolean, decisionNote: boolean, readyCheck: string }}
  */
 function plansView(cfg = config()) {
   const own = isObject(cfg?.plans) ? cfg.plans : {};
@@ -1054,6 +1067,9 @@ function plansView(cfg = config()) {
     inboxTriage: ['on-request', 'idle', 'off'].includes(own.inboxTriage) ? own.inboxTriage : std.inboxTriage,
     // only a real true turns it on: anything else keeps the owner confirming each proposal
     inboxAutoApply: own.inboxAutoApply === true,
+    // PG-1/PG-3 (lib/planGate.js gateSetup has the same fallbacks): part of the board's cache key, so a change shows
+    decisionNote: typeof own.decisionNote === 'boolean' ? own.decisionNote : std.decisionNote,
+    readyCheck: ['off', 'advisory', 'block'].includes(own.readyCheck) ? own.readyCheck : std.readyCheck,
   };
 }
 

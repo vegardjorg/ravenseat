@@ -63,6 +63,27 @@ undo.
 | `plan doc …` | Optional register of controlled documents (versions, revisions, links) |
 | `finding "<title>" [--detail "…"] [--task <id>] [--cause <id>] [--files a,b]` | A track reports something outside its scope as an idea (see Findings); `--cause` names the merged task it is a defect of |
 | `finding list [--all]` | The findings nobody has triaged yet (`--all`: every one) |
+| `plan edit <id> --skip-decision "<reason>"` | Record that a large plan skips its decision section (see Decide before you build) |
+| `plan shape --tasks <n> [--zones D-0001,…]` | The shape-first question for a request of n tasks, or "no question" (read-only) |
+
+## Decide before you build
+
+A light gate that asks WHETHER and HOW MUCH before a large build. None of it stops work by default.
+
+- **Shape large requests first** (`shape.nudge` `offer`, `shape.threshold` `5`). When a request with no plan entry
+  would split into more than 5 tasks, or touches an accepted [sensitive zone](catalog.md), `/add-to-queue` asks once:
+  shape it first (recommended: up to three questions and a one-page note as a plan entry), the smallest version first,
+  or build it all now. "All now" is fine and is recorded on the tasks (`shaped: skipped`; `smallest` for the second
+  answer). `always-shape` shapes without asking first; `off` is as before. `plan shape --tasks <n>` prints the question.
+- **Decision section for large plans** (`plans.decisionNote` on). A plan of size L or XL, or in a zone, gets a one-page
+  section in its investigation document from `/plans`: need and evidence, success measure, non-goals, alternatives,
+  cost, stop criteria, the strongest case against, the cheapest test, and reversibility for a zone. Template:
+  [decision-note.md](decision-note.md). Link it as a source with role `decision`; `plan get` prints `Decision: missing`,
+  `incomplete (missing …)`, `skipped (reason)` or `done`, and the plan's detail panel on the board shows the same.
+- **Check at ready** (`plans.readyCheck` `advisory`). `plan edit <id> --field maturity=ready` (and the board's maturity
+  menu) on such a plan without a complete section prints one WARNING naming what is missing. `block` refuses the edit
+  (off by default: for a solo owner a block they lift alone becomes a self-stamp); `off` says nothing. A skip recorded
+  with `--skip-decision "<reason>"` lets it through in every mode and stays visible on the plan.
 
 ## Findings
 

@@ -17,7 +17,7 @@ import {
   a, byName, cut, die, gitRead, P, readPlans, readQueueForPlan, require, val, values, WIDTH, withLock, writePlans,
 } from './context.mjs';
 import {
-  editPlans, existsSource, forFlag, planAnswer, planDiffLines, planError, planRole, planRow,
+  editPlans, existsSource, forFlag, planAnswer, planDiffLines, planError, planRole, planRow, readDoc,
 } from './planShared.mjs';
 import { planActive, planBackup, planCheck, planModules } from './planCheck.mjs';
 import { planDoc } from './planDoc.mjs';
@@ -26,6 +26,52 @@ import { catalogSetup, decisionIds } from './catalog.mjs';
 
 /** The design choice ids for the plan link warning (catalog.planLinks), or undefined: then only the shape is checked. */
 const linkIds = () => (catalogSetup().planLinks ? (decisionIds() ?? undefined) : undefined);
+
+// The light plan gate (lib/planGate.js, PG-1..PG-3): the settings, the source reader and the accepted zones, read once.
+const G = require('./lib/planGate.js');
+function decisionGateNow() {
+  const setup = G.gateSetup(require('./lib/queueConfig.js').config());
+  let zonesFor = Object.assign(() => [], { empty: true });
+  try {
+    zonesFor = require('./lib/catalogZones.js').zonesOnDisk();
+  } catch {
+    // error-ignored: a zone only raises attention; without the catalog the size rule still applies
+  }
+  const zonesOf = (entry, tasks) => G.planZones(entry, tasks, zonesFor);
+  return {
+    setup,
+    zonesOf,
+    state: (entry, tasks) => G.decisionState(entry, { readDoc, zones: zonesOf(entry, tasks), on: setup.decisionNote }),
+    forTasks: (tasks) =>
+      G.readyGate({ mode: setup.readyCheck, on: setup.decisionNote, readDoc, zonesFor: (e) => zonesOf(e, tasks) }),
+  };
+}
+
+/**
+ * `plan shape --tasks <n> [--zones D-0001,…] [--plan <id>] [--json]` (PG-2): the shape-first question for a request,
+ * or "no question". /add-to-queue runs it after estimating the split, so the threshold and the setting live in one
+ * place. Read-only.
+ */
+function planShape(json) {
+  const setup = G.gateSetup(require('./lib/queueConfig.js').config());
+  const n = Number(val('--tasks'));
+  if (!Number.isInteger(n) || n < 0) die('plan shape --tasks <n> [--zones D-0001,...] [--plan <PL-id>] [--json]');
+  const zones = String(val('--zones') ?? '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const q = G.shapeQuestion({ tasks: n, zones, plan: val('--plan') ?? null }, setup);
+  if (json) {
+    console.log(JSON.stringify({ ok: true, nudge: setup.nudge, threshold: setup.threshold, question: q }));
+    return;
+  }
+  if (!q) {
+    console.log(`No question (shape.nudge ${setup.nudge}, threshold ${setup.threshold}): add as asked.`);
+    return;
+  }
+  console.log(q.mode === 'always-shape' ? `Shape it first (shape.nudge always-shape): ${q.why}.` : q.text);
+  q.choices.forEach((c, i) => console.log(`  ${i + 1}. ${c.label}${c.record ? ` (tasks get "shaped": "${c.record}")` : ''}`));
+}
 
 export function planCommand() {
   const under = a[1];
@@ -79,8 +125,15 @@ export function planCommand() {
   } else if (under === 'get') {
     const sortKey = a[2];
     if (!sortKey || sortKey.startsWith('--')) die('plan get <id|project|module> [--json]');
-    const r = P.get(readPlans(), readQueueForPlan(), sortKey, { existsPath: existsSource });
+    const queue = readQueueForPlan();
+    const r = P.get(readPlans(), queue, sortKey, { existsPath: existsSource });
     if (r.error.length) planError(r.error);
+    // The decision section's state (PG-1): only for the plans that expect one (L, XL or a zone).
+    const gate = decisionGateNow();
+    for (const p of r.entries) {
+      const d = gate.state(p, queue.tasks ?? []);
+      if (d.state !== 'not-needed') p.decision = d;
+    }
     if (json) {
       console.log(JSON.stringify({ ok: true, ...r }));
       return;
@@ -95,6 +148,8 @@ export function planCommand() {
       if (p.priority_reason)
         console.log(`  Priority (${p.priority_set_by}): ${p.priority_reason}`);
       if (p.drop_reason) console.log(`  Dropped: ${p.drop_reason}`);
+      const decision = G.decisionLine(p.decision);
+      if (decision) console.log(`  ${decision}`);
       // The GitHub issue (GH-2), the link built from the stored repo and number (lib/issueLink.js).
       const issue = require('./lib/issueLink.js').issueView(p.issue);
       if (issue) console.log(`  ${issue.label} ${issue.url}`);
@@ -165,9 +220,17 @@ export function planCommand() {
       }
       field = { ...field, ...s };
     }
-    if (!Object.keys(field).length) die("no field to edit (--field name=val or --set '{...}')");
     const role = planRole();
+    // A recorded skip of the decision section (PG-3): who and when come from the tool, the reason from the caller.
+    if (a.includes('--skip-decision')) {
+      const reason = String(val('--skip-decision') ?? '').trim();
+      if (!reason || reason.startsWith('--')) die('--skip-decision needs a reason: --skip-decision "<one sentence>"');
+      field = { ...field, decision_skip: { reason, at: new Date().toISOString(), by: role } };
+    }
+    if (!Object.keys(field).length)
+      die("no field to edit (--field name=val, --set '{...}' or --skip-decision \"<reason>\")");
     const ids = linkIds();
+    const gate = decisionGateNow();
     const r = editPlans('plan edit', (reg, queue) =>
       P.editEntry(reg, id, field, {
         role,
@@ -176,6 +239,7 @@ export function planCommand() {
         question: queue.question ?? {},
         existsPath: existsSource,
         decisionIds: ids,
+        decisionGate: gate.forTasks(queue.tasks ?? []),
       }),
     );
     planAnswer(
@@ -336,9 +400,11 @@ export function planCommand() {
     planBackup();
   } else if (under === 'doc') {
     planDoc(json);
+  } else if (under === 'shape') {
+    planShape(json);
   } else {
     die(
-      'Use: ravenseat plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|capture|inbox|propose|accept|decline|merge|active|rules|check|modules|backup|doc> ...  (see the top of the file)',
+      'Use: ravenseat plan <show|get|new|edit|prioritize|prioritize-many|combine|verify|undo|capture|inbox|propose|accept|decline|merge|active|rules|check|modules|backup|doc|shape> ...  (see the top of the file)',
       under ? 1 : 0,
     );
   }

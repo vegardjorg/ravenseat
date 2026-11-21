@@ -17,7 +17,7 @@ only when the user gave a priority). No class,
 size, value, project, feature, splitting or packing; ids, class K and the defaults come by themselves, and nothing
 is refused for being small. A task that needs the owner's decision first still waits on a registered question: use
 `ravenseat add --json '{"tasks":[{"title":"…","mission":"…","waiting_on":["Q-1"]}],"question":{"Q-1":{"type":"question","text":"…","recommendation":"…"}}}'`.
-Then do step 7.
+Before adding, do step 0b when there are more than a few things. Then do step 7.
 
 0. **Plan entry as input.** If the argument is a plan entry (`PL-…`), or the work belongs to one
    (`ravenseat plan show --search "…"`), fetch it with `ravenseat plan get <id> --json` and check:
@@ -25,6 +25,16 @@ Then do step 7.
    (otherwise tasks that must wait get them in `waiting_on`), and that content only found in gitignored notes is lifted
    into the mission (worktree agents cannot see gitignored files). Every task gets `"plan": "<entry-id>"` and `project`
    from the entry. `add` refuses an unknown entry, and the entry becomes `in-queue` by itself.
+0b. **Shape first (large requests only).** When the work has no plan entry, count the tasks the split would give and run
+   `ravenseat plan shape --tasks <n>` (add `--zones <ids>` for accepted catalog zones the work touches). "No question":
+   go on as asked. Otherwise ask the user that ONE question with its three answers, shaping marked recommended:
+   - **Shape it first:** ask up to three short questions (who has the problem, what does done look like, what is
+     out), write a one-page note (the plugin's `docs/decision-note.md` headings) and register it with `plan new` (step 8).
+     Add tasks only when the user says go.
+   - **Smallest version first:** add only stage 1 (1-2 tasks, a thin slice), with `"shaped": "smallest"`; register
+     the rest as a plan entry to queue later.
+   - **Build it all now:** add as usual, every task with `"shaped": "skipped"`. Never argue; this is a fine answer.
+   `always-shape` in the output: go straight to shaping (the user may still say "all now"). It never stops work.
 1. **Split into tracks of the right size per class** (fixed overhead is a large share of a small track):
    - **K** (client/UI/ordinary code), weight 1.0: **90-120 min of content**. No K under about 30 min alone; pack it
      with related K work in the same project/feature. Split only if the track would pass about 250k context.
