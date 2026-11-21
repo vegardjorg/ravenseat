@@ -171,7 +171,10 @@ describe('settingsFiles and scanTrees (a temporary project)', () => {
     fs.mkdirSync(path.join(outside, '.claude'));
     fs.writeFileSync(path.join(outside, '.claude', 'settings.local.json'), settings({ allow: [`Bash(echo ${AWS})`] }));
     const hits = scanTrees(root);
-    expect(hits.map((h) => [h.tree, h.rule])).toEqual([[outside.replace(/\\/g, '/'), 'aws-access-key']]);
+    // git lists worktrees by their long path; a Windows TEMP can hold a short 8.3 name (RUNNER~1 on CI), so compare
+    // against the resolved long form of the folder.
+    const expected = fs.realpathSync.native(outside).replace(/\\/g, '/');
+    expect(hits.map((h) => [h.tree, h.rule])).toEqual([[expected, 'aws-access-key']]);
   });
 
   it('a project without .claude gives nothing', () => {
