@@ -295,6 +295,28 @@ This is one developer, two repositories and a few weeks: not a controlled benchm
 list prices; on a subscription they are quota, not dollars. Run `ravenseat cost` to see the numbers in your own
 project, and `ravenseat limit dailyBudget <usd>` to stop new tasks once the day's spend is reached.
 
+Ravenseat also tracks where the tokens go: building, reviewing, fixing failures, and coordinating work. Its cost
+diagnostics can flag unusual token consumption, inefficient tool use, and repeatedly read files, helping you identify
+waste rather than simply reporting a total.
+
+### Why not just start a new chat?
+
+Starting fresh chats with handover notes is a common way to manage growing context.
+
+In testing, starting a new chat with a handover cost approximately the same as compacting an existing conversation at a
+comparable context size.
+
+The difference was recovery: after compaction, Ravenseat resumed starting agents in about 6 turns, compared with about
+17 turns after a fresh chat and handover.
+
+The important cost factor is how large the context grows, not whether it is reset through compaction or a new
+conversation.
+
+Ravenseat combines shorter contexts with persistent project state, so the orchestrator can resume work without
+reconstructing the plan each time.
+
+[Measurements and methodology](plugin/docs/costs.md#measured-compacting-the-orchestrator-against-starting-a-new-chat)
+
 **The primary benefit is not lower token cost. It's less manual coordination, safer parallel work, persistent
 execution, and fewer interruptions.** [The measurements and the method](plugin/docs/costs.md)
 
